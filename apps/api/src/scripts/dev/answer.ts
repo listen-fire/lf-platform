@@ -16,8 +16,8 @@
 
 import './_profile_loader';
 import { getAsksQb, getQb } from '../../lib/kysely';
-import { answerAskById } from '../../services/translation_graph/adapters/ask/answer_door';
-import { askIdSchema } from '../../services/translation_graph/adapters/ask/store';
+import { answerAskById } from '../../services/asks/doors';
+import { askIdSchema } from '../../services/asks/store';
 import { notifyEngineOfSettledAsks } from '../../services/asks/in_process_notifier';
 
 function parseValue(raw: string): unknown {

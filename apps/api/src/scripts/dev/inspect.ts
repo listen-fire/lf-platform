@@ -43,7 +43,7 @@ import type { TeamId } from '../../generated/kysely/core/Team';
 import { ensureDevLoopTeam } from './_lib';
 import { fakeOAuthState, readDevLoopDropboxCredential } from './lib/dev_oauth';
 import { FAKE_CRM_ADAPTER_TYPE, fakeCrmBaseUrl } from './fake_crm_adapter';
-import { listAsksForTeam } from '../../services/translation_graph/adapters/ask/store';
+import { listAsksForTeam } from '../../services/asks/store';
 import {
   callbackUrl,
   listRunCallbacks,

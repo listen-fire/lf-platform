@@ -7,7 +7,7 @@
 // `answerAskByToken` (the link page, the platform doors, MCP submit) drives the
 // SAME transition, so there is one semantics rather than two that agree today.
 //
-// The store's own lattice is proven next door in `store_lattice`; what is new
+// The store's own lattice is proven next door in `ask_table`; what is new
 // here is the ADAPTER reaching it through the write path.
 
 // The wake reaches the engine through the `AskSettledNotifier` seam (A-5), so
@@ -17,15 +17,15 @@
 
 import { randomUUID } from 'node:crypto';
 
-import type { TeamId } from '../../../../../generated/kysely/core/Team';
+import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { WriteInput } from 'movement-engine/services/translation_graph/adapter';
 
-import { getAutomationsQb, getCoreQb } from '../../../../../lib/kysely';
-import { cleanupTeam } from '../../../../../test/harness/cleanup';
-import { AskAdapter } from '../index';
-import { notifyEngineOfSettledAsks } from '../../../../asks/in_process_notifier';
-import { AskResponseRefused, answerAskByToken } from '../answer_door';
-import { createAsk, getAsk, cancelAsk, type AskFamily, type AskRecord } from '../store';
+import { getAutomationsQb, getCoreQb } from '../../../lib/kysely';
+import { cleanupTeam } from '../../../test/harness/cleanup';
+import { AskAdapter } from '@listen-fire/ask';
+import { notifyEngineOfSettledAsks } from '../in_process_notifier';
+import { AskResponseRefused, answerAskByToken, cancelAskAndWake, createAsk } from '../doors';
+import { getAsk, platformAskRecords, type AskFamily, type AskRecord } from '../store';
 
 
 function ctx(): WriteInput['mutationContext'] {
@@ -68,7 +68,7 @@ describe('the Response edge write (real DB)', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .values({ id: teamId, name: `ask-write-${teamId.slice(0, 8)}` } as any)
       .execute();
-    adapter = new AskAdapter(teamId);
+    adapter = new AskAdapter(platformAskRecords(teamId));
   });
 
   afterEach(async () => {
@@ -117,7 +117,7 @@ describe('the Response edge write (real DB)', () => {
 
   it('a CANCELLED request is closed to writes too — one terminal state, one outcome', async () => {
     const ask = await createAsk({ teamId, family: 'Check', prompt: 'Ship it?' });
-    await cancelAsk({ id: ask.id });
+    await cancelAskAndWake({ id: ask.id });
 
     const err = await adapter.createRecord(responseWrite(ask, true)).catch((e: unknown) => e);
     expect((err as AskResponseRefused).outcome).toMatchObject({ kind: 'closed' });

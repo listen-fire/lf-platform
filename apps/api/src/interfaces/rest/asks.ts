@@ -58,9 +58,9 @@ import {
   lookupAskByToken,
   type AskFamily,
   type AskRecord,
-} from '../../services/translation_graph/adapters/ask/store';
-import { answerAskByToken } from '../../services/translation_graph/adapters/ask/answer_door';
-import { askResultType, FAMILY_TO_INTERACTION } from '../../services/translation_graph/adapters/ask/surface_view';
+} from '../../services/asks/store';
+import { answerAskByToken } from '../../services/asks/doors';
+import { askResultType, FAMILY_TO_INTERACTION } from '../../services/asks/surface_view';
 
 const asksRouter: ReturnType<typeof Router> = Router();
 

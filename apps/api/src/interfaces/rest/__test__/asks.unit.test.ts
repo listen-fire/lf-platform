@@ -7,7 +7,7 @@
 // a link-unfurl must not fire an answer), only a POST calls the answer door; a
 // param-bearing GET renders a confirm form; a family's control renders faithfully;
 // closed/gone requests map to clean status codes (410). `lookupAskByToken` and
-// `answerAsk` are mocked (same technique as `ask_adapter.unit.test.ts`) so the
+// the module's `answerAsk` are mocked (same technique as modules/ask's `adapter.unit.test.ts`) so the
 // test pins the HTTP shell + prefetch contract without a database.
 
 import { AddressInfo } from 'node:net';
@@ -19,11 +19,17 @@ import type { Server } from 'node:http';
 const lookupAskByTokenMock = jest.fn();
 const answerAskMock = jest.fn();
 
-jest.mock('../../../services/translation_graph/adapters/ask/store', () => {
-  const actual = jest.requireActual('../../../services/translation_graph/adapters/ask/store');
+jest.mock('../../../services/asks/store', () => {
+  const actual = jest.requireActual('../../../services/asks/store');
   return {
     ...actual,
     lookupAskByToken: (...args: unknown[]) => lookupAskByTokenMock(...args),
+  };
+});
+jest.mock('@listen-fire/ask', () => {
+  const actual = jest.requireActual('@listen-fire/ask');
+  return {
+    ...actual,
     answerAsk: (...args: unknown[]) => answerAskMock(...args),
   };
 });
@@ -69,6 +75,11 @@ describe('/api/asks/:token', () => {
   });
 
   describe('new-store bridge — Check / Choose / Select / Provide / Review / Correct / Draft / Form', () => {
+    /** The record as the module answers it: its times are ISO strings. */
+    function moduleAsk(ask: Record<string, unknown>): Record<string, unknown> {
+      return Object.fromEntries(Object.entries(ask).map(([k, v]) => [k, v instanceof Date ? v.toISOString() : v]));
+    }
+
     function newStoreAsk(family: string, extra: Record<string, unknown> = {}) {
       return {
         id: 'ask-1',
@@ -226,21 +237,21 @@ describe('/api/asks/:token', () => {
     it('POST answers a Choose ask and renders the recorded answer', async () => {
       const ask = newStoreAsk('Choose', { options: ['red', 'blue'] });
       lookupAskByTokenMock.mockResolvedValue(ask);
-      answerAskMock.mockResolvedValue({ ok: true, ask: { ...ask, state: 'answered', answer: 'red' } });
+      answerAskMock.mockResolvedValue({ kind: 'settled', ask: { ...moduleAsk(ask), state: 'answered', answer: 'red' } });
       const res = await fetch(`${base}/api/asks/ask_tok`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ answer: 'red' }),
       });
       expect(res.status).toBe(200);
-      expect(answerAskMock).toHaveBeenCalledWith({ id: 'ask-1', raw: 'red' });
+      expect(answerAskMock).toHaveBeenCalledWith(expect.anything(), { id: 'ask-1', raw: 'red' });
       expect(await res.text()).toContain('recorded');
     });
 
     it('POST answers a Select ask with the chosen subset', async () => {
       const ask = newStoreAsk('Select', { options: ['red', 'blue', 'green'] });
       lookupAskByTokenMock.mockResolvedValue(ask);
-      answerAskMock.mockResolvedValue({ ok: true, ask: { ...ask, state: 'answered', answer: ['red', 'blue'] } });
+      answerAskMock.mockResolvedValue({ kind: 'settled', ask: { ...moduleAsk(ask), state: 'answered', answer: ['red', 'blue'] } });
       const res = await fetch(`${base}/api/asks/ask_tok`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -248,56 +259,56 @@ describe('/api/asks/:token', () => {
         body: 'answer=&answer=red&answer=blue',
       });
       expect(res.status).toBe(200);
-      expect(answerAskMock).toHaveBeenCalledWith({ id: 'ask-1', raw: ['', 'red', 'blue'] });
+      expect(answerAskMock).toHaveBeenCalledWith(expect.anything(), { id: 'ask-1', raw: ['', 'red', 'blue'] });
       expect(await res.text()).toContain('recorded');
     });
 
     it('POST answers a Select ask with an empty selection ("none of these")', async () => {
       const ask = newStoreAsk('Select', { options: ['red', 'blue'] });
       lookupAskByTokenMock.mockResolvedValue(ask);
-      answerAskMock.mockResolvedValue({ ok: true, ask: { ...ask, state: 'answered', answer: [] } });
+      answerAskMock.mockResolvedValue({ kind: 'settled', ask: { ...moduleAsk(ask), state: 'answered', answer: [] } });
       const res = await fetch(`${base}/api/asks/ask_tok`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: 'answer=',
       });
       expect(res.status).toBe(200);
-      expect(answerAskMock).toHaveBeenCalledWith({ id: 'ask-1', raw: '' });
+      expect(answerAskMock).toHaveBeenCalledWith(expect.anything(), { id: 'ask-1', raw: '' });
     });
 
     it('POST answers a Form ask with the collected field object', async () => {
       const ask = newStoreAsk('Form', { options: ['call', 'cap'] });
       lookupAskByTokenMock.mockResolvedValue(ask);
       const answer = { call: 'Pursue', cap: '250000' };
-      answerAskMock.mockResolvedValue({ ok: true, ask: { ...ask, state: 'answered', answer } });
+      answerAskMock.mockResolvedValue({ kind: 'settled', ask: { ...moduleAsk(ask), state: 'answered', answer } });
       const res = await fetch(`${base}/api/asks/ask_tok`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ answer }),
       });
       expect(res.status).toBe(200);
-      expect(answerAskMock).toHaveBeenCalledWith({ id: 'ask-1', raw: answer });
+      expect(answerAskMock).toHaveBeenCalledWith(expect.anything(), { id: 'ask-1', raw: answer });
     });
 
     it('POST answers a Correct ask with { rows, dropped } and renders a summary', async () => {
       const ask = newStoreAsk('Correct', { rows: [{ ephemeralId: 'row-0', fields: { name: 'Acme' } }] });
       lookupAskByTokenMock.mockResolvedValue(ask);
       const answer = { rows: [{ ephemeralId: 'row-0', fields: { name: 'Acme Inc' } }], dropped: [] };
-      answerAskMock.mockResolvedValue({ ok: true, ask: { ...ask, state: 'answered', answer } });
+      answerAskMock.mockResolvedValue({ kind: 'settled', ask: { ...moduleAsk(ask), state: 'answered', answer } });
       const res = await fetch(`${base}/api/asks/ask_tok`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ answer }),
       });
       expect(res.status).toBe(200);
-      expect(answerAskMock).toHaveBeenCalledWith({ id: 'ask-1', raw: answer });
+      expect(answerAskMock).toHaveBeenCalledWith(expect.anything(), { id: 'ask-1', raw: answer });
       expect(await res.text()).toContain('updated');
     });
 
     it('a rejected (invalid) answer renders 400, never a live control fallthrough', async () => {
       const ask = newStoreAsk('Form', { options: ['call', 'cap'] });
       lookupAskByTokenMock.mockResolvedValue(ask);
-      answerAskMock.mockResolvedValue({ ok: false, reason: 'invalid', message: 'missing answers for: cap' });
+      answerAskMock.mockResolvedValue({ kind: 'invalid', message: 'missing answers for: cap', ask: moduleAsk(ask) });
       const res = await fetch(`${base}/api/asks/ask_tok`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -329,7 +340,7 @@ describe('/api/asks/:token', () => {
     it('closed state — a stale re-POST loses the race and 410s', async () => {
       const settled = newStoreAsk('Choose', { options: ['red', 'blue'], state: 'answered', answer: 'red' });
       lookupAskByTokenMock.mockResolvedValue(newStoreAsk('Choose', { options: ['red', 'blue'] }));
-      answerAskMock.mockResolvedValue({ ok: false, reason: 'settled', ask: settled });
+      answerAskMock.mockResolvedValue({ kind: 'closed', ask: moduleAsk(settled) });
       const res = await fetch(`${base}/api/asks/ask_tok`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

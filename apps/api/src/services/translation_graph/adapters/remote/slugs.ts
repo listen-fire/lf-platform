@@ -8,11 +8,10 @@
 
 import { CALLBACK_AWAIT_TYPE } from 'engine-contracts';
 
-import { ASK_ADAPTER_TYPE } from '../ask/type';
 import { listAdapterManifests } from '../registry';
 
 /** Await identities the engine keys parks by that are not ordinary adapters. */
-const RESERVED = [CALLBACK_AWAIT_TYPE, ASK_ADAPTER_TYPE];
+const RESERVED = [CALLBACK_AWAIT_TYPE];
 
 /** Every name a built-in answers to — slug, trigger kinds, author aliases —
  *  folded to lower case, plus the reserved identities. */

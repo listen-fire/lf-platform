@@ -485,7 +485,7 @@ type AskHostModules = {
 function askHost(): AskHostModules {
   /* eslint-disable @typescript-eslint/no-var-requires */
   return {
-    AskAdapter: require('../../../../services/translation_graph/adapters/ask').AskAdapter,
+    AskAdapter: require('@listen-fire/ask').AskAdapter,
     instanceSchemaFromDescriptors:
       require('movement-engine/services/translation_graph/movement/schema_projection')
         .instanceSchemaFromDescriptors,

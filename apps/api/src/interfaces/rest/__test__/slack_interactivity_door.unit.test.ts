@@ -26,7 +26,7 @@ jest.mock('../../../services/movement_engine/callback_fire', () => ({
   ...jest.requireActual('../../../services/movement_engine/callback_fire'),
   fireCallback: (input: unknown) => fireCallback(input),
 }));
-jest.mock('../../../services/translation_graph/adapters/ask/answer_door', () => ({
+jest.mock('../../../services/asks/doors', () => ({
   answerAskByToken: (...args: unknown[]) => answerAskByToken(...args),
 }));
 // The signature is Slack's business, not this door's — verified by

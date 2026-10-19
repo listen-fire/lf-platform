@@ -28,7 +28,8 @@ import {
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type { SchemaTypeDescriptor } from 'movement-engine/services/translation_graph/types';
 
-import { AskAdapter } from '../../adapters/ask';
+import { AskAdapter } from '@listen-fire/ask';
+import { platformAskRecords } from '../../../asks/store';
 import { instanceSchemaFromDescriptors } from 'movement-engine/services/translation_graph/movement/schema_projection';
 import { graftGenericLandings } from '../generic_landings';
 import { closeDemandOverChains, demandSeed } from '../demand';
@@ -44,7 +45,7 @@ const programFor = (body: string): string => `${PRELUDE}\nfunction m() {\n${body
  * runs over the same chains once the schema has settled.
  */
 async function demandScopedSchema(body: string): Promise<InstanceSchema> {
-  const adapter = new AskAdapter('team-1' as TeamId);
+  const adapter = new AskAdapter(platformAskRecords('team-1' as TeamId));
   const entries = await adapter.listEntryPoints();
   const source = programFor(body);
   const chains = scanInstanceChains(source);

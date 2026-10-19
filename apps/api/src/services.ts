@@ -42,7 +42,7 @@ import { neverAsAny } from 'movement-engine/public/types';
 import { getFlowUserId } from './lib/oauthFlows';
 import { storePendingCredentials } from './lib/pendingCredentials';
 import { resolveOAuthCallbackRedirect } from './lib/oauthCallbackRedirect';
-import { askSettleDelivery } from './services/translation_graph/adapters/ask/delivery_mode';
+import { askSettleDelivery } from './services/asks/delivery_mode';
 import { notifyEngineOfSettledAsks } from './services/asks/in_process_notifier';
 import { mounts } from './products';
 

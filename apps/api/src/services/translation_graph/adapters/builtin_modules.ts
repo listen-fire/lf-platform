@@ -60,6 +60,7 @@ import { AIRTABLE_MANIFEST } from '@listen-fire/airtable/manifest';
 import { ATTIO_MANIFEST } from '@listen-fire/attio/manifest';
 import { TELEGRAM_MANIFEST } from '@listen-fire/telegram/manifest';
 import { SLACK_MANIFEST } from '@listen-fire/slack/manifest';
+import { ASK_MANIFEST } from '@listen-fire/ask/manifest';
 import { pluginDeclarationNamed, pluginProgramName } from 'movement-engine/public/plugins';
 
 import { injectFakeBaseUrl, isTestHarnessTeam } from '../../../lib/recording';
@@ -77,6 +78,7 @@ import { oauthAppFromEnv } from './module_credentials';
 import { builtInBotToken } from './telegram/shared_bot';
 import { telegramIdentities } from './telegram/identities';
 import { teamIdSchema } from '../../../lib/team_id';
+import { askTableKv, askUrl } from '../../asks/store';
 
 export type BuiltinLine = 'legacy' | 'module';
 
@@ -151,6 +153,9 @@ const WEB_MODULE_LINE: BuiltinModuleLine = {
 
 /** Built once, on the Slack line's first use. */
 let platformSlackModule: AdapterModuleDefinition | undefined;
+
+/** Built once, on the ask line's first use. */
+let platformAskModule: AdapterModuleDefinition | undefined;
 
 /**
  * Every built-in that becomes a module (plan 22 #1), by adapter type or
@@ -317,6 +322,23 @@ export const BUILTIN_MODULES: BuiltinModuleTable = {
       }
       return platformSlackModule;
     },
+  },
+  // Asking a person mid-run. The platform answers asks at its link page, and
+  // its asks table is the module's kv — the same rows asks raised before ask
+  // was a module live in, so they answer and wake as they always did. Ask
+  // exists only as a module: there is no legacy line to roll back to.
+  ask: {
+    kind: 'adapter',
+    line: 'module',
+    manifest: ASK_MANIFEST,
+    load: () => {
+      if (platformAskModule === undefined) {
+        const { askModuleWith }: typeof import('@listen-fire/ask') = require('@listen-fire/ask');
+        platformAskModule = askModuleWith({ answerUrl: askUrl });
+      }
+      return platformAskModule;
+    },
+    kv: (install) => askTableKv(install.teamId),
   },
   // The bundled plugins (Henry 2026-10-17: plugins are modules too), all six
   // in one module, `@lf/web`. Each plugin keeps its own line.
@@ -507,6 +529,18 @@ export function builtinAdapterFactory(
   const entry = moduleLineOf(adapterType);
   if (entry === undefined) return legacy;
   return (install) => loadBuiltinModule(entry, install).adapter;
+}
+
+/** A registry factory for a built-in that exists only as a module: its line
+ *  must say `module`, since there is no legacy adapter behind it. */
+export function moduleOnlyAdapterFactory(adapterType: string): (input: BuiltinInstall) => Adapter {
+  return (install) => {
+    const entry = moduleLineOf(adapterType);
+    if (entry === undefined) {
+      throw new Error(`built-in ${adapterType} exists only as a module, but its line in BUILTIN_MODULES is not 'module'`);
+    }
+    return loadBuiltinModule(entry, install).adapter;
+  };
 }
 
 /** A registry poll source for a built-in: the module's declared poll when its

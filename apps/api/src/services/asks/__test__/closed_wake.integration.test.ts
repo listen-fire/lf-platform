@@ -11,36 +11,35 @@
 import { randomUUID } from 'node:crypto';
 
 const resumeMovementFiringMock = jest.fn();
-jest.mock('../../../movement/execute', () => ({
-  ...jest.requireActual('../../../movement/execute'),
+jest.mock('../../translation_graph/movement/execute', () => ({
+  ...jest.requireActual('../../translation_graph/movement/execute'),
   resumeMovementFiring: (input: unknown) => resumeMovementFiringMock(input),
 }));
 
 import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
 
-import type { TeamId } from '../../../../../generated/kysely/core/Team';
-import type { TriggerId } from '../../../../../generated/kysely/automations/Trigger';
-import type { TriggerRunId } from '../../../../../generated/kysely/automations/TriggerRun';
-import type { MovementId } from '../../../../../generated/kysely/automations/Movement';
-import type { PipelineConfigurationId } from '../../../../../generated/kysely/public/PipelineConfiguration';
+import type { TeamId } from '../../../generated/kysely/core/Team';
+import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
+import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
+import type { MovementId } from '../../../generated/kysely/automations/Movement';
+import type { PipelineConfigurationId } from '../../../generated/kysely/public/PipelineConfiguration';
 import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
 import type { AwaitResolution } from 'movement-engine/services/translation_graph/awaitable';
 
-import { testWorkContext } from '../../../../../test/harness/work';
-import { cleanupTeam } from '../../../../../test/harness/cleanup';
-import { getAutomationsQb, getCoreQb, getQb } from '../../../../../lib/kysely';
-import { TriggerRunRecorder } from '../../../runs/trigger_run';
-import { registerAwaitWork } from '../../../../movement_engine/await_resume';
-import { enqueueAwaitWake } from '../../../../movement_engine/await_wake';
-import { drainUntilIdle, inProcessNotifier, resetWorkHandlersForTests, setWorkNotifier } from '../../../../work/drain';
+import { testWorkContext } from '../../../test/harness/work';
+import { cleanupTeam } from '../../../test/harness/cleanup';
+import { getAsksQb, getAutomationsQb, getCoreQb, getQb } from '../../../lib/kysely';
+import { TriggerRunRecorder } from '../../translation_graph/runs/trigger_run';
+import { registerAwaitWork } from '../../movement_engine/await_resume';
+import { enqueueAwaitWake } from '../../movement_engine/await_wake';
+import { drainUntilIdle, inProcessNotifier, resetWorkHandlersForTests, setWorkNotifier } from '../../work/drain';
 import { askClosedSweepHandler, registerAskClosedSweepWork } from '../closed_sweep';
-import { cancelAskAndWake } from '../answer_door';
-import { notifyEngineOfSettledAsks } from '../../../../asks/in_process_notifier';
+import { answerAskByToken, cancelAskAndWake, createAsk } from '../doors';
+import { notifyEngineOfSettledAsks } from '../in_process_notifier';
 import { resetAskSettledNotifierForTests } from '../notifier';
-import { AskAdapter } from '../index';
-import { ASK_ADAPTER_TYPE } from '../type';
-import { answerAsk, cancelAsk, createAsk, type AskRecord } from '../store';
-import { postgresRunHostStore } from '../../../../movement_engine/run_host_store';
+import { ASK_ADAPTER_TYPE, ASK_TOKEN_PREFIX, AskAdapter, answerAsk, cancelAsk } from '@listen-fire/ask';
+import { getAsk, platformAskRecords, type AskRecord } from '../store';
+import { postgresRunHostStore } from '../../movement_engine/run_host_store';
 
 const SOURCE = 'go = manual()';
 const ADDRESS = 'await-ask';
@@ -117,8 +116,12 @@ beforeEach(async () => {
   await getAutomationsQb(['work']).deleteFrom('work').where('team_id', '=', teamId).execute();
 });
 
-/** A live run parked on an open ask, exactly as `commitAwaitPark` leaves it. */
-async function runParkedOnAsk(): Promise<{ runId: TriggerRunId; ask: AskRecord }> {
+/** A live run parked on an open ask, exactly as `commitAwaitPark` leaves it.
+ *  `raise` makes the ask: through the module by default. */
+async function runParkedOnAsk(
+  raise: (runId: TriggerRunId) => Promise<AskRecord> = (runId) =>
+    createAsk({ teamId, family: 'Check', prompt: 'Ship it?', provenance: { runId } }),
+): Promise<{ runId: TriggerRunId; ask: AskRecord }> {
   const recorder = new TriggerRunRecorder({
     teamId,
     triggerId,
@@ -133,7 +136,7 @@ async function runParkedOnAsk(): Promise<{ runId: TriggerRunId; ask: AskRecord }
   });
   await recorder.ensureStarted();
   const runId = recorder.triggerRunId;
-  const ask = await createAsk({ teamId, family: 'Check', prompt: 'Ship it?', provenance: { runId } });
+  const ask = await raise(runId);
   await getAutomationsQb(['parked_run'])
     .insertInto('parked_run')
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -167,7 +170,7 @@ async function sweep(): Promise<void> {
  *  await does, and complete the branch. */
 function awaitReadsTheAsk(askId: string, seen: AwaitResolution[]): void {
   resumeMovementFiringMock.mockImplementation(async () => {
-    seen.push(await new AskAdapter(teamId).awaitable.resolveAwait({ recordId: askId, edge: 'Response' }));
+    seen.push(await new AskAdapter(platformAskRecords(teamId)).awaitable.resolveAwait({ recordId: askId, edge: 'Response' }));
     return { result: { parked: false } };
   });
 }
@@ -182,7 +185,7 @@ describe('a closed ask wakes the run parked on it', () => {
     await sweep();
     expect(await wakeRows()).toEqual([]);
 
-    await cancelAsk({ id: ask.id });
+    await cancelAsk(platformAskRecords(teamId), { id: ask.id });
     // Two overlapping sweeps before the drain gets there fold onto one row.
     await sweep();
     await sweep();
@@ -217,7 +220,7 @@ describe('a closed ask wakes the run parked on it', () => {
     const { ask } = await runParkedOnAsk();
     // The bare lattice transition, without the door's notifier: the wake an
     // answer would have queued never was.
-    expect((await answerAsk({ id: ask.id, raw: 'true' })).ok).toBe(true);
+    expect((await answerAsk(platformAskRecords(teamId), { id: ask.id, raw: 'true' })).kind).toBe('settled');
     expect(await wakeRows()).toEqual([]);
 
     await sweep();
@@ -238,5 +241,43 @@ describe('a closed ask wakes the run parked on it', () => {
     await drainUntilIdle({ owner: 'test', teamId });
     expect(seen).toEqual([{ status: 'empty' }]);
     expect(await postgresRunHostStore.correlations.correlated({ adapterType: ASK_ADAPTER_TYPE, teamId, correlationKey: ask.id })).toEqual([]);
+  });
+
+  it('a run parked before ask was a module: the link-page answer wakes it, and the await lands', async () => {
+    notifyEngineOfSettledAsks();
+    // The ask row exactly as the built-in ask store wrote it (the table mints
+    // the id; the token is the old store's shape).
+    const { runId, ask } = await runParkedOnAsk(async (parkedRunId) => {
+      const row = await getAsksQb(['ask'])
+        .insertInto('ask')
+        .values({
+          team_id: teamId,
+          family: 'Check',
+          prompt: 'Ship it?',
+          token: ASK_TOKEN_PREFIX + randomUUID().replace(/-/g, ''),
+          token_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000),
+          provenance: JSON.stringify({ runId: parkedRunId }) as never,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      const raised = await getAsk(row.id);
+      if (raised === null) throw new Error('the old-shape ask row did not read back');
+      return raised;
+    });
+    const seen: AwaitResolution[] = [];
+    awaitReadsTheAsk(ask.id, seen);
+
+    expect(await answerAskByToken(ask.token, 'true')).toMatchObject({ kind: 'answered' });
+    expect(await wakeRows()).toEqual([{ adapterType: ASK_ADAPTER_TYPE, teamId, correlationKey: ask.id }]);
+
+    await drainUntilIdle({ owner: 'test', teamId });
+    expect(resumeMovementFiringMock).toHaveBeenCalledWith(expect.objectContaining({ runId, reenter: true }));
+    expect(seen).toEqual([
+      {
+        status: 'landed',
+        correlationKey: ask.id,
+        landings: [{ recordId: ask.id, recordType: 'Check Response', fields: { Answer: true } }],
+      },
+    ]);
   });
 });

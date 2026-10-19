@@ -47,10 +47,11 @@ import { EVERTRACE_ADAPTER_TYPE } from '@listen-fire/evertrace/types';
 import { EVERTRACE_MANIFEST } from '@listen-fire/evertrace/manifest';
 import { DEALROOM_ADAPTER_TYPE } from '@listen-fire/dealroom/types';
 import { DEALROOM_MANIFEST } from '@listen-fire/dealroom/manifest';
-import { builtinAdapterFactory, builtinPollSourceFactory } from './builtin_modules';
+import { builtinAdapterFactory, builtinPollSourceFactory, moduleOnlyAdapterFactory } from './builtin_modules';
 import { GMAIL_ADAPTER_TYPE, GMAIL_MANIFEST, createGmailAdapter } from './gmail';
 import { createGmailPollSource } from './gmail/poll';
-import { ASK_ADAPTER_TYPE, ASK_MANIFEST, createAskAdapter } from './ask';
+import { ASK_ADAPTER_TYPE } from '@listen-fire/ask/types';
+import { ASK_MANIFEST } from '@listen-fire/ask/manifest';
 import { SYSTEM_ADAPTER_TYPE, SYSTEM_MANIFEST, createSystemAdapter } from './system';
 import { createSystemPollSource } from './system/poll';
 
@@ -181,9 +182,6 @@ const ADAPTER_FACTORIES: Record<string, AdapterFactory> = {
     const { createDealroomAdapter }: typeof import('./dealroom') = require('./dealroom');
     return createDealroomAdapter({ teamId, credentialsId });
   }),
-  // Ask adapter — the awaitable "ask a person" intrinsic (asks-as-adapter).
-  // Credential-free, team-scoped; families (Check/Provide/Select/Review) are
-  // its writable positions. Runs alongside the legacy `ask` statement.
   // Gmail — one connected Workspace mailbox, polled, read and written: a
   // movement can search it, run when mail arrives, and send or reply as the
   // mailbox. Event production lives on its PollSource (POLL_SOURCE_FACTORIES
@@ -193,7 +191,9 @@ const ADAPTER_FACTORIES: Record<string, AdapterFactory> = {
   [GMAIL_ADAPTER_TYPE]: builtinAdapterFactory(GMAIL_ADAPTER_TYPE, ({ teamId, credentialsId }) =>
     createGmailAdapter({ teamId, credentialsId }),
   ),
-  [ASK_ADAPTER_TYPE]: ({ teamId }) => createAskAdapter({ teamId }),
+  // Ask — asking a person mid-run, the `@lf/ask` module. Credential-free and
+  // team-scoped; its families are its writable positions.
+  [ASK_ADAPTER_TYPE]: moduleOnlyAdapterFactory(ASK_ADAPTER_TYPE),
   // System — the platform itself as a source (a run failed, …). Credential-
   // free and read-only; event production lives on its PollSource, which reads
   // the run table (POLL_SOURCE_FACTORIES below).

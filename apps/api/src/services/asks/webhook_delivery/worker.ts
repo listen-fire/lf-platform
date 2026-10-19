@@ -24,7 +24,7 @@ import { getAsksQb } from '../../../lib/kysely';
 import { worker } from '../../../lib/worker';
 import { handleError } from '../../../lib/errors';
 import { logger } from 'movement-engine/public/log';
-import { askSettleDelivery } from '../../translation_graph/adapters/ask/delivery_mode';
+import { askSettleDelivery } from '../delivery_mode';
 
 const DRAIN_INTERVAL = 30 * SECOND;
 const BATCH_SIZE = 50;

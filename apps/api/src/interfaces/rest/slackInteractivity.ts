@@ -25,8 +25,8 @@ import type { Request, Response } from 'express';
 
 import { logger } from 'movement-engine/public/log';
 import { verifySlackEventsRequest } from './slackEvents';
-import { answerAskByToken, type AskDoorOutcome } from '../../services/translation_graph/adapters/ask/answer_door';
-import { parseAskAction, parseAskLink } from '../../services/translation_graph/adapters/ask/answer_link';
+import { answerAskByToken, type AskDoorOutcome } from '../../services/asks/doors';
+import { parseAskAction, parseAskLink } from '@listen-fire/ask/link';
 import { isCallbackId } from '../../services/movement_engine/callback_store';
 import {
   callbackAckText,
@@ -35,7 +35,7 @@ import {
   type CallbackFireOutcome,
 } from '../../services/movement_engine/callback_fire';
 
-// The link parse lives with the minting (`adapters/ask`), not with Slack: a
+// The link parse lives with the minting (the `@lf/ask` module), not with Slack: a
 // second platform door (Telegram's callback queries) reads the same shapes, and
 // neither door should have to import the other's route to get at them. Still
 // re-exported here — this route was the parser's first home and its callers

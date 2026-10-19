@@ -1,14 +1,14 @@
-// Answer typing enforced at the adapter layer (asks-as-adapter §B). The family
+// Answer typing (the module's answer semantics). The family
 // IS the answer's type declaration — `coerceAnswer` is where "the surface
 // control and the stored answer can never disagree" is enforced until the
 // checker parameterizes `Provide<T>` (a later chunk). Pure (no DB).
 
-import { coerceAnswer, type AskRecord, type AskFamily, type AskAnswerType, type AskRowSpec } from '../store';
+import { coerceAnswer } from '../answers';
+import type { AskAnswerType, AskFamily, AskRowSpec, StoredAsk } from '../types';
 
-function ask(family: AskFamily, extra: Partial<AskRecord> = {}): AskRecord {
+function ask(family: AskFamily, extra: Partial<StoredAsk> = {}): StoredAsk {
   return {
-    id: 'ask-1' as AskRecord['id'],
-    teamId: 'team-1' as AskRecord['teamId'],
+    id: '00000000-0000-4000-8000-000000000001',
     family,
     answerType: null,
     prompt: 'Q?',
@@ -18,11 +18,9 @@ function ask(family: AskFamily, extra: Partial<AskRecord> = {}): AskRecord {
     state: 'open',
     answer: null,
     token: 'ask_tok',
-    url: 'http://x/api/asks/ask_tok',
-    tokenExpiresAt: new Date(Date.now() + 1000),
+    tokenExpiresAt: new Date(Date.now() + 1000).toISOString(),
     provenance: {},
-    callbackUrl: null,
-    createdAt: new Date(),
+    createdAt: new Date().toISOString(),
     answeredAt: null,
     expiredAt: null,
     ...extra,
@@ -68,7 +66,7 @@ describe('coerceAnswer — Choose (exactly one of the options)', () => {
 });
 
 describe('coerceAnswer — Provide (typed by answerType)', () => {
-  function provide(answerType: AskAnswerType): AskRecord {
+  function provide(answerType: AskAnswerType): StoredAsk {
     return ask('Provide', { answerType });
   }
 

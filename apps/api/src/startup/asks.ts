@@ -5,7 +5,7 @@
 
 import type { WorkerRegistry } from './registry';
 
-import { askSettleDelivery } from '../services/translation_graph/adapters/ask/delivery_mode';
+import { askSettleDelivery } from '../services/asks/delivery_mode';
 import {
   ASK_WEBHOOK_DRAINER,
   readAskDeliveryHealth,

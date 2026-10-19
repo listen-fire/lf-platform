@@ -40,6 +40,12 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 - **The gated-document reader moved into `@lf/web`.** DocSend, Pitch, Canva, Google Slides and Docs, Papermark, BriefLink, Tome, Figma and Notion are read by the module through the browser slot, not by the platform. On the platform nothing changes: same pages, same PDFs, same alerts. Off the platform a gated address fails naming the empty browser slot (it said "the platform's gated-document browser" before); a host that lends a browser gets the document read and kept in its files. A shared Google Drive file is read with the credential's new optional `googleDriveApiKey` off the platform (the platform keeps `GOOGLE_DRIVE_API_KEY`).
 - **lf:** `core: { browser: … }` is refused: lf has no browser module.
 
+### au-ask
+
+- **`ask` is a module: `@lf/ask` (`modules/ask`).** Nothing changes for a movement: `asks = ask()`, the eight families, `Url`, `State`, `Cancelled`, and reading, writing or awaiting `Response` behave exactly as before, under the same `ask` type. The module owns what an ask is (the families, the answer each accepts, open → answered or expired, the first answer standing); the host keeps the records in its kv, answers at its own door, and wakes a run parked on an ask when the ask settles.
+- **On the platform nothing moves.** The asks table is the module's kv, so asks raised before this release (open, parked on, or settled) answer, cancel and wake exactly as before. The answer link stays `/api/asks/<token>`; the link page, Slack and Telegram buttons, MCP, the control tower and `POST /v1/asks` all answer through the module. Whoever waits on an ask is now told from one place, the table's settle; an ask closed because its run went away also queues a wake, which finds nothing parked and does nothing.
+- **A host with no answer door refuses to raise an ask, by name**, rather than minting a link nobody can open. lf does not host `@lf/ask` yet.
+
 ## [0.12.0-rc.2] - 2026-10-19 (pre-release)
 
 This is a pre-release for trying out, not the full 0.11.0 line's replacement: container images are

@@ -155,7 +155,7 @@ jest.mock('../../translation_graph/adapters/telegram', () => {
 // ── the ONE answer door, scripted ────────────────────────────────────────────
 const answerCalls: Array<{ token: string; answer: unknown }> = [];
 let answerOutcome: any = { kind: 'answered', ask: { id: 'ask-1' } };
-jest.mock('../../translation_graph/adapters/ask/answer_door', () => ({
+jest.mock('../../asks/doors', () => ({
   answerAskByToken: jest.fn(async (token: string, answer: unknown) => {
     answerCalls.push({ token, answer });
     return answerOutcome;

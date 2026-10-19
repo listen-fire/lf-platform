@@ -18,7 +18,7 @@ import {
   listAsksForTeam,
   getAsk,
   type AskState,
-} from '../translation_graph/adapters/ask/store';
+} from '../asks/store';
 import {
   askInteractionType,
   askViewOptions,
@@ -26,8 +26,8 @@ import {
   askResultType,
   type AskViewOption,
   type AskViewCorrect,
-} from '../translation_graph/adapters/ask/surface_view';
-import { answerAskById } from '../translation_graph/adapters/ask/answer_door';
+} from '../asks/surface_view';
+import { answerAskById } from '../asks/doors';
 import { resolveAutomationName } from '../../lib/automation/naming';
 
 /** One new-store question, projected for the "your asks" surface. Field names
