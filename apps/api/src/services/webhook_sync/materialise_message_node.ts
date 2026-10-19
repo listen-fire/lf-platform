@@ -33,7 +33,7 @@ import type { PipelineInputId } from '../../generated/kysely/public/PipelineInpu
 
 import { logger } from 'movement-engine/public/log';
 import { getKnowledgeQb, getQb } from '../../lib/kysely';
-import { normalizeAdapterType } from '../knowledge_pipeline/output_v3/linked_objects';
+import { normalizeAdapterType } from '../linked_objects';
 
 export interface MaterialisedSourceNode {
   nodeId: NodeId;

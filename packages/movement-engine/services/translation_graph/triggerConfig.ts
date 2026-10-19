@@ -105,7 +105,7 @@ export interface TextBlock {
 }
 
 /** One-of-a-fixed-set value collection. */
-export interface SelectBlock {
+interface SelectBlock {
   kind: 'select';
   key: string;
   label: string;
@@ -123,7 +123,7 @@ export interface SelectBlock {
  * subordinated to a single input's `help`. The minimum presentational
  * primitive — no divider/image/link until a real need appears.
  */
-export interface SectionBlock {
+interface SectionBlock {
   kind: 'section';
   title?: string;
   text?: string;
@@ -142,7 +142,7 @@ export interface SectionBlock {
  * portable (any adapter, local or remote); behaviour is app-shipped (Principle
  * 5), so a remote adapter may only reference a `kind` the app already ships.
  */
-export interface ActionBlock {
+interface ActionBlock {
   kind: 'action';
   /** App-shipped client handler id, e.g. `'google-drive-picker'`. The
    *  framework never interprets this — the host routes it to its handler
@@ -172,7 +172,7 @@ export type ConfigBlock = TextBlock | SelectBlock | SectionBlock | ActionBlock;
  * and reader (which branch on `kind === 'select'` / `'slug'` / `'text'`) keeps
  * compiling unchanged.
  */
-export type ValueBlock = TextBlock | SelectBlock;
+type ValueBlock = TextBlock | SelectBlock;
 
 /**
  * @deprecated Prefer {@link ValueBlock} / {@link ConfigBlock}. Retained as the

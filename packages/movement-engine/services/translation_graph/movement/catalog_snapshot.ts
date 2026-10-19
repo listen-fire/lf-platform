@@ -25,7 +25,7 @@ import type { AdapterManifest, ConfigBlock } from '../adapter';
 
 /** The manifest facts a catalog reads. A remote adapter's manifest answer
  *  carries a subset of these; a built-in's carries them all. */
-export type CatalogManifest = Pick<
+type CatalogManifest = Pick<
   AdapterManifest,
   | 'adapterType'
   | 'requiredCredentialType'
@@ -184,7 +184,7 @@ export interface CatalogAdapterInput {
 }
 
 /** How one adapter's manifest (plus what was introspected) reads to the checker. */
-export function adapterSnapshotOf(input: CatalogAdapterInput): AdapterSnapshot {
+function adapterSnapshotOf(input: CatalogAdapterInput): AdapterSnapshot {
   const { manifest } = input;
   // Connect affordances are `action` blocks in the manifest's `construction`
   // block list, projected into the `{ kind, label }` the editor and the chat

@@ -37,7 +37,7 @@ import type { MutationContext, MutationSourceType } from 'movement-engine/public
 import type { FieldEvidence, ParentAssociation, ParentLink, Resource } from 'movement-engine/public/adapter';
 
 import ChangeSource from '../../../generated/kysely/knowledge/ChangeSource';
-import { normalizeAdapterType } from '../../knowledge_pipeline/output_v3/linked_objects';
+import { normalizeAdapterType } from '../../linked_objects';
 import { kgFetch, kgFetchOrNull, type KgCredentials, type WireOntology } from './kg_client';
 import EvidenceType from '../../../generated/kysely/knowledge/EvidenceType';
 import { persistKgResources } from './knowledge_graph_resources';

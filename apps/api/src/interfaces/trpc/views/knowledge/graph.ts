@@ -30,7 +30,7 @@ import {
   type WriteContext,
 } from '../../../../lib/knowledge/store';
 import LinkedObjectSource from '../../../../generated/kysely/knowledge/LinkedObjectSource';
-import { storeLinkedObject, deleteLinkedObject } from '../../../../services/knowledge_pipeline/output_v3/linked_objects';
+import { storeLinkedObject, deleteLinkedObject } from '../../../../services/linked_objects';
 import { propertyToChangeValue, changeValuesEqual, ChangeSource } from '../../../../lib/knowledge/changes';
 import { SavedFilterId } from '../../../../generated/kysely/knowledge/SavedFilter';
 import { ResourceId } from '../../../../generated/kysely/knowledge/Resource';

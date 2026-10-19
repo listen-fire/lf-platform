@@ -13,6 +13,11 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 
 ## [Unreleased]
 
+### au-delete
+
+- The legacy v3 output pipeline is removed (its executor, per-destination adapters, authoring agent and the `knowledge.outputAgent` / `knowledge.expressionWriter` tRPC routes). It had no remaining callers; movements are the only way data moves. A migration sets any stored v3 output (`pipeline_output.config_version = 3`) still marked live or dry-run to `off`; its config is kept.
+- The frozen translation-graph evaluator and its parity-era schema tests are removed from the platform and the engine package. Movement results are unchanged.
+
 ### s-logs
 
 - Set `LOG_FORMAT=json` to log one JSON object per line with a Cloud Logging `severity` (`DEBUG`/`INFO`/`WARNING`/`ERROR`/`CRITICAL`), `message`, `timestamp` and `contextId`. The default is unchanged. Boot refuses any other value.

@@ -11,12 +11,6 @@ import { traversalStepSchema, fieldRefSchema } from './schemas';
 export type { Expression } from '#shared/expression/types';
 import type { Expression } from '#shared/expression/types';
 
-// Convenience type aliases for narrowing within evaluator/resolver code
-export type AggregateExpr = Extract<Expression, { type: 'aggregate' }>;
-export type FunctionExpr = Extract<Expression, { type: 'function' }>;
-export type TraverseExpr = Extract<Expression, { type: 'traverse' }>;
-export type ResourceTraverseExpr = Extract<Expression, { type: 'resource_traverse' }>;
-
 // ── Zod schema (recursive via z.lazy) ──
 
 // The inferred output of this schema doesn't perfectly match Expression because

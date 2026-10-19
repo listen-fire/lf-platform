@@ -11,8 +11,8 @@ import { getAutomationsQb, getKnowledgeQb } from '../../lib/kysely';
 import { logger } from 'movement-engine/public/log';
 import { decryptToken } from '../../lib/credentials';
 import { AttioAPIClient, attioCredsParser } from '../../adapters/attio/apiClient';
-import { buildRecordData } from '../knowledge_pipeline/output_v3/adapters/attio';
-import { normalizeAdapterType } from '../knowledge_pipeline/output_v3/linked_objects';
+import { buildRecordData } from './attio_record_data';
+import { normalizeAdapterType } from '../linked_objects';
 import { injectFakeBaseUrl, isTestHarnessTeam } from '../../lib/recording';
 
 /** What one refresh needs, as plain data so it rides the work payload. */

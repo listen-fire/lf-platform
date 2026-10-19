@@ -152,10 +152,10 @@ async function loadHandler(options: {
     AttioAPIClient: jest.fn(),
     attioCredsParser: { parse: jest.fn() },
   }));
-  jest.doMock('../../knowledge_pipeline/output_v3/adapters/attio', () => ({
+  jest.doMock('../attio_record_data', () => ({
     buildRecordData: jest.fn(),
   }));
-  jest.doMock('../../knowledge_pipeline/output_v3/linked_objects', () => ({
+  jest.doMock('../../linked_objects', () => ({
     normalizeAdapterType: (p: string) => p.toLowerCase(),
   }));
   jest.doMock('../../translation_graph/adapters/attio', () => ({ ATTIO_ADAPTER_TYPE: 'attio' }));

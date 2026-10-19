@@ -36,7 +36,6 @@ const VALID_DOMAINS: AgentDomain[] = [
   'query',
   'ontology',
   'output',
-  'output-v3',
   'movement',
   'system',
 ];
@@ -45,7 +44,6 @@ const AGENT_TYPE_BY_DOMAIN: Record<AgentDomain, string> = {
   query: 'knowledge_query',
   ontology: 'knowledge_ontology',
   output: 'knowledge_output',
-  'output-v3': 'knowledge_output_v3',
   movement: 'knowledge_movement',
   system: 'knowledge_system',
 };

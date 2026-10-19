@@ -40,7 +40,7 @@ export function teamDocumentKeyPrefix(teamId: string): string {
  *  store directly. Not an adapter. */
 export const DOCUMENT_STORE_OWNER = 'document-store';
 
-export interface DocumentStoreFileRefInput {
+interface DocumentStoreFileRefInput {
   /** The store handle (`services.document.upload`'s returned `objectUri`). */
   objectUri: string;
   name?: string;

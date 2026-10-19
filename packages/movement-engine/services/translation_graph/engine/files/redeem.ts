@@ -73,7 +73,7 @@ export function hasFileSource(ref: FileRef): boolean {
 }
 
 /** Where a file's bytes are, whichever spelling its descriptor carries. */
-export type FileOwner =
+type FileOwner =
   | { kind: 'document'; objectUri: string }
   | {
       kind: 'adapter';

@@ -2,18 +2,10 @@ import { z } from 'zod';
 
 import type { Expression } from './expression';
 
-import { webhookGraphOutputConfigInputSchema } from '../../../adapters/webhook/configSchema';
 import { expressionSchema } from './expression';
 
 export { expressionSchema };
 export type { Expression };
-
-// Inlined to avoid circular import with configSchema.ts (which imports outputV3ConfigSchema from here)
-const nodeRelationshipSchema = z.object({
-  parentField: z.string().optional(),
-  childField: z.string().optional(),
-  type: z.enum(['reference', 'embed', 'attachment']),
-});
 
 // -- FieldRef: references a value on a node, edge, linked object, or trigger metadata --
 
@@ -201,19 +193,6 @@ const filterOperatorSchema = z.enum([
 
 export type FilterOperator = z.infer<typeof filterOperatorSchema>;
 
-// FilterSelection — superset of Selection (property, edge_property, llm) plus context-level sources
-export const filterSelectionSchema = z.discriminatedUnion('mode', [
-  z.object({ mode: z.literal('property'), propertyTypeId: z.string() }),
-  z.object({ mode: z.literal('edge_property'), propertyTypeId: z.string() }),
-  z.object({ mode: z.literal('llm'), prompt: z.string() }),
-  z.object({ mode: z.literal('linked_object'), adapter: z.string(), field: z.string() }),
-  z.object({ mode: z.literal('meta'), key: z.string() }),
-  z.object({ mode: z.literal('parent_result'), field: z.enum(['created', 'external_id']) }),
-  z.object({ mode: z.literal('resource'), field: z.enum(['name', 'url', 'type', 'document_url', 'content', 'contentType']) }),
-]);
-
-export type FilterSelection = z.infer<typeof filterSelectionSchema>;
-
 const filterValueSchema = z.union([
   z.string(),
   z.number(),
@@ -277,7 +256,7 @@ export type FilterExpression =
 
 // -- Selection --
 
-export const selectionSchema = z.discriminatedUnion('mode', [
+const selectionSchema = z.discriminatedUnion('mode', [
   z.object({ mode: z.literal('property'), propertyTypeId: z.string() }),
   z.object({ mode: z.literal('edge_property'), propertyTypeId: z.string() }),
   z.object({ mode: z.literal('llm'), prompt: z.string() }),
@@ -292,7 +271,7 @@ export type Selection = z.infer<typeof selectionSchema>;
 
 // -- Aggregation --
 
-export const aggregationSchema = z.object({
+const aggregationSchema = z.object({
   function: z.enum([
     'first',
     'last',
@@ -314,7 +293,6 @@ export const aggregationSchema = z.object({
 });
 
 export type Aggregation = z.infer<typeof aggregationSchema>;
-export type OrderKey = z.infer<typeof orderKeySchema>;
 
 // -- FilterCondition / FilterExpression schemas (defined here after Selection + Aggregation) --
 
@@ -354,7 +332,7 @@ export type FieldMapping = z.infer<typeof fieldMappingSchema>;
 
 // -- PromptEmbed: deterministic content slots in LLM prompts --
 
-export const promptEmbedSchema = z.object({
+const promptEmbedSchema = z.object({
   expression: lazyExpression.optional(),
   traversal: z.array(traversalStepSchema).default([]),
   selection: selectionSchema.optional(),
@@ -364,103 +342,3 @@ export const promptEmbedSchema = z.object({
 
 export type PromptEmbed = z.infer<typeof promptEmbedSchema>;
 
-// -- ActionNode / BranchNode / TreeNode --
-
-export type ActionNode = {
-  kind: 'action';
-  id: string;
-  type: string;
-  mode?: 'assert' | 'read';
-  knowledgeNodeTypeId: string;
-  traversal: TraversalStep[];
-  linkTraversal?: TraversalStep[];
-  adapterConfig: Record<string, unknown>;
-  fieldMappings: FieldMapping[];
-  embeds?: PromptEmbed[];
-  storeLink?: boolean;
-  children: {
-    node: TreeNode;
-    relationship: z.infer<typeof nodeRelationshipSchema>;
-  }[];
-};
-
-export type BranchNode = {
-  kind: 'branch';
-  id: string;
-  filter: FilterExpression;
-  match?: TreeNode;
-  noMatch?: TreeNode;
-};
-
-export type TreeNode = ActionNode | BranchNode;
-
-const branchNodeSchema: z.ZodType<BranchNode> = z.object({
-  kind: z.literal('branch'),
-  id: z.string(),
-  filter: filterExpressionSchema,
-  match: z.lazy((): z.ZodType<TreeNode> => treeNodeSchema).optional(),
-  noMatch: z.lazy((): z.ZodType<TreeNode> => treeNodeSchema).optional(),
-});
-
-const actionNodeSchema: z.ZodType<ActionNode> = z.object({
-  kind: z.literal('action'),
-  id: z.string(),
-  type: z.string(),
-  mode: z.enum(['assert', 'read']).optional(),
-  knowledgeNodeTypeId: z.string(),
-  traversal: z.array(traversalStepSchema),
-  linkTraversal: z.array(traversalStepSchema).optional(),
-  adapterConfig: z.record(z.string(), z.unknown()),
-  fieldMappings: z.array(fieldMappingSchema),
-  embeds: z.array(promptEmbedSchema).optional(),
-  storeLink: z.boolean().optional(),
-  children: z.array(
-    z.object({
-      node: z.lazy((): z.ZodType<TreeNode> => treeNodeSchema),
-      relationship: nodeRelationshipSchema,
-    }),
-  ),
-});
-
-export const treeNodeSchema: z.ZodType<TreeNode> = z.union([actionNodeSchema, branchNodeSchema]);
-
-// -- ActionTree --
-
-export const actionTreeSchema = z.object({
-  roots: z.array(treeNodeSchema),
-});
-
-export type ActionTree = z.infer<typeof actionTreeSchema>;
-
-// -- Triggers --
-
-export const extractionTriggerSchema = z.object({
-  type: z.literal('extraction'),
-  messageNodeTypeId: z.string(),
-});
-
-export const mutationTriggerSchema = z.object({
-  type: z.literal('mutation'),
-  nodeTypeId: z.string(),
-  filter: filterExpressionSchema.optional(),
-});
-
-export const triggerSchema = z.discriminatedUnion('type', [
-  extractionTriggerSchema,
-  mutationTriggerSchema,
-]);
-
-export type ExtractionTrigger = z.infer<typeof extractionTriggerSchema>;
-export type MutationTrigger = z.infer<typeof mutationTriggerSchema>;
-export type Trigger = z.infer<typeof triggerSchema>;
-
-// -- V3 Output Config --
-
-export const outputV3ConfigSchema = z.object({
-  version: z.literal(3),
-  trigger: triggerSchema,
-  actionTree: actionTreeSchema,
-  webhookConfig: webhookGraphOutputConfigInputSchema.optional(),
-});
-
-export type OutputV3Config = z.infer<typeof outputV3ConfigSchema>;

@@ -111,7 +111,7 @@ import {
  * whether its answer is a file is not known: that read fails, naming why,
  * rather than taking the answer for data.
  */
-export class RemoteDescribeFailed extends Error {
+class RemoteDescribeFailed extends Error {
   constructor(adapterType: string, recordType: string, fieldId: string, cause: unknown) {
     super(
       `Remote adapter "${adapterType}": describe(${JSON.stringify(recordType)}) failed, so whether ${JSON.stringify(fieldId)} holds a file is not known — ${cause instanceof Error ? cause.message : String(cause)}`,
@@ -253,7 +253,7 @@ export async function fetchRemoteManifest(
   };
 }
 
-export interface RemoteAdapterInput {
+interface RemoteAdapterInput {
   config: RemoteAdapterConfig;
   secret: string;
   cacheScopeId: string;
