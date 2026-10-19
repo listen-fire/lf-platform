@@ -405,6 +405,12 @@ export interface PluginSpec {
   /** The package tag it is a member of (`@lf/web`), matched exactly
    *  (`packageMembers`); absent when it is in none. */
   package?: string;
+  /**
+   * The name a program spells it (`fetch_url`), when the catalog's key is not
+   * that: a plugin in a package is keyed by package AND name (`pluginKey`), so
+   * two packages can each serve a `render`. Absent: the key is the name.
+   */
+  name?: string;
 }
 
 /** One `fedArgs` entry: the argument's name, and whether a PLAIN call must
@@ -430,6 +436,44 @@ export interface PluginFedArg {
 // the dotted local name `web.fetchUrl`, so a call of it is an ordinary plugin
 // call. The Rust twin is crates/movement-parser/src/catalog/packages.rs.
 
+/** The catalog key of a package's plugin: module and name together, so two
+ *  packages can each serve a plugin of the same name. Compared, never parsed
+ *  (a spec carries its own `name`). The Rust twin is `plugin_key`. */
+export function pluginKey(packageTag: string, name: string): string {
+  return `${packageTag}/${name}`;
+}
+
+/** A plugin as a program writes it: its key's own name unless the spec says. */
+export function pluginProgramNameOf(key: string, spec: PluginSpec): string {
+  return spec.name ?? key;
+}
+
+/** What a written plugin name stands for among `plugins`: the entry keyed by
+ *  exactly that (a package member's key), else the one entry whose name it is
+ *  (a bare import, as versions 1 to 4 write it); several such are `ambiguous`,
+ *  listing the packages that serve it. The Rust twin is `find_plugin`. */
+export function findPlugin(
+  plugins: Readonly<Record<string, PluginSpec>>,
+  name: string,
+): { found: { key: string; spec: PluginSpec } } | { ambiguous: string[] } | undefined {
+  const exact = Object.hasOwn(plugins, name) ? plugins[name] : undefined;
+  if (exact !== undefined) return { found: { key: name, spec: exact } };
+  const named = Object.entries(plugins).filter(([key, spec]) => pluginProgramNameOf(key, spec) === name);
+  if (named.length === 1) return { found: { key: named[0][0], spec: named[0][1] } };
+  if (named.length > 1) return { ambiguous: named.map(([, spec]) => spec.package ?? '(no package)') };
+  return undefined;
+}
+
+/** The packages that serve a bare plugin name when more than one does. */
+export function ambiguousPluginPackages(catalog: Pick<Catalog, 'plugin' | 'pluginNames'>, name: string): string[] {
+  const packages: string[] = [];
+  for (const key of catalog.pluginNames?.() ?? []) {
+    const spec = catalog.plugin(key);
+    if (spec !== undefined && pluginProgramNameOf(key, spec) === name && spec.package !== undefined) packages.push(spec.package);
+  }
+  return packages.length > 1 ? packages : [];
+}
+
 /** One plugin of a package: the name it is called by after the package's
  *  local name and a dot, and the catalog's key it invokes. */
 export interface PackageMember {
@@ -443,7 +487,7 @@ export interface PackageMember {
 export function packageMembers(catalog: Pick<Catalog, 'plugin' | 'pluginNames'>, tag: string): PackageMember[] {
   return (catalog.pluginNames?.() ?? [])
     .filter(key => catalog.plugin(key)?.package === tag)
-    .map(key => ({ name: pluginName(key), key }));
+    .map(key => ({ name: pluginName(pluginProgramNameOf(key, catalog.plugin(key)!)), key }));
 }
 
 /** The local name an unnamed package import's fix suggests: the tag's last
@@ -2061,7 +2105,10 @@ export function mockCatalog(spec: {
       return 'adapters' in c ? c : { adapters: [c.adapter] };
     },
     credentialNames: () => Object.keys(spec.credentials ?? {}),
-    plugin: name => spec.plugins?.[name],
+    plugin: name => {
+      const hit = findPlugin(spec.plugins ?? {}, name);
+      return hit !== undefined && 'found' in hit ? hit.found.spec : undefined;
+    },
     pluginNames: () => Object.keys(spec.plugins ?? {}),
     instantiate: spec.instantiate ?? (adapter => spec.adapters?.[adapter]?.schema),
     ...(spec.constructionArgOptions !== undefined

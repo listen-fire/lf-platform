@@ -64,7 +64,15 @@ import { ASK_MANIFEST } from '@listen-fire/ask/manifest';
 import { SYSTEM_MANIFEST } from '@listen-fire/system/manifest';
 import { NATIVE_VALUATIONS_MANIFEST } from '@listen-fire/native-valuations/manifest';
 import { EMAIL_MANIFEST } from '@listen-fire/email/manifest';
-import { pluginDeclarationNamed, pluginProgramName } from 'movement-engine/public/plugins';
+import {
+  BUNDLED_PLUGINS,
+  BUNDLED_PLUGINS_PACKAGE,
+  PDF_PLUGINS_PACKAGE,
+  bundledPluginSpecs,
+  pluginDeclarationNamed,
+  pluginProgramName,
+} from 'movement-engine/public/plugins';
+import { findPlugin, pluginKey } from 'movement-lang';
 
 import { injectFakeBaseUrl, isTestHarnessTeam } from '../../../lib/recording';
 import { getAutomationsQb } from '../../../lib/kysely';
@@ -187,6 +195,10 @@ let platformAskModule: AdapterModuleDefinition | undefined;
  * plugin name. The order is the plan's (dealroom first, Slack last). A0
  * creates every line so each later move edits exactly one.
  */
+function webPluginKey(registeredName: string): string {
+  return pluginKey(BUNDLED_PLUGINS_PACKAGE, pluginProgramName(registeredName));
+}
+
 export const BUILTIN_MODULES: BuiltinModuleTable = {
   dealroom: {
     kind: 'adapter',
@@ -430,14 +442,11 @@ export const BUILTIN_MODULES: BuiltinModuleTable = {
   },
   // The bundled plugins (Henry 2026-10-17: plugins are modules too), all six
   // in one module, `@lf/web`. Each plugin keeps its own line.
-  'fetch-url': WEB_MODULE_LINE,
-  'web-research': WEB_MODULE_LINE,
-  research: WEB_MODULE_LINE,
-  'linkedin-research': WEB_MODULE_LINE,
-  'linkedin-enrichment': WEB_MODULE_LINE,
-  'vc-url-retrieval': WEB_MODULE_LINE,
+  // Keyed by module and name (`@lf/web/fetch_url`), so two modules can each
+  // serve a `render`.
+  ...Object.fromEntries(BUNDLED_PLUGINS.map((d) => [webPluginKey(d.signature.name), WEB_MODULE_LINE])),
   // Not a legacy plugin: `@lf/pdf` has only a module line (`pdf.render(text)`).
-  render: PDF_MODULE_LINE,
+  [pluginKey(PDF_PLUGINS_PACKAGE, 'render')]: PDF_MODULE_LINE,
 };
 
 type AdapterModuleLine = Extract<BuiltinModuleLine, { kind: 'adapter'; line: 'module' }>;
@@ -761,12 +770,16 @@ export function builtinPluginModule(
   table: BuiltinModuleTable = BUILTIN_MODULES,
 ): InProcessPluginModule | undefined {
   // A plugin's own line decides, so one plugin of a module can be rolled back
-  // while the others stay on it.
+  // while the others stay on it. The line is keyed by module and name; a bare
+  // name stands for the one bundled plugin that has it.
+  const resolved = findPlugin(bundledPluginSpecs(), pluginProgramName(plugin));
+  const wanted = resolved !== undefined && 'found' in resolved ? resolved.found.key : pluginProgramName(plugin);
+  const declared = resolved !== undefined && 'found' in resolved ? (resolved.found.spec.name ?? plugin) : plugin;
   for (const [name, entry] of Object.entries(table)) {
     if (entry.kind !== 'plugin' || entry.line !== 'module') continue;
-    if (pluginProgramName(name) !== pluginProgramName(plugin)) continue;
+    if (pluginProgramName(name) !== pluginProgramName(wanted)) continue;
     const definition = entry.load();
-    if (pluginDeclarationNamed(definition.plugins, plugin) === undefined) continue;
+    if (pluginDeclarationNamed(definition.plugins, declared) === undefined) continue;
     const loaded = loadedPluginModules.get(definition)?.get(install.teamId);
     if (loaded !== undefined) return loaded;
     const module = pluginsInProcess(definition, {

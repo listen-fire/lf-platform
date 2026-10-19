@@ -48,6 +48,7 @@ import {
   BridgeError,
   borrowedTypeSegments,
   fileViews,
+  findPlugin,
   isEnumType,
   parseFieldTypeName,
   pluginArgMisfitMessage,
@@ -460,8 +461,12 @@ export type PluginSpecs = Readonly<Record<string, PluginSpec>>;
  *  program writes `vc_url_retrieval` for a plugin registered as
  *  `vc-url-retrieval`; the snapshot keys the underscore spelling. */
 export function pluginSpecNamed(plugins: PluginSpecs, plugin: string): PluginSpec | undefined {
-  const spelled = plugin.replace(/-/g, '_');
-  return Object.hasOwn(plugins, spelled) ? plugins[spelled] : undefined;
+  // A package member's key is matched as written (a package tag may carry dashes).
+  for (const written of [plugin, plugin.replace(/-/g, '_')]) {
+    const hit = findPlugin(plugins, written);
+    if (hit !== undefined && 'found' in hit) return hit.found.spec;
+  }
+  return undefined;
 }
 
 /** One plugin invocation, as the engine asks for it. */

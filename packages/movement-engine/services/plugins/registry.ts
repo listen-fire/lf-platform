@@ -6,10 +6,10 @@
 //
 // Running a plugin is the host's (`llm.transforms.invoke`); nothing here runs.
 
-import type { PluginSpec } from 'movement-lang';
+import { findPlugin, pluginKey, type PluginSpec } from 'movement-lang';
 import type { TransformSignature } from '../translation_graph/types';
 
-import { pluginDeclarationNamed, pluginSpecOf, pluginSpecsOf, type PluginDeclaration } from './spec';
+import { pluginDeclarationNamed, pluginProgramName, pluginSpecsOf, type PluginDeclaration } from './spec';
 
 /**
  * Public signature — surfaced through the registry. The editor uses
@@ -565,19 +565,16 @@ const CATALOG_PLUGINS: ReadonlyArray<{ package: string; declarations: readonly P
 export function bundledPluginSpecs(): Record<string, PluginSpec> {
   return Object.fromEntries(
     CATALOG_PLUGINS.flatMap(({ package: tag, declarations }) =>
-      Object.entries(pluginSpecsOf(declarations)).map(([name, spec]): [string, PluginSpec] => [name, { ...spec, package: tag }]),
+      Object.entries(pluginSpecsOf(declarations)).map(([name, spec]): [string, PluginSpec] => [pluginKey(tag, name), { ...spec, package: tag, name }]),
     ),
   );
 }
 
-/** A catalog plugin's checker surface by either spelling, tagged with its
- *  package. */
+/** A catalog plugin's checker surface by its key (`@lf/pdf/render`) or by a
+ *  bare name that only one package serves, tagged with its package. */
 export function bundledPluginSpecNamed(name: string): PluginSpec | undefined {
-  for (const { package: tag, declarations } of CATALOG_PLUGINS) {
-    const declaration = pluginDeclarationNamed(declarations, name);
-    if (declaration) return { ...pluginSpecOf(declaration), package: tag };
-  }
-  return undefined;
+  const hit = findPlugin(bundledPluginSpecs(), pluginProgramName(name));
+  return hit !== undefined && 'found' in hit ? hit.found.spec : undefined;
 }
 
 /** A web plugin by either spelling (`vc_url_retrieval`, `vc-url-retrieval`). */

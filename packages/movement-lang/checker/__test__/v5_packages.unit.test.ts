@@ -199,3 +199,42 @@ describe('a package used with no import', () => {
     });
   });
 });
+
+describe('two packages that each serve a plugin of the same name', () => {
+  const render = (name: string, tag: string, output: PluginSpec['output']): [string, PluginSpec] => [
+    `${tag}/render`,
+    { args: ['text'], priced: false, requiredArgs: ['text'], argTypes: { text: 'text' }, effects: {}, output, package: tag, name },
+  ];
+  const two = mockCatalog({
+    plugins: Object.fromEntries([
+      render('render', '@lf/pdf', { kind: 'value', type: 'file' }),
+      render('render', '@lf/web', { kind: 'value', type: 'text' }),
+    ]),
+  });
+  const run = (source: string): string[] =>
+    checkProgram(parseProgram(source, { languageVersion: 5 }), two, { languageVersion: 5 })
+      .filter(notKeywordRetirement)
+      .filter((d) => d.severity === undefined)
+      .map((d) => d.code);
+
+  it('lists each package its own member', () => {
+    expect(packageMembers(two, '@lf/pdf')).toEqual([{ name: 'render', key: '@lf/pdf/render' }]);
+    expect(packageMembers(two, '@lf/web')).toEqual([{ name: 'render', key: '@lf/web/render' }]);
+  });
+
+  it('types a call by the package it was imported from', () => {
+    const body = (tag: string, as: string): string =>
+      `import { \`${tag}\` as ${as} } from plugins\n\nfunction go(t: <text>) {\n  x = ${as}.render(t)\n  y = Text.length(x)\n}\n`;
+    expect(run(body('@lf/web', 'web'))).toEqual([]);
+    expect(run(body('@lf/pdf', 'pdf'))).not.toEqual([]);
+  });
+
+  it('refuses a bare import of the name, naming both packages', () => {
+    const diagnostics = checkProgram(
+      parseProgram('import { render } from plugins\n\nfunction go(t: <text>) {\n  x = render(t)\n}\n', { languageVersion: 5 }),
+      two,
+      { languageVersion: 5 },
+    );
+    expect(diagnostics.map((d) => d.message).join('\n')).toContain('served by more than one package (@lf/pdf, @lf/web)');
+  });
+});

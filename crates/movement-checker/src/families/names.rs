@@ -374,7 +374,21 @@ impl Checker<'_> {
                         } else {
                             imported.name.clone()
                         };
-                        self.report(codes::IMPORT_UNKNOWN, format!("Unknown {what} '{named}' in '{namespace}'"), statement.span);
+                        let served_by = if what == "plugin" {
+                            movement_parser::catalog::packages::ambiguous_packages(&self.catalog.plugins, &imported.name)
+                        } else {
+                            Vec::new()
+                        };
+                        if let Some(first) = served_by.first() {
+                            let line = format!("import {{ `{first}` as {} }} from plugins", movement_parser::stmt::local_name_for_tag(first));
+                            self.report(
+                                codes::IMPORT_UNKNOWN,
+                                format!("Plugin '{named}' is served by more than one package ({}) — import the package you mean: {line}", served_by.join(", ")),
+                                statement.span,
+                            );
+                        } else {
+                            self.report(codes::IMPORT_UNKNOWN, format!("Unknown {what} '{named}' in '{namespace}'"), statement.span);
+                        }
                     }
                     kind
                 }

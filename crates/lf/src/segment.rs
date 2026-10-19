@@ -946,10 +946,12 @@ async fn invoke_plugin(host: &SegmentHost<'_>, args: &Json) -> Result<Answer, Fa
     let config = read_wire(host, args.get("config"))?.js();
     let extracted = read_wire(host, args.get("extractedContext"))?.js();
     let externals = host.adapters.externals();
-    let Some(running) = crate::externals::plugin_external_for(externals.running, &plugin) else {
-        return Ok(Err(failure(format!("plugin \"{plugin}\" cannot run: no plugin external in this project serves it"))));
+    let (running, declared) = match crate::externals::plugin_target(externals.running, &plugin) {
+        Ok(Some(target)) => target,
+        Ok(None) => return Ok(Err(failure(format!("plugin \"{plugin}\" cannot run: no plugin external in this project serves it")))),
+        Err(message) => return Ok(Err(failure(message))),
     };
-    let params = json!({ "name": plugin, "config": crate::wire::json_of_js(&config), "extractedContext": crate::wire::json_of_js(&extracted) });
+    let params = json!({ "name": declared, "config": crate::wire::json_of_js(&config), "extractedContext": crate::wire::json_of_js(&extracted) });
     let (answer, spent) = crate::protocol::spending(crate::externals::rpc(running, externals.credentials, externals.tenant, "invokePlugin", params)).await;
     // What the answer's `cost` says it spent rides the engine's own cost
     // lines; on a failure there are none to ride, so it goes to the run's

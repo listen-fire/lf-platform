@@ -23,7 +23,7 @@ import type {
   InstanceSchema,
   PluginSpec,
 } from '../checker/catalog';
-import { credentialArgOf, entryPositionKeyOf, mockCatalog, modelsMember } from '../checker/catalog';
+import { credentialArgOf, entryPositionKeyOf, findPlugin, mockCatalog, modelsMember } from '../checker/catalog';
 import type { ResolveFile } from '../checker/link';
 import { unwrapCredentialArg } from '../parser/scan';
 
@@ -247,7 +247,8 @@ export function fromCatalogSnapshot(snapshot: CatalogSnapshot): Catalog {
       return Object.keys(snapshot.credentials);
     },
     plugin(name): PluginSpec | undefined {
-      return snapshot.plugins[name];
+      const hit = findPlugin(snapshot.plugins, name);
+      return hit !== undefined && 'found' in hit ? hit.found.spec : undefined;
     },
     pluginNames(): string[] {
       return Object.keys(snapshot.plugins);
