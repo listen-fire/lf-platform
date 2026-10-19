@@ -20,6 +20,13 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 ### s-redis
 
 - Redis is now truly optional. With `MESSAGE_QUEUE_REDIS_HOSTNAME` unset (or, on compose, set empty in `deploy/.env`, which also keeps the bundled Redis from starting), the favicon cache, MCP OAuth in-flight state and the runaway-loop guard's counters live in one small expiring Postgres table (`automations.cache_entry`, added by a migration) instead of nothing or process memory. They are now exact across API instances and survive a stop between requests; the loop guard pays one database round trip per dispatch. With the hostname set, Redis is used exactly as before. Defaults are unchanged: compose still runs the bundled Redis unless you ask otherwise.
+### s-enqueue
+
+- **No movement runs inside a request.** Run now (the app, `POST /automations/run`, the trigger Send box), event replay (the app and admin), inbound email, WhatsApp, and a fired callback button or link now store the event, queue a work row and answer; whichever worker drains next runs the movement, as Slack and the webhook doors already did. A deployment whose api stops between requests no longer loses or stalls those runs; one with an always-on worker sees the same runs, a moment later.
+- **Run now and replay answer with the run's id at once** and the caller follows it: the app polls the new `movement.runStatus` (admin: `crossTeamOps.replayRunStatus`) until the run settles. A run waits in the queue as `running`; a paused listener or a guard settles it `failed`, naming why.
+- **Retrying a request no longer starts a second run.** Run now takes an optional `requestId` (the app sends one per press); a retry with the same id gets the first run back. WhatsApp messages are now deduplicated on their message id, as email already was on its Message-Id.
+- **A loop-guard throttle's held event is released from the work queue**, not an in-process timer, so a restart no longer drops the release.
+- **A fired callback answers 202** (recorded, the body queued) on the HTTP callback door, where it used to answer 200 after starting the body in the request's process.
 
 ## [0.12.0-rc.2] - 2026-10-19 (pre-release)
 

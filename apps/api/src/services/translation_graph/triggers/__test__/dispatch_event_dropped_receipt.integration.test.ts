@@ -32,8 +32,9 @@ import type { TriggerEvent } from 'movement-engine/services/translation_graph/tr
 
 import { getAutomationsQb, getCoreQb, getQb } from '../../../../lib/kysely';
 import { cleanupTeam } from '../../../../test/harness/cleanup';
-import { dispatchDiscriminableEvent } from '../dispatch_event';
-import { storeTriggerEvent, replayTriggerEvent } from '../event_store';
+import { dispatchDiscriminableEvent, registerDispatchWork, replayTriggerEvent } from '../dispatch_event';
+import { storeTriggerEvent } from '../event_store';
+import { drainUntilIdle, inProcessNotifier, resetWorkHandlersForTests, setWorkNotifier } from '../../../work/drain';
 import { resolveAdapter } from '../../adapters/resolve';
 
 
@@ -112,6 +113,17 @@ async function loadReceipt(triggerId: TriggerId) {
 describe('dispatchDiscriminableEvent — dropped events keep their suppressed receipt', () => {
   let teamId: TeamId;
 
+  beforeAll(() => {
+    resetWorkHandlersForTests();
+    registerDispatchWork();
+    setWorkNotifier({ notify() {} });
+  });
+
+  afterAll(() => {
+    setWorkNotifier(inProcessNotifier);
+    resetWorkHandlersForTests();
+  });
+
   beforeEach(async () => {
     teamId = randomUUID() as TeamId;
     await getCoreQb(['team'])
@@ -188,15 +200,15 @@ describe('dispatchDiscriminableEvent — dropped events keep their suppressed re
     expect(row.failure_reason).not.toBeNull();
   });
 
-  it('replay of a dropped event (dispatchStoredTriggerEvent tail): receipt ends suppressed, not clobbered back to dispatched', async () => {
+  it('replay of a dropped event (a queued run of the receipt): receipt ends suppressed, the run fails naming the drop', async () => {
     const { triggerId } = await seedTrigger({ teamId, kind: 'slack' });
     mockedResolve.mockResolvedValue({ adapterType: 'slack' } as unknown as Adapter);
 
-    // Store the receipt directly (the receive-path shape), then drive the
-    // OTHER tail — `dispatchStoredTriggerEvent`, via its replay entry — twice:
-    // first dispatch (dropped by the ownership gate), then a replay while the
-    // actor is STILL unregistered. Both go through the same tail; the receipt
-    // must end 'suppressed', never overwritten to 'dispatched'/null.
+    // Store the receipt directly (the receive-path shape), then replay it
+    // twice, each a queued run the drain dispatches: both are dropped by the
+    // ownership gate (the actor is still unregistered). The receipt must end
+    // 'suppressed', never overwritten to 'dispatched'/null, and each queued
+    // run must settle rather than stay 'running'.
     const triggerEvent: TriggerEvent = {
       pipelineInputId: `trigger:${triggerId}`,
       adapterType: 'slack',
@@ -206,18 +218,21 @@ describe('dispatchDiscriminableEvent — dropped events keep their suppressed re
     };
     const { id: eventId } = await storeTriggerEvent({ teamId, triggerId, event: triggerEvent });
 
-    const first = await replayTriggerEvent({ teamId, eventId });
-    expect(first.replayed).toBe(true);
-    let row = await loadReceipt(triggerId);
-    expect(row.status).toBe('suppressed');
-    expect(row.failure_reason).toMatch(/registered/);
-
-    const second = await replayTriggerEvent({ teamId, eventId });
-    expect(second.replayed).toBe(true);
-    row = await loadReceipt(triggerId);
-    expect(row.status).toBe('suppressed');
-    expect(row.failure_reason).toMatch(/registered/);
-    expect(row.failure_reason).not.toBeNull();
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const replay = await replayTriggerEvent({ teamId, eventId });
+      if (!replay.replayed) throw new Error('replay found no receipt');
+      await drainUntilIdle({ owner: 'test', teamId });
+      const row = await loadReceipt(triggerId);
+      expect(row.status).toBe('suppressed');
+      expect(row.failure_reason).toMatch(/registered/);
+      const run = await getAutomationsQb(['trigger_run'])
+        .selectFrom('trigger_run')
+        .where('id', '=', replay.runId)
+        .select(['status', 'failure_reason'])
+        .executeTakeFirstOrThrow();
+      expect(run.status).toBe('failed');
+      expect(run.failure_reason).toMatch(/not a registered user/);
+    }
   });
 
   it('idempotency: a redelivery with the same idempotencyKey stores once and flags duplicate', async () => {

@@ -32,7 +32,7 @@ import {
   triggerAcceptsWhatsappKind,
 } from '../webhook_sync/providers/whatsapp';
 import { resolveAdapterSlug } from '../translation_graph/adapters/registry';
-import { receiveTriggerEvent } from '../translation_graph/triggers/event_store';
+import { receiveTriggerEvent } from '../translation_graph/triggers/dispatch_event';
 import { getMetaWhatsappApi, movementsPhoneNumberId } from './metaApi';
 import { resolveWhatsappRoute } from './route';
 import { isVerifiedLink } from './phone_verification/logic';
@@ -206,6 +206,10 @@ export async function dispatchWhatsappMessage(input: {
               externalId: message.id,
             },
             occurredAt: new Date().toISOString(),
+            // The wamid is also the DELIVERY id: Meta redelivers anything that
+            // was not acked with a 2xx, and the receipt's unique index on
+            // (trigger, delivery id) makes the redelivery a no-op.
+            idempotencyKey: message.id,
           };
           await receiveTriggerEvent({ teamId: resolved.teamId as TeamId, triggerId: trigger.id, event });
           dispatched += 1;

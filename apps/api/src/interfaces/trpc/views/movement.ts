@@ -59,8 +59,10 @@ import {
   type SaveMovementResult,
 } from '../../../services/translation_graph/movement/provision';
 import {
-  runMovementNow,
-  type MovementRunNowResult,
+  getMovementRunStatus,
+  runMovementAsync,
+  type MovementRunAsyncResult,
+  type MovementRunStatus,
 } from '../../../services/translation_graph/movement/run_now';
 import {
   checkMovementDependents,
@@ -563,12 +565,13 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
       }),
 
     /**
-     * "Run now" — inject an invocation event on the movement's MANUAL
-     * channel (`go = manual()` + `listen to go {} fire <movement>`),
-     * through normal trigger dispatch. The event carries the pressing member, so
-     * `@user_*` / `@actor_*` resolve to them; a listener whose written
-     * instances are all `dry_run: true` rehearses (writes captured, not
-     * committed). Real writes otherwise.
+     * "Run now" — queue an invocation event on the movement's MANUAL
+     * channel (`go = manual()` + `listen to go {} fire <movement>`), through
+     * normal trigger dispatch, and answer with the run's id at once; the run
+     * happens on a worker and `runStatus` follows it. The event carries the
+     * pressing member, so `@user_*` / `@actor_*` resolve to them; a listener
+     * whose written instances are all `dry_run: true` rehearses (writes
+     * captured, not committed). Real writes otherwise.
      */
     runNow: userProcedure
       .input(
@@ -587,12 +590,15 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
               }),
             )
             .optional(),
+          /** One id per press: a retried request with the same id is the same
+           *  run, never a second one. */
+          requestId: z.string().min(1).max(200).optional(),
         }),
       )
-      .mutation(async ({ input }): Promise<MovementRunNowResult> => {
+      .mutation(async ({ input }): Promise<MovementRunAsyncResult> => {
         const ctx = currentContext();
         const user = await UserService.getById(ctx.user.id);
-        return runMovementNow({
+        return runMovementAsync({
           teamId: ctx.user.teamId,
           movementId: input.id,
           text: input.text,
@@ -601,7 +607,16 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
             email: user.email,
             ...(user.username !== null ? { name: user.username } : {}),
           },
+          ...(input.requestId !== undefined ? { requestId: input.requestId } : {}),
         });
+      }),
+
+    /** One run's status — what a Run-now press follows until it settles. */
+    runStatus: userProcedure
+      .input(z.object({ runId: z.string().uuid() }))
+      .query(async ({ input }): Promise<MovementRunStatus | { error: string }> => {
+        const ctx = currentContext();
+        return getMovementRunStatus({ teamId: ctx.user.teamId, runId: input.runId });
       }),
   });
 };

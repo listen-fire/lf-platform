@@ -26,14 +26,28 @@ import { registerWorkHandler } from '../../work/drain';
 import { enqueueWork } from '../../work/store';
 import { triggerEventSchema, type TriggerEvent } from 'movement-engine/public/inbound';
 import { triggerEventOf } from 'movement-engine/public/inbound';
-import { dispatchTriggerByIdEvent } from './router';
+import { notifyWork } from '../../work/drain';
+import {
+  dispatchTriggerByIdEvent,
+  mapRecordingTriggerType,
+  type TriggerIdDispatchResult,
+} from './router';
+import { describeDroppedReason } from './dropped_reason';
 import {
   storeTriggerEvent,
   markTriggerEventDispatched,
   markTriggerEventFailed,
+  resetTriggerEventToReceived,
 } from './event_store';
 import { platformTokenRegistry } from '../engine/platform_token_registry_db';
-import { runningSegment } from '../runs/trigger_run';
+import { loadTriggerById } from '../storage/tg_table';
+import { movementForTrigger } from '../movement/execute';
+import {
+  claimQueuedRun,
+  requeueRun,
+  runningSegment,
+  TriggerRunRecorder,
+} from '../runs/trigger_run';
 import { ORPHAN_AFTER } from '../../movement_engine/run_lease';
 import { neverAsAny } from 'movement-engine/public/types';
 import { settleUnresumableRun } from '../../interaction/run_failure';
@@ -52,6 +66,11 @@ export interface CapturedTriggerEvent {
   storedEventId?: TriggerEventId;
   /** A redelivery whose receipt already exists — dispatch MUST be skipped. */
   duplicate: boolean;
+  /** A run the door already created and handed its caller (`queueRun`): the
+   *  firing adopts it, so the id the caller follows is the run that happens. */
+  runId?: TriggerRunId;
+  /** Rehearse: writes are captured, not committed. */
+  dryRun?: boolean;
 }
 
 export interface DiscriminableEventInput {
@@ -185,7 +204,7 @@ export async function dispatchCapturedTriggerEvent(input: {
   surfaceErrors?: boolean;
 }): Promise<void> {
   const { captured } = input;
-  const { triggerId, teamId, triggerEvent, storedEventId } = captured;
+  const { triggerId, teamId, triggerEvent, storedEventId, runId } = captured;
   if (captured.duplicate) return;
 
   try {
@@ -195,6 +214,8 @@ export async function dispatchCapturedTriggerEvent(input: {
       teamId,
       platformTokenRegistry,
       storedEventId,
+      ...(runId !== undefined ? { existingRunId: runId } : {}),
+      ...(captured.dryRun === true ? { dryRun: true } : {}),
     });
     // A dropped event (actor-unregistered ownership gate, opt-in echo
     // suppression, or any other `droppedReason`) means the router already
@@ -206,12 +227,61 @@ export async function dispatchCapturedTriggerEvent(input: {
     if (storedEventId !== undefined && result.droppedReason === undefined) {
       await markTriggerEventDispatched(storedEventId);
     }
+    if (runId !== undefined) await settleQueuedRunAfterDispatch({ runId, teamId, result, storedEventId });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (storedEventId !== undefined) await markTriggerEventFailed(storedEventId, message);
+    if (runId !== undefined) await failQueuedRun({ runId, teamId, reason: message });
     logger.error('[InboundDispatch] dispatch failed', { triggerId, error: message });
     if (input.surfaceErrors) throw err;
   }
+}
+
+/**
+ * A queued run whose dispatch produced no firing (run_mode off, echo
+ * suppressed, guard paused, …) would stay `running` forever: the recorder only
+ * touches the row on a firing. Settle it `failed`, naming why, so whoever
+ * follows the run learns the reason. A guard throttle is the exception: the
+ * guard put the receipt back on the queue, so the run waits there again. A
+ * firing has already settled the row, so the `running` guard makes this a no-op.
+ */
+async function settleQueuedRunAfterDispatch(input: {
+  runId: TriggerRunId;
+  teamId: TeamId;
+  result: TriggerIdDispatchResult;
+  storedEventId: TriggerEventId | undefined;
+}): Promise<void> {
+  const { result } = input;
+  // The queued row could not know the listener rehearses (its run mode is read
+  // at dispatch), and the firing's settle leaves the flag as it found it.
+  if (result.movementFirings?.some((firing) => firing.dryRun) === true) {
+    await getAutomationsQb(['trigger_run'])
+      .updateTable('trigger_run')
+      .set({ dry_run: true })
+      .where('id', '=', input.runId)
+      .execute();
+  }
+  if (result.droppedReason === 'loop_guard_throttled' && input.storedEventId !== undefined) {
+    await requeueRun(input.runId);
+    return;
+  }
+  const reason =
+    result.droppedReason !== undefined
+      ? describeDroppedReason(result.droppedReason)
+      : result.errors !== undefined && result.errors.length > 0
+        ? result.errors.map((e) => e.message).join('; ')
+        : 'dispatch produced no firing';
+  await failQueuedRun({ runId: input.runId, teamId: input.teamId, reason });
+}
+
+async function failQueuedRun(input: { runId: TriggerRunId; teamId: TeamId; reason: string }): Promise<void> {
+  await getAutomationsQb(['trigger_run'])
+    .updateTable('trigger_run')
+    .set({ status: 'failed', failed_at: new Date(), failure_reason: input.reason })
+    .where('id', '=', input.runId)
+    .where('team_id', '=', input.teamId)
+    .where('status', '=', 'running')
+    .execute();
 }
 
 const capturedTriggerEventSchema = z.object({
@@ -226,6 +296,8 @@ const capturedTriggerEventSchema = z.object({
     .custom<TriggerEventId>((value) => z.uuid().safeParse(value).success)
     .optional(),
   duplicate: z.boolean(),
+  runId: z.custom<TriggerRunId>((value) => z.uuid().safeParse(value).success).optional(),
+  dryRun: z.boolean().optional(),
 });
 
 function parseCapturedTriggerEvent(payload: unknown): CapturedTriggerEvent {
@@ -238,6 +310,8 @@ function parseCapturedTriggerEvent(payload: unknown): CapturedTriggerEvent {
     triggerEvent: parsed.triggerEvent as TriggerEvent,
     ...(parsed.storedEventId !== undefined ? { storedEventId: parsed.storedEventId } : {}),
     duplicate: parsed.duplicate,
+    ...(parsed.runId !== undefined ? { runId: parsed.runId } : {}),
+    ...(parsed.dryRun !== undefined ? { dryRun: parsed.dryRun } : {}),
   };
 }
 
@@ -254,6 +328,17 @@ function dispatchWorkKey(storedEventId: string): string {
   return `dispatch_event:${storedEventId}`;
 }
 
+/** A queued run's row is keyed on the run: a receipt may be run more than once
+ *  (a replay), and each run is its own row. */
+function queuedRunWorkKey(runId: string): string {
+  return `dispatch_event:run:${runId}`;
+}
+
+function workKeyOf(receipt: CapturedTriggerEvent): string {
+  if (receipt.runId !== undefined) return queuedRunWorkKey(receipt.runId);
+  return dispatchWorkKey(receipt.storedEventId ?? randomUUID());
+}
+
 /** One work row per receipt that still needs a run. Keyed on the receipt, so a
  *  re-enqueue of the same receipt collapses onto the row already waiting. A
  *  redelivery of a receipt that never ran (still `received`) queues it again:
@@ -266,12 +351,202 @@ export async function enqueueCapturedEvents(captured: CapturedTriggerEvent[]): P
     }
     await enqueueWork({
       kind: 'dispatch_event',
-      key: dispatchWorkKey(receipt.storedEventId ?? randomUUID()),
+      key: workKeyOf(receipt),
       teamId: receipt.teamId,
       // The row runs the stored receipt, which is not itself a redelivery.
       payload: { ...receipt, duplicate: false },
     });
   }
+}
+
+/**
+ * The receive door for one already-routed event (inbound email, WhatsApp):
+ * store the receipt, queue its row, and return — the movement runs on whichever
+ * worker drains next, never inside the request. Idempotent on the event's
+ * delivery id: a redelivery is `duplicate` and queues nothing new, unless its
+ * receipt never ran (its row may have been lost after the receipt landed).
+ */
+export async function receiveTriggerEvent(input: {
+  teamId: TeamId;
+  triggerId: string;
+  event: TriggerEvent;
+}): Promise<{ eventId: string; duplicate: boolean }> {
+  const stored = await storeTriggerEvent(input);
+  await enqueueCapturedEvents([
+    {
+      triggerId: input.triggerId as TriggerId,
+      teamId: input.teamId,
+      triggerEvent: input.event,
+      storedEventId: stored.id,
+      duplicate: stored.duplicate,
+    },
+  ]);
+  notifyWork();
+  return { eventId: stored.id, duplicate: stored.duplicate };
+}
+
+export interface QueuedRun {
+  runId: TriggerRunId;
+  /** The event's delivery id was already received: this is the run the first
+   *  delivery queued, and nothing new was queued. */
+  duplicate: boolean;
+}
+
+/**
+ * Queue one run of a trigger and hand back its id before it starts — the
+ * on-demand doors (Run now, replay) return this id so the caller can follow
+ * the run. Stores the receipt, then queues a run of it. Idempotent on the
+ * event's delivery id: a retried request gets the first request's run back.
+ */
+export async function queueRun(input: {
+  triggerId: TriggerId;
+  teamId: TeamId;
+  event: TriggerEvent;
+  /** The movement version the run pins (the trigger's movement's current). */
+  movementVersionId: string | null;
+  dryRun?: boolean;
+}): Promise<QueuedRun> {
+  const stored = await storeTriggerEvent({
+    teamId: input.teamId,
+    triggerId: input.triggerId,
+    event: input.event,
+  });
+  if (stored.duplicate) {
+    const first = await runForReceipt(stored.id);
+    if (first !== undefined) return { runId: first.id, duplicate: true };
+  }
+  const runId = await queueRunOfReceipt({ ...input, storedEventId: stored.id });
+  return { runId, duplicate: stored.duplicate };
+}
+
+/**
+ * Insert the run as `running` with no heartbeat (waiting in the queue) and
+ * queue the row that starts it. The run row, its receipt and its work row are
+ * all durable before the caller gets the id.
+ */
+async function queueRunOfReceipt(input: {
+  triggerId: TriggerId;
+  teamId: TeamId;
+  event: TriggerEvent;
+  storedEventId: TriggerEventId;
+  movementVersionId: string | null;
+  dryRun?: boolean;
+}): Promise<TriggerRunId> {
+  const dryRun = input.dryRun === true ? { dryRun: true } : {};
+  const recorder = new TriggerRunRecorder({
+    teamId: input.teamId,
+    triggerId: input.triggerId,
+    triggerType: mapRecordingTriggerType(input.event.triggerType),
+    triggerEvent: input.event,
+    movementVersionId: input.movementVersionId,
+    triggerEventId: input.storedEventId,
+    queued: true,
+    ...dryRun,
+  });
+  await recorder.ensureStarted();
+  const runId = recorder.triggerRunId;
+  // The recorder logs rather than throws a failed insert; a run id handed out
+  // for a row that does not exist would never be followed to an outcome.
+  const recorded = await getAutomationsQb(['trigger_run'])
+    .selectFrom('trigger_run')
+    .where('id', '=', runId)
+    .select('id')
+    .executeTakeFirst();
+  if (recorded === undefined) throw new Error(`run ${runId} could not be recorded`);
+  try {
+    await enqueueCapturedEvents([
+      {
+        triggerId: input.triggerId,
+        teamId: input.teamId,
+        triggerEvent: input.event,
+        storedEventId: input.storedEventId,
+        duplicate: false,
+        runId,
+        ...dryRun,
+      },
+    ]);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await failQueuedRun({ runId, teamId: input.teamId, reason: `could not be queued: ${message}` });
+    throw err;
+  }
+  notifyWork();
+  return runId;
+}
+
+/** Put a stored receipt back on the queue, due at `dueAt` (the loop guard's
+ *  held release). A queued run it carried stays its run. */
+export async function requeueReceipt(input: {
+  storedEventId: TriggerEventId;
+  dueAt: Date;
+  runId?: TriggerRunId;
+}): Promise<void> {
+  const row = await getAutomationsQb(['trigger_event'])
+    .selectFrom('trigger_event')
+    .where('id', '=', input.storedEventId)
+    .select(['team_id', 'trigger_id', 'payload'])
+    .executeTakeFirst();
+  if (row === undefined) throw new Error(`trigger event ${input.storedEventId} not found`);
+  await resetTriggerEventToReceived(input.storedEventId);
+  const receipt = parseCapturedTriggerEvent({
+    triggerId: row.trigger_id,
+    teamId: row.team_id,
+    triggerEvent: row.payload,
+    storedEventId: input.storedEventId,
+    duplicate: false,
+    ...(input.runId !== undefined ? { runId: input.runId } : {}),
+  });
+  await enqueueWork({
+    kind: 'dispatch_event',
+    key: workKeyOf(receipt),
+    teamId: receipt.teamId,
+    payload: receipt,
+    dueAt: input.dueAt,
+  });
+}
+
+/**
+ * Re-run a stored event (playback) as a new queued run. Team-scoped unless
+ * `teamId` is omitted (the cross-team admin replay); the receipt's own team
+ * scopes the run either way.
+ */
+export async function replayTriggerEvent(input: {
+  eventId: string;
+  teamId?: TeamId;
+  dryRun?: boolean;
+}): Promise<{ replayed: false } | { replayed: true; runId: TriggerRunId }> {
+  let query = getAutomationsQb(['trigger_event'])
+    .selectFrom('trigger_event')
+    .where('id', '=', input.eventId as TriggerEventId)
+    .select(['id', 'team_id', 'trigger_id', 'payload']);
+  if (input.teamId !== undefined) query = query.where('team_id', '=', input.teamId);
+  const row = await query.executeTakeFirst();
+  if (!row) return { replayed: false };
+  const receipt = parseCapturedTriggerEvent({
+    triggerId: row.trigger_id,
+    teamId: row.team_id,
+    triggerEvent: row.payload,
+    storedEventId: row.id,
+    duplicate: false,
+  });
+  const runId = await queueRunOfReceipt({
+    triggerId: receipt.triggerId,
+    teamId: receipt.teamId,
+    event: receipt.triggerEvent,
+    storedEventId: row.id,
+    movementVersionId: await currentMovementVersionId(receipt),
+    ...(input.dryRun === true ? { dryRun: true } : {}),
+  });
+  return { replayed: true, runId };
+}
+
+/** The version a run of this trigger pins now; null when its movement is not
+ *  versioned or is gone (the dispatch then drops it with the reason). */
+async function currentMovementVersionId(receipt: CapturedTriggerEvent): Promise<string | null> {
+  const trigger = await loadTriggerById(receipt.triggerId);
+  if (!trigger || trigger.movementId === null) return null;
+  const movement = await movementForTrigger({ teamId: receipt.teamId, movementId: trigger.movementId });
+  return movement?.currentVersionId ?? null;
 }
 
 const UNFINISHED_SEGMENT = 'segment did not complete: lease lapsed or the previous attempt failed';
@@ -297,6 +572,10 @@ async function runForReceipt(
  */
 async function runReceipt(payload: unknown, ctx: WorkContext): Promise<void> {
   const captured = parseCapturedTriggerEvent(payload);
+  if (captured.runId !== undefined) {
+    await runQueuedRun({ captured, runId: captured.runId, payload, ctx });
+    return;
+  }
   const { storedEventId } = captured;
   if (storedEventId === undefined) {
     await dispatchCapturedTriggerEvent({ captured });
@@ -335,6 +614,47 @@ async function runReceipt(payload: unknown, ctx: WorkContext): Promise<void> {
     case 'not_running':
       // Settled between the two reads.
       await markTriggerEventDispatched(storedEventId);
+      return;
+    default:
+      neverAsAny(segment);
+  }
+}
+
+/**
+ * A row carrying a queued run: the run, not the receipt, says whether it still
+ * has to happen — a replay re-runs a receipt that already settled. The first
+ * claim of the waiting run starts it; any other claim finds it started and
+ * treats it as `runReceipt` treats a run its receipt already started.
+ */
+async function runQueuedRun(input: {
+  captured: CapturedTriggerEvent;
+  runId: TriggerRunId;
+  payload: unknown;
+  ctx: WorkContext;
+}): Promise<void> {
+  const { captured, runId, ctx } = input;
+  if (await claimQueuedRun(runId)) {
+    await dispatchCapturedTriggerEvent({ captured });
+    return;
+  }
+  const segment = await runningSegment(runId, { now: ctx.now, staleAfterMs: ORPHAN_AFTER });
+  switch (segment) {
+    case 'orphaned':
+      await settleUnresumableRun({ runId, reason: UNFINISHED_SEGMENT });
+      if (captured.storedEventId !== undefined) {
+        await markTriggerEventFailed(captured.storedEventId, UNFINISHED_SEGMENT);
+      }
+      return;
+    case 'live':
+      await enqueueWork({
+        kind: 'dispatch_event',
+        key: queuedRunWorkKey(runId),
+        teamId: captured.teamId,
+        payload: input.payload,
+        dueAt: new Date(ctx.now.getTime() + ORPHAN_AFTER),
+      });
+      return;
+    case 'not_running':
       return;
     default:
       neverAsAny(segment);

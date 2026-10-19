@@ -34,10 +34,6 @@ jest.mock('../../translation_graph/triggers/dispatch_event', () => ({
   ...jest.requireActual('../../translation_graph/triggers/dispatch_event'),
   ...require('./fakes').dispatchEventFake(),
 }));
-jest.mock('../../translation_graph/triggers/event_store', () => ({
-  ...jest.requireActual('../../translation_graph/triggers/event_store'),
-  ...require('./fakes').eventStoreFake(),
-}));
 jest.mock('../../movement_engine/await_wake', () => ({
   ...jest.requireActual('../../movement_engine/await_wake'),
   ...require('./fakes').awaitWakeFake(),

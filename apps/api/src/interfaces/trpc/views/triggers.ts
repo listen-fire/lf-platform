@@ -53,15 +53,16 @@ import {
   type ConfigBlock,
 } from 'movement-engine/public/adapter-config';
 import { findSiblingTriggerByConfigValue } from '../../../services/translation_graph/storage/tg_table';
-import {
-  listTriggerEvents,
-  replayTriggerEvent,
-} from '../../../services/translation_graph/triggers/event_store';
+import { listTriggerEvents } from '../../../services/translation_graph/triggers/event_store';
 import {
   parseRunMode,
   type TriggerRunMode,
 } from '../../../services/translation_graph/triggers/run_mode';
-import { runMovementNow } from '../../../services/translation_graph/movement/run_now';
+import {
+  runMovementAsync,
+  type MovementRunAsyncResult,
+} from '../../../services/translation_graph/movement/run_now';
+import { replayTriggerEvent } from '../../../services/translation_graph/triggers/dispatch_event';
 import { clearGuardPaused } from '../../../services/loop_guard';
 import ExternalServiceType from '../../../generated/kysely/automations/ExternalServiceType';
 import { reportedFailureReason } from '../../../services/translation_graph/runs/trigger_run';
@@ -965,10 +966,9 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
     /**
      * Submit text and/or files directly to an automation — the "send to this
      * automation" affordance on the automation page. A thin wrapper over the
-     * one on-demand invocation service (`runMovementNow`): it has the trigger
-     * id + text + files + session, injects a manual invocation through the SAME
-     * path real events use (`dispatchTriggerByIdEvent`), respecting the
-     * dispatcher's authoring gate.
+     * one on-demand invocation service (`runMovementAsync`): it has the trigger
+     * id + text + files + session and queues a manual invocation through the
+     * SAME path real events use, answering with the run's id at once.
      *
      * Legacy trigger-keyed entry, kept working for the apps/web Send box
      * pending UI consolidation onto the movement-keyed `movement.runNow`
@@ -992,10 +992,10 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
         }),
       )
       .mutation(
-        async ({ input }): Promise<{ ranCount: number; errors: string[] }> => {
+        async ({ input }): Promise<MovementRunAsyncResult> => {
           const ctx = currentContext();
           const user = await UserService.getById(ctx.user.id);
-          const result = await runMovementNow({
+          return runMovementAsync({
             teamId: ctx.user.teamId,
             triggerId: input.triggerId,
             text: input.text,
@@ -1005,9 +1005,6 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
               ...(user.username !== null ? { name: user.username } : {}),
             },
           });
-          return result.ok
-            ? { ranCount: 1, errors: [] }
-            : { ranCount: 0, errors: result.errors };
         },
       ),
   });

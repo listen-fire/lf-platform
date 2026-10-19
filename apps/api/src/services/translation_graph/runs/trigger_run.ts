@@ -77,6 +77,9 @@ export interface TriggerRunFiring {
   /** The stored inbound receipt this firing was dispatched from, when there
    *  was one — how a re-claimed dispatch finds the run it already started. */
   triggerEventId?: TriggerEventId;
+  /** The row is inserted waiting in the work queue: no segment has started,
+   *  so it carries no heartbeat until a worker claims it (`claimQueuedRun`). */
+  queued?: boolean;
 }
 
 type StepStatus = 'success' | 'partial' | 'failed';
@@ -283,7 +286,7 @@ export class TriggerRunRecorder {
           ops_run_id: this.opsRunId,
           dry_run: this.firing.dryRun ?? false,
           started_at: this.startedAt,
-          last_heartbeat_at: new Date(),
+          last_heartbeat_at: this.firing.queued === true ? null : new Date(),
           trigger_event_id: this.firing.triggerEventId ?? null,
         })
         .onConflict((oc) => oc.column('id').doNothing())
@@ -1020,6 +1023,34 @@ export async function runningSegment(
 }
 
 /**
+ * Take a queued run (inserted with `queued`) for its first segment. Compare
+ * and set on the missing heartbeat, so of two claims of one queued run only one
+ * starts it; false when the run already started, settled, or is gone.
+ */
+export async function claimQueuedRun(runId: TriggerRunId): Promise<boolean> {
+  const claimed = await getAutomationsQb(['trigger_run'])
+    .updateTable('trigger_run')
+    .set({ last_heartbeat_at: sql<Date>`now()` })
+    .where('id', '=', runId)
+    .where('status', '=', 'running')
+    .where('last_heartbeat_at', 'is', null)
+    .returning('id')
+    .executeTakeFirst();
+  return claimed !== undefined;
+}
+
+/** Put a claimed run back in the queue (a guard held it before it fired), so
+ *  its re-queued row claims it again. */
+export async function requeueRun(runId: TriggerRunId): Promise<void> {
+  await getAutomationsQb(['trigger_run'])
+    .updateTable('trigger_run')
+    .set({ last_heartbeat_at: null })
+    .where('id', '=', runId)
+    .where('status', '=', 'running')
+    .execute();
+}
+
+/**
  * Why a run failed, as a reader reports it: the row's `failure_reason` once
  * the run has failed, and nothing before. A first firing that lost its lease
  * notes its reason on a row that is still `running` (`noteFirstFiringLeaseLost`)
@@ -1056,10 +1087,18 @@ export async function noteFirstFiringLeaseLost(runId: TriggerRunId): Promise<voi
 export async function settleOrphanedRunningRuns(): Promise<void> {
   // The database clock, as the heartbeat and the lease are written with it.
   const cutoff = sql<Date>`now() - ${ORPHAN_AFTER}::integer * interval '1 millisecond'`;
-  const orphans = await getAutomationsQb(['trigger_run'])
+  const orphans = await getAutomationsQb(['trigger_run', 'work'])
     .selectFrom('trigger_run')
     .where('status', '=', 'running')
     .where((eb) => eb(eb.fn.coalesce('last_heartbeat_at', 'started_at'), '<', cutoff))
+    // A run still waiting in the queue has no segment to have died: on a
+    // deployment whose workers wake on a schedule it may wait longer than
+    // ORPHAN_AFTER, and its row will run it.
+    .where(
+      sql<boolean>`NOT (trigger_run.last_heartbeat_at IS NULL AND EXISTS (
+        SELECT 1 FROM automations.work
+        WHERE work.kind = 'dispatch_event' AND work.payload->>'runId' = trigger_run.id::text))`,
+    )
     .select(['id', 'trigger_event_id', 'failure_reason'])
     .execute();
   for (const orphan of orphans) {

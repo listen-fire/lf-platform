@@ -119,9 +119,9 @@ describe('applyLoopGuard — pause / throttle / fail-open', () => {
 describe('scheduleDeferredReplay — the held-event release', () => {
   const fn = extractFunction(src, 'scheduleDeferredReplay');
 
-  it('resets the stored receipt to received and re-dispatches it after the delay', () => {
-    expect(fn).toMatch(/setTimeout\(/);
-    expect(fn).toMatch(/resetTriggerEventToReceived\(input\.storedEventId\)/);
-    expect(fn).toMatch(/dispatchStoredTriggerEvent\(input\.storedEventId\)/);
+  it('puts the stored receipt back on the work queue, due after the delay — no in-process timer', () => {
+    expect(fn).not.toMatch(/setTimeout\(/);
+    expect(fn).toMatch(/requeueReceipt\(/);
+    expect(fn).toMatch(/dueAt: new Date\(Date\.now\(\) \+ input\.delayMs\)/);
   });
 });

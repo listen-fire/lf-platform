@@ -151,9 +151,19 @@ export type MovementTestRunResult = {
     error: string;
 };
 
+/** Identifier type for automations.movement_version */
+export type MovementVersionId = string & {
+    __brand: 'automations.movement_version';
+};
+
 /** Identifier type for automations.trigger_event */
 export type TriggerEventId = string & {
     __brand: 'automations.trigger_event';
+};
+
+/** Identifier type for automations.trigger_run */
+export type TriggerRunId = string & {
+    __brand: 'automations.trigger_run';
 };
 
 /**
@@ -186,6 +196,65 @@ export type TriggerEventId = string & {
 export type AutomationStatus = 'live' | 'setting_up' | 'paused' | 'error';
 
 export type TriggerRunMode = 'off' | 'dry_run' | 'live';
+
+/** Which saved version a run executed, against the one that would run
+ *  today. A run pins its version at start, so a firing from before the
+ *  last save ran OLDER logic than the editor shows — the thing that
+ *  otherwise takes a database query to notice. */
+export interface ExecutedMovementVersion {
+    /** The version this run executed. */
+    number: number;
+    /** The version a run started now would execute. */
+    currentNumber: number;
+    isCurrent: boolean;
+}
+
+export interface MovementRunNowFailure {
+    ok: false;
+    errors: string[];
+}
+export interface MovementRunAsyncDispatched {
+    ok: true;
+    runId: string;
+    status: 'running';
+    movementName: string;
+}
+export type MovementRunAsyncResult = MovementRunAsyncDispatched | MovementRunNowFailure;
+export interface MovementRunStatus {
+    runId: string;
+    /** 'running' | 'parked' (waiting on a human ask) | 'success' | 'partial' | 'failed'. */
+    status: string;
+    /** Total writes the firing applied across its steps. */
+    recordCount: number;
+    /** The run rehearsed: its writes were captured, not committed. */
+    dryRun: boolean;
+    /** Per-step errors (terminal aggregate); empty on a clean run. */
+    errors: Array<{
+        tgId?: string;
+        nodeId?: string | null;
+        message: string;
+    }>;
+    startedAt: string;
+    /** Set once the run reaches a terminal SUCCESS/partial state. */
+    finishedAt: string | null;
+    /** Set once the run FAILED. */
+    failedAt: string | null;
+    failureReason: string | null;
+    /** Model-call cost this run incurred, in USD to 4 decimal places — 0 when
+     *  it made no model calls. Rolled up from `llm_usage`. */
+    costUsd: number;
+    /** How many model calls this run made. */
+    modelCalls: number;
+    /** Present while the run is PAUSED at its cost limit (status stays
+     *  'parked'): why, what it spent against the limit, and the limit. Resume it
+     *  with `resumeRun`. */
+    paused?: {
+        reason: string;
+        spentUsd: number;
+        capUsd: number;
+        pausedAt: string;
+    };
+}
 
 export type TriggerListItem = {
     id: string;
@@ -608,48 +677,6 @@ export const enum OpsSeverity {
 export type OpsEventId = string & {
     __brand: 'public.ops_event';
 };
-
-/** Identifier type for automations.movement_version */
-export type MovementVersionId = string & {
-    __brand: 'automations.movement_version';
-};
-
-/** Identifier type for automations.trigger_run */
-export type TriggerRunId = string & {
-    __brand: 'automations.trigger_run';
-};
-
-/** Which saved version a run executed, against the one that would run
- *  today. A run pins its version at start, so a firing from before the
- *  last save ran OLDER logic than the editor shows — the thing that
- *  otherwise takes a database query to notice. */
-export interface ExecutedMovementVersion {
-    /** The version this run executed. */
-    number: number;
-    /** The version a run started now would execute. */
-    currentNumber: number;
-    isCurrent: boolean;
-}
-
-export interface MovementRunNowSuccess {
-    ok: true;
-    /** The movement the manual listener fires. */
-    movementName: string;
-    /** Writes were captured, not committed (the listener rehearses). */
-    dryRun: boolean;
-    /** Writes the run applied — the "records processed" count. */
-    recordCount: number;
-    /** Per-node evaluation errors surfaced by the engine; empty on a clean run. */
-    errors: {
-        nodeId: string | null;
-        message: string;
-    }[];
-}
-export interface MovementRunNowFailure {
-    ok: false;
-    errors: string[];
-}
-export type MovementRunNowResult = MovementRunNowSuccess | MovementRunNowFailure;
 
 export interface WalkedProperty {
     type: FieldType;
@@ -3369,17 +3396,36 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     _output_in: typeof _trpc_server.unsetMarker;
                     _output_out: typeof _trpc_server.unsetMarker;
                 }, {
-                    error?: string | undefined;
                     dryRun: boolean;
-                    status: string;
-                    droppedReason: "native_echo" | "trigger_not_found" | "no_bound_tgs" | "run_mode_off" | "loop_guard_paused" | "loop_guard_throttled" | "echo_suppressed" | "actor_unregistered" | "no_movement" | null;
-                    firingCount: number;
-                    writeCount: number;
-                    firings: {
-                        movementName: string;
-                        writes: number;
-                        dryRun: boolean;
-                    }[];
+                    runId: string;
+                }>;
+                replayRunStatus: _trpc_server.BuildProcedure<"query", {
+                    _config: _trpc_server.RootConfig<{
+                        ctx: {
+                            authorise: () => Promise<void>;
+                        };
+                        meta: object;
+                        errorShape: {
+                            message: string;
+                            code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
+                            data: _trpc_server_dist_error_formatter.DefaultErrorData;
+                        };
+                        transformer: _trpc_server.DefaultDataTransformer;
+                    }>;
+                    _meta: object;
+                    _ctx_out: {
+                        authorise: () => Promise<void>;
+                    };
+                    _input_in: {
+                        runId: string;
+                    };
+                    _input_out: {
+                        runId: string;
+                    };
+                    _output_in: typeof _trpc_server.unsetMarker;
+                    _output_out: typeof _trpc_server.unsetMarker;
+                }, MovementRunStatus | {
+                    error: string;
                 }>;
             }>;
             signups: _trpc_server.CreateRouterInner<_trpc_server.RootConfig<{
@@ -4729,12 +4775,11 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 errors: unknown;
                 trigger_id: string;
                 trigger_type: string;
-                diagnostics: unknown;
-                engine: string | null;
                 record_id: string | null;
                 movement_version_id: MovementVersionId | null;
                 trigger_payload: unknown;
                 changed_fields: string[] | null;
+                diagnostics: unknown;
                 nodes_written: number;
                 dry_run: boolean;
                 started_at: Date;
@@ -4750,6 +4795,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 lease_owner: string | null;
                 lease_until: Date | null;
                 lease_token: string | null;
+                engine: string | null;
             }>;
         }>;
         controlTower: _trpc_server.CreateRouterInner<_trpc_server.RootConfig<{
@@ -10512,6 +10558,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         contentType: string;
                         contentBase64: string;
                     }[] | undefined;
+                    requestId?: string | undefined;
                 };
                 _input_out: {
                     id: string;
@@ -10521,10 +10568,39 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         contentType: string;
                         contentBase64: string;
                     }[] | undefined;
+                    requestId?: string | undefined;
                 };
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
-            }, MovementRunNowResult>;
+            }, MovementRunAsyncResult>;
+            runStatus: _trpc_server.BuildProcedure<"query", {
+                _config: _trpc_server.RootConfig<{
+                    ctx: {
+                        authorise: () => Promise<void>;
+                    };
+                    meta: object;
+                    errorShape: {
+                        message: string;
+                        code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
+                        data: _trpc_server_dist_error_formatter.DefaultErrorData;
+                    };
+                    transformer: _trpc_server.DefaultDataTransformer;
+                }>;
+                _meta: object;
+                _ctx_out: {
+                    authorise: () => Promise<void>;
+                };
+                _input_in: {
+                    runId: string;
+                };
+                _input_out: {
+                    runId: string;
+                };
+                _output_in: typeof _trpc_server.unsetMarker;
+                _output_out: typeof _trpc_server.unsetMarker;
+            }, MovementRunStatus | {
+                error: string;
+            }>;
         }>;
         note: _trpc_server.CreateRouterInner<_trpc_server.RootConfig<{
             ctx: {
@@ -13053,7 +13129,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 supportedTriggers: string[];
                 webhookEventTypeId?: string | undefined;
                 kind?: "plugin" | "core" | "adapter" | undefined;
-                slot?: "models" | "files" | "judge" | "store" | undefined;
+                slot?: "models" | "files" | "judge" | "store" | "limiter" | "loopGuard" | undefined;
                 settings?: {
                     name: string;
                     label?: string | undefined;
@@ -13093,6 +13169,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     scheme: "hmac_sha256_hex" | "airtable_mac" | "attio" | "affinity_hex_or_b64" | "slack_v0" | "telegram_secret_token" | "remote";
                     signatureHeaders: string[];
                     intercepts?: "slack_url_verification"[] | undefined;
+                    secretIssuedBy?: "provider" | "installer" | undefined;
                 } | undefined;
                 poll?: {
                     intervalSeconds: number;
@@ -13124,6 +13201,12 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         };
                     }[];
                 } | undefined;
+                limits?: {
+                    scope: "team" | "credential" | "module" | "install";
+                    calls?: number | undefined;
+                    per?: string | undefined;
+                    concurrent?: number | undefined;
+                }[] | undefined;
                 subscribableEvents?: string[] | undefined;
                 defaultSubscribedEvents?: string[] | undefined;
                 listenConfig?: {
@@ -13196,7 +13279,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     supportedTriggers: string[];
                     webhookEventTypeId?: string | undefined;
                     kind?: "plugin" | "core" | "adapter" | undefined;
-                    slot?: "models" | "files" | "judge" | "store" | undefined;
+                    slot?: "models" | "files" | "judge" | "store" | "limiter" | "loopGuard" | undefined;
                     settings?: {
                         name: string;
                         label?: string | undefined;
@@ -13236,6 +13319,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         scheme: "hmac_sha256_hex" | "airtable_mac" | "attio" | "affinity_hex_or_b64" | "slack_v0" | "telegram_secret_token" | "remote";
                         signatureHeaders: string[];
                         intercepts?: "slack_url_verification"[] | undefined;
+                        secretIssuedBy?: "provider" | "installer" | undefined;
                     } | undefined;
                     poll?: {
                         intervalSeconds: number;
@@ -13267,6 +13351,12 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                             };
                         }[];
                     } | undefined;
+                    limits?: {
+                        scope: "team" | "credential" | "module" | "install";
+                        calls?: number | undefined;
+                        per?: string | undefined;
+                        concurrent?: number | undefined;
+                    }[] | undefined;
                     subscribableEvents?: string[] | undefined;
                     defaultSubscribedEvents?: string[] | undefined;
                     listenConfig?: {
@@ -13324,7 +13414,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     supportedTriggers: string[];
                     webhookEventTypeId?: string | undefined;
                     kind?: "plugin" | "core" | "adapter" | undefined;
-                    slot?: "models" | "files" | "judge" | "store" | undefined;
+                    slot?: "models" | "files" | "judge" | "store" | "limiter" | "loopGuard" | undefined;
                     settings?: {
                         name: string;
                         label?: string | undefined;
@@ -13364,6 +13454,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         scheme: "hmac_sha256_hex" | "airtable_mac" | "attio" | "affinity_hex_or_b64" | "slack_v0" | "telegram_secret_token" | "remote";
                         signatureHeaders: string[];
                         intercepts?: "slack_url_verification"[] | undefined;
+                        secretIssuedBy?: "provider" | "installer" | undefined;
                     } | undefined;
                     poll?: {
                         intervalSeconds: number;
@@ -13395,6 +13486,12 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                             };
                         }[];
                     } | undefined;
+                    limits?: {
+                        scope: "team" | "credential" | "module" | "install";
+                        calls?: number | undefined;
+                        per?: string | undefined;
+                        concurrent?: number | undefined;
+                    }[] | undefined;
                     subscribableEvents?: string[] | undefined;
                     defaultSubscribedEvents?: string[] | undefined;
                     listenConfig?: {
@@ -13766,7 +13863,10 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
             }, {
-                replayed: boolean;
+                replayed: false;
+            } | {
+                replayed: true;
+                runId: TriggerRunId;
             }>;
             onRunActivity: _trpc_server.BuildProcedure<"subscription", {
                 _config: _trpc_server.RootConfig<{
@@ -14116,10 +14216,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 };
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
-            }, {
-                ranCount: number;
-                errors: string[];
-            }>;
+            }, MovementRunAsyncResult>;
         }>;
         teamMembers: _trpc_server.CreateRouterInner<_trpc_server.RootConfig<{
             ctx: {

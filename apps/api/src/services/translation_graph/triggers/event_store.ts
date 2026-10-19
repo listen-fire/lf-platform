@@ -1,14 +1,15 @@
-// The trigger-event door — every inbound event a trigger receives is
+// The trigger-event receipt — every inbound event a trigger receives is
 // STORED before any processing runs:
 //
-//   receive  → insert a `trigger_event` row ('received') and return —
-//              the HTTP handler can ack the sender immediately;
-//   dispatch → `dispatchStoredTriggerEvent` runs the normal trigger
-//              dispatch from the stored row and records the outcome
-//              ('dispatched' | 'failed' + failure_reason);
-//   replay   → `replayTriggerEvent` re-dispatches any stored event —
-//              the recovery path for events that failed, or that a
-//              crash left at 'received'.
+//   receive  → insert a `trigger_event` row ('received'); the door queues a
+//              `dispatch_event` work row and acks the sender
+//              (dispatch_event.ts `receiveTriggerEvent`);
+//   dispatch → the work row runs the normal trigger dispatch from the
+//              receipt and records the outcome here ('dispatched' |
+//              'failed' + failure_reason | 'suppressed');
+//   replay   → a stored event is queued again as a new run
+//              (dispatch_event.ts `replayTriggerEvent`) — the recovery path
+//              for events that failed.
 //
 // The row is the durable record of WHAT ARRIVED, independent of whether
 // processing ever ran — `trigger_run.trigger_payload` only exists once a
@@ -23,8 +24,6 @@ import type { TriggerEventId } from '../../../generated/kysely/automations/Trigg
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 
 import { getAutomationsQb } from '../../../lib/kysely';
-import { logger } from 'movement-engine/public/log';
-import { dispatchTriggerByIdEvent } from './router';
 
 function jsonb(value: unknown): unknown {
   return sql`${JSON.stringify(value)}::jsonb` as unknown;
@@ -32,8 +31,7 @@ function jsonb(value: unknown): unknown {
 
 /**
  * Persist a received event. Synchronous part of the receive path — the
- * caller acks the sender right after this returns, then hands the id to
- * `dispatchStoredTriggerEvent` off the request cycle (setImmediate).
+ * caller queues the receipt's work row and acks the sender right after.
  *
  * Idempotent when the event carries an `idempotencyKey` (the source's own
  * per-delivery id): the partial unique index on (trigger_id, external_event_id)
@@ -79,85 +77,7 @@ export async function storeTriggerEvent(input: {
   return { id: existing.id, duplicate: true };
 }
 
-/**
- * Run the normal trigger dispatch from a stored event and record the
- * outcome on the row. Never throws — a dispatch failure is data
- * ('failed' + reason), not an unhandled rejection in a fire-and-forget
- * context.
- */
-export async function dispatchStoredTriggerEvent(eventId: string): Promise<void> {
-  const row = await getAutomationsQb(['trigger_event'])
-    .selectFrom('trigger_event')
-    .where('id', '=', eventId as TriggerEventId)
-    .selectAll()
-    .executeTakeFirst();
-  if (!row) {
-    logger.error('[TriggerEvents] stored event vanished before dispatch', { eventId });
-    return;
-  }
-  try {
-    const result = await dispatchTriggerByIdEvent({
-      triggerId: row.trigger_id,
-      event: row.payload as unknown as TriggerEvent,
-      teamId: row.team_id as TeamId,
-      // This dispatch IS the stored receipt — let the guard hold-and-release it.
-      storedEventId: row.id,
-    });
-    // A dropped event means the router already owns the receipt's outcome —
-    // marked 'suppressed' with a reason where applicable, or left held for a
-    // guard release. Only a dispatch that actually ran gets marked
-    // 'dispatched'; overwriting a drop would clobber the audit trail (status
-    // back to 'dispatched', failure_reason nulled) even though nothing ran.
-    if (result.droppedReason === undefined) {
-      await getAutomationsQb(['trigger_event'])
-        .updateTable('trigger_event')
-        .set({ status: 'dispatched', dispatched_at: new Date(), failure_reason: null })
-        .where('id', '=', row.id)
-        .execute();
-    }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    logger.error('[TriggerEvents] stored event dispatch failed', {
-      eventId,
-      triggerId: row.trigger_id,
-      error: message,
-    });
-    await getAutomationsQb(['trigger_event'])
-      .updateTable('trigger_event')
-      .set({ status: 'failed', dispatched_at: new Date(), failure_reason: message })
-      .where('id', '=', row.id)
-      .execute()
-      .catch(() => {});
-  }
-}
-
-/**
- * Receive = store + ack-ready + async dispatch. The returned id is in
- * hand before any processing starts; dispatch runs on the next tick so
- * the HTTP response never waits on a movement run.
- */
-export async function receiveTriggerEvent(input: {
-  teamId: TeamId;
-  triggerId: string;
-  event: TriggerEvent;
-}): Promise<{ eventId: string; duplicate: boolean }> {
-  const { id: eventId, duplicate } = await storeTriggerEvent(input);
-  // A redelivery of an already-received event: the first delivery already
-  // dispatched (or is about to). Skip — don't double-run.
-  if (!duplicate) {
-    setImmediate(() => {
-      void dispatchStoredTriggerEvent(eventId);
-    });
-  }
-  return { eventId, duplicate };
-}
-
-/**
- * Outcome markers for callers that keep dispatch INLINE (webhook-sync
- * needs synchronous evaluation results for the test-harness error
- * surface and the echo-drop registry) but still want the event durable
- * and replayable: store first, dispatch yourself, then mark.
- */
+/** Outcome markers the dispatch half records on the receipt. */
 export async function markTriggerEventDispatched(eventId: string): Promise<void> {
   await getAutomationsQb(['trigger_event'])
     .updateTable('trigger_event')
@@ -194,9 +114,9 @@ export async function markTriggerEventSuppressed(eventId: string, reason: string
 }
 
 /**
- * Reset a stored event back to 'received' so it can be re-dispatched. Used by
- * the loop guard's queue-don't-drop deferred-release path: an event held by a
- * rate throttle is reset and re-dispatched after the rate window. Best-effort —
+ * Reset a stored event back to 'received' so its queued row runs it. Used by
+ * the loop guard's queue-don't-drop deferred release: an event held by a rate
+ * throttle goes back on the queue, due after the rate window. Best-effort —
  * the event is replayable by hand regardless.
  */
 export async function resetTriggerEventToReceived(eventId: string): Promise<void> {
@@ -206,22 +126,6 @@ export async function resetTriggerEventToReceived(eventId: string): Promise<void
     .where('id', '=', eventId as TriggerEventId)
     .execute()
     .catch(() => {});
-}
-
-/** Re-dispatch a stored event (playback). Team-scoped. */
-export async function replayTriggerEvent(input: {
-  teamId: TeamId;
-  eventId: string;
-}): Promise<{ replayed: boolean }> {
-  const row = await getAutomationsQb(['trigger_event'])
-    .selectFrom('trigger_event')
-    .where('id', '=', input.eventId as TriggerEventId)
-    .where('team_id', '=', input.teamId)
-    .select('id')
-    .executeTakeFirst();
-  if (!row) return { replayed: false };
-  await dispatchStoredTriggerEvent(input.eventId);
-  return { replayed: true };
 }
 
 /** The stored events for one trigger, newest first (playback picker). */
