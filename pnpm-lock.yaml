@@ -160,6 +160,9 @@ importers:
       '@listen-fire/granola':
         specifier: workspace:*
         version: link:../../modules/granola
+      '@listen-fire/judge-llm':
+        specifier: workspace:*
+        version: link:../../modules/judge-llm
       '@listen-fire/slack':
         specifier: workspace:*
         version: link:../../modules/slack
@@ -1352,6 +1355,28 @@ importers:
       movement-lang:
         specifier: workspace:@listen-fire/movement-lang@*
         version: link:../../packages/movement-lang
+      typescript:
+        specifier: 5.5.4
+        version: 5.5.4
+
+  modules/judge-llm:
+    dependencies:
+      '@listen-fire/engine':
+        specifier: workspace:^
+        version: link:../../packages/movement-engine
+      zod:
+        specifier: 4.1.12
+        version: 4.1.12
+    devDependencies:
+      '@types/jest':
+        specifier: 29.5.14
+        version: 29.5.14
+      '@types/node':
+        specifier: 20.16.5
+        version: 20.16.5
+      movement-engine:
+        specifier: workspace:@listen-fire/engine@*
+        version: link:../../packages/movement-engine
       typescript:
         specifier: 5.5.4
         version: 5.5.4
@@ -18476,7 +18501,7 @@ snapshots:
   extract-pg-schema@5.8.0(@electric-sql/pglite@0.3.14)(better-sqlite3@11.10.0):
     dependencies:
       knex: 3.1.0(better-sqlite3@11.10.0)(pg@8.16.3)
-      knex-pglite: 0.12.1(@electric-sql/pglite@0.3.14)(knex@3.1.0(better-sqlite3@11.10.0)(pg@8.16.3))
+      knex-pglite: 0.12.1(@electric-sql/pglite@0.3.14)(knex@3.1.0(better-sqlite3@11.10.0)(pg@8.12.0))
       pg: 8.16.3
       pg-query-emscripten: 5.1.0
       ramda: 0.31.3
@@ -20138,7 +20163,7 @@ snapshots:
 
   kleur@4.1.5: {}
 
-  knex-pglite@0.12.1(@electric-sql/pglite@0.3.14)(knex@3.1.0(better-sqlite3@11.10.0)(pg@8.16.3)):
+  knex-pglite@0.12.1(@electric-sql/pglite@0.3.14)(knex@3.1.0(better-sqlite3@11.10.0)(pg@8.12.0)):
     dependencies:
       '@electric-sql/pglite': 0.3.14
       knex: 3.1.0(better-sqlite3@11.10.0)(pg@8.16.3)

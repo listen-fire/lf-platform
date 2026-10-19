@@ -1,6 +1,6 @@
 // Replay of recorded identity-judge cases. The fixture was recorded from the
 // judge as it stood in apps/api before it moved into the movement-engine
-// package: each case holds the inputs, what the model and Jev answered, and
+// package (and from there into @lf/judge-llm): each case holds the inputs, what the model and Jev answered, and
 // everything the judge did in return (decision, prompts sent, Jev requests,
 // failures reported). Replaying gives identical decisions AND identical
 // prompts, so a prompt edit or a changed decision rule shows up as a diff
@@ -30,7 +30,7 @@ const mockAskJev = askJev as jest.MockedFunction<typeof askJev>;
 
 const FIXTURE_PATH = path.resolve(
   __dirname,
-  '../../../../../../../packages/movement-engine/services/identity_judge/__fixtures__/replay.json',
+  '../../../../../../../modules/judge-llm/__fixtures__/replay.json',
 );
 
 type Scripted =

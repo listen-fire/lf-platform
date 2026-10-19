@@ -9,20 +9,24 @@
 // can target ANY adapter (Attio, Affinity, KG, …), whereas the KG path is
 // hardcoded to extracted-entity → KG-node matching.
 //
-// The package owns the decision rules and the prompts; the shell injects the
-// two network calls (the model and, optionally, Jev), so a shell with no
-// Jev account passes none.
+// `@lf/judge-llm` fills the engine's judge slot (the host's
+// `arbitrateEntities`): this module owns the decision rules and the prompts;
+// the shell injects the two network calls (the model and, optionally, Jev), so
+// a shell with no Jev account passes none.
 
 import { z } from 'zod';
 
-import type { ArbitrationAnswer, Costed, EntityArbitration, Priced } from '../movement_engine/host';
-import type { ExternalRecordRef } from '../translation_graph/adapter';
-import { arbitrateWithoutJudge } from '../translation_graph/uniqueness';
-import { aiExpressionSettings, claudeModelId } from '../movement_engine/ai_tiers';
-import { isBudgetExhausted } from '../../lib/run_cost';
-import { withSpendMeter } from '../../lib/run_spend';
-import { neverAsAny } from '../../lib/utils/types';
-import { logger } from '../logger';
+import type { ArbitrationAnswer, Costed, EntityArbitration, Priced } from 'movement-engine/public/host';
+import type { ExternalRecordRef } from 'movement-engine/public/adapter';
+import { logger } from 'movement-engine/public/log';
+import {
+  aiExpressionSettings,
+  arbitrateWithoutJudge,
+  claudeModelId,
+  isBudgetExhausted,
+  withSpendMeter,
+} from 'movement-engine/public/models';
+import { neverAsAny } from 'movement-engine/public/types';
 import { fillSlots, promptText } from './prompts';
 
 export type { ArbitrationAnswer, EntityArbitration };

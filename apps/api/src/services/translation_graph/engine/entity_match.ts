@@ -1,10 +1,10 @@
 // The identity judge as the hosted platform runs it: the decision rules and
-// prompts are the movement-engine package's (`services/identity_judge`); this
+// prompts are @lf/judge-llm's (modules/judge-llm), filling the judge slot; this
 // file injects the two network calls — Anthropic through the shared prompt
 // executor, and Jev — and re-exports the judge under the names the rest of
 // apps/api imports.
 
-import { createIdentityJudge, type JevJudgeClient } from 'movement-engine/public/models';
+import { createIdentityJudge, type JevJudgeClient } from '@listen-fire/judge-llm';
 
 import { execute } from '../../../lib/prompts/execute';
 import { promptDef } from '../../../lib/prompts/definition';
@@ -22,7 +22,7 @@ export {
   JUDGE_MODEL,
   type ArbitrationAnswer,
   type EntityArbitration,
-} from 'movement-engine/public/models';
+} from '@listen-fire/judge-llm';
 
 const jev: JevJudgeClient = {
   enabled: () => jevEntityResolutionEnabled(),
