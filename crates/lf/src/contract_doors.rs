@@ -69,11 +69,11 @@ pub async fn serve() -> Result<(), String> {
     let base_url = format!("http://127.0.0.1:{}", listener.local_addr().map_err(|e| e.to_string())?.port());
     let doors = {
         let bridge = bridge.clone();
-        tokio::task::spawn_local(crate::http::serve(listener, crate::serve::MAX_BODY_BYTES, move |request| {
+        tokio::task::spawn_local(crate::http::serve(listener, crate::listener::MAX_BODY_BYTES, move |request| {
             let bridge = bridge.clone();
             async move {
                 let doors = bridge.doors();
-                crate::serve::only_doors(&doors, request).await
+                crate::listener::only_doors(&doors, request).await
             }
         }))
     };

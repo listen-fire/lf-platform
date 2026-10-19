@@ -10,7 +10,7 @@ import path from 'node:path';
 import { Client } from 'pg';
 
 import { services } from '../../../../../adapters/registry';
-import { S3Adapter } from '../../../../../adapters/document/s3';
+import { S3Adapter } from 'files-s3';
 import { hostedDocumentStore } from '../retrieve';
 
 const MIGRATIONS = path.resolve(__dirname, '../../../../../db/migrations');

@@ -14,7 +14,7 @@
     "cli": "TZ=utc node build/interfaces/cli/cli.js",
     "cli-dev": "TZ=utc ts-node -r tsconfig-paths/register src/interfaces/cli/cli.ts",
     "clean": "rimraf build/",
-    "build": "pnpm clean && TZ=utc NODE_OPTIONS=--max-old-space-size=8192 tsc --project tsconfig.build.json && tsc --project ../../packages/principal/tsconfig.build.json --outDir build/node_modules/principal && tsc --project ../../packages/file-text/tsconfig.build.json --outDir build/node_modules/file-text && tsc --project ../../packages/engine-contracts/tsconfig.build.json --outDir build/node_modules/engine-contracts && tsc --project ../../packages/movement-engine/tsconfig.build.json --outDir build/node_modules/movement-engine && tsc --project ../../modules/anthropic/tsconfig.build.json --outDir build/node_modules/@listen-fire/anthropic && tsc --project ../../packages/model-providers/tsconfig.build.json --outDir build/node_modules/model-providers && tsc --project ../../packages/module-kit/tsconfig.build.json --outDir build/node_modules/module-kit && tsc --project ../../modules/dealroom/tsconfig.build.json --outDir build/node_modules/@listen-fire/dealroom && tsc --project ../../modules/granola/tsconfig.build.json --outDir build/node_modules/@listen-fire/granola && tsc --project ../../modules/evertrace/tsconfig.build.json --outDir build/node_modules/@listen-fire/evertrace && tsc --project ../../modules/dropbox/tsconfig.build.json --outDir build/node_modules/@listen-fire/dropbox && tsc --project ../../modules/google-sheets/tsconfig.build.json --outDir build/node_modules/@listen-fire/google-sheets && tsc --project ../../modules/google-drive/tsconfig.build.json --outDir build/node_modules/@listen-fire/google-drive && tsc --project ../../modules/gmail/tsconfig.build.json --outDir build/node_modules/@listen-fire/gmail && tsc --project ../../modules/web/tsconfig.build.json --outDir build/node_modules/@listen-fire/web && tsc --project ../../modules/pdf/tsconfig.build.json --outDir build/node_modules/@listen-fire/pdf && tsc --project ../../modules/affinity/tsconfig.build.json --outDir build/node_modules/@listen-fire/affinity && tsc --project ../../modules/airtable/tsconfig.build.json --outDir build/node_modules/@listen-fire/airtable && tsc --project ../../modules/attio/tsconfig.build.json --outDir build/node_modules/@listen-fire/attio && tsc --project ../../modules/telegram/tsconfig.build.json --outDir build/node_modules/@listen-fire/telegram && tsc --project ../../modules/ask/tsconfig.build.json --outDir build/node_modules/@listen-fire/ask && tsc --project ../../modules/kg/tsconfig.build.json --outDir build/node_modules/@listen-fire/kg && tsc --project ../../modules/slack/tsconfig.build.json --outDir build/node_modules/@listen-fire/slack && tsc --project ../../modules/system/tsconfig.build.json --outDir build/node_modules/@listen-fire/system && tsc --project ../../modules/native-valuations/tsconfig.build.json --outDir build/node_modules/@listen-fire/native-valuations && tsc --project ../../modules/whatsapp/tsconfig.build.json --outDir build/node_modules/@listen-fire/whatsapp && tsc --project ../../modules/email/tsconfig.build.json --outDir build/node_modules/@listen-fire/email && tsc --project ../../modules/judge-llm/tsconfig.build.json --outDir build/node_modules/@listen-fire/judge-llm && cp -R ../../modules/judge-llm/prompts build/node_modules/@listen-fire/judge-llm/prompts && (cd ../../packages/shared && pnpm build) && tsc --project ../../packages/shared/tsconfig.json --outDir build/node_modules/@listen-fire/shared &&(cd ../../packages/movement-lang && pnpm build) && cp -R ../../packages/movement-lang/dist build/node_modules/movement-lang && (cd ../../packages/story-view && pnpm bundle) && resolve-tspaths",
+    "build": "pnpm clean && TZ=utc NODE_OPTIONS=--max-old-space-size=8192 tsc --project tsconfig.build.json && tsc --project ../../packages/principal/tsconfig.build.json --outDir build/node_modules/principal && tsc --project ../../packages/file-text/tsconfig.build.json --outDir build/node_modules/file-text && tsc --project ../../packages/engine-contracts/tsconfig.build.json --outDir build/node_modules/engine-contracts && tsc --project ../../packages/movement-engine/tsconfig.build.json --outDir build/node_modules/movement-engine && tsc --project ../../modules/anthropic/tsconfig.build.json --outDir build/node_modules/@listen-fire/anthropic && tsc --project ../../packages/model-providers/tsconfig.build.json --outDir build/node_modules/model-providers && tsc --project ../../packages/embedding-providers/tsconfig.build.json --outDir build/node_modules/embedding-providers && tsc --project ../../packages/image-providers/tsconfig.build.json --outDir build/node_modules/image-providers && tsc --project ../../packages/transcription-providers/tsconfig.build.json --outDir build/node_modules/transcription-providers && tsc --project ../../packages/files-s3/tsconfig.build.json --outDir build/node_modules/files-s3 && tsc --project ../../packages/ocr-google/tsconfig.build.json --outDir build/node_modules/ocr-google && tsc --project ../../packages/module-kit/tsconfig.build.json --outDir build/node_modules/module-kit && tsc --project ../../modules/dealroom/tsconfig.build.json --outDir build/node_modules/@listen-fire/dealroom && tsc --project ../../modules/granola/tsconfig.build.json --outDir build/node_modules/@listen-fire/granola && tsc --project ../../modules/evertrace/tsconfig.build.json --outDir build/node_modules/@listen-fire/evertrace && tsc --project ../../modules/dropbox/tsconfig.build.json --outDir build/node_modules/@listen-fire/dropbox && tsc --project ../../modules/google-sheets/tsconfig.build.json --outDir build/node_modules/@listen-fire/google-sheets && tsc --project ../../modules/google-drive/tsconfig.build.json --outDir build/node_modules/@listen-fire/google-drive && tsc --project ../../modules/gmail/tsconfig.build.json --outDir build/node_modules/@listen-fire/gmail && tsc --project ../../modules/web/tsconfig.build.json --outDir build/node_modules/@listen-fire/web && tsc --project ../../modules/pdf/tsconfig.build.json --outDir build/node_modules/@listen-fire/pdf && tsc --project ../../modules/affinity/tsconfig.build.json --outDir build/node_modules/@listen-fire/affinity && tsc --project ../../modules/airtable/tsconfig.build.json --outDir build/node_modules/@listen-fire/airtable && tsc --project ../../modules/attio/tsconfig.build.json --outDir build/node_modules/@listen-fire/attio && tsc --project ../../modules/telegram/tsconfig.build.json --outDir build/node_modules/@listen-fire/telegram && tsc --project ../../modules/ask/tsconfig.build.json --outDir build/node_modules/@listen-fire/ask && tsc --project ../../modules/kg/tsconfig.build.json --outDir build/node_modules/@listen-fire/kg && tsc --project ../../modules/slack/tsconfig.build.json --outDir build/node_modules/@listen-fire/slack && tsc --project ../../modules/system/tsconfig.build.json --outDir build/node_modules/@listen-fire/system && tsc --project ../../modules/native-valuations/tsconfig.build.json --outDir build/node_modules/@listen-fire/native-valuations && tsc --project ../../modules/whatsapp/tsconfig.build.json --outDir build/node_modules/@listen-fire/whatsapp && tsc --project ../../modules/email/tsconfig.build.json --outDir build/node_modules/@listen-fire/email && tsc --project ../../modules/judge-llm/tsconfig.build.json --outDir build/node_modules/@listen-fire/judge-llm && cp -R ../../modules/judge-llm/prompts build/node_modules/@listen-fire/judge-llm/prompts && (cd ../../packages/shared && pnpm build) && tsc --project ../../packages/shared/tsconfig.json --outDir build/node_modules/@listen-fire/shared &&(cd ../../packages/movement-lang && pnpm build) && cp -R ../../packages/movement-lang/dist build/node_modules/movement-lang && (cd ../../packages/story-view && pnpm bundle) && resolve-tspaths",
     "start": "TZ=UTC node build/server.js",
     "dev": "TZ=utc TSC_WATCHFILE=UseFsEventsWithFallbackDynamicPolling ts-node-dev --project tsconfig.dev.json --transpile-only --rs --inspect -r dotenv/config -r tsconfig-paths/register src/server.ts",
     "start:nocompile": "TZ=utc ts-node --project tsconfig.dev.json --swc -r dotenv/config -r tsconfig-paths/register src/server.ts",
@@ -127,13 +127,7 @@
     "#shared": "workspace:@listen-fire/shared@*",
     "@anthropic-ai/sdk": "^0.126.0",
     "@anthropic-ai/vertex-sdk": "^0.19.9",
-    "@aws-sdk/client-s3": "3.649.0",
-    "@aws-sdk/s3-request-presigner": "3.649.0",
-    "@google-cloud/documentai": "9.4.0",
-    "@google-cloud/storage": "7.12.1",
     "@google/genai": "^2.24.0",
-    "@langchain/core": "0.3.43",
-    "@langchain/openai": "0.5.2",
     "@listen-fire/affinity": "workspace:*",
     "@listen-fire/airtable": "workspace:*",
     "@listen-fire/anthropic": "workspace:*",
@@ -163,7 +157,6 @@
     "@react-email/render": "0.0.17",
     "@resvg/resvg-js": "^2.6.2",
     "@sentry/node": "8.55.0",
-    "@slack/events-api": "3.0.1",
     "@slack/oauth": "3.0.4",
     "@slack/web-api": "7.11.0",
     "@slack/webhook": "7.0.3",
@@ -235,6 +228,9 @@
     "mailgun.js": "10.2.3",
     "mime": "4.0.3",
     "model-providers": "workspace:@listen-fire/model-providers@*",
+    "embedding-providers": "workspace:@listen-fire/embedding-providers@*",
+    "image-providers": "workspace:@listen-fire/image-providers@*",
+    "transcription-providers": "workspace:@listen-fire/transcription-providers@*",
     "module-kit": "workspace:@listen-fire/module-kit@*",
     "movement-engine": "workspace:@listen-fire/engine@*",
     "movement-lang": "workspace:@listen-fire/movement-lang@*",
@@ -271,5 +267,9 @@
     "yahoo-finance2": "3.11.2",
     "yauzl-promise": "4.0.0",
     "zod": "4.1.12"
+  },
+  "optionalDependencies": {
+    "files-s3": "workspace:@listen-fire/files-s3@*",
+    "ocr-google": "workspace:@listen-fire/ocr-google@*"
   }
 }

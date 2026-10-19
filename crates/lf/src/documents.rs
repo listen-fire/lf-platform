@@ -10,8 +10,10 @@
 use std::cell::OnceCell;
 use std::path::{Path, PathBuf};
 
+#[cfg(feature = "serve")]
 use tokio::net::TcpListener;
 
+#[cfg(feature = "serve")]
 use crate::http::Response;
 
 use crate::json::{Js, Obj};
@@ -97,6 +99,12 @@ impl Documents {
         Ok(format!("http://127.0.0.1:{port}/files/{id}"))
     }
 
+    #[cfg(not(feature = "serve"))]
+    async fn listen(&self) -> Result<u16, String> {
+        Err("this lf was built without the `serve` feature, so it cannot expose a file at a URL".into())
+    }
+
+    #[cfg(feature = "serve")]
     async fn listen(&self) -> Result<u16, String> {
         let listener = TcpListener::bind("127.0.0.1:0").await.map_err(|e| format!("the file listener: {e}"))?;
         let port = listener.local_addr().map_err(|e| e.to_string())?.port();

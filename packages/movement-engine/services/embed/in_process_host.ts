@@ -123,7 +123,14 @@ export function inProcessHost(options: InProcessHostOptions = {}): EngineHost {
       // As production reads a file: through an instance the segment holds.
       resolveFileText: async (input) => {
         const read = files.resolveFileText;
-        if (read === undefined) throw notProvided('files.resolveFileText');
+        // An empty file-text slot (a light embedding) refuses the file by name,
+        // so the run's failure says which file and which slot.
+        if (read === undefined) {
+          const named = input.file.name !== undefined ? ` "${input.file.name}"` : '';
+          throw new Error(
+            `${notProvided('files.resolveFileText').message}: this host has no file-text module, so it cannot read the file${named}`,
+          );
+        }
         return withFileOwners(table.fileOwners(input.segmentId), () => read(input));
       },
       render: files.render ?? (refused('files.render') satisfies RenderFile),

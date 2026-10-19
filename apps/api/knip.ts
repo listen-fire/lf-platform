@@ -31,7 +31,6 @@ const config: KnipConfig = {
     '@types/redis-info', // is needed in prod build step, will fall over otherwise
     '@swc-node/register', // used in dev to compile faster
     'ts-jest', // used in jest configs
-    '@langchain/core', // required peer dependency for @langchain/openai
   ],
 };
 

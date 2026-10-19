@@ -4,16 +4,26 @@
 //! read whole (up to a limit) and handed to the listener's handler as plain
 //! data.
 
+#[cfg(feature = "serve")]
 use std::convert::Infallible;
+#[cfg(feature = "serve")]
 use std::future::Future;
+#[cfg(feature = "serve")]
 use std::rc::Rc;
 
+#[cfg(feature = "serve")]
 use bytes::Bytes;
+#[cfg(feature = "serve")]
 use http_body_util::{BodyExt, Full};
+#[cfg(feature = "serve")]
 use hyper::body::Incoming;
+#[cfg(feature = "serve")]
 use hyper::server::conn::http1;
+#[cfg(feature = "serve")]
 use hyper::service::service_fn;
+#[cfg(feature = "serve")]
 use hyper_util::rt::TokioIo;
+#[cfg(feature = "serve")]
 use tokio::net::TcpListener;
 
 use crate::json::Js;
@@ -60,6 +70,7 @@ impl Response {
 /// Accept connections on `listener` for as long as the task runs, each
 /// request answered by `handler`. A body over `limit` bytes is read through
 /// (so the sender sees the answer, not a reset) but not kept.
+#[cfg(feature = "serve")]
 pub async fn serve<H, F>(listener: TcpListener, limit: usize, handler: H)
 where
     H: Fn(Request) -> F + 'static,
@@ -92,6 +103,7 @@ where
     }
 }
 
+#[cfg(feature = "serve")]
 async fn read(request: hyper::Request<Incoming>, limit: usize) -> Request {
     let (parts, mut body) = request.into_parts();
     let headers = {

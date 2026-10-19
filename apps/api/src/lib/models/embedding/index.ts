@@ -2,9 +2,9 @@
 // usage ledger and tokenizer. The vendors live in packages/model-providers.
 
 import type { EmbeddingModelName } from 'movement-engine/public/models';
-import type { EmbeddingRequest, EmbeddingResult } from 'model-providers/embedding';
+import type { EmbeddingRequest, EmbeddingResult } from 'embedding-providers';
 
-import { embed as embedWith } from 'model-providers/embedding';
+import { embed as embedWith } from 'embedding-providers';
 import { hostedModelHost } from '../host';
 
 export function embed(

@@ -919,6 +919,11 @@ async fn route(host: &SegmentHost<'_>, label: &str, args: &Json) -> Result<Answe
             Ok(Some(host.wire.borrow().write(&Hv::of_js(&answer))))
         }
         "llm.transforms.invoke" => invoke_plugin(host, args).await?,
+        #[cfg(not(feature = "anthropic"))]
+        "llm.client.call" | "llm.extractCall.call" | "llm.arbitrateEntities" => {
+            Err(failure(format!("{label}: this lf was built without the `anthropic` feature, so its models slot is empty and it cannot call a model (install the full lf)")))
+        }
+        #[cfg(feature = "anthropic")]
         "llm.client.call" | "llm.extractCall.call" | "llm.arbitrateEntities" => {
             match crate::llm_calls::serve(label, args, host.adapters.externals().credentials).await {
                 Ok(answer) => {

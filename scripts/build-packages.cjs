@@ -37,6 +37,11 @@ const PACKAGES = [
   { dir: 'packages/file-text' },
   { dir: 'modules/anthropic' },
   { dir: 'packages/model-providers' },
+  { dir: 'packages/embedding-providers' },
+  { dir: 'packages/image-providers' },
+  { dir: 'packages/transcription-providers' },
+  { dir: 'packages/files-s3' },
+  { dir: 'packages/ocr-google' },
   { dir: 'packages/module-kit' },
   { dir: 'modules/google-sheets' },
   ...fs
@@ -56,6 +61,11 @@ const SPELLINGS = {
   'module-kit': '@listen-fire/module-kit',
   'file-text': '@listen-fire/file-text',
   'model-providers': '@listen-fire/model-providers',
+  'embedding-providers': '@listen-fire/embedding-providers',
+  'image-providers': '@listen-fire/image-providers',
+  'transcription-providers': '@listen-fire/transcription-providers',
+  'files-s3': '@listen-fire/files-s3',
+  'ocr-google': '@listen-fire/ocr-google',
   'movement-lang': '@listen-fire/movement-lang',
   '@listen-fire/shared': '@listen-fire/shared',
   '#shared': '@listen-fire/shared',
@@ -149,7 +159,7 @@ function build({ dir, assets = [] }) {
     if (!/\.(js|d\.ts)$/.test(file)) continue;
     const text = fs.readFileSync(file, 'utf8');
     const renamed = text.replace(
-      /(require\(|from |import\()(["'])(#shared|@listen-fire\/shared|movement-engine|engine-contracts|module-kit|file-text|model-providers|movement-lang)(\/[^"']*)?\2/g,
+      /(require\(|from |import\()(["'])(#shared|@listen-fire\/shared|movement-engine|engine-contracts|module-kit|file-text|model-providers|embedding-providers|image-providers|transcription-providers|files-s3|ocr-google|movement-lang)(\/[^"']*)?\2/g,
       (_match, call, quote, spelling, rest = '') => `${call}${quote}${SPELLINGS[spelling]}${rest}${quote}`,
     );
     if (renamed !== text) fs.writeFileSync(file, renamed);

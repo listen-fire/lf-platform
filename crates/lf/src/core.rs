@@ -127,6 +127,16 @@ pub const ANTHROPIC: &str = "@lf/anthropic";
 pub const JUDGE: &str = "@lf/judge";
 pub const SQLITE_STORE: &str = "@lf/sqlite-store";
 pub const POSTGRES_STORE: &str = "@lf/postgres-store";
+
+/// What a build without the `oauth` cargo feature says of a sign-in or a token
+/// refresh, so a light lf refuses it by name.
+#[cfg(not(feature = "oauth"))]
+pub const NO_OAUTH: &str = "this lf was built without the `oauth` feature, so it cannot sign anyone in at a provider or refresh a token (install the full lf)";
+
+/// What a build without the `postgres` cargo feature says of a Postgres
+/// store, so a light lf refuses it by name instead of failing to connect.
+#[cfg(not(feature = "postgres"))]
+pub const NO_POSTGRES: &str = "this lf was built without the `postgres` feature, so it has no Postgres store (use the SQLite store, or install the full lf)";
 pub const LOCAL_FILES: &str = "@lf/local-files";
 pub const MEMORY_LIMITER: &str = "@lf/memory-limiter";
 pub const FINGERPRINT_GUARD: &str = "@lf/fingerprint-guard";
@@ -273,6 +283,9 @@ pub fn set_up(project: &Project, module: &CoreModule, settings: &BTreeMap<String
         return Ok(vec![format!("{} answered as a store (its tenant: {})", module.name, crate::backend::RunHostStore::tenant(&opened))]);
     }
     match module.name.as_ref() {
+        #[cfg(not(feature = "postgres"))]
+        POSTGRES_STORE => Err(NO_POSTGRES.to_string()),
+        #[cfg(feature = "postgres")]
         POSTGRES_STORE => {
             let url = required(settings, module, "url")?;
             let applied = crate::pg_store::PgStore::migrate(url).map_err(|e| e.to_string())?;

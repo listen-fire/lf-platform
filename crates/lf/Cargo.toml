@@ -32,8 +32,25 @@ path = "src/main.rs"
 required-features = ["cli"]
 
 [features]
-default = ["cli"]
-cli = ["dep:serde", "dep:serde_json", "dep:serde_yaml", "dep:indexmap", "dep:tokio", "dep:hyper", "dep:hyper-util", "dep:hmac", "dep:base64", "dep:http-body-util", "dep:bytes", "dep:rusqlite", "dep:tokio-postgres", "dep:getrandom", "dep:uuid", "dep:sha2", "dep:jiff", "dep:rustls", "dep:tokio-rustls", "dep:webpki-roots", "dep:url"]
+# The `lf` command, in the pieces a light build can leave out. The default is
+# the full `lf`; `--no-default-features --features cli` builds the light one
+# (SQLite store, loopback and remote modules, no TLS stack, no provider
+# client, no sign-in flow, no inbound doors), the host to embed or to run
+# `lf check` and a manual run with. Each omitted piece refuses by name when a
+# project asks for it.
+default = ["cli", "anthropic", "oauth", "postgres", "serve"]
+cli = ["dep:serde", "dep:serde_json", "dep:serde_yaml", "dep:indexmap", "dep:tokio", "dep:hyper", "dep:hyper-util", "dep:hmac", "dep:base64", "dep:http-body-util", "dep:bytes", "dep:rusqlite", "dep:getrandom", "dep:uuid", "dep:sha2", "dep:jiff", "dep:url"]
+# HTTPS out, pure-Rust TLS: the pieces below that speak to a provider, a token
+# endpoint or a database over TLS need it; nothing else does.
+tls = ["dep:rustls", "dep:tokio-rustls", "dep:webpki-roots"]
+# The Anthropic model client (src/anthropic.rs) and the model calls over it.
+anthropic = ["cli", "tls"]
+# The OAuth2 sign-in flows: authorize, redirect listener, code exchange, refresh.
+oauth = ["cli", "tls"]
+# The Postgres store, its TLS, and the fingerprint guard's Postgres memory.
+postgres = ["cli", "tls", "dep:tokio-postgres"]
+# The hyper server bits: `lf serve`, the inbound doors and their signature checks.
+serve = ["cli", "hyper/server"]
 
 [dependencies]
 movement-parser = { package = "listen-fire-parser", version = "0.12.0-rc.2", path = "../movement-parser" }
@@ -55,7 +72,7 @@ serde_yaml = { version = "0.9", optional = true }
 indexmap = { version = "2", optional = true }
 # Single-threaded: one host process, one thread, every wait an await.
 tokio = { version = "1", features = ["rt", "macros", "process", "io-util", "io-std", "net", "time", "signal", "sync"], optional = true }
-hyper = { version = "1", features = ["client", "server", "http1"], optional = true }
+hyper = { version = "1", features = ["client", "http1"], optional = true }
 hyper-util = { version = "0.1", features = ["tokio"], optional = true }
 # The inbound doors' signature schemes, and a callback id's base64url.
 hmac = { version = "0.13", optional = true }
