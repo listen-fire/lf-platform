@@ -18,7 +18,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::rc::Rc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock, Mutex};
 use std::time::{Duration, Instant};
 
@@ -110,6 +110,8 @@ struct HostState {
 struct Running {
     /// Killed when dropped.
     _child: Child,
+    /// Set as lf lets it go, so its end is not news (`module_exited`).
+    stopping: Arc<AtomicBool>,
     child_id: Option<u32>,
     address: String,
     /// The shared host's mounts when it started.
@@ -200,7 +202,9 @@ impl ModuleProcess {
         state.in_flight += 1;
         state.last_used = Instant::now();
         let address = joined(&started.address, self.mount.as_deref());
-        state.running = Some(Running { mounts, ..started });
+        let mut started = started;
+        started.mounts = mounts;
+        state.running = Some(started);
         stop_when_idle(self.host.clone(), state.generation);
         Ok(Lease { address, host: Some(self.host.clone()) })
     }
@@ -282,6 +286,24 @@ impl Drop for Lease {
     }
 }
 
+impl Drop for Running {
+    fn drop(&mut self) {
+        // Before the child is killed (fields drop after this), so its output
+        // closing reads as lf's stop.
+        self.stopping.store(true, Ordering::Relaxed);
+    }
+}
+
+static EXITED: LazyLock<tokio::sync::Notify> = LazyLock::new(tokio::sync::Notify::new);
+
+/// Resolves once a module process lf started has ended on its own (it
+/// crashed, or was killed or exited to reload), not by lf stopping it. Its
+/// next use starts it again, so whatever read its answers (`lf lsp`'s
+/// catalog) reads it again. One waiter: an exit while nobody waits is kept.
+pub async fn module_exited() {
+    EXITED.notified().await;
+}
+
 /// Stops the host once nothing has used it for the idle period.
 fn stop_when_idle(host: Arc<Host>, generation: u64) {
     tokio::spawn(async move {
@@ -345,12 +367,17 @@ async fn spawn(label: &str, launch: &Launch) -> Result<Running, String> {
     // stdout ending is it gone, and the next lease starts it again.
     let exited = Arc::new(Mutex::new(None));
     let noticed = exited.clone();
+    let stopping = Arc::new(AtomicBool::new(false));
+    let stopped_by_lf = stopping.clone();
     tokio::spawn(async move {
         while let Ok(Some(_)) = lines.next_line().await {}
         *lock(&noticed) = Some("its output closed".to_string());
+        if !stopped_by_lf.load(Ordering::Relaxed) {
+            EXITED.notify_one();
+        }
     });
     let child_id = child.id();
-    Ok(Running { _child: child, child_id, address: format!("http://127.0.0.1:{port}/"), mounts: Vec::new(), exited })
+    Ok(Running { _child: child, stopping, child_id, address: format!("http://127.0.0.1:{port}/"), mounts: Vec::new(), exited })
 }
 
 /// The port in a line `listening <port>…`.
@@ -582,6 +609,14 @@ mod tests {
         let _second = process.lease().await.unwrap();
         let second_id = lock(&process.host.state).running.as_ref().and_then(|r| r.child_id);
         assert_ne!(first_id, second_id, "the crashed process was started again");
+    }
+
+    #[tokio::test]
+    async fn a_process_that_ends_on_its_own_is_news() {
+        let name = format!("exits-{}", uuid::Uuid::new_v4());
+        let process = ModuleProcess::isolated(&name, sh("echo listening 3"));
+        drop(process.lease().await.unwrap());
+        tokio::time::timeout(Duration::from_secs(5), module_exited()).await.expect("its end was told");
     }
 
     #[tokio::test]

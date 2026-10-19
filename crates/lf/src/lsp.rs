@@ -2,7 +2,9 @@
 //! UTF-16 positions). Every answer is the language service's
 //! (movement_language, docs/contracts/language-service.md), checked against
 //! the project's catalog as `lf check` builds it. Diagnostics are published
-//! per file, 200 ms after its last change.
+//! per file, 200 ms after its last change. The catalog is read again when a
+//! file is saved, and when a module process lf started ends on its own (its
+//! next use starts it again, so the read sees the restarted module).
 
 use std::collections::HashMap;
 use std::io::{BufRead, Write};
@@ -19,6 +21,9 @@ use crate::check::{Opened, open_checking};
 use crate::project::{Project, load_project};
 
 const DEBOUNCE: Duration = Duration::from_millis(200);
+/// How long after a module process ended the catalog is read again: a
+/// module reloading itself has time to go before it is started again.
+const RESTART_SETTLE: Duration = Duration::from_millis(500);
 
 /// One framed message from the client, or the end of its input.
 fn read_message(input: &mut impl BufRead) -> Option<Value> {
@@ -117,9 +122,37 @@ struct Server {
     documents: HashMap<String, String>,
     /// Files whose diagnostics are due, and when.
     due: HashMap<String, Instant>,
+    /// When the catalog is next read again.
+    reread_due: Option<Instant>,
+    /// Whether the last read reached every module. A module's end prompts
+    /// another read only then, so one that dies while it is read (a crash
+    /// on a call) is not started again and again.
+    read_clean: bool,
 }
 
 impl Server {
+    async fn open(project: Option<Project>, log: &mut Vec<String>) -> Server {
+        let before = log.len();
+        let catalog = catalog_of_project(project.as_ref(), log).await;
+        let version = project.as_ref().map_or(movement_parser::version::CURRENT_LANGUAGE_VERSION, |p| p.language_version);
+        Server { service: Service::new(catalog, version), project, documents: HashMap::new(), due: HashMap::new(), reread_due: None, read_clean: log.len() == before }
+    }
+
+    /// The catalog read again; the open buffers still stand for their files,
+    /// and each is published against it.
+    async fn reread(&mut self, log: &mut Vec<String>) {
+        let before = log.len();
+        self.service.catalog = catalog_of_project(self.project.as_ref(), log).await;
+        self.read_clean = log.len() == before;
+        self.reread_due = None;
+        let documents: Vec<(String, String)> = self.documents.iter().map(|(uri, text)| (uri.clone(), text.clone())).collect();
+        let now = Instant::now();
+        for (uri, text) in documents {
+            self.track(&uri, text);
+            self.due.insert(uri, now);
+        }
+    }
+
     /// The catalog's key for a document: its path under the movements folder, no extension.
     fn file_key(&self, uri: &str) -> Option<String> {
         let path = path_of_uri(uri)?;
@@ -209,6 +242,13 @@ impl Server {
     }
 }
 
+fn log_lines(out: &mut impl Write, lines: &[String]) -> Result<(), String> {
+    for line in lines {
+        write_message(out, &json!({ "jsonrpc": "2.0", "method": "window/logMessage", "params": { "type": 2, "message": line } }))?;
+    }
+    Ok(())
+}
+
 fn range_json(range: Range) -> Value {
     json!({ "start": { "line": range.start.line, "character": range.start.character }, "end": { "line": range.end.line, "character": range.end.character } })
 }
@@ -244,7 +284,7 @@ fn item_json(item: movement_language::Item) -> Value {
 }
 
 const CAPABILITIES: &str = r#"{
-  "textDocumentSync": { "openClose": true, "change": 1 },
+  "textDocumentSync": { "openClose": true, "change": 1, "save": { "includeText": false } },
   "completionProvider": { "triggerCharacters": [".", "`", ":", "[", "{", " "] },
   "hoverProvider": true,
   "definitionProvider": true,
@@ -266,19 +306,32 @@ pub async fn run(dir: &Path, out: &mut impl Write) -> Result<i32, String> {
     let mut server: Option<Server> = None;
     let mut shut_down = false;
     loop {
-        let wait = server.as_ref().and_then(|s| s.due.values().min().copied()).map(|due| due.saturating_duration_since(Instant::now()));
-        let message = match wait {
-            Some(wait) => match tokio::time::timeout(wait, messages.recv()).await {
-                Ok(Some(message)) => Some(message),
-                Err(_) => None,
-                Ok(None) => return Ok(if shut_down { 0 } else { 1 }),
-            },
-            None => match messages.recv().await {
+        let next = server.as_ref().and_then(|s| s.due.values().copied().chain(s.reread_due).min());
+        let wait = async {
+            match next {
+                Some(at) => tokio::time::sleep_until(at.into()).await,
+                None => std::future::pending().await,
+            }
+        };
+        let message = tokio::select! {
+            received = messages.recv() => match received {
                 Some(message) => Some(message),
                 None => return Ok(if shut_down { 0 } else { 1 }),
             },
+            () = wait => None,
+            () = crate::module_hosts::module_exited() => {
+                if let Some(server) = server.as_mut().filter(|s| s.read_clean) {
+                    server.reread_due.get_or_insert(Instant::now() + RESTART_SETTLE);
+                }
+                None
+            }
         };
         if let Some(server) = server.as_mut() {
+            if server.reread_due.is_some_and(|at| at <= Instant::now()) {
+                let mut log = Vec::new();
+                server.reread(&mut log).await;
+                log_lines(out, &log)?;
+            }
             let now = Instant::now();
             let ready: Vec<String> = server.due.iter().filter(|(_, due)| **due <= now).map(|(uri, _)| uri.clone()).collect();
             for uri in ready {
@@ -300,14 +353,10 @@ pub async fn run(dir: &Path, out: &mut impl Write) -> Result<i32, String> {
                     .unwrap_or_else(|| dir.to_path_buf());
                 let mut log = Vec::new();
                 let project = load_project(&root).map_err(|e| log.push(format!("no project at {}: {e}", root.display()))).ok();
-                let catalog = catalog_of_project(project.as_ref(), &mut log).await;
-                let version = project.as_ref().map_or(movement_parser::version::CURRENT_LANGUAGE_VERSION, |p| p.language_version);
-                server = Some(Server { service: Service::new(catalog, version), project, documents: HashMap::new(), due: HashMap::new() });
+                server = Some(Server::open(project, &mut log).await);
                 let capabilities: Value = serde_json::from_str(CAPABILITIES).expect("the capabilities are JSON");
                 write_message(out, &json!({ "jsonrpc": "2.0", "id": id, "result": { "capabilities": capabilities, "serverInfo": { "name": "lf", "version": env!("CARGO_PKG_VERSION") } } }))?;
-                for line in log {
-                    write_message(out, &json!({ "jsonrpc": "2.0", "method": "window/logMessage", "params": { "type": 2, "message": line } }))?;
-                }
+                log_lines(out, &log)?;
             }
             "shutdown" => {
                 shut_down = true;
@@ -334,6 +383,11 @@ pub async fn run(dir: &Path, out: &mut impl Write) -> Result<i32, String> {
                             server.track(&uri, text.to_string());
                             server.due.insert(uri, Instant::now() + DEBOUNCE);
                         }
+                    }
+                    "textDocument/didSave" => {
+                        let mut log = Vec::new();
+                        server.reread(&mut log).await;
+                        log_lines(out, &log)?;
                     }
                     "textDocument/didClose" => {
                         if let Some(uri) = params.pointer("/textDocument/uri").and_then(Value::as_str) {

@@ -20,6 +20,7 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 ### i-procs
 
 - lf starts a module's process only when a run or check needs one (only the externals the movements import), keeps it up while used, and stops it after `moduleIdleTimeout` seconds unused (lf.yaml, default 300). A crashed module starts again on its next call; one call may take `callTimeout` seconds (default 600). First-party `@lf/*` modules and any marked `trusted: true` in their `lf-external.yaml` share one Node process (`serve-module` now serves several modules, each under its own path, with `MODULE_MOUNTS`); every other module gets its own. Module processes exit with lf, and ones a killed lf left behind are stopped on the next start (tracked in the store). `runtime: node 22` in `lf-external.yaml` is checked before a module starts (a served module defaults to node 22). A local module runs with your permissions: there is no sandbox yet.
+- `lf lsp` reads the catalog again when a file is saved, and when a module process lf started ends on its own (a crash, or a module reloading itself): the read starts it again, so the editor sees the restarted module without restarting the language server.
 
 ### i-rustkit
 
