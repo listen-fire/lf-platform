@@ -1,13 +1,13 @@
 // Which outbound email adapter a deployment gets, as a decision rather than as
 // the order of an if-chain.
 //
-// The precedence matches inbound's (`translation_graph/adapters/email/
-// provider.ts`): Resend wins when both are configured, so a deployment sends
-// through the same company its mail arrives at. Splitting the choice out of the
-// composition root is what lets all four outcomes be asserted without
-// importing every service in the process.
+// The precedence matches inbound's (`providers.ts`): Resend wins when both
+// are configured, so a deployment sends through the same company its mail
+// arrives at. Splitting the choice out of the composition root is what lets
+// all four outcomes be asserted without importing every service in the
+// process.
 
-import type { OutboundEmailProvider } from './ledger';
+import type { OutboundEmailProvider } from './interface';
 
 /**
  * Development gets the fake outbox whatever is configured — a developer's

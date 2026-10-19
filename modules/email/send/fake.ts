@@ -1,9 +1,12 @@
+// The dev loop's outbox: every send lands in fake-channels' email service,
+// where `dev:inspect` reads it back.
+
 import { logger } from 'movement-engine/public/log';
 import { OutboundEmailMessager, SendArgs } from './interface';
 
-const FAKE_CHANNELS_URL = process.env.FAKE_CHANNELS_URL || 'http://localhost:5556';
-
 class FakeOutboundEmailAdapter implements OutboundEmailMessager {
+  constructor(private readonly fakeChannelsUrl: string = process.env.FAKE_CHANNELS_URL || 'http://localhost:5556') {}
+
   async send(args: SendArgs): Promise<boolean> {
     const payload = {
       recipients: args.recipients,
@@ -19,7 +22,7 @@ class FakeOutboundEmailAdapter implements OutboundEmailMessager {
     };
 
     try {
-      const res = await fetch(`${FAKE_CHANNELS_URL}/email/v1/messages`, {
+      const res = await fetch(`${this.fakeChannelsUrl}/email/v1/messages`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(payload),
@@ -34,7 +37,7 @@ class FakeOutboundEmailAdapter implements OutboundEmailMessager {
       // dev loop unable to distinguish "delivered to the fake outbox" from
       // "nothing happened", which is exactly the bug the ledger exists to catch.
       logger.warn(
-        `FakeOutboundEmailAdapter: fake-channels unreachable at ${FAKE_CHANNELS_URL}. ${(err as Error).message}`,
+        `FakeOutboundEmailAdapter: fake-channels unreachable at ${this.fakeChannelsUrl}. ${(err as Error).message}`,
       );
       logger.info(`Email payload (undelivered): ${JSON.stringify(payload)}`);
       return false;

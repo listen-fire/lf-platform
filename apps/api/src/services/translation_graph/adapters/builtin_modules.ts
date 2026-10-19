@@ -62,6 +62,7 @@ import { TELEGRAM_MANIFEST } from '@listen-fire/telegram/manifest';
 import { SLACK_MANIFEST } from '@listen-fire/slack/manifest';
 import { SYSTEM_MANIFEST } from '@listen-fire/system/manifest';
 import { NATIVE_VALUATIONS_MANIFEST } from '@listen-fire/native-valuations/manifest';
+import { EMAIL_MANIFEST } from '@listen-fire/email/manifest';
 import { pluginDeclarationNamed, pluginProgramName } from 'movement-engine/public/plugins';
 
 import { injectFakeBaseUrl, isTestHarnessTeam } from '../../../lib/recording';
@@ -373,6 +374,21 @@ export const BUILTIN_MODULES: BuiltinModuleTable = {
     // A credential that names no base URL (the one the platform provisions)
     // means this platform's own API.
     sharedCredential: () => ({ baseUrl: apiBaseUrl() }),
+  },
+  // The platform's own provider keys (its environment) as the install's
+  // credential: nobody connects email here.
+  email: {
+    kind: 'adapter',
+    line: 'module',
+    manifest: EMAIL_MANIFEST,
+    load: () => {
+      const { emailModule }: typeof import('@listen-fire/email') = require('@listen-fire/email');
+      return emailModule;
+    },
+    credential: () => {
+      const { platformEmailCredential }: typeof import('./email') = require('./email');
+      return platformEmailCredential();
+    },
   },
   // The bundled plugins (Henry 2026-10-17: plugins are modules too), all six
   // in one module, `@lf/web`. Each plugin keeps its own line.

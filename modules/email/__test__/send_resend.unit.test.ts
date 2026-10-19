@@ -1,7 +1,7 @@
 // What Resend is actually asked to send, and which adapter a deployment gets.
 
-import { chooseOutboundEmailProvider } from '../choose';
-import { OutboundResendAdapter } from '../resend.adapter';
+import { chooseOutboundEmailProvider } from '../send/choose';
+import { OutboundResendAdapter } from '../send/resend';
 
 const SENDER = { email: 'notifications@acme.example', username: 'Acme' };
 

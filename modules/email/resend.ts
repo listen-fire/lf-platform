@@ -10,10 +10,19 @@
 // trigger event — a replay the next morning would fetch a dead link. So the
 // handle we store is the pair of ids (`resend:<emailId>/<attachmentId>`) and
 // the URL is minted fresh at the moment the bytes are wanted.
-
-import { getEnvVar } from '../../../../lib/utils/environment';
+//
+// What reaching the API takes (the key, where, the fetch) is the caller's: the
+// platform's from its environment, a module host's from the install's
+// credential.
 
 const DEFAULT_API_BASE_URL = 'https://api.resend.com';
+
+/** What one call to Resend's receiving API takes. */
+interface ResendApi {
+  apiKey: string;
+  baseUrl: string;
+  fetch: typeof fetch;
+}
 
 /** Resend paginates the attachment listing; this is its ceiling. */
 const ATTACHMENT_PAGE_LIMIT = 100;
@@ -44,20 +53,9 @@ interface ResendReceivedEmail {
   attachments?: ResendAttachment[];
 }
 
-function apiBaseUrl(env: NodeJS.ProcessEnv = process.env): string {
-  return env.RESEND_API_BASE_URL ?? DEFAULT_API_BASE_URL;
-}
-
-function apiKey(): string {
-  return getEnvVar('RESEND_API_KEY', {
-    devDefault: 'fake_resend_key',
-    because: 'inbound Resend mail carries only ids — the body and the attachments are fetched with it',
-  });
-}
-
-async function getJson(path: string): Promise<unknown> {
-  const url = `${apiBaseUrl()}${path}`;
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${apiKey()}` } });
+async function getJson(api: ResendApi, path: string): Promise<unknown> {
+  const url = `${api.baseUrl}${path}`;
+  const res = await api.fetch(url, { headers: { Authorization: `Bearer ${api.apiKey}` } });
   if (!res.ok) {
     throw new Error(`Resend ${path} failed (status ${res.status}).`);
   }
@@ -108,8 +106,8 @@ function readAttachment(value: unknown): ResendAttachment | null {
 }
 
 /** The whole message behind a webhook's `email_id`. */
-async function fetchReceivedEmail(emailId: string): Promise<ResendReceivedEmail> {
-  const body = asRecord(await getJson(`/emails/receiving/${encodeURIComponent(emailId)}`));
+async function fetchReceivedEmail(api: ResendApi, emailId: string): Promise<ResendReceivedEmail> {
+  const body = asRecord(await getJson(api, `/emails/receiving/${encodeURIComponent(emailId)}`));
   // Resend answers either the object itself or a `{ data: … }` envelope
   // depending on the endpoint; unwrap once so both read the same.
   const raw = asRecord(body.data ?? body);
@@ -136,7 +134,7 @@ async function fetchReceivedEmail(emailId: string): Promise<ResendReceivedEmail>
 }
 
 /** Every attachment on a received message, following the pages to the end. */
-async function listReceivedAttachments(emailId: string): Promise<ResendAttachment[]> {
+async function listReceivedAttachments(api: ResendApi, emailId: string): Promise<ResendAttachment[]> {
   const attachments: ResendAttachment[] = [];
   let after: string | undefined;
   // Bounded by the page ceiling so a provider that never stops handing back a
@@ -146,6 +144,7 @@ async function listReceivedAttachments(emailId: string): Promise<ResendAttachmen
     if (after !== undefined) query.set('after', after);
     const body = asRecord(
       await getJson(
+        api,
         `/emails/receiving/${encodeURIComponent(emailId)}/attachments?${query.toString()}`,
       ),
     );
@@ -180,8 +179,8 @@ function parseResendAttachmentHandle(handle: string): ResendAttachmentRef | null
 }
 
 /** A LIVE download URL for a stored handle, minted now. */
-async function mintAttachmentDownloadUrl(ref: ResendAttachmentRef): Promise<string> {
-  const attachments = await listReceivedAttachments(ref.emailId);
+async function mintAttachmentDownloadUrl(api: ResendApi, ref: ResendAttachmentRef): Promise<string> {
+  const attachments = await listReceivedAttachments(api, ref.emailId);
   const match = attachments.find((a) => a.id === ref.attachmentId);
   if (match?.download_url === undefined) {
     throw new Error(
@@ -194,13 +193,13 @@ async function mintAttachmentDownloadUrl(ref: ResendAttachmentRef): Promise<stri
 export {
   ATTACHMENT_PAGE_LIMIT,
   DEFAULT_API_BASE_URL,
-  apiBaseUrl,
   fetchReceivedEmail,
   listReceivedAttachments,
   mintAttachmentDownloadUrl,
   parseResendAttachmentHandle,
   resendAttachmentHandle,
   type ResendAttachment,
+  type ResendApi,
   type ResendAttachmentRef,
   type ResendReceivedEmail,
 };

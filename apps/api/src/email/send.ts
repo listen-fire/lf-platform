@@ -10,7 +10,7 @@
 // It also carries the `kind` tag into the ledger, which is what makes the ledger
 // queryable by what the message WAS rather than by its subject line.
 
-import type { SendArgs } from '../adapters/email/interface';
+import type { SendArgs } from '@listen-fire/email';
 
 import { services } from '../adapters/registry';
 import { logger } from 'movement-engine/public/log';

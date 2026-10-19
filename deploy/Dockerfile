@@ -63,6 +63,7 @@ COPY modules/slack/package.json modules/slack/
 COPY modules/system/package.json modules/system/
 COPY modules/native-valuations/package.json modules/native-valuations/
 COPY modules/whatsapp/package.json modules/whatsapp/
+COPY modules/email/package.json modules/email/
 COPY packages/engine-contracts/package.json packages/engine-contracts/
 COPY packages/movement-engine/package.json packages/movement-engine/
 COPY packages/shared/package.json packages/shared/

@@ -106,9 +106,6 @@ const ADAPTER_FACTORIES: Record<string, AdapterFactory> = {
   // Email adapter — source-only inbound email (body + attachments as
   // Resources). R4b landed unregistered so the wave-1a sub-wave could
   // touch the registry without collisions; G1 wires it in.
-  // The createEmailAdapter factory ignores `credentialsId` — there are
-  // no per-team email credentials in this build.
-  [EMAIL_ADAPTER_TYPE]: ({ teamId }) => createEmailAdapter({ teamId }),
   // WhatsApp adapter — inbound messages, reactions and locations (media on
   // the `Attachments` edge), and replies, reactions and typing along a
   // message's edges. No per-team credential: the platform's one Meta app
@@ -118,6 +115,10 @@ const ADAPTER_FACTORIES: Record<string, AdapterFactory> = {
     const { createWhatsappAdapter }: typeof import('./whatsapp') = require('./whatsapp');
     return createWhatsappAdapter({ teamId });
   }),
+  // No per-team email credential: the platform's provider keys are its
+  // environment. A module (@lf/email); its BUILTIN_MODULES line picks module
+  // or legacy.
+  [EMAIL_ADAPTER_TYPE]: builtinAdapterFactory(EMAIL_ADAPTER_TYPE, ({ teamId }) => createEmailAdapter({ teamId })),
   // Airtable adapter — read/write target plus webhook source. An optional
   // `base:` entry position (constructionArgs.base) scopes introspection to one
   // base, so a large workspace doesn't walk every base.

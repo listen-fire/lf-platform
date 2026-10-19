@@ -37,7 +37,7 @@ import {
   resolveAdapterSlug,
 } from '../../../services/translation_graph/adapters/registry';
 import { credentialImportNames } from 'movement-engine/public/catalog';
-import { inboundRoutingAddress } from '../../../services/translation_graph/adapters/email/address';
+import { inboundRoutingAddress } from '@listen-fire/email';
 import { WHATSAPP_MOVEMENTS_NUMBER } from '../../../services/translation_graph/adapters/whatsapp';
 import {
   builtInBotUsername,

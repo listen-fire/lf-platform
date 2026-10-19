@@ -1,3 +1,8 @@
+// The outbound sender's contract: what a send takes and what its answer
+// means. Every sender here (Resend, Mailgun, the dev loop's outbox, the
+// refusing stand-in) implements it; the platform wraps whichever it chose in
+// its own ledger.
+
 type EmailRecipient = {
   email: string;
   username: string;
@@ -28,10 +33,13 @@ type SendArgs = {
   metadata?: EmailMetadata;
 };
 
+/** Which sender served a send. */
+type OutboundEmailProvider = 'mailgun' | 'resend' | 'fake' | 'unconfigured';
+
 interface OutboundEmailMessager {
   /** False means the provider REJECTED the message. Callers must treat it as a
    *  failed send — it is not a "probably fine" signal. */
   send: (args: SendArgs) => Promise<boolean>;
 }
 
-export { OutboundEmailMessager, EmailRecipient, EmailMetadata, SendArgs };
+export { OutboundEmailMessager, OutboundEmailProvider, EmailRecipient, EmailMetadata, SendArgs };
