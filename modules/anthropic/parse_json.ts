@@ -1,6 +1,6 @@
 import { jsonrepair } from 'jsonrepair';
 
-import { logger } from '../../services/logger';
+import { logger } from 'movement-engine/public/log';
 
 /**
  * Walk the JSON string and escape double-quotes that appear inside string

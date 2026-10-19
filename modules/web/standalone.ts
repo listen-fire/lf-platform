@@ -32,11 +32,13 @@ import { Readable } from 'node:stream';
 import { z } from 'zod';
 import { fileDescriptorOf, type FileRef } from 'engine-contracts';
 import { makeFileTextResolver, type FileTextReader } from 'file-text';
-import type { ChatCall, ChatModelName } from 'movement-engine/public/anthropic';
+import type { ChatCall } from '@listen-fire/anthropic';
+import type { ChatModelName } from 'movement-engine/public/models';
 import type { FetchedResource, SearchResult, WebTools } from './tools';
 
-import { anthropicClient, anthropicKeyedChatProvider, type LlmUsage } from 'movement-engine/public/anthropic';
-import { costMicrodollars, models } from 'movement-engine/public/anthropic';
+import { anthropicClient, anthropicKeyedChatProvider, type LlmUsage } from '@listen-fire/anthropic';
+import { costMicrodollars } from '@listen-fire/anthropic';
+import { models } from 'movement-engine/public/models';
 import { FULLY_SUPPORTED_DOCUMENT_REGEXES, NOTION_REGEX, PDF_REGEX, PPTX_REGEX, XLSX_REGEX } from '#shared/constants/document_sources';
 import { isLinkedInUrl, looksLikeNonHtmlAddress } from './addresses';
 import { documentReader, type DocumentReader } from './documents/reader';

@@ -133,6 +133,9 @@ importers:
       '@listen-fire/airtable':
         specifier: workspace:*
         version: link:../../modules/airtable
+      '@listen-fire/anthropic':
+        specifier: workspace:*
+        version: link:../../modules/anthropic
       '@listen-fire/attio':
         specifier: workspace:*
         version: link:../../modules/attio
@@ -806,6 +809,9 @@ importers:
 
   examples/embed-saas:
     dependencies:
+      '@listen-fire/anthropic':
+        specifier: workspace:*
+        version: link:../../modules/anthropic
       '@listen-fire/engine':
         specifier: workspace:*
         version: link:../../packages/movement-engine
@@ -828,6 +834,9 @@ importers:
 
   modules/affinity:
     dependencies:
+      '@listen-fire/anthropic':
+        specifier: workspace:^
+        version: link:../anthropic
       '@listen-fire/engine':
         specifier: workspace:^
         version: link:../../packages/movement-engine
@@ -935,6 +944,37 @@ importers:
       movement-lang:
         specifier: workspace:@listen-fire/movement-lang@*
         version: link:../../packages/movement-lang
+      typescript:
+        specifier: 5.5.4
+        version: 5.5.4
+
+  modules/anthropic:
+    dependencies:
+      '@anthropic-ai/sdk':
+        specifier: ^0.126.0
+        version: 0.126.0(zod@4.1.12)
+      '@listen-fire/engine':
+        specifier: workspace:^
+        version: link:../../packages/movement-engine
+      exponential-backoff:
+        specifier: 3.1.1
+        version: 3.1.1
+      jsonrepair:
+        specifier: 3.8.0
+        version: 3.8.0
+      zod:
+        specifier: 4.1.12
+        version: 4.1.12
+    devDependencies:
+      '@types/jest':
+        specifier: 29.5.14
+        version: 29.5.14
+      '@types/node':
+        specifier: 20.16.5
+        version: 20.16.5
+      movement-engine:
+        specifier: workspace:@listen-fire/engine@*
+        version: link:../../packages/movement-engine
       typescript:
         specifier: 5.5.4
         version: 5.5.4
@@ -1413,6 +1453,9 @@ importers:
 
   modules/web:
     dependencies:
+      '@listen-fire/anthropic':
+        specifier: workspace:^
+        version: link:../anthropic
       '@listen-fire/engine':
         specifier: workspace:^
         version: link:../../packages/movement-engine
@@ -1536,6 +1579,9 @@ importers:
 
   packages/model-providers:
     dependencies:
+      '@listen-fire/anthropic':
+        specifier: workspace:^
+        version: link:../../modules/anthropic
       '@listen-fire/engine':
         specifier: workspace:^
         version: link:../movement-engine
@@ -1616,9 +1662,6 @@ importers:
 
   packages/movement-engine:
     dependencies:
-      '@anthropic-ai/sdk':
-        specifier: ^0.126.0
-        version: 0.126.0(zod@4.1.12)
       '@listen-fire/engine-contracts':
         specifier: workspace:^
         version: link:../engine-contracts
@@ -1628,12 +1671,6 @@ importers:
       '@listen-fire/shared':
         specifier: workspace:^
         version: link:../shared
-      exponential-backoff:
-        specifier: 3.1.1
-        version: 3.1.1
-      jsonrepair:
-        specifier: 3.8.0
-        version: 3.8.0
       safe-stable-stringify:
         specifier: 2.5.0
         version: 2.5.0
@@ -18439,7 +18476,7 @@ snapshots:
   extract-pg-schema@5.8.0(@electric-sql/pglite@0.3.14)(better-sqlite3@11.10.0):
     dependencies:
       knex: 3.1.0(better-sqlite3@11.10.0)(pg@8.16.3)
-      knex-pglite: 0.12.1(@electric-sql/pglite@0.3.14)(knex@3.1.0(better-sqlite3@11.10.0)(pg@8.12.0))
+      knex-pglite: 0.12.1(@electric-sql/pglite@0.3.14)(knex@3.1.0(better-sqlite3@11.10.0)(pg@8.16.3))
       pg: 8.16.3
       pg-query-emscripten: 5.1.0
       ramda: 0.31.3
@@ -20101,7 +20138,7 @@ snapshots:
 
   kleur@4.1.5: {}
 
-  knex-pglite@0.12.1(@electric-sql/pglite@0.3.14)(knex@3.1.0(better-sqlite3@11.10.0)(pg@8.12.0)):
+  knex-pglite@0.12.1(@electric-sql/pglite@0.3.14)(knex@3.1.0(better-sqlite3@11.10.0)(pg@8.16.3)):
     dependencies:
       '@electric-sql/pglite': 0.3.14
       knex: 3.1.0(better-sqlite3@11.10.0)(pg@8.16.3)

@@ -12,8 +12,8 @@ WORKDIR /src
 COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
 COPY crates crates
 COPY examples/rust-embed examples/rust-embed
-# The binary embeds the model price list at compile time, from the engine package.
-COPY packages/movement-engine/lib/models/prices.json packages/movement-engine/lib/models/prices.json
+# The binary embeds the model price list at compile time, from @lf/anthropic.
+COPY modules/anthropic/prices.json modules/anthropic/prices.json
 RUN cargo build --release --locked -p listen-fire \
   && cp target/release/lf /lf
 

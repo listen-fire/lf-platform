@@ -8,7 +8,7 @@
 // Re-record only deliberately: WEB_PARITY_RECORD=1, then read the diff.
 
 jest.mock('../../../../../lib/anthropic', () => {
-  const actual = jest.requireActual('movement-engine/lib/anthropic');
+  const actual = jest.requireActual('@listen-fire/anthropic');
   return { ...actual, ...require('./parity/stub_services').anthropicModule };
 });
 jest.mock('../../../../web_search', () => require('./parity/stub_services').webSearchModule);

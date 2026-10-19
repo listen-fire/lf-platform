@@ -1,5 +1,5 @@
-//! The Anthropic Messages API as the hosted engine calls it (movement-engine
-//! `lib/anthropic/index.ts` `anthropicChatDetailed`, over the SDK): one
+//! The Anthropic Messages API as @lf/anthropic's TypeScript client calls it
+//! (`modules/anthropic/client.ts` `anthropicChatDetailed`, over the SDK): one
 //! streamed request per turn, a reply cut off at the output ceiling continued
 //! where it stopped, a reply that spent the whole ceiling thinking asked again
 //! one effort lower, and a failed request retried with the same backoff.
@@ -752,6 +752,23 @@ pub mod tests {
         let replies = join_all((0..12).map(|_| provider.chat_detailed(&options, &|| true)).collect()).await;
         assert!(replies.iter().all(|reply| reply.as_ref().is_ok_and(|r| r.text == "ok")));
         assert_eq!(peak.load(Ordering::SeqCst) as u64, MAX_REQUESTS_IN_FLIGHT);
+    }
+
+    /// @lf/anthropic's behaviour (modules/anthropic/behaviour.json), which the
+    /// TypeScript client reads: the same declared limit, retries and
+    /// continuations from both.
+    #[test]
+    fn the_client_behaves_as_the_modules_behaviour_says() {
+        let text = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../modules/anthropic/behaviour.json")).unwrap();
+        let behaviour: Json = serde_json::from_str(&text).unwrap();
+        assert_eq!(behaviour["concurrentRequests"].as_u64(), Some(MAX_REQUESTS_IN_FLIGHT));
+        assert_eq!(behaviour["maxChatContinuations"].as_u64(), Some(u64::from(MAX_CHAT_CONTINUATIONS)));
+        let retry = &behaviour["retry"];
+        let backoff = Backoff::default();
+        assert_eq!(retry["attempts"].as_u64(), Some(u64::from(backoff.attempts)));
+        assert_eq!(retry["initialDelayMs"].as_u64(), Some(backoff.initial.as_millis() as u64));
+        assert_eq!(retry["multiple"].as_u64(), Some(u64::from(backoff.multiple)));
+        assert_eq!(retry["rateLimitWaitMs"].as_u64(), Some(backoff.rate_limit_wait.as_millis() as u64));
     }
 
     #[test]

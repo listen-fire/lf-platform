@@ -23,7 +23,7 @@ import type { PersonContext, ResolvedField } from './extracted_fields';
 import type { PluginOutput, WebPlugin } from './plugin';
 import type { SearchResult } from './tools';
 
-import { parseJson } from 'movement-engine/public/anthropic';
+import { parseJson } from '@listen-fire/anthropic';
 import { LINKEDIN_ENRICHMENT_PLUGIN } from 'movement-engine/public/plugins';
 import { resolvePersonContext } from './extracted_fields';
 import { anthropicChat, logger, runFields, tools } from './tools';

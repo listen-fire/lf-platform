@@ -28,7 +28,7 @@ import type { PluginOutput, WebPlugin } from './plugin';
 import type { Anchors, SearchHit } from './search_hygiene';
 import type { ProfileIdentity } from './linkedin_identity';
 
-import { parseJson } from 'movement-engine/public/anthropic';
+import { parseJson } from '@listen-fire/anthropic';
 import { describeError, looksLikeNonHtmlAddress } from './addresses';
 import { resolvePersonContext } from './extracted_fields';
 import { anthropicChat, anthropicChatStructured, logger, MINUTE, runFields, SECOND, tools } from './tools';

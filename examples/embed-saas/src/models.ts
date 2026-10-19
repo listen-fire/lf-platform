@@ -1,10 +1,10 @@
 // The models a customer's `AI(…)` reaches. By default a fake that answers
 // without the network and charges a fixed price per call, so the cost cap
 // can be seen to hold; with ANTHROPIC_API_KEY set, Claude through the
-// engine's own Anthropic client, charged at its real price.
+// models slot's module for Claude (@lf/anthropic), charged at its real price.
 
-import { anthropicClient, anthropicKeyedChatProvider, models, type ChatModelName } from '@listen-fire/engine/public/anthropic';
-import { makeAnthropicLlmClient } from '@listen-fire/engine/public/models';
+import { anthropicClient, anthropicKeyedChatProvider, makeAnthropicLlmClient } from '@listen-fire/anthropic';
+import { models, type ChatModelName } from '@listen-fire/engine/public/models';
 import type { ModelClient } from '@listen-fire/engine/public/embed';
 
 /** What the fake charges for one call, in microdollars. */

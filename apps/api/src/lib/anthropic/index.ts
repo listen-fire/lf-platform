@@ -1,8 +1,8 @@
-// The hosted product's Anthropic client: the shared one (movement-engine's
-// lib/anthropic), routed by this deployment's MODEL_MAP and environment and
+// The hosted product's Anthropic client: the shared one (@lf/anthropic,
+// modules/anthropic), routed by this deployment's MODEL_MAP and environment and
 // billed to the ambient llm-usage context.
 
-import { anthropicClient } from 'movement-engine/public/anthropic';
+import { anthropicClient } from '@listen-fire/anthropic';
 import { chatCallFor } from '../models/chat';
 import { recordLlmUsage, runFields } from '../llm_usage';
 
@@ -25,7 +25,7 @@ export {
   meterAnthropicUsage,
   MAX_CHAT_CONTINUATIONS,
   StructuredOutputError,
-} from 'movement-engine/public/anthropic';
+} from '@listen-fire/anthropic';
 export type {
   AnthropicChatOptions,
   AnthropicChatStructuredOptions,
@@ -44,4 +44,4 @@ export type {
   WebSearcher,
   WebSearchResult,
   WebToolEvent,
-} from 'movement-engine/public/anthropic';
+} from '@listen-fire/anthropic';

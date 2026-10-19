@@ -18,7 +18,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 import type { ModuleLog } from 'module-kit';
-import type { AnthropicClient } from 'movement-engine/public/anthropic';
+import type { AnthropicClient } from '@listen-fire/anthropic';
 
 /** One search result, as a search provider gives it. */
 export interface SearchResult {

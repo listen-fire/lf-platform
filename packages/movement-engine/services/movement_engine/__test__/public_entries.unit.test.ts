@@ -15,7 +15,6 @@ import * as files from '../../../public/files';
 import * as testing from '../../../public/testing';
 import * as types from '../../../public/types';
 import * as errors from '../../../public/errors';
-import * as json from '../../../public/json';
 import * as queue from '../../../public/queue';
 import * as text from '../../../public/text';
 import * as addresses from '../../../public/addresses';
@@ -54,7 +53,6 @@ describe('public entries', () => {
     expect(typeof types.neverAsAny).toBe('function');
     expect(new errors.MovementEngineError('MOVENG_RUNTIME', 'x').code).toBe('MOVENG_RUNTIME');
     expect(errors.getErrorMessage(new Error('boom'))).toBe('boom');
-    expect(json.parseJson('```json\n{"a":1}\n```')).toEqual({ a: 1 });
     expect(typeof queue.Queue).toBe('function');
     expect(text.slugify('Acme Corp')).toBe('acme-corp');
     expect(addresses.encodeAddress(addresses.parseAddress('s1.b0'))).toBe('s1.b0');

@@ -1,7 +1,7 @@
 //! Which models a run may name, what a model call costs, and the provider
-//! key: the hosted engine's registry and price table (movement-engine
-//! `lib/models/registry.ts` and `pricing.ts`). The price table is the very
-//! file the hosted engine reads, and
+//! key: the hosted engine's registry (movement-engine `lib/models/registry.ts`)
+//! and @lf/anthropic's price table (`modules/anthropic/pricing.ts`). The price
+//! table is the very file the TypeScript client bills from, and
 //! a test keeps the model names equal to the registry's.
 
 use std::collections::{BTreeMap, HashSet};
@@ -68,7 +68,9 @@ pub struct TokenCounts {
     pub cache_creation: u64,
 }
 
-static PRICES_TEXT: &str = include_str!("../data/prices.json");
+/// The one price table, @lf/anthropic's (modules/anthropic/prices.json): the
+/// TypeScript client bills from the same file.
+static PRICES_TEXT: &str = include_str!("../../../modules/anthropic/prices.json");
 
 fn prices() -> &'static BTreeMap<String, Price> {
     static PRICES: OnceLock<BTreeMap<String, Price>> = OnceLock::new();
@@ -111,7 +113,7 @@ thread_local! {
 pub fn warn_unpriced_once(key: &str) {
     let first = UNPRICED_WARNED.with(|warned| warned.borrow_mut().insert(key.to_string()));
     if first {
-        eprintln!("lf: no price for \"{key}\": its usage counts as free. Add it to movement-engine/lib/models/prices.json.");
+        eprintln!("lf: no price for \"{key}\": its usage counts as free. Add it to modules/anthropic/prices.json.");
     }
 }
 
@@ -141,14 +143,6 @@ pub fn provider_key(credentials: &Credentials) -> Result<ProviderKey, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// The published crate carries its own copy of the price table (a crate
-    /// cannot include a file outside itself): it is the TypeScript one.
-    #[test]
-    fn the_crates_price_table_is_the_engine_packages() {
-        let theirs = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../packages/movement-engine/lib/models/prices.json")).unwrap();
-        assert_eq!(PRICES_TEXT, theirs, "copy packages/movement-engine/lib/models/prices.json to crates/lf/data/prices.json");
-    }
 
     /// The names the TypeScript registry holds as chat models, in its order.
     fn registry_chat_models() -> Vec<String> {
@@ -182,19 +176,20 @@ mod tests {
         assert_eq!(cost_microdollars("anthropic/not-a-model", counts), None);
     }
 
+    /// @lf/anthropic's cost cases (modules/anthropic/fixtures/cost_cases.json),
+    /// which its TypeScript pricing test reads too: both bill a call to the
+    /// same microdollar.
     #[test]
     fn prices_agree_with_the_typescript_to_the_microdollar() {
-        // Worked by `costMicrodollars` in pricing.ts over the same table.
-        let cases: &[(&str, [u64; 4], i64)] = &[
-            ("anthropic/claude-fable-5-1", [12345, 6789, 4321, 987], 476318),
-            ("anthropic/claude-haiku-4-5", [1, 1, 1, 1], 7),
-            ("anthropic/claude-opus-4-6", [777777, 3, 123456, 2], 3950701),
-            ("anthropic/claude-sonnet-5", [3, 0, 0, 0], 6),
-            ("anthropic/claude-haiku-4-5-20251001", [33, 7, 5, 1], 70),
-        ];
-        for (key, [input, output, cache_read, cache_creation], expected) in cases {
-            let counts = TokenCounts { input: *input, output: *output, cache_read: *cache_read, cache_creation: *cache_creation };
-            assert_eq!(cost_microdollars(key, counts), Some(*expected), "{key}");
+        let text = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../modules/anthropic/fixtures/cost_cases.json")).unwrap();
+        let fixture: Json = serde_json::from_str(&text).unwrap();
+        let cases = fixture["cases"].as_array().unwrap();
+        assert!(!cases.is_empty());
+        for case in cases {
+            let key = case["key"].as_str().unwrap();
+            let tokens: Vec<u64> = case["tokens"].as_array().unwrap().iter().map(|n| n.as_u64().unwrap()).collect();
+            let counts = TokenCounts { input: tokens[0], output: tokens[1], cache_read: tokens[2], cache_creation: tokens[3] };
+            assert_eq!(cost_microdollars(key, counts), case["microdollars"].as_i64(), "{key}");
         }
     }
 

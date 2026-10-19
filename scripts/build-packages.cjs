@@ -35,12 +35,13 @@ const PACKAGES = [
   { dir: 'packages/engine-contracts' },
   { dir: 'packages/movement-engine', assets: [/\/prompts\/[^/]+\.md$/] },
   { dir: 'packages/file-text' },
+  { dir: 'modules/anthropic' },
   { dir: 'packages/model-providers' },
   { dir: 'packages/module-kit' },
   { dir: 'modules/google-sheets' },
   ...fs
     .readdirSync(path.join(ROOT, 'modules'))
-    .filter((name) => name !== 'google-sheets' && fs.existsSync(path.join(ROOT, 'modules', name, 'package.json')))
+    .filter((name) => !['google-sheets', 'anthropic'].includes(name) && fs.existsSync(path.join(ROOT, 'modules', name, 'package.json')))
     .sort()
     .map((name) => ({ dir: `modules/${name}` })),
 ];

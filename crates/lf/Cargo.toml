@@ -15,7 +15,7 @@ description = "listen-fire: the movement language's parser, checker and engine, 
 readme = "README.md"
 keywords = ["movement", "automation", "dsl", "workflow", "listen-fire"]
 categories = ["command-line-utilities", "compilers", "development-tools"]
-include = ["src/**/*", "data/**/*", "Cargo.toml", "README.md"]
+include = ["src/**/*", "Cargo.toml", "README.md"]
 
 [lib]
 name = "listen_fire"

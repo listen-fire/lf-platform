@@ -32,8 +32,9 @@ The public entries of `@listen-fire/engine` you will use:
 | `public/inbound` | `eventMatchesTriggerScope`, `triggerEventOf`: from your event to a run |
 | `public/secrets` | the secrets family, and an in-memory vault to start from |
 | `public/adapter` | what an adapter is |
-| `public/models`, `public/anthropic` | the Anthropic clients and model prices |
+| `public/models` | the model registry and map, the run's spend and cost cap |
 | `public/run-host` | the store and rules for runs that park (`await`, `sleep`) |
+| `public/log` | the engine's log lines: `routeEngineLogsTo` hands them to your own logger (the default prints to the console) |
 | `public/testing` | for your tests: the store contract suite your own store must pass |
 
 ## The shape of it
@@ -131,7 +132,7 @@ The host has the same slots as `lf.yaml`'s `core:` section ([core slots](core-sl
 
 | slot | what a run asks of it | how you fill it |
 |---|---|---|
-| models | `ai(…)` and `extract(…)` calls | `llm: pricedModels({ client, extractCall })`. A client answers `{ parsedJson }` and may report what it cost. The Anthropic clients are `makeAnthropicLlmClient` and `makeAnthropicExtractCallClient` (`public/models`), over `anthropicClient` (`public/anthropic`). |
+| models | `ai(…)` and `extract(…)` calls | `llm: pricedModels({ client, extractCall })`. A client answers `{ parsedJson }` and may report what it cost. The Anthropic clients are `makeAnthropicLlmClient` and `makeAnthropicExtractCallClient`, over `anthropicClient`, all from `@listen-fire/anthropic` (the models slot's module for Claude, which also holds the price table). |
 | judge | whether a written record is one already there, when the rules alone cannot tell | `llm.arbitrateEntities`. Absent: such a write fails, naming it. |
 | store | parks: `await`, `sleep`, callbacks | `park.sink`, `park.wake`, `park.bindings`, `park.callbacks`, with the run-host store (`public/run-host`) behind them. Absent: a movement that parks fails. `memoryRunHostStore` (`public/embed`) holds parked runs for one process; a store that must outlive a restart implements `RunHostStore` over your database and must pass the contract suite in `public/testing`. |
 | files | reading a file's text, rendering a file | `files.resolveFileText` (`@listen-fire/file-text` reads PDFs, decks and sheets), `files.render`. |

@@ -3,16 +3,15 @@
 // (`ExtractCallLlmClient`), both on the Anthropic chat wrapper the shell hands
 // in, with the output ceiling and the truncation rule they share.
 
-import type { ExtractCallLlmClient } from '../../movement_engine/extraction_call';
-import type { CancelGate } from '../../movement_engine/run';
-import type { LlmCallInput, LlmClient } from '../engine/batched_extraction/llm_call';
-import type { AnthropicClient } from '../../../lib/anthropic';
+import type { ExtractCallLlmClient, LlmCallInput, LlmClient } from 'movement-engine/public/models';
+import type { CancelGate } from 'movement-engine/public/movement-engine';
+import type { AnthropicClient } from './client';
 
-import { MAX_CHAT_CONTINUATIONS, type ChatReply } from '../../../lib/anthropic';
-import { parseJsonReply } from '../../../lib/utils/parse_json';
-import { logger } from '../../logger';
-import { claudeModelId } from '../../movement_engine/ai_tiers';
-import { RunCancelledSignal } from '../../movement_engine/errors';
+import { MAX_CHAT_CONTINUATIONS, type ChatReply } from './client';
+import { parseJsonReply } from './parse_json';
+import { logger } from 'movement-engine/public/log';
+import { claudeModelId } from 'movement-engine/public/models';
+import { RunCancelledSignal } from 'movement-engine/public/movement-engine';
 
 export interface ModelClientOptions {
   /** The chat call every model call goes through: the shell's client, bound
