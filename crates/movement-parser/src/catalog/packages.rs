@@ -29,6 +29,17 @@ pub fn package_members(plugins: &JsMap<PluginSpec>, tag: &str) -> Vec<PackageMem
         .collect()
 }
 
+/// The package a bare name stands for when the program imported none: the
+/// tag whose default local name is `name` (`@lf/pdf` → `pdf`). The TypeScript
+/// twin is `packageCalled` in packages/movement-lang/checker/catalog.ts.
+pub fn package_called(plugins: &JsMap<PluginSpec>, name: &str) -> Option<String> {
+    plugins
+        .iter()
+        .filter_map(|(_, spec)| spec.package.as_deref())
+        .find(|tag| crate::stmt::local_name_for_tag(tag) == name)
+        .map(str::to_string)
+}
+
 /// The local name a package's member is bound to: `web.fetchUrl`.
 pub fn member_local(package_local: &str, member: &str) -> String {
     format!("{package_local}.{member}")

@@ -116,6 +116,8 @@ pub(crate) struct PluginResult {
     pub(crate) data: Option<Js>,
     pub(crate) records: Vec<Js>,
     pub(crate) outcome: Option<String>,
+    /// Things the author should know, each a warning on the run.
+    pub(crate) warnings: Vec<String>,
 }
 
 impl PluginResult {
@@ -152,7 +154,19 @@ impl PluginResult {
             absent if absent.is_nullish() => None,
             other => return Err(Failure::host_answer(CALL, "`outcome` as text or absent", &other)),
         };
-        Ok(PluginResult { text, data, records, outcome })
+        let warnings = match member("warnings") {
+            Js::Array(list) => {
+                let mut warnings = Vec::new();
+                for entry in list.items().iter() {
+                    let Js::String(text) = entry else { return Err(Failure::host_answer(CALL, "every entry of `warnings` as text", entry)) };
+                    warnings.push(text.to_string());
+                }
+                warnings
+            }
+            absent if absent.is_nullish() => Vec::new(),
+            other => return Err(Failure::host_answer(CALL, "`warnings` as a list or absent", &other)),
+        };
+        Ok(PluginResult { text, data, records, outcome, warnings })
     }
 
     /// `Object.keys(result.data ?? {})`.

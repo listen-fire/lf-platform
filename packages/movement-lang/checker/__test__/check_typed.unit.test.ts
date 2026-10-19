@@ -2112,7 +2112,7 @@ describe('write-only / read-only surfaces (the WhatsApp File duality)', () => {
   });
 
   it('setting the write-only field IN a write stays clean — write-only, not unusable', () => {
-    expectClean(inMessageBlock('write m-[:replies]-> { Message: "doc", File: File.from("contents", "pdf") }'));
+    expectClean(inMessageBlock('write m-[:replies]-> { Message: "doc", File: File.from("contents", "text") }'));
   });
 });
 

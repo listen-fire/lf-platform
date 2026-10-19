@@ -15,7 +15,10 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 
 ### n-pdf
 
-- **`FILE(text, "pdf")` no longer needs Chromium, on the platform or in `lf`.** Both draw the PDF themselves, byte for byte the same: A4, Helvetica, the text wrapped at the page edge and spaces and line breaks kept, as before. A character outside Latin-1 and the Windows-1252 punctuation (CJK, emoji) now prints as `?`. In `lf` the file is now a real PDF (it was the text under a `.pdf` name), so reading it back with the file-text reader needs the file-text module.
+- **A PDF is the `@lf/pdf` plugin's, not Chromium's.** ``import { `@lf/pdf` as pdf } from plugins``, then `pdf.render(text)` is a file (A4 by default, Helvetica, the text wrapped at the page edge, spaces and line breaks kept). Settings, last: `{ pageSize: "a4" | "letter", margin }` (points). No browser, no dependency, no font to ship, so the core image stays small. A character outside Latin-1 and the Windows-1252 punctuation (CJK, emoji) prints as `?`, and the run is warned, naming `@lf/pdf` and that a Unicode PDF module can replace it. The platform loads the module in process; `lf` serves it with `serve-module` like `@lf/web`.
+- **Language versions 1 to 4 keep `FILE(text, "pdf")`**, drawn by the same writer. From version 5 `FILE(…, "pdf")` and `File.from(…, "pdf")` are `MOV_V5_SPELLING`, with `pdf.render(text)` as the rewrite (not marked safe, because the import is yours to add), and `pdf` used without its import offers the import line as a fix. `File.from(…, "text")` is unchanged. Added to the platform's plugin catalog as the second package after `@lf/web`.
+- **Plugin answers can carry files and warnings** (adapter protocol 2, additive): `files` (bytes inline as base64, stored by the host and put at `data.<field>`) and `warnings` (each a warning on the run, `MOVENG_PLUGIN_WARNING`). A plugin declaring a `value` output of type `file` answers it as `files.value`.
+- In `lf`, a `"pdf"` kind that only meets the host at run time (`File.from(t, kind)`) fails naming the plugin, and `lf`'s own writer is gone.
 
 ## [0.12.0-rc.2] - 2026-10-19 (pre-release)
 

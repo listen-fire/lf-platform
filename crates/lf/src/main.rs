@@ -73,7 +73,6 @@ mod models;
 mod oauth2;
 mod oauth_redirect;
 mod park_files;
-mod plain_pdf;
 mod pg_store;
 mod pg_tls;
 mod project;

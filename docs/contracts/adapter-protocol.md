@@ -906,12 +906,22 @@ page = web.fetchUrl(u)
   `through [ … ]` stage feeds it (`fedArgs`), and `fedByExtraction` for a
   plugin that only reads what the stage extracted.
 - `plugins` pairs with the method `invokePlugin`:
-  `{ name, config, extractedContext }` → `{ text?, data?, records?, outcome?, costMicrodollars? }`.
+  `{ name, config, extractedContext }` → `{ text?, data?, records?, outcome?, costMicrodollars?, files?, warnings? }`.
   `config` is the author's arguments by name; `extractedContext` the fields
   extracted so far inside a stage (empty otherwise). The answer is what the
   plugin added: fetched `text` to extract from, `data` fields, `records` (one
   per thing it fetched, for a records output), an `outcome` for the trace,
   and what its own work cost that nothing else priced.
+- **`files`** (a plugin that makes a file): `{ "<field>": { name?, contentType?, base64 } }`.
+  Bytes do not ride the envelope as a URL a plugin could serve, so the plugin
+  hands them over inline and the host stores each file (the platform under the
+  team's key prefix, lf as one of the run's documents) and puts the file it
+  made at `data.<field>`. A plugin declaring a `value` output of type `file`
+  answers it as `files.value`: the call's value is that file.
+- **`warnings`**: text the run's author should know; each is a warning on the
+  run (`MOVENG_PLUGIN_WARNING`) naming nothing but what the plugin said. A
+  plugin that did what it could, and tells you what it could not
+  (`@lf/pdf`: characters its default font cannot draw).
 - A plugin module answers `manifest` with `supportedTriggers: []` and lists
   only `manifest` and `invokePlugin` (and `refreshCredential` if it needs
   one) in `methods`.

@@ -176,7 +176,7 @@ fn namespaces() {
         ("List.groupBy(xs, (x) => x.k)", "GROUPBY(xs, (x) => x.k)"),
         ("List.keyBy(xs, (x) => x.k)", "KEYBY(xs, (x) => x.k)"),
         ("List.includes(xs, v)", "v IN xs"),
-        ("File.from(content, \"pdf\")", "FILE(content, \"pdf\")"),
+        ("File.from(content, \"text\")", "FILE(content, \"text\")"),
         ("File.read(f)", "READ(f)"),
         ("xs[0]", "AT(xs, 0)"),
         ("d[key]", "AT(d, key)"),
@@ -403,4 +403,15 @@ fn a_block_closure_inside_an_expression_is_read_for_old_spellings() {
     // Under 4 nothing is read for spellings.
     let v4 = "movement go(xs) {\n  if count(FILTER(xs, (r) => {\n    return LENGTH(r) > 0\n  })) > 0 {\n    y = 1\n  }\n}\n";
     assert!(program(v4, 4).spelling.is_empty());
+}
+
+#[test]
+fn a_pdf_is_the_pdf_plugin_s() {
+    for text in ["File.from(content, \"pdf\")", "FILE(content, \"pdf\")"] {
+        let found = findings(text);
+        assert_eq!(found.len(), 1, "{text}: {found:?}");
+        assert!(found[0].message.contains("@lf/pdf"), "{text}: {found:?}");
+        assert_eq!(found[0].edits.as_ref().unwrap()[0].text, "pdf.render(content)");
+        assert!(!found[0].safe, "{text}: the import is the program's to add");
+    }
 }

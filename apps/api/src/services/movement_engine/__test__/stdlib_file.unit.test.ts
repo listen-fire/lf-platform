@@ -3,8 +3,8 @@
 //
 //   1. The digest idiom feeding FILE(): a block accumulates per-file
 //      lines, JOIN over the meta-node edge composes the digest string,
-//      and `FILE(digest, "pdf")` renders it through the file_render
-//      seam (Playwright mocked at the page boundary — the seam's real
+//      and `pdf.render(digest)` (the @lf/pdf plugin) draws it, the plugin
+//      invoker storing the file through the file_render seam (Playwright mocked at the page boundary — the seam's real
 //      code runs). The dry-run sink captures the artifact ref: a
 //      branded `FileRef` with a self-contained `data:` URL, the same
 //      File-value currency file-typed adapter fields consume.
@@ -108,6 +108,7 @@ import { services } from '../../../adapters/registry';
 import { makeTestHost } from 'movement-engine/services/movement_engine/test_host';
 import { streamFileRef } from '../../translation_graph/engine/files/retrieve';
 import { renderFileArtifact } from '../../translation_graph/movement/file_render';
+import { transformInvokerFor } from '../../translation_graph/movement/transform_invoker';
 import { teamOfTenant } from '../../translation_graph/movement/tenant';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000010');
@@ -251,6 +252,8 @@ const PRELUDE = [
 function digestMovement(artifactType: 'pdf' | 'text'): string {
   return [
     PRELUDE,
+    // From language version 5 a PDF is the @lf/pdf plugin's.
+    ...(artifactType === 'pdf' ? ['import { `@lf/pdf` as pdf } from plugins'] : []),
     '',
     'function weekly_report(msg: <inbox-[:message]->>) {',
     '  items = msg-[f:files]-> {',
@@ -262,7 +265,7 @@ function digestMovement(artifactType: 'pdf' | 'text'): string {
     '    amount: Currency.numberFromFigure(msg.`text`)',
     '    code:   Currency.codeFromFigure(msg.`text`)',
     '    due:    Date.addDays("2026-03-12", 7)',
-    `    report: File.from(digest, "${artifactType}")`,
+    artifactType === 'pdf' ? '    report: pdf.render(digest)' : '    report: File.from(digest, "text")',
     '  }',
     '}',
   ].join('\n');
@@ -293,6 +296,7 @@ async function runDigest(artifactType: 'pdf' | 'text') {
         }),
       },
       files: { render: renderFileArtifact },
+      llm: { transforms: transformInvokerFor(teamOfTenant(TEAM_ID)) },
     }),
     dryRun: true,
   });
@@ -309,7 +313,7 @@ async function refBytes(ref: FileRef): Promise<Buffer> {
 
 // ── 1 + 3. The pdf artifact and the stdlib fields, dry-run captured ──────────
 
-describe('FILE(digest, "pdf") + namespaced stdlib fields through runMovement', () => {
+describe('pdf.render(digest) + namespaced stdlib fields through runMovement', () => {
   it('captures the artifact ref and the deterministic stdlib values', async () => {
     const { captured } = await runDigest('pdf');
 

@@ -41,6 +41,7 @@ COPY modules/google-sheets/package.json modules/google-sheets/
 COPY modules/google-drive/package.json modules/google-drive/
 COPY modules/gmail/package.json modules/gmail/
 COPY modules/web/package.json modules/web/
+COPY modules/pdf/package.json modules/pdf/
 COPY modules/affinity/package.json modules/affinity/
 COPY modules/airtable/package.json modules/airtable/
 COPY modules/attio/package.json modules/attio/

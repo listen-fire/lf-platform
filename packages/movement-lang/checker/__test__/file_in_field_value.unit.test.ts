@@ -98,7 +98,7 @@ const PRELUDE = [
   'l = ledger(credentials: ledger_cred)',
 ].join('\n');
 
-const F = '  f = FILE("contents", "pdf")';
+const F = '  f = FILE("contents", "text")';
 
 const program = (body: string[]): string => `${PRELUDE}\nmovement m() {\n${[F, ...body].join('\n')}\n}`;
 

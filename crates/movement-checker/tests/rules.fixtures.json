@@ -2224,7 +2224,7 @@
    "name": "plugin arg: record in MULTI to structured (v3)",
    "snapshot": "plug",
    "version": 3,
-   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = attio(credentials: crm_cred)\nmovement m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = FILE(\"contents\", \"pdf\")\n  s = summarise(data: MULTI(org))\n}",
+   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = attio(credentials: crm_cred)\nmovement m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = FILE(\"contents\", \"text\")\n  s = summarise(data: MULTI(org))\n}",
    "expected": [
     "MOV_CALL_ARG_TYPE 9:23-9:33 'summarise' takes structured data for 'data', and 'data[…]' is a crm.company handle — a record, not a value. A record goes to a plugin only as the whole argument ('data: r', which hands it the record's fields); inside a value, write a field off it ('r.`Name`')."
    ]
@@ -2233,7 +2233,7 @@
    "name": "plugin arg: record under a key (v3)",
    "snapshot": "plug",
    "version": 3,
-   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = attio(credentials: crm_cred)\nmovement m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = FILE(\"contents\", \"pdf\")\n  s = summarise(data: { a: COALESCE(org, \"x\") })\n}",
+   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = attio(credentials: crm_cred)\nmovement m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = FILE(\"contents\", \"text\")\n  s = summarise(data: { a: COALESCE(org, \"x\") })\n}",
    "expected": [
     "MOV_CALL_ARG_TYPE 9:23-9:48 'summarise' takes structured data for 'data', and 'data.a' may be a crm.company handle — a record, not a value. A record goes to a plugin only as the whole argument ('data: r', which hands it the record's fields); inside a value, write a field off it ('a: r.`Name`')."
    ]
@@ -2242,7 +2242,7 @@
    "name": "plugin arg: file in COALESCE to open (v3)",
    "snapshot": "plug",
    "version": 3,
-   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = attio(credentials: crm_cred)\nmovement m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = FILE(\"contents\", \"pdf\")\n  s = relay(data: COALESCE(f, \"x\"))\n}",
+   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = attio(credentials: crm_cred)\nmovement m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = FILE(\"contents\", \"text\")\n  s = relay(data: COALESCE(f, \"x\"))\n}",
    "expected": [
     "MOV_CALL_ARG_TYPE 9:19-9:35 'relay' takes structured data for 'data', and 'data' may be file — a file, not a value. A file goes to a plugin only as an argument it takes a file for; inside a value, put its text in its place ('data: READ(f)')."
    ]
@@ -2251,14 +2251,14 @@
    "name": "plugin arg: record whole of COALESCE (v3)",
    "snapshot": "plug",
    "version": 3,
-   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = attio(credentials: crm_cred)\nmovement m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = FILE(\"contents\", \"pdf\")\n  s = summarise(data: COALESCE(org, org))\n}",
+   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = attio(credentials: crm_cred)\nmovement m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = FILE(\"contents\", \"text\")\n  s = summarise(data: COALESCE(org, org))\n}",
    "expected": []
   },
   {
    "name": "plugin arg: system record whole (v3)",
    "snapshot": "plug",
    "version": 3,
-   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = attio(credentials: crm_cred)\nmovement m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = FILE(\"contents\", \"pdf\")\n  c = FIRST(crm-[:companies]->)\n  s = summarise(data: c)\n}",
+   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = attio(credentials: crm_cred)\nmovement m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = FILE(\"contents\", \"text\")\n  c = FIRST(crm-[:companies]->)\n  s = summarise(data: c)\n}",
    "expected": [
     "MOV_FOLD_NEEDS_ORDER 9:7-9:32 FIRST takes the first of a sequence, and 'companies' comes back in no particular order — so there is no first. If you mean the one that matched, write ONLY(…) — it answers that one and fails the run if there turns out to be more than one. Order the hop (`-[:companies ORDER BY `…` DESC]->`), or reach for a relationship the source keeps in order.",
     "MOV_CALL_ARG_TYPE 10:23-10:24 'summarise' takes every field of the record it is given as 'data', and this is crm.company (which may be empty), whose fields are read from its system one at a time. Pass a dict of the fields it needs ('data: { name: r.name, … }')"
@@ -2268,7 +2268,7 @@
    "name": "plugin arg: file under a key to text (v3)",
    "snapshot": "plug",
    "version": 3,
-   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = attio(credentials: crm_cred)\nmovement m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = FILE(\"contents\", \"pdf\")\n  s = tag(label: { a: f })\n}",
+   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = attio(credentials: crm_cred)\nmovement m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = FILE(\"contents\", \"text\")\n  s = tag(label: { a: f })\n}",
    "expected": [
     "MOV_CALL_ARG_TYPE 9:18-9:26 'tag' takes text for 'label', and 'label.a' is file — a file, not a value. A file goes to a plugin only as an argument it takes a file for; put its text in its place ('a: READ(f)')."
    ]
@@ -2277,7 +2277,7 @@
    "name": "plugin arg: file in a list to file (v3)",
    "snapshot": "plug",
    "version": 3,
-   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = attio(credentials: crm_cred)\nmovement m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = FILE(\"contents\", \"pdf\")\n  s = ocr(doc: [f])\n}",
+   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = attio(credentials: crm_cred)\nmovement m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = FILE(\"contents\", \"text\")\n  s = ocr(doc: [f])\n}",
    "expected": [
     "MOV_CALL_ARG_TYPE 9:16-9:19 'ocr' takes file for 'doc', and 'doc[0]' is file — a file, not a value. A file goes to a plugin only as an argument it takes a file for; hand it over as the whole argument ('doc: f'), or put its text in its place ('READ(f)')."
    ]
@@ -2286,14 +2286,14 @@
    "name": "plugin arg: file whole to file (v3)",
    "snapshot": "plug",
    "version": 3,
-   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = attio(credentials: crm_cred)\nmovement m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = FILE(\"contents\", \"pdf\")\n  s = ocr(doc: f)\n}",
+   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = attio(credentials: crm_cred)\nmovement m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = FILE(\"contents\", \"text\")\n  s = ocr(doc: f)\n}",
    "expected": []
   },
   {
    "name": "plugin arg: maybe record to number (v3)",
    "snapshot": "plug",
    "version": 3,
-   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = attio(credentials: crm_cred)\nmovement m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = FILE(\"contents\", \"pdf\")\n  s = score(n: COALESCE(org, 1))\n}",
+   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = attio(credentials: crm_cred)\nmovement m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = FILE(\"contents\", \"text\")\n  s = score(n: COALESCE(org, 1))\n}",
    "expected": [
     "MOV_CALL_ARG_TYPE 9:16-9:32 'score' takes number for 'n', and this may be a crm.company handle — a record, not a value. Pass one of its fields ('n: r.`Name`')."
    ]
@@ -2302,7 +2302,7 @@
    "name": "plugin arg: record in IF to text (v3)",
    "snapshot": "plug",
    "version": 3,
-   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = attio(credentials: crm_cred)\nmovement m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = FILE(\"contents\", \"pdf\")\n  s = tag(label: IF 1 > 0 THEN org ELSE \"x\" END)\n}",
+   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = attio(credentials: crm_cred)\nmovement m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = FILE(\"contents\", \"text\")\n  s = tag(label: IF 1 > 0 THEN org ELSE \"x\" END)\n}",
    "expected": [
     "MOV_CALL_ARG_TYPE 9:18-9:48 'tag' takes text for 'label', and this may be a crm.company handle — a record, not a value. Pass one of its fields ('label: r.`Name`')."
    ]
@@ -2311,7 +2311,7 @@
    "name": "plugin arg: node literal with file to structured (v3)",
    "snapshot": "plug",
    "version": 3,
-   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = attio(credentials: crm_cred)\nmovement m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = FILE(\"contents\", \"pdf\")\n  s = summarise(data: { k: \"x\", up: f })\n}",
+   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = attio(credentials: crm_cred)\nmovement m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = FILE(\"contents\", \"text\")\n  s = summarise(data: { k: \"x\", up: f })\n}",
    "expected": [
     "MOV_CALL_ARG_TYPE 9:23-9:40 'summarise' takes structured data for 'data', and 'data.up' is file — a file, not a value. A file goes to a plugin only as an argument it takes a file for; inside a value, put its text in its place ('up: READ(f)')."
    ]
@@ -2320,7 +2320,7 @@
    "name": "plugin arg: record in MULTI to structured (v5)",
    "snapshot": "plug",
    "version": 5,
-   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = connect attio using crm_cred\nfunction m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = File.from(\"contents\", \"pdf\")\n  s = summarise(List.compact(org))\n}",
+   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = connect attio using crm_cred\nfunction m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = File.from(\"contents\", \"text\")\n  s = summarise(List.compact(org))\n}",
    "expected": [
     "MOV_CALL_ARG_TYPE 9:17-9:34 'summarise' takes structured data for 'data', and 'data[…]' is a crm.company handle — a record, not a value. A record goes to a plugin only as the whole argument ('data: r', which hands it the record's fields); inside a value, write a field off it ('r.`Name`')."
    ]
@@ -2329,7 +2329,7 @@
    "name": "plugin arg: record under a key (v5)",
    "snapshot": "plug",
    "version": 5,
-   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = connect attio using crm_cred\nfunction m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = File.from(\"contents\", \"pdf\")\n  s = summarise({ a: coalesce(org, \"x\") })\n}",
+   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = connect attio using crm_cred\nfunction m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = File.from(\"contents\", \"text\")\n  s = summarise({ a: coalesce(org, \"x\") })\n}",
    "expected": [
     "MOV_CALL_ARG_TYPE 9:17-9:42 'summarise' takes structured data for 'data', and 'data.a' may be a crm.company handle — a record, not a value. A record goes to a plugin only as the whole argument ('data: r', which hands it the record's fields); inside a value, write a field off it ('a: r.`Name`')."
    ]
@@ -2338,7 +2338,7 @@
    "name": "plugin arg: file in COALESCE to open (v5)",
    "snapshot": "plug",
    "version": 5,
-   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = connect attio using crm_cred\nfunction m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = File.from(\"contents\", \"pdf\")\n  s = relay(coalesce(f, \"x\"))\n}",
+   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = connect attio using crm_cred\nfunction m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = File.from(\"contents\", \"text\")\n  s = relay(coalesce(f, \"x\"))\n}",
    "expected": [
     "MOV_CALL_ARG_TYPE 9:13-9:29 'relay' takes structured data for 'data', and 'data' may be file — a file, not a value. A file goes to a plugin only as an argument it takes a file for; inside a value, put its text in its place ('data: File.read(f)')."
    ]
@@ -2347,14 +2347,14 @@
    "name": "plugin arg: record whole of COALESCE (v5)",
    "snapshot": "plug",
    "version": 5,
-   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = connect attio using crm_cred\nfunction m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = File.from(\"contents\", \"pdf\")\n  s = summarise(coalesce(org, org))\n}",
+   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = connect attio using crm_cred\nfunction m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = File.from(\"contents\", \"text\")\n  s = summarise(coalesce(org, org))\n}",
    "expected": []
   },
   {
    "name": "plugin arg: system record whole (v5)",
    "snapshot": "plug",
    "version": 5,
-   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = connect attio using crm_cred\nfunction m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = File.from(\"contents\", \"pdf\")\n  c = first(crm-[:companies]->)\n  s = summarise(c)\n}",
+   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = connect attio using crm_cred\nfunction m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = File.from(\"contents\", \"text\")\n  c = first(crm-[:companies]->)\n  s = summarise(c)\n}",
    "expected": [
     "MOV_FOLD_NEEDS_ORDER 9:7-9:32 first takes the first of a sequence, and 'companies' comes back in no particular order — so there is no first. If you mean the one that matched, write only(…) — it answers that one and fails the run if there turns out to be more than one. Order the hop (`-[:companies ORDER BY `…` DESC]->`), or reach for a relationship the source keeps in order.",
     "MOV_CALL_ARG_TYPE 10:17-10:18 'summarise' takes every field of the record it is given as 'data', and this is crm.company (which may be empty), whose fields are read from its system one at a time. Pass a dict of the fields it needs ('data: { name: r.name, … }')"
@@ -2364,7 +2364,7 @@
    "name": "plugin arg: file under a key to text (v5)",
    "snapshot": "plug",
    "version": 5,
-   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = connect attio using crm_cred\nfunction m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = File.from(\"contents\", \"pdf\")\n  s = tag({ a: f })\n}",
+   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = connect attio using crm_cred\nfunction m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = File.from(\"contents\", \"text\")\n  s = tag({ a: f })\n}",
    "expected": [
     "MOV_CALL_ARG_TYPE 9:11-9:19 'tag' takes text for 'label', and 'label.a' is file — a file, not a value. A file goes to a plugin only as an argument it takes a file for; put its text in its place ('a: File.read(f)')."
    ]
@@ -2373,7 +2373,7 @@
    "name": "plugin arg: file in a list to file (v5)",
    "snapshot": "plug",
    "version": 5,
-   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = connect attio using crm_cred\nfunction m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = File.from(\"contents\", \"pdf\")\n  s = ocr([f])\n}",
+   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = connect attio using crm_cred\nfunction m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = File.from(\"contents\", \"text\")\n  s = ocr([f])\n}",
    "expected": [
     "MOV_CALL_ARG_TYPE 9:11-9:14 'ocr' takes file for 'doc', and 'doc[0]' is file — a file, not a value. A file goes to a plugin only as an argument it takes a file for; hand it over as the whole argument ('doc: f'), or put its text in its place ('File.read(f)')."
    ]
@@ -2382,14 +2382,14 @@
    "name": "plugin arg: file whole to file (v5)",
    "snapshot": "plug",
    "version": 5,
-   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = connect attio using crm_cred\nfunction m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = File.from(\"contents\", \"pdf\")\n  s = ocr(f)\n}",
+   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = connect attio using crm_cred\nfunction m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = File.from(\"contents\", \"text\")\n  s = ocr(f)\n}",
    "expected": []
   },
   {
    "name": "plugin arg: maybe record to number (v5)",
    "snapshot": "plug",
    "version": 5,
-   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = connect attio using crm_cred\nfunction m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = File.from(\"contents\", \"pdf\")\n  s = score(coalesce(org, 1))\n}",
+   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = connect attio using crm_cred\nfunction m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = File.from(\"contents\", \"text\")\n  s = score(coalesce(org, 1))\n}",
    "expected": [
     "MOV_CALL_ARG_TYPE 9:13-9:29 'score' takes number for 'n', and this may be a crm.company handle — a record, not a value. Pass one of its fields ('n: r.`Name`')."
    ]
@@ -2398,7 +2398,7 @@
    "name": "plugin arg: record in IF to text (v5)",
    "snapshot": "plug",
    "version": 5,
-   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = connect attio using crm_cred\nfunction m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = File.from(\"contents\", \"pdf\")\n  s = tag(1 > 0 ? org : \"x\")\n}",
+   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = connect attio using crm_cred\nfunction m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = File.from(\"contents\", \"text\")\n  s = tag(1 > 0 ? org : \"x\")\n}",
    "expected": [
     "MOV_CALL_ARG_TYPE 9:11-9:28 'tag' takes text for 'label', and this may be a crm.company handle — a record, not a value. Pass one of its fields ('label: r.`Name`')."
    ]
@@ -2407,7 +2407,7 @@
    "name": "plugin arg: node literal with file to structured (v5)",
    "snapshot": "plug",
    "version": 5,
-   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = connect attio using crm_cred\nfunction m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = File.from(\"contents\", \"pdf\")\n  s = summarise({ k: \"x\", up: f })\n}",
+   "source": "import { attio } from adapters\nimport { crm_cred } from credentials\nimport { summarise, relay, tag, ocr, score } from plugins\n\ncrm = connect attio using crm_cred\nfunction m() {\n  org = write crm-[:companies]-> { name: \"Acme Inc.\" }\n  f = File.from(\"contents\", \"text\")\n  s = summarise({ k: \"x\", up: f })\n}",
    "expected": [
     "MOV_CALL_ARG_TYPE 9:17-9:34 'summarise' takes structured data for 'data', and 'data.up' is file — a file, not a value. A file goes to a plugin only as an argument it takes a file for; inside a value, put its text in its place ('up: File.read(f)')."
    ]

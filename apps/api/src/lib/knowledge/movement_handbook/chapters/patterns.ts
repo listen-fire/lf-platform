@@ -50,7 +50,7 @@ Each one is a **function** — \`() => { … }\` written where it stands, or the
 
 ### compose-a-report
 
-Many small things into one readable artifact: a block returns a line each, \`Text.join\` assembles them, \`File.from\` turns the text into a file for a file-typed field.
+Many small things into one readable artifact: a block returns a line each, \`Text.join\` assembles them, \`pdf.render\` turns the text into a PDF file for a file-typed field.
 
 \`\`\`
 lines = msg-[f:Attachments]-> {
@@ -60,10 +60,10 @@ lines = msg-[f:Attachments]-> {
 digest = "Attachments on \${msg.Subject}:
 \${Text.join(lines, "\\n")}"
 
-write record-[:Files]-> { File: File.from(digest, "pdf") }
+write record-[:Files]-> { File: pdf.render(digest) }
 \`\`\`
 
-\`File.from\` renders the string exactly as composed, so the layout you write is the layout in the file. Anything a block can iterate — extracted entities included — can feed one.
+\`pdf.render\` draws the string exactly as composed, so the layout you write is the layout in the file. Anything a block can iterate — extracted entities included — can feed one.
 
 ### scheduled-digest
 
@@ -254,10 +254,11 @@ listen to runs {} fire \`Thesis Recap\`
 `,
     },
     {
-      construct: 'the compose-a-report shape (returned block lines → Text.join → File.from artifact)',
+      construct: 'the compose-a-report shape (returned block lines → Text.join → pdf.render artifact)',
       status: 'runs',
       probe: `
 import { \`@lf/email\` as email, \`@lf/attio\` as attio } from adapters
+import { \`@lf/pdf\` as pdf } from plugins
 import { acme } from credentials
 
 inbox = connect email
@@ -274,7 +275,7 @@ function \`Attachment Report\`(m: <inbox-[:Email]->>) {
     Name: m.Subject
   }
   write record-[:Files]-> {
-    File: File.from(digest, "pdf")
+    File: pdf.render(digest)
   }
 }
 `,

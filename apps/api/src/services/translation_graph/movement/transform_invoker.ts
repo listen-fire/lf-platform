@@ -16,6 +16,7 @@ import { registerBundledTransforms } from '../engine/transforms/register-bundled
 import { getTransform, type TransformImpl, type TransformInput, type TransformOutput } from '../engine/transforms/registry';
 import { makeEphemeralPosition } from 'movement-engine/public/catalog';
 import { BUILTIN_MODULES, builtinPluginModule, type BuiltinModuleTable } from '../adapters/builtin_modules';
+import { storeArtifact } from './file_render';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { InProcessPluginModule } from 'module-kit';
@@ -206,7 +207,7 @@ export function transformInvokerFor(teamId: TeamId, table: BuiltinModuleTable = 
   return {
     async invoke(input) {
       const module = builtinPluginModule(input.plugin, { teamId }, table);
-      return module === undefined ? registryTransformInvoker.invoke(input) : invokePluginModule(module, input);
+      return module === undefined ? registryTransformInvoker.invoke(input) : invokePluginModule(module, input, teamId);
     },
   };
 }
@@ -217,6 +218,7 @@ export function transformInvokerFor(teamId: TeamId, table: BuiltinModuleTable = 
 async function invokePluginModule(
   module: InProcessPluginModule,
   { plugin, config, extractedContext }: Priced<TransformInvokeInput>,
+  teamId: TeamId,
 ): Promise<Costed<TransformInvocationResult>> {
   let answer;
   try {
@@ -228,7 +230,10 @@ async function invokePluginModule(
   }
   const out: Costed<TransformInvocationResult> = {};
   if (answer.text !== undefined && answer.text !== '') out.text = answer.text;
-  if (answer.data !== undefined && Object.keys(answer.data).length > 0) out.data = answer.data;
+  const made = await storedFiles(answer.files, teamId);
+  if (answer.data !== undefined || made !== undefined) out.data = { ...answer.data, ...made };
+  if (Object.keys(out.data ?? {}).length === 0) delete out.data;
+  if (answer.warnings !== undefined && answer.warnings.length > 0) out.warnings = answer.warnings;
   if (answer.records !== undefined && answer.records.length > 0) out.records = answer.records;
   if (answer.outcome !== undefined) out.outcome = answer.outcome;
   if (answer.costMicrodollars !== undefined) {
@@ -236,4 +241,23 @@ async function invokePluginModule(
   }
   logger.info('[movement:transform] ran', { plugin, module: true, addedFields: Object.keys(out.data ?? {}), ...runFields() });
   return out;
+}
+
+/** The files a plugin made, stored under the team's key prefix, each as the
+ *  file value that becomes the `data` field it is named by. */
+async function storedFiles(
+  files: NonNullable<Awaited<ReturnType<InProcessPluginModule['invoke']>>['files']> | undefined,
+  teamId: TeamId,
+): Promise<Record<string, FileRef> | undefined> {
+  if (files === undefined) return undefined;
+  const stored: Record<string, FileRef> = {};
+  for (const [field, file] of Object.entries(files)) {
+    stored[field] = await storeArtifact({
+      teamId,
+      name: file.name ?? 'plugin-file',
+      contentType: file.contentType ?? 'application/octet-stream',
+      bytes: Buffer.from(file.base64, 'base64'),
+    });
+  }
+  return stored;
 }

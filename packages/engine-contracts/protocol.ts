@@ -1089,12 +1089,26 @@ export type WireAwaitResolutionShape = z.infer<typeof WireAwaitResolution>;
 
 // ── Plugins (invokePlugin) ───────────────────────────────────────────────────
 
+/** A file a plugin made: its bytes (base64, since bytes do not ride the
+ *  envelope) and what to call it. The host stores it and puts the file it
+ *  made at the `data` field of the same name. */
+export const WirePluginFile = z.object({
+  name: z.string().optional(),
+  contentType: z.string().optional(),
+  base64: z.string(),
+});
+export type WirePluginFileShape = z.infer<typeof WirePluginFile>;
+
 export const WirePluginResult = z.object({
   text: z.string().optional(),
   data: z.record(z.string(), z.unknown()).optional(),
   records: z.array(z.record(z.string(), z.unknown())).optional(),
   outcome: z.string().optional(),
   costMicrodollars: z.number().int().nonnegative().optional(),
+  /** Files made by the plugin, by the `data` field each becomes. */
+  files: z.record(z.string(), WirePluginFile).optional(),
+  /** Things the run's author should know, each shown as a warning on the run. */
+  warnings: z.array(z.string()).optional(),
 });
 export type WirePluginResultShape = z.infer<typeof WirePluginResult>;
 

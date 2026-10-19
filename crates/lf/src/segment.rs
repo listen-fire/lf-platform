@@ -895,13 +895,12 @@ async fn route(host: &SegmentHost<'_>, label: &str, args: &Json) -> Result<Answe
                 "text" => ("movement-artifact.txt", "text/plain"),
                 _ => return Err(Fault("files.render type is \"pdf\" or \"text\"".into())),
             };
-            let rendered;
-            let bytes = if kind == "pdf" {
-                rendered = crate::plain_pdf::render(content);
-                rendered.as_slice()
-            } else {
-                content.as_bytes()
-            };
+            if kind == "pdf" {
+                // From language version 5 a PDF is drawn by the `@lf/pdf` plugin; a kind
+                // that only meets "pdf" at run time (`File.from(t, kind)`) lands here.
+                return Ok(Err(failure("File.from(…, \"pdf\") draws no PDF in lf: import the `@lf/pdf` plugin and call pdf.render(text) (``import { `@lf/pdf` as pdf } from plugins``)")));
+            }
+            let bytes = content.as_bytes();
             match host.documents.put(TEAM, bytes, name, content_type) {
                 Ok(descriptor) => {
                     let mut wire = host.wire.borrow_mut();
@@ -967,7 +966,7 @@ async fn invoke_plugin(host: &SegmentHost<'_>, args: &Json) -> Result<Answer, Fa
         return Ok(Err(failure(format!("plugin \"{plugin}\": invokePlugin answered something other than an object"))));
     };
     let mut out = Obj::new();
-    for key in ["text", "data", "records", "outcome"] {
+    for key in ["text", "data", "records", "outcome", "warnings"] {
         if let Some(value) = answered.get(key) {
             out.insert(key.into(), value.clone());
         }
@@ -979,7 +978,45 @@ async fn invoke_plugin(host: &SegmentHost<'_>, args: &Json) -> Result<Answer, Fa
         out.insert("cost".into(), Js::Arr(lines));
     }
     host.charge(out.get("cost"));
-    Ok(Ok(Some(host.wire.borrow().write(&Hv::of_js(&Js::Obj(out))))))
+    let mut value = Hv::of_js(&Js::Obj(out));
+    match stored_plugin_files(host, answered.get("files")) {
+        Ok(made) if made.is_empty() => {}
+        Ok(made) => {
+            let Hv::Obj(members) = &mut value else { unreachable!("the answer is an object") };
+            let at = match members.iter().position(|(key, _)| key == "data") {
+                Some(at) => at,
+                None => {
+                    members.push(("data".into(), Hv::Obj(Vec::new())));
+                    members.len() - 1
+                }
+            };
+            let Hv::Obj(data) = &mut members[at].1 else { return Ok(Err(failure(format!("plugin \"{plugin}\": `data` is not an object, so it cannot carry the files it made")))) };
+            let mut wire = host.wire.borrow_mut();
+            for (field, descriptor) in made {
+                data.retain(|(key, _)| *key != field);
+                data.push((field, wire.file(descriptor)));
+            }
+        }
+        Err(message) => return Ok(Err(failure(format!("plugin \"{plugin}\": {message}")))),
+    }
+    Ok(Ok(Some(host.wire.borrow().write(&value))))
+}
+
+/// The files a plugin made (`files`, by the `data` field each becomes),
+/// stored as the run's documents: a descriptor per field.
+fn stored_plugin_files(host: &SegmentHost<'_>, files: Option<&Js>) -> Result<Vec<(String, Obj)>, String> {
+    use base64::Engine as _;
+    let Some(Js::Obj(files)) = files else { return Ok(Vec::new()) };
+    let mut made = Vec::new();
+    for (field, file) in files {
+        let Js::Obj(file) = file else { return Err(format!("`files.{field}` is not an object")) };
+        let encoded = file.get("base64").and_then(Js::as_str).ok_or_else(|| format!("`files.{field}` has no base64 bytes"))?;
+        let bytes = base64::engine::general_purpose::STANDARD.decode(encoded).map_err(|e| format!("`files.{field}`: its bytes are not base64 ({e})"))?;
+        let name = file.get("name").and_then(Js::as_str).unwrap_or("plugin-file");
+        let content_type = file.get("contentType").and_then(Js::as_str).unwrap_or("application/octet-stream");
+        made.push((field.clone(), host.documents.put(TEAM, &bytes, name, content_type)?));
+    }
+    Ok(made)
 }
 
 /// A park's write, then what follows every park: the run is observably

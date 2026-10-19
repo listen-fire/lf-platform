@@ -446,6 +446,36 @@ export function packageMembers(catalog: Pick<Catalog, 'plugin' | 'pluginNames'>,
     .map(key => ({ name: pluginName(key), key }));
 }
 
+/** The local name an unnamed package import's fix suggests: the tag's last
+ *  word in camelCase (`@lf/web-tools` → `webTools`), or `pkg`. The Rust twin
+ *  is `local_name_for_tag` (crates/movement-parser/src/stmt.rs). */
+export function packageLocalName(tag: string): string {
+  const last = tag.split(/[/@.:]/).filter(w => w !== '').pop() ?? '';
+  let out = '';
+  let upper = false;
+  for (const c of last) {
+    if (/^[A-Za-z0-9]$/.test(c)) {
+      if (out === '' && /^[0-9]$/.test(c)) continue;
+      out += upper && out !== '' ? c.toUpperCase() : c;
+      upper = false;
+    } else {
+      upper = true;
+    }
+  }
+  return out === '' ? 'pkg' : out;
+}
+
+/** The package a bare name stands for when the program imported none: the tag
+ *  whose default local name is `name` (`@lf/pdf` → `pdf`). The Rust twin is
+ *  `package_called` (crates/movement-parser/src/catalog/packages.rs). */
+export function packageCalled(catalog: Pick<Catalog, 'plugin' | 'pluginNames'>, name: string): string | undefined {
+  for (const key of catalog.pluginNames?.() ?? []) {
+    const tag = catalog.plugin(key)?.package;
+    if (tag !== undefined && packageLocalName(tag) === name) return tag;
+  }
+  return undefined;
+}
+
 /** The local name a package's member is bound to: `web.fetchUrl`. */
 export function memberLocal(packageLocal: string, member: string): string {
   return `${packageLocal}.${member}`;

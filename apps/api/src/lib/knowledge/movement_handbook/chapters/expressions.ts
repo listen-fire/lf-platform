@@ -307,10 +307,11 @@ Beyond the built-ins, a target system may supply functions of its own on particu
 ### file-artifacts
 
 \`\`\`
-File: File.from(digest, "pdf")
+File: pdf.render(digest)
+File: File.from(digest, "text")
 \`\`\`
 
-\`File.from(content, type)\` turns a composed string into a **file** you can write into a file-typed field — an attachment, a document slot. \`type\` is a literal \`"pdf"\` or \`"text"\`, and the content is rendered as plain text preserving your line breaks, so compose it first (interpolation, or \`Text.join\` over a block's results — the patterns chapter has the digest shape) and then wrap it. The artifact remembers where its content came from: its provenance trail carries the reads that fed the string.
+\`pdf.render(content)\` (the \`@lf/pdf\` plugin, imported with \`\`import { \`@lf/pdf\` as pdf } from plugins\`\`) and \`File.from(content, "text")\` turn a composed string into a **file** you can write into a file-typed field — an attachment, a document slot. The content is drawn or kept as plain text preserving your line breaks, so compose it first (interpolation, or \`Text.join\` over a block's results — the patterns chapter has the digest shape) and then wrap it. The default PDF writer draws Latin-1 text; any other character is drawn as \`?\` and the run gets a warning naming \`@lf/pdf\`. The artifact remembers where its content came from: its provenance trail carries the reads that fed the string.
 
 Read a file the other way — \`File.read(file)\` hands back the text in it, and \`Text.chunks\` cuts a long text into pieces:
 
@@ -563,10 +564,11 @@ function \`Intake\`(m: <inbox-[:Email]->>) {
 `,
     },
     {
-      construct: 'File.from() artifacts as write-field values',
+      construct: 'pdf.render() artifacts as write-field values',
       status: 'runs',
       probe: `
 import { \`@lf/email\` as email, \`@lf/attio\` as attio } from adapters
+import { \`@lf/pdf\` as pdf } from plugins
 import { acme } from credentials
 
 inbox = connect email
@@ -578,7 +580,7 @@ function \`Intake\`(m: <inbox-[:Email]->>) {
     Name: m.Subject
   }
   write company-[:Files]-> {
-    File: File.from(digest, "pdf")
+    File: pdf.render(digest)
   }
 }
 `,

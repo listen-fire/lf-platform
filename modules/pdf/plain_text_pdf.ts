@@ -1,16 +1,15 @@
-// Plain text → PDF with no browser and no dependency: the layout the
-// Chromium path produced for `FILE(content, "pdf")` (a `<pre>` of sans-serif
-// 14px text on A4 with 30pt of margin all round, 1.5 line height, wrapped at
-// the page edge), written as the PDF's own text operators in Helvetica.
+// Plain text → PDF with no browser, no dependency and no font file: text set
+// in Helvetica (one of the PDF reader's own fonts) with the PDF's text
+// operators, wrapped at the page edge on a 1.5 line height. This is the
+// default writer of `@lf/pdf`; a module that embeds a Unicode font can replace
+// the plugin when more than Latin-1 is needed.
 //
-// The Rust `lf` has the same renderer (crates/lf/src/plain_pdf.rs). The two
-// are kept byte-identical by the shared golden files under
-// crates/lf/tests/plain_pdf_golden, which each side's tests render and
-// compare. Every measure is an integer so no rounding can differ.
+// Every measure is an integer, so the same text and layout always give the same
+// bytes. The goldens under __test__/__fixtures__ pin them.
 //
 // Text is Helvetica in WinAnsi, so a character outside Latin-1 and the
-// Windows-1252 punctuation prints as "?" (the browser fell back to whatever
-// font the host had; the slim image has none for CJK or emoji).
+// Windows-1252 punctuation prints as "?". `renderPlainTextPdf` says which
+// characters those were, so the caller can tell the author.
 
 /** Helvetica advance widths (1/1000 em) for WinAnsi bytes 32..=255; 0 marks a byte WinAnsi leaves undefined. */
 const WIDTHS: readonly number[] = [
@@ -31,19 +30,47 @@ const CP1252_HIGH: ReadonlyMap<number, number> = new Map([
   [0x0153, 0x9c], [0x017e, 0x9e], [0x0178, 0x9f],
 ]);
 
-// 1/100 pt. A4, 30pt margins (16px page margin + 24px body padding), 10.5pt
-// type on a 15.75pt line, the baseline 11.51pt under its line's top.
-const PAGE_WIDTH = 59528;
-const PAGE_HEIGHT = 84189;
-const MARGIN = 3000;
+// 1/100 pt. Type is 10.5pt on a 15.75pt line, the baseline 11.51pt under its
+// line's top.
+const PAGES = { a4: { width: 59528, height: 84189 }, letter: { width: 61200, height: 79200 } } as const;
 const LINE = 1575;
 const BASELINE = 1151;
-const LINES_PER_PAGE = Math.floor((PAGE_HEIGHT - 2 * MARGIN) / LINE);
 const FONT_SIZE = 1050;
-/** The text column, in 1/1000 em at the font size. */
-const COLUMN = Math.floor(((PAGE_WIDTH - 2 * MARGIN) * 1000) / FONT_SIZE);
-const TAB_COLUMNS = 8;
+const TAB_columnS = 8;
 const SPACE = 0x20;
+
+export type PageSize = keyof typeof PAGES;
+export const PAGE_SIZES = Object.keys(PAGES) as PageSize[];
+
+export interface PdfLayout {
+  pageSize: PageSize;
+  /** Points, on every side. */
+  margin: number;
+}
+
+export const DEFAULT_LAYOUT: PdfLayout = { pageSize: 'a4', margin: 30 };
+export const MAX_MARGIN = 200;
+
+interface Geometry {
+  width: number;
+  height: number;
+  margin: number;
+  linesPerPage: number;
+  /** The text column, in 1/1000 em at the font size. */
+  column: number;
+}
+
+function geometry(layout: PdfLayout): Geometry {
+  const { width, height } = PAGES[layout.pageSize];
+  const margin = layout.margin * 100;
+  return {
+    width,
+    height,
+    margin,
+    linesPerPage: Math.max(1, Math.floor((height - 2 * margin) / LINE)),
+    column: Math.max(1, Math.floor(((width - 2 * margin) * 1000) / FONT_SIZE)),
+  };
+}
 
 function winAnsi(codePoint: number): number | undefined {
   if (codePoint >= 0x20 && codePoint < 0x7f) return codePoint;
@@ -58,8 +85,9 @@ function isInvisible(codePoint: number): boolean {
   return (codePoint >= 0x200b && codePoint <= 0x200f) || codePoint === 0xfeff || codePoint === 0xfe0f;
 }
 
-/** One WinAnsi byte per printed character; a newline stays 0x0a. */
-function toBytes(text: string): number[] {
+/** One WinAnsi byte per printed character; a newline stays 0x0a. A character
+ *  with no glyph prints as "?" and is added to `lacking`. */
+function toBytes(text: string, lacking: Set<string>): number[] {
   const bytes: number[] = [];
   let column = 0;
   for (const ch of text.replace(/\r\n?/g, '\n')) {
@@ -68,14 +96,16 @@ function toBytes(text: string): number[] {
       bytes.push(0x0a);
       column = 0;
     } else if (codePoint === 0x09) {
-      const fill = TAB_COLUMNS - (column % TAB_COLUMNS);
+      const fill = TAB_columnS - (column % TAB_columnS);
       for (let i = 0; i < fill; i++) bytes.push(SPACE);
       column += fill;
     } else if (codePoint < 0x20 || isInvisible(codePoint)) {
       continue;
     } else {
       const byte = winAnsi(codePoint);
-      const printed = byte !== undefined && WIDTHS[byte - 32] !== 0 ? byte : 0x3f;
+      const drawable = byte !== undefined && WIDTHS[byte - 32] !== 0;
+      if (!drawable) lacking.add(ch);
+      const printed = drawable ? byte : 0x3f;
       bytes.push(printed);
       column += 1;
     }
@@ -90,20 +120,20 @@ function advance(byte: number): number {
 /** `white-space: pre-wrap; overflow-wrap: break-word`: spaces are kept, a run
  *  of them that crosses the edge hangs there, a word that does not fit moves
  *  to a new line, and a word longer than a line is broken at the edge. */
-function wrap(bytes: readonly number[]): number[][] {
+function wrap(bytes: readonly number[], column: number): number[][] {
   const lines: number[][] = [];
   const body = bytes[bytes.length - 1] === 0x0a ? bytes.slice(0, -1) : bytes;
   let start = 0;
   for (let end = 0; end <= body.length; end++) {
     if (end === body.length || body[end] === 0x0a) {
-      wrapParagraph(body.slice(start, end), lines);
+      wrapParagraph(body.slice(start, end), column, lines);
       start = end + 1;
     }
   }
   return lines;
 }
 
-function wrapParagraph(paragraph: readonly number[], lines: number[][]): void {
+function wrapParagraph(paragraph: readonly number[], column: number, lines: number[][]): void {
   let line: number[] = [];
   let used = 0;
   let i = 0;
@@ -119,19 +149,19 @@ function wrapParagraph(paragraph: readonly number[], lines: number[][]): void {
       used += width;
       continue;
     }
-    if (used + width > COLUMN && line.some((byte) => byte !== SPACE)) {
+    if (used + width > column && line.some((byte) => byte !== SPACE)) {
       lines.push(line);
       line = [];
       used = 0;
     }
-    if (width <= COLUMN) {
+    if (width <= column) {
       line.push(...run);
       used += width;
       continue;
     }
     for (const byte of run) {
       const w = advance(byte);
-      if (used + w > COLUMN && line.length > 0) {
+      if (used + w > column && line.length > 0) {
         lines.push(line);
         line = [];
         used = 0;
@@ -156,22 +186,30 @@ function escapeString(bytes: readonly number[]): string {
     .join('');
 }
 
-function pageContent(lines: readonly (readonly number[])[]): string {
+function pageContent(lines: readonly (readonly number[])[], page: Geometry): string {
   const operations = ['BT', '/F1 10.5 Tf', '0.133 g'];
   lines.forEach((line, index) => {
     if (line.length === 0) return;
-    const y = PAGE_HEIGHT - MARGIN - BASELINE - index * LINE;
-    operations.push(`1 0 0 1 ${hundredths(MARGIN)} ${hundredths(y)} Tm (${escapeString(line)}) Tj`);
+    const y = page.height - page.margin - BASELINE - index * LINE;
+    operations.push(`1 0 0 1 ${hundredths(page.margin)} ${hundredths(y)} Tm (${escapeString(line)}) Tj`);
   });
   operations.push('ET');
   return operations.join('\n');
 }
 
-/** The PDF for `content`, deterministic: the same text gives the same bytes. */
-export function renderPlainTextPdf(content: string): Buffer {
-  const lines = wrap(toBytes(content));
+export interface RenderedPdf {
+  bytes: Buffer;
+  /** The distinct characters the font has no glyph for, each printed as "?", in the order met. */
+  lacking: string[];
+}
+
+/** The PDF for `content`, deterministic: the same text and layout give the same bytes. */
+export function renderPlainTextPdf(content: string, layout: PdfLayout = DEFAULT_LAYOUT): RenderedPdf {
+  const page = geometry(layout);
+  const lacking = new Set<string>();
+  const lines = wrap(toBytes(content, lacking), page.column);
   const pages: (readonly number[][])[] = [];
-  for (let i = 0; i < lines.length; i += LINES_PER_PAGE) pages.push(lines.slice(i, i + LINES_PER_PAGE));
+  for (let i = 0; i < lines.length; i += page.linesPerPage) pages.push(lines.slice(i, i + page.linesPerPage));
   if (pages.length === 0) pages.push([]);
 
   // Objects: 1 catalog, 2 page tree, 3 font, then a page and its content per page.
@@ -181,9 +219,9 @@ export function renderPlainTextPdf(content: string): Buffer {
     '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
   ];
   pages.forEach((pageLines, i) => {
-    const content = pageContent(pageLines);
+    const content = pageContent(pageLines, page);
     objects.push(
-      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${hundredths(PAGE_WIDTH)} ${hundredths(PAGE_HEIGHT)}] /Resources << /Font << /F1 3 0 R >> >> /Contents ${5 + 2 * i} 0 R >>`,
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${hundredths(page.width)} ${hundredths(page.height)}] /Resources << /Font << /F1 3 0 R >> >> /Contents ${5 + 2 * i} 0 R >>`,
       `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
     );
   });
@@ -198,5 +236,5 @@ export function renderPlainTextPdf(content: string): Buffer {
   out += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
   for (const offset of offsets) out += `${String(offset).padStart(10, '0')} 00000 n \n`;
   out += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
-  return Buffer.from(out, 'latin1');
+  return { bytes: Buffer.from(out, 'latin1'), lacking: [...lacking] };
 }

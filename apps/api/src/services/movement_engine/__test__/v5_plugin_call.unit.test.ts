@@ -211,7 +211,7 @@ async function run(
   const replies = setup.replies ?? [];
   const { adapter: email } = makeFakeAdapter('email');
   const { invoker, calls } = stubInvoker(answers);
-  await runMovement({
+  lastTrace = (await runMovement({
     source: [
       setup.prelude ?? PRELUDE,
       'function intake(m: <inbox-[:message]->>) {',
@@ -243,9 +243,12 @@ async function run(
         },
       },
     }),
-  });
+  })).trace;
   return calls;
 }
+
+/** The trace of the last `run`. */
+let lastTrace: MovementTraceEntry[] = [];
 
 /** The companies the message names (`extract`, its shape written in place), and the model's answer: Acme. */
 const EXTRACT_COMPANIES = [
@@ -498,5 +501,36 @@ describe('a plugin with no declared output, called as a statement on the Rust en
     );
     expect(recorded.map((r) => r.engine)).toEqual(['rust']);
     expect(calls).toEqual([{ plugin, config: { text: 'Acme' } }]);
+  });
+});
+
+// `pdf.render(text)` (the @lf/pdf plugin): a value that is a file, and the
+// warning its answer carries lands on the run's trace.
+describe('a plugin that answers a file and a warning on the Rust engine', () => {
+  const PDF_PRELUDE = [
+    'import { `@lf/email` as email } from adapters',
+    'import { `@lf/pdf` as pdf } from plugins',
+    '',
+    'inbox = connect email',
+    '',
+  ].join('\n');
+
+  it('binds the file, and traces the plugin warning', async () => {
+    const calls = await run(
+      ['  doc = pdf.render(m.`text`, { pageSize: "letter" })'],
+      {
+        render: {
+          data: { value: { __brand: 'FileRef', name: 'movement-artifact.pdf', contentType: 'application/pdf', source: { store: 'document', objectUri: 'x' } } },
+          warnings: ['@lf/pdf drew "?" for 東'],
+        },
+      },
+      { prelude: PDF_PRELUDE },
+    );
+    expect(recorded.map((r) => r.engine)).toEqual(['rust']);
+    expect(calls).toEqual([{ plugin: 'render', config: { text: 'https://acme.example', pageSize: 'letter' } }]);
+    expect(lastTrace.filter((e) => e.kind === 'warning')).toEqual([
+      { kind: 'warning', code: 'MOVENG_PLUGIN_WARNING', message: '@lf/pdf drew "?" for 東' },
+    ]);
+    expect(lastTrace.find((e) => e.kind === 'plugin')).toMatchObject({ plugin: 'render', returned: 'value' });
   });
 });

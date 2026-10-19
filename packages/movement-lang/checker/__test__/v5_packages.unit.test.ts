@@ -171,3 +171,31 @@ describe('a through stage (version 5)', () => {
     expect(codes(stage('web.linkedin'), 5)).toEqual(['MOV_V5_UNKNOWN_MEMBER']);
   });
 });
+
+describe('a package used with no import', () => {
+  const withPdf = mockCatalog({
+    plugins: {
+      render: {
+        args: ['text'],
+        priced: false,
+        requiredArgs: ['text'],
+        argTypes: { text: 'text' },
+        effects: {},
+        output: { kind: 'value', type: 'file' },
+        package: '@lf/pdf',
+      },
+    },
+  });
+
+  it('offers its import line as the fix, as a credential does (the Rust twin: surface.rs)', () => {
+    const source = 'function go(t: <text>) {\n  f = pdf.render(t)\n}\n';
+    const found = checkProgram(parseProgram(source, { languageVersion: 5 }), withPdf, { languageVersion: 5 }).filter(
+      (d) => d.code === 'MOV_NAME_UNRESOLVED',
+    );
+    expect(found).toHaveLength(1);
+    expect(found[0]?.fix?.edits[0]).toMatchObject({
+      text: 'import { `@lf/pdf` as pdf } from plugins\n',
+      span: { start: { line: 1, col: 1 }, end: { line: 1, col: 1 } },
+    });
+  });
+});

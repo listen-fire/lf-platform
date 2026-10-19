@@ -1,9 +1,11 @@
 // The production `files.render` — `FILE(content, "pdf" | "text")` turns a
 // composed string into a stored file artifact and answers its descriptor.
 //
-// The PDF is drawn by `renderPlainTextPdf` (no browser, no dependency): it
+// The PDF is drawn by `@lf/pdf`'s writer (no browser, no dependency): it
 // reproduces the layout this once got from Chromium's `page.pdf` for the
-// slack preview's plain-text path. The Rust `lf` renders the same bytes.
+// slack preview's plain-text path. This is the language versions 1 to 4
+// spelling; from version 5 a movement calls the `@lf/pdf` plugin, whose answer
+// the plugin invoker stores through `storeArtifact` below.
 //
 // The bytes go straight to the document store and never reach the engine:
 // what comes back is a document-store descriptor, durable as it stands, so a
@@ -21,7 +23,7 @@ import type { TeamId } from '../../../generated/kysely/core/Team';
 
 import { documentStoreFileRef, teamDocumentKeyPrefix } from 'movement-engine/public/files';
 
-import { renderPlainTextPdf } from './plain_text_pdf';
+import { renderPlainTextPdf } from '@listen-fire/pdf';
 
 /** The team's `files.render`: its artifacts are stored under the team's key
  *  prefix, which is what makes them the team's to read again. */
@@ -44,7 +46,7 @@ function renderInto(teamId: TeamId | undefined): RenderFile {
         bytes: Buffer.from(input.content, 'utf8'),
       });
     }
-    const bytes = renderPlainTextPdf(input.content);
+    const { bytes } = renderPlainTextPdf(input.content);
     return storeArtifact({
       teamId,
       name: 'movement-artifact.pdf',
@@ -54,7 +56,7 @@ function renderInto(teamId: TeamId | undefined): RenderFile {
   };
 }
 
-async function storeArtifact(options: {
+export async function storeArtifact(options: {
   teamId: TeamId | undefined;
   name: string;
   contentType: string;
