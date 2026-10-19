@@ -383,10 +383,7 @@ impl Session {
     /// polled again from where the last good one ended.
     async fn poll_once(&self, listen: &Listen, running: &RunningExternal, subscription: &str) -> Result<Fired, String> {
         let state = self.store.inbound_checkpoint(subscription).map_err(|e| e.to_string())?;
-        let mut params = serde_json::json!({ "config": crate::wire::json_of_js(&Js::Obj(listen.config.clone())) });
-        if let Some(checkpoint) = state.as_ref().and_then(|s| s.get("checkpoint")) {
-            params["checkpoint"] = crate::wire::json_of_js(checkpoint);
-        }
+        let params = poll_params(listen, state.as_ref());
         let raw = rpc(running, &self.credentials, LOCAL_TENANT, "poll", params).await?;
         let answer = wire_results::check("poll", &listen.adapter, &raw)?;
         let mut fired = Fired::default();
@@ -1135,9 +1132,35 @@ pub fn read_event_file(path: &std::path::Path) -> Result<(String, Js), String> {
     Ok((external.to_string(), event))
 }
 
+/// `poll`'s params (adapter protocol 2): the listen's options, the checkpoint
+/// the previous poll left, and `movementId`. Locally the automation is the
+/// movement the listen is declared in, which has no id but its name.
+fn poll_params(listen: &Listen, state: Option<&Js>) -> serde_json::Value {
+    let mut params = serde_json::json!({ "config": crate::wire::json_of_js(&Js::Obj(listen.config.clone())), "movementId": listen.movement_name });
+    if let Some(checkpoint) = state.and_then(|s| s.get("checkpoint")) {
+        params["checkpoint"] = crate::wire::json_of_js(checkpoint);
+    }
+    params
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn polled(config: Obj) -> Listen {
+        Listen { file: 0, adapter: "system".into(), config, movement_name: "alerts".into() }
+    }
+
+    #[test]
+    fn a_poll_request_names_the_listening_movement_and_carries_the_checkpoint() {
+        let listen = polled(obj! { "every" => Js::str("5m") });
+        let first = poll_params(&listen, None);
+        assert_eq!(first["movementId"], "alerts");
+        assert_eq!(first["config"]["every"], "5m");
+        assert!(first.get("checkpoint").is_none());
+        let state = Js::Obj(obj! { "armed" => Js::Bool(true), "checkpoint" => Js::str("c1") });
+        assert_eq!(poll_params(&listen, Some(&state))["checkpoint"], "c1");
+    }
 
     fn identity(configured: (Option<&str>, Option<&str>), env: &[(&str, &str)]) -> (String, String) {
         let configured = (configured.0.map(str::to_string), configured.1.map(str::to_string));
