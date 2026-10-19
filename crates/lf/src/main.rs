@@ -19,12 +19,14 @@
 //!   lf connect [<module>]               set a module up (src/connect.rs)
 //!   lf credential add|update|delete|list   user credentials (src/credential_cmd.rs)
 //!   lf completion <bash|zsh|fish>       the shell's tab completion
-//!   lf --contract-store <state.db|postgres://…> [--team <uuid>]  the run host's backend over stdio JSON-RPC
+//!   lf --contract-store <state.db|postgres://…> [--team <uuid>]  the run host's backend served as a store module
 //!   lf --contract-store-slot [--dir <project>]                   the same, over the project's store slot
-//!   lf --contract-limiter                                        the built-in limiter over stdio JSON-RPC
+//!   lf --contract-limiter                                        the built-in limiter served as a limiter module
 //!   lf --contract-limiter-slot [--dir <project>]                 the same, over the project's limiter slot
-//!   lf --contract-guard                                          the built-in loop guard over stdio JSON-RPC
+//!   lf --contract-guard                                          the built-in loop guard served as a loop guard module
 //!   lf --contract-guard-slot [--dir <project>]                   the same, over the project's loopGuard slot
+//!   lf --contract-models | --contract-judge | --contract-files   the built-in models, judge, files module served
+//!     (each --contract-<slot> server speaks adapter protocol 2 on --listen unix:<path> | <port>, default a fresh socket)
 //!   lf --contract-secrets <file|env>    a secrets store over stdio JSON-RPC
 //!   lf --contract-doors                 the inbound doors over HTTP, their world arranged over stdio JSON-RPC
 //!
@@ -51,8 +53,13 @@ mod connect;
 #[cfg(feature = "serve")]
 mod contract_doors;
 mod contract_secrets;
+#[cfg(feature = "serve")]
 mod contract_guard;
+#[cfg(feature = "serve")]
 mod contract_limiter;
+#[cfg(feature = "serve")]
+mod contract_slots;
+#[cfg(feature = "serve")]
 mod contract_store;
 mod core;
 mod credential_calls;
@@ -90,18 +97,21 @@ mod listener {
 mod lsp;
 mod models;
 mod module_hosts;
+mod module_transport;
 mod oauth2;
 #[cfg(feature = "oauth")]
 mod oauth2_flow;
 mod oauth_redirect;
 #[cfg(feature = "oauth")]
 mod oauth_signin;
+mod outgoing_auth;
 mod park_files;
 #[cfg(feature = "postgres")]
 mod pg_store;
 #[cfg(feature = "postgres")]
 mod pg_tls;
 mod project;
+mod remote_slots;
 mod prompt;
 mod protocol;
 mod remote;
@@ -114,6 +124,9 @@ mod secrets;
 mod secrets_family;
 mod segment;
 mod serve;
+mod slot_client;
+#[cfg(feature = "serve")]
+mod slot_server;
 mod sources;
 mod store;
 mod store_module;
@@ -145,6 +158,7 @@ const USAGE: &str = "usage: lf <init|check|catalog|lsp|run|resume|runs|drain|ser
        lf --contract-limiter-slot [--dir <project>]
        lf --contract-guard
        lf --contract-guard-slot [--dir <project>]
+       lf --contract-models | --contract-judge | --contract-files
        lf --contract-secrets <secrets file | env>
        lf --contract-doors
        lf --project-schema
@@ -165,12 +179,13 @@ const USAGE: &str = "usage: lf <init|check|catalog|lsp|run|resume|runs|drain|ser
   --store   where run state is kept: a SQLite file or a Postgres database (set up by `lf connect @lf/postgres-store`), instead of lf.yaml's `core: { store: … }`
   --team    the tenant (a uuid) of a Postgres store's rows
   --start-timeout  seconds a started external has to print `listening <port>` (default 30, or lf.yaml's `startTimeout`)
-  --contract-store  serve the run host's backend over stdin/stdout JSON-RPC (the contract suite's bridge)
+  --contract-store  serve the run host's backend as a store module, adapter protocol 2 over HTTP on --listen (unix:<path> or a port; default a fresh socket)
   --contract-store-slot  the same, over the store module the project's store slot names
-  --contract-limiter  serve lf's built-in limiter over stdin/stdout JSON-RPC (the limiter contract suite's bridge)
+  --contract-limiter  serve lf's built-in limiter as a limiter module, on --listen
   --contract-limiter-slot  the same, over the limiter module the project's limiter slot names
-  --contract-guard  serve lf's built-in loop guard over stdin/stdout JSON-RPC (the loop guard contract suite's bridge)
+  --contract-guard  serve lf's built-in loop guard as a loop guard module, on --listen
   --contract-guard-slot  the same, over the loop guard module the project's loopGuard slot names
+  --contract-models, --contract-judge, --contract-files  serve lf's built-in models, judge or files module, on --listen (the slot conformance suites' bridges)
   --contract-doors  serve the inbound doors over HTTP, their world arranged over stdin/stdout JSON-RPC (the inbound contract suite's bridge)
   --project-schema  project one adapter introspection (JSON on stdin) into its schema and notes (the projection's parity probe)
   --contract-secrets  serve one secrets store over stdin/stdout JSON-RPC (the secrets contract suite's bridge)
@@ -200,6 +215,10 @@ struct Args {
     contract_limiter_slot: bool,
     contract_guard: bool,
     contract_guard_slot: bool,
+    contract_models: bool,
+    contract_judge: bool,
+    contract_files: bool,
+    listen: Option<String>,
     contract_doors: bool,
     store: Option<String>,
     team: Option<String>,
@@ -236,6 +255,10 @@ fn parse_args(argv: &[String]) -> Result<Args, String> {
         contract_limiter_slot: false,
         contract_guard: false,
         contract_guard_slot: false,
+        contract_models: false,
+        contract_judge: false,
+        contract_files: false,
+        listen: None,
         contract_doors: false,
         store: None,
         team: None,
@@ -273,6 +296,10 @@ fn parse_args(argv: &[String]) -> Result<Args, String> {
             "--contract-limiter-slot" => args.contract_limiter_slot = true,
             "--contract-guard" => args.contract_guard = true,
             "--contract-guard-slot" => args.contract_guard_slot = true,
+            "--contract-models" => args.contract_models = true,
+            "--contract-judge" => args.contract_judge = true,
+            "--contract-files" => args.contract_files = true,
+            "--listen" => args.listen = Some(value("--listen")?),
             "--store" => args.store = Some(value("--store")?),
             "--team" => args.team = Some(value("--team")?),
             "--until-idle" => args.until_idle = true,
@@ -308,31 +335,8 @@ async fn run(argv: Vec<String>) -> Result<i32, String> {
         return contract_secrets::serve(std::path::Path::new(target)).await.map(|()| 0);
     }
     let args = parse_args(&argv)?;
-    if let Some(spec) = &args.contract_store {
-        let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
-        return contract_store::serve(&backend::StoreSpec::parse(spec, &cwd, args.team.as_deref())?).await.map(|()| 0);
-    }
-    if args.contract_store_slot {
-        let project = project::load_project(&args.dir)?;
-        let env: Vec<(String, String)> = std::env::vars().collect();
-        return contract_store::serve(&backend::StoreSpec::of_command(None, &project, args.team.as_deref(), &env)?).await.map(|()| 0);
-    }
-    if args.contract_limiter {
-        return contract_limiter::serve(std::sync::Arc::new(limiter::MemoryLimiter::default())).await.map(|()| 0);
-    }
-    if args.contract_limiter_slot {
-        let project = project::load_project(&args.dir)?;
-        let env: Vec<(String, String)> = std::env::vars().collect();
-        return contract_limiter::serve(limiter::of_project(&project, &env)?).await.map(|()| 0);
-    }
-    if args.contract_guard {
-        return contract_guard::serve(contract_guard::Serving::BuiltIn(None)).await.map(|()| 0);
-    }
-    if args.contract_guard_slot {
-        let project = project::load_project(&args.dir)?;
-        let env: Vec<(String, String)> = std::env::vars().collect();
-        let guard = loop_guard::of_project(&project, &env)?.ok_or("the project's loopGuard slot is empty: name a module in lf.yaml's core:")?;
-        return contract_guard::serve(contract_guard::Serving::Slot(guard)).await.map(|()| 0);
+    if let Some(code) = serve_contract_bridge(&args).await? {
+        return Ok(code);
     }
     if args.contract_doors {
         #[cfg(feature = "serve")]
@@ -523,4 +527,58 @@ fn main() {
     };
     drop(runtime);
     std::process::exit(code);
+}
+
+/// `lf --contract-<slot>`: one of lf's built-in core modules served as a
+/// module over adapter protocol 2's HTTP, for the slot's conformance suite.
+/// None when no such flag is given.
+#[cfg(feature = "serve")]
+async fn serve_contract_bridge(args: &Args) -> Result<Option<i32>, String> {
+    let listen = || slot_server::Listen::of(args.listen.as_deref());
+    let project_env = || -> Result<(project::Project, Vec<(String, String)>), String> { Ok((project::load_project(&args.dir)?, std::env::vars().collect())) };
+    if let Some(spec) = &args.contract_store {
+        let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
+        contract_store::serve(&backend::StoreSpec::parse(spec, &cwd, args.team.as_deref())?, listen()?).await?;
+    } else if args.contract_store_slot {
+        let (project, env) = project_env()?;
+        contract_store::serve(&backend::StoreSpec::of_command(None, &project, args.team.as_deref(), &env)?, listen()?).await?;
+    } else if args.contract_limiter {
+        contract_limiter::serve(std::sync::Arc::new(limiter::MemoryLimiter::default()), listen()?).await?;
+    } else if args.contract_limiter_slot {
+        let (project, env) = project_env()?;
+        contract_limiter::serve(limiter::of_project(&project, &env)?, listen()?).await?;
+    } else if args.contract_guard {
+        contract_guard::serve(contract_guard::Serving::BuiltIn(None), listen()?).await?;
+    } else if args.contract_guard_slot {
+        let (project, env) = project_env()?;
+        let guard = loop_guard::of_project(&project, &env)?.ok_or("the project's loopGuard slot is empty: name a module in lf.yaml's core:")?;
+        contract_guard::serve(contract_guard::Serving::Slot(guard), listen()?).await?;
+    } else if args.contract_models {
+        #[cfg(feature = "anthropic")]
+        contract_slots::serve_models(listen()?).await?;
+        #[cfg(not(feature = "anthropic"))]
+        return Err("this lf was built without the `anthropic` feature, so it has no built-in models module to serve".to_string());
+    } else if args.contract_judge {
+        contract_slots::serve_judge(listen()?).await?;
+    } else if args.contract_files {
+        contract_slots::serve_files(listen()?).await?;
+    } else {
+        return Ok(None);
+    }
+    Ok(Some(0))
+}
+
+/// Without the `serve` feature lf has no server to put a built-in module behind.
+#[cfg(not(feature = "serve"))]
+async fn serve_contract_bridge(args: &Args) -> Result<Option<i32>, String> {
+    let asked = args.contract_store.is_some()
+        || args.contract_store_slot
+        || args.contract_limiter
+        || args.contract_limiter_slot
+        || args.contract_guard
+        || args.contract_guard_slot
+        || args.contract_models
+        || args.contract_judge
+        || args.contract_files;
+    if asked { Err(listener::NOT_BUILT.to_string()) } else { Ok(None) }
 }

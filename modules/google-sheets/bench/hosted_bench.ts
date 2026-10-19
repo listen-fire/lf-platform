@@ -71,6 +71,7 @@ const grants: ModuleKv = {
   get: async (key) => (key === 'team/emails' ? [] : undefined),
   set: async () => {},
   delete: async () => {},
+  compareAndSet: async () => false,
   list: async () => [{ key: 'granted/ss-1', value: { mimeType: 'application/vnd.google-apps.spreadsheet', name: 'Pipeline Sheet' } }],
 };
 

@@ -95,6 +95,10 @@ async fn serve_guarded(label: &str, args: &Json, credentials: &Credentials, outp
         // only a judge can answer goes to the judge slot's module. lf's
         // built-in one (@lf/judge, crate::core) declines and says why, the
         // answer a hosted run gives when its judge call fails.
+        "llm.arbitrateEntities" if crate::remote_slots::judge().is_some() => {
+            let judge = crate::remote_slots::judge().expect("checked above");
+            Ok(crate::remote_slots::arbitrate(&judge, &crate::wire::js_of_json(args)).await)
+        }
         "llm.arbitrateEntities" => Ok(Js::Obj(obj! {
             "index" => Js::Null,
             "judgeUnavailable" => Js::str("lf's judge (@lf/judge) declines every question yet: an ambiguous match creates a new record"),
@@ -264,6 +268,9 @@ impl ModelRequest {
 
 /// The reply the engine reads: `llm_clients.ts` `makeAnthropicLlmClient`.
 async fn answer(request: &ModelRequest, credentials: &Credentials, meter: &Meter) -> Result<Obj, ChatError> {
+    if let Some(module) = crate::remote_slots::models() {
+        return answer_by_module(&module, request, meter).await;
+    }
     let key = models::provider_key(credentials).map_err(ChatError::Failed)?;
     let provider = Provider::new(key);
     // The caller's own ceiling wins where it named one.
@@ -318,6 +325,41 @@ async fn answer(request: &ModelRequest, credentials: &Credentials, meter: &Meter
                 "cacheReadTokens" => Js::Num(usage.cache_read.into()),
                 "cacheCreationTokens" => Js::Num(usage.cache_creation.into()),
             }),
+        );
+    }
+    Ok(out)
+}
+
+/// A call the models slot's module answers (crate::remote_slots): one
+/// request, one answer, priced by the module (its `cost` lines).
+async fn answer_by_module(module: &crate::slot_client::SlotClient, request: &ModelRequest, meter: &Meter) -> Result<Obj, ChatError> {
+    if !meter.open() {
+        return Err(ChatError::BudgetSpent);
+    }
+    let user_message = match &request.user {
+        UserMessage::Text(text) => text.clone(),
+        UserMessage::Blocks(blocks) => blocks.iter().map(|b| b.text.as_str()).collect::<Vec<_>>().join(""),
+    };
+    let call = crate::remote_slots::ModelCall {
+        label: &request.label,
+        system: &request.system,
+        user_message,
+        model: request.wire_model,
+        effort: request.effort.as_deref(),
+        max_tokens: request.max_tokens,
+    };
+    let answered = crate::remote_slots::call_model(module, &call).await.map_err(ChatError::Failed)?;
+    for (label, microdollars) in answered.cost {
+        meter.charge(label, microdollars);
+    }
+    let mut out = Obj::new();
+    out.insert("parsedJson".into(), parse_json_reply(&answered.text));
+    out.insert("rawText".into(), Js::Str(answered.text));
+    if request.reports_usage {
+        let zero = || Js::Num(0.into());
+        out.insert(
+            "usage".into(),
+            Js::Obj(obj! { "inputTokens" => zero(), "outputTokens" => zero(), "cacheReadTokens" => zero(), "cacheCreationTokens" => zero() }),
         );
     }
     Ok(out)

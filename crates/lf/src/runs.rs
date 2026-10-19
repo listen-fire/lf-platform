@@ -118,6 +118,8 @@ pub async fn open_session(project: Project, ephemeral: bool, store: &StoreSpec) 
     let loop_guard = crate::loop_guard::of_project(&project, &env)?;
     // Before any call: the manifest calls below ask it too.
     crate::limiter::install(crate::limiter::of_project(&project, &env)?);
+    // Before the externals start too: a browser module's address is handed to them.
+    crate::remote_slots::install(&project, &credentials).await?;
     // Before the externals start, so they are told where it is.
     crate::listener::open_models_door(&credentials).await?;
     let due_offset_ms = due_clock_offset()?;
@@ -133,8 +135,8 @@ pub async fn open_session(project: Project, ephemeral: bool, store: &StoreSpec) 
     // stopped, and what this one starts is listed in the store.
     crate::module_hosts::track_in(store.clone());
     let running = start_externals(&project, &externals, &credentials, LOCAL_TENANT).await?;
-    // The files slot's module: @lf/local-files, the one lf has (crate::core).
-    let documents = Documents::new(&project.lf_dir);
+    // The files slot's module: @lf/local-files (crate::core), or one reached over the wire.
+    let documents = Documents::with_module(&project.lf_dir, crate::remote_slots::files(&project, &credentials)?);
     let mut schemas = IndexMap::new();
     for r in running.iter().filter(|r| !r.is_plugin()) {
         schemas.insert(r.external.manifest.name.clone(), describe_external(r, &credentials).await?);

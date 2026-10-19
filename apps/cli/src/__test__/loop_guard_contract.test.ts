@@ -24,7 +24,7 @@ for (const bridge of bridges) {
         await guard.open();
         await contractCase.run(guard);
       } finally {
-        guard.close();
+        await guard.close();
       }
     });
   }

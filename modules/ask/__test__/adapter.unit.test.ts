@@ -35,6 +35,7 @@ const RECORDS: AskRecords = {
     set: async () => undefined,
     delete: async () => undefined,
     list: async () => [],
+    compareAndSet: async () => false,
   },
   answerUrl: (token) => `http://x/api/asks/${token}`,
 };

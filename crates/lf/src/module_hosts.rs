@@ -5,9 +5,12 @@
 //! `trusted: true` in their install) share one Node host, each under its own
 //! path; any other module gets a process of its own, never shared.
 //!
-//! Transport-agnostic on purpose: a host is started from a `Launch` and
-//! answers with its address; how that address is learned (`spawn`) is the
-//! one place that knows the transport.
+//! A host is started from a `Launch` and answers with its address; how that
+//! address is learned (`spawn`) is the one place that knows the transport
+//! (crate::module_transport): a Unix socket where the system has them, else
+//! loopback TCP. A host keeps one socket path for its life, so a restarted
+//! process answers where the first one did (a module lf handed the browser
+//! slot's address to still reaches it).
 //!
 //! Every started process is told to exit with lf (`LF_EXIT_WITH_PARENT`:
 //! lf holds its stdin), and is recorded through the store slot so the next
@@ -91,6 +94,8 @@ enum HostKey {
 
 struct Host {
     key: HostKey,
+    /// Where each process it starts listens (None: loopback TCP).
+    socket: Option<PathBuf>,
     /// Serialises starts: one start at a time, and a lease waits for it.
     starting: tokio::sync::Mutex<()>,
     state: Mutex<HostState>,
@@ -114,6 +119,7 @@ struct Running {
     stopping: Arc<AtomicBool>,
     child_id: Option<u32>,
     address: String,
+    socket: Option<PathBuf>,
     /// The shared host's mounts when it started.
     mounts: Vec<String>,
     exited: Arc<Mutex<Option<String>>>,
@@ -150,8 +156,14 @@ impl ModuleProcess {
     /// A process of its own, started by `launch`. A different launch for the
     /// same module (its install changed) stops the old process.
     pub fn isolated(name: &str, launch: Launch) -> ModuleProcess {
-        let host = host_for(HostKey::Own(name.to_string()), launch);
-        ModuleProcess { host, mount: None, label: format!("external \"{name}\"") }
+        ModuleProcess::own(&format!("external:{name}"), &format!("external \"{name}\""), launch)
+    }
+
+    /// A process of its own under `key` (unique among lf's module processes),
+    /// named `label` in errors: a core slot's module, say.
+    pub fn own(key: &str, label: &str, launch: Launch) -> ModuleProcess {
+        let host = host_for(HostKey::Own(key.to_string()), launch);
+        ModuleProcess { host, mount: None, label: label.to_string() }
     }
 
     /// A place in the shared host, started by `base` (serve-module with no
@@ -195,7 +207,8 @@ impl ModuleProcess {
             HostKey::Shared => with_mounts(launch)?,
             HostKey::Own(_) => (launch, Vec::new()),
         };
-        let started = spawn(&self.host_label(), &launch).await?;
+        let (label, starting, socket) = (self.host_label(), launch.clone(), self.host.socket.clone());
+        let started = watcher().spawn(async move { spawn(&label, &starting, socket.as_deref()).await }).await.map_err(|e| format!("{}: {e}", self.host_label()))??;
         record(started.child_id, &launch);
         let mut state = lock(&self.host.state);
         state.generation += 1;
@@ -229,6 +242,7 @@ fn host_for(key: HostKey, launch: Launch) -> Arc<Host> {
     }
     let host = Arc::new(Host {
         key: key.clone(),
+        socket: crate::module_transport::fresh_socket_path(),
         starting: tokio::sync::Mutex::new(()),
         state: Mutex::new(HostState { launch, running: None, in_flight: 0, last_used: Instant::now(), generation: 0 }),
     });
@@ -256,10 +270,13 @@ fn with_mounts(mut launch: Launch) -> Result<(Launch, Vec<String>), String> {
     Ok((launch, mounts.into_iter().map(|m| m.path).collect()))
 }
 
+/// A mount's address under its host's: a path below a socket is the
+/// transport's `http+unix://<socket, percent-encoded>/<path>/` form.
 fn joined(address: &str, mount: Option<&str>) -> String {
-    match mount {
-        Some(path) => format!("{}/{path}/", address.trim_end_matches('/')),
-        None => address.to_string(),
+    match (mount, address.strip_prefix("unix:")) {
+        (Some(path), Some(socket)) => format!("http+unix://{}/{path}/", crate::http_out::encode_uri_component(socket)),
+        (Some(path), None) => format!("{}/{path}/", address.trim_end_matches('/')),
+        (None, _) => address.to_string(),
     }
 }
 
@@ -291,6 +308,9 @@ impl Drop for Running {
         // Before the child is killed (fields drop after this), so its output
         // closing reads as lf's stop.
         self.stopping.store(true, Ordering::Relaxed);
+        if let Some(socket) = &self.socket {
+            let _ = std::fs::remove_file(socket);
+        }
     }
 }
 
@@ -306,7 +326,7 @@ pub async fn module_exited() {
 
 /// Stops the host once nothing has used it for the idle period.
 fn stop_when_idle(host: Arc<Host>, generation: u64) {
-    tokio::spawn(async move {
+    watcher().spawn(async move {
         let mut wait = idle_timeout();
         loop {
             tokio::time::sleep(wait).await;
@@ -325,6 +345,25 @@ fn stop_when_idle(host: Arc<Host>, generation: u64) {
     });
 }
 
+/// The runtime every module process is started and watched on (its output
+/// read, its idle stop timed): lf's own thread, so a process started for a
+/// caller on a short-lived runtime (a slot client's) is still watched after it.
+fn watcher() -> &'static tokio::runtime::Handle {
+    static HANDLE: LazyLock<tokio::runtime::Handle> = LazyLock::new(|| {
+        let (sender, handle) = std::sync::mpsc::channel();
+        std::thread::Builder::new()
+            .name("lf module processes".into())
+            .spawn(move || {
+                let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().expect("a runtime for the module processes");
+                let _ = sender.send(runtime.handle().clone());
+                runtime.block_on(std::future::pending::<()>());
+            })
+            .expect("a thread for the module processes");
+        handle.recv().expect("the module processes' runtime started")
+    });
+    &HANDLE
+}
+
 /// Stops every module process (lf is exiting).
 pub fn stop_all() {
     let hosts: Vec<Arc<Host>> = pool().hosts.values().cloned().collect();
@@ -333,12 +372,18 @@ pub fn stop_all() {
     }
 }
 
-/// Start `launch` and learn where it answers: it prints `listening <port>`.
-async fn spawn(label: &str, launch: &Launch) -> Result<Running, String> {
+/// Start `launch` and learn where it answers: told to listen on `socket`
+/// (`MODULE_SOCKET`; else, or when it ignores that, loopback TCP on `PORT=0`),
+/// it prints `listening unix:<socket>` or `listening <port>`.
+async fn spawn(label: &str, launch: &Launch, socket: Option<&std::path::Path>) -> Result<Running, String> {
+    if let Some(socket) = socket {
+        let _ = std::fs::remove_file(socket);
+    }
     let mut child = Command::new(&launch.program)
         .args(&launch.args)
         .current_dir(&launch.dir)
         .env_clear()
+        .envs(crate::module_transport::listen_env(socket))
         .envs(launch.env.iter().map(|(k, v)| (k, v)))
         .env("LF_EXIT_WITH_PARENT", "1")
         // lf holds its stdin: its end closing tells the process lf is gone.
@@ -351,18 +396,22 @@ async fn spawn(label: &str, launch: &Launch) -> Result<Running, String> {
     let stdout = child.stdout.take().ok_or("no stdout")?;
     let mut lines = BufReader::new(stdout).lines();
     let waited = launch.start_timeout;
-    let port = tokio::time::timeout(waited, async {
+    let address = tokio::time::timeout(waited, async {
         while let Ok(Some(line)) = lines.next_line().await {
-            if let Some(port) = listening_port(&line) {
-                return Ok(port);
+            if let Some(address) = crate::module_transport::listening_address(&line) {
+                return Ok(address);
             }
         }
         Err(format!("{label} exited before listening"))
     })
     .await
     .map_err(|_| {
-        format!("{label} did not print \"listening <port>\" within {}s (lf.yaml's `startTimeout`, or --start-timeout, waits longer)", waited.as_secs())
+        format!(
+            "{label} did not print \"listening <port>\" or \"listening unix:<socket>\" within {}s (lf.yaml's `startTimeout`, or --start-timeout, waits longer)",
+            waited.as_secs()
+        )
     })??;
+    let socket = socket.map(std::path::Path::to_path_buf);
     // Keep reading what it prints, so a full pipe never blocks it; its
     // stdout ending is it gone, and the next lease starts it again.
     let exited = Arc::new(Mutex::new(None));
@@ -377,13 +426,7 @@ async fn spawn(label: &str, launch: &Launch) -> Result<Running, String> {
         }
     });
     let child_id = child.id();
-    Ok(Running { _child: child, stopping, child_id, address: format!("http://127.0.0.1:{port}/"), mounts: Vec::new(), exited })
-}
-
-/// The port in a line `listening <port>…`.
-pub fn listening_port(line: &str) -> Option<u16> {
-    let digits: String = line.strip_prefix("listening ")?.chars().take_while(char::is_ascii_digit).collect();
-    digits.parse().ok()
+    Ok(Running { _child: child, stopping, child_id, address, socket, mounts: Vec::new(), exited })
 }
 
 /// A declared runtime (`runtime: node 22`): the program and the lowest
@@ -553,12 +596,6 @@ fn terminate(_pid: u32) {}
 mod tests {
     use super::*;
 
-    #[test]
-    fn the_port_is_read_off_the_listening_line() {
-        assert_eq!(listening_port("listening 5557"), Some(5557));
-        assert_eq!(listening_port("listening 80 on all"), Some(80));
-        assert_eq!(listening_port("ready"), None);
-    }
 
     #[test]
     fn a_mount_is_one_path_segment_under_the_hosts_address() {
@@ -566,6 +603,8 @@ mod tests {
         assert!(!is_mount_path("") && !is_mount_path("a/b") && !is_mount_path("-a") && !is_mount_path("@lf"));
         assert_eq!(joined("http://127.0.0.1:9/", Some("attio")), "http://127.0.0.1:9/attio/");
         assert_eq!(joined("http://127.0.0.1:9/", None), "http://127.0.0.1:9/");
+        assert_eq!(joined("unix:/tmp/lf-a.sock", Some("attio")), "http+unix://%2Ftmp%2Flf-a.sock/attio/");
+        assert_eq!(joined("unix:/tmp/lf-a.sock", None), "unix:/tmp/lf-a.sock");
     }
 
     #[test]

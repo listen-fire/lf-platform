@@ -1,25 +1,21 @@
 //! `lf --contract-guard`: lf's built-in loop guard (`@lf/fingerprint-guard`)
-//! served over stdin/stdout as the loopGuard slot's wire
-//! (docs/contracts/loop-guard-slot.md), one JSON-RPC 2.0 message per line, so
-//! the TypeScript contract suite (movement-engine `services/loop_guard/
-//! contract.ts`) holds it to the meaning every guard has. The built-in is
-//! opened by `guard.open`, with the settings it is sent (no `path` or `url`:
-//! a file in a temporary folder). `--contract-guard-slot` serves the
-//! project's loopGuard slot instead, a guard module's process included.
+//! served as a loop guard module, the loopGuard slot's methods
+//! (docs/contracts/loop-guard-slot.md) as adapter protocol 2 calls over HTTP
+//! (crate::slot_server), so the TypeScript contract suite (movement-engine
+//! `services/loop_guard/contract.ts`) holds it to the meaning every guard
+//! has. The built-in is opened by `guard.open`, with the settings it is sent
+//! (no `path` or `url`: a file in a temporary folder). `--contract-guard-slot`
+//! serves the project's loopGuard slot instead, a guard module included.
 
+use std::cell::RefCell;
 use std::sync::Arc;
 
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-
 use crate::guard_module::answer_wire;
-use crate::json::{Js, Obj};
+use crate::json::Js;
 use crate::loop_guard::{Asked, Current, FingerprintGuard, LoopGuard, Wrote};
-use crate::obj;
+use crate::slot_server::{Listen, Refusal};
 
-const INVALID_PARAMS: i64 = -32602;
-const METHOD_NOT_FOUND: i64 = -32601;
-const PARSE_ERROR: i64 = -32700;
-const GUARD_FAILED: i64 = -32000;
+pub const GUARD_METHODS: &[&str] = &["guard.open", "guard.recordWrite", "guard.isEcho"];
 
 /// The guard being served: the project's, or the built-in once `guard.open` has made it.
 pub enum Serving {
@@ -27,40 +23,20 @@ pub enum Serving {
     BuiltIn(Option<FingerprintGuard>),
 }
 
-pub async fn serve(mut serving: Serving) -> Result<(), String> {
-    let mut lines = BufReader::new(tokio::io::stdin()).lines();
-    let mut stdout = tokio::io::stdout();
-    while let Some(line) = lines.next_line().await.map_err(|e| e.to_string())? {
-        if line.trim().is_empty() {
-            continue;
-        }
-        let reply = answer(&mut serving, &line);
-        stdout.write_all(format!("{}\n", reply.to_json()).as_bytes()).await.map_err(|e| e.to_string())?;
-        stdout.flush().await.map_err(|e| e.to_string())?;
-    }
-    Ok(())
+pub async fn serve(serving: Serving, listen: Listen) -> Result<(), String> {
+    let serving = RefCell::new(serving);
+    let manifest = crate::slot_server::manifest("@lf/fingerprint-guard", "loopGuard", GUARD_METHODS);
+    crate::slot_server::serve(listen, manifest, move |method, params, _settings| answer(&mut serving.borrow_mut(), method, params)).await
 }
 
-fn answer(serving: &mut Serving, line: &str) -> Js {
-    let request = match Js::parse(line.as_bytes()) {
-        Ok(request) => request,
-        Err(e) => return error_reply(Js::Null, PARSE_ERROR, format!("not JSON: {e}")),
-    };
-    let id = request.get("id").cloned().unwrap_or(Js::Null);
-    let empty = Js::from(Obj::new());
-    let params = request.get("params").unwrap_or(&empty);
-    let result = match request.get("method").and_then(Js::as_str) {
-        Some("guard.open") => open(serving, params).map(|()| Js::Null).map_err(|m| (GUARD_FAILED, m)),
-        Some(method @ ("guard.recordWrite" | "guard.isEcho")) => match guard_of(serving) {
+fn answer(serving: &mut Serving, method: &str, params: &Js) -> Result<Js, Refusal> {
+    match method {
+        "guard.open" => open(serving, params).map(|()| Js::Null).map_err(Refusal::failed),
+        "guard.recordWrite" | "guard.isEcho" => match guard_of(serving) {
             Some(guard) => call(guard, method, params),
-            None => Err((GUARD_FAILED, "open me with guard.open first".to_string())),
+            None => Err(Refusal::failed("open me with guard.open first")),
         },
-        Some(other) => Err((METHOD_NOT_FOUND, format!("no method \"{other}\""))),
-        None => Err((INVALID_PARAMS, "a request names its method".to_string())),
-    };
-    match result {
-        Ok(result) => Js::from(obj! { "jsonrpc" => Js::str("2.0"), "id" => id, "result" => result }),
-        Err((code, message)) => error_reply(id, code, message),
+        other => Err(Refusal::unknown(other)),
     }
 }
 
@@ -85,27 +61,24 @@ fn open(serving: &mut Serving, params: &Js) -> Result<(), String> {
     Ok(())
 }
 
-fn call(guard: &dyn LoopGuard, method: &str, params: &Js) -> Result<Js, (i64, String)> {
-    fn text<'a>(from: &'a Js, key: &str) -> Result<&'a str, (i64, String)> {
-        from.get(key).and_then(Js::as_str).ok_or((INVALID_PARAMS, format!("{key}: expected a string")))
-    }
+fn call(guard: &dyn LoopGuard, method: &str, params: &Js) -> Result<Js, Refusal> {
+    let text = |from: &Js, key: &str| -> Result<String, Refusal> {
+        from.get(key).and_then(Js::as_str).map(str::to_string).ok_or_else(|| Refusal::bad_request(format!("{method}: {key}: expected a string")))
+    };
     let (adapter, external_id) = (text(params, "adapter")?, text(params, "externalId")?);
     let writer = text(params, "writer")?;
     if method == "guard.recordWrite" {
-        let record = params.get("record").ok_or((INVALID_PARAMS, "record: expected the record".to_string()))?;
-        let wrote = Wrote { adapter: adapter.into(), record_type: text(params, "recordType")?.into(), external_id: external_id.into(), record: record.clone() };
-        return guard.record_write(&wrote, writer).map(|()| Js::Null).map_err(|m| (GUARD_FAILED, m));
+        let record = params.get("record").ok_or_else(|| Refusal::bad_request(format!("{method}: record: expected the record")))?;
+        let wrote = Wrote { adapter, record_type: text(params, "recordType")?, external_id, record: record.clone() };
+        return guard.record_write(&wrote, &writer).map(|()| Js::Null).map_err(Refusal::failed);
     }
     let current = match params.get("current") {
         None | Some(Js::Null) => None,
         Some(current) => {
-            let record = current.get("record").ok_or((INVALID_PARAMS, "current.record: expected the record".to_string()))?;
-            Some(Current { record_type: text(current, "recordType")?, record })
+            let record = current.get("record").ok_or_else(|| Refusal::bad_request(format!("{method}: current.record: expected the record")))?;
+            Some((text(current, "recordType")?, record))
         }
     };
-    guard.is_echo(&Asked { adapter, external_id, writer, current }).map(|a| answer_wire(&a)).map_err(|m| (GUARD_FAILED, m))
-}
-
-fn error_reply(id: Js, code: i64, message: String) -> Js {
-    Js::from(obj! { "jsonrpc" => Js::str("2.0"), "id" => id, "error" => Js::from(obj! { "code" => Js::Num(code.into()), "message" => Js::str(message) }) })
+    let current = current.as_ref().map(|(record_type, record)| Current { record_type, record });
+    guard.is_echo(&Asked { adapter: &adapter, external_id: &external_id, writer: &writer, current }).map(|a| answer_wire(&a)).map_err(Refusal::failed)
 }

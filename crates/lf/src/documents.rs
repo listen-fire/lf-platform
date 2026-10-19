@@ -32,11 +32,19 @@ pub struct Documents {
     /// The port exposed files are fetched from: `lf serve`'s, or this
     /// store's own listener's once something was exposed.
     serving: OnceCell<u16>,
+    /// The files slot's module when it is not lf's folder: documents are
+    /// put, owned and opened through it (docs/contracts/files-slot.md);
+    /// exposing a file for an external still copies it here.
+    module: Option<crate::slot_client::SlotClient>,
 }
 
 impl Documents {
     pub fn new(lf_dir: &Path) -> Documents {
-        Documents { root: lf_dir.join("files"), serving: OnceCell::new() }
+        Documents { root: lf_dir.join("files"), serving: OnceCell::new(), module: None }
+    }
+
+    pub fn with_module(lf_dir: &Path, module: Option<crate::slot_client::SlotClient>) -> Documents {
+        Documents { module, ..Documents::new(lf_dir) }
     }
 
     fn write(&self, key: &str, bytes: &[u8]) -> Result<(), String> {
@@ -50,6 +58,18 @@ impl Documents {
     /// `put`: store the bytes; the stored file's descriptor
     /// (`documentStoreFileRef`).
     pub fn put(&self, tenant: &str, bytes: &[u8], name: &str, content_type: &str) -> Result<Obj, String> {
+        if let Some(module) = &self.module {
+            let params = obj! {
+                "tenant" => Js::str(tenant),
+                "name" => Js::str(name),
+                "contentType" => Js::str(content_type),
+                "bytes" => Js::str(crate::http_out::base64(bytes)),
+            };
+            return match module.call_text("files.put", params)? {
+                Js::Obj(descriptor) => Ok(descriptor),
+                other => Err(format!("{}: files.put answered {}, not a file's descriptor", module.label, other.to_json())),
+            };
+        }
         let key = format!("{}/{}/{name}", team_prefix(tenant), uuid::Uuid::new_v4());
         self.write(&key, bytes)?;
         Ok(obj! {
@@ -63,11 +83,21 @@ impl Documents {
 
     /// `owns`: the handle names one of the tenant's stored documents.
     pub fn owns(&self, object_uri: &str, tenant: &str) -> bool {
+        if let Some(module) = &self.module {
+            // A failed answer owns nothing: the read is then refused.
+            return matches!(module.call("files.owns", obj! { "objectUri" => Js::str(object_uri), "tenant" => Js::str(tenant) }), Ok(Js::Bool(true)));
+        }
         key_of(object_uri).is_some_and(|key| key.starts_with(&format!("{}/", team_prefix(tenant))) && self.root.join(key).exists())
     }
 
     /// `open`: a stored document's bytes.
     pub fn open(&self, object_uri: &str) -> Result<Vec<u8>, String> {
+        if let Some(module) = &self.module {
+            use base64::Engine;
+            let answer = module.call_text("files.open", obj! { "objectUri" => Js::str(object_uri) })?;
+            let bytes = answer.get("bytes").and_then(Js::as_str).ok_or_else(|| format!("{}: files.open answered {}, not {{ bytes }}", module.label, answer.to_json()))?;
+            return base64::engine::general_purpose::STANDARD.decode(bytes).map_err(|e| format!("{}: files.open: its bytes are not base64: {e}", module.label));
+        }
         let path = key_of(object_uri).map(|key| self.root.join(key)).filter(|p| p.exists());
         let Some(path) = path else { return Err(format!("no stored document {object_uri} in {}", self.root.display())) };
         std::fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))

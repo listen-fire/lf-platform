@@ -6,18 +6,15 @@
 //! error carrying the server's `{code, message}`, a shape error for an
 //! envelope that is neither.
 //!
-//! Plain HTTP only (an external reached by an `https` url is refused, as
-//! externals are local processes), and no retry: the TypeScript client
-//! retries nothing either.
+//! Over a Unix socket, plain HTTP or HTTPS (crate::module_transport), with
+//! the install's outgoing auth (crate::outgoing_auth) for a module behind a
+//! platform's own sign-in; no retry: the TypeScript client retries nothing
+//! either.
 
-use bytes::Bytes;
-use http_body_util::{BodyExt, Full};
-use hyper::Request;
-use hyper_util::rt::TokioIo;
 use serde_json::json;
 
 use crate::json::Js;
-use tokio::net::TcpStream;
+use crate::outgoing_auth::OutgoingAuth;
 
 pub use module_wire::envelope::{ADAPTER_TEAM_HEADER, CREDENTIAL_REFUSED_CODE, PROTOCOL_VERSION, shape_error};
 
@@ -69,6 +66,8 @@ pub struct Call<'a> {
     /// The caller's cache scope (`cacheScopeId`): one per adapter instance.
     pub cache_scope_id: &'a str,
     pub params: serde_json::Value,
+    /// How the call proves itself to the platform in front of the module.
+    pub auth: Option<OutgoingAuth>,
 }
 
 /// Why a protocol call failed, by the TypeScript error it stands for.
@@ -124,27 +123,6 @@ impl From<RpcError> for String {
     }
 }
 
-struct Target {
-    host: String,
-    port: u16,
-    path: String,
-}
-
-fn target_of(base_url: &str) -> Result<Target, String> {
-    let Some(rest) = base_url.strip_prefix("http://") else {
-        return Err(format!("{base_url}: lf reaches externals over plain http only"));
-    };
-    let (authority, path) = match rest.find('/') {
-        Some(at) => (&rest[..at], &rest[at..]),
-        None => (rest, "/"),
-    };
-    let (host, port) = match authority.rsplit_once(':') {
-        Some((host, port)) => (host, port.parse::<u16>().map_err(|_| format!("{base_url}: not a port: {port}"))?),
-        None => (authority, 80),
-    };
-    Ok(Target { host: host.to_string(), port, path: path.to_string() })
-}
-
 /// One protocol call: its `result`, or why it failed. With a module's
 /// declared credential it carries it (the request's `credential`), and the
 /// answer's `credentialUpdate` comes back beside the result — read on a
@@ -177,16 +155,24 @@ struct Beside {
     retry_after_ms: Option<u64>,
 }
 
+/// The request envelope's headers: the content type, the calling team, the
+/// module's own secret, and the install's outgoing auth.
+pub async fn envelope_headers(team_id: &str, bearer: Option<&str>, auth: Option<&OutgoingAuth>) -> Result<Vec<(String, String)>, String> {
+    let mut headers = vec![("content-type".to_string(), "application/json".to_string()), (ADAPTER_TEAM_HEADER.to_string(), team_id.to_string())];
+    if let Some(secret) = bearer {
+        headers.push(("authorization".into(), format!("Bearer {secret}")));
+    }
+    if let Some(auth) = auth {
+        let header = auth.header(&headers).await?;
+        headers.push(header);
+    }
+    Ok(headers)
+}
+
 async fn post(call: Call<'_>, carried: Carried, beside: &mut Beside) -> Result<Js, RpcError> {
-    let target = target_of(call.base_url).map_err(RpcError::Unreachable)?;
     let unreachable = |e: &dyn std::fmt::Display| {
         RpcError::Unreachable(format!("Remote adapter at {} could not be reached for method \"{}\": {e}", call.base_url, call.method))
     };
-    let stream = TcpStream::connect((target.host.as_str(), target.port)).await.map_err(|e| unreachable(&e))?;
-    let (mut sender, connection) = hyper::client::conn::http1::handshake(TokioIo::new(stream)).await.map_err(|e| unreachable(&e))?;
-    tokio::spawn(async move {
-        let _ = connection.await;
-    });
     let mut body = json!({
         "protocolVersion": PROTOCOL_VERSION,
         "method": call.method,
@@ -198,20 +184,12 @@ async fn post(call: Call<'_>, carried: Carried, beside: &mut Beside) -> Result<J
             body[key] = value;
         }
     }
-    let mut request = Request::post(&target.path)
-        .header("host", format!("{}:{}", target.host, target.port))
-        .header("content-type", "application/json")
-        .header(ADAPTER_TEAM_HEADER, call.team_id);
-    if let Some(secret) = call.bearer {
-        request = request.header("authorization", format!("Bearer {secret}"));
+    let headers = envelope_headers(call.team_id, call.bearer, call.auth.as_ref()).await.map_err(|e| unreachable(&e))?;
+    let answer = crate::module_transport::post(call.base_url, &headers, body.to_string().into_bytes()).await.map_err(|e| unreachable(&e))?;
+    if !(200..300).contains(&answer.status) {
+        return Err(RpcError::Transport { status: answer.status, method: call.method.to_string() });
     }
-    let request = request.body(Full::new(Bytes::from(body.to_string()))).map_err(|e| unreachable(&e))?;
-    let response = sender.send_request(request).await.map_err(|e| unreachable(&e))?;
-    let status = response.status();
-    if !status.is_success() {
-        return Err(RpcError::Transport { status: status.as_u16(), method: call.method.to_string() });
-    }
-    let bytes = response.into_body().collect().await.map_err(|e| unreachable(&e))?.to_bytes();
+    let bytes = answer.body;
     let envelope = Js::parse(&bytes).map_err(|e| {
         RpcError::Shape(format!("Remote adapter \"{}\" answered \"{}\" with a body that is not JSON: {e}", call.base_url, call.method))
     })?;
@@ -240,15 +218,6 @@ async fn post(call: Call<'_>, carried: Carried, beside: &mut Beside) -> Result<J
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn a_base_url_names_host_port_and_path() {
-        let t = target_of("http://127.0.0.1:5557/").unwrap();
-        assert_eq!((t.host.as_str(), t.port, t.path.as_str()), ("127.0.0.1", 5557, "/"));
-        let t = target_of("http://localhost/rpc").unwrap();
-        assert_eq!((t.host.as_str(), t.port, t.path.as_str()), ("localhost", 80, "/rpc"));
-        assert!(target_of("https://example.com/").is_err());
-    }
 
     #[test]
     fn each_failure_carries_the_typescript_errors_words() {

@@ -850,25 +850,14 @@ fn rebuild_with_files(value: &Hv, wired: &mut impl Iterator<Item = Js>) -> Js {
     }
 }
 
-/// A plain `GET`: the body and its content type.
+/// A plain `GET` (over HTTP, HTTPS, or a module's socket: `http+unix://…`):
+/// the body and its content type.
 async fn http_get(url: &str) -> Result<(Vec<u8>, Option<String>), String> {
-    use http_body_util::{BodyExt, Empty};
-    let rest = url.strip_prefix("http://").ok_or_else(|| format!("{url}: lf fetches files over plain http only"))?;
-    let (authority, path) = rest.find('/').map(|at| (&rest[..at], &rest[at..])).unwrap_or((rest, "/"));
-    let (host, port) = authority.rsplit_once(':').map(|(h, p)| (h, p.parse::<u16>().unwrap_or(80))).unwrap_or((authority, 80));
-    let stream = tokio::net::TcpStream::connect((host, port)).await.map_err(|e| format!("{url}: {e}"))?;
-    let (mut sender, connection) = hyper::client::conn::http1::handshake(hyper_util::rt::TokioIo::new(stream)).await.map_err(|e| e.to_string())?;
-    tokio::spawn(async move {
-        let _ = connection.await;
-    });
-    let request = hyper::Request::get(path).header("host", authority).body(Empty::<bytes::Bytes>::new()).map_err(|e| e.to_string())?;
-    let response = sender.send_request(request).await.map_err(|e| e.to_string())?;
-    if !response.status().is_success() {
-        return Err(format!("RemoteAdapter.resolveFileRef: fetch of resolved url failed (status {}).", response.status().as_u16()));
+    let answer = crate::module_transport::get(url, &[]).await.map_err(|e| format!("{url}: {e}"))?;
+    if !(200..300).contains(&answer.status) {
+        return Err(format!("RemoteAdapter.resolveFileRef: fetch of resolved url failed (status {}).", answer.status));
     }
-    let content_type = response.headers().get("content-type").and_then(|v| v.to_str().ok()).map(str::to_string);
-    let bytes = response.into_body().collect().await.map_err(|e| e.to_string())?.to_bytes().to_vec();
-    Ok((bytes, content_type))
+    Ok((answer.body.to_vec(), answer.content_type))
 }
 
 #[cfg(test)]

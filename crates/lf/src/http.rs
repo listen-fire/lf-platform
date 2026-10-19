@@ -78,7 +78,31 @@ where
 {
     let handler = Rc::new(handler);
     while let Ok((stream, _)) = listener.accept().await {
-        let handler = handler.clone();
+        connection(stream, limit, handler.clone());
+    }
+}
+
+/// `serve`, on a Unix socket.
+#[cfg(all(unix, feature = "serve"))]
+pub async fn serve_unix<H, F>(listener: tokio::net::UnixListener, limit: usize, handler: H)
+where
+    H: Fn(Request) -> F + 'static,
+    F: Future<Output = Response> + 'static,
+{
+    let handler = Rc::new(handler);
+    while let Ok((stream, _)) = listener.accept().await {
+        connection(stream, limit, handler.clone());
+    }
+}
+
+#[cfg(feature = "serve")]
+fn connection<S, H, F>(stream: S, limit: usize, handler: Rc<H>)
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + 'static,
+    H: Fn(Request) -> F + 'static,
+    F: Future<Output = Response> + 'static,
+{
+    {
         tokio::task::spawn_local(async move {
             let service = service_fn(move |request: hyper::Request<Incoming>| {
                 let handler = handler.clone();

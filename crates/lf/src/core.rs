@@ -7,22 +7,19 @@
 //! writes its settings to its install entry in the secrets file, and runs its
 //! setup (the Postgres store creates and migrates its own schema there).
 //!
-//! lf's built-ins run in process. A slot's contract is its family's
-//! contract suite (the run host's store cases, …). A third-party module
-//! fills the store slot as a process: a folder in the externals folder whose
-//! lf-external.yaml says `kind: core`, `slot: store` and its `command`,
-//! driven over the store wire (docs/contracts/store-slot.md,
-//! crate::store_module); the limiter slot likewise, over the limiter wire
-//! (docs/contracts/limiter-slot.md, crate::limiter_module), and the loopGuard
-//! slot — empty unless named — over the guard wire (docs/contracts/
-//! loop-guard-slot.md, crate::guard_module). The browser slot (a real page a
-//! module drives: a gated deck, a viewer that draws with script) stays empty
-//! in lf: lf has no browser, and naming one is refused, so a module asking
-//! for a page is refused by name (docs/contracts/browser-slot.md). The
-//! other slots take only a built-in: their
-//! families are lf's own code paths (a model call's streaming and pricing,
-//! the judge's question, the file folder), with no wire to drive a process
-//! over yet.
+//! lf's built-ins run in process. A slot's contract is its slot's methods
+//! plus its conformance suite (docs/contracts/*-slot.md). A third-party
+//! module fills any slot: a folder in the externals folder whose
+//! lf-external.yaml says `kind: core`, the `slot` and either its `command`
+//! (lf starts it) or its `url` (a remote module), spoken to over adapter
+//! protocol 2's HTTP — a Unix socket on this box, HTTPS elsewhere
+//! (crate::slot_client): the store (crate::store_module), the limiter
+//! (crate::limiter_module), the loopGuard — empty unless named —
+//! (crate::guard_module), and the models, judge and files slots
+//! (crate::remote_slots). The browser slot (a real page a module drives: a
+//! gated deck, a viewer that draws with script) has no built-in in lf, so it
+//! is empty unless a browser module is named; then lf hands its address to
+//! the modules it starts (docs/contracts/browser-slot.md).
 
 use std::borrow::Cow;
 use std::collections::BTreeMap;
@@ -63,8 +60,7 @@ impl Slot {
     }
 
     /// The module a project gets when lf.yaml names none for the slot; None
-    /// for a slot that stays empty unless filled (the loop guard) and for
-    /// one lf never fills (the browser).
+    /// for a slot that stays empty unless filled (the loop guard, the browser).
     pub fn default_module(self) -> Option<&'static CoreModule> {
         let name = match self {
             Slot::Models => ANTHROPIC,
@@ -75,11 +71,6 @@ impl Slot {
             Slot::LoopGuard | Slot::Browser => return None,
         };
         Some(builtin(name).expect("a slot's default is a built-in"))
-    }
-
-    /// A slot a third-party module may fill as a process, over its wire.
-    pub fn takes_a_process(self) -> bool {
-        matches!(self, Slot::Store | Slot::Limiter | Slot::LoopGuard)
     }
 }
 
@@ -109,14 +100,19 @@ pub struct CoreModule {
     pub process: Option<ProcessModule>,
 }
 
-/// A core module run as a process (an externals folder whose
-/// lf-external.yaml says `kind: core`): started in its folder, spoken to
-/// over its stdin and stdout.
+/// A core module lf does not build in (an externals folder whose
+/// lf-external.yaml says `kind: core`): started in its folder from its
+/// `command`, or reached at its `url` (a remote module), and spoken to over
+/// adapter protocol 2's HTTP (crate::slot_client).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProcessModule {
     pub dir: PathBuf,
     pub command: Vec<String>,
     pub env: BTreeMap<String, String>,
+    /// A remote module's address; None for one lf starts.
+    pub url: Option<String>,
+    /// The install field holding a remote module's secret (lf-external.yaml's `auth.field`).
+    pub auth_field: Option<String>,
 }
 
 const fn built_in(name: &'static str, slot: Slot, settings: &'static [Setting]) -> CoreModule {
@@ -179,6 +175,8 @@ pub struct CoreChoice {
     pub limiter: CoreModule,
     /// None: no guard runs, and a movement's own write echoing back fires it again.
     pub loop_guard: Option<CoreModule>,
+    /// None: a module asking for a page is refused by name.
+    pub browser: Option<CoreModule>,
 }
 
 impl Default for CoreChoice {
@@ -190,6 +188,7 @@ impl Default for CoreChoice {
             files: Slot::Files.default_module().expect("files has a default").clone(),
             limiter: Slot::Limiter.default_module().expect("limiter has a default").clone(),
             loop_guard: None,
+            browser: None,
         }
     }
 }
@@ -205,23 +204,17 @@ impl CoreChoice {
                 let slots: Vec<&str> = Slot::ALL.iter().map(|s| s.name()).collect();
                 return Err(format!("{at}: core.{slot_name}: not a core slot (the slots: {})", slots.join(", ")));
             };
-            if slot == Slot::Browser {
-                return Err(format!(
-                    "{at}: core.browser: lf has no browser module, so the browser slot stays empty (a module that opens a page, such as @lf/web reading a gated document, is refused by name); the platform's api image fills it with Chromium"
-                ));
-            }
             let found = builtin(module_name).or_else(|| installed.iter().find(|m| m.name == *module_name));
             let module = match found {
                 Some(module) if module.slot != slot => {
                     return Err(format!("{at}: core.{slot_name}: {module_name} fills the {} slot, not {slot_name}", module.slot.name()));
                 }
-                Some(module) if module.process.is_some() && !slot.takes_a_process() => {
+                Some(module) => module.clone(),
+                None if slot == Slot::Browser => {
                     return Err(format!(
-                        "{at}: core.{slot_name}: {module_name} is a core module run as a process; lf fills only the store, limiter and loopGuard slots with one, and the {slot_name} slot takes a built-in ({})",
-                        builtin_names(slot)
+                        "{at}: core.browser: {module_name} is not a folder in the externals folder whose lf-external.yaml says `kind: core` and `name: {module_name}`; lf builds no browser in, so the slot takes a browser module (a process or a remote url) or stays empty"
                     ));
                 }
-                Some(module) => module.clone(),
                 None => {
                     return Err(format!(
                         "{at}: core.{slot_name}: {module_name} is neither one of lf's built-in {slot_name} modules ({}) nor a folder in the externals folder whose lf-external.yaml says `kind: core` and `name: {module_name}`",
@@ -236,7 +229,7 @@ impl CoreChoice {
                 Slot::Files => choice.files = module,
                 Slot::Limiter => choice.limiter = module,
                 Slot::LoopGuard => choice.loop_guard = Some(module),
-                Slot::Browser => unreachable!("the browser slot is refused above"),
+                Slot::Browser => choice.browser = Some(module),
             }
         }
         Ok(choice)
@@ -276,6 +269,15 @@ pub fn set_up(project: &Project, module: &CoreModule, settings: &BTreeMap<String
     if let (Some(process), Slot::Limiter) = (&module.process, module.slot) {
         crate::limiter_module::ProcessLimiter::start(&module.name, process, settings)?;
         return Ok(vec![format!("{} answered as a limiter", module.name)]);
+    }
+    if let (Some(process), slot @ (Slot::Models | Slot::Judge | Slot::Files | Slot::Browser)) = (&module.process, module.slot) {
+        let client = crate::slot_client::SlotClient::start(slot.name(), &module.name, process, settings)?;
+        let manifest = client.call_text("manifest", Default::default())?;
+        let answered = manifest.get("slot").and_then(crate::json::Js::as_str);
+        if answered != Some(slot.name()) {
+            return Err(format!("{}'s manifest names the slot {}, not {}", module.name, answered.unwrap_or("(none)"), slot.name()));
+        }
+        return Ok(vec![format!("{} answered as a {} module", module.name, slot.name())]);
     }
     if let Some(process) = &module.process {
         // A store module sets itself up when it is opened.
@@ -353,11 +355,14 @@ mod tests {
     }
 
     #[test]
-    fn the_browser_slot_stays_empty_and_naming_a_module_for_it_is_refused() {
+    fn the_browser_slot_stays_empty_unless_a_browser_module_is_installed() {
         assert_eq!(Slot::of("browser"), Some(Slot::Browser));
         assert_eq!(Slot::Browser.default_module(), None);
+        assert_eq!(CoreChoice::of(&BTreeMap::new(), &[], "lf.yaml").unwrap().browser, None);
         let refused = CoreChoice::of(&named(&[("browser", "@lf/chromium")]), &[], "lf.yaml").unwrap_err();
-        assert!(refused.contains("lf has no browser module, so the browser slot stays empty"), "{refused}");
+        assert!(refused.contains("lf builds no browser in"), "{refused}");
+        let installed = [process_module("acme_browser", Slot::Browser)];
+        assert_eq!(CoreChoice::of(&named(&[("browser", "acme_browser")]), &installed, "lf.yaml").unwrap().browser, Some(installed[0].clone()));
     }
 
     #[test]
@@ -388,18 +393,18 @@ mod tests {
     }
 
     fn process_module(name: &str, slot: Slot) -> CoreModule {
-        let process = ProcessModule { dir: PathBuf::from("/p/externals/x"), command: vec!["./store".into()], env: BTreeMap::new() };
+        let process = ProcessModule { dir: PathBuf::from("/p/externals/x"), command: vec!["./store".into()], env: BTreeMap::new(), url: None, auth_field: None };
         CoreModule { name: Cow::Owned(name.into()), slot, settings: Cow::Owned(Vec::new()), process: Some(process) }
     }
 
     #[test]
-    fn a_process_module_fills_the_store_limiter_and_loop_guard_slots_and_only_them() {
+    fn a_module_lf_does_not_build_in_fills_any_slot_of_its_kind() {
         let installed = [process_module("acme_store", Slot::Store), process_module("acme_llm", Slot::Models), process_module("acme_limits", Slot::Limiter), process_module("acme_guard", Slot::LoopGuard)];
-        let choice = CoreChoice::of(&named(&[("store", "acme_store"), ("limiter", "acme_limits"), ("loopGuard", "acme_guard")]), &installed, "lf.yaml").unwrap();
+        let choice = CoreChoice::of(&named(&[("store", "acme_store"), ("limiter", "acme_limits"), ("loopGuard", "acme_guard"), ("models", "acme_llm")]), &installed, "lf.yaml").unwrap();
         assert_eq!(choice.store, installed[0]);
+        assert_eq!(choice.models, installed[1]);
         assert_eq!(choice.limiter, installed[2]);
         assert_eq!(choice.loop_guard, Some(installed[3].clone()));
-        assert!(CoreChoice::of(&named(&[("models", "acme_llm")]), &installed, "lf.yaml").unwrap_err().contains("only the store, limiter and loopGuard slots"));
         assert!(CoreChoice::of(&named(&[("models", "acme_store")]), &installed, "lf.yaml").unwrap_err().contains("fills the store slot"));
     }
 }

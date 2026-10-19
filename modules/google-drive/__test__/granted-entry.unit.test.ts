@@ -31,6 +31,7 @@ describe('GoogleDriveAdapter meta-root — granted items as entry points', () =>
     get: async () => undefined,
     set: async () => undefined,
     delete: async () => undefined,
+    compareAndSet: async () => false,
     list: async (prefix) => {
       listed.push(prefix);
       return [

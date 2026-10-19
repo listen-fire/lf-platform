@@ -3,10 +3,10 @@
 // JSON-RPC 2.0 message per line — how the secrets contract suite, written
 // once in TypeScript, holds the Rust lf's stores (`lf
 // --contract-secrets <file | env>`) to the same meaning as lf's own. The
-// transport is the run host bridge's (`RpcStoreBackend`).
+// transport is `StdioRpcBridge`'s.
 
 import { z } from 'zod';
-import { RpcStoreBackend } from 'movement-engine/services/run_host/rpc_store';
+import { StdioRpcBridge } from './stdio_rpc';
 import type { SecretFields, SecretRecord, SecretsBackend, WriteBackOutcome } from 'movement-engine/public/secrets';
 
 const Record = z.object({ fields: z.record(z.string(), z.string()), version: z.string() });
@@ -19,13 +19,13 @@ const Outcome = z.discriminatedUnion('kind', [
 const Nothing = z.null();
 
 export class RpcSecretsBackend implements SecretsBackend {
-  private readonly rpc: RpcStoreBackend;
+  private readonly rpc: StdioRpcBridge;
   exclusive?: <T>(ref: string, body: (store: SecretsBackend) => Promise<T>) => Promise<T>;
 
   /** `target`: a secrets file, or `env` for the environment store. A file
    *  store's lock is its lock file, taken through the process. */
   constructor(binary: string, target: string) {
-    this.rpc = new RpcStoreBackend(binary, ['--contract-secrets', target]);
+    this.rpc = new StdioRpcBridge(binary, ['--contract-secrets', target]);
     if (target !== 'env') {
       this.exclusive = async (ref, body) => {
         await this.rpc.call('lock', { ref }, Nothing);

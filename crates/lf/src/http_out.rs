@@ -4,8 +4,7 @@
 
 #[cfg(feature = "oauth")]
 mod request {
-    use std::sync::{Arc, OnceLock};
-
+    use super::tls_connector;
     use bytes::Bytes;
     use http_body_util::{BodyExt, Full};
     use hyper::Request;
@@ -61,25 +60,27 @@ mod request {
         let bytes = response.into_body().collect().await.map_err(|e| e.to_string())?.to_bytes();
         Ok(Answer { status, body: String::from_utf8_lossy(&bytes).into_owned() })
     }
-
-    fn tls_connector() -> tokio_rustls::TlsConnector {
-        static CONFIG: OnceLock<Arc<rustls::ClientConfig>> = OnceLock::new();
-        let config = CONFIG.get_or_init(|| {
-            let roots = rustls::RootCertStore { roots: webpki_roots::TLS_SERVER_ROOTS.to_vec() };
-            let provider = Arc::new(rustls::crypto::ring::default_provider());
-            let config = rustls::ClientConfig::builder_with_provider(provider)
-                .with_safe_default_protocol_versions()
-                .expect("rustls supports its default protocol versions")
-                .with_root_certificates(roots)
-                .with_no_client_auth();
-            Arc::new(config)
-        });
-        tokio_rustls::TlsConnector::from(config.clone())
-    }
 }
 
 #[cfg(feature = "oauth")]
 pub use request::post;
+
+/// The TLS client every HTTPS call out uses (a token endpoint, a remote module).
+#[cfg(feature = "tls")]
+pub fn tls_connector() -> tokio_rustls::TlsConnector {
+    static CONFIG: std::sync::OnceLock<std::sync::Arc<rustls::ClientConfig>> = std::sync::OnceLock::new();
+    let config = CONFIG.get_or_init(|| {
+        let roots = rustls::RootCertStore { roots: webpki_roots::TLS_SERVER_ROOTS.to_vec() };
+        let provider = std::sync::Arc::new(rustls::crypto::ring::default_provider());
+        let config = rustls::ClientConfig::builder_with_provider(provider)
+            .with_safe_default_protocol_versions()
+            .expect("rustls supports its default protocol versions")
+            .with_root_certificates(roots)
+            .with_no_client_auth();
+        std::sync::Arc::new(config)
+    });
+    tokio_rustls::TlsConnector::from(config.clone())
+}
 
 // ── Encodings the token calls use ───────────────────────────────────────────
 
@@ -89,7 +90,6 @@ pub fn form(pairs: &[(&str, &str)]) -> String {
     url::form_urlencoded::Serializer::new(String::new()).extend_pairs(pairs).finish()
 }
 
-#[cfg(feature = "oauth")]
 /// `encodeURIComponent`.
 pub fn encode_uri_component(text: &str) -> String {
     let mut out = String::new();
@@ -104,10 +104,8 @@ pub fn encode_uri_component(text: &str) -> String {
     out
 }
 
-#[cfg(feature = "oauth")]
 const STANDARD: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-#[cfg(feature = "oauth")]
 /// Base64, padded (`Buffer.toString('base64')`).
 pub fn base64(bytes: &[u8]) -> String {
     let mut out = String::new();

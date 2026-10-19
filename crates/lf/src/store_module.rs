@@ -1,93 +1,57 @@
-//! A store module run as a process: the store slot filled by a third-party
-//! module (crate::core), spoken to over the store wire
-//! (docs/contracts/store-slot.md) — one JSON-RPC 2.0 message per line on its
-//! stdin and stdout, the methods `lf --contract-store` serves
+//! A store module lf does not build in: the store slot filled by a
+//! third-party module (crate::core), spoken to over the store slot's
+//! methods (docs/contracts/store-slot.md) carried as adapter protocol 2
+//! calls (crate::slot_client) — the methods `lf --contract-store` serves
 //! (crate::contract_store), opened by `store.open` with the module's
 //! settings. Every call blocks until the module answers, as the other
 //! stores' calls do, so the rules over the store (crate::run_host) read
 //! alike over all three.
 
 use std::collections::BTreeMap;
-use std::io::{BufRead, BufReader, Write};
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
-use std::sync::Mutex;
 
 use crate::backend::{CallbackClaim, CallbackRecord, MintCallback, RunHostStore};
 use crate::core::ProcessModule;
 use crate::json::{Js, Obj};
 use crate::obj;
+use crate::slot_client::SlotClient;
 use crate::store::{BranchExport, ClaimDue, ClaimedWork, CorrelatedAwait, LeafRow, Result, RunRow, StoreError};
 use crate::store_wire::{Wire, int, num, opt, rows};
 
-/// The error a fenced write answers when the run's lease is gone (`RunLeaseLost`).
-pub const LEASE_LOST: i64 = -32001;
+/// The error code a fenced write answers when the run's lease is gone
+/// (`RunLeaseLost`), its `data` `{ runId }`.
+pub const LEASE_LOST: &str = "run_lease_lost";
 
 pub struct ProcessStore {
-    name: String,
     tenant: String,
-    wire: Mutex<Pipe>,
-    child: Child,
-}
-
-struct Pipe {
-    stdin: Option<ChildStdin>,
-    stdout: BufReader<ChildStdout>,
-    next_id: i64,
+    client: SlotClient,
 }
 
 impl ProcessStore {
-    /// Start the module in its folder and open it with its settings.
+    /// Reach the module (started in its folder, or at its url) and open it
+    /// with its settings.
     pub fn start(name: &str, process: &ProcessModule, settings: &BTreeMap<String, String>) -> Result<ProcessStore> {
-        let (program, args) = process.command.split_first().ok_or_else(|| StoreError::Backend(format!("the store module {name} has no command")))?;
-        let mut child = Command::new(program)
-            .args(args)
-            .current_dir(&process.dir)
-            .env_clear()
-            .env("PATH", std::env::var("PATH").unwrap_or_default())
-            .envs(&process.env)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
-            .spawn()
-            .map_err(|e| StoreError::Backend(format!("the store module {name}: {program} could not be started ({e})")))?;
-        let wire = Pipe { stdin: child.stdin.take(), stdout: BufReader::new(child.stdout.take().expect("stdout is piped")), next_id: 0 };
-        let mut store = ProcessStore { name: name.to_string(), tenant: String::new(), wire: Mutex::new(wire), child };
-        let settings: Obj = settings.iter().map(|(k, v)| (k.clone(), Js::str(v))).collect();
-        let opened = store.call("store.open", obj! { "settings" => Js::from(settings) })?;
+        let client = SlotClient::start("store", name, process, settings).map_err(StoreError::Backend)?;
+        let mut store = ProcessStore { tenant: String::new(), client };
+        let opened = store.call("store.open", obj! { "settings" => Js::from(store.client.settings()) })?;
         store.tenant = opened.get("tenant").and_then(Js::as_str).map(str::to_string).ok_or_else(|| store.malformed("store.open", &opened))?;
         Ok(store)
     }
 
     fn call(&self, method: &str, params: Obj) -> Result<Js> {
-        let mut wire = self.wire.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-        wire.next_id += 1;
-        let id = wire.next_id;
-        let request = Js::from(obj! { "jsonrpc" => Js::str("2.0"), "id" => Js::Num(id.into()), "method" => Js::str(method), "params" => Js::from(params) });
-        let gone = |e: std::io::Error| StoreError::Backend(format!("the store module {}: {method}: {e}", self.name));
-        let stdin = wire.stdin.as_mut().ok_or_else(|| StoreError::Backend(format!("the store module {} is closed", self.name)))?;
-        stdin.write_all(format!("{}\n", request.to_json()).as_bytes()).map_err(gone)?;
-        stdin.flush().map_err(gone)?;
-        let mut line = String::new();
-        if wire.stdout.read_line(&mut line).map_err(gone)? == 0 {
-            return Err(StoreError::Backend(format!("the store module {} exited before it answered {method}", self.name)));
-        }
-        let reply = Js::parse(line.as_bytes()).map_err(|e| StoreError::Backend(format!("the store module {}: {method}: its answer is not JSON: {e}", self.name)))?;
-        if reply.get("id").and_then(int) != Some(id) {
-            return Err(StoreError::Backend(format!("the store module {}: {method}: answered request {}, not {id}", self.name, reply.get("id").map(Js::to_json).unwrap_or_default())));
-        }
-        if let Some(error) = reply.get("error") {
-            let message = error.get("message").and_then(Js::as_str).unwrap_or("no message");
-            if error.get("code").and_then(int) == Some(LEASE_LOST) {
-                let run_id = error.get("data").and_then(|d| d.get("runId")).and_then(Js::as_str).unwrap_or_default();
-                return Err(StoreError::LeaseLost { run_id: run_id.to_string() });
+        self.client.call(method, params).map_err(|error| {
+            if error.code == LEASE_LOST {
+                let run_id = error.data.as_ref().and_then(|d| d.get("runId")).and_then(Js::as_str).unwrap_or_default();
+                return StoreError::LeaseLost { run_id: run_id.to_string() };
             }
-            return Err(StoreError::Backend(format!("the store module {}: {method}: {message}", self.name)));
-        }
-        Ok(reply.get("result").cloned().unwrap_or(Js::Null))
+            if error.code == "transport" {
+                return StoreError::Backend(error.message);
+            }
+            StoreError::Backend(format!("{}: {method}: {}", self.client.label, error.message))
+        })
     }
 
     fn malformed(&self, method: &str, answer: &Js) -> StoreError {
-        StoreError::Backend(format!("the store module {}: {method} answered {}, not its result's shape", self.name, answer.to_json()))
+        StoreError::Backend(format!("{}: {method} answered {}, not its result's shape", self.client.label, answer.to_json()))
     }
 
     fn unit(&self, method: &str, params: Obj) -> Result<()> {
@@ -116,24 +80,6 @@ impl ProcessStore {
     fn strings(&self, method: &str, params: Obj) -> Result<Vec<String>> {
         let answer = self.call(method, params)?;
         answer.as_array().and_then(|items| items.iter().map(|i| i.as_str().map(str::to_string)).collect()).ok_or_else(|| self.malformed(method, &answer))
-    }
-}
-
-impl Drop for ProcessStore {
-    /// Its stdin closed, the module ends at end of input; one that does not
-    /// within a second is killed.
-    fn drop(&mut self) {
-        if let Ok(mut wire) = self.wire.lock() {
-            wire.stdin.take();
-        }
-        for _ in 0..100 {
-            if !matches!(self.child.try_wait(), Ok(None)) {
-                return;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(10));
-        }
-        let _ = self.child.kill();
-        let _ = self.child.wait();
     }
 }
 

@@ -22,11 +22,12 @@ export function psql(sql: string): string[][] {
 let schemaReady = false;
 
 /** lf's own schema (`lf.*`), as the Postgres store's setup creates it: the
- *  contract bridge runs that setup when it opens, and exits at end of input. */
+ *  contract bridge runs that setup before it listens, so it is done once the
+ *  bridge says where it listens (and the bridge is then stopped). */
 function ensureLfSchema(): void {
   if (schemaReady) return;
-  const setup = spawnSync(lfBinary(), ['--contract-store', POSTGRES_URL], { input: '', encoding: 'utf8' });
-  if (setup.error !== undefined || setup.status !== 0) throw new Error(`the lf schema's setup failed: ${setup.error?.message ?? setup.stderr}`);
+  const setup = spawnSync(lfBinary(), ['--contract-store', POSTGRES_URL, '--listen', '0'], { encoding: 'utf8', timeout: 15_000 });
+  if (!setup.stdout.includes('listening ')) throw new Error(`the lf schema's setup failed: ${setup.error?.message ?? setup.stderr}`);
   schemaReady = true;
 }
 

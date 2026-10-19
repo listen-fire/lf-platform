@@ -17,7 +17,7 @@ for (const contractCase of loopGuardContractCases) {
       await guard.open({ url: POSTGRES_URL });
       await contractCase.run(guard);
     } finally {
-      guard.close();
+      await guard.close();
     }
   });
 }
@@ -32,7 +32,7 @@ test('over Postgres: another process opened on the database knows a recorded wri
     assert.deepEqual(await second.isEcho({ adapter: one.adapter, externalId: one.externalId, writer: one.writer }), { read: { recordType: 'Companies' } });
     assert.deepEqual(psql(`select count(*) from lf_guard.write_fingerprint where external_id = '${one.externalId}'`), [['1']]);
   } finally {
-    first.close();
-    second.close();
+    await first.close();
+    await second.close();
   }
 });

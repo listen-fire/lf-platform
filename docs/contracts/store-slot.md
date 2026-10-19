@@ -1,8 +1,8 @@
-# The store slot's wire
+# The store slot's methods
 
 Part of [the adapter protocol](adapter-protocol.md), version 2 (an addition within it; no version of its own).
 
-A store module keeps a host's run state: runs, parks, joins, await correlations, leases, the work queue, library sources, callbacks, pull cursors and event receipts. lf ships two (`@lf/sqlite-store`, the default, and `@lf/postgres-store`). A third-party one is a process lf starts and speaks to over this wire.
+A store module keeps a host's run state: runs, parks, joins, await correlations, leases, the work queue, library sources, callbacks, pull cursors and event receipts. lf ships two (`@lf/sqlite-store`, the default, and `@lf/postgres-store`). A third-party one is a module lf starts, or reaches at its URL, and calls over adapter protocol 2's HTTP, as it calls any module.
 
 ## Installing one
 
@@ -12,7 +12,7 @@ A folder in the project's externals folder, with an `lf-external.yaml`:
 name: acme_store
 kind: core
 slot: store
-command: [node, store.mjs]      # started in this folder
+command: [node, store.mjs]      # started in this folder; or `url:` for a remote one
 settings:                       # optional; prompted by `lf connect acme_store`
   - { name: path, label: the state file, secret: false, optional: false }
 env: { LOG_LEVEL: info }        # optional
@@ -20,17 +20,17 @@ env: { LOG_LEVEL: info }        # optional
 
 - lf.yaml names it for the slot: `core: { store: acme_store }`.
 - `lf connect acme_store` asks its settings, keeps them on its install entry in the secrets file, and opens it once (so a module that sets itself up, a schema say, does so then).
-- Only the store slot takes a process module. The models, judge and files slots take a built-in: lf runs them as its own code paths, with no wire to drive a process over yet.
+- Every slot takes such a module ([the transport](adapter-protocol.md#transport)): the models, judge, files and browser slots' methods are [models-slot.md](models-slot.md), [judge-slot.md](judge-slot.md), [files-slot.md](files-slot.md) and [browser-slot.md](browser-slot.md).
 
 ## The envelope
 
-- JSON-RPC 2.0, one message per line: lf writes requests to the module's stdin and reads answers from its stdout, one at a time, in order.
-- stderr is the module's own log; lf passes it through.
-- The module ends when its stdin closes. One still running a second later is killed.
+The adapter protocol's ([the envelope](adapter-protocol.md#the-envelope), [the transport](adapter-protocol.md#transport)): one `POST` per method, the method in the body, the install's settings in `settings` on every request.
+
 - A method's `params` is one object, keyed in camel case. Its `result` is the answer; `null` for a method that answers nothing.
 - An absent optional string is `null`.
 - Instants are `Date.toISOString` strings; ids and tokens are strings the module mints.
-- A failure is an `error` with a `message`. Code `-32001`, with `data: { name: "RunLeaseLost", runId }`, means a fenced write found the run's lease gone: lf treats it as losing the run. Any other code is a store failure.
+- A failure is `ok: false` with an `error`. The code `run_lease_lost`, with `data: { runId }`, means a fenced write found the run's lease gone: lf treats it as losing the run. Any other code is a store failure.
+- lf calls a store one method at a time and waits for each answer.
 
 ## Methods
 
@@ -100,9 +100,10 @@ type CallbackRow = {
 };
 ```
 
-`lf --contract-store <state.db|postgres://…>` serves this wire over lf's own stores. A module may forward to it, as the test module does (`apps/cli/src/__test__/store_module/forward.mjs`). `runs.status` and `runs.complete` are the contract suite's helpers and are not called by lf.
+`lf --contract-store <state.db|postgres://…>` serves these methods over lf's own stores, as a store module on a Unix socket. A module may forward to it, as the test module does (`apps/cli/src/__test__/store_module/forward.mjs`). `runs.status` and `runs.complete` are the contract suite's helpers and are not called by lf.
 
 ## Changes
 
+- **2026-10-19** (within adapter protocol 2): the methods ride adapter protocol 2's HTTP, as every module's do; the stdin/stdout JSON-RPC wire is retired. A lost lease is the error code `run_lease_lost` (`data: { runId }`). A store module may be remote (`url:`).
 - **2026-10-18** (within adapter protocol 2): `work.claimDue` takes `kinds`, for drain pools (`lf drain --kinds`).
 - **2026-10-17** (within adapter protocol 2): the store slot's wire, and process modules filling the store slot.

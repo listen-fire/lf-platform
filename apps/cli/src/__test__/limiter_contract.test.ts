@@ -24,7 +24,7 @@ for (const bridge of bridges) {
         await limiter.open();
         await contractCase.run(limiter);
       } finally {
-        limiter.close();
+        await limiter.close();
       }
     });
   }

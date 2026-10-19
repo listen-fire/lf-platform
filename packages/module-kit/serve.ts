@@ -1,10 +1,12 @@
 // `serve-module`: any module as a protocol-2 process, so lf, the Rust host,
 // the cloud and an embedder run a module one way. It prints
-// `listening <port>` once it answers (the line lf's externals wait for), logs
-// as JSON lines on stderr, and binds loopback unless told otherwise. One
-// process may serve several modules, each under its own path (lf's shared
-// host for trusted modules); an untrusted module gets a process of its own.
+// `listening <port>` (or `listening unix:<path>` on the socket MODULE_SOCKET
+// names) once it answers (the line lf's externals wait for), logs as JSON
+// lines on stderr, and binds loopback unless told otherwise. One process may
+// serve several modules, each under its own path (lf's shared host for
+// trusted modules); an untrusted module gets a process of its own.
 
+import { rmSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { resolve as resolvePath } from 'node:path';
@@ -16,6 +18,7 @@ import { fileKv } from './file_kv';
 import { refusingFiles, refusingKv, refusingModels } from './in_process';
 import { createModuleProtocolHandler } from './module_server';
 import { emptyBrowserSlot, type BrowserSlot } from 'module-runtime/browser';
+import { remoteBrowserSlot } from 'module-runtime/module-wire';
 
 /** A log that writes one JSON line per entry to `write`. */
 export function jsonLineLog(module: string, write: (line: string) => void): ModuleLog {
@@ -37,6 +40,9 @@ export interface ServeModuleOptions {
   definition: ModuleDefinition;
   /** 0 (the default) picks a free one. */
   port?: number;
+  /** A Unix socket to listen on instead of a port (a host on the same box
+   *  names one: `MODULE_SOCKET`). */
+  socket?: string;
   /** Default 127.0.0.1. */
   host?: string;
   /** When set, every request must carry `Authorization: Bearer <token>`. */
@@ -59,16 +65,29 @@ export interface ServeModuleOptions {
   browser?: BrowserSlot;
 }
 
-export async function serveModule(options: ServeModuleOptions): Promise<{ port: number; server: Server }> {
-  const { port, host, ...module } = options;
-  return serveModules({ mounts: [{ path: '', options: module }], ...(port !== undefined ? { port } : {}), ...(host !== undefined ? { host } : {}) });
+export async function serveModule(options: ServeModuleOptions): Promise<ServedModules> {
+  const { port, host, socket, ...module } = options;
+  return serveModules({
+    mounts: [{ path: '', options: module }],
+    ...(port !== undefined ? { port } : {}),
+    ...(host !== undefined ? { host } : {}),
+    ...(socket !== undefined ? { socket } : {}),
+  });
 }
 
 /** One module of a shared host: served under `/<path>/`, or at the root
  *  when `path` is empty. */
 export interface ModuleMount {
   path: string;
-  options: Omit<ServeModuleOptions, 'port' | 'host'>;
+  options: Omit<ServeModuleOptions, 'port' | 'host' | 'socket'>;
+}
+
+/** A served host: its port (0 on a socket), and the address its
+ *  `listening` line names (`unix:<path>` or the port). */
+export interface ServedModules {
+  port: number;
+  server: Server;
+  listening: string;
 }
 
 const MOUNT_PATH = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
@@ -76,7 +95,7 @@ const MOUNT_PATH = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
 /** Several modules in one process (lf's shared host for trusted modules),
  *  each under its own path, each with its own options, log and token. A
  *  module's file URLs are under its own path. */
-export async function serveModules(options: { mounts: readonly ModuleMount[]; port?: number; host?: string }): Promise<{ port: number; server: Server }> {
+export async function serveModules(options: { mounts: readonly ModuleMount[]; port?: number; host?: string; socket?: string }): Promise<ServedModules> {
   const { mounts } = options;
   if (mounts.length === 0) throw new Error('serve-module: no module to serve');
   const paths = new Set<string>();
@@ -100,19 +119,30 @@ export async function serveModules(options: { mounts: readonly ModuleMount[]; po
     });
   });
   const bindHost = options.host ?? '127.0.0.1';
-  await new Promise<void>((done) => server.listen(options.port ?? 0, bindHost, done));
-  const address: AddressInfo | string | null = server.address();
-  if (address === null || typeof address === 'string') throw new Error('serve-module: the server is not listening on a port');
-  // The handlers are built once the port is known: a file's URL is under
+  let port = 0;
+  let origin: string;
+  if (options.socket !== undefined) {
+    const socket = options.socket;
+    rmSync(socket, { force: true });
+    await new Promise<void>((done) => server.listen(socket, done));
+    // A file's URL below the socket (the transport's `http+unix://` form).
+    origin = `http+unix://${encodeURIComponent(socket)}`;
+  } else {
+    await new Promise<void>((done) => server.listen(options.port ?? 0, bindHost, done));
+    const address: AddressInfo | string | null = server.address();
+    if (address === null || typeof address === 'string') throw new Error('serve-module: the server is not listening on a port');
+    port = address.port;
+    origin = `http://${ownOrigin(bindHost)}:${port}`;
+  }
+  // The handlers are built once the address is known: a file's URL is under
   // the module's public URL, else this server's own bound address, and
   // never under a request's Host header.
-  const origin = `http://${ownOrigin(bindHost)}:${address.port}`;
   for (const mount of mounts) {
     const log = mount.options.log ?? jsonLineLog(mount.options.definition.name, (line) => process.stderr.write(line));
     const publicUrl = mount.options.publicUrl ?? (mount.path === '' ? origin : `${origin}/${mount.path}`);
     routes.set(mount.path, { handler: moduleHandler(mount.options, log, publicUrl), log });
   }
-  return { port: address.port, server };
+  return { port, server, listening: options.socket !== undefined ? `unix:${options.socket}` : String(port) };
 }
 
 interface Route {
@@ -133,7 +163,7 @@ function routeOf(req: IncomingMessage, routes: ReadonlyMap<string, Route>): Rout
   return route;
 }
 
-function moduleHandler(options: Omit<ServeModuleOptions, 'port' | 'host'>, log: ModuleLog, publicUrl: string): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
+function moduleHandler(options: Omit<ServeModuleOptions, 'port' | 'host' | 'socket'>, log: ModuleLog, publicUrl: string): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
   const { definition, token, stateDir } = options;
   const unavailable = (what: string) =>
     `module ${definition.name}: ${what} is not available when the module is served as a process (protocol 2 carries files by URL and keeps no module state)`;
@@ -191,9 +221,9 @@ export function parseConstructionArgs(text: string): Record<string, string> {
 
 /** A module's options from its environment: MODULE_TOKEN,
  *  MODULE_BASE_URL_OVERRIDE, MODULE_STATE_DIR, MODULE_CONSTRUCTION_ARGS,
- *  MODULE_PUBLIC_URL, and the host's models door (LF_HOST_URL,
- *  LF_HOST_TOKEN). */
-function moduleOptionsOf(definition: ModuleDefinition, env: Readonly<Record<string, string | undefined>>): Omit<ServeModuleOptions, 'port' | 'host'> {
+ *  MODULE_PUBLIC_URL, the host's models door (LF_HOST_URL, LF_HOST_TOKEN)
+ *  and its browser module (LF_BROWSER_URL, LF_BROWSER_TOKEN). */
+function moduleOptionsOf(definition: ModuleDefinition, env: Readonly<Record<string, string | undefined>>): Omit<ServeModuleOptions, 'port' | 'host' | 'socket'> {
   const set = (name: string): string | undefined => (env[name] !== undefined && env[name] !== '' ? env[name] : undefined);
   const token = set('MODULE_TOKEN');
   const baseUrlOverride = set('MODULE_BASE_URL_OVERRIDE');
@@ -202,6 +232,8 @@ function moduleOptionsOf(definition: ModuleDefinition, env: Readonly<Record<stri
   const publicUrl = set('MODULE_PUBLIC_URL');
   const hostUrl = set('LF_HOST_URL');
   const hostToken = set('LF_HOST_TOKEN');
+  const browserUrl = set('LF_BROWSER_URL');
+  const browserToken = set('LF_BROWSER_TOKEN');
   return {
     definition,
     ...(token !== undefined ? { token } : {}),
@@ -219,6 +251,8 @@ function moduleOptionsOf(definition: ModuleDefinition, env: Readonly<Record<stri
           }),
         }
       : {}),
+    // A host whose browser slot a browser module fills hands it on (LF_BROWSER_URL).
+    ...(browserUrl !== undefined ? { browser: remoteBrowserSlot({ baseUrl: browserUrl, ...(browserToken !== undefined ? { token: browserToken } : {}) }) } : {}),
   };
 }
 
@@ -282,6 +316,11 @@ export async function main(argv: readonly string[], env: Readonly<Record<string,
           options: moduleOptionsOf(loadModuleDefinition(mount.module, mount.cwd ?? process.cwd()), { ...env, ...mount.env }),
         }))
       : [{ path: '', options: moduleOptionsOf(loadModuleDefinition(specifier ?? '', process.cwd()), env) }];
-  const served = await serveModules({ mounts, ...(port !== undefined ? { port: Number(port) } : {}), ...(host !== undefined ? { host } : {}) });
-  process.stdout.write(`listening ${served.port}\n`);
+  const socket = env.MODULE_SOCKET !== undefined && env.MODULE_SOCKET !== '' ? env.MODULE_SOCKET : undefined;
+  const served = await serveModules({
+    mounts,
+    ...(socket !== undefined ? { socket } : port !== undefined ? { port: Number(port) } : {}),
+    ...(host !== undefined ? { host } : {}),
+  });
+  process.stdout.write(`listening ${served.listening}\n`);
 }

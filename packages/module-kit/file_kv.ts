@@ -13,6 +13,7 @@ import { join } from 'node:path';
 
 import type { ModuleKv } from './define';
 
+import { sameJsonValue } from './kv_compare';
 import { refusingKv } from './in_process';
 
 interface KvFile {
@@ -59,9 +60,12 @@ export function fileKv(dir: string, tenant: string): ModuleKv {
     return parsed.entries;
   };
 
-  const change = (edit: (entries: KvFile['entries']) => KvFile['entries']): Promise<void> => {
+  const change = (edit: (entries: KvFile['entries']) => KvFile['entries']): Promise<void> =>
+    queued(async () => writeFileKv(dir, tenant, edit(await read())));
+
+  const queued = <T>(work: () => Promise<T>): Promise<T> => {
     const before = queues.get(path) ?? Promise.resolve();
-    const run = before.then(async () => writeFileKv(dir, tenant, edit(await read())));
+    const run = before.then(work);
     const settled = run.catch(() => undefined);
     queues.set(path, settled);
     void settled.then(() => {
@@ -70,17 +74,27 @@ export function fileKv(dir: string, tenant: string): ModuleKv {
     return run;
   };
 
+  const setIn = (entries: KvFile['entries'], key: string, value: unknown): KvFile['entries'] => {
+    const json: unknown = value === undefined ? null : JSON.parse(JSON.stringify(value));
+    const at = entries.findIndex((entry) => entry.key === key);
+    // A key set again keeps its place: the order is the order keys were first set.
+    if (at < 0) return [...entries, { key, value: json }];
+    return entries.map((entry, index) => (index === at ? { key, value: json } : entry));
+  };
+
   return {
     get: async (key) => (await read()).find((entry) => entry.key === key)?.value,
     list: async (prefix) => (await read()).filter((entry) => entry.key.startsWith(prefix)),
-    set: (key, value) =>
-      change((entries) => {
-        const json: unknown = value === undefined ? null : JSON.parse(JSON.stringify(value));
-        const at = entries.findIndex((entry) => entry.key === key);
-        // A key set again keeps its place: the order is the order keys were first set.
-        if (at < 0) return [...entries, { key, value: json }];
-        return entries.map((entry, index) => (index === at ? { key, value: json } : entry));
-      }),
+    set: (key, value) => change((entries) => setIn(entries, key, value)),
     delete: (key) => change((entries) => entries.filter((entry) => entry.key !== key)),
+    // In this process's queue for the file, so the read and the write are one
+    // step: two processes sharing a state directory are not held apart.
+    compareAndSet: (key, expected, value) =>
+      queued(async () => {
+        const entries = await read();
+        if (!sameJsonValue(entries.find((entry) => entry.key === key)?.value, expected)) return false;
+        await writeFileKv(dir, tenant, setIn(entries, key, value));
+        return true;
+      }),
   };
 }

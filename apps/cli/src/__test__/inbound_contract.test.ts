@@ -1,13 +1,13 @@
 // The inbound doors' contract suite (movement-engine's inbound/contract.ts)
 // against the Rust lf's doors: `lf --contract-doors` serves them
 // over HTTP, and the suite's world is arranged, and what the doors did read
-// back, over its stdio JSON-RPC bridge (`RpcStoreBackend`'s `call`). The same
+// back, over its stdio JSON-RPC bridge (`StdioRpcBridge`). The same
 // cases the doors are held to.
 
 import { test } from 'node:test';
 import { z } from 'zod';
 import { INBOUND_CONTRACT_CASES, type InboundContractBackend } from 'movement-engine/public/inbound';
-import { RpcStoreBackend } from 'movement-engine/services/run_host/rpc_store';
+import { StdioRpcBridge } from './stdio_rpc';
 import { lfBinary } from './lf_bin';
 
 const Observations = z.object({
@@ -19,7 +19,7 @@ const Observations = z.object({
 });
 
 async function backendOnLfHost(): Promise<{ backend: InboundContractBackend; stop(): Promise<void> }> {
-  const bridge = new RpcStoreBackend(lfBinary(), ['--contract-doors']);
+  const bridge = new StdioRpcBridge(lfBinary(), ['--contract-doors']);
   const { baseUrl } = await bridge.call('doors.baseUrl', {}, z.object({ baseUrl: z.string() }));
   const backend: InboundContractBackend = {
     baseUrl,

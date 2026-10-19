@@ -39,6 +39,7 @@ const grantsKv: ModuleKv = {
   get: async () => undefined,
   set: async () => undefined,
   delete: async () => undefined,
+  compareAndSet: async () => false,
   list: async (prefix) =>
     grantedSpreadsheetIds
       .map((id) => ({ key: `granted/${id}`, value: { mimeType: 'application/vnd.google-apps.spreadsheet', name: `Sheet ${id}` } }))

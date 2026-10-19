@@ -196,6 +196,13 @@ async fn post(target: &Target<'_>, credentials: &Credentials, sending: &Sending<
         credential: presented.sent,
         settings: settings.filter(|s| s.as_object().is_some_and(|o| !o.is_empty())),
     };
+    let auth = match crate::outgoing_auth::OutgoingAuth::of_fields(&install.map(current_fields).unwrap_or_default(), target.base_url) {
+        Ok(auth) => auth,
+        Err(message) => {
+            drop(held);
+            return Answered { answer: Err(RpcError::Unreachable(format!("external \"{name}\": {message}"))), update: None, retry_after_ms: None };
+        }
+    };
     let call = Call {
         base_url: target.base_url,
         bearer,
@@ -203,6 +210,7 @@ async fn post(target: &Target<'_>, credentials: &Credentials, sending: &Sending<
         method: sending.method,
         cache_scope_id: sending.cache_scope_id,
         params: sending.params.clone(),
+        auth,
     };
     let answered = post_rpc_carrying(call, carried).await;
     drop(held);
@@ -229,17 +237,8 @@ fn bearer_of(external: &External, signer: Option<(&str, Fields)>) -> Result<Opti
 
 /// HTTPS, or plain HTTP to a loopback address (`isCredentialChannel`).
 fn is_credential_channel(base_url: &str) -> bool {
-    let Ok(url) = url::Url::parse(base_url) else { return false };
-    match url.scheme() {
-        "https" => true,
-        "http" => match url.host() {
-            Some(url::Host::Domain(d)) => d == "localhost",
-            Some(url::Host::Ipv4(ip)) => ip.octets()[0] == 127,
-            Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
-            None => false,
-        },
-        _ => false,
-    }
+    use crate::module_transport::Address;
+    Address::parse(base_url).is_ok_and(|address| matches!(address, Address::Tcp { tls: true, .. }) || address.is_local())
 }
 
 /// lf's own convention for a credential no manifest declares: `refresh_token`
@@ -345,5 +344,6 @@ mod tests {
         assert!(is_credential_channel("http://[::1]:5557/"));
         assert!(!is_credential_channel("http://crm.example.com/"));
         assert!(!is_credential_channel("http://10.0.0.1/"));
+        assert!(is_credential_channel("unix:/tmp/lf-1.sock"));
     }
 }

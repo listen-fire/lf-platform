@@ -14,7 +14,7 @@ import { createRemoteAdapter, fetchRemoteManifest } from '../index';
 
 import type { ModuleLog } from 'module-kit';
 
-import { fileKv, fileKvPath, parseConstructionArgs, refusingKv, serveModule, writeFileKv } from 'module-kit';
+import { fileKv, fileKvPath, memoryKv, parseConstructionArgs, refusingKv, serveModule, writeFileKv } from 'module-kit';
 import tally from './modules/tally_module';
 
 const quiet: ModuleLog = { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
@@ -34,6 +34,29 @@ describe('a refusing kv', () => {
     await expect(kv.set('a', 1)).rejects.toThrow('no kv here');
     await expect(kv.delete('a')).rejects.toThrow('no kv here');
     await expect(kv.list('')).rejects.toThrow('no kv here');
+  });
+});
+
+describe('compare-and-set', () => {
+  for (const [name, make] of [
+    ['in memory', () => memoryKv()],
+    ['in files', () => fileKv(stateDir(), 'team-a')],
+  ] as const) {
+    it(`${name}: writes only over the value it expected, and one of two racing writers wins`, async () => {
+      const kv = make();
+      expect(await kv.compareAndSet('cursor', 'x', 1)).toBe(false);
+      expect(await kv.get('cursor')).toBeUndefined();
+      expect(await kv.compareAndSet('cursor', undefined, { at: 1, tags: ['a'] })).toBe(true);
+      // The same JSON value, whatever its keys' order.
+      expect(await kv.compareAndSet('cursor', { tags: ['a'], at: 1 }, { at: 2 })).toBe(true);
+      const racing = await Promise.all([kv.compareAndSet('cursor', { at: 2 }, { at: 3 }), kv.compareAndSet('cursor', { at: 2 }, { at: 4 })]);
+      expect(racing.filter(Boolean)).toHaveLength(1);
+      expect([{ at: 3 }, { at: 4 }]).toContainEqual(await kv.get('cursor'));
+    });
+  }
+
+  it('is refused by a refusing kv', async () => {
+    await expect(refusingKv('no kv here').compareAndSet('a', undefined, 1)).rejects.toThrow('no kv here');
   });
 });
 

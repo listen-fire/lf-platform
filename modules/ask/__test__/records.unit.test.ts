@@ -18,6 +18,7 @@ function memoryKv(): ModuleKv & { entries: Map<string, unknown> } {
       entries.delete(key);
     },
     list: async (prefix) => [...entries].filter(([key]) => key.startsWith(prefix)).map(([key, value]) => ({ key, value })),
+    compareAndSet: async () => false,
   };
 }
 

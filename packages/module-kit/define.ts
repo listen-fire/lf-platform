@@ -115,6 +115,10 @@ export interface ModuleKv {
   /** Every entry whose key starts with `prefix`, in the order the keys were
    *  first set. */
   list(prefix: string): Promise<Array<{ key: string; value: unknown }>>;
+  /** Write `value` only if the key still holds `expected` (undefined: the
+   *  key is unset), compared as JSON values; answers whether it wrote. Of two
+   *  writers that read the same value, one wins and the other learns it lost. */
+  compareAndSet(key: string, expected: unknown, value: unknown): Promise<boolean>;
 }
 
 export interface ModuleConfig {

@@ -267,6 +267,9 @@ export function refusingKv(reason: string): ModuleKv {
     list: async () => {
       throw new Error(reason);
     },
+    compareAndSet: async () => {
+      throw new Error(reason);
+    },
   };
 }
 

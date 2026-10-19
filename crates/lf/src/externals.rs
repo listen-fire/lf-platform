@@ -163,7 +163,7 @@ pub fn core_modules_in(dir: &Path) -> Result<Vec<crate::core::CoreModule>, Strin
         .map(|e| crate::core::CoreModule {
             slot: e.manifest.slot.as_deref().and_then(crate::core::Slot::of).expect("a core manifest's slot is validated"),
             settings: std::borrow::Cow::Owned(e.manifest.settings),
-            process: Some(crate::core::ProcessModule { command: e.manifest.command.unwrap_or_default(), env: e.manifest.env, dir: e.dir }),
+            process: Some(crate::core::ProcessModule { command: e.manifest.command.unwrap_or_default(), env: e.manifest.env, dir: e.dir, url: e.manifest.url, auth_field: e.manifest.auth.map(|a| a.field) }),
             name: std::borrow::Cow::Owned(e.manifest.name),
         })
         .collect())
@@ -582,8 +582,9 @@ fn reach(project: &Project, external: &External, base_url_override: Option<&str>
     if let Some(url) = base_url_override.filter(|_| external.manifest.module.is_some()) {
         own_env.insert("MODULE_BASE_URL_OVERRIDE".into(), url.to_string());
     }
-    let host_env: Vec<(String, String)> = [("PATH".to_string(), std::env::var("PATH").unwrap_or_default()), ("PORT".to_string(), "0".to_string())]
+    let host_env: Vec<(String, String)> = [("PATH".to_string(), std::env::var("PATH").unwrap_or_default())]
         .into_iter()
+        .chain(crate::remote_slots::browser_env())
         .chain(crate::serve::externals_host_url().map(|url| ("LF_HOST_URL".to_string(), url.to_string())))
         .chain(crate::serve::host_token().map(|token| ("LF_HOST_TOKEN".to_string(), token.to_string())))
         .collect();

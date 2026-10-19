@@ -1,10 +1,10 @@
-# The loop guard slot's wire
+# The loop guard slot's methods
 
 Part of [the adapter protocol](adapter-protocol.md), version 2 (an addition within it; no version of its own).
 
 A movement that writes to a source it listens to hears its own write come back: Attio sends `record.updated` for the update a run just made, a poll returns the row a run just changed. A loop guard module tells that echo from a real change, so the echo runs nothing.
 
-**The slot is empty by default.** With no guard in `core:`, neither lf nor the platform suppresses anything, and the echo runs the movement again. lf ships one, `@lf/fingerprint-guard`; the platform's own opt-in, the listen flag `suppress_self`, is unchanged and separate. A guard whose memory is elsewhere (Redis, a database) is a third-party module lf starts and speaks to over this wire.
+**The slot is empty by default.** With no guard in `core:`, neither lf nor the platform suppresses anything, and the echo runs the movement again. lf ships one, `@lf/fingerprint-guard`; the platform's own opt-in, the listen flag `suppress_self`, is unchanged and separate. A guard whose memory is elsewhere (Redis, a database) is a third-party module lf starts (or reaches at its URL) and calls over adapter protocol 2.
 
 ## Using one
 
@@ -20,7 +20,7 @@ core:
 
 ## The envelope
 
-The store slot's envelope ([store-slot.md](store-slot.md#the-envelope)): JSON-RPC 2.0, one message per line on the module's stdin and stdout, one request at a time, stderr its log, stdin closing ends it.
+The store slot's envelope ([store-slot.md](store-slot.md#the-envelope)): adapter protocol 2's HTTP, one request at a time.
 
 ## Methods
 
@@ -40,4 +40,5 @@ The store slot's envelope ([store-slot.md](store-slot.md#the-envelope)): JSON-RP
 
 ## Changes
 
+- **2026-10-19** (within adapter protocol 2): the methods ride adapter protocol 2's HTTP; the stdin/stdout JSON-RPC wire is retired.
 - **2026-10-18** (within adapter protocol 2): the loop guard slot, its wire, and process modules filling it.

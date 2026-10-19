@@ -1,8 +1,8 @@
-# The limiter slot's wire
+# The limiter slot's methods
 
 Part of [the adapter protocol](adapter-protocol.md), version 2 (an addition within it; no version of its own).
 
-A limiter module keeps a host's calls to modules and models inside the providers' limits. The host asks it before every call, and holds the call until it is granted. lf ships one, `@lf/memory-limiter` (the default), which keeps the limits in lf's own process. A limiter shared by many hosts (Redis, a database) is a third-party module lf starts and speaks to over this wire.
+A limiter module keeps a host's calls to modules and models inside the providers' limits. The host asks it before every call, and holds the call until it is granted. lf ships one, `@lf/memory-limiter` (the default), which keeps the limits in lf's own process. A limiter shared by many hosts (Redis, a database) is a third-party module lf starts (or reaches at its URL) and calls over adapter protocol 2.
 
 The engine knows nothing of limits. Only the host asks.
 
@@ -24,7 +24,7 @@ settings:                      # optional; prompted by `lf connect acme_limits`
 
 ## The envelope
 
-The store slot's envelope ([store-slot.md](store-slot.md#the-envelope)): JSON-RPC 2.0, one message per line on the module's stdin and stdout, one request at a time, stderr its log, stdin closing ends it. Instants are `Date.toISOString` strings.
+The store slot's envelope ([store-slot.md](store-slot.md#the-envelope)): adapter protocol 2's HTTP, one request at a time. Instants are `Date.toISOString` strings.
 
 ## Methods
 
@@ -52,4 +52,5 @@ No method waits. A refusal says when to ask again; the host does the waiting.
 
 ## Changes
 
+- **2026-10-19** (within adapter protocol 2): the methods ride adapter protocol 2's HTTP; the stdin/stdout JSON-RPC wire is retired.
 - **2026-10-18** (within adapter protocol 2): the limiter slot, its wire, and process modules filling it.

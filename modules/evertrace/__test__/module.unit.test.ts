@@ -26,7 +26,7 @@ function contextOver(fields: () => CredentialFields, config: { baseUrlOverride?:
     }) as typeof fetch,
     log: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
     files: { put: refuse, read: refuse, expose: refuse },
-    kv: { get: refuse, set: refuse, delete: refuse, list: refuse },
+    kv: { get: refuse, set: refuse, delete: refuse, list: refuse, compareAndSet: refuse },
     models: { chat: refuse, chatStructured: refuse },
     identities: { list: refuse, find: refuse },
     browser: emptyBrowserSlot('none'),
