@@ -13,6 +13,11 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 
 ## [Unreleased]
 
+### merge-3
+
+- `ctx.kv.compareAndSet` is atomic everywhere: on the platform an ask or a grant is written by one conditional statement, and the file kv (`MODULE_STATE_DIR`) writes under a lock file, so processes sharing the directory never lose a write.
+- A models module's `models.call` answer carries `usage` (the tokens it spent), required; lf reports it as the call's usage and refuses an answer without it, and the module's `cost` counts against `maxRunCostUsd`. lf's own models module served over the wire honours `maxTokens`.
+
 ### kit-contracts
 
 - `@listen-fire/module-kit` no longer depends on `@listen-fire/engine`. What a module is written against now lives below the engine: the runtime-neutral contract in `@listen-fire/engine-contracts` (the adapter contract and its manifest, the catalog's schema types and positions, the Expression vocabulary, plugins as data, model names, the team header), and what a Node host shares with its modules in the new `@listen-fire/module-runtime` (a live adapter's file bytes as a stream, the secrets family with OAuth 2 refresh and connect, the in-memory vault, the browser slot, the queue). The engine's public entries re-export both, so existing imports keep working; module tags and type ids are unchanged.
