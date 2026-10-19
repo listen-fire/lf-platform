@@ -12,6 +12,7 @@ import type { Actor } from './mutation_context';
 import type { UniquenessConstraints } from './uniqueness';
 import type { ConfigBlock } from './trigger_config';
 import type { HandbookSection } from './handbook_section';
+import type { WireCheckInboundInputShape } from './protocol';
 import type {
   SchemaDescriptor,
   SchemaEntryPoint,
@@ -839,6 +840,14 @@ export interface Adapter {
    * a resumed await re-checks live, so it never relies on the payload.
    */
   wakeKeys?(input: { raw: unknown }): Promise<string[]>;
+
+  /**
+   * The module checks its own inbound requests (its manifest declares
+   * `inbound.scheme: module`): one request at its door, raw, in place of the
+   * host's signature check, `preprocessInbound` and `wakeKeys`. The answer is
+   * its events, a refusal, or a reply the host sends as it is (a handshake).
+   */
+  checkInbound?(input: InboundCheckInput): Promise<InboundCheck>;
 
   /**
    * The instance-aware union of event types this connection can emit. The
@@ -1828,6 +1837,18 @@ export function updateRecordSucceeded(result: UpdateResult): result is UpdateWri
 /** A delete's return carries no payload — the absence of a throw IS the
  *  result. Kept as a named type so the `Adapter` signature stays readable. */
 export type DeleteResult = Record<string, never>;
+
+/** One request at a module-checked inbound door, as it arrived (the wire's
+ *  `checkInbound` params: the body is base64). */
+export type InboundCheckInput = WireCheckInboundInputShape;
+
+/** What a module decided about one inbound request (`checkInbound`). */
+export type InboundCheck =
+  | { outcome: 'accepted'; events: DiscriminableEvent[]; wakeKeys?: string[]; checkpoint?: unknown }
+  /** The host answers `status` (401 when absent) with `signature_invalid`. */
+  | { outcome: 'refused'; status?: number }
+  /** Sent as it is, nothing run: `text` as text/plain, `json` as JSON. */
+  | { outcome: 'reply'; status: number; text?: string; json?: unknown };
 
 export interface ReadInput {
   recordType: string;

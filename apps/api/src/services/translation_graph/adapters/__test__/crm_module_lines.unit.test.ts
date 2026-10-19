@@ -66,9 +66,10 @@ describe.each(['affinity', 'airtable', 'attio'])('%s on its module line', (adapt
     const key = adapterType.toUpperCase();
     const frozen = LEGACY_SIGNATURE_HEADERS[key];
     expect(definition.inbound?.providerKey).toBe(adapterType);
+    const declared = definition.inbound?.scheme === 'module' ? undefined : definition.inbound;
     expect(frozen !== undefined && 'scheme' in frozen ? { scheme: frozen.scheme, signatureHeaders: [...frozen.signatureHeaders] } : frozen).toEqual({
-      scheme: definition.inbound?.scheme,
-      signatureHeaders: definition.inbound?.signatureHeaders,
+      scheme: declared?.scheme,
+      signatureHeaders: declared?.signatureHeaders,
     });
     expect(builtinModuleInboundVerifier(key)).toBeDefined();
   });
@@ -77,7 +78,7 @@ describe.each(['affinity', 'airtable', 'attio'])('%s on its module line', (adapt
     const verifier = builtinModuleInboundVerifier(adapterType.toUpperCase());
     if (verifier === undefined) throw new Error('no declared verifier');
     const rawBody = Buffer.from('{"events":[]}');
-    const header = definition.inbound?.signatureHeaders[0] ?? '';
+    const header = (definition.inbound?.scheme === 'module' ? undefined : definition.inbound)?.signatureHeaders[0] ?? '';
     for (const secret of ['', '   ', 'pending']) {
       const signature = createHmac('sha256', secret).update(rawBody).digest('hex');
       expect(verifyInbound(verifier, { rawBody, headers: { [header]: signature }, secret })).toBe(false);

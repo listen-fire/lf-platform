@@ -286,3 +286,20 @@ export function whatsappNumbers(config: WhatsappNumbersConfig): (phoneNumberId?:
     return primary;
   };
 }
+
+/**
+ * A media item Meta delivered by id, downloaded with the token of the app it
+ * was delivered to: the id names a short-lived URL (Graph `/{media-id}`),
+ * which is fetched with the same token. The answer is the bytes' response.
+ */
+export async function downloadMetaMedia(
+  config: { graphBaseUrl: string; accessToken: string; fetch: typeof fetch },
+  mediaId: string,
+): Promise<Response> {
+  const auth = { Authorization: `Bearer ${config.accessToken}` };
+  const described = await config.fetch(`${config.graphBaseUrl}/${encodeURIComponent(mediaId)}`, { headers: auth });
+  if (!described.ok) throw new Error(`whatsapp: Meta media ${mediaId} could not be described (status ${described.status}).`);
+  const { url } = (await described.json()) as { url?: unknown };
+  if (typeof url !== 'string' || url === '') throw new Error(`whatsapp: Meta media ${mediaId} has no download URL.`);
+  return config.fetch(url, { headers: auth });
+}

@@ -32,17 +32,27 @@ export function createWebhookSyncRouter<Captured>(
 ): ReturnType<typeof Router> {
   const router: ReturnType<typeof Router> = Router();
   router.use(express.raw({ type: 'application/json' }));
-  router.post('/:provider/:subscriptionId', async (req: Request, res: Response) => {
-    // A body of another content type is left unparsed; it verifies as `{}`.
-    const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body));
+  // A module that checks its own inbound reads any content type (Mailgun's
+  // form) and answers its provider's GET handshake (Meta's); the rest keep
+  // reading JSON as before.
+  router.use(express.raw({ type: (req) => !String(req.headers['content-type'] ?? '').includes('application/json') }));
+  const deliver = async (req: Request, res: Response) => {
+    // A JSON body the parser left unparsed (another content type) verifies as `{}`.
+    const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body ?? {}));
+    const queryAt = req.originalUrl.indexOf('?');
     const answer = await answerDelivery(store, host, {
       provider: req.params.provider,
       subscriptionId: req.params.subscriptionId,
       rawBody,
       headers: req.headers,
+      method: req.method,
+      path: queryAt === -1 ? req.originalUrl : req.originalUrl.slice(0, queryAt),
+      query: queryAt === -1 ? '' : req.originalUrl.slice(queryAt + 1),
     });
     sendInboundAnswer(res, answer);
-  });
+  };
+  router.post('/:provider/:subscriptionId', deliver);
+  router.get('/:provider/:subscriptionId', deliver);
   router.use(inboundBodyRefusals);
   return router;
 }

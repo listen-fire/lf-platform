@@ -44,7 +44,7 @@ import {
   type OAuth2ClientApp,
   type SecretsFamily,
 } from 'movement-engine/public/secrets';
-import { declaredInboundVerifier, type InboundVerifier } from 'movement-engine/public/inbound';
+import { CHECKED_BY_MODULE, declaredInboundVerifier, type InboundVerifier } from 'movement-engine/public/inbound';
 import { ownedFilesAdapter } from 'movement-engine/public/modules';
 import { logger } from 'movement-engine/public/log';
 import type { BrowserSlot } from 'movement-engine/public/browser';
@@ -697,11 +697,12 @@ export function builtinPollSourceFactory(
  * line declares an inbound under that provider key (the frozen table then
  * verifies, as it always has).
  */
-export function builtinModuleInboundVerifier(providerKey: string): InboundVerifier | undefined {
+export function builtinModuleInboundVerifier(providerKey: string): InboundVerifier | typeof CHECKED_BY_MODULE | undefined {
   for (const entry of adapterModuleLines()) {
     const declared = entry.load().inbound;
     if (declared !== undefined && declared.providerKey.toUpperCase() === providerKey.toUpperCase()) {
-      return declaredInboundVerifier(declared);
+      // A module that checks its own inbound is handed each request instead.
+      return declared.scheme === 'module' ? CHECKED_BY_MODULE : declaredInboundVerifier(declared);
     }
   }
   return undefined;

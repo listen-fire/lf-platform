@@ -421,6 +421,7 @@ language version 5 an automation cannot delete any other.
 | `poll` | `{ config, checkpoint? }` | `{ events, checkpoint? }` ([Modules](#polled-sources-and-periodic-tasks)); needs `poll` declared |
 | `refreshCredential` | `{}` | `{ fields }` ([Modules](#credentials)); needs `credentials` declared |
 | `runPeriodic` | `{ name }` | `null` ([Modules](#polled-sources-and-periodic-tasks)); needs `periodic` declared |
+| `checkInbound` | `{ request, secret?, checkpoint? }` | `accepted` / `refused` / `reply` ([Modules](#a-module-that-checks-its-own-inbound)); needs `inbound.scheme: module` |
 
 `listEventTypes` example — the CRM's one event, delivered as a `Company`:
 
@@ -853,8 +854,64 @@ host verifies each delivery before `preprocessInbound` sees it:
   signature is wrong. No scheme is lenient for a module (a built-in keeps its
   door's behaviour only until it moves onto a module manifest).
 - A scheme or intercept the host does not know refuses the manifest; it is
-  never silently left unverified. A provider no scheme fits keeps verifying
-  in its own code.
+  never silently left unverified. A provider no scheme fits checks its own
+  requests ([below](#a-module-that-checks-its-own-inbound)).
+
+### A module that checks its own inbound
+
+A provider no scheme fits (Mailgun's form signature, Resend's Svix), or one
+that needs a handshake answered (Meta's verification `GET`), is checked by the
+module itself. The manifest says so, and lists `checkInbound`:
+
+```json
+"inbound": { "providerKey": "email", "scheme": "module" }
+```
+
+- No `signatureHeaders` and no `intercepts`. `secretIssuedBy` is as above.
+- The door takes `POST` and `GET` for it (only `POST` for a declared scheme).
+- The host hands each request to `checkInbound`, as it arrived, and sends what
+  the module answers. It verifies nothing itself, and calls neither
+  `preprocessInbound` nor `wakeKeys` for it.
+
+```json
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/public/webhook-sync/email/mail",
+    "query": "",
+    "headers": { "content-type": "application/x-www-form-urlencoded" },
+    "body": "c2VuZGVyPWFkYSU0MGV4YW1wbGUuY29tJi4uLg=="
+  },
+  "secret": "key-3b2f…"
+}
+```
+
+- `body` is the exact bytes, base64. Header names are lower case, each with
+  its first value.
+- `secret` is the subscription's key, present only when it is usable (not
+  missing, blank or the placeholder before registration). Refuse when you
+  need it and it is absent.
+- `checkpoint` is what your last `accepted` answer returned.
+- The request carries the install's credential, as any call does: the keys a
+  check reads (a verify token, the API key a thin notification is fetched
+  with).
+
+The answer is one of three:
+
+| `outcome` | Fields | The door answers |
+|---|---|---|
+| `accepted` | `events`, `wakeKeys?`, `checkpoint?` | 200 `{ ok, eventsProcessed }` once the events and wakes are queued, as for any delivery |
+| `refused` | `status?` (a 4xx) | `status`, default 401, `{ "error": "signature_invalid" }` |
+| `reply` | `status`, `text?` or `json?` | exactly that: `text` as `text/plain`, `json` as JSON, neither as an empty body; nothing runs |
+
+```json
+{ "outcome": "reply", "status": 200, "text": "1158201444" }
+```
+
+A throw is an internal failure: the door answers 500 and the provider
+retries. The module kit reads the request for you (`inboundRequest(input)`:
+its bytes, text, JSON, form, query and headers) and builds the answers
+(`accepted`, `refused`, `reply`).
 
 ### Polled sources and periodic tasks
 
@@ -1309,4 +1366,12 @@ from the root, so no automation can walk the collection.
   `limiter` core slot and [its wire](limiter-slot.md); the store wire's
   `work.claimDue` takes `kinds`. All additive: an older server declares and
   sends none of them and is unchanged, and an older host ignores them.
+- **A module checks its own inbound** (within version 2, no bump; 2026-10-19).
+  `inbound.scheme` may be `module`, paired with the optional method
+  `checkInbound`: the host hands the raw request and sends the module's
+  answer (events, a refusal, or a reply such as a handshake); the door also
+  takes `GET` for such a module. Additive: an older server declares no such
+  scheme and is unchanged, and an older host refuses the unknown scheme
+  rather than leave it unverified. See [A module that checks its own
+  inbound](#a-module-that-checks-its-own-inbound).
 - **Version 1**: the first protocol. Not supported: an install that answers it is refused, naming the version.

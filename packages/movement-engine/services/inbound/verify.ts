@@ -35,6 +35,10 @@ export type InboundVerifier =
     }
   | { verifyInbound(input: InboundVerification): boolean };
 
+/** A source whose module checks each request itself (`checkInbound`): the
+ *  host verifies nothing for it, so as a verifier it never verifies. */
+export const CHECKED_BY_MODULE = { checkedBy: 'module' } as const;
+
 /** Slack sends the signed timestamp beside the signature; the scheme fixes it. */
 export const SLACK_TIMESTAMP_HEADER = 'x-slack-request-timestamp';
 
@@ -152,7 +156,8 @@ export function verifyWithScheme(
 }
 
 /** Check one delivery the way its provider says to. */
-export function verifyInbound(verifier: InboundVerifier, input: InboundVerification): boolean {
+export function verifyInbound(verifier: InboundVerifier | typeof CHECKED_BY_MODULE, input: InboundVerification): boolean {
+  if ('checkedBy' in verifier) return false;
   if ('verifyInbound' in verifier) return verifier.verifyInbound(input);
   return verifyWithScheme(verifier.scheme, { ...input, signatureHeaders: verifier.signatureHeaders });
 }

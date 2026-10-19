@@ -222,7 +222,7 @@ pub fn signer_of<'a>(credentials: &'a Credentials, external: &str, credential: O
 
 /// The install of `external` (secrets.ts `installOf`): its `module:`-only
 /// entry, else the first hand-written one, else the first.
-pub fn install_of<'a>(credentials: &'a Credentials, external: &str) -> Option<&'a Credential> {
+pub fn install_of<'a>(credentials: &'a [Credential], external: &str) -> Option<&'a Credential> {
     let all: Vec<&Credential> = credentials.iter().filter(|c| c.external == external).collect();
     all.iter().find(|c| c.binding == Binding::Install).or_else(|| all.iter().find(|c| c.binding == Binding::Legacy)).or(all.first()).copied()
 }

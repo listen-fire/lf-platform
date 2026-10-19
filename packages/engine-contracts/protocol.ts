@@ -739,15 +739,24 @@ export const WireInboundIntercept = z.enum(INBOUND_INTERCEPTS);
 
 const HEADER_NAME = /^[a-z0-9-]+$/;
 
+const WireProviderKey = z.string().regex(/^[a-z][a-z0-9_-]*$/, 'providerKey must be ASCII lower case');
+
+/** Who sets the secret deliveries are signed with. `installer` (the
+ *  default): whoever installs the module sets it (`lf connect` generates or
+ *  asks for it). `provider`: the provider issues it when the webhook is
+ *  registered (`ensureEventSubscription` returns it), so nobody is asked,
+ *  and a registration that returns none is refused. */
+const WireSecretIssuedBy = z.enum(['installer', 'provider']);
+
 /**
  * How the provider's webhooks reach the module: through the host's door at
  * `/api/public/webhook-sync/<providerKey>/<subscription>`, verified by
  * `scheme` before `preprocessInbound` sees the body.
  */
-export const WireInboundDeclaration = z.object({
+export const WireSignedInboundDeclaration = z.object({
   /** The door's provider segment — for a built-in, today's key, so no
    *  subscription's URL changes. */
-  providerKey: z.string().regex(/^[a-z][a-z0-9_-]*$/, 'providerKey must be ASCII lower case'),
+  providerKey: WireProviderKey,
   scheme: WireInboundSignatureScheme,
   /** The headers that may carry the signature, lower case, the first present
    *  one read. `slack_v0` also reads `x-slack-request-timestamp`, which the
@@ -756,13 +765,23 @@ export const WireInboundDeclaration = z.object({
     .array(z.string().regex(HEADER_NAME, 'a signature header is a lower-case header name'))
     .min(1),
   intercepts: z.array(WireInboundIntercept).optional(),
-  /** Who sets the secret deliveries are signed with. `installer` (the
-   *  default): whoever installs the module sets it (`lf connect` generates or
-   *  asks for it). `provider`: the provider issues it when the webhook is
-   *  registered (`ensureEventSubscription` returns it), so nobody is asked,
-   *  and a registration that returns none is refused. */
-  secretIssuedBy: z.enum(['installer', 'provider']).optional(),
+  secretIssuedBy: WireSecretIssuedBy.optional(),
 });
+
+/**
+ * The module checks its own inbound requests (`scheme: module`): the host
+ * hands each request at its door, raw, to `checkInbound`, and sends what the
+ * module answers. For a provider no declarative scheme fits (Mailgun's form
+ * signature, Svix) or one that needs a handshake answered (Meta's GET).
+ */
+export const WireModuleCheckedInboundDeclaration = z.object({
+  providerKey: WireProviderKey,
+  scheme: z.literal('module'),
+  secretIssuedBy: WireSecretIssuedBy.optional(),
+});
+
+export const WireInboundDeclaration = z.discriminatedUnion('scheme', [WireSignedInboundDeclaration, WireModuleCheckedInboundDeclaration]);
+export type WireSignedInboundDeclarationShape = z.infer<typeof WireSignedInboundDeclaration>;
 export type WireInboundDeclarationShape = z.infer<typeof WireInboundDeclaration>;
 
 /** The module is a polled source: the host calls `poll` every
@@ -916,6 +935,7 @@ export function refuseUnpairedDeclarations(
   pair(manifest.poll !== undefined, 'poll', 'poll');
   pair((manifest.periodic ?? []).length > 0, 'runPeriodic', 'periodic');
   pair(manifest.plugins !== undefined, 'invokePlugin', 'plugins');
+  pair(manifest.inbound?.scheme === 'module', 'checkInbound', 'inbound');
   // Refreshing is optional for a declared credential (the host refreshes an
   // OAuth 2 one itself), but there is nothing to refresh without one.
   if (lists.has('refreshCredential') && (manifest.credentials ?? []).length === 0) {
@@ -1003,6 +1023,55 @@ export const AdapterEmitBody = z.object({
 export const AdapterWakeBody = z.object({
   keys: z.array(z.string().min(1)).min(1).max(ADAPTER_DOOR_MAX_BATCH),
 });
+
+/** One request at a module-checked inbound door, as it arrived. */
+export const WireInboundRequest = z.object({
+  method: z.string().min(1),
+  /** The path, still percent-encoded, without its query. */
+  path: z.string(),
+  /** What follows the `?`, or empty. */
+  query: z.string(),
+  /** Lower-case names, each with its first value. */
+  headers: z.record(z.string(), z.string()),
+  /** The exact bytes that arrived, base64. */
+  body: z.string(),
+});
+export type WireInboundRequestShape = z.infer<typeof WireInboundRequest>;
+
+export const WireCheckInboundInput = z.object({
+  request: WireInboundRequest,
+  /** The key the subscription holds, when it holds a usable one (present,
+   *  not blank, not the placeholder before registration). */
+  secret: z.string().optional(),
+  /** Whatever the previous accepted request returned as `checkpoint`. */
+  checkpoint: z.unknown().optional(),
+});
+export type WireCheckInboundInputShape = z.infer<typeof WireCheckInboundInput>;
+
+/** What the module decided about one request. `accepted`: it came from the
+ *  provider; its events and the await keys it wakes. `refused`: it did not
+ *  (the host answers `status`, 401 by default, with `signature_invalid`).
+ *  `reply`: answer exactly this and run nothing (a handshake). */
+export const WireInboundCheck = z.discriminatedUnion('outcome', [
+  z.object({
+    outcome: z.literal('accepted'),
+    events: z.array(WireDiscriminableEvent),
+    wakeKeys: z.array(z.string().min(1)).optional(),
+    checkpoint: z.unknown().optional(),
+  }),
+  z.object({
+    outcome: z.literal('refused'),
+    status: z.number().int().min(400).max(499).optional(),
+  }),
+  z.object({
+    outcome: z.literal('reply'),
+    status: z.number().int().min(200).max(599),
+    /** Sent as `text/plain`; `json` as `application/json`; neither, empty. */
+    text: z.string().optional(),
+    json: z.unknown().optional(),
+  }),
+]);
+export type WireInboundCheckShape = z.infer<typeof WireInboundCheck>;
 
 /** The models door a module declaring `hostModels` calls
  *  (`POST {host}/api/public/adapter/{adapterType}/models`, authenticated as
@@ -1280,6 +1349,13 @@ export const METHODS = {
   refreshCredential: {
     params: z.object({}),
     result: z.object({ fields: WireCredentialFields }),
+  },
+  // One request at the module's inbound door (`inbound.scheme: module`), raw:
+  // the module checks it and answers its events, a refusal, or the reply
+  // the host sends as it is (a handshake). Paired with that declaration.
+  checkInbound: {
+    params: WireCheckInboundInput,
+    result: WireInboundCheck,
   },
   // One run of a declared periodic task, for one install.
   runPeriodic: {

@@ -13084,6 +13084,10 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     signatureHeaders: string[];
                     intercepts?: "slack_url_verification"[] | undefined;
                     secretIssuedBy?: "provider" | "installer" | undefined;
+                } | {
+                    providerKey: string;
+                    scheme: "module";
+                    secretIssuedBy?: "provider" | "installer" | undefined;
                 } | undefined;
                 poll?: {
                     intervalSeconds: number;
@@ -13116,7 +13120,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     }[];
                 } | undefined;
                 limits?: {
-                    scope: "team" | "credential" | "module" | "install";
+                    scope: "team" | "module" | "credential" | "install";
                     calls?: number | undefined;
                     per?: string | undefined;
                     concurrent?: number | undefined;
@@ -13234,6 +13238,10 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         signatureHeaders: string[];
                         intercepts?: "slack_url_verification"[] | undefined;
                         secretIssuedBy?: "provider" | "installer" | undefined;
+                    } | {
+                        providerKey: string;
+                        scheme: "module";
+                        secretIssuedBy?: "provider" | "installer" | undefined;
                     } | undefined;
                     poll?: {
                         intervalSeconds: number;
@@ -13266,7 +13274,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         }[];
                     } | undefined;
                     limits?: {
-                        scope: "team" | "credential" | "module" | "install";
+                        scope: "team" | "module" | "credential" | "install";
                         calls?: number | undefined;
                         per?: string | undefined;
                         concurrent?: number | undefined;
@@ -13369,6 +13377,10 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         signatureHeaders: string[];
                         intercepts?: "slack_url_verification"[] | undefined;
                         secretIssuedBy?: "provider" | "installer" | undefined;
+                    } | {
+                        providerKey: string;
+                        scheme: "module";
+                        secretIssuedBy?: "provider" | "installer" | undefined;
                     } | undefined;
                     poll?: {
                         intervalSeconds: number;
@@ -13401,7 +13413,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         }[];
                     } | undefined;
                     limits?: {
-                        scope: "team" | "credential" | "module" | "install";
+                        scope: "team" | "module" | "credential" | "install";
                         calls?: number | undefined;
                         per?: string | undefined;
                         concurrent?: number | undefined;

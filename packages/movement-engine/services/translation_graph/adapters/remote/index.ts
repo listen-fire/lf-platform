@@ -72,6 +72,8 @@ import type {
   EnsureEventSubscriptionInput,
   EventSubscriptionRegistration,
   RemoveEventSubscriptionInput,
+  InboundCheck,
+  InboundCheckInput,
 } from '../../adapter';
 import type {
   AwaitableCapability,
@@ -206,6 +208,7 @@ export const OPTIONAL_REMOTE_METHODS = [
   'ensureEventSubscription',
   'removeEventSubscription',
   'wakeKeys',
+  'checkInbound',
 ] as const satisfies readonly (keyof Adapter)[];
 
 /**
@@ -707,6 +710,11 @@ export class RemoteAdapter implements Adapter {
    *  `resolveAwait` named — so the host can wake the runs parked on them. */
   wakeKeys(input: { raw: unknown }): Promise<string[]> {
     return this.call('wakeKeys', input);
+  }
+
+  /** One request at a module-checked inbound door, checked by the server. */
+  checkInbound(input: InboundCheckInput): Promise<InboundCheck> {
+    return this.call('checkInbound', input) as Promise<InboundCheck>;
   }
 
   private remoteAwaitable(): AwaitableCapability {

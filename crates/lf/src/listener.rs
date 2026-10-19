@@ -191,7 +191,10 @@ fn decoded(segment: &str) -> Result<String, String> {
 
 /// The answer, with the drain poked once it is composed when it asks.
 fn send(answer: Answer, notify: impl FnOnce()) -> Response {
-    let response = Response::json(answer.status, &answer.body);
+    let response = match &answer.text {
+        Some(text) => Response::plain(answer.status, text),
+        None => Response::json(answer.status, &answer.body),
+    };
     if answer.notify_after {
         notify();
     }
@@ -212,6 +215,12 @@ async fn route(session: &Session, poke: &Notify, request: Request) -> Result<Res
                 Some(bytes) => Response::bytes(200, bytes),
                 None => Response::bytes(404, Vec::new()),
             });
+        }
+        // A provider's handshake at a module's door (Meta's verify GET).
+        if segments(&request.path, "/api/public/webhook-sync/").is_some() {
+            let notify = || poke.notify_one();
+            let doors = LfDoors::of_session(session, EventSink::Queue, &notify);
+            return Ok(doors_route(&doors, &request).await?.unwrap_or_else(not_found));
         }
         return Ok(not_found());
     }
@@ -240,7 +249,7 @@ async fn route(session: &Session, poke: &Notify, request: Request) -> Result<Res
     let Some((provider, subscription_id)) = hook_target(session, &external, install.as_deref()) else {
         return Ok(Response::json(404, &Js::Obj(obj! { "error" => Js::str("unknown_provider") })));
     };
-    let delivery = Delivery { provider: &provider, subscription_id: &subscription_id, raw_body: &request.body, headers: &request.headers };
+    let delivery = Delivery { provider: &provider, subscription_id: &subscription_id, raw_body: &request.body, headers: &request.headers, method: "POST", path: &request.path, query: &request.query };
     let (answer, outcomes) = deliver_inline(session, delivery, &notify).await;
     log_runs(&outcomes);
     if answer.status != 200 {
@@ -293,7 +302,7 @@ pub async fn doors_route<S: InboundStore + PushStore>(stores: &S, request: &Requ
             return Ok(Some(send(Answer::payload_too_large(), || {})));
         }
         let (provider, install) = (decoded(provider)?, decoded(install)?);
-        let delivery = Delivery { provider: &provider, subscription_id: &install, raw_body: &request.body, headers: &request.headers };
+        let delivery = Delivery { provider: &provider, subscription_id: &install, raw_body: &request.body, headers: &request.headers, method: &request.method, path: &request.path, query: &request.query };
         return Ok(Some(send(answer_delivery(stores, delivery).await, || InboundStore::notify(stores))));
     }
     Ok(None)
@@ -305,7 +314,7 @@ pub async fn only_doors<S: InboundStore + PushStore>(stores: &S, request: Reques
     if request.too_large {
         return Response::json(413, &Js::Obj(obj! { "error" => Js::str("payload_too_large") }));
     }
-    if request.method != "POST" {
+    if request.method != "POST" && !(request.method == "GET" && segments(&request.path, "/api/public/webhook-sync/").is_some()) {
         return not_found();
     }
     match doors_route(stores, &request).await {

@@ -22,12 +22,12 @@ use rusqlite::{OptionalExtension, params};
 use crate::check::LOCAL_TENANT;
 use crate::credential_calls::{Sending, Target, send};
 use crate::externals::RunningExternal;
-use crate::inbound::{Answer, Declaration, Delivery, Extraction, InboundStore, Intercept, PushAuth, PushCaller, PushStore, Scheme, Source, Subscription, answer_delivery, same_secret};
+use crate::inbound::{Answer, Declaration, Delivery, Extraction, InboundStore, Intercept, PushAuth, PushCaller, PushStore, RawRequest, Scheme, Source, Subscription, answer_delivery, same_secret};
 use crate::json::Js;
 use crate::obj;
 use crate::run_host::queue_await_wake;
 use crate::runs::{RunOutcome, Session};
-use crate::secrets::{Credential, install_of};
+use crate::secrets::{Binding, Credential, Credentials, install_of, signer_of};
 use crate::backend::RunHostStore;
 use crate::store::{Store, StoreError};
 
@@ -91,6 +91,9 @@ pub trait Reader {
     async fn preprocess(&self, external: &str, install: &Credential, raw: &Js, checkpoint: Option<&Js>) -> Result<Extraction, String>;
     /// The keys a delivery wakes; empty when the external names none.
     async fn wake_keys(&self, external: &str, install: &Credential, raw: &Js) -> Result<Vec<String>, String>;
+    /// The external's own check of a raw request (`checkInbound`): `request`
+    /// is the wire's `WireInboundRequest`.
+    async fn check_inbound(&self, external: &str, install: &Credential, request: &Js, secret: Option<&str>, checkpoint: Option<&Js>) -> Result<Js, String>;
 }
 
 /// Where a verified event goes.
@@ -168,11 +171,21 @@ impl<R: Reader> InboundStore for LfDoors<'_, R> {
     async fn find_subscription(&self, id: &str) -> Result<Option<Subscription>, String> {
         let Some(credential) = self.install(id) else { return Ok(None) };
         let Some(setup) = self.setup_of(&credential.external) else { return Ok(None) };
+        let own = credential.fields.get(&setup.secret_field);
+        // A module that checks its own inbound may be addressed by a user
+        // credential (it carries the provider keys the check reads) while the
+        // secret `lf connect` set is the install's.
+        let secret = match own {
+            None if setup.declaration.scheme == Scheme::Module => {
+                install_of(self.installs, &credential.external).and_then(|install| install.fields.get(&setup.secret_field))
+            }
+            own => own,
+        };
         Ok(Some(Subscription {
             id: id.to_string(),
             team_id: LOCAL_TENANT.into(),
             provider_key: setup.provider_key(),
-            secret: credential.fields.get(&setup.secret_field).cloned().unwrap_or_default(),
+            secret: secret.cloned().unwrap_or_default(),
             checkpoint: self.store.inbound_checkpoint(id).map_err(|e| e.to_string())?,
         }))
     }
@@ -208,6 +221,11 @@ impl<R: Reader> InboundStore for LfDoors<'_, R> {
     async fn wake_keys(&self, source: &Source, raw: &Js) -> Result<Vec<String>, String> {
         let install = self.install(&source.install).ok_or_else(|| format!("no install {}", source.install))?;
         self.reader.wake_keys(&source.adapter_type, install, raw).await
+    }
+
+    async fn check_inbound(&self, source: &Source, request: &RawRequest<'_>, secret: Option<&str>, checkpoint: Option<&Js>) -> Result<Js, String> {
+        let install = self.install(&source.install).ok_or_else(|| format!("no install {}", source.install))?;
+        self.reader.check_inbound(&source.adapter_type, install, &request.wire(), secret, checkpoint).await
     }
 
     // lf keeps no receipts: the event itself is what is queued.
@@ -324,6 +342,49 @@ impl Reader for SessionReader<'_> {
         let read = self.call(external, install, "wakeKeys", serde_json::json!({ "raw": crate::wire::json_of_js(raw) })).await?;
         Ok(read.as_array().unwrap_or(&[]).iter().filter_map(Js::as_str).map(str::to_string).collect())
     }
+
+    async fn check_inbound(&self, external: &str, install: &Credential, request: &Js, secret: Option<&str>, checkpoint: Option<&Js>) -> Result<Js, String> {
+        let running = self.session.running().iter().find(|r| r.external.manifest.name == external).ok_or_else(|| format!("no external {external}"))?;
+        if !running.methods.iter().any(|m| m == "checkInbound") {
+            return Err(format!("external \"{external}\" declares that it checks its own inbound but does not list checkInbound"));
+        }
+        let mut params = serde_json::json!({ "request": crate::wire::json_of_js(request) });
+        if let Some(secret) = secret {
+            params["secret"] = serde_json::Value::String(secret.to_string());
+        }
+        if let Some(checkpoint) = checkpoint {
+            params["checkpoint"] = crate::wire::json_of_js(checkpoint);
+        }
+        // The check reads the provider's keys (a verify token, an API key to
+        // fetch the message with), so it carries the user credential.
+        let credentials = self.session.credentials();
+        let carried = carried_credential(credentials, external, install);
+        let lease = running.reach.lease().await?;
+        let target = Target {
+            external: &running.external,
+            base_url: &lease.address,
+            declarations: &running.credential_declarations,
+            methods: &running.methods,
+            settings: &running.settings,
+            limits: &running.limits,
+        };
+        let sending = Sending { tenant: LOCAL_TENANT, method: "checkInbound", cache_scope_id: "<none>", params };
+        let raw = send(&target, credentials, carried, signer_of(credentials, external, carried).or(Some(install)), sending).await?;
+        module_wire::results::check("checkInbound", external, &raw)
+    }
+}
+
+/// The user credential a module's own inbound check carries: the one the URL
+/// names, else the external's only one; none when it has several.
+fn carried_credential<'a>(credentials: &'a Credentials, external: &str, named: &'a Credential) -> Option<&'a Credential> {
+    if matches!(named.binding, Binding::Credential(_)) {
+        return Some(named);
+    }
+    let mut users = credentials.iter().filter(|c| c.external == external && matches!(c.binding, Binding::Credential(_)));
+    match (users.next(), users.next()) {
+        (Some(only), None) => Some(only),
+        _ => None,
+    }
 }
 
 // ── The pull cursor ─────────────────────────────────────────────────────────
@@ -390,7 +451,7 @@ pub async fn receive_webhook(session: &Session, webhook: Webhook<'_>) -> Result<
     let Some((provider, subscription_id)) = hook_target(session, external, install) else {
         return Err(format!("external \"{external}\" takes no webhooks"));
     };
-    let delivery = Delivery { provider: &provider, subscription_id: &subscription_id, raw_body, headers };
+    let delivery = Delivery { provider: &provider, subscription_id: &subscription_id, raw_body, headers, method: "POST", path: "", query: "" };
     let (answer, outcomes) = deliver_inline(session, delivery, &|| {}).await;
     if answer.status == 200 {
         return Ok(outcomes);

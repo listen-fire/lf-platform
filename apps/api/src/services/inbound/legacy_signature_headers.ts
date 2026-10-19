@@ -9,7 +9,7 @@
 // longer read for built-ins. It headed every chain, so a bad value in it
 // shadowed a good provider signature; it now verifies remote installs only.
 
-import { isUsableInboundSecret, type InboundIntercept, type InboundVerifier } from 'movement-engine/public/inbound';
+import { isUsableInboundSecret, type CHECKED_BY_MODULE, type InboundIntercept, type InboundVerifier } from 'movement-engine/public/inbound';
 
 import { NATIVE_KNOWLEDGE_PROVIDER_KEY } from '../webhook_sync/providers/native_knowledge';
 
@@ -52,11 +52,12 @@ export function builtInVerifierFor(input: {
   providerKey: string;
   secret: string;
   grandfatheredUnsigned: boolean;
-  /** The verifier the provider's module declares, if it declares one. */
-  declared: InboundVerifier | undefined;
-}): InboundVerifier | undefined {
+  /** The verifier the provider's module declares, if it declares one (or
+   *  that the module checks each request itself). */
+  declared: InboundVerifier | typeof CHECKED_BY_MODULE | undefined;
+}): InboundVerifier | typeof CHECKED_BY_MODULE | undefined {
   const legacy = LEGACY_SIGNATURE_HEADERS[input.providerKey];
-  if (input.declared !== undefined && input.grandfatheredUnsigned && !isUsableInboundSecret(input.secret) && legacy !== undefined) {
+  if (input.declared !== undefined && !('checkedBy' in input.declared) && input.grandfatheredUnsigned && !isUsableInboundSecret(input.secret) && legacy !== undefined) {
     return legacy;
   }
   return input.declared ?? legacy;
