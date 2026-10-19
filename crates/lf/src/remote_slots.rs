@@ -82,10 +82,12 @@ pub struct ModelCall<'a> {
     pub max_tokens: Option<u64>,
 }
 
-/// What a models module answered: the text, and what it cost, line by line.
+/// What a models module answered: the text, what it cost, line by line, and
+/// the tokens it spent.
 pub struct ModelAnswer {
     pub text: String,
     pub cost: Vec<(String, i64)>,
+    pub usage: crate::models::TokenCounts,
 }
 
 /// One `models.call`.
@@ -103,8 +105,25 @@ pub async fn call_model(client: &SlotClient, call: &ModelCall<'_>) -> Result<Mod
         params.insert("maxTokens".into(), Js::Num(max_tokens.into()));
     }
     let answer = client.call_async("models.call", params).await?;
-    let text = answer.get("text").and_then(Js::as_str).ok_or_else(|| format!("{}: models.call answered {}, not {{ text, cost }}", client.label, answer.to_json()))?;
-    Ok(ModelAnswer { text: text.to_string(), cost: cost_lines(answer.get("cost")) })
+    let shape = || format!("{}: models.call answered {}, not {{ text, cost, usage: {{ inputTokens, outputTokens }} }}", client.label, answer.to_json());
+    let text = answer.get("text").and_then(Js::as_str).ok_or_else(shape)?;
+    // Required, so a run's usage counts a third-party model as the built-in one.
+    let usage = answer.get("usage").and_then(usage_of).ok_or_else(shape)?;
+    Ok(ModelAnswer { text: text.to_string(), cost: cost_lines(answer.get("cost")), usage })
+}
+
+/// `{ inputTokens, outputTokens, cacheReadTokens?, cacheCreationTokens? }`.
+fn usage_of(usage: &Js) -> Option<crate::models::TokenCounts> {
+    let count = |key: &str| match usage.get(key) {
+        Some(Js::Num(n)) => n.as_u64(),
+        _ => None,
+    };
+    Some(crate::models::TokenCounts {
+        input: count("inputTokens")?,
+        output: count("outputTokens")?,
+        cache_read: count("cacheReadTokens").unwrap_or(0),
+        cache_creation: count("cacheCreationTokens").unwrap_or(0),
+    })
 }
 
 /// `[{ microdollars, label }]`, the lines that read.

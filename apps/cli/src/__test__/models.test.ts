@@ -10,7 +10,9 @@ import { appendFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingHttpHeaders } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { companies, lfCommand, project } from './example';
+import { ACME_LLM_ANSWER, withModelsModule } from './models_module/project';
 
 const ANSWER = 'Vireo Robotics, welcomed by a model';
 
@@ -156,6 +158,56 @@ test('lf run: lf.yaml maxRunCostUsd pauses a run at its cap; lf resume carries o
   } finally {
     fake.close();
   }
+});
+
+const TWO_CALLS = [
+  'import { acme_crm } from adapters',
+  'import { acme } from credentials',
+  '',
+  'crm = connect acme_crm using acme',
+  '',
+  'function name_it(company: <crm-[:Company]->>) {',
+  '  line = ai("Write a welcome line for ${company.Name}")',
+  '  write crm-[:Company]-> { Name: ai("Shorten: ${line}") }',
+  '}',
+  '',
+  'listen to crm { events: ["company.created"] } fire name_it',
+  '',
+].join('\n');
+
+// A third-party models module: what it answers it spent is the run's spend,
+// so maxRunCostUsd counts its calls as it counts the built-in's.
+test('lf run: a models module fills the models slot; its cost is the run\'s spend and the cap counts it', async () => {
+  const dir = project();
+  withModelsModule(dir);
+  writeFileSync(join(dir, 'movements/named.mvt'), TWO_CALLS);
+  const run = await lfAsync(dir, 'run', '--event', 'events/company_created.json');
+  assert.equal(run.code, 0, run.out);
+  assert.ok(companies(dir).includes(ACME_LLM_ANSWER), `${companies(dir).join(', ')}\n${run.out}`);
+  const db = new DatabaseSync(join(dir, '.lf', 'state.db'));
+  try {
+    const rows = db.prepare('select spent_microdollars as spent from run').all() as Array<{ spent: number }>;
+    // The example's own movement runs too, and calls no model.
+    assert.deepEqual(rows.map((r) => r.spent).sort((a, b) => a - b), [0, 5000]);
+  } finally {
+    db.close();
+  }
+
+  const capped = project();
+  withModelsModule(capped);
+  appendFileSync(join(capped, 'lf.yaml'), '\nmaxRunCostUsd: 0.001\n');
+  writeFileSync(join(capped, 'movements/named.mvt'), TWO_CALLS);
+  const parked = await lfAsync(capped, 'run', '--event', 'events/company_created.json');
+  assert.match(parked.out, /^run \S+ named:name_it parked/m, 'the first call spent past the cap, so the second waits');
+  assert.ok(!companies(capped).includes(ACME_LLM_ANSWER), companies(capped).join(', '));
+});
+
+test('lf run: a models module answer without its token usage is refused', async () => {
+  const dir = project();
+  withModelsModule(dir, { ACME_LLM_NO_USAGE: '1' });
+  writeFileSync(join(dir, 'movements/named.mvt'), TWO_CALLS);
+  const run = await lfAsync(dir, 'run', '--event', 'events/company_created.json');
+  assert.match(run.out, /models\.call answered .*not \{ text, cost, usage/);
 });
 
 // A process module that asks the host for a model call (`ctx.models`): under a

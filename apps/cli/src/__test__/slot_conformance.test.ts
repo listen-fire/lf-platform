@@ -32,22 +32,25 @@ import { browserContractCases, type ContractSite } from 'movement-engine/service
 import { fakeBrowser, type FakeSite } from 'movement-engine/services/browser/fake_browser';
 import { lfBinary } from './lf_bin';
 
-/** A Messages API that streams one text answer to every request. */
+/** A Messages API that streams one text answer to every request, spending
+ *  50 output tokens or the request's `max_tokens`, whichever is fewer. */
 async function fakeAnthropic(): Promise<{ url: string; server: Server }> {
   const text = '{"greeting":"hello"}';
-  const events: Array<[string, unknown]> = [
+  const events = (outputTokens: number): Array<[string, unknown]> => [
     ['message_start', { type: 'message_start', message: { id: 'm', type: 'message', role: 'assistant', model: 'fake', content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 10, output_tokens: 0 } } }],
     ['content_block_start', { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } }],
     ['content_block_delta', { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text } }],
     ['content_block_stop', { type: 'content_block_stop', index: 0 }],
-    ['message_delta', { type: 'message_delta', delta: { stop_reason: 'end_turn', stop_sequence: null }, usage: { output_tokens: 5 } }],
+    ['message_delta', { type: 'message_delta', delta: { stop_reason: 'end_turn', stop_sequence: null }, usage: { output_tokens: outputTokens } }],
     ['message_stop', { type: 'message_stop' }],
   ];
   const server = createServer((request, response) => {
-    request.resume();
+    const chunks: Buffer[] = [];
+    request.on('data', (chunk: Buffer) => chunks.push(chunk));
     request.on('end', () => {
+      const ceiling: unknown = Reflect.get(Object(JSON.parse(Buffer.concat(chunks).toString('utf8'))), 'max_tokens');
       response.writeHead(200, { 'content-type': 'text/event-stream' });
-      response.end(events.map(([name, data]) => `event: ${name}\ndata: ${JSON.stringify(data)}\n\n`).join(''));
+      response.end(events(Math.min(50, typeof ceiling === 'number' ? ceiling : 50)).map(([name, data]) => `event: ${name}\ndata: ${JSON.stringify(data)}\n\n`).join(''));
     });
   });
   await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));

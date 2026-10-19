@@ -76,11 +76,23 @@ export function commonSlotCases(slot: CoreSlot, methods: readonly string[]): Slo
 /** The models slot. `client` carries settings that reach a model. */
 export const modelsSlotCases: SlotConformanceCase[] = [
   {
-    name: 'models: one call, one answer: its text and what it cost',
+    name: 'models: one call, one answer: its text, what it cost and the tokens it spent',
     async run(client) {
       const answer = await client.read('models.call', { label: 'conformance.text', system: 'Answer briefly.', userMessage: 'Say hello.', model: 'sonnet' }, ModelsCallAnswer);
       assert.ok(answer.text.length > 0, 'the answer has text');
       for (const line of answer.cost) assert.ok(line.microdollars >= 0 && line.label.length > 0);
+      assert.ok(answer.usage.inputTokens > 0 && answer.usage.outputTokens > 0, 'the answer reports the tokens it spent');
+    },
+  },
+  {
+    name: 'models: maxTokens is the answer\'s output ceiling',
+    async run(client) {
+      const answer = await client.read(
+        'models.call',
+        { label: 'conformance.ceiling', system: 'Answer at length.', userMessage: 'Tell a long story.', model: 'sonnet', maxTokens: 16 },
+        ModelsCallAnswer,
+      );
+      assert.ok(answer.usage.outputTokens <= 16, `the answer spent ${answer.usage.outputTokens} output tokens under a ceiling of 16`);
     },
   },
   {

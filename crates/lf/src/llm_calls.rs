@@ -165,7 +165,7 @@ impl Meter {
 pub async fn host_model_call(body: &Js, credentials: &Credentials) -> Result<Js, String> {
     let text = |name: &str| body.get(name).and_then(Js::as_str).map(str::to_string);
     let (Some(label), Some(system), Some(user)) = (text("label"), text("system"), text("userMessage")) else {
-        return Err("a models door request is { label, system, userMessage, model?, effort?, schema? }".into());
+        return Err("a models door request is { label, system, userMessage, model?, effort?, maxTokens?, schema? }".into());
     };
     let model = text("model").unwrap_or_else(|| "sonnet".into());
     let wire_model = models::wire_model(&model).ok_or_else(|| format!("model {model} is not a model a call names"))?;
@@ -175,15 +175,21 @@ pub async fn host_model_call(body: &Js, credentials: &Credentials) -> Result<Js,
         Some(schema) => format!("{system}\n\nAnswer with one JSON value matching this JSON schema, and nothing else:\n{}", schema.to_json()),
         None => system,
     };
+    // The models slot's output ceiling (`models.call`'s `maxTokens`).
+    let max_tokens = match body.get("maxTokens") {
+        None | Some(Js::Null) => None,
+        Some(Js::Num(n)) => Some(n.as_u64().filter(|n| *n > 0).ok_or("maxTokens: expected a positive whole number")?),
+        Some(_) => return Err("maxTokens: expected a positive whole number".into()),
+    };
     let request = ModelRequest {
         label,
         system,
         user: UserMessage::Text(user),
         wire_model,
         effort: text("effort"),
-        max_tokens: None,
+        max_tokens,
         budget: None,
-        reports_usage: false,
+        reports_usage: true,
         output_budget: false,
     };
     let meter = Meter::new(None);
@@ -207,6 +213,9 @@ pub async fn host_model_call(body: &Js, credentials: &Credentials) -> Result<Js,
         out.insert("data".into(), reply.swap_remove("parsedJson").unwrap_or(Js::Null));
     }
     out.insert("cost".into(), cost);
+    if let Some(usage) = reply.swap_remove("usage") {
+        out.insert("usage".into(), usage);
+    }
     Ok(Js::Obj(out))
 }
 
@@ -356,10 +365,15 @@ async fn answer_by_module(module: &crate::slot_client::SlotClient, request: &Mod
     out.insert("parsedJson".into(), parse_json_reply(&answered.text));
     out.insert("rawText".into(), Js::Str(answered.text));
     if request.reports_usage {
-        let zero = || Js::Num(0.into());
+        let usage = answered.usage;
         out.insert(
             "usage".into(),
-            Js::Obj(obj! { "inputTokens" => zero(), "outputTokens" => zero(), "cacheReadTokens" => zero(), "cacheCreationTokens" => zero() }),
+            Js::Obj(obj! {
+                "inputTokens" => Js::Num(usage.input.into()),
+                "outputTokens" => Js::Num(usage.output.into()),
+                "cacheReadTokens" => Js::Num(usage.cache_read.into()),
+                "cacheCreationTokens" => Js::Num(usage.cache_creation.into()),
+            }),
         );
     }
     Ok(out)

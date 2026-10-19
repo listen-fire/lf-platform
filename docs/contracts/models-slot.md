@@ -10,11 +10,13 @@ One request, one answer: no streaming.
 
 | method | params | result |
 |---|---|---|
-| `models.call` | `{ label, system, userMessage, model?, effort?, maxTokens?, schema?, toolName?, toolDescription? }` | `{ text, data?, cost: [{ microdollars, label }] }` |
+| `models.call` | `{ label, system, userMessage, model?, effort?, maxTokens?, schema?, toolName?, toolDescription? }` | `{ text, data?, cost: [{ microdollars, label }], usage: { inputTokens, outputTokens, cacheReadTokens?, cacheCreationTokens? } }` |
 
 - **The request** is the models door's (`HostModelRequest`, `packages/engine-contracts/protocol.ts`) and an output ceiling, `maxTokens`. `model` is a name a movement writes (`sonnet`, `claude-sonnet-5`); the module maps it to its provider's.
 - **`schema`** (a JSON schema) asks for the reply as data: `data` is the reply read as that value, `text` its text.
+- **`maxTokens`** is the answer's output ceiling: the module asks its provider for no more.
 - **`cost`** is what the call spent, priced by the module. The host adds it to the run's spend, so `maxRunCostUsd` counts it. The host refuses a call before it starts once the run's budget is spent.
+- **`usage`** is the tokens the call spent, required: the host reports it as the run's usage (an extraction's token counts), so a third-party model is counted as the built-in one is. An answer without it is refused.
 - **A refusal**: `bad_request` for a request missing `system`, `userMessage` or `label`, or naming no model; `module_error` (retryable) for a provider failure.
 - Shapes: `packages/engine-contracts/slots/models.ts`.
 
@@ -25,3 +27,4 @@ One request, one answer: no streaming.
 ## Changes
 
 - **2026-10-19** (within adapter protocol 2): the models slot's methods, and modules filling it over the transport.
+- **2026-10-19** (within adapter protocol 2): `models.call`'s answer carries `usage`, required; the models door's answer may carry it too.

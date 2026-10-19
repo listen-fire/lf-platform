@@ -1090,14 +1090,24 @@ export const HostModelRequest = z.object({
 });
 export type HostModelRequestShape = z.infer<typeof HostModelRequest>;
 
-/** The models door's answer: the text (or `data`, for a `schema` request)
- *  and what it cost. The door bills nothing to a run itself: the module adds
+/** The tokens a model call spent: what a run's usage reports, beside its cost. */
+export const WireModelUsage = z.object({
+  inputTokens: z.number().int().nonnegative(),
+  outputTokens: z.number().int().nonnegative(),
+  cacheReadTokens: z.number().int().nonnegative().optional(),
+  cacheCreationTokens: z.number().int().nonnegative().optional(),
+});
+export type WireModelUsageShape = z.infer<typeof WireModelUsage>;
+
+/** The models door's answer: the text (or `data`, for a `schema` request),
+ *  what it cost, and the tokens it spent. The door bills nothing to a run itself: the module adds
  *  `cost` to the `cost` of the response whose work asked it, so the run that
  *  made that call is charged. */
 export const HostModelAnswer = z.object({
   text: z.string(),
   data: z.unknown().optional(),
   cost: z.array(WireCostLine),
+  usage: WireModelUsage.optional(),
 });
 export type HostModelAnswerShape = z.infer<typeof HostModelAnswer>;
 
