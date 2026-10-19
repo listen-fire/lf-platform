@@ -5,7 +5,7 @@ import type { AnthropicVertex } from '@anthropic-ai/vertex-sdk';
 
 import type { ChatProvider } from '../chat';
 
-import { googleAuth, googleModelRegion, googleServiceAccount } from 'movement-engine/public/google-cloud';
+import { googleAuth, googleModelRegion, googleServiceAccount } from './google_account';
 
 let client: AnthropicVertex | undefined;
 

@@ -21,6 +21,7 @@
     "@anthropic-ai/sdk": "^0.126.0",
     "@anthropic-ai/vertex-sdk": "^0.19.9",
     "@google/genai": "^2.24.0",
+    "google-auth-library": "10.3.0",
     "openai": "5.22.0"
   },
   "peerDependenciesMeta": {
@@ -33,6 +34,9 @@
     "@google/genai": {
       "optional": true
     },
+    "google-auth-library": {
+      "optional": true
+    },
     "openai": {
       "optional": true
     }
@@ -43,6 +47,7 @@
     "@google/genai": "^2.24.0",
     "@types/jest": "29.5.14",
     "@types/node": "20.16.5",
+    "google-auth-library": "10.3.0",
     "movement-engine": "workspace:@listen-fire/engine@*",
     "openai": "5.22.0",
     "typescript": "5.5.4"

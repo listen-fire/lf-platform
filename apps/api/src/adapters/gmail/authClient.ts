@@ -30,7 +30,7 @@ import {
   type OAuth2Attempt,
   type OAuth2Declaration,
 } from 'movement-engine/public/secrets';
-import { GMAIL_READONLY_SCOPE } from 'movement-engine/public/google-cloud';
+import { GMAIL_READONLY_SCOPE } from '@listen-fire/gmail/api_client';
 
 import type { Credentials } from 'google-auth-library';
 

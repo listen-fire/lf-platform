@@ -19,7 +19,7 @@ import type { ChatProvider } from 'movement-engine/public/models';
 import type { Provider, Resolved } from 'movement-engine/public/models';
 import type { ChatModelName } from 'movement-engine/public/models';
 
-import { missingGoogleServiceAccountVars } from 'movement-engine/public/google-cloud';
+import { missingGoogleServiceAccountVars } from 'movement-engine/public/models';
 import { chatCallFor } from '../models/chat';
 import { providerCredentialsPresent, resolveModel } from 'movement-engine/public/models';
 import { anthropicKeyedChatProvider } from 'movement-engine/public/anthropic';

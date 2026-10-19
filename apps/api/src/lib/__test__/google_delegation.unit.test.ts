@@ -15,13 +15,9 @@ jest.mock('google-auth-library', () => ({
   },
 }));
 
-import {
-  GMAIL_READONLY_SCOPE,
-  GMAIL_SEND_SCOPE,
-  delegatedGoogleAuth,
-  gmailMailboxAllowlist,
-  googleAuth,
-} from 'movement-engine/lib/google_cloud';
+import { GMAIL_READONLY_SCOPE, GMAIL_SEND_SCOPE } from '@listen-fire/gmail/api_client';
+import { googleAuth } from 'model-providers/providers/google_account';
+import { delegatedGoogleAuth, gmailMailboxAllowlist } from '../../adapters/gmail/delegation';
 
 const ACCOUNT_ENV = {
   GOOGLE_PRIVATE_KEY: '-----BEGIN PRIVATE KEY-----\\nline\\n-----END PRIVATE KEY-----',

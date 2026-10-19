@@ -7,6 +7,7 @@
 
 export * from '../lib/models/registry';
 export * from '../lib/models/map';
+export * from '../lib/models/google_account';
 export * from '../lib/models/chat';
 export * from '../lib/run_cost';
 export * from '../lib/run_spend';

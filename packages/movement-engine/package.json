@@ -32,7 +32,6 @@
     "@listen-fire/movement-lang": "workspace:^",
     "@listen-fire/shared": "workspace:^",
     "exponential-backoff": "3.1.1",
-    "google-auth-library": "10.3.0",
     "jsonrepair": "3.8.0",
     "safe-stable-stringify": "2.5.0",
     "zod": "4.1.12"

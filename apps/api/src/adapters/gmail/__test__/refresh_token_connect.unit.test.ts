@@ -40,7 +40,7 @@ jest.mock('googleapis', () => ({
   },
 }));
 
-import { GMAIL_READONLY_SCOPE, GMAIL_SEND_SCOPE } from 'movement-engine/lib/google_cloud';
+import { GMAIL_READONLY_SCOPE, GMAIL_SEND_SCOPE } from '@listen-fire/gmail/api_client';
 import { connectGmailByRefreshToken } from '../apiClient';
 
 const PASTED = 'the-pasted-refresh-token';

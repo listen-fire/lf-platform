@@ -26,7 +26,7 @@ jest.mock('../../../lib/oauthCallbackRedirect', () => ({
 
 import type { Request, Response } from 'express';
 
-import { GMAIL_READONLY_SCOPE, GMAIL_SEND_SCOPE } from 'movement-engine/lib/google_cloud';
+import { GMAIL_READONLY_SCOPE, GMAIL_SEND_SCOPE } from '@listen-fire/gmail/api_client';
 import { GmailAppAdapter } from '../connector';
 
 const GRANTED = {
