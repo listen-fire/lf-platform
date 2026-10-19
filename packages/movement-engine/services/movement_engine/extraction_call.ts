@@ -16,7 +16,7 @@
 // only — the declaration's spec builder, the field validators, the file-text
 // seam and its bound — and both reach the model through the host's clients,
 // which own the output budget and the truncation rule
-// (`translation_graph/movement/llm_clients.ts`). The PROMPT is this file's own,
+// (`@listen-fire/anthropic`'s llm_clients). The PROMPT is this file's own,
 // laid out for the prompt cache:
 //
 //   1. one system prompt, identical for every call — no shape in it;

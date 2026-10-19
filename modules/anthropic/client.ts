@@ -15,10 +15,10 @@ import type {
   WebSearchResult,
   WebToolEvent,
 } from './web_tools';
-import type { ChatCallFor } from '../models/chat';
-import type { Provider, Resolved } from '../models/map';
-import type { ChatModelName } from '../models/registry';
+import type { ChatCallFor } from './chat';
+import type { ChatModelName, Provider, Resolved } from 'movement-engine/public/models';
 
+import behaviour from './behaviour.json';
 import { buildStructuredTool, extractStructuredResult } from './structured';
 import {
   defaultPageReader,
@@ -35,10 +35,10 @@ import {
   webChatTools,
   WEB_FETCH_MAX_CONTENT_TOKENS,
 } from './web_tools';
-import { limited, limiterSlot, limitRequest } from '../../services/limiter/limiter';
-import { neverAsAny } from '../utils/types';
-import { logger } from '../../services/logger';
-import { assertRunBudget } from '../run_spend';
+import { limited, limiterSlot, limitRequest } from 'movement-engine/public/limiter';
+import { logger } from 'movement-engine/public/log';
+import { assertRunBudget } from 'movement-engine/public/models';
+import { neverAsAny } from 'movement-engine/public/types';
 
 const SECOND = 1000;
 
@@ -73,12 +73,15 @@ interface ModelAccess {
 /** Requests in flight at once: `@lf/anthropic`'s own declared limit, kept by
  *  the limiter slot (services/limiter), as lf's Rust client keeps it. A
  *  request holds its place through its retries. */
-const MODELS_REQUEST = limitRequest({ module: '@lf/anthropic', team: '' }, [{ scope: 'module', concurrent: 8 }]);
+const MODELS_REQUEST = limitRequest({ module: '@lf/anthropic', team: '' }, [
+  { scope: 'module', concurrent: behaviour.concurrentRequests },
+]);
 
-const RETRY_LIMIT = 4;
-const INITIAL_DELAY = 1 * SECOND;
-const TIME_MULTIPLE = 4;
-const RATE_LIMIT_DELAY = 30 * SECOND;
+// behaviour.json, which the Rust lf's client is held to as well.
+const RETRY_LIMIT = behaviour.retry.attempts;
+const INITIAL_DELAY = behaviour.retry.initialDelayMs;
+const TIME_MULTIPLE = behaviour.retry.multiple;
+const RATE_LIMIT_DELAY = behaviour.retry.rateLimitWaitMs;
 
 async function enqueueQuery<T>(fn: () => Promise<T>, signal?: AbortSignal) {
   // Every request — each turn of a tool loop, each continuation — first asks
@@ -695,7 +698,7 @@ async function anthropicToolLoop(
   }
 }
 
-const MAX_CHAT_CONTINUATIONS = 5;
+const MAX_CHAT_CONTINUATIONS = behaviour.maxChatContinuations;
 
 /** How long one Messages request may run before the wait itself is news. Silence
  *  for longer than this is indistinguishable from a hang to anyone watching the

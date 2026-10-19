@@ -2,7 +2,7 @@
 // the provider's limits (plans/cloud-native-2026-10-06/22_everywhere_plan.md,
 // Henry 2026-10-18). The engine knows nothing of limits; the host asks the
 // slot before each call to a module (the remote adapter) and each model
-// request (lib/anthropic), and holds the call until it is granted.
+// request (@listen-fire/anthropic), and holds the call until it is granted.
 //
 // The contract (docs/contracts/limiter-slot.md) never waits: `acquire`
 // answers granted (with a permit to release) or refused (with when to ask

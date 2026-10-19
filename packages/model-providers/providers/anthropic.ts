@@ -1,18 +1,13 @@
-// Anthropic's own API, passed through: the seam IS this SDK's shape.
+// Anthropic's own API on this deployment's key: @lf/anthropic's keyed
+// provider, so the platform and a module calling Claude on its own key build
+// the one client the same way.
 
-import type Anthropic from '@anthropic-ai/sdk';
+import type { ChatProvider } from '@listen-fire/anthropic';
 
-import type { ChatProvider } from 'movement-engine/public/models';
-
-// Built at first use, not at import: a host that routes every name elsewhere
-// need not hold a key, nor install the SDK.
-let client: Anthropic | undefined;
+import { anthropicKeyedChatProvider } from '@listen-fire/anthropic';
 
 export function anthropicChatProvider(env: NodeJS.ProcessEnv): ChatProvider {
-  if (client) return client;
-  const { apiKey } = anthropicKeyFrom(env);
-  const sdk: typeof import('@anthropic-ai/sdk') = require('@anthropic-ai/sdk');
-  return (client = new sdk.default({ apiKey }));
+  return anthropicKeyedChatProvider(anthropicKeyFrom(env));
 }
 
 function anthropicKeyFrom(env: NodeJS.ProcessEnv): { apiKey: string } {

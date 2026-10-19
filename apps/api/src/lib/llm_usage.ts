@@ -9,7 +9,7 @@ import type { AgentConversationId } from '../generated/kysely/public/AgentConver
 import type { TriggerRunId } from '../generated/kysely/automations/TriggerRun';
 
 import { isInsideSpendMeter, reportRunCost } from 'movement-engine/public/models';
-import { costMicrodollars } from 'movement-engine/public/models';
+import { costMicrodollars } from '@listen-fire/anthropic';
 import { models } from 'movement-engine/public/models';
 import { logger } from 'movement-engine/public/log';
 import { getQb } from './kysely';
@@ -122,7 +122,7 @@ function calculateCostMicrodollars(options: {
       unpricedKeysWarned.add(key);
       logger.warn(
         `[llm_usage] no price for "${key}" (from ${originOf(options.served)}) — its usage is recorded ` +
-          'at zero cost. Add it to movement-engine/lib/models/prices.json.',
+          'at zero cost. Add it to modules/anthropic/prices.json.',
       );
     }
     return 0;

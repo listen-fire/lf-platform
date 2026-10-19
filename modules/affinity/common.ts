@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { parse } from 'tldts';
 
 import type { ModuleModels } from 'module-kit';
-import { parseJson } from 'movement-engine/public/adapter-support';
+import { parseJson } from '@listen-fire/anthropic';
 import { AffinityAPIClient } from './api_client';
 import { logger } from 'movement-engine/public/log';
 

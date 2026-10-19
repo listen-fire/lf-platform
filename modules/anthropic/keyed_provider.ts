@@ -3,7 +3,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 
-import type { ChatProvider } from '../chat';
+import type { ChatProvider } from './chat';
 
 export interface AnthropicKey {
   apiKey: string;

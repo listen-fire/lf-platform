@@ -33,16 +33,17 @@ const PACKAGES = [
   { dir: 'packages/shared' },
   { dir: 'packages/movement-lang', assets: [/^wasm\/[^/]+\.wasm$/] },
   { dir: 'packages/engine-contracts' },
-  { dir: 'packages/movement-engine', assets: [/\/prompts\/[^/]+\.md$/] },
+  { dir: 'packages/movement-engine' },
   { dir: 'packages/file-text' },
+  { dir: 'modules/anthropic' },
   { dir: 'packages/model-providers' },
   { dir: 'packages/module-kit' },
   { dir: 'modules/google-sheets' },
   ...fs
     .readdirSync(path.join(ROOT, 'modules'))
-    .filter((name) => name !== 'google-sheets' && fs.existsSync(path.join(ROOT, 'modules', name, 'package.json')))
+    .filter((name) => !['google-sheets', 'anthropic'].includes(name) && fs.existsSync(path.join(ROOT, 'modules', name, 'package.json')))
     .sort()
-    .map((name) => ({ dir: `modules/${name}` })),
+    .map((name) => ({ dir: `modules/${name}`, ...(name === 'judge-llm' ? { assets: [/^prompts\/[^/]+\.md$/] } : {}) })),
 ];
 
 /** The workspace spelling each package is imported by, beside its published name. */

@@ -18,7 +18,7 @@
 import type { Emission } from './addresses';
 import type { PluginOutput, WebPlugin } from './plugin';
 
-import { parseJson } from 'movement-engine/public/anthropic';
+import { parseJson } from '@listen-fire/anthropic';
 import { VC_URL_RETRIEVAL_PLUGIN } from 'movement-engine/public/plugins';
 import { emissionOf } from './addresses';
 import { anthropicChat, logger, runFields, tools } from './tools';

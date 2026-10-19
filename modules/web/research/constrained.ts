@@ -22,7 +22,7 @@
 
 import { z } from 'zod';
 
-import type { ChatModelName } from 'movement-engine/public/anthropic';
+import type { ChatModelName } from 'movement-engine/public/models';
 import type { ProfileIdentity } from '../linkedin_identity';
 import type { SearchHit } from '../search_hygiene';
 import type {
@@ -35,7 +35,7 @@ import type {
   ResearchUsage,
 } from './contract';
 
-import { meterAnthropicUsage } from 'movement-engine/public/anthropic';
+import { meterAnthropicUsage } from '@listen-fire/anthropic';
 import { describeError, looksLikeNonHtmlAddress } from '../addresses';
 import { anthropicChatStructured, logger, runFields, SECOND, tools } from '../tools';
 import { canonicalProfileUrl, isLinkedInLink, profileSlug } from '../linkedin_identity';

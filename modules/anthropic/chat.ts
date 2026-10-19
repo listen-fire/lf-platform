@@ -10,8 +10,7 @@
 // shared client is handed a `ChatCallFor` rather than reading either.
 
 import type Anthropic from '@anthropic-ai/sdk';
-import type { Resolved } from './map';
-import type { ChatModelName } from './registry';
+import type { ChatModelName, Resolved } from 'movement-engine/public/models';
 
 export type ChatProvider = {
   messages: {

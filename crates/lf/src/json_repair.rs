@@ -1,8 +1,9 @@
-//! A model reply's broken JSON repaired as the TypeScript engine repairs it:
+//! A model reply's broken JSON repaired as the TypeScript client repairs it:
 //! a port of the npm `jsonrepair` 3.8.0 (its non-streaming `jsonrepair`),
-//! which movement-engine's `parseJsonReply` calls. The text is walked in
+//! which @lf/anthropic's `parseJsonReply` calls. The text is walked in
 //! UTF-16 units, as JavaScript indexes a string, so a repair lands where the
-//! TypeScript one does. The replies both are held to: `testdata/json_replies.json`.
+//! TypeScript one does. The replies both are held to:
+//! `modules/anthropic/fixtures/json_replies.json`.
 //!
 //! jsonrepair is Copyright (c) 2020-2023 by Jos de Jong, under the ISC
 //! License: permission to use, copy, modify, and/or distribute this software

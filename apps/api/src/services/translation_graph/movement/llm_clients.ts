@@ -1,5 +1,5 @@
-// The hosted product's model clients: the shared ones (movement-engine's
-// movement/llm_clients) on this deployment's Anthropic client.
+// The hosted product's model clients: the shared ones (@lf/anthropic's
+// llm_clients) on this deployment's Anthropic client.
 
 import type { ExtractCallLlmClient } from 'movement-engine/public/models';
 import type { CancelGate } from 'movement-engine/public/movement-engine';
@@ -9,7 +9,7 @@ import { anthropicChatDetailed } from '../../../lib/anthropic';
 import {
   makeAnthropicExtractCallClient as makeExtractCallClient,
   makeAnthropicLlmClient as makeLlmClient,
-} from 'movement-engine/public/models';
+} from '@listen-fire/anthropic';
 
 interface HostedModelClientOptions {
   cancel?: CancelGate;

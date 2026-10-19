@@ -12,7 +12,7 @@ import {
   type AffinityOrganisation,
 } from './common';
 import type { ModuleModels } from 'module-kit';
-import { parseJson } from 'movement-engine/public/adapter-support';
+import { parseJson } from '@listen-fire/anthropic';
 import { logger } from 'movement-engine/public/log';
 import { reportAffinityWriteFailure } from './write_failures';
 import { fieldConfigurationSchema, AffinityFieldConfiguration } from './field_configuration';

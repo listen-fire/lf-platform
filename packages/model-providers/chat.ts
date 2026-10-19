@@ -1,8 +1,8 @@
 // The hosted product's answer to which provider serves each chat model name:
 // its MODEL_MAP and environment pick the vendor and its credentials. The seam
-// itself (`ChatProvider`, `ChatCall`) lives with the shared client.
+// itself (`ChatProvider`, `ChatCall`) lives with the shared client, @lf/anthropic.
 
-import type { ChatCall, ChatProvider } from 'movement-engine/public/models';
+import type { ChatCall, ChatProvider } from '@listen-fire/anthropic';
 import type { Provider } from 'movement-engine/public/models';
 import type { ChatModelName } from 'movement-engine/public/models';
 

@@ -1,37 +1,22 @@
 /**
- * `winston.format.simple()` stringifies metadata with plain JSON.stringify,
- * which drops Error.message/Error.stack (non-enumerable) → `{}`. The logger's
- * `simple()` replacement must apply the same Error-aware replacer used for
- * `info.message` to the rest-metadata too, in any NODE_ENV.
+ * Plain JSON.stringify drops Error.message/Error.stack (non-enumerable) → `{}`.
+ * The engine's line format applies an Error-aware replacer to the metadata,
+ * in any NODE_ENV.
  */
 
-import { Writable } from "node:stream";
+import { formatEngineLogLine, logger, routeEngineLogsTo } from 'movement-engine/public/log';
 
-import winston from 'winston';
-
-import { logger } from 'movement-engine/services/logger';
-
-// Captures through a transport on the real logger rather than spying on
-// process.stdout: winston's Console transport writes via `console._stdout`,
-// which exists only under jest's verbose (single-file) console. A multi-file
-// run swaps in a buffered console, so a stdout spy sees nothing there.
+// Captures through the engine's log hook, formatting each line as the default
+// console hook would print it.
 function captureLogOutput(emit: () => void): string {
-  const chunks: string[] = [];
-  const transport = new winston.transports.Stream({
-    stream: new Writable({
-      write(chunk, _encoding, done) {
-        chunks.push(chunk.toString());
-        done();
-      },
-    }),
-  });
-  logger.add(transport);
+  const lines: string[] = [];
+  const restore = routeEngineLogsTo((line) => lines.push(formatEngineLogLine(line, { colour: false })));
   try {
     emit();
   } finally {
-    logger.remove(transport);
+    restore();
   }
-  return chunks.join('');
+  return lines.join('\n');
 }
 
 describe('logger metadata Error serialization', () => {

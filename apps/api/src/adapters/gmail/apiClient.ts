@@ -22,18 +22,15 @@ import { z } from 'zod';
 import type { GmailConnectMethod } from './connect_method';
 
 import {
+  GMAIL_READONLY_SCOPE,
   GMAIL_SEND_SCOPE,
   GmailApiClient as ModuleGmailApiClient,
   classifyGmailError,
   type GmailProfile,
   type GmailScope,
 } from '@listen-fire/gmail/api_client';
-import {
-  GMAIL_READONLY_SCOPE,
-  delegatedGoogleAuth,
-  gmailMailboxAllowlist,
-  isGoogleServiceAccountConfigured,
-} from 'movement-engine/public/google-cloud';
+import { isGoogleServiceAccountConfigured } from 'movement-engine/public/models';
+import { delegatedGoogleAuth, gmailMailboxAllowlist } from './delegation';
 import { neverAsAny } from 'movement-engine/public/types';
 import {
   GMAIL_REFRESH_TOKEN_REFUSED_MESSAGE,

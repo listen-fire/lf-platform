@@ -1,8 +1,8 @@
 //! The engine's model requests, answered: `llm.client.call` (the extraction
 //! keyword's and `AI()`'s call), `llm.extractCall.call` (the extraction
 //! call's, its prompt as blocks with cache breakpoints) and
-//! `llm.arbitrateEntities`. As movement-engine's `llm_clients.ts` and
-//! `metered.ts` make them: each call runs under its request's
+//! `llm.arbitrateEntities`. As @lf/anthropic's `llm_clients.ts` and
+//! movement-engine's `metered.ts` make them: each call runs under its request's
 //! budget, is priced from the shared price table and answers what it spent, and
 //! a call refused past its budget answers the refusal as data.
 
@@ -462,10 +462,10 @@ mod tests {
     }
 
     /// Every reply in the fixture reads as the TypeScript engine reads it
-    /// (apps/cli `json_replies.test.ts` holds the fixture to that engine).
+    /// (@lf/anthropic's `json_replies.unit.test.ts` holds the fixture to it).
     #[test]
     fn replies_read_as_the_typescript_engine_reads_them() {
-        let cases: Vec<Json> = serde_json::from_str(include_str!("testdata/json_replies.json")).unwrap();
+        let cases: Vec<Json> = serde_json::from_str(include_str!("../../../modules/anthropic/fixtures/json_replies.json")).unwrap();
         // Valid JSON whose value lf cannot hold, so it reads the raw text: a
         // number past a double's range (JavaScript's Infinity) and a lone
         // UTF-16 surrogate (a Rust string is UTF-8).

@@ -13,7 +13,7 @@ import { z } from 'zod';
 
 import type { Capability, ChatModelName, ModelName } from './registry';
 
-import { isGoogleServiceAccountConfigured, missingGoogleServiceAccountVars } from '../google_cloud';
+import { isGoogleServiceAccountConfigured, missingGoogleServiceAccountVars } from './google_account';
 import { neverAsAny } from '../utils/types';
 import { embeddingDestinations } from './embedding/destinations';
 import { embeddingRange } from './embedding/range';
