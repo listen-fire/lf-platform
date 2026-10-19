@@ -1,10 +1,9 @@
-import * as movement_engine_public_adapter from 'movement-engine/public/adapter';
 import { CapturedWrite } from 'movement-engine/public/adapter';
 import { FieldType, CatalogSnapshot, InstanceSchema, LanguageVersion, Diagnostic, StoryProblem, StoryShapeNode, StoryEdge, Step, Chip, StoryFilter, StoryValidity } from 'movement-lang';
 import * as _prisma_client_runtime_library from '@prisma/client/runtime/library';
 import * as _trpc_server_observable from '@trpc/server/observable';
 import { AskState } from '@listen-fire/ask';
-import * as movement_engine_public_catalog from 'movement-engine/public/catalog';
+import * as engine_contracts from 'engine-contracts';
 import * as _prisma_client from '@prisma/client';
 import * as _trpc_server from '@trpc/server';
 import * as _trpc_server_dist_error_formatter from '@trpc/server/dist/error/formatter';
@@ -4592,9 +4591,9 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     } | {
                         kind: "generic";
                         shape: {
-                            properties: Record<string, movement_engine_public_catalog.ExpressionType>;
+                            properties: Record<string, engine_contracts.ExpressionType>;
                             edges: Record<string, {
-                                target: movement_engine_public_catalog.ExpressionType;
+                                target: engine_contracts.ExpressionType;
                             }>;
                         };
                     } | {
@@ -4635,7 +4634,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     fires?: boolean | undefined;
                     firesOn?: string[] | undefined;
                 }[];
-                runtimeCapabilities: movement_engine_public_adapter.RuntimeCapabilities;
+                runtimeCapabilities: engine_contracts.RuntimeCapabilities;
                 supportedTriggers: readonly ("mutation" | "extraction" | "snapshot" | "poll" | "changes-feed" | "webhook")[];
             }>;
             describeTypes: _trpc_server.BuildProcedure<"query", {
@@ -4697,9 +4696,9 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     } | {
                         kind: "generic";
                         shape: {
-                            properties: Record<string, movement_engine_public_catalog.ExpressionType>;
+                            properties: Record<string, engine_contracts.ExpressionType>;
                             edges: Record<string, {
-                                target: movement_engine_public_catalog.ExpressionType;
+                                target: engine_contracts.ExpressionType;
                             }>;
                         };
                     } | {
@@ -13873,7 +13872,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
             }, {
-                blocks: movement_engine_public_adapter.ConfigBlock[];
+                blocks: engine_contracts.ConfigBlock[];
                 values: Record<string, string>;
             }>;
             updateTriggerConfig: _trpc_server.BuildProcedure<"mutation", {
