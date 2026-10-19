@@ -1,0 +1,27 @@
+[package]
+# What a module and its host both speak: adapter protocol 2's envelope, JSON
+# in JavaScript's key order, and the check every protocol result passes. `lf`
+# (the host) and the module kit (crates/module-kit, the module side) share it.
+name = "listen-fire-module-wire"
+version.workspace = true
+edition.workspace = true
+publish = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+description = "listen-fire adapter protocol 2: the envelope, JSON in JavaScript key order, and every result's schema check"
+keywords = ["movement", "automation", "listen-fire", "protocol"]
+categories = ["encoding", "network-programming"]
+include = ["src/**/*", "Cargo.toml"]
+
+[lib]
+name = "module_wire"
+
+[dependencies]
+# JavaScript's object key order (array-index keys first) lives in the parser.
+movement-parser = { package = "listen-fire-parser", version = "0.12.0-rc.2", path = "../movement-parser" }
+serde = { version = "1", features = ["derive"] }
+# As the parser's: `preserve_order` must stay off (features unify).
+serde_json = { version = "1", features = ["float_roundtrip", "raw_value", "unbounded_depth"] }
+indexmap = { version = "2" }

@@ -21,6 +21,11 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 
 - lf starts a module's process only when a run or check needs one (only the externals the movements import), keeps it up while used, and stops it after `moduleIdleTimeout` seconds unused (lf.yaml, default 300). A crashed module starts again on its next call; one call may take `callTimeout` seconds (default 600). First-party `@lf/*` modules and any marked `trusted: true` in their `lf-external.yaml` share one Node process (`serve-module` now serves several modules, each under its own path, with `MODULE_MOUNTS`); every other module gets its own. Module processes exit with lf, and ones a killed lf left behind are stopped on the next start (tracked in the store). `runtime: node 22` in `lf-external.yaml` is checked before a module starts (a served module defaults to node 22). A local module runs with your permissions: there is no sandbox yet.
 
+### i-rustkit
+
+- **Modules in Rust: `listen-fire-module-kit`** (`crates/module-kit`). A trait per module kind (`Adapter`, `Plugins`, and the core slots `Store`, `Limiter`, `LoopGuard`) and a `Host` that serves one or several of them over adapter protocol 2 HTTP, each at `/<name>`, on loopback TCP (`PORT`, prints `listening <port>`) or a Unix socket (`--socket`/`LF_MODULE_SOCKET`). A host is its own process; lf reaches it as any module server (`url:` in `lf-external.yaml`). Example: `examples/rust-module`.
+- The protocol's envelope, JSON in JavaScript key order and every result's schema check move from lf into `listen-fire-module-wire` (`crates/module-wire`), which lf and the kit share. No behaviour change in lf.
+
 ### au-delete
 
 - The legacy v3 output pipeline is removed (its executor, per-destination adapters, authoring agent and the `knowledge.outputAgent` / `knowledge.expressionWriter` tRPC routes). It had no remaining callers; movements are the only way data moves. A migration sets any stored v3 output (`pipeline_output.config_version = 3`) still marked live or dry-run to `off`; its config is kept.

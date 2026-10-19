@@ -602,8 +602,11 @@ dependencies = [
  "listen-fire-checker",
  "listen-fire-engine",
  "listen-fire-language",
+ "listen-fire-module-kit",
+ "listen-fire-module-wire",
  "listen-fire-parser",
  "rusqlite",
+ "rust-module-example",
  "rustls",
  "serde",
  "serde_json",
@@ -649,6 +652,31 @@ version = "0.12.0-rc.2"
 dependencies = [
  "listen-fire-checker",
  "listen-fire-parser",
+ "serde_json",
+]
+
+[[package]]
+name = "listen-fire-module-kit"
+version = "0.12.0-rc.2"
+dependencies = [
+ "bytes",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "indexmap",
+ "listen-fire-module-wire",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "listen-fire-module-wire"
+version = "0.12.0-rc.2"
+dependencies = [
+ "indexmap",
+ "listen-fire-parser",
+ "serde",
  "serde_json",
 ]
 
@@ -931,6 +959,13 @@ version = "0.0.0"
 dependencies = [
  "listen-fire",
  "serde_json",
+]
+
+[[package]]
+name = "rust-module-example"
+version = "0.0.0"
+dependencies = [
+ "listen-fire-module-kit",
 ]
 
 [[package]]

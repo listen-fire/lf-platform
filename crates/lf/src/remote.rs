@@ -7,7 +7,7 @@
 //! a written file exposed at a URL the external fetches, a file read back
 //! (only at a field the external's own catalog declares a file, or a
 //! resource's `fileRef`) named as one this install owns. Every answer is held
-//! to its protocol schema (crate::wire_results), every call counts against
+//! to its protocol schema (module_wire::results), every call counts against
 //! the segment's ceiling (`REMOTE_ADAPTER_MAX_CALLS_PER_RUN`), and a
 //! rehearsed instance (`dryRun`) captures its writes instead of making them
 //! (`engine/dry_run_adapter.ts`).
@@ -25,7 +25,7 @@ use crate::project::Project;
 use crate::protocol::RpcError;
 use crate::secrets::{Credential, Credentials, credential_for, signer_of};
 use crate::wire::{Hv, json_of_js};
-use crate::wire_results;
+use module_wire::results as wire_results;
 
 /// `ADAPTER_METHODS`, in order: what an instance can be asked.
 pub const ADAPTER_METHODS: &[&str] = &[

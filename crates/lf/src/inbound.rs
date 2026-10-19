@@ -561,7 +561,7 @@ fn emit_body(body: Option<&Js>) -> Result<Vec<Js>, (String, String)> {
         return Err(("events".into(), format!("expected between 1 and {DOOR_MAX_BATCH} events")));
     }
     // The events as the protocol's `preprocessInbound` result reads them.
-    let read = crate::wire_results::check("preprocessInbound", "emit", &Js::Obj(obj! { "events" => Js::Arr(events.to_vec()) }))
+    let read = module_wire::results::check("preprocessInbound", "emit", &Js::Obj(obj! { "events" => Js::Arr(events.to_vec()) }))
         .map_err(|issue| ("events".to_string(), issue))?;
     Ok(read.get("events").and_then(Js::as_array).map(<[Js]>::to_vec).unwrap_or_default())
 }

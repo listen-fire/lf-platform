@@ -66,7 +66,6 @@ mod http;
 mod http_out;
 mod inbound;
 mod init;
-mod json;
 mod lfjson;
 #[cfg(feature = "anthropic")]
 mod json_repair;
@@ -123,9 +122,10 @@ mod subscriptions;
 mod units;
 mod upgrade;
 mod wire;
-mod wire_results;
 
 use std::io::Write;
+// The wire a module and lf share (crates/module-wire), at the paths lf names it by.
+pub(crate) use module_wire::{json, obj};
 use std::path::PathBuf;
 
 const USAGE: &str = "usage: lf <init|check|catalog|lsp|run|resume|runs|drain|serve|call|cancel|upgrade|connect|credential|completion> [--dir <project folder>] [--ephemeral] [--store <state.db|postgres://…>] [--team <uuid>]
