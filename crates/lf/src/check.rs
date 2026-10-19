@@ -14,7 +14,7 @@ use movement_parser::util::form::{external_text, form_of_text, read_json_text};
 use serde_json::json;
 
 use crate::catalog::catalog_of;
-use crate::externals::{RunningExternal, rpc, scan_externals, start_externals};
+use crate::externals::{RunningExternal, needed_externals, rpc, scan_externals, start_externals};
 use crate::json::Js;
 use crate::project::Project;
 use crate::protocol::shape_error;
@@ -94,7 +94,8 @@ pub fn check_file(file: &MovementFile, catalog: &CatalogSnapshot, language_versi
 pub struct Checking {
     pub files: Vec<MovementFile>,
     pub catalog: Js,
-    /// Held so the started externals live until the check is done.
+    /// The externals the catalog was read from (their processes stay up
+    /// until idle: crate::module_hosts).
     pub _running: Vec<RunningExternal>,
 }
 
@@ -112,7 +113,9 @@ pub async fn open_checking(project: &Project) -> Result<Opened, String> {
     if !missing.is_empty() {
         return Ok(Opened::MissingCredentials(missing));
     }
-    let externals = scan_externals(project)?;
+    // A check starts only what the files import: a third-party graph is
+    // read live, so its module runs for the check.
+    let externals = needed_externals(scan_externals(project)?, &files, project.language_version, |_| false);
     let running = start_externals(project, &externals, &credentials, LOCAL_TENANT).await?;
     let mut schemas = IndexMap::new();
     for r in running.iter().filter(|r| !r.is_plugin()) {

@@ -70,6 +70,7 @@ mod loop_guard;
 mod llm_calls;
 mod lsp;
 mod models;
+mod module_hosts;
 mod oauth2;
 mod oauth_redirect;
 mod park_files;
@@ -471,7 +472,13 @@ fn main() {
     let wants_json = argv.iter().any(|a| a == "--json");
     let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().expect("a tokio runtime");
     // A LocalSet, so a listener's connections run as tasks on this one thread.
-    let code = match runtime.block_on(tokio::task::LocalSet::new().run_until(run(argv))) {
+    let code = runtime.block_on(tokio::task::LocalSet::new().run_until(async {
+        let code = run(argv).await;
+        // process::exit runs no destructor: the module processes go now.
+        module_hosts::stop_all();
+        code
+    }));
+    let code = match code {
         Ok(code) => code,
         Err(message) if wants_json => {
             println!("{}", json::Js::Obj(crate::obj! { "error" => json::Js::str(&message) }).to_json());

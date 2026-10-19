@@ -164,7 +164,15 @@ pub struct Answered {
 
 pub async fn post_rpc_carrying(call: Call<'_>, carried: Carried) -> Answered {
     let mut beside = Beside::default();
-    let answer = post(call, carried, &mut beside).await;
+    let (method, base_url, limit) = (call.method.to_string(), call.base_url.to_string(), crate::module_hosts::call_timeout());
+    // A call that outlasts the limit fails as an unreachable one does: the
+    // run's own retry and failure path takes it from there.
+    let answer = tokio::time::timeout(limit, post(call, carried, &mut beside)).await.unwrap_or_else(|_| {
+        Err(RpcError::Unreachable(format!(
+            "Remote adapter at {base_url} did not answer \"{method}\" within {}s (lf.yaml's `callTimeout` allows longer)",
+            limit.as_secs()
+        )))
+    });
     Answered { answer, update: beside.update, retry_after_ms: beside.retry_after_ms }
 }
 

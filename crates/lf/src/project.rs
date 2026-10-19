@@ -39,6 +39,12 @@ struct ProjectFile {
     /// Seconds a started external has to print `listening <port>`.
     #[serde(rename = "startTimeout")]
     start_timeout: Option<f64>,
+    /// Seconds a started module process may sit unused before lf stops it.
+    #[serde(rename = "moduleIdleTimeout")]
+    module_idle_timeout: Option<f64>,
+    /// Seconds one call to a module may take.
+    #[serde(rename = "callTimeout")]
+    call_timeout: Option<f64>,
     /// The most one run may spend, in US dollars (the platform's
     /// `MOVEMENT_MAX_RUN_COST_USD`).
     #[serde(rename = "maxRunCostUsd")]
@@ -80,6 +86,11 @@ pub struct Project {
     /// print `listening <port>`: lf.yaml's `startTimeout`, unless
     /// `--start-timeout` names another.
     pub start_timeout: Duration,
+    /// How long a module process may sit unused before lf stops it
+    /// (`moduleIdleTimeout`); the next call starts it again.
+    pub module_idle_timeout: Duration,
+    /// How long one call to a module may take (`callTimeout`).
+    pub call_timeout: Duration,
     /// The most one run may spend on model calls and paid services, in
     /// microdollars (lf.yaml's `maxRunCostUsd`); None: no cap.
     pub cost_cap_microdollars: Option<f64>,
@@ -179,6 +190,12 @@ pub fn load_project(from: &Path) -> Result<Project, String> {
         None => DEFAULT_START_TIMEOUT,
         Some(seconds) => start_timeout_of(seconds, &format!("{}: startTimeout", path.display()))?,
     };
+    let seconds_or = |value: Option<f64>, default: Duration, key: &str| match value {
+        None => Ok(default),
+        Some(seconds) => start_timeout_of(seconds, &format!("{}: {key}", path.display())),
+    };
+    let module_idle_timeout = seconds_or(file.module_idle_timeout, crate::module_hosts::DEFAULT_IDLE_TIMEOUT, "moduleIdleTimeout")?;
+    let call_timeout = seconds_or(file.call_timeout, crate::module_hosts::DEFAULT_CALL_TIMEOUT, "callTimeout")?;
     let cost_cap_microdollars = file.max_run_cost_usd.map(|d| cost_cap_of(d, &path.display().to_string())).transpose()?;
     if file.store.is_some() {
         return Err(format!(
@@ -207,6 +224,8 @@ pub fn load_project(from: &Path) -> Result<Project, String> {
         core,
         public_url: file.public_url,
         start_timeout,
+        module_idle_timeout,
+        call_timeout,
         cost_cap_microdollars,
         root: dir,
     })

@@ -15,7 +15,7 @@ use crate::catalog::catalog_of;
 use crate::check::{LOCAL_TENANT, describe_external};
 use crate::documents::Documents;
 use crate::loop_guard::{Answer, Asked, Current, LoopGuard, Wrote};
-use crate::externals::{RunningExternal, rpc, scan_externals, start_externals};
+use crate::externals::{RunningExternal, needed_externals, rpc, scan_externals, start_externals};
 use crate::json::{Js, Obj};
 use crate::obj;
 use crate::project::{Project, refuse_below_lf};
@@ -49,7 +49,7 @@ pub const DEFAULT_PORT: u16 = 4400;
 
 pub struct Session {
     pub project: Project,
-    pub store: Box<dyn RunHostStore>,
+    pub store: std::rc::Rc<dyn RunHostStore>,
     credentials: Credentials,
     running: Vec<RunningExternal>,
     pub documents: Documents,
@@ -113,13 +113,13 @@ pub async fn open_session(project: Project, ephemeral: bool, store: &StoreSpec) 
     if !missing.is_empty() {
         return Err(missing.iter().map(|m| format!("{}:{}:{} {}", m.file.display(), m.line, m.column, m.message)).collect::<Vec<_>>().join("\n"));
     }
-    let externals = scan_externals(&project)?;
+    let registered = |e: &crate::externals::External| crate::subscriptions::has_registered_webhook(&credentials, &e.manifest.name);
+    let externals = needed_externals(scan_externals(&project)?, &files, project.language_version, registered);
     let loop_guard = crate::loop_guard::of_project(&project, &env)?;
     // Before any call: the manifest calls below ask it too.
     crate::limiter::install(crate::limiter::of_project(&project, &env)?);
     // Before the externals start, so they are told where it is.
     crate::serve::open_models_door(&credentials).await?;
-    let running = start_externals(&project, &externals, &credentials, LOCAL_TENANT).await?;
     let due_offset_ms = due_clock_offset()?;
     let (store, ephemeral_dir) = if ephemeral {
         let dir = std::env::temp_dir().join(format!("lf-{}", uuid::Uuid::new_v4()));
@@ -128,6 +128,11 @@ pub async fn open_session(project: Project, ephemeral: bool, store: &StoreSpec) 
     } else {
         (open_store(store)?, None)
     };
+    let store: std::rc::Rc<dyn RunHostStore> = store.into();
+    // Before any module starts: what an earlier lf left running is
+    // stopped, and what this one starts is listed in the store.
+    crate::module_hosts::track_in(store.clone());
+    let running = start_externals(&project, &externals, &credentials, LOCAL_TENANT).await?;
     // The files slot's module: @lf/local-files, the one lf has (crate::core).
     let documents = Documents::new(&project.lf_dir);
     let mut schemas = IndexMap::new();
