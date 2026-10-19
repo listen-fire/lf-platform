@@ -101,6 +101,13 @@ describe('defining a module', () => {
     expect(() => defineModule({ ...notes, name: '@lf/other' })).toThrow(/answers to "other"/);
   });
 
+  it('accepts the bare package name as spelled, so a hyphenated tag kept from before modules still names its package', () => {
+    const named = (adapterType: string) => ({ ...notes, name: '@lf/notes-hub', manifest: { ...notes.manifest, adapterType } });
+    expect(defineModule(named('notes-hub')).manifest.adapterType).toBe('notes-hub');
+    expect(defineModule(named('notes_hub')).manifest.adapterType).toBe('notes_hub');
+    expect(() => defineModule(named('notes'))).toThrow(/answers to "notes_hub"/);
+  });
+
   it('declares what the protocol manifest carries, its methods read off what create built', () => {
     const loaded = adapterInProcess(notes, host(memoryCredential({ api_key: 'k' })));
     expect(loaded.manifest).toMatchObject({

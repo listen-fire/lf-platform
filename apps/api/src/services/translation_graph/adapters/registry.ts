@@ -12,17 +12,15 @@ import { credentialTypeOf } from './credential_type';
 import { KG_ADAPTER_TYPE, KG_MANIFEST, createKnowledgeGraphAdapter } from './knowledge_graph';
 import { ATTIO_ADAPTER_TYPE } from '@listen-fire/attio/types';
 import { ATTIO_MANIFEST } from '@listen-fire/attio/manifest';
-import {
-  NATIVE_VALUATIONS_ADAPTER_TYPE,
-  NATIVE_VALUATIONS_MANIFEST,
-  createNativeValuationsAdapter,
-} from './native_valuations';
+import { NATIVE_VALUATIONS_ADAPTER_TYPE } from '@listen-fire/native-valuations/types';
+import { NATIVE_VALUATIONS_MANIFEST } from '@listen-fire/native-valuations/manifest';
 import { SLACK_ADAPTER_TYPE } from '@listen-fire/slack/types';
 import { SLACK_MANIFEST } from '@listen-fire/slack/manifest';
 import { TELEGRAM_ADAPTER_TYPE } from '@listen-fire/telegram/types';
 import { TELEGRAM_MANIFEST } from '@listen-fire/telegram/manifest';
 import { EMAIL_ADAPTER_TYPE, EMAIL_MANIFEST, createEmailAdapter } from './email';
-import { WHATSAPP_ADAPTER_TYPE, WHATSAPP_MANIFEST, createWhatsappAdapter } from './whatsapp';
+import { WHATSAPP_ADAPTER_TYPE } from '@listen-fire/whatsapp/types';
+import { WHATSAPP_MANIFEST } from './whatsapp/shared_app';
 import { AIRTABLE_ADAPTER_TYPE } from '@listen-fire/airtable/types';
 import { AIRTABLE_MANIFEST } from '@listen-fire/airtable/manifest';
 import { AFFINITY_ADAPTER_TYPE } from '@listen-fire/affinity/types';
@@ -52,8 +50,7 @@ import { GMAIL_ADAPTER_TYPE, GMAIL_MANIFEST, createGmailAdapter } from './gmail'
 import { createGmailPollSource } from './gmail/poll';
 import { ASK_ADAPTER_TYPE } from '@listen-fire/ask/types';
 import { ASK_MANIFEST } from '@listen-fire/ask/manifest';
-import { SYSTEM_ADAPTER_TYPE, SYSTEM_MANIFEST, createSystemAdapter } from './system';
-import { createSystemPollSource } from './system/poll';
+import { SYSTEM_ADAPTER_TYPE, SYSTEM_MANIFEST, createSystemAdapter, createSystemPollSource } from './system';
 
 /**
  * Factory signature: takes per-team + per-consumer context. Adapters that
@@ -87,7 +84,12 @@ const ADAPTER_FACTORIES: Record<string, AdapterFactory> = {
     const { createAffinityAdapter }: typeof import('./affinity') = require('./affinity');
     return createAffinityAdapter({ teamId, credentialsId });
   }),
-  [NATIVE_VALUATIONS_ADAPTER_TYPE]: createNativeValuationsAdapter,
+  // A module (@lf/native-valuations, platform-supplied); its BUILTIN_MODULES
+  // line picks module or legacy.
+  [NATIVE_VALUATIONS_ADAPTER_TYPE]: builtinAdapterFactory(NATIVE_VALUATIONS_ADAPTER_TYPE, ({ teamId, credentialsId }) => {
+    const { createNativeValuationsAdapter }: typeof import('./native_valuations') = require('./native_valuations');
+    return createNativeValuationsAdapter({ teamId, credentialsId });
+  }),
   // A module (@lf/slack); its BUILTIN_MODULES line picks module or legacy.
   [SLACK_ADAPTER_TYPE]: builtinAdapterFactory(SLACK_ADAPTER_TYPE, ({ teamId, credentialsId }) => {
     const { createSlackAdapter }: typeof import('./slack') = require('./slack');
@@ -105,14 +107,19 @@ const ADAPTER_FACTORIES: Record<string, AdapterFactory> = {
   // Email adapter — source-only inbound email (body + attachments as
   // Resources). R4b landed unregistered so the wave-1a sub-wave could
   // touch the registry without collisions; G1 wires it in.
-  // The createEmailAdapter factory ignores `credentialsId` — there are
-  // no per-team email credentials in this build.
-  [EMAIL_ADAPTER_TYPE]: ({ teamId }) => createEmailAdapter({ teamId }),
-  // WhatsApp adapter — source-only inbound WhatsApp messages (body + media
-  // as Resources). The phone-based twin of the email adapter. The factory
-  // ignores `credentialsId` — there are no per-team WhatsApp credentials in
-  // this build (the v3 Twilio creds live on `pipeline_input`).
-  [WHATSAPP_ADAPTER_TYPE]: ({ teamId }) => createWhatsappAdapter({ teamId }),
+  // WhatsApp adapter — inbound messages, reactions and locations (media on
+  // the `Attachments` edge), and replies, reactions and typing along a
+  // message's edges. No per-team credential: the platform's one Meta app
+  // sends for every team, so the legacy factory ignores `credentialsId`.
+  // A module (@lf/whatsapp); its BUILTIN_MODULES line picks module or legacy.
+  [WHATSAPP_ADAPTER_TYPE]: builtinAdapterFactory(WHATSAPP_ADAPTER_TYPE, ({ teamId }) => {
+    const { createWhatsappAdapter }: typeof import('./whatsapp') = require('./whatsapp');
+    return createWhatsappAdapter({ teamId });
+  }),
+  // No per-team email credential: the platform's provider keys are its
+  // environment. A module (@lf/email); its BUILTIN_MODULES line picks module
+  // or legacy.
+  [EMAIL_ADAPTER_TYPE]: builtinAdapterFactory(EMAIL_ADAPTER_TYPE, ({ teamId }) => createEmailAdapter({ teamId })),
   // Airtable adapter — read/write target plus webhook source. An optional
   // `base:` entry position (constructionArgs.base) scopes introspection to one
   // base, so a large workspace doesn't walk every base.
@@ -195,9 +202,10 @@ const ADAPTER_FACTORIES: Record<string, AdapterFactory> = {
   // team-scoped; its families are its writable positions.
   [ASK_ADAPTER_TYPE]: moduleOnlyAdapterFactory(ASK_ADAPTER_TYPE),
   // System — the platform itself as a source (a run failed, …). Credential-
-  // free and read-only; event production lives on its PollSource, which reads
-  // the run table (POLL_SOURCE_FACTORIES below).
-  [SYSTEM_ADAPTER_TYPE]: ({ teamId }) => createSystemAdapter({ teamId }),
+  // free and read-only; event production lives on its poll, which reads the
+  // platform's records (POLL_SOURCE_FACTORIES below). A module (@lf/system);
+  // its BUILTIN_MODULES line picks module or legacy.
+  [SYSTEM_ADAPTER_TYPE]: builtinAdapterFactory(SYSTEM_ADAPTER_TYPE, createSystemAdapter),
 };
 
 /**
@@ -223,7 +231,7 @@ const POLL_SOURCE_FACTORIES: Record<string, PollSourceFactory> = {
   [GMAIL_ADAPTER_TYPE]: builtinPollSourceFactory(GMAIL_ADAPTER_TYPE, ({ teamId, credentialsId }) =>
     createGmailPollSource({ teamId, credentialsId }),
   ),
-  [SYSTEM_ADAPTER_TYPE]: ({ teamId }) => createSystemPollSource({ teamId }),
+  [SYSTEM_ADAPTER_TYPE]: builtinPollSourceFactory(SYSTEM_ADAPTER_TYPE, createSystemPollSource),
 };
 
 /** Whether a slug (or trigger-kind alias) has a registered PollSource. */

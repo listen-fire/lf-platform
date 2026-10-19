@@ -40,7 +40,7 @@ import type { TeamId } from '../../generated/kysely/core/Team';
 import type { RunLimitPause } from 'movement-engine/public/movement-engine';
 
 import { recordSystemEvent, webBaseUrl } from '../translation_graph/adapters/system/events';
-import { RUN_PAUSED } from '../translation_graph/adapters/system/types';
+import { RUN_PAUSED } from '@listen-fire/system';
 import { loadTriggerById } from '../translation_graph/storage/tg_table';
 import { getAutomationsQb } from '../../lib/kysely';
 

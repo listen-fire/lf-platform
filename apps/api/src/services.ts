@@ -1,16 +1,16 @@
 import { randomBytes } from 'node:crypto';
 
 import { services } from './adapters/registry';
-import { OutboundMailgunAdapter } from './adapters/email/mailgun.adapter';
-import { OutboundResendAdapter } from './adapters/email/resend.adapter';
-import { FakeOutboundEmailAdapter } from './adapters/email/fake.adapter';
-import { UnconfiguredOutboundEmailAdapter } from './adapters/email/unconfigured.adapter';
-import { withOutboundEmailLedger } from './adapters/email/ledger';
-import { chooseOutboundEmailProvider } from './adapters/email/choose';
 import {
+  FakeOutboundEmailAdapter,
+  OutboundMailgunAdapter,
+  OutboundResendAdapter,
+  UnconfiguredOutboundEmailAdapter,
+  chooseOutboundEmailProvider,
   emailProvidersOverlap,
   resolveEmailProvider,
-} from './services/translation_graph/adapters/email/provider';
+} from '@listen-fire/email';
+import { withOutboundEmailLedger } from './adapters/email/ledger';
 import { logger } from 'movement-engine/public/log';
 import { OutboundTwilioMessager } from './adapters/whatsapp/twilio.adapter';
 import { FakeOutboundWhatsAppAdapter } from './adapters/whatsapp/fake.adapter';

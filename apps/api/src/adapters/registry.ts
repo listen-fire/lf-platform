@@ -2,7 +2,7 @@ import * as db from '@prisma/client';
 
 import { DocumentProvider } from './document/interface';
 import { OcrAdapter } from './ocr/interface';
-import { OutboundEmailMessager } from './email/interface';
+import type { OutboundEmailMessager } from '@listen-fire/email';
 import { OutboundWhatsAppMessager } from './whatsapp/interface';
 import { LinkedinAdapter } from './linkedin/interface';
 import { SlackConnector } from './slack/interface';

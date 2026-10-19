@@ -1,0 +1,1748 @@
+{
+  "transcript": [
+    {
+      "step": "listEntryPoints",
+      "answer": [
+        {
+          "typeId": "whatsapp:message",
+          "displayName": "Message",
+          "writable": false,
+          "readable": false,
+          "fires": true,
+          "firesOn": [
+            "message"
+          ]
+        },
+        {
+          "typeId": "whatsapp:attachment",
+          "displayName": "Attachment",
+          "writable": false,
+          "readable": false
+        },
+        {
+          "typeId": "whatsapp:reaction",
+          "displayName": "Reaction",
+          "writable": false,
+          "readable": false,
+          "fires": true,
+          "firesOn": [
+            "reaction"
+          ]
+        },
+        {
+          "typeId": "whatsapp:location",
+          "displayName": "Location",
+          "writable": false,
+          "readable": false,
+          "fires": true,
+          "firesOn": [
+            "location"
+          ]
+        },
+        {
+          "typeId": "whatsapp:typing",
+          "displayName": "Typing",
+          "writable": false,
+          "readable": false
+        }
+      ]
+    },
+    {
+      "step": "describe Message",
+      "answer": {
+        "typeId": "whatsapp:message",
+        "displayName": "Message",
+        "description": "A single inbound WhatsApp message — what a listen delivers, whole: read `e.`Body`` straight off the event, reply along its `Replies` edge.",
+        "fields": [
+          {
+            "fieldId": "messageId",
+            "displayName": "Message Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "The WhatsApp message id — the value a reply or reaction addresses."
+          },
+          {
+            "fieldId": "from",
+            "displayName": "From",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "The sender's phone number."
+          },
+          {
+            "fieldId": "to",
+            "displayName": "To",
+            "kind": "string",
+            "writable": false,
+            "required": false,
+            "description": "Inbound: the team's own WhatsApp business number (the message's recipient). On a send: the other party's phone number, derived from the message the write is anchored on (an inbound parent's From, a sent parent's To) — read-only either way."
+          },
+          {
+            "fieldId": "body",
+            "displayName": "Body",
+            "kind": "string",
+            "writable": true,
+            "required": false,
+            "description": "The message text. Empty for media-only messages. At least one of Body / File on a send (the Body captions the file)."
+          },
+          {
+            "fieldId": "data",
+            "displayName": "File",
+            "kind": "file",
+            "writable": true,
+            "readable": false,
+            "required": false,
+            "description": "A file to send (image / PDF / audio / video, routed by content type). At least one of Body / File. Send-side only: a received message's media is on its Attachments edge — read `msg-[:Attachments]->.File`."
+          },
+          {
+            "fieldId": "interactive",
+            "displayName": "Interactive",
+            "kind": "json",
+            "writable": true,
+            "readable": false,
+            "required": false,
+            "description": "WhatsApp's `interactive` object, exactly as the Cloud API spells it — passed through verbatim (no wrapping, no typed shape here; a malformed object surfaces as a loud WhatsApp error at run time, not at save time). Sending this REPLACES a plain-text send: the interactive type carries its own `body.text`, so the message's words go inside `interactive.body.text`, never in `Body` on the same send. Usually reply buttons: up to 3, each `{ type: \"reply\", reply: { id, title } }` (`title` capped at 20 characters). To make a tap DO something, mint a callback (`c = callback({ … })`) and put `\"${c.id}\"` in `reply.id` — WhatsApp allows up to 256 characters there, roomy for it — one callback per button, since its body is what that button means. WhatsApp captures nothing at tap time, so a callback fired from a button takes no values; anything a person has to fill in needs a plain-text reply instead. Build strings with \"${…}\" interpolation (never `+`, which is numeric addition). Example:\n{ type: \"button\",\n  body: { text: \"Ship the release?\" },\n  action: { buttons: [\n    { type: \"reply\", reply: { id: \"${approve.id}\", title: \"Approve\" } },\n    { type: \"reply\", reply: { id: \"${reject.id}\", title: \"Reject\" } } ] } }"
+          },
+          {
+            "fieldId": "waId",
+            "displayName": "WhatsApp Id",
+            "kind": "string",
+            "writable": false,
+            "required": false,
+            "description": "The sender's WhatsApp account id."
+          },
+          {
+            "fieldId": "profileName",
+            "displayName": "Profile Name",
+            "kind": "string",
+            "writable": false,
+            "required": false,
+            "description": "The sender's WhatsApp profile display name."
+          },
+          {
+            "fieldId": "timestamp",
+            "displayName": "Timestamp",
+            "kind": "string",
+            "writable": false,
+            "required": false,
+            "description": "When the message was received (ISO-8601), when known."
+          }
+        ],
+        "references": [
+          {
+            "fieldId": "attachments",
+            "targetTypeId": "whatsapp:attachment",
+            "cardinality": "many",
+            "direction": "outgoing",
+            "name": "Attachments",
+            "writable": false,
+            "description": "Media attached to the message (zero or more)."
+          },
+          {
+            "fieldId": "replies",
+            "targetTypeId": "whatsapp:message",
+            "cardinality": "many",
+            "direction": "outgoing",
+            "name": "Replies",
+            "writable": true,
+            "readable": false,
+            "description": "Send a reply threaded to this message (write-only — Meta has no read API). The recipient derives from this message; sends only reach a conversation someone opened by messaging the number (Meta's 24-hour service window)."
+          },
+          {
+            "fieldId": "reactions",
+            "targetTypeId": "whatsapp:reaction",
+            "cardinality": "many",
+            "direction": "outgoing",
+            "name": "Reactions",
+            "writable": true,
+            "readable": false,
+            "description": "React to this message with an emoji (write-only)."
+          },
+          {
+            "fieldId": "typing",
+            "targetTypeId": "whatsapp:typing",
+            "cardinality": "many",
+            "direction": "outgoing",
+            "name": "Typing",
+            "writable": true,
+            "readable": false,
+            "ephemeral": true,
+            "description": "Show the typing indicator (and mark this message read) while a longer step runs. An action, not a record — nothing is created; do not bind the result."
+          }
+        ]
+      }
+    },
+    {
+      "step": "describe Attachment",
+      "answer": {
+        "typeId": "whatsapp:attachment",
+        "displayName": "Attachment",
+        "fields": [
+          {
+            "fieldId": "name",
+            "displayName": "Name",
+            "kind": "string",
+            "writable": false,
+            "required": true
+          },
+          {
+            "fieldId": "contentType",
+            "displayName": "Content Type",
+            "kind": "string",
+            "writable": false,
+            "required": true
+          },
+          {
+            "fieldId": "url",
+            "displayName": "URL",
+            "kind": "string",
+            "writable": false,
+            "required": false
+          },
+          {
+            "fieldId": "data",
+            "displayName": "File",
+            "kind": "file",
+            "writable": false,
+            "required": false
+          }
+        ],
+        "references": []
+      }
+    },
+    {
+      "step": "describe Reaction",
+      "answer": {
+        "typeId": "whatsapp:reaction",
+        "displayName": "Reaction",
+        "description": "Someone reacted to a message in the team-number conversation. Listen with `events: [\"reaction\"]`. Also the reaction WRITE: created along a message's `Reactions` edge.",
+        "fields": [
+          {
+            "fieldId": "emoji",
+            "displayName": "Emoji",
+            "kind": "string",
+            "writable": true,
+            "required": true,
+            "description": "The reaction emoji. Inbound: empty when the reaction was removed. On a write along msg-[:Reactions]->: the single emoji to react with — required."
+          },
+          {
+            "fieldId": "reactedMessageId",
+            "displayName": "Reacted Message Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "The message the reaction is on."
+          },
+          {
+            "fieldId": "messageId",
+            "displayName": "Message Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "The reaction event's own id."
+          },
+          {
+            "fieldId": "from",
+            "displayName": "From",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "The reactor's phone number."
+          },
+          {
+            "fieldId": "profileName",
+            "displayName": "Profile Name",
+            "kind": "string",
+            "writable": false,
+            "required": false
+          },
+          {
+            "fieldId": "timestamp",
+            "displayName": "Timestamp",
+            "kind": "string",
+            "writable": false,
+            "required": false
+          }
+        ],
+        "references": []
+      }
+    },
+    {
+      "step": "describe Location",
+      "answer": {
+        "typeId": "whatsapp:location",
+        "displayName": "Location",
+        "description": "Someone shared a location with the team number. Listen with `events: [\"location\"]`.",
+        "fields": [
+          {
+            "fieldId": "latitude",
+            "displayName": "Latitude",
+            "kind": "number",
+            "writable": false,
+            "required": true
+          },
+          {
+            "fieldId": "longitude",
+            "displayName": "Longitude",
+            "kind": "number",
+            "writable": false,
+            "required": true
+          },
+          {
+            "fieldId": "name",
+            "displayName": "Name",
+            "kind": "string",
+            "writable": false,
+            "required": false,
+            "description": "The place name, when the sender picked one."
+          },
+          {
+            "fieldId": "address",
+            "displayName": "Address",
+            "kind": "string",
+            "writable": false,
+            "required": false
+          },
+          {
+            "fieldId": "messageId",
+            "displayName": "Message Id",
+            "kind": "string",
+            "writable": false,
+            "required": true
+          },
+          {
+            "fieldId": "from",
+            "displayName": "From",
+            "kind": "string",
+            "writable": false,
+            "required": true
+          },
+          {
+            "fieldId": "profileName",
+            "displayName": "Profile Name",
+            "kind": "string",
+            "writable": false,
+            "required": false
+          },
+          {
+            "fieldId": "timestamp",
+            "displayName": "Timestamp",
+            "kind": "string",
+            "writable": false,
+            "required": false
+          }
+        ],
+        "references": []
+      }
+    },
+    {
+      "step": "describe Typing",
+      "answer": {
+        "typeId": "whatsapp:typing",
+        "displayName": "Typing",
+        "description": "The typing-indicator action, written along a message's `Typing` edge (`write msg-[:Typing]-> {}` — no fields; Meta's API is on-only, so there is no off to write). An action, not a record: nothing is created and nothing reads back. WhatsApp clears the indicator itself when your reply sends, or after ~25 seconds.",
+        "fields": [],
+        "references": []
+      }
+    },
+    {
+      "step": "describe whatsapp:message",
+      "answer": {
+        "typeId": "whatsapp:message",
+        "displayName": "Message",
+        "description": "A single inbound WhatsApp message — what a listen delivers, whole: read `e.`Body`` straight off the event, reply along its `Replies` edge.",
+        "fields": [
+          {
+            "fieldId": "messageId",
+            "displayName": "Message Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "The WhatsApp message id — the value a reply or reaction addresses."
+          },
+          {
+            "fieldId": "from",
+            "displayName": "From",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "The sender's phone number."
+          },
+          {
+            "fieldId": "to",
+            "displayName": "To",
+            "kind": "string",
+            "writable": false,
+            "required": false,
+            "description": "Inbound: the team's own WhatsApp business number (the message's recipient). On a send: the other party's phone number, derived from the message the write is anchored on (an inbound parent's From, a sent parent's To) — read-only either way."
+          },
+          {
+            "fieldId": "body",
+            "displayName": "Body",
+            "kind": "string",
+            "writable": true,
+            "required": false,
+            "description": "The message text. Empty for media-only messages. At least one of Body / File on a send (the Body captions the file)."
+          },
+          {
+            "fieldId": "data",
+            "displayName": "File",
+            "kind": "file",
+            "writable": true,
+            "readable": false,
+            "required": false,
+            "description": "A file to send (image / PDF / audio / video, routed by content type). At least one of Body / File. Send-side only: a received message's media is on its Attachments edge — read `msg-[:Attachments]->.File`."
+          },
+          {
+            "fieldId": "interactive",
+            "displayName": "Interactive",
+            "kind": "json",
+            "writable": true,
+            "readable": false,
+            "required": false,
+            "description": "WhatsApp's `interactive` object, exactly as the Cloud API spells it — passed through verbatim (no wrapping, no typed shape here; a malformed object surfaces as a loud WhatsApp error at run time, not at save time). Sending this REPLACES a plain-text send: the interactive type carries its own `body.text`, so the message's words go inside `interactive.body.text`, never in `Body` on the same send. Usually reply buttons: up to 3, each `{ type: \"reply\", reply: { id, title } }` (`title` capped at 20 characters). To make a tap DO something, mint a callback (`c = callback({ … })`) and put `\"${c.id}\"` in `reply.id` — WhatsApp allows up to 256 characters there, roomy for it — one callback per button, since its body is what that button means. WhatsApp captures nothing at tap time, so a callback fired from a button takes no values; anything a person has to fill in needs a plain-text reply instead. Build strings with \"${…}\" interpolation (never `+`, which is numeric addition). Example:\n{ type: \"button\",\n  body: { text: \"Ship the release?\" },\n  action: { buttons: [\n    { type: \"reply\", reply: { id: \"${approve.id}\", title: \"Approve\" } },\n    { type: \"reply\", reply: { id: \"${reject.id}\", title: \"Reject\" } } ] } }"
+          },
+          {
+            "fieldId": "waId",
+            "displayName": "WhatsApp Id",
+            "kind": "string",
+            "writable": false,
+            "required": false,
+            "description": "The sender's WhatsApp account id."
+          },
+          {
+            "fieldId": "profileName",
+            "displayName": "Profile Name",
+            "kind": "string",
+            "writable": false,
+            "required": false,
+            "description": "The sender's WhatsApp profile display name."
+          },
+          {
+            "fieldId": "timestamp",
+            "displayName": "Timestamp",
+            "kind": "string",
+            "writable": false,
+            "required": false,
+            "description": "When the message was received (ISO-8601), when known."
+          }
+        ],
+        "references": [
+          {
+            "fieldId": "attachments",
+            "targetTypeId": "whatsapp:attachment",
+            "cardinality": "many",
+            "direction": "outgoing",
+            "name": "Attachments",
+            "writable": false,
+            "description": "Media attached to the message (zero or more)."
+          },
+          {
+            "fieldId": "replies",
+            "targetTypeId": "whatsapp:message",
+            "cardinality": "many",
+            "direction": "outgoing",
+            "name": "Replies",
+            "writable": true,
+            "readable": false,
+            "description": "Send a reply threaded to this message (write-only — Meta has no read API). The recipient derives from this message; sends only reach a conversation someone opened by messaging the number (Meta's 24-hour service window)."
+          },
+          {
+            "fieldId": "reactions",
+            "targetTypeId": "whatsapp:reaction",
+            "cardinality": "many",
+            "direction": "outgoing",
+            "name": "Reactions",
+            "writable": true,
+            "readable": false,
+            "description": "React to this message with an emoji (write-only)."
+          },
+          {
+            "fieldId": "typing",
+            "targetTypeId": "whatsapp:typing",
+            "cardinality": "many",
+            "direction": "outgoing",
+            "name": "Typing",
+            "writable": true,
+            "readable": false,
+            "ephemeral": true,
+            "description": "Show the typing indicator (and mark this message read) while a longer step runs. An action, not a record — nothing is created; do not bind the result."
+          }
+        ]
+      }
+    },
+    {
+      "step": "describe whatsapp:reaction",
+      "answer": {
+        "typeId": "whatsapp:reaction",
+        "displayName": "Reaction",
+        "description": "Someone reacted to a message in the team-number conversation. Listen with `events: [\"reaction\"]`. Also the reaction WRITE: created along a message's `Reactions` edge.",
+        "fields": [
+          {
+            "fieldId": "emoji",
+            "displayName": "Emoji",
+            "kind": "string",
+            "writable": true,
+            "required": true,
+            "description": "The reaction emoji. Inbound: empty when the reaction was removed. On a write along msg-[:Reactions]->: the single emoji to react with — required."
+          },
+          {
+            "fieldId": "reactedMessageId",
+            "displayName": "Reacted Message Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "The message the reaction is on."
+          },
+          {
+            "fieldId": "messageId",
+            "displayName": "Message Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "The reaction event's own id."
+          },
+          {
+            "fieldId": "from",
+            "displayName": "From",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "The reactor's phone number."
+          },
+          {
+            "fieldId": "profileName",
+            "displayName": "Profile Name",
+            "kind": "string",
+            "writable": false,
+            "required": false
+          },
+          {
+            "fieldId": "timestamp",
+            "displayName": "Timestamp",
+            "kind": "string",
+            "writable": false,
+            "required": false
+          }
+        ],
+        "references": []
+      }
+    },
+    {
+      "step": "describe Nonexistent",
+      "answer": null
+    },
+    {
+      "step": "edgesFrom meta",
+      "answer": {
+        "descriptor": {
+          "typeId": "meta",
+          "displayName": "WhatsApp",
+          "description": "A WhatsApp connection. Nothing here can be listed — there is no call that enumerates conversations — so the way in is somebody messaging you, which a listen delivers whole.",
+          "fields": [],
+          "references": [
+            {
+              "fieldId": "whatsapp:message",
+              "targetTypeId": "whatsapp:message",
+              "cardinality": "one",
+              "direction": "outgoing",
+              "name": "Message",
+              "fires": true,
+              "firesOn": [
+                "message"
+              ],
+              "readable": false,
+              "description": "Somebody sending a message — what a listen delivers."
+            },
+            {
+              "fieldId": "whatsapp:reaction",
+              "targetTypeId": "whatsapp:reaction",
+              "cardinality": "one",
+              "direction": "outgoing",
+              "name": "Reaction",
+              "fires": true,
+              "firesOn": [
+                "reaction"
+              ],
+              "readable": false,
+              "description": "Somebody reacting to a message."
+            },
+            {
+              "fieldId": "whatsapp:location",
+              "targetTypeId": "whatsapp:location",
+              "cardinality": "one",
+              "direction": "outgoing",
+              "name": "Location",
+              "fires": true,
+              "firesOn": [
+                "location"
+              ],
+              "readable": false,
+              "description": "Somebody sharing their location."
+            }
+          ]
+        },
+        "targetPositions": {
+          "whatsapp:message": {
+            "adapterType": "whatsapp",
+            "recordType": "whatsapp:message",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "whatsapp:reaction": {
+            "adapterType": "whatsapp",
+            "recordType": "whatsapp:reaction",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "whatsapp:location": {
+            "adapterType": "whatsapp",
+            "recordType": "whatsapp:location",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          }
+        },
+        "targetNodes": {
+          "whatsapp:message": {
+            "typeId": "whatsapp:message",
+            "displayName": "Message",
+            "description": "A single inbound WhatsApp message — what a listen delivers, whole: read `e.`Body`` straight off the event, reply along its `Replies` edge.",
+            "fields": [
+              {
+                "fieldId": "messageId",
+                "displayName": "Message Id",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "The WhatsApp message id — the value a reply or reaction addresses."
+              },
+              {
+                "fieldId": "from",
+                "displayName": "From",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "The sender's phone number."
+              },
+              {
+                "fieldId": "to",
+                "displayName": "To",
+                "kind": "string",
+                "writable": false,
+                "required": false,
+                "description": "Inbound: the team's own WhatsApp business number (the message's recipient). On a send: the other party's phone number, derived from the message the write is anchored on (an inbound parent's From, a sent parent's To) — read-only either way."
+              },
+              {
+                "fieldId": "body",
+                "displayName": "Body",
+                "kind": "string",
+                "writable": true,
+                "required": false,
+                "description": "The message text. Empty for media-only messages. At least one of Body / File on a send (the Body captions the file)."
+              },
+              {
+                "fieldId": "data",
+                "displayName": "File",
+                "kind": "file",
+                "writable": true,
+                "readable": false,
+                "required": false,
+                "description": "A file to send (image / PDF / audio / video, routed by content type). At least one of Body / File. Send-side only: a received message's media is on its Attachments edge — read `msg-[:Attachments]->.File`."
+              },
+              {
+                "fieldId": "interactive",
+                "displayName": "Interactive",
+                "kind": "json",
+                "writable": true,
+                "readable": false,
+                "required": false,
+                "description": "WhatsApp's `interactive` object, exactly as the Cloud API spells it — passed through verbatim (no wrapping, no typed shape here; a malformed object surfaces as a loud WhatsApp error at run time, not at save time). Sending this REPLACES a plain-text send: the interactive type carries its own `body.text`, so the message's words go inside `interactive.body.text`, never in `Body` on the same send. Usually reply buttons: up to 3, each `{ type: \"reply\", reply: { id, title } }` (`title` capped at 20 characters). To make a tap DO something, mint a callback (`c = callback({ … })`) and put `\"${c.id}\"` in `reply.id` — WhatsApp allows up to 256 characters there, roomy for it — one callback per button, since its body is what that button means. WhatsApp captures nothing at tap time, so a callback fired from a button takes no values; anything a person has to fill in needs a plain-text reply instead. Build strings with \"${…}\" interpolation (never `+`, which is numeric addition). Example:\n{ type: \"button\",\n  body: { text: \"Ship the release?\" },\n  action: { buttons: [\n    { type: \"reply\", reply: { id: \"${approve.id}\", title: \"Approve\" } },\n    { type: \"reply\", reply: { id: \"${reject.id}\", title: \"Reject\" } } ] } }"
+              },
+              {
+                "fieldId": "waId",
+                "displayName": "WhatsApp Id",
+                "kind": "string",
+                "writable": false,
+                "required": false,
+                "description": "The sender's WhatsApp account id."
+              },
+              {
+                "fieldId": "profileName",
+                "displayName": "Profile Name",
+                "kind": "string",
+                "writable": false,
+                "required": false,
+                "description": "The sender's WhatsApp profile display name."
+              },
+              {
+                "fieldId": "timestamp",
+                "displayName": "Timestamp",
+                "kind": "string",
+                "writable": false,
+                "required": false,
+                "description": "When the message was received (ISO-8601), when known."
+              }
+            ]
+          },
+          "whatsapp:reaction": {
+            "typeId": "whatsapp:reaction",
+            "displayName": "Reaction",
+            "description": "Someone reacted to a message in the team-number conversation. Listen with `events: [\"reaction\"]`. Also the reaction WRITE: created along a message's `Reactions` edge.",
+            "fields": [
+              {
+                "fieldId": "emoji",
+                "displayName": "Emoji",
+                "kind": "string",
+                "writable": true,
+                "required": true,
+                "description": "The reaction emoji. Inbound: empty when the reaction was removed. On a write along msg-[:Reactions]->: the single emoji to react with — required."
+              },
+              {
+                "fieldId": "reactedMessageId",
+                "displayName": "Reacted Message Id",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "The message the reaction is on."
+              },
+              {
+                "fieldId": "messageId",
+                "displayName": "Message Id",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "The reaction event's own id."
+              },
+              {
+                "fieldId": "from",
+                "displayName": "From",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "The reactor's phone number."
+              },
+              {
+                "fieldId": "profileName",
+                "displayName": "Profile Name",
+                "kind": "string",
+                "writable": false,
+                "required": false
+              },
+              {
+                "fieldId": "timestamp",
+                "displayName": "Timestamp",
+                "kind": "string",
+                "writable": false,
+                "required": false
+              }
+            ]
+          },
+          "whatsapp:location": {
+            "typeId": "whatsapp:location",
+            "displayName": "Location",
+            "description": "Someone shared a location with the team number. Listen with `events: [\"location\"]`.",
+            "fields": [
+              {
+                "fieldId": "latitude",
+                "displayName": "Latitude",
+                "kind": "number",
+                "writable": false,
+                "required": true
+              },
+              {
+                "fieldId": "longitude",
+                "displayName": "Longitude",
+                "kind": "number",
+                "writable": false,
+                "required": true
+              },
+              {
+                "fieldId": "name",
+                "displayName": "Name",
+                "kind": "string",
+                "writable": false,
+                "required": false,
+                "description": "The place name, when the sender picked one."
+              },
+              {
+                "fieldId": "address",
+                "displayName": "Address",
+                "kind": "string",
+                "writable": false,
+                "required": false
+              },
+              {
+                "fieldId": "messageId",
+                "displayName": "Message Id",
+                "kind": "string",
+                "writable": false,
+                "required": true
+              },
+              {
+                "fieldId": "from",
+                "displayName": "From",
+                "kind": "string",
+                "writable": false,
+                "required": true
+              },
+              {
+                "fieldId": "profileName",
+                "displayName": "Profile Name",
+                "kind": "string",
+                "writable": false,
+                "required": false
+              },
+              {
+                "fieldId": "timestamp",
+                "displayName": "Timestamp",
+                "kind": "string",
+                "writable": false,
+                "required": false
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "step": "listEventTypes",
+      "answer": [
+        {
+          "tag": "message",
+          "positionType": "whatsapp:message"
+        },
+        {
+          "tag": "reaction",
+          "positionType": "whatsapp:reaction"
+        },
+        {
+          "tag": "location",
+          "positionType": "whatsapp:location"
+        }
+      ]
+    },
+    {
+      "step": "runtimeCapabilities",
+      "answer": {
+        "traversal": {
+          "incoming": false,
+          "edgeProperties": false
+        },
+        "resources": false
+      }
+    },
+    {
+      "step": "preprocessInbound meta envelope",
+      "answer": {
+        "events": [
+          {
+            "payload": {
+              "messageId": "wamid.T1",
+              "from": "447700900001",
+              "to": "+44 7700 900000",
+              "body": "Closed the round!",
+              "waId": "447700900001",
+              "profileName": "Ada",
+              "timestamp": "1700000000",
+              "attachments": []
+            },
+            "externalId": "wamid.T1",
+            "recordType": "whatsapp:message",
+            "eventType": "message",
+            "tag": "message"
+          },
+          {
+            "payload": {
+              "messageId": "wamid.I1",
+              "from": "447700900001",
+              "to": "+44 7700 900000",
+              "body": "the deck",
+              "waId": "447700900001",
+              "profileName": "Ada",
+              "timestamp": "1700000001",
+              "attachments": [
+                {
+                  "key": "MEDIA-1",
+                  "filename": "wamid.I1",
+                  "contentType": "image/jpeg"
+                }
+              ]
+            },
+            "externalId": "wamid.I1",
+            "recordType": "whatsapp:message",
+            "eventType": "message",
+            "tag": "message"
+          },
+          {
+            "payload": {
+              "messageId": "wamid.S1",
+              "from": "447700900001",
+              "to": "+44 7700 900000",
+              "body": "",
+              "waId": "447700900001",
+              "profileName": "Ada",
+              "timestamp": "1700000002",
+              "attachments": [
+                {
+                  "key": "MEDIA-2",
+                  "filename": "wamid.S1",
+                  "contentType": "image/webp"
+                }
+              ]
+            },
+            "externalId": "wamid.S1",
+            "recordType": "whatsapp:message",
+            "eventType": "message",
+            "tag": "message"
+          },
+          {
+            "payload": {
+              "messageId": "wamid.R1",
+              "from": "447700900001",
+              "waId": "447700900001",
+              "profileName": "Ada",
+              "timestamp": "1700000003",
+              "emoji": "👍",
+              "reactedMessageId": "wamid.T1"
+            },
+            "externalId": "wamid.R1",
+            "recordType": "whatsapp:reaction",
+            "eventType": "reaction",
+            "tag": "reaction"
+          },
+          {
+            "payload": {
+              "messageId": "wamid.L1",
+              "from": "447700900001",
+              "waId": "447700900001",
+              "profileName": "Ada",
+              "timestamp": "1700000004",
+              "latitude": 51.5,
+              "longitude": -0.12,
+              "name": "Office",
+              "address": "1 Road"
+            },
+            "externalId": "wamid.L1",
+            "recordType": "whatsapp:location",
+            "eventType": "location",
+            "tag": "location"
+          }
+        ]
+      }
+    },
+    {
+      "step": "preprocessInbound empty envelope",
+      "answer": {
+        "events": []
+      }
+    },
+    {
+      "step": "preprocessInbound malformed",
+      "answer": {
+        "events": []
+      }
+    },
+    {
+      "step": "preprocessInbound not an object",
+      "answer": {
+        "events": []
+      }
+    },
+    {
+      "step": "dispatched.Message Id",
+      "answer": "wamid.IN1"
+    },
+    {
+      "step": "dispatched.From",
+      "answer": "447700900001"
+    },
+    {
+      "step": "dispatched.To",
+      "answer": "447700900000"
+    },
+    {
+      "step": "dispatched.Body",
+      "answer": "Here is the deck"
+    },
+    {
+      "step": "dispatched.File",
+      "answer": null
+    },
+    {
+      "step": "dispatched.Interactive",
+      "answer": null
+    },
+    {
+      "step": "dispatched.WhatsApp Id",
+      "answer": "447700900001"
+    },
+    {
+      "step": "dispatched.Profile Name",
+      "answer": "Ada"
+    },
+    {
+      "step": "dispatched.Timestamp",
+      "answer": "1700000000"
+    },
+    {
+      "step": "dispatched.Nope",
+      "answer": {
+        "error": "'Nope' is not a known field of 'Message' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+      }
+    },
+    {
+      "step": "twilio.Message Id",
+      "answer": "SM1"
+    },
+    {
+      "step": "twilio.From",
+      "answer": "+447700900002"
+    },
+    {
+      "step": "twilio.To",
+      "answer": "+447700900000"
+    },
+    {
+      "step": "twilio.Body",
+      "answer": "raw twilio"
+    },
+    {
+      "step": "twilio.File",
+      "answer": null
+    },
+    {
+      "step": "twilio.Interactive",
+      "answer": null
+    },
+    {
+      "step": "twilio.WhatsApp Id",
+      "answer": "447700900002"
+    },
+    {
+      "step": "twilio.Profile Name",
+      "answer": "Bo"
+    },
+    {
+      "step": "twilio.Timestamp",
+      "answer": null
+    },
+    {
+      "step": "twilio.Nope",
+      "answer": {
+        "error": "'Nope' is not a known field of 'Message' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+      }
+    },
+    {
+      "step": "typeless twilio.Message Id",
+      "answer": null
+    },
+    {
+      "step": "typeless twilio.From",
+      "answer": null
+    },
+    {
+      "step": "typeless twilio.To",
+      "answer": null
+    },
+    {
+      "step": "typeless twilio.Body",
+      "answer": null
+    },
+    {
+      "step": "typeless twilio.File",
+      "answer": null
+    },
+    {
+      "step": "typeless twilio.Interactive",
+      "answer": null
+    },
+    {
+      "step": "typeless twilio.WhatsApp Id",
+      "answer": null
+    },
+    {
+      "step": "typeless twilio.Profile Name",
+      "answer": null
+    },
+    {
+      "step": "typeless twilio.Timestamp",
+      "answer": null
+    },
+    {
+      "step": "typeless twilio.Nope",
+      "answer": null
+    },
+    {
+      "step": "Reaction.Emoji",
+      "answer": "👍"
+    },
+    {
+      "step": "Reaction.Reacted Message Id",
+      "answer": "wamid.T1"
+    },
+    {
+      "step": "Reaction.Message Id",
+      "answer": "wamid.R1"
+    },
+    {
+      "step": "Reaction.From",
+      "answer": "447700900001"
+    },
+    {
+      "step": "Reaction.Profile Name",
+      "answer": "Ada"
+    },
+    {
+      "step": "Reaction.Timestamp",
+      "answer": "1700000003"
+    },
+    {
+      "step": "Location.Latitude",
+      "answer": 51.5
+    },
+    {
+      "step": "Location.Longitude",
+      "answer": -0.12
+    },
+    {
+      "step": "Location.Name",
+      "answer": "Office"
+    },
+    {
+      "step": "Location.Address",
+      "answer": "1 Road"
+    },
+    {
+      "step": "Location.From",
+      "answer": "447700900001"
+    },
+    {
+      "step": "foreign position",
+      "answer": {
+        "error": "WhatsappAdapter.getFieldValue received a position from a different adapter ('slack')."
+      }
+    },
+    {
+      "step": "dispatched Attachments",
+      "answer": [
+        {
+          "position": {
+            "adapterType": "whatsapp",
+            "recordType": "Attachment",
+            "identity": {
+              "kind": "unstable",
+              "data": {
+                "key": "<base>/api/files/blob/deck-1",
+                "url": "<base>/api/files/blob/deck-1",
+                "filename": "deck.pdf",
+                "contentType": "application/pdf"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "step": "dispatched Attachment 0.Name",
+      "answer": "deck.pdf"
+    },
+    {
+      "step": "dispatched Attachment 0.Content Type",
+      "answer": "application/pdf"
+    },
+    {
+      "step": "dispatched Attachment 0.URL",
+      "answer": "<base>/api/files/blob/deck-1"
+    },
+    {
+      "step": "dispatched Attachment 0.File",
+      "answer": {
+        "__brand": "FileRef",
+        "name": "deck.pdf",
+        "contentType": "application/pdf",
+        "source": {
+          "adapterType": "whatsapp",
+          "handle": "<base>/api/files/blob/deck-1"
+        }
+      }
+    },
+    {
+      "step": "twilio Attachments",
+      "answer": [
+        {
+          "position": {
+            "adapterType": "whatsapp",
+            "recordType": "Attachment",
+            "identity": {
+              "kind": "unstable",
+              "data": {
+                "key": "https://api.twilio.com/2010-04-01/Accounts/ACparity/Messages/MM1/Media/ME1",
+                "url": "https://api.twilio.com/2010-04-01/Accounts/ACparity/Messages/MM1/Media/ME1",
+                "contentType": "image/jpeg",
+                "filename": "Attachment 1.jpeg"
+              }
+            }
+          }
+        },
+        {
+          "position": {
+            "adapterType": "whatsapp",
+            "recordType": "Attachment",
+            "identity": {
+              "kind": "unstable",
+              "data": {
+                "key": "https://api.twilio.com/2010-04-01/Accounts/ACother/Messages/MM1/Media/ME2",
+                "url": "https://api.twilio.com/2010-04-01/Accounts/ACother/Messages/MM1/Media/ME2",
+                "contentType": "application/x-not-a-type",
+                "filename": "Attachment 2"
+              }
+            }
+          }
+        },
+        {
+          "position": {
+            "adapterType": "whatsapp",
+            "recordType": "Attachment",
+            "identity": {
+              "kind": "unstable",
+              "data": {
+                "key": "http://api.twilio.com/2010-04-01/Accounts/ACparity/Messages/MM1/Media/ME3",
+                "url": "http://api.twilio.com/2010-04-01/Accounts/ACparity/Messages/MM1/Media/ME3",
+                "contentType": "audio/ogg",
+                "filename": "Attachment 3.oga"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "step": "twilio Attachment 0.Name",
+      "answer": "Attachment 1.jpeg"
+    },
+    {
+      "step": "twilio Attachment 0.Content Type",
+      "answer": "image/jpeg"
+    },
+    {
+      "step": "twilio Attachment 0.URL",
+      "answer": "https://api.twilio.com/2010-04-01/Accounts/ACparity/Messages/MM1/Media/ME1"
+    },
+    {
+      "step": "twilio Attachment 0.File",
+      "answer": {
+        "__brand": "FileRef",
+        "name": "Attachment 1.jpeg",
+        "contentType": "image/jpeg",
+        "source": {
+          "adapterType": "whatsapp",
+          "handle": "https://api.twilio.com/2010-04-01/Accounts/ACparity/Messages/MM1/Media/ME1"
+        }
+      }
+    },
+    {
+      "step": "twilio Attachment 1.Name",
+      "answer": "Attachment 2"
+    },
+    {
+      "step": "twilio Attachment 1.Content Type",
+      "answer": "application/x-not-a-type"
+    },
+    {
+      "step": "twilio Attachment 1.URL",
+      "answer": "https://api.twilio.com/2010-04-01/Accounts/ACother/Messages/MM1/Media/ME2"
+    },
+    {
+      "step": "twilio Attachment 1.File",
+      "answer": {
+        "__brand": "FileRef",
+        "name": "Attachment 2",
+        "contentType": "application/x-not-a-type",
+        "source": {
+          "adapterType": "whatsapp",
+          "handle": "https://api.twilio.com/2010-04-01/Accounts/ACother/Messages/MM1/Media/ME2"
+        }
+      }
+    },
+    {
+      "step": "twilio Attachment 2.Name",
+      "answer": "Attachment 3.oga"
+    },
+    {
+      "step": "twilio Attachment 2.Content Type",
+      "answer": "audio/ogg"
+    },
+    {
+      "step": "twilio Attachment 2.URL",
+      "answer": "http://api.twilio.com/2010-04-01/Accounts/ACparity/Messages/MM1/Media/ME3"
+    },
+    {
+      "step": "twilio Attachment 2.File",
+      "answer": {
+        "__brand": "FileRef",
+        "name": "Attachment 3.oga",
+        "contentType": "audio/ogg",
+        "source": {
+          "adapterType": "whatsapp",
+          "handle": "http://api.twilio.com/2010-04-01/Accounts/ACparity/Messages/MM1/Media/ME3"
+        }
+      }
+    },
+    {
+      "step": "Attachments incoming",
+      "answer": []
+    },
+    {
+      "step": "Replies is not read",
+      "answer": []
+    },
+    {
+      "step": "Attachment without a key .File",
+      "answer": null
+    },
+    {
+      "step": "getActorCandidates dispatched",
+      "answer": [
+        {
+          "identity": {
+            "identifier": "447700900001",
+            "scheme": "phone",
+            "adapterType": "whatsapp"
+          },
+          "source": "originator"
+        }
+      ]
+    },
+    {
+      "step": "extractActor dispatched",
+      "answer": {
+        "identifier": "447700900001",
+        "scheme": "phone",
+        "adapterType": "whatsapp",
+        "name": "Ada",
+        "label": "Ada"
+      }
+    },
+    {
+      "step": "getActorCandidates twilio",
+      "answer": [
+        {
+          "identity": {
+            "identifier": "+447700900002",
+            "scheme": "phone",
+            "adapterType": "whatsapp"
+          },
+          "source": "originator"
+        }
+      ]
+    },
+    {
+      "step": "extractActor twilio",
+      "answer": {
+        "identifier": "+447700900002",
+        "scheme": "phone",
+        "adapterType": "whatsapp",
+        "name": "Bo",
+        "label": "Bo"
+      }
+    },
+    {
+      "step": "getActorCandidates reaction",
+      "answer": [
+        {
+          "identity": {
+            "identifier": "447700900001",
+            "scheme": "phone",
+            "adapterType": "whatsapp"
+          },
+          "source": "originator"
+        }
+      ]
+    },
+    {
+      "step": "extractActor reaction",
+      "answer": {
+        "identifier": "447700900001",
+        "scheme": "phone",
+        "adapterType": "whatsapp",
+        "name": "Ada",
+        "label": "Ada"
+      }
+    },
+    {
+      "step": "getActorCandidates no sender",
+      "answer": []
+    },
+    {
+      "step": "extractActor no sender",
+      "answer": null
+    },
+    {
+      "step": "getActorCandidates blank sender",
+      "answer": []
+    },
+    {
+      "step": "extractActor blank sender",
+      "answer": null
+    },
+    {
+      "step": "resolveFileRef exposed",
+      "answer": {
+        "contentType": "application/pdf",
+        "text": "%PDF-1.4 the parity deck"
+      }
+    },
+    {
+      "step": "resolveFileRef twilio 2",
+      "answer": {
+        "error": "the file's handle is not one its owner whatsapp issued, so it is not fetched"
+      }
+    },
+    {
+      "step": "resolveFileRef twilio 3",
+      "answer": {
+        "error": "the file's handle is not one its owner whatsapp issued, so it is not fetched"
+      }
+    },
+    {
+      "step": "resolveFileRef not a URL",
+      "answer": {
+        "error": "the file's handle is not one its owner whatsapp issued, so it is not fetched"
+      }
+    },
+    {
+      "step": "resolveFileRef without a handle",
+      "answer": {
+        "error": "whatsapp.resolveFileRef: FileRef has no source handle to resolve."
+      }
+    },
+    {
+      "step": "typing",
+      "answer": {
+        "adapterType": "whatsapp",
+        "externalId": "typing:wamid.IN1",
+        "data": {
+          "message_id": "wamid.IN1"
+        }
+      }
+    },
+    {
+      "step": "reaction",
+      "answer": {
+        "adapterType": "whatsapp",
+        "externalId": "reaction:wamid.IN1:🔥",
+        "data": {
+          "to": "447700900001",
+          "emoji": "🔥",
+          "message_id": "wamid.IN1"
+        }
+      }
+    },
+    {
+      "step": "reaction without emoji",
+      "answer": {
+        "error": "WhatsappAdapter.createRecord(reaction): the \"Emoji\" field must carry a non-empty value."
+      }
+    },
+    {
+      "step": "reply",
+      "answer": {
+        "adapterType": "whatsapp",
+        "externalId": "wamid.fake_3",
+        "data": {
+          "to": "447700900001",
+          "body": "Thanks Ada",
+          "reply_to_message_id": "wamid.IN1"
+        }
+      }
+    },
+    {
+      "step": "reply from an unknown number",
+      "answer": {
+        "adapterType": "whatsapp",
+        "externalId": "wamid.fake_4",
+        "data": {
+          "to": "447700900001",
+          "body": "from the primary",
+          "reply_to_message_id": "wamid.IN1"
+        }
+      }
+    },
+    {
+      "step": "reply to a sent message",
+      "answer": {
+        "adapterType": "whatsapp",
+        "externalId": "wamid.fake_5",
+        "data": {
+          "to": "+447700900001",
+          "body": "again",
+          "reply_to_message_id": "wamid.fake_1"
+        }
+      }
+    },
+    {
+      "step": "reply to a twilio message",
+      "answer": {
+        "error": "WhatsappAdapter.createRecord: the parent message carries no sender — parent data must include `from` (an inbound message) or `to` (a send handle)."
+      }
+    },
+    {
+      "step": "interactive",
+      "answer": {
+        "adapterType": "whatsapp",
+        "externalId": "wamid.fake_6",
+        "data": {
+          "to": "447700900001",
+          "body": "ignored",
+          "interactive": true,
+          "reply_to_message_id": "wamid.IN1"
+        }
+      }
+    },
+    {
+      "step": "reply with the file",
+      "answer": {
+        "adapterType": "whatsapp",
+        "externalId": "wamid.fake_7",
+        "data": {
+          "to": "447700900001",
+          "body": "your deck",
+          "file_name": "deck.pdf",
+          "reply_to_message_id": "wamid.IN1"
+        }
+      }
+    },
+    {
+      "step": "reply with nothing",
+      "answer": {
+        "error": "WhatsappAdapter.createRecord: a Message send needs a \"Body\", a \"File\", or an \"Interactive\" object (Interactive replaces Body/File — put the text inside `interactive.body.text`)."
+      }
+    },
+    {
+      "step": "no parent",
+      "answer": {
+        "error": "WhatsappAdapter.createRecord: a WhatsApp write is created along an edge off a message — `write msg-[:Replies]-> {…}`, `write msg-[:Reactions]-> {…}`, `write msg-[:Typing]-> {}`. There is no top-level send."
+      }
+    },
+    {
+      "step": "parent not a message",
+      "answer": {
+        "error": "WhatsappAdapter.createRecord: writes anchor off a Message, not 'Reaction'."
+      }
+    },
+    {
+      "step": "wrong edge",
+      "answer": {
+        "error": "WhatsappAdapter.createRecord: a Message cannot be created along '-[:Attachments]->'."
+      }
+    },
+    {
+      "step": "parent without a sender",
+      "answer": {
+        "error": "WhatsappAdapter.createRecord: the parent message carries no sender — parent data must include `from` (an inbound message) or `to` (a send handle)."
+      }
+    },
+    {
+      "step": "updateRecord",
+      "answer": {
+        "error": "whatsapp is not configured as a write target — updateRecord called"
+      }
+    },
+    {
+      "step": "deleteRecord",
+      "answer": {
+        "error": "whatsapp is not configured as a write target — deleteRecord called"
+      }
+    }
+  ],
+  "exchanges": [
+    {
+      "method": "GET",
+      "path": "/api/files/blob/deck-1",
+      "authorization": null,
+      "body": null,
+      "status": 200,
+      "response": "%PDF-1.4 the parity deck",
+      "responseContentType": "application/pdf"
+    },
+    {
+      "method": "POST",
+      "path": "/whatsapp/graph/PN-MOVEMENTS/messages",
+      "authorization": "Bearer PARITY-META-TOKEN",
+      "body": {
+        "messaging_product": "whatsapp",
+        "message_id": "wamid.IN1",
+        "status": "read",
+        "typing_indicator": {
+          "type": "text"
+        }
+      },
+      "status": 200,
+      "response": "{\"messaging_product\":\"whatsapp\",\"contacts\":[{\"input\":\"\",\"wa_id\":\"\"}],\"messages\":[{\"id\":\"wamid.fake_1\"}]}"
+    },
+    {
+      "method": "POST",
+      "path": "/whatsapp/graph/PN-MOVEMENTS/messages",
+      "authorization": "Bearer PARITY-META-TOKEN",
+      "body": {
+        "messaging_product": "whatsapp",
+        "to": "+447700900001",
+        "type": "reaction",
+        "reaction": {
+          "message_id": "wamid.IN1",
+          "emoji": "🔥"
+        }
+      },
+      "status": 200,
+      "response": "{\"messaging_product\":\"whatsapp\",\"contacts\":[{\"input\":\"+447700900001\",\"wa_id\":\"+447700900001\"}],\"messages\":[{\"id\":\"wamid.fake_2\"}]}"
+    },
+    {
+      "method": "POST",
+      "path": "/whatsapp/graph/PN-MOVEMENTS/messages",
+      "authorization": "Bearer PARITY-META-TOKEN",
+      "body": {
+        "messaging_product": "whatsapp",
+        "to": "+447700900001",
+        "type": "text",
+        "text": {
+          "preview_url": true,
+          "body": "Thanks Ada"
+        },
+        "context": {
+          "message_id": "wamid.IN1"
+        }
+      },
+      "status": 200,
+      "response": "{\"messaging_product\":\"whatsapp\",\"contacts\":[{\"input\":\"+447700900001\",\"wa_id\":\"+447700900001\"}],\"messages\":[{\"id\":\"wamid.fake_3\"}]}"
+    },
+    {
+      "method": "POST",
+      "path": "/whatsapp/graph/PN-PRIMARY/messages",
+      "authorization": "Bearer PARITY-META-TOKEN",
+      "body": {
+        "messaging_product": "whatsapp",
+        "to": "+447700900001",
+        "type": "text",
+        "text": {
+          "preview_url": true,
+          "body": "from the primary"
+        },
+        "context": {
+          "message_id": "wamid.IN1"
+        }
+      },
+      "status": 200,
+      "response": "{\"messaging_product\":\"whatsapp\",\"contacts\":[{\"input\":\"+447700900001\",\"wa_id\":\"+447700900001\"}],\"messages\":[{\"id\":\"wamid.fake_4\"}]}"
+    },
+    {
+      "method": "POST",
+      "path": "/whatsapp/graph/PN-PRIMARY/messages",
+      "authorization": "Bearer PARITY-META-TOKEN",
+      "body": {
+        "messaging_product": "whatsapp",
+        "to": "+447700900001",
+        "type": "text",
+        "text": {
+          "preview_url": true,
+          "body": "again"
+        },
+        "context": {
+          "message_id": "wamid.fake_1"
+        }
+      },
+      "status": 200,
+      "response": "{\"messaging_product\":\"whatsapp\",\"contacts\":[{\"input\":\"+447700900001\",\"wa_id\":\"+447700900001\"}],\"messages\":[{\"id\":\"wamid.fake_5\"}]}"
+    },
+    {
+      "method": "POST",
+      "path": "/whatsapp/graph/PN-MOVEMENTS/messages",
+      "authorization": "Bearer PARITY-META-TOKEN",
+      "body": {
+        "messaging_product": "whatsapp",
+        "to": "+447700900001",
+        "type": "interactive",
+        "interactive": {
+          "type": "button",
+          "body": {
+            "text": "Ship?"
+          },
+          "action": {
+            "buttons": [
+              {
+                "type": "reply",
+                "reply": {
+                  "id": "cb_1",
+                  "title": "Yes"
+                }
+              }
+            ]
+          }
+        },
+        "context": {
+          "message_id": "wamid.IN1"
+        }
+      },
+      "status": 200,
+      "response": "{\"messaging_product\":\"whatsapp\",\"contacts\":[{\"input\":\"+447700900001\",\"wa_id\":\"+447700900001\"}],\"messages\":[{\"id\":\"wamid.fake_6\"}]}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/files/blob/deck-1",
+      "authorization": null,
+      "body": null,
+      "status": 200,
+      "response": "%PDF-1.4 the parity deck",
+      "responseContentType": "application/pdf"
+    },
+    {
+      "method": "POST",
+      "path": "/whatsapp/graph/PN-MOVEMENTS/media",
+      "authorization": "Bearer PARITY-META-TOKEN",
+      "body": {
+        "multipart": [
+          {
+            "contentType": null,
+            "body": "whatsapp"
+          },
+          {
+            "contentType": null,
+            "body": "application/pdf"
+          },
+          {
+            "contentType": "application/pdf",
+            "body": "%PDF-1.4 the parity deck"
+          }
+        ]
+      },
+      "status": 200,
+      "response": "{\"id\":\"upload_1\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/whatsapp/graph/PN-MOVEMENTS/messages",
+      "authorization": "Bearer PARITY-META-TOKEN",
+      "body": {
+        "messaging_product": "whatsapp",
+        "to": "+447700900001",
+        "type": "document",
+        "document": {
+          "id": "upload_1",
+          "caption": "your deck",
+          "filename": "deck.pdf"
+        },
+        "context": {
+          "message_id": "wamid.IN1"
+        }
+      },
+      "status": 200,
+      "response": "{\"messaging_product\":\"whatsapp\",\"contacts\":[{\"input\":\"+447700900001\",\"wa_id\":\"+447700900001\"}],\"messages\":[{\"id\":\"wamid.fake_7\"}]}"
+    }
+  ]
+}

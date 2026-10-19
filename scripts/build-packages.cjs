@@ -42,6 +42,9 @@ const PACKAGES = [
   ...fs
     .readdirSync(path.join(ROOT, 'modules'))
     .filter((name) => !['google-sheets', 'anthropic'].includes(name) && fs.existsSync(path.join(ROOT, 'modules', name, 'package.json')))
+    // A private module is platform-supplied (`@lf/system`, `@lf/native-valuations`):
+    // only the platform hosts it, so it is never published.
+    .filter((name) => JSON.parse(fs.readFileSync(path.join(ROOT, 'modules', name, 'package.json'), 'utf8')).private !== true)
     .sort()
     .map((name) => ({ dir: `modules/${name}`, ...(name === 'judge-llm' ? { assets: [/^prompts\/[^/]+\.md$/] } : {}) })),
 ];

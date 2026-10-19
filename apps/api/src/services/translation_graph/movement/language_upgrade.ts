@@ -63,7 +63,7 @@ import {
   VALIDATION_ISSUE,
   type SystemEventKind,
   type SystemEventPayload,
-} from '../adapters/system/types';
+} from '@listen-fire/system';
 import {
   assessMovementValidity,
   validateMovementForTeam,

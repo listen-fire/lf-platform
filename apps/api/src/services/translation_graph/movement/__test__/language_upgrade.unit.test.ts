@@ -42,7 +42,7 @@ import {
   type DeployCheckSummary,
   type ValidateUnder,
 } from '../language_upgrade';
-import { DEPRECATED_VERSION, RELEASE_APPLIED, VALIDATION_ISSUE } from '../../adapters/system/types';
+import { DEPRECATED_VERSION, RELEASE_APPLIED, VALIDATION_ISSUE } from '@listen-fire/system';
 
 const RELEASE: LanguageRelease = {
   current: 2,

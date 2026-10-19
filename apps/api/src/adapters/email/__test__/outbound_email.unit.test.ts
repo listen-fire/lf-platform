@@ -25,11 +25,10 @@ jest.mock('../../../lib/kysely', () => ({
   getAutomationsQb: () => qbDouble(),
 }));
 
-import type { OutboundEmailMessager, SendArgs } from '../interface';
+import type { OutboundEmailMessager, SendArgs } from '@listen-fire/email';
 
 import { withOutboundEmailLedger } from '../ledger';
-import { FakeOutboundEmailAdapter } from '../fake.adapter';
-import { UnconfiguredOutboundEmailAdapter } from '../unconfigured.adapter';
+import { FakeOutboundEmailAdapter, UnconfiguredOutboundEmailAdapter } from '@listen-fire/email';
 
 const args = (over: Partial<SendArgs> = {}): SendArgs => ({
   recipients: [{ email: 'ada@example.com', username: 'Ada' }],

@@ -104,7 +104,7 @@ jest.mock('movement-engine/services/logger', () => ({
   },
 }));
 
-import type { InboundEmailDecision } from 'movement-engine/public/inbound';
+import type { InboundEmailDecision } from '@listen-fire/email';
 
 import { verifyInboundEmailRequest } from '../inbound_door';
 

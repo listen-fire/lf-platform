@@ -69,10 +69,9 @@ import {
 } from '../adapters/whatsapp';
 import { fileValue, RESOURCES_REFERENCE_FIELD_ID } from 'movement-engine/services/translation_graph/adapter';
 import { installMemoryDocumentStore } from '../engine/files/__test__/memory_document_store';
-import { normalizeWhatsappPhone } from '../adapters/acting_user/phone';
+import { normalizeWhatsappPhone } from '@listen-fire/whatsapp/phone';
 import { discriminateEvent } from 'movement-engine/services/translation_graph/engine/inbound/discriminate';
-import { parseWhatsappEvents } from '../../webhook_sync/providers/whatsapp';
-import { webhookEventToDiscriminable } from '../../webhook_sync/event_conversion';
+import { whatsappInboundEvents } from '@listen-fire/whatsapp/inbound';
 import { makeStablePosition, makeUnstablePosition } from 'movement-engine/services/translation_graph/types';
 import { instanceSchemaFromDescriptors } from 'movement-engine/services/translation_graph/movement/schema_projection';
 
@@ -427,7 +426,7 @@ describe('WhatsappAdapter.createRecord — reply (msg-[:Replies]->)', () => {
     const [to, media, options] = sendMediaMessageMock.mock.calls[0];
     expect(to).toBe('+15551234567');
     expect(media).toMatchObject({ filename: 'report.pdf', mimeType: 'application/pdf' });
-    expect((media.buffer as Buffer).toString()).toBe('PDFBYTES');
+    expect(Buffer.from(media.buffer as Uint8Array).toString()).toBe('PDFBYTES');
     expect(options).toEqual({ caption: 'the report', replyToMessageId: 'wamid.A' });
     expect(result.externalId).toBe('wamid.MEDIA');
   });
@@ -685,11 +684,10 @@ describe('WhatsappAdapter.listEventTypes — inbound parse→discriminate pin', 
     expect(result?.eventType.positionType).toBe(WHATSAPP_INBOUND_LOCATION_TYPE);
   });
 
-  it('the UN-tagged legacy conversion discriminates NONE — pins that the tag is load-bearing', async () => {
+  it('an UN-tagged event discriminates NONE — pins that the tag is load-bearing', async () => {
     const eventTypes = await adapter().listEventTypes();
     for (const message of [TEXT, REACTION, LOCATION]) {
-      const parsed = parseWhatsappEvents(envelope(message));
-      const untagged = webhookEventToDiscriminable(parsed[0]);
+      const { tag: _tag, ...untagged } = whatsappInboundEvents(envelope(message))[0]!;
       expect(discriminateEvent({ adapterType: WHATSAPP_ADAPTER_TYPE, event: untagged, eventTypes })).toBeNull();
     }
   });

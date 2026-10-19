@@ -1,0 +1,3025 @@
+{
+  "platform": {
+    "transcript": [
+      {
+        "step": "listEntryPoints",
+        "answer": [
+          {
+            "typeId": "email:message",
+            "displayName": "Email",
+            "writable": false,
+            "readable": false,
+            "fires": true
+          },
+          {
+            "typeId": "email:attachment",
+            "displayName": "Attachment",
+            "writable": false,
+            "readable": false
+          }
+        ]
+      },
+      {
+        "step": "describe Email",
+        "answer": {
+          "typeId": "email:message",
+          "displayName": "Email",
+          "description": "A single inbound email message — what a listen delivers, whole: read `e.`Subject``, `e.`From``, `e.`Body`` straight off the event.",
+          "fields": [
+            {
+              "fieldId": "messageId",
+              "displayName": "Message Id",
+              "kind": "string",
+              "writable": false,
+              "required": true,
+              "description": "RFC 5322 Message-Id (or an inbound-adapter id when absent)."
+            },
+            {
+              "fieldId": "subject",
+              "displayName": "Subject",
+              "kind": "string",
+              "writable": false,
+              "required": false,
+              "description": "The subject line."
+            },
+            {
+              "fieldId": "sender",
+              "displayName": "From",
+              "kind": "string",
+              "writable": false,
+              "required": false,
+              "description": "The \"From\" header value."
+            },
+            {
+              "fieldId": "recipient",
+              "displayName": "To",
+              "kind": "string",
+              "writable": false,
+              "required": false,
+              "description": "The primary recipient the message was routed on. Usually NOT helpful: for forwarded mail it shows the internal address the user forwarded it to (e.g. their Listen-Fire forwarding address), not the true recipient. Prefer `From` for who the message is about."
+            },
+            {
+              "fieldId": "bodyHtml",
+              "displayName": "HTML Body",
+              "kind": "string",
+              "writable": false,
+              "required": false,
+              "description": "The HTML body, when present."
+            },
+            {
+              "fieldId": "bodyText",
+              "displayName": "Plain Body",
+              "kind": "string",
+              "writable": false,
+              "required": false,
+              "description": "The plain-text body, when present."
+            },
+            {
+              "fieldId": "content",
+              "displayName": "Body",
+              "kind": "string",
+              "writable": false,
+              "required": false,
+              "description": "The normalised body — plain text, derived from HTML when only HTML arrived, or when the plain part is itself markup. Use this for \"the body\" regardless of format."
+            }
+          ],
+          "references": [
+            {
+              "fieldId": "attachments",
+              "targetTypeId": "email:attachment",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "name": "Attachments",
+              "writable": false,
+              "sequenced": "document",
+              "description": "Files attached to the email (zero or more)."
+            }
+          ]
+        }
+      },
+      {
+        "step": "describe Attachment",
+        "answer": {
+          "typeId": "email:attachment",
+          "displayName": "Attachment",
+          "fields": [
+            {
+              "fieldId": "name",
+              "displayName": "Name",
+              "kind": "string",
+              "writable": false,
+              "required": true
+            },
+            {
+              "fieldId": "contentType",
+              "displayName": "Content Type",
+              "kind": "string",
+              "writable": false,
+              "required": true
+            },
+            {
+              "fieldId": "size",
+              "displayName": "Size",
+              "kind": "number",
+              "writable": false,
+              "required": false
+            },
+            {
+              "fieldId": "url",
+              "displayName": "URL",
+              "kind": "string",
+              "writable": false,
+              "required": false
+            },
+            {
+              "fieldId": "data",
+              "displayName": "File",
+              "kind": "file",
+              "writable": false,
+              "required": false
+            }
+          ],
+          "references": []
+        }
+      },
+      {
+        "step": "describe email:message",
+        "answer": {
+          "typeId": "email:message",
+          "displayName": "Email",
+          "description": "A single inbound email message — what a listen delivers, whole: read `e.`Subject``, `e.`From``, `e.`Body`` straight off the event.",
+          "fields": [
+            {
+              "fieldId": "messageId",
+              "displayName": "Message Id",
+              "kind": "string",
+              "writable": false,
+              "required": true,
+              "description": "RFC 5322 Message-Id (or an inbound-adapter id when absent)."
+            },
+            {
+              "fieldId": "subject",
+              "displayName": "Subject",
+              "kind": "string",
+              "writable": false,
+              "required": false,
+              "description": "The subject line."
+            },
+            {
+              "fieldId": "sender",
+              "displayName": "From",
+              "kind": "string",
+              "writable": false,
+              "required": false,
+              "description": "The \"From\" header value."
+            },
+            {
+              "fieldId": "recipient",
+              "displayName": "To",
+              "kind": "string",
+              "writable": false,
+              "required": false,
+              "description": "The primary recipient the message was routed on. Usually NOT helpful: for forwarded mail it shows the internal address the user forwarded it to (e.g. their Listen-Fire forwarding address), not the true recipient. Prefer `From` for who the message is about."
+            },
+            {
+              "fieldId": "bodyHtml",
+              "displayName": "HTML Body",
+              "kind": "string",
+              "writable": false,
+              "required": false,
+              "description": "The HTML body, when present."
+            },
+            {
+              "fieldId": "bodyText",
+              "displayName": "Plain Body",
+              "kind": "string",
+              "writable": false,
+              "required": false,
+              "description": "The plain-text body, when present."
+            },
+            {
+              "fieldId": "content",
+              "displayName": "Body",
+              "kind": "string",
+              "writable": false,
+              "required": false,
+              "description": "The normalised body — plain text, derived from HTML when only HTML arrived, or when the plain part is itself markup. Use this for \"the body\" regardless of format."
+            }
+          ],
+          "references": [
+            {
+              "fieldId": "attachments",
+              "targetTypeId": "email:attachment",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "name": "Attachments",
+              "writable": false,
+              "sequenced": "document",
+              "description": "Files attached to the email (zero or more)."
+            }
+          ]
+        }
+      },
+      {
+        "step": "describe email:attachment",
+        "answer": {
+          "typeId": "email:attachment",
+          "displayName": "Attachment",
+          "fields": [
+            {
+              "fieldId": "name",
+              "displayName": "Name",
+              "kind": "string",
+              "writable": false,
+              "required": true
+            },
+            {
+              "fieldId": "contentType",
+              "displayName": "Content Type",
+              "kind": "string",
+              "writable": false,
+              "required": true
+            },
+            {
+              "fieldId": "size",
+              "displayName": "Size",
+              "kind": "number",
+              "writable": false,
+              "required": false
+            },
+            {
+              "fieldId": "url",
+              "displayName": "URL",
+              "kind": "string",
+              "writable": false,
+              "required": false
+            },
+            {
+              "fieldId": "data",
+              "displayName": "File",
+              "kind": "file",
+              "writable": false,
+              "required": false
+            }
+          ],
+          "references": []
+        }
+      },
+      {
+        "step": "describe Nonexistent",
+        "answer": null
+      },
+      {
+        "step": "edgesFrom meta",
+        "answer": {
+          "descriptor": {
+            "typeId": "meta",
+            "displayName": "Email",
+            "description": "An email connection. Nothing here can be listed — an inbox is not enumerable — so the one way in is an email ARRIVING, which a listen delivers whole.",
+            "fields": [],
+            "references": [
+              {
+                "fieldId": "email:message",
+                "targetTypeId": "email:message",
+                "cardinality": "one",
+                "direction": "outgoing",
+                "name": "Email",
+                "fires": true,
+                "readable": false,
+                "description": "An email arriving — what a listen delivers, whole."
+              }
+            ]
+          },
+          "targetPositions": {
+            "email:message": {
+              "adapterType": "email",
+              "recordType": "email:message",
+              "identity": {
+                "kind": "unstable",
+                "data": {}
+              }
+            }
+          },
+          "targetNodes": {
+            "email:message": {
+              "typeId": "email:message",
+              "displayName": "Email",
+              "description": "A single inbound email message — what a listen delivers, whole: read `e.`Subject``, `e.`From``, `e.`Body`` straight off the event.",
+              "fields": [
+                {
+                  "fieldId": "messageId",
+                  "displayName": "Message Id",
+                  "kind": "string",
+                  "writable": false,
+                  "required": true,
+                  "description": "RFC 5322 Message-Id (or an inbound-adapter id when absent)."
+                },
+                {
+                  "fieldId": "subject",
+                  "displayName": "Subject",
+                  "kind": "string",
+                  "writable": false,
+                  "required": false,
+                  "description": "The subject line."
+                },
+                {
+                  "fieldId": "sender",
+                  "displayName": "From",
+                  "kind": "string",
+                  "writable": false,
+                  "required": false,
+                  "description": "The \"From\" header value."
+                },
+                {
+                  "fieldId": "recipient",
+                  "displayName": "To",
+                  "kind": "string",
+                  "writable": false,
+                  "required": false,
+                  "description": "The primary recipient the message was routed on. Usually NOT helpful: for forwarded mail it shows the internal address the user forwarded it to (e.g. their Listen-Fire forwarding address), not the true recipient. Prefer `From` for who the message is about."
+                },
+                {
+                  "fieldId": "bodyHtml",
+                  "displayName": "HTML Body",
+                  "kind": "string",
+                  "writable": false,
+                  "required": false,
+                  "description": "The HTML body, when present."
+                },
+                {
+                  "fieldId": "bodyText",
+                  "displayName": "Plain Body",
+                  "kind": "string",
+                  "writable": false,
+                  "required": false,
+                  "description": "The plain-text body, when present."
+                },
+                {
+                  "fieldId": "content",
+                  "displayName": "Body",
+                  "kind": "string",
+                  "writable": false,
+                  "required": false,
+                  "description": "The normalised body — plain text, derived from HTML when only HTML arrived, or when the plain part is itself markup. Use this for \"the body\" regardless of format."
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "step": "edgesFrom Email",
+        "answer": {
+          "descriptor": {
+            "typeId": "email:message",
+            "displayName": "Email",
+            "description": "A single inbound email message — what a listen delivers, whole: read `e.`Subject``, `e.`From``, `e.`Body`` straight off the event.",
+            "fields": [
+              {
+                "fieldId": "messageId",
+                "displayName": "Message Id",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "RFC 5322 Message-Id (or an inbound-adapter id when absent)."
+              },
+              {
+                "fieldId": "subject",
+                "displayName": "Subject",
+                "kind": "string",
+                "writable": false,
+                "required": false,
+                "description": "The subject line."
+              },
+              {
+                "fieldId": "sender",
+                "displayName": "From",
+                "kind": "string",
+                "writable": false,
+                "required": false,
+                "description": "The \"From\" header value."
+              },
+              {
+                "fieldId": "recipient",
+                "displayName": "To",
+                "kind": "string",
+                "writable": false,
+                "required": false,
+                "description": "The primary recipient the message was routed on. Usually NOT helpful: for forwarded mail it shows the internal address the user forwarded it to (e.g. their Listen-Fire forwarding address), not the true recipient. Prefer `From` for who the message is about."
+              },
+              {
+                "fieldId": "bodyHtml",
+                "displayName": "HTML Body",
+                "kind": "string",
+                "writable": false,
+                "required": false,
+                "description": "The HTML body, when present."
+              },
+              {
+                "fieldId": "bodyText",
+                "displayName": "Plain Body",
+                "kind": "string",
+                "writable": false,
+                "required": false,
+                "description": "The plain-text body, when present."
+              },
+              {
+                "fieldId": "content",
+                "displayName": "Body",
+                "kind": "string",
+                "writable": false,
+                "required": false,
+                "description": "The normalised body — plain text, derived from HTML when only HTML arrived, or when the plain part is itself markup. Use this for \"the body\" regardless of format."
+              }
+            ],
+            "references": [
+              {
+                "fieldId": "attachments",
+                "targetTypeId": "email:attachment",
+                "cardinality": "many",
+                "direction": "outgoing",
+                "name": "Attachments",
+                "writable": false,
+                "sequenced": "document",
+                "description": "Files attached to the email (zero or more)."
+              }
+            ]
+          },
+          "targetPositions": {
+            "attachments": {
+              "adapterType": "email",
+              "recordType": "email:attachment",
+              "identity": {
+                "kind": "unstable",
+                "data": {}
+              }
+            }
+          },
+          "targetNodes": {
+            "attachments": {
+              "typeId": "email:attachment",
+              "displayName": "Attachment",
+              "fields": [
+                {
+                  "fieldId": "name",
+                  "displayName": "Name",
+                  "kind": "string",
+                  "writable": false,
+                  "required": true
+                },
+                {
+                  "fieldId": "contentType",
+                  "displayName": "Content Type",
+                  "kind": "string",
+                  "writable": false,
+                  "required": true
+                },
+                {
+                  "fieldId": "size",
+                  "displayName": "Size",
+                  "kind": "number",
+                  "writable": false,
+                  "required": false
+                },
+                {
+                  "fieldId": "url",
+                  "displayName": "URL",
+                  "kind": "string",
+                  "writable": false,
+                  "required": false
+                },
+                {
+                  "fieldId": "data",
+                  "displayName": "File",
+                  "kind": "file",
+                  "writable": false,
+                  "required": false
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "step": "edgesFrom Attachment",
+        "answer": {
+          "descriptor": {
+            "typeId": "email:attachment",
+            "displayName": "Attachment",
+            "fields": [
+              {
+                "fieldId": "name",
+                "displayName": "Name",
+                "kind": "string",
+                "writable": false,
+                "required": true
+              },
+              {
+                "fieldId": "contentType",
+                "displayName": "Content Type",
+                "kind": "string",
+                "writable": false,
+                "required": true
+              },
+              {
+                "fieldId": "size",
+                "displayName": "Size",
+                "kind": "number",
+                "writable": false,
+                "required": false
+              },
+              {
+                "fieldId": "url",
+                "displayName": "URL",
+                "kind": "string",
+                "writable": false,
+                "required": false
+              },
+              {
+                "fieldId": "data",
+                "displayName": "File",
+                "kind": "file",
+                "writable": false,
+                "required": false
+              }
+            ],
+            "references": []
+          }
+        }
+      },
+      {
+        "step": "mailgun.Message Id",
+        "answer": "<mg-1@mail.example.com>"
+      },
+      {
+        "step": "mailgun.Subject",
+        "answer": "Intro: Acme"
+      },
+      {
+        "step": "mailgun.From",
+        "answer": "\"Bo Li\" <bo@acme.com>"
+      },
+      {
+        "step": "mailgun.To",
+        "answer": "inbox+deals@example.com"
+      },
+      {
+        "step": "mailgun.HTML Body",
+        "answer": "<p>Hello <i>there</i></p>"
+      },
+      {
+        "step": "mailgun.Plain Body",
+        "answer": "Hello there"
+      },
+      {
+        "step": "mailgun.Body",
+        "answer": "Hello there"
+      },
+      {
+        "step": "mailgun.messageId",
+        "answer": {
+          "error": "'messageId' is not a known field of 'Email' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "mailgun.content",
+        "answer": {
+          "error": "'content' is not a known field of 'Email' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "mailgun.Nope",
+        "answer": {
+          "error": "'Nope' is not a known field of 'Email' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "html only.Message Id",
+        "answer": "h1"
+      },
+      {
+        "step": "html only.Subject",
+        "answer": "html"
+      },
+      {
+        "step": "html only.From",
+        "answer": "x@y.com"
+      },
+      {
+        "step": "html only.To",
+        "answer": "r@y.com"
+      },
+      {
+        "step": "html only.HTML Body",
+        "answer": "<div><p>Only <b>html</b></p><br/>here</div>"
+      },
+      {
+        "step": "html only.Plain Body",
+        "answer": null
+      },
+      {
+        "step": "html only.Body",
+        "answer": "Only html\n\n\nhere"
+      },
+      {
+        "step": "html only.messageId",
+        "answer": {
+          "error": "'messageId' is not a known field of 'Email' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "html only.content",
+        "answer": {
+          "error": "'content' is not a known field of 'Email' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "html only.Nope",
+        "answer": {
+          "error": "'Nope' is not a known field of 'Email' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "markup text.Message Id",
+        "answer": "m1"
+      },
+      {
+        "step": "markup text.Subject",
+        "answer": "markup"
+      },
+      {
+        "step": "markup text.From",
+        "answer": "x@y.com"
+      },
+      {
+        "step": "markup text.To",
+        "answer": "r@y.com"
+      },
+      {
+        "step": "markup text.HTML Body",
+        "answer": "<p>real html</p>"
+      },
+      {
+        "step": "markup text.Plain Body",
+        "answer": "<!DOCTYPE html><html><body><table><tr><td>cell</td></tr></table></body></html>"
+      },
+      {
+        "step": "markup text.Body",
+        "answer": "cell"
+      },
+      {
+        "step": "markup text.messageId",
+        "answer": {
+          "error": "'messageId' is not a known field of 'Email' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "markup text.content",
+        "answer": {
+          "error": "'content' is not a known field of 'Email' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "markup text.Nope",
+        "answer": {
+          "error": "'Nope' is not a known field of 'Email' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "prose angle.Message Id",
+        "answer": "p1"
+      },
+      {
+        "step": "prose angle.Subject",
+        "answer": "prose"
+      },
+      {
+        "step": "prose angle.From",
+        "answer": "x@y.com"
+      },
+      {
+        "step": "prose angle.To",
+        "answer": "r@y.com"
+      },
+      {
+        "step": "prose angle.HTML Body",
+        "answer": null
+      },
+      {
+        "step": "prose angle.Plain Body",
+        "answer": "a <3 b and x < y"
+      },
+      {
+        "step": "prose angle.Body",
+        "answer": "a <3 b and x < y"
+      },
+      {
+        "step": "prose angle.messageId",
+        "answer": {
+          "error": "'messageId' is not a known field of 'Email' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "prose angle.content",
+        "answer": {
+          "error": "'content' is not a known field of 'Email' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "prose angle.Nope",
+        "answer": {
+          "error": "'Nope' is not a known field of 'Email' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "empty.Message Id",
+        "answer": ""
+      },
+      {
+        "step": "empty.Subject",
+        "answer": null
+      },
+      {
+        "step": "empty.From",
+        "answer": null
+      },
+      {
+        "step": "empty.To",
+        "answer": null
+      },
+      {
+        "step": "empty.HTML Body",
+        "answer": null
+      },
+      {
+        "step": "empty.Plain Body",
+        "answer": null
+      },
+      {
+        "step": "empty.Body",
+        "answer": ""
+      },
+      {
+        "step": "empty.messageId",
+        "answer": {
+          "error": "'messageId' is not a known field of 'Email' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "empty.content",
+        "answer": {
+          "error": "'content' is not a known field of 'Email' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "empty.Nope",
+        "answer": {
+          "error": "'Nope' is not a known field of 'Email' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "resend-aliased position .Subject",
+        "answer": "Intro: Acme"
+      },
+      {
+        "step": "foreign position",
+        "answer": {
+          "error": "EmailAdapter.getFieldValue received a position from a different adapter ('slack')."
+        }
+      },
+      {
+        "step": "Attachments",
+        "answer": [
+          {
+            "position": {
+              "adapterType": "email",
+              "recordType": "Attachment",
+              "identity": {
+                "kind": "unstable",
+                "data": {
+                  "key": "https://storage.eu.mailgun.net/v3/domains/example.com/messages/MSG1/attachments/0",
+                  "filename": "term-sheet.pdf",
+                  "contentType": "application/pdf",
+                  "size": 2048,
+                  "url": "https://storage.eu.mailgun.net/v3/domains/example.com/messages/MSG1/attachments/0"
+                }
+              }
+            }
+          },
+          {
+            "position": {
+              "adapterType": "email",
+              "recordType": "Attachment",
+              "identity": {
+                "kind": "unstable",
+                "data": {
+                  "key": "resend:em_parity/att_2",
+                  "filename": "notes.txt",
+                  "contentType": "text/plain"
+                }
+              }
+            }
+          },
+          {
+            "position": {
+              "adapterType": "email",
+              "recordType": "Attachment",
+              "identity": {
+                "kind": "unstable",
+                "data": {
+                  "key": "",
+                  "filename": "no-handle.bin",
+                  "contentType": "application/octet-stream"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "step": "Attachments incoming",
+        "answer": []
+      },
+      {
+        "step": "Attachments of an empty email",
+        "answer": []
+      },
+      {
+        "step": "foreign getRelated",
+        "answer": {
+          "error": "EmailAdapter.getRelated received a position from a different adapter ('slack')."
+        }
+      },
+      {
+        "step": "Attachment 0.Name",
+        "answer": "term-sheet.pdf"
+      },
+      {
+        "step": "Attachment 0.Content Type",
+        "answer": "application/pdf"
+      },
+      {
+        "step": "Attachment 0.Size",
+        "answer": 2048
+      },
+      {
+        "step": "Attachment 0.URL",
+        "answer": "https://storage.eu.mailgun.net/v3/domains/example.com/messages/MSG1/attachments/0"
+      },
+      {
+        "step": "Attachment 0.File",
+        "answer": {
+          "__brand": "FileRef",
+          "name": "term-sheet.pdf",
+          "contentType": "application/pdf",
+          "size": 2048,
+          "source": {
+            "adapterType": "email",
+            "handle": "https://storage.eu.mailgun.net/v3/domains/example.com/messages/MSG1/attachments/0"
+          }
+        }
+      },
+      {
+        "step": "Attachment 0.filename",
+        "answer": {
+          "error": "'filename' is not a known field of 'Attachment' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "Attachment 1.Name",
+        "answer": "notes.txt"
+      },
+      {
+        "step": "Attachment 1.Content Type",
+        "answer": "text/plain"
+      },
+      {
+        "step": "Attachment 1.Size",
+        "answer": null
+      },
+      {
+        "step": "Attachment 1.URL",
+        "answer": null
+      },
+      {
+        "step": "Attachment 1.File",
+        "answer": {
+          "__brand": "FileRef",
+          "name": "notes.txt",
+          "contentType": "text/plain",
+          "source": {
+            "adapterType": "email",
+            "handle": "resend:em_parity/att_2"
+          }
+        }
+      },
+      {
+        "step": "Attachment 1.filename",
+        "answer": {
+          "error": "'filename' is not a known field of 'Attachment' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "Attachment 2.Name",
+        "answer": "no-handle.bin"
+      },
+      {
+        "step": "Attachment 2.Content Type",
+        "answer": "application/octet-stream"
+      },
+      {
+        "step": "Attachment 2.Size",
+        "answer": null
+      },
+      {
+        "step": "Attachment 2.URL",
+        "answer": null
+      },
+      {
+        "step": "Attachment 2.File",
+        "answer": null
+      },
+      {
+        "step": "Attachment 2.filename",
+        "answer": {
+          "error": "'filename' is not a known field of 'Attachment' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "getActorCandidates mailgun",
+        "answer": [
+          {
+            "identity": {
+              "identifier": "bo@acme.com",
+              "scheme": "email",
+              "adapterType": "email",
+              "email": "bo@acme.com"
+            },
+            "source": "originator"
+          },
+          {
+            "identity": {
+              "identifier": "dealflow@acme.com",
+              "scheme": "email",
+              "adapterType": "email",
+              "email": "dealflow@acme.com"
+            },
+            "source": "relay"
+          },
+          {
+            "identity": {
+              "identifier": "other@acme.com",
+              "scheme": "email",
+              "adapterType": "email",
+              "email": "other@acme.com"
+            },
+            "source": "relay"
+          },
+          {
+            "identity": {
+              "identifier": "list@acme.com",
+              "scheme": "email",
+              "adapterType": "email",
+              "email": "list@acme.com"
+            },
+            "source": "relay"
+          },
+          {
+            "identity": {
+              "identifier": "inbox+deals@example.com",
+              "scheme": "email",
+              "adapterType": "email",
+              "email": "inbox+deals@example.com"
+            },
+            "source": "relay"
+          }
+        ]
+      },
+      {
+        "step": "getActorCandidates From header only",
+        "answer": [
+          {
+            "identity": {
+              "identifier": "cy@acme.com",
+              "scheme": "email",
+              "adapterType": "email",
+              "email": "cy@acme.com"
+            },
+            "source": "originator"
+          },
+          {
+            "identity": {
+              "identifier": "orig@acme.com",
+              "scheme": "email",
+              "adapterType": "email",
+              "email": "orig@acme.com"
+            },
+            "source": "relay"
+          }
+        ]
+      },
+      {
+        "step": "getActorCandidates empty",
+        "answer": []
+      },
+      {
+        "step": "extractActor mailgun",
+        "answer": {
+          "identifier": "bo@acme.com",
+          "scheme": "email",
+          "adapterType": "email",
+          "email": "bo@acme.com",
+          "name": "Bo Li",
+          "label": "Bo Li"
+        }
+      },
+      {
+        "step": "extractActor bare address",
+        "answer": {
+          "identifier": "bare@acme.com",
+          "scheme": "email",
+          "adapterType": "email",
+          "email": "bare@acme.com",
+          "label": "bare@acme.com"
+        }
+      },
+      {
+        "step": "extractActor none",
+        "answer": null
+      },
+      {
+        "step": "resolveFileRef mailgun",
+        "answer": {
+          "contentType": "application/pdf",
+          "text": "bytes of /v3/domains/example.com/messages/MSG1/attachments/0"
+        }
+      },
+      {
+        "step": "resolveFileRef resend",
+        "answer": {
+          "contentType": "text/plain",
+          "text": "some notes"
+        }
+      },
+      {
+        "step": "resolveFileRef resend, attachment gone",
+        "answer": {
+          "error": "Resend no longer lists attachment att_9 on email em_parity."
+        }
+      },
+      {
+        "step": "resolveFileRef mailgun, another domain",
+        "answer": {
+          "error": "Refusing to fetch a Mailgun attachment outside this deployment's configured Mailgun domain (MAILGUN_SENDING_DOMAIN)"
+        }
+      },
+      {
+        "step": "resolveFileRef mailgun, encoded traversal",
+        "answer": {
+          "error": "Refusing to fetch a Mailgun attachment outside this deployment's configured Mailgun domain (MAILGUN_SENDING_DOMAIN)"
+        }
+      },
+      {
+        "step": "resolveFileRef look-alike host",
+        "answer": {
+          "error": "the file's handle is not one its owner email issued, so it is not fetched"
+        }
+      },
+      {
+        "step": "resolveFileRef foreign handle",
+        "answer": {
+          "error": "the file's handle is not one its owner email issued, so it is not fetched"
+        }
+      },
+      {
+        "step": "resolveFileRef without a handle",
+        "answer": {
+          "error": "email.resolveFileRef: FileRef has no source handle to resolve."
+        }
+      },
+      {
+        "step": "createRecord",
+        "answer": {
+          "error": "email is not configured as a write target — createRecord called"
+        }
+      },
+      {
+        "step": "manifest triggerConfig",
+        "answer": [
+          {
+            "kind": "section",
+            "tone": "info",
+            "text": "Email sent to your inbound address starts this automation. Forward or CC it to route a message into your movement."
+          },
+          {
+            "kind": "slug",
+            "key": "key",
+            "label": "Inbound email address",
+            "prefix": "inbox+",
+            "suffix": "@example.com",
+            "required": true,
+            "min": 1,
+            "max": 30,
+            "unique": true,
+            "routingKey": true
+          }
+        ]
+      },
+      {
+        "step": "manifest triggerExpectation",
+        "answer": "Fires once per email actually delivered to the movement's dedicated forwarding address (inbox+<key>@example.com) — it does NOT read an existing inbox or see mail sent elsewhere. The user must forward or send mail to that address for it to fire; the listen key is the plus-suffix, so different keys route different mail. Describe it as \"when an email is sent to your inbound address\", not \"when you get an email\"."
+      },
+      {
+        "step": "manifest configurationGap",
+        "answer": null
+      },
+      {
+        "step": "inboundRoutingAddress",
+        "answer": {
+          "localPart": "Mail",
+          "domain": "Example.com",
+          "prefix": "Mail+",
+          "suffix": "@Example.com"
+        }
+      },
+      {
+        "step": "inboundRoutingAddress plus",
+        "answer": null
+      },
+      {
+        "step": "routingKeyFrom",
+        "answer": "Deals"
+      },
+      {
+        "step": "routingKeyFrom none",
+        "answer": null
+      },
+      {
+        "step": "resolveEmailProvider none",
+        "answer": {
+          "slug": "mailgun",
+          "callbackPath": "/api/mailgun/callback"
+        }
+      },
+      {
+        "step": "emailProvidersOverlap none",
+        "answer": false
+      },
+      {
+        "step": "resolveEmailProvider mailgun",
+        "answer": {
+          "slug": "mailgun",
+          "callbackPath": "/api/mailgun/callback"
+        }
+      },
+      {
+        "step": "emailProvidersOverlap mailgun",
+        "answer": false
+      },
+      {
+        "step": "resolveEmailProvider resend",
+        "answer": {
+          "slug": "resend",
+          "callbackPath": "/api/resend/callback"
+        }
+      },
+      {
+        "step": "emailProvidersOverlap resend",
+        "answer": false
+      },
+      {
+        "step": "resolveEmailProvider both",
+        "answer": {
+          "slug": "resend",
+          "callbackPath": "/api/resend/callback"
+        }
+      },
+      {
+        "step": "emailProvidersOverlap both",
+        "answer": true
+      },
+      {
+        "step": "chooseOutboundEmailProvider development",
+        "answer": "fake"
+      },
+      {
+        "step": "chooseOutboundEmailProvider production, no from",
+        "answer": "unconfigured"
+      },
+      {
+        "step": "chooseOutboundEmailProvider production, resend",
+        "answer": "resend"
+      },
+      {
+        "step": "chooseOutboundEmailProvider staging, mailgun",
+        "answer": "mailgun"
+      },
+      {
+        "step": "chooseOutboundEmailProvider production, mailgun without domain",
+        "answer": "unconfigured"
+      },
+      {
+        "step": "normaliseInboundEmailPayload mailgun",
+        "answer": {
+          "sender": "bo@acme.com",
+          "from": "Bo Li <bo@acme.com>",
+          "recipient": "inbox+deals@example.com",
+          "To": "Inbox <inbox+deals@example.com>, Other <other@example.com>",
+          "Cc": "cc@example.com",
+          "subject": "Intro",
+          "body-plain": "plain body",
+          "stripped-text": "stripped",
+          "body-html": "<p>html</p>",
+          "Message-Id": "<mg-2@acme.com>",
+          "X-Forwarded-For": "dealflow@acme.com other@acme.com",
+          "Delivered-To": "inbox+deals@example.com",
+          "attachments": [
+            {
+              "key": "https://storage.eu.mailgun.net/v3/domains/example.com/messages/M2/attachments/0",
+              "filename": "a.pdf",
+              "contentType": "application/pdf",
+              "size": 10,
+              "url": "https://storage.eu.mailgun.net/v3/domains/example.com/messages/M2/attachments/0"
+            },
+            {
+              "key": "no-url.txt",
+              "filename": "no-url.txt",
+              "contentType": "application/octet-stream"
+            }
+          ],
+          "message-headers": "[[\"Received\",\"from x by y for &lt;bcc+deals@example.com&gt;\"]]",
+          "timestamp": "1700000000",
+          "token": "tok",
+          "messageId": "<mg-2@acme.com>",
+          "bodyHtml": "<p>html</p>",
+          "bodyText": "plain body"
+        }
+      },
+      {
+        "step": "normaliseInboundEmailPayload contract-shaped",
+        "answer": {
+          "messageId": "id",
+          "bodyText": "t",
+          "bodyHtml": "<p>h</p>",
+          "attachments": [
+            {
+              "key": "https://x/y",
+              "filename": "f",
+              "contentType": "text/plain",
+              "url": "https://x/y"
+            }
+          ],
+          "subject": "",
+          "sender": "",
+          "recipient": ""
+        }
+      },
+      {
+        "step": "normaliseInboundEmailPayload broken attachments",
+        "answer": {
+          "attachments": [],
+          "messageId": "",
+          "subject": "",
+          "sender": "",
+          "recipient": ""
+        }
+      },
+      {
+        "step": "readMailgunMessage",
+        "answer": {
+          "signature": "9643375ff643aee0e379b1592c17fcb6c750bbe9abe7d3d0fcba1ee875d1b6ac",
+          "token": "tok",
+          "timestamp": "1700000000",
+          "sender": "bo@acme.com",
+          "recipients": [
+            "inbox+deals@example.com",
+            "other@example.com",
+            "cc@example.com",
+            "bcc+deals@example.com"
+          ],
+          "senderCandidates": [
+            "dealflow@acme.com",
+            "inbox+deals@example.com",
+            "bo@acme.com"
+          ]
+        }
+      },
+      {
+        "step": "readMailgunMessage no sender",
+        "answer": null
+      },
+      {
+        "step": "readMailgunMessage not an object",
+        "answer": null
+      },
+      {
+        "step": "admitMailgunMail signed",
+        "answer": {
+          "outcome": "routed",
+          "userId": "user-1",
+          "teamId": "team-1",
+          "route": {
+            "teamId": "team-1",
+            "key": null,
+            "trigger": null
+          },
+          "message": {
+            "signature": "9643375ff643aee0e379b1592c17fcb6c750bbe9abe7d3d0fcba1ee875d1b6ac",
+            "token": "tok",
+            "timestamp": "1700000000",
+            "sender": "bo@acme.com",
+            "recipients": [
+              "inbox+deals@example.com",
+              "other@example.com",
+              "cc@example.com",
+              "bcc+deals@example.com"
+            ],
+            "senderCandidates": [
+              "dealflow@acme.com",
+              "inbox+deals@example.com",
+              "bo@acme.com"
+            ]
+          }
+        }
+      },
+      {
+        "step": "admitMailgunMail bad signature",
+        "answer": {
+          "outcome": "refused",
+          "status": 406
+        }
+      },
+      {
+        "step": "admitMailgunMail short signature",
+        "answer": {
+          "outcome": "refused",
+          "status": 406
+        }
+      },
+      {
+        "step": "admitMailgunMail no key",
+        "answer": {
+          "outcome": "refused",
+          "status": 401
+        }
+      },
+      {
+        "step": "admitMailgunMail not mail",
+        "answer": {
+          "outcome": "refused",
+          "status": 406
+        }
+      },
+      {
+        "step": "judgeMailgunEvent verified",
+        "answer": "verified"
+      },
+      {
+        "step": "judgeMailgunEvent refused",
+        "answer": "refused"
+      },
+      {
+        "step": "judgeMailgunEvent malformed",
+        "answer": "refused"
+      },
+      {
+        "step": "judgeMailgunEvent misconfigured",
+        "answer": "misconfigured"
+      },
+      {
+        "step": "readResendEnvelope",
+        "answer": {
+          "email_id": "em_parity",
+          "from": "\"Ada Okafor\" <Ada@Example.com>",
+          "to": [
+            "inbox+deals@example.com"
+          ],
+          "cc": [
+            "Cc Person <CC@example.com>"
+          ],
+          "bcc": [],
+          "received_for": [
+            "inbox+deals@example.com"
+          ],
+          "message_id": "<em_parity@mail.example.com>",
+          "subject": "Deck for the round"
+        }
+      },
+      {
+        "step": "readResendEnvelope other type",
+        "answer": null
+      },
+      {
+        "step": "readResendEnvelope not json",
+        "answer": null
+      },
+      {
+        "step": "resendEnvelopeRecipients",
+        "answer": [
+          "inbox+deals@example.com",
+          "cc@example.com"
+        ]
+      },
+      {
+        "step": "admitResendMail signed",
+        "answer": {
+          "outcome": "routed",
+          "userId": "user-1",
+          "teamId": "team-1",
+          "route": {
+            "teamId": "team-1",
+            "key": null,
+            "trigger": null
+          },
+          "message": {
+            "recipients": [
+              "inbox+deals@example.com",
+              "cc@example.com"
+            ],
+            "senderCandidates": [
+              "ada@example.com"
+            ]
+          }
+        }
+      },
+      {
+        "step": "admitResendMail rotated secrets",
+        "answer": {
+          "outcome": "routed",
+          "userId": "user-1",
+          "teamId": "team-1",
+          "route": {
+            "teamId": "team-1",
+            "key": null,
+            "trigger": null
+          },
+          "message": {
+            "recipients": [
+              "inbox+deals@example.com",
+              "cc@example.com"
+            ],
+            "senderCandidates": [
+              "ada@example.com"
+            ]
+          }
+        }
+      },
+      {
+        "step": "admitResendMail re-serialised body",
+        "answer": {
+          "outcome": "refused",
+          "status": 406
+        }
+      },
+      {
+        "step": "admitResendMail stale",
+        "answer": {
+          "outcome": "refused",
+          "status": 406
+        }
+      },
+      {
+        "step": "admitResendMail no raw body",
+        "answer": {
+          "outcome": "refused",
+          "status": 406
+        }
+      },
+      {
+        "step": "admitResendMail no secret",
+        "answer": {
+          "outcome": "refused",
+          "status": 401
+        }
+      },
+      {
+        "step": "admitResendMail not mail",
+        "answer": {
+          "outcome": "refused",
+          "status": 200
+        }
+      },
+      {
+        "step": "admitResendMail no email id",
+        "answer": {
+          "outcome": "refused",
+          "status": 406
+        }
+      },
+      {
+        "step": "admitResendMail no sender",
+        "answer": {
+          "outcome": "refused",
+          "status": 406
+        }
+      },
+      {
+        "step": "verifySvixSignature fixed clock",
+        "answer": "verified"
+      },
+      {
+        "step": "verifySvixSignature malformed",
+        "answer": "malformed"
+      },
+      {
+        "step": "fetchResendEmailPayload",
+        "answer": {
+          "X-Forwarded-For": "dealflow@acme.com",
+          "Delivered-To": "inbox+deals@example.com",
+          "messageId": "<em_parity@mail.example.com>",
+          "subject": "Deck for the round",
+          "sender": "\"Ada Okafor\" <Ada@Example.com>",
+          "recipient": "inbox+deals@example.com",
+          "bodyHtml": "<!DOCTYPE html><html><body><p>See the <b>deck</b>.</p></body></html>",
+          "bodyText": "See the deck.",
+          "attachments": [
+            {
+              "key": "resend:em_parity/att_1",
+              "filename": "deck.pdf",
+              "contentType": "application/pdf",
+              "size": 15
+            },
+            {
+              "key": "resend:em_parity/att_2",
+              "filename": "notes.txt",
+              "contentType": "text/plain",
+              "size": 10
+            }
+          ]
+        }
+      },
+      {
+        "step": "fetchResendEmailPayload unknown",
+        "answer": {
+          "error": "Resend /emails/receiving/em_missing failed (status 404)."
+        }
+      },
+      {
+        "step": "resend send text",
+        "answer": true
+      },
+      {
+        "step": "resend send html, cc, reply, attachment",
+        "answer": true
+      },
+      {
+        "step": "resend send template",
+        "answer": {
+          "error": "Resend cannot send the 'welcome' template — it has no template API. Render the message before sending it."
+        }
+      },
+      {
+        "step": "resend without key",
+        "answer": {
+          "error": "RESEND_API_KEY is not set"
+        }
+      },
+      {
+        "step": "resend without from",
+        "answer": {
+          "error": "OUTBOUND_EMAIL_FROM is not set — it is the address this deployment sends mail as"
+        }
+      },
+      {
+        "step": "mailgun send text",
+        "answer": true
+      },
+      {
+        "step": "mailgun send html with cc and reply",
+        "answer": true
+      },
+      {
+        "step": "mailgun send template",
+        "answer": true
+      },
+      {
+        "step": "mailgun without key",
+        "answer": {
+          "error": "MAILGUN_API_KEY is not set"
+        }
+      },
+      {
+        "step": "mailgun without domain",
+        "answer": {
+          "error": "MAILGUN_SENDING_DOMAIN is not set — it is the verified Mailgun domain this deployment sends from"
+        }
+      },
+      {
+        "step": "mailgun without from",
+        "answer": {
+          "error": "OUTBOUND_EMAIL_FROM is not set — it is the address this deployment sends mail as"
+        }
+      },
+      {
+        "step": "fake send",
+        "answer": true
+      },
+      {
+        "step": "unconfigured send",
+        "answer": false
+      }
+    ],
+    "exchanges": {
+      "resend": [
+        {
+          "method": "GET",
+          "path": "/emails/receiving/em_parity/attachments?limit=100",
+          "authorization": "Bearer re_parity",
+          "headers": {},
+          "body": null,
+          "status": 200,
+          "response": "{\"data\":[{\"id\":\"att_1\",\"filename\":\"deck.pdf\",\"content_type\":\"application/pdf\",\"size\":15,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_1\",\"expires_at\":\"2026-10-19T13:49:37.462Z\"},{\"id\":\"att_2\",\"filename\":\"notes.txt\",\"content_type\":\"text/plain\",\"size\":10,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_2\",\"expires_at\":\"2026-10-19T13:49:37.462Z\"}],\"has_more\":false}"
+        },
+        {
+          "method": "GET",
+          "path": "/_attachments/em_parity/att_2",
+          "authorization": null,
+          "headers": {},
+          "body": null,
+          "status": 200,
+          "response": "some notes",
+          "responseContentType": "text/plain"
+        },
+        {
+          "method": "GET",
+          "path": "/emails/receiving/em_parity/attachments?limit=100",
+          "authorization": "Bearer re_parity",
+          "headers": {},
+          "body": null,
+          "status": 200,
+          "response": "{\"data\":[{\"id\":\"att_1\",\"filename\":\"deck.pdf\",\"content_type\":\"application/pdf\",\"size\":15,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_1\",\"expires_at\":\"2026-10-19T13:49:37.481Z\"},{\"id\":\"att_2\",\"filename\":\"notes.txt\",\"content_type\":\"text/plain\",\"size\":10,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_2\",\"expires_at\":\"2026-10-19T13:49:37.481Z\"}],\"has_more\":false}"
+        },
+        {
+          "method": "GET",
+          "path": "/emails/receiving/em_parity",
+          "authorization": "Bearer re_parity",
+          "headers": {},
+          "body": null,
+          "status": 200,
+          "response": "{\"id\":\"em_parity\",\"from\":\"\\\"Ada Okafor\\\" <Ada@Example.com>\",\"to\":[\"inbox+deals@example.com\"],\"cc\":[\"cc@example.com\"],\"bcc\":[],\"received_for\":[\"inbox+deals@example.com\"],\"subject\":\"Deck for the round\",\"html\":\"<!DOCTYPE html><html><body><p>See the <b>deck</b>.</p></body></html>\",\"text\":\"See the deck.\",\"headers\":{\"X-Forwarded-For\":\"dealflow@acme.com\",\"Delivered-To\":\"inbox+deals@example.com\"},\"message_id\":\"<em_parity@mail.example.com>\",\"attachment_ids\":[\"att_1\",\"att_2\"],\"attachments\":[{\"id\":\"att_1\",\"filename\":\"deck.pdf\",\"content_type\":\"application/pdf\",\"size\":15},{\"id\":\"att_2\",\"filename\":\"notes.txt\",\"content_type\":\"text/plain\",\"size\":10}]}"
+        },
+        {
+          "method": "GET",
+          "path": "/emails/receiving/em_parity/attachments?limit=100",
+          "authorization": "Bearer re_parity",
+          "headers": {},
+          "body": null,
+          "status": 200,
+          "response": "{\"data\":[{\"id\":\"att_1\",\"filename\":\"deck.pdf\",\"content_type\":\"application/pdf\",\"size\":15,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_1\",\"expires_at\":\"2026-10-19T13:49:37.512Z\"},{\"id\":\"att_2\",\"filename\":\"notes.txt\",\"content_type\":\"text/plain\",\"size\":10,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_2\",\"expires_at\":\"2026-10-19T13:49:37.512Z\"}],\"has_more\":false}"
+        },
+        {
+          "method": "GET",
+          "path": "/emails/receiving/em_missing",
+          "authorization": "Bearer re_parity",
+          "headers": {},
+          "body": null,
+          "status": 404,
+          "response": "{\"error\":\"Not found\"}"
+        },
+        {
+          "method": "POST",
+          "path": "/emails",
+          "authorization": "Bearer re_parity",
+          "headers": {
+            "content-type": "application/json"
+          },
+          "body": {
+            "from": "Listen-Fire <notices@example.com>",
+            "to": [
+              "ada@example.com"
+            ],
+            "subject": "Hi",
+            "reply_to": "Listen-Fire <notices@example.com>",
+            "bcc": [
+              "archive@example.com"
+            ],
+            "text": "plain words"
+          },
+          "status": 200,
+          "response": "{\"id\":\"1\"}"
+        },
+        {
+          "method": "POST",
+          "path": "/emails",
+          "authorization": "Bearer re_parity",
+          "headers": {
+            "content-type": "application/json"
+          },
+          "body": {
+            "from": "other@example.com",
+            "to": [
+              "ada@example.com"
+            ],
+            "subject": "Report",
+            "reply_to": "reply@example.com",
+            "cc": [
+              "cc@example.com"
+            ],
+            "bcc": [
+              "archive@example.com"
+            ],
+            "html": "<!DOCTYPE html><p>report</p>",
+            "headers": {
+              "In-Reply-To": "<prev@example.com>"
+            },
+            "attachments": [
+              {
+                "filename": "r.csv",
+                "content": "YSxiCjEsMg=="
+              }
+            ]
+          },
+          "status": 200,
+          "response": "{\"id\":\"2\"}"
+        }
+      ],
+      "outbox": [
+        {
+          "method": "POST",
+          "path": "/email/v1/messages",
+          "authorization": null,
+          "headers": {
+            "content-type": "application/json"
+          },
+          "body": {
+            "recipients": [
+              {
+                "email": "ada@example.com",
+                "username": "Ada"
+              }
+            ],
+            "subject": "Fake",
+            "data": "x",
+            "attachment": {
+              "filename": "f.txt",
+              "size": 3
+            }
+          },
+          "status": 200,
+          "response": "{\"data\":{\"id\":\"1\",\"sent_at\":\"2026-10-19T12:49:37.604Z\",\"recipients\":[{\"email\":\"ada@example.com\",\"username\":\"Ada\"}],\"sender\":null,\"cc\":[],\"subject\":\"Fake\",\"data\":\"x\",\"replyToHeader\":null,\"inReplyToHeader\":null,\"hasAttachment\":true,\"attachmentFilename\":\"f.txt\"}}"
+        }
+      ],
+      "mailgun": [
+        {
+          "method": "GET",
+          "path": "/v3/domains/example.com/messages/MSG1/attachments/0",
+          "authorization": "Basic YXBpOmtleS1wYXJpdHk=",
+          "headers": {},
+          "body": null,
+          "status": 200,
+          "response": "bytes of /v3/domains/example.com/messages/MSG1/attachments/0",
+          "responseContentType": "application/pdf"
+        },
+        {
+          "method": "POST",
+          "path": "/v3/example.com/messages",
+          "authorization": "Basic YXBpOmtleS1wYXJpdHk=",
+          "headers": {
+            "content-type": "multipart/form-data; boundary=<random>"
+          },
+          "body": {
+            "multipart": [
+              {
+                "contentType": null,
+                "body": "Listen-Fire <notices@example.com>"
+              },
+              {
+                "contentType": null,
+                "body": "Listen-Fire <notices@example.com>"
+              },
+              {
+                "contentType": null,
+                "body": "ada@example.com"
+              },
+              {
+                "contentType": null,
+                "body": "Hi"
+              },
+              {
+                "contentType": null,
+                "body": "plain words"
+              }
+            ]
+          },
+          "status": 200,
+          "response": "{\"id\":\"<parity-1@example.com>\",\"message\":\"Queued. Thank you.\"}"
+        },
+        {
+          "method": "POST",
+          "path": "/v3/example.com/messages",
+          "authorization": "Basic YXBpOmtleS1wYXJpdHk=",
+          "headers": {
+            "content-type": "multipart/form-data; boundary=<random>"
+          },
+          "body": {
+            "multipart": [
+              {
+                "contentType": null,
+                "body": "Listen-Fire <notices@example.com>"
+              },
+              {
+                "contentType": null,
+                "body": "r@example.com"
+              },
+              {
+                "contentType": null,
+                "body": "ada@example.com"
+              },
+              {
+                "contentType": null,
+                "body": "H"
+              },
+              {
+                "contentType": null,
+                "body": "cc@example.com"
+              },
+              {
+                "contentType": null,
+                "body": "<p@example.com>"
+              },
+              {
+                "contentType": null,
+                "body": "<!DOCTYPE html><p>x</p>"
+              }
+            ]
+          },
+          "status": 200,
+          "response": "{\"id\":\"<parity-2@example.com>\",\"message\":\"Queued. Thank you.\"}"
+        },
+        {
+          "method": "POST",
+          "path": "/v3/example.com/messages",
+          "authorization": "Basic YXBpOmtleS1wYXJpdHk=",
+          "headers": {
+            "content-type": "multipart/form-data; boundary=<random>"
+          },
+          "body": {
+            "multipart": [
+              {
+                "contentType": null,
+                "body": "Listen-Fire <notices@example.com>"
+              },
+              {
+                "contentType": null,
+                "body": "Listen-Fire <notices@example.com>"
+              },
+              {
+                "contentType": null,
+                "body": "ada@example.com"
+              },
+              {
+                "contentType": null,
+                "body": "T"
+              },
+              {
+                "contentType": null,
+                "body": "welcome"
+              },
+              {
+                "contentType": null,
+                "body": {
+                  "name": "Ada"
+                }
+              }
+            ]
+          },
+          "status": 200,
+          "response": "{\"id\":\"<parity-3@example.com>\",\"message\":\"Queued. Thank you.\"}"
+        }
+      ]
+    }
+  },
+  "process": {
+    "transcript": [
+      {
+        "step": "listEntryPoints",
+        "answer": [
+          {
+            "typeId": "email:message",
+            "displayName": "Email",
+            "writable": false,
+            "readable": false,
+            "fires": true
+          },
+          {
+            "typeId": "email:attachment",
+            "displayName": "Attachment",
+            "writable": false,
+            "readable": false
+          }
+        ]
+      },
+      {
+        "step": "describe Email",
+        "answer": {
+          "typeId": "email:message",
+          "displayName": "Email",
+          "description": "A single inbound email message — what a listen delivers, whole: read `e.`Subject``, `e.`From``, `e.`Body`` straight off the event.",
+          "fields": [
+            {
+              "fieldId": "messageId",
+              "displayName": "Message Id",
+              "kind": "string",
+              "writable": false,
+              "required": true,
+              "description": "RFC 5322 Message-Id (or an inbound-adapter id when absent)."
+            },
+            {
+              "fieldId": "subject",
+              "displayName": "Subject",
+              "kind": "string",
+              "writable": false,
+              "required": false,
+              "description": "The subject line."
+            },
+            {
+              "fieldId": "sender",
+              "displayName": "From",
+              "kind": "string",
+              "writable": false,
+              "required": false,
+              "description": "The \"From\" header value."
+            },
+            {
+              "fieldId": "recipient",
+              "displayName": "To",
+              "kind": "string",
+              "writable": false,
+              "required": false,
+              "description": "The primary recipient the message was routed on. Usually NOT helpful: for forwarded mail it shows the internal address the user forwarded it to (e.g. their Listen-Fire forwarding address), not the true recipient. Prefer `From` for who the message is about."
+            },
+            {
+              "fieldId": "bodyHtml",
+              "displayName": "HTML Body",
+              "kind": "string",
+              "writable": false,
+              "required": false,
+              "description": "The HTML body, when present."
+            },
+            {
+              "fieldId": "bodyText",
+              "displayName": "Plain Body",
+              "kind": "string",
+              "writable": false,
+              "required": false,
+              "description": "The plain-text body, when present."
+            },
+            {
+              "fieldId": "content",
+              "displayName": "Body",
+              "kind": "string",
+              "writable": false,
+              "required": false,
+              "description": "The normalised body — plain text, derived from HTML when only HTML arrived, or when the plain part is itself markup. Use this for \"the body\" regardless of format."
+            }
+          ],
+          "references": [
+            {
+              "fieldId": "attachments",
+              "targetTypeId": "email:attachment",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "name": "Attachments",
+              "writable": false,
+              "sequenced": "document",
+              "description": "Files attached to the email (zero or more)."
+            }
+          ]
+        }
+      },
+      {
+        "step": "describe Attachment",
+        "answer": {
+          "typeId": "email:attachment",
+          "displayName": "Attachment",
+          "fields": [
+            {
+              "fieldId": "name",
+              "displayName": "Name",
+              "kind": "string",
+              "writable": false,
+              "required": true
+            },
+            {
+              "fieldId": "contentType",
+              "displayName": "Content Type",
+              "kind": "string",
+              "writable": false,
+              "required": true
+            },
+            {
+              "fieldId": "size",
+              "displayName": "Size",
+              "kind": "number",
+              "writable": false,
+              "required": false
+            },
+            {
+              "fieldId": "url",
+              "displayName": "URL",
+              "kind": "string",
+              "writable": false,
+              "required": false
+            },
+            {
+              "fieldId": "data",
+              "displayName": "File",
+              "kind": "file",
+              "writable": false,
+              "required": false
+            }
+          ],
+          "references": []
+        }
+      },
+      {
+        "step": "describe email:message",
+        "answer": {
+          "typeId": "email:message",
+          "displayName": "Email",
+          "description": "A single inbound email message — what a listen delivers, whole: read `e.`Subject``, `e.`From``, `e.`Body`` straight off the event.",
+          "fields": [
+            {
+              "fieldId": "messageId",
+              "displayName": "Message Id",
+              "kind": "string",
+              "writable": false,
+              "required": true,
+              "description": "RFC 5322 Message-Id (or an inbound-adapter id when absent)."
+            },
+            {
+              "fieldId": "subject",
+              "displayName": "Subject",
+              "kind": "string",
+              "writable": false,
+              "required": false,
+              "description": "The subject line."
+            },
+            {
+              "fieldId": "sender",
+              "displayName": "From",
+              "kind": "string",
+              "writable": false,
+              "required": false,
+              "description": "The \"From\" header value."
+            },
+            {
+              "fieldId": "recipient",
+              "displayName": "To",
+              "kind": "string",
+              "writable": false,
+              "required": false,
+              "description": "The primary recipient the message was routed on. Usually NOT helpful: for forwarded mail it shows the internal address the user forwarded it to (e.g. their Listen-Fire forwarding address), not the true recipient. Prefer `From` for who the message is about."
+            },
+            {
+              "fieldId": "bodyHtml",
+              "displayName": "HTML Body",
+              "kind": "string",
+              "writable": false,
+              "required": false,
+              "description": "The HTML body, when present."
+            },
+            {
+              "fieldId": "bodyText",
+              "displayName": "Plain Body",
+              "kind": "string",
+              "writable": false,
+              "required": false,
+              "description": "The plain-text body, when present."
+            },
+            {
+              "fieldId": "content",
+              "displayName": "Body",
+              "kind": "string",
+              "writable": false,
+              "required": false,
+              "description": "The normalised body — plain text, derived from HTML when only HTML arrived, or when the plain part is itself markup. Use this for \"the body\" regardless of format."
+            }
+          ],
+          "references": [
+            {
+              "fieldId": "attachments",
+              "targetTypeId": "email:attachment",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "name": "Attachments",
+              "writable": false,
+              "sequenced": "document",
+              "description": "Files attached to the email (zero or more)."
+            }
+          ]
+        }
+      },
+      {
+        "step": "describe email:attachment",
+        "answer": {
+          "typeId": "email:attachment",
+          "displayName": "Attachment",
+          "fields": [
+            {
+              "fieldId": "name",
+              "displayName": "Name",
+              "kind": "string",
+              "writable": false,
+              "required": true
+            },
+            {
+              "fieldId": "contentType",
+              "displayName": "Content Type",
+              "kind": "string",
+              "writable": false,
+              "required": true
+            },
+            {
+              "fieldId": "size",
+              "displayName": "Size",
+              "kind": "number",
+              "writable": false,
+              "required": false
+            },
+            {
+              "fieldId": "url",
+              "displayName": "URL",
+              "kind": "string",
+              "writable": false,
+              "required": false
+            },
+            {
+              "fieldId": "data",
+              "displayName": "File",
+              "kind": "file",
+              "writable": false,
+              "required": false
+            }
+          ],
+          "references": []
+        }
+      },
+      {
+        "step": "describe Nonexistent",
+        "answer": null
+      },
+      {
+        "step": "edgesFrom meta",
+        "answer": {
+          "descriptor": {
+            "typeId": "meta",
+            "displayName": "Email",
+            "description": "An email connection. Nothing here can be listed — an inbox is not enumerable — so the one way in is an email ARRIVING, which a listen delivers whole.",
+            "fields": [],
+            "references": [
+              {
+                "fieldId": "email:message",
+                "targetTypeId": "email:message",
+                "cardinality": "one",
+                "direction": "outgoing",
+                "name": "Email",
+                "fires": true,
+                "readable": false,
+                "description": "An email arriving — what a listen delivers, whole."
+              }
+            ]
+          },
+          "targetPositions": {
+            "email:message": {
+              "adapterType": "email",
+              "recordType": "email:message",
+              "identity": {
+                "kind": "unstable",
+                "data": {}
+              }
+            }
+          },
+          "targetNodes": {
+            "email:message": {
+              "typeId": "email:message",
+              "displayName": "Email",
+              "description": "A single inbound email message — what a listen delivers, whole: read `e.`Subject``, `e.`From``, `e.`Body`` straight off the event.",
+              "fields": [
+                {
+                  "fieldId": "messageId",
+                  "displayName": "Message Id",
+                  "kind": "string",
+                  "writable": false,
+                  "required": true,
+                  "description": "RFC 5322 Message-Id (or an inbound-adapter id when absent)."
+                },
+                {
+                  "fieldId": "subject",
+                  "displayName": "Subject",
+                  "kind": "string",
+                  "writable": false,
+                  "required": false,
+                  "description": "The subject line."
+                },
+                {
+                  "fieldId": "sender",
+                  "displayName": "From",
+                  "kind": "string",
+                  "writable": false,
+                  "required": false,
+                  "description": "The \"From\" header value."
+                },
+                {
+                  "fieldId": "recipient",
+                  "displayName": "To",
+                  "kind": "string",
+                  "writable": false,
+                  "required": false,
+                  "description": "The primary recipient the message was routed on. Usually NOT helpful: for forwarded mail it shows the internal address the user forwarded it to (e.g. their Listen-Fire forwarding address), not the true recipient. Prefer `From` for who the message is about."
+                },
+                {
+                  "fieldId": "bodyHtml",
+                  "displayName": "HTML Body",
+                  "kind": "string",
+                  "writable": false,
+                  "required": false,
+                  "description": "The HTML body, when present."
+                },
+                {
+                  "fieldId": "bodyText",
+                  "displayName": "Plain Body",
+                  "kind": "string",
+                  "writable": false,
+                  "required": false,
+                  "description": "The plain-text body, when present."
+                },
+                {
+                  "fieldId": "content",
+                  "displayName": "Body",
+                  "kind": "string",
+                  "writable": false,
+                  "required": false,
+                  "description": "The normalised body — plain text, derived from HTML when only HTML arrived, or when the plain part is itself markup. Use this for \"the body\" regardless of format."
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "step": "edgesFrom Email",
+        "answer": {
+          "descriptor": {
+            "typeId": "email:message",
+            "displayName": "Email",
+            "description": "A single inbound email message — what a listen delivers, whole: read `e.`Subject``, `e.`From``, `e.`Body`` straight off the event.",
+            "fields": [
+              {
+                "fieldId": "messageId",
+                "displayName": "Message Id",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "RFC 5322 Message-Id (or an inbound-adapter id when absent)."
+              },
+              {
+                "fieldId": "subject",
+                "displayName": "Subject",
+                "kind": "string",
+                "writable": false,
+                "required": false,
+                "description": "The subject line."
+              },
+              {
+                "fieldId": "sender",
+                "displayName": "From",
+                "kind": "string",
+                "writable": false,
+                "required": false,
+                "description": "The \"From\" header value."
+              },
+              {
+                "fieldId": "recipient",
+                "displayName": "To",
+                "kind": "string",
+                "writable": false,
+                "required": false,
+                "description": "The primary recipient the message was routed on. Usually NOT helpful: for forwarded mail it shows the internal address the user forwarded it to (e.g. their Listen-Fire forwarding address), not the true recipient. Prefer `From` for who the message is about."
+              },
+              {
+                "fieldId": "bodyHtml",
+                "displayName": "HTML Body",
+                "kind": "string",
+                "writable": false,
+                "required": false,
+                "description": "The HTML body, when present."
+              },
+              {
+                "fieldId": "bodyText",
+                "displayName": "Plain Body",
+                "kind": "string",
+                "writable": false,
+                "required": false,
+                "description": "The plain-text body, when present."
+              },
+              {
+                "fieldId": "content",
+                "displayName": "Body",
+                "kind": "string",
+                "writable": false,
+                "required": false,
+                "description": "The normalised body — plain text, derived from HTML when only HTML arrived, or when the plain part is itself markup. Use this for \"the body\" regardless of format."
+              }
+            ],
+            "references": [
+              {
+                "fieldId": "attachments",
+                "targetTypeId": "email:attachment",
+                "cardinality": "many",
+                "direction": "outgoing",
+                "name": "Attachments",
+                "writable": false,
+                "sequenced": "document",
+                "description": "Files attached to the email (zero or more)."
+              }
+            ]
+          },
+          "targetPositions": {
+            "attachments": {
+              "adapterType": "email",
+              "recordType": "email:attachment",
+              "identity": {
+                "kind": "unstable",
+                "data": {}
+              }
+            }
+          },
+          "targetNodes": {
+            "attachments": {
+              "typeId": "email:attachment",
+              "displayName": "Attachment",
+              "fields": [
+                {
+                  "fieldId": "name",
+                  "displayName": "Name",
+                  "kind": "string",
+                  "writable": false,
+                  "required": true
+                },
+                {
+                  "fieldId": "contentType",
+                  "displayName": "Content Type",
+                  "kind": "string",
+                  "writable": false,
+                  "required": true
+                },
+                {
+                  "fieldId": "size",
+                  "displayName": "Size",
+                  "kind": "number",
+                  "writable": false,
+                  "required": false
+                },
+                {
+                  "fieldId": "url",
+                  "displayName": "URL",
+                  "kind": "string",
+                  "writable": false,
+                  "required": false
+                },
+                {
+                  "fieldId": "data",
+                  "displayName": "File",
+                  "kind": "file",
+                  "writable": false,
+                  "required": false
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "step": "edgesFrom Attachment",
+        "answer": {
+          "descriptor": {
+            "typeId": "email:attachment",
+            "displayName": "Attachment",
+            "fields": [
+              {
+                "fieldId": "name",
+                "displayName": "Name",
+                "kind": "string",
+                "writable": false,
+                "required": true
+              },
+              {
+                "fieldId": "contentType",
+                "displayName": "Content Type",
+                "kind": "string",
+                "writable": false,
+                "required": true
+              },
+              {
+                "fieldId": "size",
+                "displayName": "Size",
+                "kind": "number",
+                "writable": false,
+                "required": false
+              },
+              {
+                "fieldId": "url",
+                "displayName": "URL",
+                "kind": "string",
+                "writable": false,
+                "required": false
+              },
+              {
+                "fieldId": "data",
+                "displayName": "File",
+                "kind": "file",
+                "writable": false,
+                "required": false
+              }
+            ],
+            "references": []
+          }
+        }
+      },
+      {
+        "step": "mailgun.Message Id",
+        "answer": "<mg-1@mail.example.com>"
+      },
+      {
+        "step": "mailgun.Subject",
+        "answer": "Intro: Acme"
+      },
+      {
+        "step": "mailgun.From",
+        "answer": "\"Bo Li\" <bo@acme.com>"
+      },
+      {
+        "step": "mailgun.To",
+        "answer": "inbox+deals@example.com"
+      },
+      {
+        "step": "mailgun.HTML Body",
+        "answer": "<p>Hello <i>there</i></p>"
+      },
+      {
+        "step": "mailgun.Plain Body",
+        "answer": "Hello there"
+      },
+      {
+        "step": "mailgun.Body",
+        "answer": "Hello there"
+      },
+      {
+        "step": "mailgun.messageId",
+        "answer": {
+          "error": "'messageId' is not a known field of 'Email' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "mailgun.content",
+        "answer": {
+          "error": "'content' is not a known field of 'Email' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "mailgun.Nope",
+        "answer": {
+          "error": "'Nope' is not a known field of 'Email' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "html only.Message Id",
+        "answer": "h1"
+      },
+      {
+        "step": "html only.Subject",
+        "answer": "html"
+      },
+      {
+        "step": "html only.From",
+        "answer": "x@y.com"
+      },
+      {
+        "step": "html only.To",
+        "answer": "r@y.com"
+      },
+      {
+        "step": "html only.HTML Body",
+        "answer": "<div><p>Only <b>html</b></p><br/>here</div>"
+      },
+      {
+        "step": "html only.Plain Body",
+        "answer": null
+      },
+      {
+        "step": "html only.Body",
+        "answer": "Only html\n\n\nhere"
+      },
+      {
+        "step": "html only.messageId",
+        "answer": {
+          "error": "'messageId' is not a known field of 'Email' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "html only.content",
+        "answer": {
+          "error": "'content' is not a known field of 'Email' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "html only.Nope",
+        "answer": {
+          "error": "'Nope' is not a known field of 'Email' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "markup text.Message Id",
+        "answer": "m1"
+      },
+      {
+        "step": "markup text.Subject",
+        "answer": "markup"
+      },
+      {
+        "step": "markup text.From",
+        "answer": "x@y.com"
+      },
+      {
+        "step": "markup text.To",
+        "answer": "r@y.com"
+      },
+      {
+        "step": "markup text.HTML Body",
+        "answer": "<p>real html</p>"
+      },
+      {
+        "step": "markup text.Plain Body",
+        "answer": "<!DOCTYPE html><html><body><table><tr><td>cell</td></tr></table></body></html>"
+      },
+      {
+        "step": "markup text.Body",
+        "answer": "cell"
+      },
+      {
+        "step": "markup text.messageId",
+        "answer": {
+          "error": "'messageId' is not a known field of 'Email' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "markup text.content",
+        "answer": {
+          "error": "'content' is not a known field of 'Email' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "markup text.Nope",
+        "answer": {
+          "error": "'Nope' is not a known field of 'Email' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "prose angle.Message Id",
+        "answer": "p1"
+      },
+      {
+        "step": "prose angle.Subject",
+        "answer": "prose"
+      },
+      {
+        "step": "prose angle.From",
+        "answer": "x@y.com"
+      },
+      {
+        "step": "prose angle.To",
+        "answer": "r@y.com"
+      },
+      {
+        "step": "prose angle.HTML Body",
+        "answer": null
+      },
+      {
+        "step": "prose angle.Plain Body",
+        "answer": "a <3 b and x < y"
+      },
+      {
+        "step": "prose angle.Body",
+        "answer": "a <3 b and x < y"
+      },
+      {
+        "step": "prose angle.messageId",
+        "answer": {
+          "error": "'messageId' is not a known field of 'Email' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "prose angle.content",
+        "answer": {
+          "error": "'content' is not a known field of 'Email' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "prose angle.Nope",
+        "answer": {
+          "error": "'Nope' is not a known field of 'Email' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "empty.Message Id",
+        "answer": ""
+      },
+      {
+        "step": "empty.Subject",
+        "answer": null
+      },
+      {
+        "step": "empty.From",
+        "answer": null
+      },
+      {
+        "step": "empty.To",
+        "answer": null
+      },
+      {
+        "step": "empty.HTML Body",
+        "answer": null
+      },
+      {
+        "step": "empty.Plain Body",
+        "answer": null
+      },
+      {
+        "step": "empty.Body",
+        "answer": ""
+      },
+      {
+        "step": "empty.messageId",
+        "answer": {
+          "error": "'messageId' is not a known field of 'Email' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "empty.content",
+        "answer": {
+          "error": "'content' is not a known field of 'Email' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "empty.Nope",
+        "answer": {
+          "error": "'Nope' is not a known field of 'Email' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "resend-aliased position .Subject",
+        "answer": "Intro: Acme"
+      },
+      {
+        "step": "foreign position",
+        "answer": {
+          "error": "EmailAdapter.getFieldValue received a position from a different adapter ('slack')."
+        }
+      },
+      {
+        "step": "Attachments",
+        "answer": [
+          {
+            "position": {
+              "adapterType": "email",
+              "recordType": "Attachment",
+              "identity": {
+                "kind": "unstable",
+                "data": {
+                  "key": "https://storage.eu.mailgun.net/v3/domains/example.com/messages/MSG1/attachments/0",
+                  "filename": "term-sheet.pdf",
+                  "contentType": "application/pdf",
+                  "size": 2048,
+                  "url": "https://storage.eu.mailgun.net/v3/domains/example.com/messages/MSG1/attachments/0"
+                }
+              }
+            }
+          },
+          {
+            "position": {
+              "adapterType": "email",
+              "recordType": "Attachment",
+              "identity": {
+                "kind": "unstable",
+                "data": {
+                  "key": "resend:em_parity/att_2",
+                  "filename": "notes.txt",
+                  "contentType": "text/plain"
+                }
+              }
+            }
+          },
+          {
+            "position": {
+              "adapterType": "email",
+              "recordType": "Attachment",
+              "identity": {
+                "kind": "unstable",
+                "data": {
+                  "key": "",
+                  "filename": "no-handle.bin",
+                  "contentType": "application/octet-stream"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "step": "Attachments incoming",
+        "answer": []
+      },
+      {
+        "step": "Attachments of an empty email",
+        "answer": []
+      },
+      {
+        "step": "foreign getRelated",
+        "answer": {
+          "error": "EmailAdapter.getRelated received a position from a different adapter ('slack')."
+        }
+      },
+      {
+        "step": "Attachment 0.Name",
+        "answer": "term-sheet.pdf"
+      },
+      {
+        "step": "Attachment 0.Content Type",
+        "answer": "application/pdf"
+      },
+      {
+        "step": "Attachment 0.Size",
+        "answer": 2048
+      },
+      {
+        "step": "Attachment 0.URL",
+        "answer": "https://storage.eu.mailgun.net/v3/domains/example.com/messages/MSG1/attachments/0"
+      },
+      {
+        "step": "Attachment 0.File",
+        "answer": {
+          "__brand": "FileRef",
+          "name": "term-sheet.pdf",
+          "contentType": "application/pdf",
+          "size": 2048,
+          "source": {
+            "adapterType": "email",
+            "handle": "https://storage.eu.mailgun.net/v3/domains/example.com/messages/MSG1/attachments/0"
+          }
+        }
+      },
+      {
+        "step": "Attachment 0.filename",
+        "answer": {
+          "error": "'filename' is not a known field of 'Attachment' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "Attachment 1.Name",
+        "answer": "notes.txt"
+      },
+      {
+        "step": "Attachment 1.Content Type",
+        "answer": "text/plain"
+      },
+      {
+        "step": "Attachment 1.Size",
+        "answer": null
+      },
+      {
+        "step": "Attachment 1.URL",
+        "answer": null
+      },
+      {
+        "step": "Attachment 1.File",
+        "answer": {
+          "__brand": "FileRef",
+          "name": "notes.txt",
+          "contentType": "text/plain",
+          "source": {
+            "adapterType": "email",
+            "handle": "resend:em_parity/att_2"
+          }
+        }
+      },
+      {
+        "step": "Attachment 1.filename",
+        "answer": {
+          "error": "'filename' is not a known field of 'Attachment' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "Attachment 2.Name",
+        "answer": "no-handle.bin"
+      },
+      {
+        "step": "Attachment 2.Content Type",
+        "answer": "application/octet-stream"
+      },
+      {
+        "step": "Attachment 2.Size",
+        "answer": null
+      },
+      {
+        "step": "Attachment 2.URL",
+        "answer": null
+      },
+      {
+        "step": "Attachment 2.File",
+        "answer": null
+      },
+      {
+        "step": "Attachment 2.filename",
+        "answer": {
+          "error": "'filename' is not a known field of 'Attachment' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+        }
+      },
+      {
+        "step": "getActorCandidates mailgun",
+        "answer": [
+          {
+            "identity": {
+              "identifier": "bo@acme.com",
+              "scheme": "email",
+              "adapterType": "email",
+              "email": "bo@acme.com"
+            },
+            "source": "originator"
+          },
+          {
+            "identity": {
+              "identifier": "dealflow@acme.com",
+              "scheme": "email",
+              "adapterType": "email",
+              "email": "dealflow@acme.com"
+            },
+            "source": "relay"
+          },
+          {
+            "identity": {
+              "identifier": "other@acme.com",
+              "scheme": "email",
+              "adapterType": "email",
+              "email": "other@acme.com"
+            },
+            "source": "relay"
+          },
+          {
+            "identity": {
+              "identifier": "list@acme.com",
+              "scheme": "email",
+              "adapterType": "email",
+              "email": "list@acme.com"
+            },
+            "source": "relay"
+          },
+          {
+            "identity": {
+              "identifier": "inbox+deals@example.com",
+              "scheme": "email",
+              "adapterType": "email",
+              "email": "inbox+deals@example.com"
+            },
+            "source": "relay"
+          }
+        ]
+      },
+      {
+        "step": "getActorCandidates From header only",
+        "answer": [
+          {
+            "identity": {
+              "identifier": "cy@acme.com",
+              "scheme": "email",
+              "adapterType": "email",
+              "email": "cy@acme.com"
+            },
+            "source": "originator"
+          },
+          {
+            "identity": {
+              "identifier": "orig@acme.com",
+              "scheme": "email",
+              "adapterType": "email",
+              "email": "orig@acme.com"
+            },
+            "source": "relay"
+          }
+        ]
+      },
+      {
+        "step": "getActorCandidates empty",
+        "answer": []
+      },
+      {
+        "step": "extractActor mailgun",
+        "answer": {
+          "identifier": "bo@acme.com",
+          "scheme": "email",
+          "adapterType": "email",
+          "email": "bo@acme.com",
+          "name": "Bo Li",
+          "label": "Bo Li"
+        }
+      },
+      {
+        "step": "extractActor bare address",
+        "answer": {
+          "identifier": "bare@acme.com",
+          "scheme": "email",
+          "adapterType": "email",
+          "email": "bare@acme.com",
+          "label": "bare@acme.com"
+        }
+      },
+      {
+        "step": "extractActor none",
+        "answer": null
+      },
+      {
+        "step": "resolveFileRef resend",
+        "answer": {
+          "contentType": "text/plain",
+          "text": "some notes"
+        }
+      },
+      {
+        "step": "resolveFileRef resend, attachment gone",
+        "answer": {
+          "error": "Resend no longer lists attachment att_9 on email em_parity."
+        }
+      },
+      {
+        "step": "resolveFileRef mailgun, another domain",
+        "answer": {
+          "error": "Refusing to fetch a Mailgun attachment outside this deployment's configured Mailgun domain (MAILGUN_SENDING_DOMAIN)"
+        }
+      },
+      {
+        "step": "resolveFileRef mailgun, encoded traversal",
+        "answer": {
+          "error": "Refusing to fetch a Mailgun attachment outside this deployment's configured Mailgun domain (MAILGUN_SENDING_DOMAIN)"
+        }
+      },
+      {
+        "step": "resolveFileRef look-alike host",
+        "answer": {
+          "error": "the file's handle is not one its owner email issued, so it is not fetched"
+        }
+      },
+      {
+        "step": "resolveFileRef foreign handle",
+        "answer": {
+          "error": "the file's handle is not one its owner email issued, so it is not fetched"
+        }
+      },
+      {
+        "step": "resolveFileRef without a handle",
+        "answer": {
+          "error": "email.resolveFileRef: FileRef has no source handle to resolve."
+        }
+      },
+      {
+        "step": "createRecord",
+        "answer": {
+          "error": "email is not configured as a write target — createRecord called"
+        }
+      }
+    ],
+    "exchanges": {
+      "resend": [
+        {
+          "method": "GET",
+          "path": "/emails/receiving/em_parity/attachments?limit=100",
+          "authorization": "Bearer re_parity",
+          "headers": {},
+          "body": null,
+          "status": 200,
+          "response": "{\"data\":[{\"id\":\"att_1\",\"filename\":\"deck.pdf\",\"content_type\":\"application/pdf\",\"size\":15,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_1\",\"expires_at\":\"2026-10-19T13:49:37.617Z\"},{\"id\":\"att_2\",\"filename\":\"notes.txt\",\"content_type\":\"text/plain\",\"size\":10,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_2\",\"expires_at\":\"2026-10-19T13:49:37.617Z\"}],\"has_more\":false}"
+        },
+        {
+          "method": "GET",
+          "path": "/_attachments/em_parity/att_2",
+          "authorization": null,
+          "headers": {},
+          "body": null,
+          "status": 200,
+          "response": "some notes",
+          "responseContentType": "text/plain"
+        },
+        {
+          "method": "GET",
+          "path": "/emails/receiving/em_parity/attachments?limit=100",
+          "authorization": "Bearer re_parity",
+          "headers": {},
+          "body": null,
+          "status": 200,
+          "response": "{\"data\":[{\"id\":\"att_1\",\"filename\":\"deck.pdf\",\"content_type\":\"application/pdf\",\"size\":15,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_1\",\"expires_at\":\"2026-10-19T13:49:37.622Z\"},{\"id\":\"att_2\",\"filename\":\"notes.txt\",\"content_type\":\"text/plain\",\"size\":10,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_2\",\"expires_at\":\"2026-10-19T13:49:37.622Z\"}],\"has_more\":false}"
+        }
+      ],
+      "outbox": [],
+      "mailgun": []
+    }
+  }
+}

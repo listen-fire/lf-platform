@@ -1,0 +1,1433 @@
+{
+  "transcript": [
+    {
+      "step": "adapterType",
+      "answer": "system"
+    },
+    {
+      "step": "supportedTriggers",
+      "answer": [
+        "poll"
+      ]
+    },
+    {
+      "step": "listEntryPoints",
+      "answer": [
+        {
+          "typeId": "run_failed",
+          "displayName": "Run Failed",
+          "writable": false,
+          "readable": false,
+          "fires": true,
+          "firesOn": [
+            "Run Failed"
+          ]
+        },
+        {
+          "typeId": "run_paused",
+          "displayName": "Run Paused",
+          "writable": false,
+          "readable": false,
+          "fires": true,
+          "firesOn": [
+            "Run Paused"
+          ]
+        },
+        {
+          "typeId": "validation_issue",
+          "displayName": "Validation Issue",
+          "writable": false,
+          "readable": false,
+          "fires": true,
+          "firesOn": [
+            "Validation Issue"
+          ]
+        },
+        {
+          "typeId": "deprecated_version",
+          "displayName": "Deprecated Version",
+          "writable": false,
+          "readable": false,
+          "fires": true,
+          "firesOn": [
+            "Deprecated Version"
+          ]
+        },
+        {
+          "typeId": "release_applied",
+          "displayName": "Release Applied",
+          "writable": false,
+          "readable": false,
+          "fires": true,
+          "firesOn": [
+            "Release Applied"
+          ]
+        }
+      ]
+    },
+    {
+      "step": "edgesFrom root",
+      "answer": {
+        "descriptor": {
+          "typeId": "meta",
+          "displayName": "Listen-Fire",
+          "description": "The platform itself. Nothing here can be listed or written — its events are delivered, and each edge leaving here is one a listen subscribes to.",
+          "fields": [],
+          "references": [
+            {
+              "fieldId": "run_failed",
+              "targetTypeId": "run_failed",
+              "cardinality": "one",
+              "direction": "outgoing",
+              "name": "Run Failed",
+              "fires": true,
+              "firesOn": [
+                "Run Failed"
+              ],
+              "readable": false,
+              "writable": false,
+              "description": "An automation run ended failed. Delivered within a couple of minutes of the run settling; an automation is never told about its own failures, and a rehearsal (dry run) failing is not reported."
+            },
+            {
+              "fieldId": "run_paused",
+              "targetTypeId": "run_paused",
+              "cardinality": "one",
+              "direction": "outgoing",
+              "name": "Run Paused",
+              "fires": true,
+              "firesOn": [
+                "Run Paused"
+              ],
+              "readable": false,
+              "writable": false,
+              "description": "An automation run paused because it reached its cost limit (the per-run cap on model calls and paid services this deployment sets). Every branch of the run stopped before its next statement, and it stays paused until someone resumes it; resuming resets its usage. `Reason` says what it spent and the limit. Delivered within a couple of minutes of the pause."
+            },
+            {
+              "fieldId": "validation_issue",
+              "targetTypeId": "validation_issue",
+              "cardinality": "one",
+              "direction": "outgoing",
+              "name": "Validation Issue",
+              "fires": true,
+              "firesOn": [
+                "Validation Issue"
+              ],
+              "readable": false,
+              "writable": false,
+              "description": "A saved automation does not validate cleanly under the release's current language version, so it stays on the version it is written in. `Reason` lists what to repair. Emitted by the check that runs as a new release is deployed."
+            },
+            {
+              "fieldId": "deprecated_version",
+              "targetTypeId": "deprecated_version",
+              "cardinality": "one",
+              "direction": "outgoing",
+              "name": "Deprecated Version",
+              "fires": true,
+              "firesOn": [
+                "Deprecated Version"
+              ],
+              "readable": false,
+              "writable": false,
+              "description": "A saved automation is written in a language version the running release deprecates; it still runs, until a later release removes that version. Emitted by the check that runs as a new release is deployed."
+            },
+            {
+              "fieldId": "release_applied",
+              "targetTypeId": "release_applied",
+              "cardinality": "one",
+              "direction": "outgoing",
+              "name": "Release Applied",
+              "fires": true,
+              "firesOn": [
+                "Release Applied"
+              ],
+              "readable": false,
+              "writable": false,
+              "description": "A new release was deployed and its check ran over this workspace's automations. `Reason` names the release and how many automations moved to the current language version, stayed with warnings, or failed. Not about one automation: `Automation` is empty. Emitted by the check that runs as a new release is deployed."
+            }
+          ]
+        },
+        "targetPositions": {
+          "run_failed": {
+            "adapterType": "system",
+            "recordType": "run_failed",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "run_paused": {
+            "adapterType": "system",
+            "recordType": "run_paused",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "validation_issue": {
+            "adapterType": "system",
+            "recordType": "validation_issue",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "deprecated_version": {
+            "adapterType": "system",
+            "recordType": "deprecated_version",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "release_applied": {
+            "adapterType": "system",
+            "recordType": "release_applied",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          }
+        },
+        "targetNodes": {
+          "run_failed": {
+            "typeId": "run_failed",
+            "displayName": "Run Failed",
+            "description": "An automation run ended failed. Delivered within a couple of minutes of the run settling; an automation is never told about its own failures, and a rehearsal (dry run) failing is not reported.",
+            "fields": [
+              {
+                "fieldId": "automation",
+                "displayName": "Automation",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "The name of the automation the event is about."
+              },
+              {
+                "fieldId": "automationId",
+                "displayName": "Automation Id",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "That automation’s id."
+              },
+              {
+                "fieldId": "runId",
+                "displayName": "Run Id",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "The run the event is about; empty when it concerns no run."
+              },
+              {
+                "fieldId": "version",
+                "displayName": "Version",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "The name of the language version involved; empty when none is."
+              },
+              {
+                "fieldId": "reason",
+                "displayName": "Reason",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "What happened, in words — for a failed run, why it failed."
+              },
+              {
+                "fieldId": "url",
+                "displayName": "Url",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "A link into the app: the automation’s failed runs, or the automation itself."
+              },
+              {
+                "fieldId": "at",
+                "displayName": "At",
+                "kind": "date",
+                "writable": false,
+                "required": true,
+                "description": "When it happened (UTC)."
+              }
+            ]
+          },
+          "run_paused": {
+            "typeId": "run_paused",
+            "displayName": "Run Paused",
+            "description": "An automation run paused because it reached its cost limit (the per-run cap on model calls and paid services this deployment sets). Every branch of the run stopped before its next statement, and it stays paused until someone resumes it; resuming resets its usage. `Reason` says what it spent and the limit. Delivered within a couple of minutes of the pause.",
+            "fields": [
+              {
+                "fieldId": "automation",
+                "displayName": "Automation",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "The name of the automation the event is about."
+              },
+              {
+                "fieldId": "automationId",
+                "displayName": "Automation Id",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "That automation’s id."
+              },
+              {
+                "fieldId": "runId",
+                "displayName": "Run Id",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "The run the event is about; empty when it concerns no run."
+              },
+              {
+                "fieldId": "version",
+                "displayName": "Version",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "The name of the language version involved; empty when none is."
+              },
+              {
+                "fieldId": "reason",
+                "displayName": "Reason",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "What happened, in words — for a failed run, why it failed."
+              },
+              {
+                "fieldId": "url",
+                "displayName": "Url",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "A link into the app: the automation’s failed runs, or the automation itself."
+              },
+              {
+                "fieldId": "at",
+                "displayName": "At",
+                "kind": "date",
+                "writable": false,
+                "required": true,
+                "description": "When it happened (UTC)."
+              }
+            ]
+          },
+          "validation_issue": {
+            "typeId": "validation_issue",
+            "displayName": "Validation Issue",
+            "description": "A saved automation does not validate cleanly under the release's current language version, so it stays on the version it is written in. `Reason` lists what to repair. Emitted by the check that runs as a new release is deployed.",
+            "fields": [
+              {
+                "fieldId": "automation",
+                "displayName": "Automation",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "The name of the automation the event is about."
+              },
+              {
+                "fieldId": "automationId",
+                "displayName": "Automation Id",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "That automation’s id."
+              },
+              {
+                "fieldId": "runId",
+                "displayName": "Run Id",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "The run the event is about; empty when it concerns no run."
+              },
+              {
+                "fieldId": "version",
+                "displayName": "Version",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "The name of the language version involved; empty when none is."
+              },
+              {
+                "fieldId": "reason",
+                "displayName": "Reason",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "What happened, in words — for a failed run, why it failed."
+              },
+              {
+                "fieldId": "url",
+                "displayName": "Url",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "A link into the app: the automation’s failed runs, or the automation itself."
+              },
+              {
+                "fieldId": "at",
+                "displayName": "At",
+                "kind": "date",
+                "writable": false,
+                "required": true,
+                "description": "When it happened (UTC)."
+              }
+            ]
+          },
+          "deprecated_version": {
+            "typeId": "deprecated_version",
+            "displayName": "Deprecated Version",
+            "description": "A saved automation is written in a language version the running release deprecates; it still runs, until a later release removes that version. Emitted by the check that runs as a new release is deployed.",
+            "fields": [
+              {
+                "fieldId": "automation",
+                "displayName": "Automation",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "The name of the automation the event is about."
+              },
+              {
+                "fieldId": "automationId",
+                "displayName": "Automation Id",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "That automation’s id."
+              },
+              {
+                "fieldId": "runId",
+                "displayName": "Run Id",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "The run the event is about; empty when it concerns no run."
+              },
+              {
+                "fieldId": "version",
+                "displayName": "Version",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "The name of the language version involved; empty when none is."
+              },
+              {
+                "fieldId": "reason",
+                "displayName": "Reason",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "What happened, in words — for a failed run, why it failed."
+              },
+              {
+                "fieldId": "url",
+                "displayName": "Url",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "A link into the app: the automation’s failed runs, or the automation itself."
+              },
+              {
+                "fieldId": "at",
+                "displayName": "At",
+                "kind": "date",
+                "writable": false,
+                "required": true,
+                "description": "When it happened (UTC)."
+              }
+            ]
+          },
+          "release_applied": {
+            "typeId": "release_applied",
+            "displayName": "Release Applied",
+            "description": "A new release was deployed and its check ran over this workspace's automations. `Reason` names the release and how many automations moved to the current language version, stayed with warnings, or failed. Not about one automation: `Automation` is empty. Emitted by the check that runs as a new release is deployed.",
+            "fields": [
+              {
+                "fieldId": "automation",
+                "displayName": "Automation",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "The name of the automation the event is about."
+              },
+              {
+                "fieldId": "automationId",
+                "displayName": "Automation Id",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "That automation’s id."
+              },
+              {
+                "fieldId": "runId",
+                "displayName": "Run Id",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "The run the event is about; empty when it concerns no run."
+              },
+              {
+                "fieldId": "version",
+                "displayName": "Version",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "The name of the language version involved; empty when none is."
+              },
+              {
+                "fieldId": "reason",
+                "displayName": "Reason",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "What happened, in words — for a failed run, why it failed."
+              },
+              {
+                "fieldId": "url",
+                "displayName": "Url",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "A link into the app: the automation’s failed runs, or the automation itself."
+              },
+              {
+                "fieldId": "at",
+                "displayName": "At",
+                "kind": "date",
+                "writable": false,
+                "required": true,
+                "description": "When it happened (UTC)."
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "step": "describe Run Failed",
+      "answer": {
+        "typeId": "run_failed",
+        "displayName": "Run Failed",
+        "description": "An automation run ended failed. Delivered within a couple of minutes of the run settling; an automation is never told about its own failures, and a rehearsal (dry run) failing is not reported.",
+        "fields": [
+          {
+            "fieldId": "automation",
+            "displayName": "Automation",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "The name of the automation the event is about."
+          },
+          {
+            "fieldId": "automationId",
+            "displayName": "Automation Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "That automation’s id."
+          },
+          {
+            "fieldId": "runId",
+            "displayName": "Run Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "The run the event is about; empty when it concerns no run."
+          },
+          {
+            "fieldId": "version",
+            "displayName": "Version",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "The name of the language version involved; empty when none is."
+          },
+          {
+            "fieldId": "reason",
+            "displayName": "Reason",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "What happened, in words — for a failed run, why it failed."
+          },
+          {
+            "fieldId": "url",
+            "displayName": "Url",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "A link into the app: the automation’s failed runs, or the automation itself."
+          },
+          {
+            "fieldId": "at",
+            "displayName": "At",
+            "kind": "date",
+            "writable": false,
+            "required": true,
+            "description": "When it happened (UTC)."
+          }
+        ],
+        "references": []
+      }
+    },
+    {
+      "step": "describe Run Paused",
+      "answer": {
+        "typeId": "run_paused",
+        "displayName": "Run Paused",
+        "description": "An automation run paused because it reached its cost limit (the per-run cap on model calls and paid services this deployment sets). Every branch of the run stopped before its next statement, and it stays paused until someone resumes it; resuming resets its usage. `Reason` says what it spent and the limit. Delivered within a couple of minutes of the pause.",
+        "fields": [
+          {
+            "fieldId": "automation",
+            "displayName": "Automation",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "The name of the automation the event is about."
+          },
+          {
+            "fieldId": "automationId",
+            "displayName": "Automation Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "That automation’s id."
+          },
+          {
+            "fieldId": "runId",
+            "displayName": "Run Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "The run the event is about; empty when it concerns no run."
+          },
+          {
+            "fieldId": "version",
+            "displayName": "Version",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "The name of the language version involved; empty when none is."
+          },
+          {
+            "fieldId": "reason",
+            "displayName": "Reason",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "What happened, in words — for a failed run, why it failed."
+          },
+          {
+            "fieldId": "url",
+            "displayName": "Url",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "A link into the app: the automation’s failed runs, or the automation itself."
+          },
+          {
+            "fieldId": "at",
+            "displayName": "At",
+            "kind": "date",
+            "writable": false,
+            "required": true,
+            "description": "When it happened (UTC)."
+          }
+        ],
+        "references": []
+      }
+    },
+    {
+      "step": "describe Validation Issue",
+      "answer": {
+        "typeId": "validation_issue",
+        "displayName": "Validation Issue",
+        "description": "A saved automation does not validate cleanly under the release's current language version, so it stays on the version it is written in. `Reason` lists what to repair. Emitted by the check that runs as a new release is deployed.",
+        "fields": [
+          {
+            "fieldId": "automation",
+            "displayName": "Automation",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "The name of the automation the event is about."
+          },
+          {
+            "fieldId": "automationId",
+            "displayName": "Automation Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "That automation’s id."
+          },
+          {
+            "fieldId": "runId",
+            "displayName": "Run Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "The run the event is about; empty when it concerns no run."
+          },
+          {
+            "fieldId": "version",
+            "displayName": "Version",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "The name of the language version involved; empty when none is."
+          },
+          {
+            "fieldId": "reason",
+            "displayName": "Reason",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "What happened, in words — for a failed run, why it failed."
+          },
+          {
+            "fieldId": "url",
+            "displayName": "Url",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "A link into the app: the automation’s failed runs, or the automation itself."
+          },
+          {
+            "fieldId": "at",
+            "displayName": "At",
+            "kind": "date",
+            "writable": false,
+            "required": true,
+            "description": "When it happened (UTC)."
+          }
+        ],
+        "references": []
+      }
+    },
+    {
+      "step": "describe Deprecated Version",
+      "answer": {
+        "typeId": "deprecated_version",
+        "displayName": "Deprecated Version",
+        "description": "A saved automation is written in a language version the running release deprecates; it still runs, until a later release removes that version. Emitted by the check that runs as a new release is deployed.",
+        "fields": [
+          {
+            "fieldId": "automation",
+            "displayName": "Automation",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "The name of the automation the event is about."
+          },
+          {
+            "fieldId": "automationId",
+            "displayName": "Automation Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "That automation’s id."
+          },
+          {
+            "fieldId": "runId",
+            "displayName": "Run Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "The run the event is about; empty when it concerns no run."
+          },
+          {
+            "fieldId": "version",
+            "displayName": "Version",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "The name of the language version involved; empty when none is."
+          },
+          {
+            "fieldId": "reason",
+            "displayName": "Reason",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "What happened, in words — for a failed run, why it failed."
+          },
+          {
+            "fieldId": "url",
+            "displayName": "Url",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "A link into the app: the automation’s failed runs, or the automation itself."
+          },
+          {
+            "fieldId": "at",
+            "displayName": "At",
+            "kind": "date",
+            "writable": false,
+            "required": true,
+            "description": "When it happened (UTC)."
+          }
+        ],
+        "references": []
+      }
+    },
+    {
+      "step": "describe Release Applied",
+      "answer": {
+        "typeId": "release_applied",
+        "displayName": "Release Applied",
+        "description": "A new release was deployed and its check ran over this workspace's automations. `Reason` names the release and how many automations moved to the current language version, stayed with warnings, or failed. Not about one automation: `Automation` is empty. Emitted by the check that runs as a new release is deployed.",
+        "fields": [
+          {
+            "fieldId": "automation",
+            "displayName": "Automation",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "The name of the automation the event is about."
+          },
+          {
+            "fieldId": "automationId",
+            "displayName": "Automation Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "That automation’s id."
+          },
+          {
+            "fieldId": "runId",
+            "displayName": "Run Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "The run the event is about; empty when it concerns no run."
+          },
+          {
+            "fieldId": "version",
+            "displayName": "Version",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "The name of the language version involved; empty when none is."
+          },
+          {
+            "fieldId": "reason",
+            "displayName": "Reason",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "What happened, in words — for a failed run, why it failed."
+          },
+          {
+            "fieldId": "url",
+            "displayName": "Url",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "A link into the app: the automation’s failed runs, or the automation itself."
+          },
+          {
+            "fieldId": "at",
+            "displayName": "At",
+            "kind": "date",
+            "writable": false,
+            "required": true,
+            "description": "When it happened (UTC)."
+          }
+        ],
+        "references": []
+      }
+    },
+    {
+      "step": "describe run_failed",
+      "answer": {
+        "typeId": "run_failed",
+        "displayName": "Run Failed",
+        "description": "An automation run ended failed. Delivered within a couple of minutes of the run settling; an automation is never told about its own failures, and a rehearsal (dry run) failing is not reported.",
+        "fields": [
+          {
+            "fieldId": "automation",
+            "displayName": "Automation",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "The name of the automation the event is about."
+          },
+          {
+            "fieldId": "automationId",
+            "displayName": "Automation Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "That automation’s id."
+          },
+          {
+            "fieldId": "runId",
+            "displayName": "Run Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "The run the event is about; empty when it concerns no run."
+          },
+          {
+            "fieldId": "version",
+            "displayName": "Version",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "The name of the language version involved; empty when none is."
+          },
+          {
+            "fieldId": "reason",
+            "displayName": "Reason",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "What happened, in words — for a failed run, why it failed."
+          },
+          {
+            "fieldId": "url",
+            "displayName": "Url",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "A link into the app: the automation’s failed runs, or the automation itself."
+          },
+          {
+            "fieldId": "at",
+            "displayName": "At",
+            "kind": "date",
+            "writable": false,
+            "required": true,
+            "description": "When it happened (UTC)."
+          }
+        ],
+        "references": []
+      }
+    },
+    {
+      "step": "describe release_applied",
+      "answer": {
+        "typeId": "release_applied",
+        "displayName": "Release Applied",
+        "description": "A new release was deployed and its check ran over this workspace's automations. `Reason` names the release and how many automations moved to the current language version, stayed with warnings, or failed. Not about one automation: `Automation` is empty. Emitted by the check that runs as a new release is deployed.",
+        "fields": [
+          {
+            "fieldId": "automation",
+            "displayName": "Automation",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "The name of the automation the event is about."
+          },
+          {
+            "fieldId": "automationId",
+            "displayName": "Automation Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "That automation’s id."
+          },
+          {
+            "fieldId": "runId",
+            "displayName": "Run Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "The run the event is about; empty when it concerns no run."
+          },
+          {
+            "fieldId": "version",
+            "displayName": "Version",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "The name of the language version involved; empty when none is."
+          },
+          {
+            "fieldId": "reason",
+            "displayName": "Reason",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "What happened, in words — for a failed run, why it failed."
+          },
+          {
+            "fieldId": "url",
+            "displayName": "Url",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "A link into the app: the automation’s failed runs, or the automation itself."
+          },
+          {
+            "fieldId": "at",
+            "displayName": "At",
+            "kind": "date",
+            "writable": false,
+            "required": true,
+            "description": "When it happened (UTC)."
+          }
+        ],
+        "references": []
+      }
+    },
+    {
+      "step": "describe Nope",
+      "answer": null
+    },
+    {
+      "step": "listEventTypes",
+      "answer": [
+        {
+          "tag": "system:run_failed",
+          "positionType": "run_failed"
+        },
+        {
+          "tag": "system:run_paused",
+          "positionType": "run_paused"
+        },
+        {
+          "tag": "system:validation_issue",
+          "positionType": "validation_issue"
+        },
+        {
+          "tag": "system:deprecated_version",
+          "positionType": "deprecated_version"
+        },
+        {
+          "tag": "system:release_applied",
+          "positionType": "release_applied"
+        }
+      ]
+    },
+    {
+      "step": "getFieldValue Reason",
+      "answer": "boom"
+    },
+    {
+      "step": "getFieldValue reason",
+      "answer": {
+        "error": "'reason' is not a known field of 'Run Failed' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+      }
+    },
+    {
+      "step": "getFieldValue Url",
+      "answer": "http://x/m"
+    },
+    {
+      "step": "getFieldValue At",
+      "answer": "2026-09-29T11:00:00.000Z"
+    },
+    {
+      "step": "getFieldValue Run Id",
+      "answer": null
+    },
+    {
+      "step": "getFieldValue Missing",
+      "answer": {
+        "error": "'Missing' is not a known field of 'Run Failed' in this connection — its schema has changed (drift). Re-open the movement so it picks up the current fields, or rename in the source system."
+      }
+    },
+    {
+      "step": "getFieldValue foreign",
+      "answer": {
+        "error": "SystemAdapter.getFieldValue received a position from a different adapter ('attio')."
+      }
+    },
+    {
+      "step": "pollIntervalSeconds",
+      "answer": 60
+    },
+    {
+      "step": "poll first (default kinds)",
+      "answer": {
+        "events": [],
+        "checkpoint": {
+          "runFailed": {
+            "failedAt": "2026-09-29T11:59:50.000Z",
+            "runId": "00000000-0000-0000-0000-000000000000"
+          }
+        }
+      }
+    },
+    {
+      "step": "poll first (all kinds)",
+      "answer": {
+        "events": [],
+        "checkpoint": {
+          "runFailed": {
+            "failedAt": "2026-09-29T11:59:50.000Z",
+            "runId": "00000000-0000-0000-0000-000000000000"
+          },
+          "stored": {
+            "occurredAt": "2026-09-29T11:59:50.000Z",
+            "id": "00000000-0000-0000-0000-000000000000"
+          }
+        }
+      }
+    },
+    {
+      "step": "poll Run Failed from mark",
+      "answer": {
+        "events": [
+          {
+            "payload": {
+              "automation": "Sync CRM",
+              "automationId": "mov-crm",
+              "runId": "run-a",
+              "version": "",
+              "reason": "Attio refused the write: 403",
+              "url": "http://localhost:3003/movements/mov-crm?view=activity&status=failed",
+              "at": "2026-09-29T11:51:00.000Z"
+            },
+            "externalId": "run-a",
+            "idempotencyKey": "system:run_failed:run-a",
+            "tag": "system:run_failed",
+            "occurredAt": "2026-09-29T11:51:00.000Z"
+          }
+        ],
+        "checkpoint": {
+          "runFailed": {
+            "failedAt": "2026-09-29T11:53:00.000Z",
+            "runId": "run-c"
+          }
+        }
+      }
+    },
+    {
+      "step": "poll Run Failed without a listener",
+      "answer": {
+        "events": [
+          {
+            "payload": {
+              "automation": "Sync CRM",
+              "automationId": "mov-crm",
+              "runId": "run-a",
+              "version": "",
+              "reason": "Attio refused the write: 403",
+              "url": "http://localhost:3003/movements/mov-crm?view=activity&status=failed",
+              "at": "2026-09-29T11:51:00.000Z"
+            },
+            "externalId": "run-a",
+            "idempotencyKey": "system:run_failed:run-a",
+            "tag": "system:run_failed",
+            "occurredAt": "2026-09-29T11:51:00.000Z"
+          },
+          {
+            "payload": {
+              "automation": "Alerts",
+              "automationId": "mov-alerts",
+              "runId": "run-b",
+              "version": "",
+              "reason": "own failure",
+              "url": "http://localhost:3003/movements/mov-alerts?view=activity&status=failed",
+              "at": "2026-09-29T11:52:00.000Z"
+            },
+            "externalId": "run-b",
+            "idempotencyKey": "system:run_failed:run-b",
+            "tag": "system:run_failed",
+            "occurredAt": "2026-09-29T11:52:00.000Z"
+          }
+        ],
+        "checkpoint": {
+          "runFailed": {
+            "failedAt": "2026-09-29T11:53:00.000Z",
+            "runId": "run-c"
+          }
+        }
+      }
+    },
+    {
+      "step": "poll stored kinds from mark",
+      "answer": {
+        "events": [
+          {
+            "payload": {
+              "automation": "Sync CRM",
+              "automationId": "mov-crm",
+              "runId": "",
+              "version": "Quiet Heron",
+              "reason": "fix the listen",
+              "url": "http://web/movements/mov-crm",
+              "at": "2026-09-29T11:54:00.000Z"
+            },
+            "externalId": "e-1",
+            "idempotencyKey": "system:validation_issue:e-1",
+            "tag": "system:validation_issue",
+            "occurredAt": "2026-09-29T11:54:00.000Z"
+          },
+          {
+            "payload": {
+              "automation": "Sync CRM",
+              "automationId": "mov-crm",
+              "runId": "",
+              "version": "",
+              "reason": "cost cap",
+              "url": "http://web/movements/mov-crm",
+              "at": "2026-09-29T11:54:00.000Z"
+            },
+            "externalId": "e-3",
+            "idempotencyKey": "system:run_paused:e-3",
+            "tag": "system:run_paused",
+            "occurredAt": "2026-09-29T11:55:00.000Z"
+          },
+          {
+            "payload": {
+              "automation": "",
+              "automationId": "",
+              "runId": "",
+              "version": "",
+              "reason": "v0.12",
+              "url": "http://web/movements/mov-crm",
+              "at": "2026-09-29T11:54:00.000Z"
+            },
+            "externalId": "e-4",
+            "idempotencyKey": "system:release_applied:e-4",
+            "tag": "system:release_applied",
+            "occurredAt": "2026-09-29T11:56:00.000Z"
+          }
+        ],
+        "checkpoint": {
+          "runFailed": {
+            "failedAt": "2026-09-29T11:50:00.000Z",
+            "runId": "00000000-0000-0000-0000-000000000000"
+          },
+          "stored": {
+            "occurredAt": "2026-09-29T11:56:00.000Z",
+            "id": "e-4"
+          }
+        }
+      }
+    },
+    {
+      "step": "poll all kinds from mark",
+      "answer": {
+        "events": [
+          {
+            "payload": {
+              "automation": "Sync CRM",
+              "automationId": "mov-crm",
+              "runId": "run-a",
+              "version": "",
+              "reason": "Attio refused the write: 403",
+              "url": "http://localhost:3003/movements/mov-crm?view=activity&status=failed",
+              "at": "2026-09-29T11:51:00.000Z"
+            },
+            "externalId": "run-a",
+            "idempotencyKey": "system:run_failed:run-a",
+            "tag": "system:run_failed",
+            "occurredAt": "2026-09-29T11:51:00.000Z"
+          },
+          {
+            "payload": {
+              "automation": "Sync CRM",
+              "automationId": "mov-crm",
+              "runId": "",
+              "version": "Quiet Heron",
+              "reason": "fix the listen",
+              "url": "http://web/movements/mov-crm",
+              "at": "2026-09-29T11:54:00.000Z"
+            },
+            "externalId": "e-1",
+            "idempotencyKey": "system:validation_issue:e-1",
+            "tag": "system:validation_issue",
+            "occurredAt": "2026-09-29T11:54:00.000Z"
+          },
+          {
+            "payload": {
+              "automation": "Sync CRM",
+              "automationId": "mov-crm",
+              "runId": "",
+              "version": "",
+              "reason": "cost cap",
+              "url": "http://web/movements/mov-crm",
+              "at": "2026-09-29T11:54:00.000Z"
+            },
+            "externalId": "e-3",
+            "idempotencyKey": "system:run_paused:e-3",
+            "tag": "system:run_paused",
+            "occurredAt": "2026-09-29T11:55:00.000Z"
+          },
+          {
+            "payload": {
+              "automation": "",
+              "automationId": "",
+              "runId": "",
+              "version": "",
+              "reason": "v0.12",
+              "url": "http://web/movements/mov-crm",
+              "at": "2026-09-29T11:54:00.000Z"
+            },
+            "externalId": "e-4",
+            "idempotencyKey": "system:release_applied:e-4",
+            "tag": "system:release_applied",
+            "occurredAt": "2026-09-29T11:56:00.000Z"
+          }
+        ],
+        "checkpoint": {
+          "runFailed": {
+            "failedAt": "2026-09-29T11:53:00.000Z",
+            "runId": "run-c"
+          },
+          "stored": {
+            "occurredAt": "2026-09-29T11:56:00.000Z",
+            "id": "e-4"
+          }
+        }
+      }
+    },
+    {
+      "step": "poll unknown kind only",
+      "answer": {
+        "events": [],
+        "checkpoint": {
+          "runFailed": {
+            "failedAt": "2026-09-29T11:50:00.000Z",
+            "runId": "00000000-0000-0000-0000-000000000000"
+          },
+          "stored": {
+            "occurredAt": "2026-09-29T11:50:00.000Z",
+            "id": "00000000-0000-0000-0000-000000000000"
+          }
+        }
+      }
+    },
+    {
+      "step": "poll events as a string",
+      "answer": {
+        "events": [
+          {
+            "payload": {
+              "automation": "Sync CRM",
+              "automationId": "mov-crm",
+              "runId": "",
+              "version": "Quiet Heron",
+              "reason": "fix the listen",
+              "url": "http://web/movements/mov-crm",
+              "at": "2026-09-29T11:54:00.000Z"
+            },
+            "externalId": "e-1",
+            "idempotencyKey": "system:validation_issue:e-1",
+            "tag": "system:validation_issue",
+            "occurredAt": "2026-09-29T11:54:00.000Z"
+          }
+        ],
+        "checkpoint": {
+          "runFailed": {
+            "failedAt": "2026-09-29T11:50:00.000Z",
+            "runId": "00000000-0000-0000-0000-000000000000"
+          },
+          "stored": {
+            "occurredAt": "2026-09-29T11:54:00.000Z",
+            "id": "e-1"
+          }
+        }
+      }
+    },
+    {
+      "step": "poll a malformed checkpoint",
+      "answer": {
+        "events": [],
+        "checkpoint": {
+          "runFailed": {
+            "failedAt": "2026-09-29T11:59:50.000Z",
+            "runId": "00000000-0000-0000-0000-000000000000"
+          }
+        }
+      }
+    }
+  ],
+  "questions": [
+    {
+      "reader": "failedRuns",
+      "input": {
+        "teamId": "team-parity",
+        "after": {
+          "failedAt": "2026-09-29T11:50:00.000Z",
+          "runId": "00000000-0000-0000-0000-000000000000"
+        },
+        "until": "2026-09-29T11:59:50.000Z",
+        "limit": 100
+      }
+    },
+    {
+      "reader": "failedRuns",
+      "input": {
+        "teamId": "team-parity",
+        "after": {
+          "failedAt": "2026-09-29T11:50:00.000Z",
+          "runId": "00000000-0000-0000-0000-000000000000"
+        },
+        "until": "2026-09-29T11:59:50.000Z",
+        "limit": 100
+      }
+    },
+    {
+      "reader": "storedEvents",
+      "input": {
+        "teamId": "team-parity",
+        "kinds": [
+          "run_paused",
+          "validation_issue",
+          "release_applied"
+        ],
+        "after": {
+          "occurredAt": "2026-09-29T11:50:00.000Z",
+          "id": "00000000-0000-0000-0000-000000000000"
+        },
+        "until": "2026-09-29T11:59:50.000Z",
+        "limit": 100
+      }
+    },
+    {
+      "reader": "failedRuns",
+      "input": {
+        "teamId": "team-parity",
+        "after": {
+          "failedAt": "2026-09-29T11:50:00.000Z",
+          "runId": "00000000-0000-0000-0000-000000000000"
+        },
+        "until": "2026-09-29T11:59:50.000Z",
+        "limit": 100
+      }
+    },
+    {
+      "reader": "storedEvents",
+      "input": {
+        "teamId": "team-parity",
+        "kinds": [
+          "run_paused",
+          "validation_issue",
+          "deprecated_version",
+          "release_applied"
+        ],
+        "after": {
+          "occurredAt": "2026-09-29T11:50:00.000Z",
+          "id": "00000000-0000-0000-0000-000000000000"
+        },
+        "until": "2026-09-29T11:59:50.000Z",
+        "limit": 100
+      }
+    },
+    {
+      "reader": "storedEvents",
+      "input": {
+        "teamId": "team-parity",
+        "kinds": [
+          "validation_issue"
+        ],
+        "after": {
+          "occurredAt": "2026-09-29T11:50:00.000Z",
+          "id": "00000000-0000-0000-0000-000000000000"
+        },
+        "until": "2026-09-29T11:59:50.000Z",
+        "limit": 100
+      }
+    }
+  ]
+}

@@ -61,6 +61,9 @@ import { ATTIO_MANIFEST } from '@listen-fire/attio/manifest';
 import { TELEGRAM_MANIFEST } from '@listen-fire/telegram/manifest';
 import { SLACK_MANIFEST } from '@listen-fire/slack/manifest';
 import { ASK_MANIFEST } from '@listen-fire/ask/manifest';
+import { SYSTEM_MANIFEST } from '@listen-fire/system/manifest';
+import { NATIVE_VALUATIONS_MANIFEST } from '@listen-fire/native-valuations/manifest';
+import { EMAIL_MANIFEST } from '@listen-fire/email/manifest';
 import { pluginDeclarationNamed, pluginProgramName } from 'movement-engine/public/plugins';
 
 import { injectFakeBaseUrl, isTestHarnessTeam } from '../../../lib/recording';
@@ -77,8 +80,10 @@ import { platformBrowser } from '../../playwright';
 import { oauthAppFromEnv } from './module_credentials';
 import { builtInBotToken } from './telegram/shared_bot';
 import { telegramIdentities } from './telegram/identities';
+import { WHATSAPP_MANIFEST, WHATSAPP_MOVEMENTS_NUMBER, sharedWhatsappCredential } from './whatsapp/shared_app';
 import { teamIdSchema } from '../../../lib/team_id';
 import { askTableKv, askUrl } from '../../asks/store';
+import { apiBaseUrl } from '../../../lib/api_base_url';
 
 export type BuiltinLine = 'legacy' | 'module';
 
@@ -169,6 +174,10 @@ const PDF_MODULE_LINE: BuiltinModuleLine = {
 
 /** Built once, on the Slack line's first use. */
 let platformSlackModule: AdapterModuleDefinition | undefined;
+/** Built once, on the system line's first use. */
+let platformSystemModule: AdapterModuleDefinition | undefined;
+/** Built once, on the WhatsApp line's first use. */
+let platformWhatsappModule: AdapterModuleDefinition | undefined;
 
 /** Built once, on the ask line's first use. */
 let platformAskModule: AdapterModuleDefinition | undefined;
@@ -355,6 +364,69 @@ export const BUILTIN_MODULES: BuiltinModuleTable = {
       return platformAskModule;
     },
     kv: (install) => askTableKv(install.teamId),
+  },
+  whatsapp: {
+    kind: 'adapter',
+    line: 'module',
+    manifest: WHATSAPP_MANIFEST,
+    // The platform's own definition: its shared number quoted, and the URLs
+    // its Meta door exposes downloaded media at owned.
+    load: () => {
+      if (platformWhatsappModule === undefined) {
+        const { whatsappModuleWith }: typeof import('@listen-fire/whatsapp') = require('@listen-fire/whatsapp');
+        const { isExposedFileUrl }: typeof import('../engine/files/expose') = require('../engine/files/expose');
+        platformWhatsappModule = whatsappModuleWith({ movementsNumber: WHATSAPP_MOVEMENTS_NUMBER, exposedFileUrl: isExposedFileUrl });
+      }
+      return platformWhatsappModule;
+    },
+    // The platform's one Meta app, for every team: WhatsApp takes no team
+    // credential.
+    sharedCredential: sharedWhatsappCredential,
+    files: (install) => platformModuleFiles({ teamId: install.teamId, module: '@lf/whatsapp' }),
+  },
+  // Platform-supplied (au-units): a module only the platform hosts, over its
+  // own records of runs and events.
+  system: {
+    kind: 'adapter',
+    line: 'module',
+    manifest: SYSTEM_MANIFEST,
+    load: () => {
+      if (platformSystemModule === undefined) {
+        const { systemModuleWith }: typeof import('@listen-fire/system') = require('@listen-fire/system');
+        const { platformSystemRecords }: typeof import('./system/events') = require('./system/events');
+        platformSystemModule = systemModuleWith(platformSystemRecords);
+      }
+      return platformSystemModule;
+    },
+  },
+  // Platform-supplied (au-units): the platform's own Valuations product,
+  // through its REST API.
+  'native-valuations': {
+    kind: 'adapter',
+    line: 'module',
+    manifest: NATIVE_VALUATIONS_MANIFEST,
+    load: () => {
+      const { nativeValuationsModule }: typeof import('@listen-fire/native-valuations') = require('@listen-fire/native-valuations');
+      return nativeValuationsModule;
+    },
+    // A credential that names no base URL (the one the platform provisions)
+    // means this platform's own API.
+    sharedCredential: () => ({ baseUrl: apiBaseUrl() }),
+  },
+  // The platform's own provider keys (its environment) as the install's
+  // credential: nobody connects email here.
+  email: {
+    kind: 'adapter',
+    line: 'module',
+    manifest: EMAIL_MANIFEST,
+    load: () => {
+      const { emailModule }: typeof import('@listen-fire/email') = require('@listen-fire/email');
+      return emailModule;
+    },
+    credential: () => {
+      const { platformEmailCredential }: typeof import('./email') = require('./email');
+      return platformEmailCredential();
+    },
   },
   // The bundled plugins (Henry 2026-10-17: plugins are modules too), all six
   // in one module, `@lf/web`. Each plugin keeps its own line.
@@ -579,7 +651,12 @@ export function builtinPollSourceFactory(
     }
     return {
       pollIntervalSeconds: declared.intervalSeconds,
-      getEvents: (input) => poll({ config: input.config, ...(input.checkpoint !== undefined ? { checkpoint: input.checkpoint } : {}) }),
+      getEvents: (input) =>
+        poll({
+          config: input.config,
+          ...(input.checkpoint !== undefined ? { checkpoint: input.checkpoint } : {}),
+          ...(input.movementId !== undefined ? { movementId: input.movementId } : {}),
+        }),
     };
   };
 }

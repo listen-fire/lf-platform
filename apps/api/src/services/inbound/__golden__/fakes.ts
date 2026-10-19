@@ -315,7 +315,7 @@ export function inboundDoorFake(actual: AnyRecord): AnyRecord {
 export function resendApiFake(actual: AnyRecord): AnyRecord {
   return {
     ...actual,
-    fetchReceivedEmail: async (emailId: string) => {
+    fetchReceivedEmail: async (_api: unknown, emailId: string) => {
       if (world.resendFetch === 'fail') throw new Error('resend api unavailable');
       record({ kind: 'resend_fetch', emailId });
       return world.resendFetch;
