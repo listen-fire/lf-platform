@@ -12,9 +12,10 @@ import type { LandingSynthesizer } from '../movement/generic_landings';
 import type { AwaitKeeper } from './await_correlation';
 
 import { AIRTABLE_WORK_KINDS } from '../../airtable_webhook_refresh/worker';
-import { ASK_ADAPTER_TYPE, askResponseDescriptorFor } from './ask';
-import { askAwaitKeeper } from './ask/await_keeper';
-import { ASK_WORK_KINDS } from './ask/closed_sweep';
+import { ASK_ADAPTER_TYPE } from '@listen-fire/ask/types';
+import { askResponseDescriptorFor } from '@listen-fire/ask/descriptors';
+import { askAwaitKeeper } from '../../asks/await_keeper';
+import { ASK_WORK_KINDS } from '../../asks/closed_sweep';
 import { builtinModuleWorkKinds } from './builtin_modules';
 
 

@@ -7,14 +7,15 @@
 // sweep reads here for the parks a lost wake left behind. Correlation, NOT
 // stability — the ask id IS the identity, stored as the row's `correlation_key`.
 
-import type { AskId } from '../../../../generated/kysely/asks/Ask';
-import type { TriggerRunId } from '../../../../generated/kysely/automations/TriggerRun';
+import type { AskId } from '../../generated/kysely/asks/Ask';
+import type { TriggerRunId } from '../../generated/kysely/automations/TriggerRun';
 import type { CorrelatedAwait } from 'movement-engine/public/run-host';
 
-import { getAsksQb, getAutomationsQb } from '../../../../lib/kysely';
-import { postgresRunHostStore } from '../../../movement_engine/run_host_store';
-import { ASK_ADAPTER_TYPE } from './type';
-import { askIdSchema, cancelAsk } from './store';
+import { getAsksQb, getAutomationsQb } from '../../lib/kysely';
+import { postgresRunHostStore } from '../movement_engine/run_host_store';
+import { ASK_ADAPTER_TYPE } from '@listen-fire/ask';
+import { cancelAskAndWake } from './doors';
+import { askIdSchema } from './store';
 
 /**
  * Withdraw ask await parks that will NEVER be consumed — a race arm that lost,
@@ -57,7 +58,8 @@ export async function abandonAskAwaits(input: {
     await postgresRunHostStore.correlations.drop({ runId: input.runId, address: row.address });
   }
   for (const askId of new Set(rows.map((r) => r.correlation_key))) {
-    await cancelAsk({ id: askId as AskId });
+    // Its wake finds nothing parked (the correlations went first) and is a no-op.
+    await cancelAskAndWake({ id: askId as AskId });
   }
 }
 

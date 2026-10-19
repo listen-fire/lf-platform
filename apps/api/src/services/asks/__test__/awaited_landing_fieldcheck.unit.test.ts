@@ -6,7 +6,7 @@
 //   1. the Response descriptor's field is 'Answer' (=== displayName), and the
 //      landing dict the engine binds is keyed by that same name — so the
 //      DECLARED name `got.Answer` reaches the value (proven end-to-end in
-//      ask_adapter.unit.test.ts's getFieldValue read);
+//      modules/ask's adapter.unit.test.ts getFieldValue read);
 //   2. an UNKNOWN field on the awaited landing is a CHECKER error
 //      (MOV_UNKNOWN_PROPERTY, the same did-you-mean pattern every other typed
 //      position uses) rather than a silent runtime null.
@@ -25,14 +25,15 @@ import {
   type InstanceSchema,
 } from 'movement-lang';
 
-import type { TeamId } from '../../../../../generated/kysely/core/Team';
+import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { SchemaTypeDescriptor } from 'movement-engine/services/translation_graph/types';
 
 import { instanceSchemaFromDescriptors } from 'movement-engine/services/translation_graph/movement/schema_projection';
-import { AskAdapter } from '../index';
+import { AskAdapter } from '@listen-fire/ask';
+import { platformAskRecords } from '../store';
 
 async function askSnapshot(): Promise<{ schema: InstanceSchema; snapshot: CatalogSnapshot }> {
-  const adapter = new AskAdapter('team-1' as TeamId);
+  const adapter = new AskAdapter(platformAskRecords('team-1' as TeamId));
   const entries = await adapter.listEntryPoints();
   const descriptors = new Map<string, SchemaTypeDescriptor>();
   for (const e of entries) {
@@ -124,7 +125,7 @@ describe('the awaited ask landing is checked like any position', () => {
   it('resolvesEmpty still wraps the awaited scalar maybe-absent (unchanged by the per-family split)', async () => {
     // The resolvesEmpty/awaitable flags on the Response edge are untouched by
     // this chunk's per-family retarget — pin that they're still there.
-    const d = await new AskAdapter('team-1' as TeamId).describe('Check');
+    const d = await new AskAdapter(platformAskRecords('team-1' as TeamId)).describe('Check');
     const response = d!.references.find((r) => r.name === 'Response');
     expect(response).toMatchObject({ resolvesEmpty: true, awaitable: true, targetTypeId: 'Check Response' });
   });

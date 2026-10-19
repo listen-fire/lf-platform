@@ -15,7 +15,8 @@ import type { AskId } from '../../../generated/kysely/asks/Ask';
 
 import { cleanupTeam } from '../../../test/harness/cleanup';
 import { getAutomationsQb, getCoreQb } from '../../../lib/kysely';
-import { createAsk, getAsk } from '../../translation_graph/adapters/ask/store';
+import { createAsk } from '../../asks/doors';
+import { getAsk } from '../../asks/store';
 import {
   listAskRecordsForTeam,
   answerAskRecordForTeam,

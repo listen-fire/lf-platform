@@ -32,14 +32,13 @@ import type { AskId } from '../../../generated/kysely/asks/Ask';
 import {
   ASK_ANSWER_TYPES,
   ASK_FAMILIES,
-  createAsk,
   getAsk,
   listAsksForTeam,
   type AskRecord,
-} from '../../../services/translation_graph/adapters/ask/store';
-import { cancelAskAndWake } from '../../../services/translation_graph/adapters/ask/answer_door';
+} from '../../../services/asks/store';
+import { cancelAskAndWake, createAsk } from '../../../services/asks/doors';
 import { readAskDeliveryHealth } from '../../../services/asks/webhook_delivery/worker';
-import { askSettleDelivery } from '../../../services/translation_graph/adapters/ask/delivery_mode';
+import { askSettleDelivery } from '../../../services/asks/delivery_mode';
 import { requireScope } from './require_scope';
 
 const ASKS_SCOPE = 'asks';

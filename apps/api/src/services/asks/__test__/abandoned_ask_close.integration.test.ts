@@ -18,19 +18,19 @@ import { createServer, type Server } from 'node:http';
 import express, { type Router } from 'express';
 
 import type { AddressInfo } from 'node:net';
-import type { TeamId } from '../../../../../generated/kysely/core/Team';
-import type { TriggerRunId } from '../../../../../generated/kysely/automations/TriggerRun';
-import type { TriggerRunRecorder } from '../../../runs/trigger_run';
+import type { TeamId } from '../../../generated/kysely/core/Team';
+import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
+import type { TriggerRunRecorder } from '../../translation_graph/runs/trigger_run';
 
-import { cleanupTeam } from '../../../../../test/harness/cleanup';
-import { getAutomationsQb, getCoreQb } from '../../../../../lib/kysely';
-import { makeRecorderParkSink } from '../../../../movement_engine/park_sink';
-import { settleRunsParkedOnTriggers } from '../../../../interaction/run_failure';
-import { asksRouter } from '../../../../../interfaces/rest/asks';
-import { answerAskByToken } from '../answer_door';
-import { ASK_ADAPTER_TYPE } from '../type';
-import { createAsk, getAsk, type AskRecord } from '../store';
-import { postgresRunHostStore } from '../../../../movement_engine/run_host_store';
+import { cleanupTeam } from '../../../test/harness/cleanup';
+import { getAutomationsQb, getCoreQb } from '../../../lib/kysely';
+import { makeRecorderParkSink } from '../../movement_engine/park_sink';
+import { settleRunsParkedOnTriggers } from '../../interaction/run_failure';
+import { asksRouter } from '../../../interfaces/rest/asks';
+import { answerAskByToken, createAsk } from '../doors';
+import { ASK_ADAPTER_TYPE } from '@listen-fire/ask';
+import { getAsk, type AskRecord } from '../store';
+import { postgresRunHostStore } from '../../movement_engine/run_host_store';
 
 // The link page's own harness — the closed rendering is a user-facing promise,
 // so it is asserted over real HTTP through the real router, not by calling the

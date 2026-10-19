@@ -1,18 +1,18 @@
-// The ask adapter's record duties (asks-as-adapter §B): the family write
-// (`-[:Check]->` …), the cancellation update (`{ Cancelled: true }`), and the
-// promise-honest descriptor surface (families writable-not-readable; the
-// awaitable `Response` edge). The store's DB functions are mocked so this pins
-// the ADAPTER's routing/validation without a database; the lattice itself is
-// proven against a real DB in `ask/__test__/store_lattice.integration.test.ts`
-// and end-to-end in the dev loop.
+// The ask adapter's record duties: the family write (`-[:Check]->` …), the
+// cancellation update (`{ Cancelled: true }`), and the promise-honest
+// descriptor surface (families writable-not-readable; the awaitable
+// `Response` edge). The records are mocked so this pins the ADAPTER's
+// routing/validation; the lattice itself is proven over a kv in
+// `records.unit.test.ts`, and against the platform's asks table (with the wake
+// a settle queues) in apps/api's `services/asks/__test__`.
 
 const createAskMock = jest.fn();
 const cancelAskMock = jest.fn();
 const getAskMock = jest.fn();
 const answerAskMock = jest.fn();
 
-jest.mock('../ask/store', () => {
-  const actual = jest.requireActual('../ask/store');
+jest.mock('../records', () => {
+  const actual = jest.requireActual('../records');
   return {
     ...actual,
     createAsk: (...a: unknown[]) => createAskMock(...a),
@@ -22,27 +22,25 @@ jest.mock('../ask/store', () => {
   };
 });
 
-// A cancel goes through the cancel door, which queues the engine's wake where
-// the engine's notifier is registered.
-const enqueueAwaitWakeMock = jest.fn();
-jest.mock('../../../movement_engine/await_wake', () => ({
-  enqueueAwaitWake: (...a: unknown[]) => enqueueAwaitWakeMock(...a),
-}));
-jest.mock('../../../work/drain', () => ({ notifyWork: jest.fn() }));
+import type { WriteInput, UpdateInput } from 'movement-engine/public/adapter';
 
-import type { WriteInput, UpdateInput } from 'movement-engine/services/translation_graph/adapter';
-import type { TeamId } from '../../../../generated/kysely/core/Team';
+import { makeStablePosition, makeUnstablePosition } from 'movement-engine/public/catalog';
+import { UPDATE_NOT_FOUND } from 'module-kit/adapter/not_found';
+import { AskAdapter } from '../adapter';
+import { AskResponseRefused, type AskRecords } from '../records';
 
-import { AskAdapter } from '../ask';
-import { notifyEngineOfSettledAsks } from '../../../asks/in_process_notifier';
-import { AskResponseRefused } from '../ask/answer_door';
-import { UPDATE_NOT_FOUND } from '../not_found';
-import { makeStablePosition, makeUnstablePosition } from 'movement-engine/services/translation_graph/types';
-
-const TEAM = 'team-1' as TeamId;
+const RECORDS: AskRecords = {
+  kv: {
+    get: async () => undefined,
+    set: async () => undefined,
+    delete: async () => undefined,
+    list: async () => [],
+  },
+  answerUrl: (token) => `http://x/api/asks/${token}`,
+};
 
 function adapter(): AskAdapter {
-  return new AskAdapter(TEAM);
+  return new AskAdapter(RECORDS);
 }
 
 function ctx(): WriteInput['mutationContext'] {
@@ -63,7 +61,6 @@ function writeInput(recordType: string, fields: Record<string, unknown>): WriteI
 
 const STORED = {
   id: 'ask-1',
-  teamId: TEAM,
   family: 'Check',
   state: 'open',
   url: 'http://x/api/asks/ask_tok',
@@ -284,8 +281,8 @@ describe('createRecord', () => {
     const result = await adapter().createRecord(writeInput('Check', { Prompt: 'Ship it?' }));
 
     expect(createAskMock).toHaveBeenCalledWith(
+      RECORDS,
       expect.objectContaining({
-        teamId: TEAM,
         family: 'Check',
         prompt: 'Ship it?',
         provenance: expect.objectContaining({ movementId: 'mv-1', nodeId: 'node-1' }),
@@ -311,7 +308,7 @@ describe('createRecord', () => {
   it('Provide passes the declared Answer Type through and rejects an unknown one', async () => {
     createAskMock.mockResolvedValue({ ...STORED });
     await adapter().createRecord(writeInput('Provide', { Prompt: 'How much?', 'Answer Type': 'number' }));
-    expect(createAskMock).toHaveBeenCalledWith(expect.objectContaining({ answerType: 'number' }));
+    expect(createAskMock).toHaveBeenCalledWith(RECORDS, expect.objectContaining({ answerType: 'number' }));
 
     await expect(
       adapter().createRecord(writeInput('Provide', { Prompt: 'How much?', 'Answer Type': 'currency' })),
@@ -321,7 +318,7 @@ describe('createRecord', () => {
   it.each(['Choose', 'Select'])('%s writes Options through and requires at least one offered', async (family) => {
     createAskMock.mockResolvedValue({ ...STORED });
     await adapter().createRecord(writeInput(family, { Prompt: 'Which?', Options: ['a', 'b'] }));
-    expect(createAskMock).toHaveBeenCalledWith(expect.objectContaining({ family, options: ['a', 'b'] }));
+    expect(createAskMock).toHaveBeenCalledWith(RECORDS, expect.objectContaining({ family, options: ['a', 'b'] }));
 
     await expect(
       adapter().createRecord(writeInput(family, { Prompt: 'Which?', Options: [] })),
@@ -334,6 +331,7 @@ describe('createRecord', () => {
       writeInput('Correct', { Prompt: 'Review these', Rows: [{ name: 'Acme' }, { name: 'Beta' }] }),
     );
     expect(createAskMock).toHaveBeenCalledWith(
+      RECORDS,
       expect.objectContaining({
         family: 'Correct',
         rows: [
@@ -351,7 +349,7 @@ describe('createRecord', () => {
   it('Draft requires only Prompt (no extra field)', async () => {
     createAskMock.mockResolvedValue({ ...STORED });
     await adapter().createRecord(writeInput('Draft', { Prompt: 'Draft the memo' }));
-    expect(createAskMock).toHaveBeenCalledWith(expect.objectContaining({ family: 'Draft', prompt: 'Draft the memo' }));
+    expect(createAskMock).toHaveBeenCalledWith(RECORDS, expect.objectContaining({ family: 'Draft', prompt: 'Draft the memo' }));
   });
 
   it('Form writes its named Fields through (stored as Options) and requires at least one', async () => {
@@ -359,7 +357,7 @@ describe('createRecord', () => {
     const result = await adapter().createRecord(
       writeInput('Form', { Prompt: 'Decide', Fields: ['call', 'cap'] }),
     );
-    expect(createAskMock).toHaveBeenCalledWith(expect.objectContaining({ family: 'Form', options: ['call', 'cap'] }));
+    expect(createAskMock).toHaveBeenCalledWith(RECORDS, expect.objectContaining({ family: 'Form', options: ['call', 'cap'] }));
     expect(result.data).toMatchObject({ Fields: ['call', 'cap'] });
     expect(result.data.Options).toBeUndefined();
 
@@ -391,11 +389,11 @@ function responseWrite(family: string, answer: unknown, edge = 'Response'): Writ
 
 describe('writing the Response edge — the answer IS an ordinary edge write', () => {
   it('routes `write a-[:Response]-> { Answer: … }` to the one answer path and lands the coerced answer', async () => {
-    answerAskMock.mockResolvedValue({ ok: true, ask: { ...STORED, state: 'answered', answer: true } });
+    answerAskMock.mockResolvedValue({ kind: 'settled', ask: { ...STORED, state: 'answered', answer: true } });
     const result = await adapter().createRecord(responseWrite('Check', true));
 
     // The parent link carries the request's identity; the body carries the answer.
-    expect(answerAskMock).toHaveBeenCalledWith({ id: 'ask-1', raw: true });
+    expect(answerAskMock).toHaveBeenCalledWith(RECORDS, { id: 'ask-1', raw: true });
     expect(result).toMatchObject({
       adapterType: 'ask',
       externalId: 'ask-1',
@@ -408,7 +406,7 @@ describe('writing the Response edge — the answer IS an ordinary edge write', (
 
   it('a write to a SETTLED request fails with the closed outcome — typed, so a caller acks without matching strings', async () => {
     answerAskMock.mockResolvedValue({
-      ok: false, reason: 'settled', ask: { ...STORED, state: 'answered', answer: false },
+      kind: 'closed', ask: { ...STORED, state: 'answered', answer: false },
     });
     const err = await adapter().createRecord(responseWrite('Check', true)).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(AskResponseRefused);
@@ -419,7 +417,7 @@ describe('writing the Response edge — the answer IS an ordinary edge write', (
 
   it('an answer that does not fit the family is the `invalid` outcome, carrying the reason', async () => {
     answerAskMock.mockResolvedValue({
-      ok: false, reason: 'invalid', message: 'expected a yes/no answer', ask: { ...STORED },
+      kind: 'invalid', message: 'expected a yes/no answer', ask: { ...STORED },
     });
     const err = await adapter().createRecord(responseWrite('Check', 'maybe')).catch((e: unknown) => e);
     expect((err as AskResponseRefused).outcome).toMatchObject({
@@ -428,15 +426,15 @@ describe('writing the Response edge — the answer IS an ordinary edge write', (
   });
 
   it('a vanished request is `not_found`, not a silent no-op', async () => {
-    answerAskMock.mockResolvedValue({ ok: false, reason: 'not_found' });
+    answerAskMock.mockResolvedValue({ kind: 'not_found' });
     const err = await adapter().createRecord(responseWrite('Check', true)).catch((e: unknown) => e);
     expect((err as AskResponseRefused).outcome).toEqual({ kind: 'not_found' });
   });
 
   it('SINGLE ANSWER: the second write of the same request is refused (the store guard, surfaced)', async () => {
     answerAskMock
-      .mockResolvedValueOnce({ ok: true, ask: { ...STORED, state: 'answered', answer: true } })
-      .mockResolvedValueOnce({ ok: false, reason: 'settled', ask: { ...STORED, state: 'answered', answer: true } });
+      .mockResolvedValueOnce({ kind: 'settled', ask: { ...STORED, state: 'answered', answer: true } })
+      .mockResolvedValueOnce({ kind: 'closed', ask: { ...STORED, state: 'answered', answer: true } });
     await adapter().createRecord(responseWrite('Check', true));
     const err = await adapter().createRecord(responseWrite('Check', false)).catch((e: unknown) => e);
     expect((err as AskResponseRefused).outcome).toMatchObject({ kind: 'closed' });
@@ -455,17 +453,17 @@ describe('writing the Response edge — the answer IS an ordinary edge write', (
     ];
     for (const [family, answer] of bodies) {
       answerAskMock.mockReset();
-      answerAskMock.mockResolvedValue({ ok: true, ask: { ...STORED, family, state: 'answered', answer } });
+      answerAskMock.mockResolvedValue({ kind: 'settled', ask: { ...STORED, family, state: 'answered', answer } });
       const result = await adapter().createRecord(responseWrite(family, answer));
-      expect(answerAskMock).toHaveBeenCalledWith({ id: 'ask-1', raw: answer });
+      expect(answerAskMock).toHaveBeenCalledWith(RECORDS, { id: 'ask-1', raw: answer });
       expect(result.recordType).toBe(`${family} Response`);
     }
   });
 
   it('a Review answer needs no value — the acknowledgement is the answer', async () => {
-    answerAskMock.mockResolvedValue({ ok: true, ask: { ...STORED, family: 'Review', state: 'answered', answer: 'ack' } });
+    answerAskMock.mockResolvedValue({ kind: 'settled', ask: { ...STORED, family: 'Review', state: 'answered', answer: 'ack' } });
     const result = await adapter().createRecord(responseWrite('Review', undefined));
-    expect(answerAskMock).toHaveBeenCalledWith({ id: 'ask-1', raw: undefined });
+    expect(answerAskMock).toHaveBeenCalledWith(RECORDS, { id: 'ask-1', raw: undefined });
     expect(result.data).toEqual({ Answer: 'ack' });
   });
 
@@ -528,22 +526,16 @@ describe('reading the Response edge — synchronous, empty until answered', () =
 
 describe('updateRecord — the cancellation surface', () => {
   it('{ Cancelled: true } freezes an open ask to expired', async () => {
-    // The composed deployment's wiring, so the cancel door has an engine to wake.
-    notifyEngineOfSettledAsks();
-    cancelAskMock.mockResolvedValue({ ok: true, ask: { ...STORED, state: 'expired' } });
+    cancelAskMock.mockResolvedValue({ kind: 'settled', ask: { ...STORED, state: 'expired' } });
     const result = await adapter().updateRecord(
       { recordType: 'Check', externalId: 'ask-1', fields: { Cancelled: true }, mutationContext: ctx() } as UpdateInput,
     );
-    expect(cancelAskMock).toHaveBeenCalledWith({ id: 'ask-1' });
+    expect(cancelAskMock).toHaveBeenCalledWith(RECORDS, { id: 'ask-1' });
     expect(result).toMatchObject({ externalId: 'ask-1', data: { State: 'expired' } });
-    // …and wakes the run parked on it now, not at the next sweep.
-    expect(enqueueAwaitWakeMock).toHaveBeenCalledWith(
-      expect.objectContaining({ adapterType: 'ask', correlationKey: STORED.id }),
-    );
   });
 
   it('rejects observably when the ask has already settled', async () => {
-    cancelAskMock.mockResolvedValue({ ok: false, reason: 'settled', ask: { ...STORED, state: 'answered' } });
+    cancelAskMock.mockResolvedValue({ kind: 'closed', ask: { ...STORED, state: 'answered' } });
     await expect(
       adapter().updateRecord(
         { recordType: 'Check', externalId: 'ask-1', fields: { Cancelled: true }, mutationContext: ctx() } as UpdateInput,
@@ -552,7 +544,7 @@ describe('updateRecord — the cancellation surface', () => {
   });
 
   it('returns the typed not-found signal when the row is gone', async () => {
-    cancelAskMock.mockResolvedValue({ ok: false, reason: 'not_found' });
+    cancelAskMock.mockResolvedValue({ kind: 'not_found' });
     const result = await adapter().updateRecord(
       { recordType: 'Check', externalId: 'ghost', fields: { Cancelled: true }, mutationContext: ctx() } as UpdateInput,
     );

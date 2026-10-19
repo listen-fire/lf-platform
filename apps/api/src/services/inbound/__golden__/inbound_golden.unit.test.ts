@@ -52,12 +52,12 @@ jest.mock('../../movement_engine/callback_store', () => {
   const actual = jest.requireActual('../../movement_engine/callback_store');
   return require('./fakes').callbackStoreFake(actual);
 });
-jest.mock('../../translation_graph/adapters/ask/store', () => {
-  const actual = jest.requireActual('../../translation_graph/adapters/ask/store');
+jest.mock('../../asks/store', () => {
+  const actual = jest.requireActual('../../asks/store');
   return require('./fakes').askStoreFake(actual);
 });
-jest.mock('../../translation_graph/adapters/ask/answer_door', () => {
-  const actual = jest.requireActual('../../translation_graph/adapters/ask/answer_door');
+jest.mock('../../asks/doors', () => {
+  const actual = jest.requireActual('../../asks/doors');
   return require('./fakes').askAnswerFake(actual);
 });
 jest.mock('../../webhook_sync/telegram_builtin', () => ({

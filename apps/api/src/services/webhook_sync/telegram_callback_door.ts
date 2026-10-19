@@ -32,8 +32,8 @@
 import { z } from 'zod';
 
 import { logger } from 'movement-engine/public/log';
-import { answerAskByToken, type AskDoorOutcome } from '../translation_graph/adapters/ask/answer_door';
-import { parseAskLink } from '../translation_graph/adapters/ask/answer_link';
+import { answerAskByToken, type AskDoorOutcome } from '../asks/doors';
+import { parseAskLink } from '@listen-fire/ask/link';
 import { isCallbackId } from '../movement_engine/callback_store';
 import {
   callbackAckText,

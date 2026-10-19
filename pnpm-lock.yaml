@@ -133,6 +133,9 @@ importers:
       '@listen-fire/airtable':
         specifier: workspace:*
         version: link:../../modules/airtable
+      '@listen-fire/ask':
+        specifier: workspace:*
+        version: link:../../modules/ask
       '@listen-fire/attio':
         specifier: workspace:*
         version: link:../../modules/attio
@@ -935,6 +938,40 @@ importers:
       movement-lang:
         specifier: workspace:@listen-fire/movement-lang@*
         version: link:../../packages/movement-lang
+      typescript:
+        specifier: 5.5.4
+        version: 5.5.4
+
+  modules/ask:
+    dependencies:
+      '@listen-fire/engine':
+        specifier: workspace:^
+        version: link:../../packages/movement-engine
+      '@listen-fire/engine-contracts':
+        specifier: workspace:^
+        version: link:../../packages/engine-contracts
+      '@listen-fire/module-kit':
+        specifier: workspace:^
+        version: link:../../packages/module-kit
+      zod:
+        specifier: 4.1.12
+        version: 4.1.12
+    devDependencies:
+      '@types/jest':
+        specifier: 29.5.14
+        version: 29.5.14
+      '@types/node':
+        specifier: 20.16.5
+        version: 20.16.5
+      engine-contracts:
+        specifier: workspace:@listen-fire/engine-contracts@*
+        version: link:../../packages/engine-contracts
+      module-kit:
+        specifier: workspace:@listen-fire/module-kit@*
+        version: link:../../packages/module-kit
+      movement-engine:
+        specifier: workspace:@listen-fire/engine@*
+        version: link:../../packages/movement-engine
       typescript:
         specifier: 5.5.4
         version: 5.5.4

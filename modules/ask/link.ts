@@ -1,12 +1,12 @@
 // Reading an ask's answer link back out of a string a platform handed us.
 //
-// The link is MINTED here (`askUrl`, beside it in `store.ts`), so it is parsed
+// The token is MINTED here (`records.ts`), so it is parsed
 // here too — one neighbourhood owns both directions. Every platform door that
 // carries an answer (Slack's block actions, Telegram's callback queries) reads
 // the same two shapes through this module, so no platform's door imports
 // another platform's route to borrow a parser.
 
-import { ASK_TOKEN_PREFIX } from './store';
+import { ASK_TOKEN_PREFIX } from './types';
 
 /** Pull `{ token, answer? }` out of a string that MAY carry an ask token — a
  *  full `<api>/api/asks/<token>[?answer=<v>]` URL, or a bare

@@ -24,10 +24,10 @@ import { getAsksQb, getAutomationsQb, getKnowledgeQb, getValuationsQb } from '..
 import type { ResourceId } from '../../generated/kysely/knowledge/Resource';
 
 import ResourceType from '../../generated/kysely/knowledge/ResourceType';
-import { createAsk, getAsk } from '../../services/translation_graph/adapters/ask/store';
-import { answerAskByToken } from '../../services/translation_graph/adapters/ask/answer_door';
+import { getAsk } from '../../services/asks/store';
+import { answerAskByToken, createAsk } from '../../services/asks/doors';
 import { notifyEngineOfSettledAsks } from '../../services/asks/in_process_notifier';
-import { askSettleDelivery } from '../../services/translation_graph/adapters/ask/delivery_mode';
+import { askSettleDelivery } from '../../services/asks/delivery_mode';
 import { deliverOnce, signPayload } from '../../services/valuations_outbox/delivery';
 import { summarizeNodes } from '../../lib/knowledge/store';
 import { openKnowledgeStore } from '../../lib/knowledge/store/write';
@@ -65,7 +65,7 @@ async function asks(): Promise<void> {
   // Register the composed notifier, wrapping a counter instead of the engine so
   // the seam itself is what is observed.
   const { registerAskSettledNotifier } = await import(
-    '../../services/translation_graph/adapters/ask/notifier'
+    '../../services/asks/notifier'
   );
   registerAskSettledNotifier({
     async notify() {

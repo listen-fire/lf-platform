@@ -8,15 +8,15 @@
 import type { AskId } from '../../generated/kysely/asks/Ask';
 import type { TeamId } from '../../generated/kysely/core/Team';
 
-import { getAsk as getNewStoreAsk, listAsksForTeam as listNewStoreAsks, type AskRecord } from '../translation_graph/adapters/ask/store';
+import { getAsk as getNewStoreAsk, listAsksForTeam as listNewStoreAsks, type AskRecord } from '../asks/store';
 import { getAutomationsQb, getQb } from '../../lib/kysely';
-import { answerAskById } from '../translation_graph/adapters/ask/answer_door';
+import { answerAskById } from '../asks/doors';
 import {
   askInteractionType,
   askViewOptions,
   askViewCorrect,
   askResultType,
-} from '../translation_graph/adapters/ask/surface_view';
+} from '../asks/surface_view';
 
 /** The result of resolving an answer through the ONE answer door — the ask id
  *  (as the surfaces' request handle), the run (if any) that was awaiting, and

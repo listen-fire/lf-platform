@@ -21,7 +21,7 @@ jest.mock('movement-engine/services/logger', () => ({
 }));
 
 const answerAskByToken = jest.fn();
-jest.mock('../../translation_graph/adapters/ask/answer_door', () => ({
+jest.mock('../../asks/doors', () => ({
   answerAskByToken: (...args: unknown[]) => answerAskByToken(...args),
 }));
 

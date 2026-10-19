@@ -22,7 +22,7 @@
 
 import type { AskRecord } from './store';
 
-import { getAsksQb } from '../../../../lib/kysely';
+import { getAsksQb } from '../../lib/kysely';
 import { logger } from 'movement-engine/public/log';
 import { neverAsAny } from 'movement-engine/public/types';
 import { askSettleDelivery } from './delivery_mode';
