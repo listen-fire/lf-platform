@@ -1,22 +1,16 @@
 // The production `files.render` — `FILE(content, "pdf" | "text")` turns a
 // composed string into a stored file artifact and answers its descriptor.
 //
-// Substrate: the Slack v3 output "preview" node's email-body PDF path
-// (`knowledge_pipeline/output_v3/adapters/slack.ts` — `renderHtmlToPdf`
-// + the `<pre>`-wrapped plain-text fallback of `getEmailBodyHtml`). The
-// PDF machinery is the SAME: Playwright Chromium via
-// `PlaywrightService.withPage` + `page.pdf` (A4, 16px margins) — no new
-// PDF dependency. Playwright is imported lazily inside the pdf branch,
-// exactly as slack.ts does, so loading this module costs nothing.
+// The PDF is drawn by `renderPlainTextPdf` (no browser, no dependency): it
+// reproduces the layout this once got from Chromium's `page.pdf` for the
+// slack preview's plain-text path. The Rust `lf` renders the same bytes.
 //
 // The bytes go straight to the document store and never reach the engine:
 // what comes back is a document-store descriptor, durable as it stands, so a
 // movement that parks after composing a FILE() resumes holding the same file.
 //
-// Content is treated as PLAIN TEXT in both renderings: the pdf branch
-// escapes it and preserves whitespace (the slack preview's plain-text
-// fallback), so what the author composed is what the reader sees —
-// predictable over clever.
+// Content is treated as PLAIN TEXT in both renderings, so what the author
+// composed is what the reader sees — predictable over clever.
 
 import { Readable } from 'node:stream';
 
@@ -26,6 +20,8 @@ import type { FileRef } from 'movement-engine/public/adapter';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 
 import { documentStoreFileRef, teamDocumentKeyPrefix } from 'movement-engine/public/files';
+
+import { renderPlainTextPdf } from './plain_text_pdf';
 
 /** The team's `files.render`: its artifacts are stored under the team's key
  *  prefix, which is what makes them the team's to read again. */
@@ -48,7 +44,7 @@ function renderInto(teamId: TeamId | undefined): RenderFile {
         bytes: Buffer.from(input.content, 'utf8'),
       });
     }
-    const bytes = await renderHtmlToPdf(plainTextHtml(input.content));
+    const bytes = renderPlainTextPdf(input.content);
     return storeArtifact({
       teamId,
       name: 'movement-artifact.pdf',
@@ -75,36 +71,4 @@ async function storeArtifact(options: {
     ...(teamId !== undefined ? { keyPrefix: teamDocumentKeyPrefix(teamId) } : {}),
   });
   return documentStoreFileRef({ objectUri, name, contentType, size: bytes.byteLength });
-}
-
-// ── HTML → PDF (mirrors slack.ts renderHtmlToPdf / getEmailBodyHtml) ─────────
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-function plainTextHtml(content: string): string {
-  return `<pre style="font-family: sans-serif; white-space: pre-wrap; word-wrap: break-word;">${escapeHtml(content)}</pre>`;
-}
-
-async function renderHtmlToPdf(html: string): Promise<Buffer> {
-  const { PlaywrightService } = await import('../../playwright');
-  const fullHtml = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><style>
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 24px; color: #222; background: #fff; font-size: 14px; line-height: 1.5; }
-</style></head><body>${html}</body></html>`;
-
-  return PlaywrightService.withPage(async (page) => {
-    await page.setContent(fullHtml, { waitUntil: 'domcontentloaded' });
-    const pdfBuffer = await page.pdf({
-      format: 'A4',
-      margin: { top: '16px', bottom: '16px', left: '16px', right: '16px' },
-      printBackground: true,
-    });
-    return Buffer.from(pdfBuffer);
-  });
 }

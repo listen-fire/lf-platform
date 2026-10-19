@@ -733,7 +733,7 @@ request: { segmentId: string; content: string; type: 'pdf' | 'text' }
 answer:  FileRef            // a document-store descriptor
 ```
 
-- `FILE(content, type)`: the host renders the composed string, stores the artifact under the team's key prefix (what makes it the team's to read again), and answers its descriptor.
+- `FILE(content, type)`: the host renders the composed string (a `pdf` is the text on A4 in Helvetica, wrapped at the page edge, drawn without a browser; a character outside WinAnsi prints as `?`), stores the artifact under the team's key prefix (what makes it the team's to read again), and answers its descriptor.
 - **Persist:** the artifact's bytes in the document store. **Retry:** not idempotent (each call stores a new artifact).
 
 ### `lookup`

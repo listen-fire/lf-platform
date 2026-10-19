@@ -89,24 +89,6 @@ jest.mock('../../../lib/anthropic', () => ({
 jest.mock('../../translation_graph/adapters/acting_user/resolve', () => ({
   resolveActingUser: jest.fn(async () => null),
 }));
-// The PDF boundary: file_render's REAL code runs (escaping, page
-// driving, FileRef minting); only Chromium is stubbed. `page.pdf`
-// returns bytes derived from the html `setContent` received, so the
-// assertion can see the composed digest INSIDE the artifact bytes.
-jest.mock('../../playwright', () => ({
-  PlaywrightService: {
-    withPage: async <T>(fn: (page: unknown) => Promise<T>): Promise<T> => {
-      let html = '';
-      const page = {
-        setContent: async (content: string) => {
-          html = content;
-        },
-        pdf: async () => Buffer.from(`PDF(${html})`),
-      };
-      return fn(page);
-    },
-  },
-}));
 
 import { runMovement } from 'movement-engine/services/movement_engine/run';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
@@ -353,10 +335,9 @@ describe('FILE(digest, "pdf") + namespaced stdlib fields through runMovement', (
     expect(ref.source).toMatchObject({ store: 'document' });
     expect(ref.size).toBeGreaterThan(0);
 
-    // The rendered bytes (the seam's real path; Chromium stubbed at the
-    // page boundary) carry the composed digest, escaped into the html.
+    // The rendered bytes (the seam's real path) are a PDF carrying the composed digest.
     const bytes = (await refBytes(ref)).toString('utf8');
-    expect(bytes).toMatch(/^PDF\(/);
+    expect(bytes).toMatch(/^%PDF-/);
     expect(bytes).toContain(EXPECTED_DIGEST);
   });
 

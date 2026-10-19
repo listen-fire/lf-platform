@@ -13,6 +13,10 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 
 ## [Unreleased]
 
+### n-pdf
+
+- **`FILE(text, "pdf")` no longer needs Chromium, on the platform or in `lf`.** Both draw the PDF themselves, byte for byte the same: A4, Helvetica, the text wrapped at the page edge and spaces and line breaks kept, as before. A character outside Latin-1 and the Windows-1252 punctuation (CJK, emoji) now prints as `?`. In `lf` the file is now a real PDF (it was the text under a `.pdf` name), so reading it back with the file-text reader needs the file-text module.
+
 ## [0.12.0-rc.2] - 2026-10-19 (pre-release)
 
 This is a pre-release for trying out, not the full 0.11.0 line's replacement: container images are

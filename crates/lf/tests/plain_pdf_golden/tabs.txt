@@ -1,0 +1,5 @@
+a	b	c
+	indented
+12345678	x
+line with    spaces   kept
+    leading
