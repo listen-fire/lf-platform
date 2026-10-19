@@ -4,42 +4,20 @@
 // math, the empty-set-without-a-complete-filter rule, and the full getRelated
 // round-trip with a mocked compute response.
 
-// logger → services/context → casl crashes at module load; stub it (mirrors the
-// sibling read test).
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
-// Credentials load hits the DB + decrypt; stub the two seams so requireCreds
-// resolves to a fake connection without a database.
-jest.mock('../../../../lib/kysely', () => {
-  const qb = () => ({
-    selectFrom: () => ({
-      where: () => ({
-        select: () => ({
-          executeTakeFirstOrThrow: async () => ({ id: 'cred-1', credentials: Buffer.from('x') }),
-        }),
-      }),
-    }),
-  });
-  return { getQb: qb, getCoreQb: qb, getAutomationsQb: qb };
-});
-jest.mock('../../../../lib/credentials', () => ({
-  decryptToken: async () => JSON.stringify({ apiKey: 'k', baseUrl: 'http://vals.test/api/v1' }),
-}));
-
-import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type { Expression } from '#shared/expression/types';
 
-import {
-  NATIVE_VALUATIONS_ADAPTER_TYPE,
-  createNativeValuationsAdapter,
-  parseValuationCriteria,
-  aggregateComputeValuation,
-} from '../native_valuations';
-import { makeStablePosition } from 'movement-engine/services/translation_graph/types';
+import { makeStablePosition } from 'movement-engine/public/catalog';
 
+import { NativeValuationsAdapter, parseValuationCriteria, aggregateComputeValuation } from '../adapter';
+import { NATIVE_VALUATIONS_ADAPTER_TYPE } from '../types';
+
+const quiet = { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
+// Through the global fetch, so a test's spy on it sees the calls.
 const adapter = () =>
-  createNativeValuationsAdapter({ teamId: 'team-1' as TeamId, credentialsId: 'cred-1' });
+  new NativeValuationsAdapter({
+    api: async () => ({ apiKey: 'k', baseUrl: 'http://vals.test', fetch: (input, init) => fetch(input, init) }),
+    log: quiet,
+  });
 
 const legalEntity = (id = 'le-1') =>
   makeStablePosition({

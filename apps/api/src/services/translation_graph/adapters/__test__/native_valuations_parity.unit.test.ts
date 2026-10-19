@@ -20,13 +20,27 @@ jest.mock('../../../../lib/kysely', () => ({
   getAutomationsQb: () => jest.requireActual<typeof import('./crm_parity/legacy_row')>('./crm_parity/legacy_row').rowQueryBuilder(),
 }));
 
+// The platform's encrypted store, as a vault the test seeds: the module line
+// reads its credential through the secrets family exactly as in production.
+const vault: { current?: ReturnType<typeof import('movement-engine/public/secrets').createMemoryVault> } = {};
+jest.mock('../../../credentials/secrets_postgres', () => ({
+  ...jest.requireActual('../../../credentials/secrets_postgres'),
+  postgresSecrets: () => {
+    if (vault.current === undefined) throw new Error('no vault seeded');
+    return vault.current;
+  },
+}));
+
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type { Adapter } from 'movement-engine/public/adapter';
 
+import { createMemoryVault } from 'movement-engine/public/secrets';
 import { createNativeValuationsAdapter } from '../native_valuations';
+import { getAdapter } from '../registry';
+import { BUILTIN_MODULES } from '../builtin_modules';
 import { recordingServer, replayingServer, type Exchange, type ExchangeRequest } from './parity/exchange';
 import { legacyRow } from './crm_parity/legacy_row';
 import { freezeClock, type TranscriptEntry } from './crm_parity/walk';
@@ -67,6 +81,15 @@ function legacySubject(): Adapter {
 }
 
 const legacyWithoutCredential = (): Adapter => createNativeValuationsAdapter({ teamId: freshInstall().teamId });
+
+/** The module line, as the registry hosts it, over the stored credential. */
+function moduleSubject(): Adapter {
+  const install = freshInstall();
+  vault.current = createMemoryVault({ [install.credentialsId]: { ...STORED } });
+  return getAdapter({ adapterType: 'native-valuations', ...install });
+}
+
+const moduleWithoutCredential = (): Adapter => getAdapter({ adapterType: 'native-valuations', teamId: freshInstall().teamId });
 
 jest.setTimeout(120_000);
 beforeAll(freezeClock);
@@ -152,5 +175,10 @@ async function expectValuationsParity(subject: () => Promise<Adapter> | Adapter,
 
   it('the legacy line replays identically', async () => {
     await expectValuationsParity(legacySubject, legacyWithoutCredential);
+  });
+
+  it('the module in process, through the platform registry, replays identically', async () => {
+    expect(BUILTIN_MODULES['native-valuations']?.line).toBe('module');
+    await expectValuationsParity(moduleSubject, moduleWithoutCredential);
   });
 });

@@ -244,6 +244,12 @@ export function moduleSlug(name: string): string {
   return bare.replace(/-/g, '_');
 }
 
+/** The package name after its scope, as it is spelled: `@lf/native-valuations`
+ *  → `native-valuations`. */
+function bareName(name: string): string {
+  return name.includes('/') ? name.slice(name.indexOf('/') + 1) : name;
+}
+
 /**
  * A module, checked as it is defined: an adapter module's manifest names the
  * adapter its package does, and every declaration is well formed. The pairing
@@ -251,7 +257,10 @@ export function moduleSlug(name: string): string {
  * (`moduleManifest`), since methods exist only once `create` has run.
  */
 export function defineModule<D extends ModuleDefinition>(definition: D): D {
-  if (definition.kind === 'adapter' && definition.manifest.adapterType !== moduleSlug(definition.name)) {
+  // The bare name as spelled is accepted too: a built-in whose movement tag was
+  // hyphenated before it was a module (`native-valuations`) keeps that tag,
+  // which no slug can produce.
+  if (definition.kind === 'adapter' && ![moduleSlug(definition.name), bareName(definition.name)].includes(definition.manifest.adapterType)) {
     throw new Error(
       `module ${definition.name}: its manifest names adapter "${definition.manifest.adapterType}", but the package answers to "${moduleSlug(definition.name)}"`,
     );

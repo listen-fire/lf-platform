@@ -12,11 +12,8 @@ import { credentialTypeOf } from './credential_type';
 import { KG_ADAPTER_TYPE, KG_MANIFEST, createKnowledgeGraphAdapter } from './knowledge_graph';
 import { ATTIO_ADAPTER_TYPE } from '@listen-fire/attio/types';
 import { ATTIO_MANIFEST } from '@listen-fire/attio/manifest';
-import {
-  NATIVE_VALUATIONS_ADAPTER_TYPE,
-  NATIVE_VALUATIONS_MANIFEST,
-  createNativeValuationsAdapter,
-} from './native_valuations';
+import { NATIVE_VALUATIONS_ADAPTER_TYPE } from '@listen-fire/native-valuations/types';
+import { NATIVE_VALUATIONS_MANIFEST } from '@listen-fire/native-valuations/manifest';
 import { SLACK_ADAPTER_TYPE } from '@listen-fire/slack/types';
 import { SLACK_MANIFEST } from '@listen-fire/slack/manifest';
 import { TELEGRAM_ADAPTER_TYPE } from '@listen-fire/telegram/types';
@@ -85,7 +82,12 @@ const ADAPTER_FACTORIES: Record<string, AdapterFactory> = {
     const { createAffinityAdapter }: typeof import('./affinity') = require('./affinity');
     return createAffinityAdapter({ teamId, credentialsId });
   }),
-  [NATIVE_VALUATIONS_ADAPTER_TYPE]: createNativeValuationsAdapter,
+  // A module (@lf/native-valuations, platform-supplied); its BUILTIN_MODULES
+  // line picks module or legacy.
+  [NATIVE_VALUATIONS_ADAPTER_TYPE]: builtinAdapterFactory(NATIVE_VALUATIONS_ADAPTER_TYPE, ({ teamId, credentialsId }) => {
+    const { createNativeValuationsAdapter }: typeof import('./native_valuations') = require('./native_valuations');
+    return createNativeValuationsAdapter({ teamId, credentialsId });
+  }),
   // A module (@lf/slack); its BUILTIN_MODULES line picks module or legacy.
   [SLACK_ADAPTER_TYPE]: builtinAdapterFactory(SLACK_ADAPTER_TYPE, ({ teamId, credentialsId }) => {
     const { createSlackAdapter }: typeof import('./slack') = require('./slack');
