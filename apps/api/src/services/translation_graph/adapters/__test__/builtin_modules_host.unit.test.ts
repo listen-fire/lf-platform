@@ -150,7 +150,7 @@ describe('a module line’s oauth2 credential, refreshed in process', () => {
 describe('a module line’s kv', () => {
   it('is the one the line supplies for the install', async () => {
     const entries = [{ key: 'granted/a', value: 1 }];
-    const kv: ModuleKv = { get: async () => undefined, set: async () => {}, delete: async () => {}, list: async () => entries };
+    const kv: ModuleKv = { get: async () => undefined, set: async () => {}, delete: async () => {}, list: async () => entries, compareAndSet: async () => false };
     const seen: unknown[] = [];
     const loaded = loadBuiltinModule(
       line(probeModule('http://127.0.0.1:1/token'), {

@@ -2,7 +2,9 @@
 //! HTTP, docs/contracts/adapter-protocol.md#transport): a Unix socket for a
 //! module on this box, plain HTTP over TCP where there is none (loopback),
 //! and HTTPS for a remote module. A module's address is written as its base
-//! URL: `unix:<socket path>`, `http://host:port/path` or `https://…`.
+//! URL: `unix:<socket path>`, `http://host:port/path` or `https://…`. A URL
+//! below a socket (a file a module serves) is `http+unix://<socket path,
+//! percent-encoded>/<path>`.
 //!
 //! A started module says where it listens on one line of its stdout:
 //! `listening unix:<socket path>` or `listening <port>` (loopback TCP).
@@ -17,18 +19,22 @@ use hyper_util::rt::TokioIo;
 /// Where a module is, read off its base URL.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Address {
-    Unix(PathBuf),
+    Unix { socket: PathBuf, path: String },
     Tcp { tls: bool, host: String, port: u16, path: String },
 }
 
 impl Address {
     pub fn parse(base_url: &str) -> Result<Address, String> {
-        if let Some(path) = base_url.strip_prefix("unix:") {
-            let path = path.trim_start_matches("//");
-            if path.is_empty() {
+        if let Some(socket) = base_url.strip_prefix("unix:") {
+            if socket.is_empty() {
                 return Err(format!("{base_url}: a unix: address names its socket's path"));
             }
-            return Ok(Address::Unix(PathBuf::from(path)));
+            return Ok(Address::Unix { socket: PathBuf::from(socket), path: "/".into() });
+        }
+        if let Some(rest) = base_url.strip_prefix("http+unix://") {
+            let (socket, path) = rest.find('/').map(|at| (&rest[..at], &rest[at..])).unwrap_or((rest, "/"));
+            let socket = crate::http::decode_component(socket).filter(|s| !s.is_empty()).ok_or_else(|| format!("{base_url}: no socket path"))?;
+            return Ok(Address::Unix { socket: PathBuf::from(socket), path: path.to_string() });
         }
         let (tls, rest) = match (base_url.strip_prefix("http://"), base_url.strip_prefix("https://")) {
             (Some(rest), _) => (false, rest),
@@ -64,7 +70,7 @@ impl Address {
     /// The `host` header a request to it carries.
     fn authority(&self) -> String {
         match self {
-            Address::Unix(_) => "localhost".into(),
+            Address::Unix { .. } => "localhost".into(),
             Address::Tcp { host, port, .. } if host.contains(':') => format!("[{host}]:{port}"),
             Address::Tcp { host, port, .. } => format!("{host}:{port}"),
         }
@@ -72,7 +78,7 @@ impl Address {
 
     fn path(&self) -> &str {
         match self {
-            Address::Unix(_) => "/",
+            Address::Unix { path, .. } => path,
             Address::Tcp { path, .. } => path,
         }
     }
@@ -81,7 +87,7 @@ impl Address {
     /// in the clear).
     pub fn is_local(&self) -> bool {
         match self {
-            Address::Unix(_) => true,
+            Address::Unix { .. } => true,
             Address::Tcp { tls: true, .. } => false,
             Address::Tcp { host, .. } => {
                 host == "localhost" || host.parse::<std::net::IpAddr>().is_ok_and(|ip| ip.is_loopback())
@@ -94,6 +100,7 @@ impl Address {
 pub struct Answer {
     pub status: u16,
     pub body: Bytes,
+    pub content_type: Option<String>,
 }
 
 /// POST `body` to the module at `base_url` with `headers`.
@@ -114,7 +121,7 @@ async fn send(method: hyper::Method, base_url: &str, headers: &[(String, String)
     }
     let request = request.body(Full::new(Bytes::from(body))).map_err(|e| e.to_string())?;
     match &address {
-        Address::Unix(path) => unix_exchange(path, request).await,
+        Address::Unix { socket, .. } => unix_exchange(socket, request).await,
         Address::Tcp { tls, host, port, .. } => {
             let stream = tokio::net::TcpStream::connect((host.as_str(), *port)).await.map_err(|e| e.to_string())?;
             if *tls {
@@ -149,8 +156,9 @@ where
     });
     let response = sender.send_request(request).await.map_err(|e| e.to_string())?;
     let status = response.status().as_u16();
+    let content_type = response.headers().get("content-type").and_then(|v| v.to_str().ok()).map(str::to_string);
     let body = response.into_body().collect().await.map_err(|e| e.to_string())?.to_bytes();
-    Ok(Answer { status, body })
+    Ok(Answer { status, body, content_type })
 }
 
 // ── Where a started module listens ──────────────────────────────────────────
@@ -198,7 +206,8 @@ mod tests {
 
     #[test]
     fn an_address_is_a_socket_a_loopback_port_or_a_remote_url() {
-        assert_eq!(Address::parse("unix:/tmp/lf-1.sock"), Ok(Address::Unix("/tmp/lf-1.sock".into())));
+        assert_eq!(Address::parse("unix:/tmp/lf-1.sock"), Ok(Address::Unix { socket: "/tmp/lf-1.sock".into(), path: "/".into() }));
+        assert_eq!(Address::parse("http+unix://%2Ftmp%2Flf-1.sock/files/a"), Ok(Address::Unix { socket: "/tmp/lf-1.sock".into(), path: "/files/a".into() }));
         assert_eq!(
             Address::parse("http://127.0.0.1:5557/"),
             Ok(Address::Tcp { tls: false, host: "127.0.0.1".into(), port: 5557, path: "/".into() })

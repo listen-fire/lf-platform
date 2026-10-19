@@ -1,36 +1,24 @@
-// A run host backend another process serves: every family of `RunHostStore`
-// (store.ts) forwarded over the process's stdin/stdout, one JSON-RPC 2.0
-// message per line. It is how the contract suite (contract.ts), written once
-// in TypeScript, holds a backend in another language to the same meaning —
+// A run host backend a store module serves: every family of `RunHostStore`
+// (store.ts) as the store slot's methods (docs/contracts/store-slot.md),
+// carried as adapter protocol 2 calls over HTTP (a Unix socket on this box).
+// It is how the contract suite (contract.ts), written once in TypeScript,
+// holds a backend in another language to the same meaning —
 // `lf --contract-store <state.db>` (crates/lf) first.
 //
 // A method is `<family>.<method>` as `RunHostStore` names it, its params the
 // method's one input object, its result the method's answer; the callback
 // family is `callbacks.<method>` as `CallbackStore` names it, and the run
-// records `records.<method>` as `RunRecords` does. The server's
-// `RunLeaseLost` error (data.name) is rethrown as the core's `RunLeaseLost`,
-// so the rules over the store see the one refusal they handle.
+// records `records.<method>` as `RunRecords` does. The error code
+// `run_lease_lost` (`data: { runId }`) is rethrown as the core's
+// `RunLeaseLost`, so the rules over the store see the one refusal they handle.
 
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { createInterface } from 'node:readline';
 import { z } from 'zod';
 import { CALLBACK_PARAM_TYPES } from 'engine-contracts';
+import { RUN_LEASE_LOST_CODE } from 'engine-contracts/slots';
 import { RunLeaseLost } from '../movement_engine/errors';
+import { SlotClient, SlotRefused, startModule, type SlotAddress } from '../module_wire/wire';
 import type { RunRecords } from './rules';
 import type { CallbackClaim, CallbackStore, ClaimedWork, RunHostStore } from './store';
-
-// The error branch first: `result: z.unknown()` also accepts a reply without one.
-const Reply = z.union([
-  z.object({
-    id: z.number().nullable(),
-    error: z.object({
-      code: z.number(),
-      message: z.string(),
-      data: z.object({ name: z.string(), runId: z.string().optional() }).optional(),
-    }),
-  }),
-  z.object({ id: z.number(), result: z.unknown() }),
-]);
 
 const Nothing = z.null();
 const Leaf = z.object({
@@ -71,37 +59,36 @@ export class RpcStoreBackend {
   readonly callbacks: CallbackStore;
   /** The run records the server keeps beside its families. */
   readonly runs: RunRecords;
-  private readonly child: ChildProcessWithoutNullStreams;
-  private readonly waiting = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>();
-  private nextId = 1;
-  private exited: Error | undefined;
+  private readonly started: Promise<{ client: SlotClient; close(): Promise<void> }>;
 
-  constructor(command: string, args: readonly string[]) {
-    this.child = spawn(command, [...args], { stdio: ['pipe', 'pipe', 'pipe'] });
-    const stderr: string[] = [];
-    this.child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk.toString('utf8')));
-    createInterface({ input: this.child.stdout }).on('line', (line) => this.receive(line));
-    this.child.on('exit', (code) => {
-      this.exited = new Error(`the store process exited (${code})${stderr.length > 0 ? `: ${stderr.join('').trim()}` : ''}`);
-      for (const waiter of this.waiting.values()) waiter.reject(this.exited);
-      this.waiting.clear();
-    });
+  /** The store module `command` starts, or the one already at `address`. */
+  constructor(command: string, args: readonly string[]);
+  constructor(address: SlotAddress);
+  constructor(target: string | SlotAddress, args: readonly string[] = []) {
+    this.started =
+      typeof target === 'string'
+        ? startModule(target, args).then((module) => ({ client: new SlotClient(module.address), close: () => module.close() }))
+        : Promise.resolve({ client: new SlotClient(target), close: async () => undefined });
+    // A failed start is met by the first call; never an unhandled rejection.
+    this.started.catch(() => undefined);
     this.store = this.families();
     this.callbacks = this.callbackFamily();
     this.runs = this.runRecords();
   }
 
-  /** One call; its result read by `schema`. */
+  /** One call; its result read by `schema`. A fenced write refused because
+   *  the run's lease is gone throws the core's `RunLeaseLost`. */
   async call<S extends z.ZodType>(method: string, params: object, schema: S): Promise<z.infer<S>> {
-    if (this.exited !== undefined) throw this.exited;
-    const id = this.nextId++;
-    const result = await new Promise<unknown>((resolve, reject) => {
-      this.waiting.set(id, { resolve, reject });
-      this.child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`);
-    });
-    const parsed = schema.safeParse(result);
-    if (!parsed.success) throw new Error(`${method} answered ${JSON.stringify(result)}: ${parsed.error.issues[0]?.message}`);
-    return parsed.data;
+    const { client } = await this.started;
+    try {
+      return await client.read(method, params, schema);
+    } catch (error) {
+      if (error instanceof SlotRefused && error.code === RUN_LEASE_LOST_CODE) {
+        const runId = error.data !== null && typeof error.data === 'object' ? Reflect.get(error.data, 'runId') : undefined;
+        throw new RunLeaseLost(typeof runId === 'string' ? runId : '');
+      }
+      throw error;
+    }
   }
 
   /** A run row the backend can park against (the contract's `newRun`). */
@@ -124,34 +111,10 @@ export class RpcStoreBackend {
     await this.call('runs.complete', { runId }, Nothing);
   }
 
-  /** End the process: its stdin closes, and it exits once it has answered. */
+  /** End the module this backend started. */
   async close(): Promise<void> {
-    if (this.exited !== undefined) return;
-    const exited = new Promise<void>((resolve) => this.child.once('exit', () => resolve()));
-    this.child.stdin.end();
-    await exited;
-  }
-
-  private receive(line: string): void {
-    let reply: z.infer<typeof Reply>;
-    try {
-      reply = Reply.parse(JSON.parse(line));
-    } catch {
-      for (const waiter of this.waiting.values()) waiter.reject(new Error(`the store process answered what is not a reply: ${line}`));
-      this.waiting.clear();
-      return;
-    }
-    if (reply.id === null) return;
-    const waiter = this.waiting.get(reply.id);
-    if (waiter === undefined) return;
-    this.waiting.delete(reply.id);
-    if (!('error' in reply)) {
-      waiter.resolve(reply.result ?? null);
-    } else if (reply.error.data?.name === 'RunLeaseLost') {
-      waiter.reject(new RunLeaseLost(reply.error.data.runId ?? ''));
-    } else {
-      waiter.reject(new Error(reply.error.message));
-    }
+    const started = await this.started.catch(() => undefined);
+    await started?.close();
   }
 
   private callbackFamily(): CallbackStore {

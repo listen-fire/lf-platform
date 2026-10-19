@@ -30,7 +30,8 @@ export const BrowserOpenRequest = z.object({
   viewport: z.object({ width: z.number(), height: z.number() }).optional(),
   userAgent: z.string().optional(),
 });
-export const BrowserOpenAnswer = z.object({ session: z.string().min(1) });
+/** The session, and how long it may last (the server's limit): a client is refused past it too. */
+export const BrowserOpenAnswer = z.object({ session: z.string().min(1), deadlineMs: z.number().int().positive().optional() });
 
 /** What a page step does: a page operation, or (with `locator`) one on the
  *  elements the chain finds. */
@@ -79,8 +80,8 @@ export const BrowserPageRequest = z.object({
 });
 export type BrowserPageRequestShape = z.infer<typeof BrowserPageRequest>;
 
-/** A step's answer: its value, or `{ bytes }` (base64) for a screenshot or PDF. */
-export const BrowserPageAnswer = z.object({ value: z.unknown().optional(), bytes: z.string().optional() });
+/** A step's answer: its value, or `{ bytes }` (base64) for a screenshot or PDF, and the page's URL after it. */
+export const BrowserPageAnswer = z.object({ value: z.unknown().optional(), bytes: z.string().optional(), url: z.string().optional() });
 
 export const BrowserCloseRequest = z.object({ session: z.string() });
 

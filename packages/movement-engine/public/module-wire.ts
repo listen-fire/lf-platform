@@ -6,3 +6,4 @@
 
 export * from '../services/module_wire/wire';
 export * from '../services/module_wire/conformance';
+export * from '../services/browser/wire_browser';

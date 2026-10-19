@@ -64,6 +64,7 @@ const grants: ModuleKv = {
   get: async () => undefined,
   set: async () => {},
   delete: async () => {},
+  compareAndSet: async () => false,
   list: async () => [{ key: 'granted/fold-deals', value: { mimeType: 'application/vnd.google-apps.folder', name: 'Deals' } }],
 };
 

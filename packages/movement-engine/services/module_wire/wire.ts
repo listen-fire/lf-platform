@@ -166,6 +166,9 @@ export function startModule(command: string, args: readonly string[], options: {
             child.once('exit', () => done());
             child.kill();
           }).then(() => {
+            // A process it left behind may hold the pipes open; this side lets go.
+            child.stdout?.destroy();
+            child.stderr?.destroy();
             if (socket !== undefined) {
               try {
                 unlinkSync(socket);

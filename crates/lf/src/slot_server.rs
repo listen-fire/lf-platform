@@ -117,7 +117,7 @@ where
             let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await.map_err(|e| format!("127.0.0.1:{port}: {e}"))?;
             let port = listener.local_addr().map_err(|e| e.to_string())?.port();
             println!("listening {port}");
-            crate::http::serve(listener, LIMIT, handle).await;
+            until_stopped(crate::http::serve(listener, LIMIT, handle)).await;
         }
         #[cfg(unix)]
         Listen::Unix(path) => {
@@ -125,13 +125,34 @@ where
             let listener = tokio::net::UnixListener::bind(&path).map_err(|e| format!("unix:{}: {e}", path.display()))?;
             println!("listening unix:{}", path.display());
             let removed = Removed(path);
-            crate::http::serve_unix(listener, LIMIT, handle).await;
+            until_stopped(crate::http::serve_unix(listener, LIMIT, handle)).await;
             drop(removed);
         }
         #[cfg(not(unix))]
         Listen::Unix(path) => return Err(format!("unix:{}: this system has no Unix sockets; listen on a port", path.display())),
     }
     Ok(())
+}
+
+/// Serve until the process is asked to stop (SIGTERM, Ctrl-C), then return,
+/// so what the server holds — the modules it started — is dropped and ended.
+async fn until_stopped(serving: impl std::future::Future<Output = ()>) {
+    #[cfg(unix)]
+    let terminated = async {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut signal) => {
+                signal.recv().await;
+            }
+            Err(_) => std::future::pending::<()>().await,
+        }
+    };
+    #[cfg(not(unix))]
+    let terminated = std::future::pending::<()>();
+    tokio::select! {
+        () = serving => {}
+        () = terminated => {}
+        _ = tokio::signal::ctrl_c() => {}
+    }
 }
 
 /// A request body's limit: a files slot's bytes ride in it.
