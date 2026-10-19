@@ -48,6 +48,11 @@ impl Response {
         Response { status, content_type: Some("application/json"), body: body.to_json().into_bytes() }
     }
 
+    /// Exactly `text`, nothing added (a handshake echo is compared whole).
+    pub fn plain(status: u16, text: &str) -> Response {
+        Response { status, content_type: Some("text/plain; charset=utf-8"), body: text.as_bytes().to_vec() }
+    }
+
     pub fn text(status: u16, text: &str) -> Response {
         Response { status, content_type: Some("text/plain; charset=utf-8"), body: format!("{text}\n").into_bytes() }
     }

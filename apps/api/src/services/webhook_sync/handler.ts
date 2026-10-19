@@ -50,7 +50,7 @@ import {
 import { hasAdapter, resolveAdapterSlug } from '../translation_graph/adapters/registry';
 import { resolveAdapter } from '../translation_graph/adapters/resolve';
 import { isTestHarnessTeam } from '../../lib/recording';
-import { receiveDelivery } from 'movement-engine/public/inbound';
+import { CHECKED_BY_MODULE, receiveDelivery } from 'movement-engine/public/inbound';
 import { webhookProviderKey } from './urls';
 import { listRemoteAdapters } from '../translation_graph/adapters/remote/store';
 import { mayBeRemoteSlug } from '../translation_graph/adapters/remote/slugs';
@@ -195,23 +195,26 @@ async function remoteSource(subscription: InboundSubscription): Promise<InboundS
       webhookProviderKey({ adapterType: row.adapter_type }) === subscription.providerKey,
   );
   if (!install) return null;
+  const credentialsId = install.credentials_id;
+  if (credentialsId === null) {
+    logger.error(`[webhook] remote adapter ${install.adapter_type} has no credential — delivery dropped`);
+    return { verifier: REMOTE_VERIFIER, secret: subscription.secret, open: async () => null };
+  }
+  // Whether the server checks its own inbound is in its live manifest: it
+  // lists `checkInbound` exactly when it declares `inbound.scheme: module`.
+  const adapter = await resolveAdapter({
+    adapterType: install.adapter_type,
+    teamId: subscription.teamId as TeamId,
+  });
+  const opened: OpenedSource = { adapterType: install.adapter_type, credentialsId, adapter };
   return {
-    verifier: { scheme: 'remote', signatureHeaders: ['x-listen-fire-signature'] },
+    verifier: adapter.checkInbound !== undefined ? CHECKED_BY_MODULE : REMOTE_VERIFIER,
     secret: subscription.secret,
-    async open() {
-      const credentialsId = install.credentials_id;
-      if (credentialsId === null) {
-        logger.error(`[webhook] remote adapter ${install.adapter_type} has no credential — delivery dropped`);
-        return null;
-      }
-      const adapter = await resolveAdapter({
-        adapterType: install.adapter_type,
-        teamId: subscription.teamId as TeamId,
-      });
-      return { adapterType: install.adapter_type, credentialsId, adapter };
-    },
+    open: async () => opened,
   };
 }
+
+const REMOTE_VERIFIER = { scheme: 'remote', signatureHeaders: ['x-listen-fire-signature'] } as const;
 
 /** Inbound deliveries only exist for credentialed channels — a
  *  credential-free subscription row (the cron adapter's platform-internal

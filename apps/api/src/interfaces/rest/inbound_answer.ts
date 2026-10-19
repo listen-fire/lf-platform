@@ -7,7 +7,8 @@ import type { InboundAnswer } from 'movement-engine/public/inbound';
 import { PAYLOAD_TOO_LARGE } from 'movement-engine/public/inbound';
 
 export function sendInboundAnswer(res: Response, answer: InboundAnswer): void {
-  res.status(answer.status).json(answer.body);
+  if (answer.contentType === 'text/plain') res.status(answer.status).type('text/plain').send(String(answer.body));
+  else res.status(answer.status).json(answer.body);
   answer.afterAnswer?.();
 }
 

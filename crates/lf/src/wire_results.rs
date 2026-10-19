@@ -249,6 +249,22 @@ fn result_schema(method: &str) -> Option<S> {
             ],
         },
         "wakeKeys" => arr(S::Str),
+        "checkInbound" => S::Tagged {
+            key: "outcome",
+            members: vec![
+                (
+                    "accepted",
+                    obj(vec![
+                        req("outcome", S::Literal("accepted")),
+                        req("events", arr(discriminable_event())),
+                        opt("wakeKeys", arr(S::Str)),
+                        opt("checkpoint", S::Unknown),
+                    ]),
+                ),
+                ("refused", obj(vec![req("outcome", S::Literal("refused")), opt("status", S::Num)])),
+                ("reply", obj(vec![req("outcome", S::Literal("reply")), req("status", S::Num), opt("text", S::Str), opt("json", S::Unknown)])),
+            ],
+        },
         "readRecord" => nullable(record(S::Unknown)),
         "describeOpaqueId" => nullable(S::Str),
         "resolveFileRef" => obj(vec![req("url", S::Str), opt("contentType", S::Str)]),

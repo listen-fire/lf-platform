@@ -22,7 +22,7 @@ use rusqlite::{OptionalExtension, params};
 use crate::check::LOCAL_TENANT;
 use crate::credential_calls::{Sending, Target, send};
 use crate::externals::RunningExternal;
-use crate::inbound::{Answer, Declaration, Delivery, Extraction, InboundStore, Intercept, PushAuth, PushCaller, PushStore, Scheme, Source, Subscription, answer_delivery, same_secret};
+use crate::inbound::{Answer, Declaration, Delivery, Extraction, InboundStore, Intercept, PushAuth, PushCaller, PushStore, RawRequest, Scheme, Source, Subscription, answer_delivery, same_secret};
 use crate::json::Js;
 use crate::obj;
 use crate::run_host::queue_await_wake;
@@ -91,6 +91,9 @@ pub trait Reader {
     async fn preprocess(&self, external: &str, install: &Credential, raw: &Js, checkpoint: Option<&Js>) -> Result<Extraction, String>;
     /// The keys a delivery wakes; empty when the external names none.
     async fn wake_keys(&self, external: &str, install: &Credential, raw: &Js) -> Result<Vec<String>, String>;
+    /// The external's own check of a raw request (`checkInbound`): `request`
+    /// is the wire's `WireInboundRequest`.
+    async fn check_inbound(&self, external: &str, install: &Credential, request: &Js, secret: Option<&str>, checkpoint: Option<&Js>) -> Result<Js, String>;
 }
 
 /// Where a verified event goes.
@@ -210,6 +213,11 @@ impl<R: Reader> InboundStore for LfDoors<'_, R> {
         self.reader.wake_keys(&source.adapter_type, install, raw).await
     }
 
+    async fn check_inbound(&self, source: &Source, request: &RawRequest<'_>, secret: Option<&str>, checkpoint: Option<&Js>) -> Result<Js, String> {
+        let install = self.install(&source.install).ok_or_else(|| format!("no install {}", source.install))?;
+        self.reader.check_inbound(&source.adapter_type, install, &request.wire(), secret, checkpoint).await
+    }
+
     // lf keeps no receipts: the event itself is what is queued.
     async fn capture(&self, event: &Js, _source: &Source) -> Result<Js, String> {
         Ok(event.clone())
@@ -323,6 +331,20 @@ impl Reader for SessionReader<'_> {
         let read = self.call(external, install, "wakeKeys", serde_json::json!({ "raw": crate::wire::json_of_js(raw) })).await?;
         Ok(read.as_array().unwrap_or(&[]).iter().filter_map(Js::as_str).map(str::to_string).collect())
     }
+
+    async fn check_inbound(&self, external: &str, install: &Credential, request: &Js, secret: Option<&str>, checkpoint: Option<&Js>) -> Result<Js, String> {
+        if !self.lists(external, "checkInbound") {
+            return Err(format!("external \"{external}\" declares that it checks its own inbound but does not list checkInbound"));
+        }
+        let mut params = serde_json::json!({ "request": crate::wire::json_of_js(request) });
+        if let Some(secret) = secret {
+            params["secret"] = serde_json::Value::String(secret.to_string());
+        }
+        if let Some(checkpoint) = checkpoint {
+            params["checkpoint"] = crate::wire::json_of_js(checkpoint);
+        }
+        self.call(external, install, "checkInbound", params).await
+    }
 }
 
 // ── The pull cursor ─────────────────────────────────────────────────────────
@@ -389,7 +411,7 @@ pub async fn receive_webhook(session: &Session, webhook: Webhook<'_>) -> Result<
     let Some((provider, subscription_id)) = hook_target(session, external, install) else {
         return Err(format!("external \"{external}\" takes no webhooks"));
     };
-    let delivery = Delivery { provider: &provider, subscription_id: &subscription_id, raw_body, headers };
+    let delivery = Delivery { provider: &provider, subscription_id: &subscription_id, raw_body, headers, method: "POST", path: "", query: "" };
     let (answer, outcomes) = deliver_inline(session, delivery, &|| {}).await;
     if answer.status == 200 {
         return Ok(outcomes);

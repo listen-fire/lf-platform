@@ -124,6 +124,7 @@ const VALIDATED_METHODS: ReadonlySet<string> = new Set<MethodName>([
   'describeOpaqueId',
   'invokeFieldFunction',
   'poll',
+  'checkInbound',
   'runPeriodic',
   'invokePlugin',
 ]);

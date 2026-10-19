@@ -8,6 +8,10 @@
 //! → preprocessInbound → capture an event's receipt → advance the pull cursor
 //! → queue a work row per receipt and per await wake → ack. Capture, queue,
 //! then ack: the sender's 200 means every receipt and wake has its work row.
+//! A module that checks its own inbound (`scheme: module`) is handed the raw
+//! request (`checkInbound`) in place of the signature, `preprocessInbound`
+//! and `wakeKeys`, and may answer a reply to send as it is (a handshake);
+//! only its door takes a method other than POST.
 
 use hmac::{Hmac, KeyInit, Mac};
 use sha2::{Digest, Sha256};
@@ -49,6 +53,9 @@ pub enum Scheme {
     /// This protocol's own: hex HMAC-SHA256 in `x-listen-fire-signature`,
     /// never with a placeholder or empty secret.
     Remote,
+    /// The module checks each request itself (`checkInbound`); the host
+    /// verifies nothing, so this scheme never verifies a signature.
+    Module,
 }
 
 impl Scheme {
@@ -61,6 +68,7 @@ impl Scheme {
             "slack_v0" => Scheme::SlackV0,
             "telegram_secret_token" => Scheme::TelegramSecretToken,
             "remote" => Scheme::Remote,
+            "module" => Scheme::Module,
             _ => return None,
         })
     }
@@ -75,6 +83,7 @@ impl Scheme {
             Scheme::SlackV0 => &["x-slack-signature"],
             Scheme::TelegramSecretToken => &["x-telegram-bot-api-secret-token"],
             Scheme::Remote => &["x-listen-fire-signature"],
+            Scheme::Module => &[],
         }
     }
 }
@@ -110,16 +119,20 @@ impl Declaration {
             return Err("providerKey: providerKey must be ASCII lower case".into());
         }
         let scheme = value.get("scheme").and_then(Js::as_str).and_then(Scheme::of).ok_or("scheme: expected one of the inbound signature schemes")?;
-        let headers = value.get("signatureHeaders").and_then(Js::as_array).ok_or("signatureHeaders: expected an array")?;
         let mut signature_headers = Vec::new();
+        // A module that checks its own inbound names no headers or intercepts.
+        let headers = match (scheme, value.get("signatureHeaders")) {
+            (Scheme::Module, _) => &[][..],
+            (_, headers) => headers.and_then(Js::as_array).ok_or("signatureHeaders: expected an array")?,
+        };
         for h in headers {
             let name = h.as_str().filter(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-'));
             signature_headers.push(name.ok_or("signatureHeaders: a signature header is a lower-case header name")?.to_string());
         }
-        if signature_headers.is_empty() {
+        if signature_headers.is_empty() && scheme != Scheme::Module {
             return Err("signatureHeaders: expected at least one header".into());
         }
-        let intercepts = match value.get("intercepts") {
+        let intercepts = match value.get("intercepts").filter(|_| scheme != Scheme::Module) {
             None => Vec::new(),
             Some(list) => list
                 .as_array()
@@ -246,6 +259,7 @@ fn check(scheme: Scheme, raw_body: &[u8], signature: &str, headers: &[(String, S
             }
             same_bytes(&hmac_sha256(secret.as_bytes(), raw_body), &hex_prefix(signature))
         }
+        Scheme::Module => false,
     }
 }
 
@@ -264,7 +278,7 @@ pub fn verify_with_scheme(scheme: Scheme, raw_body: &[u8], headers: &[(String, S
 
 /// A key a delivery may be verified against: present, not blank, not the
 /// placeholder (`isUsableInboundSecret`).
-fn is_usable_secret(secret: &str) -> bool {
+pub fn is_usable_secret(secret: &str) -> bool {
     !secret.trim().is_empty() && secret != UNREGISTERED_SECRET
 }
 
@@ -282,13 +296,15 @@ pub fn verify_declared(declaration: &Declaration, raw_body: &[u8], headers: &[(S
 pub struct Answer {
     pub status: u16,
     pub body: Js,
+    /// Sent as `text/plain` in place of `body` (a module's handshake reply).
+    pub text: Option<String>,
     /// Poke whatever drains the work rows once this is sent (`afterAnswer`).
     pub notify_after: bool,
 }
 
 impl Answer {
     fn of(status: u16, body: Js) -> Answer {
-        Answer { status, body, notify_after: false }
+        Answer { status, body, text: None, notify_after: false }
     }
 
     fn error(status: u16, code: &str) -> Answer {
@@ -349,6 +365,29 @@ pub struct Extraction {
     pub checkpoint: Option<Js>,
 }
 
+/// One request at a door, as the protocol's `checkInbound` hands it on.
+pub struct RawRequest<'a> {
+    pub method: &'a str,
+    pub path: &'a str,
+    pub query: &'a str,
+    pub headers: &'a [(String, String)],
+    pub body: &'a [u8],
+}
+
+impl RawRequest<'_> {
+    /// `WireInboundRequest`: the body base64.
+    pub fn wire(&self) -> Js {
+        let headers = self.headers.iter().map(|(k, v)| (k.to_lowercase(), Js::str(v))).collect();
+        Js::Obj(obj! {
+            "method" => Js::str(self.method),
+            "path" => Js::str(self.path),
+            "query" => Js::str(self.query),
+            "headers" => Js::Obj(headers),
+            "body" => Js::Str(base64::Engine::encode(&base64::engine::general_purpose::STANDARD, self.body)),
+        })
+    }
+}
+
 /// What a door needs of its host (`InboundStore` with the adapter it opens).
 pub trait InboundStore {
     async fn find_subscription(&self, id: &str) -> Result<Option<Subscription>, String>;
@@ -360,6 +399,9 @@ pub trait InboundStore {
     /// Whether the source's adapter reads deliveries (`preprocessInbound`).
     fn reads_deliveries(&self, source: &Source) -> bool;
     async fn preprocess(&self, source: &Source, raw: &Js, checkpoint: Option<&Js>) -> Result<Extraction, String>;
+    /// The module's own check of a request (`checkInbound`), its answer
+    /// validated as the wire's.
+    async fn check_inbound(&self, source: &Source, request: &RawRequest<'_>, secret: Option<&str>, checkpoint: Option<&Js>) -> Result<Js, String>;
     /// The correlation keys a delivery wakes; empty when the adapter names none.
     async fn wake_keys(&self, source: &Source, raw: &Js) -> Result<Vec<String>, String>;
     /// An event's receipt: what `enqueue` later queues.
@@ -377,6 +419,11 @@ pub struct Delivery<'a> {
     pub subscription_id: &'a str,
     pub raw_body: &'a [u8],
     pub headers: &'a [(String, String)],
+    /// POST, unless a module that checks its own inbound is handed another.
+    pub method: &'a str,
+    /// Percent-encoded, without its query.
+    pub path: &'a str,
+    pub query: &'a str,
 }
 
 /// Why a delivery is refused, and the status it is refused with.
@@ -385,7 +432,17 @@ enum Refusal {
     SubscriptionNotFound,
     ProviderMismatch,
     SignatureInvalid,
+    /// A module refused it, asking for this status.
+    RefusedWith(u16),
+    MethodNotAllowed,
     CannotPreprocess,
+}
+
+/// How a delivery ended short of its events.
+enum Ended {
+    Refused(Refusal),
+    /// The module's reply, sent as it is.
+    Reply(Answer),
 }
 
 impl Refusal {
@@ -395,6 +452,8 @@ impl Refusal {
             Refusal::SubscriptionNotFound => (404, "subscription_not_found"),
             Refusal::ProviderMismatch => (400, "provider_mismatch"),
             Refusal::SignatureInvalid => (401, "signature_invalid"),
+            Refusal::RefusedWith(status) => (status, "signature_invalid"),
+            Refusal::MethodNotAllowed => (405, "method_not_allowed"),
             Refusal::CannotPreprocess => (500, "adapter cannot preprocess inbound"),
         };
         Answer::error(status, code)
@@ -404,16 +463,20 @@ impl Refusal {
 /// The whole webhook door (`answerDelivery`): one delivery in, the answer out.
 pub async fn answer_delivery<S: InboundStore>(store: &S, delivery: Delivery<'_>) -> Answer {
     let provider_key = delivery.provider.to_uppercase();
-    if let Some(answer) = answer_intercepts(&store.intercepts(&provider_key), delivery.raw_body) {
-        return answer;
+    if delivery.method == "POST" {
+        if let Some(answer) = answer_intercepts(&store.intercepts(&provider_key), delivery.raw_body) {
+            return answer;
+        }
     }
     match receive_delivery(store, &provider_key, &delivery).await {
         Ok(Ok(events_processed)) => Answer {
             status: 200,
             body: Js::Obj(obj! { "ok" => Js::Bool(true), "eventsProcessed" => Js::Num((events_processed as u64).into()) }),
+            text: None,
             notify_after: true,
         },
-        Ok(Err(refusal)) => refusal.answer(),
+        Ok(Err(Ended::Refused(refusal))) => refusal.answer(),
+        Ok(Err(Ended::Reply(answer))) => answer,
         Err(error) => {
             eprintln!("Webhook sync endpoint error: {error}");
             Answer::error(500, "internal")
@@ -424,27 +487,51 @@ pub async fn answer_delivery<S: InboundStore>(store: &S, delivery: Delivery<'_>)
 /// Verify, capture and queue one delivery (`receiveDelivery` and its
 /// `queue`): the events captured, or why it is refused. Anything that cannot
 /// be queued is an error, so the sender's retry replays it.
-async fn receive_delivery<S: InboundStore>(store: &S, provider_key: &str, delivery: &Delivery<'_>) -> Result<Result<usize, Refusal>, String> {
+async fn receive_delivery<S: InboundStore>(store: &S, provider_key: &str, delivery: &Delivery<'_>) -> Result<Result<usize, Ended>, String> {
+    let refused = |refusal| Ok(Err(Ended::Refused(refusal)));
     let Some(subscription) = store.find_subscription(delivery.subscription_id).await? else {
-        return Ok(Err(if store.knows_provider(provider_key) { Refusal::SubscriptionNotFound } else { Refusal::UnknownProvider }));
+        return refused(if store.knows_provider(provider_key) { Refusal::SubscriptionNotFound } else { Refusal::UnknownProvider });
     };
     if subscription.provider_key != provider_key {
-        return Ok(Err(Refusal::ProviderMismatch));
+        return refused(Refusal::ProviderMismatch);
     }
-    let Some(source) = store.source_for(&subscription).await? else { return Ok(Err(Refusal::UnknownProvider)) };
-    // lf has no synthetic subscription: every delivery is verified.
-    if !verify_declared(&source.declaration, delivery.raw_body, delivery.headers, &source.secret) {
-        eprintln!("Webhook signature verification failed for subscription {}", delivery.subscription_id);
-        return Ok(Err(Refusal::SignatureInvalid));
-    }
-    let body = Js::parse(delivery.raw_body).map_err(|e| format!("the delivery is not JSON: {e}"))?;
-    // `preprocessInbound` is the raw→events seam every inbound adapter
-    // implements; one that lacks it is a wiring bug, refused loudly.
-    if !store.reads_deliveries(&source) {
-        eprintln!("[webhook] adapter for provider {} has no preprocessInbound — delivery dropped", subscription.provider_key);
-        return Ok(Err(Refusal::CannotPreprocess));
-    }
-    let extraction = store.preprocess(&source, &body, subscription.checkpoint.as_ref()).await?;
+    let Some(source) = store.source_for(&subscription).await? else { return refused(Refusal::UnknownProvider) };
+
+    let (extraction, wakes) = if source.declaration.scheme == Scheme::Module {
+        let request = RawRequest { method: delivery.method, path: delivery.path, query: delivery.query, headers: delivery.headers, body: delivery.raw_body };
+        let secret = is_usable_secret(&source.secret).then_some(source.secret.as_str());
+        let answer = store.check_inbound(&source, &request, secret, subscription.checkpoint.as_ref()).await?;
+        match answer.get("outcome").and_then(Js::as_str) {
+            Some("reply") => return Ok(Err(Ended::Reply(module_reply(&answer)))),
+            Some("refused") => {
+                eprintln!("Webhook refused by its module for subscription {}", delivery.subscription_id);
+                let status = status_of(answer.get("status")).filter(|s| (400..500).contains(s)).unwrap_or(401);
+                return refused(Refusal::RefusedWith(status));
+            }
+            _ => {
+                let events = answer.get("events").and_then(Js::as_array).map(<[Js]>::to_vec).unwrap_or_default();
+                let keys = answer.get("wakeKeys").and_then(Js::as_array).unwrap_or(&[]).iter().filter_map(Js::as_str).map(str::to_string).collect::<Vec<_>>();
+                (Extraction { events, checkpoint: answer.get("checkpoint").cloned() }, Wakes::Known(keys))
+            }
+        }
+    } else {
+        if delivery.method != "POST" {
+            return refused(Refusal::MethodNotAllowed);
+        }
+        // lf has no synthetic subscription: every delivery is verified.
+        if !verify_declared(&source.declaration, delivery.raw_body, delivery.headers, &source.secret) {
+            eprintln!("Webhook signature verification failed for subscription {}", delivery.subscription_id);
+            return refused(Refusal::SignatureInvalid);
+        }
+        let body = Js::parse(delivery.raw_body).map_err(|e| format!("the delivery is not JSON: {e}"))?;
+        // `preprocessInbound` is the raw→events seam every inbound adapter
+        // implements; one that lacks it is a wiring bug, refused loudly.
+        if !store.reads_deliveries(&source) {
+            eprintln!("[webhook] adapter for provider {} has no preprocessInbound — delivery dropped", subscription.provider_key);
+            return refused(Refusal::CannotPreprocess);
+        }
+        (store.preprocess(&source, &body, subscription.checkpoint.as_ref()).await?, Wakes::Read(body))
+    };
 
     // Capture: one receipt per event. A receipt that cannot be stored drops
     // its event from the count; the rest go on.
@@ -458,7 +545,10 @@ async fn receive_delivery<S: InboundStore>(store: &S, provider_key: &str, delive
 
     // The wakes are independent of the events, read after the capture, so a
     // failing wake door never costs the delivery its receipts.
-    let wakes = store.wake_keys(&source, &body).await;
+    let wakes = match wakes {
+        Wakes::Known(keys) => Ok(keys),
+        Wakes::Read(body) => store.wake_keys(&source, &body).await,
+    };
     if extraction.events.is_empty() && wakes.as_ref().is_ok_and(Vec::is_empty) {
         return Ok(Ok(0));
     }
@@ -482,6 +572,30 @@ async fn receive_delivery<S: InboundStore>(store: &S, provider_key: &str, delive
         return Err(format!("{} receipt(s) of the delivery could not be queued: {}", failures.len(), failures.join("; ")));
     }
     Ok(Ok(events_processed))
+}
+
+/// A delivery's wakes: named by the module's check, or read off the body.
+enum Wakes {
+    Known(Vec<String>),
+    Read(Js),
+}
+
+fn status_of(value: Option<&Js>) -> Option<u16> {
+    match value {
+        Some(Js::Num(n)) => n.as_u64().and_then(|n| u16::try_from(n).ok()),
+        _ => None,
+    }
+}
+
+/// A module's `reply` as the door sends it: `text` as text, `json` as JSON,
+/// neither as an empty text.
+fn module_reply(answer: &Js) -> Answer {
+    let status = status_of(answer.get("status")).filter(|s| (200..600).contains(s)).unwrap_or(200);
+    match (answer.get("text").and_then(Js::as_str), answer.get("json")) {
+        (Some(text), _) => Answer { status, body: Js::Null, text: Some(text.to_string()), notify_after: false },
+        (None, Some(json)) => Answer::of(status, json.clone()),
+        (None, None) => Answer { status, body: Js::Null, text: Some(String::new()), notify_after: false },
+    }
 }
 
 // ── The push doors (push.ts) ────────────────────────────────────────────────

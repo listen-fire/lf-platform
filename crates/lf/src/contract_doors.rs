@@ -244,6 +244,10 @@ impl InboundStore for Observed<'_> {
         self.lf().wake_keys(source, raw).await
     }
 
+    async fn check_inbound(&self, source: &Source, request: &crate::inbound::RawRequest<'_>, secret: Option<&str>, checkpoint: Option<&Js>) -> Result<Js, String> {
+        self.lf().check_inbound(source, request, secret, checkpoint).await
+    }
+
     async fn capture(&self, event: &Js, source: &Source) -> Result<Js, String> {
         if self.faults.capture_marked && Js::is_true(event.get("payload").and_then(|p| p.get("fail"))) {
             return Err("receipt store unavailable".into());
@@ -348,5 +352,9 @@ impl Reader for SuiteReader {
             return Err("wake door down".into());
         }
         Ok(delivery(raw)?.wake)
+    }
+
+    async fn check_inbound(&self, _external: &str, _install: &Credential, _request: &Js, _secret: Option<&str>, _checkpoint: Option<&Js>) -> Result<Js, String> {
+        Err("the suite's adapter checks no inbound of its own".into())
     }
 }
