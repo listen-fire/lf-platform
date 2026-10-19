@@ -83,9 +83,9 @@ import { fetchUrlImpl, FETCH_URL_PLUGIN_MANIFEST } from '../engine/transforms/fe
 import { linkedinEnrichmentImpl } from '../engine/transforms/linkedin-enrichment';
 
 import type { ContextDependentInput, PreExtractionInput } from '../engine/transforms';
-import type { SourcePosition } from 'movement-engine/services/translation_graph/types';
+import type { SourcePosition } from 'engine-contracts/catalog';
 
-import { makeStablePosition } from 'movement-engine/services/translation_graph/types';
+import { makeStablePosition } from 'engine-contracts/catalog';
 import { services } from '../../../adapters/registry';
 import { logger } from 'movement-engine/services/logger';
 

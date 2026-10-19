@@ -23,8 +23,8 @@ import { AI_EFFORTS, AI_TIERS, aiTier } from '#shared/expression/types';
 import type { AiTier } from '#shared/expression/types';
 
 import { availableChatModels, chatModelAvailability } from '../../lib/models/map';
-import { hasCapability, isModelName, parseChatModelName } from '../../lib/models/registry';
-import type { ChatModelName } from '../../lib/models/registry';
+import { hasCapability, isModelName, parseChatModelName } from 'engine-contracts/model_names';
+import type { ChatModelName } from 'engine-contracts/model_names';
 
 /**
  * Reasoning depth for extraction, on its OWN calls rather than on the client

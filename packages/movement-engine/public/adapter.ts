@@ -3,7 +3,7 @@
 
 export * from '../services/translation_graph/adapter';
 export { normalizeAdapterType } from '../services/translation_graph/adapter_type';
-export * from '../services/translation_graph/awaitable';
+export * from 'engine-contracts/awaitable';
 export {
   newDryRunRehearsal,
   wrapAdapterForDryRun,
@@ -11,7 +11,7 @@ export {
   type DryRunRehearsal,
   type DryRunWriteSink,
 } from '../services/translation_graph/engine/dry_run_adapter';
-export * from '../services/translation_graph/mutation_context';
+export * from 'engine-contracts/mutation_context';
 export {
   ADAPTER_TEAM_HEADER,
   RemoteProtocolError,

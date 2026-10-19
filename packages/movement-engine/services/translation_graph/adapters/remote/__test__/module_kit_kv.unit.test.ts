@@ -10,11 +10,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 
-import { createRemoteAdapter, fetchRemoteManifest } from 'movement-engine/public/modules';
+import { createRemoteAdapter, fetchRemoteManifest } from '../index';
 
-import type { ModuleLog } from '../index';
+import type { ModuleLog } from 'module-kit';
 
-import { fileKv, fileKvPath, parseConstructionArgs, refusingKv, serveModule, writeFileKv } from '../index';
+import { fileKv, fileKvPath, parseConstructionArgs, refusingKv, serveModule, writeFileKv } from 'module-kit';
 import tally from './modules/tally_module';
 
 const quiet: ModuleLog = { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
@@ -131,8 +131,8 @@ describe('serve-module state', () => {
   it('takes MODULE_STATE_DIR from the environment as a child process', async () => {
     const dir = stateDir();
     await writeFileKv(dir, 'team-1', [{ key: 'count', value: 41 }]);
-    const child = spawn(process.execPath, [join(__dirname, '../bin/serve-module.cjs'), './__test__/modules/tally_module.ts'], {
-      cwd: join(__dirname, '..'),
+    const child = spawn(process.execPath, [require.resolve('module-kit/bin/serve-module.cjs'), './modules/tally_module.ts'], {
+      cwd: __dirname,
       env: { ...process.env, PORT: '0', MODULE_STATE_DIR: dir, MODULE_CONSTRUCTION_ARGS: '{"spreadsheet":"Pipeline"}' },
       stdio: ['ignore', 'pipe', 'inherit'],
     });

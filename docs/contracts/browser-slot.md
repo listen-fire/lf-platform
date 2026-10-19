@@ -19,7 +19,7 @@ An empty slot refuses every page, naming the slot and why it is empty, e.g. `the
 
 `withPage(fn, options?)` opens a page in a fresh browser, runs `fn(page, session)`, and closes the browser when `fn` settles. `options` sets the viewport and the user agent.
 
-- **The page** is the part of a browser automation API the modules use, written down as an interface (`BrowserPage` in [`browser.ts`](../../packages/movement-engine/services/browser/browser.ts)): open an address, read its title and URL, find elements by selector, role, label or test id, click and fill them, wait for a load state or a selector, hold requests with a route, wait for a download, take a screenshot of the page or an element (PNG), and print the page to PDF. Playwright's `Page` is one; a remote browser service speaking the same protocol is another. A module that needs more adds it there first.
+- **The page** is the part of a browser automation API the modules use, written down as an interface (`BrowserPage` in [`browser.ts`](../../packages/module-runtime/browser.ts)): open an address, read its title and URL, find elements by selector, role, label or test id, click and fill them, wait for a load state or a selector, hold requests with a route, wait for a download, take a screenshot of the page or an element (PNG), and print the page to PDF. Playwright's `Page` is one; a remote browser service speaking the same protocol is another. A module that needs more adds it there first.
 - **The session** can be closed early (`session.close()`); the slot closes it in any case.
 
 ## Limits

@@ -34,7 +34,7 @@ import {
   makeUnstablePosition,
   positionData,
   positionRecordId,
-} from '../../translation_graph/types';
+} from 'engine-contracts/catalog';
 import { MovementEngineError } from '../errors';
 import type { MovementTraceEntry } from '../expression';
 import {

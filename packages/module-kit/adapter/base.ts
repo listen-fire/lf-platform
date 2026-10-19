@@ -41,8 +41,8 @@
 
 import { eventAddressEventName } from 'movement-lang';
 
+import type { Adapter } from 'module-runtime/adapter';
 import type {
-  Adapter,
   RuntimeCapabilities,
   DeleteInput,
   DeleteResult,
@@ -55,12 +55,12 @@ import type {
   UpdateResult,
   WriteInput,
   WriteResult,
-} from 'movement-engine/public/adapter';
-import type { SchemaEntryPoint, SchemaTypeDescriptor } from 'movement-engine/public/catalog';
-import type { TriggerType } from 'movement-engine/public/inbound';
+} from 'engine-contracts';
+import type { SchemaEntryPoint, SchemaTypeDescriptor } from 'engine-contracts';
+import type { TriggerType } from 'engine-contracts';
 
-import { BASE_RUNTIME_CAPABILITIES } from 'movement-engine/public/adapter';
-import { positionData } from 'movement-engine/public/catalog';
+import { BASE_RUNTIME_CAPABILITIES } from 'engine-contracts';
+import { positionData } from 'engine-contracts';
 import {
   AdapterNameDriftError,
   memoizedResolver,

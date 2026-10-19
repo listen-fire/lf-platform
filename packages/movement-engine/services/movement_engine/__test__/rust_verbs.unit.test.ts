@@ -27,7 +27,7 @@ import {
   makeStablePosition,
   positionData,
   positionRecordId,
-} from '../../translation_graph/types';
+} from 'engine-contracts/catalog';
 import {
   runFailureCause,
   runMovement,

@@ -18,7 +18,7 @@
 // ── Jest module workarounds (mirrors run.unit.test.ts) ──────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-require('movement-engine/services/knowledge_pipeline/output_v3/schemas');
+require('engine-contracts/expression/schemas');
 
 process.env.ENCRYPTION_MASTER_KEY ??= Buffer.alloc(32, 1).toString('base64');
 process.env.ENCRYPTION_SALT_BASE64 ??= Buffer.alloc(16, 2).toString('base64');
@@ -105,7 +105,7 @@ import {
   makeStablePosition,
   positionData,
   positionRecordId,
-} from 'movement-engine/services/translation_graph/types';
+} from 'engine-contracts/catalog';
 import { tenantIdOf } from 'engine-contracts';
 import type { NodeId } from '../../../generated/kysely/knowledge/Node';
 import { credentialIdsFor, makeTestHost } from 'movement-engine/services/movement_engine/test_host';

@@ -26,7 +26,7 @@ import type { TriggerEvent } from 'movement-engine/services/translation_graph/tr
 import type { TransformInvocationResult } from 'movement-engine/services/movement_engine/extraction';
 
 import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
-import { positionData } from 'movement-engine/services/translation_graph/types';
+import { positionData } from 'engine-contracts/catalog';
 import { startHostDouble, httpHost } from '../conformance/http_host_double';
 import { recordEntry, recordedError } from '../conformance/recorder';
 import { MovementRunFailed, resumeMovement, runFailureCause, runMovement, type RunMovementInput } from 'movement-engine/services/movement_engine/run';

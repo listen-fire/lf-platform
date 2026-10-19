@@ -13,7 +13,7 @@ import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
 
 import { BudgetExhausted } from 'movement-engine/lib/run_cost';
 import type { ExternalRecordRef } from 'movement-engine/services/translation_graph/adapter';
-import type { UniquenessConstraints } from 'movement-engine/services/translation_graph/uniqueness';
+import type { UniquenessConstraints } from 'engine-contracts/uniqueness';
 
 import { execute } from '../../../../lib/prompts/execute';
 import { askJev, JevConfigurationError, JevRequestError } from '../../../../lib/jev/client';

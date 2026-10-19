@@ -77,12 +77,12 @@ import type {
   AwaitableCapability,
   AwaitPoint,
   AwaitResolution,
-} from '../../awaitable';
+} from 'engine-contracts/awaitable';
 import type {
   SchemaEntryPoint,
   SchemaTypeDescriptor,
   SourcePosition,
-} from '../../types';
+} from 'engine-contracts/catalog';
 import type { TriggerEvent, TriggerType } from '../../triggers/types';
 import type { Expression } from '#shared/expression/types';
 import type { AuthStrategy } from '../../protocol/client';
@@ -90,8 +90,8 @@ import type { MethodName, WireCredentialDeclarationShape, WireCredentialShape, W
 
 import { authHeader, postRpc, parseWireResult, RemoteProtocolError } from '../../protocol/client';
 import { limited, limiterSlot, limitRequest, type Limiter } from '../../../limiter/limiter';
-import { SecretVersionConflict, withSecret, type Refresher, type SecretsFamily } from '../../../secrets/family';
-import { declaredFields, declaredRefresher, OAUTH2_TOKEN_FIELDS, type OAuth2ClientApp } from '../../../secrets/oauth2';
+import { SecretVersionConflict, withSecret, type Refresher, type SecretsFamily } from 'module-runtime/secrets/family';
+import { declaredFields, declaredRefresher, OAUTH2_TOKEN_FIELDS, type OAuth2ClientApp } from 'module-runtime/secrets/oauth2';
 import { DOCUMENT_STORE_OWNER, type DocumentStore } from '../../engine/files/document_store';
 import { fileOwner, hasFileSource, redeemFileRef } from '../../engine/files/redeem';
 import { countAdapterCall } from '../../segment_scope';

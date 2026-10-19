@@ -17,7 +17,7 @@
 
 import type { Readable } from 'node:stream';
 
-import { Queue } from '../../lib/utils/queue';
+import { Queue } from './queue';
 
 /** Where an element is drawn, in CSS pixels. */
 export interface BrowserBox {

@@ -16,7 +16,7 @@ import { hostedDocumentStore } from '../../../services/translation_graph/engine/
 import http from 'node:http';
 
 import type { AddressInfo } from 'node:net';
-import type { MutationContext } from 'movement-engine/services/translation_graph/mutation_context';
+import type { MutationContext } from 'engine-contracts/mutation_context';
 import type { RemoteAdapterConfig } from 'movement-engine/services/translation_graph/adapters/remote';
 import type { FakeCrmServer } from '../fake_crm_adapter';
 import type { TeamId } from '../../../generated/kysely/core/Team';
@@ -27,7 +27,7 @@ import {
   fetchRemoteManifest,
   RemoteAdapter,
 } from 'movement-engine/services/translation_graph/adapters/remote';
-import { makeMetaPosition, positionData } from 'movement-engine/services/translation_graph/types';
+import { makeMetaPosition, positionData } from 'engine-contracts/catalog';
 import {
   FAKE_CRM_ADAPTER_TYPE,
   FAKE_CRM_COMMENTS_EDGE,

@@ -13,7 +13,7 @@ import { hostModels } from './host_models';
 import { fileKv } from './file_kv';
 import { refusingFiles, refusingKv, refusingModels } from './in_process';
 import { createModuleProtocolHandler } from './module_server';
-import { emptyBrowserSlot, type BrowserSlot } from 'movement-engine/public/browser';
+import { emptyBrowserSlot, type BrowserSlot } from 'module-runtime/browser';
 
 /** A log that writes one JSON line per entry to `write`. */
 export function jsonLineLog(module: string, write: (line: string) => void): ModuleLog {

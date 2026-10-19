@@ -14,10 +14,10 @@ function describedTarget(target: WalkedNodeShape | undefined): WalkedDescribedNo
   return target;
 }
 
-import { makeUnstablePosition } from 'movement-engine/services/translation_graph/types';
+import { makeUnstablePosition } from 'engine-contracts/catalog';
 
 import type { EdgesFromResult } from 'movement-engine/services/translation_graph/adapter';
-import type { SchemaFieldDescriptor } from 'movement-engine/services/translation_graph/types';
+import type { SchemaFieldDescriptor } from 'engine-contracts/catalog';
 
 const field = (over: Partial<SchemaFieldDescriptor>): SchemaFieldDescriptor => ({
   fieldId: 'subject',

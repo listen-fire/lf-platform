@@ -12,7 +12,7 @@ import { PARK_STATE_VERSION, tenantIdOf, type CodeByPlace, type ParkedScopeState
 
 import type { Adapter } from '../../translation_graph/adapter';
 import { containerAssociation } from '../../translation_graph/adapter';
-import { makeStablePosition, positionData } from '../../translation_graph/types';
+import { makeStablePosition, positionData } from 'engine-contracts/catalog';
 import {
   credentialIdsFor,
   makeFakeParkSink,

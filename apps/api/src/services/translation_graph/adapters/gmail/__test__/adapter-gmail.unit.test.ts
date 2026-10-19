@@ -19,7 +19,7 @@ import {
   makeMetaPosition,
   makeStablePosition,
   positionRecordId,
-} from 'movement-engine/services/translation_graph/types';
+} from 'engine-contracts/catalog';
 import {
   GmailApiError,
   type GmailMessage,

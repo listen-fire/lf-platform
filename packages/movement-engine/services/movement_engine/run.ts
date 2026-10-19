@@ -224,7 +224,7 @@ import { foldedShape } from './declared_shape';
 import type { AdapterResolution, BindingEndpoint, CallbackSink, EngineHost } from './host';
 import { hostAdapter, isAdapterCallCeilingReached, isoDates } from './host_adapter';
 import { applicableRequiredFields } from '../translation_graph/required_fields';
-import type { MutationContext } from '../translation_graph/mutation_context';
+import type { MutationContext } from 'engine-contracts/mutation_context';
 import type { TriggerEvent } from '../translation_graph/triggers/types';
 import {
   META_RECORD_TYPE,
@@ -235,13 +235,13 @@ import {
   positionRecordId,
   type SchemaFieldDescriptor,
   type SourcePosition,
-} from '../translation_graph/types';
+} from 'engine-contracts/catalog';
 import {
   arbitrateWithoutJudge,
   isBlankIdentityValue,
   mergeUniqueness,
   type UniquenessConstraints,
-} from '../translation_graph/uniqueness';
+} from 'engine-contracts/uniqueness';
 import type { LlmClient } from '../translation_graph/engine/batched_extraction/llm_call';
 import {
   matchesResourceFilter,

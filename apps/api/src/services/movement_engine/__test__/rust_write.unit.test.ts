@@ -27,8 +27,8 @@ import type { CapturedWrite } from 'movement-engine/services/translation_graph/e
 import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
 import { staticCatalogFromManifests } from '../../translation_graph/movement/catalog';
 import type { MovementTraceEntry } from 'movement-engine/services/movement_engine/expression';
-import type { SchemaTypeDescriptor } from 'movement-engine/services/translation_graph/types';
-import { makeStablePosition, positionData } from 'movement-engine/services/translation_graph/types';
+import type { SchemaTypeDescriptor } from 'engine-contracts/catalog';
+import { makeStablePosition, positionData } from 'engine-contracts/catalog';
 import {
   credentialIdsFor,
   makeFakeParkSink,

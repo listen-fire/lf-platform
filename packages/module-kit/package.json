@@ -19,8 +19,8 @@
   "types": "index.ts",
   "type": "commonjs",
   "dependencies": {
-    "@listen-fire/engine": "workspace:^",
     "@listen-fire/engine-contracts": "workspace:^",
+    "@listen-fire/module-runtime": "workspace:^",
     "@listen-fire/movement-lang": "workspace:^",
     "@listen-fire/shared": "workspace:^",
     "zod": "4.1.12"
@@ -38,7 +38,7 @@
     "@types/jest": "29.5.14",
     "@types/node": "20.16.5",
     "engine-contracts": "workspace:@listen-fire/engine-contracts@*",
-    "movement-engine": "workspace:@listen-fire/engine@*",
+    "module-runtime": "workspace:@listen-fire/module-runtime@*",
     "movement-lang": "workspace:@listen-fire/movement-lang@*",
     "tsx": "4.21.0",
     "typescript": "5.5.4"

@@ -34,7 +34,7 @@ import { tenantIdOf } from 'engine-contracts';
 
 import type { Adapter } from '../../translation_graph/adapter';
 import { containerAssociation } from '../../translation_graph/adapter';
-import { positionData } from '../../translation_graph/types';
+import { positionData } from 'engine-contracts/catalog';
 import { runMovement } from '../run';
 import { resetRustRunStats, rustRunStats } from '../rust_stats';
 import { credentialIdsFor, makeFakeParkSink, makeTestHost } from '../test_host';

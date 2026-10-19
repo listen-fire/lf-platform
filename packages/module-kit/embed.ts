@@ -5,7 +5,8 @@
 // (apps/api builtin_modules.ts).
 
 import type { WireCredentialDeclarationShape } from 'engine-contracts';
-import { DEFAULT_REFRESH_WINDOW_MS, declaredRefresher, expiresWithin, type OAuth2ClientApp, type SecretsFamily } from 'movement-engine/public/secrets';
+import { DEFAULT_REFRESH_WINDOW_MS, expiresWithin, type SecretsFamily } from 'module-runtime/secrets/family';
+import { declaredRefresher, type OAuth2ClientApp } from 'module-runtime/secrets/oauth2';
 
 import type { CredentialFields, ModuleCredential, ModuleKv } from './define';
 

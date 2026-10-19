@@ -24,7 +24,7 @@ import type {
 } from 'movement-engine/services/translation_graph/adapter';
 import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
 import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
-import { META_RECORD_TYPE, makeStablePosition, positionRecordId } from 'movement-engine/services/translation_graph/types';
+import { META_RECORD_TYPE, makeStablePosition, positionRecordId } from 'engine-contracts/catalog';
 import { tenantIdOf } from 'engine-contracts';
 import { createManualAdapter } from '../../translation_graph/adapters/manual';
 import { makeTestHost } from 'movement-engine/services/movement_engine/test_host';

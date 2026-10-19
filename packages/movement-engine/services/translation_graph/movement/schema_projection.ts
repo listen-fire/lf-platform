@@ -39,11 +39,11 @@ import type {
   SchemaFieldDescriptor,
   SchemaReferenceDescriptor,
   SchemaTypeDescriptor,
-} from '../types';
+} from 'engine-contracts/catalog';
 import type { FieldCapability } from '#shared/expression/types';
-import type { UniquenessConstraints } from '../uniqueness';
+import type { UniquenessConstraints } from 'engine-contracts/uniqueness';
 
-import { referenceTargetTypeIds } from '../types';
+import { referenceTargetTypeIds } from 'engine-contracts/catalog';
 import { RESOURCES_REFERENCE_FIELD_ID } from '../adapter';
 
 /**

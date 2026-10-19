@@ -4,4 +4,5 @@
 export * from '../services/translation_graph/movement/catalog_snapshot';
 export * from '../services/translation_graph/movement/schema_projection';
 export * from '../services/translation_graph/movement/binding_endpoint';
-export * from '../services/translation_graph/types';
+export * from 'engine-contracts/catalog';
+export * from '../services/translation_graph/row_body';

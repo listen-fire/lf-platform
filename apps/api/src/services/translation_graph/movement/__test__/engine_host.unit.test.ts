@@ -51,7 +51,7 @@ import { createRemoteAdapter } from 'movement-engine/services/translation_graph/
 import { hostedDocumentStore } from '../../engine/files/retrieve';
 import { productionEngineHost } from '../engine_host';
 import { inMemoryRawTextStore } from '../raw_text_store';
-import { userEditContext } from 'movement-engine/services/translation_graph/mutation_context';
+import { userEditContext } from 'engine-contracts/mutation_context';
 import { teamOfTenant } from '../tenant';
 
 const MUTATION_CONTEXT = userEditContext('user-1');

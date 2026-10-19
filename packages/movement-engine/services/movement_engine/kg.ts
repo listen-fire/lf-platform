@@ -50,7 +50,7 @@ import {
   positionData,
   positionRecordId,
   type SourcePosition,
-} from '../translation_graph/types';
+} from 'engine-contracts/catalog';
 
 // ── Source reads in the program's natural vocabulary ────────────────────────
 //

@@ -15,7 +15,7 @@
 // Order-sensitive cycle guard (mirrors save.unit.test.ts): pre-require
 // schemas.ts so `expressionSchema` resolves before ../types pulls it.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-require('movement-engine/services/knowledge_pipeline/output_v3/schemas');
+require('engine-contracts/expression/schemas');
 
 jest.mock('../store', () => ({
   getMovementRow: jest.fn(),

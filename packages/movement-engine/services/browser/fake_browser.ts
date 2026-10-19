@@ -15,7 +15,7 @@ import {
   type BrowserPage,
   type BrowserRoute,
   type BrowserSlot,
-} from './browser';
+} from 'module-runtime/browser';
 
 /** One element as the site shows it now. */
 export interface FakeElement {

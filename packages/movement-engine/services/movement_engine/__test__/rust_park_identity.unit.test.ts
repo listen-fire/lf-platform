@@ -27,7 +27,7 @@ import { SUPPORTED_PARK_STATE_VERSIONS, tenantIdOf, type AnyParkedScopeState } f
 
 import type { Adapter } from '../../translation_graph/adapter';
 import { containerAssociation } from '../../translation_graph/adapter';
-import { positionData } from '../../translation_graph/types';
+import { positionData } from 'engine-contracts/catalog';
 import { credentialIdsFor, makeTestHost } from '../test_host';
 import {
   resumeMovement,

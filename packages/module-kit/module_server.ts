@@ -7,8 +7,8 @@
 // resolves (`resolveFileRef`) is held for one fetch at a URL of the server's
 // own (`served_files.ts`).
 
-import { ADAPTER_TEAM_HEADER } from 'movement-engine/public/adapter';
-import type { BrowserSlot } from 'movement-engine/public/browser';
+import { ADAPTER_TEAM_HEADER } from 'engine-contracts';
+import type { BrowserSlot } from 'module-runtime/browser';
 
 import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from 'node:http';
 import { METHODS, type MethodName, type RpcResponseShape, type WireCostLineShape, type WireCredentialShape } from 'engine-contracts';

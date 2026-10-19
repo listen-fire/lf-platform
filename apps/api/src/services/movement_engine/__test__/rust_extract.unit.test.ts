@@ -33,7 +33,7 @@ import { staticCatalogFromManifests } from '../../translation_graph/movement/cat
 import {
   makeUnstablePosition,
   positionData,
-} from 'movement-engine/services/translation_graph/types';
+} from 'engine-contracts/catalog';
 import {
   credentialIdsFor,
   makeFakeParkSink,

@@ -16,7 +16,7 @@ import type {
   ExtractCallLlmResult,
 } from '../extraction_call';
 import { containerAssociation } from '../../translation_graph/adapter';
-import { positionData } from '../../translation_graph/types';
+import { positionData } from 'engine-contracts/catalog';
 import { runMovement } from '../run';
 import {
   resetRustRunStats,

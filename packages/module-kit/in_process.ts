@@ -8,8 +8,8 @@
 // (`inProcessValidationDefault`), where it would only cost time.
 
 import { METHODS, type MethodName, type WireManifestResultShape } from 'engine-contracts';
-import type { Adapter } from 'movement-engine/public/adapter';
-import { emptyBrowserSlot, type BrowserSlot } from 'movement-engine/public/browser';
+import type { Adapter } from 'module-runtime/adapter';
+import { emptyBrowserSlot, type BrowserSlot } from 'module-runtime/browser';
 
 import type {
   AdapterModuleDefinition,

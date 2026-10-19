@@ -6,7 +6,7 @@
 // clean and refused, are compared through the authoring surface itself.
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-require('movement-engine/services/knowledge_pipeline/output_v3/schemas');
+require('engine-contracts/expression/schemas');
 
 const checkers = { rust: 0, typescript: 0 };
 

@@ -30,14 +30,14 @@ jest.mock('../../../../lib/credentials', () => ({
 }));
 
 import type { TeamId } from '../../../../generated/kysely/core/Team';
-import type { MutationContext } from 'movement-engine/services/translation_graph/mutation_context';
+import type { MutationContext } from 'engine-contracts/mutation_context';
 
 import { decryptToken } from '../../../../lib/credentials';
 import {
   NATIVE_VALUATIONS_ADAPTER_TYPE,
   createNativeValuationsAdapter,
 } from '../native_valuations';
-import { ADAPTER_META_TYPE_ID, META_RECORD_TYPE, makeStablePosition } from 'movement-engine/services/translation_graph/types';
+import { ADAPTER_META_TYPE_ID, META_RECORD_TYPE, makeStablePosition } from 'engine-contracts/catalog';
 import { instanceSchemaFromDescriptors } from 'movement-engine/services/translation_graph/movement/schema_projection';
 
 

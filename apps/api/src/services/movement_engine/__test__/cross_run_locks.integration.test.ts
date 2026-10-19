@@ -5,7 +5,7 @@
 // both lock tables: the in-process one and Postgres advisory locks.
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-require('movement-engine/services/knowledge_pipeline/output_v3/schemas');
+require('engine-contracts/expression/schemas');
 
 process.env.ENCRYPTION_MASTER_KEY ??= Buffer.alloc(32, 1).toString('base64');
 process.env.ENCRYPTION_SALT_BASE64 ??= Buffer.alloc(16, 2).toString('base64');
@@ -91,7 +91,7 @@ import {
   type ExternalRecordRef,
   type RuntimeCapabilities,
 } from 'movement-engine/services/translation_graph/adapter';
-import { makeStablePosition, positionData } from 'movement-engine/services/translation_graph/types';
+import { makeStablePosition, positionData } from 'engine-contracts/catalog';
 import { InMemoryWriteLocks, type WriteLocks } from 'movement-engine/services/write_locks/write_locks';
 import { PostgresWriteLocks, type PostgresWriteLockHolder } from '../../write_locks/postgres';
 import { credentialIdsFor, makeTestHost } from 'movement-engine/services/movement_engine/test_host';

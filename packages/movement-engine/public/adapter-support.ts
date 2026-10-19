@@ -15,6 +15,6 @@ export {
   withSegment,
   type AdapterCallSystem,
 } from '../services/translation_graph/segment_scope';
-export { Queue } from '../lib/utils/queue';
+export { Queue } from 'module-runtime/queue';
 export { matchOption } from '../lib/utils/string';
-export type { UniquenessConstraints } from '../services/translation_graph/uniqueness';
+export type { UniquenessConstraints } from 'engine-contracts/uniqueness';

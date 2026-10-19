@@ -36,7 +36,7 @@ import {
   runSkeletonPass,
 } from '../engine/batched_extraction/phases';
 import { ENTITY_DENSITY_OPUS_THRESHOLD } from '../engine/batched_extraction/schema_synthesis';
-import { positionData } from 'movement-engine/services/translation_graph/types';
+import { positionData } from 'engine-contracts/catalog';
 
 // ── Test helpers ──────────────────────────────────────────────────────────
 

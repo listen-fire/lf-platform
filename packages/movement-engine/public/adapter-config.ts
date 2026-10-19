@@ -2,4 +2,4 @@
 // a trigger or an install form is built from (and the zod schema derived from
 // them).
 
-export * from '../services/translation_graph/triggerConfig';
+export * from 'engine-contracts/trigger_config';

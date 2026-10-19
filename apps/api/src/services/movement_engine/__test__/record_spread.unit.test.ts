@@ -15,7 +15,7 @@
 // ── Jest module workarounds (mirrors declared_shape_reuse.unit.test.ts) ─────
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-require('movement-engine/services/knowledge_pipeline/output_v3/schemas');
+require('engine-contracts/expression/schemas');
 
 process.env.ENCRYPTION_MASTER_KEY ??= Buffer.alloc(32, 1).toString('base64');
 process.env.ENCRYPTION_SALT_BASE64 ??= Buffer.alloc(16, 2).toString('base64');
@@ -97,7 +97,7 @@ import {
   type FileRef,
 } from 'movement-engine/services/translation_graph/adapter';
 import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
-import { positionData } from 'movement-engine/services/translation_graph/types';
+import { positionData } from 'engine-contracts/catalog';
 import { tenantIdOf } from 'engine-contracts';
 import { makeTestHost } from 'movement-engine/services/movement_engine/test_host';
 

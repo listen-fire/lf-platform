@@ -8,7 +8,7 @@
 
 import type { CapturedWrite } from '../dry_run_adapter';
 import type { Adapter } from '../../adapter';
-import type { MutationContext } from '../../mutation_context';
+import type { MutationContext } from 'engine-contracts/mutation_context';
 
 import { newDryRunRehearsal, wrapAdapterForDryRun } from '../dry_run_adapter';
 

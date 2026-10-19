@@ -8,15 +8,17 @@
 import { createServer, type Server } from 'node:http';
 import { Readable } from 'node:stream';
 
-import type { Adapter, FileRef } from 'movement-engine/public/adapter';
+import type { FileRef } from 'engine-contracts';
+import type { Adapter } from 'module-runtime';
 
-import { fileValue } from 'movement-engine/public/adapter';
-import { makeStablePosition } from 'movement-engine/public/catalog';
-import { createRemoteAdapter, fetchRemoteManifest, ownedFilesAdapter } from 'movement-engine/public/modules';
+import { fileValue } from 'engine-contracts';
+import { makeStablePosition } from 'engine-contracts';
+import { createRemoteAdapter, fetchRemoteManifest } from '../index';
+import { ownedFilesAdapter } from '../../owned_files';
 
-import type { ModuleFiles, ModuleLog, ServedFiles } from '../index';
+import type { ModuleFiles, ModuleLog, ServedFiles } from 'module-kit';
 
-import { adapterInProcess, moduleFileRef, noCredential, readHandedFile, refusingKv, servedFiles, serveModule } from '../index';
+import { adapterInProcess, moduleFileRef, noCredential, readHandedFile, refusingKv, servedFiles, serveModule } from 'module-kit';
 import blobs, { blobBytes } from './modules/blobs_module';
 
 const quiet: ModuleLog = { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };

@@ -8,7 +8,7 @@
 import type { getSlackClient } from '../../../adapters/slack/webApi/apiClient';
 import type { SlackWriteHost } from '@listen-fire/slack/write';
 import type { TeamId } from '../../../generated/kysely/core/Team';
-import type { MutationContext } from 'movement-engine/services/translation_graph/mutation_context';
+import type { MutationContext } from 'engine-contracts/mutation_context';
 
 import {
   SlackAdapter,

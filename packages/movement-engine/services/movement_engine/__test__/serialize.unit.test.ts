@@ -7,7 +7,7 @@
 // context is mocked.
 
 import type { FileRef, Resource } from '../../translation_graph/adapter';
-import type { SourcePosition } from '../../translation_graph/types';
+import type { SourcePosition } from 'engine-contracts/catalog';
 import type { Binding, DeferredWalk, SourceRead, WriteRecord } from '../expression';
 import { binding, bindingOf, Environment, isDictValue } from '../expression';
 import type { ExtractEmission } from '../extraction';

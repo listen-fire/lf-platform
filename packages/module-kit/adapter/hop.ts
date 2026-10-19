@@ -20,10 +20,10 @@
 // a stub be an edit in one place rather than sixteen; that promise is only
 // true if sixteen adapters do not each hand-roll it.
 
-import type { SchemaReferenceDescriptor, SchemaTypeDescriptor, SourcePosition } from 'movement-engine/public/catalog';
+import type { SchemaReferenceDescriptor, SchemaTypeDescriptor, SourcePosition } from 'engine-contracts';
 
-import { stubTargetOf, targetNodeOf, type EdgesFromResult, type EdgeTargetNode, type StubTargetNode } from 'movement-engine/public/adapter';
-import { META_RECORD_TYPE, makeUnstablePosition } from 'movement-engine/public/catalog';
+import { stubTargetOf, targetNodeOf, type EdgesFromResult, type EdgeTargetNode, type StubTargetNode } from 'engine-contracts';
+import { META_RECORD_TYPE, makeUnstablePosition } from 'engine-contracts';
 
 type Describe = (typeId: string) => Promise<SchemaTypeDescriptor | null>;
 

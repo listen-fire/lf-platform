@@ -8,7 +8,7 @@
 
 import type { DiscriminableEvent, EventType } from '../../adapter';
 
-import { makeStablePosition, makeUnstablePosition, type SourcePosition } from '../../types';
+import { makeStablePosition, makeUnstablePosition, type SourcePosition } from 'engine-contracts/catalog';
 
 interface DiscriminationResult {
   /** The typed root position to seed the trigger's evaluation with. */

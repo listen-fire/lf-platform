@@ -15,7 +15,7 @@ import type { Adapter, RuntimeCapabilities, WriteInput } from 'movement-engine/s
 import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
 import { createManualAdapter } from '../../translation_graph/adapters/manual';
 import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
-import { makeStablePosition, makeUnstablePosition, positionData } from 'movement-engine/services/translation_graph/types';
+import { makeStablePosition, makeUnstablePosition, positionData } from 'engine-contracts/catalog';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import { teamOfTenant } from '../../translation_graph/movement/tenant';
 import type { CallbackSink } from 'movement-engine/services/movement_engine/host';

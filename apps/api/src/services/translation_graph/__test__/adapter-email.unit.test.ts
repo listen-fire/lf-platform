@@ -19,7 +19,7 @@
  */
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
-import type { SourcePosition } from 'movement-engine/services/translation_graph/types';
+import type { SourcePosition } from 'engine-contracts/catalog';
 
 import {
   EmailAdapter,
@@ -31,7 +31,7 @@ import {
   type EmailPayload,
 } from '../adapters/email';
 import { RESOURCES_REFERENCE_FIELD_ID } from 'movement-engine/services/translation_graph/adapter';
-import { makeStablePosition, makeUnstablePosition } from 'movement-engine/services/translation_graph/types';
+import { makeStablePosition, makeUnstablePosition } from 'engine-contracts/catalog';
 
 const TEAM_ID = 'team-1' as TeamId;
 

@@ -32,7 +32,7 @@
 
 import { z } from 'zod';
 
-import { neverAsAny } from '../../lib/utils/types';
+import { neverAsAny } from 'movement-lang';
 
 /**
  * Plus-address / routing-key charset: lowercase alphanumerics in

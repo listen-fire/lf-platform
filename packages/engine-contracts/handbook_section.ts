@@ -1,6 +1,6 @@
 // The conceptual-documentation contract shared by the two layers that meet
 // over it: an adapter declares a section on its manifest
-// (services/translation_graph/adapter.ts), and the handbook registry
+// (adapter.ts), and the handbook registry
 // (lib/knowledge/movement_handbook) assembles the declared sections into the
 // automation book. It lives below both so the manifest never has to import
 // the handbook, nor the handbook own anything adapter-specific.

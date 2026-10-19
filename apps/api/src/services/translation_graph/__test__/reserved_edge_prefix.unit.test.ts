@@ -4,7 +4,7 @@
 // no author could reach. The projection leaves one out with a note, and this
 // file proves no registered adapter declares one today.
 
-import type { SchemaEntryPoint, SchemaTypeDescriptor } from 'movement-engine/services/translation_graph/types';
+import type { SchemaEntryPoint, SchemaTypeDescriptor } from 'engine-contracts/catalog';
 import { instanceSchemaFromDescriptors } from 'movement-engine/services/translation_graph/movement/schema_projection';
 import { staticCatalogFromManifests } from '../movement/catalog';
 import { listAdapterTypes } from '../adapters/registry';

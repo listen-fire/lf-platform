@@ -4,7 +4,7 @@
 // cost money is a fact about the plugin, not about the host that runs it: the
 // checker reads it (through the catalog snapshot), the engine reads it (the
 // same snapshot's `plugins`), and the host that implements it must agree. So
-// it lives here, in the engine package, as data. Running a plugin stays the
+// it lives here, in the engine's contracts, as data. Running a plugin stays the
 // host's (`llm.transforms.invoke`): a host serves the plugins it implements
 // and refuses the rest by name.
 
@@ -14,9 +14,9 @@ import type {
   ExpressionType,
   TransformOutputKind,
   TransformSignature,
-} from '../translation_graph/types';
+} from './catalog';
 
-import { neverAsAny } from '../../lib/utils/types';
+import { neverAsAny } from 'movement-lang';
 
 /**
  * One plugin's declaration: its signature (name, parameters, scheduling

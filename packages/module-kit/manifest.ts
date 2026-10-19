@@ -13,8 +13,8 @@ import {
   type WirePluginSpecShape,
 } from 'engine-contracts';
 import type { PluginSpec } from 'movement-lang';
-import { BASE_RUNTIME_CAPABILITIES } from 'movement-engine/public/adapter';
-import { pluginProgramName, pluginSpecOf } from 'movement-engine/public/plugins';
+import { BASE_RUNTIME_CAPABILITIES } from 'engine-contracts';
+import { pluginProgramName, pluginSpecOf } from 'engine-contracts';
 
 import type { AdapterModuleDefinition, AdapterModuleMethods, ModuleContext, ModuleDefinition, PluginModuleDefinition, PluginModuleMethods } from './define';
 

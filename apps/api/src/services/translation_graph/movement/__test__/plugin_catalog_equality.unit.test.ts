@@ -7,7 +7,7 @@
 // plugin's surface: PLUGIN_CATALOG_RECORD=1.
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-require('movement-engine/services/knowledge_pipeline/output_v3/schemas');
+require('engine-contracts/expression/schemas');
 
 import * as fs from 'fs';
 import * as path from 'path';

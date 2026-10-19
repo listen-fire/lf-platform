@@ -3,12 +3,13 @@
 // It reads its provider through `ctx.fetch` at `ctx.config.baseUrlOverride`
 // (or the credential's `base_url`), so a test can stand the provider up.
 
-import type { Adapter, RelatedResult } from 'movement-engine/public/adapter';
+import type { RelatedResult } from 'engine-contracts';
+import type { Adapter } from 'module-runtime';
 
-import { BASE_RUNTIME_CAPABILITIES } from 'movement-engine/public/adapter';
-import { META_RECORD_TYPE, makeStablePosition } from 'movement-engine/public/catalog';
+import { BASE_RUNTIME_CAPABILITIES } from 'engine-contracts';
+import { META_RECORD_TYPE, makeStablePosition } from 'engine-contracts';
 
-import { defineModule, type AdapterModuleMethods, type ModuleContext } from '../../define';
+import { defineModule, type AdapterModuleMethods, type ModuleContext } from 'module-kit';
 
 export const NOTES_MANIFEST = {
   adapterType: 'notes',

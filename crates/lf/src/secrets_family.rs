@@ -1,4 +1,4 @@
-//! The secrets host family (movement-engine services/secrets/family.ts): where a credential's fields are read from,
+//! The secrets host family (module-runtime secrets/family.ts): where a credential's fields are read from,
 //! written back to and refreshed through, whatever stores them (a plain or
 //! SOPS file, the environment). A store implements `SecretsBackend`; every
 //! caller goes through the one `SecretsFamily`, so the rules a refresh keeps

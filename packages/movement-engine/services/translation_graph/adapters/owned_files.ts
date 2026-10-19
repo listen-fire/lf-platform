@@ -8,7 +8,7 @@
 // process; `ownedFilesAdapter` does the same for one loaded in process.
 
 import type { Adapter, GetFieldValueInput, RelatedResult } from '../adapter';
-import type { SchemaTypeDescriptor } from '../types';
+import type { SchemaTypeDescriptor } from 'engine-contracts/catalog';
 
 import { fileDescriptorOf, ownedFileSource, RESOURCES_REFERENCE_FIELD_ID } from '../adapter';
 

@@ -24,7 +24,7 @@ import {
 
 import { staticCatalogSnapshot } from '../../../translation_graph/movement/catalog';
 import type { Adapter, RuntimeCapabilities } from 'movement-engine/services/translation_graph/adapter';
-import { positionData } from 'movement-engine/services/translation_graph/types';
+import { positionData } from 'engine-contracts/catalog';
 import { RunCancelledSignal } from 'movement-engine/services/movement_engine/errors';
 import { VOID_HOST_METHODS, hostMethodPaths, type EngineHost } from 'movement-engine/services/movement_engine/host';
 import { runMovement } from 'movement-engine/services/movement_engine/run';

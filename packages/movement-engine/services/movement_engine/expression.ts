@@ -146,7 +146,7 @@ import {
   positionData,
   positionRecordId,
   type SourcePosition,
-} from '../translation_graph/types';
+} from 'engine-contracts/catalog';
 import { stampedPositionName } from './kg';
 import type { ExtractEmission } from './extraction';
 import type { CallbackParamSpec } from 'engine-contracts';

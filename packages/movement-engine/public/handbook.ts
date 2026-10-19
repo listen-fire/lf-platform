@@ -2,4 +2,4 @@
 // by, slicing one section out of a chapter, and the claims a section makes
 // about the engine.
 
-export * from '../lib/handbook_section';
+export * from 'engine-contracts/handbook_section';

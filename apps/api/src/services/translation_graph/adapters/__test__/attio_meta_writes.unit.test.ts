@@ -13,7 +13,7 @@
 
 
 import { fileValue, type FileValue } from 'movement-engine/services/translation_graph/adapter';
-import type { MutationContext } from 'movement-engine/services/translation_graph/mutation_context';
+import type { MutationContext } from 'engine-contracts/mutation_context';
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 
 import {

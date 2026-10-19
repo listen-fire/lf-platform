@@ -4,12 +4,13 @@
 
 import { Readable } from 'node:stream';
 
-import type { Adapter, FileRef } from 'movement-engine/public/adapter';
+import type { FileRef } from 'engine-contracts';
+import type { Adapter } from 'module-runtime';
 
-import { BASE_RUNTIME_CAPABILITIES, isFileValue } from 'movement-engine/public/adapter';
+import { BASE_RUNTIME_CAPABILITIES, isFileValue } from 'engine-contracts';
 
-import { defineModule, type ModuleContext } from '../../define';
-import { moduleFileRef, readHandedFile } from '../../files';
+import { defineModule, type ModuleContext } from 'module-kit';
+import { moduleFileRef, readHandedFile } from 'module-kit';
 
 export const BLOBS_MANIFEST = {
   adapterType: 'blobs',

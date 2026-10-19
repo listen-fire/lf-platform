@@ -12,7 +12,7 @@ import {
   type InstanceSchema,
 } from 'movement-lang';
 
-import type { SchemaEntryPoint, SchemaTypeDescriptor } from 'movement-engine/services/translation_graph/types';
+import type { SchemaEntryPoint, SchemaTypeDescriptor } from 'engine-contracts/catalog';
 
 import {
   closeDemandOverChains,

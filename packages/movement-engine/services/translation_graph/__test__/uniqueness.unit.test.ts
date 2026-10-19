@@ -3,7 +3,7 @@
 // to auto-match (every branch's search was exact) or must reach the judge
 // (some branch could have matched approximately).
 
-import { constraintsHaveFuzzyEntry, type UniquenessConstraints } from '../uniqueness';
+import { constraintsHaveFuzzyEntry, type UniquenessConstraints } from 'engine-contracts/uniqueness';
 
 const exactOn = (field: string): UniquenessConstraints => ({
   any: [{ all: [{ field }] }],
