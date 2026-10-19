@@ -109,6 +109,11 @@ LISTEN_FIRE_VERSION="$(configured LISTEN_FIRE_VERSION)"
 export LISTEN_FIRE_VERSION
 IMAGE_TAG="${LISTEN_FIRE_VERSION:-latest}"
 REGISTRY=ghcr.io/listen-fire
+# WHICH api variant: the default is `api` (with Chromium); the slim one is
+# `api-slim`. Compose reads the same two values from .env for the run itself.
+API_IMAGE="$(configured LISTEN_FIRE_API_IMAGE)"
+API_IMAGE="${API_IMAGE:-$REGISTRY/api}"
+API_TARGET="$(configured LISTEN_FIRE_API_TARGET)"
 
 LISTEN_FIRE_PRODUCTS="$(IFS=,; echo "${UNITS[*]}")"
 export LISTEN_FIRE_PRODUCTS
@@ -349,19 +354,21 @@ echo
 build_image() {
   local name="$1" dockerfile="$2" target="${3:-}"
   # The tag compose will start, so a build and a pull are interchangeable.
-  local args=(-f "$DEPLOY_DIR/$dockerfile" -t "$REGISTRY/$name:$IMAGE_TAG")
+  local ref="$REGISTRY/$name"
+  [ "$name" = "api" ] && ref="$API_IMAGE"
+  local args=(-f "$DEPLOY_DIR/$dockerfile" -t "$ref:$IMAGE_TAG")
   [ -n "$target" ] && args+=(--target "$target")
   # Only the api declares it; passing it to the others is a warning per build.
   [ "$name" = "api" ] && args+=(--build-arg "LISTEN_FIRE_VERSION=${LISTEN_FIRE_VERSION:-dev}")
 
-  echo "[up] building $REGISTRY/$name:$IMAGE_TAG …"
+  echo "[up] building $ref:$IMAGE_TAG …"
   docker build "${args[@]}" "$DEPLOY_DIR/.."
 }
 
 case "$SOURCE" in
   build)
     # migrate and seed share the api's image, so `api` covers all three.
-    build_image api Dockerfile
+    build_image api Dockerfile "$API_TARGET"
     build_image web Dockerfile.web web
     # The admin app rides the `admin` profile, which only core turns on.
     if has_unit core; then build_image admin Dockerfile.web admin; fi
@@ -535,7 +542,7 @@ if [ "$KEEP_IMAGES" -eq 0 ]; then
   [ -n "$PREVIOUS_VERSION" ] && KEEP_TAGS+=("$PREVIOUS_VERSION")
 
   REMOVED=()
-  for name in api web admin; do
+  for name in api api-slim web admin; do
     while IFS= read -r ref; do
       [ -z "$ref" ] && continue
       tag="${ref##*:}"

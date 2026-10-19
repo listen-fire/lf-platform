@@ -6,8 +6,13 @@ node_modules
 # paths — was riding into the image and poisoning the build inside it.
 .next
 **/.next
-dist
-*.log
+**/dist
+**/build
+**/coverage
+**/.turbo
+**/*.tsbuildinfo
+**/.vercel
+**/*.log
 # `.env*` alone matches only the context ROOT, so `apps/api/.env` was being
 # copied into the image — a developer's local secrets baked into a layer.
 .env*
@@ -20,3 +25,14 @@ dist
 /tmp
 target
 **/target
+# Not inputs to any image: Rust sources (the engine ships as the committed wasm
+# artifacts under packages/movement-lang/wasm), the planning folders, and the
+# dev-loop's and agents' transient state. `target` and `**/target` above are
+# the Rust build output, which is gigabytes on a developer's machine.
+crates
+plans
+.superpowers
+.dev-loop
+.github
+HEALTH.md
+**/.DS_Store

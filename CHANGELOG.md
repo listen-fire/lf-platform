@@ -27,6 +27,9 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 - **Retrying a request no longer starts a second run.** Run now takes an optional `requestId` (the app sends one per press); a retry with the same id gets the first run back. WhatsApp messages are now deduplicated on their message id, as email already was on its Message-Id.
 - **A loop-guard throttle's held event is released from the work queue**, not an in-process timer, so a restart no longer drops the release.
 - **A fired callback answers 202** (recorded, the body queued) on the HTTP callback door, where it used to answer 200 after starting the body in the request's process.
+### s-image
+
+- The API image is now built in two variants and carries production dependencies only. `ghcr.io/listen-fire/api` is unchanged in features (it keeps Chromium); new `ghcr.io/listen-fire/api-slim` leaves Chromium out for a smaller image and faster cold start. Document fetches behind browser-rendered viewers (DocSend, Papermark, Notion) and PDF rendering fail on the slim image with an error naming the browser variant. Compose runs the browser variant unless `LISTEN_FIRE_API_IMAGE` and `LISTEN_FIRE_API_TARGET` are set (see `deploy/SELF_HOSTING.md`, "Image variants"). The demo's seed and fake CRM services now run the compiled scripts, not ts-node.
 
 ## [0.12.0-rc.2] - 2026-10-19 (pre-release)
 

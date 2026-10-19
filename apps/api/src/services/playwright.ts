@@ -28,17 +28,44 @@ class WithPageTimeoutError extends Error {
 const DESKTOP_CHROME_USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36';
 
+// The slim API image (ghcr.io/listen-fire/api-slim) leaves Chromium out so a
+// scale-from-zero container pulls and starts faster. Everything that renders a
+// page or a PDF goes through getBrowser, so this is the one place that names
+// the fix.
+class BrowserUnavailableError extends Error {
+  constructor(reason: string) {
+    super(
+      `This feature needs Chromium, which is not available here (${reason}). ` +
+        'Run the browser variant of the API image (ghcr.io/listen-fire/api, ' +
+        'build target api-browser) instead of the slim one (ghcr.io/listen-fire/api-slim).',
+    );
+    this.name = 'BrowserUnavailableError';
+  }
+}
+
+const MISSING_EXECUTABLE = /Executable doesn't exist/;
+
 class Playwright {
   async instance() {
     return import('playwright');
   }
 
   async getBrowser() {
+    if (process.env.LISTEN_FIRE_IMAGE_VARIANT === 'slim') {
+      throw new BrowserUnavailableError('this is the slim image');
+    }
     const playwright = await this.instance();
-    return playwright.chromium.launch({
-      headless: true,
-      executablePath: undefined,
-    });
+    try {
+      return await playwright.chromium.launch({
+        headless: true,
+        executablePath: undefined,
+      });
+    } catch (err) {
+      if (err instanceof Error && MISSING_EXECUTABLE.test(err.message)) {
+        throw new BrowserUnavailableError('no Chromium is installed');
+      }
+      throw err;
+    }
   }
 
   /**
@@ -112,4 +139,4 @@ class Playwright {
 
 const PlaywrightService = new Playwright();
 
-export { PlaywrightService };
+export { PlaywrightService, BrowserUnavailableError };

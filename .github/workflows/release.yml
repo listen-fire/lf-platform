@@ -1,5 +1,5 @@
 name: release
-# A git tag IS the version. Pushing `v0.1.0` publishes the four images an
+# A git tag IS the version. Pushing `v0.1.0` publishes the five images an
 # installation runs to ghcr.io/listen-fire/<name>, for both architectures, at
 # that tag and at `latest`; nothing else publishes anything, and there is no
 # schedule — a release happens because somebody tagged.
@@ -46,11 +46,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # The api in two variants: `api` keeps Chromium (what every earlier
+          # release shipped under this name), `api-slim` leaves it out. Same
+          # tag rules for both, so a pre-release never moves either :latest.
           - name: api
             dockerfile: deploy/Dockerfile
-            target: ""
+            target: api-browser
             # Only the api reads a version back out of its environment, and a
             # build arg no Dockerfile declares is a warning on every build.
+            build-args: |
+              LISTEN_FIRE_VERSION=${{ github.event_name == 'push' && github.ref_name || 'dev' }}
+          - name: api-slim
+            dockerfile: deploy/Dockerfile
+            target: api-slim
             build-args: |
               LISTEN_FIRE_VERSION=${{ github.event_name == 'push' && github.ref_name || 'dev' }}
           - name: web
@@ -120,7 +128,9 @@ jobs:
             org.opencontainers.image.version=${{ github.ref_name }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.licenses=Apache-2.0
-          # Scoped per image: one shared cache would have four images evicting
+          # Scoped per image: one shared cache would have five images evicting
           # each other's layers on every release.
-          cache-from: type=gha,scope=${{ matrix.name }}
-          cache-to: type=gha,scope=${{ matrix.name }},mode=max
+          # The two api variants share one scope: they share the whole build
+          # stage, which is the slow part (arm64 under QEMU).
+          cache-from: type=gha,scope=${{ startsWith(matrix.name, 'api') && 'api' || matrix.name }}
+          cache-to: type=gha,scope=${{ startsWith(matrix.name, 'api') && 'api' || matrix.name }},mode=max
