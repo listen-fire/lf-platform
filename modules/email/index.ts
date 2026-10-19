@@ -17,10 +17,14 @@
 
 import { defineModule, type ModuleContext } from 'module-kit';
 
+import type { EventType, InboundCheck, InboundCheckInput } from 'movement-engine/public/adapter';
+
 import { EmailAdapter, type EmailSources } from './adapter';
 import { EMAIL_CREDENTIAL, emailAccessFrom } from './credential';
+import { EMAIL_INBOUND_TAG, checkEmailInbound, type EmailInboundSources } from './inbound/check';
 import { EMAIL_MANIFEST } from './manifest';
 import { fetchEmailAttachment } from './providers';
+import { EMAIL_RECORD_TYPE_ID } from './types';
 
 /** The adapter's sources over a module context. */
 export function emailSourcesFrom(ctx: ModuleContext): EmailSources {
@@ -29,12 +33,34 @@ export function emailSourcesFrom(ctx: ModuleContext): EmailSources {
   };
 }
 
+/** The email adapter as the module serves it: it also checks the mail a
+ *  provider posts to its door, and types what that mail becomes. The
+ *  platform's own mail doors keep the plain adapter. */
+export class InboundEmailAdapter extends EmailAdapter {
+  constructor(
+    sources: EmailSources,
+    private readonly inbound: EmailInboundSources,
+  ) {
+    super(sources);
+  }
+
+  async checkInbound(input: InboundCheckInput): Promise<InboundCheck> {
+    return checkEmailInbound(input, this.inbound);
+  }
+
+  async listEventTypes(): Promise<EventType[]> {
+    return [{ tag: EMAIL_INBOUND_TAG, positionType: EMAIL_RECORD_TYPE_ID }];
+  }
+}
+
 export const emailModule = defineModule({
   kind: 'adapter',
   name: '@lf/email',
   manifest: EMAIL_MANIFEST,
   credentials: [EMAIL_CREDENTIAL],
-  create: (ctx) => new EmailAdapter(emailSourcesFrom(ctx)),
+  // Mailgun and Resend each sign their own way, neither a declared scheme.
+  inbound: { providerKey: 'email', scheme: 'module' },
+  create: (ctx) => new InboundEmailAdapter(emailSourcesFrom(ctx), { access: () => emailAccessFrom(ctx) }),
 });
 
 export default emailModule;
@@ -42,6 +68,7 @@ export default emailModule;
 export * from './adapter';
 export * from './address';
 export * from './credential';
+export * from './inbound/check';
 export * from './inbound/mail';
 export * from './manifest';
 export * from './providers';

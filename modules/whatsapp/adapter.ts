@@ -77,7 +77,19 @@ export interface WhatsappSources {
   fetch: typeof fetch;
   /** The bytes of a file a write hands the adapter. */
   readFile(file: FileValue): Promise<Uint8Array>;
+  /** Meta media by id (`meta-media:<id>`), downloaded with the install's own
+   *  token. Absent where media ids are never handles (the platform's Meta
+   *  door exposes each download at a URL instead). */
+  metaMedia?(mediaId: string): Promise<Response>;
   log: ModuleLog;
+}
+
+/** The handle an inbound attachment Meta delivers by id carries. */
+export const META_MEDIA_HANDLE_PREFIX = 'meta-media:';
+
+/** The Meta media id a handle names, or null. */
+export function metaMediaId(handle: string): string | null {
+  return handle.startsWith(META_MEDIA_HANDLE_PREFIX) ? handle.slice(META_MEDIA_HANDLE_PREFIX.length) || null : null;
 }
 
 /**
@@ -597,6 +609,11 @@ export class WhatsappAdapter extends BaseAdapter implements Adapter {
         `${WHATSAPP_ADAPTER_TYPE}.resolveFileRef: FileRef has no source handle to resolve.`,
       );
     }
+    const mediaId = metaMediaId(handle);
+    if (mediaId !== null) {
+      if (this.sources.metaMedia === undefined) throw new FileOutsideTeamError('handle', WHATSAPP_ADAPTER_TYPE);
+      return this.streamed(handle, await this.sources.metaMedia(mediaId));
+    }
     // Only a handle this adapter issued is fetched: refused by name otherwise.
     const issued = await this.sources.issued(handle);
     if (issued !== true) throw new FileOutsideTeamError('handle', issued);
@@ -610,6 +627,10 @@ export class WhatsappAdapter extends BaseAdapter implements Adapter {
     } catch (err) {
       throw new Error(`${WHATSAPP_ADAPTER_TYPE}.resolveFileRef: fetch of "${url}" failed — ${describeError(err)}`);
     }
+    return this.streamed(url, res);
+  }
+
+  private streamed(url: string, res: Response): ResolveFileRefResult {
     if (!res.ok || !res.body) {
       throw new Error(`${WHATSAPP_ADAPTER_TYPE}.resolveFileRef: fetch of "${url}" failed (status ${res.status}).`);
     }

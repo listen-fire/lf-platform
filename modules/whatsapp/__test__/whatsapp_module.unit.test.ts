@@ -46,10 +46,11 @@ const reply = (data: Record<string, unknown>, fields: Record<string, unknown> = 
   ({ mutationContext, recordType: 'Message', fields, parentLinks: [{ recordType: 'Message', externalId: 'wamid.IN', edgeName: 'Replies', data }] }) as never;
 
 describe('@lf/whatsapp', () => {
-  it('declares its credential and no signed inbound; the manifest quotes the number its host names', () => {
+  it('declares its credential and that it checks its own inbound; the manifest quotes the number its host names', () => {
     const own = load({ credential: credential(OWN) });
     expect(own.manifest.credentials?.[0]?.name).toBe('whatsapp');
-    expect(own.manifest.inbound).toBeUndefined();
+    expect(own.manifest.inbound).toEqual({ providerKey: 'whatsapp', scheme: 'module' });
+    expect(own.manifest.methods).toContain('checkInbound');
     expect(whatsappModule.manifest.description).toMatch(/^WhatsApp on the shared Listen-Fire number\. /);
     expect(whatsappModuleWith({ movementsNumber: '+44 7700 900000' }).manifest.description).toContain('(+44 7700 900000)');
   });

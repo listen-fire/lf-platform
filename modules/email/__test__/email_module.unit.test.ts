@@ -44,11 +44,12 @@ const owned = (handle: string): { ref: FileRef } => ({
 });
 
 describe('@lf/email', () => {
-  it('declares the email credential and no signed inbound (its doors are the host’s)', () => {
+  it('declares the email credential and that it checks its own inbound', () => {
     const { manifest } = load({ credential: credential({}) });
     expect(manifest.adapterType).toBe('email');
     expect(manifest.credentials?.[0]?.name).toBe('email');
-    expect(manifest.inbound).toBeUndefined();
+    expect(manifest.inbound).toEqual({ providerKey: 'email', scheme: 'module' });
+    expect(manifest.methods).toContain('checkInbound');
   });
 
   it('mints a Resend attachment’s URL with the credential’s key, at the dev loop’s fake when there is one', async () => {

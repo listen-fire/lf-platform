@@ -15,8 +15,11 @@ import { z } from 'zod';
 
 import { defineModule, type AdapterModuleDefinition, type ModuleContext } from 'module-kit';
 
+import type { InboundCheck, InboundCheckInput } from 'movement-engine/public/adapter';
+
 import { WhatsappAdapter, issuedTwilioMedia, type WhatsappSources } from './adapter';
-import { META_GRAPH_BASE_URL, whatsappNumbers } from './client';
+import { META_GRAPH_BASE_URL, downloadMetaMedia, whatsappNumbers } from './client';
+import { checkWhatsappInbound, type WhatsappInboundSources } from './inbound_check';
 import { whatsappManifest } from './manifest';
 
 /** The credential's fields. */
@@ -26,6 +29,7 @@ const whatsappCredential = z.object({
   movementsPhoneNumberId: z.string().optional(),
   baseUrl: z.string().url().optional(),
   twilioAccountSid: z.string().optional(),
+  webhookVerifyToken: z.string().optional(),
 });
 
 /** What a host knows that the module cannot. */
@@ -36,6 +40,10 @@ export interface WhatsappHost {
   /** Whether a URL is one the host exposed a file at: the platform's Meta door
    *  downloads each media item and hands the adapter such a URL. */
   exposedFileUrl?(url: string): boolean;
+  /** The host takes media by Meta's id (`meta-media:<id>`), downloaded with
+   *  the install's own token. Only where an install is its own Meta app (lf):
+   *  on a shared app any team could name any team's media id. */
+  mediaById?: boolean;
 }
 
 /** The adapter's sources over a module context. */
@@ -65,8 +73,32 @@ export function whatsappSourcesFrom(ctx: ModuleContext, host: WhatsappHost = {})
     },
     fetch: ctx.fetch,
     readFile: (file) => ctx.files.read(file),
+    ...(host.mediaById === true
+      ? {
+          metaMedia: async (mediaId: string) => {
+            const fields = await credential();
+            const graphBaseUrl = ctx.config.baseUrlOverride ?? fields.baseUrl ?? META_GRAPH_BASE_URL;
+            return downloadMetaMedia({ graphBaseUrl, accessToken: fields.accessToken, fetch: ctx.fetch }, mediaId);
+          },
+        }
+      : {}),
     log: ctx.log,
   };
+}
+
+/** The WhatsApp adapter as the module serves it: it also checks what Meta
+ *  sends its door (the verification GET, signed deliveries). */
+export class InboundWhatsappAdapter extends WhatsappAdapter {
+  constructor(
+    sources: WhatsappSources,
+    private readonly inbound: WhatsappInboundSources,
+  ) {
+    super(sources);
+  }
+
+  async checkInbound(input: InboundCheckInput): Promise<InboundCheck> {
+    return checkWhatsappInbound(input, this.inbound);
+  }
 }
 
 /** `@lf/whatsapp` for a host that knows what `host` says. */
@@ -85,15 +117,27 @@ export function whatsappModuleWith(host: WhatsappHost): AdapterModuleDefinition 
           { name: 'movementsPhoneNumberId', label: 'A second phone number id, in the same Meta app', secret: false, optional: true },
           { name: 'baseUrl', label: 'Graph API base URL', secret: false, optional: true },
           { name: 'twilioAccountSid', label: 'Twilio account SID (its media are this install’s)', secret: false, optional: true },
+          { name: 'webhookVerifyToken', label: 'Webhook verify token (what Meta presents when the webhook is registered)', optional: true },
         ],
       },
     ],
-    create: (ctx) => new WhatsappAdapter(whatsappSourcesFrom(ctx, host)),
+    // Meta's verification GET is a handshake no declared scheme answers. The
+    // key deliveries are signed with is the Meta app's secret.
+    inbound: { providerKey: 'whatsapp', scheme: 'module' },
+    create: (ctx) =>
+      new InboundWhatsappAdapter(whatsappSourcesFrom(ctx, host), {
+        verifyToken: async () => {
+          const token = (await ctx.credential.fields())['webhookVerifyToken'];
+          return token !== undefined && token.trim() !== '' ? token : undefined;
+        },
+        mediaById: host.mediaById === true,
+      }),
   });
 }
 
-/** The module for a host with no shared number and no exposed files (lf). */
-export const whatsappModule = whatsappModuleWith({});
+/** The module for a host with no shared number and no exposed files, where
+ *  each install is its own Meta app (lf). */
+export const whatsappModule = whatsappModuleWith({ mediaById: true });
 
 export default whatsappModule;
 
@@ -101,6 +145,7 @@ export * from './adapter';
 export * from './client';
 export * from './handbook_section';
 export * from './inbound';
+export * from './inbound_check';
 export * from './manifest';
 export * from './phone';
 export * from './types';
