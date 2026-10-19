@@ -1,9 +1,7 @@
 import { Readable } from 'node:stream';
 
-import Redis from 'ioredis';
-
 import { Queue } from 'movement-engine/public/queue';
-import { getRedisPool, redisConfigured } from '../redisPool';
+import { ttlCache } from './ttl_cache';
 
 const requestQueue = new Queue<Readable | null>({ concurrency: 10 });
 
@@ -53,39 +51,23 @@ async function getIconForUrlInner(hostname: string, size: string) {
   return null;
 }
 
-// The cache is Redis-only: with no Redis configured every lookup is a miss.
 async function getCachedIcon(hostname: string, size: string) {
-  if (!redisConfigured()) return null;
   const cacheKey = `${hostname}:${size}`;
-  const pool = getRedisPool();
-  let client: Redis | null = null;
-
   try {
-    client = await pool.acquire();
-    const data = await client.getBuffer(cacheKey); // ioredis supports getBuffer
-    return data || null;
+    return await ttlCache.get(cacheKey);
   } catch (error) {
     console.error(`Failed to get cache for ${cacheKey}:`, error);
     return null;
-  } finally {
-    if (client) await pool.release(client);
   }
 }
 
 async function cacheIcon(hostname: string, size: string, buffer: Buffer) {
-  if (!redisConfigured()) return;
-  const oneMonth = 30 * 24 * 60 * 60; // 30 days in seconds
+  const oneMonthMs = 30 * 24 * 60 * 60 * 1000;
   const cacheKey = `${hostname}:${size}`;
-
-  const pool = getRedisPool();
-  let client: Redis | null = null;
   try {
-    client = await pool.acquire();
-    await client.set(cacheKey, buffer, 'EX', oneMonth);
+    await ttlCache.set(cacheKey, buffer, oneMonthMs);
   } catch (error) {
     console.error(`Failed to cache icon for ${cacheKey}:`, error);
-  } finally {
-    if (client) await pool.release(client);
   }
 }
 

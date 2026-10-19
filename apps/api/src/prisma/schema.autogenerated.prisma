@@ -108,6 +108,17 @@ model AutomationsAuditLog {
   @@schema("automations")
 }
 
+model CacheEntry {
+  key       String   @id
+  value     Bytes    @default("")
+  counter   BigInt   @default(0)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+
+  @@index([expiresAt], map: "cache_entry_expires_idx")
+  @@map("cache_entry")
+  @@schema("automations")
+}
+
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model Callback {
   id         String     @id

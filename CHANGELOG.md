@@ -13,6 +13,10 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 
 ## [Unreleased]
 
+### s-redis
+
+- Redis is now truly optional. With `MESSAGE_QUEUE_REDIS_HOSTNAME` unset (or, on compose, set empty in `deploy/.env`, which also keeps the bundled Redis from starting), the favicon cache, MCP OAuth in-flight state and the runaway-loop guard's counters live in one small expiring Postgres table (`automations.cache_entry`, added by a migration) instead of nothing or process memory. They are now exact across API instances and survive a stop between requests; the loop guard pays one database round trip per dispatch. With the hostname set, Redis is used exactly as before. Defaults are unchanged: compose still runs the bundled Redis unless you ask otherwise.
+
 ## [0.12.0-rc.2] - 2026-10-19 (pre-release)
 
 This is a pre-release for trying out, not the full 0.11.0 line's replacement: container images are

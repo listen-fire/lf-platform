@@ -30,6 +30,8 @@
 #
 #   DATABASE_URL                    set → the bundled `postgres` is not started
 #   MESSAGE_QUEUE_REDIS_HOSTNAME    set → the bundled `redis` is not started
+#                                   (set EMPTY → no Redis at all: the API keeps its
+#                                   caches and counters in Postgres)
 #   AWS_S3_ENDPOINT                 set → the bundled `objectstore` is not started
 #
 # The mechanism is the `profiles:` line on each of those three services. A
@@ -121,15 +123,15 @@ services:
       retries: 30
     restart: unless-stopped
 
-  # Optional to the API (unset hostname = it never connects), but the composition names
-  # this one. Core's MCP OAuth flow keeps in-flight state here; automations' runaway-loop
+  # Optional to the API (an empty hostname = it never connects and keeps its caches and
+  # counters in Postgres), but the composition names this one. Core's MCP OAuth flow keeps in-flight state here; automations' runaway-loop
   # guard keeps its counters here. Every shipped composition runs it — a bare
   # `docker compose up` mounts every unit, and two of them write here — so its
   # profile is on by default and the only thing that parks it is naming your own
   # Redis in MESSAGE_QUEUE_REDIS_HOSTNAME. A shape that needs none of it pays
   # for one idle alpine container.
   redis:
-    profiles: ['${MESSAGE_QUEUE_REDIS_HOSTNAME:+unused-}redis']
+    profiles: ['${MESSAGE_QUEUE_REDIS_HOSTNAME+unused-}redis']
     image: redis:7.2-alpine
     command: ['redis-server', '--save', '60', '1', '--loglevel', 'warning']
     volumes:
@@ -237,7 +239,7 @@ services:
       NODE_ENV: ${LISTEN_FIRE_NODE_ENV:-production}
       API_BASE_URL: ${API_BASE_URL:-http://localhost:8081}
       WEB_BASE_URL: ${WEB_BASE_URL:-http://localhost:8080}
-      MESSAGE_QUEUE_REDIS_HOSTNAME: ${MESSAGE_QUEUE_REDIS_HOSTNAME:-redis}
+      MESSAGE_QUEUE_REDIS_HOSTNAME: ${MESSAGE_QUEUE_REDIS_HOSTNAME-redis}
       MESSAGE_QUEUE_REDIS_PORT: ${MESSAGE_QUEUE_REDIS_PORT:-6379}
       FAKE_CHANNELS_URL: ${FAKE_CHANNELS_URL:-}
       MOCK_OUTPUT_ADAPTERS: ${MOCK_OUTPUT_ADAPTERS:-}
@@ -287,7 +289,7 @@ services:
       # bundled service (see the header). Host and port only: the client is
       # built from these two and nothing else, so a managed Redis that demands
       # AUTH or TLS cannot be reached through them.
-      MESSAGE_QUEUE_REDIS_HOSTNAME: ${MESSAGE_QUEUE_REDIS_HOSTNAME:-redis}
+      MESSAGE_QUEUE_REDIS_HOSTNAME: ${MESSAGE_QUEUE_REDIS_HOSTNAME-redis}
       MESSAGE_QUEUE_REDIS_PORT: ${MESSAGE_QUEUE_REDIS_PORT:-6379}
       # Both default to the composed deployment's answer — an in-process
       # consumer — because a bare `docker compose up` is the composed

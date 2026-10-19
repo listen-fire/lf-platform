@@ -141,10 +141,20 @@ fi
 # agree, which is why both are the presence of the same variable.
 PROFILES=()
 STORES_REPORT=()
+# Whether a variable is declared at all, empty included. Redis alone needs this: an empty
+# MESSAGE_QUEUE_REDIS_HOSTNAME means "no Redis", which compose reads the same way.
+declared() {
+  local name="$1"
+  eval "[ -z \"\${$name+x}\" ]" || return 0
+  grep -Eq "^[[:space:]]*$name=" .env 2>/dev/null
+}
+
 add_store() {
-  local service="$1" variable="$2"
+  local service="$1" variable="$2" empty_means_none="${3:-}"
   if [ -n "$(configured "$variable")" ]; then
     STORES_REPORT+=("$service (yours, via $variable)")
+  elif [ -n "$empty_means_none" ] && declared "$variable"; then
+    STORES_REPORT+=("$service (none: caches and counters live in Postgres)")
   else
     PROFILES+=("$service")
     STORES_REPORT+=("$service (bundled)")
@@ -187,7 +197,7 @@ GUARD_MESSAGE
 }
 
 add_store postgres DATABASE_URL
-add_store redis MESSAGE_QUEUE_REDIS_HOSTNAME
+add_store redis MESSAGE_QUEUE_REDIS_HOSTNAME empty-means-none
 add_store objectstore AWS_S3_ENDPOINT
 objectstore_upgrade_guard
 

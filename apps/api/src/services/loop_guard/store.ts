@@ -7,11 +7,11 @@
 // bucket and reading the recent buckets are independent pipelined ops.
 //
 // All keys are short-TTL and self-expiring: nothing here needs cleanup, and a
-// metric that goes quiet simply ages out. No DB on this path.
+// metric that goes quiet simply ages out. With Redis there is no DB on this path.
 //
-// The buckets live in Redis when MESSAGE_QUEUE_REDIS_HOSTNAME is set and in this process's memory
-// otherwise (./counters). The backend is picked once, at load. Memory is exact for one process; with
-// several API instances and no Redis each counts only its own firings.
+// The buckets live in Redis when MESSAGE_QUEUE_REDIS_HOSTNAME is set and in Postgres otherwise
+// (./counters). The backend is picked once, at load. Process memory (./counters/memory) remains
+// as a test double.
 //
 // FAIL-OPEN: every backend operation is wrapped so that a connection
 // error, timeout, or unexpected reply degrades to "no signal" — `increment`
@@ -21,7 +21,7 @@
 import { redisConfigured } from '../../redisPool';
 import { logger } from 'movement-engine/public/log';
 import type { BucketBackend } from './counters/backend';
-import { createMemoryBucketBackend } from './counters/memory';
+import { postgresBucketBackend } from './counters/postgres';
 import { redisBucketBackend } from './counters/redis';
 
 export { resetAcquireBackoffForTests } from './counters/redis';
@@ -29,10 +29,8 @@ export { resetAcquireBackoffForTests } from './counters/redis';
 /** Bucket granularity. One bucket per second keeps windows precise to ~1s. */
 const BUCKET_SECONDS = 1;
 
-const backend: BucketBackend = redisConfigured() ? redisBucketBackend : createMemoryBucketBackend();
-// A deployment that meant to share counters across instances but lost its Redis setting would
-// otherwise count per instance without a trace.
-logger.info(`[LoopGuard] counters kept in ${redisConfigured() ? 'Redis' : 'process memory'}`);
+const backend: BucketBackend = redisConfigured() ? redisBucketBackend : postgresBucketBackend;
+logger.info(`[LoopGuard] counters kept in ${redisConfigured() ? 'Redis' : 'Postgres'}`);
 
 function bucketStamp(nowMs: number): number {
   return Math.floor(nowMs / 1000 / BUCKET_SECONDS);
