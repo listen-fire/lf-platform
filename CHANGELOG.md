@@ -13,6 +13,10 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 
 ## [Unreleased]
 
+### i-wire
+- One transport for every module kind: every core slot (store, models, judge, files, limiter, loopGuard, browser) speaks adapter protocol 2's HTTP — a Unix socket on the same box, loopback TCP without one, HTTPS for a remote module (`url:` in lf-external.yaml) with per-install outgoing auth (a Google identity token from the metadata server, or a static bearer). The store, limiter and loop guard stdin/stdout JSON-RPC wire is retired; `lf --contract-<slot>` servers speak the wire on `--listen`. New slot methods for models (no streaming), judge, files and browser (docs/contracts/*-slot.md, shapes in `engine-contracts/slots`), with conformance suites (`movement-engine/public/module-wire`) run against lf's built-ins.
+- `ctx.kv.compareAndSet(key, expected, value)`: write only if unchanged (memory, file and the platform's kvs). serve-module listens on `MODULE_SOCKET` and prints `listening unix:<path>`.
+
 ### au-delete
 
 - The legacy v3 output pipeline is removed (its executor, per-destination adapters, authoring agent and the `knowledge.outputAgent` / `knowledge.expressionWriter` tRPC routes). It had no remaining callers; movements are the only way data moves. A migration sets any stored v3 output (`pipeline_output.config_version = 3`) still marked live or dry-run to `off`; its config is kept.

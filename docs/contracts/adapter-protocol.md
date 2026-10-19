@@ -16,6 +16,7 @@ CRM in `apps/api/src/scripts/dev/fake_crm_adapter.ts` (see
 Contents:
 
 - [The envelope](#the-envelope)
+- [Transport](#transport)
 - [Versioning](#versioning)
 - [Authentication](#authentication)
 - [The manifest and installing](#the-manifest-and-installing)
@@ -80,6 +81,21 @@ Types, fields and edges each have two names, and the two may differ:
   type one name and use it for both.
 
 Record ids are identity, and cross the wire unchanged.
+
+## Transport
+
+Every module kind — adapter, plugin, and every core slot (store, models, judge, files, limiter, loopGuard, browser) — is reached this one way: this envelope over HTTP. Where it listens decides how:
+
+| where the module runs | its address | how |
+|---|---|---|
+| on the host's box, started by the host | `unix:<socket path>` | HTTP/1.1 on a Unix socket |
+| on the host's box, where there are no sockets | `http://127.0.0.1:<port>/` | loopback TCP |
+| elsewhere (a remote module: only a manifest on the host) | `https://…` | HTTPS |
+
+- **A module the host starts** is told where to listen: `MODULE_SOCKET` (a socket path) when set, else `PORT` (`0` picks one). It requires `Authorization: Bearer <MODULE_TOKEN>` when that is set, and prints one line on its stdout once it answers: `listening unix:<socket path>`, or `listening <port>`.
+- **A URL below a socket** (a file a module serves) is `http+unix://<socket path, percent-encoded>/<path>`.
+- **A remote module** is an `lf-external.yaml` with `url:` (and `auth:` naming the install field holding its secret). A credential goes only over HTTPS, a socket or loopback.
+- **Outgoing auth.** A remote module behind a platform's own sign-in (Cloud Run with IAM, a proxy) is reached with a second credential, set per install: `outgoing_auth: google-identity` sends a Google identity token for `outgoing_audience` (default: the URL's origin), minted by the metadata server; `outgoing_auth: bearer` sends `outgoing_token`. It goes in `outgoing_header`, by default `authorization`, or `x-serverless-authorization` when the module's own secret holds `authorization`. The module never sees these fields as settings.
 
 ## Versioning
 
@@ -930,14 +946,15 @@ page = web.fetchUrl(u)
 
 - **Kind.** The manifest may say what the module is: `"kind": "adapter"`,
   `"plugin"` or `"core"`. A `core` module fills one of the host's core
-  services and names it in `"slot"`: `models`, `judge`, `store`, `files` or
-  `limiter`.
+  services and names it in `"slot"`: `models`, `judge`, `store`, `files`,
+  `limiter`, `loopGuard` or `browser`.
   The host names one module per slot (lf.yaml's `core:`); a slot's contract
-  is its family's contract suite (the run host's store cases for `store`).
-  A `store` module may be a process the host speaks to over the
-  [store slot's wire](store-slot.md) (JSON-RPC on its stdin and stdout)
-  rather than over HTTP; a `limiter` module likewise, over
-  [the limiter slot's wire](limiter-slot.md).
+  is its methods and its conformance suite: [store](store-slot.md),
+  [limiter](limiter-slot.md), [loopGuard](loop-guard-slot.md),
+  [models](models-slot.md), [judge](judge-slot.md), [files](files-slot.md),
+  [browser](browser-slot.md), each over [the transport](#transport). A core
+  module answers `manifest` with `{ protocolVersion: 2, name, kind: "core",
+  slot, methods }`.
   Without `kind`, a module is an adapter, or a plugin package when it
   declares `plugins`.
 - **Settings.** Construction arguments the install supplies (an Airtable
@@ -1008,9 +1025,16 @@ page = web.fetchUrl(u)
 
 A module written with the module kit (`packages/module-kit`,
 `defineModule`) is served as a process by `serve-module <module>`: it binds
-loopback on `PORT` (0 picks one), prints `listening <port>`, and requires
+the socket `MODULE_SOCKET` names (else loopback on `PORT`, 0 picks one),
+prints `listening unix:<path>` (or `listening <port>`), and requires
 `Authorization: Bearer <MODULE_TOKEN>` when that is set. The platform loads
 the same module in process; both declare the same manifest.
+
+A module's own state (`ctx.kv`) is small JSON per install: `get`, `set`,
+`delete`, `list(prefix)`, and `compareAndSet(key, expected, value)`, which
+writes only when the key still holds `expected` (undefined: unset), compared
+as JSON values, and answers whether it wrote — of two writers that read the
+same value, one wins.
 
 ## Paging
 
@@ -1249,6 +1273,7 @@ from the root, so no automation can walk the collection.
 
 ## Changes
 
+- **One transport for every module kind** (within version 2, no bump; 2026-10-19). Every core slot's methods ride this envelope ([Transport](#transport)): a Unix socket on the host's box, loopback TCP without one, HTTPS for a remote module; the store, limiter and loop guard slots' stdin/stdout JSON-RPC wire is retired. New slot methods for models, judge, files and browser; a core module's manifest; per-install outgoing auth; `ctx.kv.compareAndSet`. Additive for adapters and plugins: an older server is unchanged.
 - **Conformance CLI.** `pnpm adapter:conformance` checks a server against this protocol; run it first when building an adapter ([Build your first adapter](#build-your-first-adapter)).
 - **Version 2** (current; the only version this release speaks). Breaking for a server built against version 1:
   - Requests carry `protocolVersion: "2"`, and the `manifest` answers `protocolVersion: 2`. Installing probes the server and refuses anything older.

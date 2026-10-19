@@ -66,6 +66,7 @@ describe('GoogleDriveAdapter read graph', () => {
         set: async () => undefined,
         delete: async () => undefined,
         list: async () => [{ key: 'granted/fold-1', value: { mimeType: FOLDER_MIME, name: 'Deals' } }],
+        compareAndSet: async () => false,
       },
       readFile: (ref) => refusingFiles('no files').read(ref),
       log: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },

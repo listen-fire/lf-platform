@@ -100,9 +100,10 @@ type CallbackRow = {
 };
 ```
 
-`lf --contract-store <state.db|postgres://…>` serves this wire over lf's own stores. A module may forward to it, as the test module does (`apps/cli/src/__test__/store_module/forward.mjs`). `runs.status` and `runs.complete` are the contract suite's helpers and are not called by lf.
+`lf --contract-store <state.db|postgres://…>` serves these methods over lf's own stores, as a store module on a Unix socket. A module may forward to it, as the test module does (`apps/cli/src/__test__/store_module/forward.mjs`). `runs.status` and `runs.complete` are the contract suite's helpers and are not called by lf.
 
 ## Changes
 
+- **2026-10-19** (within adapter protocol 2): the methods ride adapter protocol 2's HTTP, as every module's do; the stdin/stdout JSON-RPC wire is retired. A lost lease is the error code `run_lease_lost` (`data: { runId }`). A store module may be remote (`url:`).
 - **2026-10-18** (within adapter protocol 2): `work.claimDue` takes `kinds`, for drain pools (`lf drain --kinds`).
 - **2026-10-17** (within adapter protocol 2): the store slot's wire, and process modules filling the store slot.
