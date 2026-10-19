@@ -66,11 +66,20 @@ x-node-app: &node-app
 # RELEASE an installation runs is `LISTEN_FIRE_VERSION` — pin it in .env and
 # the installation moves only when you change it. Unpinned means `latest`,
 # which moves under you the next time anything pulls.
+#
+# The api comes in two variants (see deploy/Dockerfile): `api`, with Chromium
+# for the browser-rendered document fetches and PDF rendering, and `api-slim`,
+# without it. The default stays `api`, so an installation that changes nothing
+# keeps every feature. To run the slim one, set BOTH in .env:
+#   LISTEN_FIRE_API_IMAGE=ghcr.io/listen-fire/api-slim
+#   LISTEN_FIRE_API_TARGET=api-slim
+# (the second only matters to a source build).
 x-api-image: &api-image
-  image: ghcr.io/listen-fire/api:${LISTEN_FIRE_VERSION:-latest}
+  image: ${LISTEN_FIRE_API_IMAGE:-ghcr.io/listen-fire/api}:${LISTEN_FIRE_VERSION:-latest}
   build:
     context: ..
     dockerfile: deploy/Dockerfile
+    target: ${LISTEN_FIRE_API_TARGET:-api-browser}
     args:
       # A source build of an untagged tree is `dev`, and says so on
       # /healthz/workers and in the settings page.
@@ -424,7 +433,7 @@ services:
     <<: [*node-app, *api-image]
     profiles: ['demo']
     working_dir: /srv/listen-fire/apps/api
-    command: ['pnpm', 'dev:fake-crm']
+    command: ['node', 'build/scripts/dev/fake_crm_server.js']
     environment:
       NODE_ENV: development
       LISTEN_FIRE_DEMO: '1'
@@ -464,12 +473,12 @@ services:
             *) return 1 ;;
           esac
         }
-        pnpm dev:seed --pretty
-        if mounts knowledge; then pnpm dev:demo-graph; fi
-        if mounts automations; then pnpm dev:movement provision; fi
+        node build/scripts/dev/seed.js --pretty
+        if mounts knowledge; then node build/scripts/dev/demo_graph.js; fi
+        if mounts automations; then node build/scripts/dev/movement.js provision; fi
         if mounts valuations; then
-          pnpm dev:valuations setup
-          pnpm dev:valuations seed
+          node build/scripts/dev/valuations.js setup
+          node build/scripts/dev/valuations.js seed
         fi
     environment:
       NODE_ENV: development

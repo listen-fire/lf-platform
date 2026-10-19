@@ -13,6 +13,10 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 
 ## [Unreleased]
 
+### s-image
+
+- The API image is now built in two variants and carries production dependencies only. `ghcr.io/listen-fire/api` is unchanged in features (it keeps Chromium); new `ghcr.io/listen-fire/api-slim` leaves Chromium out for a smaller image and faster cold start. Document fetches behind browser-rendered viewers (DocSend, Papermark, Notion) and PDF rendering fail on the slim image with an error naming the browser variant. Compose runs the browser variant unless `LISTEN_FIRE_API_IMAGE` and `LISTEN_FIRE_API_TARGET` are set (see `deploy/SELF_HOSTING.md`, "Image variants"). The demo's seed and fake CRM services now run the compiled scripts, not ts-node.
+
 ## [0.12.0-rc.2] - 2026-10-19 (pre-release)
 
 This is a pre-release for trying out, not the full 0.11.0 line's replacement: container images are

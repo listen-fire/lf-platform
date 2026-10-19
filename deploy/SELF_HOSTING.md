@@ -111,6 +111,26 @@ Building from source is the right answer when you have changed the code, or on a
 
 **The contracts have versions of their own.** Beside the release tag, the five contracts the movement core speaks (the catalog snapshot, the parked run state, the engine's host families, the adapter protocol and the language) each carry an integer version, and a release states which of each it supports and deprecates. [`docs/contracts/`](../docs/contracts/README.md) is the index. It matters when you run something against this release from outside it: a remote adapter (adapter protocol 2), or your own host for the engine.
 
+### Image variants: with and without Chromium
+
+The API image comes in two variants, built from one Dockerfile and published together:
+
+| image | contains | use it when |
+|---|---|---|
+| `ghcr.io/listen-fire/api` (the default) | the API, its production dependencies, and Chromium | you want every feature, or you are changing nothing |
+| `ghcr.io/listen-fire/api-slim` | the same without Chromium | the container is pulled on a cold start (scale from zero), where a smaller image starts sooner |
+
+Chromium is used by exactly two things: fetching documents behind a browser-rendered viewer (DocSend, Papermark, Notion and the like) and rendering a PDF in an automation or a Slack preview. On the slim image those fail with an error that names the browser variant (`This feature needs Chromium ... ghcr.io/listen-fire/api`); everything else behaves the same. Nothing is auto-detected: you choose the variant, and a deployment that never set anything keeps the browser one.
+
+To run the slim variant under compose, set both in `deploy/.env`:
+
+```
+LISTEN_FIRE_API_IMAGE=ghcr.io/listen-fire/api-slim
+LISTEN_FIRE_API_TARGET=api-slim
+```
+
+The first picks the image to pull; the second picks the Dockerfile target for a source build (`up.sh --build` honours both). Outside compose, run `ghcr.io/listen-fire/api-slim:<tag>` directly. A pre-release tag publishes both variants at that tag only, and neither moves `latest`.
+
 ## Ports
 
 | service | host port | when |
