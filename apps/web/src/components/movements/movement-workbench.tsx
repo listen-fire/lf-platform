@@ -53,7 +53,7 @@ import {
   type MovementDiagnostic,
 } from "movement-lang";
 
-import { trpc } from "@/lib/trpc";
+import { trpc, type RouterOutputs } from "@/lib/trpc";
 import {
   LanguageVersionNotice,
   type UpgradeDiagnostic,
@@ -233,6 +233,84 @@ export interface MovementWorkbenchProps {
 
 /** "Used by" chips — the scripts that import this file, linked. Shown
  *  near the header so a library edit happens with its importers in view. */
+/** Where a Run-now press stands: queued or running, waiting, or settled. */
+function RunNowOutcome({
+  movementName,
+  status,
+}: {
+  movementName: string;
+  status: RouterOutputs["views"]["movement"]["runStatus"] | undefined;
+}) {
+  if (status !== undefined && "error" in status) {
+    return (
+      <div className="rounded-xl border border-red-100 bg-red-50/70 px-4 py-3.5">
+        <div className="flex items-center gap-2 text-[12.5px] font-medium text-red-800">
+          <AlertCircle size={15} />
+          Lost track of the run
+        </div>
+        <div className="mt-2 text-[12px] leading-relaxed text-red-700">{status.error}</div>
+      </div>
+    );
+  }
+  if (status === undefined || status.status === "running") {
+    return (
+      <div className="rounded-xl border border-gray-100 bg-gray-50/70 px-4 py-3.5">
+        <div className="flex items-center gap-2 text-[12.5px] font-medium text-gray-700">
+          <Loader2 size={15} className="animate-spin" />
+          Running &lsquo;{movementName}&rsquo;
+        </div>
+      </div>
+    );
+  }
+  if (status.status === "parked") {
+    return (
+      <div className="rounded-xl border border-amber-100 bg-amber-50/70 px-4 py-3.5">
+        <div className="flex items-center gap-2 text-[12.5px] font-medium text-amber-800">
+          <HelpCircle size={15} />
+          &lsquo;{movementName}&rsquo; is waiting
+        </div>
+        <div className="mt-2 text-[12px] leading-relaxed text-amber-700">
+          {status.paused?.reason ?? "It carries on once what it waits for arrives — see its runs."}
+        </div>
+      </div>
+    );
+  }
+  if (status.status === "failed") {
+    return (
+      <div className="rounded-xl border border-red-100 bg-red-50/70 px-4 py-3.5">
+        <div className="flex items-center gap-2 text-[12.5px] font-medium text-red-800">
+          <AlertCircle size={15} />
+          The run failed
+        </div>
+        <div className="mt-2 text-[12px] leading-relaxed text-red-700">
+          {status.failureReason ?? "No reason was recorded."}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-xl border border-green-100 bg-green-50/70 px-4 py-3.5">
+      <div className="flex items-center gap-2 text-[12.5px] font-medium text-green-800">
+        <CheckCircle2 size={15} />
+        Ran &lsquo;{movementName}&rsquo;
+        {status.dryRun ? " (rehearsal)" : ""}
+      </div>
+      <div className="mt-2 text-[12px] leading-relaxed text-green-700">
+        {status.recordCount} record
+        {status.recordCount === 1 ? "" : "s"} processed
+        {status.dryRun ? " — writes were captured, not committed." : "."}
+      </div>
+      {status.errors.length > 0 && (
+        <ul className="mt-2 space-y-1.5 text-[12px] leading-relaxed text-amber-700">
+          {status.errors.map((e, i) => (
+            <li key={i}>{e.message}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function UsedByChips({ dependents }: { dependents: Array<{ id: string; name: string }> }) {
   const MAX_CHIPS = 3;
   const shown = dependents.slice(0, MAX_CHIPS);
@@ -512,10 +590,11 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
       router.push("/automations");
     },
   });
-  // "Run now" — inject an invocation event on the script's manual-channel
+  // "Run now" — queue an invocation event on the script's manual-channel
   // listener (`go = manual()` + `listen to go {} fire …`), through normal
   // dispatch (the server rehearses instead when every written instance is
-  // dry_run).
+  // dry_run). The server answers with the run's id before the run starts; the
+  // status query follows it until it settles.
   const runNow = trpc.views.movement.runNow.useMutation({
     onSuccess: () => {
       // A run consumes its input; clear so the next run starts fresh.
@@ -525,6 +604,22 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
       if (runFileInputRef.current) runFileInputRef.current.value = "";
     },
   });
+  const queuedRunId = runNow.data?.ok ? runNow.data.runId : undefined;
+  const runStatus = trpc.views.movement.runStatus.useQuery(
+    { runId: queuedRunId ?? "" },
+    {
+      enabled: queuedRunId !== undefined,
+      refetchInterval: (data) =>
+        data !== undefined && !("error" in data) && data.status === "running"
+          ? 1500
+          : false,
+    },
+  );
+  const runInFlight =
+    runNow.isLoading ||
+    (queuedRunId !== undefined &&
+      (runStatus.data === undefined ||
+        (!("error" in runStatus.data) && runStatus.data.status === "running")));
   // Optional invocation payload for "Run now" — a manual movement can read
   // the invocation text (`go.\`Text\``) and `#resources`, so the run button expands to let the
   // user type a note and/or attach files. Both stay optional: an empty
@@ -550,6 +645,8 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
     if (movementId === undefined) return;
     runNow.mutate({
       id: movementId,
+      // One id per press: a retried request is the same run, not a second.
+      requestId: crypto.randomUUID(),
       text: runText.trim() ? runText.trim() : undefined,
       files:
         runFiles.length > 0
@@ -1117,13 +1214,13 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
             <div className="relative">
               <button
                 type="button"
-                disabled={runNow.isLoading}
+                disabled={runInFlight}
                 onClick={() => setRunPopoverOpen((open) => !open)}
                 aria-expanded={runPopoverOpen}
                 className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                 data-testid="run-now-button"
               >
-                {runNow.isLoading ? (
+                {runInFlight ? (
                   <Loader2 size={13} className="animate-spin" />
                 ) : (
                   <Play size={13} />
@@ -1203,7 +1300,7 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
                       <button
                         type="button"
                         onClick={() => runFileInputRef.current?.click()}
-                        disabled={runReadingFiles || runNow.isLoading}
+                        disabled={runReadingFiles || runInFlight}
                         className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 px-2.5 py-1.5 text-[12px] font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
                         data-testid="run-now-attach"
                       >
@@ -1221,11 +1318,11 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
                             fireRunNow();
                           }
                         }}
-                        disabled={runReadingFiles || runNow.isLoading}
+                        disabled={runReadingFiles || runInFlight}
                         className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-gray-900 px-3 py-1.5 text-[12px] font-medium text-white transition hover:bg-gray-700 disabled:opacity-50"
                         data-testid="run-now-confirm"
                       >
-                        {runNow.isLoading ? (
+                        {runInFlight ? (
                           <Loader2 className="h-3 w-3 animate-spin" />
                         ) : (
                           <Play className="h-3 w-3" />
@@ -1434,27 +1531,10 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
           )}
           {runNow.data &&
             (runNow.data.ok ? (
-              <div className="rounded-xl border border-green-100 bg-green-50/70 px-4 py-3.5">
-                <div className="flex items-center gap-2 text-[12.5px] font-medium text-green-800">
-                  <CheckCircle2 size={15} />
-                  Ran &lsquo;{runNow.data.movementName}&rsquo;
-                  {runNow.data.dryRun ? " (rehearsal)" : ""}
-                </div>
-                <div className="mt-2 text-[12px] leading-relaxed text-green-700">
-                  {runNow.data.recordCount} record
-                  {runNow.data.recordCount === 1 ? "" : "s"} processed
-                  {runNow.data.dryRun
-                    ? " — writes were captured, not committed."
-                    : "."}
-                </div>
-                {runNow.data.errors.length > 0 && (
-                  <ul className="mt-2 space-y-1.5 text-[12px] leading-relaxed text-amber-700">
-                    {runNow.data.errors.map((e, i) => (
-                      <li key={i}>{e.message}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+              <RunNowOutcome
+                movementName={runNow.data.movementName}
+                status={runStatus.data}
+              />
             ) : (
               <div className="rounded-xl border border-red-100 bg-red-50/70 px-4 py-3.5">
                 <div className="flex items-center gap-2 text-[12.5px] font-medium text-red-800">

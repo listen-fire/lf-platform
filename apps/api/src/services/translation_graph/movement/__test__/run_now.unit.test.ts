@@ -30,12 +30,13 @@ jest.mock('../../../../adapters/registry', () => ({
   services: { document: { upload: jest.fn() } },
 }));
 
-// Async-path collaborators: the trigger/movement resolution, the recorder that
-// pre-creates the `running` run row (its id is what async returns), and the qb.
+// Async-path collaborators: the trigger/movement resolution, the queue that
+// records the run and its work row (its id is what async returns), and the qb.
+// The queue itself runs for real in queued_run_doors.integration.test.ts.
 jest.mock('../../storage/tg_table', () => ({ loadTriggerById: jest.fn() }));
 jest.mock('../execute', () => ({ movementForTrigger: jest.fn() }));
+jest.mock('../../triggers/dispatch_event', () => ({ queueRun: jest.fn() }));
 jest.mock('../../runs/trigger_run', () => ({
-  TriggerRunRecorder: jest.fn(),
   reportedFailureReason: jest.requireActual('../../runs/trigger_run').reportedFailureReason,
 }));
 jest.mock('../../../../lib/kysely', () => ({ getAutomationsQb: jest.fn() }));
@@ -55,8 +56,8 @@ const { loadTriggerById } = jest.requireMock('../../storage/tg_table') as {
 const { movementForTrigger } = jest.requireMock('../execute') as {
   movementForTrigger: jest.Mock;
 };
-const { TriggerRunRecorder } = jest.requireMock('../../runs/trigger_run') as {
-  TriggerRunRecorder: jest.Mock;
+const { queueRun } = jest.requireMock('../../triggers/dispatch_event') as {
+  queueRun: jest.Mock;
 };
 const { getAutomationsQb } = jest.requireMock('../../../../lib/kysely') as {
   getAutomationsQb: jest.Mock;
@@ -147,10 +148,7 @@ beforeEach(() => {
     name: 'backfill',
     currentVersionId: 'ver-1',
   });
-  TriggerRunRecorder.mockImplementation(() => ({
-    ensureStarted: jest.fn(async () => {}),
-    triggerRunId: RUN_ID,
-  }));
+  queueRun.mockResolvedValue({ runId: RUN_ID, duplicate: false });
   getAutomationsQb.mockImplementation(() => makeQbStub(null));
 });
 
@@ -322,18 +320,7 @@ describe('runMovementNow', () => {
 });
 
 describe('runMovementAsync', () => {
-  // Drain the setImmediate the async path schedules its dispatch on.
-  const flush = () => new Promise((r) => setImmediate(r));
-
-  it('returns { runId, status: running } immediately WITHOUT awaiting the firing', async () => {
-    let dispatchResolve: (() => void) | undefined;
-    // A dispatch that never resolves within the call — proves we don't await it.
-    dispatchTriggerByIdEvent.mockReturnValue(
-      new Promise<{ evaluations: [] }>((resolve) => {
-        dispatchResolve = () => resolve({ evaluations: [] });
-      }),
-    );
-
+  it('queues the manual invocation and returns { runId, status: running } without dispatching', async () => {
     const result = await runMovementAsync({ teamId: TEAM, movementId: MOVEMENT_ID });
 
     expect(result.ok).toBe(true);
@@ -341,68 +328,29 @@ describe('runMovementAsync', () => {
     expect(result.runId).toBe(RUN_ID);
     expect(result.status).toBe('running');
     expect(result.movementName).toBe('backfill');
-    // The pre-created run row was inserted before returning.
-    expect(TriggerRunRecorder).toHaveBeenCalledTimes(1);
-    dispatchResolve?.();
-  });
-
-  it('dispatches OFF the request cycle, adopting the pre-created run id', async () => {
-    dispatchTriggerByIdEvent.mockResolvedValue({ evaluations: [] });
-    await runMovementAsync({ teamId: TEAM, movementId: MOVEMENT_ID });
-    // Not dispatched yet — it's scheduled on setImmediate.
+    expect(queueRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        triggerId: TRIGGER_ID,
+        teamId: TEAM,
+        movementVersionId: 'ver-1',
+        event: expect.objectContaining({ adapterType: 'manual', pipelineInputId: `trigger:${TRIGGER_ID}` }),
+      }),
+    );
+    // Nothing runs in the request: the worker that drains the row dispatches.
     expect(dispatchTriggerByIdEvent).not.toHaveBeenCalled();
-    await flush();
-    expect(dispatchTriggerByIdEvent).toHaveBeenCalledWith(
-      expect.objectContaining({ triggerId: TRIGGER_ID, existingRunId: RUN_ID }),
-    );
   });
 
-  it('a gate-dropped dispatch settles the pre-created run with the NAMED reason', async () => {
-    const qb = makeQbStub(null);
-    getAutomationsQb.mockImplementation(() => qb);
-    dispatchTriggerByIdEvent.mockResolvedValue({
-      evaluations: [],
-      droppedReason: 'run_mode_off',
-    });
-    await runMovementAsync({ teamId: TEAM, movementId: MOVEMENT_ID });
-    await flush();
-    expect(qb.set).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: 'failed',
-        failure_reason: expect.stringContaining('this listener is paused'),
-      }),
-    );
+  it('a requestId becomes the event delivery id, so a retried request is the same run', async () => {
+    await runMovementAsync({ teamId: TEAM, movementId: MOVEMENT_ID, requestId: 'press-1' });
+    const queued = queueRun.mock.calls[0]?.[0] as { event: { idempotencyKey?: string; payload: { submissionId: string } } };
+    expect(queued.event.idempotencyKey).toBe('press-1');
+    expect(queued.event.payload.submissionId).toBe('press-1');
   });
 
-  it('dispatch errors settle the pre-created run carrying their messages', async () => {
-    const qb = makeQbStub(null);
-    getAutomationsQb.mockImplementation(() => qb);
-    dispatchTriggerByIdEvent.mockResolvedValue({
-      evaluations: [],
-      errors: [{ triggerEntryId: TRIGGER_ID, message: 'movement mov-row-1 not found' }],
-    });
+  it('without a requestId the event carries no delivery id (every press is a run)', async () => {
     await runMovementAsync({ teamId: TEAM, movementId: MOVEMENT_ID });
-    await flush();
-    expect(qb.set).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: 'failed',
-        failure_reason: expect.stringContaining('movement mov-row-1 not found'),
-      }),
-    );
-  });
-
-  it('a raw drop sentinel never reaches the settled failure_reason', async () => {
-    const qb = makeQbStub(null);
-    getAutomationsQb.mockImplementation(() => qb);
-    dispatchTriggerByIdEvent.mockResolvedValue({
-      evaluations: [],
-      droppedReason: 'loop_guard_throttled',
-    });
-    await runMovementAsync({ teamId: TEAM, movementId: MOVEMENT_ID });
-    await flush();
-    const settle = qb.set.mock.calls.at(-1)?.[0] as { failure_reason: string };
-    expect(settle.failure_reason).not.toContain('loop_guard_throttled');
-    expect(settle.failure_reason).toContain('throttled');
+    const queued = queueRun.mock.calls[0]?.[0] as { event: { idempotencyKey?: string } };
+    expect(queued.event.idempotencyKey).toBeUndefined();
   });
 
   it('a non-movement trigger is ok:false (nothing to run)', async () => {
@@ -411,14 +359,14 @@ describe('runMovementAsync', () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.errors[0]).toContain('not a movement trigger');
-    expect(dispatchTriggerByIdEvent).not.toHaveBeenCalled();
+    expect(queueRun).not.toHaveBeenCalled();
   });
 
   it('a missing movement listener is ok:false (resolution gate runs)', async () => {
     getMovementRow.mockResolvedValue(undefined);
     const result = await runMovementAsync({ teamId: TEAM, movementId: 'ghost' });
     expect(result.ok).toBe(false);
-    expect(TriggerRunRecorder).not.toHaveBeenCalled();
+    expect(queueRun).not.toHaveBeenCalled();
   });
 });
 

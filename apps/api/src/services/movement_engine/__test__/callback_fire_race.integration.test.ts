@@ -288,6 +288,31 @@ describe('two processes fire one run at once', () => {
     await getAutomationsQb(['work']).deleteFrom('work').where('team_id', '=', teamId).execute();
   });
 
+  it("a door's fire answers before its body runs: the body row is due at once, and a drain runs it once", async () => {
+    const { callbackId } = await seedFiredRun();
+    fireCallbackFiringMock.mockResolvedValue({ result: { movementName: 'book_it' } });
+
+    const outcome = await fireCallback({ id: callbackId, values: {}, suppliedValue: '2026-08-20' });
+    expect(outcome).toMatchObject({ kind: 'recorded', queued: true });
+    // Nothing ran inside the request; the body waits on its row, due now.
+    expect(fireCallbackFiringMock).not.toHaveBeenCalled();
+    const due = await getAutomationsQb(['work'])
+      .selectFrom('work')
+      .where('kind', '=', 'fire_callback')
+      .where('team_id', '=', teamId)
+      .where('due_at', '<=', new Date())
+      .select('key')
+      .execute();
+    expect(due).toEqual([{ key: `fire_callback:${callbackId}:0` }]);
+
+    const drained = await drainWork({ owner: 'drain-1', teamId, heartbeatMs: false });
+    expect(drained).toMatchObject({ failed: 0, deferred: 0 });
+    expect(fireCallbackFiringMock).toHaveBeenCalledTimes(1);
+    // A second drain finds the body done: it never runs twice.
+    await drainWork({ owner: 'drain-1', teamId, heartbeatMs: false });
+    expect(fireCallbackFiringMock).toHaveBeenCalledTimes(1);
+  });
+
   it('exactly one runs its body now; the other queues it, and the queued row runs it once the run is free', async () => {
     const { runId, callbackId } = await seedFiredRun({ singleUse: false });
     const other = secondProcess();

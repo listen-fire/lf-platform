@@ -10,7 +10,7 @@ import { sendSlackNotification } from '../../lib/slack';
 import { getQb } from '../../lib/kysely';
 import { TeamId } from '../../generated/kysely/core/Team';
 import { loadTriggerById } from '../../services/translation_graph/storage/tg_table';
-import { receiveTriggerEvent } from '../../services/translation_graph/triggers/event_store';
+import { receiveTriggerEvent } from '../../services/translation_graph/triggers/dispatch_event';
 import {
   createEmailAdapter,
   normaliseInboundEmailPayload,

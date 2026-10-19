@@ -46,12 +46,10 @@ import { describeLimitPause, readLimitPause } from '../../movement_engine/limit_
 import { handleError } from '../../../lib/errors';
 import { logger } from 'movement-engine/public/log';
 import { flattenTriggerRunPlans, parseTriggerRunSteps } from '../runs/trigger_run_read';
-import {
-  dispatchTriggerByIdEvent,
-  type TriggerIdDispatchResult,
-} from '../triggers/router';
-import { neverAsAny } from 'movement-engine/public/types';
-import { reportedFailureReason, TriggerRunRecorder } from '../runs/trigger_run';
+import { dispatchTriggerByIdEvent } from '../triggers/router';
+import { describeDroppedReason } from '../triggers/dropped_reason';
+import { queueRun } from '../triggers/dispatch_event';
+import { reportedFailureReason } from '../runs/trigger_run';
 import { movementForTrigger } from './execute';
 import { loadTriggerById } from '../storage/tg_table';
 import {
@@ -119,45 +117,18 @@ export interface RunMovementNowInput {
   /** The member who pressed Run now — rides the event payload, feeding
    *  `@user_*` / `@actor_*` resolution and the run's actor attribution. */
   actor?: { email?: string; name?: string };
+  /** The caller's id for this request. A retry carrying the same id is the
+   *  same run, not a second one (the receipt's delivery id). */
+  requestId?: string;
 }
 
 const NO_MANUAL_LISTENER_FIX =
   'declare a manual channel and save first — `go = manual()` + `listen to go {} fire <movement>`; "Run now" injects an event on that channel';
 
 /**
- * Every dispatch-gate drop, named for the person who pressed Run. Both
- * on-demand doors surface these — the sync door as its `errors`, the async
- * door as the settled run's `failure_reason` — so a gated run never collapses
- * into an unexplained "no firing". Never leaks a raw sentinel.
- */
-function describeDroppedReason(
-  reason: NonNullable<TriggerIdDispatchResult['droppedReason']>,
-): string {
-  switch (reason) {
-    case 'run_mode_off':
-      return "this listener is paused (run mode 'off') — set it live to run it";
-    case 'loop_guard_paused':
-      return 'held by the runaway-automation guard — a prior usage breach paused this automation; resume it from the app';
-    case 'loop_guard_throttled':
-      return 'throttled by the runaway-automation guard (rate limit) — this run was skipped; try again in a minute';
-    case 'echo_suppressed':
-      return "suppressed as this automation's own echo (suppress_self is on and the source change was written by it)";
-    case 'actor_unregistered':
-      return 'dropped — the person or bot behind the inbound event is not a registered user of this workspace';
-    case 'native_echo':
-      return "dropped as this workspace's own echo — the inbound change was made by its automations";
-    case 'trigger_not_found':
-      return 'the listener row was not found — re-save the automation, then run it again';
-    case 'no_bound_tgs':
-    case 'no_movement':
-      return 'this listener has no automation bound to it — re-save the automation, then run it again';
-    default:
-      return neverAsAny(reason);
-  }
-}
-
-/**
- * Run a movement's manual channel once, now. The single on-demand invocation
+ * Run a movement's manual channel once, now, IN THIS PROCESS — the dev CLI's
+ * entry. Every request door queues instead (`runMovementAsync`), so no
+ * movement runs inside a request. The single on-demand invocation
  * entry: the caller either names the MOVEMENT (we discover the manual
  * listener's derived trigger from its SAVED source) or names the TRIGGER
  * directly. Either way one `ManualInvocationPayload` — optionally carrying
@@ -195,18 +166,16 @@ export async function runMovementNow(
   };
 }
 
-// ── Async dispatch (the MCP / on-demand path) ───────────────────────────────
+// ── Queued run (every on-demand door) ───────────────────────────────────────
 //
-// A non-trivial movement run (extraction + writes) easily outlasts the MCP
-// 55-second tool-call limit. `runMovementAsync` is the dispatch-and-poll
-// version of `runMovementNow`: it resolves the manual trigger and builds the
-// SAME invocation event, then PRE-CREATES the firing's `trigger_run` (status
-// 'running') so it can hand the runId back to the caller IMMEDIATELY. The
-// actual dispatch runs OFF the request cycle (`setImmediate`, the same seam the
-// inbound `receiveTriggerEvent` door uses), adopting the pre-created run id so
-// the firing's recorder UPSERTS that row to its terminal status (success /
-// partial / failed) with the recordCount + errors. The caller polls
-// `getMovementRunStatus(runId)` until it leaves 'running'.
+// A non-trivial movement run (extraction + writes) outlasts any request: the
+// MCP tool-call limit, a browser's patience, and a deployment that stops the
+// api between requests. `runMovementAsync` resolves the manual trigger, builds
+// the SAME invocation event `runMovementNow` would, and QUEUES it: the receipt,
+// a `running` run row and a `dispatch_event` work row are durable before it
+// returns the run id. Whichever worker drains next starts the run, adopting
+// that id, so the row settles to its terminal status; the caller follows it
+// with `getMovementRunStatus(runId)`.
 
 export interface MovementRunAsyncDispatched {
   ok: true;
@@ -218,9 +187,9 @@ export interface MovementRunAsyncDispatched {
 export type MovementRunAsyncResult = MovementRunAsyncDispatched | MovementRunNowFailure;
 
 /**
- * Dispatch a movement's manual channel and return immediately with the runId.
- * Does NOT await the run; the worker (off the request cycle) records the
- * outcome on the pre-created `trigger_run`. Poll `getMovementRunStatus`.
+ * Queue a run of a movement's manual channel and return its id at once. Does
+ * NOT run it; poll `getMovementRunStatus`. A retried request carrying the same
+ * `requestId` gets the first request's run back.
  */
 export async function runMovementAsync(
   input: RunMovementNowInput,
@@ -229,8 +198,8 @@ export async function runMovementAsync(
   if (typeof triggerId !== 'string') return triggerId;
 
   // The firing runs through the movement engine — so the trigger must resolve
-  // to a movement row (the recorder pins its version). Resolve it now so we can
-  // pre-create a faithful `running` row and reject cleanly before enqueueing.
+  // to a movement row (the run pins its version). Resolve it now so the queued
+  // run is faithful and a non-movement trigger is refused before queueing.
   const triggerRow = await loadTriggerById(triggerId);
   if (!triggerRow || triggerRow.movementId === null) {
     return {
@@ -247,88 +216,13 @@ export async function runMovementAsync(
   }
 
   const event = await buildManualInvocationEvent({ triggerId, input });
-
-  // Pre-create the `running` run row so the id is in hand before dispatch. The
-  // recorder owns the row's shape; `ensureStarted()` inserts it as 'running'.
-  const recorder = new TriggerRunRecorder({
+  const { runId } = await queueRun({
+    triggerId: triggerId as TriggerId,
     teamId: input.teamId as TeamId,
-    triggerId,
-    triggerType: 'webhook',
-    triggerEvent: event,
+    event,
     movementVersionId: movementRow.currentVersionId,
   });
-  await recorder.ensureStarted();
-  const runId = recorder.triggerRunId;
-
-  // Dispatch off the request cycle — the caller returns now. The firing adopts
-  // this run id; its recorder upserts the row to a terminal status. A dispatch
-  // failure marks the run failed rather than crashing the detached task.
-  setImmediate(() => {
-    void (async () => {
-      try {
-        const outcome = await dispatchTriggerByIdEvent({
-          triggerId,
-          event,
-          teamId: input.teamId as TeamId,
-          existingRunId: runId,
-        });
-        await markRunFailedIfStillRunning(runId, input.teamId as TeamId, outcome);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        logger.error('[runMovementAsync] dispatch failed', { runId, triggerId, error: message });
-        await failRun({ runId, teamId: input.teamId as TeamId, reason: message }).catch(handleError);
-      }
-    })();
-  });
-
   return { ok: true, runId, status: 'running', movementName: movementRow.name };
-}
-
-/**
- * A dispatch that produced no firing (run_mode off, echo-suppressed, loop-guard
- * paused, …) leaves the pre-created run at 'running' forever — the recorder
- * only touches it on an actual firing. Settle it to 'failed', naming the ACTUAL
- * drop reason (or the dispatch errors) so the poller learns why, not just that
- * nothing ran. A clean firing has already upserted the row to a terminal
- * status, so the `status = 'running'` guard makes this a no-op there.
- */
-async function markRunFailedIfStillRunning(
-  runId: TriggerRunId,
-  teamId: TeamId,
-  outcome: TriggerIdDispatchResult,
-): Promise<void> {
-  const reason =
-    outcome.droppedReason !== undefined
-      ? describeDroppedReason(outcome.droppedReason)
-      : outcome.errors !== undefined && outcome.errors.length > 0
-        ? outcome.errors.map((e) => e.message).join('; ')
-        : 'dispatch produced no firing';
-  await getAutomationsQb(['trigger_run'])
-    .updateTable('trigger_run')
-    .set({
-      status: 'failed',
-      failed_at: new Date(),
-      failure_reason: reason,
-    })
-    .where('id', '=', runId)
-    .where('team_id', '=', teamId)
-    .where('status', '=', 'running')
-    .execute()
-    .catch(handleError);
-}
-
-async function failRun(input: {
-  runId: TriggerRunId;
-  teamId: TeamId;
-  reason: string;
-}): Promise<void> {
-  await getAutomationsQb(['trigger_run'])
-    .updateTable('trigger_run')
-    .set({ status: 'failed', failed_at: new Date(), failure_reason: input.reason })
-    .where('id', '=', input.runId)
-    .where('team_id', '=', input.teamId)
-    .where('status', '=', 'running')
-    .execute();
 }
 
 // ── Run status read (the poll target) ───────────────────────────────────────
@@ -339,6 +233,8 @@ export interface MovementRunStatus {
   status: string;
   /** Total writes the firing applied across its steps. */
   recordCount: number;
+  /** The run rehearsed: its writes were captured, not committed. */
+  dryRun: boolean;
   /** Per-step errors (terminal aggregate); empty on a clean run. */
   errors: Array<{ tgId?: string; nodeId?: string | null; message: string }>;
   startedAt: string;
@@ -375,6 +271,7 @@ export async function getMovementRunStatus(input: {
       'id',
       'status',
       'nodes_written',
+      'dry_run',
       'errors',
       'started_at',
       'completed_at',
@@ -402,6 +299,7 @@ export async function getMovementRunStatus(input: {
     runId: row.id as unknown as string,
     status: row.status,
     recordCount: row.nodes_written,
+    dryRun: row.dry_run,
     errors,
     startedAt: row.started_at.toISOString(),
     finishedAt: row.completed_at ? row.completed_at.toISOString() : null,
@@ -803,7 +701,7 @@ async function buildManualInvocationEvent(args: {
   const text = input.text?.trim() || undefined;
   const payload: ManualInvocationPayload = {
     firedAt: new Date().toISOString(),
-    submissionId: randomUUID(),
+    submissionId: input.requestId ?? randomUUID(),
     ...(input.actor?.email !== undefined ? { actorEmail: input.actor.email } : {}),
     ...(input.actor?.name !== undefined ? { actorName: input.actor.name } : {}),
     ...(text !== undefined ? { text } : {}),
@@ -815,6 +713,7 @@ async function buildManualInvocationEvent(args: {
     triggerType: 'webhook',
     payload,
     occurredAt: payload.firedAt,
+    ...(input.requestId !== undefined ? { idempotencyKey: input.requestId } : {}),
   };
 }
 

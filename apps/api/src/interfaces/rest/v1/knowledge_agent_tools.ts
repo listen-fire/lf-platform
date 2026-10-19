@@ -1356,6 +1356,9 @@ const runMovementSchema = z.object({
       }),
     )
     .optional(),
+  /** The caller's id for this request: a retry carrying the same id gets the
+   *  first request's run back instead of starting a second. */
+  requestId: z.string().min(1).max(200).optional(),
   team: z.string().optional(),
 });
 
@@ -1363,9 +1366,9 @@ const runMovementSchema = z.object({
 // from the MCP session (api-key auth), so the run's actor (`@user_*` / `@actor_*`)
 // resolves to the caller — identical to pressing "Run now" in the app.
 //
-// ASYNC: a non-trivial run (extraction + writes) outlasts the MCP 55s tool-call
-// limit, so we DISPATCH and return immediately with `{ runId, status: 'running' }`.
-// The worker records the outcome on the run row; the caller polls
+// QUEUED: a non-trivial run (extraction + writes) outlasts the MCP 55s tool-call
+// limit, so we QUEUE it and return immediately with `{ runId, status: 'running' }`.
+// A worker runs it and records the outcome on the run row; the caller polls
 // `getMovementRun(runId)` for the result.
 const runMovementHandler: RequestHandler = jsonHandler(runMovementSchema, 'body', async (input) => {
   // The actor is attribution: it feeds `@user_*` / `@actor_*` resolution and
@@ -1384,6 +1387,7 @@ const runMovementHandler: RequestHandler = jsonHandler(runMovementSchema, 'body'
     movementId,
     ...(input.text !== undefined ? { text: input.text } : {}),
     ...(input.files !== undefined ? { files: input.files } : {}),
+    ...(input.requestId !== undefined ? { requestId: input.requestId } : {}),
     ...(user === undefined
       ? {}
       : {
@@ -1705,7 +1709,7 @@ function registerAutomationToolRoutes(): void {
   reg('POST', '/automations/completions', 'Given an automation program with a `<|>` cursor marker, return the valid next tokens at that point (writable fields, edges, enum options). Body: { source, team?, automation?, languageVersion? } (a saved automation completes under its pinned language version).', { inputSchema: completionsAtSchema, latency: 'medium' });
   reg('POST', '/automations/save', 'Save an automation program and provision its listeners (authoring → live). It validates first: text with errors, or that can\'t be verified, is NOT saved — the answer is { ok: false, saved: false, diagnostics } — and acknowledgeErrors: true ships it anyway (replacing whatever ran, even broken). A clean save goes live. No "draft" quietly keeps the last good version running. Returns diagnostics, per-listener details, runnable, `warnings` (saved fine, but would surprise the user — a movement name another automation already fires, or listeners retired because the saved source could not be read; always relay these), and `storyUrl` — a login-free link to a picture of what the automation does, worth offering as a labelled link once a save goes live. Body: { source, name?, description?, id?, acknowledgeErrors?, expectedRevision?, team? } — pass id to re-save, expectedRevision (the `revision` from your last getAutomation read) when updating an EXISTING automation so a concurrent edit can\'t be silently clobbered — a stale expectedRevision is rejected with { ok: false, conflict } instead of overwriting; call getAutomation again, merge, and re-save with the new revision. Omit expectedRevision for today\'s behaviour (no precondition — last write wins); it\'s ignored when creating a new automation. `team` files it in a specific team. Also the top-level "saveAutomation" tool.', { inputSchema: saveMovementSchema, latency: 'medium' });
   reg('POST', '/automations/delete', 'Permanently delete a saved automation and every listener it derives (a hard delete — the automation and its run triggers are gone, and any now-orphaned external subscriptions are torn down). Body: { automation, team? } — the automation id (from listAutomations); pass `team` when you belong to more than one. Returns { deleted } — false if no automation with that id lives in the resolved team. Also the top-level "deleteAutomation" tool.', { inputSchema: deleteMovementSchema, latency: 'fast' });
-  reg('POST', '/automations/run', 'Dispatch a saved automation on its manual channel and return IMMEDIATELY with { runId, status: "running" } — the run executes asynchronously (it can take a while). Optionally pass text and/or files as its input. Body: { automation, text?, files?, team? }. Poll /automations/run-status (the "checkRun" tool) with the runId for the outcome. Also the top-level "runAutomation" tool.', { inputSchema: runMovementSchema, latency: 'fast' });
+  reg('POST', '/automations/run', 'Dispatch a saved automation on its manual channel and return IMMEDIATELY with { runId, status: "running" } — the run executes asynchronously (it can take a while). Optionally pass text and/or files as its input. Body: { automation, text?, files?, requestId?, team? } — a retry with the same requestId returns the same run. Poll /automations/run-status (the "checkRun" tool) with the runId for the outcome. Also the top-level "runAutomation" tool.', { inputSchema: runMovementSchema, latency: 'fast' });
   reg('POST', '/automations/run-status', 'Read one automation run\'s status by id — the poll target for runAutomation. Body: { runId, team? }. Returns { status (running | parked | success | partial | failed), recordCount, errors, startedAt, finishedAt, failedAt, failureReason, costUsd, modelCalls } — costUsd/modelCalls are the run\'s model-call spend and call count. Poll until status leaves "running" ("parked" means paused, waiting for your review — see listReviews). Also the top-level "checkRun" tool.', { inputSchema: getMovementRunSchema, readOnly: true, latency: 'fast' });
   reg('GET', '/automations/:idOrName/runs', 'List an automation\'s recent runs (every listener / "Run now" firing), newest first. Returns each run\'s { runId, lane, triggerType, status, committed, captured, recordCount, timestamps, costUsd, modelCalls } — `committed` = writes that landed, `captured` = writes rehearsed (a `dry_run` target, or a whole-run rehearsal), `costUsd`/`modelCalls` = the run\'s model-call spend and call count. Use a runId with inspectRun to see what the run actually captured and wrote. Query: ?limit= (default 20), ?team=. Also the top-level "listRuns" tool.', { readOnly: true, latency: 'fast' });
   reg('POST', '/automations/inspect-run', 'Read one run\'s full captured detail by id: the source event that fired it, the resolved write-plan (every target record + the FINAL field values it wrote, with every `?:` and enum coercion applied, each write flagged `committed` or captured), the decision trace (gate/branch outcomes, extraction emissions), errors, and the run\'s `committed`/`captured` counts plus its `costUsd`/`modelCalls` model-call spend. The "did it actually do what I meant" surface — including exactly which writes a rehearsal captured versus committed. Body: { runId, team? }. Get runIds from listRuns. Also the top-level "inspectRun" tool.', { inputSchema: inspectRunSchema, readOnly: true, latency: 'fast' });

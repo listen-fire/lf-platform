@@ -51,6 +51,19 @@ function ReplayModal({ event, onClose }: { event: EventRow; onClose: () => void 
   const replay = trpc.views.admin.crossTeamOps.replayTriggerEvent.useMutation({
     onSuccess: (r) => setResult(r),
   });
+  // The replay answers with its run's id before the run starts; follow it.
+  const run = trpc.views.admin.crossTeamOps.replayRunStatus.useQuery(
+    { runId: result?.runId ?? '' },
+    {
+      enabled: result !== null,
+      refetchInterval: (data) =>
+        data !== undefined && !('error' in data) && data.status === 'running' ? 1500 : false,
+    },
+  );
+  const runStatus = run.data;
+  const settling =
+    result !== null &&
+    (runStatus === undefined || (!('error' in runStatus) && runStatus.status === 'running'));
 
   const dryRun = !live;
 
@@ -148,36 +161,32 @@ function ReplayModal({ event, onClose }: { event: EventRow; onClose: () => void 
           {result && (
             <div
               className={`rounded-lg border p-3 text-[12px] leading-relaxed ${
-                result.status === 'error'
+                runStatus !== undefined && ('error' in runStatus || runStatus.status === 'failed')
                   ? 'border-red-200 bg-red-50 text-red-700'
                   : 'border-gray-100 bg-gray-50 text-gray-700'
               }`}
             >
-              {result.droppedReason !== null ? (
-                <div>
-                  {result.droppedReason === 'no_movement'
-                    ? "This event's trigger has no movement; nothing to replay."
-                    : `Dropped: ${result.droppedReason}`}
+              {runStatus === undefined || settling ? (
+                <div>{result.dryRun ? 'Rehearsing…' : 'Replaying…'}</div>
+              ) : 'error' in runStatus ? (
+                <div className="font-medium">Error: {runStatus.error}</div>
+              ) : runStatus.status === 'failed' ? (
+                <div className="font-medium">
+                  Error: {runStatus.failureReason ?? 'the run failed'}
                 </div>
+              ) : runStatus.status === 'parked' ? (
+                <div>The run is waiting (an ask, a timer or its cost limit).</div>
               ) : result.dryRun ? (
                 <div>
-                  Would fire {result.firingCount} movement
-                  {result.firingCount === 1 ? '' : 's'}, ~{result.writeCount} write
-                  {result.writeCount === 1 ? '' : 's'}
-                  {result.firings.length > 0 && (
-                    <>: {result.firings.map((f) => f.movementName).join(', ')}</>
-                  )}
-                  . Nothing committed.
+                  Would write ~{runStatus.recordCount} record
+                  {runStatus.recordCount === 1 ? '' : 's'}. Nothing committed.
                 </div>
               ) : (
                 <div>
-                  Dispatched: {result.firingCount} firing
-                  {result.firingCount === 1 ? '' : 's'}, {result.writeCount} write
-                  {result.writeCount === 1 ? '' : 's'}.
+                  Ran: {runStatus.recordCount} write
+                  {runStatus.recordCount === 1 ? '' : 's'}
+                  {runStatus.dryRun ? ' (rehearsed by its run_mode)' : ''}.
                 </div>
-              )}
-              {result.error !== undefined && (
-                <div className="mt-1 font-medium">Error: {result.error}</div>
               )}
             </div>
           )}
@@ -191,19 +200,19 @@ function ReplayModal({ event, onClose }: { event: EventRow; onClose: () => void 
             <Button
               variant="primary"
               size="md"
-              disabled={replay.isLoading}
+              disabled={replay.isLoading || settling}
               onClick={fire}
             >
-              {replay.isLoading ? 'Running…' : 'Run dry run'}
+              {replay.isLoading || settling ? 'Running…' : 'Run dry run'}
             </Button>
           ) : (
             <Button
               variant="danger"
               size="md"
-              disabled={replay.isLoading}
+              disabled={replay.isLoading || settling}
               onClick={fire}
             >
-              {replay.isLoading ? 'Replaying…' : 'Replay live'}
+              {replay.isLoading || settling ? 'Replaying…' : 'Replay live'}
             </Button>
           )}
         </div>

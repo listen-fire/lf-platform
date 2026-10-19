@@ -8,17 +8,17 @@
 import { z } from 'zod';
 import { sql } from 'kysely';
 
-import type { TriggerEvent } from 'movement-engine/public/inbound';
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type OpsDetailLevel from '../../../../generated/kysely/automations/OpsDetailLevel';
 import type { UserEmailId } from '../../../../generated/kysely/core/UserEmail';
-import type { TriggerEventId } from '../../../../generated/kysely/automations/TriggerEvent';
+import type { TriggerRunId } from '../../../../generated/kysely/automations/TriggerRun';
 
 import { trpc } from '../../trpc';
 import { currentContext } from '../../../../services/context';
 import { getAutomationsQb, getCoreQb, getQb } from '../../../../lib/kysely';
 import { checkUsage, getBillingContacts } from '../../../../services/usage';
-import { dispatchTriggerByIdEvent } from '../../../../services/translation_graph/triggers/router';
+import { replayTriggerEvent } from '../../../../services/translation_graph/triggers/dispatch_event';
+import { getMovementRunStatus } from '../../../../services/translation_graph/movement/run_now';
 import { GLOBAL_DEFAULT_OPS_DETAIL_LEVEL } from '../../../../services/team/ops_detail';
 
 
@@ -243,12 +243,13 @@ const crossTeamOpsRouter = (procedure: typeof trpc.procedure) =>
       }),
 
     // ── Replay (the safety-critical one) ─────────────────────────────────
-    // Re-dispatch a stored trigger_event through the normal movement
-    // dispatch path. `dryRun` DEFAULTS TO TRUE — a rehearsal whose writes
-    // are captured, not committed. Only `dryRun: false` lets the live
-    // dispatch proceed (which then still respects the trigger's own
-    // `run_mode`). Admin = cross-team: the event is loaded by id with no
-    // team gate, and its stored `team_id` scopes the dispatch.
+    // Queue a stored trigger_event again as a new run through the normal
+    // movement dispatch path, and answer with the run's id at once; the run
+    // happens on a worker and `replayRunStatus` follows it. `dryRun` DEFAULTS
+    // TO TRUE — a rehearsal whose writes are captured, not committed. Only
+    // `dryRun: false` lets the live dispatch proceed (which then still
+    // respects the trigger's own `run_mode`). Admin = cross-team: the event is
+    // loaded by id with no team gate, and its stored `team_id` scopes the run.
     replayTriggerEvent: procedure
       .input(
         z.object({
@@ -257,40 +258,22 @@ const crossTeamOpsRouter = (procedure: typeof trpc.procedure) =>
         }),
       )
       .mutation(async ({ input }) => {
-        const row = await getAutomationsQb(['trigger_event'])
-          .selectFrom('trigger_event')
-          .select(['team_id', 'trigger_id', 'payload'])
-          .where('id', '=', input.eventId as TriggerEventId)
+        const replay = await replayTriggerEvent({ eventId: input.eventId, dryRun: input.dryRun });
+        if (!replay.replayed) throw new Error(`Trigger event ${input.eventId} not found`);
+        return { dryRun: input.dryRun, runId: replay.runId as string };
+      }),
+
+    /** A replayed run's status, cross-team: the run's own team scopes the read. */
+    replayRunStatus: procedure
+      .input(z.object({ runId: z.string().uuid() }))
+      .query(async ({ input }) => {
+        const run = await getAutomationsQb(['trigger_run'])
+          .selectFrom('trigger_run')
+          .where('id', '=', input.runId as TriggerRunId)
+          .select('team_id')
           .executeTakeFirst();
-        if (!row) throw new Error(`Trigger event ${input.eventId} not found`);
-
-        const result = await dispatchTriggerByIdEvent({
-          triggerId: row.trigger_id,
-          event: row.payload as unknown as TriggerEvent,
-          teamId: row.team_id as TeamId,
-          dryRun: input.dryRun,
-        });
-
-        const firings = result.movementFirings ?? [];
-        const writeCount = firings.reduce((sum, f) => sum + f.writes, 0);
-        const error =
-          result.errors !== undefined && result.errors.length > 0
-            ? result.errors.map((e) => e.message).join('; ')
-            : undefined;
-
-        return {
-          dryRun: input.dryRun,
-          status: error !== undefined ? 'error' : 'dispatched',
-          droppedReason: result.droppedReason ?? null,
-          firingCount: firings.length,
-          writeCount,
-          firings: firings.map((f) => ({
-            movementName: f.movementName,
-            writes: f.writes,
-            dryRun: f.dryRun,
-          })),
-          ...(error !== undefined ? { error } : {}),
-        };
+        if (!run) return { error: `run ${input.runId} not found` };
+        return getMovementRunStatus({ teamId: run.team_id, runId: input.runId });
       }),
   });
 

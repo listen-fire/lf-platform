@@ -3,16 +3,16 @@
 // platform-shaped plumbing (signature verification, capture-then-ack, the
 // after-effects); recognition and execution converge here.
 //
-// CAPTURE, RESPOND, THEN RUN. `fireCallback` validates + CLAIMS synchronously
-// so the caller gets a true outcome to ack with, and returns. The claim writes
-// the call's `fire_callback` row in the same transaction, so a recorded call's
-// body is never lost. Execution — the body segment and the wake of whoever
-// awaits `Called` — happens OFF-REQUEST, under the run's lease (taken before
-// the ack) and the SAME per-run single-flight slot the await-resume worker
-// uses, so a fire and a resume of one run never overlap, in this process or
-// across processes. A run another process is stepping leaves the body to its
-// row, made due at once, which runs it once the run is free; a row whose body
-// already started does nothing.
+// CAPTURE, QUEUE, RESPOND. `fireCallback` validates + CLAIMS synchronously so
+// the caller gets a true outcome to ack with, and returns. The claim writes
+// the call's `fire_callback` row in the same transaction, due at once, so a
+// recorded call's body is never lost and never runs inside the request: the
+// next drain runs it under the run's lease and the SAME per-run single-flight
+// slot the await-resume worker uses, so a fire and a resume of one run never
+// overlap, in this process or across processes. A run another process is
+// stepping defers the row until the run is free; a row whose body already
+// started does nothing. Only `awaitExecution` (tests, the dev CLI) runs the
+// body in this process before answering.
 
 import { logger } from 'movement-engine/public/log';
 import { CALLBACK_AWAIT_TYPE } from 'engine-contracts';
@@ -47,17 +47,18 @@ import {
 } from './callback_store';
 
 
-/** How long after a fire its durable rows (the body's, the wake's) come due.
- *  The body and the prompt wake run in this process right after the claim;
- *  these rows only matter if the process dies before they finish, so they wait
- *  well past a normal body. */
+/** How long after a fire its wake backstop comes due — and its body row, when
+ *  the body runs in this process (`awaitExecution`): those rows only matter if
+ *  the process dies before the body finishes, so they wait well past a normal
+ *  body. */
 const CALLBACK_BACKSTOP_MS = 30 * SECOND;
 
 /** What the caller acks with. Every non-`recorded` outcome is a REFUSAL the door
  *  reports as such — never a silent no-op. */
 export type CallbackFireOutcome =
-  /** `queued`: the run was being stepped elsewhere, so the body waits on a
-   *  `fire_callback` row rather than starting now (the HTTP door answers 202). */
+  /** `queued`: the body waits on its `fire_callback` row rather than having
+   *  run — always for a door's fire, and for `awaitExecution` when the run was
+   *  being stepped elsewhere (the HTTP door answers 202). */
   | { kind: 'recorded'; callback: CallbackRecord; queued?: true }
   | { kind: 'not_found' }
   /** Revoked (its run ended, was cancelled, or its movement was deleted) or
@@ -67,9 +68,9 @@ export type CallbackFireOutcome =
   | { kind: 'mismatch'; callback: CallbackRecord; message: string };
 
 /**
- * Fire a callback by id. Returns as soon as the claim settles; the body runs
- * off-request unless `awaitExecution` is set (tests and the dev CLI want the
- * whole round trip).
+ * Fire a callback by id. Returns as soon as the claim settles, with the body
+ * queued for the next drain, unless `awaitExecution` is set (tests and the dev
+ * CLI want the whole round trip in this process).
  */
 export async function fireCallback(input: {
   id: string;
@@ -93,13 +94,13 @@ export async function fireCallback(input: {
   }
 
   // The claim and its body's work row commit together: once a call is on the
-  // ledger, its body is durable work, whatever this process does next. The
-  // row is due only once the body would long since have run here; the queued
-  // row that finds the body started does nothing.
+  // ledger, its body is durable work, whatever this process does next. It is
+  // due at once, unless this process runs the body itself (`awaitExecution`):
+  // then it is only the backstop, and finding the body started it does nothing.
   const claim = await claimCallbackFireWithBody({
     id: input.id,
     values: coerced.values,
-    bodyDueAt: new Date(Date.now() + CALLBACK_BACKSTOP_MS),
+    bodyDueAt: input.awaitExecution ? new Date(Date.now() + CALLBACK_BACKSTOP_MS) : new Date(),
   });
   switch (claim.kind) {
     case 'not_found':
@@ -115,6 +116,10 @@ export async function fireCallback(input: {
       // body is queued, so a failure only delays the body to its row.
       const callIndex = claim.callback.calls.length - 1;
       await queueWakeBackstop(claim.callback);
+      if (!input.awaitExecution) {
+        notifyWork();
+        return { kind: 'recorded', callback: claim.callback, queued: true };
+      }
       const lease = await takeLeaseOrQueue(claim.callback, callIndex);
       if (lease === null) return { kind: 'recorded', callback: claim.callback, queued: true };
       // EXCLUSIVE, never coalesced: this body belongs to THIS recorded call. The
@@ -123,15 +128,13 @@ export async function fireCallback(input: {
       // body applies its writes a second time under a ledger that still shows one
       // call — exactly the double-write this entry point exists to make
       // structurally impossible.
-      const execution = runResumeSlot.exclusive(claim.callback.runId, async () => {
+      await runResumeSlot.exclusive(claim.callback.runId, async () => {
         try {
           await executeFire(claim.callback, callIndex, lease);
         } finally {
           await lease.release();
         }
       });
-      if (input.awaitExecution) await execution;
-      else void execution.catch(() => {}); // logged inside; never breaks the ack
       return { kind: 'recorded', callback: claim.callback };
     }
   }

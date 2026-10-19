@@ -172,20 +172,15 @@ export function dispatchEventFake(): AnyRecord {
       if (world.enqueueFails) throw new Error('queue unavailable');
       record({ kind: 'enqueue_receipts', receipts: captured });
     },
-    readReceiptGroupOutcomes: async (input: { groups: { group: unknown }[] }) => ({
-      cleared: input.groups.map((entry) => entry.group),
-      failed: [],
-    }),
-  };
-}
-
-export function eventStoreFake(): AnyRecord {
-  return {
     receiveTriggerEvent: async (input: AnyRecord) => {
       if (world.storeFails) throw new Error('store unavailable');
       record({ kind: 'store_trigger_event', ...input });
       return { eventId: 'event-1', duplicate: false };
     },
+    readReceiptGroupOutcomes: async (input: { groups: { group: unknown }[] }) => ({
+      cleared: input.groups.map((entry) => entry.group),
+      failed: [],
+    }),
   };
 }
 
