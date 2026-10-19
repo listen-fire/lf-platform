@@ -25,6 +25,7 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 
 - **Modules in Rust: `listen-fire-module-kit`** (`crates/module-kit`). A trait per module kind (`Adapter`, `Plugins`, and the core slots `Store`, `Limiter`, `LoopGuard`) and a `Host` that serves one or several of them over adapter protocol 2 HTTP, each at `/<name>`, on loopback TCP (`PORT`, prints `listening <port>`) or a Unix socket (`--socket`/`LF_MODULE_SOCKET`). A host is its own process; lf reaches it as any module server (`url:` in `lf-external.yaml`). Example: `examples/rust-module`.
 - The protocol's envelope, JSON in JavaScript key order and every result's schema check move from lf into `listen-fire-module-wire` (`crates/module-wire`), which lf and the kit share. No behaviour change in lf.
+- A Rust module host that lf starts by `command:` exits with lf, as serve-module does (`LF_EXIT_WITH_PARENT`: its stdin closing, or being re-parented to init).
 
 ### au-delete
 

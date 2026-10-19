@@ -173,6 +173,9 @@ impl Host {
     /// `MODULE_TOKEN` as the bearer when that is set.
     pub fn run(self, args: impl IntoIterator<Item = String>) -> Result<(), String> {
         let address = Address::from_env_and_args(args)?;
+        if std::env::var("LF_EXIT_WITH_PARENT").is_ok_and(|v| !v.is_empty()) {
+            exit_with_parent();
+        }
         let host = self.token(std::env::var("MODULE_TOKEN").ok());
         let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().map_err(|e| e.to_string())?;
         tokio::task::LocalSet::new().block_on(&runtime, async move {
@@ -263,6 +266,24 @@ fn json(body: Js) -> Response<Full<Bytes>> {
     let mut response = Response::new(Full::new(Bytes::from(body.to_json())));
     response.headers_mut().insert("content-type", hyper::header::HeaderValue::from_static("application/json"));
     response
+}
+
+/// The process ends when whoever started it does (serve-module's
+/// `LF_EXIT_WITH_PARENT`): lf holds this process's stdin, so its end closing
+/// is lf gone, through any shim in between (`cargo run`); being re-parented
+/// to init is the same news from a parent that gave no stdin.
+fn exit_with_parent() {
+    std::thread::spawn(|| {
+        let _ = std::io::copy(&mut std::io::stdin().lock(), &mut std::io::sink());
+        std::process::exit(0);
+    });
+    #[cfg(unix)]
+    std::thread::spawn(|| loop {
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        if std::os::unix::process::parent_id() == 1 {
+            std::process::exit(0);
+        }
+    });
 }
 
 fn plain(status: StatusCode, text: &str) -> Response<Full<Bytes>> {
