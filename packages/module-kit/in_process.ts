@@ -9,6 +9,7 @@
 
 import { METHODS, type MethodName, type WireManifestResultShape } from 'engine-contracts';
 import type { Adapter } from 'movement-engine/public/adapter';
+import { emptyBrowserSlot, type BrowserSlot } from 'movement-engine/public/browser';
 
 import type {
   AdapterModuleDefinition,
@@ -46,6 +47,8 @@ export interface ModuleHost {
   models?: ModuleModels;
   /** Default: none kept (`refusingIdentities`). */
   identities?: ModuleIdentities;
+  /** Default: the empty slot, refused by name (a host with no browser). */
+  browser?: BrowserSlot;
   baseUrlOverride?: string;
   constructionArgs?: Readonly<Record<string, string>>;
   credentialRef?: string;
@@ -75,6 +78,7 @@ export function moduleContext(host: ModuleHost): ModuleContext {
     kv: host.kv,
     models: host.models ?? refusingModels('this host lends no models to its modules'),
     identities: host.identities ?? refusingIdentities('this host keeps no linked identities'),
+    browser: host.browser ?? emptyBrowserSlot('this host has no browser to lend its modules'),
     config: {
       tenant: host.tenant,
       ...(host.baseUrlOverride !== undefined ? { baseUrlOverride: host.baseUrlOverride } : {}),

@@ -30,6 +30,11 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 ### s-image
 
 - The API image is now built in two variants and carries production dependencies only. `ghcr.io/listen-fire/api` is unchanged in features (it keeps Chromium); new `ghcr.io/listen-fire/api-slim` leaves Chromium out for a smaller image and faster cold start. Document fetches behind browser-rendered viewers (DocSend, Papermark, Notion) and PDF rendering fail on the slim image with an error naming the browser variant. Compose runs the browser variant unless `LISTEN_FIRE_API_IMAGE` and `LISTEN_FIRE_API_TARGET` are set (see `deploy/SELF_HOSTING.md`, "Image variants"). The demo's seed and fake CRM services now run the compiled scripts, not ts-node.
+### n-browser
+
+- **The browser is a slot the host fills.** A module asks for a page through `ctx.browser`; the platform's api image fills it with Chromium (`@lf/chromium`), and lf, `serve-module` and the api-slim image leave it empty, so a module asking for a page is refused naming the slot. Limits are the slot's: 2 sessions at once, 5 minutes each. Wire and contract suite: [browser-slot.md](docs/contracts/browser-slot.md).
+- **The gated-document reader moved into `@lf/web`.** DocSend, Pitch, Canva, Google Slides and Docs, Papermark, BriefLink, Tome, Figma and Notion are read by the module through the browser slot, not by the platform. On the platform nothing changes: same pages, same PDFs, same alerts. Off the platform a gated address fails naming the empty browser slot (it said "the platform's gated-document browser" before); a host that lends a browser gets the document read and kept in its files. A shared Google Drive file is read with the credential's new optional `googleDriveApiKey` off the platform (the platform keeps `GOOGLE_DRIVE_API_KEY`).
+- **lf:** `core: { browser: … }` is refused: lf has no browser module.
 
 ## [0.12.0-rc.2] - 2026-10-19 (pre-release)
 

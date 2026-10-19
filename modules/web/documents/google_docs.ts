@@ -1,11 +1,10 @@
-import { PdfStream } from '.';
+import type { PdfStream } from './reader';
 
-import { google } from 'googleapis';
+import { z } from 'zod';
 
-import { getEnvVar } from '../utils/environment';
-import { PlaywrightService } from '../../services/playwright';
-import { logger } from 'movement-engine/public/log';
-import { Crawler, FetchedDocument, Screenshot } from '../../services/crawler';
+import { logger, readerHost } from './host';
+import { bodyStream } from './waits';
+import { Crawler, FetchedDocument, Screenshot } from './crawler';
 
 class GoogleDocsCrawler extends Crawler {
   protected async takeScreenshotsOfAllPages() {
@@ -178,7 +177,7 @@ class GoogleDocs {
     try {
       // TODO: We should sanity check the URL to make sure we're
       // actually looking at a figma link.
-      const result: FetchedDocument<PdfStream> = await PlaywrightService.withPage(
+      const result: FetchedDocument<PdfStream> = await readerHost().browser.withPage(
         (page, browser) => {
           let crawler;
           if (/drive\.google\.com/.test(url)) {
@@ -212,36 +211,24 @@ class GoogleDocs {
   }
 
   async getFromDrive(fileId: string): Promise<PdfStream> {
-    const service = google.drive({
-      version: 'v3',
-      auth: getEnvVar('GOOGLE_DRIVE_API_KEY', { devDefault: 'local' }),
-    });
+    const key = readerHost().googleDriveApiKey();
+    const metadata = DriveFileMetadata.parse(
+      await (await driveGet(fileId, { fields: 'name,mimeType', supportsAllDrives: 'true', key })).json(),
+    );
+    let name = metadata.name ?? `${fileId}.pdf`;
+    let response: Response;
 
-    const metadata = await service.files.get({
-      fileId,
-      fields: 'name,mimeType',
-      supportsAllDrives: true,
-    });
-    let name = metadata.data.name ?? `${fileId}.pdf`;
-    let response;
-
-    if (metadata.data.mimeType?.startsWith('application/vnd.google-apps.')) {
-      response = await service.files.export(
-        { fileId, mimeType: 'application/pdf' },
-        { responseType: 'stream' },
-      );
+    if (metadata.mimeType?.startsWith('application/vnd.google-apps.')) {
+      response = await driveGet(`${fileId}/export`, { mimeType: 'application/pdf', key });
 
       if (!name.endsWith('.pdf')) {
         name += '.pdf';
       }
     } else {
-      response = await service.files.get(
-        { fileId, alt: 'media', supportsAllDrives: true },
-        { responseType: 'stream' },
-      );
+      response = await driveGet(fileId, { alt: 'media', supportsAllDrives: 'true', key });
 
       if (
-        metadata.data.mimeType ===
+        metadata.mimeType ===
           'application/vnd.openxmlformats-officedocument.presentationml.presentation' &&
         !name.endsWith('.pptx')
       ) {
@@ -249,8 +236,24 @@ class GoogleDocs {
       }
     }
 
-    return { type: 'PDF_STREAM', data: response.data, name };
+    if (!response.body) throw new Error(`Google Drive answered no body for ${fileId}`);
+    return { type: 'PDF_STREAM', data: bodyStream(response.body), name };
   }
+}
+
+// Drive's v3 REST API, read with an API key: a file anyone with the link can
+// view. Only the fields read here are declared.
+const DriveFileMetadata = z.object({ name: z.string().nullish(), mimeType: z.string().nullish() });
+
+async function driveGet(path: string, query: Record<string, string>): Promise<Response> {
+  const url = new URL(`https://www.googleapis.com/drive/v3/files/${path}`);
+  for (const [k, v] of Object.entries(query)) url.searchParams.set(k, v);
+  const response = await readerHost().fetch(url);
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new Error(`Google Drive answered ${response.status} ${response.statusText} for ${path}`);
+  }
+  return response;
 }
 
 const GoogleDocsService = new GoogleDocs();

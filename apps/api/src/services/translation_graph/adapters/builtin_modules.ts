@@ -47,6 +47,7 @@ import {
 import { declaredInboundVerifier, type InboundVerifier } from 'movement-engine/public/inbound';
 import { ownedFilesAdapter } from 'movement-engine/public/modules';
 import { logger } from 'movement-engine/public/log';
+import type { BrowserSlot } from 'movement-engine/public/browser';
 import { DEALROOM_MANIFEST } from '@listen-fire/dealroom/manifest';
 import { GRANOLA_MANIFEST } from '@listen-fire/granola/manifest';
 import { EVERTRACE_MANIFEST } from '@listen-fire/evertrace/manifest';
@@ -71,6 +72,7 @@ import { googleIntegrationsApp } from '../../../adapters/google/authClient';
 import { gmailModuleCredential } from '../../../adapters/gmail/module_credential';
 import { credentialTypeOf } from './credential_type';
 import { hostedModels } from './module_host';
+import { platformBrowser } from '../../playwright';
 import { oauthAppFromEnv } from './module_credentials';
 import { builtInBotToken } from './telegram/shared_bot';
 import { telegramIdentities } from './telegram/identities';
@@ -440,13 +442,14 @@ function harnessBaseUrl(entry: AdapterModuleLine, definition: AdapterModuleDefin
 }
 
 /** What the platform hosts a module line's module with, for one install:
- *  the stored credential, and the line's kv, files and linked identities
- *  (refused by name where the line names none). */
+ *  the stored credential, the line's kv, files and linked identities
+ *  (refused by name where the line names none), and the platform's browser
+ *  slot (Chromium on the api image, empty on api-slim). */
 function platformHost(
   entry: ModuleLineHost,
   definition: ModuleDefinition,
   install: BuiltinInstall,
-): { credential: ModuleCredential; kv: ModuleKv; files: ModuleFiles; identities?: ModuleIdentities } {
+): { credential: ModuleCredential; kv: ModuleKv; files: ModuleFiles; identities?: ModuleIdentities; browser: BrowserSlot } {
   const secrets = createSecretsFamily({
     backend: postgresSecrets({ teamId: install.teamId, ...(entry.storedAs !== undefined ? { shape: entry.storedAs } : {}) }),
     warn: (message) => logger.warn(message),
@@ -463,6 +466,7 @@ function platformHost(
     kv: entry.kv?.(install) ?? refusingKv(unavailable('ctx.kv')),
     files: entry.files?.(install) ?? refusingFiles(unavailable('ctx.files')),
     ...(entry.identities !== undefined ? { identities: entry.identities(install.teamId) } : {}),
+    browser: platformBrowser,
   };
 }
 

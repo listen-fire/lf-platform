@@ -15,7 +15,11 @@
 //! crate::store_module); the limiter slot likewise, over the limiter wire
 //! (docs/contracts/limiter-slot.md, crate::limiter_module), and the loopGuard
 //! slot — empty unless named — over the guard wire (docs/contracts/
-//! loop-guard-slot.md, crate::guard_module). The other slots take only a built-in: their
+//! loop-guard-slot.md, crate::guard_module). The browser slot (a real page a
+//! module drives: a gated deck, a viewer that draws with script) stays empty
+//! in lf: lf has no browser, and naming one is refused, so a module asking
+//! for a page is refused by name (docs/contracts/browser-slot.md). The
+//! other slots take only a built-in: their
 //! families are lf's own code paths (a model call's streaming and pricing,
 //! the judge's question, the file folder), with no wire to drive a process
 //! over yet.
@@ -36,10 +40,11 @@ pub enum Slot {
     Files,
     Limiter,
     LoopGuard,
+    Browser,
 }
 
 impl Slot {
-    pub const ALL: [Slot; 6] = [Slot::Models, Slot::Judge, Slot::Store, Slot::Files, Slot::Limiter, Slot::LoopGuard];
+    pub const ALL: [Slot; 7] = [Slot::Models, Slot::Judge, Slot::Store, Slot::Files, Slot::Limiter, Slot::LoopGuard, Slot::Browser];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -49,6 +54,7 @@ impl Slot {
             Slot::Files => "files",
             Slot::Limiter => "limiter",
             Slot::LoopGuard => "loopGuard",
+            Slot::Browser => "browser",
         }
     }
 
@@ -57,7 +63,8 @@ impl Slot {
     }
 
     /// The module a project gets when lf.yaml names none for the slot; None
-    /// for a slot that stays empty unless filled (the loop guard).
+    /// for a slot that stays empty unless filled (the loop guard) and for
+    /// one lf never fills (the browser).
     pub fn default_module(self) -> Option<&'static CoreModule> {
         let name = match self {
             Slot::Models => ANTHROPIC,
@@ -65,7 +72,7 @@ impl Slot {
             Slot::Store => SQLITE_STORE,
             Slot::Files => LOCAL_FILES,
             Slot::Limiter => MEMORY_LIMITER,
-            Slot::LoopGuard => return None,
+            Slot::LoopGuard | Slot::Browser => return None,
         };
         Some(builtin(name).expect("a slot's default is a built-in"))
     }
@@ -188,6 +195,11 @@ impl CoreChoice {
                 let slots: Vec<&str> = Slot::ALL.iter().map(|s| s.name()).collect();
                 return Err(format!("{at}: core.{slot_name}: not a core slot (the slots: {})", slots.join(", ")));
             };
+            if slot == Slot::Browser {
+                return Err(format!(
+                    "{at}: core.browser: lf has no browser module, so the browser slot stays empty (a module that opens a page, such as @lf/web reading a gated document, is refused by name); the platform's api image fills it with Chromium"
+                ));
+            }
             let found = builtin(module_name).or_else(|| installed.iter().find(|m| m.name == *module_name));
             let module = match found {
                 Some(module) if module.slot != slot => {
@@ -214,6 +226,7 @@ impl CoreChoice {
                 Slot::Files => choice.files = module,
                 Slot::Limiter => choice.limiter = module,
                 Slot::LoopGuard => choice.loop_guard = Some(module),
+                Slot::Browser => unreachable!("the browser slot is refused above"),
             }
         }
         Ok(choice)
@@ -324,6 +337,14 @@ mod tests {
             [ANTHROPIC, JUDGE, SQLITE_STORE, LOCAL_FILES, MEMORY_LIMITER]
         );
         assert_eq!(choice.loop_guard, None, "no guard runs unless lf.yaml names one");
+    }
+
+    #[test]
+    fn the_browser_slot_stays_empty_and_naming_a_module_for_it_is_refused() {
+        assert_eq!(Slot::of("browser"), Some(Slot::Browser));
+        assert_eq!(Slot::Browser.default_module(), None);
+        let refused = CoreChoice::of(&named(&[("browser", "@lf/chromium")]), &[], "lf.yaml").unwrap_err();
+        assert!(refused.contains("lf has no browser module, so the browser slot stays empty"), "{refused}");
     }
 
     #[test]

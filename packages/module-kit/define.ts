@@ -21,6 +21,7 @@ import type {
 } from 'engine-contracts';
 import type { ZodType } from 'zod';
 import type { Adapter, AdapterManifest, DiscriminableEvent } from 'movement-engine/public/adapter';
+import type { BrowserSlot } from 'movement-engine/public/browser';
 import type { ChatModelName } from 'movement-engine/public/models';
 import type { PluginDeclaration } from 'movement-engine/public/plugins';
 
@@ -151,6 +152,10 @@ export interface ModuleContext {
   /** Refuses by name on a host that lends none. */
   models: ModuleModels;
   identities: ModuleIdentities;
+  /** The host's browser slot: a real page to drive (a gated deck, a viewer
+   *  that draws with script). Refuses by name, saying which slot is empty,
+   *  on a host that has none. */
+  browser: BrowserSlot;
   config: ModuleConfig;
 }
 

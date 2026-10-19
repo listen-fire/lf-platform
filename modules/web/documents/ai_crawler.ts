@@ -1,17 +1,11 @@
 import { createHash } from "node:crypto";
 
-import { Page } from 'playwright';
 import { z } from 'zod';
 
-import type Anthropic from '@anthropic-ai/sdk';
+import type { BrowserLocator, BrowserPage as Page } from 'movement-engine/public/browser';
+import type { Screenshot } from './crawler';
 
-import { chatCallFor } from '../models/chat';
-import { logger } from 'movement-engine/public/log';
-import { recordLlmUsage } from '../llm_usage';
-import { Screenshot } from '../../services/crawler';
-import { sendSlackNotification } from '../slack';
-import { handleError } from '../errors';
-import { Prompt } from '../prompts';
+import { alert, logger, readerHost, reportError } from './host';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -107,14 +101,10 @@ type AICrawlResult =
   | { type: 'needs_verification'; steps: StepLog[] }
   | { type: 'failed'; reason: string; steps: StepLog[] };
 
-// ── Anthropic client ───────────────────────────────────────────────────────
+// ── Vision model ───────────────────────────────────────────────────────────
 
-// The crawler asks Claude what kind of page it has landed on, wherever the
-// model map sends that name. The factory reads its credentials at first USE,
-// not at module load, so merely importing this file cannot stop the process
-// booting.
-
-const VISION_MODEL = 'claude-sonnet-5';
+// The crawler asks a vision model what kind of page it has landed on. The
+// host makes the call (its model routing, its metering).
 
 async function visionCall(opts: {
   system: string;
@@ -122,44 +112,7 @@ async function visionCall(opts: {
   text: string;
   label: string;
 }): Promise<string> {
-  const startMs = Date.now();
-  const { client, wireModel, resolved } = chatCallFor(VISION_MODEL);
-  const response = await client.messages.create({
-    model: wireModel,
-    max_tokens: 4096,
-    system: opts.system,
-    messages: [
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'image',
-            source: {
-              type: 'base64',
-              media_type: 'image/png',
-              data: opts.screenshot.toString('base64'),
-            },
-          },
-          { type: 'text', text: opts.text },
-        ],
-      },
-    ],
-  });
-  const durationMs = Date.now() - startMs;
-
-  recordLlmUsage({
-    resolved,
-    callType: 'chat',
-    label: opts.label,
-    inputTokens: response.usage.input_tokens,
-    outputTokens: response.usage.output_tokens,
-    durationMs,
-  }).catch(() => {});
-
-  return response.content
-    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-    .map((b) => b.text)
-    .join('');
+  return readerHost().vision(opts);
 }
 
 function parseJsonFromLLM(text: string): unknown {
@@ -489,7 +442,7 @@ async function captureAllSlides(
  */
 async function captureScrollContent(
   page: Page,
-  contentEl: ReturnType<Page['locator']>,
+  contentEl: BrowserLocator,
   contentSelector: string,
 ): Promise<Screenshot[]> {
   const dims = await page.evaluate((sel) => {
@@ -579,7 +532,7 @@ function getScrollTiles(screenshot: Screenshot): Screenshot[] | null {
  */
 async function captureDiscreteSlides(
   page: Page,
-  contentEl: ReturnType<Page['locator']>,
+  contentEl: BrowserLocator,
   nav: DeckViewerAssessment['navigation'],
 ): Promise<Screenshot[]> {
   const screenshots: Screenshot[] = [];
@@ -729,20 +682,20 @@ async function aiCaptureContent(
 async function reportAIResult(url: string, result: AICrawlResult, context: string): Promise<void> {
   try {
     if (result.type === 'screenshots') {
-      await sendSlackNotification({
-        type: 'DEALFLOW',
+      await alert({
+        channel: 'DEALFLOW',
         text: `:robot_face: AI crawler succeeded for ${context}\nURL: ${url}\nSlides captured: ${result.data.length}`,
         opsTitle: `AI crawler captured ${result.data.length} slides for ${context}`,
       });
     } else if (result.type === 'failed') {
-      await sendSlackNotification({
-        type: 'DEALFLOW',
+      await alert({
+        channel: 'DEALFLOW',
         text: `:warning: AI crawler failed for ${context}\nURL: ${url}\nReason: ${result.reason}\nSteps taken: ${result.steps.length}`,
         opsTitle: `AI crawler failed for ${context} (${url}) — ${result.reason}`,
       });
     }
   } catch (err) {
-    handleError(err);
+    reportError(err);
   }
 }
 

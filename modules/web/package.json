@@ -23,10 +23,13 @@
     "@listen-fire/module-kit": "workspace:^",
     "@listen-fire/movement-lang": "workspace:^",
     "@listen-fire/shared": "workspace:^",
+    "html-to-text": "9.0.5",
+    "jspdf": "2.5.1",
     "zod": "4.1.12"
   },
   "devDependencies": {
     "#shared": "workspace:@listen-fire/shared@*",
+    "@types/html-to-text": "9.0.4",
     "@types/jest": "29.5.14",
     "@types/node": "20.16.5",
     "engine-contracts": "workspace:@listen-fire/engine-contracts@*",

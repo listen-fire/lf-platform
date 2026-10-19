@@ -1,32 +1,33 @@
-import { ExternalUrl, PdfStream } from '.';
+import type { PdfStream } from './reader';
 
-import { Crawler, FetchedDocument, Screenshot } from '../../services/crawler';
-import { logger } from 'movement-engine/public/log';
-import { PlaywrightService } from '../../services/playwright';
+import { Crawler, FetchedDocument, Screenshot } from './crawler';
+import { logger, readerHost } from './host';
 
-class PapermarkCrawler extends Crawler {
+class InvalidCredentialsError extends Error {}
+
+class BrieflinkCrawler extends Crawler {
   protected async authenticate(): Promise<Error | null> {
-    const slideLocators = this.page.locator('.viewer-container:not(.hidden)').nth(0);
+    const slideLocators = this.page.locator('.DeckGalleryPageContainer').nth(0);
     const emailFieldLocator = this.page.locator('input[name="email"]').nth(0);
-    const passcodeFieldLocator = this.page.locator('input[name="password"]').nth(0);
+    const passcodeFieldLocator = this.page.locator('input[name="passcode"]').nth(0);
     const submitButtonLocator = this.page.locator('button[type="submit"]').nth(0);
 
     await this.page.waitForTimeout(3000);
 
-    if (this.email && (await emailFieldLocator.isVisible())) {
+    if (await emailFieldLocator.isVisible()) {
+      if (!this.email) {
+        return new InvalidCredentialsError(
+          'This BriefLink needs an email to view — pass email: to vc_url_retrieval (e.g. email: @user_email)',
+        );
+      }
       await emailFieldLocator.fill(this.email);
-    }
-
-    if (this.passcode?.length && (await passcodeFieldLocator.isVisible())) {
-      await passcodeFieldLocator.fill(this.passcode);
-    }
-
-    if (await submitButtonLocator.isVisible()) {
-      await this.page.waitForTimeout(500);
+      if (this.passcode?.length && (await passcodeFieldLocator.isVisible())) {
+        await passcodeFieldLocator.fill(this.passcode);
+      }
       await submitButtonLocator.click();
     }
 
-    await this.page.waitForTimeout(3000);
+    await this.page.waitForTimeout(500);
 
     if (await slideLocators.isVisible()) {
       return null;
@@ -36,31 +37,22 @@ class PapermarkCrawler extends Crawler {
   }
 
   protected async takeScreenshotsOfAllPages(): Promise<Screenshot[]> {
-    const slideLocators = this.page.locator('.viewer-container:not(.hidden)').nth(0);
-    const nextButtonLocator = this.page.locator('button:has(> svg.lucide-chevron-right)').nth(0);
-    const floatingShareLocator = this.page.locator('div.absolute.bottom-0').nth(0);
+    const slideLocators = this.page.locator('.DeckGalleryPageContainer').nth(0);
+    const nextButtonLocator = this.page.locator('button.Button.Right').nth(0);
     const screenshots: Screenshot[] = [];
 
     await this.page.waitForTimeout(700);
 
-    await floatingShareLocator.evaluate((el) =>
-      el.setAttribute('style', 'opacity: 0; pointer-events: none;'),
-    );
-
     while (true /* eslint-disable-line no-constant-condition */) {
       await this.page.waitForLoadState('domcontentloaded');
       await this.page.waitForTimeout(200);
-      if ((await slideLocators.count()) === 0) {
-        break;
-      }
-
       const box = await slideLocators.boundingBox();
       if (box) {
         const screenshot = await slideLocators.screenshot();
         screenshots.push({ width: box.width, height: box.height, data: screenshot });
       }
 
-      if (!(await nextButtonLocator.isVisible())) {
+      if (await nextButtonLocator.isDisabled()) {
         break;
       }
 
@@ -76,27 +68,27 @@ class PapermarkCrawler extends Crawler {
   }
 }
 
-class Papermark {
+class Brieflink {
   /**
-   * Get the PDF at the given Papermark URL
+   * Get the PDF at the given BriefLink URL
    */
   async getAsPdf(
     url: string,
     { email, passcode }: { email?: string; passcode?: string },
-  ): Promise<PdfStream | ExternalUrl | null> {
+  ): Promise<PdfStream | null> {
     try {
       // TODO: We should sanity check the URL to make sure we're
-      // actually looking at a papermark link.
-      const papermarkResult: FetchedDocument<PdfStream> = await PlaywrightService.withPage(
-        async (page, browser) => {
-          const papermarkCrawler = new PapermarkCrawler({
+      // actually looking at a brieflink link.
+      const brieflinkResult: FetchedDocument<PdfStream> = await readerHost().browser.withPage(
+        (page, browser) => {
+          const brieflinkCrawler = new BrieflinkCrawler({
             page,
             browser,
             url,
             email,
             passcode,
           });
-          return papermarkCrawler.getPdf();
+          return brieflinkCrawler.getPdf();
         },
         {
           viewport: {
@@ -106,20 +98,25 @@ class Papermark {
         },
       );
 
-      if (papermarkResult.error) {
-        throw papermarkResult.error;
+      if (brieflinkResult.error) {
+        throw brieflinkResult.error;
       }
 
-      return papermarkResult.document;
+      return brieflinkResult.document;
     } catch (err) {
+      // Rethrow (rather than swallow to null) so the actionable message
+      // reaches the per-URL failure log the plugin already produces — this
+      // is an author config gap, not an unexpected system error.
+      if (err instanceof InvalidCredentialsError) throw err;
+
       console.error(err);
-      logger.info(`Failed to fetch PDF from papermark link: ${url}.`);
+      logger.info(`Failed to fetch PDF from brieflink link: ${url}.`);
 
       return null;
     }
   }
 }
 
-const PapermarkService = new Papermark();
+const BrieflinkService = new Brieflink();
 
-export { PapermarkService };
+export { BrieflinkService };

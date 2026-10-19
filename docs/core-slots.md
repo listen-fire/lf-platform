@@ -17,6 +17,7 @@ core:
 | `files` | where documents a run stores are kept | `@lf/local-files` (`.lf/files/`) | |
 | `limiter` | keeps calls to modules and models inside the providers' limits | `@lf/memory-limiter` (in lf's own process) | |
 | `loopGuard` | tells a movement's own write echoing back from a real change | none: the slot is empty and nothing is suppressed | `@lf/fingerprint-guard` (opt in) |
+| `browser` | a real page a module drives: a gated deck, a viewer that draws with script ([browser-slot.md](contracts/browser-slot.md)) | none: lf has no browser, and a module asking for a page is refused by name | none in lf; the platform's api image fills it with `@lf/chromium` |
 
 A slot accepts only a module of its own kind; `lf check` and `lf run` refuse anything else, naming the slots.
 

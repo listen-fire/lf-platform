@@ -8,6 +8,7 @@
 // own (`served_files.ts`).
 
 import { ADAPTER_TEAM_HEADER } from 'movement-engine/public/adapter';
+import type { BrowserSlot } from 'movement-engine/public/browser';
 
 import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from 'node:http';
 import { METHODS, type MethodName, type RpcResponseShape, type WireCostLineShape, type WireCredentialShape } from 'engine-contracts';
@@ -39,6 +40,9 @@ export interface ModuleServerOptions {
   /** The models the serving host lends; default: refused by name. Given
    *  each request's spend, so a host door's cost is charged to the call. */
   models?: ModuleModels | ((spend: ModuleSpend) => ModuleModels);
+  /** The browser the serving host lends; default: the empty slot, refused
+   *  by name. */
+  browser?: BrowserSlot;
   baseUrlOverride?: string;
   /** Construction arguments for every request (an entry position); a
    *  request's own `settings` (its install's) are laid over them. */
@@ -157,6 +161,7 @@ async function answer(
         files: options.files,
         kv: options.kvFor(tenant),
         ...(models !== undefined ? { models } : {}),
+        ...(options.browser !== undefined ? { browser: options.browser } : {}),
         ...(options.baseUrlOverride !== undefined ? { baseUrlOverride: options.baseUrlOverride } : {}),
         constructionArgs,
         validateResults: false,

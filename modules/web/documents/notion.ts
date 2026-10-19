@@ -1,8 +1,7 @@
 import { htmlToText } from 'html-to-text';
 
-import { Crawler, Screenshot } from '../../services/crawler';
-import { logger } from 'movement-engine/public/log';
-import { PlaywrightService } from '../../services/playwright';
+import { Crawler, Screenshot } from './crawler';
+import { logger, readerHost } from './host';
 
 class NotionCrawler extends Crawler {
   protected getPageContent = async () => {
@@ -69,7 +68,7 @@ class Notion {
     try {
       // TODO: We should sanity check the URL to make sure we're
       // actually looking at a notion link.
-      const notionResult = await PlaywrightService.withPage(
+      const notionResult = await readerHost().browser.withPage(
         async (page, browser) => {
           const notionCrawler = new NotionCrawler({
             page,

@@ -1,4 +1,4 @@
-import { PitchDotComService } from '../pitch_dot_com';
+import { PitchDotComService } from '../../documents/pitch_dot_com';
 
 describe('getFirstPageUrl', () => {
   [

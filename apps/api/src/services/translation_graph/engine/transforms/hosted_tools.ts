@@ -8,7 +8,7 @@
 import type { FileRef } from 'engine-contracts';
 import type { TransformImpl } from './registry';
 
-import { runWebPlugin, withTools, type WebPlugin, type WebTools } from '@listen-fire/web';
+import { BrowserSlotEmptyForDocument, runWebPlugin, withTools, type WebPlugin, type WebTools } from '@listen-fire/web';
 import { documentStoreFileRef } from 'movement-engine/public/files';
 import { logger } from 'movement-engine/public/log';
 import { services } from '../../../../adapters/registry';
@@ -16,6 +16,7 @@ import { anthropicChat, anthropicChatStructured, anthropicWebChat } from '../../
 import { DocumentSourceService } from '../../../../lib/document_sources';
 import { runFields } from '../../../../lib/llm_usage';
 import { DocumentService } from '../../../document';
+import { platformBrowser } from '../../../playwright';
 import { missingBrightDataVars, ScraperService } from '../../../scraper';
 import { resolveWebSearchProvider, WebSearchService } from '../../../web_search';
 import { fetchWithTimeout } from './fetch_resource';
@@ -46,6 +47,12 @@ export const hostedWebTools: WebTools = {
   },
   isDocumentSource: (url) => DocumentSourceService.isSupportedUrl(url),
   async fetchResource(url, email, password) {
+    // On an image without Chromium a gated address is refused up front, naming
+    // the empty slot: inside the read the sources would swallow it as nothing.
+    const empty = platformBrowser.emptyBecause;
+    if (empty !== undefined && DocumentSourceService.isSupportedUrl(url)) {
+      throw new BrowserSlotEmptyForDocument(url, empty);
+    }
     const fetched = password === undefined ? await fetchWithTimeout(url, email) : await fetchWithTimeout(url, email, password);
     return fetched === null ? null : { url: fetched.url, content: fetched.content, file: fetched.documentId };
   },
