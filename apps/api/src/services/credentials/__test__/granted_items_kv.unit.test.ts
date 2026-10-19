@@ -16,6 +16,14 @@ function memoryStore(): GrantedItemsStore & { rows: Array<GrantedItem & { creden
       if (existing !== undefined) Object.assign(existing, { mimeType: input.mimeType, name: input.name });
       else rows.push({ ...input });
     },
+    replace: async (input) => {
+      const existing = rows.find((row) => row.credentialsId === input.credentialsId && row.itemId === input.itemId);
+      const held = existing === undefined ? undefined : { mimeType: existing.mimeType, name: existing.name };
+      if (JSON.stringify(held) !== JSON.stringify(input.expected)) return false;
+      if (existing !== undefined) Object.assign(existing, input.next);
+      else rows.push({ credentialsId: input.credentialsId, itemId: input.itemId, ...input.next });
+      return true;
+    },
     revoke: async (input) => {
       const at = rows.findIndex((row) => row.credentialsId === input.credentialsId && row.itemId === input.itemId);
       if (at >= 0) rows.splice(at, 1);
@@ -56,6 +64,22 @@ describe('grantedItemsKv', () => {
     expect((await kv.list('')).map((entry) => entry.key)).toEqual(['granted/b', 'granted/a']);
     await kv.delete('granted/b');
     expect((await kv.list('granted/')).map((entry) => entry.key)).toEqual(['granted/a']);
+  });
+
+  it('compare-and-set: grants only over what it expected, and of two racing writers one wins', async () => {
+    const store = memoryStore();
+    const kv = grantedItemsKv('cred-1', { teamId: 'team-1', store });
+    expect(await kv.compareAndSet('granted/s1', { mimeType: SHEET, name: 'x' }, { mimeType: SHEET, name: 'A' })).toBe(false);
+    expect(await kv.compareAndSet('granted/s1', undefined, { mimeType: SHEET, name: 'A' })).toBe(true);
+    expect(await kv.compareAndSet('granted/s1', undefined, { mimeType: SHEET, name: 'B' })).toBe(false);
+    const racing = await Promise.all([
+      kv.compareAndSet('granted/s1', { mimeType: SHEET, name: 'A' }, { mimeType: SHEET, name: 'B' }),
+      kv.compareAndSet('granted/s1', { mimeType: SHEET, name: 'A' }, { mimeType: SHEET, name: 'C' }),
+    ]);
+    expect(racing).toEqual([true, false]);
+    expect(await kv.get('granted/s1')).toEqual({ mimeType: SHEET, name: 'B' });
+    expect(await kv.compareAndSet('granted/s1', 'not a grant', { mimeType: SHEET, name: 'D' })).toBe(false);
+    await expect(kv.compareAndSet('team/emails', undefined, { mimeType: SHEET, name: 'D' })).rejects.toThrow('read-only');
   });
 
   it('refuses a value that is not a grant', async () => {

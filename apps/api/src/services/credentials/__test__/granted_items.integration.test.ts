@@ -7,7 +7,7 @@ import { getAutomationsQb, getCoreQb } from '../../../lib/kysely';
 import ExternalServiceType from '../../../generated/kysely/automations/ExternalServiceType';
 import { cleanupTeam } from '../../../test/harness/cleanup';
 import {
-  grantItem, listGrantedItems, revokeItem, SPREADSHEET_MIME, DRIVE_FOLDER_MIME,
+  grantItem, listGrantedItems, replaceGrant, revokeItem, SPREADSHEET_MIME, DRIVE_FOLDER_MIME,
 } from '../granted_items';
 
 describe('granted_items store', () => {
@@ -46,5 +46,22 @@ describe('granted_items store', () => {
     await grantItem({ credentialsId: credId, itemId: 'f1', mimeType: DRIVE_FOLDER_MIME, name: 'new' });
     const rows = await listGrantedItems(credId);
     expect(rows).toEqual([{ itemId: 'f1', mimeType: DRIVE_FOLDER_MIME, name: 'new' }]);
+  });
+
+  it('replaces a grant only over what it expected: of two racing writers one wins', async () => {
+    const grant = (name: string | null) => ({ mimeType: SPREADSHEET_MIME, name });
+    expect(await replaceGrant({ credentialsId: credId, itemId: 's', expected: grant('x'), next: grant('A') })).toBe(false);
+    const created = await Promise.all([
+      replaceGrant({ credentialsId: credId, itemId: 's', expected: undefined, next: grant(null) }),
+      replaceGrant({ credentialsId: credId, itemId: 's', expected: undefined, next: grant('B') }),
+    ]);
+    expect(created.filter(Boolean)).toHaveLength(1);
+    const held = (await listGrantedItems(credId))[0]?.name ?? null;
+    const racing = await Promise.all([
+      replaceGrant({ credentialsId: credId, itemId: 's', expected: grant(held), next: grant('C') }),
+      replaceGrant({ credentialsId: credId, itemId: 's', expected: grant(held), next: grant('D') }),
+    ]);
+    expect(racing.filter(Boolean)).toHaveLength(1);
+    expect(await listGrantedItems(credId)).toEqual([{ itemId: 's', mimeType: SPREADSHEET_MIME, name: racing[0] ? 'C' : 'D' }]);
   });
 });

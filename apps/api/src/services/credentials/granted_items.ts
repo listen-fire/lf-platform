@@ -2,7 +2,7 @@
 // drive.file scope there is no list-all API; the Picker grants access one item
 // at a time and each pick is recorded here against the Google credential, tagged
 // with its real Drive mime_type so each adapter filters to what it cares about.
-import { compareThenSet, type ModuleKv } from 'module-kit';
+import type { ModuleKv } from 'module-kit';
 import type { ExternalServiceCredentialsId } from '../../generated/kysely/automations/ExternalServiceCredentials';
 import type { TeamId } from '../../generated/kysely/core/Team';
 
@@ -58,6 +58,36 @@ export async function grantItem(input: {
     .execute();
 }
 
+/** A grant's mime type and name. */
+export type Grant = Pick<GrantedItem, 'mimeType' | 'name'>;
+
+/** Write `next` over the item's grant only if it still holds `expected`
+ *  (undefined: not granted), as one conditional statement. Answers whether it
+ *  wrote. */
+export async function replaceGrant(input: { credentialsId: string; itemId: string; expected: Grant | undefined; next: Grant }): Promise<boolean> {
+  const credentialsId = input.credentialsId as ExternalServiceCredentialsId;
+  if (input.expected === undefined) {
+    const inserted = await getAutomationsQb(['google_granted_item'])
+      .insertInto('google_granted_item')
+      .values({ credentials_id: credentialsId, item_id: input.itemId, mime_type: input.next.mimeType, name: input.next.name })
+      .onConflict((oc) => oc.columns(['credentials_id', 'item_id']).doNothing())
+      .returning('item_id')
+      .executeTakeFirst();
+    return inserted !== undefined;
+  }
+  const { mimeType, name } = input.expected;
+  const updated = await getAutomationsQb(['google_granted_item'])
+    .updateTable('google_granted_item')
+    .set({ mime_type: input.next.mimeType, name: input.next.name })
+    .where('credentials_id', '=', credentialsId)
+    .where('item_id', '=', input.itemId)
+    .where('mime_type', '=', mimeType)
+    .where((eb) => (name === null ? eb('name', 'is', null) : eb('name', '=', name)))
+    .returning('item_id')
+    .executeTakeFirst();
+  return updated !== undefined;
+}
+
 export async function revokeItem(input: {
   credentialsId: string;
   itemId: string;
@@ -87,6 +117,7 @@ const grantedValue = z.object({ mimeType: z.string().min(1), name: z.string().nu
 export interface GrantedItemsStore {
   list(credentialsId: string): Promise<GrantedItem[]>;
   grant(input: { credentialsId: string; itemId: string; mimeType: string; name: string | null }): Promise<void>;
+  replace(input: { credentialsId: string; itemId: string; expected: Grant | undefined; next: Grant }): Promise<boolean>;
   revoke(input: { credentialsId: string; itemId: string }): Promise<void>;
   teamEmails(teamId: string): Promise<string[]>;
 }
@@ -105,6 +136,7 @@ export async function teamPrimaryEmails(teamId: string): Promise<string[]> {
 export const postgresGrantedItems: GrantedItemsStore = {
   list: (credentialsId) => listGrantedItems(credentialsId),
   grant: grantItem,
+  replace: replaceGrant,
   revoke: revokeItem,
   teamEmails: teamPrimaryEmails,
 };
@@ -138,9 +170,14 @@ export function grantedItemsKv(credentialsId: string, options: { teamId: string;
     async delete(key) {
       await store.revoke({ credentialsId, itemId: itemOf(key, 'delete') });
     },
-    // A grant is an upsert of the same item: two writers agree on what it holds.
     async compareAndSet(key, expected, value) {
-      return compareThenSet(this, { key, expected, value });
+      const itemId = itemOf(key, 'compareAndSet');
+      const next = grantedValue.safeParse(value);
+      if (!next.success) throw new Error(`ctx.kv.compareAndSet("${key}"): a grant is { mimeType: string, name: string | null }`);
+      if (expected === undefined) return store.replace({ credentialsId, itemId, expected: undefined, next: next.data });
+      // A value no grant can hold is never what the item holds.
+      const was = grantedValue.strict().safeParse(expected);
+      return was.success && store.replace({ credentialsId, itemId, expected: was.data, next: next.data });
     },
     async list(prefix) {
       return (await store.list(credentialsId))

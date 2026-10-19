@@ -31,7 +31,7 @@ import { resolveAdapter } from '../../translation_graph/adapters/resolve';
 import { answerAskByToken, cancelAskAndWake, createAsk } from '../doors';
 import { notifyEngineOfSettledAsks } from '../in_process_notifier';
 import { resetAskSettledNotifierForTests } from '../notifier';
-import { askTableKv, getAsk, lookupAskByToken, platformAskRecords } from '../store';
+import { askIdSchema, askTableKv, getAsk, lookupAskByToken, platformAskRecords } from '../store';
 
 describe('the asks table as the ask module\'s kv (real DB)', () => {
   let teamId: TeamId;
@@ -113,6 +113,27 @@ describe('the asks table as the ask module\'s kv (real DB)', () => {
       kv.set(`ask:${ask.id}`, { ...(open as object), state: 'answered', answer: true, answeredAt: new Date().toISOString() }),
     ).rejects.toThrow(/already settled/);
     expect((await getAsk(ask.id))?.answer).toBe(false);
+  });
+
+  it('compare-and-set: of two racing settles from the same open ask one wins, and a raise over a taken id writes nothing', async () => {
+    const ask = await createAsk({ teamId, family: 'Check', prompt: 'Ship it?' });
+    const kv = askTableKv(teamId);
+    const key = `ask:${ask.id}`;
+    const open = (await kv.get(key)) as Record<string, unknown>;
+    const settled = (answer: boolean) => ({ ...open, state: 'answered', answer, answeredAt: new Date().toISOString() });
+    const racing = await Promise.all([kv.compareAndSet(key, open, settled(true)), kv.compareAndSet(key, open, settled(false))]);
+    expect(racing.filter(Boolean)).toHaveLength(1);
+    const won = (await getAsk(ask.id))?.answer;
+    expect(won).toBe(racing[0] ? true : false);
+    // Past the settle nothing more is written.
+    expect(await kv.compareAndSet(key, await kv.get(key), settled(!won))).toBe(false);
+    expect((await getAsk(ask.id))?.answer).toBe(won);
+    // The id is taken: expecting it unset loses.
+    expect(await kv.compareAndSet(key, undefined, open)).toBe(false);
+    const freshId = askIdSchema.parse(randomUUID());
+    const fresh = { ...open, id: freshId, token: `${ASK_TOKEN_PREFIX}${randomBytes(12).toString('hex')}` };
+    expect(await kv.compareAndSet(`ask:${freshId}`, undefined, fresh)).toBe(true);
+    expect((await getAsk(freshId))?.state).toBe('open');
   });
 
   it('keeps one team\'s asks out of another team\'s kv', async () => {

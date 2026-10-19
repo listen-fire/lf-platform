@@ -22,7 +22,7 @@ import { z } from 'zod';
 
 import type { TeamId } from '../../generated/kysely/core/Team';
 import type { AskId } from '../../generated/kysely/asks/Ask';
-import { compareThenSet, type ModuleKv } from 'module-kit';
+import { compareThenSet, sameJsonValue, type ModuleKv } from 'module-kit';
 
 import {
   ASK_ANSWER_TYPES,
@@ -237,8 +237,10 @@ class AskAlreadySettled extends Error {
   }
 }
 
-async function insertAsk(teamId: TeamId, ask: StoredAsk, callbackUrl: string | null): Promise<void> {
-  await getAsksQb(['ask'])
+/** Insert the ask's row; with `ifAbsent`, one whose id is taken already is
+ *  left as it is. Answers whether a row was written. */
+async function insertAsk(teamId: TeamId, ask: StoredAsk, callbackUrl: string | null, options: { ifAbsent?: boolean } = {}): Promise<boolean> {
+  const insert = getAsksQb(['ask'])
     .insertInto('ask')
     .values({
       id: ask.id as AskId,
@@ -253,17 +255,27 @@ async function insertAsk(teamId: TeamId, ask: StoredAsk, callbackUrl: string | n
       token_expires_at: new Date(ask.tokenExpiresAt),
       provenance: jsonb(ask.provenance) as never,
       callback_url: callbackUrl,
-    })
-    .execute();
+    });
+  const written = await (options.ifAbsent === true ? insert.onConflict((oc) => oc.column('id').doNothing()) : insert)
+    .returning('id')
+    .executeTakeFirst();
+  return written !== undefined;
 }
 
 /** Write a settle over an open row and tell whoever waits; refused when the
  *  row has settled already. Only the settle is written: everything else on an
  *  ask is immutable once raised. */
 async function settleAsk(teamId: TeamId, ask: StoredAsk): Promise<void> {
-  if (ask.state === 'open') return;
+  if (!isSettle(ask)) return;
+  if (!(await writeSettle(teamId, ask))) throw new AskAlreadySettled(ask.id);
+}
+
+/** The settle as one conditional UPDATE over the row while it is open (and,
+ *  given `raised`, still the ask it describes), then the notification.
+ *  Answers whether it wrote. */
+async function writeSettle(teamId: TeamId, ask: StoredAsk & { state: 'answered' | 'expired' }, raised?: StoredAsk): Promise<boolean> {
   const now = new Date();
-  const row = await getAsksQb(['ask'])
+  let update = getAsksQb(['ask'])
     .updateTable('ask')
     .set(
       ask.state === 'answered'
@@ -272,15 +284,22 @@ async function settleAsk(teamId: TeamId, ask: StoredAsk): Promise<void> {
     )
     .where('id', '=', ask.id as AskId)
     .where('team_id', '=', teamId)
-    .where('state', '=', 'open')
-    .returning([...SELECT_COLUMNS])
-    .executeTakeFirst();
-  if (!row) throw new AskAlreadySettled(ask.id);
+    .where('state', '=', 'open');
+  if (raised !== undefined) {
+    update = update.where('token', '=', raised.token).where('family', '=', raised.family).where('prompt', '=', raised.prompt);
+  }
+  const row = await update.returning([...SELECT_COLUMNS]).executeTakeFirst();
+  if (!row) return false;
   const settled = rowToRecord(row as AskRow);
   // Awaited so a queued wake is durable before the door says it took the
   // answer; neither throws, so a notification fault never fails a settle.
   if (settled.state === 'answered') await notifyAskSettled(settled);
   else await notifyAskCancelled(settled);
+  return true;
+}
+
+function isSettle(ask: StoredAsk): ask is StoredAsk & { state: 'answered' | 'expired' } {
+  return ask.state !== 'open';
 }
 
 /**
@@ -322,16 +341,33 @@ export function askTableKv(teamId: TeamId, options: { callbackUrl?: string | nul
       const ask = askRecordSchema.parse(value);
       if (ask.id !== key.slice('ask:'.length)) return refuse('ask under another ask\'s key');
       const existing = await rowById(ask.id);
-      if (existing === undefined) return insertAsk(teamId, ask, options.callbackUrl ?? null);
+      if (existing === undefined) {
+        await insertAsk(teamId, ask, options.callbackUrl ?? null);
+        return;
+      }
       if (existing.team_id !== teamId) return refuse('ask of another team');
       return settleAsk(teamId, ask);
     },
     async delete() {
       refuse('delete: asks are receipts and are cancelled, never removed');
     },
-    // An ask is inserted once (its id is the row's key) and settled once (from pending).
+    // Each write is one conditional statement: an ask is inserted only where
+    // its id is free, and settled only from open. A token key's write only
+    // checks the row it names, which never changes, so its read-then-check
+    // has nothing to race.
     async compareAndSet(key, expected, value) {
-      return compareThenSet(this, { key, expected, value });
+      if (key.startsWith('token:')) return compareThenSet(this, { key, expected, value });
+      if (!key.startsWith('ask:')) return refuse(`key "${key}"`);
+      const ask = askRecordSchema.parse(value);
+      if (ask.id !== key.slice('ask:'.length)) return refuse('ask under another ask\'s key');
+      if (expected === undefined) return insertAsk(teamId, ask, options.callbackUrl ?? null, { ifAbsent: true });
+      const raised = askRecordSchema.safeParse(expected);
+      if (!raised.success || raised.data.id !== ask.id) return false;
+      // Past a settle nothing is written; writing what it holds changes nothing.
+      if (raised.data.state !== 'open' || !isSettle(ask)) {
+        return sameJsonValue(ask, raised.data) && sameJsonValue(await this.get(key), raised.data);
+      }
+      return writeSettle(teamId, ask, raised.data);
     },
     async list(prefix) {
       if (!prefix.startsWith('ask:')) return [];

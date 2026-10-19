@@ -3,12 +3,14 @@
 // (`MODULE_STATE_DIR`). Entries keep the order their keys were first set, so
 // `list` answers in creation order as every kv does. A write replaces the file
 // whole, through a temporary file and a rename, so a reader never sees half
-// of one; the writes of one process to one file are queued, so two never race.
-// The file is read on every call, so state seeded or edited beside the process
-// is what the next call sees.
+// of one. A write reads the file and replaces it as one step: queued within
+// this process, and under a lock file (`<file>.lock`, made exclusively)
+// across the processes that share the directory, so two writers never race
+// and a compare-and-set is atomic. The file is read on every call, so state
+// seeded or edited beside the process is what the next call sees.
 
 import { randomBytes } from 'node:crypto';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { ModuleKv } from './define';
@@ -40,6 +42,38 @@ export async function writeFileKv(dir: string, tenant: string, entries: KvFile['
   await rename(temporary, path);
 }
 
+/** A lock older than this was left by a writer that died holding it. */
+const STALE_LOCK_MS = 30_000;
+/** How long a writer waits for another process's lock before it gives up. */
+const LOCK_WAIT_MS = 10_000;
+
+/** `work` while holding `<path>.lock`, made with O_EXCL so one process at a
+ *  time holds it. */
+async function underFileLock<T>(path: string, work: () => Promise<T>): Promise<T> {
+  const lock = `${path}.lock`;
+  const giveUpAt = Date.now() + LOCK_WAIT_MS;
+  for (;;) {
+    try {
+      await (await open(lock, 'wx')).close();
+      break;
+    } catch (error) {
+      if (Reflect.get(Object(error), 'code') !== 'EEXIST') throw error;
+    }
+    const held = await stat(lock).catch(() => undefined);
+    if (held !== undefined && Date.now() - held.mtimeMs > STALE_LOCK_MS) {
+      await unlink(lock).catch(() => undefined);
+      continue;
+    }
+    if (Date.now() > giveUpAt) throw new Error(`ctx.kv: ${lock} has been held for over ${LOCK_WAIT_MS / 1000}s by another process`);
+    await new Promise((done) => setTimeout(done, 5 + Math.random() * 20));
+  }
+  try {
+    return await work();
+  } finally {
+    await unlink(lock).catch(() => undefined);
+  }
+}
+
 /** Queued writes per file, across every kv this process opened on it. */
 const queues = new Map<string, Promise<unknown>>();
 
@@ -65,7 +99,10 @@ export function fileKv(dir: string, tenant: string): ModuleKv {
 
   const queued = <T>(work: () => Promise<T>): Promise<T> => {
     const before = queues.get(path) ?? Promise.resolve();
-    const run = before.then(work);
+    const run = before.then(async () => {
+      await mkdir(dir, { recursive: true });
+      return underFileLock(path, work);
+    });
     const settled = run.catch(() => undefined);
     queues.set(path, settled);
     void settled.then(() => {
@@ -87,8 +124,6 @@ export function fileKv(dir: string, tenant: string): ModuleKv {
     list: async (prefix) => (await read()).filter((entry) => entry.key.startsWith(prefix)),
     set: (key, value) => change((entries) => setIn(entries, key, value)),
     delete: (key) => change((entries) => entries.filter((entry) => entry.key !== key)),
-    // In this process's queue for the file, so the read and the write are one
-    // step: two processes sharing a state directory are not held apart.
     compareAndSet: (key, expected, value) =>
       queued(async () => {
         const entries = await read();
