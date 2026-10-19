@@ -15,6 +15,11 @@
 // A caller may normalize each request before it is kept and matched (a
 // message's random MIME boundary, a header stamped with the time): what is
 // forwarded upstream is always the request as sent.
+//
+// A provider that names its own address in an answer (a download URL it
+// minted) can have that address kept as a placeholder and answered as the
+// server's own (`selfReferences`), so the follow-up request comes back through
+// the server, on record and on replay alike.
 
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -164,7 +169,13 @@ export interface ExchangeOptions {
   headers?: readonly string[];
   /** Applied to each request before it is kept and matched. */
   normalize?: (request: ExchangeRequest) => ExchangeRequest;
+  /** The provider's answers name its own base URL: kept as `SELF_REFERENCE`,
+   *  answered as this server's. */
+  selfReferences?: boolean;
 }
+
+/** What a provider's own base URL is kept as in a recording. */
+export const SELF_REFERENCE = '{{exchange-server}}';
 
 /** Forward to `upstream` and keep each exchange. */
 export async function recordingServer(upstream: string, options: ExchangeOptions = {}): Promise<ExchangeServer> {
@@ -182,13 +193,16 @@ export async function recordingServer(upstream: string, options: ExchangeOptions
         headers,
         ...(raw.length > 0 ? { body: raw } : {}),
       });
-      const bytes = Buffer.from(await answer.arrayBuffer());
+      const answered = Buffer.from(await answer.arrayBuffer());
       const answeredType = answer.headers.get('content-type');
-      const text = utf8(bytes);
+      const upstreamText = utf8(answered);
+      const self = options.selfReferences === true && upstreamText !== undefined;
+      const text = self ? upstreamText.split(upstream.replace(/\/+$/, '')).join(SELF_REFERENCE) : upstreamText;
+      const bytes = self ? Buffer.from(text?.split(SELF_REFERENCE).join(baseUrl) ?? '', 'utf8') : answered;
       exchanges.push({
         ...request,
         status: answer.status,
-        response: text ?? bytes.toString('base64'),
+        response: text ?? answered.toString('base64'),
         ...(isJson(answeredType) ? {} : { responseContentType: answeredType ?? undefined }),
         ...(text === undefined ? { responseEncoding: 'base64' as const } : {}),
       });
@@ -240,7 +254,8 @@ export async function replayingServer(recorded: readonly Exchange[], options: Re
         return;
       }
       res.writeHead(answer.status, { 'content-type': answer.responseContentType ?? 'application/json' });
-      res.end(answer.responseEncoding === 'base64' ? Buffer.from(answer.response, 'base64') : answer.response);
+      if (answer.responseEncoding === 'base64') res.end(Buffer.from(answer.response, 'base64'));
+      else res.end(options.selfReferences === true ? answer.response.split(SELF_REFERENCE).join(baseUrl) : answer.response);
     })();
   });
   const baseUrl = await listen(server);
