@@ -1,11 +1,15 @@
 import { Readable } from 'node:stream';
 import { ReadableStream } from 'node:stream/web';
 
-import { PdfStream } from '.';
+import type { PdfStream } from './reader';
+
+import { readerHost } from './host';
 
 const genericLink = {
   get: async (url: string, type: 'PDF' | 'PPTX' | 'XLSX'): Promise<PdfStream> => {
-    const webStream = await fetch(url).then((res) => res.body);
+    const webStream = await readerHost()
+      .fetch(url)
+      .then((res) => res.body);
     if (!webStream) {
       throw new Error(`Failed to fetch ${type} from ${url}`);
     }

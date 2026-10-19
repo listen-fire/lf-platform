@@ -1,15 +1,12 @@
 import { Readable } from 'node:stream';
 
-import { Browser, Page, Locator } from 'playwright';
 import jsPDF from 'jspdf';
 
-import type { AICrawlResult } from '../lib/document_sources/ai_crawler';
+import type { BrowserLocator, BrowserPage, BrowserSession } from 'movement-engine/public/browser';
+import type { AICrawlResult } from './ai_crawler';
 
-import { ImageService } from './images';
-import { sendSlackNotification } from '../lib/slack';
-import { handleError } from '../lib/errors';
-import { aiCaptureContent, reportAIResult, getScrollTiles } from '../lib/document_sources/ai_crawler';
-import { logger } from 'movement-engine/public/log';
+import { aiCaptureContent, reportAIResult, getScrollTiles } from './ai_crawler';
+import { alert, logger, readerHost, reportError } from './host';
 
 type Screenshot = { width: number; height: number; data: Buffer };
 
@@ -34,15 +31,15 @@ type FetchedDocument<Format> =
     };
 
 abstract class Crawler {
-  protected readonly page: Page;
-  protected readonly browser: Browser;
+  protected readonly page: BrowserPage;
+  protected readonly browser: BrowserSession;
   protected readonly url: string;
   protected readonly email: string | undefined;
   protected readonly passcode: string | undefined;
 
   constructor(opts: {
-    page: Page;
-    browser: Browser;
+    page: BrowserPage;
+    browser: BrowserSession;
     url: string;
     email?: string;
     passcode?: string;
@@ -76,23 +73,22 @@ abstract class Crawler {
   protected async errorAlert() {
     try {
       const screenshot = await this.page.screenshot();
-      const imageId = await ImageService.upload(new Blob([screenshot]));
-      const errorScreenshotUrl = ImageService.getDeliveryUrl(imageId);
+      const errorScreenshotUrl = await readerHost().keepScreenshot(screenshot);
 
-      await sendSlackNotification({
-        type: 'DEALFLOW',
+      await alert({
+        channel: 'DEALFLOW',
         text: `:arrow_right_hook: crawler failed to fetch anything (from url: ${this.url}, screenshot: ${errorScreenshotUrl})`,
         opsTitle: `Crawler failed to fetch anything from ${this.url}`,
       });
     } catch (err) {
-      handleError(err);
+      reportError(err);
     }
   }
 
   /**
    * Attempt to get a PDF from a URL.
    *
-   * This method also ensures that the playwright context gets cleaned
+   * This method also ensures that the browser session gets cleaned
    * up after the returned `PdfStream` has been read (or immediately
    * if the document can't be fetched).
    */
@@ -292,7 +288,7 @@ async function buildPdf(
   };
 }
 
-async function waitFor(el: Locator, options: Parameters<Locator['waitFor']>[0]) {
+async function waitFor(el: BrowserLocator, options: Parameters<BrowserLocator['waitFor']>[0]) {
   try {
     return await el.waitFor(options);
   } catch (_err) {

@@ -10,10 +10,13 @@
 //   - Pages: Bright Data's Web Unlocker (`brightDataAccessToken`,
 //     `brightDataUnlockerZone`) when configured, else a plain GET — a local
 //     host reads the open web as its user does.
-//   - No profile reader, no gated-document browser and no document store: a
-//     profile address or a document source (a deck host, a data room, a file
-//     the platform keeps) fails, naming what is not available off the
-//     platform; a page whose body is not HTML or text is not kept.
+//   - No profile reader: a profile address fails, naming what is not
+//     available off the platform.
+//   - Gated documents (a deck host, a data room, a Notion page) are read
+//     through the host's browser slot (`ctx.browser`), the downloaded file
+//     kept in the host's files (`ctx.files`). Where the slot is empty — lf
+//     and serve-module today — a document source fails naming the slot.
+//     A page whose body is not HTML or text is not kept.
 //   - A plain PDF, PowerPoint or spreadsheet link is fetched and read through
 //     the file-text package (a PDF's text layer; a scanned one has no OCR
 //     here and reads as nothing).
@@ -27,6 +30,7 @@ import type { ModuleContext } from 'module-kit';
 import { Readable } from 'node:stream';
 
 import { z } from 'zod';
+import { fileDescriptorOf, type FileRef } from 'engine-contracts';
 import { makeFileTextResolver, type FileTextReader } from 'file-text';
 import type { ChatCall, ChatModelName } from 'movement-engine/public/anthropic';
 import type { FetchedResource, SearchResult, WebTools } from './tools';
@@ -35,6 +39,7 @@ import { anthropicClient, anthropicKeyedChatProvider, type LlmUsage } from 'move
 import { costMicrodollars, models } from 'movement-engine/public/anthropic';
 import { FULLY_SUPPORTED_DOCUMENT_REGEXES, NOTION_REGEX, PDF_REGEX, PPTX_REGEX, XLSX_REGEX } from '#shared/constants/document_sources';
 import { isLinkedInUrl, looksLikeNonHtmlAddress } from './addresses';
+import { documentReader, type DocumentReader } from './documents/reader';
 
 /** The files read as text off the platform: the address or the response's
  *  type says it is a PDF, a PowerPoint deck or a spreadsheet. */
@@ -67,6 +72,7 @@ export const WEB_CREDENTIAL_FIELDS: WireCredentialDeclarationShape['fields'] = [
   { name: 'brightDataAccessToken', label: 'Bright Data access token', optional: true },
   { name: 'brightDataSerpZone', label: 'Bright Data SERP zone', secret: false, optional: true },
   { name: 'brightDataUnlockerZone', label: 'Bright Data Web Unlocker zone', secret: false, optional: true },
+  { name: 'googleDriveApiKey', label: 'Google Drive API key (a shared Drive file read directly)', optional: true },
 ];
 
 type Fields = Readonly<Record<string, string>>;
@@ -96,7 +102,24 @@ export class NotAvailableOffPlatform extends Error {
 }
 
 const PROFILE_READER = "the platform's LinkedIn profile reader";
-const DOCUMENT_BROWSER = "the platform's gated-document browser and document store";
+
+/** A document source read with no browser in the host's slot. */
+export class BrowserSlotEmptyForDocument extends Error {
+  constructor(url: string, why: string) {
+    super(`@lf/web: reading the document at ${url} needs a browser, and the host's browser slot is empty (${why})`);
+    this.name = 'BrowserSlotEmptyForDocument';
+  }
+}
+
+const DOCUMENT_TYPES: ReadonlyArray<[RegExp, string]> = [
+  [/\.pdf$/i, 'application/pdf'],
+  [/\.pptx$/i, 'application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+  [/\.xlsx$/i, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+];
+
+function documentType(name: string): string {
+  return DOCUMENT_TYPES.find(([pattern]) => pattern.test(name))?.[1] ?? 'application/pdf';
+}
 
 /** The fields, or none when the host connected no credential. */
 async function fieldsOf(ctx: ModuleContext): Promise<Fields> {
@@ -177,6 +200,87 @@ export async function standaloneTools(ctx: ModuleContext): Promise<WebTools> {
     return read.text;
   }
 
+  // The gated-document reader over this host: its browser slot, its fetch,
+  // and Anthropic (on the credential) for the vision fallback and for
+  // picking a data room's deck. Built on the first gated address.
+  let reader: DocumentReader | undefined;
+  function documents(): DocumentReader {
+    reader ??= documentReader({
+      browser: ctx.browser,
+      log: ctx.log,
+      fetch: ctx.fetch,
+      async vision({ system, screenshot, text, label }) {
+        const call = anthropicCall('claude-sonnet-5', fields, ctx.config.baseUrlOverride);
+        const response = await call.client.messages.create({
+          model: call.wireModel,
+          max_tokens: 4096,
+          system,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'image', source: { type: 'base64', media_type: 'image/png', data: screenshot.toString('base64') } },
+                { type: 'text', text },
+              ],
+            },
+          ],
+        });
+        spent +=
+          priced({
+            resolved: call.resolved,
+            callType: 'chat',
+            inputTokens: response.usage.input_tokens,
+            outputTokens: response.usage.output_tokens,
+            label,
+          }) ?? 0;
+        return response.content.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('');
+      },
+      async deckName(documentNames) {
+        const { name } = await models_.anthropicChatStructured({
+          model: 'claude-sonnet-5',
+          system: DECK_NAME_SYSTEM,
+          userMessage: documentNames,
+          schema: DeckName,
+          toolName: 'pick_pitch_deck',
+          toolDescription: 'Name the document most likely to be the pitch deck.',
+          label: 'GET_PITCH_DECK_NAME',
+        });
+        return name;
+      },
+      // No ops channel off the platform: an alert is a log line.
+      alert: async ({ channel, text, opsTitle }) => ctx.log.warn(opsTitle, { channel, text }),
+      keepScreenshot: async () => '(screenshots are not kept off the platform)',
+      reportError: (err) => ctx.log.error('@lf/web: the document reader failed', { error: describe(err) }),
+      googleDriveApiKey: () => {
+        if (!fields.googleDriveApiKey) throw new Error('@lf/web: no googleDriveApiKey on its credential');
+        return fields.googleDriveApiKey;
+      },
+    });
+    return reader;
+  }
+
+  /** A gated document read through the browser slot, kept in the host's files. */
+  async function gatedDocument(url: string, email: string | null, password: string | null | undefined): Promise<FetchedResource | null> {
+    const empty = ctx.browser.emptyBecause;
+    if (empty !== undefined) throw new BrowserSlotEmptyForDocument(url, empty);
+    const credentials = { ...(email ? { email } : {}), ...(password ? { password } : {}) };
+    const read = documents();
+    if (read.outputFormat(url) === 'TEXT') {
+      const text = await read.getUrlAsText(url, credentials);
+      return text ? { url, content: text.slice(0, PAGE_CHAR_LIMIT), file: null } : null;
+    }
+    const pdf = await read.getUrlAsPdfStream(url, credentials);
+    if (pdf === null) return null;
+    const chunks: Buffer[] = [];
+    for await (const chunk of pdf.data) chunks.push(Buffer.from(chunk));
+    const file: DownloadedFile = { name: pdf.name, contentType: documentType(pdf.name), bytes: Buffer.concat(chunks) };
+    const ref = await ctx.files.put({ bytes: file.bytes, name: file.name, contentType: file.contentType });
+    const text = await readFile({ file });
+    if ('unreadable' in text) ctx.log.warn('@lf/web: a gated document has no readable text', { url, reason: text.unreadable, detail: text.detail });
+    const content = 'unreadable' in text ? '' : text.text.slice(0, PAGE_CHAR_LIMIT);
+    return { url, content, file: ref };
+  }
+
   async function search(query: string): Promise<{ items: SearchResult[] }> {
     const zone = fields.brightDataSerpZone;
     if (!fields.brightDataAccessToken || !zone) {
@@ -212,9 +316,9 @@ export async function standaloneTools(ctx: ModuleContext): Promise<WebTools> {
       },
     },
     isDocumentSource: isDocumentSourceAddress,
-    async fetchResource(url): Promise<FetchedResource | null> {
+    async fetchResource(url, email, password): Promise<FetchedResource | null> {
       if (isLinkedInUrl(url)) throw new NotAvailableOffPlatform(`reading the LinkedIn profile ${url}`, PROFILE_READER);
-      if (isDocumentSourceAddress(url)) throw new NotAvailableOffPlatform(`reading the document at ${url}`, DOCUMENT_BROWSER);
+      if (isDocumentSourceAddress(url)) return gatedDocument(url, email, password);
       let content: string;
       if (isReadableFileAddress(url) || !looksLikeNonHtmlAddress(url)) {
         const response = await get(url);
@@ -234,8 +338,8 @@ export async function standaloneTools(ctx: ModuleContext): Promise<WebTools> {
       if (content.length > PAGE_CHAR_LIMIT) content = content.slice(0, PAGE_CHAR_LIMIT);
       return { url, content, file: null };
     },
-    // Nothing here stores a document, so no handle is ever handed out.
-    fileValues: async (handles) => handles.map(() => undefined),
+    // The only handles handed out are the files a gated document was kept as.
+    fileValues: async (handles) => handles.map((handle): FileRef | undefined => fileDescriptorOf(handle)),
     spentMicrodollars: () => spent,
   };
 }
@@ -260,6 +364,18 @@ function priced(usage: LlmUsage): number | undefined {
     cacheReadTokens: usage.cacheReadTokens ?? 0,
     cacheCreationTokens: usage.cacheCreationTokens ?? 0,
   });
+}
+
+const DeckName = z.object({ name: z.string().nullable().optional() });
+
+// The platform's prompt for the same question (lib/prompts get_pitch_deck_name).
+const DECK_NAME_SYSTEM = `You are my virtual assistant in a VC firm.
+I will send you a list of newline-separated names of documents in a dataroom.
+You must respond with the name of the document you think is most likely a pitch deck.
+If there are multiple candidates, you must pick only the most likely one; if none looks like a pitch deck, give no name.`;
+
+function describe(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
 
 // Only the fields read here are declared; the rest of Google's parsed result

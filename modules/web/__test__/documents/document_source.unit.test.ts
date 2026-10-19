@@ -1,7 +1,10 @@
-import { DocumentSourceService } from '..';
-import { GoogleDocsService, parsePageBoxLabel } from '../google_docs';
+import { documentReader } from '../../documents/reader';
+import { readerHost } from './reader_host';
+import { GoogleDocsService, parsePageBoxLabel } from '../../documents/google_docs';
 
 import { NOTION_REGEX } from '#shared/constants/document_sources';
+
+const DocumentSourceService = documentReader(readerHost());
 
 describe('parsePageBoxLabel', () => {
   [

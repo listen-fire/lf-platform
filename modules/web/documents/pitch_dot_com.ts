@@ -1,9 +1,8 @@
-import { PdfStream } from '.';
+import type { PdfStream } from './reader';
 
-import { logger } from 'movement-engine/public/log';
-import { PlaywrightService } from '../../services/playwright';
-import { SECOND } from '../../constants';
-import { Crawler, FetchedDocument, Screenshot } from '../../services/crawler';
+import { logger, readerHost } from './host';
+import { SECOND } from './waits';
+import { Crawler, FetchedDocument, Screenshot } from './crawler';
 
 enum PitchDotComAccessError {
   UNKNOWN = 'unknown',
@@ -144,7 +143,7 @@ class PitchDotCom {
     try {
       // TODO: We should sanity check the URL to make sure we're
       // actually looking at a pitch.com link.
-      const pitchDotComResult: FetchedDocument<PdfStream> = await PlaywrightService.withPage(
+      const pitchDotComResult: FetchedDocument<PdfStream> = await readerHost().browser.withPage(
         (page, browser) => {
           const pitchDotComCrawler = new PitchDotComCrawler({
             page,

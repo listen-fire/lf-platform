@@ -1,10 +1,9 @@
-import { PdfStream } from '.';
+import type { PdfStream } from './reader';
 
-import { Page } from 'playwright';
+import type { BrowserPage as Page } from 'movement-engine/public/browser';
 
-import { Crawler, FetchedDocument, Screenshot } from '../../services/crawler';
-import { logger } from 'movement-engine/public/log';
-import { PlaywrightService } from '../../services/playwright';
+import { Crawler, FetchedDocument, Screenshot } from './crawler';
+import { logger, readerHost } from './host';
 
 class TomeCrawler extends Crawler {
   protected async authenticate(): Promise<Error | null> {
@@ -120,7 +119,7 @@ class Tome {
     try {
       // TODO: We should sanity check the URL to make sure we're
       // actually looking at a tome link.
-      const tomeResult: FetchedDocument<PdfStream> = await PlaywrightService.withPage(
+      const tomeResult: FetchedDocument<PdfStream> = await readerHost().browser.withPage(
         (page, browser) => {
           const tomeCrawler = new TomeCrawler({
             page,

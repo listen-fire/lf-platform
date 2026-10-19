@@ -1,6 +1,7 @@
-// Off the platform there is no LinkedIn profile reader and no gated-document
-// browser. An address that needs one fails, naming what is missing, instead of
-// coming back as nothing (which a movement would read as an empty page).
+// Off the platform there is no LinkedIn profile reader, and the browser slot
+// is empty unless the host fills it. An address that needs one fails, naming
+// what is missing, instead of coming back as nothing (which a movement would
+// read as an empty page).
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -47,9 +48,9 @@ describe('@lf/web off the platform', () => {
     expect(fetched).toEqual([]);
   });
 
-  it('refuses a gated document address, naming the document browser', async () => {
+  it('refuses a gated document address, naming the empty browser slot', async () => {
     await expect(fetchUrl('https://docsend.com/view/abc123')).rejects.toThrow(
-      "needs the platform's gated-document browser and document store, which is not available off the platform",
+      "@lf/web: reading the document at https://docsend.com/view/abc123 needs a browser, and the host's browser slot is empty (this host has no browser to lend its modules)",
     );
     expect(fetched).toEqual([]);
   });

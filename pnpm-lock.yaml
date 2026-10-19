@@ -1431,6 +1431,12 @@ importers:
       '@listen-fire/shared':
         specifier: workspace:^
         version: link:../../packages/shared
+      html-to-text:
+        specifier: 9.0.5
+        version: 9.0.5
+      jspdf:
+        specifier: 2.5.1
+        version: 2.5.1
       zod:
         specifier: 4.1.12
         version: 4.1.12
@@ -1438,6 +1444,9 @@ importers:
       '#shared':
         specifier: workspace:@listen-fire/shared@*
         version: link:../../packages/shared
+      '@types/html-to-text':
+        specifier: 9.0.4
+        version: 9.0.4
       '@types/jest':
         specifier: 29.5.14
         version: 29.5.14

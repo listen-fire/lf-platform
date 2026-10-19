@@ -2,6 +2,7 @@
 // how the fields a host hands it become a client.
 
 import { loadedModule, moduleManifest, refusingFiles, refusingIdentities, refusingKv, refusingModels } from 'module-kit';
+import { emptyBrowserSlot } from 'movement-engine/public/browser';
 
 import { GMAIL_SCOPES, GMAIL_SEND_SCOPE } from '../api_client';
 import { gmailClientFromFields } from '../credential';
@@ -21,6 +22,7 @@ describe('the declarations', () => {
         kv: refusingKv('none'),
         models: refusingModels('none'),
         identities: refusingIdentities('none'),
+        browser: emptyBrowserSlot('none'),
         config: { tenant: 't', constructionArgs: {} },
       }),
     );

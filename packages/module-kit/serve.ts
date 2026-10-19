@@ -13,6 +13,7 @@ import { hostModels } from './host_models';
 import { fileKv } from './file_kv';
 import { refusingFiles, refusingKv, refusingModels } from './in_process';
 import { createModuleProtocolHandler } from './module_server';
+import { emptyBrowserSlot, type BrowserSlot } from 'movement-engine/public/browser';
 
 /** A log that writes one JSON line per entry to `write`. */
 export function jsonLineLog(module: string, write: (line: string) => void): ModuleLog {
@@ -51,6 +52,9 @@ export interface ServeModuleOptions {
   /** Models to lend the module (an embedder's), or the host's models door
    *  (`hostModels`). Absent: a module call that asks one is refused by name. */
   models?: ModuleModels | ((spend: ModuleSpend) => ModuleModels);
+  /** A browser to lend the module (an embedder's). Absent: the browser slot
+   *  is empty, and a module call that opens a page is refused by name. */
+  browser?: BrowserSlot;
 }
 
 export async function serveModule(options: ServeModuleOptions): Promise<{ port: number; server: Server }> {
@@ -85,6 +89,9 @@ export async function serveModule(options: ServeModuleOptions): Promise<{ port: 
     files: refusingFiles(unavailable('ctx.files')),
     kvFor: stateDir !== undefined ? (tenant) => fileKv(stateDir, tenant) : () => noKv,
     models: options.models ?? refusingModels(`module ${definition.name}: ctx.models is lent by no host when the module is served by the serve-module command line`),
+    browser:
+      options.browser ??
+      emptyBrowserSlot(`module ${definition.name} is served by the serve-module command line, which lends no browser (the platform's api image fills the slot with Chromium)`),
     ...(options.baseUrlOverride !== undefined ? { baseUrlOverride: options.baseUrlOverride } : {}),
     ...(options.constructionArgs !== undefined ? { constructionArgs: options.constructionArgs } : {}),
     publicUrl,

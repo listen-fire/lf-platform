@@ -1,8 +1,7 @@
-import { PdfStream } from '.';
+import type { PdfStream } from './reader';
 
-import { Crawler, FetchedDocument, Screenshot, waitFor } from '../../services/crawler';
-import { logger } from 'movement-engine/public/log';
-import { PlaywrightService } from '../../services/playwright';
+import { Crawler, FetchedDocument, Screenshot, waitFor } from './crawler';
+import { logger, readerHost } from './host';
 
 /*
  * The share link people paste is usually the one from their address bar, which
@@ -117,7 +116,7 @@ class Canva {
     try {
       // TODO: We should sanity check the URL to make sure we're
       // actually looking at a Canva link.
-      const canvaResult: FetchedDocument<PdfStream> = await PlaywrightService.withPage(
+      const canvaResult: FetchedDocument<PdfStream> = await readerHost().browser.withPage(
         (page, browser) => {
           const canvaCrawler = new CanvaCrawler({
             page,

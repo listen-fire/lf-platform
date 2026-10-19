@@ -2,6 +2,7 @@
 // client, and what the module declares.
 
 import type { CredentialFields, ModuleContext } from 'module-kit';
+import { emptyBrowserSlot } from 'movement-engine/public/browser';
 
 import { EVERTRACE_API_VERSION } from '../api_client';
 import { evertraceClientFrom, evertraceModule, EVERTRACE_POLL_INTERVAL_SECONDS } from '../index';
@@ -28,6 +29,7 @@ function contextOver(fields: () => CredentialFields, config: { baseUrlOverride?:
     kv: { get: refuse, set: refuse, delete: refuse, list: refuse },
     models: { chat: refuse, chatStructured: refuse },
     identities: { list: refuse, find: refuse },
+    browser: emptyBrowserSlot('none'),
     config: { tenant: 'team-1', constructionArgs: {}, ...config },
   };
   return { ctx, seen };

@@ -822,8 +822,10 @@ export type WireModuleKindShape = z.infer<typeof WireModuleKind>;
 /** The host's core services a `core` module can fill. Each slot's contract
  *  is its family's contract suite (the run host's store cases for `store`,
  *  and so on); the host names one module per slot, and every slot has a
- *  default module but `loopGuard`, which stays empty unless named. */
-export const CORE_SLOTS = ['models', 'judge', 'store', 'files', 'limiter', 'loopGuard'] as const;
+ *  default module but `loopGuard`, which stays empty unless named, and
+ *  `browser`, which the platform's api image fills with Chromium and every
+ *  other host leaves empty (a module asking for a page is refused by name). */
+export const CORE_SLOTS = ['models', 'judge', 'store', 'files', 'limiter', 'loopGuard', 'browser'] as const;
 export const WireCoreSlot = z.enum(CORE_SLOTS);
 export type WireCoreSlotShape = z.infer<typeof WireCoreSlot>;
 

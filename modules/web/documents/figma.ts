@@ -1,8 +1,7 @@
-import { PdfStream } from '.';
+import type { PdfStream } from './reader';
 
-import { logger } from 'movement-engine/public/log';
-import { PlaywrightService } from '../../services/playwright';
-import { Crawler, FetchedDocument, Screenshot } from '../../services/crawler';
+import { logger, readerHost } from './host';
+import { Crawler, FetchedDocument, Screenshot } from './crawler';
 
 class FigmaCrawler extends Crawler {
   protected async takeScreenshotsOfAllPages(): Promise<Screenshot[]> {
@@ -65,7 +64,7 @@ class Figma {
     try {
       // TODO: We should sanity check the URL to make sure we're
       // actually looking at a figma link.
-      const figmaResult: FetchedDocument<PdfStream> = await PlaywrightService.withPage(
+      const figmaResult: FetchedDocument<PdfStream> = await readerHost().browser.withPage(
         (page, browser) => {
           const figmaCrawler = new FigmaCrawler({
             page,

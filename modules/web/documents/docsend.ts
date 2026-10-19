@@ -1,16 +1,8 @@
-import { ExternalUrl, PdfStream } from '.';
+import type { ExternalUrl, PdfStream } from './reader';
 
-import { logger } from 'movement-engine/public/log';
-import { PlaywrightService } from '../../services/playwright';
-import { MINUTE, SECOND } from '../../constants';
-import { sendSlackNotification } from '../slack';
-import { ImageService } from '../../services/images';
-import { setJitteredTimeout } from '../utils/timeout';
-import { Crawler, Screenshot, waitFor } from '../../services/crawler';
-import { handleError } from '../errors';
-import { retryUntilResolves } from '../utils/retry';
-import { Prompt } from '../prompts';
-import { pipeThroughTmpFile } from '../utils/tmp';
+import { alert, readerHost, reportError } from './host';
+import { MINUTE, SECOND, pipeThroughTmpFile, retryUntilResolves, setJitteredTimeout } from './waits';
+import { Crawler, Screenshot, waitFor } from './crawler';
 
 import { DOCSEND_REGEX } from '#shared/constants/document_sources';
 
@@ -175,7 +167,7 @@ class DocsendCrawler extends Crawler {
 
       const box = await slide.boundingBox();
       if (!box) {
-        handleError('Could not determine bounding box of slide');
+        reportError('Could not determine bounding box of slide');
         break;
       }
 
@@ -227,7 +219,7 @@ class DocsendCrawler extends Crawler {
       ns.map((n) => n?.trim()),
     );
 
-    const { name } = await Prompt.getPitchDeckName({ message: names.join('\n') });
+    const name = await readerHost().deckName(names.join('\n'));
     if (!name) return []; // AI fallback will take over
 
     let matchingLink;
@@ -298,7 +290,7 @@ class Docsend {
     url: string,
     { email, password }: { email?: string; password?: string },
   ): Promise<PdfStream | ExternalUrl | null> {
-    return PlaywrightService.withPage(async (page, browser) => {
+    return readerHost().browser.withPage(async (page, browser) => {
       const crawler = new DocsendCrawler({
         page,
         browser,
@@ -330,8 +322,7 @@ class Docsend {
       } catch (err) {
         try {
           const screenshot = await page.screenshot();
-          const imageId = await ImageService.upload(new Blob([screenshot]));
-          errorScreenshotUrl = ImageService.getDeliveryUrl(imageId);
+          errorScreenshotUrl = await readerHost().keepScreenshot(screenshot);
         } catch {
           // screenshot may fail if browser is already closed
         }
@@ -339,8 +330,8 @@ class Docsend {
         await browser.close().catch(() => {});
 
         if (err instanceof InvalidCredentialsError) {
-          await sendSlackNotification({
-            type: 'SUPPORT',
+          await alert({
+            channel: 'SUPPORT',
             text: `:arrow_right_hook: Docsend crawler was missing credentials (from url: ${url}, screenshot: ${errorScreenshotUrl})`,
             opsTitle: `DocSend crawler was missing credentials for ${url}`,
           });
@@ -350,13 +341,13 @@ class Docsend {
           throw err;
         }
 
-        await sendSlackNotification({
-          type: 'DEALFLOW',
+        await alert({
+          channel: 'DEALFLOW',
           text: `:arrow_right_hook: Docsend crawler failed to fetch anything (from url: ${url}, screenshot: ${errorScreenshotUrl})`,
           opsTitle: `DocSend crawler failed to fetch ${url}`,
         });
 
-        handleError(err);
+        reportError(err);
         return null;
       }
     });
