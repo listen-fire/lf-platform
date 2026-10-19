@@ -40,6 +40,15 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 - **The gated-document reader moved into `@lf/web`.** DocSend, Pitch, Canva, Google Slides and Docs, Papermark, BriefLink, Tome, Figma and Notion are read by the module through the browser slot, not by the platform. On the platform nothing changes: same pages, same PDFs, same alerts. Off the platform a gated address fails naming the empty browser slot (it said "the platform's gated-document browser" before); a host that lends a browser gets the document read and kept in its files. A shared Google Drive file is read with the credential's new optional `googleDriveApiKey` off the platform (the platform keeps `GOOGLE_DRIVE_API_KEY`).
 - **lf:** `core: { browser: … }` is refused: lf has no browser module.
 
+### au-engine
+
+- **The engine package no longer carries a model vendor, Google auth or a logging library.** `@listen-fire/engine`'s runtime dependencies are now engine-contracts, movement-lang, shared, zod and safe-stable-stringify. Nothing an operator sets changes, and saved movements run as before.
+- **New `@listen-fire/anthropic` (`@lf/anthropic`, the models slot's module for Claude).** The Anthropic client, its web tools and structured output, the chat seam, the keyed provider, the extraction and `AI()` clients, the JSON reply reader (`parseJson`, `parseJsonReply`) and the price table (`prices.json`) moved here from the engine. Embedders: import them from `@listen-fire/anthropic`; the engine's `public/anthropic` and `public/json` entries are gone, and `public/models` no longer carries the clients or prices. The Rust `lf` embeds the same `prices.json` (its own copy is gone), and both clients are tested against the module's shared fixtures.
+- **New `@listen-fire/judge-llm` (`@lf/judge-llm`, the judge slot's module).** The LLM identity judge (its rules, prompts and recorded replay) moved here; the engine keeps the slot. The platform fills it as before.
+- **Google service-account auth left the engine.** Vertex and Gemini get it from `@listen-fire/model-providers` (`google-auth-library` is now its optional peer); the platform's Gmail adapter owns domain-wide delegation and the mailbox allowlist; Gmail scopes come from `@listen-fire/gmail`. The engine's `public/google-cloud` entry is gone.
+- **Engine logging is a hook.** The engine logs through one replaceable hook (`routeEngineLogsTo` in `public/log`) that prints the same text or `LOG_FORMAT=json` lines to stdout by default. The api server keeps winston for request lines and uncaught exceptions, in the same line format.
+- **`tsx` is now an optional peer of `@listen-fire/module-kit`.** `serve-module` serving a built module needs none; install `tsx` beside it to serve a module written in TypeScript.
+
 ## [0.12.0-rc.2] - 2026-10-19 (pre-release)
 
 This is a pre-release for trying out, not the full 0.11.0 line's replacement: container images are

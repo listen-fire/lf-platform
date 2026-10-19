@@ -23,8 +23,15 @@
     "@listen-fire/engine-contracts": "workspace:^",
     "@listen-fire/movement-lang": "workspace:^",
     "@listen-fire/shared": "workspace:^",
-    "tsx": "4.21.0",
     "zod": "4.1.12"
+  },
+  "peerDependencies": {
+    "tsx": "4.21.0"
+  },
+  "peerDependenciesMeta": {
+    "tsx": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "#shared": "workspace:@listen-fire/shared@*",
@@ -33,6 +40,7 @@
     "engine-contracts": "workspace:@listen-fire/engine-contracts@*",
     "movement-engine": "workspace:@listen-fire/engine@*",
     "movement-lang": "workspace:@listen-fire/movement-lang@*",
+    "tsx": "4.21.0",
     "typescript": "5.5.4"
   },
   "repository": {
