@@ -38,9 +38,9 @@
 // explicitly here makes the dependency obvious and doesn't rely on the
 // transitive ordering through `_lib`.
 import './_profile_loader';
-// The cron / kg-mutation subcommands dispatch IN-PROCESS (no HTTP route exists
-// for them), so the firing runs the movement engine here — register the same
-// service adapters the API server boots (as `dev:movement` does).
+// The cron subcommand dispatches IN-PROCESS (no HTTP route exists for it), and
+// kg-mutation reads its event through the graph's module here, so register the
+// same service adapters the API server boots (as `dev:movement` does).
 import '../../services';
 
 import { randomUUID } from 'node:crypto';
@@ -55,12 +55,12 @@ import { findTriggersByKind } from '../../services/translation_graph/storage/tg_
 import { pollTriggerNow } from '../../services/poll_source/worker';
 import { EVERTRACE_API_VERSION } from '@listen-fire/evertrace/api_client';
 import { dispatchTriggerByIdEvent } from '../../services/translation_graph/triggers/router';
-import { dispatchMutationEvent } from '../../services/translation_graph/triggers/mutation_dispatch';
+import { queueKnowledgeChange } from '../../services/webhook_sync/knowledge_changes';
+import { awaitTeamWorkSettled } from '../../services/work/store';
+import { envelopeFor, type MutationEvent } from '../../lib/knowledge/store/events';
 import { userEditContext } from 'movement-engine/public/adapter';
 
-import type { RecordMutationEvent } from '../../services/translation_graph/triggers/record_mutation_event';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
-import type { NodeId } from '../../generated/kysely/knowledge/Node';
 import type { NodeTypeId } from '../../generated/kysely/knowledge/NodeType';
 
 import { Context } from '../../services/context';
@@ -1465,10 +1465,12 @@ async function injectGmailMessage(args: {
 /**
  * Fire a synthetic KG mutation so a `listen to <graph> { type: "…" }` movement
  * dispatches. Resolves the node type by name (or id), picks an existing node of
- * that type (or `--node-id`), builds a `RecordMutationEvent`, and dispatches it
- * in-process via `dispatchMutationEvent` — the same entry the post-commit
- * emitter feeds. Use this instead of `dev:link` (a raw insert that bypasses the
- * mutation emitter, so it never fires a kg listener).
+ * that type (or `--node-id`), builds the store's change envelope, and queues it
+ * through the same door the outbox drain uses (`queueKnowledgeChange`): one
+ * receipt and run row per matching listen, which the stack's drain then runs.
+ * It waits for the team's rows to settle. Use this instead of `dev:link` (a
+ * raw insert that bypasses the mutation emitter, so it never fires a kg
+ * listener).
  */
 async function injectKgMutation(args: {
   nodeType: string;
@@ -1524,22 +1526,29 @@ async function injectKgMutation(args: {
     nodeId = node.id as unknown as string;
   }
 
-  const event: RecordMutationEvent = {
-    recordId: nodeId as unknown as NodeId,
+  const context = userEditContext(seed.userId);
+  const event: MutationEvent = {
+    recordId: nodeId,
     nodeTypeId: nt.id as unknown as string,
     changeKind: args.changeKind ?? 'update',
     changedFields: args.fields ?? [],
-    context: userEditContext(seed.userId),
+    context,
   };
-  const out = await runInDevLoopContext(seed, () =>
-    dispatchMutationEvent({ event, teamId: seed.teamId as TeamId }),
+  const { queued } = await runInDevLoopContext(seed, () =>
+    queueKnowledgeChange({
+      teamId: seed.teamId,
+      envelope: envelopeFor(event, context.occurredAt),
+      outboxId: randomUUID(),
+    }),
   );
+  const settled = await awaitTeamWorkSettled({ teamId: seed.teamId, timeoutMs: 30_000 });
   return {
     nodeType: nt.name,
     nodeId,
     changeKind: event.changeKind,
     changedFields: event.changedFields,
-    firings: out.movementFirings ?? [],
+    queuedRuns: queued,
+    settled,
   };
 }
 

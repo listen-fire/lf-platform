@@ -42,12 +42,13 @@ import PropertyCardinality from '../../generated/kysely/knowledge/PropertyCardin
 import EvaluationStrategy from '../../generated/kysely/knowledge/EvaluationStrategy';
 import PropertyIdentity from '../../generated/kysely/knowledge/PropertyIdentity';
 import { createEntity, updateEntity } from '../../lib/knowledge/query_agent_crud';
-import { createKgRecord, updateKgRecord, linkKgRecords } from '../../services/translation_graph/adapters/knowledge_graph_writes';
+import { createKgRecord, updateKgRecord, linkKgRecords, type WriteConnection } from '@listen-fire/kg/writes';
+import { platformKgStore } from '../../services/translation_graph/adapters/kg_store';
 
 import type { MutationContext } from 'movement-engine/public/adapter';
 
 import { getAutomationsQb } from '../../lib/kysely';
-import { loadKgCredentials, kgFetch, type WireOntology } from '../../services/translation_graph/adapters/kg_client';
+
 import ExternalServiceType from '../../generated/kysely/automations/ExternalServiceType';
 
 const movementContext: MutationContext = {
@@ -67,9 +68,8 @@ async function main() {
     .where('type', '=', ExternalServiceType.NATIVE_KNOWLEDGE)
     .select(['id'])
     .executeTakeFirstOrThrow();
-  const creds = await loadKgCredentials(credRow.id as string);
-  const ontology = await kgFetch<WireOntology>(creds, { method: 'GET', path: '/ontology' });
-  const writeConnection = { creds, ontology };
+  const store = platformKgStore({ teamId: team, credentialsId: credRow.id as string });
+  const writeConnection: WriteConnection = { store, ontology: await store.ontology(), log: console };
 
   // ── 1. The D37(b) sweep ──────────────────────────────────────────────────
   // A null `writable_by` admits everything; anything else is a restriction the
@@ -238,7 +238,6 @@ async function main() {
   // ── 5. The movement path ─────────────────────────────────────────────────
   const adapterWrite = await createKgRecord({
     connection: writeConnection,
-    teamId: team,
     recordType: orgType.id as string,
     fields: { [nameType.id as string]: 'Door Probe Movement Ltd' },
     mutationContext: movementContext,
@@ -253,7 +252,6 @@ async function main() {
 
   await updateKgRecord({
     connection: writeConnection,
-    teamId: team,
     externalId: adapterWrite.externalId,
     recordType: orgType.id as string,
     fields: { [nameType.id as string]: 'Door Probe Movement Ltd (updated)' },
@@ -281,7 +279,6 @@ async function main() {
   out.movementRefused = await refusal(() =>
     updateKgRecord({
       connection: writeConnection,
-      teamId: team,
       externalId: adapterWrite.externalId,
       recordType: orgType.id as string,
       fields: { [userEditOnly.id as string]: 'nope' },
@@ -344,14 +341,13 @@ async function main() {
 
 /** A bare node create, for endpoints the link probe needs to exist. */
 async function createNodeThroughDoor(
-  writeConnection: { creds: { apiKey: string; baseUrl: string }; ontology: WireOntology },
+  writeConnection: WriteConnection,
   teamId: TeamId,
   nodeTypeId: NodeTypeId,
   label: string,
 ): Promise<{ nodeId: NodeId }> {
   const result = await createKgRecord({
     connection: writeConnection,
-    teamId,
     recordType: nodeTypeId as string,
     fields: {},
     mutationContext: movementContext,

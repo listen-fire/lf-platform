@@ -35,6 +35,8 @@ import { registerExposedFileWork } from '../services/exposed_file/worker';
 import { adapterWorkKinds } from '../services/translation_graph/adapters/packages';
 import { logGrandfatheredUnsignedInbounds } from '../services/translation_graph/adapters/module_inbound_audit';
 import { registerLinkedObjectWork } from '../services/webhook_sync/linked_object_refresh';
+import { registerKnowledgeChangeWork } from '../services/webhook_sync/knowledge_changes';
+import { mutationDelivery } from '../services/knowledge/mutation_outbox/delivery_mode';
 import { ensureAutomationsPeriodicWork, registerCoreWork } from '../services/work/register';
 
 type Env = Record<string, string | undefined>;
@@ -161,6 +163,12 @@ async function registerAutomationsWork(): Promise<void> {
   registerWorkKinds(adapterWorkKinds());
   registerExposedFileWork();
   registerLinkedObjectWork();
+  // Knowledge emits, the engine listens, and neither imports the other to do
+  // it (M-38): where the graph's store runs beside us, its change events come
+  // off its outbox into the inbound path as a work kind of this drain, so the
+  // movements they fire run wherever automations work runs, never in the
+  // store's loop. Under `webhook` the store POSTs them to the door instead.
+  if (mounts('knowledge') && mutationDelivery() === 'local') registerKnowledgeChangeWork();
   await ensureAutomationsPeriodicWork();
   // A report, never a reason not to start.
   logGrandfatheredUnsignedInbounds().catch((error: unknown) =>

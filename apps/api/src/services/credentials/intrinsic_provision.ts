@@ -20,7 +20,7 @@ import ExternalServiceType from '../../generated/kysely/automations/ExternalServ
 import { ApiKeyService } from '../api_key';
 import { platformTokenRegistry } from '../translation_graph/engine/platform_token_registry_db';
 import { NATIVE_VALUATIONS_ADAPTER_TYPE } from '../translation_graph/adapters/native_valuations';
-import { KG_ADAPTER_TYPE } from '../translation_graph/adapters/knowledge_graph';
+import { KG_ADAPTER_TYPE } from '@listen-fire/kg/manifest';
 
 export interface IntrinsicProvisionArgs {
   teamId: TeamId;

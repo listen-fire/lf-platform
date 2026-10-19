@@ -187,6 +187,7 @@ async function loadHandler(options: {
   }));
   jest.doMock('../../translation_graph/adapters/registry', () => ({
     hasAdapter: jest.fn(() => true),
+    getAdapterManifest: jest.fn(() => null),
     resolveAdapterSlug: jest.fn(() => options.adapterType ?? 'attio'),
   }));
   const preprocessInbound = jest.fn(async () => ({

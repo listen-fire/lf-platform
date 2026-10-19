@@ -9,9 +9,9 @@
  *   2. `webhook_sync/handler.ts` calls `findTriggersByKind` ahead of the
  *      legacy pipeline_input scan, and routes hits through
  *      `dispatchTriggerByIdEvent`.
- *   3. `mutation_dispatch.ts` calls `findTriggersByKind` with
- *      `kinds: ['KG_MUTATION']` ahead of the legacy pipeline_output
- *      container scan.
+ *   3. The knowledge graph's change events take the same capture tail as a
+ *      webhook delivery (`webhook_sync/knowledge_changes.ts`), scoped by
+ *      record type and fields (`triggers/record_scope.ts`).
  *   4. `interfaces/rest/private.ts` looks up `findTriggerByInboundKey`
  *      with the inbound-email kinds before falling back to the legacy
  *      `pipeline_input.config.key` scan.
@@ -169,46 +169,40 @@ describe('R — trigger-first dispatch wiring', () => {
     });
   });
 
-  describe('mutation_dispatch.ts — KG_MUTATION trigger-first dispatch', () => {
-    const src = READ('services/translation_graph/triggers/mutation_dispatch.ts');
+  describe('knowledge graph changes — through the inbound path, scoped by record', () => {
+    const door = READ('services/webhook_sync/knowledge_changes.ts');
+    const scope = READ('services/translation_graph/triggers/record_scope.ts');
 
-    it('dispatchKgMutationTriggers is the only mutation dispatch path', () => {
-      // N3-C: the legacy `loadPipelineOutputContainers` walk + the
-      // pipeline_output-keyed container loop were retired. The
-      // trigger-substrate dispatch (KG_MUTATION trigger rows) is the
-      // single surface for mutation events.
-      const triggerCallIdx = src.indexOf('dispatchKgMutationTriggers({');
-      expect(triggerCallIdx).toBeGreaterThan(-1);
-      expect(src).not.toMatch(/loadPipelineOutputContainers\(/);
-    });
-
-    it('queries triggers with kind=KG_MUTATION', () => {
-      const fnRange = extractFunction(src, 'dispatchKgMutationTriggers');
-      expect(fnRange).toMatch(/kinds:\s*\['KG_MUTATION'\]/);
+    it('queues through the shared capture tail and never runs a movement itself', () => {
+      // The in-process listener loop is gone: a change becomes receipts and
+      // dispatch_event rows, and the drainer runs them.
+      expect(door).toMatch(/captureProviderTriggerEvents\(/);
+      expect(door).toMatch(/enqueueCapturedEvents\(/);
+      expect(door).not.toMatch(/runMovementFiring|dispatchTriggerByIdEvent/);
     });
 
     it("matches event change_kind against the listen's `events:` vocabulary", () => {
       // D40: a listen selects change kinds in the platform's uniform `record.*`
-      // currency, the same one attio and airtable use; the engine event carries
-      // the shorter verb form ('create'/'update'/'delete'). Pin the mapping so a
+      // currency, the same one attio and airtable use; the event carries the
+      // shorter verb form ('create'/'update'/'delete'). Pin the mapping so a
       // refactor can't silently desync the two.
-      expect(src).toMatch(/CHANGE_KIND_TO_EVENT/);
-      expect(src).toMatch(/create:\s*'record\.created'/);
-      expect(src).toMatch(/update:\s*'record\.updated'/);
-      expect(src).toMatch(/delete:\s*'record\.deleted'/);
+      expect(scope).toMatch(/CHANGE_KIND_TO_EVENT/);
+      expect(scope).toMatch(/create:\s*'record\.created'/);
+      expect(scope).toMatch(/update:\s*'record\.updated'/);
+      expect(scope).toMatch(/delete:\s*'record\.deleted'/);
     });
 
     it('still reads the participle vocabulary pre-D40 rows persist', () => {
       // A trigger provisioned before D40 holds the store's own currency. It
       // keeps filtering exactly as it did until its movement is re-saved.
-      expect(src).toMatch(/CHANGE_KIND_TO_PARTICIPLE/);
-      expect(src).toMatch(/create:\s*'created'/);
+      expect(scope).toMatch(/CHANGE_KIND_TO_PARTICIPLE/);
+      expect(scope).toMatch(/create:\s*'created'/);
     });
 
     it('filters triggers by the watched type — by name, and by id on older rows', () => {
-      const fnRange = extractFunction(src, 'mutationTriggerConfigMatches');
+      const fnRange = extractFunction(scope, 'recordScopeMatches');
       expect(fnRange).toMatch(/node_type_id/);
-      expect(fnRange).toMatch(/event\.nodeTypeId/);
+      expect(fnRange).toMatch(/event\.recordType/);
       expect(fnRange).toMatch(/surface\.typeName\(\)/);
     });
   });

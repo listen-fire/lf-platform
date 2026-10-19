@@ -1,12 +1,11 @@
 // Knowledge-graph adapter — the graph as a system the engine reaches, on the
 // same `Adapter` contract as every external one.
 //
-// It used to reach the graph by writing SQL against `knowledge.*` in this
-// process. It does not any more: after D25 the graph is another optional
-// system, so its READS go over HTTP to `/v1/knowledge/graph/*` with a stored
-// credential, exactly as `native_valuations` does. What is left in here is what
-// an adapter is FOR — translating the program's natural names into the wire's
-// ids and back — rather than a privileged shortcut into somebody else's tables.
+// After D25 the graph is another optional system, and now a module like any
+// other: it reaches the records through the store its host supplies
+// (`./store`), never a database. What is in here is what an adapter is FOR —
+// translating the program's natural names into the store's ids and back —
+// rather than a privileged shortcut into somebody else's tables.
 //
 // Two consequences worth knowing before reading:
 //
@@ -17,24 +16,18 @@
 //     translation happens on the first line of each method, and an ontology
 //     UUID never rides a position.
 
-import { z } from 'zod';
-
+import type { ModuleLog } from 'module-kit';
 import type { EdgesFromResult } from 'movement-engine/public/adapter';
-import type { TeamId } from '../../../generated/kysely/core/Team';
-import type { NodeId } from '../../../generated/kysely/knowledge/Node';
-import type { ResourceId } from '../../../generated/kysely/knowledge/Resource';
-import type { NodeTypeId } from '../../../generated/kysely/knowledge/NodeType';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import type {
   Adapter,
   RuntimeCapabilities,
-  AdapterManifest,
   DedupConstraint,
   DedupRules,
   DiscriminableEvent,
   EnsureEventSubscriptionInput,
   EventSubscriptionRegistration,
   RemoveEventSubscriptionInput,
-  ExternalRecordRef,
   DeleteInput,
   DeleteResult,
   FieldEvidence,
@@ -48,36 +41,15 @@ import type {
   RelatedResult,
   ResolveEntityInput,
   ResolveEntityResult,
-  Resource,
   UpdateInput,
   UpdateResult,
   WriteInput,
   WriteResult,
 } from 'movement-engine/public/adapter';
+import type { KgStore, WireOntology, WirePropertyType } from './store';
 
 import { hydrateTargets, typeAddressedPositions, uniformWalk } from 'module-kit/adapter/hop';
-import { KNOWLEDGE_GRAPH_HANDBOOK_SECTION } from './knowledge_graph_handbook_section';
-import PropertyValueType from '../../../generated/kysely/knowledge/PropertyValueType';
-import PropertyCardinality from '../../../generated/kysely/knowledge/PropertyCardinality';
-import ExternalServiceType from '../../../generated/kysely/automations/ExternalServiceType';
-import { getKnowledgeQb } from '../../../lib/kysely';
-import { mutationDelivery } from '../../knowledge/mutation_outbox/delivery_mode';
-import {
-  KgOntologyCache,
-  kgFetch,
-  kgFetchOrNull,
-  loadKgCredentials,
-  type KgCredentials,
-  type WireEdgeType,
-  type WireOntology,
-  type WirePropertyType,
-} from './kg_client';
-import {
-  deregisterKnowledgeWebhook,
-  registerKnowledgeWebhook,
-} from './knowledge_graph_webhook';
 import { RESOURCES_REFERENCE_FIELD_ID, writeParentLinks } from 'movement-engine/public/adapter';
-import { recordMutationEventSchema } from '../triggers/record_mutation_event';
 import {
   ADAPTER_META_TYPE_ID,
   META_RECORD_TYPE,
@@ -92,64 +64,30 @@ import {
   type SourcePosition,
 } from 'movement-engine/public/catalog';
 import {
+  memoizedResolver,
+  naturalName,
+  type AdapterNameResolver,
+  type ScopedResolver,
+} from 'module-kit/adapter/name_resolution';
+import { KG_SUBSCRIBABLE_EVENTS, changeEventsOf, didWeAuthorChange } from './events';
+import {
+  KG_ADAPTER_TYPE,
+  KG_EVENT_RECORD_EDGE,
+  KG_EVENT_RECORD_EDGE_NAME,
+  KG_EVENT_TYPE_ID,
+  KG_EVENT_TYPE_NAME,
+  KG_NODE_TYPE_META_TYPE,
+  KG_RESOURCE_TYPE_ID,
+  KG_RESOURCES_EDGE_NAME,
+} from './manifest';
+import {
   createKgRecord,
   deleteKgRecord,
   linkKgRecords,
   unlinkKgRecords,
   updateKgRecord,
   type WriteConnection,
-} from './knowledge_graph_writes';
-import {
-  memoizedResolver,
-  naturalName,
-  type AdapterNameResolver,
-  type ScopedResolver,
-} from 'module-kit/adapter/name_resolution';
-
-/** Stable adapter identifier. Matches `MutationContext.source.adapterType`, and
- *  IS the import name a movement constructs the graph through
- *  (`import { kg } from adapters` ⇒ `graph = kg()`). */
-export const KG_ADAPTER_TYPE = 'kg';
-
-// ── The event surface (D40) ─────────────────────────────────────────────────
-// The graph publishes an EVENT ENTRY exactly like every other adapter — the
-// same shape Airtable's `Record Change` has, for the same reasons. Nothing
-// here is graph-specific machinery: a listen names the watched node type, the
-// change kind is the event node's own `action` field, and the changed record
-// is REACHED over the event's `Record` edge rather than being the event.
-
-/** The event node's own type name. JUST A NODE: its change kind is its
- *  `action` field, narrowed in the address —
- *  `<graph-[:`Record Change` WHERE `action` == "record.created"]->>`. */
-export const KG_EVENT_TYPE_NAME = 'Record Change';
-/** The dispatch id for the event node (its `describe` / `getRelated` currency);
- *  the display name above is what an author writes. */
-export const KG_EVENT_TYPE_ID = 'kg:record_change';
-/** The event node's edge to the changed record. */
-export const KG_EVENT_RECORD_EDGE = 'record';
-/** Its NATURAL name — Title Case, the one convention across adapter surfaces. */
-export const KG_EVENT_RECORD_EDGE_NAME = 'Record';
-
-/**
- * The meta collection whose members are this team's node types.
- *
- * `Base`/`Table` for the graph: the node the `type:` listen hop selects a
- * member of, and the type the event's `Record` edge lands on before anything
- * says WHICH node type. Its members ride the root hop's `targetPositions`, each
- * publishing `Id` — the name a listen writes, which for the graph IS the node
- * type's identity (the ontology UUID stays adapter-private, in the structured-id
- * cache and the SQL).
- */
-export const KG_NODE_TYPE_META_TYPE = 'Node Type';
-
-/** The change kinds a `listen to <graph> { events: [...] }` subscribes to, in
- *  Listen-Fire's uniform `record.*` currency (the same names attio and airtable use,
- *  so authoring and dispatch stay adapter-neutral). */
-export const KG_SUBSCRIBABLE_EVENTS = [
-  'record.created',
-  'record.updated',
-  'record.deleted',
-] as const;
+} from './writes';
 
 /**
  * The EVENT edge off the meta node: `meta -[:`Record Change`]-> <the event>`.
@@ -242,29 +180,6 @@ function describeRecordChange(): SchemaTypeDescriptor {
   };
 }
 
-/** The envelope the drainer delivers, whichever path it takes. Parsed rather
- *  than trusted: an inbound body is somebody else's claim until it typechecks. */
-const mutationEnvelopeSchema = z.object({
-  event: z.enum([...KG_SUBSCRIBABLE_EVENTS]),
-  timestamp: z.string(),
-  data: z.object({
-    recordId: z.string(),
-    nodeTypeId: z.string(),
-    changeKind: z.enum(['create', 'update', 'delete']),
-    changedFields: z.array(z.string()),
-    context: z.record(z.string(), z.unknown()),
-  }),
-});
-
-const CHANGE_TYPE_BY_EVENT: Record<
-  (typeof KG_SUBSCRIBABLE_EVENTS)[number],
-  'create' | 'update' | 'delete'
-> = {
-  'record.created': 'create',
-  'record.updated': 'update',
-  'record.deleted': 'delete',
-};
-
 /** One property type as a schema field. Node-anchored and edge-anchored
  *  property types describe identically — an anchor is a write-routing fact,
  *  not a difference in what the field IS — so both go through here and the
@@ -277,27 +192,12 @@ function propertyField(pt: WirePropertyType): SchemaTypeDescriptor['fields'][num
     enumValues: pt.enumValues ?? undefined,
     writable: true,
     required: false,
-    cardinality: pt.cardinality === PropertyCardinality.multi ? ('many' as const) : ('one' as const),
+    cardinality: pt.cardinality === 'multi' ? ('many' as const) : ('one' as const),
   };
 }
 
-/** Synthetic target type for the `#resources` reference — a `node_resource`
- *  attachment surfaced as a resource position. The id IS the natural display
- *  name: it rides schema edge targets and landed positions, both agent-visible
- *  surfaces (the leakage audit's rule — an id that can surface must read as a
- *  name, never as adapter plumbing). */
-export const KG_RESOURCE_TYPE_ID = 'Attached Resource';
-
-/** The name a node's resources edge is walked by — `c-[f:Resources]->`. It is
- *  an ordinary declared edge; the reserved `_resources` fieldId it is keyed by
- *  is the adapter's own (versions 1–4 of the language walked it as
- *  `c-[f:_resources]->`). A display name only: `getRelated` matches the edge
- *  by that fieldId, so a team's ontology edge named `Resources` stays the
- *  ontology's. */
-export const KG_RESOURCES_EDGE_NAME = 'Resources';
-
 /** An `Attached Resource`'s fields by the name a movement reads them under,
- *  and the key `readResources` materialises each at on the landing's `data`. */
+ *  and the key the store materialises each at on the landing's `data`. */
 const KG_RESOURCE_FIELDS: Readonly<Record<string, 'name' | 'url' | 'type'>> = {
   Name: 'name',
   URL: 'url',
@@ -346,115 +246,20 @@ const KG_RUNTIME_CAPABILITIES: RuntimeCapabilities = {
   resources: true,
 };
 
-/**
- * The subscription half of the contract, declared only where it is real.
- *
- * D39(c): a deployment has EXACTLY ONE delivery path. Composed delivers
- * in-process, so there is nothing to register and advertising the methods would
- * make `syncListenSubscriptions` provision a webhook the drainer will never
- * post to — a subscription that looks live and never fires, which is precisely
- * the silently-dead state `canFire` exists to prevent. Standalone is the
- * opposite: automations is a different process, so the webhook IS the delivery.
- *
- * The manifest is where that shows, because the manifest is what the
- * reconciler reads. No new gate was added for it.
- */
-const SUBSCRIPTION_METHODS =
-  mutationDelivery() === 'webhook'
-    ? (['ensureEventSubscription', 'removeEventSubscription'] as const)
-    : ([] as const);
-
-/**
- * Static manifest — the construction-free declaration the registry exposes via
- * `getAdapterManifest`. `createRecord`/`updateRecord`/`deleteRecord` are
- * genuine writes; `linkRecords`/`unlinkRecords` assert and sever edges between
- * existing nodes.
- *
- */
-export const KG_MANIFEST: AdapterManifest = {
-  adapterType: KG_ADAPTER_TYPE,
-  displayName: 'Knowledge Graph',
-  description:
-    "Listen-Fire's own store — the structured records your data model defines. " +
-    'Movements can read it, write to it, and run whenever something in it changes.',
-  supportedTriggers: ['mutation'],
-  methods: [
-    'listEntryPoints', 'describe', 'resolveEntity', 'getDedupRules',
-    'getFieldValue', 'getRelated', 'createRecord', 'updateRecord', 'deleteRecord',
-    'linkRecords', 'unlinkRecords',
-    // Echo-authorship capability — gates the opt-in `suppress_self` listen
-    // flag (the KG answers from its own mutation-context provenance).
-    'didWeAuthor',
-    'preprocessInbound',
-    ...SUBSCRIPTION_METHODS,
-  ],
-  // The graph is reached over HTTP with a stored credential, like every other
-  // system (D25) — which is also what makes it OPTIONAL: a team with no
-  // connection simply has no `kg` in its catalog, because the registry's
-  // presence gate reads this. `intrinsic` because there is no third party to
-  // sign in to: the server provisions the key against the configured instance.
-  // `connect: 'intrinsic'` is not stated here — it is DERIVED from the type
-  // having an intrinsic provisioner (`connectKindForType`), so the two cannot
-  // disagree about whether one-click provisioning exists.
-  requiredCredentialType: ExternalServiceType.NATIVE_KNOWLEDGE,
-  triggerKinds: ['KG_MUTATION'],
-  // The change kinds a listen subscribes to, in the platform's uniform
-  // `record.*` currency (D40) — ONE namespace with attio and airtable, and the
-  // same values the event node's `action` field enumerates.
-  subscribableEvents: [...KG_SUBSCRIBABLE_EVENTS],
-  // The graph's model is per-team and user-editable, so describing an instance
-  // is a live read of THIS team's ontology rather than a static constant.
-  introspectedSchema: true,
-  // `type` is the ADDRESS of the record the event's `Record` edge lands on: a
-  // listen is shorthand for a WHERE, so naming the watched type here is what
-  // narrows the edge, and the author never restates it in the movement. It
-  // matches on `Id`, which for the graph IS the node type's name — the
-  // framework identity the entry points publish (the ontology UUID never rides
-  // a position). `fields` is the changed-attribute filter: bare property names
-  // of the watched type. `events` needs no entry — `subscribableEvents`
-  // projects it — and `suppress_self` is universal, validated centrally for
-  // every adapter, so neither is declared here.
-  listenConfig: [
-    {
-      key: 'type',
-      required: true,
-      narrows: { collection: KG_NODE_TYPE_META_TYPE, matchField: 'Id' },
-    },
-    { key: 'fields', format: 'fields' },
-  ],
-  triggerExpectation:
-    "Fires when a record in the team's Listen-Fire knowledge graph is created, " +
-    'updated or deleted — whether a user edited it, an agent wrote it, or ' +
-    'ANOTHER MOVEMENT wrote it. That last case can loop a movement that ' +
-    'both listens to and writes the same types: narrow the listen to ' +
-    'specific types/changes, and use suppress_self where the movement ' +
-    'should ignore its own writes.',
-  handbookSection: KNOWLEDGE_GRAPH_HANDBOOK_SECTION,
-  vocabulary: {
-    // No brand mark — the KG is intrinsic, not a third-party system.
-    eventPhrase: {
-      // No per-event phrasing today (create/update/delete all shared one
-      // generic sentence in the former switch) — `default` mirrors that.
-      default: [{ template: 'When data changes in your knowledge graph' }],
-    },
-  },
-};
-
 export class KnowledgeGraphAdapter implements Adapter {
   readonly adapterType = KG_ADAPTER_TYPE;
-  readonly supportedTriggers = KG_MANIFEST.supportedTriggers;
+  readonly supportedTriggers = ['mutation' as const];
 
   runtimeCapabilities(): RuntimeCapabilities {
     return KG_RUNTIME_CAPABILITIES;
   }
 
-  private readonly teamId: TeamId;
-  private readonly credentialsId: string | undefined;
+  private readonly store: KgStore;
+  private readonly log: ModuleLog;
 
-  constructor(input: { teamId: TeamId; credentialsId?: string }) {
-    this.teamId = input.teamId;
-    this.credentialsId = input.credentialsId;
-    this.ontology = new KgOntologyCache(() => this.creds(), input.teamId);
+  constructor(input: { store: KgStore; log: ModuleLog }) {
+    this.store = input.store;
+    this.log = input.log;
   }
 
   /**
@@ -471,26 +276,22 @@ export class KnowledgeGraphAdapter implements Adapter {
   private readonly resolver: ScopedResolver = memoizedResolver(this);
 
   /** This team's whole model, fetched once. Everything schema-shaped below is a
-   *  projection of it. */
-  private readonly ontology: KgOntologyCache;
+   *  projection of it. A failed fetch is forgotten, so the next call retries
+   *  rather than the instance staying poisoned. */
+  private model?: Promise<WireOntology>;
 
-  /**
-   * The connection this instance reads through.
-   *
-   * A missing credential is a hard error rather than a graceful empty: the
-   * graph is optional, and a team without a connection simply has no `kg` in
-   * its catalog — so reaching here without one means something constructed an
-   * instance it had no right to, and answering "the graph is empty" would be a
-   * lie that looks like data.
-   */
-  private async creds(): Promise<KgCredentials> {
-    if (this.credentialsId === undefined) {
-      throw new Error(
-        'The knowledge graph adapter has no connection. Connect Listen-Fire Knowledge for this team, then re-save the movement.',
-      );
-    }
-    return loadKgCredentials(this.credentialsId);
-  }
+  private readonly ontology = {
+    get: (): Promise<WireOntology> => {
+      if (this.model === undefined) {
+        const pending = this.store.ontology();
+        this.model = pending;
+        pending.catch(() => {
+          if (this.model === pending) this.model = undefined;
+        });
+      }
+      return this.model;
+    },
+  };
 
   // ── Name → structured-identifier cache ──────────────────────────────────
   // The framework names an ontology node type only by its pretty `name` (the
@@ -505,14 +306,14 @@ export class KnowledgeGraphAdapter implements Adapter {
   /** Resolve a node type's pretty NAME to its ontology id, or undefined when
    *  the name isn't a known node type (the caller decides graceful-empty vs
    *  hard error). */
-  private async structuredIdFor(name: string): Promise<NodeTypeId | undefined> {
+  private async structuredIdFor(name: string): Promise<string | undefined> {
     const model = await this.ontology.get();
-    return model.nodeTypes.find((nt) => nt.name === name)?.id as NodeTypeId | undefined;
+    return model.nodeTypes.find((nt) => nt.name === name)?.id;
   }
 
   /** The read/write variant: a name that doesn't resolve is drift — the
    *  movement targets a node type this ontology no longer exposes. */
-  private async requireStructuredId(name: string, method: string): Promise<NodeTypeId> {
+  private async requireStructuredId(name: string, method: string): Promise<string> {
     const id = await this.structuredIdFor(name);
     if (!id) {
       throw new Error(`KnowledgeGraphAdapter.${method}: unrecognised node type "${name}".`);
@@ -981,21 +782,14 @@ export class KnowledgeGraphAdapter implements Adapter {
 
   private async resolveByBridge(
     input: ResolveEntityInput,
-    nodeTypeId: NodeTypeId,
+    nodeTypeId: string,
   ): Promise<ResolveEntityResult | null> {
     if (input.candidates.length === 0) return null;
-    const batch = await kgFetch<{ data: { id: string; nodeTypeId: string }[] }>(
-      await this.creds(),
-      {
-        method: 'POST',
-        path: '/nodes/batch',
-        body: { ids: input.candidates.map((c) => c.node_id), team: this.teamId },
-      },
-    );
+    const batch = await this.store.nodeTypesOf(input.candidates.map((c) => c.node_id));
     // Narrow by node type: one external record can bridge to several node types
     // (an Attio Company linked to both an Organisation and a Deal), and the
     // bridge alone does not say which of them this write is about.
-    const matching = batch.data.filter((n) => n.nodeTypeId === nodeTypeId);
+    const matching = batch.filter((n) => n.nodeTypeId === nodeTypeId);
     if (matching.length === 0) return null;
     // For KG-as-target the node id IS the external id (the bridge keys off
     // it). A single bridge hit is the unambiguous match.
@@ -1006,7 +800,7 @@ export class KnowledgeGraphAdapter implements Adapter {
   }
 
   private async resolveByConstraints(input: {
-    nodeTypeId: NodeTypeId;
+    nodeTypeId: string;
     record: Record<string, unknown>;
     constraints: ResolveEntityInput['constraints'];
   }): Promise<ResolveEntityResult> {
@@ -1019,17 +813,7 @@ export class KnowledgeGraphAdapter implements Adapter {
     // adjacency rides along because the engine's `judgeEntityMatch`
     // disambiguates by connections, not just properties, and fetching it
     // separately would be a second walk of a graph we just queried.
-    const { candidates } = await kgFetch<{
-      candidates: {
-        nodeId: string;
-        data: Record<string, unknown>;
-        relationships: { edgeName: string; targetName: string; edgeProperties?: Record<string, unknown> }[];
-      }[];
-    }>(await this.creds(), {
-      method: 'POST',
-      path: '/nodes/match',
-      body: { nodeTypeId, record: input.record, team: this.teamId },
-    });
+    const candidates = await this.store.matchNodes({ nodeTypeId, record: input.record });
 
     // Candidate `data` comes back keyed by property_type_id — rename it to the
     // adapter's NATURAL property names so the engine arbitrates exactness in
@@ -1059,7 +843,7 @@ export class KnowledgeGraphAdapter implements Adapter {
   /** property_type_id → display name for one node type — renames a candidate
    *  data bag back to the adapter's natural property names before it leaves
    *  the adapter (Decision #6). */
-  private async propertyNameMap(nodeTypeId: NodeTypeId): Promise<Map<string, string>> {
+  private async propertyNameMap(nodeTypeId: string): Promise<Map<string, string>> {
     const { propertyTypes } = await this.ontology.get();
     return new Map(
       propertyTypes.filter((pt) => pt.nodeTypeId === nodeTypeId).map((pt) => [pt.id, pt.name]),
@@ -1121,7 +905,7 @@ export class KnowledgeGraphAdapter implements Adapter {
 
   async getFieldValue(input: GetFieldValueInput): Promise<unknown> {
     // A resource landing (`c-[f:Resources]-> { … f.URL … }`) is not a node:
-    // its fields ride the landing itself (`readResources`).
+    // its fields ride the landing itself (the store materialised them onto `data`).
     if (input.position.recordType === KG_RESOURCE_TYPE_ID) {
       const key = KG_RESOURCE_FIELDS[input.fieldId] ?? input.fieldId;
       const data = positionData(input.position) as Record<string, unknown> | null | undefined;
@@ -1135,10 +919,7 @@ export class KnowledgeGraphAdapter implements Adapter {
       input.position.recordType,
       input.fieldId,
     );
-    const node = await kgFetchOrNull<{ properties: Record<string, unknown> }>(
-      await this.creds(),
-      { method: 'GET', path: `/nodes/${nodeId}`, query: { team: this.teamId } },
-    );
+    const node = await this.store.getNode(nodeId);
     // A field of a record that is gone reads null, not an error: the walk that
     // got here already landed on the position, and a record deleted between the
     // landing and the read is an ordinary race, not a broken program.
@@ -1214,11 +995,7 @@ export class KnowledgeGraphAdapter implements Adapter {
       if (input.fieldId !== KG_EVENT_RECORD_EDGE && input.fieldId !== KG_EVENT_RECORD_EDGE_NAME) {
         return [];
       }
-      const record = await kgFetchOrNull<{ id: string; nodeTypeId: string }>(await this.creds(), {
-        method: 'GET',
-        path: `/nodes/${nodeId}`,
-        query: { team: this.teamId },
-      });
+      const record = await this.store.getNode(nodeId);
       if (!record) return [];
       const model = await this.ontology.get();
       const typeName = model.nodeTypes.find((nt) => nt.id === record.nodeTypeId)?.name;
@@ -1244,14 +1021,10 @@ export class KnowledgeGraphAdapter implements Adapter {
     // fieldId; versions 1–4's `_resources` reference (`resource_traverse`,
     // which applies any `ResourceFilter`) asks for it directly.
     if (input.fieldId === RESOURCES_REFERENCE_FIELD_ID) {
-      const attached = await kgFetch<{ data: { resourceId: string }[] }>(await this.creds(), {
-        method: 'GET',
-        path: `/nodes/${nodeId}/resources`,
-        query: { team: this.teamId },
-      });
-      // Only the ATTACHMENT is the graph's; the resource itself is this side's
-      // table, so it is read here rather than asked for across the boundary.
-      const resources = await readResources(attached.data.map((r) => r.resourceId as ResourceId));
+      // The store answers the attachments with the resources themselves
+      // (fields materialised onto `data`); the engine applies any author
+      // `ResourceFilter` post-hoc.
+      const resources = await this.store.resourcesOf(nodeId);
       return resources.map<RelatedResult>((resource) => ({
         position: makeUnstablePosition({
           adapterType: KG_ADAPTER_TYPE,
@@ -1272,21 +1045,10 @@ export class KnowledgeGraphAdapter implements Adapter {
     // no answer, onto a whole-graph edge-name scan. Edge properties ride along
     // for the same reason candidate adjacency does (3b §2): an `edge_property`
     // expression reads them off the result rather than re-asking per field.
-    const { data: rows } = await kgFetch<{
-      data: {
-        edgeId: string;
-        otherNodeId: string;
-        otherNodeTypeId: string;
-        properties: Record<string, unknown>;
-      }[];
-    }>(await this.creds(), {
-      method: 'GET',
-      path: `/nodes/${nodeId}/edges`,
-      query: {
-        team: this.teamId,
-        edgeTypeId,
-        direction: input.direction === 'outgoing' ? 'out' : 'in',
-      },
+    const rows = await this.store.edgesOf({
+      nodeId,
+      edgeTypeId,
+      direction: input.direction === 'outgoing' ? 'out' : 'in',
     });
 
     // The wire names the other end by node-type ID; a position carries the
@@ -1321,18 +1083,13 @@ export class KnowledgeGraphAdapter implements Adapter {
    * all and reverse once, rather than trusting a partial order that could show a
    * row on two pages and skip a third.
    */
-  private async scanNodeIds(nodeTypeId: NodeTypeId): Promise<string[]> {
-    const creds = await this.creds();
+  private async scanNodeIds(nodeTypeId: string): Promise<string[]> {
     const pageSize = 100;
     const ids: string[] = [];
     for (let offset = 0; ; offset += pageSize) {
-      const page = await kgFetch<{ data: { id: string }[] }>(creds, {
-        method: 'GET',
-        path: '/nodes',
-        query: { team: this.teamId, nodeTypeId, limit: pageSize, offset },
-      });
-      ids.push(...page.data.map((n) => n.id));
-      if (page.data.length < pageSize) break;
+      const page = await this.store.listNodeIds({ nodeTypeId, limit: pageSize, offset });
+      ids.push(...page);
+      if (page.length < pageSize) break;
     }
     return ids.reverse();
   }
@@ -1359,22 +1116,7 @@ export class KnowledgeGraphAdapter implements Adapter {
    * while every 2-way sync quietly starts echoing (K-29).
    */
   async preprocessInbound(input: { raw: unknown }): Promise<{ events: DiscriminableEvent[] }> {
-    const parsed = mutationEnvelopeSchema.safeParse(input.raw);
-    if (!parsed.success) return { events: [] };
-    const { event, timestamp, data } = parsed.data;
-    return {
-      events: [
-        {
-          payload: data,
-          eventType: event,
-          recordType: data.nodeTypeId,
-          externalId: data.recordId,
-          changedFields: data.changedFields,
-          occurredAt: timestamp,
-          changeType: CHANGE_TYPE_BY_EVENT[event],
-        },
-      ],
-    };
+    return { events: changeEventsOf(input.raw, (message, meta) => this.log.warn(message, meta)) };
   }
 
   /**
@@ -1387,22 +1129,11 @@ export class KnowledgeGraphAdapter implements Adapter {
   async ensureEventSubscription(
     input: EnsureEventSubscriptionInput,
   ): Promise<EventSubscriptionRegistration | undefined> {
-    if (this.credentialsId === undefined) return undefined;
-    return registerKnowledgeWebhook({
-      credentialsId: this.credentialsId,
-      teamId: this.teamId,
-      targetUrl: input.callbackUrl,
-      eventTypes: input.events,
-    });
+    return (await this.store.registerChangeWebhook({ targetUrl: input.callbackUrl, eventTypes: input.events })) ?? undefined;
   }
 
   async removeEventSubscription(input: RemoveEventSubscriptionInput): Promise<void> {
-    if (this.credentialsId === undefined) return;
-    await deregisterKnowledgeWebhook({
-      credentialsId: this.credentialsId,
-      teamId: this.teamId,
-      externalId: input.externalId ?? input.callbackUrl,
-    });
+    await this.store.removeChangeWebhook({ externalId: input.externalId ?? input.callbackUrl });
   }
 
   // ── 5. Writes ───────────────────────────────────────────────────────────
@@ -1414,8 +1145,7 @@ export class KnowledgeGraphAdapter implements Adapter {
    *  so a write costs the same round trips as the writes it replaced, minus the
    *  queries the resolution used to be. */
   private async writeConnection(): Promise<WriteConnection> {
-    const [creds, ontology] = await Promise.all([this.creds(), this.ontology.get()]);
-    return { creds, ontology };
+    return { store: this.store, ontology: await this.ontology.get(), log: this.log };
   }
 
   async createRecord(input: WriteInput): Promise<WriteResult> {
@@ -1428,7 +1158,6 @@ export class KnowledgeGraphAdapter implements Adapter {
     const w = await this.toInternalWriteCurrency(input);
     const { externalId } = await createKgRecord({
       connection: await this.writeConnection(),
-      teamId: this.teamId,
       recordType: w.recordType,
       fields: w.fields,
       evidence: w.evidence,
@@ -1450,7 +1179,6 @@ export class KnowledgeGraphAdapter implements Adapter {
     const w = await this.toInternalWriteCurrency(input);
     const result = await updateKgRecord({
       connection: await this.writeConnection(),
-      teamId: this.teamId,
       externalId: input.externalId,
       recordType: w.recordType,
       fields: w.fields,
@@ -1590,25 +1318,8 @@ export class KnowledgeGraphAdapter implements Adapter {
   //     direct API call) editing a record, even one automation once wrote —
   //     is NOT this-change authorship by the sync → `false`, fires normally.
   //   - no recognisable provenance → `null` (can't tell; don't suppress).
-  async didWeAuthor(input: {
-    event: import('movement-engine/public/inbound').TriggerEvent;
-  }): Promise<boolean | null> {
-    const parsed = recordMutationEventSchema
-      .pick({ context: true })
-      .safeParse(input.event.payload);
-    if (!parsed.success) return null; // not a recognisable KG mutation event
-    const source = parsed.data.context.source;
-
-    // Only automation-produced writes count as "we authored this change."
-    if (source.type !== 'structured_input' && source.type !== 'extraction') {
-      return false;
-    }
-    // A self-echo of OUR sync carries a translation-graph / trigger marker.
-    const fromAutomation =
-      source.translationGraphId !== undefined ||
-      (typeof source.pipelineInputId === 'string' &&
-        source.pipelineInputId.startsWith('trigger:'));
-    return fromAutomation ? true : false;
+  async didWeAuthor(input: { event: TriggerEvent }): Promise<boolean | null> {
+    return didWeAuthorChange(input.event);
   }
 }
 
@@ -1643,72 +1354,16 @@ function expectKgNodeId(position: SourcePosition, method: string): string {
  *  cannot say more". */
 function mapPropertyValueTypeToFieldKind(value: string): SchemaFieldKind {
   switch (value) {
-    case PropertyValueType.text:
+    case 'text':
       return 'string';
-    case PropertyValueType.number:
+    case 'number':
       return 'number';
-    case PropertyValueType.date:
+    case 'date':
       return 'date';
-    case PropertyValueType.boolean:
+    case 'boolean':
       return 'boolean';
-    case PropertyValueType.json:
+    case 'json':
     default:
       return 'json';
   }
-}
-
-/**
- * The `Resource` rows behind a node's attachments.
- *
- * Only the ATTACHMENT is the graph's; `resource` is this side's own table, so
- * the join is split across the boundary rather than asked for across it. The
- * standard fields are materialised onto `data` so a `resource` expression's
- * field reads are a local lookup; the engine applies any author
- * `ResourceFilter` post-hoc.
- */
-async function readResources(resourceIds: ResourceId[]): Promise<Resource[]> {
-  if (resourceIds.length === 0) return [];
-  const resources = await getKnowledgeQb(['resource'])
-    .selectFrom('resource')
-    .where('resource.id', 'in', resourceIds)
-    .select([
-      'resource.id',
-      'resource.type',
-      'resource.url',
-      'resource.name',
-      'resource.external_id',
-      'resource.metadata',
-    ])
-    .execute();
-
-  return resources.map((r) => ({
-    id: r.id,
-    externalId: r.external_id ?? undefined,
-    // Provenance was stored in metadata at write time (4d_resources.md) —
-    // round-trip it back onto the resource.
-    provenance: (r.metadata as { provenance?: Resource['provenance'] } | null)?.provenance,
-    type: r.type as Resource['type'],
-    name: r.name ?? undefined,
-    url: r.url ?? undefined,
-    data: {
-      name: r.name,
-      url: r.url,
-      type: r.type,
-      // document_url and content are lazy fields — fetched on demand when
-      // a resource expression specifically asks for them. Initial pass
-      // returns null; future enhancement loads them.
-      document_url: null,
-      content: null,
-    },
-  }));
-}
-
-/**
- * Re-export a function to create the adapter — used by the registry.
- */
-export function createKnowledgeGraphAdapter(input: {
-  teamId: TeamId;
-  credentialsId?: string;
-}): KnowledgeGraphAdapter {
-  return new KnowledgeGraphAdapter(input);
 }

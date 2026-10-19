@@ -22,7 +22,7 @@ import {
   isStablePosition,
   positionRecordId,
 } from 'movement-engine/services/translation_graph/types';
-import { KG_ADAPTER_TYPE } from '../adapters/knowledge_graph';
+import { KG_ADAPTER_TYPE } from '@listen-fire/kg/manifest';
 
 /** Permissive caps: all expression kinds + traversal directions allowed. */
 function permissiveCaps(

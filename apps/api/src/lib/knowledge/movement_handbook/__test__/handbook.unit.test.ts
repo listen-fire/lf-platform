@@ -21,7 +21,7 @@ import {
   KG_EVENT_TYPE_NAME,
   KG_NODE_TYPE_META_TYPE,
   KG_SUBSCRIBABLE_EVENTS,
-} from '../../../../services/translation_graph/adapters/knowledge_graph';
+} from '@listen-fire/kg';
 import adapterSchemas from './adapter_schemas.fixture.json';
 import { bundledPluginSpecs } from 'movement-engine/public/plugins';
 import { proseViolations } from './prose_rules';

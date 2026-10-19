@@ -35,7 +35,7 @@ import type { RecordBindingId } from '../generated/kysely/automations/RecordBind
 import type { PropertyTypeId } from '../generated/kysely/knowledge/PropertyType';
 import type { Property } from '../generated/kysely/knowledge/Property';
 
-import { KG_ADAPTER_TYPE } from '../services/translation_graph/adapters/knowledge_graph';
+import { KG_ADAPTER_TYPE } from '@listen-fire/kg/manifest';
 import { logger } from 'movement-engine/public/log';
 import { neverAsAny } from 'movement-engine/public/types';
 import { getAutomationsQb, getCoreQb, getKnowledgeQb } from '../lib/kysely';

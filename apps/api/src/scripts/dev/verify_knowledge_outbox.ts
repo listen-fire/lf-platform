@@ -37,7 +37,7 @@ import ChangeSource from '../../generated/kysely/knowledge/ChangeSource';
 
 import type { MutationEventEnvelope } from '../../lib/knowledge/store/events';
 
-import { drainOnce, readOutboxHealth, registerLocalMutationSubscriber } from '../../services/knowledge/mutation_outbox/worker';
+import { drainOnce, readOutboxHealth } from '../../services/knowledge/mutation_outbox/worker';
 
 const AUTOMATION_CONTEXT = {
   // The shape a movement's own write carries: an automation marker inside the
@@ -135,10 +135,11 @@ async function main() {
 
   // ── 4. The drainer delivers, and delivery is what reaches a subscriber ───
   const delivered: MutationEventEnvelope[] = [];
-  registerLocalMutationSubscriber(async ({ envelope }) => {
-    delivered.push(envelope);
+  const drain = await drainOnce({
+    deliverLocally: async ({ envelope }) => {
+      delivered.push(envelope);
+    },
   });
-  const drain = await drainOnce();
   out.drain = drain;
 
   const afterDrain = await qb

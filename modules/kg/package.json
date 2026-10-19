@@ -1,0 +1,69 @@
+{
+  "name": "@listen-fire/kg",
+  "license": "Apache-2.0",
+  "version": "0.12.0-rc.2",
+  "description": "The platform's knowledge graph as a module (`@lf/kg`): its record types read from the team's own model, reads and writes through a store the host supplies, and its change events delivered through the host's inbound path like any adapter's. Loaded in process by the platform. Its tests borrow apps/api's jest runner (jest.config.borrowed.cjs)",
+  "engines": {
+    "node": "22.20.0"
+  },
+  "scripts": {
+    "code:type-check": "tsc --pretty --noEmit && node ../../scripts/check-module-boundary.cjs",
+    "test": "node ../../apps/api/node_modules/jest/bin/jest.js --config jest.config.borrowed.cjs",
+    "prepack": "node ../../scripts/build-packages.cjs .",
+    "postpack": "node ../../scripts/build-packages.cjs --restore ."
+  },
+  "main": "index.ts",
+  "types": "index.ts",
+  "type": "commonjs",
+  "dependencies": {
+    "@listen-fire/engine": "workspace:^",
+    "@listen-fire/engine-contracts": "workspace:^",
+    "@listen-fire/module-kit": "workspace:^",
+    "@listen-fire/movement-lang": "workspace:^",
+    "@listen-fire/shared": "workspace:^",
+    "zod": "4.1.12"
+  },
+  "devDependencies": {
+    "#shared": "workspace:@listen-fire/shared@*",
+    "@types/jest": "29.5.14",
+    "@types/node": "20.16.5",
+    "engine-contracts": "workspace:@listen-fire/engine-contracts@*",
+    "module-kit": "workspace:@listen-fire/module-kit@*",
+    "movement-engine": "workspace:@listen-fire/engine@*",
+    "movement-lang": "workspace:@listen-fire/movement-lang@*",
+    "typescript": "5.5.4"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/listen-fire/listen-fire.git",
+    "directory": "modules/kg"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./*": {
+        "types": "./dist/*.d.ts",
+        "default": "./dist/*.js"
+      },
+      "./package.json": "./package.json"
+    },
+    "typesVersions": {
+      "*": {
+        "*": [
+          "dist/*",
+          "*"
+        ]
+      }
+    },
+    "tag": "next"
+  }
+}

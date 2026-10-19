@@ -59,6 +59,7 @@ import { AIRTABLE_MANIFEST } from '@listen-fire/airtable/manifest';
 import { ATTIO_MANIFEST } from '@listen-fire/attio/manifest';
 import { TELEGRAM_MANIFEST } from '@listen-fire/telegram/manifest';
 import { SLACK_MANIFEST } from '@listen-fire/slack/manifest';
+import { kgManifest } from '@listen-fire/kg/manifest';
 import { pluginDeclarationNamed, pluginProgramName } from 'movement-engine/public/plugins';
 
 import { injectFakeBaseUrl, isTestHarnessTeam } from '../../../lib/recording';
@@ -75,6 +76,7 @@ import { oauthAppFromEnv } from './module_credentials';
 import { builtInBotToken } from './telegram/shared_bot';
 import { telegramIdentities } from './telegram/identities';
 import { teamIdSchema } from '../../../lib/team_id';
+import { mutationDelivery } from '../../knowledge/mutation_outbox/delivery_mode';
 
 export type BuiltinLine = 'legacy' | 'module';
 
@@ -149,6 +151,17 @@ const WEB_MODULE_LINE: BuiltinModuleLine = {
 
 /** Built once, on the Slack line's first use. */
 let platformSlackModule: AdapterModuleDefinition | undefined;
+
+/** Whether the knowledge graph's change events reach this deployment as signed
+ *  webhooks (its store runs in another process) rather than straight off the
+ *  store's outbox: read once, at boot, as the delivery mode always was. */
+const kgChangeWebhooks = mutationDelivery() === 'webhook';
+
+/** `@lf/kg`'s manifest on this deployment. */
+export const KG_PLATFORM_MANIFEST: AdapterManifest = kgManifest({ changeWebhooks: kgChangeWebhooks });
+
+/** Built once, on the knowledge graph line's first use. */
+let platformKgModule: AdapterModuleDefinition | undefined;
 
 /**
  * Every built-in that becomes a module (plan 22 #1), by adapter type or
@@ -314,6 +327,23 @@ export const BUILTIN_MODULES: BuiltinModuleTable = {
         });
       }
       return platformSlackModule;
+    },
+  },
+  // The knowledge graph (Henry 2026-10-19: out of core, an adapter module the
+  // platform supplies). Its store is the platform's knowledge unit, handed to
+  // the module scoped to the install; there is no legacy line to flip back to
+  // (the adapter moved, it was not copied).
+  kg: {
+    kind: 'adapter',
+    line: 'module',
+    manifest: KG_PLATFORM_MANIFEST,
+    load: () => {
+      if (platformKgModule === undefined) {
+        const { kgModuleWith }: typeof import('@listen-fire/kg') = require('@listen-fire/kg');
+        const { platformKgStoreFor }: typeof import('./kg_store') = require('./kg_store');
+        platformKgModule = kgModuleWith({ store: platformKgStoreFor, changeWebhooks: kgChangeWebhooks });
+      }
+      return platformKgModule;
     },
   },
   // The bundled plugins (Henry 2026-10-17: plugins are modules too), all six
@@ -502,6 +532,14 @@ export function builtinAdapterFactory(
 ): (input: BuiltinInstall) => Adapter {
   const entry = moduleLineOf(adapterType);
   if (entry === undefined) return legacy;
+  return (install) => loadBuiltinModule(entry, install).adapter;
+}
+
+/** A registry factory for a built-in that is only a module (it has no legacy
+ *  adapter to fall back to). */
+export function builtinModuleAdapterFactory(adapterType: string): (input: BuiltinInstall) => Adapter {
+  const entry = moduleLineOf(adapterType);
+  if (entry === undefined) throw new Error(`built-in ${adapterType} has no module line`);
   return (install) => loadBuiltinModule(entry, install).adapter;
 }
 

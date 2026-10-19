@@ -1,13 +1,10 @@
-// The knowledge graph's HTTP client — how the adapter reaches the graph now
-// that the graph is another system rather than a privilege (D25).
+// The knowledge graph's HTTP client — how the platform's store for the `@lf/kg`
+// module reaches the graph, now that the graph is another system rather than a
+// privilege (D25).
 //
 // Structurally this is `native_valuations`' client, deliberately: a credential
 // parsed out of `external_service_credentials`, a base URL that defaults to
-// this instance, a fetch wrapper that names the operation in its failures. The
-// one thing this client has that valuations does not is an ONTOLOGY CACHE —
-// valuations describes itself with hardcoded constants, but a graph's model is
-// per-team and user-editable, so `describe` is a live read and would otherwise
-// be a round trip per type per walk.
+// this instance, a fetch wrapper that names the operation in its failures.
 //
 // The wire currency is IDS (K-5). Names ride along for introspection and are
 // never identity: a display name is renameable, and a persisted trigger routed
@@ -146,87 +143,13 @@ export async function kgFetchOrNull<T>(
 }
 
 // ── The ontology, as the wire publishes it ─────────────────────────────────
+// The shapes are the module's (`@lf/kg`'s store speaks them); the wire is this
+// platform's.
 
-/** OR-of-AND over field ids — the projected form; the stored expression shape
- *  never leaves the knowledge unit. */
-export interface WireUniqueness {
-  any: { all: { field: string; fuzzy?: boolean }[] }[];
-}
-
-export interface WireNodeType {
-  id: string;
-  name: string;
-  description: string | null;
-  category: string | null;
-  displayNameTemplate: string | null;
-  displayNameExpression: string | null;
-  uniquenessConstraints: WireUniqueness;
-}
-
-export interface WirePropertyType {
-  id: string;
-  name: string;
-  description: string | null;
-  nodeTypeId: string | null;
-  edgeTypeId: string | null;
-  valueType: string;
-  cardinality: string;
-  enumValues: string[] | null;
-  writableBy: string[] | null;
-  evaluationStrategy: string | null;
-}
-
-export interface WireEdgeType {
-  id: string;
-  outboundName: string;
-  inboundName: string;
-  sourceNodeTypeId: string;
-  targetNodeTypeId: string;
-  required: boolean | null;
-  scopes: boolean | null;
-  filters: unknown;
-}
-
-export interface WireOntology {
-  nodeTypes: WireNodeType[];
-  propertyTypes: WirePropertyType[];
-  edgeTypes: WireEdgeType[];
-}
-
-/**
- * One team's model, fetched once and read many times.
- *
- * Every schema question the adapter answers — entry points, `describe`, the
- * name↔id maps, dedup rules — is a projection of this one response, so it is
- * fetched whole rather than per type. The model can change under a running
- * process (an agent edits it), which is what `refresh` is for; a failed fetch
- * drops the cache so the next call retries rather than poisoning the instance.
- */
-export class KgOntologyCache {
-  private pending?: Promise<WireOntology>;
-
-  constructor(
-    private readonly creds: () => Promise<KgCredentials>,
-    private readonly teamId: string,
-  ) {}
-
-  get(): Promise<WireOntology> {
-    if (this.pending === undefined) {
-      this.pending = (async () =>
-        kgFetch<WireOntology>(await this.creds(), {
-          method: 'GET',
-          path: '/ontology',
-          query: { team: this.teamId },
-        }))();
-      this.pending.catch(() => {
-        this.pending = undefined;
-      });
-    }
-    return this.pending;
-  }
-
-  refresh(): Promise<WireOntology> {
-    this.pending = undefined;
-    return this.get();
-  }
-}
+export type {
+  WireEdgeType,
+  WireNodeType,
+  WireOntology,
+  WirePropertyType,
+  WireUniqueness,
+} from '@listen-fire/kg/store';
