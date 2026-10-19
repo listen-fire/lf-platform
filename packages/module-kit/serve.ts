@@ -1,7 +1,9 @@
 // `serve-module`: any module as a protocol-2 process, so lf, the Rust host,
 // the cloud and an embedder run a module one way. It prints
 // `listening <port>` once it answers (the line lf's externals wait for), logs
-// as JSON lines on stderr, and binds loopback unless told otherwise.
+// as JSON lines on stderr, and binds loopback unless told otherwise. One
+// process may serve several modules, each under its own path (lf's shared
+// host for trusted modules); an untrusted module gets a process of its own.
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -58,23 +60,42 @@ export interface ServeModuleOptions {
 }
 
 export async function serveModule(options: ServeModuleOptions): Promise<{ port: number; server: Server }> {
-  const { definition, token } = options;
-  const log = options.log ?? jsonLineLog(definition.name, (line) => process.stderr.write(line));
-  const unavailable = (what: string) =>
-    `module ${definition.name}: ${what} is not available when the module is served as a process (protocol 2 carries files by URL and keeps no module state)`;
-  const { stateDir } = options;
-  const noKv = refusingKv(`${unavailable('ctx.kv')}; set MODULE_STATE_DIR to keep it in files`);
-  // The handler is built once the port is known: a file's URL is under
-  // MODULE_PUBLIC_URL, else this server's own bound address, and never under
-  // a request's Host header.
-  let handler: ((req: IncomingMessage, res: ServerResponse) => Promise<void>) | undefined;
+  const { port, host, ...module } = options;
+  return serveModules({ mounts: [{ path: '', options: module }], ...(port !== undefined ? { port } : {}), ...(host !== undefined ? { host } : {}) });
+}
+
+/** One module of a shared host: served under `/<path>/`, or at the root
+ *  when `path` is empty. */
+export interface ModuleMount {
+  path: string;
+  options: Omit<ServeModuleOptions, 'port' | 'host'>;
+}
+
+const MOUNT_PATH = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
+
+/** Several modules in one process (lf's shared host for trusted modules),
+ *  each under its own path, each with its own options, log and token. A
+ *  module's file URLs are under its own path. */
+export async function serveModules(options: { mounts: readonly ModuleMount[]; port?: number; host?: string }): Promise<{ port: number; server: Server }> {
+  const { mounts } = options;
+  if (mounts.length === 0) throw new Error('serve-module: no module to serve');
+  const paths = new Set<string>();
+  for (const { path } of mounts) {
+    if (path === '' ? mounts.length > 1 : !MOUNT_PATH.test(path)) {
+      throw new Error(`serve-module: mount path "${path}" is not a path segment (letters, digits, _ . -), or a root mount is not alone`);
+    }
+    if (paths.has(path)) throw new Error(`serve-module: two modules are mounted at "${path}"`);
+    paths.add(path);
+  }
+  const routes = new Map<string, Route>();
   const server = createServer((req, res) => {
-    if (handler === undefined) {
-      res.writeHead(503).end();
+    const route = routeOf(req, routes);
+    if (route === undefined) {
+      res.writeHead(routes.size === 0 ? 503 : 404).end();
       return;
     }
-    handler(req, res).catch((error: unknown) => {
-      log.error('request failed outside the envelope', { error: error instanceof Error ? error.message : String(error) });
+    route.handler(req, res).catch((error: unknown) => {
+      route.log.error('request failed outside the envelope', { error: error instanceof Error ? error.message : String(error) });
       if (!res.headersSent) res.writeHead(500).end();
     });
   });
@@ -82,8 +103,42 @@ export async function serveModule(options: ServeModuleOptions): Promise<{ port: 
   await new Promise<void>((done) => server.listen(options.port ?? 0, bindHost, done));
   const address: AddressInfo | string | null = server.address();
   if (address === null || typeof address === 'string') throw new Error('serve-module: the server is not listening on a port');
-  const publicUrl = options.publicUrl ?? `http://${ownOrigin(bindHost)}:${address.port}`;
-  handler = createModuleProtocolHandler({
+  // The handlers are built once the port is known: a file's URL is under
+  // the module's public URL, else this server's own bound address, and
+  // never under a request's Host header.
+  const origin = `http://${ownOrigin(bindHost)}:${address.port}`;
+  for (const mount of mounts) {
+    const log = mount.options.log ?? jsonLineLog(mount.options.definition.name, (line) => process.stderr.write(line));
+    const publicUrl = mount.options.publicUrl ?? (mount.path === '' ? origin : `${origin}/${mount.path}`);
+    routes.set(mount.path, { handler: moduleHandler(mount.options, log, publicUrl), log });
+  }
+  return { port: address.port, server };
+}
+
+interface Route {
+  handler: (req: IncomingMessage, res: ServerResponse) => Promise<void>;
+  log: ModuleLog;
+}
+
+/** The mount a request is for, its URL made relative to the mount. */
+function routeOf(req: IncomingMessage, routes: ReadonlyMap<string, Route>): Route | undefined {
+  const root = routes.get('');
+  if (root !== undefined) return root;
+  const url = req.url ?? '/';
+  const segment = url.slice(1).split(/[/?]/, 1)[0] ?? '';
+  const route = routes.get(segment);
+  if (route === undefined) return undefined;
+  const rest = url.slice(segment.length + 1);
+  req.url = rest.startsWith('/') ? rest : `/${rest}`;
+  return route;
+}
+
+function moduleHandler(options: Omit<ServeModuleOptions, 'port' | 'host'>, log: ModuleLog, publicUrl: string): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
+  const { definition, token, stateDir } = options;
+  const unavailable = (what: string) =>
+    `module ${definition.name}: ${what} is not available when the module is served as a process (protocol 2 carries files by URL and keeps no module state)`;
+  const noKv = refusingKv(`${unavailable('ctx.kv')}; set MODULE_STATE_DIR to keep it in files`);
+  return createModuleProtocolHandler({
     definition,
     log,
     files: refusingFiles(unavailable('ctx.files')),
@@ -97,7 +152,6 @@ export async function serveModule(options: ServeModuleOptions): Promise<{ port: 
     publicUrl,
     ...(token !== undefined ? { authenticate: (headers) => headers.authorization === `Bearer ${token}` } : {}),
   });
-  return { port: address.port, server };
 }
 
 /** Whether a loaded value is a module definition (its default export, or
@@ -135,9 +189,77 @@ export function parseConstructionArgs(text: string): Record<string, string> {
   return args;
 }
 
-/** The command line: `serve-module <module> [--port N] [--host H]`; PORT,
- *  MODULE_TOKEN, MODULE_BASE_URL_OVERRIDE, MODULE_STATE_DIR,
- *  MODULE_CONSTRUCTION_ARGS and MODULE_PUBLIC_URL from the environment. */
+/** A module's options from its environment: MODULE_TOKEN,
+ *  MODULE_BASE_URL_OVERRIDE, MODULE_STATE_DIR, MODULE_CONSTRUCTION_ARGS,
+ *  MODULE_PUBLIC_URL, and the host's models door (LF_HOST_URL,
+ *  LF_HOST_TOKEN). */
+function moduleOptionsOf(definition: ModuleDefinition, env: Readonly<Record<string, string | undefined>>): Omit<ServeModuleOptions, 'port' | 'host'> {
+  const set = (name: string): string | undefined => (env[name] !== undefined && env[name] !== '' ? env[name] : undefined);
+  const token = set('MODULE_TOKEN');
+  const baseUrlOverride = set('MODULE_BASE_URL_OVERRIDE');
+  const stateDir = set('MODULE_STATE_DIR');
+  const constructionArgs = set('MODULE_CONSTRUCTION_ARGS');
+  const publicUrl = set('MODULE_PUBLIC_URL');
+  const hostUrl = set('LF_HOST_URL');
+  const hostToken = set('LF_HOST_TOKEN');
+  return {
+    definition,
+    ...(token !== undefined ? { token } : {}),
+    ...(baseUrlOverride !== undefined ? { baseUrlOverride } : {}),
+    ...(stateDir !== undefined ? { stateDir } : {}),
+    ...(constructionArgs !== undefined ? { constructionArgs: parseConstructionArgs(constructionArgs) } : {}),
+    ...(publicUrl !== undefined ? { publicUrl } : {}),
+    // A host that serves the models door names itself (LF_HOST_URL) and the
+    // token its doors take from this process (LF_HOST_TOKEN).
+    ...(hostUrl !== undefined
+      ? {
+          models: hostModels({
+            url: `${hostUrl.replace(/\/$/, '')}/api/public/adapter/${moduleSlug(definition.name)}/models`,
+            headers: hostToken !== undefined ? { authorization: `Bearer ${hostToken}` } : {},
+          }),
+        }
+      : {}),
+  };
+}
+
+/** `MODULE_MOUNTS`: a JSON array of `{ path, module, cwd?, env? }` — each
+ *  module's own MODULE_* settings in `env`, over the process's. */
+export function parseMounts(text: string): { path: string; module: string; cwd?: string; env: Record<string, string> }[] {
+  const refuse = (): never => {
+    throw new Error('serve-module: MODULE_MOUNTS is a JSON array of { path, module, cwd?, env? }, e.g. [{"path":"attio","module":"@lf/attio"}]');
+  };
+  const parsed: unknown = JSON.parse(text);
+  if (!Array.isArray(parsed)) return refuse();
+  return parsed.map((entry: unknown) => {
+    if (entry === null || typeof entry !== 'object') return refuse();
+    const path: unknown = Reflect.get(entry, 'path');
+    const module: unknown = Reflect.get(entry, 'module');
+    const cwd: unknown = Reflect.get(entry, 'cwd');
+    const env: unknown = Reflect.get(entry, 'env') ?? {};
+    if (typeof path !== 'string' || typeof module !== 'string' || (cwd !== undefined && typeof cwd !== 'string')) return refuse();
+    if (env === null || typeof env !== 'object' || Array.isArray(env)) return refuse();
+    const strings: Record<string, string> = {};
+    for (const [name, value] of Object.entries(env)) strings[name] = typeof value === 'string' ? value : refuse();
+    return { path, module, ...(cwd !== undefined ? { cwd } : {}), env: strings };
+  });
+}
+
+/** With LF_EXIT_WITH_PARENT set, the process ends when its parent does:
+ *  the parent holds this process's stdin, so its end closing is the
+ *  parent gone (through any shim in between); being re-parented to init
+ *  is the same news on a parent that gave no stdin. */
+function exitWithParent(env: Readonly<Record<string, string | undefined>>): void {
+  if (env.LF_EXIT_WITH_PARENT === undefined || env.LF_EXIT_WITH_PARENT === '') return;
+  const gone = (): never => process.exit(0);
+  process.stdin.on('end', gone).on('close', gone).on('error', gone).resume();
+  setInterval(() => {
+    if (process.ppid === 1) gone();
+  }, 1000).unref();
+}
+
+/** The command line: `serve-module <module> [--port N] [--host H]`, or
+ *  `serve-module` with MODULE_MOUNTS for several modules in one process;
+ *  PORT and each module's settings (moduleOptionsOf) from the environment. */
 export async function main(argv: readonly string[], env: Readonly<Record<string, string | undefined>>): Promise<void> {
   const args = [...argv];
   const flag = (name: string): string | undefined => {
@@ -149,29 +271,17 @@ export async function main(argv: readonly string[], env: Readonly<Record<string,
   const port = flag('--port') ?? env.PORT;
   const host = flag('--host');
   const [specifier] = args;
-  if (specifier === undefined) throw new Error('usage: serve-module <module> [--port N] [--host H]');
-  const definition = loadModuleDefinition(specifier, process.cwd());
-  const served = await serveModule({
-    definition,
-    ...(port !== undefined ? { port: Number(port) } : {}),
-    ...(host !== undefined ? { host } : {}),
-    ...(env.MODULE_TOKEN !== undefined && env.MODULE_TOKEN !== '' ? { token: env.MODULE_TOKEN } : {}),
-    ...(env.MODULE_BASE_URL_OVERRIDE !== undefined && env.MODULE_BASE_URL_OVERRIDE !== '' ? { baseUrlOverride: env.MODULE_BASE_URL_OVERRIDE } : {}),
-    ...(env.MODULE_STATE_DIR !== undefined && env.MODULE_STATE_DIR !== '' ? { stateDir: env.MODULE_STATE_DIR } : {}),
-    ...(env.MODULE_CONSTRUCTION_ARGS !== undefined && env.MODULE_CONSTRUCTION_ARGS !== ''
-      ? { constructionArgs: parseConstructionArgs(env.MODULE_CONSTRUCTION_ARGS) }
-      : {}),
-    ...(env.MODULE_PUBLIC_URL !== undefined && env.MODULE_PUBLIC_URL !== '' ? { publicUrl: env.MODULE_PUBLIC_URL } : {}),
-    // A host that serves the models door names itself (LF_HOST_URL) and the
-    // token its doors take from this process (LF_HOST_TOKEN).
-    ...(env.LF_HOST_URL !== undefined && env.LF_HOST_URL !== ''
-      ? {
-          models: hostModels({
-            url: `${env.LF_HOST_URL.replace(/\/$/, '')}/api/public/adapter/${moduleSlug(definition.name)}/models`,
-            headers: env.LF_HOST_TOKEN !== undefined && env.LF_HOST_TOKEN !== '' ? { authorization: `Bearer ${env.LF_HOST_TOKEN}` } : {},
-          }),
-        }
-      : {}),
-  });
+  const mounted = env.MODULE_MOUNTS !== undefined && env.MODULE_MOUNTS !== '' ? parseMounts(env.MODULE_MOUNTS) : undefined;
+  if (specifier === undefined && mounted === undefined) throw new Error('usage: serve-module <module> [--port N] [--host H], or MODULE_MOUNTS for several');
+  if (specifier !== undefined && mounted !== undefined) throw new Error('serve-module: name one module or set MODULE_MOUNTS, not both');
+  exitWithParent(env);
+  const mounts: ModuleMount[] =
+    mounted !== undefined
+      ? mounted.map((mount) => ({
+          path: mount.path,
+          options: moduleOptionsOf(loadModuleDefinition(mount.module, mount.cwd ?? process.cwd()), { ...env, ...mount.env }),
+        }))
+      : [{ path: '', options: moduleOptionsOf(loadModuleDefinition(specifier ?? '', process.cwd()), env) }];
+  const served = await serveModules({ mounts, ...(port !== undefined ? { port: Number(port) } : {}), ...(host !== undefined ? { host } : {}) });
   process.stdout.write(`listening ${served.port}\n`);
 }

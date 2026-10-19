@@ -252,7 +252,51 @@ describe('a plugin module', () => {
   });
 });
 
+function listeningPort(child: ReturnType<typeof spawn>): Promise<number> {
+  return new Promise<number>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('no listening line in 20s')), 20_000);
+    child.once('exit', (code) => reject(new Error(`exited ${code}`)));
+    createInterface({ input: child.stdout! }).on('line', (line) => {
+      const match = /^listening (\d+)$/.exec(line);
+      if (match) {
+        clearTimeout(timer);
+        resolve(Number(match[1]));
+      }
+    });
+  });
+}
+
 describe('serve-module', () => {
+  it('serves several modules in one process, each under its own path, and ends when its parent closes its stdin', async () => {
+    const bin = join(__dirname, '../bin/serve-module.cjs');
+    const mounts = [
+      { path: 'shout', module: './__test__/modules/shout_module.ts' },
+      { path: 'tally', module: './__test__/modules/tally_module.ts' },
+    ];
+    const child = spawn(process.execPath, [bin], {
+      cwd: join(__dirname, '..'),
+      env: { ...process.env, PORT: '0', MODULE_MOUNTS: JSON.stringify(mounts), LF_EXIT_WITH_PARENT: '1' },
+      stdio: ['pipe', 'pipe', 'inherit'],
+    });
+    try {
+      const port = await listeningPort(child);
+      for (const name of ['shout', 'tally']) {
+        const manifest = await fetchRemoteManifest(
+          { adapterType: name, teamId: 't', baseUrl: `http://127.0.0.1:${port}/${name}/`, authStrategy: { kind: 'bearer' } },
+          '',
+        );
+        expect(manifest.adapterType).toBe(name);
+      }
+      const unmounted = await fetch(`http://127.0.0.1:${port}/other/`, { method: 'POST', body: '{}' });
+      expect(unmounted.status).toBe(404);
+      const exited = new Promise<number | null>((done) => child.once('exit', done));
+      child.stdin!.end();
+      expect(await exited).toBe(0);
+    } finally {
+      child.kill();
+    }
+  }, 30_000);
+
   it('serves a module file as a child process that prints the port it answers on', async () => {
     const bin = join(__dirname, '../bin/serve-module.cjs');
     const child = spawn(process.execPath, [bin, './__test__/modules/shout_module.ts'], {
