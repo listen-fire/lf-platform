@@ -288,7 +288,8 @@ impl SessionReader<'_> {
     async fn call(&self, external: &str, install: &Credential, method: &str, params: serde_json::Value) -> Result<Js, String> {
         let running = self.session.running().iter().find(|r| r.external.manifest.name == external).ok_or_else(|| format!("no external {external}"))?;
         // Signed by the install, carrying no user credential.
-        let target = Target { external: &running.external, base_url: &running.base_url, declarations: &[], methods: &running.methods, settings: &running.settings, limits: &running.limits };
+        let lease = running.reach.lease().await?;
+        let target = Target { external: &running.external, base_url: &lease.address, declarations: &[], methods: &running.methods, settings: &running.settings, limits: &running.limits };
         let sending = Sending { tenant: LOCAL_TENANT, method, cache_scope_id: "<none>", params };
         let raw = send(&target, self.session.credentials(), None, Some(install), sending).await?;
         crate::wire_results::check(method, external, &raw)

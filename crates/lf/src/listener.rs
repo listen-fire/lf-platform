@@ -98,7 +98,7 @@ pub async fn run(project: Project, ephemeral: bool, store: &StoreSpec, port: Opt
         task.abort();
         let _ = task.await;
     }
-    // The last holder: the session goes, and its externals with it.
+    // The last holder: the session goes; its module processes stop as lf exits (crate::module_hosts::stop_all).
     drop(session);
     Ok(0)
 }

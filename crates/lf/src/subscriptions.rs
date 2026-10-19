@@ -22,7 +22,7 @@ use crate::check::LOCAL_TENANT;
 use crate::json::Js;
 use crate::runs::Session;
 use crate::secret_stores::{EntryChange, change_entry};
-use crate::secrets::{Credential, credential_for};
+use crate::secrets::{Credential, Credentials, credential_for};
 
 /// The source's id for the webhook it registered.
 const WEBHOOK_ID_FIELD: &str = "webhook_id";
@@ -36,6 +36,13 @@ struct Registered {
     id: Option<String>,
     events: Vec<String>,
     url: Option<String>,
+}
+
+/// Whether `external` has a webhook registered under its credential: lf
+/// starts it then even when no movement imports it any more, so the
+/// webhook is removed.
+pub fn has_registered_webhook(credentials: &Credentials, external: &str) -> bool {
+    credential_for(credentials, external).is_some_and(|c| Registered::of(c).id.is_some())
 }
 
 impl Registered {

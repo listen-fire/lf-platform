@@ -4,18 +4,22 @@
 //! `listening <port>`. A `module` external is served by `serve-module` (the
 //! module kit's runner; `LF_SERVE_MODULE` names another command). A plugin
 //! external serves a package of plugins instead of an adapter.
+//!
+//! Only the externals the movements import are started, when first called
+//! (crate::module_hosts keeps them up while used and stops them idle); a
+//! trusted module shares one serve-module process with the others.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
 
+use movement_parser::ast::{ImportSource, Statement};
 use serde::Deserialize;
 use serde_json::json;
-use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::{Child, Command};
 
 use crate::json::{Js, Obj};
+use crate::module_hosts::{Launch, Lease, ModuleProcess, Mount};
 use crate::project::Project;
+use crate::sources::MovementFile;
 use crate::credential_calls::{Sending, Target, send};
 use crate::oauth2::{Declaration, declarations_of};
 use crate::protocol::shape_error;
@@ -83,6 +87,31 @@ pub struct ExternalManifest {
     /// come from its manifest answer).
     #[serde(default)]
     pub settings: Vec<crate::core::Setting>,
+    /// What it runs on (`node 22`): the program and its lowest major
+    /// version, refused by name when this machine lacks it. A `module`
+    /// external runs on serve-module's (MODULE_RUNTIME) unless it says.
+    pub runtime: Option<String>,
+    /// A `module` external its installer trusts: it may share the one
+    /// Node host with the first-party (`@lf/*`) modules. Anything not
+    /// trusted gets a process of its own.
+    #[serde(default)]
+    pub trusted: bool,
+}
+
+/// serve-module's runtime (module-kit's `engines`).
+pub const MODULE_RUNTIME: &str = "node 22";
+
+impl ExternalManifest {
+    /// First-party, or marked trusted in its install.
+    pub fn is_trusted(&self) -> bool {
+        self.trusted || self.module.as_deref().is_some_and(|m| m.starts_with("@lf/"))
+    }
+
+    /// The runtime lf checks before starting it: its declared one, else a
+    /// served module's.
+    pub fn runtime(&self) -> Option<&str> {
+        self.runtime.as_deref().or_else(|| self.module.as_ref().filter(|_| std::env::var_os("LF_SERVE_MODULE").is_none()).map(|_| MODULE_RUNTIME))
+    }
 }
 
 /// `webhook:` — the protocol's own scheme, keyed by one of the install's fields.
@@ -209,7 +238,8 @@ fn validate(manifest: &ExternalManifest) -> Result<(), String> {
 /// An adapter external the host can call: where it answers, and its manifest answer.
 pub struct RunningExternal {
     pub external: External,
-    pub base_url: String,
+    /// Where its calls go: a URL, or the process lf starts for it.
+    pub reach: Reach,
     pub supported_triggers: Vec<String>,
     /// What a listen on it may say (`WireListenDeclarations`), as JSON.
     pub listen: Obj,
@@ -236,8 +266,24 @@ pub struct RunningExternal {
     /// How often its manifest says to call `poll` per listen (`poll:
     /// { intervalSeconds }`); None for a source that is not polled.
     pub poll_interval_seconds: Option<u64>,
-    /// The started process; killed when this is dropped.
-    _child: Option<Child>,
+}
+
+/// How an external is reached.
+#[derive(Clone)]
+pub enum Reach {
+    /// A module that is only a manifest, or one already running: lf talks to its URL.
+    Url(String),
+    Process(ModuleProcess),
+}
+
+impl Reach {
+    /// Its address for one call, its process started when it is not up.
+    pub async fn lease(&self) -> Result<Lease, String> {
+        match self {
+            Reach::Url(url) => Ok(Lease::remote(url)),
+            Reach::Process(process) => process.lease().await,
+        }
+    }
 }
 
 impl RunningExternal {
@@ -275,9 +321,10 @@ pub fn plugin_external_for<'r>(running: &'r [RunningExternal], plugin: &str) -> 
 
 /// One call to a running external, under the credential its secrets name.
 pub async fn rpc(running: &RunningExternal, credentials: &Credentials, tenant: &str, method: &str, params: serde_json::Value) -> Result<Js, String> {
+    let lease = running.reach.lease().await?;
     let target = Target {
         external: &running.external,
-        base_url: &running.base_url,
+        base_url: &lease.address,
         declarations: &running.credential_declarations,
         methods: &running.methods,
         settings: &running.settings,
@@ -292,15 +339,60 @@ async fn call(target: &Target<'_>, credentials: &Credentials, tenant: &str, meth
     Ok(send(target, credentials, credential, signer, Sending { tenant, method, cache_scope_id: "<none>", params }).await?)
 }
 
-/// Start (or reach) every external and read its manifest.
+/// The externals the files import (`from adapters`, `from plugins`), by
+/// name or by the module they serve; an external that takes a run host
+/// unit's name always (it replaces the unit, imported or not). A plugin
+/// import no external is named for is found in a plugin external's
+/// manifest, so then every plugin external is needed. `also`: any other
+/// external the caller needs.
+pub fn needed_externals(externals: Vec<External>, files: &[MovementFile], language_version: u32, also: impl Fn(&External) -> bool) -> Vec<External> {
+    let mut imported = Vec::new();
+    for file in files {
+        let Ok(program) = crate::check::parse(&file.source, language_version) else { continue };
+        for statement in &program.statements {
+            let Statement::Import(import) = statement else { continue };
+            if let ImportSource::Builtin { namespace } = &import.source
+                && (namespace == "adapters" || namespace == "plugins")
+            {
+                imported.extend(import.names.iter().map(|n| (namespace == "plugins", n.name.clone())));
+            }
+        }
+    }
+    let names = |e: &External, name: &str| e.manifest.name == name || e.manifest.module.as_deref() == Some(name);
+    let unnamed_plugin = imported.iter().any(|(plugin, name)| *plugin && !externals.iter().any(|e| names(e, name)));
+    externals
+        .into_iter()
+        .filter(|e| {
+            movement_parser::version::RUN_HOST_UNITS.contains(&e.manifest.name.as_str())
+                || imported.iter().any(|(_, name)| names(e, name))
+                || (unnamed_plugin && e.manifest.kind == "plugin")
+                || also(e)
+        })
+        .collect()
+}
+
+/// Read every external's manifest, its process started on that first call
+/// (and its runtime checked before).
 pub async fn start_externals(project: &Project, externals: &[External], credentials: &Credentials, tenant: &str) -> Result<Vec<RunningExternal>, String> {
-    let mut running = Vec::new();
+    crate::module_hosts::configure(project.module_idle_timeout, project.call_timeout);
+    // Every process registered before any starts, so the shared host
+    // starts once with all its modules.
+    let mut reaches = Vec::new();
     for external in externals {
+        if let (Some(runtime), None) = (external.manifest.runtime(), &external.manifest.url) {
+            crate::module_hosts::check_runtime(&external.manifest.name, runtime)?;
+        }
+        let install = install_of(credentials, &external.manifest.name);
+        reaches.push(reach(project, external, install_field(install, BASE_URL_OVERRIDE_FIELD))?);
+    }
+    let mut running = Vec::new();
+    for (external, reach) in externals.iter().zip(reaches) {
         let name = &external.manifest.name;
         let install = install_of(credentials, name);
-        let (base_url, child) = reach(project, external, install_field(install, BASE_URL_OVERRIDE_FIELD)).await?;
-        let target = Target { external, base_url: &base_url, declarations: &[], methods: &[], settings: &[], limits: &[] };
+        let lease = reach.lease().await?;
+        let target = Target { external, base_url: &lease.address, declarations: &[], methods: &[], settings: &[], limits: &[] };
         let raw = call(&target, credentials, tenant, "manifest", json!({})).await?;
+        drop(lease);
         let version = raw.get("protocolVersion");
         if !matches!(version, Some(Js::Num(n)) if n.as_f64() == Some(MANIFEST_PROTOCOL_VERSION as f64)) {
             let got = version.map(Js::to_json).unwrap_or_else(|| "nothing".into());
@@ -319,7 +411,7 @@ pub async fn start_externals(project: &Project, externals: &[External], credenti
         }
         running.push(RunningExternal {
             external: external.clone(),
-            base_url,
+            reach,
             supported_triggers: manifest.supported_triggers,
             listen: manifest.listen,
             methods: manifest.methods,
@@ -332,7 +424,6 @@ pub async fn start_externals(project: &Project, externals: &[External], credenti
             manifest_answer: raw,
             inbound: manifest.inbound,
             poll_interval_seconds: manifest.poll_interval_seconds,
-            _child: child,
         });
     }
     Ok(running)
@@ -476,63 +567,45 @@ fn listen_declarations(raw: &Js) -> Result<Obj, String> {
     Ok(out)
 }
 
-async fn reach(project: &Project, external: &External, base_url_override: Option<&str>) -> Result<(String, Option<Child>), String> {
+/// How `external` is reached: its URL, or the process lf starts for it — a
+/// place in the shared host for a trusted module whose install sets only
+/// per-module settings, else a process of its own.
+fn reach(project: &Project, external: &External, base_url_override: Option<&str>) -> Result<Reach, String> {
     let name = &external.manifest.name;
     if let Some(url) = &external.manifest.url {
-        return Ok((url.clone(), None));
+        return Ok(Reach::Url(url.clone()));
     }
-    let served: Vec<String>;
-    let command_line = match &external.manifest.module {
-        Some(module) => {
-            let module = bundled_module(module).unwrap_or_else(|| module.clone());
-            served = [serve_module_command(project, name)?, vec![module]].concat();
-            Some(served.as_slice())
-        }
-        None => external.manifest.command.as_deref(),
-    };
-    let Some((command, args)) = command_line.and_then(<[String]>::split_first) else {
-        return Err(format!("external \"{name}\" has no command"));
-    };
     let state_dir = project.lf_dir.join("externals").join(name);
     std::fs::create_dir_all(&state_dir).map_err(|e| format!("{}: {e}", state_dir.display()))?;
     let lf = project.lf_dir.display().to_string();
-    let mut child = Command::new(command)
-        .args(args)
-        .current_dir(&external.dir)
-        .env_clear()
-        .env("PATH", std::env::var("PATH").unwrap_or_default())
-        .env("PORT", "0")
-        .envs(crate::serve::externals_host_url().map(|url| ("LF_HOST_URL", url)))
-        .envs(crate::serve::host_token().map(|token| ("LF_HOST_TOKEN", token)))
-        .envs(base_url_override.filter(|_| external.manifest.module.is_some()).map(|url| ("MODULE_BASE_URL_OVERRIDE", url)))
-        .envs(external.manifest.env.iter().map(|(k, v)| (k, v.replace("{lf}", &lf))))
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
-        .kill_on_drop(true)
-        .spawn()
-        .map_err(|e| format!("external \"{name}\": {command} could not be started ({e})"))?;
-    let stdout = child.stdout.take().ok_or("no stdout")?;
-    let mut lines = BufReader::new(stdout).lines();
-    let waited = project.start_timeout;
-    let port = tokio::time::timeout(waited, async {
-        while let Ok(Some(line)) = lines.next_line().await {
-            if let Some(port) = listening_port(&line) {
-                return Ok(port);
-            }
-        }
-        Err(format!("external \"{name}\" exited before listening"))
-    })
-    .await
-    .map_err(|_| {
-        format!(
-            "external \"{name}\" did not print \"listening <port>\" within {}s (lf.yaml's `startTimeout`, or --start-timeout, waits longer)",
-            waited.as_secs()
-        )
-    })??;
-    // Keep reading what it prints, so a full pipe never blocks it.
-    tokio::spawn(async move { while let Ok(Some(_)) = lines.next_line().await {} });
-    Ok((format!("http://127.0.0.1:{port}/"), Some(child)))
+    let mut own_env: BTreeMap<String, String> = external.manifest.env.iter().map(|(k, v)| (k.clone(), v.replace("{lf}", &lf))).collect();
+    if let Some(url) = base_url_override.filter(|_| external.manifest.module.is_some()) {
+        own_env.insert("MODULE_BASE_URL_OVERRIDE".into(), url.to_string());
+    }
+    let host_env: Vec<(String, String)> = [("PATH".to_string(), std::env::var("PATH").unwrap_or_default()), ("PORT".to_string(), "0".to_string())]
+        .into_iter()
+        .chain(crate::serve::externals_host_url().map(|url| ("LF_HOST_URL".to_string(), url.to_string())))
+        .chain(crate::serve::host_token().map(|token| ("LF_HOST_TOKEN".to_string(), token.to_string())))
+        .collect();
+    let launch = |command_line: &[String], dir: &Path, env: Vec<(String, String)>| -> Result<Launch, String> {
+        let (program, args) = command_line.split_first().ok_or_else(|| format!("external \"{name}\" has no command"))?;
+        Ok(Launch { program: program.clone(), args: args.to_vec(), dir: dir.to_path_buf(), env, start_timeout: project.start_timeout })
+    };
+    let Some(module) = &external.manifest.module else {
+        let command = external.manifest.command.as_deref().unwrap_or_default();
+        return Ok(Reach::Process(ModuleProcess::isolated(name, launch(command, &external.dir, [host_env, own_env.into_iter().collect()].concat())?)));
+    };
+    let module = bundled_module(module).unwrap_or_else(|| module.clone());
+    let serve = serve_module_command(project, name)?;
+    let shareable = external.manifest.is_trusted()
+        && crate::module_hosts::is_mount_path(name)
+        && own_env.keys().all(|k| crate::module_hosts::PER_MODULE_ENV.contains(&k.as_str()));
+    if shareable {
+        let mount = Mount { path: name.clone(), module, dir: external.dir.clone(), env: own_env };
+        return Ok(Reach::Process(ModuleProcess::shared(mount, launch(&serve, &project.root, host_env)?)));
+    }
+    let served = [serve, vec![module]].concat();
+    Ok(Reach::Process(ModuleProcess::isolated(name, launch(&served, &external.dir, [host_env, own_env.into_iter().collect()].concat())?)))
 }
 
 /// Where the release's built-in modules live: `LF_MODULES_DIR`, else
@@ -597,12 +670,6 @@ fn serve_module_command(project: &Project, external: &str) -> Result<Vec<String>
     ))
 }
 
-/// The port in a line `listening <port>…`.
-fn listening_port(line: &str) -> Option<u16> {
-    let digits: String = line.strip_prefix("listening ")?.chars().take_while(char::is_ascii_digit).collect();
-    digits.parse().ok()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -638,15 +705,46 @@ mod tests {
             core: crate::core::CoreChoice::default(),
             public_url: None,
             start_timeout: crate::project::DEFAULT_START_TIMEOUT,
+            module_idle_timeout: crate::module_hosts::DEFAULT_IDLE_TIMEOUT,
+            call_timeout: crate::module_hosts::DEFAULT_CALL_TIMEOUT,
             cost_cap_microdollars: None,
         }
     }
 
+    fn installed(name: &str, kind: &str, module: Option<&str>) -> External {
+        let yaml = format!("name: {name}\nkind: {kind}\n{}", module.map_or("url: http://127.0.0.1:1/\n".to_string(), |m| format!("module: \"{m}\"\n")));
+        External { dir: PathBuf::from("/x"), manifest: serde_yaml::from_str(&yaml).unwrap() }
+    }
+
     #[test]
-    fn the_port_is_read_off_the_listening_line() {
-        assert_eq!(listening_port("listening 5557"), Some(5557));
-        assert_eq!(listening_port("listening 80 on all"), Some(80));
-        assert_eq!(listening_port("ready"), None);
+    fn only_the_imported_externals_are_needed() {
+        let file = |source: &str| MovementFile { name: "m".into(), path: PathBuf::from("m.mvt"), source: source.into() };
+        let all = || {
+            vec![
+                installed("attio", "adapter", Some("@lf/attio")),
+                installed("acme_crm", "adapter", None),
+                installed("cron", "adapter", None),
+                installed("words", "plugin", Some("./words.ts")),
+                installed("pdf", "plugin", Some("@lf/pdf")),
+            ]
+        };
+        let names = |needed: Vec<External>| needed.into_iter().map(|e| e.manifest.name).collect::<Vec<_>>();
+        let attio = file("import { `@lf/attio` as attio } from adapters\n");
+        assert_eq!(names(needed_externals(all(), &[attio], 5, |_| false)), ["attio", "cron"]);
+        let by_module = file("import { `@lf/pdf` as pdf } from plugins\n");
+        assert_eq!(names(needed_externals(all(), &[by_module], 5, |_| false)), ["cron", "pdf"]);
+        // A plugin package named in no install: the plugin externals answer it.
+        let package = file("import { `@acme/words` as words } from plugins\n");
+        assert_eq!(names(needed_externals(all(), &[package], 5, |_| false)), ["cron", "words", "pdf"]);
+        assert_eq!(names(needed_externals(all(), &[], 5, |e| e.manifest.name == "acme_crm")), ["acme_crm", "cron"]);
+    }
+
+    #[test]
+    fn trust_is_first_party_or_the_installs_word() {
+        assert!(installed("attio", "adapter", Some("@lf/attio")).manifest.is_trusted());
+        assert!(!installed("words", "plugin", Some("./words.ts")).manifest.is_trusted());
+        let marked: ExternalManifest = serde_yaml::from_str("name: words\nkind: plugin\nmodule: ./words.ts\ntrusted: true\n").unwrap();
+        assert!(marked.is_trusted());
     }
 
     #[test]

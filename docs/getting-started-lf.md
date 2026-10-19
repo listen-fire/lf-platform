@@ -87,6 +87,20 @@ function report(c: <crm-[:Company]->>) {
 
 `pdf.render(text, { pageSize: "a4" | "letter", margin })` is a file (A4, 30 points of margin by default). Its writer is thin: Helvetica, no font to ship. A character outside Latin-1 (CJK, emoji) prints as `?` and the run is warned, naming `@lf/pdf`; a PDF module that embeds a font can serve the same plugin in its place.
 
+### How lf runs a module
+
+A movement imports only modules installed in `externals/`; installing is always `lf connect` (or a folder you add), never an import.
+
+**A local module runs with your permissions.** lf has no sandbox yet: a module's process can read and write what you can. Install only modules you trust.
+
+- It starts a module's process only when a run or a check needs it. A check needs one when the movement imports a live graph such as Attio's.
+- It keeps the process up while it is used, and stops it after `moduleIdleTimeout` seconds unused (in `lf.yaml`; default 300). The next call starts it again.
+- First-party `@lf/*` modules, and any whose `lf-external.yaml` says `trusted: true`, share one Node process. Every other module gets a process of its own.
+- A module that crashes starts again on its next call. A run whose call it broke fails or retries as any failed call does.
+- One call may take `callTimeout` seconds (default 600).
+- A module process exits when lf does. A process left behind by a killed lf is stopped the next time lf opens the same store.
+- `runtime: node 22` in `lf-external.yaml` says what the module runs on; a served module (`module:`) runs on node 22 unless it says otherwise. `lf check` refuses, by name, a runtime this machine lacks or has too old.
+
 ## 4. Add a credential
 
 ```

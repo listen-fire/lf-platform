@@ -7,7 +7,6 @@
 use std::collections::HashMap;
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
-use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use indexmap::IndexMap;
@@ -253,7 +252,9 @@ const CAPABILITIES: &str = r#"{
 }"#;
 
 pub async fn run(dir: &Path, out: &mut impl Write) -> Result<i32, String> {
-    let (send, messages) = mpsc::channel::<Value>();
+    // An async channel, so the module processes' tasks (their idle stops)
+    // run while the server waits for the client.
+    let (send, mut messages) = tokio::sync::mpsc::unbounded_channel::<Value>();
     std::thread::spawn(move || {
         let mut input = std::io::BufReader::new(std::io::stdin().lock());
         while let Some(message) = read_message(&mut input) {
@@ -267,14 +268,14 @@ pub async fn run(dir: &Path, out: &mut impl Write) -> Result<i32, String> {
     loop {
         let wait = server.as_ref().and_then(|s| s.due.values().min().copied()).map(|due| due.saturating_duration_since(Instant::now()));
         let message = match wait {
-            Some(wait) => match messages.recv_timeout(wait) {
-                Ok(message) => Some(message),
-                Err(mpsc::RecvTimeoutError::Timeout) => None,
-                Err(mpsc::RecvTimeoutError::Disconnected) => return Ok(if shut_down { 0 } else { 1 }),
+            Some(wait) => match tokio::time::timeout(wait, messages.recv()).await {
+                Ok(Some(message)) => Some(message),
+                Err(_) => None,
+                Ok(None) => return Ok(if shut_down { 0 } else { 1 }),
             },
-            None => match messages.recv() {
-                Ok(message) => Some(message),
-                Err(_) => return Ok(if shut_down { 0 } else { 1 }),
+            None => match messages.recv().await {
+                Some(message) => Some(message),
+                None => return Ok(if shut_down { 0 } else { 1 }),
             },
         };
         if let Some(server) = server.as_mut() {

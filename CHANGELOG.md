@@ -17,6 +17,10 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 
 - `@listen-fire/module-kit` no longer depends on `@listen-fire/engine`. What a module is written against now lives below the engine: the runtime-neutral contract in `@listen-fire/engine-contracts` (the adapter contract and its manifest, the catalog's schema types and positions, the Expression vocabulary, plugins as data, model names, the team header), and what a Node host shares with its modules in the new `@listen-fire/module-runtime` (a live adapter's file bytes as a stream, the secrets family with OAuth 2 refresh and connect, the in-memory vault, the browser slot, the queue). The engine's public entries re-export both, so existing imports keep working; module tags and type ids are unchanged.
 
+### i-procs
+
+- lf starts a module's process only when a run or check needs one (only the externals the movements import), keeps it up while used, and stops it after `moduleIdleTimeout` seconds unused (lf.yaml, default 300). A crashed module starts again on its next call; one call may take `callTimeout` seconds (default 600). First-party `@lf/*` modules and any marked `trusted: true` in their `lf-external.yaml` share one Node process (`serve-module` now serves several modules, each under its own path, with `MODULE_MOUNTS`); every other module gets its own. Module processes exit with lf, and ones a killed lf left behind are stopped on the next start (tracked in the store). `runtime: node 22` in `lf-external.yaml` is checked before a module starts (a served module defaults to node 22). A local module runs with your permissions: there is no sandbox yet.
+
 ### au-delete
 
 - The legacy v3 output pipeline is removed (its executor, per-destination adapters, authoring agent and the `knowledge.outputAgent` / `knowledge.expressionWriter` tRPC routes). It had no remaining callers; movements are the only way data moves. A migration sets any stored v3 output (`pipeline_output.config_version = 3`) still marked live or dry-run to `off`; its config is kept.
