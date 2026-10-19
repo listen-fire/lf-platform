@@ -267,13 +267,13 @@ function listeningPort(child: ReturnType<typeof spawn>): Promise<number> {
 
 describe('serve-module', () => {
   it('serves several modules in one process, each under its own path, and ends when its parent closes its stdin', async () => {
-    const bin = join(__dirname, '../bin/serve-module.cjs');
+    const bin = require.resolve('module-kit/bin/serve-module.cjs');
     const mounts = [
-      { path: 'shout', module: './__test__/modules/shout_module.ts' },
-      { path: 'tally', module: './__test__/modules/tally_module.ts' },
+      { path: 'shout', module: './modules/shout_module.ts' },
+      { path: 'tally', module: './modules/tally_module.ts' },
     ];
     const child = spawn(process.execPath, [bin], {
-      cwd: join(__dirname, '..'),
+      cwd: __dirname,
       env: { ...process.env, PORT: '0', MODULE_MOUNTS: JSON.stringify(mounts), LF_EXIT_WITH_PARENT: '1' },
       stdio: ['pipe', 'pipe', 'inherit'],
     });
