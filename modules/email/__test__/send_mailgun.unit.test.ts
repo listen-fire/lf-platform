@@ -18,7 +18,7 @@ jest.mock('mailgun.js', () => ({
 }));
 jest.mock('form-data', () => ({ __esModule: true, default: class {} }));
 
-import { OutboundMailgunAdapter } from '../mailgun.adapter';
+import { OutboundMailgunAdapter } from '../send/mailgun';
 
 const config = {
   mailgunApiKey: 'key',

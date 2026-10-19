@@ -11,13 +11,10 @@
 // through.
 
 import type { TeamId } from '../../generated/kysely/core/Team';
+import type { OutboundEmailMessager, OutboundEmailProvider, SendArgs } from '@listen-fire/email';
 
 import { getAutomationsQb } from '../../lib/kysely';
 import { logger } from 'movement-engine/public/log';
-import { OutboundEmailMessager, SendArgs } from './interface';
-
-/** Which adapter served a send — the ledger's record of who was asked. */
-type OutboundEmailProvider = 'mailgun' | 'resend' | 'fake' | 'unconfigured';
 
 async function recordSend(input: {
   args: SendArgs;
@@ -79,4 +76,4 @@ function withOutboundEmailLedger(
   };
 }
 
-export { withOutboundEmailLedger, type OutboundEmailProvider };
+export { withOutboundEmailLedger };

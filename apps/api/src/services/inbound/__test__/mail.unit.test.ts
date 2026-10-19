@@ -1,15 +1,15 @@
-// The inbound core's mail doors and shared-door admission, over an in-memory
+// The mail doors (@lf/email's) and the inbound core's shared-door admission, over an in-memory
 // store: every status a refusal earns, without a database or a directory.
 
+import { admitShared } from 'movement-engine/public/inbound';
 import {
   admitMailgunMail,
   admitResendMail,
-  admitShared,
   judgeMailgunEvent,
   parseEmailAddress,
   type InboundEmailDecision,
   type RoutableMessage,
-} from 'movement-engine/public/inbound';
+} from '@listen-fire/email';
 
 import { signMailgunPayload } from '../../../scripts/dev/lib/mailgun-sign';
 import { signResendWebhook } from '../../../scripts/dev/lib/resend-sign';

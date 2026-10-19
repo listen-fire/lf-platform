@@ -10,8 +10,7 @@
 // to anybody's inbox, and the same archive BCC is absent unless configured.
 
 import { OutboundEmailMessager, EmailRecipient, SendArgs } from './interface';
-
-const DEFAULT_API_BASE_URL = 'https://api.resend.com';
+import { DEFAULT_API_BASE_URL } from '../resend';
 
 const addressOf = (input: EmailRecipient): string =>
   input.username ? `${input.username} <${input.email}>` : input.email;
@@ -34,18 +33,22 @@ class OutboundResendAdapter implements OutboundEmailMessager {
   private apiBaseUrl: string;
   private defaultSender: EmailRecipient;
   private archiveBcc: string | undefined;
+  private fetch: typeof globalThis.fetch | undefined;
 
   constructor({
     resendApiKey,
     defaultSender,
     apiBaseUrl = DEFAULT_API_BASE_URL,
     archiveBcc,
+    fetch,
   }: {
     resendApiKey: string;
     defaultSender: EmailRecipient;
     apiBaseUrl?: string;
     /** Every outbound message is copied here when set. Absent = no BCC at all. */
     archiveBcc?: string;
+    /** The host's fetch. Default: the global one, looked up per send. */
+    fetch?: typeof globalThis.fetch;
   }) {
     if (!resendApiKey) {
       throw new Error('RESEND_API_KEY is not set');
@@ -60,6 +63,7 @@ class OutboundResendAdapter implements OutboundEmailMessager {
     this.apiBaseUrl = apiBaseUrl;
     this.defaultSender = defaultSender;
     this.archiveBcc = archiveBcc;
+    this.fetch = fetch;
   }
 
   async send({
@@ -101,7 +105,7 @@ class OutboundResendAdapter implements OutboundEmailMessager {
         : {}),
     };
 
-    const response = await fetch(`${this.apiBaseUrl}/emails`, {
+    const response = await (this.fetch ?? fetch)(`${this.apiBaseUrl}/emails`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
@@ -114,4 +118,4 @@ class OutboundResendAdapter implements OutboundEmailMessager {
   }
 }
 
-export { OutboundResendAdapter, DEFAULT_API_BASE_URL };
+export { OutboundResendAdapter };

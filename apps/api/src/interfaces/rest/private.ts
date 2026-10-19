@@ -18,7 +18,7 @@ import {
   EMAIL_RECORD_TYPE_ID,
 } from '../../services/translation_graph/adapters/email';
 import { fetchResendEmailPayload } from '../../services/translation_graph/adapters/email/resend_inbound';
-import { readMailgunMessage, readResendEnvelope, resendEnvelopeRecipients } from 'movement-engine/public/inbound';
+import { readMailgunMessage, readResendEnvelope, resendEnvelopeRecipients } from '@listen-fire/email';
 import { resolveActingUser } from '../../services/translation_graph/adapters/acting_user/resolve';
 
 /**

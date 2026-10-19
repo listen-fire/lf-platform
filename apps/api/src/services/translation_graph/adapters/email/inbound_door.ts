@@ -32,16 +32,15 @@
 // shape and signature scheme are entirely different, routes through the same
 // three questions once its own door has believed it.
 
-import type { InboundEmailDecision, MailgunStore, RoutableMessage } from 'movement-engine/public/inbound';
+import type { InboundEmailDecision, MailgunStore, RoutableMessage } from '@listen-fire/email';
 
-import { admitMailgunMail } from 'movement-engine/public/inbound';
+import { admitMailgunMail, routingKeyFrom } from '@listen-fire/email';
 
 import { getAutomationsQb } from '../../../../lib/kysely';
 import { logger } from 'movement-engine/public/log';
 import { sendSlackNotification } from '../../../../lib/slack';
 import { findTriggerByInboundKey } from '../../storage/tg_table';
 import { principalDirectory } from '../../../principal';
-import { routingKeyFrom } from './address';
 
 /** The trigger kinds an inbound email may dispatch. */
 const INBOUND_EMAIL_TRIGGER_KINDS = ['CUSTOM_EMAIL', 'MAILGUN', 'INBOUND_EMAIL'];
@@ -51,7 +50,7 @@ function str(value: unknown): string | undefined {
 }
 
 /** The routing key on the deployment's own inbound address, if a recipient
- *  carries one. The address itself is configuration (`address.ts`). */
+ *  carries one. The address itself is configuration (@lf/email's `address.ts`). */
 function inboundKeyFrom(recipients: string[]): string | null {
   return routingKeyFrom(recipients);
 }

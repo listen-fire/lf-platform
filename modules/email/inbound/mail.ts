@@ -3,17 +3,18 @@
 //
 // The host owns the two things that are not about the wire: where the signing
 // key comes from (an environment rule), and whose team a believed message is
-// for (a database and a directory). Everything between is here, so any host
-// that serves these doors answers the same status for the same delivery.
+// for (a database and a directory). Everything between is here, in the email
+// module, so any host that serves these doors answers the same status for the
+// same delivery.
 //
 // Every refusal is final — a bad signature never becomes good — so none of
 // them answers with a code the provider would retry.
 
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-import type { InboundHeaders } from './verify';
+import type { InboundHeaders } from 'movement-engine/public/inbound';
 
-import { logger } from '../logger';
+import { logger } from 'movement-engine/public/log';
 import { verifySvixSignature } from './svix';
 
 export * from './svix';

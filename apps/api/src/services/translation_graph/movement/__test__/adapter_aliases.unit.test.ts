@@ -10,7 +10,7 @@
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 
 import { getAdapter, resolveAdapterSlug } from '../../adapters/registry';
-import { EMAIL_ADAPTER_NAMES, EmailAdapter } from '../../adapters/email';
+import { EMAIL_ADAPTER_NAMES, EMAIL_ADAPTER_TYPE } from '../../adapters/email';
 import { staticCatalogFromManifests } from '../catalog';
 
 const TEAM = 'team-1' as TeamId;
@@ -28,7 +28,8 @@ describe('the names inbound mail answers to', () => {
   });
 
   it.each([...EMAIL_ADAPTER_NAMES])('the runtime builds the email adapter for %s', (name) => {
-    expect(getAdapter({ adapterType: name, teamId: TEAM })).toBeInstanceOf(EmailAdapter);
+    // The email module's adapter, wrapped by its line: known by its type.
+    expect(getAdapter({ adapterType: name, teamId: TEAM }).adapterType).toBe(EMAIL_ADAPTER_TYPE);
   });
 
   it('resolves the provider names to the one canonical slug', () => {

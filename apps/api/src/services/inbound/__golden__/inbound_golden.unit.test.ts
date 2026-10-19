@@ -86,8 +86,8 @@ jest.mock('../../translation_graph/adapters/email/inbound_door', () => {
   const actual = jest.requireActual('../../translation_graph/adapters/email/inbound_door');
   return require('./fakes').inboundDoorFake(actual);
 });
-jest.mock('../../translation_graph/adapters/email/resend', () => {
-  const actual = jest.requireActual('../../translation_graph/adapters/email/resend');
+jest.mock('@listen-fire/email/resend', () => {
+  const actual = jest.requireActual('@listen-fire/email/resend');
   return require('./fakes').resendApiFake(actual);
 });
 jest.mock('../../principal', () => {

@@ -103,9 +103,10 @@ const ADAPTER_FACTORIES: Record<string, AdapterFactory> = {
   // Email adapter — source-only inbound email (body + attachments as
   // Resources). R4b landed unregistered so the wave-1a sub-wave could
   // touch the registry without collisions; G1 wires it in.
-  // The createEmailAdapter factory ignores `credentialsId` — there are
-  // no per-team email credentials in this build.
-  [EMAIL_ADAPTER_TYPE]: ({ teamId }) => createEmailAdapter({ teamId }),
+  // No per-team email credential: the platform's provider keys are its
+  // environment. A module (@lf/email); its BUILTIN_MODULES line picks module
+  // or legacy.
+  [EMAIL_ADAPTER_TYPE]: builtinAdapterFactory(EMAIL_ADAPTER_TYPE, ({ teamId }) => createEmailAdapter({ teamId })),
   // WhatsApp adapter — source-only inbound WhatsApp messages (body + media
   // as Resources). The phone-based twin of the email adapter. The factory
   // ignores `credentialsId` — there are no per-team WhatsApp credentials in

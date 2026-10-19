@@ -1,30 +1,14 @@
-// What it takes to turn a Resend delivery into the same email every other part
-// of the system already understands.
-//
-// Resend's webhook is a notification, not a message: `email.received` carries
-// ids and an envelope and nothing an author can read. Believing the delivery
-// (a Svix signature over the exact bytes) is the inbound core's
-// (`admitResendMail`); this file is the second step the Mailgun path never
-// had — going and FETCHING the message.
-//
-// Neither decides anything about routing. Whose team the mail is for and which
-// trigger answers for it are the same three questions Mailgun's door asks, and
-// they are asked in the same place (`routeInboundEmail`), because a message
-// routing differently depending on who carried it would be a bug nobody would
-// find.
+// The Resend door's platform half: the webhook secret and the router the
+// module's admission (`admitResendMail`) is handed, and the Resend API the
+// handler fetches the message through. Both are the platform's environment;
+// what a delivery and a message ARE is the module's (@lf/email).
 
 import type { Request } from 'express';
-import type { InboundEmailDecision, ResendStore } from 'movement-engine/public/inbound';
+import type { InboundEmailDecision, ResendStore } from '@listen-fire/email';
 
-import { admitResendMail } from 'movement-engine/public/inbound';
+import { DEFAULT_API_BASE_URL, admitResendMail, fetchResendEmailPayload as fetchWith } from '@listen-fire/email';
+import { getEnvVar } from '../../../../lib/utils/environment';
 import { routeInboundEmail } from './inbound_door';
-import type { EmailAttachment, EmailPayload } from './index';
-import {
-  fetchReceivedEmail,
-  listReceivedAttachments,
-  resendAttachmentHandle,
-  type ResendReceivedEmail,
-} from './resend';
 
 const resendMailStore: ResendStore = {
   route: routeInboundEmail,
@@ -41,60 +25,14 @@ function verifyResendInboundRequest(req: Request): Promise<InboundEmailDecision>
   });
 }
 
-// ── The message itself ─────────────────────────────────────────────────────
-
-/**
- * Fetch the message behind a delivery and shape it the way every email in the
- * system is shaped.
- *
- * Headers are also spread as flat top-level keys because that is where the
- * acting-user chain looks for the forwarding headers (`X-Forwarded-For`,
- * `Delivered-To`, …) — Mailgun sends them flat, Resend sends them in an
- * object, and the chain should not have to know which.
- */
-async function fetchResendEmailPayload(
-  emailId: string,
-): Promise<Record<string, unknown>> {
-  const email = await fetchReceivedEmail(emailId);
-  const attachments = await resendAttachments(emailId, email);
-
-  const recipient = email.received_for?.[0] ?? email.to?.[0] ?? '';
-  const payload: EmailPayload = {
-    messageId: email.message_id ?? emailId,
-    subject: email.subject ?? '',
-    sender: email.from ?? '',
-    recipient,
-    ...(email.html ? { bodyHtml: email.html } : {}),
-    ...(email.text ? { bodyText: email.text } : {}),
-    attachments,
-  };
-  return { ...(email.headers ?? {}), ...payload };
-}
-
-/**
- * The attachment list, with a handle that will still resolve tomorrow.
- *
- * The message's own `attachments` are used only as a fallback for their
- * metadata: the listing endpoint is the one that knows sizes, and neither
- * carries bytes.
- */
-async function resendAttachments(
-  emailId: string,
-  email: ResendReceivedEmail,
-): Promise<EmailAttachment[]> {
-  const listed = await listReceivedAttachments(emailId);
-  const source = listed.length > 0 ? listed : (email.attachments ?? []);
-  return source.flatMap((attachment): EmailAttachment[] => {
-    if (typeof attachment.id !== 'string' || typeof attachment.filename !== 'string') return [];
-    return [
-      {
-        key: resendAttachmentHandle(emailId, attachment.id),
-        filename: attachment.filename,
-        contentType: attachment.content_type ?? 'application/octet-stream',
-        ...(typeof attachment.size === 'number' ? { size: attachment.size } : {}),
-      },
-    ];
+/** The message behind a delivery, through the platform's Resend account. */
+function fetchResendEmailPayload(emailId: string): Promise<Record<string, unknown>> {
+  const apiKey = getEnvVar('RESEND_API_KEY', {
+    devDefault: 'fake_resend_key',
+    because: 'inbound Resend mail carries only ids — the body and the attachments are fetched with it',
   });
+  const baseUrl = process.env.RESEND_API_BASE_URL ?? DEFAULT_API_BASE_URL;
+  return fetchWith({ apiKey, baseUrl, fetch: (input, init) => fetch(input, init) }, emailId);
 }
 
 export { fetchResendEmailPayload, verifyResendInboundRequest };

@@ -17,24 +17,64 @@
 // bytes are served by the provider the HANDLE names, not by the configured
 // one. Silent 401s on old attachments is exactly what the old
 // `endsWith('mailgun.net')` special-case produced when anything else appeared.
+//
+// The keys and the domain are the host's to hand over (`EmailProviderAccess`):
+// the platform's from its environment, a module host's from the install's
+// credential.
 
+import { Readable } from 'node:stream';
+
+import type { ReadableStream as WebReadableStream } from 'node:stream/web';
 import type { ResolveFileRefResult } from 'movement-engine/public/adapter';
 
-import { fetchUrlToStream } from '../../engine/files/fetch-stream';
-import { getEnvVar } from '../../../../lib/utils/environment';
-import { mintAttachmentDownloadUrl, parseResendAttachmentHandle } from './resend';
+import { describeError } from 'movement-engine/public/errors';
 import { FileOutsideTeamError } from 'movement-engine/public/files';
+import { DEFAULT_API_BASE_URL, mintAttachmentDownloadUrl, parseResendAttachmentHandle } from './resend';
 
 type EmailProviderSlug = 'mailgun' | 'resend';
 
+/** What reaching the providers takes, for one call: the email credential's
+ *  fields, and the host's fetch. A provider whose key is absent refuses by
+ *  name when it is needed, never sooner. */
+interface EmailProviderAccess {
+  fetch: typeof fetch;
+  resendApiKey?: string;
+  /** Default: Resend's production API. */
+  resendBaseUrl?: string;
+  mailgunApiKey?: string;
+  /** The verified Mailgun domain; a storage URL under any other is refused. */
+  mailgunSendingDomain?: string;
+}
+
 interface EmailProvider {
   readonly slug: EmailProviderSlug;
-  /** Where this provider's inbound deliveries land. */
+  /** Where this provider's inbound deliveries land on the platform. */
   readonly callbackPath: string;
   /** Whether a stored attachment handle is one this provider minted. */
   owns(handle: string): boolean;
   /** The bytes behind one of its handles. */
-  fetchAttachment(handle: string): Promise<ResolveFileRefResult>;
+  fetchAttachment(handle: string, access: EmailProviderAccess): Promise<ResolveFileRefResult>;
+}
+
+/** `url`'s body as a Node `Readable`, the shape `resolveFileRef` returns.
+ *  Throws on a non-2xx: a failed fetch is a failed redemption. */
+async function fetchToStream(access: EmailProviderAccess, url: string, init?: RequestInit): Promise<ResolveFileRefResult> {
+  let res: Response;
+  try {
+    res = await access.fetch(url, init);
+  } catch (err) {
+    throw new Error(`fetchUrlToStream: fetch of "${url}" failed — ${describeError(err)}`);
+  }
+  if (!res.ok || !res.body) {
+    throw new Error(`fetchUrlToStream: fetch of "${url}" failed (status ${res.status}).`);
+  }
+  const lengthHeader = res.headers.get('content-length');
+  const size = lengthHeader ? Number(lengthHeader) : undefined;
+  return {
+    stream: Readable.fromWeb(res.body as unknown as WebReadableStream),
+    contentType: res.headers.get('content-type') ?? undefined,
+    size: size != null && Number.isFinite(size) ? size : undefined,
+  };
 }
 
 /** `mailgun.net` or a host under it (a bare `endsWith` also took `evilmailgun.net`). */
@@ -49,11 +89,8 @@ function isMailgunHost(hostname: string): boolean {
  * mailgun.net host, which is the shape Mailgun's storage URLs have. Unset
  * domain means no URL qualifies, so the key is never sent.
  */
-function isConfiguredMailgunStorageUrl(
-  handle: string,
-  env: NodeJS.ProcessEnv = process.env,
-): boolean {
-  const domain = env.MAILGUN_SENDING_DOMAIN?.trim().toLowerCase();
+function isConfiguredMailgunStorageUrl(handle: string, sendingDomain: string | undefined): boolean {
+  const domain = sendingDomain?.trim().toLowerCase();
   if (domain === undefined || domain === '') return false;
   try {
     const url = new URL(handle);
@@ -88,18 +125,21 @@ const MAILGUN_PROVIDER: EmailProvider = {
       return false;
     }
   },
-  async fetchAttachment(handle) {
+  async fetchAttachment(handle, access) {
     // The deployment holds ONE Mailgun key, which reads any domain's storage
     // on Mailgun's side, so the key goes only to a URL under the domain this
     // deployment is configured for. Another team's unguessable URL on the
     // same host is refused, not fetched.
-    if (!isConfiguredMailgunStorageUrl(handle)) {
+    if (!isConfiguredMailgunStorageUrl(handle, access.mailgunSendingDomain)) {
       throw new Error(
         'Refusing to fetch a Mailgun attachment outside this deployment\'s configured Mailgun domain (MAILGUN_SENDING_DOMAIN)',
       );
     }
-    const key = getEnvVar('MAILGUN_API_KEY', { devDefault: 'fake_mailgun_key' });
-    return fetchUrlToStream(handle, {
+    const key = access.mailgunApiKey;
+    if (key === undefined || key === '') {
+      throw new Error('email: there is no Mailgun API key (mailgunApiKey) to fetch a Mailgun attachment with');
+    }
+    return fetchToStream(access, handle, {
       headers: { Authorization: `Basic ${Buffer.from(`api:${key}`).toString('base64')}` },
     });
   },
@@ -116,12 +156,19 @@ const RESEND_PROVIDER: EmailProvider = {
   owns(handle) {
     return parseResendAttachmentHandle(handle) !== null;
   },
-  async fetchAttachment(handle) {
+  async fetchAttachment(handle, access) {
     const ref = parseResendAttachmentHandle(handle);
     if (ref === null) {
       throw new Error(`Not a Resend attachment handle: ${handle}`);
     }
-    return fetchUrlToStream(await mintAttachmentDownloadUrl(ref));
+    const apiKey = access.resendApiKey;
+    if (apiKey === undefined || apiKey === '') {
+      throw new Error(
+        'email: there is no Resend API key (resendApiKey) — inbound Resend mail carries only ids, and its attachments are fetched with it',
+      );
+    }
+    const api = { apiKey, baseUrl: access.resendBaseUrl ?? DEFAULT_API_BASE_URL, fetch: access.fetch };
+    return fetchToStream(access, await mintAttachmentDownloadUrl(api, ref));
   },
 };
 
@@ -151,9 +198,9 @@ function emailProvidersOverlap(env: NodeJS.ProcessEnv = process.env): boolean {
  * (`resendAttachmentHandle`) — so a handle no provider claims was not issued
  * to this adapter, and is refused by name, never fetched.
  */
-async function fetchEmailAttachment(handle: string): Promise<ResolveFileRefResult> {
+async function fetchEmailAttachment(handle: string, access: EmailProviderAccess): Promise<ResolveFileRefResult> {
   const owner = EMAIL_PROVIDERS.find((provider) => provider.owns(handle));
-  if (owner !== undefined) return owner.fetchAttachment(handle);
+  if (owner !== undefined) return owner.fetchAttachment(handle, access);
   throw new FileOutsideTeamError('handle', 'email');
 }
 
@@ -165,5 +212,6 @@ export {
   fetchEmailAttachment,
   resolveEmailProvider,
   type EmailProvider,
+  type EmailProviderAccess,
   type EmailProviderSlug,
 };
