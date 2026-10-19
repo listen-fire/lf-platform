@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import * as db from '@prisma/client';
 
 import { requireEnv } from '../lib/utils/environment';
+import { poolSettings, withPrismaPoolMax } from './pool_settings';
 
 requireEnv('NODE_ENV');
 if (process.env.NODE_ENV === 'test') {
@@ -29,12 +30,12 @@ function getDatabaseUrl(readonly = false) {
 const log: db.Prisma.LogLevel[] | undefined = undefined;
 
 const prismaClient = new db.PrismaClient({
-  datasources: { db: { url: getDatabaseUrl().url } },
+  datasources: { db: { url: withPrismaPoolMax(getDatabaseUrl().url, poolSettings.prismaMax) } },
   log,
 });
 
 const prismaReadonlyClient = new db.PrismaClient({
-  datasources: { db: { url: getDatabaseUrl(true).url } },
+  datasources: { db: { url: withPrismaPoolMax(getDatabaseUrl(true).url, poolSettings.prismaMax) } },
   log,
 });
 

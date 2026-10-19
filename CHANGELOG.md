@@ -13,6 +13,11 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 
 ## [Unreleased]
 
+### s-logs
+
+- Set `LOG_FORMAT=json` to log one JSON object per line with a Cloud Logging `severity` (`DEBUG`/`INFO`/`WARNING`/`ERROR`/`CRITICAL`), `message`, `timestamp` and `contextId`. The default is unchanged. Boot refuses any other value.
+- New optional database pool settings for small Cloud SQL instances: `PRISMA_POOL_MAX`, `KYSELY_POOL_MAX` and `KYSELY_POOL_IDLE_TIMEOUT_MS`. Unset keeps today's pool sizes. Boot refuses a value that is not a whole number in range. See `deploy/SELF_HOSTING.md`.
+
 ## [0.12.0-rc.2] - 2026-10-19 (pre-release)
 
 This is a pre-release for trying out, not the full 0.11.0 line's replacement: container images are

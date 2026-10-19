@@ -2,22 +2,14 @@ import winston from 'winston';
 import stringify from 'safe-stable-stringify';
 
 import { currentContextId } from './context/current_id';
+import { errorAwareReplacer, jsonLogLine, logFormatFromEnv } from './log_format';
 
 const isDev = process.env.NODE_ENV === 'development';
 const level = isDev ? 'debug' : 'info';
+const logFormat = logFormatFromEnv(process.env);
+const jsonLogsEnabled = logFormat === 'json';
 
-const replacer = (_: string, value: unknown) => {
-  if (value instanceof Error) {
-    return {
-      ...value,
-      message: value.message,
-      stack: value.stack,
-      // @ts-ignore
-      trace: value.trace,
-    };
-  }
-  return value;
-};
+const replacer = errorAwareReplacer;
 
 // Drop-in replacement for winston.format.simple() (see logform's simple.js) that
 // stringifies the rest-metadata with `replacer` so Error values in metadata
@@ -32,7 +24,24 @@ const simple = () =>
       : `${info.level}:${padding} ${info.message}`;
   });
 
-const format = isDev
+// One JSON object per line, for log collectors that read `severity` (Cloud
+// Logging). The request context id becomes its own field rather than a
+// message prefix, and nothing is coloured.
+const jsonFormat = winston.format.printf((info) => {
+  const { level: _level, message, splat: _splat, timestamp: _timestamp, ...meta } = info;
+  const ctxId = currentContextId();
+  return jsonLogLine({
+    level: String(info[Symbol.for('level')] ?? info.level),
+    message,
+    timestamp: new Date(),
+    contextId: ctxId,
+    meta,
+  });
+});
+
+const format = jsonLogsEnabled
+  ? jsonFormat
+  : isDev
   ? winston.format.combine(
       winston.format.colorize(),
       winston.format((info) => {
@@ -71,4 +80,4 @@ const logger = winston.createLogger({
   format,
 });
 
-export { logger };
+export { logger, jsonLogsEnabled };
