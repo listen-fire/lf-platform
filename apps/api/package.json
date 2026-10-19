@@ -232,6 +232,7 @@
     "image-providers": "workspace:@listen-fire/image-providers@*",
     "transcription-providers": "workspace:@listen-fire/transcription-providers@*",
     "module-kit": "workspace:@listen-fire/module-kit@*",
+    "module-runtime": "workspace:@listen-fire/module-runtime@*",
     "movement-engine": "workspace:@listen-fire/engine@*",
     "movement-lang": "workspace:@listen-fire/movement-lang@*",
     "mustache": "4.2.0",

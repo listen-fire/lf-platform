@@ -418,6 +418,9 @@ importers:
       module-kit:
         specifier: workspace:@listen-fire/module-kit@*
         version: link:../../packages/module-kit
+      module-runtime:
+        specifier: workspace:@listen-fire/module-runtime@*
+        version: link:../../packages/module-runtime
       movement-engine:
         specifier: workspace:@listen-fire/engine@*
         version: link:../../packages/movement-engine
@@ -1943,6 +1946,9 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: 3.649.0
         version: 3.649.0
+      '@listen-fire/module-runtime':
+        specifier: workspace:^
+        version: link:../module-runtime
     devDependencies:
       '@types/jest':
         specifier: 29.5.14
@@ -1950,6 +1956,9 @@ importers:
       '@types/node':
         specifier: 20.16.5
         version: 20.16.5
+      module-runtime:
+        specifier: workspace:@listen-fire/module-runtime@*
+        version: link:../module-runtime
       typescript:
         specifier: 5.5.4
         version: 5.5.4
