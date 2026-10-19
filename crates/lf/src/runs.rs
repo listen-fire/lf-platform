@@ -30,7 +30,7 @@ use crate::segment::{Ended, Entry, Ran, SegmentHost, SegmentHostParts, SegmentIn
 use crate::sources::{MovementFile, scan_movements};
 use crate::backend::{RunHostStore, StoreSpec, open_store};
 use crate::store::{ClaimDue, iso};
-use crate::wire_results;
+use module_wire::results as wire_results;
 
 /// A polled listen's row in the work queue: its next poll.
 const POLL_WORK_KIND: &str = "poll_listen";

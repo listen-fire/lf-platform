@@ -1,4 +1,4 @@
-//! Every protocol result an external answers, validated as the TypeScript
+//! Every protocol result a module answers, validated as the TypeScript
 //! client validates it (`parseWireResult` over `METHODS[method].result`,
 //! packages/engine-contracts/protocol.ts): a process module's answer is a
 //! safety boundary, so the check is always on. A schema here is a port of
@@ -9,7 +9,7 @@
 //! back, then the first issue and its path.
 
 use crate::json::{Js, Obj};
-use crate::protocol::received;
+use crate::envelope::received;
 
 #[derive(Clone)]
 enum S {

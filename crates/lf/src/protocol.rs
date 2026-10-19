@@ -19,12 +19,7 @@ use serde_json::json;
 use crate::json::Js;
 use tokio::net::TcpStream;
 
-pub const PROTOCOL_VERSION: &str = "2";
-/// The header naming the calling team (`ADAPTER_TEAM_HEADER`).
-pub const ADAPTER_TEAM_HEADER: &str = "x-listen-fire-team";
-/// The error code a module answers when the provider refused the request's
-/// credential (`CREDENTIAL_REFUSED_CODE`): refreshed and retried once.
-pub const CREDENTIAL_REFUSED_CODE: &str = "credential_refused";
+pub use module_wire::envelope::{ADAPTER_TEAM_HEADER, CREDENTIAL_REFUSED_CODE, PROTOCOL_VERSION, shape_error};
 
 /// What a request carries beside its params: the one credential the
 /// connection names, and the install's settings.
@@ -232,23 +227,6 @@ async fn post(call: Call<'_>, carried: Carried, beside: &mut Beside) -> Result<J
         }
         _ => Err(RpcError::Shape(shape_error(call.method, call.base_url, &envelope, "ok: expected true or false"))),
     }
-}
-
-/// What came back, as `RemoteResponseShapeError` describes it.
-pub fn received(value: &Js) -> String {
-    match value {
-        Js::Arr(items) => format!("received an array ({} item{})", items.len(), if items.len() == 1 { "" } else { "s" }),
-        Js::Null => "received null".into(),
-        Js::Obj(map) => format!("received an object with keys [{}]", map.keys().cloned().collect::<Vec<_>>().join(", ")),
-        Js::Bool(_) => "received boolean".into(),
-        Js::Num(_) => "received number".into(),
-        Js::Str(_) => "received string".into(),
-    }
-}
-
-/// `RemoteResponseShapeError`'s wording: what came back, and what was expected.
-pub fn shape_error(method: &str, adapter: &str, received_value: &Js, expected: &str) -> String {
-    format!("Remote adapter \"{adapter}\" returned an unexpected shape from \"{method}\": {}. {expected}", received(received_value))
 }
 
 #[cfg(test)]

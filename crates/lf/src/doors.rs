@@ -291,7 +291,7 @@ impl SessionReader<'_> {
         let target = Target { external: &running.external, base_url: &running.base_url, declarations: &[], methods: &running.methods, settings: &running.settings, limits: &running.limits };
         let sending = Sending { tenant: LOCAL_TENANT, method, cache_scope_id: "<none>", params };
         let raw = send(&target, self.session.credentials(), None, Some(install), sending).await?;
-        crate::wire_results::check(method, external, &raw)
+        module_wire::results::check(method, external, &raw)
     }
 
     fn lists(&self, external: &str, method: &str) -> bool {

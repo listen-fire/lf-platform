@@ -112,7 +112,7 @@ async fn reconcile_one(session: &Session, name: &str) -> Result<Option<(String, 
     let secret_field = setup.secret_field;
     let call = |method: &'static str, params: serde_json::Value| async move {
         let raw = rpc(running, session.credentials(), LOCAL_TENANT, method, params).await?;
-        crate::wire_results::check(method, name, &raw)
+        module_wire::results::check(method, name, &raw)
     };
 
     if wanted.is_empty() {
