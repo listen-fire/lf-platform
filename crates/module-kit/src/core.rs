@@ -209,6 +209,14 @@ pub struct Checkpoint {
     pub checkpoint: Js,
 }
 
+/// The module processes the hosts on this store started, at the version a
+/// `processes.swap` writes over (0: never written).
+#[derive(Debug, Clone, Serialize)]
+pub struct ModuleProcesses {
+    pub processes: Js,
+    pub version: i64,
+}
+
 slot! {
     /// The store slot: a host's run state (runs, parks, joins, await
     /// correlations, leases, the work queue, library sources, callbacks,
@@ -273,6 +281,12 @@ slot! {
         "callbacks.revokeRun" => fn revoke_run_callbacks(CallbacksRevokeRun { run_id: String }) -> ();
         "inbound.checkpoint" => fn inbound_checkpoint(InboundCheckpoint { subscription_id: String }) -> Option<Checkpoint>;
         "inbound.saveCheckpoint" => fn save_inbound_checkpoint(InboundSaveCheckpoint { subscription_id: String, checkpoint: Js }) -> ();
+        /// The module processes the hosts on this store started (so the next
+        /// stops what a killed one left), with the list's version.
+        "processes.list" => fn module_processes(ProcessesList {}) -> ModuleProcesses;
+        /// Write `processes` only if the list is still at `version` (it moves
+        /// to `version + 1`); `true` when it wrote.
+        "processes.swap" => fn swap_module_processes(ProcessesSwap { version: i64, processes: Js }) -> bool;
         /// `true` the first time this event key reaches this listen; `false`
         /// for a redelivery, which runs nothing.
         "events.claim" => fn claim_event(EventsClaim { listen: String, key: String }) -> bool;

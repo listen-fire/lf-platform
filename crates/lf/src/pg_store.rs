@@ -118,8 +118,11 @@ pub(crate) fn block_on<F: Future>(future: F) -> F::Output {
 
 /// The store's own schema, in order. Each runs once, in its own
 /// transaction, under an advisory lock so two setups never race; the
-/// applied ones are recorded in `lf.schema_migration`.
-const MIGRATIONS: &[(i32, &str)] = &[(1, include_str!("pg_store_schema_1.sql")), (2, include_str!("pg_store_schema_2.sql"))];
+/// applied ones are recorded in `lf.schema_migration`. Version 3 is retired,
+/// never to be reused: it made `lf.write_echo`, which moved to the loop
+/// guard, and databases that applied it record it as done.
+const MIGRATIONS: &[(i32, &str)] =
+    &[(1, include_str!("pg_store_schema_1.sql")), (2, include_str!("pg_store_schema_2.sql")), (4, include_str!("pg_store_schema_4.sql"))];
 
 /// The advisory lock the migrations run under: "lf-store" as a number.
 const MIGRATION_LOCK: i64 = 0x6c66_2d73_746f_7265;
@@ -997,6 +1000,29 @@ impl RunHostStore for PgStore {
             &[&self.tenant, &subscription_id, &text],
         )?;
         Ok(())
+    }
+
+    fn module_processes(&self) -> Result<crate::backend::ModuleProcesses> {
+        let row = self.query_opt("select processes::text, version from lf.module_processes where team_id = $1::text::uuid", &[&self.tenant])?;
+        Ok(match row {
+            None => crate::backend::ModuleProcesses { processes: Js::Arr(Vec::new()), version: 0 },
+            Some(row) => crate::backend::ModuleProcesses { processes: parse_text(row.get(0))?, version: row.get(1) },
+        })
+    }
+    fn swap_module_processes(&self, version: i64, processes: &Js) -> Result<bool> {
+        let text = processes.to_json();
+        let written = if version == 0 {
+            self.execute(
+                "insert into lf.module_processes (team_id, processes, version) values ($1::text::uuid, $2::text::jsonb, 1) on conflict (team_id) do nothing",
+                &[&self.tenant, &text],
+            )?
+        } else {
+            self.execute(
+                "update lf.module_processes set processes = $2::text::jsonb, version = version + 1, updated_at = now() where team_id = $1::text::uuid and version = $3",
+                &[&self.tenant, &text, &version],
+            )?
+        };
+        Ok(written == 1)
     }
 
     fn claim_event(&self, listen: &str, key: &str) -> Result<bool> {

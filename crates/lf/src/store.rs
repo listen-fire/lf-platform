@@ -105,6 +105,11 @@ create table if not exists inbound_checkpoint (
   subscription_id text primary key,
   checkpoint text not null
 );
+create table if not exists module_processes (
+  id integer primary key check (id = 1),
+  processes text not null,
+  version integer not null
+);
 create table if not exists event_receipt (
   listen text not null,
   key text not null,

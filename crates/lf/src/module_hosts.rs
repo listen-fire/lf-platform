@@ -180,6 +180,7 @@ impl ModuleProcess {
     /// after a crash, an idle stop, or a mount it lacks), and kept from an
     /// idle stop until the lease is dropped.
     pub async fn lease(&self) -> Result<Lease, String> {
+        list_unlisted();
         let _starting = self.host.starting.lock().await;
         let launch = {
             let mut state = lock(&self.host.state);
@@ -476,12 +477,13 @@ fn leading_number(text: &str) -> Option<u64> {
 
 // --- Leftovers, tracked through the store slot --------------------------
 
-/// The store row the started processes are listed in.
-const PROCESSES_KEY: &str = "lf:module-processes";
-
 thread_local! {
     static TRACKER: RefCell<Option<Rc<dyn RunHostStore>>> = const { RefCell::new(None) };
 }
+
+/// Processes started on a thread that holds no store (a slot client's), to
+/// be listed by the next call on the thread that does.
+static UNLISTED: Mutex<Vec<Record>> = Mutex::new(Vec::new());
 
 #[derive(Clone, Debug, PartialEq)]
 struct Record {
@@ -509,16 +511,23 @@ impl Record {
     }
 }
 
-fn records(store: &dyn RunHostStore) -> Vec<Record> {
-    let row = store.inbound_checkpoint(PROCESSES_KEY).ok().flatten();
-    row.as_ref().and_then(|r| r.get("processes")).and_then(Js::as_array).into_iter().flatten().filter_map(Record::of).collect()
-}
+/// How often a change to the list is tried again when another lf changed it
+/// between this one's read and its write.
+const SWAP_ATTEMPTS: usize = 8;
 
-fn save(store: &dyn RunHostStore, kept: &[Record]) {
-    let row = Js::Obj(crate::obj! { "processes" => Js::Arr(kept.iter().map(Record::to_js).collect()) });
-    if let Err(e) = store.save_inbound_checkpoint(PROCESSES_KEY, &row) {
-        eprintln!("lf: the store did not keep the module process list ({e})");
+/// Change the store's list by `edit`, by compare-and-set: read it at its
+/// version, write the edit over that version, and read again when another lf
+/// wrote first. The edit is applied to the list as it was when the write won.
+fn change_list(store: &dyn RunHostStore, edit: impl Fn(Vec<Record>) -> Vec<Record>) -> Result<Vec<Record>, String> {
+    for _ in 0..SWAP_ATTEMPTS {
+        let list = store.module_processes().map_err(|e| e.to_string())?;
+        let before: Vec<Record> = list.processes.as_array().into_iter().flatten().filter_map(Record::of).collect();
+        let after = edit(before.clone());
+        if store.swap_module_processes(list.version, &Js::Arr(after.iter().map(Record::to_js).collect())).map_err(|e| e.to_string())? {
+            return Ok(before);
+        }
     }
+    Err(format!("the list kept changing under this lf ({SWAP_ATTEMPTS} tries)"))
 }
 
 /// Stops the module processes an lf on this machine started and left
@@ -526,29 +535,71 @@ fn save(store: &dyn RunHostStore, kept: &[Record]) {
 /// this lf starts in `store`.
 pub fn track_in(store: Rc<dyn RunHostStore>) {
     let (me, here) = (std::process::id(), machine());
-    let mut kept = Vec::new();
-    for record in records(&*store) {
-        let ours = record.machine == here;
-        if !ours || record.lf == me || alive(record.lf) {
-            kept.push(record);
-            continue;
+    let leftover = |record: &Record| record.machine == here && record.lf != me && !alive(record.lf);
+    match change_list(&*store, |list| list.into_iter().filter(|r| !leftover(r)).collect()) {
+        Ok(before) => {
+            for record in before.iter().filter(|r| leftover(r)) {
+                if alive(record.pid) && command_of(record.pid).is_some_and(|c| c.contains(&record.command)) {
+                    eprintln!("lf: stopping a module process an earlier lf left running (pid {}, {})", record.pid, record.command);
+                    terminate(record.pid);
+                }
+            }
         }
-        if alive(record.pid) && command_of(record.pid).is_some_and(|c| c.contains(&record.command)) {
-            eprintln!("lf: stopping a module process an earlier lf left running (pid {}, {})", record.pid, record.command);
-            terminate(record.pid);
-        }
+        Err(e) => eprintln!("lf: the store did not keep the module process list ({e})"),
     }
-    save(&*store, &kept);
     TRACKER.with(|t| *t.borrow_mut() = Some(store));
+    list_unlisted();
 }
 
 fn record(pid: Option<u32>, launch: &Launch) {
     let Some(pid) = pid else { return };
+    lock(&UNLISTED).push(Record { pid, lf: std::process::id(), machine: machine(), command: launch.program.clone() });
+    list_unlisted();
+}
+
+/// Lists what this lf started and has not listed yet, from the thread that
+/// holds the store; elsewhere it waits for that thread's next start or call.
+fn list_unlisted() {
     let Some(store) = TRACKER.with(|t| t.borrow().clone()) else { return };
+    let started: Vec<Record> = std::mem::take(&mut *lock(&UNLISTED));
+    if started.is_empty() {
+        return;
+    }
     let (me, here) = (std::process::id(), machine());
-    let mut kept: Vec<Record> = records(&*store).into_iter().filter(|r| !(r.machine == here && r.lf == me && !alive(r.pid))).collect();
-    kept.push(Record { pid, lf: me, machine: here, command: launch.program.clone() });
-    save(&*store, &kept);
+    let listed = change_list(&*store, |list| {
+        let kept = list.into_iter().filter(|r| !(r.machine == here && r.lf == me && !alive(r.pid)));
+        kept.chain(started.iter().cloned()).collect()
+    });
+    if let Err(e) = listed {
+        eprintln!("lf: the store did not keep the module process list ({e})");
+    }
+}
+
+// ── The list in lf's SQLite store ──────────────────────────────────────────
+
+impl crate::store::Store {
+    pub fn module_processes(&self) -> Result<crate::backend::ModuleProcesses, crate::store::StoreError> {
+        use rusqlite::OptionalExtension;
+        let row: Option<(String, i64)> =
+            self.db.query_row("select processes, version from module_processes where id = 1", [], |r| Ok((r.get(0)?, r.get(1)?))).optional()?;
+        Ok(match row {
+            None => crate::backend::ModuleProcesses { processes: Js::Arr(Vec::new()), version: 0 },
+            Some((text, version)) => crate::backend::ModuleProcesses {
+                processes: Js::parse(text.as_bytes()).map_err(|e| crate::store::StoreError::Invalid(format!("the stored module process list is not JSON: {e}")))?,
+                version,
+            },
+        })
+    }
+
+    pub fn swap_module_processes(&self, version: i64, processes: &Js) -> Result<bool, crate::store::StoreError> {
+        let text = processes.to_json();
+        let written = if version == 0 {
+            self.db.execute("insert into module_processes (id, processes, version) values (1, ?, 1) on conflict (id) do nothing", rusqlite::params![text])?
+        } else {
+            self.db.execute("update module_processes set processes = ?, version = version + 1 where id = 1 and version = ?", rusqlite::params![text, version])?
+        };
+        Ok(written == 1)
+    }
 }
 
 fn machine() -> String {
@@ -622,6 +673,28 @@ mod tests {
     fn a_record_round_trips_through_the_store_row() {
         let record = Record { pid: 7, lf: 3, machine: "box".into(), command: "node".into() };
         assert_eq!(Record::of(&record.to_js()), Some(record));
+    }
+
+    #[test]
+    fn a_change_another_lf_wrote_under_is_made_again_over_what_it_wrote() {
+        let dir = std::env::temp_dir().join(format!("lf-processes-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = crate::store::Store::open(&dir.join("state.db")).unwrap();
+        let entry = |pid: u32, lf: u32| Record { pid, lf, machine: "box".into(), command: "node".into() };
+        let other_lf_wrote = std::cell::Cell::new(false);
+        // The first edit is read, then another lf lists its process before this write lands.
+        let before = change_list(&store, |list| {
+            if !other_lf_wrote.replace(true) {
+                let version = store.module_processes().unwrap().version;
+                assert!(store.swap_module_processes(version, &Js::Arr(vec![entry(1, 1).to_js()])).unwrap());
+            }
+            list.into_iter().chain([entry(2, 2)]).collect()
+        })
+        .unwrap();
+        assert_eq!(before, vec![entry(1, 1)], "the write that won was made over the other lf's list");
+        let listed = store.module_processes().unwrap();
+        assert_eq!(listed.version, 2);
+        assert_eq!(listed.processes.as_array().unwrap().iter().filter_map(Record::of).collect::<Vec<_>>(), vec![entry(1, 1), entry(2, 2)]);
     }
 
     fn sh(script: &str) -> Launch {

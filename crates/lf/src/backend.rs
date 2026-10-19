@@ -242,6 +242,16 @@ pub trait RunHostStore {
     fn inbound_checkpoint(&self, subscription_id: &str) -> Result<Option<Js>>;
     fn save_inbound_checkpoint(&self, subscription_id: &str, checkpoint: &Js) -> Result<()>;
 
+    // ── The module processes lf started ─────────────────────────────────────
+    /// The list of module processes the lfs on this store started (so the
+    /// next one stops what a killed one left behind), at its version: 0 for a
+    /// list never written.
+    fn module_processes(&self) -> Result<ModuleProcesses>;
+    /// Write `processes` only if the list is still at `version` (it then
+    /// moves to `version + 1`): true when it wrote. Two lfs on one store
+    /// never overwrite each other's entries.
+    fn swap_module_processes(&self, version: i64, processes: &Js) -> Result<bool>;
+
     // ── Event receipts ──────────────────────────────────────────────────────
     /// Note one delivery of an event to a listen by the event's
     /// `idempotencyKey` (the provider's own id for the occurrence): true the
@@ -412,9 +422,25 @@ impl RunHostStore for Store {
         Store::save_inbound_checkpoint(self, subscription_id, checkpoint)
     }
 
+    fn module_processes(&self) -> Result<ModuleProcesses> {
+        Store::module_processes(self)
+    }
+    fn swap_module_processes(&self, version: i64, processes: &Js) -> Result<bool> {
+        Store::swap_module_processes(self, version, processes)
+    }
+
     fn claim_event(&self, listen: &str, key: &str) -> Result<bool> {
         Store::claim_event(self, listen, key)
     }
+}
+
+/// The store's list of started module processes (crate::module_hosts), at the
+/// version a compare-and-set writes over.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ModuleProcesses {
+    /// An array; empty for a list never written.
+    pub processes: Js,
+    pub version: i64,
 }
 
 #[cfg(test)]

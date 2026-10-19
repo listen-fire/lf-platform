@@ -87,6 +87,8 @@ The first request is always `store.open`. The others are the run host's store fa
 | `callbacks.revokeRun` | `{ runId }` | `null` |
 | `inbound.checkpoint` | `{ subscriptionId }` | `{ checkpoint }`, or `null` |
 | `inbound.saveCheckpoint` | `{ subscriptionId, checkpoint }` | `null` |
+| `processes.list` | `{}` | `{ processes, version }`: the module processes the hosts on this store started (an array of `{ pid, lf, machine, command }`), at its version; `{ processes: [], version: 0 }` for a list never written |
+| `processes.swap` | `{ version, processes }` | `true` when the list was still at `version` and is now `processes` at `version + 1`; `false` when another host wrote first (read again and retry) |
 | `events.claim` | `{ listen, key }` | `true` the first time this event key reaches this listen; `false` for a redelivery, which runs nothing |
 
 The rows:
@@ -104,6 +106,7 @@ type CallbackRow = {
 
 ## Changes
 
+- **2026-10-19** (within adapter protocol 2): `processes.list` and `processes.swap`, the list of module processes the hosts on a store started, written by compare-and-set on its version so two lfs on one store never overwrite each other's entries. lf used to keep it in an inbound checkpoint row.
 - **2026-10-19** (within adapter protocol 2): the methods ride adapter protocol 2's HTTP, as every module's do; the stdin/stdout JSON-RPC wire is retired. A lost lease is the error code `run_lease_lost` (`data: { runId }`). A store module may be remote (`url:`).
 - **2026-10-18** (within adapter protocol 2): `work.claimDue` takes `kinds`, for drain pools (`lf drain --kinds`).
 - **2026-10-17** (within adapter protocol 2): the store slot's wire, and process modules filling the store slot.

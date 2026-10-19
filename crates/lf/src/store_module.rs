@@ -312,6 +312,21 @@ impl RunHostStore for ProcessStore {
         self.unit("inbound.saveCheckpoint", obj! { "subscriptionId" => s(subscription_id), "checkpoint" => checkpoint.clone() })
     }
 
+    fn module_processes(&self) -> Result<crate::backend::ModuleProcesses> {
+        let answer = self.call("processes.list", Obj::new())?;
+        let version = match answer.get("version") {
+            Some(Js::Num(n)) => n.as_i64(),
+            _ => None,
+        };
+        match (answer.get("processes"), version) {
+            (Some(processes @ Js::Arr(_)), Some(version)) => Ok(crate::backend::ModuleProcesses { processes: processes.clone(), version }),
+            _ => Err(self.malformed("processes.list", &answer)),
+        }
+    }
+    fn swap_module_processes(&self, version: i64, processes: &Js) -> Result<bool> {
+        self.flag("processes.swap", obj! { "version" => Js::Num(version.into()), "processes" => processes.clone() })
+    }
+
     fn claim_event(&self, listen: &str, key: &str) -> Result<bool> {
         self.flag("events.claim", obj! { "listen" => s(listen), "key" => s(key) })
     }
