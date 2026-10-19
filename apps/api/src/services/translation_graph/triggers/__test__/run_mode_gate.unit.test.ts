@@ -79,7 +79,9 @@ describe('dispatchTriggerByIdEvent — run_mode gating wiring', () => {
   });
 
   it('run_mode_off is a recognised droppedReason on the result type', () => {
-    expect(src).toMatch(/\|\s*'run_mode_off'/);
+    // The union moved out of the router when queued doors began sharing it.
+    const reasons = READ('services/translation_graph/triggers/dropped_reason.ts');
+    expect(reasons).toMatch(/\|\s*'run_mode_off'/);
   });
 });
 
