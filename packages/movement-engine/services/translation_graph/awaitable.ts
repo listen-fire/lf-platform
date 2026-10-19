@@ -28,7 +28,7 @@ export type AwaitResolution =
   | { status: 'empty' };
 
 /** One landing along an awaited edge — the node the resolution carries. */
-export interface AwaitLanding {
+interface AwaitLanding {
   /** The landing record's id, when it has one (correlation, not stability —
    *  absent is fine). */
   recordId?: string;
@@ -67,10 +67,4 @@ export interface AwaitableCapability {
    * landings; the adapter only reports what has arrived.
    */
   resolveAwait(point: AwaitPoint): Promise<AwaitResolution>;
-}
-
-/** An adapter that advertises awaitable edges exposes this capability. Absent ⇒
- *  the adapter has no awaitable edges (bare adapters). */
-export interface MaybeAwaitable {
-  awaitable?: AwaitableCapability;
 }

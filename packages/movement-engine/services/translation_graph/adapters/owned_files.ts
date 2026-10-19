@@ -13,7 +13,7 @@ import type { SchemaTypeDescriptor } from '../types';
 import { fileDescriptorOf, ownedFileSource, RESOURCES_REFERENCE_FIELD_ID } from '../adapter';
 
 /** The instance a module's files are named as owned by. */
-export interface FileOwnerInstance {
+interface FileOwnerInstance {
   adapterType: string;
   credentialsId?: string;
   /** The install's construction arguments (an entry position), which
@@ -116,7 +116,7 @@ export class FileOwnership {
 
 /** The catalog of an in-process module could not be read for a field it
  *  answered (the in-process twin of the remote adapter's refusal). */
-export class OwnedFileDescribeFailed extends Error {
+class OwnedFileDescribeFailed extends Error {
   constructor(adapterType: string, recordType: string, fieldId: string, cause: unknown) {
     super(
       `Adapter "${adapterType}": describe(${JSON.stringify(recordType)}) failed, so whether ${JSON.stringify(fieldId)} holds a file is not known — ${cause instanceof Error ? cause.message : String(cause)}`,

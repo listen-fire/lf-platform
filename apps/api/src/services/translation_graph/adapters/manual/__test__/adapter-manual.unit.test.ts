@@ -33,7 +33,6 @@ jest.mock('movement-engine/services/knowledge_pipeline/output_v3/schemas', () =>
     fieldRefSchema: stub,
     expressionSchema: stub,
     filterExpressionSchema: stub,
-    webhookGraphOutputConfigSchema: stub,
   };
 });
 

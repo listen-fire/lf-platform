@@ -10,7 +10,7 @@ import type { DiscriminableEvent, EventType } from '../../adapter';
 
 import { makeStablePosition, makeUnstablePosition, type SourcePosition } from '../../types';
 
-export interface DiscriminationResult {
+interface DiscriminationResult {
   /** The typed root position to seed the trigger's evaluation with. */
   position: SourcePosition;
   /** The matched event type (its `tag` / `positionType` drive downstream logic). */

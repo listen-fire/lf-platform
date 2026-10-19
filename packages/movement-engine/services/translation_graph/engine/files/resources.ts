@@ -73,7 +73,7 @@ export function withResourceFile(resource: Resource): Resource {
 }
 
 /** `count` fresh ids. */
-export type MintIds = (count: number) => Promise<string[]>;
+type MintIds = (count: number) => Promise<string[]>;
 
 /**
  * Materialisation boundary for resource identity (`4d_resources.md`:

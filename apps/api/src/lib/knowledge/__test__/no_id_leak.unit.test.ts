@@ -21,7 +21,6 @@
  *   - translation_agent  — TG authoring specialist
  *   - ontology_agent     — schema/model design
  *   - query_agent        — KG data querying
- *   - output_agent       — legacy v3 output authoring (frozen)
  *
  * Exempt:
  *   - system_agent       — debug surface; users paste ids from
@@ -96,9 +95,7 @@ function extractToolDefs(source: string): string {
 /**
  * Load an agent's lintable surface from one or more source paths. Each
  * path's text is concatenated before extraction — useful when the
- * prompt or tool defs live in a sibling file (output_v3's prompt is in
- * `services/knowledge_pipeline/output_v3/agent/system_prompt.ts`, not
- * in the agent runner file).
+ * prompt or tool defs live in a sibling file.
  */
 function loadAgent(args: {
   displayName: string;
@@ -118,15 +115,6 @@ function loadAgent(args: {
 
 const LINTED_AGENTS: AgentSurface[] = [
   loadAgent({ displayName: 'ontology', sources: ['ontology_agent.ts'] }),
-  loadAgent({
-    displayName: 'output_v3',
-    sources: [
-      'output_agent.ts',
-      // OUTPUT_AGENT_SYSTEM_PROMPT lives in the v3 pipeline package;
-      // include it so the prompt-body smoke check + lint cover it.
-      join(__dirname, '..', '..', '..', 'services', 'knowledge_pipeline', 'output_v3', 'agent', 'system_prompt.ts'),
-    ],
-  }),
 ];
 
 // ---------------------------------------------------------------------------

@@ -19,7 +19,7 @@ import { z } from 'zod';
 import { since, type LanguageVersion } from 'movement-lang';
 
 /** One AND-tupled entry: a target field name, optionally fuzzy-matched. */
-export const uniquenessEntrySchema = z.object({
+const uniquenessEntrySchema = z.object({
   field: z.string(),
   fuzzy: z.boolean().optional(),
 });
@@ -31,9 +31,6 @@ export const uniquenessConstraintsSchema = z.object({
 
 export type UniquenessEntry = z.infer<typeof uniquenessEntrySchema>;
 export type UniquenessConstraints = z.infer<typeof uniquenessConstraintsSchema>;
-
-/** No constraints — entity resolution falls straight through to create. */
-export const EMPTY_UNIQUENESS: UniquenessConstraints = { any: [] };
 
 /**
  * Union two constraint sets (native-from-describe ∪ author-on-the-node). The

@@ -31,7 +31,6 @@ import {
 // 6), so their kysely id brands are gone. These TG-body schemas are vestigial
 // (no live storage consumer), but kept compiling; brand the ids locally.
 type TranslationGraphId = string & { readonly __brand: 'TranslationGraphId' };
-type SchemaTypeId = string & { readonly __brand: 'SchemaTypeId' };
 
 // ── ExpressionType: value-type primitives used in generic shapes ───────────
 // The expression type system describes the static type of a value flowing
@@ -184,79 +183,6 @@ export const schemaRefSchema = z.discriminatedUnion('kind', [
 
 export type SchemaRef = z.infer<typeof schemaRefSchema>;
 
-// ── N3 SourceSchemaRef + TargetSchemaRef (tightened) ───────────────────────
-// N3 tightens the source/target sides of a TG body into two distinct
-// discriminated unions, removing the loose `kind: 'adapter'` / `kind:
-// 'knowledge-graph'` overlap and naming the two roles the framework
-// distinguishes between:
-//
-//   - Source: `dynamic` (the trigger's raw adapter feed; only valid at the
-//     edge of an orchestration) | `static` (a named `schema_type` row,
-//     shared with the previous step's target).
-//   - Target: `static` (intermediate TGs — produce a value for the next
-//     step) | `knowledge-graph` (terminal write to the KG) | `adapter`
-//     (terminal write to an external system).
-//
-// `generic_reference` stays in the legacy `schemaRefSchema` union for
-// composition; it is intentionally NOT carried into the tightened unions —
-// out of scope per the N3-S chunk brief.
-//
-// SchemaType brand: zod can't carry the kysely brand directly (same dance
-// as `tg_id` above). We validate the raw string and cast on the type alias.
-//
-//   §Schema, §translation_graph.body schemaRef tightening
-//   §3 (static at TG boundaries), §5 (side effects only at terminals)
-
-const adapterKindSchema = z.string().min(1);
-const credentialsIdSchema = z.string().min(1);
-const schemaTypeIdSchema = z.string().min(1) as unknown as z.ZodType<SchemaTypeId>;
-
-// N3 tightened source/target schemas. Strict — no extra keys, no
-// passthrough — so a malformed N3 body fails parsing before the
-// validator gets a chance to misinterpret it.
-export const sourceSchemaRefSchema = z.discriminatedUnion('kind', [
-  z
-    .object({
-      kind: z.literal('dynamic'),
-      adapterKind: adapterKindSchema,
-      // Object-type discriminant (D4) — see schemaRefSchema above.
-      objectType: z.string().min(1).optional(),
-      credentialsId: credentialsIdSchema.nullable(),
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal('static'),
-      schemaTypeId: schemaTypeIdSchema,
-    })
-    .strict(),
-]);
-
-export type SourceSchemaRef = z.infer<typeof sourceSchemaRefSchema>;
-
-export const targetSchemaRefSchema = z.discriminatedUnion('kind', [
-  z
-    .object({
-      kind: z.literal('static'),
-      schemaTypeId: schemaTypeIdSchema,
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal('knowledge-graph'),
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal('adapter'),
-      adapterKind: adapterKindSchema,
-      credentialsId: credentialsIdSchema,
-    })
-    .strict(),
-]);
-
-export type TargetSchemaRef = z.infer<typeof targetSchemaRefSchema>;
-
 /**
  * Resolve a `SchemaRef` to a concrete adapter type when one exists.
  *
@@ -274,7 +200,7 @@ export type TargetSchemaRef = z.infer<typeof targetSchemaRefSchema>;
  *
  *   ("F2 — Extending schemaRefSchema breaks .adapterType narrowing")
  */
-export const KG_ADAPTER_TYPE_FOR_REF = 'kg';
+const KG_ADAPTER_TYPE_FOR_REF = 'kg';
 
 export function adapterTypeForRef(ref: SchemaRef): string | null {
   switch (ref.kind) {
@@ -322,14 +248,12 @@ export function credentialsIdFromRef(ref: SchemaRef): string | null {
 // Per P15. Used by mappings on translation graphs fired from mutation triggers.
 // For non-mutation triggers the predicate defaults to 'always'.
 
-export const changedFieldsPredicateSchema = z.discriminatedUnion('op', [
+const changedFieldsPredicateSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('any-of'), fields: z.array(z.string()) }),
   z.object({ op: z.literal('all-of'), fields: z.array(z.string()) }),
   z.object({ op: z.literal('none-of'), fields: z.array(z.string()) }),
   z.object({ op: z.literal('always') }),
 ]);
-
-export type ChangedFieldsPredicate = z.infer<typeof changedFieldsPredicateSchema>;
 
 // ── FieldMapping: write-permission semantics + runWhen extension ───────────
 // Diverges from the output v3 fieldMappingSchema by adding `semantics` (overwrite /
@@ -337,10 +261,10 @@ export type ChangedFieldsPredicate = z.infer<typeof changedFieldsPredicateSchema
 // output v3 trees through the read adapter, semantics defaults to 'overwrite' and
 // runWhen is omitted.
 
-export const fieldMappingSemanticsSchema = z.enum(['overwrite', 'set-if-null', 'merge']);
+const fieldMappingSemanticsSchema = z.enum(['overwrite', 'set-if-null', 'merge']);
 export type FieldMappingSemantics = z.infer<typeof fieldMappingSemanticsSchema>;
 
-export const tgFieldMappingSchema = z.object({
+const tgFieldMappingSchema = z.object({
   targetField: z.string(),
   /**
    * Source-side expression that produces the value to write. Optional
@@ -363,7 +287,7 @@ export type TGFieldMapping = z.infer<typeof tgFieldMappingSchema>;
 // Reused conceptually from output v3's pattern. Used by adapters that need
 // explicit relationship typing (Attio reference fields, knowledge-graph edges).
 
-export const nodeRelationshipSchema = z.object({
+const nodeRelationshipSchema = z.object({
   parentField: z.string().optional(),
   childField: z.string().optional(),
   type: z.enum(['reference', 'embed', 'attachment']),
@@ -400,7 +324,7 @@ export type NodeRelationship = z.infer<typeof nodeRelationshipSchema>;
 // engine can dispatch to the existing extraction execution code without forking).
 // Inline native templates are a future enhancement.
 
-export const extractionTemplateSchema = z.discriminatedUnion('kind', [
+const extractionTemplateSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('extraction_graph_ref'),
     extractionGraphId: z.string(),
@@ -408,7 +332,7 @@ export const extractionTemplateSchema = z.discriminatedUnion('kind', [
   // Future: kind: 'inline' with a structural template definition.
 ]);
 
-export type ExtractionTemplate = z.infer<typeof extractionTemplateSchema>;
+type ExtractionTemplate = z.infer<typeof extractionTemplateSchema>;
 
 // ── Node taxonomy ─────────────────────────────────────────────────────────
 
@@ -454,7 +378,7 @@ export type ActionNode = {
   uniquenessConstraints?: UniquenessConstraints;
 };
 
-export type BranchNode = {
+type BranchNode = {
   kind: 'branch';
   id: string;
   filter: FilterExpression;
@@ -544,184 +468,11 @@ const deprecatedExtractionNodeSchema: z.ZodType<never> = z
     return z.NEVER;
   });
 
-export const translationGraphNodeSchema: z.ZodType<TranslationGraphNode> = z.union([
+const translationGraphNodeSchema: z.ZodType<TranslationGraphNode> = z.union([
   actionNodeSchema,
   branchNodeSchema,
   deprecatedExtractionNodeSchema,
 ]);
-
-// ── NodeMapping ────────────────────────────────────────────────────────────
-// Top-level entity-type correspondence, declared once per TG and consumed by
-// event-mode execution. The directed structure (the rooted tree of action
-// nodes in `roots`) remains the entry point for pipeline mode and is
-// independent of node mappings; future unification can merge them.
-
-export const nodeMappingSchema = z.object({
-  id: z.string(),
-  sourceTypeRef: z.string(),
-  targetTypeRef: z.string(),
-  fieldMappings: z.array(tgFieldMappingSchema),
-  /** Node-level filter — limits which entities of this type are in scope.
-   *  Symmetric: applies regardless of which edge brings us to this node. */
-  filter: expressionSchema.optional(),
-  /** Per-mapping uniqueness constraints — unioned with adapter-native
-   *  constraints during entity resolution. Same semantics as ActionNode's
-   *  uniquenessConstraints. */
-  uniquenessConstraints: uniquenessConstraintsSchema.optional(),
-  /** Optional adapter-config (e.g. Attio per-object identifiers). */
-  adapterConfig: z.record(z.string(), z.unknown()).optional(),
-});
-
-export type NodeMapping = z.infer<typeof nodeMappingSchema>;
-
-// ── TraversalExpression ────────────────────────────────────────────────────
-// Ordered list of steps; length > 1 = multi-hop. Each step reuses the
-// existing TraversalStep schema used by the directed structure. Adapters
-// resolve the expression against their own system.
-
-export const traversalExpressionSchema = z.object({
-  steps: z.array(traversalStepSchema).min(1),
-});
-
-export type TraversalExpression = z.infer<typeof traversalExpressionSchema>;
-
-// ── TGEdge ─────────────────────────────────────────────────────────────────
-// Relationship correspondence between two NodeMappings. Names traversals in
-// source and target via adapter-local edge names; the adapter resolves
-// physical mechanisms (FK lookup, list query, join table, etc.). The TG
-// stays system-agnostic — no `kind: 'reverse-reference', field: '...'`-style
-// details live here.
-//
-// Each side may declare zero, one, or both directions:
-//   - traversalAB: A → B in this system
-//   - traversalBA: B → A in this system
-//
-// Missing direction = "not traversable on this side." The runtime asks the
-// adapter for FK-ownership and change-relevance at execution time; the edge
-// itself doesn't carry that metadata.
-
-export const tgEdgeSchema = z.object({
-  id: z.string(),
-  /** Ordered pair of NodeMapping ids. `AB` / `BA` below refer to this order. */
-  endpoints: z.tuple([z.string(), z.string()]),
-  source: z.object({
-    traversalAB: traversalExpressionSchema.optional(),
-    traversalBA: traversalExpressionSchema.optional(),
-  }),
-  target: z.object({
-    traversalAB: traversalExpressionSchema.optional(),
-    traversalBA: traversalExpressionSchema.optional(),
-  }),
-});
-
-export type TGEdge = z.infer<typeof tgEdgeSchema>;
-
-// ── TranslationGraph body (the JSONB shape) ────────────────────────────────
-// The full row also has id/team_id/name/description/version/timestamps as
-// columns (see knowledge.translation_graph) — those are not part of the body.
-//
-// Note: NodeMappings + Edges are NOT here. They live one level up, on the
-// consumer entity (`pipeline_input.tg_event_body` /
-// `pipeline_output.tg_event_body`), shared across all triggers on the same
-// input/output. See `pipelineEventBodySchema` below.
-
-export const translationGraphBodySchema = z.object({
-  // Bodies may start empty when the user creates a trigger before authoring
-  // its TG. The engine treats an empty body as a no-op; the editor seeds
-  // the first node interactively.
-  roots: z.array(translationGraphNodeSchema),
-  /**
-   * Name of the lexical alias the trigger declaration binds to the source
-   * root position (the `msg` in `trigger: source AS msg`). When set, the
-   * engine seeds `ctx.aliases = { [sourceAlias]: rootPosition }` before any
-   * expressions evaluate, so `traverse.aliasRoot: 'msg'` (and `alias_ref`)
-   * can resolve at the trigger root. When undefined the engine leaves
-   * `ctx.aliases` unset — R1's evaluator throws a clear
-   * `traverse.aliasRoot("…") has no binding in scope.` for the missing-
-   * alias case, which is the right UX for unwired bodies.
-   *
-   * F3 authoring sets this at parse time from the `AS` clause; back-compat
-   * leaves it optional so legacy bodies (no alias) keep parsing.
-   *
-   */
-  sourceAlias: z.string().min(1).optional(),
-});
-
-export type TranslationGraphBody = z.infer<typeof translationGraphBodySchema>;
-
-// ── PipelineEventBody (the input/output-level event-mode map) ──────────────
-// Stored as JSONB on `pipeline_input.tg_event_body` and
-// `pipeline_output.tg_event_body`. One canonical map per consumer entity;
-// every event-mode trigger on that consumer shares the same map.
-//
-// Event-mode dispatch reads this body alongside the trigger entry's
-// (filter, executionMode) to construct the runtime body the engine
-// consumes — see triggers/router.ts.
-
-export const pipelineEventBodySchema = z.object({
-  nodeMappings: z.array(nodeMappingSchema),
-  edges: z.array(tgEdgeSchema),
-});
-
-export type PipelineEventBody = z.infer<typeof pipelineEventBodySchema>;
-
-/** Lenient parse — used at storage boundary so a malformed JSONB doesn't
- *  break the page. Returns an empty body when input isn't recognisable. */
-export function parsePipelineEventBodyLenient(value: unknown): PipelineEventBody {
-  if (!value || typeof value !== 'object') return { nodeMappings: [], edges: [] };
-  const parsed = pipelineEventBodySchema.safeParse(value);
-  if (parsed.success) return parsed.data;
-  // Partial-parse: accept whichever side is well-formed.
-  const obj = value as Record<string, unknown>;
-  return {
-    nodeMappings: Array.isArray(obj.nodeMappings)
-      ? z.array(nodeMappingSchema).parse(obj.nodeMappings)
-      : [],
-    edges: Array.isArray(obj.edges) ? z.array(tgEdgeSchema).parse(obj.edges) : [],
-  };
-}
-
-// ── Top-level TranslationGraph (body + metadata) ───────────────────────────
-
-/**
- * TG flavour persisted on the `knowledge.translation_graph.kind` column.
- * Only `extraction` (regular mapping TGs) survives — the `router` flavour
- * was retired with the router-TG mechanism (3c substrate collapse;
- * content routing is now a `branch` step in the orchestration).
- */
-export const translationGraphRowKindSchema = z.enum(['extraction']);
-export type TranslationGraphRowKind = z.infer<typeof translationGraphRowKindSchema>;
-
-export const translationGraphSchema = z.object({
-  id: z.string(),
-  teamId: z.string(),
-  name: z.string(),
-  description: z.string().optional(),
-  sourceSchemaRef: schemaRefSchema,
-  targetSchemaRef: schemaRefSchema,
-  body: translationGraphBodySchema,
-  /**
-   * W5-D2 — TG flavour. Optional in the schema so back-compat callers
-   * that construct `TranslationGraph` literals without specifying kind
-   * still type-check; storage adapters always set it on load. Callers
-   * that need to branch on it should treat `undefined` as `'extraction'`.
-   */
-  kind: translationGraphRowKindSchema.optional(),
-  version: z.number().int().positive(),
-  createdAt: z.coerce.date(),
-  updatedAt: z.coerce.date(),
-});
-
-export type TranslationGraph = z.infer<typeof translationGraphSchema>;
-
-// ── TranslationGraph row "kind" (legacy alias, kept for storage helpers) ───
-// F7 removed the persisted `kind` column from `knowledge.translation_graph`
-// — a mapping has no owner. Some storage helpers still use this enum as a
-// dispatch hint ("which consumer am I writing this binding for?"). The
-// values match the old persisted values so call-site rewrites stay small.
-
-export const translationGraphKindSchema = z.enum(['input', 'output', 'standalone']);
-export type TranslationGraphKind = z.infer<typeof translationGraphKindSchema>;
 
 // ── Trigger entries (pipeline_input.translation_graphs persisted shape) ────
 // Per `plans/2026-05-07-structured-input-containers/`: a structured input's
@@ -735,10 +486,9 @@ export type TranslationGraphKind = z.infer<typeof translationGraphKindSchema>;
 // "one TG per object type" shape. The persisted value is now a TriggerEntry
 // array; renaming the column is a follow-up tidy.
 
-export const triggerEntryKindSchema = z.enum(['manual', 'webhook', 'mutation', 'extraction']);
-export type TriggerEntryKind = z.infer<typeof triggerEntryKindSchema>;
+const triggerEntryKindSchema = z.enum(['manual', 'webhook', 'mutation', 'extraction']);
 
-export const triggerEntrySchema = z.object({
+const triggerEntrySchema = z.object({
   /** Stable identifier per entry. Post-F7 this IS the
    *  `knowledge.trigger_entry.id` — i.e. the binding row that ties a
    *  consumer to a translation_graph mapping. Lets the engine route an
@@ -814,14 +564,11 @@ export const triggerEntrySchema = z.object({
 
 export type TriggerEntry = z.infer<typeof triggerEntrySchema>;
 
-export const triggerEntriesSchema = z.array(triggerEntrySchema);
-export type TriggerEntries = z.infer<typeof triggerEntriesSchema>;
-
 // ── TranslationGraph row body (the JSONB shape persisted to the table) ─────
 // F7 split: the row body is now a pure mapping (sourceSchemaRef,
 // targetSchemaRef, roots). Trigger metadata moved to knowledge.trigger_entry.
 
-export const translationGraphRowBodySchema = z.object({
+const translationGraphRowBodySchema = z.object({
   sourceSchemaRef: schemaRefSchema,
   targetSchemaRef: schemaRefSchema,
   roots: z.array(translationGraphNodeSchema),
@@ -838,71 +585,6 @@ export const translationGraphRowBodySchema = z.object({
 });
 
 export type TranslationGraphRowBody = z.infer<typeof translationGraphRowBodySchema>;
-
-/**
- * In-memory binding shape — one `knowledge.trigger_entry` row plus its
- * referenced mapping. Storage helpers join across the two tables and
- * return this so consumers keep the legacy `TriggerEntry[]` mental model
- * even though the underlying persistence split into two relations.
- */
-export interface TriggerEntryRow {
-  id: string;                       // trigger_entry.id
-  teamId: string;
-  translationGraphId: string;       // FK → translation_graph.id (the mapping)
-  pipelineInputId: string | null;
-  pipelineOutputId: string | null;
-  triggerKind: TriggerEntryKind;
-  filter?: import('../knowledge_pipeline/output_v3/expression').Expression;
-  executionMode?: 'pipeline' | 'event';
-}
-
-/**
- * Build a `TriggerEntry` (the joined in-memory view) from a binding row +
- * its mapping body. The `id` of the resulting TriggerEntry is the
- * trigger_entry row id — i.e. the firing-binding identifier. The mapping
- * id is exposed separately as `translationGraphId`.
- */
-export function buildTriggerEntry(input: {
-  binding: TriggerEntryRow;
-  mappingBody: TranslationGraphRowBody;
-}): TriggerEntry {
-  return {
-    id: input.binding.id,
-    translationGraphId: input.binding.translationGraphId,
-    triggerKind: input.binding.triggerKind,
-    filter: input.binding.filter,
-    sourceSchemaRef: input.mappingBody.sourceSchemaRef,
-    targetSchemaRef: input.mappingBody.targetSchemaRef,
-    roots: input.mappingBody.roots,
-    sourceAlias: input.mappingBody.sourceAlias,
-    executionMode: input.binding.executionMode,
-  };
-}
-
-/**
- * Project a `TriggerEntry` back into (binding fields, mapping body) for
- * persistence. The caller is responsible for routing the binding fields
- * to the trigger_entry write and the mapping body to the
- * translation_graph write.
- */
-export function splitTriggerEntry(entry: TriggerEntry): {
-  mappingBody: TranslationGraphRowBody;
-  bindingFields: Pick<TriggerEntryRow, 'triggerKind' | 'filter' | 'executionMode'>;
-} {
-  return {
-    mappingBody: {
-      sourceSchemaRef: entry.sourceSchemaRef,
-      targetSchemaRef: entry.targetSchemaRef,
-      roots: entry.roots,
-      sourceAlias: entry.sourceAlias,
-    },
-    bindingFields: {
-      triggerKind: entry.triggerKind,
-      filter: entry.filter,
-      executionMode: entry.executionMode,
-    },
-  };
-}
 
 /**
  * Lenient parse of a mapping row body — tolerates malformed JSONB so
@@ -951,7 +633,7 @@ export function parseRowBodyLenient(value: unknown): TranslationGraphRowBody | n
 // Per Layer 2 §2.6 + critique §C3 (framework consumes descriptor abstractly;
 // adapter generates it however — introspection or hardcoded).
 
-export const schemaFieldKindSchema = z.enum([
+const schemaFieldKindSchema = z.enum([
   'string',
   'number',
   'boolean',
@@ -994,7 +676,7 @@ export type SchemaFieldKind = z.infer<typeof schemaFieldKindSchema>;
  * adapter-registry path and lets the editor consume the descriptor as
  * the single source of truth.
  */
-export const schemaFieldUiHintSchema = z.enum([
+const schemaFieldUiHintSchema = z.enum([
   'string',
   'textarea',
   'prompt',
@@ -1004,7 +686,6 @@ export const schemaFieldUiHintSchema = z.enum([
   'date',
   'json',
 ]);
-export type SchemaFieldUiHint = z.infer<typeof schemaFieldUiHintSchema>;
 
 /**
  * Where a writable field lands at the adapter's write boundary.
@@ -1028,7 +709,7 @@ export type SchemaFieldUiHint = z.infer<typeof schemaFieldUiHintSchema>;
  * single edge type but might be authored against from either end.
  *
  */
-export const fieldAnchorSchema = z.discriminatedUnion('kind', [
+const fieldAnchorSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('node') }),
   z.object({
     kind: z.literal('edge'),
@@ -1036,7 +717,6 @@ export const fieldAnchorSchema = z.discriminatedUnion('kind', [
     side: z.enum(['source', 'target']),
   }),
 ]);
-export type FieldAnchor = z.infer<typeof fieldAnchorSchema>;
 
 /**
  * The effect row a function whose BODY is not a movement declares for itself —
@@ -1048,15 +728,13 @@ export type FieldAnchor = z.infer<typeof fieldAnchorSchema>;
  * not instances: a declaration is written once and cannot know which graphs the
  * movement calling it constructed.
  */
-export const declaredEffectRowSchema = z.object({
+const declaredEffectRowSchema = z.object({
   reads: z.array(z.string().min(1)).optional(),
   writes: z.array(z.string().min(1)).optional(),
   ai: z.boolean().optional(),
   now: z.boolean().optional(),
   suspend: z.boolean().optional(),
 }) satisfies z.ZodType<DeclaredEffectRow>;
-
-export type DeclaredEffects = z.infer<typeof declaredEffectRowSchema>;
 
 // ── Field functions: adapter-provided expression functions, scoped to a
 // ── writable field (e.g. Slack's `SLACK_MESSAGE`).
@@ -1069,7 +747,7 @@ export type DeclaredEffects = z.infer<typeof declaredEffectRowSchema>;
 // `invokeFieldFunction`), the validator (a non-built-in function is only valid
 // on a field that advertises it), and discoverability (editor palette +
 // authoring handbook). The *body* is `Adapter.invokeFieldFunction`.
-export const fieldFunctionParamSchema = z.object({
+const fieldFunctionParamSchema = z.object({
   name: z.string(),
   /** `string` — coerced to a string (the brief). `value` — a bare value
    *  passed through verbatim (the adapter never interprets it). */
@@ -1078,9 +756,8 @@ export const fieldFunctionParamSchema = z.object({
   variadic: z.boolean().optional(),
   doc: z.string(),
 });
-export type FieldFunctionParam = z.infer<typeof fieldFunctionParamSchema>;
 
-export const fieldFunctionDescriptorSchema = z.object({
+const fieldFunctionDescriptorSchema = z.object({
   /** The call name authors type, e.g. `SLACK_MESSAGE`. */
   name: z.string(),
   displayName: z.string(),
@@ -1116,7 +793,7 @@ const filterOperatorSchema = z.enum([
  * adapter-capability-contract plan). Rides the field descriptor `describe()`
  * already returns. See `#shared/expression/types`' `FieldCapability`.
  */
-export const fieldCapabilitySchema = z.object({
+const fieldCapabilitySchema = z.object({
   filterOperators: z.array(filterOperatorSchema).optional(),
   orderable: z.boolean().optional(),
 }) satisfies z.ZodType<FieldCapability>;
@@ -1128,7 +805,7 @@ const edgePushModeSchema = z.enum(['bounded', 'native']);
  * Combined by the checker with the target type's per-field `fieldCapability`.
  * See `#shared/expression/types`' `EdgeCapability`.
  */
-export const edgeCapabilitySchema = z.object({
+const edgeCapabilitySchema = z.object({
   filter: edgePushModeSchema.optional(),
   order: edgePushModeSchema.optional(),
   supportsLimit: z.boolean(),
@@ -1143,13 +820,13 @@ export const edgeCapabilitySchema = z.object({
  * be pushed to the source. See `#shared/expression/types`' `EdgeSequencing`
  * for the distinction and the declaration rule.
  */
-export const edgeSequencingSchema = z.enum([
+const edgeSequencingSchema = z.enum([
   'chronological',
   'document',
   'arrival',
 ]) satisfies z.ZodType<EdgeSequencing>;
 
-export const schemaFieldDescriptorSchema = z.object({
+const schemaFieldDescriptorSchema = z.object({
   fieldId: z.string(),
   displayName: z.string(),
   kind: schemaFieldKindSchema,
@@ -1244,7 +921,7 @@ export const schemaFieldDescriptorSchema = z.object({
 
 export type SchemaFieldDescriptor = z.infer<typeof schemaFieldDescriptorSchema>;
 
-export const schemaReferenceDescriptorSchema = z.object({
+const schemaReferenceDescriptorSchema = z.object({
   fieldId: z.string(),
   targetTypeId: z.string(),
   /**
@@ -1763,7 +1440,7 @@ export const schemaTypeDescriptorSchema = z.object({
 
 export type SchemaTypeDescriptor = z.infer<typeof schemaTypeDescriptorSchema>;
 
-export const schemaDescriptorSchema = z.object({
+const schemaDescriptorSchema = z.object({
   adapterType: z.string(),
   types: z.array(schemaTypeDescriptorSchema),
 });
@@ -1923,7 +1600,7 @@ export function makeMetaPosition(adapterType: string): Position {
  * source-side nodes use the `'synthetic'` adapterType sentinel (they aren't
  * served by a real adapter; the evaluator reads their inline data directly).
  */
-export const SYNTHETIC_ADAPTER_TYPE = 'synthetic';
+const SYNTHETIC_ADAPTER_TYPE = 'synthetic';
 export function makeEphemeralPosition(input: {
   adapterType?: string;
   recordType?: string | null;
@@ -2019,14 +1696,13 @@ export function isStablePosition(p: Position): boolean {
 //     from an ancestral `#extract` and must run after that extraction.
 // The engine uses this to schedule transforms in the right phase.
 
-export const transformDataDependencySchema = z.enum(['none', 'extracted_context']);
-export type TransformDataDependency = z.infer<typeof transformDataDependencySchema>;
+const transformDataDependencySchema = z.enum(['none', 'extracted_context']);
 
 /** Declared shape of a transform's parameter (the values the author writes
  *  in the `config:` object of `-[urls:#transform { plugin, config: {…} }]->`).
  *  Optional `required` covers the common case; everything else lives in the
  *  transform's free-form `description`. */
-export const transformParamSchema = z.object({
+const transformParamSchema = z.object({
   name: z.string().min(1),
   type: expressionTypeSchema,
   required: z.boolean().optional(),
@@ -2047,7 +1723,7 @@ export type TransformParam = z.infer<typeof transformParamSchema>;
 /** What the transform contributes to the source graph at runtime. Each
  *  collection is a *declaration* (the schema of what gets added); the
  *  actual values are produced by the transform's `run` method (F4). */
-export const transformAdditionsSchema = z.object({
+const transformAdditionsSchema = z.object({
   /** Properties added directly to the source node the transform was
    *  attached to. Keyed by property name → value type. */
   properties: z.record(z.string(), expressionTypeSchema).optional(),
@@ -2068,7 +1744,7 @@ export type TransformAdditions = z.infer<typeof transformAdditionsSchema>;
  *  may leave it unfilled. `ExpressionType` — the vocabulary `additions` and
  *  `params` already speak — says the type; `optional` is the one thing it
  *  cannot say, and it maps onto the checker's `T | absent` exactly. */
-export const transformOutputFieldSchema = z.object({
+const transformOutputFieldSchema = z.object({
   type: expressionTypeSchema,
   /** The plugin may not fill this — a fetch that failed, a search that found
    *  nothing. Read downstream as `T | absent`, so it has to be discharged
@@ -2118,28 +1794,16 @@ const transformOutputKindSchema = z.discriminatedUnion('kind', [
  * under its movement's pin (`transformOutputUnder`). Removing a language
  * version removes its entries.
  */
-export const transformOutputSchema = transformOutputKindSchema.and(
+const transformOutputSchema = transformOutputKindSchema.and(
   z.object({
     previously: z
       .array(z.object({ before: z.number().int(), output: transformOutputKindSchema }))
       .optional(),
   }),
 );
-
-export type TransformOutputShape = z.infer<typeof transformOutputSchema>;
 export type TransformOutputKind = z.infer<typeof transformOutputKindSchema>;
 
-/** What a plain call to a plugin declaring `output` hands back to a movement
- *  pinned to `languageVersion`. */
-export function transformOutputUnder(
-  output: TransformOutputShape,
-  languageVersion: LanguageVersion,
-): TransformOutputKind {
-  const earlier = output.previously?.find((entry) => before(languageVersion, entry.before));
-  return earlier !== undefined ? earlier.output : output;
-}
-
-export const transformSignatureSchema = z.object({
+const transformSignatureSchema = z.object({
   /** Unique transform identifier — the value an author writes in
    *  `-[…:#transform { plugin: "<name>" }]->`. Must be unique across
    *  the framework-global registry. */

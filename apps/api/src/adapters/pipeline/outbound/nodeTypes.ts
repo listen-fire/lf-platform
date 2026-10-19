@@ -146,15 +146,8 @@ export function createNodeTypeId<T extends string, U extends string>(
   return `${adapter}:${type}`;
 }
 
-// Helper to parse a node type ID
-export function parseNodeTypeId(id: string): { adapter: string; type: string } | null {
-  const parts = id.split(':');
-  if (parts.length !== 2) return null;
-  return { adapter: parts[0], type: parts[1] };
-}
-
 // Serializable node type definition for API responses
-export interface SerializableNodeTypeDefinition {
+interface SerializableNodeTypeDefinition {
   id: string;
   adapter: PipelineOutputType;
   label: string;

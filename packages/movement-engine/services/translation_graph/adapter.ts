@@ -453,7 +453,7 @@ export interface EventPhraseTemplate {
  */
 export type AdapterEventPhraseVocabulary = Record<string, readonly EventPhraseTemplate[]>;
 
-export interface AdapterVocabulary {
+interface AdapterVocabulary {
   /** Absorbs the former core-side `BRAND_ICONS` map — see
    *  `adapters/registry.ts`'s `getBrandIcon`. */
   icon?: BrandIcon;
@@ -462,7 +462,7 @@ export interface AdapterVocabulary {
 }
 
 /** One entry-position construction arg — see {@link AdapterManifest.positionArgs}. */
-export interface PositionArg {
+interface PositionArg {
   /** The construction-arg name, e.g. `spreadsheet`. */
   name: string;
   /** The meta-node collection whose members are the value enum and the landed
@@ -1185,7 +1185,7 @@ export interface DedupConstraint {
   entries: DedupConstraintEntry[];
 }
 
-export interface DedupConstraintEntry {
+interface DedupConstraintEntry {
   /** Adapter-neutral property identifier the framework maps to an
    *  ephemeral data field name via the bundle's synthetic schema
    *  (every `FieldShape.propertyTypeId` is stamped during W3-F4
@@ -1486,7 +1486,7 @@ export interface RelatedPage {
  * should be narrowed; past this the walk is assumed to be a server that
  * never ends, and fails rather than spinning the host.
  */
-export const MAX_RELATED_PAGES = 10_000;
+const MAX_RELATED_PAGES = 10_000;
 
 /**
  * Walk a paged traversal to its end as a stream: the first page is fetched
@@ -1729,7 +1729,7 @@ export interface DeleteInput {
 
 /** One end of a `linkRecords` assert — an existing record, by the same
  *  (recordType, externalId) coordinates every write method speaks. */
-export interface LinkRecordEndpoint {
+interface LinkRecordEndpoint {
   /** A typeId in this adapter's schema (KG: a NodeTypeId). */
   recordType: string;
   /** The record's id in this adapter's system (KG: the node id). */

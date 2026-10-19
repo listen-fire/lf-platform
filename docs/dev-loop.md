@@ -1137,7 +1137,7 @@ in the file headers for the original deferred decisions).
 
 All read/write sites for `linked_object.adapter_type` (and the joined
 `output_run.adapter_type`) funnel through `normalizeAdapterType` from
-`services/knowledge_pipeline/output_v3/linked_objects.ts`. The column
+`services/linked_objects.ts`. The column
 is always lowercase. The legacy refresh path used to store the
 uppercase enum value (`'ATTIO'`) and the TG dispatch path the lowercase
 adapter id (`'attio'`) — Postgres is case-sensitive, so these silently

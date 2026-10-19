@@ -16,18 +16,14 @@ import type { Attachment } from '../file_generation';
  *    dispatch; their registrations below remain only for direct callers
  *    that haven't migrated (tRPC views, Slack, WhatsApp).
  *  - `output` is a tiny no-LLM dispatcher. Upstream agents hand off here
- *    when the user wants to work with pipeline outputs/inputs; the
- *    dispatcher inspects which substrate the entity uses
- *    (legacy v3 `config` JSONB vs. the new substrate) and immediately
- *    hands off to either `output-v3` or the unified agent.
- *  - `output-v3` is the legacy output agent — frozen, edits `pipeline_output.config`.
+ *    when the user wants to work with pipeline outputs/inputs; it
+ *    immediately hands off to the unified agent.
  */
 export type AgentDomain =
   | 'unified'
   | 'query'
   | 'ontology'
   | 'output'
-  | 'output-v3'
   | 'movement'
   | 'system';
 
@@ -240,59 +236,19 @@ export async function initAgentRegistry(): Promise<void> {
     },
   });
 
-  // Legacy v3 output agent — frozen surface. Reached via the `output`
-  // dispatcher below; not handed off to directly by upstream agents.
-  registerAgent({
-    domain: 'output-v3',
-    canHandoffTo: ['query', 'ontology', 'system'],
-    run: async (invocation) => {
-      const { runOutputAgent } = await import('./output_agent');
-      const opts = invocation.domainOptions ?? {};
-      const result = await runOutputAgent(invocation.message, {
-        sessionId: invocation.sessionId,
-        teamId: invocation.teamId,
-        conversationHistory: invocation.conversationHistory,
-        currentConfig: (opts.currentConfig as any) ?? null,
-        adapterType: (opts.adapterType as string) ?? '',
-        credentialsId: (opts.credentialsId as string) ?? null,
-        additionalToolDefs: invocation.additionalToolDefs,
-        additionalToolImpls: invocation.additionalToolImpls,
-      });
-      return {
-        text: result.text,
-        trace: [],
-        suggestedActions: [],
-        attachments: [],
-        outputConfig: result.config,
-      };
-    },
-  });
-
-  // Output dispatcher — no LLM, pure routing. Upstream agents hand off
-  // here when the user wants to work with pipeline outputs/inputs; we
-  // inspect domainOptions to decide which substrate handles it.
-  //
-  //   • `currentConfig` present → legacy v3 entity → output-v3
-  //   • neither set (fresh selection) → default to the unified agent (the
-  //     going-forward consultant). It handles listing/selection and will
-  //     hand back to this dispatcher with `currentConfig` set if the user
-  //     lands on a v3 row.
+  // Output dispatcher — no LLM, pure routing. Pipeline outputs/inputs are
+  // authored by the unified agent; the legacy v3 output agent is gone.
   registerAgent({
     domain: 'output',
-    canHandoffTo: ['output-v3', 'unified'],
-    run: async (invocation) => {
+    canHandoffTo: ['unified'],
+    run: async () => {
       const { HandoffSignal } = await import('./handoff');
-      const opts = invocation.domainOptions ?? {};
-      const isV3 = opts.currentConfig != null;
-      const target: AgentDomain = isV3 ? 'output-v3' : 'unified';
-      const referral = isV3
-        ? 'User is editing a legacy v3 output. Continue from the loaded config.'
-        : 'User wants to work with pipeline outputs/inputs. ' +
+      throw new HandoffSignal(
+        'unified',
+        'User wants to work with pipeline outputs/inputs. ' +
           'The unified agent authors the data movement; use listOutputs / listInputs ' +
-          'to surface candidates. If the user selects a row whose `config` JSONB ' +
-          'is populated (legacy v3), hand off directly to the `output-v3` agent — ' +
-          'that path is frozen and edits the v3 config.';
-      throw new HandoffSignal(target, referral);
+          'to surface candidates.',
+      );
     },
   });
 

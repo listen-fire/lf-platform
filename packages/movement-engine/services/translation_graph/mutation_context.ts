@@ -21,7 +21,7 @@ export type { Actor, ActorType, TriggerType } from 'engine-contracts';
 
 // ── Source-of-change classification ────────────────────────────────────────
 
-export const mutationSourceTypeSchema = z.enum([
+const mutationSourceTypeSchema = z.enum([
   'user_edit',
   'extraction',
   'structured_input',
@@ -33,7 +33,7 @@ export type MutationSourceType = z.infer<typeof mutationSourceTypeSchema>;
 
 // ── MutationSource: who/what produced the change ───────────────────────────
 
-export const mutationSourceSchema = z.object({
+const mutationSourceSchema = z.object({
   type: mutationSourceTypeSchema,
   // Adapter that observed or produced the change. 'kg' for writes originating
   // within Listen-Fire (user edits, agent operations, direct API).
@@ -54,8 +54,6 @@ export const mutationSourceSchema = z.object({
   // Trigger type that fired (when applicable).
   triggerType: triggerTypeSchema.optional(),
 });
-
-export type MutationSource = z.infer<typeof mutationSourceSchema>;
 
 // ── MutationContext: full provenance + audit metadata ──────────────────────
 
@@ -98,47 +96,5 @@ export function agentContext(actorId: string, translationGraphId?: string): Muta
     },
     occurredAt: new Date().toISOString(),
     actorId,
-  };
-}
-
-/**
- * Construct a MutationContext for a write produced by a translation graph
- * running in the structured-input mode (external system → knowledge graph).
- */
-export function structuredInputContext(input: {
-  adapterType: string;
-  translationGraphId: string;
-  translationGraphNodeId: string;
-  pipelineInputId: string;
-  triggerType: TriggerType;
-  linkedObjectId?: string;
-}): MutationContext {
-  return {
-    source: {
-      type: 'structured_input',
-      ...input,
-    },
-    occurredAt: new Date().toISOString(),
-  };
-}
-
-/**
- * Construct a MutationContext for a write produced by an extraction node
- * (LLM-driven expansion within a translation graph).
- */
-export function extractionContext(input: {
-  adapterType: string;
-  translationGraphId: string;
-  translationGraphNodeId: string;
-  pipelineInputId: string;
-  triggerType: TriggerType;
-  linkedObjectId?: string;
-}): MutationContext {
-  return {
-    source: {
-      type: 'extraction',
-      ...input,
-    },
-    occurredAt: new Date().toISOString(),
   };
 }
