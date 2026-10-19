@@ -184,7 +184,7 @@ export async function runWhatsappParityScript(subject: WhatsappParitySubject): P
   await step('Attachment without a key .File', () => adapter.getFieldValue({ position: bare, fieldId: 'File' }));
 
   // ── Actor ──
-  const event = (payload: unknown) => ({ payload }) as never;
+  const event = (payload: unknown) => ({ pipelineInputId: 'parity', adapterType: 'whatsapp', triggerType: 'webhook' as const, payload });
   for (const [name, payload] of [['dispatched', dispatched], ['twilio', TWILIO_RAW], ['reaction', payloadOf(3)], ['no sender', {}], ['blank sender', { from: 'whatsapp:  ' }]] as const) {
     await step(`getActorCandidates ${name}`, async () => (await adapter.getActorCandidates?.({ event: event(payload) })) ?? null);
     await step(`extractActor ${name}`, async () => (await adapter.extractActor?.({ event: event(payload) })) ?? null);
@@ -219,7 +219,8 @@ export async function runWhatsappParityScript(subject: WhatsappParitySubject): P
     edgeName,
     data,
   });
-  const write = (name: string, input: unknown) => step(name, () => adapter.createRecord(input as never));
+  const mutationContext = { source: {}, occurredAt: '2026-10-19T00:00:00.000Z' };
+  const write = (name: string, input: object) => step(name, () => adapter.createRecord({ mutationContext, ...input } as never));
   await write('typing', { recordType: 'Typing', fields: {}, parentLinks: [parentOf(dispatched, 'Typing')] });
   await write('reaction', { recordType: 'Reaction', fields: { Emoji: ' 🔥 ' }, parentLinks: [parentOf(dispatched, 'Reactions')] });
   await write('reaction without emoji', { recordType: 'Reaction', fields: { Emoji: '  ' }, parentLinks: [parentOf(dispatched, 'Reactions')] });
@@ -248,7 +249,7 @@ export async function runWhatsappParityScript(subject: WhatsappParitySubject): P
     await step('reply with the file', () =>
       withFileOwners(
         (owner) => (owner.adapterType === 'whatsapp' ? adapter : undefined),
-        () => adapter.createRecord({ recordType: 'Message', fields: { Body: 'your deck', File: fileValue(file) }, parentLinks: [parentOf(dispatched, 'Replies')] } as never),
+        () => adapter.createRecord({ mutationContext, recordType: 'Message', fields: { Body: 'your deck', File: fileValue(file) }, parentLinks: [parentOf(dispatched, 'Replies')] } as never),
       ),
     );
   }
@@ -257,7 +258,7 @@ export async function runWhatsappParityScript(subject: WhatsappParitySubject): P
   await write('parent not a message', { recordType: 'Message', fields: { Body: 'x' }, parentLinks: [parentOf(payloadOf(3), 'Replies', 'Reaction')] });
   await write('wrong edge', { recordType: 'Message', fields: { Body: 'x' }, parentLinks: [parentOf(dispatched, 'Attachments')] });
   await write('parent without a sender', { recordType: 'Message', fields: { Body: 'x' }, parentLinks: [parentOf({ messageId: 'wamid.Z' }, 'Replies')] });
-  await step('updateRecord', () => adapter.updateRecord({ recordType: 'Message', externalId: '1', fields: {} } as never));
-  await step('deleteRecord', () => adapter.deleteRecord({ recordType: 'Message', externalId: '1' } as never));
+  await step('updateRecord', () => adapter.updateRecord({ mutationContext, recordType: 'Message', externalId: '1', fields: {} } as never));
+  await step('deleteRecord', () => adapter.deleteRecord({ mutationContext, recordType: 'Message', externalId: '1' } as never));
   return transcript;
 }

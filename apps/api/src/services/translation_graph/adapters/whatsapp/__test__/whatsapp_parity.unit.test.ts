@@ -7,15 +7,20 @@
 // know), and the Meta door's media reach the adapter at the platform's
 // exposed-file URLs, served here beside the fake.
 // Each implementation is replayed against the recording and must make the
-// same requests (its writes) and give the same answers.
+// same requests (its writes) and give the same answers: the legacy line, the
+// module in process through the platform's registry (the shared app reaching
+// it as its credential), and the module served as a process with the same
+// app as a user's own credential.
 //
 // Re-record (only when the legacy line changes on purpose, reading the diff):
 // WHATSAPP_PARITY_RECORD=1 pnpm test:unit --testPathPattern whatsapp_parity
 
 import { readFileSync, writeFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
+import { createInterface } from 'node:readline';
 
 import type { TeamId } from '../../../../../generated/kysely/core/Team';
 import type { Exchange } from '../../__test__/parity/exchange';
@@ -24,6 +29,10 @@ import type { TranscriptEntry, WhatsappParitySubject } from './parity/script';
 import { MOVEMENTS_NUMBER_ID, PARITY_TWILIO_ACCOUNT, PRIMARY_NUMBER_ID, runWhatsappParityScript } from './parity/script';
 import { recordingServer, replayingServer, requestOf } from '../../__test__/parity/exchange';
 import { bootFakeChannels } from '../../__test__/parity/fake_channels';
+import { getAdapter } from '../../registry';
+import { BUILTIN_MODULES } from '../../builtin_modules';
+import { createMemoryVault, createSecretsFamily } from 'movement-engine/public/secrets';
+import { createRemoteAdapter, fetchRemoteManifest } from 'movement-engine/public/modules';
 
 // `mime` is an ES module, which this jest runtime cannot load; the adapter
 // reads it with a dynamic import. Answer from the real library, run by Node.
@@ -218,4 +227,105 @@ async function expectParity(subject: () => Promise<WhatsappParitySubject> | What
   it('the legacy line replays identically', async () => {
     await expectParity(legacySubject);
   });
+
+  it('the module in process, through the platform registry, replays identically', async () => {
+    expect(BUILTIN_MODULES.whatsapp?.line).toBe('module');
+    await expectParity(() => ({ adapter: getAdapter({ adapterType: 'whatsapp', teamId: TEAM }), baseUrl: board.baseUrl, hostFiles: true }));
+  });
+
+  // A process host exposes no files of its own and redeems none in process,
+  // so the steps that fetch an exposed file or send one are not run; every
+  // other answer and request is the recording's.
+  it('the module served as a process, over protocol 2, replays identically (no host files)', async () => {
+    const recorded = loadRecording();
+    const served = await serveWhatsapp();
+    const server = await replayingServer(recorded.exchanges);
+    const nodeFetch = globalThis.fetch;
+    globalThis.fetch = sameRealmFetch(nodeFetch);
+    try {
+      target = server.baseUrl;
+      const fields = {
+        accessToken: ACCESS_TOKEN,
+        phoneNumberId: PRIMARY_NUMBER_ID,
+        movementsPhoneNumberId: MOVEMENTS_NUMBER_ID,
+        baseUrl: `${board.baseUrl}/whatsapp/graph`,
+        twilioAccountSid: PARITY_TWILIO_ACCOUNT,
+      };
+      const credentials = createMemoryVault({ 'cred-own': fields });
+      const config = { adapterType: 'whatsapp', teamId: TEAM, baseUrl: served.url, authStrategy: { kind: 'bearer' as const }, credentialsId: 'cred-own' };
+      const remote = createRemoteAdapter({
+        config,
+        secret: '',
+        cacheScopeId: 'parity',
+        manifest: await fetchRemoteManifest(config, ''),
+        documents: { put: async () => ({}) } as never,
+        credential: { name: 'whatsapp', secrets: createSecretsFamily({ backend: credentials }), ref: 'cred-own' },
+      });
+      const transcript = (await runWhatsappParityScript({ adapter: remote, baseUrl: board.baseUrl, hostFiles: false })).map(unwrapRemoteError).map(unnamedInstall);
+      const withoutHostFiles = new Set(['resolveFileRef exposed', 'reply with the file']);
+      expect(transcript).toEqual(recorded.transcript.filter((entry) => !withoutHostFiles.has(entry.step)));
+      const hostFileRequests = (exchange: Exchange) =>
+        !exchange.path.startsWith('/api/files/blob/') && !exchange.path.endsWith('/media') && !JSON.stringify(exchange.body).includes('upload_');
+      expect(server.requests()).toEqual(recorded.exchanges.filter(hostFileRequests).map(requestOf));
+    } finally {
+      globalThis.fetch = nodeFetch;
+      await server.close();
+      served.stop();
+    }
+  });
 });
+
+/** A file as the module named it: over the process transport the client
+ *  names the install a file belongs to (its credential), which an install
+ *  with no credential, as on the platform, does not carry. */
+function unnamedInstall(entry: TranscriptEntry): TranscriptEntry {
+  return JSON.parse(JSON.stringify(entry).split(',"credentialId":"cred-own"').join('')) as TranscriptEntry;
+}
+
+/** A refusal as the module raised it: the client wraps every error the wire
+ *  carries in its method and code, which says nothing about the module. */
+function unwrapRemoteError(entry: TranscriptEntry): TranscriptEntry {
+  const answer = entry.answer;
+  if (answer === null || typeof answer !== 'object' || !('error' in answer) || typeof answer.error !== 'string') return entry;
+  const match = /^Remote adapter error for method "[^"]+": [a-z_]+ — (.*)$/s.exec(answer.error);
+  return match?.[1] === undefined ? entry : { ...entry, answer: { error: match[1] } };
+}
+
+/**
+ * Jest runs this file in a realm of its own, and `fetch` answers in Node's:
+ * the objects of a parsed answer then fail the engine's plain-object check,
+ * which compares prototypes (engine-contracts `isPlainObject`). Production has
+ * one realm. Parse each answer here instead.
+ */
+function sameRealmFetch(nodeFetch: typeof fetch): typeof fetch {
+  return async (input, init) => {
+    const res = await nodeFetch(input, init);
+    const body = await res.text();
+    return Object.assign(new Response(body, { status: res.status, headers: res.headers }), {
+      json: async (): Promise<unknown> => JSON.parse(body),
+    });
+  };
+}
+
+/** `serve-module @lf/whatsapp` as a child process. */
+async function serveWhatsapp(): Promise<{ url: string; stop(): void }> {
+  const repo = join(__dirname, '../../../../../../../..');
+  const child = spawn(process.execPath, [join(repo, 'packages/module-kit/bin/serve-module.cjs'), '.'], {
+    cwd: join(repo, 'modules/whatsapp'),
+    env: { ...process.env, PORT: '0' },
+    stdio: ['ignore', 'pipe', 'inherit'],
+  });
+  const port = await new Promise<number>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('serve-module printed no port within 30s')), 30_000);
+    child.once('exit', (code) => reject(new Error(`serve-module exited (${code})`)));
+    if (child.stdout === null) return;
+    createInterface({ input: child.stdout }).on('line', (line) => {
+      const match = /^listening (\d+)$/.exec(line);
+      if (match?.[1] !== undefined) {
+        clearTimeout(timer);
+        resolve(Number(match[1]));
+      }
+    });
+  });
+  return { url: `http://127.0.0.1:${port}/`, stop: () => child.kill() };
+}

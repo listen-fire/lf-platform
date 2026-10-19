@@ -77,6 +77,7 @@ import { platformBrowser } from '../../playwright';
 import { oauthAppFromEnv } from './module_credentials';
 import { builtInBotToken } from './telegram/shared_bot';
 import { telegramIdentities } from './telegram/identities';
+import { WHATSAPP_MANIFEST, WHATSAPP_MOVEMENTS_NUMBER, sharedWhatsappCredential } from './whatsapp/shared_app';
 import { teamIdSchema } from '../../../lib/team_id';
 
 export type BuiltinLine = 'legacy' | 'module';
@@ -154,6 +155,8 @@ const WEB_MODULE_LINE: BuiltinModuleLine = {
 let platformSlackModule: AdapterModuleDefinition | undefined;
 /** Built once, on the system line's first use. */
 let platformSystemModule: AdapterModuleDefinition | undefined;
+/** Built once, on the WhatsApp line's first use. */
+let platformWhatsappModule: AdapterModuleDefinition | undefined;
 
 /**
  * Every built-in that becomes a module (plan 22 #1), by adapter type or
@@ -320,6 +323,25 @@ export const BUILTIN_MODULES: BuiltinModuleTable = {
       }
       return platformSlackModule;
     },
+  },
+  whatsapp: {
+    kind: 'adapter',
+    line: 'module',
+    manifest: WHATSAPP_MANIFEST,
+    // The platform's own definition: its shared number quoted, and the URLs
+    // its Meta door exposes downloaded media at owned.
+    load: () => {
+      if (platformWhatsappModule === undefined) {
+        const { whatsappModuleWith }: typeof import('@listen-fire/whatsapp') = require('@listen-fire/whatsapp');
+        const { isExposedFileUrl }: typeof import('../engine/files/expose') = require('../engine/files/expose');
+        platformWhatsappModule = whatsappModuleWith({ movementsNumber: WHATSAPP_MOVEMENTS_NUMBER, exposedFileUrl: isExposedFileUrl });
+      }
+      return platformWhatsappModule;
+    },
+    // The platform's one Meta app, for every team: WhatsApp takes no team
+    // credential.
+    sharedCredential: sharedWhatsappCredential,
+    files: (install) => platformModuleFiles({ teamId: install.teamId, module: '@lf/whatsapp' }),
   },
   // Platform-supplied (au-units): a module only the platform hosts, over its
   // own records of runs and events.

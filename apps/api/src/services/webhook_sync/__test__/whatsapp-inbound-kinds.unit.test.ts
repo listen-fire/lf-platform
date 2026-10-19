@@ -4,15 +4,13 @@
 // every whatsapp movement).
 
 import {
-  classifyMetaMessage,
-  parseWhatsappEvents,
-  triggerAcceptsWhatsappKind,
-} from '../providers/whatsapp';
-import { WHATSAPP_RECORD_TYPE_ID } from '../../translation_graph/adapters/whatsapp/types';
-import {
   WHATSAPP_INBOUND_LOCATION_TYPE,
   WHATSAPP_INBOUND_REACTION_TYPE,
-} from '../providers/whatsapp';
+  WHATSAPP_RECORD_TYPE_ID,
+  classifyMetaMessage,
+  triggerAcceptsWhatsappKind,
+  whatsappInboundEvents,
+} from '@listen-fire/whatsapp';
 
 const base = { from: '15551234567', id: 'wamid.IN', timestamp: '1700000000' };
 
@@ -91,7 +89,7 @@ describe('triggerAcceptsWhatsappKind — the listen `events` gate', () => {
   });
 });
 
-describe('parseWhatsappEvents (BYO door) — typed, drop-not-blank', () => {
+describe('whatsappInboundEvents (BYO door) — typed, drop-not-blank', () => {
   const envelope = (message: Record<string, unknown>) => ({
     object: 'whatsapp_business_account',
     entry: [
@@ -111,18 +109,19 @@ describe('parseWhatsappEvents (BYO door) — typed, drop-not-blank', () => {
   });
 
   it('a reaction parses to a reaction-typed event', () => {
-    const events = parseWhatsappEvents(
+    const events = whatsappInboundEvents(
       envelope({ ...base, type: 'reaction', reaction: { message_id: 'wamid.T', emoji: '🔥' } }),
     );
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({
       eventType: 'reaction',
-      objectId: WHATSAPP_INBOUND_REACTION_TYPE,
-      recordId: 'wamid.IN',
+      tag: 'reaction',
+      recordType: WHATSAPP_INBOUND_REACTION_TYPE,
+      externalId: 'wamid.IN',
     });
   });
 
   it('an unsupported kind yields NO event', () => {
-    expect(parseWhatsappEvents(envelope({ ...base, type: 'contacts' }))).toEqual([]);
+    expect(whatsappInboundEvents(envelope({ ...base, type: 'contacts' }))).toEqual([]);
   });
 });
