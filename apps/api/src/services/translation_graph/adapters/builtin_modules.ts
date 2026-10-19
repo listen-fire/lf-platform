@@ -64,6 +64,7 @@ import { ASK_MANIFEST } from '@listen-fire/ask/manifest';
 import { SYSTEM_MANIFEST } from '@listen-fire/system/manifest';
 import { NATIVE_VALUATIONS_MANIFEST } from '@listen-fire/native-valuations/manifest';
 import { EMAIL_MANIFEST } from '@listen-fire/email/manifest';
+import { kgManifest } from '@listen-fire/kg/manifest';
 import { pluginDeclarationNamed, pluginProgramName } from 'movement-engine/public/plugins';
 
 import { injectFakeBaseUrl, isTestHarnessTeam } from '../../../lib/recording';
@@ -84,6 +85,7 @@ import { WHATSAPP_MANIFEST, WHATSAPP_MOVEMENTS_NUMBER, sharedWhatsappCredential 
 import { teamIdSchema } from '../../../lib/team_id';
 import { askTableKv, askUrl } from '../../asks/store';
 import { apiBaseUrl } from '../../../lib/api_base_url';
+import { mutationDelivery } from '../../knowledge/mutation_outbox/delivery_mode';
 
 export type BuiltinLine = 'legacy' | 'module';
 
@@ -181,6 +183,17 @@ let platformWhatsappModule: AdapterModuleDefinition | undefined;
 
 /** Built once, on the ask line's first use. */
 let platformAskModule: AdapterModuleDefinition | undefined;
+
+/** Whether the knowledge graph's change events reach this deployment as signed
+ *  webhooks (its store runs in another process) rather than straight off the
+ *  store's outbox: read once, at boot, as the delivery mode always was. */
+const kgChangeWebhooks = mutationDelivery() === 'webhook';
+
+/** `@lf/kg`'s manifest on this deployment. */
+export const KG_PLATFORM_MANIFEST: AdapterManifest = kgManifest({ changeWebhooks: kgChangeWebhooks });
+
+/** Built once, on the knowledge graph line's first use. */
+let platformKgModule: AdapterModuleDefinition | undefined;
 
 /**
  * Every built-in that becomes a module (plan 22 #1), by adapter type or
@@ -426,6 +439,23 @@ export const BUILTIN_MODULES: BuiltinModuleTable = {
     credential: () => {
       const { platformEmailCredential }: typeof import('./email') = require('./email');
       return platformEmailCredential();
+    },
+  },
+  // The knowledge graph (Henry 2026-10-19: out of core, an adapter module the
+  // platform supplies). Its store is the platform's knowledge unit, handed to
+  // the module scoped to the install; there is no legacy line to flip back to
+  // (the adapter moved, it was not copied).
+  kg: {
+    kind: 'adapter',
+    line: 'module',
+    manifest: KG_PLATFORM_MANIFEST,
+    load: () => {
+      if (platformKgModule === undefined) {
+        const { kgModuleWith }: typeof import('@listen-fire/kg') = require('@listen-fire/kg');
+        const { platformKgStoreFor }: typeof import('./kg_store') = require('./kg_store');
+        platformKgModule = kgModuleWith({ store: platformKgStoreFor, changeWebhooks: kgChangeWebhooks });
+      }
+      return platformKgModule;
     },
   },
   // The bundled plugins (Henry 2026-10-17: plugins are modules too), all six

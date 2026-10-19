@@ -14,7 +14,9 @@ import type { TriggerEvent } from 'movement-engine/services/translation_graph/tr
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type { MutationContext } from 'movement-engine/services/translation_graph/mutation_context';
 
-import { KnowledgeGraphAdapter, KG_ADAPTER_TYPE } from '../../adapters/knowledge_graph';
+import { KnowledgeGraphAdapter, KG_ADAPTER_TYPE } from '@listen-fire/kg';
+import { platformKgStore } from '../../adapters/kg_store';
+import { logger } from 'movement-engine/public/log';
 import {
   consultEchoSuppression,
   suppressSelfEnabled,
@@ -131,7 +133,7 @@ describe('consultEchoSuppression — the inbound decision', () => {
 describe('KnowledgeGraphAdapter.didWeAuthor — scoped to THIS change', () => {
   // `didWeAuthor` answers from the event's own provenance, so no connection is
   // needed — the adapter never reaches the graph on this path.
-  const adapter = new KnowledgeGraphAdapter({ teamId: TEAM });
+  const adapter = new KnowledgeGraphAdapter({ store: platformKgStore({ teamId: TEAM, credentialsId: undefined }), log: logger });
 
   function kgEvent(context: MutationContext): TriggerEvent {
     return event({

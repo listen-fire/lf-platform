@@ -1,17 +1,20 @@
 // The drainer: the only thing that carries a graph mutation out of knowledge.
 //
-// The write door enqueues events inside the write transaction; this worker
-// hands each one to the ONE delivery path this deployment is configured for —
-// a locally-registered subscriber, or signed POSTs to the team's registered
+// The write door enqueues events inside the write transaction; a drain hands
+// each one to the ONE delivery path this deployment is configured for — the
+// local consumer that drains it (the automations work queue, which takes each
+// event through its inbound path), or signed POSTs to the team's registered
 // destinations. Neither is a privileged fast path: the outbox row is written
 // either way, so the ordering and latency semantics are the same shape in every
 // deployment (D25, M-38). Running both would be two deliveries of one graph
 // write, which is why the mode is a choice and not two switches (D39c, D41b).
 //
 // The composed wiring is deliberately INVERTED: knowledge does not know the
-// movement engine exists. The composition root registers a subscriber at
-// startup; a standalone knowledge simply has none, and its consumers register
-// webhooks like any other client.
+// movement engine exists. Under `local` the consumer calls `drainOnce` with its
+// own delivery (the composition root registers that as a work kind, so the
+// automations drainer — the server's loop or a scheduled `drain:once` — runs
+// it and nothing here runs a movement); under `webhook` this unit's own loop
+// drains and POSTs, and its consumers register webhooks like any other client.
 
 import { createHmac } from 'node:crypto';
 
@@ -33,20 +36,10 @@ const DELIVERY_TIMEOUT_MS = 10 * SECOND;
 
 export const OUTBOX_DRAINER = 'knowledge.mutation_outbox';
 
-/**
- * A consumer inside this process. The composed Listen-Fire deployment registers the
- * movement engine's mutation dispatch here; nothing else may — a second
- * in-process subscriber would be a second delivery path, which is exactly what
- * the outbox exists to prevent.
- */
-export interface LocalMutationSubscriber {
-  (input: { teamId: string; envelope: MutationEventEnvelope }): Promise<void>;
-}
-
-let localSubscriber: LocalMutationSubscriber | null = null;
-
-export function registerLocalMutationSubscriber(subscriber: LocalMutationSubscriber): void {
-  localSubscriber = subscriber;
+/** The local consumer's delivery of one event. It must be durable when it
+ *  resolves (the row is then marked delivered); a throw retries the row. */
+export interface LocalMutationDelivery {
+  (input: { teamId: string; envelope: MutationEventEnvelope; outboxId: string }): Promise<void>;
 }
 
 function outboxQb() {
@@ -112,22 +105,22 @@ async function postTo(input: { url: string; secret: string; body: string }): Pro
   }
 }
 
-async function deliver(row: OutboxRow): Promise<void> {
+async function deliver(row: OutboxRow, deliverLocally: LocalMutationDelivery | undefined): Promise<void> {
   const envelope = row.payload as MutationEventEnvelope;
   const mode = mutationDelivery();
 
   switch (mode) {
     case 'local': {
-      // No subscriber in a deployment configured to deliver in-process means
-      // the consumer never booted, or stopped. That is a listener that will not
-      // fire, so the row fails and retries rather than being marked delivered
-      // into nowhere — the same reason the drainer keeps a heartbeat at all.
-      if (!localSubscriber) {
+      // A drain without the local consumer's delivery, in a deployment
+      // configured to deliver locally, is a listener that will not fire, so
+      // the row fails and retries rather than being marked delivered into
+      // nowhere — the same reason the drainer keeps a heartbeat at all.
+      if (!deliverLocally) {
         throw new Error(
-          'No local mutation subscriber is registered, but KNOWLEDGE_MUTATION_DELIVERY is "local"',
+          'This drain has no local delivery, but KNOWLEDGE_MUTATION_DELIVERY is "local" (the automations drain carries these events)',
         );
       }
-      await localSubscriber({ teamId: row.team_id, envelope });
+      await deliverLocally({ teamId: row.team_id, envelope, outboxId: row.id });
       return;
     }
     case 'webhook': {
@@ -244,7 +237,11 @@ async function beat(input: { delivered: number; failed: number; lastError: strin
     .execute();
 }
 
-export async function drainOnce(): Promise<{ delivered: number; failed: number }> {
+/** One pass over the undelivered rows. `deliverLocally` is the local
+ *  consumer's delivery, required under `local`. */
+export async function drainOnce(
+  input: { deliverLocally?: LocalMutationDelivery } = {},
+): Promise<{ delivered: number; failed: number }> {
   const rows = await claimBatch();
   let delivered = 0;
   let failed = 0;
@@ -252,7 +249,7 @@ export async function drainOnce(): Promise<{ delivered: number; failed: number }
 
   for (const row of rows) {
     try {
-      await deliver(row);
+      await deliver(row, input.deliverLocally);
       await markDelivered(row.id);
       delivered += 1;
     } catch (err) {
@@ -266,7 +263,10 @@ export async function drainOnce(): Promise<{ delivered: number; failed: number }
   return { delivered, failed };
 }
 
+/** This unit's own loop, for a deployment whose events leave as webhooks. Under
+ *  `local` it starts nothing: the consumer drains (see the file header). */
 export function startKnowledgeOutboxDrainer(): void {
+  if (mutationDelivery() === 'local') return;
   worker(async () => {
     try {
       await drainOnce();

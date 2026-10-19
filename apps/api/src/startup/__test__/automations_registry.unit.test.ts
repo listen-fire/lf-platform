@@ -46,11 +46,13 @@ const PERIODIC_KINDS = [
   'exposed_file_sweep',
   'airtable_webhook_refresh',
   'run_orphan_sweep',
+  'knowledge_changes',
 ] as const;
 
 /** The kinds the units bring: the adapter packages' (asks, Airtable), file
- *  exposure's and inbound sync's. */
-const UNIT_KINDS = ['ask_closed_sweep', 'airtable_webhook_refresh', 'exposed_file_sweep', 'linked_object_refresh'];
+ *  exposure's, inbound sync's, and the knowledge graph's change events (a
+ *  composed process, the default delivery). */
+const UNIT_KINDS = ['ask_closed_sweep', 'airtable_webhook_refresh', 'exposed_file_sweep', 'linked_object_refresh', 'knowledge_changes'];
 
 const PASS = { claimed: 0, ran: 0, recovered: 0, failed: 0, deferred: 0, claimFailed: false };
 
@@ -306,6 +308,7 @@ describe('registerAutomationsWork', () => {
       exposed_file_sweep: 5 * 60_000,
       airtable_webhook_refresh: 60 * 60_000,
       run_orphan_sweep: 30_000,
+      knowledge_changes: 2_000,
     });
   });
 

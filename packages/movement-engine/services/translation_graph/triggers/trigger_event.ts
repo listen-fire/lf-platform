@@ -35,14 +35,19 @@ export function triggerEventOf(input: {
     payload: event.payload,
     ...(event.changeType ? { changeType: event.changeType } : {}),
     ...(rootRecordType ? { rootRecordType } : {}),
+    // A mutation event is about a record the host itself keeps (a store's
+    // node), so it anchors by the host's id; every other event names the
+    // source system's record.
     ...(event.externalId !== undefined
-      ? {
-          externalRecordRef: {
-            adapterType,
-            externalId: event.externalId,
-            ...(externalRecordRefType ? { recordType: externalRecordRefType } : {}),
-          },
-        }
+      ? triggerType === 'mutation'
+        ? { recordId: event.externalId }
+        : {
+            externalRecordRef: {
+              adapterType,
+              externalId: event.externalId,
+              ...(externalRecordRefType ? { recordType: externalRecordRefType } : {}),
+            },
+          }
       : {}),
     ...(event.actor ? { actor: event.actor } : {}),
     ...(event.changedFields ? { changedFields: event.changedFields } : {}),

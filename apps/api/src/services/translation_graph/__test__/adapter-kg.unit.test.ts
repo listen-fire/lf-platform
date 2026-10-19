@@ -1,6 +1,7 @@
 /**
- * Unit tests for the KG adapter's schema + resource paths, across the TWO
- * seams the adapter now has (D25):
+ * Unit tests for the `@lf/kg` module's adapter over the platform's store
+ * (`kg_store`), its schema + resource paths, across the TWO seams that store
+ * has (D25):
  *
  *   - **Reads go over HTTP.** The ontology and a node's attachments are
  *     fetched from `/api/v1/knowledge/graph/*` with a stored credential, so
@@ -76,14 +77,6 @@ jest.mock('movement-engine/services/knowledge_pipeline/output_v3/schemas', () =>
     filterExpressionSchema: stub,
   };
 });
-
-// `knowledge_graph_writes` pulls in the knowledge store + mutation_context,
-// which transitively crash on the same load chain. We don't exercise
-// createRecord / updateRecord in this suite.
-jest.mock('../adapters/knowledge_graph_writes', () => ({
-  createKgRecord: jest.fn(),
-  updateKgRecord: jest.fn(),
-}));
 
 jest.mock('../../../generated/kysely/knowledge/ResourceType', () => ({
   __esModule: true,
@@ -388,7 +381,9 @@ jest.mock('../../../lib/kysely', () => ({
 // Subject under test (loaded after mocks are in place)
 // ---------------------------------------------------------------------------
 
-import { KnowledgeGraphAdapter, KG_ADAPTER_TYPE, KG_RESOURCE_TYPE_ID, KG_RESOURCES_EDGE_NAME } from '../adapters/knowledge_graph';
+import { KnowledgeGraphAdapter, KG_ADAPTER_TYPE, KG_RESOURCE_TYPE_ID, KG_RESOURCES_EDGE_NAME } from '@listen-fire/kg';
+import { platformKgStore } from '../adapters/kg_store';
+import { logger } from 'movement-engine/public/log';
 import { persistKgResources } from '../adapters/knowledge_graph_resources';
 import { RESOURCES_REFERENCE_FIELD_ID, type ResourceFilter } from 'movement-engine/services/translation_graph/adapter';
 import { makeStablePosition } from 'movement-engine/services/translation_graph/types';
@@ -500,8 +495,8 @@ const fakeGraph = jest.fn(async (input: unknown, init?: RequestInit): Promise<Re
 
 global.fetch = fakeGraph as unknown as typeof fetch;
 
-function makeAdapter(): KnowledgeGraphAdapter {
-  return new KnowledgeGraphAdapter({ teamId: TEAM_ID, credentialsId: KG_CREDENTIALS_ID });
+function makeAdapter(input: { credentialsId: string | undefined } = { credentialsId: KG_CREDENTIALS_ID }): KnowledgeGraphAdapter {
+  return new KnowledgeGraphAdapter({ store: platformKgStore({ teamId: TEAM_ID, credentialsId: input.credentialsId }), log: logger });
 }
 
 /** A wire node type with only the parts a test cares about spelled out. */
@@ -529,10 +524,7 @@ async function writeResourceVia(input: {
   facts: Fact[];
 }): Promise<void> {
   await persistKgResources({
-    connection: {
-      creds: { apiKey: 'test-key', baseUrl: 'https://test.local' },
-      ontology: { nodeTypes: [], propertyTypes: [], edgeTypes: [] },
-    },
+    creds: { apiKey: 'test-key', baseUrl: 'https://test.local' },
     teamId: TEAM_ID,
     nodeId: input.target.nodeId,
     resources: [{ ...input.resource, facts: input.facts }],
@@ -587,7 +579,7 @@ beforeEach(() => {
 
 describe('KnowledgeGraphAdapter — the connection is what makes a read possible', () => {
   it('refuses to read without one — an unconnected graph is an error, never an empty one', async () => {
-    const adapter = new KnowledgeGraphAdapter({ teamId: TEAM_ID });
+    const adapter = makeAdapter({ credentialsId: undefined });
     await expect(adapter.describe('Company')).rejects.toThrow(/no connection/i);
     expect(fakeGraph).not.toHaveBeenCalled();
   });

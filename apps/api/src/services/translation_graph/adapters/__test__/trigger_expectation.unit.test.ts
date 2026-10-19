@@ -10,12 +10,14 @@ import { SLACK_MANIFEST } from '../slack';
 import { EMAIL_MANIFEST } from '../email';
 import { ATTIO_MANIFEST } from '../attio';
 import { AIRTABLE_MANIFEST } from '../airtable';
-import { KG_MANIFEST } from '../knowledge_graph';
+import { kgManifest } from '@listen-fire/kg/manifest';
 import { WHATSAPP_MANIFEST } from '../whatsapp';
 import { CRON_MANIFEST } from '../cron';
 import { MANUAL_MANIFEST } from '../manual';
 import { NATIVE_VALUATIONS_MANIFEST } from '../native_valuations';
 import { listAdapterManifests } from '../registry';
+
+const KG_MANIFEST = kgManifest({ changeWebhooks: false });
 
 describe('adapter triggerExpectation — honest inbound semantics', () => {
   it('Slack spells out the scope and warns against "every message"', () => {

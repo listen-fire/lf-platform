@@ -1,8 +1,10 @@
-// KG resource persistence (`4d_resources.md`).
+// KG resources (`4d_resources.md`): the platform's half of the knowledge
+// graph module's store, for the `public.resource` rows a node's attachments
+// name.
 //
 // Node-level resources ride `WriteInput.resources` and persist as part of the
-// record's own write: createKgRecord/updateKgRecord call `persistKgResources`
-// once the node exists. This is the per-node persist helper repurposed from
+// record's own write: the module's createKgRecord/updateKgRecord attach them
+// through the store once the node exists, and the store lands here. This is the per-node persist helper repurposed from
 // the retired standalone `writeResource` method.
 //
 // The persistence is SPLIT along the carve's own line, and deliberately: the
@@ -21,12 +23,11 @@
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { ResourceId } from '../../../generated/kysely/knowledge/Resource';
 import type { Resource } from 'movement-engine/public/adapter';
-import type { WriteConnection } from './knowledge_graph_writes';
 
 import { getKnowledgeQb } from '../../../lib/kysely';
 import ResourceType from '../../../generated/kysely/knowledge/ResourceType';
 import { resourceIdSchema } from '../../../lib/resource_id';
-import { kgFetch } from './kg_client';
+import { kgFetch, type KgCredentials } from './kg_client';
 
 
 /**
@@ -45,7 +46,7 @@ import { kgFetch } from './kg_client';
  * record's own write.
  */
 export async function persistKgResources(input: {
-  connection: WriteConnection;
+  creds: KgCredentials;
   teamId: TeamId;
   nodeId: string;
   resources: Resource[] | undefined;
@@ -53,7 +54,7 @@ export async function persistKgResources(input: {
   if (!input.resources || input.resources.length === 0) return;
   for (const resource of input.resources) {
     await persistKgResource({
-      connection: input.connection,
+      creds: input.creds,
       teamId: input.teamId,
       nodeId: input.nodeId,
       resource,
@@ -62,7 +63,7 @@ export async function persistKgResources(input: {
 }
 
 async function persistKgResource(input: {
-  connection: WriteConnection;
+  creds: KgCredentials;
   teamId: TeamId;
   nodeId: string;
   resource: Resource;
@@ -124,7 +125,7 @@ async function persistKgResource(input: {
     resolvedId = inserted.id;
   }
 
-  await kgFetch(input.connection.creds, {
+  await kgFetch(input.creds, {
     method: 'POST',
     path: `/nodes/${input.nodeId}/resources`,
     body: {
@@ -154,4 +155,50 @@ async function excerptFor(resourceId: ResourceId): Promise<string | null> {
     .select(['raw_text.content'])
     .executeTakeFirst();
   return row?.content ?? null;
+}
+
+/**
+ * The `Resource` rows behind a node's attachments.
+ *
+ * Only the ATTACHMENT is the graph's; `resource` is this side's own table, so
+ * the join is split across the boundary rather than asked for across it. The
+ * standard fields are materialised onto `data` so a `resource` expression's
+ * field reads are a local lookup; the engine applies any author
+ * `ResourceFilter` post-hoc.
+ */
+export async function readKgResources(resourceIds: ResourceId[]): Promise<Resource[]> {
+  if (resourceIds.length === 0) return [];
+  const resources = await getKnowledgeQb(['resource'])
+    .selectFrom('resource')
+    .where('resource.id', 'in', resourceIds)
+    .select([
+      'resource.id',
+      'resource.type',
+      'resource.url',
+      'resource.name',
+      'resource.external_id',
+      'resource.metadata',
+    ])
+    .execute();
+
+  return resources.map((r) => ({
+    id: r.id,
+    externalId: r.external_id ?? undefined,
+    // Provenance was stored in metadata at write time (4d_resources.md) —
+    // round-trip it back onto the resource.
+    provenance: (r.metadata as { provenance?: Resource['provenance'] } | null)?.provenance,
+    type: r.type as Resource['type'],
+    name: r.name ?? undefined,
+    url: r.url ?? undefined,
+    data: {
+      name: r.name,
+      url: r.url,
+      type: r.type,
+      // document_url and content are lazy fields — fetched on demand when
+      // a resource expression specifically asks for them. Initial pass
+      // returns null; future enhancement loads them.
+      document_url: null,
+      content: null,
+    },
+  }));
 }

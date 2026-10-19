@@ -70,7 +70,6 @@ jest.mock('../../adapters/registry', () => ({
   },
 }));
 
-jest.mock('../../adapters/knowledge_graph', () => ({ KG_ADAPTER_TYPE: 'knowledge_graph' }));
 jest.mock('../../adapters/resolve', () => ({ resolveAdapter: jest.fn() }));
 
 const resolveAdapterMock = resolveAdapter as jest.Mock;

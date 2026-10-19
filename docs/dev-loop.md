@@ -463,8 +463,10 @@ Give `pnpm dev:dealroom setup` a `--round` to narrow the listen, then inject a
 different round label to prove an excluded label stays silent.
 
 **KG mutation** under the hood: resolves a node type (by name or id), picks an
-existing node of that type (or `--node-id`), builds a `RecordMutationEvent`, and
-calls `dispatchMutationEvent` — the same entry the post-commit emitter feeds. Use
+existing node of that type (or `--node-id`), builds the store's change envelope,
+and queues it through the same door the outbox drain uses (`queueKnowledgeChange`:
+the `@lf/kg` module reads it, one receipt and `dispatch_event` row per matching
+listen), then waits for the stack's drain to settle the team's rows. Use
 this to exercise a `listen to kg { type: <…> }` movement; `dev:link` does a raw
 insert that bypasses the mutation emitter and will NOT fire a kg listener. The
 listener movement's param is kg-seeded: `function m(rec: <kg-[:Deal]->>) { … }` +

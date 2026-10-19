@@ -63,6 +63,7 @@ COPY modules/airtable/package.json modules/airtable/
 COPY modules/attio/package.json modules/attio/
 COPY modules/telegram/package.json modules/telegram/
 COPY modules/ask/package.json modules/ask/
+COPY modules/kg/package.json modules/kg/
 COPY modules/slack/package.json modules/slack/
 COPY modules/system/package.json modules/system/
 COPY modules/native-valuations/package.json modules/native-valuations/

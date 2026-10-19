@@ -3,10 +3,10 @@
  *
  * Two halves:
  *
- *  1. Behavioural — `runModeGate` (the single source of truth both dispatch
- *     paths consult). Asserts off → drop, dry_run → dryRun true, live →
+ *  1. Behavioural — `runModeGate` (the single source of truth the dispatch
+ *     path consults; a knowledge-graph change takes the same path). Asserts off → drop, dry_run → dryRun true, live →
  *     dispatch with dryRun false. This is the load-bearing decision; the
- *     wiring tests below pin that both dispatchers actually consult it.
+ *     wiring tests below pin that the dispatcher actually consults it.
  *
  *  2. Wiring (source-text) — mirrors `r_routing.unit.test.ts`: reads the
  *     dispatcher sources directly (no DB) and pins that the gate is
@@ -85,34 +85,6 @@ describe('dispatchTriggerByIdEvent — run_mode gating wiring', () => {
   });
 });
 
-describe('dispatchKgMutationTriggers — run_mode gating wiring', () => {
-  const src = READ('services/translation_graph/triggers/mutation_dispatch.ts');
-
-  it('consults runModeGate per matching trigger', () => {
-    const fnRange = extractFunction(src, 'dispatchKgMutationTriggers');
-    expect(fnRange).toMatch(/runModeGate\(trigger\.runMode\)/);
-  });
-
-  it('off → skips the trigger before firing its movement', () => {
-    const fnRange = extractFunction(src, 'dispatchKgMutationTriggers');
-    expect(fnRange).toMatch(/if \(!gate\.dispatch\)/);
-    // `continue` skips this trigger entirely — before the movement firing.
-    // (The legacy non-movement orchestration walk retired with the TG
-    // engine, kill-tg SD-3a; movement firing is the only mutation path now.)
-    const gateIdx = fnRange.indexOf('runModeGate(trigger.runMode)');
-    const continueIdx = fnRange.indexOf('continue;', gateIdx);
-    const firingIdx = fnRange.indexOf('dispatchMovementMutationFiring(');
-    expect(continueIdx).toBeGreaterThan(gateIdx);
-    expect(firingIdx).toBeGreaterThan(continueIdx);
-  });
-
-  it('dry_run → threads gate.dryRun into the movement firing', () => {
-    const fnRange = extractFunction(src, 'dispatchKgMutationTriggers');
-    expect(fnRange).toMatch(/const dryRun = gate\.dryRun/);
-    // The gated dryRun is threaded into the movement firing dispatch.
-    expect(fnRange).toMatch(/dispatchMovementMutationFiring\(\{[\s\S]*?dryRun,/);
-  });
-});
 
 /**
  * Pull the body of a named function out of a source file — copy of the

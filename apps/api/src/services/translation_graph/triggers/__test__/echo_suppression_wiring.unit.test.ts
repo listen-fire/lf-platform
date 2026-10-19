@@ -6,7 +6,8 @@
  * can't silently drop them:
  *
  *  - the consult sits at the inbound boundary AFTER the loop-guard floor and
- *    BEFORE the engine runs, on BOTH dispatch paths (external + kg-mutation);
+ *    BEFORE the engine runs, on the one dispatch path (a knowledge-graph change
+ *    takes it too, through its work row);
  *  - `suppress` returns the `echo_suppressed` disposition and records (not
  *    drops) the stored receipt as suppressed;
  *  - `no-op` (flag on, adapter can't answer) fires as normal with a loud log;
@@ -20,7 +21,6 @@ const READ = (rel: string) =>
   fs.readFileSync(path.resolve(__dirname, '..', '..', '..', '..', rel), 'utf-8');
 
 const routerSrc = READ('services/translation_graph/triggers/router.ts');
-const mutationSrc = READ('services/translation_graph/triggers/mutation_dispatch.ts');
 
 describe('dispatchTriggerByIdEvent — echo-suppression wiring (external path)', () => {
   it('consults after the loop guard and before the engine runs', () => {
@@ -51,33 +51,5 @@ describe('dispatchTriggerByIdEvent — echo-suppression wiring (external path)',
     expect(preceding.lastIndexOf('if (!dryRun)')).toBeGreaterThan(
       preceding.lastIndexOf('// ── OPT-IN ECHO-SUPPRESSION') - 200,
     );
-  });
-});
-
-describe('dispatchKgMutationTriggers — echo-suppression wiring (kg-mutation path)', () => {
-  it('consults after the run_mode gate and before the firing dispatch', () => {
-    const gateIdx = mutationSrc.indexOf('runModeGate(trigger.runMode)');
-    const consultIdx = mutationSrc.indexOf('consultEchoSuppression({');
-    const firingIdx = mutationSrc.indexOf('dispatchMovementMutationFiring({');
-    expect(consultIdx).toBeGreaterThan(gateIdx);
-    expect(firingIdx).toBeGreaterThan(consultIdx);
-  });
-
-  it('asks the trigger’s own adapter from the mutation event provenance and skips on suppress', () => {
-    // Resolved from the trigger's kind, not from a named constant: after D25
-    // the graph is one adapter among many on this path, and hardcoding it here
-    // is the privilege the whole carve removed. The assertion follows.
-    expect(mutationSrc).toMatch(/adapterSlug = resolveAdapterSlug\(trigger\.kind\)/);
-    expect(mutationSrc).toMatch(/adapterType: adapterSlug/);
-    expect(mutationSrc).toMatch(/disposition\.kind === 'suppress'/);
-    // No durable receipt on the in-process path — suppression is a `continue`.
-    const suppressBranch = mutationSrc.slice(mutationSrc.indexOf("disposition.kind === 'suppress'"));
-    expect(suppressBranch.slice(0, 700)).toMatch(/continue;/);
-  });
-
-  it('is skipped under dry-run', () => {
-    const consultIdx = mutationSrc.indexOf('consultEchoSuppression({');
-    const preceding = mutationSrc.slice(0, consultIdx);
-    expect(preceding.lastIndexOf('if (!dryRun)')).toBeGreaterThan(-1);
   });
 });

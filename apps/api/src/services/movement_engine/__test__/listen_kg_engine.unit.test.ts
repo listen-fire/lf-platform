@@ -56,9 +56,11 @@ jest.mock('../../context', () => ({
   }),
 }));
 
-jest.mock('../../translation_graph/adapters/knowledge_graph', () => ({
+// The graph's manifest without its connection requirement, so these runs
+// construct `kg()` bare (the platform's real one needs a credential).
+jest.mock('@listen-fire/kg/manifest', () => ({
   KG_ADAPTER_TYPE: 'kg',
-  KG_MANIFEST: {
+  kgManifest: () => ({
     adapterType: 'kg',
     displayName: 'Knowledge Graph',
     supportedTriggers: ['mutation'],
@@ -69,8 +71,7 @@ jest.mock('../../translation_graph/adapters/knowledge_graph', () => ({
       { key: 'type', required: true, narrows: { collection: 'Node Type', matchField: 'Id' } },
       { key: 'fields', format: 'fields' },
     ],
-  },
-  createKnowledgeGraphAdapter: jest.fn(() => ({ adapterType: 'kg' })),
+  }),
 }));
 
 jest.mock('../../knowledge_pipeline/facts', () => ({
@@ -99,7 +100,7 @@ import type {
 } from 'movement-engine/services/translation_graph/adapter';
 import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
 import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
-import type { RecordMutationEvent } from '../../translation_graph/triggers/record_mutation_event';
+import type { RecordMutationEvent } from '@listen-fire/kg';
 import {
   makeStablePosition,
   positionData,

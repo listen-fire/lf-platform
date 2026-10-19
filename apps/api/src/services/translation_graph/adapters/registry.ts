@@ -9,7 +9,7 @@ import type { ConfigBlock, TextBlock } from 'movement-engine/public/adapter-conf
 import ExternalServiceType from '../../../generated/kysely/automations/ExternalServiceType';
 import { WRITE_METHODS } from 'movement-engine/public/adapter';
 import { credentialTypeOf } from './credential_type';
-import { KG_ADAPTER_TYPE, KG_MANIFEST, createKnowledgeGraphAdapter } from './knowledge_graph';
+import { KG_ADAPTER_TYPE } from '@listen-fire/kg/manifest';
 import { ATTIO_ADAPTER_TYPE } from '@listen-fire/attio/types';
 import { ATTIO_MANIFEST } from '@listen-fire/attio/manifest';
 import { NATIVE_VALUATIONS_ADAPTER_TYPE } from '@listen-fire/native-valuations/types';
@@ -45,7 +45,7 @@ import { EVERTRACE_ADAPTER_TYPE } from '@listen-fire/evertrace/types';
 import { EVERTRACE_MANIFEST } from '@listen-fire/evertrace/manifest';
 import { DEALROOM_ADAPTER_TYPE } from '@listen-fire/dealroom/types';
 import { DEALROOM_MANIFEST } from '@listen-fire/dealroom/manifest';
-import { builtinAdapterFactory, builtinPollSourceFactory, moduleOnlyAdapterFactory } from './builtin_modules';
+import { KG_PLATFORM_MANIFEST, builtinAdapterFactory, builtinPollSourceFactory, moduleOnlyAdapterFactory } from './builtin_modules';
 import { GMAIL_ADAPTER_TYPE, GMAIL_MANIFEST, createGmailAdapter } from './gmail';
 import { createGmailPollSource } from './gmail/poll';
 import { ASK_ADAPTER_TYPE } from '@listen-fire/ask/types';
@@ -71,8 +71,8 @@ type AdapterFactory = (input: {
 }) => Adapter;
 
 const ADAPTER_FACTORIES: Record<string, AdapterFactory> = {
-  [KG_ADAPTER_TYPE]: ({ teamId, credentialsId }) =>
-    createKnowledgeGraphAdapter({ teamId, credentialsId }),
+  // The knowledge graph — a module (@lf/kg) over the platform's own store.
+  [KG_ADAPTER_TYPE]: moduleOnlyAdapterFactory(KG_ADAPTER_TYPE),
   [ATTIO_ADAPTER_TYPE]: builtinAdapterFactory(ATTIO_ADAPTER_TYPE, ({ teamId, credentialsId }) => {
     const { createAttioAdapter }: typeof import('./attio') = require('./attio');
     return createAttioAdapter({ teamId, credentialsId });
@@ -264,7 +264,7 @@ export function getPollSource(input: {
  *
  */
 const ADAPTER_MANIFESTS: Record<string, AdapterManifest> = {
-  [KG_ADAPTER_TYPE]: KG_MANIFEST,
+  [KG_ADAPTER_TYPE]: KG_PLATFORM_MANIFEST,
   [ATTIO_ADAPTER_TYPE]: ATTIO_MANIFEST,
   [AFFINITY_ADAPTER_TYPE]: AFFINITY_MANIFEST,
   [NATIVE_VALUATIONS_ADAPTER_TYPE]: NATIVE_VALUATIONS_MANIFEST,

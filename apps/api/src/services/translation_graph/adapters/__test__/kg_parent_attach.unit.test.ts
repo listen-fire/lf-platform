@@ -20,6 +20,7 @@ const existingEdges = new Set<string>();
 
 jest.mock('../kg_client', () => ({
   __esModule: true,
+  loadKgCredentials: jest.fn(async () => ({ apiKey: 'k', baseUrl: 'https://graph.test' })),
   kgFetch: jest.fn(
     async (_creds: unknown, req: { method: string; path: string; body?: Record<string, unknown> }) => {
       calls.push({ method: req.method, path: req.path, body: req.body });
@@ -58,7 +59,8 @@ jest.mock('../../../../generated/kysely/knowledge/ChangeSource', () => ({
   default: { pipeline: 'pipeline', api: 'api' },
 }));
 
-import { updateKgRecord } from '../knowledge_graph_writes';
+import { updateKgRecord } from '@listen-fire/kg/writes';
+import { platformKgStore } from '../kg_store';
 
 const PARENT_TYPE = 'type-organization';
 const CHILD_TYPE = 'type-person';
@@ -78,9 +80,12 @@ const ONTOLOGY: WireOntology = {
   ],
 } as unknown as WireOntology;
 
+// The module's write path over the platform's store: the store is what turns
+// each write into the graph's request.
 const CONNECTION = {
-  creds: { apiKey: 'k', baseUrl: 'https://graph.test' },
+  store: platformKgStore({ teamId: 'team-1' as TeamId, credentialsId: 'kg-credential-1' }),
   ontology: ONTOLOGY,
+  log: { debug: () => undefined, info: () => undefined, warn: () => undefined, error: () => undefined },
 };
 
 const MUTATION_CONTEXT: MutationContext = {
@@ -91,7 +96,6 @@ const MUTATION_CONTEXT: MutationContext = {
 /** The parent-only attach: a matched node, no fields, one parent. */
 const attachOnly = {
   connection: CONNECTION,
-  teamId: 'team-1' as TeamId,
   externalId: 'child-1',
   recordType: CHILD_TYPE,
   fields: {},

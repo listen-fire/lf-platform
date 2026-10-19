@@ -1,6 +1,7 @@
 // A drained mutation event leaves knowledge exactly ONE way per deployment:
-// the in-process subscriber (composed) or the team's registered webhooks
-// (standalone). Delivering both for one outbox row is a double-fire — the same
+// the local consumer's delivery handed to the drain (composed: the automations
+// work kind, which queues it through the inbound path) or the team's
+// registered webhooks (standalone). Delivering both for one outbox row is a double-fire — the same
 // graph write reaching a listener twice — so these pin the mode as a choice,
 // the default as composed, and an unrecognised value as a boot failure.
 
@@ -55,15 +56,17 @@ function chainableQb(rowsByTable: Record<string, unknown[]>, setCalls: SetCall[]
 }
 
 interface Harness {
-  drainOnce: typeof import('../worker').drainOnce;
+  drainOnce: () => ReturnType<typeof import('../worker').drainOnce>;
   subscriber: jest.Mock;
+  startKnowledgeOutboxDrainer: typeof import('../worker').startKnowledgeOutboxDrainer;
+  workerLoop: jest.Mock;
   fetchMock: jest.Mock;
   setCalls: SetCall[];
 }
 
 async function loadWorker(options: {
   delivery?: string;
-  /** Whether the composition root registered an in-process consumer. */
+  /** Whether the drain is handed the local consumer's delivery. */
   subscribed?: boolean;
   endpoints?: unknown[];
 }): Promise<Harness> {
@@ -82,16 +85,19 @@ async function loadWorker(options: {
     logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
   }));
   jest.doMock('../../../../lib/kysely', () => ({ getKnowledgeQb: jest.fn(() => qb) }));
+  const workerLoop = jest.fn();
+  jest.doMock('../../../../lib/worker', () => ({ worker: workerLoop }));
 
-  const { drainOnce, registerLocalMutationSubscriber } = await import('../worker');
+  const worker = await import('../worker');
 
   const subscriber = jest.fn(async () => undefined);
-  if (options.subscribed !== false) registerLocalMutationSubscriber(subscriber);
+  const drainOnce = () =>
+    worker.drainOnce(options.subscribed !== false ? { deliverLocally: subscriber } : {});
 
   const fetchMock = jest.fn(async () => new Response('ok', { status: 200 }));
   global.fetch = fetchMock as unknown as typeof fetch;
 
-  return { drainOnce, subscriber, fetchMock, setCalls };
+  return { drainOnce, subscriber, fetchMock, setCalls, startKnowledgeOutboxDrainer: worker.startKnowledgeOutboxDrainer, workerLoop };
 }
 
 describe('choosing where a drained mutation event goes', () => {
@@ -108,7 +114,7 @@ describe('choosing where a drained mutation event goes', () => {
     const h = await loadWorker({});
 
     expect(await h.drainOnce()).toEqual({ delivered: 1, failed: 0 });
-    expect(h.subscriber).toHaveBeenCalledWith({ teamId: 'team-1', envelope: ROW.payload });
+    expect(h.subscriber).toHaveBeenCalledWith({ teamId: 'team-1', envelope: ROW.payload, outboxId: ROW.id });
     expect(h.fetchMock).not.toHaveBeenCalled();
     expect(h.setCalls).toContainEqual(
       expect.objectContaining({
@@ -143,10 +149,30 @@ describe('choosing where a drained mutation event goes', () => {
         table: 'mutation_outbox',
         values: expect.objectContaining({
           attempts: 1,
-          last_error: expect.stringContaining('No local mutation subscriber'),
+          last_error: expect.stringContaining('no local delivery'),
         }),
       }),
     );
+  });
+});
+
+describe("who drains: knowledge's own loop only when its events leave as webhooks", () => {
+  const REAL_DELIVERY = process.env.KNOWLEDGE_MUTATION_DELIVERY;
+  afterEach(() => {
+    if (REAL_DELIVERY === undefined) delete process.env.KNOWLEDGE_MUTATION_DELIVERY;
+    else process.env.KNOWLEDGE_MUTATION_DELIVERY = REAL_DELIVERY;
+  });
+
+  it('starts no loop in the composed default (the automations drain carries the events)', async () => {
+    const h = await loadWorker({});
+    h.startKnowledgeOutboxDrainer();
+    expect(h.workerLoop).not.toHaveBeenCalled();
+  });
+
+  it('starts its loop when standalone', async () => {
+    const h = await loadWorker({ delivery: 'webhook' });
+    h.startKnowledgeOutboxDrainer();
+    expect(h.workerLoop).toHaveBeenCalledTimes(1);
   });
 });
 

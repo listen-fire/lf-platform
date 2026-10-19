@@ -47,7 +47,8 @@ import {
   hasBridgedLinkedObjects,
   type LinkedObjectRefresh,
 } from './linked_object_refresh';
-import { hasAdapter, resolveAdapterSlug } from '../translation_graph/adapters/registry';
+import { getAdapterManifest, hasAdapter, resolveAdapterSlug } from '../translation_graph/adapters/registry';
+import { filterByRecordScope } from '../translation_graph/triggers/record_scope';
 import { resolveAdapter } from '../translation_graph/adapters/resolve';
 import { isTestHarnessTeam } from '../../lib/recording';
 import { receiveDelivery } from 'movement-engine/public/inbound';
@@ -511,7 +512,13 @@ export async function captureProviderTriggerEvents(
   // Channel-scope filter (`listen … { channels: [...] }`) — async because it
   // resolves the event's channel id → name off the adapter. Only runs when a
   // candidate actually declares `channels`, so the common case pays nothing.
-  const scoped = await filterByChannelScope({ candidates, event, adapterType, subscription });
+  const channelScoped = await filterByChannelScope({ candidates, event, adapterType, subscription });
+  // A store's change to its own record (the knowledge graph's) is scoped by
+  // the watched type and fields, by name, through the adapter.
+  const mutation = isMutationSource(adapterType);
+  const scoped = mutation
+    ? await filterByRecordScope({ candidates: channelScoped, event, adapterType, teamId: subscription.team_id as TeamId })
+    : channelScoped;
   if (scoped.length === 0) return [];
 
   const eventTypes =
@@ -528,13 +535,21 @@ export async function captureProviderTriggerEvents(
       movementId: trigger.movementId,
       event,
       adapterType,
-      triggerType: 'webhook',
+      triggerType: mutation ? 'mutation' : 'webhook',
       eventTypes,
       teamId: subscription.team_id as TeamId,
     });
     if (receipt !== null) captured.push(receipt);
   }
   return captured;
+}
+
+/** A source whose events are changes to records the host itself keeps (it
+ *  fires only `mutation` triggers): its events anchor by the host's record id,
+ *  and its listens are scoped by record type and fields. */
+function isMutationSource(adapterType: string): boolean {
+  const triggers = getAdapterManifest(adapterType)?.supportedTriggers ?? [];
+  return triggers.length > 0 && triggers.every((trigger) => trigger === 'mutation');
 }
 
 export { handleInboundWebhook };

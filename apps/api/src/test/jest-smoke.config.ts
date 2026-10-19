@@ -33,9 +33,9 @@ export default {
     '**/interfaces/rest/__test__/files-blob.unit.test.ts',
     // Trigger routing + run-mode/loop/echo gates.
     '**/triggers/__test__/r_routing.unit.test.ts',
-    // KG-mutation dispatch (single-listener routing/filtering — the 2-way-sync
-    // re-dispatch case was removed with 2-way-sync safety).
-    '**/triggers/__test__/movement_mutation_dispatch.unit.test.ts',
+    // Knowledge-graph change events through the inbound path (listen routing
+    // and filtering, the mutation event a run is handed, queue-only).
+    '**/webhook_sync/__test__/knowledge_changes.unit.test.ts',
     // Movement engine execute + run-now (the core firing paths).
     '**/movement/__test__/execute.unit.test.ts',
     '**/movement/__test__/run_now.unit.test.ts',

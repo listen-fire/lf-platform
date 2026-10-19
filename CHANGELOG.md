@@ -78,6 +78,12 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 - **Plugin answers can carry files and warnings** (adapter protocol 2, additive): `files` (bytes inline as base64, stored by the host and put at `data.<field>`) and `warnings` (each a warning on the run, `MOVENG_PLUGIN_WARNING`). A plugin declaring a `value` output of type `file` answers it as `files.value`.
 - In `lf`, a `"pdf"` kind that only meets the host at run time (`File.from(t, kind)`) fails naming the plugin, and `lf`'s own writer is gone.
 
+### n-kg
+
+- **The knowledge graph is a module, `@lf/kg`, that the platform supplies.** Movements import and use it exactly as before (`` `@lf/kg` ``, `connect kg`, the same record types, edges, `Record Change` event and listen settings); versions 1 to 4 keep their behaviour. The module reaches the graph only through a store the platform hands it, so nothing about the graph is built into the engine any more.
+- **A graph change now runs its listening movements as queued work, never inside the API process's graph loop.** With `KNOWLEDGE_MUTATION_DELIVERY=local` (the default), the automations drain takes each change off the graph's outbox and queues one receipt and one run per matching listen, as for any adapter's webhook; the server's drain loop or a scheduled `drain:once` runs them. Each change is stored as a trigger event (visible and replayable like a webhook's), and the run-mode, loop-guard and `suppress_self` gates apply as they do to every other source. No setting changes. In a process that mounts `knowledge` without `automations`, `local` events now wait undelivered instead of failing on a backoff (`up.sh` already sets `webhook` there).
+- With `KNOWLEDGE_MUTATION_DELIVERY=webhook`, a graph listen's `type:` and `fields:` now narrow which changes fire it (before, that path did not check them, so any change could start any graph listen), and its signed deliveries are held to the platform's rule for signed inbound (subscriptions that existed before keep their old leniency).
+
 ## [0.12.0-rc.2] - 2026-10-19 (pre-release)
 
 This is a pre-release for trying out, not the full 0.11.0 line's replacement: container images are

@@ -1,9 +1,10 @@
 // Which way a drained mutation event leaves knowledge. Read at the composition
 // root, and again by the drainer for every row it delivers.
 //
-// A deployment has EXACTLY ONE active path: composed runs the local subscriber
-// the composition root registers (no HTTP hop); standalone runs the registered
-// webhooks, because automations is a different process. Delivering both for the
+// A deployment has EXACTLY ONE active path: composed has the automations drain
+// take each event straight off the outbox into its inbound path (no HTTP hop);
+// standalone runs the registered webhooks, because automations is a different
+// process. Delivering both for the
 // same row is a double-fire — the listener runs twice off one graph write — so
 // the choice is a mode, not a pair of independently-enabled features.
 //
