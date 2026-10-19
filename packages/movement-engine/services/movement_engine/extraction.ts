@@ -447,6 +447,10 @@ export interface TransformInvocationResult {
    *  to the trace and nowhere else — an outcome is not enrichment, so a
    *  plugin that reports one and attaches nothing still counts as empty. */
   outcome?: string;
+  /** Things the author should know about this call, each shown as a warning
+   *  on the run (`PLUGIN_WARNING`). A plugin that did what it could, and tells
+   *  you what it could not. */
+  warnings?: string[];
 }
 
 /** The plugins a run's catalog snapshot describes, by name. */

@@ -205,6 +205,7 @@ import {
   bindStageArgs,
   callArgSpan,
   memberLocal,
+  packageCalled,
   packageMembers,
   type PackageMember,
   pluginArgMisfitMessage,
@@ -16878,6 +16879,19 @@ class Checker {
             `'${name}' is a plugin — import it: import { ${name} } from plugins`,
             span,
           );
+          return;
+        }
+        // A plugin package used with no import (`pdf.render(…)`): the line is
+        // the whole fix, as a credential's is.
+        const packageTag = since(this.languageVersion, 5) ? packageCalled(this.catalog, name) : undefined;
+        if (packageTag !== undefined) {
+          const line = `import { \`${packageTag}\` as ${name} } from plugins`;
+          this.reportWithFix({
+            code: DiagnosticCodes.NAME_UNRESOLVED,
+            message: `'${name}' is the plugin package ${packageTag} — import it: add '${line}' at the top of the file`,
+            span,
+            fix: { edits: [insertLineAtTop(line)] },
+          });
           return;
         }
         this.report(

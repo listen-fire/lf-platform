@@ -392,6 +392,15 @@ impl<'s> Canon<'s> {
         };
         let Some(written) = written else { return };
 
+        // A PDF is not a file kind from version 5: `@lf/pdf` draws it. The old
+        // spelling's finding is this one alone; the v5 spelling's call is still
+        // read into the canonical tree below.
+        if (written == "File.from" || written == "FILE") && self.is_pdf_file(args) {
+            self.pdf_plugin(args, at);
+            if written == "FILE" {
+                return;
+            }
+        }
         // A v5 spelling, exactly as written: read into the canonical call.
         if let Some(row) = table::by_v5(&written) {
             if self.is_old_shape(row, args) {
@@ -435,6 +444,21 @@ impl<'s> Canon<'s> {
             Shape::ExistsWalk => args.first().is_some_and(|a| !is_walk(&a.value)),
             _ => false,
         }
+    }
+
+    /// `File.from(text, "pdf")`: the kind written as the literal `"pdf"`.
+    fn is_pdf_file(&self, args: &[CallArg]) -> bool {
+        args.len() == 2 && matches!(self.arg_text(args, 1).trim(), "\"pdf\"" | "'pdf'")
+    }
+
+    /// A PDF from version 5 is the `@lf/pdf` plugin's: `pdf.render(text)`.
+    /// The rewrite is not marked safe, because the program must also import the
+    /// package, which an expression's edit cannot add.
+    fn pdf_plugin(&mut self, args: &[CallArg], at: At) {
+        let text = self.arg_text(args, 0);
+        let message = "from language version 5 a PDF is drawn by the `@lf/pdf` plugin: `pdf.render(text)`, with ``import { `@lf/pdf` as pdf } from plugins``".to_string();
+        let edit = Edit { at, text: format!("pdf.render({text})") };
+        self.findings.push(Finding { code: SPELLING_CODE, message, at, edits: Some(vec![edit]), unless_bound: None, safe: false, unsafe_if_bound: Vec::new() });
     }
 
     fn arg_text(&self, args: &[CallArg], i: usize) -> String {

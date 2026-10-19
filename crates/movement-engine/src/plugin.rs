@@ -155,8 +155,17 @@ impl Run<'_> {
         let duration = self.clock_now().await.map_err(Stop::Thrown)? - started;
         let (binding, handed_back) = match declared {
             None => (Binding::Value(ValueBinding { value: Js::Undefined, trail: None, many: false }), false),
-            Some(PluginOutput::Value { .. }) => {
-                let value = result.text().map_or(Js::Null, Js::str);
+            Some(PluginOutput::Value { type_ }) => {
+                // A plugin that hands back a file answers it as `data.value`;
+                // any other value is the text it fetched.
+                let value = if matches!(type_, movement_parser::catalog::types::FieldType::Scalar(movement_parser::catalog::types::Scalar::File)) {
+                    match &result.data {
+                        Some(Js::Object(data)) => data.get("value").cloned().unwrap_or(Js::Null),
+                        _ => Js::Null,
+                    }
+                } else {
+                    result.text().map_or(Js::Null, Js::str)
+                };
                 let handed_back = !matches!(value, Js::Null);
                 (Binding::Value(ValueBinding { value, trail: Some(trail), many: false }), handed_back)
             }
@@ -202,6 +211,9 @@ impl Run<'_> {
         result.trace_into(&mut entry);
         entry.set("returned", Js::str(if handed_back { "value" } else { "absent" }));
         self.trace(TraceEntry::Plugin(entry));
+        for message in &result.warnings {
+            self.trace(TraceEntry::Warning { code: "MOVENG_PLUGIN_WARNING".into(), message: message.clone() });
+        }
         Ok(binding)
     }
 }

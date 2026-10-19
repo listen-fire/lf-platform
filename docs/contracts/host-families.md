@@ -733,7 +733,7 @@ request: { segmentId: string; content: string; type: 'pdf' | 'text' }
 answer:  FileRef            // a document-store descriptor
 ```
 
-- `FILE(content, type)`: the host renders the composed string, stores the artifact under the team's key prefix (what makes it the team's to read again), and answers its descriptor.
+- `FILE(content, type)`: the host renders the composed string (language versions 1 to 4; a `pdf` is the text on A4 in Helvetica, wrapped at the page edge, drawn without a browser by `@lf/pdf`'s writer; a character outside WinAnsi prints as `?`. From version 5 a PDF is the `@lf/pdf` plugin's `pdf.render(text)`, and lf refuses a `pdf` kind that only meets this family at run time), stores the artifact under the team's key prefix (what makes it the team's to read again), and answers its descriptor.
 - **Persist:** the artifact's bytes in the document store. **Retry:** not idempotent (each call stores a new artifact).
 
 ### `lookup`

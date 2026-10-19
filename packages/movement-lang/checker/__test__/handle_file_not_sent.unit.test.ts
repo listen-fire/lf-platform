@@ -42,7 +42,7 @@ const program = (body: string[]): string =>
     '',
     'd = drive(credentials: drive_cred)',
     'movement m() {',
-    '  f = FILE("contents", "pdf")',
+    '  f = FILE("contents", "text")',
     ...body,
     '}',
   ].join('\n');

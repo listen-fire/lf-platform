@@ -244,6 +244,34 @@
         }
       },
       "package": "@lf/web"
+    },
+    "render": {
+      "args": [
+        "text",
+        "pageSize",
+        "margin"
+      ],
+      "priced": false,
+      "argTypes": {
+        "text": "text",
+        "pageSize": {
+          "kind": "enum",
+          "options": [
+            "a4",
+            "letter"
+          ]
+        },
+        "margin": "number"
+      },
+      "requiredArgs": [
+        "text"
+      ],
+      "effects": {},
+      "output": {
+        "kind": "value",
+        "type": "file"
+      },
+      "package": "@lf/pdf"
     }
   },
   "snapshotPlugins": {
@@ -491,6 +519,34 @@
         }
       },
       "package": "@lf/web"
+    },
+    "render": {
+      "args": [
+        "text",
+        "pageSize",
+        "margin"
+      ],
+      "priced": false,
+      "argTypes": {
+        "text": "text",
+        "pageSize": {
+          "kind": "enum",
+          "options": [
+            "a4",
+            "letter"
+          ]
+        },
+        "margin": "number"
+      },
+      "requiredArgs": [
+        "text"
+      ],
+      "effects": {},
+      "output": {
+        "kind": "value",
+        "type": "file"
+      },
+      "package": "@lf/pdf"
     }
   },
   "liveCatalog": {
@@ -691,6 +747,34 @@
         }
       },
       "package": "@lf/web"
+    },
+    "render": {
+      "args": [
+        "text",
+        "pageSize",
+        "margin"
+      ],
+      "priced": false,
+      "argTypes": {
+        "text": "text",
+        "pageSize": {
+          "kind": "enum",
+          "options": [
+            "a4",
+            "letter"
+          ]
+        },
+        "margin": "number"
+      },
+      "requiredArgs": [
+        "text"
+      ],
+      "effects": {},
+      "output": {
+        "kind": "value",
+        "type": "file"
+      },
+      "package": "@lf/pdf"
     },
     "research": {
       "args": [
@@ -1078,6 +1162,45 @@
     "linkedin_research every argument v4 typescript": [],
     "linkedin_research every argument v5 typescript": [],
     "linkedin_research every argument v5 rust": [],
+    "render no argument v4 typescript": [
+      {
+        "code": "MOV_THROUGH_ARG_MISSING",
+        "message": "'render' is missing the required argument 'text'",
+        "severity": "error",
+        "line": 3,
+        "col": 7,
+        "endLine": 3,
+        "endCol": 15,
+        "sourceLine": "  r = render()"
+      }
+    ],
+    "render no argument v5 typescript": [
+      {
+        "code": "MOV_THROUGH_ARG_MISSING",
+        "message": "'render' is missing the required argument 'text'",
+        "severity": "error",
+        "line": 3,
+        "col": 7,
+        "endLine": 3,
+        "endCol": 15,
+        "sourceLine": "  r = render()"
+      }
+    ],
+    "render no argument v5 rust": [
+      {
+        "code": "MOV_THROUGH_ARG_MISSING",
+        "message": "'render' is missing the required argument 'text'",
+        "severity": "error",
+        "line": 3,
+        "col": 7,
+        "endLine": 3,
+        "endCol": 15,
+        "sourceLine": "  r = render()"
+      }
+    ],
+    "render every argument v4 typescript": [],
+    "render every argument v5 typescript": [],
+    "render every argument v5 rust": [],
     "research no argument v4 typescript": [
       {
         "code": "MOV_THROUGH_ARG_MISSING",

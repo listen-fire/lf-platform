@@ -86,7 +86,8 @@ Section 2 respells the whole surface; nothing in it changes what a program means
 | `URL.HOST(t)` | `Url.host(t)` |
 | `SUM AVG MIN MAX LAST COLLECT MULTI GROUPBY KEYBY` | `List.sum List.avg List.min List.max List.last List.from List.compact List.groupBy List.keyBy` |
 | `x IN [..]`, `xs CONTAINS v` | `List.includes(xs, v)` |
-| `FILE(content, "pdf")`, `READ(f)` | `File.from(content, "pdf")`, `File.read(f)` |
+| `FILE(content, "text")`, `READ(f)` | `File.from(content, "text")`, `File.read(f)` |
+| `FILE(content, "pdf")` | `pdf.render(content)`, from the `@lf/pdf` plugin (``import { `@lf/pdf` as pdf } from plugins``); `File.from(content, "pdf")` is refused with this rewrite (not marked safe: the import is yours to add) |
 | `AT(xs, 0)`, `AT(d, "k")`, `AT(d, key)` | `xs[0]`, `d["k"]`, `d[key]` (the upgrade writes `d["k"]`: on a record, `d.k` would read the field where `AT` refused; on a dict, `d.k` reads the same key) |
 
 - A built-in run in a record's scope (`o.UPPER(n)`) is gone: a dot reads a field, or a namespace's function.

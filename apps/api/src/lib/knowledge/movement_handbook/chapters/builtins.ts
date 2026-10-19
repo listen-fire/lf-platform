@@ -515,10 +515,21 @@ byId = List.keyBy(co-[p:People]->, (p) => { return p.Email })
 
 ### File.from
 
-\`File.from(content, "pdf" | "text")\` → a \`file\` value, always present — turns a composed string into a file for a file-typed field. \`type\` is a literal; the content renders as plain text, line breaks preserved.
+\`File.from(content, "text")\` → a \`file\` value, always present — turns a composed string into a text file for a file-typed field. The content is kept as written, line breaks preserved.
 
 \`\`\`
-File: File.from(digest, "pdf")
+File: File.from(digest, "text")
+\`\`\`
+
+### pdf.render
+
+A PDF is drawn by the \`@lf/pdf\` plugin: \`pdf.render(content)\` → a \`file\` value, the PDF, always present. The content is drawn as plain text, line breaks preserved. \`{ pageSize: "a4" | "letter", margin }\` (points, from 0 to 200) is the settings record, last. A character the default writer has no glyph for (anything outside Latin-1 and the common punctuation) is drawn as \`?\` and the run is warned, naming \`@lf/pdf\`.
+
+\`\`\`
+import { \`@lf/pdf\` as pdf } from plugins
+
+File: pdf.render(digest)
+File: pdf.render(digest, { pageSize: "letter" })
 \`\`\`
 
 ### File.read
@@ -691,10 +702,11 @@ listen to runs {} fire \`Recap\`
 `,
     },
     {
-      construct: 'File.from/File.read/Text.chunks and the coercers Date.from/DateTime.from/Number.parse',
+      construct: 'File.from/File.read/Text.chunks/pdf.render and the coercers Date.from/DateTime.from/Number.parse',
       status: 'runs',
       probe: `
 import { \`@lf/manual\` as manual, \`@lf/attio\` as attio } from adapters
+import { \`@lf/pdf\` as pdf } from plugins
 import { acme } from credentials
 
 runs = connect manual
@@ -710,7 +722,7 @@ function \`Cut A Document\`(go: <runs-[:Invocation]->>) {
       \`Team Size\` ?: Number.parse(coalesce(first(pieces), ""))
     }
     write company-[:Files]-> {
-      File: File.from(Text.join(pieces, "\\n"), "pdf")
+      File: pdf.render(Text.join(pieces, "\\n"))
     }
     write company-[:Notes]-> {
       Title:   "Window"

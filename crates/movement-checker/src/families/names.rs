@@ -12,6 +12,7 @@
 
 use movement_parser::ast::{CallArg, CallStatement, ImportSource, ImportStatement, ImportedName, Loc, Span};
 use movement_parser::surface::SpellingFinding;
+use movement_parser::catalog::packages::package_called;
 use movement_parser::catalog::helpers::credential_arg_of;
 use movement_parser::surface::phrase::{Connection, connection};
 use movement_parser::version::{before, since};
@@ -181,6 +182,16 @@ impl Checker<'_> {
                     self.push(diagnostic);
                 } else if self.catalog.plugin(name).is_some() {
                     self.report(codes::NAME_UNRESOLVED, format!("'{name}' is a plugin — import it: import {{ {name} }} from plugins"), span);
+                } else if let Some(tag) = package_called(&self.catalog.plugins, name).filter(|_| since(self.version, 5)) {
+                    // A plugin package (`pdf.render(…)`) used with no import: the line is the whole fix.
+                    let line = format!("import {{ `{tag}` as {name} }} from plugins");
+                    let mut diagnostic = Diagnostic::error(
+                        codes::NAME_UNRESOLVED,
+                        format!("'{name}' is the plugin package {tag} — import it: add '{line}' at the top of the file"),
+                        span,
+                    );
+                    diagnostic.fix = Some(json!({ "edits": [insert_line_at_top(&line)] }));
+                    self.push(diagnostic);
                 } else {
                     self.report(
                         codes::NAME_UNRESOLVED,

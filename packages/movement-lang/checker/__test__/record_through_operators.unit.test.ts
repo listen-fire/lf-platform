@@ -98,7 +98,7 @@ const PRELUDE = [
   'l = ledger(credentials: ledger_cred)',
 ].join('\n');
 
-const HELD = ['  org = write crm-[:companies]-> { name: "Acme Inc." }', '  f = FILE("contents", "pdf")'];
+const HELD = ['  org = write crm-[:companies]-> { name: "Acme Inc." }', '  f = FILE("contents", "text")'];
 
 const program = (body: string[]): string => `${PRELUDE}\nmovement m() {\n${[...HELD, ...body].join('\n')}\n}`;
 
@@ -705,7 +705,7 @@ const PICK = [
   '  return COALESCE(o, "x")',
   '}',
   'function scan() {',
-  '  d = FILE("contents", "pdf")',
+  '  d = FILE("contents", "text")',
   '  return { a: COALESCE(d, "x") }',
   '}',
 ].join('\n');

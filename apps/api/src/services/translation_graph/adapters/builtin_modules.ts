@@ -151,6 +151,22 @@ const WEB_MODULE_LINE: BuiltinModuleLine = {
   },
 };
 
+let pdfModule: PluginModuleDefinition | undefined;
+
+/** `@lf/pdf`, which needs nothing of the platform but a place to store the
+ *  files it makes (the plugin invoker does that). Loaded on the first call. */
+const PDF_MODULE_LINE: BuiltinModuleLine = {
+  kind: 'plugin',
+  line: 'module',
+  load: () => {
+    if (pdfModule === undefined) {
+      const { pdfModule: loaded }: typeof import('@listen-fire/pdf') = require('@listen-fire/pdf');
+      pdfModule = loaded;
+    }
+    return pdfModule;
+  },
+};
+
 /** Built once, on the Slack line's first use. */
 let platformSlackModule: AdapterModuleDefinition | undefined;
 
@@ -348,6 +364,8 @@ export const BUILTIN_MODULES: BuiltinModuleTable = {
   'linkedin-research': WEB_MODULE_LINE,
   'linkedin-enrichment': WEB_MODULE_LINE,
   'vc-url-retrieval': WEB_MODULE_LINE,
+  // Not a legacy plugin: `@lf/pdf` has only a module line (`pdf.render(text)`).
+  render: PDF_MODULE_LINE,
 };
 
 type AdapterModuleLine = Extract<BuiltinModuleLine, { kind: 'adapter'; line: 'module' }>;

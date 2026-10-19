@@ -99,3 +99,26 @@ describe('language version 5 surface', () => {
 function cmp(a: { line: number; col: number }, b: { line: number; col: number }): number {
   return a.line - b.line || a.col - b.col;
 }
+
+// A PDF is drawn by the @lf/pdf plugin from version 5 (the Rust twin:
+// crates/movement-checker/tests/surface.rs).
+describe('a PDF', () => {
+  const pdfBody = (call: string): string => `function go(t: <text>) {\n  f = ${call}\n}`;
+  const refusals = (source: string, languageVersion: number): Diagnostic[] =>
+    check(source, languageVersion).filter((d) => d.message.includes('@lf/pdf'));
+
+  it.each([
+    ['FILE(t, "pdf")', 'FILE(t, "pdf")'],
+    ['File.from(t, "pdf")', 'File.from(t, "pdf")'],
+  ])('%s is refused under 5 with the plugin call as its rewrite, not marked safe', (_, call) => {
+    const found = refusals(pdfBody(call), 5);
+    expect(found.map((d) => d.code)).toEqual(['MOV_V5_SPELLING']);
+    expect(found[0]?.fix?.edits[0]?.text).toBe('pdf.render(t)');
+    expect(found[0]?.fix?.safe).not.toBe(true);
+  });
+
+  it('is still a file kind before 5, and text is one under 5', () => {
+    expect(refusals(`movement go(t: <text>) {\n  f = FILE(t, "pdf")\n}`, 4)).toEqual([]);
+    expect(check(pdfBody('File.from(t, "text")'), 5)).toEqual([]);
+  });
+});

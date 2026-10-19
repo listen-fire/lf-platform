@@ -495,8 +495,37 @@ const RESEARCH_SIGNATURE: TransformSignature = {
   },
 };
 
+/**
+ * `pdf.render(text)`: plain text drawn as a PDF, a file. Served by `@lf/pdf`
+ * (modules/pdf), whose default writer is a thin one in Helvetica: a character
+ * it cannot draw prints as "?" and the answer carries a warning saying a
+ * Unicode PDF module can replace it. Nothing is fetched, no model is asked,
+ * nothing costs.
+ */
+const RENDER_SIGNATURE: TransformSignature = {
+  name: 'render',
+  description: 'Draw plain text as a PDF file. A character the default writer has no glyph for prints as "?", with a warning on the run.',
+  params: [
+    { name: 'text', type: { kind: 'string' }, required: true, description: 'The text to draw: line breaks and tabs are kept, long lines wrap at the page edge.' },
+    {
+      name: 'pageSize',
+      type: { kind: 'enum', values: ['a4', 'letter'] },
+      description: 'The page: "a4" (the default) or "letter".',
+    },
+    { name: 'margin', type: { kind: 'number' }, description: 'The margin on every side, in points (a whole number from 0 to 200). The default is 30.' },
+  ],
+  dataDependency: 'none',
+  // Pure: it reads nothing, writes nowhere, asks no model and never parks.
+  effects: {},
+  additions: {},
+  // The PDF itself, so `File: pdf.render(text)` writes it. A `value` output
+  // of type file is what the host hands back under `data.value`.
+  output: { kind: 'value', type: { kind: 'file' }, description: 'The PDF, a file a write to a file field can carry.' },
+};
+
 // Every plugin searches, scrapes or asks a model, and all of that is paid for.
 export const VC_URL_RETRIEVAL_PLUGIN: PluginDeclaration = { signature: VC_URL_RETRIEVAL_SIGNATURE, priced: true };
+export const RENDER_PLUGIN: PluginDeclaration = { signature: RENDER_SIGNATURE, priced: false };
 export const FETCH_URL_PLUGIN: PluginDeclaration = { signature: FETCH_URL_SIGNATURE, priced: true };
 export const LINKEDIN_ENRICHMENT_PLUGIN: PluginDeclaration = { signature: LINKEDIN_ENRICHMENT_SIGNATURE, priced: true };
 export const LINKEDIN_RESEARCH_PLUGIN: PluginDeclaration = { signature: LINKEDIN_RESEARCH_SIGNATURE, priced: true };
@@ -513,27 +542,45 @@ export const BUNDLED_PLUGINS: readonly PluginDeclaration[] = [
   RESEARCH_PLUGIN,
 ];
 
-/** The package the bundled plugins are served by (`modules/web`): a movement
+/** The package the web plugins are served by (`modules/web`): a movement
  *  imports them one by one or as the package
  *  (``import { `@lf/web` as web } from plugins``). */
 export const BUNDLED_PLUGINS_PACKAGE = '@lf/web';
 
-/** Every bundled plugin's checker surface, keyed the way a program spells it,
+/** The package that draws PDFs (`modules/pdf`). */
+export const PDF_PLUGINS_PACKAGE = '@lf/pdf';
+
+/** The plugins `@lf/pdf` serves. */
+export const PDF_PLUGINS: readonly PluginDeclaration[] = [RENDER_PLUGIN];
+
+/** Every plugin the platform's catalog lists, each with the package that
+ *  serves it. */
+const CATALOG_PLUGINS: ReadonlyArray<{ package: string; declarations: readonly PluginDeclaration[] }> = [
+  { package: BUNDLED_PLUGINS_PACKAGE, declarations: BUNDLED_PLUGINS },
+  { package: PDF_PLUGINS_PACKAGE, declarations: PDF_PLUGINS },
+];
+
+/** Every catalog plugin's checker surface, keyed the way a program spells it,
  *  each tagged with its package. */
 export function bundledPluginSpecs(): Record<string, PluginSpec> {
   return Object.fromEntries(
-    Object.entries(pluginSpecsOf(BUNDLED_PLUGINS)).map(([name, spec]) => [name, { ...spec, package: BUNDLED_PLUGINS_PACKAGE }]),
+    CATALOG_PLUGINS.flatMap(({ package: tag, declarations }) =>
+      Object.entries(pluginSpecsOf(declarations)).map(([name, spec]): [string, PluginSpec] => [name, { ...spec, package: tag }]),
+    ),
   );
 }
 
-/** A bundled plugin's checker surface by either spelling, tagged with its
+/** A catalog plugin's checker surface by either spelling, tagged with its
  *  package. */
 export function bundledPluginSpecNamed(name: string): PluginSpec | undefined {
-  const declaration = bundledPluginNamed(name);
-  return declaration ? { ...pluginSpecOf(declaration), package: BUNDLED_PLUGINS_PACKAGE } : undefined;
+  for (const { package: tag, declarations } of CATALOG_PLUGINS) {
+    const declaration = pluginDeclarationNamed(declarations, name);
+    if (declaration) return { ...pluginSpecOf(declaration), package: tag };
+  }
+  return undefined;
 }
 
-/** A bundled plugin by either spelling (`vc_url_retrieval`, `vc-url-retrieval`). */
+/** A web plugin by either spelling (`vc_url_retrieval`, `vc-url-retrieval`). */
 export function bundledPluginNamed(name: string): PluginDeclaration | undefined {
   return pluginDeclarationNamed(BUNDLED_PLUGINS, name);
 }

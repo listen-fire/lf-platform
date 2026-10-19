@@ -1710,6 +1710,7 @@ type MemberAnswer = { kept: true; value: unknown } | { kept: false };
 
 /** The trace warning `onError: "warn"` leaves for a member it left out. */
 const COLLECTION_MEMBER_FAILED = 'MOVENG_COLLECTION_MEMBER_FAILED';
+const PLUGIN_WARNING = 'MOVENG_PLUGIN_WARNING';
 /** A file the run could not fetch the bytes of — warned once per file. */
 const FILE_BYTES_UNAVAILABLE = 'MOVENG_FILE_BYTES_UNAVAILABLE';
 /** A match whose judge never answered, bound absent all the same. */
@@ -6266,6 +6267,7 @@ class Interpreter {
       ...(result.outcome ? { outcome: result.outcome } : {}),
       returned: handedBack ? 'value' : 'absent',
     });
+    for (const message of result.warnings ?? []) this.trace.push({ kind: 'warning', code: PLUGIN_WARNING, message });
     return binding;
   }
 
@@ -12894,7 +12896,12 @@ function pluginCallBinding(
 ): { binding: Binding; handedBack: boolean } {
   switch (output.kind) {
     case 'value': {
-      const value = result.text !== undefined && result.text !== '' ? result.text : null;
+      // A plugin that hands back a file answers it as `data.value`; any other
+      // value is the text it fetched.
+      const value =
+        output.type === 'file'
+          ? (result.data?.value ?? null)
+          : result.text !== undefined && result.text !== '' ? result.text : null;
       return { binding: binding({ kind: 'value', value, provenance }), handedBack: value !== null };
     }
     case 'records': {

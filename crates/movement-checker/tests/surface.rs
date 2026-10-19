@@ -53,3 +53,38 @@ fn a_message_suggests_the_surface_of_its_program_s_version() {
     assert!(v5[0].starts_with("a value negated by '!' is a closure"), "{v5:?}");
     assert!(v5[1].starts_with("a value joined by '&&' is a closure"), "{v5:?}");
 }
+
+const PDF_V4: &str = "movement go(t: <text>) {\n  f = FILE(t, \"pdf\")\n}";
+const PDF_V5: &str = "function go(t: <text>) {\n  f = File.from(t, \"pdf\")\n}";
+
+#[test]
+fn a_pdf_is_the_pdf_plugin_s_from_version_5() {
+    for (source, written) in [(PDF_V4, "FILE"), (PDF_V5, "File.from")] {
+        let found = check(source, 5);
+        let pdf: Vec<_> = found.iter().filter(|d| d.code == "MOV_V5_SPELLING" && d.message.contains("@lf/pdf")).collect();
+        assert_eq!(pdf.len(), 1, "{written}: {found:#?}");
+        assert_eq!(pdf[0].fix.as_ref().unwrap()["edits"][0]["text"], "pdf.render(t)", "{written}");
+        // The rewrite also needs an import, which an expression's edit cannot add.
+        assert_ne!(pdf[0].fix.as_ref().unwrap()["safe"], true, "{written}");
+    }
+}
+
+#[test]
+fn a_pdf_is_still_a_file_kind_before_version_5_and_text_is_one_under_5() {
+    assert!(!check(PDF_V4, 4).iter().any(|d| d.message.contains("@lf/pdf")));
+    assert!(codes("function go(t: <text>) {\n  f = File.from(t, \"text\")\n}", 5).is_empty());
+}
+
+const PDF_CATALOG: &str = r#"{"adapters":{},"credentials":{},"plugins":{"render":{"args":["text"],"priced":false,"argTypes":{"text":"text"},"requiredArgs":["text"],"effects":{},"output":{"kind":"value","type":"file"},"package":"@lf/pdf"}}}"#;
+
+#[test]
+fn the_pdf_package_used_with_no_import_offers_its_import_line() {
+    let catalog = CatalogSnapshot::load(PDF_CATALOG).unwrap();
+    let options = CheckOptions { language_version: 5, upgrading_from: None, parse_version: None, zones: &movement_checker::host::native::NativeZones };
+    let found = check_source("function go(t: <text>) {\n  f = pdf.render(t)\n}", &catalog, options).unwrap();
+    let unresolved: Vec<_> = found.iter().filter(|d| d.code == "MOV_NAME_UNRESOLVED").collect();
+    assert_eq!(unresolved.len(), 1, "{found:#?}");
+    let edit = &unresolved[0].fix.as_ref().unwrap()["edits"][0];
+    assert_eq!(edit["text"], "import { `@lf/pdf` as pdf } from plugins\n");
+    assert_eq!(edit["span"]["start"]["line"], 1);
+}

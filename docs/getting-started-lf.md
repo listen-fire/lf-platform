@@ -68,6 +68,25 @@ lf connect <module>     # installs it and asks for its server secret, webhook se
 
 `lf connect <module> --base-url <url>` points the module at a fake or a proxy instead of its provider; `--oauth-authorize-url` and `--oauth-token-url` do the same for its sign-in. [`examples/lf-attio`](../examples/lf-attio) walks Attio through end to end, against real Attio or the repo's fake.
 
+A plugin package is an external of `kind: plugin`. `@lf/pdf` draws text as a PDF file and needs no credential:
+
+```
+# externals/pdf/lf-external.yaml
+name: pdf
+kind: plugin
+module: "@lf/pdf"
+```
+
+```
+import { `@lf/pdf` as pdf } from plugins
+
+function report(c: <crm-[:Company]->>) {
+  write crm-[:Company]-> { Name: c.Name, Report: pdf.render("Report for ${c.Name}") }
+}
+```
+
+`pdf.render(text, { pageSize: "a4" | "letter", margin })` is a file (A4, 30 points of margin by default). Its writer is thin: Helvetica, no font to ship. A character outside Latin-1 (CJK, emoji) prints as `?` and the run is warned, naming `@lf/pdf`; a PDF module that embeds a font can serve the same plugin in its place.
+
 ## 4. Add a credential
 
 ```
