@@ -34,7 +34,7 @@ export function lackingWarning(lacking: readonly string[]): string {
   const more = lacking.length > LISTED ? ` and ${lacking.length - LISTED} more` : '';
   return (
     `@lf/pdf's default writer draws Latin-1 text in Helvetica, so ${lacking.length === 1 ? 'this character was' : 'these characters were'} printed as "?": ${shown}${more}. ` +
-    'A Unicode PDF module (one that embeds a font) can replace this one.'
+    'A Unicode PDF module (one that embeds a font) can replace this one; on a host with a browser, web.render (from @lf/web) prints any text the browser\'s fonts cover.'
   );
 }
 

@@ -25,7 +25,7 @@ interface CatalogSnapshot {
   contractVersion?: number;                       // absent: 1
   adapters: Record<string, AdapterSnapshot>;      // by adapter type
   credentials: Record<string, { adapters: string[]; credential?: string } | { adapter: string }>;   // by import name; `{ adapter }` is the older single-adapter form; `credential`: the module's declared credential it fills
-  plugins: Record<string, PluginSpec>;            // by registered name
+  plugins: Record<string, PluginSpec>;            // by key: module and name (`@lf/web/render`) for a package's plugin, else the name
   files?: Record<string, { source: string }>;     // saved movement files, by import path
   models?: string[];                              // logical model names this deployment reaches; absent: models unchecked
 }
@@ -71,6 +71,7 @@ interface PluginSpec {
   output?: PluginOutput;
   earlierOutputs?: Array<{ before: number; output: PluginOutput }>;   // the output under language versions before `before`
   package?: string;   // the package tag it is a member of (`@lf/web`); absent when it is in none
+  name?: string;      // the name a program spells it (`render`), when the key is not that; absent: the key
 }
 ```
 
@@ -78,7 +79,7 @@ interface PluginSpec {
 
 **A plugin's output that is one file.** A `value` output of type `file` is the file the host put at the answer's `data.value`, not the fetched text (a PDF: `pdf.render(text)`).
 
-**A plugin package (language version 5).** A spec's `package` is a tag (`@lf/web`), compared exactly and never parsed. An import from `plugins` whose name equals some spec's `package` imports that package: ``import { `@lf/web` as web } from plugins``. Its members are the specs that declare that tag, each called by its key in camelCase after the package's local name (`fetch_url` → `web.fetchUrl(u)`, `through [web.linkedinEnrichment]`). A member call is an ordinary plugin call: it binds by position as above, and the plugin is invoked by its catalog key with the named config. The platform's catalog lists two: `@lf/web` and `@lf/pdf` (`pdf.render(text)`). The member is optional and additive, both readers carry it, so the version stays 1.
+**A plugin package (language version 5).** A spec's `package` is a tag (`@lf/web`), compared exactly and never parsed. An import from `plugins` whose name equals some spec's `package` imports that package: ``import { `@lf/web` as web } from plugins``. Its members are the specs that declare that tag, each called by its key in camelCase after the package's local name (`fetch_url` → `web.fetchUrl(u)`, `through [web.linkedinEnrichment]`). A member call is an ordinary plugin call: it binds by position as above, and the plugin is invoked by its catalog key with the named config. The platform's catalog lists two: `@lf/web` and `@lf/pdf` (`pdf.render(text)`). A package's plugin is keyed by module and name (`@lf/pdf/render`, `@lf/web/render`), so two modules can each serve a `render`; the spec's `name` is what a program writes. A bare import (`import { fetch_url } from plugins`, as versions 1 to 4 write it) finds the one plugin of that name, and is refused, naming the packages, when several have it. The key is compared, never parsed. `name` is optional and additive, so the version stays 1. The member is optional and additive, both readers carry it, so the version stays 1.
 
 ```ts
 type PluginOutput =

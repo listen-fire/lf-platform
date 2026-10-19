@@ -13,6 +13,11 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 
 ## [Unreleased]
 
+### i-plugins
+
+- **Plugins are keyed by module and name.** Two modules can each serve a plugin of the same name: `@lf/pdf` and `@lf/web` both have a `render`. Movement syntax is unchanged: ``import { `@lf/web` as web } from plugins``, then `web.render(…)`. A bare import of a name that two packages serve (`import { render } from plugins`) is refused, naming both packages and the package import to write instead; a bare name only one package serves works as before, so saved movements on versions 1 to 4 run unchanged. A catalog snapshot's plugin keys are now `@lf/web/fetch_url` for a package's plugin, each spec carrying its `name`; a snapshot with plain names still reads.
+- **`@lf/web` has a `render` plugin: text or HTML drawn as a PDF by the host's browser.** `web.render(text, { pageSize, margin })` has the call shape of `pdf.render`. HTML (a document, or markup such as an email body) keeps its layout; plain text is put on a page with its line breaks kept. It prints through the host's browser slot (the page's print to PDF), so any text the browser's fonts cover prints, with no `?` substitution and nothing added to the core image. With the slot empty (`lf`, the slim API image) the call is refused by name, as a gated document is; there is no fallback to `pdf.render`'s writer. Scripts in the HTML do not run.
+
 ### au-delete
 
 - The legacy v3 output pipeline is removed (its executor, per-destination adapters, authoring agent and the `knowledge.outputAgent` / `knowledge.expressionWriter` tRPC routes). It had no remaining callers; movements are the only way data moves. A migration sets any stored v3 output (`pipeline_output.config_version = 3`) still marked live or dry-run to `off`; its config is kept.

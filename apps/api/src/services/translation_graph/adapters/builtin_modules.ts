@@ -65,7 +65,7 @@ import { SYSTEM_MANIFEST } from '@listen-fire/system/manifest';
 import { NATIVE_VALUATIONS_MANIFEST } from '@listen-fire/native-valuations/manifest';
 import { EMAIL_MANIFEST } from '@listen-fire/email/manifest';
 import {
-  BUNDLED_PLUGINS,
+  WEB_MODULE_PLUGINS,
   BUNDLED_PLUGINS_PACKAGE,
   PDF_PLUGINS_PACKAGE,
   bundledPluginSpecs,
@@ -444,7 +444,7 @@ export const BUILTIN_MODULES: BuiltinModuleTable = {
   // in one module, `@lf/web`. Each plugin keeps its own line.
   // Keyed by module and name (`@lf/web/fetch_url`), so two modules can each
   // serve a `render`.
-  ...Object.fromEntries(BUNDLED_PLUGINS.map((d) => [webPluginKey(d.signature.name), WEB_MODULE_LINE])),
+  ...Object.fromEntries(WEB_MODULE_PLUGINS.map((d) => [webPluginKey(d.signature.name), WEB_MODULE_LINE])),
   // Not a legacy plugin: `@lf/pdf` has only a module line (`pdf.render(text)`).
   [pluginKey(PDF_PLUGINS_PACKAGE, 'render')]: PDF_MODULE_LINE,
 };

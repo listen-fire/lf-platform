@@ -38,20 +38,27 @@ function observe(): unknown {
   const specs = bundledPluginSpecs();
   const names = Object.keys(specs).sort();
 
+  const written = (key: string): string => specs[key]?.name ?? key;
+  // A name two packages serve is not a bare import (the catalog refuses it);
+  // those are held by the package tests below.
+  const ambiguous = (key: string): boolean => names.filter((other) => written(other) === written(key)).length > 1;
+
   const liveCatalog = Object.fromEntries(
-    names.flatMap((name) => {
-      const dashed = name.replace(/_/g, '-');
+    names.flatMap((key) => {
+      const dashed = written(key).replace(/_/g, '-');
       return [
-        [name, catalog.plugin(name) ?? null],
-        [dashed, catalog.plugin(dashed) ?? null],
+        [key, catalog.plugin(key) ?? null],
+        ...(ambiguous(key) ? [] : [[dashed, catalog.plugin(dashed) ?? null]]),
       ];
     }),
   );
 
   const versions: LanguageVersion[] = [4, 5];
   const diagnostics: Record<string, unknown> = {};
-  for (const name of names) {
-    const spec = specs[name]!;
+  for (const key of names) {
+    const spec = specs[key]!;
+    const name = written(key);
+    if (ambiguous(key)) continue;
     for (const withArgs of [false, true]) {
       const source = callingProgram(name, spec, withArgs);
       for (const languageVersion of versions) {
@@ -84,6 +91,40 @@ describe('the plugin catalog the checkers see', () => {
 // The bundled plugins are one module, `@lf/web` (modules/web): a movement
 // imports them one by one, as it always has, or as the package, and both
 // checkers read the same members off the hosted catalog.
+describe('two packages that each serve a render', () => {
+  const imports = (tag: string, as: string) => `import { \`${tag}\` as ${as} } from plugins
+function m(t: <text>) {
+  r = ${as}.render(t)
+  return r
+}
+`;
+
+  it.each([
+    ['@lf/pdf', 'pdf'],
+    ['@lf/web', 'web'],
+  ])('checks %s render clean in both checkers', (tag, as) => {
+    const catalog = staticCatalogFromManifests();
+    const snapshot = staticCatalogSnapshot();
+    expect(diagnoseMovementSource(imports(tag, as), { catalog, languageVersion: 5 }).diagnostics).toEqual([]);
+    expect(diagnoseMovementSource(imports(tag, as), { catalog, languageVersion: 5, snapshot }).diagnostics).toEqual([]);
+  });
+
+  it('refuses a bare import of render, naming both packages, in both checkers', () => {
+    const source = `import { render } from plugins
+function m(t: <text>) {
+  r = render(t)
+  return r
+}
+`;
+    const catalog = staticCatalogFromManifests();
+    const snapshot = staticCatalogSnapshot();
+    for (const options of [{ catalog, languageVersion: 5 as const }, { catalog, languageVersion: 5 as const, snapshot }]) {
+      const messages = diagnoseMovementSource(source, options).diagnostics.map((d) => d.message).join('\n');
+      expect(messages).toContain('served by more than one package (@lf/web, @lf/pdf)');
+    }
+  });
+});
+
 describe('the bundled plugins as a package', () => {
   const program = (imports: string, call: string) => `${imports}
 function m(u: <text>) {

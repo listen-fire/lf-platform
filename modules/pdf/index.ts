@@ -4,8 +4,8 @@
 //
 // The writer here is a thin one: Helvetica, no font to ship, so the core image
 // stays small. A character outside Latin-1 prints as "?" and the run is warned,
-// naming this module. Full Unicode comes from another module that serves the
-// same plugin (one that embeds a font): swap it in for this one.
+// naming this module. Full Unicode comes from `web.render` (`@lf/web`), which
+// prints through the host's browser, or from another module that embeds a font.
 //
 // The declaration (what it accepts, what it hands back) is the engine
 // package's data, so the checker reads one description wherever the module

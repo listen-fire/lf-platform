@@ -1,6 +1,6 @@
 {
   "registeredPluginSpecs": {
-    "vc_url_retrieval": {
+    "@lf/web/vc_url_retrieval": {
       "args": [
         "email"
       ],
@@ -48,9 +48,10 @@
           }
         }
       ],
-      "package": "@lf/web"
+      "package": "@lf/web",
+      "name": "vc_url_retrieval"
     },
-    "fetch_url": {
+    "@lf/web/fetch_url": {
       "args": [
         "url",
         "email",
@@ -77,9 +78,10 @@
           "of": "text"
         }
       },
-      "package": "@lf/web"
+      "package": "@lf/web",
+      "name": "fetch_url"
     },
-    "linkedin_enrichment": {
+    "@lf/web/linkedin_enrichment": {
       "args": [],
       "priced": true,
       "argTypes": {},
@@ -103,9 +105,10 @@
           }
         }
       },
-      "package": "@lf/web"
+      "package": "@lf/web",
+      "name": "linkedin_enrichment"
     },
-    "linkedin_research": {
+    "@lf/web/linkedin_research": {
       "args": [
         "url"
       ],
@@ -147,9 +150,10 @@
           }
         }
       },
-      "package": "@lf/web"
+      "package": "@lf/web",
+      "name": "linkedin_research"
     },
-    "web_research": {
+    "@lf/web/web_research": {
       "args": [
         "name",
         "context",
@@ -185,9 +189,10 @@
           }
         }
       },
-      "package": "@lf/web"
+      "package": "@lf/web",
+      "name": "web_research"
     },
-    "research": {
+    "@lf/web/research": {
       "args": [
         "name",
         "context",
@@ -243,9 +248,43 @@
           }
         }
       },
-      "package": "@lf/web"
+      "package": "@lf/web",
+      "name": "research"
     },
-    "render": {
+    "@lf/web/render": {
+      "args": [
+        "text",
+        "pageSize",
+        "margin"
+      ],
+      "priced": false,
+      "argTypes": {
+        "text": "text",
+        "pageSize": {
+          "kind": "enum",
+          "options": [
+            "a4",
+            "letter"
+          ]
+        },
+        "margin": "number"
+      },
+      "requiredArgs": [
+        "text"
+      ],
+      "effects": {
+        "reads": [
+          "the web"
+        ]
+      },
+      "output": {
+        "kind": "value",
+        "type": "file"
+      },
+      "package": "@lf/web",
+      "name": "render"
+    },
+    "@lf/pdf/render": {
       "args": [
         "text",
         "pageSize",
@@ -271,11 +310,12 @@
         "kind": "value",
         "type": "file"
       },
-      "package": "@lf/pdf"
+      "package": "@lf/pdf",
+      "name": "render"
     }
   },
   "snapshotPlugins": {
-    "vc_url_retrieval": {
+    "@lf/web/vc_url_retrieval": {
       "args": [
         "email"
       ],
@@ -323,9 +363,10 @@
           }
         }
       ],
-      "package": "@lf/web"
+      "package": "@lf/web",
+      "name": "vc_url_retrieval"
     },
-    "fetch_url": {
+    "@lf/web/fetch_url": {
       "args": [
         "url",
         "email",
@@ -352,9 +393,10 @@
           "of": "text"
         }
       },
-      "package": "@lf/web"
+      "package": "@lf/web",
+      "name": "fetch_url"
     },
-    "linkedin_enrichment": {
+    "@lf/web/linkedin_enrichment": {
       "args": [],
       "priced": true,
       "argTypes": {},
@@ -378,9 +420,10 @@
           }
         }
       },
-      "package": "@lf/web"
+      "package": "@lf/web",
+      "name": "linkedin_enrichment"
     },
-    "linkedin_research": {
+    "@lf/web/linkedin_research": {
       "args": [
         "url"
       ],
@@ -422,9 +465,10 @@
           }
         }
       },
-      "package": "@lf/web"
+      "package": "@lf/web",
+      "name": "linkedin_research"
     },
-    "web_research": {
+    "@lf/web/web_research": {
       "args": [
         "name",
         "context",
@@ -460,9 +504,10 @@
           }
         }
       },
-      "package": "@lf/web"
+      "package": "@lf/web",
+      "name": "web_research"
     },
-    "research": {
+    "@lf/web/research": {
       "args": [
         "name",
         "context",
@@ -518,9 +563,43 @@
           }
         }
       },
-      "package": "@lf/web"
+      "package": "@lf/web",
+      "name": "research"
     },
-    "render": {
+    "@lf/web/render": {
+      "args": [
+        "text",
+        "pageSize",
+        "margin"
+      ],
+      "priced": false,
+      "argTypes": {
+        "text": "text",
+        "pageSize": {
+          "kind": "enum",
+          "options": [
+            "a4",
+            "letter"
+          ]
+        },
+        "margin": "number"
+      },
+      "requiredArgs": [
+        "text"
+      ],
+      "effects": {
+        "reads": [
+          "the web"
+        ]
+      },
+      "output": {
+        "kind": "value",
+        "type": "file"
+      },
+      "package": "@lf/web",
+      "name": "render"
+    },
+    "@lf/pdf/render": {
       "args": [
         "text",
         "pageSize",
@@ -546,11 +625,41 @@
         "kind": "value",
         "type": "file"
       },
-      "package": "@lf/pdf"
+      "package": "@lf/pdf",
+      "name": "render"
     }
   },
   "liveCatalog": {
-    "fetch_url": {
+    "@lf/pdf/render": {
+      "args": [
+        "text",
+        "pageSize",
+        "margin"
+      ],
+      "priced": false,
+      "argTypes": {
+        "text": "text",
+        "pageSize": {
+          "kind": "enum",
+          "options": [
+            "a4",
+            "letter"
+          ]
+        },
+        "margin": "number"
+      },
+      "requiredArgs": [
+        "text"
+      ],
+      "effects": {},
+      "output": {
+        "kind": "value",
+        "type": "file"
+      },
+      "package": "@lf/pdf",
+      "name": "render"
+    },
+    "@lf/web/fetch_url": {
       "args": [
         "url",
         "email",
@@ -577,7 +686,8 @@
           "of": "text"
         }
       },
-      "package": "@lf/web"
+      "package": "@lf/web",
+      "name": "fetch_url"
     },
     "fetch-url": {
       "args": [
@@ -606,9 +716,10 @@
           "of": "text"
         }
       },
-      "package": "@lf/web"
+      "package": "@lf/web",
+      "name": "fetch_url"
     },
-    "linkedin_enrichment": {
+    "@lf/web/linkedin_enrichment": {
       "args": [],
       "priced": true,
       "argTypes": {},
@@ -632,7 +743,8 @@
           }
         }
       },
-      "package": "@lf/web"
+      "package": "@lf/web",
+      "name": "linkedin_enrichment"
     },
     "linkedin-enrichment": {
       "args": [],
@@ -658,9 +770,10 @@
           }
         }
       },
-      "package": "@lf/web"
+      "package": "@lf/web",
+      "name": "linkedin_enrichment"
     },
-    "linkedin_research": {
+    "@lf/web/linkedin_research": {
       "args": [
         "url"
       ],
@@ -702,7 +815,8 @@
           }
         }
       },
-      "package": "@lf/web"
+      "package": "@lf/web",
+      "name": "linkedin_research"
     },
     "linkedin-research": {
       "args": [
@@ -746,9 +860,10 @@
           }
         }
       },
-      "package": "@lf/web"
+      "package": "@lf/web",
+      "name": "linkedin_research"
     },
-    "render": {
+    "@lf/web/render": {
       "args": [
         "text",
         "pageSize",
@@ -769,12 +884,76 @@
       "requiredArgs": [
         "text"
       ],
-      "effects": {},
+      "effects": {
+        "reads": [
+          "the web"
+        ]
+      },
       "output": {
         "kind": "value",
         "type": "file"
       },
-      "package": "@lf/pdf"
+      "package": "@lf/web",
+      "name": "render"
+    },
+    "@lf/web/research": {
+      "args": [
+        "name",
+        "context",
+        "questions",
+        "website",
+        "linkedin",
+        "url"
+      ],
+      "priced": true,
+      "argTypes": {
+        "name": "text",
+        "context": "text",
+        "questions": "text",
+        "website": "text",
+        "linkedin": "text",
+        "url": "text"
+      },
+      "requiredArgs": [
+        "name"
+      ],
+      "effects": {
+        "reads": [
+          "the web"
+        ],
+        "ai": true
+      },
+      "output": {
+        "kind": "record",
+        "fields": {
+          "summary": {
+            "kind": "maybeAbsent",
+            "of": "text"
+          },
+          "confidence": {
+            "kind": "maybeAbsent",
+            "of": "text"
+          },
+          "sources": {
+            "kind": "maybeAbsent",
+            "of": "text"
+          },
+          "website": {
+            "kind": "maybeAbsent",
+            "of": "text"
+          },
+          "linkedin": {
+            "kind": "maybeAbsent",
+            "of": "text"
+          },
+          "dossier": {
+            "kind": "maybeAbsent",
+            "of": "text"
+          }
+        }
+      },
+      "package": "@lf/web",
+      "name": "research"
     },
     "research": {
       "args": [
@@ -832,9 +1011,10 @@
           }
         }
       },
-      "package": "@lf/web"
+      "package": "@lf/web",
+      "name": "research"
     },
-    "vc_url_retrieval": {
+    "@lf/web/vc_url_retrieval": {
       "args": [
         "email"
       ],
@@ -882,7 +1062,8 @@
           }
         }
       ],
-      "package": "@lf/web"
+      "package": "@lf/web",
+      "name": "vc_url_retrieval"
     },
     "vc-url-retrieval": {
       "args": [
@@ -932,9 +1113,10 @@
           }
         }
       ],
-      "package": "@lf/web"
+      "package": "@lf/web",
+      "name": "vc_url_retrieval"
     },
-    "web_research": {
+    "@lf/web/web_research": {
       "args": [
         "name",
         "context",
@@ -970,7 +1152,8 @@
           }
         }
       },
-      "package": "@lf/web"
+      "package": "@lf/web",
+      "name": "web_research"
     },
     "web-research": {
       "args": [
@@ -1008,7 +1191,8 @@
           }
         }
       },
-      "package": "@lf/web"
+      "package": "@lf/web",
+      "name": "web_research"
     }
   },
   "diagnostics": {
@@ -1162,45 +1346,6 @@
     "linkedin_research every argument v4 typescript": [],
     "linkedin_research every argument v5 typescript": [],
     "linkedin_research every argument v5 rust": [],
-    "render no argument v4 typescript": [
-      {
-        "code": "MOV_THROUGH_ARG_MISSING",
-        "message": "'render' is missing the required argument 'text'",
-        "severity": "error",
-        "line": 3,
-        "col": 7,
-        "endLine": 3,
-        "endCol": 15,
-        "sourceLine": "  r = render()"
-      }
-    ],
-    "render no argument v5 typescript": [
-      {
-        "code": "MOV_THROUGH_ARG_MISSING",
-        "message": "'render' is missing the required argument 'text'",
-        "severity": "error",
-        "line": 3,
-        "col": 7,
-        "endLine": 3,
-        "endCol": 15,
-        "sourceLine": "  r = render()"
-      }
-    ],
-    "render no argument v5 rust": [
-      {
-        "code": "MOV_THROUGH_ARG_MISSING",
-        "message": "'render' is missing the required argument 'text'",
-        "severity": "error",
-        "line": 3,
-        "col": 7,
-        "endLine": 3,
-        "endCol": 15,
-        "sourceLine": "  r = render()"
-      }
-    ],
-    "render every argument v4 typescript": [],
-    "render every argument v5 typescript": [],
-    "render every argument v5 rust": [],
     "research no argument v4 typescript": [
       {
         "code": "MOV_THROUGH_ARG_MISSING",

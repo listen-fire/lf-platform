@@ -34,14 +34,14 @@ import { transformInvokerFor } from '../transform_invoker';
 const TEAM = '11111111-1111-1111-1111-111111111111' as TeamId;
 const invoker = transformInvokerFor(TEAM);
 const render = (text: string, extra: Record<string, unknown> = {}) =>
-  invoker.invoke({ plugin: 'render', config: { text, ...extra }, extractedContext: {}, budget: NO_BUDGET_LIMIT });
+  invoker.invoke({ plugin: '@lf/pdf/render', config: { text, ...extra }, extractedContext: {}, budget: NO_BUDGET_LIMIT });
 
 describe('pdf.render on the platform', () => {
   beforeEach(() => uploads.splice(0));
 
   it('is a catalog plugin of the @lf/pdf package, answering one file', () => {
-    expect(BUILTIN_MODULES.render?.kind).toBe('plugin');
-    const spec = bundledPluginSpecs().render;
+    expect(BUILTIN_MODULES['@lf/pdf/render']?.kind).toBe('plugin');
+    const spec = bundledPluginSpecs()['@lf/pdf/render'];
     expect(spec?.package).toBe('@lf/pdf');
     expect(spec?.output).toEqual({ kind: 'value', type: 'file' });
     expect(spec?.requiredArgs).toEqual(['text']);
