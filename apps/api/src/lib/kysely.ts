@@ -18,6 +18,7 @@ import KnowledgeSchema from '../generated/kysely/knowledge/KnowledgeSchema';
 import PublicSchema from '../generated/kysely/public/PublicSchema';
 import ValuationsSchema from '../generated/kysely/valuations/ValuationsSchema';
 import { getDatabaseUrl } from '../prisma';
+import { kyselyPoolOptions, poolSettings } from '../prisma/pool_settings';
 import { logger } from 'movement-engine/public/log';
 import { unsafeCurrentContext } from '../services/context';
 
@@ -27,6 +28,7 @@ const databaseUrl = getDatabaseUrl(false);
 const dialect = new PostgresDialect({
   pool: new Pool({
     connectionString: databaseUrl.url,
+    ...kyselyPoolOptions(poolSettings),
   }),
 });
 

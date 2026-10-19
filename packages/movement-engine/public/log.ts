@@ -4,9 +4,9 @@
 // the code that logs.
 
 import winston from 'winston';
-import { logger } from '../services/logger';
+import { logger, jsonLogsEnabled } from '../services/logger';
 
-export { logger };
+export { logger, jsonLogsEnabled };
 // The request context id each line carries, read from the shell's own context.
 export * from '../services/context/current_id';
 
