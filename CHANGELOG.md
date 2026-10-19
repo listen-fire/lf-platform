@@ -13,6 +13,11 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 
 ## [Unreleased]
 
+### i-inbound
+
+- A module can check its own inbound requests (protocol 2, additive: `inbound.scheme: module` with the `checkInbound` method). The host hands it the raw request and sends its answer: the events, a refusal, or a reply such as a handshake. The platform's webhook door and `lf serve` use it when a module declares it, and the door takes GET for such a module; declared signature schemes are unchanged.
+- `lf` can now receive email and WhatsApp. `@lf/email` takes Mailgun and Resend deliveries at `/api/public/webhook-sync/email/<install>`, and `@lf/whatsapp` answers Meta's verification handshake, checks Meta's signature and reads inbound media by Meta's id.
+
 ### au-delete
 
 - The legacy v3 output pipeline is removed (its executor, per-destination adapters, authoring agent and the `knowledge.outputAgent` / `knowledge.expressionWriter` tRPC routes). It had no remaining callers; movements are the only way data moves. A migration sets any stored v3 output (`pipeline_output.config_version = 3`) still marked live or dry-run to `off`; its config is kept.

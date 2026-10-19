@@ -27,7 +27,7 @@ use crate::json::Js;
 use crate::obj;
 use crate::run_host::queue_await_wake;
 use crate::runs::{RunOutcome, Session};
-use crate::secrets::{Credential, install_of};
+use crate::secrets::{Binding, Credential, Credentials, install_of, signer_of};
 use crate::backend::RunHostStore;
 use crate::store::{Store, StoreError};
 
@@ -171,11 +171,21 @@ impl<R: Reader> InboundStore for LfDoors<'_, R> {
     async fn find_subscription(&self, id: &str) -> Result<Option<Subscription>, String> {
         let Some(credential) = self.install(id) else { return Ok(None) };
         let Some(setup) = self.setup_of(&credential.external) else { return Ok(None) };
+        let own = credential.fields.get(&setup.secret_field);
+        // A module that checks its own inbound may be addressed by a user
+        // credential (it carries the provider keys the check reads) while the
+        // secret `lf connect` set is the install's.
+        let secret = match own {
+            None if setup.declaration.scheme == Scheme::Module => {
+                install_of(self.installs, &credential.external).and_then(|install| install.fields.get(&setup.secret_field))
+            }
+            own => own,
+        };
         Ok(Some(Subscription {
             id: id.to_string(),
             team_id: LOCAL_TENANT.into(),
             provider_key: setup.provider_key(),
-            secret: credential.fields.get(&setup.secret_field).cloned().unwrap_or_default(),
+            secret: secret.cloned().unwrap_or_default(),
             checkpoint: self.store.inbound_checkpoint(id).map_err(|e| e.to_string())?,
         }))
     }
@@ -333,7 +343,8 @@ impl Reader for SessionReader<'_> {
     }
 
     async fn check_inbound(&self, external: &str, install: &Credential, request: &Js, secret: Option<&str>, checkpoint: Option<&Js>) -> Result<Js, String> {
-        if !self.lists(external, "checkInbound") {
+        let running = self.session.running().iter().find(|r| r.external.manifest.name == external).ok_or_else(|| format!("no external {external}"))?;
+        if !running.methods.iter().any(|m| m == "checkInbound") {
             return Err(format!("external \"{external}\" declares that it checks its own inbound but does not list checkInbound"));
         }
         let mut params = serde_json::json!({ "request": crate::wire::json_of_js(request) });
@@ -343,7 +354,34 @@ impl Reader for SessionReader<'_> {
         if let Some(checkpoint) = checkpoint {
             params["checkpoint"] = crate::wire::json_of_js(checkpoint);
         }
-        self.call(external, install, "checkInbound", params).await
+        // The check reads the provider's keys (a verify token, an API key to
+        // fetch the message with), so it carries the user credential.
+        let credentials = self.session.credentials();
+        let carried = carried_credential(credentials, external, install);
+        let target = Target {
+            external: &running.external,
+            base_url: &running.base_url,
+            declarations: &running.credential_declarations,
+            methods: &running.methods,
+            settings: &running.settings,
+            limits: &running.limits,
+        };
+        let sending = Sending { tenant: LOCAL_TENANT, method: "checkInbound", cache_scope_id: "<none>", params };
+        let raw = send(&target, credentials, carried, signer_of(credentials, external, carried).or(Some(install)), sending).await?;
+        crate::wire_results::check("checkInbound", external, &raw)
+    }
+}
+
+/// The user credential a module's own inbound check carries: the one the URL
+/// names, else the external's only one; none when it has several.
+fn carried_credential<'a>(credentials: &'a Credentials, external: &str, named: &'a Credential) -> Option<&'a Credential> {
+    if matches!(named.binding, Binding::Credential(_)) {
+        return Some(named);
+    }
+    let mut users = credentials.iter().filter(|c| c.external == external && matches!(c.binding, Binding::Credential(_)));
+    match (users.next(), users.next()) {
+        (Some(only), None) => Some(only),
+        _ => None,
     }
 }
 

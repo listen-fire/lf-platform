@@ -802,4 +802,99 @@ mod tests {
         assert!(!read(r#"{"providerKey":"attio","scheme":"attio","signatureHeaders":["x"],"secretIssuedBy":"installer"}"#).unwrap().secret_from_provider);
         assert!(read(r#"{"providerKey":"attio","scheme":"attio","signatureHeaders":["x"],"secretIssuedBy":"someone"}"#).is_err());
     }
+
+    /// A store whose one provider checks its own inbound: its answer is set
+    /// per test, and what reached the module and the queue is kept.
+    struct ModuleChecked {
+        answer: Js,
+        seen: std::cell::RefCell<Vec<String>>,
+        queued: std::cell::Cell<usize>,
+        wakes: std::cell::RefCell<Vec<String>>,
+    }
+
+    impl ModuleChecked {
+        fn answering(answer: &str) -> ModuleChecked {
+            ModuleChecked { answer: Js::parse(answer.as_bytes()).unwrap(), seen: Default::default(), queued: Default::default(), wakes: Default::default() }
+        }
+    }
+
+    impl InboundStore for ModuleChecked {
+        async fn find_subscription(&self, id: &str) -> Result<Option<Subscription>, String> {
+            Ok((id == "inst").then(|| Subscription { id: id.into(), team_id: "t".into(), provider_key: "MAIL".into(), secret: "key".into(), checkpoint: None }))
+        }
+        fn knows_provider(&self, provider_key: &str) -> bool {
+            provider_key == "MAIL"
+        }
+        fn intercepts(&self, _provider_key: &str) -> Vec<Intercept> {
+            Vec::new()
+        }
+        async fn source_for(&self, _subscription: &Subscription) -> Result<Option<Source>, String> {
+            let declaration = Declaration::read(&Js::parse(br#"{"providerKey":"mail","scheme":"module"}"#).unwrap())?;
+            Ok(Some(Source { declaration, secret: "key".into(), adapter_type: "mail".into(), install: "inst".into() }))
+        }
+        fn reads_deliveries(&self, _source: &Source) -> bool {
+            false
+        }
+        async fn preprocess(&self, _source: &Source, _raw: &Js, _checkpoint: Option<&Js>) -> Result<Extraction, String> {
+            Err("never called for a module that checks its own inbound".into())
+        }
+        async fn check_inbound(&self, _source: &Source, request: &RawRequest<'_>, secret: Option<&str>, _checkpoint: Option<&Js>) -> Result<Js, String> {
+            self.seen.borrow_mut().push(format!("{} {} {}", request.wire().to_json(), secret.unwrap_or("-"), request.method));
+            Ok(self.answer.clone())
+        }
+        async fn wake_keys(&self, _source: &Source, _raw: &Js) -> Result<Vec<String>, String> {
+            Err("never called for a module that checks its own inbound".into())
+        }
+        async fn capture(&self, event: &Js, _source: &Source) -> Result<Js, String> {
+            Ok(event.clone())
+        }
+        async fn save_checkpoint(&self, _subscription_id: &str, _checkpoint: &Js) -> Result<(), String> {
+            Ok(())
+        }
+        async fn enqueue(&self, _captured: Js, _source: &Source) -> Result<(), String> {
+            self.queued.set(self.queued.get() + 1);
+            Ok(())
+        }
+        async fn enqueue_wakes(&self, _adapter_type: &str, _team_id: &str, keys: &[String]) -> Result<(), String> {
+            self.wakes.borrow_mut().extend(keys.iter().cloned());
+            Ok(())
+        }
+        fn notify(&self) {}
+    }
+
+    fn delivery<'a>(method: &'a str, body: &'a [u8], headers: &'a [(String, String)]) -> Delivery<'a> {
+        Delivery { provider: "mail", subscription_id: "inst", raw_body: body, headers, method, path: "/api/public/webhook-sync/mail/inst", query: "a=1" }
+    }
+
+    #[tokio::test]
+    async fn a_module_that_checks_its_own_inbound_is_handed_the_raw_request() {
+        let store = ModuleChecked::answering(r#"{"outcome":"accepted","events":[{"payload":{"n":1}}],"wakeKeys":["k1"]}"#);
+        let headers = headers(&[("Content-Type", "application/x-www-form-urlencoded")]);
+        let answer = answer_delivery(&store, delivery("POST", b"a=b", &headers)).await;
+        assert_eq!((answer.status, answer.body.to_json()), (200, r#"{"ok":true,"eventsProcessed":1}"#.to_string()));
+        assert_eq!((store.queued.get(), store.wakes.borrow().clone()), (1, vec!["k1".to_string()]));
+        assert_eq!(
+            store.seen.borrow()[0],
+            r#"{"method":"POST","path":"/api/public/webhook-sync/mail/inst","query":"a=1","headers":{"content-type":"application/x-www-form-urlencoded"},"body":"YT1i"} key POST"#
+        );
+    }
+
+    #[tokio::test]
+    async fn its_refusal_and_its_reply_are_what_the_door_answers() {
+        let refused = answer_delivery(&ModuleChecked::answering(r#"{"outcome":"refused","status":406}"#), delivery("POST", b"", &[])).await;
+        assert_eq!((refused.status, refused.body.to_json()), (406, r#"{"error":"signature_invalid"}"#.to_string()));
+        let default = answer_delivery(&ModuleChecked::answering(r#"{"outcome":"refused"}"#), delivery("POST", b"", &[])).await;
+        assert_eq!(default.status, 401);
+        let store = ModuleChecked::answering(r#"{"outcome":"reply","status":200,"text":"challenge-1"}"#);
+        let reply = answer_delivery(&store, delivery("GET", b"", &[])).await;
+        assert_eq!((reply.status, reply.text.as_deref()), (200, Some("challenge-1")));
+        assert_eq!(store.queued.get(), 0);
+    }
+
+    #[test]
+    fn a_module_checked_declaration_names_no_headers() {
+        let read = Declaration::read(&Js::parse(br#"{"providerKey":"mail","scheme":"module"}"#).unwrap()).unwrap();
+        assert_eq!((read.scheme, read.signature_headers.len()), (Scheme::Module, 0));
+        assert!(!verify_declared(&read, BODY, &[], "key"), "the host verifies nothing for it");
+    }
 }

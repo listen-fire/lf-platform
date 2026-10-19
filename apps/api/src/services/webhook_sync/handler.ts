@@ -324,6 +324,8 @@ async function handleInboundWebhook(options: {
     headers: options.headers,
   });
   if (!result.ok) return { ok: false, eventsProcessed: 0, error: result.error };
+  // A module's reply (a handshake) ran nothing.
+  if ('reply' in result) return { ok: true, eventsProcessed: 0 };
   const { queue } = result;
   return {
     ok: true,

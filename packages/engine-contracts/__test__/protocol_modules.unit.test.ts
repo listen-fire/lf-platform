@@ -97,6 +97,15 @@ describe('a module manifest', () => {
     expect(refusal({ ...MODULE_MANIFEST, inbound: { ...MODULE_MANIFEST.inbound, intercepts: ['ping'] } })[0]).toMatch(/^inbound\.intercepts/);
   });
 
+  it('takes a module that checks its own inbound only with checkInbound, and no headers', () => {
+    const checked = { ...MODULE_MANIFEST, inbound: { providerKey: 'mail', scheme: 'module' } };
+    expect(WireManifestResult.safeParse({ ...checked, methods: [...MODULE_MANIFEST.methods, 'checkInbound'] }).success).toBe(true);
+    expect(refusal(checked)).toEqual(['methods: declares `inbound` but does not list `checkInbound` in methods']);
+    expect(refusal({ ...MODULE_MANIFEST, methods: [...MODULE_MANIFEST.methods, 'checkInbound'] })).toEqual([
+      'inbound: lists `checkInbound` in methods but declares no `inbound`',
+    ]);
+  });
+
   it('refuses a signature header that is not a lower-case header name, and an empty list', () => {
     expect(refusal({ ...MODULE_MANIFEST, inbound: { ...MODULE_MANIFEST.inbound, signatureHeaders: ['Attio-Signature'] } })[0]).toMatch(
       /lower-case header name/,

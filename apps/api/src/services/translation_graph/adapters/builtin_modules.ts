@@ -44,7 +44,7 @@ import {
   type OAuth2ClientApp,
   type SecretsFamily,
 } from 'movement-engine/public/secrets';
-import { declaredInboundVerifier, type InboundVerifier } from 'movement-engine/public/inbound';
+import { CHECKED_BY_MODULE, declaredInboundVerifier, type InboundVerifier } from 'movement-engine/public/inbound';
 import { ownedFilesAdapter } from 'movement-engine/public/modules';
 import { logger } from 'movement-engine/public/log';
 import type { BrowserSlot } from 'movement-engine/public/browser';

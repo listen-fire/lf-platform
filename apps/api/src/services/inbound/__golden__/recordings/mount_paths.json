@@ -1,6 +1,7 @@
 {
   "routers": {
     "/api/public/webhook-sync": [
+      "GET /:provider/:subscriptionId",
       "POST /:provider/:subscriptionId"
     ],
     "/api/public/adapter": [

@@ -772,7 +772,7 @@ export const WireModuleCheckedInboundDeclaration = z.object({
   secretIssuedBy: WireSecretIssuedBy.optional(),
 });
 
-export const WireInboundDeclaration = z.union([WireSignedInboundDeclaration, WireModuleCheckedInboundDeclaration]);
+export const WireInboundDeclaration = z.discriminatedUnion('scheme', [WireSignedInboundDeclaration, WireModuleCheckedInboundDeclaration]);
 export type WireSignedInboundDeclarationShape = z.infer<typeof WireSignedInboundDeclaration>;
 export type WireInboundDeclarationShape = z.infer<typeof WireInboundDeclaration>;
 

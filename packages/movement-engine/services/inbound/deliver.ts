@@ -22,15 +22,13 @@ import type { z } from 'zod';
 import type { Adapter, DiscriminableEvent, EventType, InboundCheck } from '../translation_graph/adapter';
 
 import { logger } from '../logger';
-import { isUsableInboundSecret, verifyInbound, type InboundHeaders, type InboundVerifier } from './verify';
+import { CHECKED_BY_MODULE, isUsableInboundSecret, verifyInbound, type InboundHeaders, type InboundVerifier } from './verify';
 
 export type InboundIntercept = z.infer<typeof WireInboundIntercept>;
 
 /** The adapter surface a delivery is read through. */
 export type InboundAdapter = Pick<Adapter, 'adapterType' | 'preprocessInbound' | 'wakeKeys' | 'listEventTypes' | 'checkInbound'>;
 
-/** A source whose module checks each request itself (`checkInbound`). */
-export const CHECKED_BY_MODULE = { checkedBy: 'module' } as const;
 
 /** The row a door URL names. */
 export interface InboundSubscription {
