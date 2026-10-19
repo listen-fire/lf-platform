@@ -3979,6 +3979,18 @@ CREATE TABLE automations.work (
 CREATE INDEX work_due_idx ON automations.work (due_at);
 CREATE INDEX work_team_idx ON automations.work (team_id) WHERE team_id IS NOT NULL;
 
+-- Expiring key-value store for the API's caches and counters (favicons, MCP OAuth
+-- flow state, loop guard buckets) when no Redis is configured. A row past its
+-- expires_at reads as absent; rows are swept lazily. `value` holds a cached blob,
+-- `counter` a loop guard bucket. Not audited: machine churn nobody edits.
+CREATE TABLE automations.cache_entry (
+    key text PRIMARY KEY,
+    value bytea NOT NULL DEFAULT ''::bytea,
+    counter bigint NOT NULL DEFAULT 0,
+    expires_at timestamptz NOT NULL
+);
+CREATE INDEX cache_entry_expires_idx ON automations.cache_entry (expires_at);
+
 -- join_pending — the per-frame PENDING-COUNT (§5.4): for each parallel / fan-out
 -- JOIN frame with ≥1 parked descendant, the number of its child branches still
 -- unresolved. "A frame is parked iff pending > 0." Resolving a child is the

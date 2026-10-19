@@ -8,20 +8,19 @@ import { ApiKeyService } from '../../services/api_key';
 import { recordUserMilestone } from '../../lib/journey';
 import { sessionJwtAudience } from '../../lib/middleware/authentication/session_jwt_audience';
 import { logger } from 'movement-engine/public/log';
-import { getRedisPool, redisConfigured } from '../../redisPool';
+import { ttlCache } from '../../services/ttl_cache';
 import { getOrigin } from './origin';
 
 /**
  * OAuth flow state — auth codes and dynamically-registered clients — lives in
- * BOTH a process-local Map (fast path) and Redis (durable path). Memory alone
+ * BOTH a process-local Map (fast path) and the shared TTL cache (durable path:
+ * Redis when configured, else Postgres). Memory alone
  * broke real connects: an API restart mid-flow (every deploy) wiped in-flight
  * codes, the token exchange then failed, and the MCP client silently restarted
  * the whole flow — which the user experienced as the consent button "needing a
- * double-click". Reads try memory first, then Redis; writes go to both,
- * best-effort on the Redis leg (a Redis hiccup degrades to today's
- * single-instance behavior instead of failing the flow). With no Redis configured
- * the Redis leg is skipped: the flow is exact within one process, but a restart
- * mid-flow, or another API instance answering the token exchange, loses it.
+ * double-click". Reads try memory first, then the cache; writes go to both,
+ * best-effort on the cache leg (a hiccup degrades to single-instance
+ * behavior instead of failing the flow).
  */
 interface AuthCodeData {
   apiKey: string;
@@ -41,7 +40,7 @@ const registeredClients = new Map<string, RegisteredClient>();
 
 const AUTH_CODE_TTL_MS = 10 * 60 * 1000;
 // Registrations are re-minted freely by clients; 30 days outlives any session.
-const CLIENT_TTL_SECONDS = 30 * 24 * 60 * 60;
+const CLIENT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 setInterval(() => {
   const now = Date.now();
@@ -50,25 +49,20 @@ setInterval(() => {
   }
 }, 60_000);
 
-async function redisOp<T>(op: (client: import('ioredis').Redis) => Promise<T>): Promise<T | null> {
-  if (!redisConfigured()) return null;
+async function cacheOp<T>(op: () => Promise<T>): Promise<T | null> {
   try {
-    const pool = getRedisPool();
-    const client = await pool.acquire();
-    try {
-      return await op(client);
-    } finally {
-      pool.release(client).catch(() => {});
-    }
+    return await op();
   } catch (e) {
-    logger.warn('[mcp-oauth] redis op failed — falling back to in-memory state', { error: e });
+    logger.warn('[mcp-oauth] cache op failed — falling back to in-memory state', { error: e });
     return null;
   }
 }
 
 async function persistAuthCode(code: string, data: AuthCodeData): Promise<void> {
   authCodes.set(code, data);
-  await redisOp((c) => c.set(`mcp:oauth:code:${code}`, JSON.stringify(data), 'PX', AUTH_CODE_TTL_MS));
+  await cacheOp(() =>
+    ttlCache.set(`mcp:oauth:code:${code}`, Buffer.from(JSON.stringify(data)), AUTH_CODE_TTL_MS),
+  );
 }
 
 /** Single-use fetch: removes the code from both stores. */
@@ -77,29 +71,29 @@ async function consumeAuthCode(code: string): Promise<AuthCodeData | null> {
   const local = authCodes.get(code);
   authCodes.delete(code);
   if (local) {
-    void redisOp((c) => c.del(key));
+    void cacheOp(() => ttlCache.delete(key));
     return local;
   }
-  const raw = await redisOp(async (c) => {
-    const value = await c.get(key);
-    if (value) await c.del(key);
-    return value;
-  });
-  return raw ? (JSON.parse(raw) as AuthCodeData) : null;
+  const raw = await cacheOp(() => ttlCache.take(key));
+  return raw ? (JSON.parse(raw.toString()) as AuthCodeData) : null;
 }
 
 async function persistClient(client: RegisteredClient): Promise<void> {
   registeredClients.set(client.clientId, client);
-  await redisOp((c) =>
-    c.set(`mcp:oauth:client:${client.clientId}`, JSON.stringify(client), 'EX', CLIENT_TTL_SECONDS),
+  await cacheOp(() =>
+    ttlCache.set(
+      `mcp:oauth:client:${client.clientId}`,
+      Buffer.from(JSON.stringify(client)),
+      CLIENT_TTL_MS,
+    ),
   );
 }
 
 async function lookupClient(clientId: string): Promise<RegisteredClient | null> {
   const local = registeredClients.get(clientId);
   if (local) return local;
-  const raw = await redisOp((c) => c.get(`mcp:oauth:client:${clientId}`));
-  return raw ? (JSON.parse(raw) as RegisteredClient) : null;
+  const raw = await cacheOp(() => ttlCache.get(`mcp:oauth:client:${clientId}`));
+  return raw ? (JSON.parse(raw.toString()) as RegisteredClient) : null;
 }
 
 // ── Session helpers (no dependency on request context) ──

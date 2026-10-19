@@ -1,11 +1,16 @@
-// Loop-guard store with no Redis configured: the counters live in this process and give the same
-// totals as the Redis store for the same calls, expire, and never reach the Redis pool.
+// Loop-guard store over the in-process counter backend (a test double for the Postgres one, which
+// is exercised for real in the integration test): it gives the same totals as the Redis store for
+// the same calls, expires, and never reaches the Redis pool.
 
 const getRedisPool = jest.fn();
 
 jest.mock('../../../redisPool', () => ({
   redisConfigured: () => false,
   getRedisPool,
+}));
+
+jest.mock('../counters/postgres', () => ({
+  postgresBucketBackend: jest.requireActual('../counters/memory').createMemoryBucketBackend(),
 }));
 
 import { createMemoryBucketBackend } from '../counters/memory';
