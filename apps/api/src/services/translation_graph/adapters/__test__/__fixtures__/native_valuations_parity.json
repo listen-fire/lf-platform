@@ -14372,98 +14372,89 @@
       ]
     },
     {
-      "step": "snapshot Legal Entity",
+      "step": "iterateRelated root Legal Entity",
       "answer": [
         {
-          "pipelineInputId": "pipeline-input-parity",
-          "adapterType": "native-valuations",
-          "objectType": "Legal Entity",
-          "triggerType": "snapshot",
-          "payload": {
-            "id": "le-fund",
-            "type": "FUND",
-            "name": "Northwind Capital",
-            "legal_name": "Northwind Capital I LP",
-            "also_known_as": null,
-            "personal_website": null,
-            "other_names": [],
-            "investing_entity_id": null,
-            "underlying_company_id": null,
-            "acquired_by_legal_entity_id": null,
-            "is_own_investing_entity": true,
-            "created_at": "2026-09-01T09:00:00.000Z",
-            "updated_at": "2026-09-01T09:00:00.000Z"
-          },
-          "externalRecordRef": {
+          "position": {
             "adapterType": "native-valuations",
-            "externalId": "le-fund",
-            "recordType": "Legal Entity"
-          },
-          "occurredAt": "2026-10-01T09:00:00.000Z",
-          "snapshotComplete": false
+            "recordType": "Legal Entity",
+            "identity": {
+              "kind": "stable",
+              "recordId": "le-fund",
+              "data": {
+                "id": "le-fund",
+                "type": "FUND",
+                "name": "Northwind Capital",
+                "legal_name": "Northwind Capital I LP",
+                "also_known_as": null,
+                "personal_website": null,
+                "other_names": [],
+                "investing_entity_id": null,
+                "underlying_company_id": null,
+                "acquired_by_legal_entity_id": null,
+                "is_own_investing_entity": true,
+                "created_at": "2026-09-01T09:00:00.000Z",
+                "updated_at": "2026-09-01T09:00:00.000Z"
+              }
+            }
+          }
         },
         {
-          "pipelineInputId": "pipeline-input-parity",
-          "adapterType": "native-valuations",
-          "objectType": "Legal Entity",
-          "triggerType": "snapshot",
-          "payload": {
-            "id": "le-acme",
-            "type": "PORTFOLIO_COMPANY",
-            "name": "Acme Robotics",
-            "legal_name": "Acme Robotics GmbH",
-            "also_known_as": "Acme",
-            "personal_website": "https://www.acme.example/",
-            "other_names": [
-              "ACME Bots"
-            ],
-            "investing_entity_id": "le-fund",
-            "underlying_company_id": null,
-            "acquired_by_legal_entity_id": null,
-            "is_portfolio": true,
-            "created_at": "2026-09-01T09:00:00.000Z",
-            "updated_at": "2026-09-01T09:00:00.000Z"
-          },
-          "externalRecordRef": {
+          "position": {
             "adapterType": "native-valuations",
-            "externalId": "le-acme",
-            "recordType": "Legal Entity"
-          },
-          "occurredAt": "2026-10-01T09:00:00.000Z",
-          "snapshotComplete": false
+            "recordType": "Legal Entity",
+            "identity": {
+              "kind": "stable",
+              "recordId": "le-acme",
+              "data": {
+                "id": "le-acme",
+                "type": "PORTFOLIO_COMPANY",
+                "name": "Acme Robotics",
+                "legal_name": "Acme Robotics GmbH",
+                "also_known_as": "Acme",
+                "personal_website": "https://www.acme.example/",
+                "other_names": [
+                  "ACME Bots"
+                ],
+                "investing_entity_id": "le-fund",
+                "underlying_company_id": null,
+                "acquired_by_legal_entity_id": null,
+                "is_portfolio": true,
+                "created_at": "2026-09-01T09:00:00.000Z",
+                "updated_at": "2026-09-01T09:00:00.000Z"
+              }
+            }
+          }
         },
         {
-          "pipelineInputId": "pipeline-input-parity",
-          "adapterType": "native-valuations",
-          "objectType": "Legal Entity",
-          "triggerType": "snapshot",
-          "payload": {
-            "id": "le-beta",
-            "type": "PORTFOLIO_COMPANY",
-            "name": "Beta Labs",
-            "legal_name": null,
-            "also_known_as": "Acme Beta",
-            "personal_website": "beta.example",
-            "other_names": [],
-            "investing_entity_id": "le-fund",
-            "underlying_company_id": null,
-            "acquired_by_legal_entity_id": null,
-            "is_portfolio": true,
-            "created_at": "2026-09-01T09:00:00.000Z",
-            "updated_at": "2026-09-01T09:00:00.000Z"
-          },
-          "externalRecordRef": {
+          "position": {
             "adapterType": "native-valuations",
-            "externalId": "le-beta",
-            "recordType": "Legal Entity"
-          },
-          "occurredAt": "2026-10-01T09:00:00.000Z",
-          "snapshotComplete": true
+            "recordType": "Legal Entity",
+            "identity": {
+              "kind": "stable",
+              "recordId": "le-beta",
+              "data": {
+                "id": "le-beta",
+                "type": "PORTFOLIO_COMPANY",
+                "name": "Beta Labs",
+                "legal_name": null,
+                "also_known_as": "Acme Beta",
+                "personal_website": "beta.example",
+                "other_names": [],
+                "investing_entity_id": "le-fund",
+                "underlying_company_id": null,
+                "acquired_by_legal_entity_id": null,
+                "is_portfolio": true,
+                "created_at": "2026-09-01T09:00:00.000Z",
+                "updated_at": "2026-09-01T09:00:00.000Z"
+              }
+            }
+          }
         }
       ]
     },
     {
-      "step": "snapshot Investment (reached through its parents)",
+      "step": "iterateRelated root Investment (reached through its parents)",
       "answer": {
         "error": "Listen-Fire Valuations: Investments live under their legal entities — read `<legal entity>-[:Investments]->` (into the entity) or `<legal entity>-[:`Investments Made`]->` (by the entity)."
       }
@@ -14505,7 +14496,7 @@
       }
     },
     {
-      "step": "snapshot Legal Entity",
+      "step": "iterateRelated root Legal Entity",
       "answer": {
         "error": "NativeValuationsAdapter snapshot requires credentialsId; the pipeline_input row is missing one."
       }

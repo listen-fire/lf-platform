@@ -128,7 +128,7 @@ async function expectValuationsParity(subject: () => Promise<Adapter> | Adapter,
       'resolveEntity FUZZY on a field that does not take it',
       'createRecord Event along the wrong edge',
       'createRecord AddInvestment without its investor',
-      'snapshot Investment (reached through its parents)',
+      'iterateRelated root Investment (reached through its parents)',
     ]);
     expect(answered('Legal Entity -[Valuations WHERE date AND currency]->')).toHaveLength(1);
     expect(answered('ensureEventSubscription create')).toEqual({

@@ -4,14 +4,14 @@
 // Valuations edge with its date and currency, entity resolution (exact,
 // fuzzy, by website), an entity's create/read/update/delete, two commands
 // with their parent links and the receipts they walk to, the inbound
-// mapping for each subscribable event and for junk, a snapshot, and the
-// webhook subscription lifecycle. A second, shorter pass runs with no
-// credential at all.
+// mapping for each subscribable event and for junk, the streamed root read
+// (the snapshot underneath it), and the webhook subscription lifecycle. A
+// second, shorter pass runs with no credential at all.
 
 import type { Expression } from '#shared/expression/types';
 import type { Adapter } from 'movement-engine/public/adapter';
 
-import { makeStablePosition } from 'movement-engine/public/catalog';
+import { makeMetaPosition, makeStablePosition } from 'movement-engine/public/catalog';
 
 import { MUTATION, Transcript, cmp, prop, value, walkSurface, type TranscriptEntry } from '../crm_parity/walk';
 
@@ -40,6 +40,7 @@ export async function runValuationsParityScript(adapter: Adapter): Promise<Trans
     depth: 2,
   });
 
+  const meta = makeMetaPosition(ADAPTER_TYPE);
   const entity = (id: string, recordType: string, data: Record<string, unknown>) =>
     makeStablePosition({ adapterType: ADAPTER_TYPE, recordId: id, recordType, data: { id, ...data } });
   const acme = firsts.get('Legal Entity') !== undefined ? entity('le-acme', 'Legal Entity', { name: 'Acme Robotics' }) : undefined;
@@ -204,9 +205,10 @@ export async function runValuationsParityScript(adapter: Adapter): Promise<Trans
   }
   await t.step('listEventTypes', () => adapter.listEventTypes?.() ?? null);
 
-  await t.step('snapshot Legal Entity', () => collect(adapter.snapshot?.({ pipelineInputId: 'pipeline-input-parity', recordType: 'Legal Entity' })));
-  await t.step('snapshot Investment (reached through its parents)', () =>
-    collect(adapter.snapshot?.({ pipelineInputId: 'pipeline-input-parity', recordType: 'Investment' })),
+  // The streamed root read, which pages the entity's whole collection.
+  await t.step('iterateRelated root Legal Entity', () => collect(adapter.iterateRelated?.({ position: meta, fieldId: 'Legal Entity', direction: 'outgoing' })));
+  await t.step('iterateRelated root Investment (reached through its parents)', () =>
+    collect(adapter.iterateRelated?.({ position: meta, fieldId: 'Investment', direction: 'outgoing' })),
   );
 
   const callbackUrl = 'https://example.test/api/public/webhook-sync/native_valuations/sub-1';
@@ -247,7 +249,9 @@ export async function runValuationsWithoutCredentialScript(adapter: Adapter): Pr
   await t.step('getRelated Investing Entity', () =>
     adapter.getRelated({ position: makeStablePosition({ adapterType: ADAPTER_TYPE, recordId: 'le-acme', recordType: 'Legal Entity', data: { id: 'le-acme', investing_entity_id: 'le-fund' } }), fieldId: 'Investing Entity', direction: 'outgoing' }),
   );
-  await t.step('snapshot Legal Entity', () => collect(adapter.snapshot?.({ pipelineInputId: 'pipeline-input-parity', recordType: 'Legal Entity' })));
+  await t.step('iterateRelated root Legal Entity', () =>
+    collect(adapter.iterateRelated?.({ position: makeMetaPosition(ADAPTER_TYPE), fieldId: 'Legal Entity', direction: 'outgoing' })),
+  );
   await t.step('resolveEntity', () =>
     adapter.resolveEntity({ record: { Name: 'Acme Robotics' }, recordType: 'Legal Entity', candidates: [], constraints: { any: [{ all: [{ field: 'Name' }] }] } } as never),
   );
