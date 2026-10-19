@@ -15,6 +15,8 @@ const MESSAGE =
  * and only the file-touching paths fail, naming the vars they need.
  */
 class UnconfiguredDocumentProvider implements DocumentProvider {
+  constructor(private readonly message: string = MESSAGE) {}
+
   async upload(
     _readable: Readable,
     _options: {
@@ -24,7 +26,7 @@ class UnconfiguredDocumentProvider implements DocumentProvider {
       keyPrefix?: string;
     },
   ): Promise<{ objectUri: string; checksum: string }> {
-    throw new Error(MESSAGE);
+    throw new Error(this.message);
   }
 
   async getFile(_args: { objectUri: string }): Promise<{
@@ -32,17 +34,17 @@ class UnconfiguredDocumentProvider implements DocumentProvider {
     ContentLength: number | undefined;
     ContentType: string | undefined;
   } | null> {
-    throw new Error(MESSAGE);
+    throw new Error(this.message);
   }
 
   async getFileNodeStream(
     _args: { objectUri: string },
   ): Promise<Readable & { size: number; contentType?: string }> {
-    throw new Error(MESSAGE);
+    throw new Error(this.message);
   }
 
   async getDownloadUrl(_args: { objectUri: string }): Promise<string> {
-    throw new Error(MESSAGE);
+    throw new Error(this.message);
   }
 
   keyOf(_objectUri: string): string | undefined {
@@ -50,7 +52,7 @@ class UnconfiguredDocumentProvider implements DocumentProvider {
   }
 
   async delete(_uri: string): Promise<void> {
-    throw new Error(MESSAGE);
+    throw new Error(this.message);
   }
 }
 

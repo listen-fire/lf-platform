@@ -16,9 +16,7 @@ import { OutboundTwilioMessager } from './adapters/whatsapp/twilio.adapter';
 import { FakeOutboundWhatsAppAdapter } from './adapters/whatsapp/fake.adapter';
 import { UnconfiguredOutboundWhatsAppAdapter } from './adapters/whatsapp/unconfigured.adapter';
 import { whatsappLinkVerification } from './services/whatsapp/phone_verification/link_verification';
-import { S3Adapter } from './adapters/document/s3';
 import { UnconfiguredDocumentProvider } from './adapters/document/unconfigured';
-import { GoogleDocumentAIAdapter } from './adapters/ocr/google';
 import { UnconfiguredOcrAdapter } from './adapters/ocr/unconfigured';
 import { BrightDataAdapter } from './adapters/linkedin/brightData';
 import { AirtableAppAdapter } from './adapters/airtable/connector';
@@ -45,6 +43,19 @@ import { resolveOAuthCallbackRedirect } from './lib/oauthCallbackRedirect';
 import { askSettleDelivery } from './services/translation_graph/adapters/ask/delivery_mode';
 import { notifyEngineOfSettledAsks } from './services/asks/in_process_notifier';
 import { mounts } from './products';
+
+// The S3 files module and the Google OCR module are optionalDependencies: a
+// light install (pnpm install --no-optional) leaves them, with their cloud SDKs,
+// out. Absent, the slot is filled by its "unconfigured" stand-in naming the
+// package, so the build boots and only the file-touching path says what is missing.
+function optionalPackage<T>(load: () => T): T | undefined {
+  try {
+    return load();
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'MODULE_NOT_FOUND') return undefined;
+    throw error;
+  }
+}
 
 const NODE_ENV = process.env.NODE_ENV as typeof process.env.NODE_ENV | 'staging';
 const isProductionOrStaging = NODE_ENV === 'production' || NODE_ENV === 'staging';
@@ -197,14 +208,19 @@ whatsappLinkVerification();
 // adapter at any S3-compatible service — R2, MinIO, Supabase Storage — so
 // "S3" here is a protocol, not a vendor.
 if (AWS_DOCUMENT_S3_BUCKET && AWS_REGION && AWS_ACCESS_KEY_ID && AWS_SECRET_ACCESS_KEY) {
-  services.document = new S3Adapter({
-    bucket: AWS_DOCUMENT_S3_BUCKET,
-    region: AWS_REGION,
-    accessKeyId: AWS_ACCESS_KEY_ID,
-    secretAccessKey: AWS_SECRET_ACCESS_KEY,
-    endpoint: AWS_S3_ENDPOINT,
-    forcePathStyle: AWS_S3_FORCE_PATH_STYLE === 'true',
-  });
+  const filesS3 = optionalPackage((): typeof import('files-s3') => require('files-s3'));
+  services.document = filesS3
+    ? new filesS3.S3Adapter({
+        bucket: AWS_DOCUMENT_S3_BUCKET,
+        region: AWS_REGION,
+        accessKeyId: AWS_ACCESS_KEY_ID,
+        secretAccessKey: AWS_SECRET_ACCESS_KEY,
+        endpoint: AWS_S3_ENDPOINT,
+        forcePathStyle: AWS_S3_FORCE_PATH_STYLE === 'true',
+      })
+    : new UnconfiguredDocumentProvider(
+        'Object storage is configured (AWS_DOCUMENT_S3_BUCKET is set) but this build does not include the S3 files module, @listen-fire/files-s3. Use the full build, or add that package.',
+      );
 } else {
   services.document = new UnconfiguredDocumentProvider();
 }
@@ -218,15 +234,20 @@ if (
   GOOGLE_PROCESSOR_ID &&
   GOOGLE_STORAGE_BUCKET_NAME
 ) {
-  services.ocr = new GoogleDocumentAIAdapter({
-    privateKey: GOOGLE_PRIVATE_KEY,
-    clientEmail: GOOGLE_CLIENT_EMAIL,
-    clientId: GOOGLE_CLIENT_ID,
-    projectId: GOOGLE_PROJECT_ID,
-    projectLocation: GOOGLE_PROJECT_LOCATION,
-    processorId: GOOGLE_PROCESSOR_ID,
-    bucketName: GOOGLE_STORAGE_BUCKET_NAME,
-  });
+  const ocrGoogle = optionalPackage((): typeof import('ocr-google') => require('ocr-google'));
+  services.ocr = ocrGoogle
+    ? new ocrGoogle.GoogleDocumentAIAdapter({
+        privateKey: GOOGLE_PRIVATE_KEY,
+        clientEmail: GOOGLE_CLIENT_EMAIL,
+        clientId: GOOGLE_CLIENT_ID,
+        projectId: GOOGLE_PROJECT_ID,
+        projectLocation: GOOGLE_PROJECT_LOCATION,
+        processorId: GOOGLE_PROCESSOR_ID,
+        bucketName: GOOGLE_STORAGE_BUCKET_NAME,
+      })
+    : new UnconfiguredOcrAdapter(
+        'OCR is configured (the GOOGLE_* Document AI variables are set) but this build does not include the Google OCR module, @listen-fire/ocr-google. Use the full build, or add that package.',
+      );
 
   // TODO: allow user configuration of which adapters they use?
 } else {

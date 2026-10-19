@@ -2,9 +2,9 @@
 // environment and usage ledger. The vendors live in packages/model-providers.
 
 import type { ImageModelName } from 'movement-engine/public/models';
-import type { GeneratedImage, ImageRequest } from 'model-providers/image';
+import type { GeneratedImage, ImageRequest } from 'image-providers';
 
-import { generateImage as generateImageWith } from 'model-providers/image';
+import { generateImage as generateImageWith } from 'image-providers';
 import { hostedModelHost } from '../host';
 
 export function generateImage(

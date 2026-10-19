@@ -46,6 +46,11 @@ COPY apps/api/package.json apps/api/
 COPY packages/principal/package.json packages/principal/
 COPY packages/file-text/package.json packages/file-text/
 COPY packages/model-providers/package.json packages/model-providers/
+COPY packages/embedding-providers/package.json packages/embedding-providers/
+COPY packages/image-providers/package.json packages/image-providers/
+COPY packages/transcription-providers/package.json packages/transcription-providers/
+COPY packages/files-s3/package.json packages/files-s3/
+COPY packages/ocr-google/package.json packages/ocr-google/
 COPY packages/module-kit/package.json packages/module-kit/
 COPY modules/dealroom/package.json modules/dealroom/
 COPY modules/granola/package.json modules/granola/

@@ -36,6 +36,11 @@
 //!
 //! Single-threaded: one tokio thread, every wait an await.
 
+// The light build has no listener, and the inbound doors' shared logic is
+// reached through it: what is unreached there is the doors', not dead.
+#![cfg_attr(not(feature = "serve"), allow(dead_code))]
+
+#[cfg(feature = "anthropic")]
 mod anthropic;
 mod backend;
 mod callbacks;
@@ -43,6 +48,7 @@ mod catalog;
 mod check;
 mod completion;
 mod connect;
+#[cfg(feature = "serve")]
 mod contract_doors;
 mod contract_secrets;
 mod contract_guard;
@@ -62,18 +68,38 @@ mod inbound;
 mod init;
 mod json;
 mod lfjson;
+#[cfg(feature = "anthropic")]
 mod json_repair;
 mod guard_module;
 mod limiter;
 mod limiter_module;
 mod loop_guard;
+#[cfg(feature = "anthropic")]
 mod llm_calls;
+#[cfg(feature = "serve")]
+mod listener;
+/// Without the `serve` feature this process listens nowhere: a module that
+/// asks the host for a model call finds no door, and `lf serve` refuses.
+#[cfg(not(feature = "serve"))]
+mod listener {
+    pub const NOT_BUILT: &str = "this lf was built without the `serve` feature, so it has no listener (install the full lf to serve inbound doors)";
+
+    pub async fn open_models_door(_: &crate::secrets::Credentials) -> Result<(), String> {
+        Ok(())
+    }
+}
 mod lsp;
 mod models;
 mod oauth2;
+#[cfg(feature = "oauth")]
+mod oauth2_flow;
 mod oauth_redirect;
+#[cfg(feature = "oauth")]
+mod oauth_signin;
 mod park_files;
+#[cfg(feature = "postgres")]
 mod pg_store;
+#[cfg(feature = "postgres")]
 mod pg_tls;
 mod project;
 mod prompt;
@@ -308,7 +334,10 @@ async fn run(argv: Vec<String>) -> Result<i32, String> {
         return contract_guard::serve(contract_guard::Serving::Slot(guard)).await.map(|()| 0);
     }
     if args.contract_doors {
+        #[cfg(feature = "serve")]
         return contract_doors::serve().await.map(|()| 0);
+        #[cfg(not(feature = "serve"))]
+        return Err(listener::NOT_BUILT.to_string());
     }
     let mut out = std::io::stdout().lock();
     if args.version {
@@ -432,10 +461,13 @@ async fn run(argv: Vec<String>) -> Result<i32, String> {
             session.pool = pool;
             drain::drain(&session, &drain::DrainOptions { until_idle: args.until_idle, max_seconds: args.max_seconds }, &mut out).await
         }
+        #[cfg(not(feature = "serve"))]
+        "serve" => Err(listener::NOT_BUILT.to_string()),
+        #[cfg(feature = "serve")]
         "serve" => {
             let project = load()?;
             let store = store_of(&args, &project)?;
-            serve::run(project, args.ephemeral, &store, args.port.as_deref()).await
+            listener::run(project, args.ephemeral, &store, args.port.as_deref()).await
         }
         "call" => {
             let project = load()?;

@@ -19,6 +19,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::json::Js;
+#[cfg(feature = "postgres")]
 use crate::pg_store::PgStore;
 use crate::core;
 use crate::project::Project;
@@ -104,7 +105,10 @@ fn redact_password(url: &str) -> String {
 pub fn open_store(spec: &StoreSpec) -> std::result::Result<Box<dyn RunHostStore>, String> {
     let opened: Result<Box<dyn RunHostStore>> = match spec {
         StoreSpec::Sqlite(path) => Store::open(path).map(|s| Box::new(s) as Box<dyn RunHostStore>),
+        #[cfg(feature = "postgres")]
         StoreSpec::Postgres { url, tenant } => PgStore::connect(url, tenant).map(|s| Box::new(s) as Box<dyn RunHostStore>),
+        #[cfg(not(feature = "postgres"))]
+        StoreSpec::Postgres { .. } => return Err(format!("{}: {}", spec.display(), crate::core::NO_POSTGRES)),
         StoreSpec::Module { name, process, settings } => {
             crate::store_module::ProcessStore::start(name, process, settings).map(|s| Box::new(s) as Box<dyn RunHostStore>)
         }

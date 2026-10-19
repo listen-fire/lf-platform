@@ -118,7 +118,7 @@ pub async fn open_session(project: Project, ephemeral: bool, store: &StoreSpec) 
     // Before any call: the manifest calls below ask it too.
     crate::limiter::install(crate::limiter::of_project(&project, &env)?);
     // Before the externals start, so they are told where it is.
-    crate::serve::open_models_door(&credentials).await?;
+    crate::listener::open_models_door(&credentials).await?;
     let running = start_externals(&project, &externals, &credentials, LOCAL_TENANT).await?;
     let due_offset_ms = due_clock_offset()?;
     let (store, ephemeral_dir) = if ephemeral {

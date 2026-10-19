@@ -12,8 +12,11 @@ A working example is in [`examples/embed-saas`](../examples/embed-saas): a small
 | `@listen-fire/engine-contracts` | The data the engine is handed: a run's input, the tenant id, the event, the parked state, the module protocol. |
 | `@listen-fire/module-kit` | How a module is defined (`defineModule`) and loaded, in your process or served as a process. |
 | `@listen-fire/movement-lang` | The language: parser, checker, catalog types. The engine depends on it. |
-| `@listen-fire/model-providers` | Model vendors beyond Anthropic (OpenAI, Gemini, Claude on Vertex). Optional. |
-| `@listen-fire/file-text` | A file's text: PDF, decks, spreadsheets, audio. Optional. |
+| `@listen-fire/model-providers` | Chat vendors beyond Anthropic (OpenAI, Gemini, Claude on Vertex): the models slot. Optional. |
+| `@listen-fire/embedding-providers`, `@listen-fire/image-providers`, `@listen-fire/transcription-providers` | Embeddings, image generation and transcription over OpenAI and Gemini, each its own package on `model-providers`' host type. Optional. |
+| `@listen-fire/files-s3` | The files slot over S3 or any S3-compatible service. Optional. |
+| `@listen-fire/ocr-google` | Scanned-PDF text through Google Document AI, for `file-text`'s `ocrPdf`. Optional. |
+| `@listen-fire/file-text` | A file's text: PDF, decks, spreadsheets, audio. The file-reading slot's default module; leave it out and an `extract` over a file is refused by the file's name. Optional. |
 | `@lf/<name>` | Ready-made modules: `@lf/attio`, `@lf/slack`, `@lf/google-sheets`, `@lf/web`, and the rest. |
 
 Every package has the same version as the engine. Node 22 or later. With TypeScript, use `moduleResolution` `node16`, `nodenext` or `bundler` (plain `node` works too, through the packages' `typesVersions`).

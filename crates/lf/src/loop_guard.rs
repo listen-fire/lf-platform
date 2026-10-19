@@ -27,6 +27,7 @@ use std::sync::Mutex;
 
 use rusqlite::{Connection, OptionalExtension, params};
 use sha2::{Digest, Sha256};
+#[cfg(feature = "postgres")]
 use tokio_postgres::Client;
 
 use crate::json::Js;
@@ -107,6 +108,7 @@ pub struct FingerprintGuard {
 
 enum Memory {
     File(Connection),
+    #[cfg(feature = "postgres")]
     Postgres(Client),
 }
 
@@ -121,6 +123,7 @@ create table if not exists write_fingerprint (
   primary key (adapter, external_id, writer)
 );";
 
+#[cfg(feature = "postgres")]
 const POSTGRES_SCHEMA: &str = "
 create schema if not exists lf_guard;
 create table if not exists lf_guard.write_fingerprint (
@@ -135,6 +138,7 @@ create table if not exists lf_guard.write_fingerprint (
 create index if not exists write_fingerprint_expires_at on lf_guard.write_fingerprint (expires_at);";
 
 /// The advisory lock the schema is created under: "lf-guard" as a number.
+#[cfg(feature = "postgres")]
 const SCHEMA_LOCK: i64 = 0x6c66_2d67_7561_7264;
 
 impl FingerprintGuard {
@@ -143,6 +147,9 @@ impl FingerprintGuard {
     /// `.lf/guard.db`. Idempotent, so setup (`lf connect`) and use share it.
     pub fn open(settings: &BTreeMap<String, String>, root: &Path, lf_dir: &Path) -> Result<FingerprintGuard, String> {
         let memory = match settings.get("url").filter(|u| !u.is_empty()) {
+            #[cfg(not(feature = "postgres"))]
+            Some(_) => return Err(crate::core::NO_POSTGRES.to_string()),
+            #[cfg(feature = "postgres")]
             Some(url) => {
                 let client = crate::pg_store::connect_client(url).map_err(|e| e.to_string())?;
                 let failed = |e| crate::pg_store::failed(e).to_string();
@@ -187,6 +194,7 @@ impl LoopGuard for FingerprintGuard {
                 )
                 .map_err(failed)?;
             }
+            #[cfg(feature = "postgres")]
             Memory::Postgres(client) => {
                 let failed = |e| crate::pg_store::failed(e).to_string();
                 crate::pg_store::block_on(client.execute("delete from lf_guard.write_fingerprint where expires_at <= now()", &[])).map_err(failed)?;
@@ -215,6 +223,7 @@ impl LoopGuard for FingerprintGuard {
                 )
                 .optional()
                 .map_err(|e| e.to_string())?,
+            #[cfg(feature = "postgres")]
             Memory::Postgres(client) => crate::pg_store::block_on(client.query_opt(
                 "select record_type, fingerprint from lf_guard.write_fingerprint
                  where adapter = $1::text and external_id = $2::text and writer = $3::text and expires_at > $4::text::timestamptz",

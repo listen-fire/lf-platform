@@ -84,4 +84,12 @@ describe('the in-process host and a credential a run names', () => {
     // A connection with no credential asks nothing.
     await expect(host.adapters.resolve({ adapterType: 'crm', role: 'target', segmentId })).resolves.toMatchObject({ adapterType: 'crm' });
   });
+
+  it('refuses a file by name on a host whose file-text slot is empty', async () => {
+    const host = inProcessHost();
+    const segmentId = await segmentFor(host, ACME);
+    await expect(
+      host.files.resolveFileText({ file: { name: 'deck.pdf' } as never, segmentId, budget: {} as never }),
+    ).rejects.toThrow('EngineHost.files.resolveFileText not provided: this host has no file-text module, so it cannot read the file "deck.pdf"');
+  });
 });

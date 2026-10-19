@@ -13,6 +13,14 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 
 ## [Unreleased]
 
+### au-light
+
+- **A light `lf`.** `cargo install listen-fire` is unchanged (the default features are the full `lf`). `cargo install listen-fire --no-default-features --features cli` builds a light one for embedding or a small box: SQLite store, local and `serve-module` modules, `lf check`, `lf run`. It leaves out the Anthropic client (`anthropic`), the OAuth2 sign-in and token refresh (`oauth`), the Postgres store and its TLS (`postgres`), the inbound doors and `lf serve` (`serve`), and with them the whole TLS stack. Each omitted piece refuses by name when a project asks for it ("this lf was built without the `postgres` feature…").
+- **`@listen-fire/model-providers` is chat only.** Embeddings, image generation and transcription are now `@listen-fire/embedding-providers`, `@listen-fire/image-providers` and `@listen-fire/transcription-providers` (import `embed` from `@listen-fire/embedding-providers`, and so on). The vendor SDKs stay optional peers.
+- **S3 storage and Google OCR are optional packages**: `@listen-fire/files-s3` and `@listen-fire/ocr-google`, `optionalDependencies` of the api, so `pnpm install --no-optional` leaves out the AWS and Google Cloud SDKs. A default install and the same environment behave as before; a build without a package whose variables are set refuses at first use, naming it.
+- An embedding host with no file-text module now fails an `extract` over a file naming the file ("this host has no file-text module, so it cannot read the file "deck.pdf"").
+- The api no longer depends on `@langchain/*` or `@slack/events-api` (nothing imported them), and the unused `lib/ocr` copy of the OCR code is gone.
+
 ### s-logs
 
 - Set `LOG_FORMAT=json` to log one JSON object per line with a Cloud Logging `severity` (`DEBUG`/`INFO`/`WARNING`/`ERROR`/`CRITICAL`), `message`, `timestamp` and `contextId`. The default is unchanged. Boot refuses any other value.
