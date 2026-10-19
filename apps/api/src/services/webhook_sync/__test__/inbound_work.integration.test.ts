@@ -59,7 +59,7 @@ import { resolveAdapter } from '../../translation_graph/adapters/resolve';
 import { resumeMovementFiring } from '../../translation_graph/movement/execute';
 import { dispatchTriggerByIdEvent } from '../../translation_graph/triggers/router';
 import { mintMovementVersionIfChanged } from '../../translation_graph/movement/version_store';
-import { positionData } from 'movement-engine/services/translation_graph/types';
+import { positionData } from 'engine-contracts/catalog';
 
 import type { Adapter, DiscriminableEvent, RuntimeCapabilities } from 'movement-engine/services/translation_graph/adapter';
 

@@ -37,7 +37,7 @@ import { adapterErrorOf } from 'movement-engine/services/translation_graph/engin
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import { productionEngineHost } from '../../translation_graph/movement/engine_host';
 import { inMemoryRawTextStore } from '../../translation_graph/movement/raw_text_store';
-import { makeUnstablePosition, positionData } from 'movement-engine/services/translation_graph/types';
+import { makeUnstablePosition, positionData } from 'engine-contracts/catalog';
 import { InMemoryWriteLocks } from 'movement-engine/services/write_locks/write_locks';
 import {
   HOST_FAMILIES,

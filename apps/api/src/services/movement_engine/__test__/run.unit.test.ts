@@ -39,7 +39,7 @@
 // Order-sensitive cycle: pre-require schemas.ts so `expressionSchema`
 // resolves before any ES import pulls it transitively.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-require('movement-engine/services/knowledge_pipeline/output_v3/schemas');
+require('engine-contracts/expression/schemas');
 
 // lib/credentials derives its DEK at module load; the attio adapter pulls
 // it in through the registry. Synthetic keys — nothing here encrypts.
@@ -156,8 +156,8 @@ import type {
 import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
 import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
 import type { LlmClient } from '../../translation_graph/engine/batched_extraction';
-import { makeStablePosition, makeUnstablePosition, positionData } from 'movement-engine/services/translation_graph/types';
-import type { SchemaTypeDescriptor } from 'movement-engine/services/translation_graph/types';
+import { makeStablePosition, makeUnstablePosition, positionData } from 'engine-contracts/catalog';
+import type { SchemaTypeDescriptor } from 'engine-contracts/catalog';
 import { tenantIdOf, type ActingPrincipal } from 'engine-contracts';
 import type { EngineHost } from 'movement-engine/services/movement_engine/host';
 import { credentialIdsFor, makeTestHost, TEST_HOST_NOW } from 'movement-engine/services/movement_engine/test_host';

@@ -6,7 +6,7 @@
 import { Readable } from 'node:stream';
 
 import { PROTOCOL_VERSION } from 'engine-contracts';
-import type { PluginDeclaration } from 'movement-engine/public/plugins';
+import type { PluginDeclaration } from 'engine-contracts';
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
 

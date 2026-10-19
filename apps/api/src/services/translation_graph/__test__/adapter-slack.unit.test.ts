@@ -22,7 +22,7 @@
 import { parseProgram, checkProgram, mockCatalog, type Catalog } from 'movement-lang';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
-import type { SchemaTypeDescriptor, SourcePosition } from 'movement-engine/services/translation_graph/types';
+import type { SchemaTypeDescriptor, SourcePosition } from 'engine-contracts/catalog';
 
 import {
   SlackAdapter,
@@ -34,7 +34,7 @@ import {
   slackEventToDiscriminable,
 } from '../adapters/slack';
 import { RESOURCES_REFERENCE_FIELD_ID } from 'movement-engine/services/translation_graph/adapter';
-import { makeStablePosition, makeUnstablePosition } from 'movement-engine/services/translation_graph/types';
+import { makeStablePosition, makeUnstablePosition } from 'engine-contracts/catalog';
 import { parseSlackEvents } from '../../webhook_sync/providers/slack';
 import { webhookEventToDiscriminable } from '../../webhook_sync/event_conversion';
 import { discriminateEvent } from 'movement-engine/services/translation_graph/engine/inbound/discriminate';

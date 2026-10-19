@@ -6,14 +6,14 @@
 // extraction and transform call shapes, the batched extraction client and its
 // model choice), and the embedding models and their destinations.
 
-export * from '../lib/models/registry';
+export * from 'engine-contracts/model_names';
 export * from '../lib/models/map';
 export * from '../lib/models/google_account';
 export * from '../lib/run_cost';
 export * from '../lib/run_spend';
 export { aiExpressionSettings, claudeModelId } from '../services/movement_engine/ai_tiers';
 export { metered, refusingPastBudget } from '../services/translation_graph/movement/metered';
-export * from '../services/translation_graph/uniqueness';
+export * from 'engine-contracts/uniqueness';
 export type {
   FileUnreadable,
   TransformInvocationResult,

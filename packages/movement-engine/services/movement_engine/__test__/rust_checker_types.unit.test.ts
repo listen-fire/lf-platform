@@ -14,7 +14,7 @@ import type {
 } from '../extraction_call';
 
 import { containerAssociation } from '../../translation_graph/adapter';
-import { makeStablePosition, positionData } from '../../translation_graph/types';
+import { makeStablePosition, positionData } from 'engine-contracts/catalog';
 import { makeTestHost } from '../test_host';
 import {
   runFailureCause,

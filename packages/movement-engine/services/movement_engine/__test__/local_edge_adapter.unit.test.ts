@@ -9,7 +9,7 @@
 // happen to both be AI.
 
 import { binding, type Binding } from '../expression';
-import type { UniquenessConstraints } from '../../translation_graph/uniqueness';
+import type { UniquenessConstraints } from 'engine-contracts/uniqueness';
 import {
   LOCAL_ADAPTER_TYPE,
   LOCAL_CANDIDATE_CAP,

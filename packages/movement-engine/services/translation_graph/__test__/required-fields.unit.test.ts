@@ -1,4 +1,4 @@
-import type { SchemaFieldDescriptor } from '../types';
+import type { SchemaFieldDescriptor } from 'engine-contracts/catalog';
 
 import { applicableRequiredFields } from '../required_fields';
 

@@ -8,8 +8,8 @@
 
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { createSecretsFamily, SecretMissing, SecretVersionConflict, withSecret, type SecretFields, type SecretsBackend, type SecretsFamily } from './family';
-import { oauth2Refresher } from './oauth2';
+import { createSecretsFamily, SecretMissing, SecretVersionConflict, withSecret, type SecretFields, type SecretsBackend, type SecretsFamily } from 'module-runtime/secrets/family';
+import { oauth2Refresher } from 'module-runtime/secrets/oauth2';
 
 export interface SecretsContractBackend {
   /** A handle on the store. */

@@ -7,18 +7,13 @@
 // as HTTP 200 — see `3_model.md` "Envelope".
 
 import { z } from 'zod';
-import { PROTOCOL_VERSION, RpcResponse } from 'engine-contracts';
+import { ADAPTER_TEAM_HEADER, PROTOCOL_VERSION, RpcResponse } from 'engine-contracts';
 import { reportRunCost } from '../../../lib/run_spend';
 
 import type { RpcErrorShape, WireCredentialShape, WireCredentialUpdateShape } from 'engine-contracts';
 
-/**
- * The header naming a team, both ways: the host sends it on every call to a
- * remote adapter, so a vendor serving several teams learns which install is
- * calling, and a vendor names its team in it at the push doors when one
- * credential is shared by several teams' installs.
- */
-export const ADAPTER_TEAM_HEADER = 'x-listen-fire-team';
+export { ADAPTER_TEAM_HEADER };
+
 
 /**
  * A protocol response that didn't match the schema for its method — the

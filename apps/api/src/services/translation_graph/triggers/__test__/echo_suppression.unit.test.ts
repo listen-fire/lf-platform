@@ -12,7 +12,7 @@
 import type { Adapter } from 'movement-engine/services/translation_graph/adapter';
 import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
 import type { TeamId } from '../../../../generated/kysely/core/Team';
-import type { MutationContext } from 'movement-engine/services/translation_graph/mutation_context';
+import type { MutationContext } from 'engine-contracts/mutation_context';
 
 import { KnowledgeGraphAdapter, KG_ADAPTER_TYPE } from '../../adapters/knowledge_graph';
 import {

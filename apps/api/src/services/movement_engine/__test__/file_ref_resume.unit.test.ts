@@ -26,7 +26,7 @@ import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog'
 import { fileHandle, type Adapter, type FileRef, type RuntimeCapabilities } from 'movement-engine/services/translation_graph/adapter';
 import { streamFileRef, type ResolveFileOwner } from '../../translation_graph/engine/files/retrieve';
 import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
-import { makeUnstablePosition, positionData } from 'movement-engine/services/translation_graph/types';
+import { makeUnstablePosition, positionData } from 'engine-contracts/catalog';
 import { tenantIdOf } from 'engine-contracts';
 import type { HostTransformInvoker } from 'movement-engine/services/movement_engine/host';
 import { credentialIdsFor, makeTestHost } from 'movement-engine/services/movement_engine/test_host';

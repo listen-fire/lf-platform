@@ -20,10 +20,10 @@ import type {
   Resource,
   ResourceFilter,
 } from '../../adapter';
-import type { SourcePosition } from '../../types';
+import type { SourcePosition } from 'engine-contracts/catalog';
 
 import { fileValueOf, RESOURCES_REFERENCE_FIELD_ID } from '../../adapter';
-import { positionData } from '../../types';
+import { positionData } from 'engine-contracts/catalog';
 
 /**
  * Resolve the resources attached to a source position by traversing the

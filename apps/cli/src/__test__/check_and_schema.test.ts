@@ -9,7 +9,7 @@ import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { instanceSchemaFromDescriptors } from 'movement-engine/services/translation_graph/movement/schema_projection';
-import { schemaEntryPointSchema, schemaTypeDescriptorSchema } from 'movement-engine/services/translation_graph/types';
+import { schemaEntryPointSchema, schemaTypeDescriptorSchema } from 'engine-contracts/catalog';
 import { project } from './example';
 import { lfBinary } from './lf_bin';
 

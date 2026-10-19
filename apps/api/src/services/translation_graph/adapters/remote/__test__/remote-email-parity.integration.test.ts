@@ -36,7 +36,7 @@ import type { AddressInfo } from 'node:net';
 import type { TeamId } from '../../../../../generated/kysely/core/Team';
 import type { EmailAdapter, EmailPayload } from '../../email';
 import type { Adapter } from 'movement-engine/services/translation_graph/adapter';
-import type { SourcePosition } from 'movement-engine/services/translation_graph/types';
+import type { SourcePosition } from 'engine-contracts/catalog';
 import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
 import type { RemoteAdapterConfig } from 'movement-engine/services/translation_graph/adapters/remote';
 
@@ -47,7 +47,7 @@ import {
 } from '../../email';
 import { RESOURCES_REFERENCE_FIELD_ID } from 'movement-engine/services/translation_graph/adapter';
 import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
-import { makeUnstablePosition, positionData } from 'movement-engine/services/translation_graph/types';
+import { makeUnstablePosition, positionData } from 'engine-contracts/catalog';
 
 
 /** Walk the explicit `attachments` edge and read each attachment's payload. */

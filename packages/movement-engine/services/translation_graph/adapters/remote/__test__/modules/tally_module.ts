@@ -2,9 +2,9 @@
 // in the install's kv and answers the count, every key it holds, and the
 // install's construction arguments.
 
-import type { PluginDeclaration } from 'movement-engine/public/plugins';
+import type { PluginDeclaration } from 'engine-contracts';
 
-import { defineModule } from '../../define';
+import { defineModule } from 'module-kit';
 
 export const TALLY: PluginDeclaration = {
   priced: false,

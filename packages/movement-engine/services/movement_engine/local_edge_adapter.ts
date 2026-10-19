@@ -37,7 +37,7 @@ import {
   type WriteInput,
   type WriteResult,
 } from '../translation_graph/adapter';
-import type { UniquenessConstraints } from '../translation_graph/uniqueness';
+import type { UniquenessConstraints } from 'engine-contracts/uniqueness';
 import type { LockRequest } from './effect_locks';
 import { binding, type Binding, type LocalLandingShape, type NodeEdge } from './expression';
 

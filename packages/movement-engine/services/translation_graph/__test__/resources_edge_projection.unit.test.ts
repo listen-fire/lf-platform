@@ -6,7 +6,7 @@
 // refusal of `x-[f:_resources]->` off a record can name it. Nothing resolves
 // `_resources` to it.
 
-import type { SchemaEntryPoint, SchemaTypeDescriptor } from '../types';
+import type { SchemaEntryPoint, SchemaTypeDescriptor } from 'engine-contracts/catalog';
 import { instanceSchemaFromDescriptors } from '../movement/schema_projection';
 import { RESOURCES_REFERENCE_FIELD_ID } from '../adapter';
 

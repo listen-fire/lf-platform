@@ -12,14 +12,14 @@ import type { TeamId } from '../../../../../generated/kysely/core/Team';
 import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
 
 import { RESOURCES_REFERENCE_FIELD_ID } from 'movement-engine/services/translation_graph/adapter';
-import { makeUnstablePosition, positionData } from 'movement-engine/services/translation_graph/types';
+import { makeUnstablePosition, positionData } from 'engine-contracts/catalog';
 
 // `types.ts` (imported transitively by the adapter) loads the output_v3
 // zod-schema chain, which pulls in the prisma/openai/logger graph that crashes
 // at module load in jest without a test DB. Stub it at the leaf — the adapter
 // consumes these schemas only at type level. Mirrors the google-sheets /
 // airtable adapter tests.
-jest.mock('movement-engine/services/knowledge_pipeline/output_v3/schemas', () => {
+jest.mock('engine-contracts/expression/schemas', () => {
   const stub: Record<string, unknown> = {};
   const ret = () => stub;
   Object.assign(stub, {

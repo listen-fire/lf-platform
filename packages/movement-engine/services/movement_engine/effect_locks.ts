@@ -48,7 +48,7 @@ import type { LanguageVersion } from 'movement-lang';
 
 
 import { MovementEngineError } from './errors';
-import { isBlankIdentityValue, type UniquenessConstraints } from '../translation_graph/uniqueness';
+import { isBlankIdentityValue, type UniquenessConstraints } from 'engine-contracts/uniqueness';
 
 /** How a flow holds a lock: on its own, or alongside every other flow
  *  holding it for the same `group`. */

@@ -20,10 +20,11 @@ import type {
   WirePluginResultShape,
 } from 'engine-contracts';
 import type { ZodType } from 'zod';
-import type { Adapter, AdapterManifest, DiscriminableEvent } from 'movement-engine/public/adapter';
-import type { BrowserSlot } from 'movement-engine/public/browser';
-import type { ChatModelName } from 'movement-engine/public/models';
-import type { PluginDeclaration } from 'movement-engine/public/plugins';
+import type { AdapterManifest, DiscriminableEvent } from 'engine-contracts';
+import type { Adapter } from 'module-runtime/adapter';
+import type { BrowserSlot } from 'module-runtime/browser';
+import type { ChatModelName } from 'engine-contracts';
+import type { PluginDeclaration } from 'engine-contracts';
 
 // ── The context a host hands a module ───────────────────────────────────────
 

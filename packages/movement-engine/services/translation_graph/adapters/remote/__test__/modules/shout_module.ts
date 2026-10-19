@@ -1,9 +1,9 @@
 // A plugin module for the kit's own tests: one plugin, `shout`, that upper-
 // cases its text, priced by the length it shouted.
 
-import type { PluginDeclaration } from 'movement-engine/public/plugins';
+import type { PluginDeclaration } from 'engine-contracts';
 
-import { defineModule } from '../../define';
+import { defineModule } from 'module-kit';
 
 export const SHOUT: PluginDeclaration = {
   priced: true,

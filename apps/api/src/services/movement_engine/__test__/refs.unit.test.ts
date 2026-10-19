@@ -24,7 +24,7 @@
 // ── Jest module workarounds (mirrors run.unit.test.ts) ──────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-require('movement-engine/services/knowledge_pipeline/output_v3/schemas');
+require('engine-contracts/expression/schemas');
 
 process.env.ENCRYPTION_MASTER_KEY ??= Buffer.alloc(32, 1).toString('base64');
 process.env.ENCRYPTION_SALT_BASE64 ??= Buffer.alloc(16, 2).toString('base64');
@@ -103,8 +103,8 @@ import { singleParentLink } from 'movement-engine/services/translation_graph/ada
 import type {
   SchemaEntryPoint,
   SchemaTypeDescriptor,
-} from 'movement-engine/services/translation_graph/types';
-import { positionData, makeStablePosition, META_RECORD_TYPE } from 'movement-engine/services/translation_graph/types';
+} from 'engine-contracts/catalog';
+import { positionData, makeStablePosition, META_RECORD_TYPE } from 'engine-contracts/catalog';
 import {
   adapterNameResolver,
   naturalName,

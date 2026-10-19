@@ -3,7 +3,8 @@
 // expire and when the provider refuses its token, one refresh at a time.
 
 import type { WireCredentialDeclarationShape } from 'engine-contracts';
-import { createMemoryVault, createSecretsFamily } from 'movement-engine/public/secrets';
+import { createSecretsFamily } from 'module-runtime/secrets/family';
+import { createMemoryVault } from 'module-runtime/secrets/memory';
 
 import { secretsCredential } from '../embed';
 

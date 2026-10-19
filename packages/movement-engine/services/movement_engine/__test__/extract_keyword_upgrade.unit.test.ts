@@ -8,7 +8,7 @@ import { applyFix, checkProgram, fromCatalogSnapshot, mockCatalogSnapshot, parse
 
 import { tenantIdOf } from 'engine-contracts';
 import { containerAssociation, type Adapter } from '../../translation_graph/adapter';
-import { positionData } from '../../translation_graph/types';
+import { positionData } from 'engine-contracts/catalog';
 import { credentialIdsFor, makeTestHost } from '../test_host';
 import { runMovement } from '../run';
 

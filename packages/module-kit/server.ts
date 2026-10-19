@@ -38,7 +38,7 @@ import { fileDescriptorOf, fileValueOf, MANIFEST_PROTOCOL_VERSION, METHODS, PROT
 
 import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from 'node:http';
 import type { z } from 'zod';
-import type { Adapter } from 'movement-engine/public/adapter';
+import type { Adapter } from 'module-runtime/adapter';
 import type { ServedFile } from './served_files';
 
 import { Readable } from 'node:stream';

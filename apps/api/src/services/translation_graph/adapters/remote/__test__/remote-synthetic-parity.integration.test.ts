@@ -34,7 +34,7 @@ import type {
   FilterTranslationResult,
 } from 'movement-engine/services/translation_graph/adapter';
 import type { FieldEvidence } from 'movement-engine/services/translation_graph/adapter';
-import type { SchemaEntryPoint, SchemaTypeDescriptor, SourcePosition } from 'movement-engine/services/translation_graph/types';
+import type { SchemaEntryPoint, SchemaTypeDescriptor, SourcePosition } from 'engine-contracts/catalog';
 import type { TriggerType } from 'movement-engine/services/translation_graph/triggers/types';
 import type { Expression } from '#shared/expression/types';
 import type { RemoteAdapter, RemoteAdapterConfig } from 'movement-engine/services/translation_graph/adapters/remote';

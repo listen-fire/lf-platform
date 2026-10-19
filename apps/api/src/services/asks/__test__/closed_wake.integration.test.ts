@@ -24,7 +24,7 @@ import type { TriggerRunId } from '../../../generated/kysely/automations/Trigger
 import type { MovementId } from '../../../generated/kysely/automations/Movement';
 import type { PipelineConfigurationId } from '../../../generated/kysely/public/PipelineConfiguration';
 import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
-import type { AwaitResolution } from 'movement-engine/services/translation_graph/awaitable';
+import type { AwaitResolution } from 'engine-contracts/awaitable';
 
 import { testWorkContext } from '../../../test/harness/work';
 import { cleanupTeam } from '../../../test/harness/cleanup';

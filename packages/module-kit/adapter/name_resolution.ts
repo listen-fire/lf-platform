@@ -41,8 +41,8 @@
 //     keeps whichever it iterated last for that name — undefined behaviour we
 //     don't paper over).
 
-import type { SchemaEntryPoint, SchemaTypeDescriptor } from 'movement-engine/public/catalog';
-import { RESOURCES_REFERENCE_FIELD_ID } from 'movement-engine/public/adapter';
+import type { SchemaEntryPoint, SchemaTypeDescriptor } from 'engine-contracts';
+import { RESOURCES_REFERENCE_FIELD_ID } from 'engine-contracts';
 
 /**
  * A name in the program's NATURAL vocabulary — the adapter's `displayName`

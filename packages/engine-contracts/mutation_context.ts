@@ -4,7 +4,7 @@
 // in the consolidation-authority child stub plan).
 
 import { z } from 'zod';
-import { actorSchema, triggerTypeSchema, type TriggerType } from 'engine-contracts';
+import { actorSchema, triggerTypeSchema, type TriggerType } from './event';
 
 // ── Actor: server-asserted identity of who/what produced a change ────────
 // Modeled on Attio's actor schema (https://docs.attio.com/docs/actors).
@@ -16,8 +16,8 @@ import { actorSchema, triggerTypeSchema, type TriggerType } from 'engine-contrac
 // the trigger taxonomy ride the run's event, so they are the contract's
 // (`engine-contracts`).
 
-export { actorSchema, actorTypeSchema, triggerTypeSchema } from 'engine-contracts';
-export type { Actor, ActorType, TriggerType } from 'engine-contracts';
+export { actorSchema, actorTypeSchema, triggerTypeSchema } from './event';
+export type { Actor, ActorType, TriggerType } from './event';
 
 // ── Source-of-change classification ────────────────────────────────────────
 

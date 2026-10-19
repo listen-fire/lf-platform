@@ -18,7 +18,7 @@ import type { MovementTraceEntry } from '../expression';
 
 import { logger } from '../../logger';
 import { containerAssociation } from '../../translation_graph/adapter';
-import { makeStablePosition, positionData } from '../../translation_graph/types';
+import { makeStablePosition, positionData } from 'engine-contracts/catalog';
 import { openRunContext } from '../run_context';
 import { credentialIdsFor, makeTestHost, endedInRust, type TestHostOverrides } from '../test_host';
 import { AdapterCallFailed } from '../host_adapter';

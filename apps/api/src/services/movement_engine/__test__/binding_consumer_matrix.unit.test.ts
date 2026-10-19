@@ -43,7 +43,7 @@
 // ── Jest module workarounds (mirrors local_record_update.unit.test.ts) ──────
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-require('movement-engine/services/knowledge_pipeline/output_v3/schemas');
+require('engine-contracts/expression/schemas');
 
 process.env.ENCRYPTION_MASTER_KEY ??= Buffer.alloc(32, 1).toString('base64');
 process.env.ENCRYPTION_SALT_BASE64 ??= Buffer.alloc(16, 2).toString('base64');
@@ -125,7 +125,7 @@ import { makeTestHost } from 'movement-engine/services/movement_engine/test_host
 import { runMovement, runFailureCause, type MovementRunResult } from 'movement-engine/services/movement_engine/run';
 import { MovementEngineError } from 'movement-engine/services/movement_engine/errors';
 import { containerAssociation, type Adapter } from 'movement-engine/services/translation_graph/adapter';
-import { makeStablePosition, positionData, positionRecordId, META_RECORD_TYPE } from 'movement-engine/services/translation_graph/types';
+import { makeStablePosition, positionData, positionRecordId, META_RECORD_TYPE } from 'engine-contracts/catalog';
 import { ACME, BETA, GAMMA, cellId, cells, expectationAt, row, type Cell, type Rec } from './binding_consumer_matrix.cells';
 import { RELAY, SUMMARISE, catalog, programFor } from './binding_consumer_matrix.program';
 

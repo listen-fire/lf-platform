@@ -5,7 +5,7 @@
 // Each store (a file, the environment, an encrypted table, a vault)
 // implements `SecretsBackend`.
 
-export * from '../services/secrets/family';
-export * from '../services/secrets/oauth2';
-export * from '../services/secrets/connect';
-export * from '../services/secrets/memory';
+export * from 'module-runtime/secrets/family';
+export * from 'module-runtime/secrets/oauth2';
+export * from 'module-runtime/secrets/connect';
+export * from 'module-runtime/secrets/memory';

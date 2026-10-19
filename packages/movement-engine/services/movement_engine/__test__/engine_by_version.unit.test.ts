@@ -13,7 +13,7 @@ import { spelledFor } from 'movement-lang/checker/__test__/surface_spelling';
 import type { Adapter } from '../../translation_graph/adapter';
 import type { TriggerEvent } from '../../translation_graph/triggers/types';
 import { containerAssociation } from '../../translation_graph/adapter';
-import { positionData } from '../../translation_graph/types';
+import { positionData } from 'engine-contracts/catalog';
 import { MovementEngineError } from '../errors';
 import { resumeMovement, runMovement, type ParkSink, type RunMovementInput } from '../run';
 import { assertEngineConfigured, engineFor } from '../rust_engine';

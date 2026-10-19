@@ -40,7 +40,7 @@ import { credentialIdsFor, makeFakeParkSink, makeTestHost } from '../../../../pa
 import { staticCatalogFromManifests } from '../../../../apps/api/src/services/translation_graph/movement/catalog';
 import type { ActingUser, Adapter, RelatedResult } from '../../../../packages/movement-engine/services/translation_graph/adapter';
 import { containerAssociation } from '../../../../packages/movement-engine/services/translation_graph/adapter';
-import { makeStablePosition, makeUnstablePosition, positionData } from '../../../../packages/movement-engine/services/translation_graph/types';
+import { makeStablePosition, makeUnstablePosition, positionData } from '../../../../packages/engine-contracts/catalog';
 
 import { PATTERNS, type Ends, type Pick, type Program } from './patterns_table';
 

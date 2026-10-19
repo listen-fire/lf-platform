@@ -96,7 +96,7 @@ jest.mock('../../../adapters/registry', () => ({ services: {} }));
 
 import type { ResearchEngineName } from '../engine/transforms/research';
 import type { ContextDependentInput } from '../engine/transforms';
-import type { SourcePosition } from 'movement-engine/services/translation_graph/types';
+import type { SourcePosition } from 'engine-contracts/catalog';
 
 import { services } from '../../../adapters/registry';
 import {
@@ -107,7 +107,7 @@ import {
   researchImpl,
   RESEARCH_PLUGIN_MANIFEST,
 } from '../engine/transforms/research';
-import { makeStablePosition } from 'movement-engine/services/translation_graph/types';
+import { makeStablePosition } from 'engine-contracts/catalog';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────
 

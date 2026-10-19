@@ -4,7 +4,7 @@
 // here, so an event reaches a run the same way in each.
 
 import type { DiscriminableEvent, EventType } from '../adapter';
-import type { TriggerType } from '../mutation_context';
+import type { TriggerType } from 'engine-contracts/mutation_context';
 import { discriminateEvent } from '../engine/inbound/discriminate';
 import type { TriggerEvent } from './types';
 

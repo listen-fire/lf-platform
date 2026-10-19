@@ -19,7 +19,7 @@ import {
   NATIVE_VALUATIONS_ADAPTER_TYPE,
   createNativeValuationsAdapter,
 } from '../native_valuations';
-import { makeStablePosition } from 'movement-engine/services/translation_graph/types';
+import { makeStablePosition } from 'engine-contracts/catalog';
 
 const adapter = () =>
   createNativeValuationsAdapter({ teamId: 'team-1' as TeamId, credentialsId: 'cred-1' });

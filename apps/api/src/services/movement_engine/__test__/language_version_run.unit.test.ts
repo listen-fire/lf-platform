@@ -24,7 +24,7 @@ import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog'
 import { diagnoseMovementSource } from '../../translation_graph/movement/authoring';
 import type { Adapter, RuntimeCapabilities, UpdateInput } from 'movement-engine/services/translation_graph/adapter';
 import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
-import { META_RECORD_TYPE, makeStablePosition } from 'movement-engine/services/translation_graph/types';
+import { META_RECORD_TYPE, makeStablePosition } from 'engine-contracts/catalog';
 import { tenantIdOf } from 'engine-contracts';
 import { createManualAdapter } from '../../translation_graph/adapters/manual';
 import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';

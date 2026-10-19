@@ -49,7 +49,7 @@ import { resolveAdapter } from '../../adapters/resolve';
 import {
   makeStablePosition,
   positionData,
-} from 'movement-engine/services/translation_graph/types';
+} from 'engine-contracts/catalog';
 import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
 
 

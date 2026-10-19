@@ -7,9 +7,9 @@
 // Running a plugin is the host's (`llm.transforms.invoke`); nothing here runs.
 
 import type { PluginSpec } from 'movement-lang';
-import type { TransformSignature } from '../translation_graph/types';
+import type { TransformSignature } from 'engine-contracts/catalog';
 
-import { pluginDeclarationNamed, pluginSpecOf, pluginSpecsOf, type PluginDeclaration } from './spec';
+import { pluginDeclarationNamed, pluginSpecOf, pluginSpecsOf, type PluginDeclaration } from 'engine-contracts/plugin_spec';
 
 /**
  * Public signature — surfaced through the registry. The editor uses

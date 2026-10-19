@@ -23,7 +23,7 @@ jest.mock('movement-engine/services/logger', () => ({
 // breaks under jest's transform (zod schema chain & runtime extension
 // import). Stub the schema source so the module under test loads in
 // isolation.
-jest.mock('movement-engine/services/knowledge_pipeline/output_v3/expression', () => {
+jest.mock('engine-contracts/expression/expression', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const z = require('zod');
   return { expressionSchema: z.any() };

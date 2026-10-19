@@ -21,7 +21,7 @@ import type { ParkedScopeState } from 'movement-engine/services/movement_engine/
 import type { FileTextResolution } from 'movement-engine/services/movement_engine/expression';
 
 import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
-import { makeUnstablePosition, positionData } from 'movement-engine/services/translation_graph/types';
+import { makeUnstablePosition, positionData } from 'engine-contracts/catalog';
 import { credentialIdsFor, makeFakeParkSink, makeTestHost, endedInRust } from 'movement-engine/services/movement_engine/test_host';
 import { isCheckFailure } from 'movement-engine/services/movement_engine/errors';
 import { runFailureCause, resumeMovement, runMovement, type RunMovementInput } from 'movement-engine/services/movement_engine/run';

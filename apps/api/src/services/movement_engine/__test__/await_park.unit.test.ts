@@ -4,7 +4,7 @@
 // the host's `park.wake` when it already resolved. Nothing but data crosses.
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
-import type { AwaitResolution } from 'movement-engine/services/translation_graph/awaitable';
+import type { AwaitResolution } from 'engine-contracts/awaitable';
 import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
 import { runFailureCause, type ParkSink } from 'movement-engine/services/movement_engine/run';
 import { RunLeaseLost } from '../run_lease';

@@ -5,7 +5,7 @@
 
 import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
 
-import { candidateIsAllExact, isBlankIdentityValue, type UniquenessConstraints } from '../uniqueness';
+import { candidateIsAllExact, isBlankIdentityValue, type UniquenessConstraints } from 'engine-contracts/uniqueness';
 
 const byName: UniquenessConstraints = { any: [{ all: [{ field: 'name' }] }] };
 

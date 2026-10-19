@@ -12,7 +12,7 @@ import { tenantIdOf } from 'engine-contracts';
 import type { Adapter, GetRelatedInput } from '../../translation_graph/adapter';
 import type { TriggerEvent } from '../../translation_graph/triggers/types';
 import { containerAssociation } from '../../translation_graph/adapter';
-import { makeStablePosition, positionData } from '../../translation_graph/types';
+import { makeStablePosition, positionData } from 'engine-contracts/catalog';
 import { runMovement } from '../run';
 import {
   resetRustRunStats,

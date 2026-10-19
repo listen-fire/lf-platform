@@ -55,7 +55,7 @@ jest.mock('mime', () => ({
 import { parseProgram, checkProgram, mockCatalog, type Catalog } from 'movement-lang';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
-import type { SchemaTypeDescriptor, SourcePosition } from 'movement-engine/services/translation_graph/types';
+import type { SchemaTypeDescriptor, SourcePosition } from 'engine-contracts/catalog';
 
 import {
   WhatsappAdapter,
@@ -72,7 +72,7 @@ import { installMemoryDocumentStore } from '../engine/files/__test__/memory_docu
 import { normalizeWhatsappPhone } from '@listen-fire/whatsapp/phone';
 import { discriminateEvent } from 'movement-engine/services/translation_graph/engine/inbound/discriminate';
 import { whatsappInboundEvents } from '@listen-fire/whatsapp/inbound';
-import { makeStablePosition, makeUnstablePosition } from 'movement-engine/services/translation_graph/types';
+import { makeStablePosition, makeUnstablePosition } from 'engine-contracts/catalog';
 import { instanceSchemaFromDescriptors } from 'movement-engine/services/translation_graph/movement/schema_projection';
 
 const TEAM_ID = 'team-1' as TeamId;

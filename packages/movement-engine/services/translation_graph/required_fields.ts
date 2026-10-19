@@ -5,7 +5,7 @@
 // adapter contract surfaces this per field (`SchemaFieldDescriptor.required`);
 // the engine's write-time check uses the subset that applies here.
 
-import type { SchemaFieldDescriptor } from './types';
+import type { SchemaFieldDescriptor } from 'engine-contracts/catalog';
 
 /**
  * The required fields that *apply* to an action in this position — writable

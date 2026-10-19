@@ -34,7 +34,7 @@ import { assertRunBudget, reportRunCost, runCostCapFromEnv, withSpendMeter } fro
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import { type Adapter, type RuntimeCapabilities } from 'movement-engine/services/translation_graph/adapter';
 import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
-import { positionData } from 'movement-engine/services/translation_graph/types';
+import { positionData } from 'engine-contracts/catalog';
 import { tenantIdOf } from 'engine-contracts';
 import type { HostTransformInvoker } from 'movement-engine/services/movement_engine/host';
 import { credentialIdsFor, makeTestHost } from 'movement-engine/services/movement_engine/test_host';

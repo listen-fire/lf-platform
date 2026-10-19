@@ -41,9 +41,9 @@ import type {
   RelatedPage,
   RuntimeCapabilities,
 } from '../translation_graph/adapter';
-import type { AwaitPoint, AwaitResolution } from '../translation_graph/awaitable';
-import type { UniquenessConstraints } from '../translation_graph/uniqueness';
-import type { SourcePosition } from '../translation_graph/types';
+import type { AwaitPoint, AwaitResolution } from 'engine-contracts/awaitable';
+import type { UniquenessConstraints } from 'engine-contracts/uniqueness';
+import type { SourcePosition } from 'engine-contracts/catalog';
 import type { TriggerEvent } from '../translation_graph/triggers/types';
 import type { LlmCallInput, LlmCallResult } from '../translation_graph/engine/batched_extraction/llm_call';
 import type { CallbackCall, CallbackParamSpec } from 'engine-contracts';

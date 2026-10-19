@@ -23,6 +23,14 @@ import { z } from 'zod';
 
 export const PROTOCOL_VERSION = '2';
 
+/**
+ * The header naming a team, both ways: the host sends it on every call to a
+ * remote adapter, so a vendor serving several teams learns which install is
+ * calling, and a vendor names its team in it at the push doors when one
+ * credential is shared by several teams' installs.
+ */
+export const ADAPTER_TEAM_HEADER = 'x-listen-fire-team';
+
 /** The same version as the manifest's `protocolVersion` field. A number there
  *  because manifests are hand-written files, where `2` is what an author types. */
 export const MANIFEST_PROTOCOL_VERSION = 2;

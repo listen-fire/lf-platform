@@ -17,7 +17,7 @@ import {
   META_RECORD_TYPE,
   makeStablePosition,
   positionRecordId,
-} from 'movement-engine/services/translation_graph/types';
+} from 'engine-contracts/catalog';
 import { tenantIdOf } from 'engine-contracts';
 import { createManualAdapter } from '../../translation_graph/adapters/manual';
 import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';

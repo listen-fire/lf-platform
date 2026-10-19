@@ -10,7 +10,7 @@ import { awaitLandingMatches } from 'movement-engine/services/movement_engine/ru
 import type { Adapter, RuntimeCapabilities } from 'movement-engine/services/translation_graph/adapter';
 import { AdapterNameDriftError } from 'module-kit/adapter/name_resolution';
 import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
-import { positionData } from 'movement-engine/services/translation_graph/types';
+import { positionData } from 'engine-contracts/catalog';
 
 function filterOf(where: string): Expression {
   const steps = parseTraversalPath(`-[r:Replies WHERE ${where}]->`);

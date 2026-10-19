@@ -1,5 +1,5 @@
 //! Which models a run may name, what a model call costs, and the provider
-//! key: the hosted engine's registry (movement-engine `lib/models/registry.ts`)
+//! key: the hosted engine's registry (engine-contracts `model_names.ts`)
 //! and @lf/anthropic's price table (`modules/anthropic/pricing.ts`). The price
 //! table is the very file the TypeScript client bills from, and
 //! a test keeps the model names equal to the registry's.
@@ -146,7 +146,7 @@ mod tests {
 
     /// The names the TypeScript registry holds as chat models, in its order.
     fn registry_chat_models() -> Vec<String> {
-        let text = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../packages/movement-engine/lib/models/registry.ts")).unwrap();
+        let text = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../packages/engine-contracts/model_names.ts")).unwrap();
         text.lines()
             .filter_map(|line| {
                 let line = line.trim();

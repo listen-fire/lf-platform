@@ -16,7 +16,11 @@ const path = require('node:path');
 const ts = require(require.resolve('typescript', { paths: [path.join(__dirname, '../packages/module-kit')] }));
 
 const repoRoot = path.resolve(__dirname, '..');
-const roots = [path.join(repoRoot, 'packages/module-kit')];
+const roots = [path.join(repoRoot, 'packages/module-kit'), path.join(repoRoot, 'packages/module-runtime')];
+// The kit and the runtime it shares with the host are what the engine itself
+// is built on, so neither may reach the engine at all: what a module is written
+// against is engine-contracts' and module-runtime's.
+const ENGINE_FREE = roots.slice();
 const modulesDir = path.join(repoRoot, 'modules');
 if (fs.existsSync(modulesDir)) {
   for (const entry of fs.readdirSync(modulesDir, { withFileTypes: true })) {
@@ -41,6 +45,12 @@ function sourceFiles(dir, found = []) {
 
 /** Why an import is refused, or null when it is allowed. */
 function refusal(specifier, fromFile) {
+  if (ENGINE_FREE.some((root) => fromFile.startsWith(root + path.sep))) {
+    const reachesEngine = specifier.startsWith('.')
+      ? path.relative(repoRoot, path.resolve(path.dirname(fromFile), specifier)).startsWith(`packages${path.sep}movement-engine${path.sep}`)
+      : /^(movement-engine|@listen-fire\/engine)(\/|$)/.test(specifier);
+    if (reachesEngine) return 'reaches the engine (the kit and module-runtime stand below it: import engine-contracts or module-runtime)';
+  }
   if (specifier.startsWith('.')) {
     const target = path.resolve(path.dirname(fromFile), specifier);
     const inRepo = path.relative(repoRoot, target);

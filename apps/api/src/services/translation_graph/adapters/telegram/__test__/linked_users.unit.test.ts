@@ -52,7 +52,7 @@ jest.mock('../../../../../lib/kysely', () => ({
 
 import type { TeamId } from '../../../../../generated/kysely/core/Team';
 
-import { isStablePosition, makeMetaPosition, makeStablePosition } from 'movement-engine/services/translation_graph/types';
+import { isStablePosition, makeMetaPosition, makeStablePosition } from 'engine-contracts/catalog';
 import { TelegramAdapter } from '../index';
 
 describe('Telegram Linked Users collection', () => {

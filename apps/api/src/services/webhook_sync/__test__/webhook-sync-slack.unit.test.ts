@@ -45,7 +45,7 @@ import {
 import {
   type SourcePosition,
   makeStablePosition,
-} from 'movement-engine/services/translation_graph/types';
+} from 'engine-contracts/catalog';
 
 const FIXTURE_PATH = join(
   __dirname,

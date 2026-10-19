@@ -15,7 +15,7 @@ import type { Resource } from 'movement-engine/services/translation_graph/adapte
 import type { ResourceId } from '../../../../../generated/kysely/knowledge/Resource';
 
 import { matchesResourceFilter, resolvePositionResources, stampResourceIds } from 'movement-engine/services/translation_graph/engine/files/resources';
-import { makeStablePosition } from 'movement-engine/services/translation_graph/types';
+import { makeStablePosition } from 'engine-contracts/catalog';
 import { EmailAdapter, EMAIL_ADAPTER_TYPE, EMAIL_RECORD_TYPE_ID } from '../../../adapters/email';
 
 const TEAM_ID = 'team-1' as TeamId;

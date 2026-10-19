@@ -28,7 +28,7 @@ import {
 import type { Expression } from '#shared/expression/types';
 import type { TeamId } from '../../../../../generated/kysely/core/Team';
 
-import { isStablePosition, makeMetaPosition, makeStablePosition, positionData } from 'movement-engine/services/translation_graph/types';
+import { isStablePosition, makeMetaPosition, makeStablePosition, positionData } from 'engine-contracts/catalog';
 import { SlackAdapter, SLACK_MANIFEST } from '../index';
 import { instanceSchemaFromDescriptors } from 'movement-engine/services/translation_graph/movement/schema_projection';
 

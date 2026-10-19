@@ -5,7 +5,7 @@
 // case is a name and an async body that throws on failure (node:assert).
 
 import assert from 'node:assert/strict';
-import { BrowserSessionTimedOut, type BrowserLimits, type BrowserSlot } from './browser';
+import { BrowserSessionTimedOut, type BrowserLimits, type BrowserSlot } from 'module-runtime/browser';
 
 /** A page the slot under test can open: its address and what it shows. */
 export interface ContractSite {

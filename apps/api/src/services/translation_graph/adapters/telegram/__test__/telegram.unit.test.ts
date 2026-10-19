@@ -16,7 +16,7 @@ import type { TriggerEvent } from 'movement-engine/services/translation_graph/tr
 import type { TelegramUpdate } from '@listen-fire/telegram/types';
 import type { FileRef } from 'movement-engine/services/translation_graph/adapter';
 
-import { makeStablePosition, makeUnstablePosition } from 'movement-engine/services/translation_graph/types';
+import { makeStablePosition, makeUnstablePosition } from 'engine-contracts/catalog';
 
 // ── Module-scope mocks ──────────────────────────────────────────────────────
 // The credential read (getQb → external_service_credentials) and decryption are

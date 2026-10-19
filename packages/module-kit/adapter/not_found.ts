@@ -7,7 +7,7 @@
 // supplies the common shapes (HTTP-404 detection, the signal constructor) so
 // every adapter spells it the same way.
 
-import type { UpdateNotFound } from 'movement-engine/public/adapter';
+import type { UpdateNotFound } from 'engine-contracts';
 
 /** The typed not-found signal an `updateRecord` returns when its target is
  *  gone. One constant so every adapter returns the identical shape. */

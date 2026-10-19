@@ -46,7 +46,7 @@ function refToAdapterType(ref: SchemaRef): string | null {
   }
 }
 
-// Mirrors packages/movement-engine/services/translation_graph/mutation_context.ts.
+// Mirrors packages/engine-contracts/mutation_context.ts.
 export type TriggerType =
   | "snapshot"
   | "poll"
@@ -56,7 +56,7 @@ export type TriggerType =
   | "extraction";
 
 // Schema shapes mirrored locally to avoid a circular dep on the API
-// types. Kept in sync with packages/movement-engine/services/translation_graph/types.ts.
+// types. Kept in sync with packages/engine-contracts/catalog.ts.
 export type SchemaEntryPoint = {
   typeId: string;
   displayName: string;
@@ -123,7 +123,7 @@ export type PartialDescriptor = {
   types: SchemaTypeDescriptor[];
 };
 
-// Mirrors packages/movement-engine/services/translation_graph/adapter.ts —
+// Mirrors packages/engine-contracts/adapter.ts —
 // `RuntimeCapabilities`. The honest whole-adapter facts the editor can
 // still gate on: inverse-edge traversal, edge-property reads, and
 // resource support. (`outgoing` traversal is universal, hence implicit.)

@@ -53,14 +53,14 @@ jest.mock('../engine/transforms/fetch_resource', () => ({
 // ── Module imports (after mocks) ──────────────────────────────────────────
 
 import type { ContextDependentInput } from '../engine/transforms';
-import type { SourcePosition } from 'movement-engine/services/translation_graph/types';
+import type { SourcePosition } from 'engine-contracts/catalog';
 
 import {
   linkedinResearchImpl,
   LINKEDIN_RESEARCH_PLUGIN_MANIFEST,
 } from '../engine/transforms/linkedin-research';
 import { services } from '../../../adapters/registry';
-import { makeStablePosition } from 'movement-engine/services/translation_graph/types';
+import { makeStablePosition } from 'engine-contracts/catalog';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────
 

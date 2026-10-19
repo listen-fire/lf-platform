@@ -7,16 +7,10 @@ import { z } from 'zod';
 import { before, type DeclaredEffectRow, type LanguageVersion } from 'movement-lang';
 
 import type { UniquenessConstraints } from './uniqueness';
-import type {
-  EphemeralOriginRef,
-  FieldEvidence,
-  Position,
-  PositionIdentity,
-  Resource,
-  SourcePosition,
-} from 'engine-contracts';
-import type { FilterExpression, TraversalStep } from '../knowledge_pipeline/output_v3/schemas';
-import type { Expression } from '../knowledge_pipeline/output_v3/expression';
+import type { EphemeralOriginRef, Position, PositionIdentity, SourcePosition } from './position';
+import type { FieldEvidence, Resource } from './records';
+import type { FilterExpression, TraversalStep } from './expression/schemas';
+import type { Expression } from './expression/expression';
 import type { EdgeCapability, EdgeSequencing, FieldCapability } from '#shared/expression/types';
 
 import { uniquenessConstraintsSchema } from './uniqueness';
@@ -24,7 +18,7 @@ import {
   expressionSchema,
   filterExpressionSchema,
   traversalStepSchema,
-} from '../knowledge_pipeline/output_v3/schemas';
+} from './expression/schemas';
 
 
 // The `translation_graph` / `schema_type` tables were dropped (kill-tg phase
@@ -568,7 +562,7 @@ export type TriggerEntry = z.infer<typeof triggerEntrySchema>;
 // F7 split: the row body is now a pure mapping (sourceSchemaRef,
 // targetSchemaRef, roots). Trigger metadata moved to knowledge.trigger_entry.
 
-const translationGraphRowBodySchema = z.object({
+export const translationGraphRowBodySchema = z.object({
   sourceSchemaRef: schemaRefSchema,
   targetSchemaRef: schemaRefSchema,
   roots: z.array(translationGraphNodeSchema),
@@ -585,44 +579,6 @@ const translationGraphRowBodySchema = z.object({
 });
 
 export type TranslationGraphRowBody = z.infer<typeof translationGraphRowBodySchema>;
-
-/**
- * Lenient parse of a mapping row body — tolerates malformed JSONB so
- * reads never 500 the page. Returns null when the body is not
- * recognisable as a mapping.
- *
- * Parse failures emit a `console.warn` with a summary of the zod errors:
- * silent failures here surface downstream as misleading "referenced
- * mapping not found" errors (G1-v4 / Gap G), costing diagnostic time.
- * The warn includes the schema location + the first few issue paths so
- * the caller can grep the source straight away.
- */
-export function parseRowBodyLenient(value: unknown): TranslationGraphRowBody | null {
-  if (!value || typeof value !== 'object') {
-    console.warn(
-      '[parseRowBodyLenient] row body is not an object — returning null',
-      { type: typeof value, isNull: value === null },
-    );
-    return null;
-  }
-  const parsed = translationGraphRowBodySchema.safeParse(value);
-  if (parsed.success) return parsed.data;
-  const issues = parsed.error.issues.slice(0, 5).map((issue) => ({
-    path: issue.path.join('.'),
-    code: issue.code,
-    message: issue.message,
-  }));
-  console.warn(
-    '[parseRowBodyLenient] translationGraphRowBodySchema rejected row body — returning null. ' +
-      'See packages/movement-engine/services/translation_graph/types.ts (translationGraphRowBodySchema) ' +
-      'and packages/movement-engine/services/knowledge_pipeline/output_v3/expression.ts (expressionSchema).',
-    {
-      issueCount: parsed.error.issues.length,
-      firstIssues: issues,
-    },
-  );
-  return null;
-}
 
 // F7 removed the legacy `typed_translation_graphs` aliases and
 // `parseTriggerEntriesLenient` — TGs no longer live as JSONB on the

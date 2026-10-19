@@ -7,14 +7,13 @@
 import { spawn } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 
-import { createMemoryVault, createSecretsFamily } from 'movement-engine/public/secrets';
-import { makeMetaPosition } from 'movement-engine/public/catalog';
-import { createRemoteAdapter, fetchRemoteManifest, type RemoteAdapter } from 'movement-engine/public/modules';
+import { createMemoryVault, createSecretsFamily } from 'module-runtime';
+import { makeMetaPosition } from 'engine-contracts';
+import { createRemoteAdapter, fetchRemoteManifest, type RemoteAdapter } from '../index';
 
-import type { ModuleCredential, ModuleHost, ModuleLog } from '../index';
+import type { ModuleCredential, ModuleHost, ModuleLog } from 'module-kit';
 
 import {
   ModuleAnswerInvalid,
@@ -26,7 +25,7 @@ import {
   refusingFiles,
   refusingKv,
   serveModule,
-} from '../index';
+} from 'module-kit';
 import notes from './modules/notes_module';
 import shout from './modules/shout_module';
 
@@ -254,9 +253,9 @@ describe('a plugin module', () => {
 
 describe('serve-module', () => {
   it('serves a module file as a child process that prints the port it answers on', async () => {
-    const bin = join(__dirname, '../bin/serve-module.cjs');
-    const child = spawn(process.execPath, [bin, './__test__/modules/shout_module.ts'], {
-      cwd: join(__dirname, '..'),
+    const bin = require.resolve('module-kit/bin/serve-module.cjs');
+    const child = spawn(process.execPath, [bin, './modules/shout_module.ts'], {
+      cwd: __dirname,
       env: { ...process.env, PORT: '0' },
       stdio: ['ignore', 'pipe', 'inherit'],
     });

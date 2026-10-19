@@ -29,7 +29,7 @@ import {
   makeStablePosition,
   makeUnstablePosition,
   positionData,
-} from '../../translation_graph/types';
+} from 'engine-contracts/catalog';
 import { makeTestHost, endedInRust } from '../test_host';
 import { runFailureCause, runMovement } from '../run';
 import {

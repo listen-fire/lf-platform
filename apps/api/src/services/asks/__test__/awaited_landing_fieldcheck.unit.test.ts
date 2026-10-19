@@ -26,7 +26,7 @@ import {
 } from 'movement-lang';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
-import type { SchemaTypeDescriptor } from 'movement-engine/services/translation_graph/types';
+import type { SchemaTypeDescriptor } from 'engine-contracts/catalog';
 
 import { instanceSchemaFromDescriptors } from 'movement-engine/services/translation_graph/movement/schema_projection';
 import { AskAdapter } from '@listen-fire/ask';

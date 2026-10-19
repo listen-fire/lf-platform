@@ -12,7 +12,7 @@
 
 // Order-sensitive cycle guard (mirrors run_now.unit.test.ts).
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-require('movement-engine/services/knowledge_pipeline/output_v3/schemas');
+require('engine-contracts/expression/schemas');
 
 const recordStep = jest.fn();
 const recordMovementStep = jest.fn();

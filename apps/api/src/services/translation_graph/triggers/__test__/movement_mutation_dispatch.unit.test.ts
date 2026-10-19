@@ -19,7 +19,7 @@
 //       on_person_change) fires and writes to the fake attio.
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-require('movement-engine/services/knowledge_pipeline/output_v3/schemas');
+require('engine-contracts/expression/schemas');
 
 process.env.ENCRYPTION_MASTER_KEY ??= Buffer.alloc(32, 1).toString('base64');
 process.env.ENCRYPTION_SALT_BASE64 ??= Buffer.alloc(16, 2).toString('base64');
@@ -139,13 +139,13 @@ import type {
   Adapter,
   RuntimeCapabilities,
 } from 'movement-engine/services/translation_graph/adapter';
-import type { MutationContext } from 'movement-engine/services/translation_graph/mutation_context';
+import type { MutationContext } from 'engine-contracts/mutation_context';
 import type { RecordMutationEvent } from '../record_mutation_event';
 import type { NodeId } from '../../../../generated/kysely/knowledge/Node';
 
 import { dispatchMutationEvent } from '../mutation_dispatch';
 import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
-import { makeStablePosition, positionRecordId } from 'movement-engine/services/translation_graph/types';
+import { makeStablePosition, positionRecordId } from 'engine-contracts/catalog';
 import { teamOfTenant } from '../../movement/tenant';
 
 const { findTriggersByKind } = jest.requireMock('../../storage/tg_table') as {

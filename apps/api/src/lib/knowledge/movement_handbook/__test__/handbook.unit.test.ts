@@ -25,7 +25,7 @@ import {
 import adapterSchemas from './adapter_schemas.fixture.json';
 import { bundledPluginSpecs } from 'movement-engine/public/plugins';
 import { proseViolations } from './prose_rules';
-import { chapterRoute } from 'movement-engine/lib/handbook_section';
+import { chapterRoute } from 'engine-contracts/handbook_section';
 import { frontPageClaims } from '../front_page';
 import { controlFormClaims } from '../language_search';
 import {

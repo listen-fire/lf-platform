@@ -15,7 +15,7 @@
 // Kept apart from the embedding service so boot validation can read it
 // without importing the database layer the service writes through.
 
-import type { EmbeddingModelName } from '../registry';
+import type { EmbeddingModelName } from 'engine-contracts/model_names';
 
 interface EmbeddingDestination {
   /** The column, as an operator reading a refusal would look for it. */

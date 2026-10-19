@@ -48,7 +48,7 @@ import { dispatchTriggerByIdEvent } from '../../translation_graph/triggers/route
 import { runCatalogSnapshotForTeam, snapshotOverManifests, staticCatalogFromManifests } from '../../translation_graph/movement/catalog';
 import { resolveAdapter } from '../../translation_graph/adapters/resolve';
 import { mintMovementVersionIfChanged } from '../../translation_graph/movement/version_store';
-import { makeStablePosition, positionData } from 'movement-engine/services/translation_graph/types';
+import { makeStablePosition, positionData } from 'engine-contracts/catalog';
 import type { Adapter, RuntimeCapabilities } from 'movement-engine/services/translation_graph/adapter';
 import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
 import type { Catalog, CatalogSnapshot, InstanceSchema, LanguageVersion, PositionSchema } from 'movement-lang';
