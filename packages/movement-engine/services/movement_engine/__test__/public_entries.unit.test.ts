@@ -71,9 +71,10 @@ describe('public entries', () => {
 });
 
 describe('routeEngineLogsTo', () => {
-  it('takes the lines, then restores the console transport', () => {
+  it('takes the lines, then puts the previous hook back', () => {
     const lines: Parameters<EngineLogSink>[0][] = [];
-    const before = logger.transports.length;
+    const outer: Parameters<EngineLogSink>[0][] = [];
+    const restoreOuter = routeEngineLogsTo((line) => outer.push(line));
     const restore = routeEngineLogsTo((line) => lines.push(line));
     logger.warn('careful', { run: 'r1' });
     logger.info('fine');
@@ -83,6 +84,8 @@ describe('routeEngineLogsTo', () => {
       ['info', 'fine'],
     ]);
     expect(lines[0].meta).toMatchObject({ run: 'r1' });
-    expect(logger.transports.length).toBe(before);
+    logger.warn('after');
+    restoreOuter();
+    expect(outer.map((l) => l.message)).toEqual(['after']);
   });
 });

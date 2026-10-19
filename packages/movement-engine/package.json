@@ -35,7 +35,6 @@
     "google-auth-library": "10.3.0",
     "jsonrepair": "3.8.0",
     "safe-stable-stringify": "2.5.0",
-    "winston": "3.14.2",
     "zod": "4.1.12"
   },
   "devDependencies": {
