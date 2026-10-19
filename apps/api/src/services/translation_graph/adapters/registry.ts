@@ -19,7 +19,8 @@ import { SLACK_MANIFEST } from '@listen-fire/slack/manifest';
 import { TELEGRAM_ADAPTER_TYPE } from '@listen-fire/telegram/types';
 import { TELEGRAM_MANIFEST } from '@listen-fire/telegram/manifest';
 import { EMAIL_ADAPTER_TYPE, EMAIL_MANIFEST, createEmailAdapter } from './email';
-import { WHATSAPP_ADAPTER_TYPE, WHATSAPP_MANIFEST, createWhatsappAdapter } from './whatsapp';
+import { WHATSAPP_ADAPTER_TYPE } from '@listen-fire/whatsapp/types';
+import { WHATSAPP_MANIFEST } from './whatsapp/shared_app';
 import { AIRTABLE_ADAPTER_TYPE } from '@listen-fire/airtable/types';
 import { AIRTABLE_MANIFEST } from '@listen-fire/airtable/manifest';
 import { AFFINITY_ADAPTER_TYPE } from '@listen-fire/affinity/types';
@@ -108,11 +109,15 @@ const ADAPTER_FACTORIES: Record<string, AdapterFactory> = {
   // The createEmailAdapter factory ignores `credentialsId` — there are
   // no per-team email credentials in this build.
   [EMAIL_ADAPTER_TYPE]: ({ teamId }) => createEmailAdapter({ teamId }),
-  // WhatsApp adapter — source-only inbound WhatsApp messages (body + media
-  // as Resources). The phone-based twin of the email adapter. The factory
-  // ignores `credentialsId` — there are no per-team WhatsApp credentials in
-  // this build (the v3 Twilio creds live on `pipeline_input`).
-  [WHATSAPP_ADAPTER_TYPE]: ({ teamId }) => createWhatsappAdapter({ teamId }),
+  // WhatsApp adapter — inbound messages, reactions and locations (media on
+  // the `Attachments` edge), and replies, reactions and typing along a
+  // message's edges. No per-team credential: the platform's one Meta app
+  // sends for every team, so the legacy factory ignores `credentialsId`.
+  // A module (@lf/whatsapp); its BUILTIN_MODULES line picks module or legacy.
+  [WHATSAPP_ADAPTER_TYPE]: builtinAdapterFactory(WHATSAPP_ADAPTER_TYPE, ({ teamId }) => {
+    const { createWhatsappAdapter }: typeof import('./whatsapp') = require('./whatsapp');
+    return createWhatsappAdapter({ teamId });
+  }),
   // Airtable adapter — read/write target plus webhook source. An optional
   // `base:` entry position (constructionArgs.base) scopes introspection to one
   // base, so a large workspace doesn't walk every base.

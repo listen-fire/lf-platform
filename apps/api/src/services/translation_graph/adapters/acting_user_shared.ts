@@ -12,7 +12,7 @@ import type { UserId } from '../../../generated/kysely/core/User';
 import type { ActingUser } from 'movement-engine/public/adapter';
 
 import { getAutomationsQb, getCoreQb } from '../../../lib/kysely';
-import { normalizeWhatsappPhone } from './acting_user/phone';
+import { normalizeWhatsappPhone } from '@listen-fire/whatsapp/phone';
 
 /**
  * Per-trigger config slot for the creator-fallback opt-in. Adapters whose

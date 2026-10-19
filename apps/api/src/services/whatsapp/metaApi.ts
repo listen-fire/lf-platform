@@ -1,7 +1,6 @@
-import axios from 'axios';
-import FormData from 'form-data';
 import * as ExcelJS from 'exceljs';
 
+import { WhatsappCloudClient, formatWhatsappRecipient } from '@listen-fire/whatsapp/client';
 import { logger } from 'movement-engine/public/log';
 import { getEnvVar } from '../../lib/utils/environment';
 import { buildOtpTemplatePayload } from './phone_verification/otp_template';
@@ -191,6 +190,9 @@ class MetaWhatsAppApiService {
   private readonly graphBase: string;
   private readonly baseUrl: string;
   private readonly businessAccountId: string;
+  /** The sends a movement's write makes too (@lf/whatsapp's client), from
+   *  this number. */
+  private readonly cloud: WhatsappCloudClient;
 
   constructor(creds: WhatsappNumberCreds) {
     this.accessToken = creds.accessToken;
@@ -198,6 +200,11 @@ class MetaWhatsAppApiService {
     this.businessAccountId = creds.businessAccountId ?? '';
     this.graphBase = graphBaseUrl();
     this.baseUrl = `${this.graphBase}/${this.phoneNumberId}/messages`;
+    this.cloud = new WhatsappCloudClient(
+      { accessToken: creds.accessToken, phoneNumberId: creds.phoneNumberId },
+      // Global fetch looked up per call, so a test's stub is seen.
+      { graphBaseUrl: this.graphBase, fetch: (input, init) => fetch(input, init), log: logger },
+    );
   }
 
   /** The Meta phone number id this instance sends from — the registry key. */
@@ -236,134 +243,17 @@ class MetaWhatsAppApiService {
     }
   }
 
-  async sendTypingOn(waMessageId: string): Promise<boolean> {
-    try {
-      const payload = {
-        messaging_product: 'whatsapp',
-        message_id: waMessageId,
-        status: 'read',
-        typing_indicator: {
-          type: 'text',
-        },
-      };
-
-      const response = await fetch(this.baseUrl, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        logger.error('Meta WhatsApp API Error:', { error: errorData });
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      return true;
-    } catch (error: unknown) {
-      logger.error('Failed to send typing on via Meta WhatsApp API:', error);
-      return false;
-    }
+  sendTypingOn(waMessageId: string): Promise<boolean> {
+    return this.cloud.sendTypingOn(waMessageId);
   }
 
-  async sendReaction(to: string, waMessageId: string, emoji: string): Promise<boolean> {
-    try {
-      const payload = {
-        messaging_product: 'whatsapp',
-        to: this.formatPhoneNumber(to),
-        type: 'reaction',
-        reaction: {
-          message_id: waMessageId,
-          emoji,
-        },
-      };
-
-      const response = await fetch(this.baseUrl, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        logger.error('Meta WhatsApp API reaction error:', { error: errorData });
-        return false;
-      }
-
-      return true;
-    } catch (error: unknown) {
-      logger.error('Failed to send reaction via Meta WhatsApp API:', error);
-      return false;
-    }
+  sendReaction(to: string, waMessageId: string, emoji: string): Promise<boolean> {
+    return this.cloud.sendReaction(to, waMessageId, emoji);
   }
 
-  /**
-   * Send a text message via WhatsApp Business API (Meta Cloud API)
-   */
-  async sendTextMessage(
-    to: string,
-    message: string,
-    options: { replyToMessageId?: string } = {},
-  ): Promise<string | null> {
-    try {
-      const payload = {
-        messaging_product: 'whatsapp',
-        to: this.formatPhoneNumber(to),
-        type: 'text',
-        text: {
-          preview_url: true,
-          body: message,
-        },
-        // Threads the send as a reply — WhatsApp renders it quoting the
-        // referenced message.
-        ...(options.replyToMessageId !== undefined
-          ? { context: { message_id: options.replyToMessageId } }
-          : {}),
-      };
-
-      const response = await fetch(this.baseUrl, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        logger.error('Meta WhatsApp API Error:', {
-          status: response.status,
-          statusText: response.statusText,
-          error: errorData,
-        });
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const responseData = await response.json();
-
-      if (!responseData.messages || !responseData.messages[0]?.id) {
-        logger.error('Invalid response from Meta WhatsApp API:', responseData);
-        throw new Error('Failed to send message - invalid response');
-      }
-
-      const messageId = responseData.messages[0].id;
-      logger.info('Message sent successfully via Meta WhatsApp API:', {
-        messageId,
-        to: this.formatPhoneNumber(to),
-      });
-
-      return messageId;
-    } catch (error: unknown) {
-      logger.error('Failed to send message via Meta WhatsApp API:', error);
-      throw new Error('Failed to send message');
-    }
+  /** A text message; the sent message's id. Throws when Meta refuses it. */
+  sendTextMessage(to: string, message: string, options: { replyToMessageId?: string } = {}): Promise<string | null> {
+    return this.cloud.sendTextMessage(to, message, options);
   }
 
   /**
@@ -538,55 +428,9 @@ class MetaWhatsAppApiService {
     }
   }
 
-  /**
-   * Send an interactive message with a caller-supplied `interactive` object,
-   * passed through VERBATIM — no reshaping, no typed button/list wrapper (the
-   * verbatim-passthrough doctrine: matches Telegram's `reply_markup`). The
-   * caller owns the WhatsApp Cloud API shape completely; a malformed object
-   * surfaces as a loud Meta API error at send time, never a save-time check.
-   */
-  async sendInteractive(
-    to: string,
-    interactive: unknown,
-    options: { replyToMessageId?: string } = {},
-  ): Promise<string | null> {
-    try {
-      const payload = {
-        messaging_product: 'whatsapp',
-        to: this.formatPhoneNumber(to),
-        type: 'interactive',
-        interactive,
-        ...(options.replyToMessageId !== undefined
-          ? { context: { message_id: options.replyToMessageId } }
-          : {}),
-      };
-
-      const response = await fetch(this.baseUrl, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        logger.error('Meta WhatsApp API interactive-send error:', { error: errorData });
-        return null;
-      }
-
-      const responseData = await response.json();
-      const messageId = responseData.messages?.[0]?.id ?? null;
-      if (!messageId) {
-        logger.error('Invalid response from Meta WhatsApp API:', responseData);
-        return null;
-      }
-      return messageId;
-    } catch (error: unknown) {
-      logger.error('Failed to send interactive message via Meta WhatsApp API:', error);
-      return null;
-    }
+  /** An interactive message, its `interactive` object passed through verbatim. */
+  sendInteractive(to: string, interactive: unknown, options: { replyToMessageId?: string } = {}): Promise<string | null> {
+    return this.cloud.sendInteractive(to, interactive, options);
   }
 
   /**
@@ -858,165 +702,18 @@ class MetaWhatsAppApiService {
     };
   }
 
-  /**
-   * Send a media message (image / audio / video / document by MIME) — uploads
-   * the bytes, then sends by media id. Returns the sent wamid, or null when
-   * Meta refuses (e.g. outside the 24-hour service window).
-   */
-  async sendMediaMessage(
+  /** A media message, its type by MIME; the sent message's id, or null when
+   *  Meta refuses it. */
+  sendMediaMessage(
     to: string,
-    media: { buffer: Buffer; filename: string; mimeType: string },
+    media: { buffer: Uint8Array; filename: string; mimeType: string },
     options: { caption?: string; replyToMessageId?: string } = {},
   ): Promise<string | null> {
-    try {
-      const mediaId = await this.uploadMedia(media.buffer, media.filename, media.mimeType);
-      const kind = media.mimeType.startsWith('image/')
-        ? 'image'
-        : media.mimeType.startsWith('video/')
-          ? 'video'
-          : media.mimeType.startsWith('audio/')
-            ? 'audio'
-            : 'document';
-      const payload = {
-        messaging_product: 'whatsapp',
-        to: this.formatPhoneNumber(to),
-        type: kind,
-        [kind]: {
-          id: mediaId,
-          // Audio doesn't take captions; documents carry a filename.
-          ...(options.caption !== undefined && kind !== 'audio' ? { caption: options.caption } : {}),
-          ...(kind === 'document' ? { filename: media.filename } : {}),
-        },
-        ...(options.replyToMessageId !== undefined
-          ? { context: { message_id: options.replyToMessageId } }
-          : {}),
-      };
-      const response = await fetch(this.baseUrl, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        logger.error('Meta WhatsApp API media-send error:', { error: errorData });
-        return null;
-      }
-      const responseData = await response.json();
-      return responseData.messages?.[0]?.id ?? null;
-    } catch (error: unknown) {
-      logger.error('Failed to send media message via Meta WhatsApp API:', error);
-      return null;
-    }
+    return this.cloud.sendMediaMessage(to, media, options);
   }
 
-  /**
-   * Upload media to WhatsApp Business API and get media ID
-   */
-  private async uploadMedia(buffer: Buffer, filename: string, mimeType: string): Promise<string> {
-    try {
-      const uploadUrl = `${this.graphBase}/${this.phoneNumberId}/media`;
-
-      // Determine media type category based on MIME type
-      let newMediaType = mimeType; // default for documents
-      if (mimeType.startsWith('image/')) {
-        newMediaType = 'image';
-      } else if (mimeType.startsWith('video/')) {
-        newMediaType = 'video';
-      } else if (mimeType.startsWith('audio/')) {
-        newMediaType = 'audio';
-      }
-
-      const form = new FormData();
-      form.append('messaging_product', 'whatsapp');
-      form.append('type', newMediaType);
-      form.append('file', buffer, {
-        filename: filename,
-        contentType: mimeType,
-      });
-
-      logger.info('Uploading media:', {
-        filename,
-        mimeType,
-        newMediaType,
-        uploadUrl,
-        bufferSize: buffer.length,
-      });
-
-      const response = await axios.post(uploadUrl, form, {
-        headers: {
-          Authorization: `Bearer ${this.accessToken}`,
-          ...form.getHeaders(),
-        },
-        maxContentLength: Infinity,
-        maxBodyLength: Infinity,
-        validateStatus: () => true, // Don't throw on any status code
-      });
-
-      // Log the full response for debugging
-      if (response.status !== 200) {
-        logger.error('WhatsApp API upload error response:', {
-          status: response.status,
-          statusText: response.statusText,
-          data: response.data,
-          headers: response.headers,
-        });
-
-        // Try to extract error message from response
-        const errorMessage =
-          response.data?.error?.message ||
-          response.data?.message ||
-          `HTTP ${response.status}: ${response.statusText}`;
-
-        throw new Error(`WhatsApp API Error: ${errorMessage}`);
-      }
-
-      const responseData = response.data;
-
-      if (!responseData.id) {
-        logger.error('Invalid media upload response:', responseData);
-        throw new Error('Failed to get media ID from upload response');
-      }
-
-      logger.info('Media uploaded successfully:', {
-        mediaId: responseData.id,
-        filename,
-        mimeType,
-        newMediaType,
-        bufferSize: buffer.length,
-      });
-
-      return responseData.id;
-    } catch (error) {
-      // Enhanced error logging
-      if (axios.isAxiosError(error)) {
-        if (error.response) {
-          logger.error('WhatsApp API upload error - Response:', {
-            status: error.response.status,
-            statusText: error.response.statusText,
-            data: error.response.data,
-            headers: error.response.headers,
-          });
-        } else if (error.request) {
-          logger.error('WhatsApp API upload error - No response:', {
-            request: error.request,
-          });
-        } else {
-          logger.error('WhatsApp API upload error - Setup:', {
-            message: error.message,
-            stack: error.stack,
-          });
-        }
-      } else {
-        logger.error('WhatsApp API upload error:', {
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-
-      throw new Error(`Failed to upload media to WhatsApp`);
-    }
+  private uploadMedia(buffer: Uint8Array, filename: string, mimeType: string): Promise<string> {
+    return this.cloud.uploadMedia(buffer, filename, mimeType);
   }
 
   /**
@@ -1377,23 +1074,8 @@ class MetaWhatsAppApiService {
     return matches.map((_, index) => `param_${index + 1}`);
   }
 
-  /**
-   * Format phone number to ensure it's in the correct format for Meta API
-   * Removes any non-digit characters except the leading +
-   */
   private formatPhoneNumber(phoneNumber: string): string {
-    // Remove any existing whatsapp: prefix if present
-    let formatted = phoneNumber.replace(/^whatsapp:/, '');
-
-    // Ensure it starts with + and contains only digits after that
-    if (!formatted.startsWith('+')) {
-      formatted = `+${formatted}`;
-    }
-
-    // Remove any non-digit characters except the leading +
-    formatted = formatted.replace(/[^\d+]/g, '');
-
-    return formatted;
+    return formatWhatsappRecipient(phoneNumber);
   }
 }
 
