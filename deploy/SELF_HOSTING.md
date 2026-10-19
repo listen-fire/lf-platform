@@ -478,10 +478,10 @@ Every write to the graph enqueues an event, and `KNOWLEDGE_MUTATION_DELIVERY` de
 
 | value | what happens |
 |---|---|
-| `local` | Handed to a consumer in the same process. That consumer exists only when `automations` is mounted here. |
+| `local` | Taken off the outbox by the automations drain (the server's drain loop, or a scheduled `drain:once`) and queued like any adapter's event: one receipt and one run row per matching listen, so the movements run as ordinary work, never inside a request or the graph's own loop. The drain does this only in a process that mounts both `automations` and `knowledge`. |
 | `webhook` | Delivered to the subscriptions you register over the API. With none registered, events drain quietly to nobody, which is the right shape for a store nothing is listening to yet. |
 
-The CODE default is `local` — right for the composed deployment, wrong for a knowledge-only one, where every graph write's event would fail delivery and retry on a backoff. `up.sh` sets `webhook` unless `automations` and `knowledge` are BOTH mounted in the same process, so you never have to think about it; `KNOWLEDGE_MUTATION_DELIVERY` in `deploy/.env` overrides it if you must.
+The CODE default is `local` — right for the composed deployment, wrong for a knowledge-only one, where nothing would drain the events and they would wait undelivered. `up.sh` sets `webhook` unless `automations` and `knowledge` are BOTH mounted in the same process, so you never have to think about it; `KNOWLEDGE_MUTATION_DELIVERY` in `deploy/.env` overrides it if you must.
 
 Subscriptions are registered at `/api/v1/knowledge/graph/webhooks`; an empty event-type list means every type, registration is idempotent by URL, and a secret is generated and returned if you supply none. Verify with a bare hex HMAC-SHA256 of the raw body. Registering a subscription while delivery is `local` is refused at the door with an explanation rather than accepted into silence. `GET /api/v1/knowledge/graph/health` reports the delivery mode, the outbox depth and last error, and whether a model key is configured.
 

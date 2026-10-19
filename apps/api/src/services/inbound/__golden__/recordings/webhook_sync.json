@@ -2831,7 +2831,7 @@
         "movementId": "movement-1",
         "teamId": "team-1",
         "adapterType": "kg",
-        "triggerType": "webhook",
+        "triggerType": "mutation",
         "event": {
           "eventType": "inbound",
           "externalId": "rec-1",

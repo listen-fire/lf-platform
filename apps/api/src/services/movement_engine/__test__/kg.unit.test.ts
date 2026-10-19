@@ -67,19 +67,20 @@ jest.mock('../../context', () => ({
 // via the standard `resolveAdapter` seam — exactly how the TG engine's
 // own unit suites fake the KG (per-action-target.unit.test.ts,
 // engine.unit.test.ts) — so only the manifest constants are needed.
-jest.mock('../../translation_graph/adapters/knowledge_graph', () => ({
+// The graph's manifest without its connection requirement, so these runs
+// construct `kg()` bare (the platform's real one needs a credential).
+jest.mock('@listen-fire/kg/manifest', () => ({
   KG_ADAPTER_TYPE: 'kg',
-  KG_MANIFEST: {
-    adapterType: 'kg',
-    displayName: 'Knowledge Graph',
-    supportedTriggers: ['mutation'],
-    methods: [
-      'listEntryPoints', 'describe', 'resolveEntity', 'getDedupRules',
-      'getFieldValue', 'getRelated', 'createRecord', 'updateRecord',
-    ],
-    triggerKinds: ['KG_MUTATION'],
-  },
-  createKnowledgeGraphAdapter: jest.fn(() => ({ adapterType: 'kg' })),
+  kgManifest: () => ({
+      adapterType: 'kg',
+      displayName: 'Knowledge Graph',
+      supportedTriggers: ['mutation'],
+      methods: [
+        'listEntryPoints', 'describe', 'resolveEntity', 'getDedupRules',
+        'getFieldValue', 'getRelated', 'createRecord', 'updateRecord',
+      ],
+      triggerKinds: ['KG_MUTATION'],
+    }),
 }));
 
 jest.mock('../../knowledge_pipeline/facts', () => ({

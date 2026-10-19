@@ -58,9 +58,9 @@ jest.mock('../../../context', () => ({
   }),
 }));
 
-jest.mock('../../adapters/knowledge_graph', () => ({
+jest.mock('@listen-fire/kg/manifest', () => ({
   KG_ADAPTER_TYPE: 'kg',
-  KG_MANIFEST: {
+  kgManifest: () => ({
     adapterType: 'kg',
     displayName: 'Knowledge Graph',
     supportedTriggers: ['mutation'],
@@ -70,8 +70,7 @@ jest.mock('../../adapters/knowledge_graph', () => ({
       'getPriorMatch', 'recordLink',
     ],
     triggerKinds: ['KG_MUTATION'],
-  },
-  createKnowledgeGraphAdapter: jest.fn(() => ({ adapterType: 'kg' })),
+  }),
 }));
 
 jest.mock('../../../knowledge_pipeline/facts', () => ({
