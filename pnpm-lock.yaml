@@ -160,6 +160,9 @@ importers:
       '@listen-fire/slack':
         specifier: workspace:*
         version: link:../../modules/slack
+      '@listen-fire/system':
+        specifier: workspace:*
+        version: link:../../modules/system
       '@listen-fire/telegram':
         specifier: workspace:*
         version: link:../../modules/telegram
@@ -1361,6 +1364,31 @@ importers:
       movement-lang:
         specifier: workspace:@listen-fire/movement-lang@*
         version: link:../../packages/movement-lang
+      typescript:
+        specifier: 5.5.4
+        version: 5.5.4
+
+  modules/system:
+    dependencies:
+      '@listen-fire/engine':
+        specifier: workspace:^
+        version: link:../../packages/movement-engine
+      '@listen-fire/module-kit':
+        specifier: workspace:^
+        version: link:../../packages/module-kit
+    devDependencies:
+      '@types/jest':
+        specifier: 29.5.14
+        version: 29.5.14
+      '@types/node':
+        specifier: 20.16.5
+        version: 20.16.5
+      module-kit:
+        specifier: workspace:@listen-fire/module-kit@*
+        version: link:../../packages/module-kit
+      movement-engine:
+        specifier: workspace:@listen-fire/engine@*
+        version: link:../../packages/movement-engine
       typescript:
         specifier: 5.5.4
         version: 5.5.4

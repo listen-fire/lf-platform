@@ -51,8 +51,7 @@ import { builtinAdapterFactory, builtinPollSourceFactory } from './builtin_modul
 import { GMAIL_ADAPTER_TYPE, GMAIL_MANIFEST, createGmailAdapter } from './gmail';
 import { createGmailPollSource } from './gmail/poll';
 import { ASK_ADAPTER_TYPE, ASK_MANIFEST, createAskAdapter } from './ask';
-import { SYSTEM_ADAPTER_TYPE, SYSTEM_MANIFEST, createSystemAdapter } from './system';
-import { createSystemPollSource } from './system/poll';
+import { SYSTEM_ADAPTER_TYPE, SYSTEM_MANIFEST, createSystemAdapter, createSystemPollSource } from './system';
 
 /**
  * Factory signature: takes per-team + per-consumer context. Adapters that
@@ -195,9 +194,10 @@ const ADAPTER_FACTORIES: Record<string, AdapterFactory> = {
   ),
   [ASK_ADAPTER_TYPE]: ({ teamId }) => createAskAdapter({ teamId }),
   // System — the platform itself as a source (a run failed, …). Credential-
-  // free and read-only; event production lives on its PollSource, which reads
-  // the run table (POLL_SOURCE_FACTORIES below).
-  [SYSTEM_ADAPTER_TYPE]: ({ teamId }) => createSystemAdapter({ teamId }),
+  // free and read-only; event production lives on its poll, which reads the
+  // platform's records (POLL_SOURCE_FACTORIES below). A module (@lf/system);
+  // its BUILTIN_MODULES line picks module or legacy.
+  [SYSTEM_ADAPTER_TYPE]: builtinAdapterFactory(SYSTEM_ADAPTER_TYPE, createSystemAdapter),
 };
 
 /**
@@ -223,7 +223,7 @@ const POLL_SOURCE_FACTORIES: Record<string, PollSourceFactory> = {
   [GMAIL_ADAPTER_TYPE]: builtinPollSourceFactory(GMAIL_ADAPTER_TYPE, ({ teamId, credentialsId }) =>
     createGmailPollSource({ teamId, credentialsId }),
   ),
-  [SYSTEM_ADAPTER_TYPE]: ({ teamId }) => createSystemPollSource({ teamId }),
+  [SYSTEM_ADAPTER_TYPE]: builtinPollSourceFactory(SYSTEM_ADAPTER_TYPE, createSystemPollSource),
 };
 
 /** Whether a slug (or trigger-kind alias) has a registered PollSource. */

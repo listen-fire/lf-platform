@@ -13,6 +13,11 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 
 ## [Unreleased]
 
+### au-units
+
+- **`system` is a module, `@lf/system`** (`modules/system`), hosted in process by the platform. Platform-supplied: it reads the platform's own records of runs and events, so it is never published or shipped with lf. Movements, events, fields and timing are unchanged (recorded parity: the whole read surface and the poll replay identically). Switching back is one line (`BUILTIN_MODULES`).
+- A module's poll now receives the automation its listen belongs to (`movementId`, optional, protocol 2 minor), so a source about automations can keep an automation from being told about itself.
+
 ### s-logs
 
 - Set `LOG_FORMAT=json` to log one JSON object per line with a Cloud Logging `severity` (`DEBUG`/`INFO`/`WARNING`/`ERROR`/`CRITICAL`), `message`, `timestamp` and `contextId`. The default is unchanged. Boot refuses any other value.

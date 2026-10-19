@@ -1243,9 +1243,10 @@ export const METHODS = {
   // Module methods (within version 2; each paired with its manifest
   // declaration, see `refuseUnpairedDeclarations`).
   // One solicited pull of a polled source: `config` is the listen's options,
-  // `checkpoint` whatever the previous poll returned (absent the first time).
+  // `checkpoint` whatever the previous poll returned (absent the first time),
+  // `movementId` the automation the listen belongs to where the host knows it.
   poll: {
-    params: z.object({ config: z.unknown(), checkpoint: z.unknown().optional() }),
+    params: z.object({ config: z.unknown(), checkpoint: z.unknown().optional(), movementId: z.string().optional() }),
     result: z.object({
       events: z.array(WireDiscriminableEvent),
       checkpoint: z.unknown().optional(),

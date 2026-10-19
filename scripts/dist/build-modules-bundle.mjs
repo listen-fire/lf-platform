@@ -33,7 +33,11 @@ const WORKSPACE = {
   '#shared': 'packages/shared',
   '@listen-fire/shared': 'packages/shared',
 };
-const modules = readdirSync('modules', { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
+// A private module is platform-supplied (`@lf/system`, `@lf/native-valuations`):
+// only the platform hosts it, so lf never ships it.
+const modules = readdirSync('modules', { withFileTypes: true })
+  .filter((e) => e.isDirectory() && JSON.parse(readFileSync(join('modules', e.name, 'package.json'), 'utf8')).private !== true)
+  .map((e) => e.name);
 const sources = [...new Set([...Object.values(WORKSPACE), ...modules.map((m) => `modules/${m}`)])];
 
 const thirdParty = {};

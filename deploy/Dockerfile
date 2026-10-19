@@ -60,6 +60,7 @@ COPY modules/airtable/package.json modules/airtable/
 COPY modules/attio/package.json modules/attio/
 COPY modules/telegram/package.json modules/telegram/
 COPY modules/slack/package.json modules/slack/
+COPY modules/system/package.json modules/system/
 COPY packages/engine-contracts/package.json packages/engine-contracts/
 COPY packages/movement-engine/package.json packages/movement-engine/
 COPY packages/shared/package.json packages/shared/

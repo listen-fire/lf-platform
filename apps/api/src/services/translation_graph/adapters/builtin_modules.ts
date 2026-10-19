@@ -60,6 +60,7 @@ import { AIRTABLE_MANIFEST } from '@listen-fire/airtable/manifest';
 import { ATTIO_MANIFEST } from '@listen-fire/attio/manifest';
 import { TELEGRAM_MANIFEST } from '@listen-fire/telegram/manifest';
 import { SLACK_MANIFEST } from '@listen-fire/slack/manifest';
+import { SYSTEM_MANIFEST } from '@listen-fire/system/manifest';
 import { pluginDeclarationNamed, pluginProgramName } from 'movement-engine/public/plugins';
 
 import { injectFakeBaseUrl, isTestHarnessTeam } from '../../../lib/recording';
@@ -151,6 +152,8 @@ const WEB_MODULE_LINE: BuiltinModuleLine = {
 
 /** Built once, on the Slack line's first use. */
 let platformSlackModule: AdapterModuleDefinition | undefined;
+/** Built once, on the system line's first use. */
+let platformSystemModule: AdapterModuleDefinition | undefined;
 
 /**
  * Every built-in that becomes a module (plan 22 #1), by adapter type or
@@ -316,6 +319,21 @@ export const BUILTIN_MODULES: BuiltinModuleTable = {
         });
       }
       return platformSlackModule;
+    },
+  },
+  // Platform-supplied (au-units): a module only the platform hosts, over its
+  // own records of runs and events.
+  system: {
+    kind: 'adapter',
+    line: 'module',
+    manifest: SYSTEM_MANIFEST,
+    load: () => {
+      if (platformSystemModule === undefined) {
+        const { systemModuleWith }: typeof import('@listen-fire/system') = require('@listen-fire/system');
+        const { platformSystemRecords }: typeof import('./system/events') = require('./system/events');
+        platformSystemModule = systemModuleWith(platformSystemRecords);
+      }
+      return platformSystemModule;
     },
   },
   // The bundled plugins (Henry 2026-10-17: plugins are modules too), all six
@@ -527,7 +545,12 @@ export function builtinPollSourceFactory(
     }
     return {
       pollIntervalSeconds: declared.intervalSeconds,
-      getEvents: (input) => poll({ config: input.config, ...(input.checkpoint !== undefined ? { checkpoint: input.checkpoint } : {}) }),
+      getEvents: (input) =>
+        poll({
+          config: input.config,
+          ...(input.checkpoint !== undefined ? { checkpoint: input.checkpoint } : {}),
+          ...(input.movementId !== undefined ? { movementId: input.movementId } : {}),
+        }),
     };
   };
 }

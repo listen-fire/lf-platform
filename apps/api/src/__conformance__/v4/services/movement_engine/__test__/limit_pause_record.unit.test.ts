@@ -41,7 +41,7 @@ jest.mock('../../translation_graph/movement/execute', () => ({ resumeMovementFir
 jest.mock('../../translation_graph/movement/version_store', () => ({ loadPinnedVersion: jest.fn() }));
 
 import { describeLimitPause, markRunLimitPaused, readLimitPause } from '../limit_pause';
-import { RUN_PAUSED } from '../../translation_graph/adapters/system/types';
+import { RUN_PAUSED } from '@listen-fire/system';
 import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 

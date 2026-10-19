@@ -1,0 +1,28 @@
+{
+  "name": "@listen-fire/system",
+  "private": true,
+  "license": "Apache-2.0",
+  "version": "0.12.0-rc.2",
+  "description": "The platform itself as a source (a run failed or paused, a release was deployed) as a module. Platform-supplied: the platform hosts it in process and hands it its own records of runs and events; it has no story outside the platform, so it is never published or served as a process. Its tests borrow apps/api's jest runner (jest.config.borrowed.cjs)",
+  "engines": {
+    "node": "22.20.0"
+  },
+  "scripts": {
+    "code:type-check": "tsc --pretty --noEmit && node ../../scripts/check-module-boundary.cjs",
+    "test": "node ../../apps/api/node_modules/jest/bin/jest.js --config jest.config.borrowed.cjs"
+  },
+  "main": "index.ts",
+  "types": "index.ts",
+  "type": "commonjs",
+  "dependencies": {
+    "@listen-fire/engine": "workspace:^",
+    "@listen-fire/module-kit": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/jest": "29.5.14",
+    "@types/node": "20.16.5",
+    "module-kit": "workspace:@listen-fire/module-kit@*",
+    "movement-engine": "workspace:@listen-fire/engine@*",
+    "typescript": "5.5.4"
+  }
+}

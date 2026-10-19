@@ -1,36 +1,28 @@
 // System adapter — the platform as a source. Covers the surface an author
 // reads (four fires edges, one record shape, nothing readable or writable), the
 // Run Failed emission from a failed run, and the rule that keeps a failure
-// handler from reporting itself. No database: the failed-run reader is faked.
+// handler from reporting itself. The platform's readers are faked.
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
-// The DB reader is replaced in every test; stub the accessor so the module
-// graph never opens a connection.
-jest.mock('../../../../../lib/kysely', () => ({ getAutomationsQb: jest.fn() }));
+import type { SystemRecords } from '../poll';
 
-import type { TeamId } from '../../../../../generated/kysely/core/Team';
-import type { StoredSystemEvent, StoredSystemEventReader } from '../events';
-
-import { makeMetaPosition, makeUnstablePosition } from 'movement-engine/services/translation_graph/types';
-import { SYSTEM_ADAPTER_TYPE, SYSTEM_MANIFEST, SystemAdapter } from '../index';
-import {
-  SystemPollSource,
-  type FailedRun,
-  type FailedRunReader,
-  type SystemCheckpoint,
-} from '../poll';
+import { makeMetaPosition, makeUnstablePosition } from 'movement-engine/public/catalog';
+import { SYSTEM_MANIFEST } from '../manifest';
+import { SystemAdapter } from '../adapter';
+import { pollSystemEvents, type FailedRun, type StoredSystemEvent, type SystemCheckpoint } from '../poll';
 import {
   RELEASE_APPLIED,
   RUN_FAILED,
   RUN_PAUSED,
+  SYSTEM_ADAPTER_TYPE,
   SYSTEM_EVENT_KINDS,
   VALIDATION_ISSUE,
   type SystemEventPayload,
 } from '../types';
 
-const TEAM = 'team-1' as TeamId;
+type FailedRunReader = SystemRecords['failedRuns'];
+type StoredSystemEventReader = SystemRecords['storedEvents'];
+
+const TEAM = 'team-1';
 const NOW = new Date('2026-09-29T12:00:00.000Z');
 const MARK = { failedAt: '2026-09-29T11:50:00.000Z', runId: '00000000-0000-0000-0000-000000000000' };
 
@@ -47,15 +39,26 @@ function failedRun(over: Partial<FailedRun> = {}): FailedRun {
   };
 }
 
-function source(runs: FailedRun[]): { poll: SystemPollSource; reader: jest.Mock } {
-  const reader = jest.fn<ReturnType<FailedRunReader>, Parameters<FailedRunReader>>(
-    async () => runs,
-  );
-  return { poll: new SystemPollSource(TEAM, reader, () => NOW), reader };
+beforeEach(() => {
+  jest.useFakeTimers({ now: NOW, doNotFake: ['nextTick', 'setImmediate', 'queueMicrotask'] });
+});
+afterEach(() => {
+  jest.useRealTimers();
+});
+
+/** The module's poll over the given readers, for TEAM. */
+function pollOver(failedRuns: FailedRunReader, storedEvents: StoredSystemEventReader) {
+  const records: SystemRecords = { failedRuns, storedEvents, webBaseUrl: () => 'http://localhost:3003/' };
+  return { getEvents: (input: { config: unknown; checkpoint?: unknown; movementId?: string }) => pollSystemEvents(records, TEAM, input) };
+}
+
+function source(runs: FailedRun[]) {
+  const reader = jest.fn<ReturnType<FailedRunReader>, Parameters<FailedRunReader>>(async () => runs);
+  return { poll: pollOver(reader, async () => []), reader };
 }
 
 describe('SystemAdapter surface', () => {
-  const adapter = new SystemAdapter(TEAM);
+  const adapter = new SystemAdapter();
 
   it('declares five fires edges, each selected by its own natural name', async () => {
     const entries = await adapter.listEntryPoints();
@@ -138,7 +141,7 @@ describe('Run Failed emission', () => {
     });
 
     expect(reader).toHaveBeenCalledWith({
-      teamId: TEAM,
+      tenant: TEAM,
       after: MARK,
       until: new Date('2026-09-29T11:59:50.000Z'),
       limit: 100,
@@ -238,7 +241,7 @@ function storedSource(events: StoredSystemEvent[]) {
   const stored = jest.fn<ReturnType<StoredSystemEventReader>, Parameters<StoredSystemEventReader>>(
     async () => events,
   );
-  return { poll: new SystemPollSource(TEAM, failed, () => NOW, stored), failed, stored };
+  return { poll: pollOver(failed, stored), failed, stored };
 }
 
 describe('deploy check kinds emission', () => {
