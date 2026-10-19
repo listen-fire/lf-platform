@@ -17,9 +17,11 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 
 - Set `LOG_FORMAT=json` to log one JSON object per line with a Cloud Logging `severity` (`DEBUG`/`INFO`/`WARNING`/`ERROR`/`CRITICAL`), `message`, `timestamp` and `contextId`. The default is unchanged. Boot refuses any other value.
 - New optional database pool settings for small Cloud SQL instances: `PRISMA_POOL_MAX`, `KYSELY_POOL_MAX` and `KYSELY_POOL_IDLE_TIMEOUT_MS`. Unset keeps today's pool sizes. Boot refuses a value that is not a whole number in range. See `deploy/SELF_HOSTING.md`.
+
 ### s-redis
 
 - Redis is now truly optional. With `MESSAGE_QUEUE_REDIS_HOSTNAME` unset (or, on compose, set empty in `deploy/.env`, which also keeps the bundled Redis from starting), the favicon cache, MCP OAuth in-flight state and the runaway-loop guard's counters live in one small expiring Postgres table (`automations.cache_entry`, added by a migration) instead of nothing or process memory. They are now exact across API instances and survive a stop between requests; the loop guard pays one database round trip per dispatch. With the hostname set, Redis is used exactly as before. Defaults are unchanged: compose still runs the bundled Redis unless you ask otherwise.
+
 ### s-enqueue
 
 - **No movement runs inside a request.** Run now (the app, `POST /automations/run`, the trigger Send box), event replay (the app and admin), inbound email, WhatsApp, and a fired callback button or link now store the event, queue a work row and answer; whichever worker drains next runs the movement, as Slack and the webhook doors already did. A deployment whose api stops between requests no longer loses or stalls those runs; one with an always-on worker sees the same runs, a moment later.
@@ -27,9 +29,11 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 - **Retrying a request no longer starts a second run.** Run now takes an optional `requestId` (the app sends one per press); a retry with the same id gets the first run back. WhatsApp messages are now deduplicated on their message id, as email already was on its Message-Id.
 - **A loop-guard throttle's held event is released from the work queue**, not an in-process timer, so a restart no longer drops the release.
 - **A fired callback answers 202** (recorded, the body queued) on the HTTP callback door, where it used to answer 200 after starting the body in the request's process.
+
 ### s-image
 
 - The API image is now built in two variants and carries production dependencies only. `ghcr.io/listen-fire/api` is unchanged in features (it keeps Chromium); new `ghcr.io/listen-fire/api-slim` leaves Chromium out for a smaller image and faster cold start. Document fetches behind browser-rendered viewers (DocSend, Papermark, Notion) and PDF rendering fail on the slim image with an error naming the browser variant. Compose runs the browser variant unless `LISTEN_FIRE_API_IMAGE` and `LISTEN_FIRE_API_TARGET` are set (see `deploy/SELF_HOSTING.md`, "Image variants"). The demo's seed and fake CRM services now run the compiled scripts, not ts-node.
+
 ### n-browser
 
 - **The browser is a slot the host fills.** A module asks for a page through `ctx.browser`; the platform's api image fills it with Chromium (`@lf/chromium`), and lf, `serve-module` and the api-slim image leave it empty, so a module asking for a page is refused naming the slot. Limits are the slot's: 2 sessions at once, 5 minutes each. Wire and contract suite: [browser-slot.md](docs/contracts/browser-slot.md).
