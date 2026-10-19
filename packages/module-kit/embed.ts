@@ -8,6 +8,7 @@ import type { WireCredentialDeclarationShape } from 'engine-contracts';
 import { DEFAULT_REFRESH_WINDOW_MS, declaredRefresher, expiresWithin, type OAuth2ClientApp, type SecretsFamily } from 'movement-engine/public/secrets';
 
 import type { CredentialFields, ModuleCredential, ModuleKv } from './define';
+import { sameJsonValue } from './kv_compare';
 
 /**
  * The credential stored at `ref` in `secrets`, as a module reads it: its
@@ -77,5 +78,11 @@ export function memoryKv(): ModuleKv {
       entries.delete(key);
     },
     list: async (prefix) => [...entries].filter(([key]) => key.startsWith(prefix)).map(([key, value]) => ({ key, value })),
+    // No await between the read and the write: one process, so nothing interleaves.
+    compareAndSet: async (key, expected, value) => {
+      if (!sameJsonValue(entries.get(key), expected)) return false;
+      entries.set(key, value);
+      return true;
+    },
   };
 }

@@ -2,7 +2,7 @@
 // drive.file scope there is no list-all API; the Picker grants access one item
 // at a time and each pick is recorded here against the Google credential, tagged
 // with its real Drive mime_type so each adapter filters to what it cares about.
-import type { ModuleKv } from 'module-kit';
+import { compareThenSet, type ModuleKv } from 'module-kit';
 import type { ExternalServiceCredentialsId } from '../../generated/kysely/automations/ExternalServiceCredentials';
 import type { TeamId } from '../../generated/kysely/core/Team';
 
@@ -137,6 +137,10 @@ export function grantedItemsKv(credentialsId: string, options: { teamId: string;
     },
     async delete(key) {
       await store.revoke({ credentialsId, itemId: itemOf(key, 'delete') });
+    },
+    // A grant is an upsert of the same item: two writers agree on what it holds.
+    async compareAndSet(key, expected, value) {
+      return compareThenSet(this, { key, expected, value });
     },
     async list(prefix) {
       return (await store.list(credentialsId))

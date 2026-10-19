@@ -1,8 +1,9 @@
 //! `lf --contract-store <state.db|postgres://…>`: the run host's backend
-//! families (crate::backend) served over stdin/stdout as the store slot's
-//! wire (docs/contracts/store-slot.md), one JSON-RPC 2.0 message per line,
-//! so the TypeScript contract suite drives this store through its
-//! `RpcStoreBackend` (movement-engine `services/run_host/rpc_store.ts`) and
+//! families (crate::backend) served as a store module: the store slot's
+//! methods (docs/contracts/store-slot.md) as adapter protocol 2 calls over
+//! HTTP on a Unix socket (crate::slot_server), so the TypeScript contract
+//! suite drives this store through its `RpcStoreBackend` (movement-engine
+//! `services/run_host/rpc_store.ts`) and
 //! holds it to the meaning every backend has. `--contract-store-slot` serves
 //! the project's store slot instead, a store module's process included.
 //!
@@ -14,77 +15,54 @@
 //! `runs.start` adds a run row, the contract's `newRun`; `runs.requestCancel`,
 //! `runs.status` and `runs.complete` are the records backend's
 //! `requestCancel`, `runStatus` and `completeRun`. A fenced write
-//! refused because the lease is gone answers the error `RunLeaseLost`
-//! (code -32001, `data: { name, runId }`), which the client rethrows as the
-//! core's `RunLeaseLost`. Requests are answered one at a time, in order.
+//! refused because the lease is gone answers the error code
+//! `run_lease_lost` (`data: { runId }`), which the client rethrows as the
+//! core's `RunLeaseLost`. Requests are answered one at a time.
 //! The callback family and the run records (`callbacks.*`, `runs.*`) are
 //! crate::callbacks's.
 
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-
 use crate::backend::{MintCallback, RunHostStore, StoreSpec, open_store};
-use crate::json::{Js, Obj};
+use crate::json::Js;
 use crate::obj;
+use crate::slot_server::{Listen, Refusal};
 use crate::store::{ClaimDue, StoreError, iso};
 use crate::store_wire::{Wire, num, opt, to_rows};
 
-const LEASE_LOST: i64 = -32001;
-const INVALID_PARAMS: i64 = -32602;
-const METHOD_NOT_FOUND: i64 = -32601;
-const PARSE_ERROR: i64 = -32700;
-const STORE_FAILED: i64 = -32000;
+/// The store slot's methods (docs/contracts/store-slot.md), as its manifest lists them.
+pub const STORE_METHODS: &[&str] = &[
+    "store.open", "runs.start", "runs.requestCancel", "runs.status", "runs.complete", "runs.settle", "runs.markParked", "runs.get",
+    "runs.list", "runs.appendTrace", "runs.traceLength", "runs.spent", "runs.addSpend", "runs.resetSpendBaseline", "records.cancelRequest",
+    "records.markFailed", "records.closeRun", "callbacks.mint", "callbacks.get", "callbacks.record", "callbacks.markBodyStarted",
+    "callbacks.landed", "callbacks.revokeRun", "parks.putLeaf", "parks.claimLeaf", "parks.finishLeaf", "parks.leaves", "parks.deleteLeaves",
+    "joins.recordJoin", "joins.decrementJoin", "joins.persistBranchExport", "joins.collectBranchExports", "joins.hasPendingJoins",
+    "joins.frames", "joins.deleteFrames", "correlations.correlate", "correlations.correlated", "correlations.ofRun", "correlations.drop",
+    "correlations.dropRun", "leases.claim", "leases.renew", "leases.release", "leases.dropRunState", "work.enqueue", "work.claimDue",
+    "work.complete", "work.release", "sources.put", "sources.get", "inbound.checkpoint", "inbound.saveCheckpoint", "events.claim",
+];
 
-pub async fn serve(spec: &StoreSpec) -> Result<(), String> {
+pub async fn serve(spec: &StoreSpec, listen: Listen) -> Result<(), String> {
     // The bridge stands in for a set-up store: a Postgres one's setup
     // (`lf connect @lf/postgres-store`) is run first.
     if let StoreSpec::Postgres { url, .. } = spec {
         crate::pg_store::PgStore::migrate(url).map_err(|e| format!("{}: {e}", spec.display()))?;
     }
     let store = open_store(spec)?;
-    let mut lines = BufReader::new(tokio::io::stdin()).lines();
-    let mut stdout = tokio::io::stdout();
-    while let Some(line) = lines.next_line().await.map_err(|e| e.to_string())? {
-        if line.trim().is_empty() {
-            continue;
-        }
-        let reply = answer(&*store, &line);
-        stdout.write_all(format!("{}\n", reply.to_json()).as_bytes()).await.map_err(|e| e.to_string())?;
-        stdout.flush().await.map_err(|e| e.to_string())?;
-    }
-    Ok(())
+    let manifest = crate::slot_server::manifest("@lf/contract-store", "store", STORE_METHODS);
+    crate::slot_server::serve(listen, manifest, move |method, params, _settings| answer(&*store, method, params)).await
 }
 
-fn answer(store: &dyn RunHostStore, line: &str) -> Js {
-    let request = match Js::parse(line.as_bytes()) {
-        Ok(request) => request,
-        Err(e) => return error_reply(Js::Null, PARSE_ERROR, format!("not JSON: {e}"), None),
-    };
-    let id = request.get("id").cloned().unwrap_or(Js::Null);
-    let Some(method) = request.get("method").and_then(Js::as_str) else {
-        return error_reply(id, INVALID_PARAMS, "a request names its method".into(), None);
-    };
-    let empty = Js::from(Obj::new());
-    let params = Params(request.get("params").unwrap_or(&empty));
-    match dispatch(store, method, &params) {
-        Ok(result) => Js::from(obj! { "jsonrpc" => Js::str("2.0"), "id" => id, "result" => result }),
-        Err(Failure::Store(StoreError::LeaseLost { run_id })) => error_reply(
-            id,
-            LEASE_LOST,
-            "run lease lost; another instance may hold the run".into(),
-            Some(Js::from(obj! { "name" => Js::str("RunLeaseLost"), "runId" => Js::str(run_id) })),
-        ),
-        Err(Failure::Store(other)) => error_reply(id, STORE_FAILED, describe(&other), None),
-        Err(Failure::Params(message)) => error_reply(id, INVALID_PARAMS, message, None),
-        Err(Failure::Unknown) => error_reply(id, METHOD_NOT_FOUND, format!("no method \"{method}\""), None),
+fn answer(store: &dyn RunHostStore, method: &str, params: &Js) -> Result<Js, Refusal> {
+    match dispatch(store, method, &Params(params)) {
+        Ok(result) => Ok(result),
+        Err(Failure::Store(StoreError::LeaseLost { run_id })) => Err(Refusal {
+            code: crate::store_module::LEASE_LOST.into(),
+            message: "run lease lost; another instance may hold the run".into(),
+            data: Some(Js::from(obj! { "runId" => Js::str(run_id) })),
+        }),
+        Err(Failure::Store(other)) => Err(Refusal::failed(describe(&other))),
+        Err(Failure::Params(message)) => Err(Refusal::bad_request(format!("{method}: {message}"))),
+        Err(Failure::Unknown) => Err(Refusal::unknown(method)),
     }
-}
-
-fn error_reply(id: Js, code: i64, message: String, data: Option<Js>) -> Js {
-    let mut error = obj! { "code" => Js::Num(code.into()), "message" => Js::str(message) };
-    if let Some(data) = data {
-        error.insert("data".into(), data);
-    }
-    Js::from(obj! { "jsonrpc" => Js::str("2.0"), "id" => id, "error" => Js::from(error) })
 }
 
 fn describe(error: &StoreError) -> String {

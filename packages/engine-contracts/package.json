@@ -17,6 +17,7 @@
   "exports": {
     ".": "./index.ts",
     "./conformance": "./conformance/index.ts",
+    "./slots": "./slots/index.ts",
     "./package.json": "./package.json"
   },
   "type": "commonjs",
@@ -49,6 +50,10 @@
       "./conformance": {
         "types": "./dist/conformance/index.d.ts",
         "default": "./dist/conformance/index.js"
+      },
+      "./slots": {
+        "types": "./dist/slots/index.d.ts",
+        "default": "./dist/slots/index.js"
       },
       "./*": {
         "types": "./dist/*.d.ts",

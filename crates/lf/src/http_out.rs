@@ -60,7 +60,7 @@ where
     Ok(Answer { status, body: String::from_utf8_lossy(&bytes).into_owned() })
 }
 
-fn tls_connector() -> tokio_rustls::TlsConnector {
+pub fn tls_connector() -> tokio_rustls::TlsConnector {
     static CONFIG: OnceLock<Arc<rustls::ClientConfig>> = OnceLock::new();
     let config = CONFIG.get_or_init(|| {
         let roots = rustls::RootCertStore { roots: webpki_roots::TLS_SERVER_ROOTS.to_vec() };

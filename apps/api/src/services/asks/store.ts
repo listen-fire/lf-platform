@@ -22,7 +22,7 @@ import { z } from 'zod';
 
 import type { TeamId } from '../../generated/kysely/core/Team';
 import type { AskId } from '../../generated/kysely/asks/Ask';
-import type { ModuleKv } from 'module-kit';
+import { compareThenSet, type ModuleKv } from 'module-kit';
 
 import {
   ASK_ANSWER_TYPES,
@@ -328,6 +328,10 @@ export function askTableKv(teamId: TeamId, options: { callbackUrl?: string | nul
     },
     async delete() {
       refuse('delete: asks are receipts and are cancelled, never removed');
+    },
+    // An ask is inserted once (its id is the row's key) and settled once (from pending).
+    async compareAndSet(key, expected, value) {
+      return compareThenSet(this, { key, expected, value });
     },
     async list(prefix) {
       if (!prefix.startsWith('ask:')) return [];

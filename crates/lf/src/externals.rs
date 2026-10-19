@@ -134,7 +134,7 @@ pub fn core_modules_in(dir: &Path) -> Result<Vec<crate::core::CoreModule>, Strin
         .map(|e| crate::core::CoreModule {
             slot: e.manifest.slot.as_deref().and_then(crate::core::Slot::of).expect("a core manifest's slot is validated"),
             settings: std::borrow::Cow::Owned(e.manifest.settings),
-            process: Some(crate::core::ProcessModule { command: e.manifest.command.unwrap_or_default(), env: e.manifest.env, dir: e.dir }),
+            process: Some(crate::core::ProcessModule { command: e.manifest.command.unwrap_or_default(), env: e.manifest.env, dir: e.dir, url: e.manifest.url, auth_field: e.manifest.auth.map(|a| a.field) }),
             name: std::borrow::Cow::Owned(e.manifest.name),
         })
         .collect())
@@ -501,7 +501,8 @@ async fn reach(project: &Project, external: &External, base_url_override: Option
         .current_dir(&external.dir)
         .env_clear()
         .env("PATH", std::env::var("PATH").unwrap_or_default())
-        .env("PORT", "0")
+        .envs(crate::module_transport::listen_env(crate::module_transport::fresh_socket_path().as_deref()))
+        .envs(crate::remote_slots::browser_env())
         .envs(crate::serve::externals_host_url().map(|url| ("LF_HOST_URL", url)))
         .envs(crate::serve::host_token().map(|token| ("LF_HOST_TOKEN", token)))
         .envs(base_url_override.filter(|_| external.manifest.module.is_some()).map(|url| ("MODULE_BASE_URL_OVERRIDE", url)))
@@ -515,10 +516,10 @@ async fn reach(project: &Project, external: &External, base_url_override: Option
     let stdout = child.stdout.take().ok_or("no stdout")?;
     let mut lines = BufReader::new(stdout).lines();
     let waited = project.start_timeout;
-    let port = tokio::time::timeout(waited, async {
+    let address = tokio::time::timeout(waited, async {
         while let Ok(Some(line)) = lines.next_line().await {
-            if let Some(port) = listening_port(&line) {
-                return Ok(port);
+            if let Some(address) = crate::module_transport::listening_address(&line) {
+                return Ok(address);
             }
         }
         Err(format!("external \"{name}\" exited before listening"))
@@ -526,13 +527,13 @@ async fn reach(project: &Project, external: &External, base_url_override: Option
     .await
     .map_err(|_| {
         format!(
-            "external \"{name}\" did not print \"listening <port>\" within {}s (lf.yaml's `startTimeout`, or --start-timeout, waits longer)",
+            "external \"{name}\" did not print \"listening <port>\" or \"listening unix:<socket>\" within {}s (lf.yaml's `startTimeout`, or --start-timeout, waits longer)",
             waited.as_secs()
         )
     })??;
     // Keep reading what it prints, so a full pipe never blocks it.
     tokio::spawn(async move { while let Ok(Some(_)) = lines.next_line().await {} });
-    Ok((format!("http://127.0.0.1:{port}/"), Some(child)))
+    Ok((address, Some(child)))
 }
 
 /// Where the release's built-in modules live: `LF_MODULES_DIR`, else
@@ -597,12 +598,6 @@ fn serve_module_command(project: &Project, external: &str) -> Result<Vec<String>
     ))
 }
 
-/// The port in a line `listening <port>…`.
-fn listening_port(line: &str) -> Option<u16> {
-    let digits: String = line.strip_prefix("listening ")?.chars().take_while(char::is_ascii_digit).collect();
-    digits.parse().ok()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -640,13 +635,6 @@ mod tests {
             start_timeout: crate::project::DEFAULT_START_TIMEOUT,
             cost_cap_microdollars: None,
         }
-    }
-
-    #[test]
-    fn the_port_is_read_off_the_listening_line() {
-        assert_eq!(listening_port("listening 5557"), Some(5557));
-        assert_eq!(listening_port("listening 80 on all"), Some(80));
-        assert_eq!(listening_port("ready"), None);
     }
 
     #[test]
