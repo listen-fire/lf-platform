@@ -61,6 +61,7 @@ import { ATTIO_MANIFEST } from '@listen-fire/attio/manifest';
 import { TELEGRAM_MANIFEST } from '@listen-fire/telegram/manifest';
 import { SLACK_MANIFEST } from '@listen-fire/slack/manifest';
 import { SYSTEM_MANIFEST } from '@listen-fire/system/manifest';
+import { NATIVE_VALUATIONS_MANIFEST } from '@listen-fire/native-valuations/manifest';
 import { pluginDeclarationNamed, pluginProgramName } from 'movement-engine/public/plugins';
 
 import { injectFakeBaseUrl, isTestHarnessTeam } from '../../../lib/recording';
@@ -78,6 +79,7 @@ import { oauthAppFromEnv } from './module_credentials';
 import { builtInBotToken } from './telegram/shared_bot';
 import { telegramIdentities } from './telegram/identities';
 import { teamIdSchema } from '../../../lib/team_id';
+import { apiBaseUrl } from '../../../lib/api_base_url';
 
 export type BuiltinLine = 'legacy' | 'module';
 
@@ -335,6 +337,20 @@ export const BUILTIN_MODULES: BuiltinModuleTable = {
       }
       return platformSystemModule;
     },
+  },
+  // Platform-supplied (au-units): the platform's own Valuations product,
+  // through its REST API.
+  'native-valuations': {
+    kind: 'adapter',
+    line: 'module',
+    manifest: NATIVE_VALUATIONS_MANIFEST,
+    load: () => {
+      const { nativeValuationsModule }: typeof import('@listen-fire/native-valuations') = require('@listen-fire/native-valuations');
+      return nativeValuationsModule;
+    },
+    // A credential that names no base URL (the one the platform provisions)
+    // means this platform's own API.
+    sharedCredential: () => ({ baseUrl: apiBaseUrl() }),
   },
   // The bundled plugins (Henry 2026-10-17: plugins are modules too), all six
   // in one module, `@lf/web`. Each plugin keeps its own line.

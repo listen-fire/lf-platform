@@ -1,0 +1,35 @@
+{
+  "name": "@listen-fire/native-valuations",
+  "private": true,
+  "license": "Apache-2.0",
+  "version": "0.12.0-rc.2",
+  "description": "The platform's own Valuations product, reached through its REST API, as a module. Platform-supplied: the platform hosts it in process and hands it the api-key it provisioned and its own address; it has no story outside the platform, so it is never published or served as a process. Its tests borrow apps/api's jest runner (jest.config.borrowed.cjs)",
+  "engines": {
+    "node": "22.20.0"
+  },
+  "scripts": {
+    "code:type-check": "tsc --pretty --noEmit && node ../../scripts/check-module-boundary.cjs",
+    "test": "node ../../apps/api/node_modules/jest/bin/jest.js --config jest.config.borrowed.cjs"
+  },
+  "main": "index.ts",
+  "types": "index.ts",
+  "type": "commonjs",
+  "dependencies": {
+    "@listen-fire/engine": "workspace:^",
+    "@listen-fire/engine-contracts": "workspace:^",
+    "@listen-fire/module-kit": "workspace:^",
+    "@listen-fire/movement-lang": "workspace:^",
+    "@listen-fire/shared": "workspace:^",
+    "zod": "4.1.12"
+  },
+  "devDependencies": {
+    "#shared": "workspace:@listen-fire/shared@*",
+    "@types/jest": "29.5.14",
+    "@types/node": "20.16.5",
+    "engine-contracts": "workspace:@listen-fire/engine-contracts@*",
+    "module-kit": "workspace:@listen-fire/module-kit@*",
+    "movement-engine": "workspace:@listen-fire/engine@*",
+    "movement-lang": "workspace:@listen-fire/movement-lang@*",
+    "typescript": "5.5.4"
+  }
+}

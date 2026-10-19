@@ -6,32 +6,19 @@
 // opt-in the reconciler gates on, and (2) the adapter delegating to the shared
 // register/deregister helper with correct change-handling.
 
-// logger → services/context → casl crashes at module load; stub it.
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
+const registerValuationsWebhook = jest.fn(async (_api: unknown, _input: unknown) => ({ externalId: 'https://cb', secret: 'shh' }));
+const deregisterValuationsWebhook = jest.fn(async (_api: unknown, _input: unknown) => {});
+jest.mock('../webhook', () => ({
+  registerValuationsWebhook: (api: unknown, input: unknown) => registerValuationsWebhook(api, input),
+  deregisterValuationsWebhook: (api: unknown, input: unknown) => deregisterValuationsWebhook(api, input),
 }));
 
-const registerValuationsWebhook = jest.fn(async (_a: unknown) => ({ externalId: 'https://cb', secret: 'shh' }));
-const deregisterValuationsWebhook = jest.fn(async (_a: unknown) => {});
-jest.mock('../native_valuations_webhook', () => ({
-  NATIVE_VALUATIONS_SUBSCRIBABLE_EVENTS: [
-    'valuations:legal_entity:create',
-    'valuations:legal_entity:update',
-    'valuations:legal_entity:delete',
-  ],
-  registerValuationsWebhook: (a: unknown) => registerValuationsWebhook(a),
-  deregisterValuationsWebhook: (a: unknown) => deregisterValuationsWebhook(a),
-}));
+import { NativeValuationsAdapter } from '../adapter';
+import { NATIVE_VALUATIONS_MANIFEST } from '../manifest';
 
-import type { TeamId } from '../../../../generated/kysely/core/Team';
-
-import {
-  NATIVE_VALUATIONS_MANIFEST,
-  createNativeValuationsAdapter,
-} from '../native_valuations';
-
-const adapter = () =>
-  createNativeValuationsAdapter({ teamId: 'team-1' as TeamId, credentialsId: 'cred-1' });
+const API = { apiKey: 'k', baseUrl: 'http://vals.test', fetch };
+const quiet = { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
+const adapter = (api: typeof API | null = API) => new NativeValuationsAdapter({ api: async () => api, log: quiet });
 
 beforeEach(() => jest.clearAllMocks());
 
@@ -56,8 +43,7 @@ describe('NativeValuationsAdapter.ensureEventSubscription', () => {
       events: ['valuations:legal_entity:create', 'valuations:legal_entity:update'],
       callbackUrl: 'https://cb',
     });
-    expect(registerValuationsWebhook).toHaveBeenCalledWith({
-      credentialsId: 'cred-1',
+    expect(registerValuationsWebhook).toHaveBeenCalledWith(API, {
       targetUrl: 'https://cb',
       eventTypes: ['valuations:legal_entity:create', 'valuations:legal_entity:update'],
     });
@@ -81,20 +67,23 @@ describe('NativeValuationsAdapter.ensureEventSubscription', () => {
       callbackUrl: 'https://cb',
       current: { externalId: 'https://cb', events: ['valuations:legal_entity:create'] },
     });
-    expect(deregisterValuationsWebhook).toHaveBeenCalledWith({
-      credentialsId: 'cred-1',
-      externalId: 'https://cb',
-    });
+    expect(deregisterValuationsWebhook).toHaveBeenCalledWith(API, { externalId: 'https://cb' });
     expect(registerValuationsWebhook).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('an install with no credential', () => {
+  it('provisions nothing and removes nothing', async () => {
+    expect(await adapter(null).ensureEventSubscription!({ events: ['valuations:legal_entity:create'], callbackUrl: 'https://cb' })).toBeUndefined();
+    await adapter(null).removeEventSubscription!({ callbackUrl: 'https://cb', externalId: 'https://cb' });
+    expect(registerValuationsWebhook).not.toHaveBeenCalled();
+    expect(deregisterValuationsWebhook).not.toHaveBeenCalled();
   });
 });
 
 describe('NativeValuationsAdapter.removeEventSubscription', () => {
   it('deregisters by the held externalId', async () => {
     await adapter().removeEventSubscription!({ callbackUrl: 'https://cb', externalId: 'https://cb' });
-    expect(deregisterValuationsWebhook).toHaveBeenCalledWith({
-      credentialsId: 'cred-1',
-      externalId: 'https://cb',
-    });
+    expect(deregisterValuationsWebhook).toHaveBeenCalledWith(API, { externalId: 'https://cb' });
   });
 });
