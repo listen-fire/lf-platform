@@ -1866,6 +1866,9 @@ importers:
 
   packages/trpc:
     dependencies:
+      '@listen-fire/ask':
+        specifier: workspace:*
+        version: link:../../modules/ask
       '@listen-fire/shared':
         specifier: workspace:*
         version: link:../shared
