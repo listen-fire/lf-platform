@@ -34,7 +34,8 @@ function sourceFiles(dir, found = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (entry.name === 'node_modules') continue;
+      // Build output is derived from the sources checked here, and may be stale.
+      if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name === 'build') continue;
       sourceFiles(full, found);
     } else if (/\.(c|m)?[tj]sx?$/.test(entry.name) && !entry.name.endsWith('.d.ts')) {
       found.push(full);
