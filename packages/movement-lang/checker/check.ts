@@ -207,6 +207,8 @@ import {
   memberLocal,
   packageCalled,
   packageMembers,
+  ambiguousPluginPackages,
+  packageLocalName,
   type PackageMember,
   pluginArgMisfitMessage,
   pluginPositionalParams,
@@ -6083,9 +6085,12 @@ class Checker {
           // From version 5 a plugin is imported by its camelCase name, read
           // into the catalog's key: the message names it as written.
           const named = namespace === 'plugins' && since(this.languageVersion, 5) ? pluginName(name) : name;
+          const servedBy = namespace === 'plugins' ? ambiguousPluginPackages(this.catalog, name) : [];
           this.report(
             DiagnosticCodes.IMPORT_UNKNOWN,
-            `Unknown ${namespace === 'adapters' ? 'adapter' : namespace === 'credentials' ? 'credential' : 'plugin'} '${named}' in '${namespace}'`,
+            servedBy.length > 0
+              ? `Plugin '${named}' is served by more than one package (${servedBy.join(', ')}) — import the package you mean: import { \`${servedBy[0]}\` as ${packageLocalName(servedBy[0])} } from plugins`
+              : `Unknown ${namespace === 'adapters' ? 'adapter' : namespace === 'credentials' ? 'credential' : 'plugin'} '${named}' in '${namespace}'`,
             statement.span,
           );
         }

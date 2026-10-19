@@ -6,10 +6,10 @@
 //
 // Running a plugin is the host's (`llm.transforms.invoke`); nothing here runs.
 
-import type { PluginSpec } from 'movement-lang';
+import { findPlugin, pluginKey, type PluginSpec } from 'movement-lang';
 import type { TransformSignature } from 'engine-contracts/catalog';
 
-import { pluginDeclarationNamed, pluginSpecOf, pluginSpecsOf, type PluginDeclaration } from 'engine-contracts/plugin_spec';
+import { pluginDeclarationNamed, pluginProgramName, pluginSpecsOf, type PluginDeclaration } from 'engine-contracts/plugin_spec';
 
 /**
  * Public signature — surfaced through the registry. The editor uses
@@ -523,9 +523,44 @@ const RENDER_SIGNATURE: TransformSignature = {
   output: { kind: 'value', type: { kind: 'file' }, description: 'The PDF, a file a write to a file field can carry.' },
 };
 
+/**
+ * `web.render(text)`: text or HTML drawn as a PDF by the host's browser (the
+ * print-to-PDF of a page), so any Unicode the browser's fonts cover prints and
+ * an email's HTML keeps its layout. Served by `@lf/web`; it needs a browser in
+ * the host's browser slot and refuses by name when the slot is empty. It is
+ * `@lf/pdf`'s `render` with the same call shape, for the hosts that have a
+ * browser. Nothing is paid for.
+ */
+const WEB_RENDER_SIGNATURE: TransformSignature = {
+  name: 'render',
+  description:
+    'Draw text or HTML as a PDF file with the host\'s browser. HTML keeps its layout; plain text is wrapped in a page. Refuses when the host has no browser.',
+  params: [
+    {
+      name: 'text',
+      type: { kind: 'string' },
+      required: true,
+      description:
+        'The text or HTML to draw. HTML (a document or markup such as an email body) is drawn as a page; anything else is plain text with line breaks and tabs kept and long lines wrapped.',
+    },
+    {
+      name: 'pageSize',
+      type: { kind: 'enum', values: ['a4', 'letter'] },
+      description: 'The page: "a4" (the default) or "letter".',
+    },
+    { name: 'margin', type: { kind: 'number' }, description: 'The margin on every side, in points (a whole number from 0 to 200). The default is 30.' },
+  ],
+  dataDependency: 'none',
+  // The browser may load the images and styles an HTML page names.
+  effects: { reads: ['the web'] },
+  additions: {},
+  output: { kind: 'value', type: { kind: 'file' }, description: 'The PDF, a file a write to a file field can carry.' },
+};
+
 // Every plugin searches, scrapes or asks a model, and all of that is paid for.
 export const VC_URL_RETRIEVAL_PLUGIN: PluginDeclaration = { signature: VC_URL_RETRIEVAL_SIGNATURE, priced: true };
 export const RENDER_PLUGIN: PluginDeclaration = { signature: RENDER_SIGNATURE, priced: false };
+export const WEB_RENDER_PLUGIN: PluginDeclaration = { signature: WEB_RENDER_SIGNATURE, priced: false };
 export const FETCH_URL_PLUGIN: PluginDeclaration = { signature: FETCH_URL_SIGNATURE, priced: true };
 export const LINKEDIN_ENRICHMENT_PLUGIN: PluginDeclaration = { signature: LINKEDIN_ENRICHMENT_SIGNATURE, priced: true };
 export const LINKEDIN_RESEARCH_PLUGIN: PluginDeclaration = { signature: LINKEDIN_RESEARCH_SIGNATURE, priced: true };
@@ -542,6 +577,10 @@ export const BUNDLED_PLUGINS: readonly PluginDeclaration[] = [
   RESEARCH_PLUGIN,
 ];
 
+/** Every plugin `@lf/web` serves: the six bundled ones, and `render`, which the
+ *  module serves with no older registry body behind it. */
+export const WEB_MODULE_PLUGINS: readonly PluginDeclaration[] = [...BUNDLED_PLUGINS, WEB_RENDER_PLUGIN];
+
 /** The package the web plugins are served by (`modules/web`): a movement
  *  imports them one by one or as the package
  *  (``import { `@lf/web` as web } from plugins``). */
@@ -556,7 +595,7 @@ export const PDF_PLUGINS: readonly PluginDeclaration[] = [RENDER_PLUGIN];
 /** Every plugin the platform's catalog lists, each with the package that
  *  serves it. */
 const CATALOG_PLUGINS: ReadonlyArray<{ package: string; declarations: readonly PluginDeclaration[] }> = [
-  { package: BUNDLED_PLUGINS_PACKAGE, declarations: BUNDLED_PLUGINS },
+  { package: BUNDLED_PLUGINS_PACKAGE, declarations: WEB_MODULE_PLUGINS },
   { package: PDF_PLUGINS_PACKAGE, declarations: PDF_PLUGINS },
 ];
 
@@ -565,19 +604,16 @@ const CATALOG_PLUGINS: ReadonlyArray<{ package: string; declarations: readonly P
 export function bundledPluginSpecs(): Record<string, PluginSpec> {
   return Object.fromEntries(
     CATALOG_PLUGINS.flatMap(({ package: tag, declarations }) =>
-      Object.entries(pluginSpecsOf(declarations)).map(([name, spec]): [string, PluginSpec] => [name, { ...spec, package: tag }]),
+      Object.entries(pluginSpecsOf(declarations)).map(([name, spec]): [string, PluginSpec] => [pluginKey(tag, name), { ...spec, package: tag, name }]),
     ),
   );
 }
 
-/** A catalog plugin's checker surface by either spelling, tagged with its
- *  package. */
+/** A catalog plugin's checker surface by its key (`@lf/pdf/render`) or by a
+ *  bare name that only one package serves, tagged with its package. */
 export function bundledPluginSpecNamed(name: string): PluginSpec | undefined {
-  for (const { package: tag, declarations } of CATALOG_PLUGINS) {
-    const declaration = pluginDeclarationNamed(declarations, name);
-    if (declaration) return { ...pluginSpecOf(declaration), package: tag };
-  }
-  return undefined;
+  const hit = findPlugin(bundledPluginSpecs(), pluginProgramName(name));
+  return hit !== undefined && 'found' in hit ? hit.found.spec : undefined;
 }
 
 /** A web plugin by either spelling (`vc_url_retrieval`, `vc-url-retrieval`). */

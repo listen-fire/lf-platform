@@ -158,8 +158,9 @@ fn trigger_config_vocabulary(supported_triggers: &[String], listen: &Obj) -> Obj
     out
 }
 
-/// `pluginsOf`: each plugin external's package, keyed as a program spells a
-/// plugin, each spec tagged with the package it is imported from.
+/// `pluginsOf`: each plugin external's package, keyed by module and name, each
+/// spec tagged with the package it is imported from and the name a program
+/// spells it.
 fn plugins_of(running: &[RunningExternal]) -> Obj {
     let mut plugins = Obj::new();
     for r in running {
@@ -169,8 +170,11 @@ fn plugins_of(running: &[RunningExternal]) -> Obj {
                 Js::Obj(spec) => spec,
                 _ => continue,
             };
+            let program_name = name.replace('-', "_");
             spec.insert("package".into(), package.clone());
-            plugins.insert(name.replace('-', "_"), Js::Obj(spec));
+            spec.insert("name".into(), Js::Str(program_name.clone()));
+            let tag = package.as_str().unwrap_or_default();
+            plugins.insert(movement_parser::catalog::packages::plugin_key(tag, &program_name), Js::Obj(spec));
         }
     }
     plugins

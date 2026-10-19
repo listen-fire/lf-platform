@@ -16,11 +16,12 @@ import type { PluginInput, PluginOutput, WebPlugin } from './plugin';
 import type { WebTools } from './tools';
 
 import { defineModule } from 'module-kit';
-import { BUNDLED_PLUGINS, pluginProgramName } from 'movement-engine/public/plugins';
+import { BUNDLED_PLUGINS, WEB_RENDER_PLUGIN, pluginProgramName } from 'movement-engine/public/plugins';
 import { fetchUrlPlugin } from './fetch_url';
 import { linkedinEnrichmentPlugin } from './linkedin_enrichment';
 import { linkedinResearchPlugin } from './linkedin_research';
 import { answerOf, inputFor } from './plugin';
+import { renderPlugin } from './render';
 import { researchPlugin } from './research';
 import { standaloneTools, WEB_CREDENTIAL_FIELDS } from './standalone';
 import { withTools } from './tools';
@@ -71,9 +72,12 @@ export function webModuleWith(toolsOf: (ctx: ModuleContext) => WebTools | Promis
     kind: 'plugin',
     name: '@lf/web',
     credentials: [WEB_CREDENTIAL],
-    plugins: WEB_PLUGINS.map((p) => p.declaration),
+    plugins: [...WEB_PLUGINS.map((p) => p.declaration), WEB_RENDER_PLUGIN],
     create: (ctx) => ({
       async invokePlugin({ name, config, extractedContext }) {
+        // `render` draws through the host's browser and needs none of the
+        // search, scrape or model tools the other plugins read.
+        if (pluginProgramName(name) === pluginProgramName(WEB_RENDER_PLUGIN.signature.name)) return renderPlugin(ctx.browser, config);
         const plugin = webPluginNamed(name);
         if (plugin === undefined) throw new Error(`@lf/web has no plugin "${name}"`);
         const tools = await toolsOf(ctx);
@@ -94,6 +98,7 @@ export default webModule;
 
 export * from './addresses';
 export * from './plugin';
+export { renderPlugin, looksLikeHtml, pageOf, BrowserSlotEmptyForRender } from './render';
 export * from './tools';
 export { standaloneTools, pageText, BrowserSlotEmptyForDocument } from './standalone';
 export { documentReader } from './documents/reader';

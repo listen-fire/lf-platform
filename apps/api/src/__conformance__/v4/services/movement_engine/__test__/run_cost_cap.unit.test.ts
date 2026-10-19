@@ -215,7 +215,7 @@ async function run(
     catalog:
       fetchUrlPriced === undefined
         ? catalog
-        : { ...catalog, plugins: { ...catalog.plugins, fetch_url: { ...catalog.plugins.fetch_url!, priced: fetchUrlPriced } } },
+        : { ...catalog, plugins: { ...catalog.plugins, '@lf/web/fetch_url': { ...catalog.plugins['@lf/web/fetch_url']!, priced: fetchUrlPriced } } },
     credentialIds: { acme_main: 'cred-attio-1' },
     host: makeTestHost({
       adapters: {

@@ -181,7 +181,8 @@ function stubInvoker(answers: Record<string, TransformInvocationResult>): {
     async invoke({ plugin, config, extractedContext }) {
       calls.push({ plugin, config });
       contexts.push(extractedContext);
-      return answers[plugin] ?? {};
+      // Answers are keyed by the plugin's name; a package member arrives by its key (module and name).
+      return answers[plugin] ?? answers[plugin.slice(plugin.lastIndexOf('/') + 1)] ?? {};
     },
   };
   return { invoker, calls };
@@ -392,12 +393,12 @@ describe("a package's member called on the Rust engine", () => {
     );
     expect(recorded.map((r) => r.engine)).toEqual(['rust']);
     expect(calls).toEqual([
-      { plugin: 'fetch_url', config: { url: 'https://acme.example' } },
-      { plugin: 'fetch_url', config: { url: 'Acme' } },
-      { plugin: 'fetch_url', config: { url: 'https://acme.example' } },
-      { plugin: 'fetch_url', config: { url: 'Acme' } },
-      { plugin: 'research', config: { name: 'Acme', context: 'https://acme.example' } },
-      { plugin: 'fetch_url', config: { url: 'https://g.example' } },
+      { plugin: '@lf/web/fetch_url', config: { url: 'https://acme.example' } },
+      { plugin: '@lf/web/fetch_url', config: { url: 'Acme' } },
+      { plugin: '@lf/web/fetch_url', config: { url: 'https://acme.example' } },
+      { plugin: '@lf/web/fetch_url', config: { url: 'Acme' } },
+      { plugin: '@lf/web/research', config: { name: 'Acme', context: 'https://acme.example' } },
+      { plugin: '@lf/web/fetch_url', config: { url: 'https://g.example' } },
     ]);
   });
 
@@ -415,7 +416,7 @@ describe("a package's member called on the Rust engine", () => {
     );
     expect(recorded.map((r) => r.engine)).toEqual(['rust']);
     expect(calls).toEqual([
-      { plugin: 'research', config: { name: 'Acme', questions: 'what it does' } },
+      { plugin: '@lf/web/research', config: { name: 'Acme', questions: 'what it does' } },
     ]);
   });
 });
@@ -528,10 +529,10 @@ describe('a plugin that answers a file and a warning on the Rust engine', () => 
       { prelude: PDF_PRELUDE },
     );
     expect(recorded.map((r) => r.engine)).toEqual(['rust']);
-    expect(calls).toEqual([{ plugin: 'render', config: { text: 'https://acme.example', pageSize: 'letter' } }]);
+    expect(calls).toEqual([{ plugin: '@lf/pdf/render', config: { text: 'https://acme.example', pageSize: 'letter' } }]);
     expect(lastTrace.filter((e) => e.kind === 'warning')).toEqual([
       { kind: 'warning', code: 'MOVENG_PLUGIN_WARNING', message: '@lf/pdf drew "?" for 東' },
     ]);
-    expect(lastTrace.find((e) => e.kind === 'plugin')).toMatchObject({ plugin: 'render', returned: 'value' });
+    expect(lastTrace.find((e) => e.kind === 'plugin')).toMatchObject({ plugin: '@lf/pdf/render', returned: 'value' });
   });
 });

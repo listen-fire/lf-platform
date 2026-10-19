@@ -1348,20 +1348,20 @@ describe('bundledPluginSpecs — required-argument projection', () => {
   const specs = bundledPluginSpecs();
 
   it('projects a required, author-supplied param into requiredArgs (fetch_url.url)', () => {
-    expect(specs.fetch_url?.args).toEqual(expect.arrayContaining(['url', 'email', 'password']));
-    expect(specs.fetch_url?.requiredArgs).toEqual(['url']);
+    expect(specs['@lf/web/fetch_url']?.args).toEqual(expect.arrayContaining(['url', 'email', 'password']));
+    expect(specs['@lf/web/fetch_url']?.requiredArgs).toEqual(['url']);
   });
 
   it('a required AUTO param is excluded from both args and requiredArgs (vc_url_retrieval.text)', () => {
-    expect(specs.vc_url_retrieval?.args).not.toContain('text');
-    expect(specs.vc_url_retrieval?.requiredArgs ?? []).not.toContain('text');
+    expect(specs['@lf/web/vc_url_retrieval']?.args).not.toContain('text');
+    expect(specs['@lf/web/vc_url_retrieval']?.requiredArgs ?? []).not.toContain('text');
   });
 
   it('an optional author param stays out of requiredArgs (fetch_url.email, vc_url_retrieval.email)', () => {
-    expect(specs.fetch_url?.args).toContain('email');
-    expect(specs.fetch_url?.requiredArgs ?? []).not.toContain('email');
-    expect(specs.vc_url_retrieval?.args).toContain('email');
-    expect(specs.vc_url_retrieval?.requiredArgs ?? []).not.toContain('email');
+    expect(specs['@lf/web/fetch_url']?.args).toContain('email');
+    expect(specs['@lf/web/fetch_url']?.requiredArgs ?? []).not.toContain('email');
+    expect(specs['@lf/web/vc_url_retrieval']?.args).toContain('email');
+    expect(specs['@lf/web/vc_url_retrieval']?.requiredArgs ?? []).not.toContain('email');
   });
 });
 
@@ -1375,14 +1375,14 @@ describe('bundledPluginSpecs — declared output', () => {
   const specs = bundledPluginSpecs();
 
   it('a page fetch hands back the text, and may hand back nothing', () => {
-    expect(specs.fetch_url?.output).toEqual({
+    expect(specs['@lf/web/fetch_url']?.output).toEqual({
       kind: 'value',
       type: { kind: 'maybeAbsent', of: 'text' },
     });
   });
 
   it('research hands back a record whose every field may be unfilled', () => {
-    const output = specs.research?.output;
+    const output = specs['@lf/web/research']?.output;
     expect(output?.kind).toBe('record');
     const fields = output?.kind === 'record' ? output.fields : {};
     expect(Object.keys(fields).sort()).toEqual([
@@ -1399,7 +1399,7 @@ describe('bundledPluginSpecs — declared output', () => {
   });
 
   it('link retrieval hands back one record per fetched link, file and text optional', () => {
-    expect(specs.vc_url_retrieval?.output).toEqual({
+    expect(specs['@lf/web/vc_url_retrieval']?.output).toEqual({
       kind: 'records',
       fields: {
         name: 'text',
@@ -1421,8 +1421,8 @@ describe('bundledPluginSpecs — declared output', () => {
     // No parameters and a body that reads the enclosing extract's fields:
     // before language version 5 it is a stage and nothing else; from 5 a call
     // hands it that record and gets back what it found.
-    expect(specs.linkedin_enrichment?.fedByExtraction).toBe(true);
-    expect(specs.linkedin_enrichment?.output).toEqual({
+    expect(specs['@lf/web/linkedin_enrichment']?.fedByExtraction).toBe(true);
+    expect(specs['@lf/web/linkedin_enrichment']?.output).toEqual({
       kind: 'record',
       fields: {
         linkedin_url: { kind: 'maybeAbsent', of: 'text' },
@@ -1433,13 +1433,13 @@ describe('bundledPluginSpecs — declared output', () => {
 
   it('a plugin with parameters is callable however it is SCHEDULED', () => {
     // `dataDependency` says when a stage runs, not what the plugin runs on.
-    expect(specs.fetch_url?.fedByExtraction).toBeUndefined();
-    expect(specs.research?.fedByExtraction).toBeUndefined();
+    expect(specs['@lf/web/fetch_url']?.fedByExtraction).toBeUndefined();
+    expect(specs['@lf/web/research']?.fedByExtraction).toBeUndefined();
   });
 
   it("the scanned text is one parameter a stage gets fed and a call writes", () => {
-    expect(specs.vc_url_retrieval?.fedArgs).toEqual([{ name: 'text', required: true }]);
-    expect(specs.vc_url_retrieval?.fedByExtraction).toBeUndefined();
+    expect(specs['@lf/web/vc_url_retrieval']?.fedArgs).toEqual([{ name: 'text', required: true }]);
+    expect(specs['@lf/web/vc_url_retrieval']?.fedByExtraction).toBeUndefined();
   });
 });
 

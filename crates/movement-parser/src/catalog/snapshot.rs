@@ -74,7 +74,10 @@ impl CatalogSnapshot {
     }
 
     pub fn plugin(&self, name: &str) -> Option<&PluginSpec> {
-        self.plugins.get(name)
+        match crate::catalog::packages::find_plugin(&self.plugins, name) {
+            crate::catalog::packages::FoundPlugin::One { spec, .. } => Some(spec),
+            _ => None,
+        }
     }
 
     /// `models?()`: absent when the snapshot carries none, which leaves a

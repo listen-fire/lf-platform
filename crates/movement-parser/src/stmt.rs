@@ -5021,7 +5021,7 @@ fn is_plain_ident(name: &str) -> bool {
 
 /// The local name an unnamed package import's fix suggests: the tag's last
 /// word in camelCase (`@lf/web-tools` → `webTools`), or `pkg`.
-pub(crate) fn local_name_for_tag(tag: &str) -> String {
+pub fn local_name_for_tag(tag: &str) -> String {
     let last = tag.rsplit(['/', '@', '.', ':']).find(|w| !w.is_empty()).unwrap_or("");
     let mut out = String::new();
     let mut upper = false;

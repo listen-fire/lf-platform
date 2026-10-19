@@ -10,6 +10,49 @@ use crate::catalog::types::{JsMap, PluginSpec};
 use crate::surface::table::plugin_name;
 use crate::version::since;
 
+/// The catalog key of a package's plugin: module and name together, so two
+/// packages can each serve a plugin of the same name. Compared, never parsed
+/// (a spec carries its own `name`). The TypeScript twin is `pluginKey`.
+pub fn plugin_key(package: &str, name: &str) -> String {
+    format!("{package}/{name}")
+}
+
+/// A plugin as a program writes it: its key, unless the spec says otherwise.
+pub fn program_name_of<'a>(key: &'a str, spec: &'a PluginSpec) -> &'a str {
+    spec.name.as_deref().unwrap_or(key)
+}
+
+/// What a written plugin name stands for.
+pub enum FoundPlugin<'p> {
+    One { key: &'p str, spec: &'p PluginSpec },
+    /// Several packages serve a plugin of that name; a bare import cannot say which.
+    Ambiguous(Vec<&'p str>),
+    None,
+}
+
+/// The entry keyed by exactly `name` (a package member's key), else the one
+/// entry whose program name it is (a bare import, as versions 1 to 4 write
+/// it). The TypeScript twin is `findPlugin`.
+pub fn find_plugin<'p>(plugins: &'p JsMap<PluginSpec>, name: &str) -> FoundPlugin<'p> {
+    if let Some((key, spec)) = plugins.get_key_value(name) {
+        return FoundPlugin::One { key, spec };
+    }
+    let named: Vec<(&String, &PluginSpec)> = plugins.iter().filter(|(key, spec)| program_name_of(key, spec) == name).collect();
+    match named.as_slice() {
+        [] => FoundPlugin::None,
+        [(key, spec)] => FoundPlugin::One { key, spec },
+        _ => FoundPlugin::Ambiguous(named.iter().map(|(_, spec)| spec.package.as_deref().unwrap_or("(no package)")).collect()),
+    }
+}
+
+/// The packages that serve a bare plugin name, when more than one does.
+pub fn ambiguous_packages<'p>(plugins: &'p JsMap<PluginSpec>, name: &str) -> Vec<&'p str> {
+    match find_plugin(plugins, name) {
+        FoundPlugin::Ambiguous(packages) => packages,
+        _ => Vec::new(),
+    }
+}
+
 /// One plugin of a package: the name it is called by after the package's
 /// local name and a dot, and the catalog's key it invokes.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,7 +68,7 @@ pub fn package_members(plugins: &JsMap<PluginSpec>, tag: &str) -> Vec<PackageMem
     plugins
         .iter()
         .filter(|(_, spec)| spec.package.as_deref() == Some(tag))
-        .map(|(key, _)| PackageMember { name: plugin_name(key), key: key.clone() })
+        .map(|(key, spec)| PackageMember { name: plugin_name(program_name_of(key, spec)), key: key.clone() })
         .collect()
 }
 

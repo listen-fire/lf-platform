@@ -291,10 +291,9 @@ impl RunningExternal {
         self.external.manifest.kind == "plugin"
     }
 
-    /// Whether it serves `plugin` (either spelling).
-    pub fn serves_plugin(&self, plugin: &str) -> bool {
-        let spelled = plugin.replace('-', "_");
-        plugin_entries(self.plugins.as_ref()).iter().any(|(name, _)| name.replace('-', "_") == spelled)
+    /// The package tag its plugins are imported from.
+    pub fn plugin_package(&self) -> Option<&str> {
+        self.plugins.as_ref()?.get("package")?.as_str()
     }
 }
 
@@ -314,9 +313,32 @@ fn setting_names(manifest: &Js) -> Vec<String> {
     manifest.get("settings").and_then(Js::as_array).into_iter().flatten().filter_map(|s| s.get("name").and_then(Js::as_str).map(str::to_string)).collect()
 }
 
-/// The plugin external that serves `plugin`.
-pub fn plugin_external_for<'r>(running: &'r [RunningExternal], plugin: &str) -> Option<&'r RunningExternal> {
-    running.iter().find(|r| r.serves_plugin(plugin))
+/// The plugin external that serves `plugin`, and the name it declares it
+/// under. `plugin` is a catalog key (module and name: `@lf/web/render`), or a
+/// bare name that only one module serves; a bare name several serve is refused
+/// naming them.
+pub fn plugin_target<'r>(running: &'r [RunningExternal], plugin: &str) -> Result<Option<(&'r RunningExternal, String)>, String> {
+    let served: Vec<(&RunningExternal, String, String)> = running
+        .iter()
+        .flat_map(|r| {
+            let package = r.plugin_package().unwrap_or("").to_string();
+            plugin_entries(r.plugins.as_ref()).into_iter().map(move |(name, _)| (r, package.clone(), name))
+        })
+        .collect();
+    let spelled = |name: &str| name.replace('-', "_");
+    if let Some((r, _, name)) = served.iter().find(|(_, package, name)| movement_parser::catalog::packages::plugin_key(package, &spelled(name)) == plugin) {
+        return Ok(Some((r, name.clone())));
+    }
+    let bare = spelled(plugin);
+    let named: Vec<_> = served.iter().filter(|(_, _, name)| spelled(name) == bare).collect();
+    match named.as_slice() {
+        [] => Ok(None),
+        [(r, _, name)] => Ok(Some((r, name.clone()))),
+        many => Err(format!(
+            "plugin \"{plugin}\" is served by more than one module ({}): import the module you mean",
+            many.iter().map(|(_, package, _)| package.as_str()).collect::<Vec<_>>().join(", ")
+        )),
+    }
 }
 
 /// One call to a running external, under the credential its secrets name.

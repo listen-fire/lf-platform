@@ -7,6 +7,7 @@ import type { TransformInvocationResult, TransformInvokeInput } from 'movement-e
 import type { Costed, Priced } from 'movement-engine/public/host';
 import type { FileRef } from 'movement-engine/public/adapter';
 
+import { bundledPluginSpecNamed } from 'movement-engine/public/plugins';
 import { runFields } from '../../../lib/llm_usage';
 import { costEnvelopeMicrodollars, costSourceKey, isBudgetExhausted } from 'movement-engine/public/models';
 import { DocumentService } from '../../document';
@@ -222,7 +223,7 @@ async function invokePluginModule(
 ): Promise<Costed<TransformInvocationResult>> {
   let answer;
   try {
-    answer = await module.invoke({ name: plugin, config, extractedContext });
+    answer = await module.invoke({ name: bundledPluginSpecNamed(plugin)?.name ?? plugin, config, extractedContext });
   } catch (error) {
     if (isBudgetExhausted(error)) throw error;
     logger.warn('[movement:transform] plugin module threw — no enrichment', { plugin, error, ...runFields() });

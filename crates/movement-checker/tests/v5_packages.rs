@@ -136,3 +136,27 @@ fn a_bare_member_call_in_a_closure_of_a_nested_call_parses() {
         assert_eq!(check(&v5(body), 5), Vec::<Diagnostic>::new(), "{body}");
     }
 }
+
+const TWO_RENDERS: &str = r#"{"adapters":{},"credentials":{},"plugins":{
+  "@lf/pdf/render":{"args":["text"],"priced":false,"requiredArgs":["text"],"argTypes":{"text":"text"},"effects":{},"output":{"kind":"value","type":"file"},"package":"@lf/pdf","name":"render"},
+  "@lf/web/render":{"args":["text"],"priced":false,"requiredArgs":["text"],"argTypes":{"text":"text"},"effects":{},"output":{"kind":"value","type":"text"},"package":"@lf/web","name":"render"}
+}}"#;
+
+fn check_two(source: &str) -> Vec<Diagnostic> {
+    let catalog = CatalogSnapshot::load(TWO_RENDERS).unwrap();
+    let options = CheckOptions { language_version: 5, upgrading_from: None, parse_version: None, zones: &movement_checker::host::native::NativeZones };
+    check_source(source, &catalog, options).unwrap().into_iter().filter(|d| d.is_error()).collect()
+}
+
+#[test]
+fn two_packages_may_each_serve_a_plugin_of_the_same_name() {
+    let by = |tag: &str, local: &str| format!("import {{ `{tag}` as {local} }} from plugins\n\nfunction go(t: <text>) {{\n  x = {local}.render(t)\n  y = Text.length(x)\n}}\n");
+    assert_eq!(check_two(&by("@lf/web", "web")), Vec::<Diagnostic>::new());
+    assert!(!check_two(&by("@lf/pdf", "pdf")).is_empty(), "the pdf render answers a file, which Text.length refuses");
+}
+
+#[test]
+fn a_bare_import_of_a_shared_name_is_refused_naming_both_packages() {
+    let diagnostics = check_two("import { render } from plugins\n\nfunction go(t: <text>) {\n  x = render(t)\n}\n");
+    assert!(diagnostics.iter().any(|d| d.message.contains("served by more than one package (@lf/pdf, @lf/web)")), "{diagnostics:?}");
+}

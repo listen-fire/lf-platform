@@ -627,6 +627,11 @@ pub struct PluginSpec {
     /// (crate::catalog::packages); absent when it is in none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub package: Option<String>,
+    /// The name a program spells it, when the catalog's key is not that: a
+    /// plugin in a package is keyed by package and name (`plugin_key`), so two
+    /// packages can each serve a `render`. Absent: the key is the name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
 }
 
 impl PluginSpec {

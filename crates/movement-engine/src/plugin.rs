@@ -29,7 +29,16 @@ const FETCHED_TEXT_FIELD: &str = "text";
 /// `vc_url_retrieval` for a plugin registered as `vc-url-retrieval`, and the
 /// snapshot keys the underscore one.
 pub fn spec_named<'p>(plugins: &'p JsMap<PluginSpec>, plugin: &str) -> Option<&'p PluginSpec> {
-    plugins.get(&plugin.replace('-', "_"))
+    use movement_parser::catalog::packages::{FoundPlugin, find_plugin};
+    // A package member's key is matched as written (a package tag may carry dashes).
+    match find_plugin(plugins, plugin) {
+        FoundPlugin::One { spec, .. } => Some(spec),
+        FoundPlugin::Ambiguous(_) => None,
+        FoundPlugin::None => match find_plugin(plugins, &plugin.replace('-', "_")) {
+            FoundPlugin::One { spec, .. } => Some(spec),
+            _ => None,
+        },
+    }
 }
 
 /// `pluginOutputUnder`: the output a movement pinned at `language_version`
@@ -215,5 +224,38 @@ impl Run<'_> {
             self.trace(TraceEntry::Warning { code: "MOVENG_PLUGIN_WARNING".into(), message: message.clone() });
         }
         Ok(binding)
+    }
+}
+
+#[cfg(test)]
+mod keyed_by_module {
+    use super::*;
+    use movement_parser::catalog::packages::plugin_key;
+
+    fn plugins() -> JsMap<PluginSpec> {
+        let spec = |package: &str, name: &str| -> PluginSpec {
+            serde_json::from_str(&format!(r#"{{"args":["text"],"priced":false,"package":"{package}","name":"{name}"}}"#)).unwrap()
+        };
+        [
+            (plugin_key("@lf/pdf", "render"), spec("@lf/pdf", "render")),
+            (plugin_key("@lf/web", "render"), spec("@lf/web", "render")),
+            (plugin_key("@lf/web", "fetch_url"), spec("@lf/web", "fetch_url")),
+        ]
+        .into_iter()
+        .collect()
+    }
+
+    #[test]
+    fn two_modules_may_each_serve_a_render() {
+        let plugins = plugins();
+        assert_eq!(spec_named(&plugins, "@lf/pdf/render").and_then(|s| s.package.as_deref()), Some("@lf/pdf"));
+        assert_eq!(spec_named(&plugins, "@lf/web/render").and_then(|s| s.package.as_deref()), Some("@lf/web"));
+    }
+
+    #[test]
+    fn a_bare_name_reaches_the_one_plugin_that_has_it_and_not_one_two_have() {
+        let plugins = plugins();
+        assert_eq!(spec_named(&plugins, "fetch-url").and_then(|s| s.package.as_deref()), Some("@lf/web"));
+        assert!(spec_named(&plugins, "render").is_none());
     }
 }

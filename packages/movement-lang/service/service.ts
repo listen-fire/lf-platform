@@ -36,6 +36,7 @@ import {
   describeFieldType,
   type FieldType,
   type InstanceSchema,
+  pluginProgramNameOf,
 } from '../checker/catalog';
 import {
   describePosition,
@@ -597,9 +598,9 @@ export function getMovementCompletions(
   // ── `through [` plugin pipelines ──
   if (/\bthrough\s*\[\s*[A-Za-z_]?\w*$/.test(lineBefore)) {
     return done(
-      Object.entries(snapshot.plugins).map(([name, spec]) => ({
-        label: name,
-        insert: name,
+      Object.entries(snapshot.plugins).map(([key, spec]) => ({
+        label: pluginProgramNameOf(key, spec),
+        insert: pluginProgramNameOf(key, spec),
         kind: 'function' as const,
         detail: spec.args.length ? `args: ${spec.args.join(', ')}` : 'plugin',
       })),
@@ -1998,7 +1999,7 @@ function importNameItems(snapshot: CatalogSnapshot, fullLine: string): MovementC
     });
   }
   if (namespace === 'plugins' || namespace === undefined) {
-    add(Object.keys(snapshot.plugins), 'plugin', () => 'transform plugin');
+    add([...new Set(Object.entries(snapshot.plugins).map(([key, spec]) => pluginProgramNameOf(key, spec)))], 'plugin', () => 'transform plugin');
   }
   return items;
 }
