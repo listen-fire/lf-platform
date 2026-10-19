@@ -13,6 +13,11 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 
 ## [Unreleased]
 
+### i-rustkit
+
+- **Modules in Rust: `listen-fire-module-kit`** (`crates/module-kit`). A trait per module kind (`Adapter`, `Plugins`, and the core slots `Store`, `Limiter`, `LoopGuard`) and a `Host` that serves one or several of them over adapter protocol 2 HTTP, each at `/<name>`, on loopback TCP (`PORT`, prints `listening <port>`) or a Unix socket (`--socket`/`LF_MODULE_SOCKET`). A host is its own process; lf reaches it as any module server (`url:` in `lf-external.yaml`). Example: `examples/rust-module`.
+- The protocol's envelope, JSON in JavaScript key order and every result's schema check move from lf into `listen-fire-module-wire` (`crates/module-wire`), which lf and the kit share. No behaviour change in lf.
+
 ### au-delete
 
 - The legacy v3 output pipeline is removed (its executor, per-destination adapters, authoring agent and the `knowledge.outputAgent` / `knowledge.expressionWriter` tRPC routes). It had no remaining callers; movements are the only way data moves. A migration sets any stored v3 output (`pipeline_output.config_version = 3`) still marked live or dry-run to `off`; its config is kept.

@@ -92,3 +92,6 @@ url = { version = "2", optional = true }
 [dev-dependencies]
 # Paused time: a test of the wall clock's grace runs in no time.
 tokio = { version = "1", features = ["test-util"] }
+# tests/module_host.rs: lf drives crate modules served by a module host.
+module-kit = { package = "listen-fire-module-kit", path = "../module-kit" }
+rust-module-example = { path = "../../examples/rust-module" }

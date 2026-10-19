@@ -602,9 +602,11 @@ dependencies = [
  "listen-fire-checker",
  "listen-fire-engine",
  "listen-fire-language",
+ "listen-fire-module-kit",
  "listen-fire-module-wire",
  "listen-fire-parser",
  "rusqlite",
+ "rust-module-example",
  "rustls",
  "serde",
  "serde_json",
@@ -957,6 +959,13 @@ version = "0.0.0"
 dependencies = [
  "listen-fire",
  "serde_json",
+]
+
+[[package]]
+name = "rust-module-example"
+version = "0.0.0"
+dependencies = [
+ "listen-fire-module-kit",
 ]
 
 [[package]]

@@ -298,13 +298,13 @@ pub struct Written {
     pub events: Option<Vec<Js>>,
 }
 
+/// An update's answer; `None` from [`Adapter::update_record`] says the record is gone.
 #[derive(Debug, Clone)]
-pub enum Updated {
-    /// `association`: what became of the `parentLinks` (`made`, `already`,
-    /// `unsupported`, `none`).
-    Record { written: Written, association: Option<String> },
-    /// The record is gone.
-    NotFound,
+pub struct Updated {
+    pub written: Written,
+    /// What became of the `parentLinks`: `made`, `already`, `unsupported`
+    /// (an existing record cannot be attached along that edge) or `none`.
+    pub association: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -341,7 +341,7 @@ pub trait Adapter {
         async move { Err(ModuleError::adapter(format!("{} records are not written here", request.record_type)).retryable(false)) }
     }
 
-    fn update_record(&self, _ctx: &Ctx, request: UpdateRecord) -> impl Future<Output = Answer<Updated>> {
+    fn update_record(&self, _ctx: &Ctx, request: UpdateRecord) -> impl Future<Output = Answer<Option<Updated>>> {
         async move { Err(ModuleError::adapter(format!("{} records are not written here", request.record_type)).retryable(false)) }
     }
 
@@ -379,14 +379,14 @@ impl<A: Adapter> AdapterModule<A> {
             "getRelated" => to_js(&a.get_related(ctx, from_js(method, &params)?).await?)?,
             "createRecord" => to_js(&a.create_record(ctx, from_js(method, &params)?).await?)?,
             "updateRecord" => match a.update_record(ctx, from_js(method, &params)?).await? {
-                Updated::Record { written, association } => {
+                Some(Updated { written, association }) => {
                     let mut record = to_js(&written)?;
                     if let (Js::Obj(map), Some(association)) = (&mut record, association) {
                         map.insert("association".into(), Js::str(association));
                     }
                     record
                 }
-                Updated::NotFound => Js::Obj(module_wire::obj! { "notFound" => Js::Bool(true) }),
+                None => Js::Obj(module_wire::obj! { "notFound" => Js::Bool(true) }),
             },
             "deleteRecord" => to_js(&a.delete_record(ctx, from_js(method, &params)?).await?)?,
             optional if self.manifest.optional_methods.iter().any(|m| m == optional) => a.optional(ctx, optional, params).await?,

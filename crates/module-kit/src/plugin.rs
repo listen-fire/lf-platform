@@ -87,10 +87,13 @@ impl<P: Plugins> PluginModule<P> {
         if method != "invokePlugin" {
             return Err(ModuleError::not_implemented(method));
         }
-        let call: PluginCall = from_js(method, &params)?;
-        if !self.package.plugins.iter().any(|p| p.name == call.name) {
+        let mut call: PluginCall = from_js(method, &params)?;
+        // A host may name a plugin by any spelling of it (`shout-out`,
+        // `shout_out`); the module sees the name it declared.
+        let Some(declared) = self.package.plugins.iter().find(|p| spelled(&p.name) == spelled(&call.name)) else {
             return Err(ModuleError::bad_request(format!("invokePlugin: {} has no plugin \"{}\"", self.package.package, call.name)));
-        }
+        };
+        call.name = declared.name.clone();
         let raw = to_js(&self.plugins.invoke(ctx, call).await?)?;
         module_wire::results::check(method, &self.package.module, &raw)
             .map_err(|refused| ModuleError::adapter(format!("this module's answer is not the protocol's: {refused}")).retryable(false))?;
@@ -115,4 +118,22 @@ impl<P: Plugins> Module for PluginModule<P> {
     fn call<'a>(&'a self, ctx: &'a Ctx, method: &'a str, params: Js) -> LocalFuture<'a, Answer<Js>> {
         Box::pin(self.answer(ctx, method, params))
     }
+}
+
+/// A plugin name's camel case, as a movement calls it: two names that spell
+/// the same are one plugin.
+fn spelled(name: &str) -> String {
+    let mut out = String::new();
+    for (i, part) in name.split(['-', '_']).filter(|p| !p.is_empty()).enumerate() {
+        let mut chars = part.chars();
+        if let Some(first) = chars.next() {
+            if i == 0 {
+                out.push(first);
+            } else {
+                out.extend(first.to_uppercase());
+            }
+            out.push_str(chars.as_str());
+        }
+    }
+    out
 }

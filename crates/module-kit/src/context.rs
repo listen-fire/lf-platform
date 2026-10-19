@@ -77,7 +77,7 @@ pub struct ModuleError {
     pub code: String,
     pub message: String,
     pub retryable: bool,
-    pub data: Option<Js>,
+    pub data: Option<Box<Js>>,
 }
 
 impl ModuleError {
@@ -111,7 +111,7 @@ impl ModuleError {
     }
 
     pub fn with_data(mut self, data: Js) -> ModuleError {
-        self.data = Some(data);
+        self.data = Some(Box::new(data));
         self
     }
 
@@ -121,7 +121,7 @@ impl ModuleError {
         error.insert("message".into(), Js::str(&self.message));
         error.insert("retryable".into(), Js::Bool(self.retryable));
         if let Some(data) = &self.data {
-            error.insert("data".into(), data.clone());
+            error.insert("data".into(), Js::clone(data));
         }
         Js::Obj(error)
     }
