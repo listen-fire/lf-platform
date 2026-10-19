@@ -17,6 +17,7 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 
 - `ctx.kv.compareAndSet` is atomic everywhere: on the platform an ask or a grant is written by one conditional statement, and the file kv (`MODULE_STATE_DIR`) writes under a lock file, so processes sharing the directory never lose a write.
 - A models module's `models.call` answer carries `usage` (the tokens it spent), required; lf reports it as the call's usage and refuses an answer without it, and the module's `cost` counts against `maxRunCostUsd`. lf's own models module served over the wire honours `maxTokens`.
+- The platform's webhook door knows whether a remote install checks its own inbound from the install's stored manifest, so an unsigned delivery to a host-verified install is refused without resolving the module.
 
 ### kit-contracts
 

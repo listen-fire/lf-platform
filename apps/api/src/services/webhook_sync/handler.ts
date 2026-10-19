@@ -53,7 +53,7 @@ import { resolveAdapter } from '../translation_graph/adapters/resolve';
 import { isTestHarnessTeam } from '../../lib/recording';
 import { CHECKED_BY_MODULE, receiveDelivery } from 'movement-engine/public/inbound';
 import { webhookProviderKey } from './urls';
-import { listRemoteAdapters } from '../translation_graph/adapters/remote/store';
+import { listRemoteAdapters, parseStoredManifest } from '../translation_graph/adapters/remote/store';
 import { mayBeRemoteSlug } from '../translation_graph/adapters/remote/slugs';
 import { LEGACY_INTERCEPTS, builtInVerifierFor } from '../inbound/legacy_signature_headers';
 import { builtinModuleInboundVerifier } from '../translation_graph/adapters/builtin_modules';
@@ -201,17 +201,23 @@ async function remoteSource(subscription: InboundSubscription): Promise<InboundS
     logger.error(`[webhook] remote adapter ${install.adapter_type} has no credential — delivery dropped`);
     return { verifier: REMOTE_VERIFIER, secret: subscription.secret, open: async () => null };
   }
-  // Whether the server checks its own inbound is in its live manifest: it
-  // lists `checkInbound` exactly when it declares `inbound.scheme: module`.
-  const adapter = await resolveAdapter({
-    adapterType: install.adapter_type,
-    teamId: subscription.teamId as TeamId,
-  });
-  const opened: OpenedSource = { adapterType: install.adapter_type, credentialsId, adapter };
+  // Whether the server checks its own inbound is remembered with the install:
+  // its stored manifest lists `checkInbound` exactly when it declares
+  // `inbound.scheme: module` (what the resolved adapter exposes, too). So a
+  // delivery the host verifies is turned away unsigned before the adapter is
+  // resolved, and the adapter is resolved once, when the delivery is read.
+  const stored = parseStoredManifest(install);
+  const checksItsOwn = stored.ok && stored.manifest.methods.includes('checkInbound');
+  let opened: Promise<OpenedSource> | undefined;
   return {
-    verifier: adapter.checkInbound !== undefined ? CHECKED_BY_MODULE : REMOTE_VERIFIER,
+    verifier: checksItsOwn ? CHECKED_BY_MODULE : REMOTE_VERIFIER,
     secret: subscription.secret,
-    open: async () => opened,
+    open: () =>
+      (opened ??= resolveAdapter({ adapterType: install.adapter_type, teamId: subscription.teamId as TeamId }).then((adapter) => ({
+        adapterType: install.adapter_type,
+        credentialsId,
+        adapter,
+      }))),
   };
 }
 
