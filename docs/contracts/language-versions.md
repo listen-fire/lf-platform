@@ -27,7 +27,7 @@ Breaking changes never break a saved movement.
 - **The old behaviour is proved by its own corpus.** Each older version's test corpus runs against the current code under that version. Adding a version adds its fixtures; removing one deletes its conditionals and its fixtures.
 - **A changed meaning is diagnosed.** Any construct whose meaning changed gets a checker diagnostic under the new version, so "validates clean under the new version" can never hide a silent behaviour change.
 - **A release names what it supports and deprecates.** Unsupported: validate and run refuse, loudly (`MOV_LANGUAGE_VERSION_UNSUPPORTED`, naming the version and the fix). Deprecated: it runs, with a warning (`MOV_LANGUAGE_VERSION_DEPRECATED`).
-- **The pin moves only on purpose.** By the deploy check (auto-advance when the movement validates clean under the newer version) or an explicit upgrade; never by an ordinary edit.
+- **The pin moves only by an explicit upgrade.** A person asks for it (`lf upgrade`, the API's or an agent's upgrade). Never automatically, and never by an ordinary edit. A movement that validates clean under a newer version is at most offered the upgrade (the deploy check reports it), never moved.
 - **The CHANGELOG says why.** The entry for a break names the version that introduces it and why.
 
 ## Changes

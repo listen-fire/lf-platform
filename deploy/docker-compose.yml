@@ -230,11 +230,11 @@ services:
         # command line into this container's log and the URL carries the password.
         pnpm schema:migrate
         # The deploy check: once per release, re-validate every saved automation
-        # and advance the language version pins that are clean under this
-        # release (apps/api/src/scripts/deploy_check.ts). HERE because this
+        # and report which are clean under this release; it moves no language
+        # version pin (apps/api/src/scripts/deploy_check.ts). HERE because this
         # one-shot runs exactly once per deployment however many api replicas
         # follow, after the schema and before the api takes traffic. It exits 0
-        # even when it cannot finish: a pin it did not reach stays put.
+        # even when it cannot finish.
         node build/scripts/deploy_check.js
     environment:
       LISTEN_FIRE_DEMO: ${LISTEN_FIRE_DEMO:-0}

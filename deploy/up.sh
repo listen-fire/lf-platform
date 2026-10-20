@@ -470,9 +470,9 @@ for i in $(seq 1 90); do
   fi
 done
 
-# What the deploy check (run by `migrate`, once per release) did to each saved
-# automation's language version: moved to the current one, kept with warnings,
-# or no longer validating. READ from the record it wrote — never re-run here.
+# What the deploy check (run by `migrate`, once per release) found for each
+# saved automation's language version: clean under the current one (upgraded
+# only when asked), not clean under it, or no longer validating. READ from the record it wrote — never re-run here.
 echo
 if ! compose run --rm --no-deps --entrypoint /usr/local/bin/with-generated-env api \
     node build/scripts/deploy_check.js --summary 2>/dev/null; then

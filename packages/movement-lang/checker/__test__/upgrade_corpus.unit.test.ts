@@ -12,7 +12,10 @@
 //   - the rewrite: only the rewritten text is refused — the old spelling's fix
 //     produced text that 5 does not read as the old text meant.
 //
-// The rate is pinned as a floor that only moves up.
+// It measures the explicit upgrade a person asks for (`lf upgrade` without
+// `--all`, the API's upgrade): how much of the old text it converts with no
+// review. Nothing upgrades on its own. The rate is pinned as a floor that only
+// moves up.
 
 import { checkSourceInRust } from '../rust_checker';
 import { checkProgram, diagnosticSeverity, type Diagnostic } from '../check';

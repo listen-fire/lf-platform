@@ -62,7 +62,7 @@ The compose file runs migrations as a one-shot service that must exit 0 before t
 pnpm deploy:render-pre
 ```
 
-The second half is the deploy check: once per release it re-validates every saved automation, and moves each one that validates cleanly under the release's current language version onto it. It always exits 0, so it never blocks a deploy; `node build/scripts/deploy_check.js --summary` prints what it did.
+The second half is the deploy check: once per release it re-validates every saved automation and reports which ones validate cleanly under the release's current language version. It moves none: only an explicit upgrade does. It always exits 0, so it never blocks a deploy; `node build/scripts/deploy_check.js --summary` prints what it did.
 
 It runs inside the API image, which carries the migration files and `pnpm`, after the image is pulled and before the new process serves. The migration runner takes the database as an **argument**. It does not read the ambient environment, which is why the URL is passed explicitly here and in the compose file.
 

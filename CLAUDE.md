@@ -52,7 +52,7 @@ Every saved movement is pinned to the language version it was written against (a
 - The old behaviour is proved by the older version's own test corpus run against the current code under that version. Add a version = add its fixtures; remove a version = delete its conditionals and its fixtures.
 - Any construct whose meaning changed gets a checker diagnostic under the new version, so "validates clean under the new version" can never hide a silent behaviour change.
 - A release names the versions it supports and deprecates. Unsupported: validate and run refuse, loudly. Deprecated: runs, with a warning.
-- The pin moves only by the deploy check (auto-advance when clean under the newer version) or an explicit upgrade; never by an ordinary edit.
+- The pin moves only by an explicit upgrade; never automatically, and never by an ordinary edit.
 - The CHANGELOG entry for a break says which version introduces it and why.
 
 Plan: `plans/language-versioning-2026-09-29/` (gitignored, on Henry's machine).

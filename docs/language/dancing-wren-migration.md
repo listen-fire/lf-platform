@@ -30,7 +30,7 @@ Section 2 respells the whole surface; nothing in it changes what a program means
 
 ## 1. How the pin moves
 
-- A new automation is written in Dancing Wren (5). The deploy check moves an existing automation up to it when it validates cleanly there.
+- A new automation is written in Dancing Wren (5). An existing automation moves up to it only when someone upgrades it; a release's deploy check reports which ones validate cleanly there, and moves none.
 - Every change below is a refusal under version 5, not a move-up warning: an automation that uses a retired form has an error under 5, so its pin cannot move. It stays on its version, shows **Review**, lists the diagnostics, and runs exactly as before. Rewrite each form as below, then upgrade (`lf upgrade`, or `upgradeAutomation` through the API). The respellings of [section 2](#2-the-everyday-spelling) carry their rewrite, so the upgrade applies them itself.
 
 ## 2. The everyday spelling
@@ -46,7 +46,7 @@ Section 2 respells the whole surface; nothing in it changes what a program means
 
 - An upgrade runs only when someone asks for it: `lf upgrade <file>` (the CLI), the API's upgrade (`upgradeAutomation`), or the agent tool. It applies the fixes marked safe (they provably keep the meaning), checks again, and repeats until no fix is left. Every other fix is listed with its rewrite; `lf upgrade --all` (the API's `applyAllFixes`) applies those too. An outer rewrite is written from the original text, so a fix inside it comes round on the next pass.
 - The result is checked under 5. The pin moves only when it checks clean; otherwise the automation stays on its version, runs as before, and lists what is left.
-- A release's deploy check never rewrites an automation. It moves a pin only when the automation's text, as written, is already clean under 5; an automation in an older spelling stays on its version, and the team is told that an upgrade can rewrite it.
+- A release's deploy check never rewrites an automation and never moves a pin. It reports an automation whose text, as written, is already clean under 5 as ready to upgrade; for one in an older spelling, the team is told that an upgrade can rewrite it.
 - Check a few rewrites by hand, because the right one depends on what the value is:
   - `LENGTH(x)` is rewritten to `Text.length(x)`. On a list, write `count(x)`. Under 5 a text's length counts characters: an emoji is 1 (under 4 and earlier it was 2, its UTF-16 units). `Text.split(t, "")` and `Text.chunks` count and cut the same way, so an emoji is never cut in two.
   - `x CONTAINS v` outside brackets is rewritten to `Text.includes(x, v)` when `v` is a text literal, else to `List.includes(x, v)`. Check that it matches what `x` is.

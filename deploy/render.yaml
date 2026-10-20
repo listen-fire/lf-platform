@@ -179,8 +179,8 @@ services:
     # The migration runner takes the database as an ARGUMENT — it does not
     # read the ambient environment (deploy/guides/render.md, "Migrations").
     # Then the deploy check, once per release: it re-validates every saved
-    # automation and advances the language version pins that are clean under
-    # this release. It exits 0 even when it cannot finish.
+    # automation and reports which are clean under this release; it moves no
+    # language version pin. It exits 0 even when it cannot finish.
     # One package script, not two commands joined by `&&`: Render splits the
     # pre-deploy line on whitespace and does not run it through a shell, so a
     # bare `&&` reaches pnpm as an argument and the deploy check silently never

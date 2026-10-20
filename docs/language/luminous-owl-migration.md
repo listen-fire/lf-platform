@@ -15,7 +15,7 @@ Language version 4, **Luminous Owl**, arrives after v0.10.9. The release's [chan
 
 ## 1. How the pin moves
 
-- Language version 4 arrives: **Luminous Owl**. A new automation is written in it, and the deploy check moves an automation up to it when it validates cleanly there: no error and no move-up warning.
+- Language version 4 arrives: **Luminous Owl**. A new automation is written in it. An existing automation moves up to it only when someone upgrades it, and the upgrade needs it to validate cleanly there: no error, and any move-up warning acknowledged. (Before v0.12 the deploy check also moved clean automations up on its own; it no longer does.)
 - An automation with an error under Luminous Owl (4), or with a move-up warning, stays on its version. It shows the **Review** badge, and the automation page lists the diagnostics. Three warnings are move-up warnings, because they mark places where the same text now does something different:
   - `MOV_MATCH_MISS_CONTINUES` on every bound match: a miss no longer ends the enclosing scope (see [section 2](#2-a-named-match-yields-a-handle-or-absent)).
   - `MOV_HANDLE_UPDATED_IN_PLACE` on a `write` off a write handle (see [section 6](#6-a-write-on-a-write-handle-updates-in-place)).
