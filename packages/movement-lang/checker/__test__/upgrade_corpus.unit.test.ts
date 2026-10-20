@@ -60,8 +60,10 @@ const ORACLE = path.join(__dirname, '../../../../crates/movement-engine/tests/or
  *  arithmetic on a value that may be absent (MOV_ABSENT_REQUIRED, a person
  *  picks the guard or fallback): 4,732 of 5,518 (85.76%). Lowered when the
  *  committed checker was rebuilt from source and four more programs showed
- *  the same refusal: 4,728 of 5,518 (85.68%). */
-const FLOOR = 0.856;
+ *  the same refusal: 4,728 of 5,518 (85.68%). Lowered when version 5 drew a
+ *  PDF with the `@lf/pdf` plugin, a rewrite not marked safe (the program must
+ *  also import the package): 4,728 of 5,546 (85.25%). */
+const FLOOR = 0.852;
 
 interface Program {
   source: string;
