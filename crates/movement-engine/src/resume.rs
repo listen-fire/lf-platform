@@ -111,6 +111,12 @@ enum Completion {
     Stopped,
 }
 
+/// Whether the whole spine's completion is the movement's body returning:
+/// its outermost level finishes in the movement's own scope.
+fn movement_returned(completion: Completion) -> bool {
+    matches!(completion, Completion::Done(Flow::Returned))
+}
+
 /// What runs at the leaf once the descent reached it.
 enum LeafRun {
     /// Re-enter the leaf statement, its finished calls replayed.
@@ -166,7 +172,7 @@ pub(crate) fn unparsed_address(state: &Js, leaf: &Leaf) -> Option<Failure> {
 impl Run<'_> {
     /// `resume`, `fireCallback` or `settleRaceFrame`: the state's leaf, by
     /// its rule.
-    pub(crate) async fn resume_along(&self, movement: &MovementDeclaration, movement_scope: &Rc<Scope>, body_path: &str, state: &Js, leaf: Leaf) -> Result<(), Stop> {
+    pub(crate) async fn resume_along(&self, movement: &MovementDeclaration, movement_scope: &Rc<Scope>, body_path: &str, state: &Js, leaf: Leaf) -> Result<bool, Stop> {
         let state_address = match &leaf {
             Leaf::SettleRace { frame } => frame.clone(),
             _ => text(at(state, "address")).unwrap_or("").to_string(),
@@ -372,11 +378,12 @@ impl Run<'_> {
             Leaf::FireCallback { values, call_index } => {
                 self.firing_callback.set(true);
                 let leaf_statement = statements.get(leaf_index).cloned();
-                self.inside_spine(&spine, self.callback_body(leaf_statement.as_ref(), &leaf_at, &values, call_index)).await
+                // A callback's body is not the movement's: it returns nothing of the run's.
+                self.inside_spine(&spine, self.callback_body(leaf_statement.as_ref(), &leaf_at, &values, call_index)).await.map(|()| false)
             }
             Leaf::SettleRace { frame } => {
                 let leaf_run = LeafRun::SettleRace { at: leaf_at, frame };
-                self.complete_spine(&spine, 0, &state_address, &leaf_run).await.map(|_| ())
+                self.complete_spine(&spine, 0, &state_address, &leaf_run).await.map(movement_returned)
             }
             Leaf::Continue { answer, reenter } => {
                 let binding_name = text(at(state, "bindingName"));
@@ -386,7 +393,7 @@ impl Run<'_> {
                     scope.declare(name, answer);
                 }
                 let leaf_run = if reenter { LeafRun::Reenter { at: leaf_at, replay: journal.unwrap_or_default() } } else { LeafRun::After(leaf_at) };
-                self.complete_spine(&spine, 0, &state_address, &leaf_run).await.map(|_| ())
+                self.complete_spine(&spine, 0, &state_address, &leaf_run).await.map(movement_returned)
             }
         }
     }
