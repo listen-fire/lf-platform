@@ -15,6 +15,8 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 
 ### hover
 
+- lf reads a PDF's text layer in a short-lived child process (30 s, 64 MiB input, a 2 GiB memory limit on Linux), so a malformed or hostile PDF can crash only that child, never `lf serve`. Such a file is reported unreadable; it is not sent to paid OCR.
+
 - **A new core slot, `ocr`**, empty by default. With it filled, lf reads a born-digital PDF's own text and sends scans and images to the slot, so `extract()` reads screenshot decks with no change to the movement. `@listen-fire/document-ai` fills it with Google Document AI; the models module's `models_ocr` entry fills it with Gemini. Plugins reach it through `ctx.ocr` (the dealflow URL plugin now reads screenshot PDFs). Each read counts against the run's cost cap. Both modules, and `@listen-fire/models`, ship in the lf release bundle and the lf image.
 
 - **`@listen-fire/models` fills lf's models slot with Gemini, OpenAI, Anthropic or Vertex**, mapping movement model names as the platform does (`model_map` setting). Models modules may publish their prices (`models.prices`). lf refuses a call the run cannot afford before making it, and under a cost cap that refusal pauses the run (`lf resume` carries on) instead of failing it. lf refuses an answer that used tokens but reports no cost. `judge-llm` runs as lf's judge on any vendor, through lf's models door.
