@@ -4,7 +4,8 @@
 //! listed), and the wake module is told the work is ready now; nothing
 //! drains in serve; a worker (`lf drain --until-idle`) runs the event, whose
 //! movement parks on a timer, and the wake module is told the timer's work
-//! is ready an hour later.
+//! is ready an hour later. A call to a callback's door is recorded, its body
+//! queued for a worker rather than run in the request.
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
@@ -113,8 +114,8 @@ fn serve(told: Told) -> u16 {
 struct Project(PathBuf);
 
 impl Project {
-    fn new(port: u16) -> Project {
-        let root = std::env::temp_dir().join(format!("lf-doors-only-{}", std::process::id()));
+    fn new(name: &str, port: u16) -> Project {
+        let root = std::env::temp_dir().join(format!("lf-doors-only-{name}-{}", std::process::id()));
         std::fs::remove_dir_all(&root).ok();
         assert!(Command::new(env!("CARGO_BIN_EXE_lf")).arg("init").arg(&root).output().unwrap().status.success());
         std::fs::remove_file(root.join("movements/hello.mvt")).unwrap();
@@ -187,10 +188,15 @@ fn deliver(port: u16, body: &str) -> (u16, String) {
     let mut mac = Hmac::<sha2::Sha256>::new_from_slice(SECRET.as_bytes()).unwrap();
     mac.update(body.as_bytes());
     let signature: String = mac.finalize().into_bytes().iter().map(|b| format!("{b:02x}")).collect();
+    post(port, "/hooks/inbox", &format!("x-listen-fire-signature: {signature}\r\n"), body)
+}
+
+/// One POST of a JSON body, with any extra header lines; the status and the body.
+fn post(port: u16, path: &str, headers: &str, body: &str) -> (u16, String) {
     let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
     write!(
         stream,
-        "POST /hooks/inbox HTTP/1.1\r\nhost: 127.0.0.1\r\ncontent-type: application/json\r\nx-listen-fire-signature: {signature}\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+        "POST {path} HTTP/1.1\r\nhost: 127.0.0.1\r\ncontent-type: application/json\r\n{headers}content-length: {}\r\nconnection: close\r\n\r\n{body}",
         body.len()
     )
     .unwrap();
@@ -207,7 +213,7 @@ fn epoch_ms(iso: &str) -> i64 {
 #[test]
 fn serve_doors_only_queues_a_delivery_and_the_wake_module_hears_of_each_queued_row() {
     let told = Told::default();
-    let project = Project::new(serve(told.clone()));
+    let project = Project::new("hooks", serve(told.clone()));
     let (code, out) = project.lf(&["check"]);
     assert_eq!(code, 0, "lf check: {out}");
 
@@ -235,4 +241,41 @@ fn serve_doors_only_queues_a_delivery_and_the_wake_module_hears_of_each_queued_r
     let (at, _) = told.iter().find(|(_, kind)| kind == "resume_timer").unwrap_or_else(|| panic!("the timer's wake: {told:?}"));
     let in_an_hour = jiff::Timestamp::now().as_millisecond() + 3_600_000;
     assert!((epoch_ms(at) - in_an_hour).abs() < 300_000, "the timer is due in an hour, not at {at}");
+}
+
+#[test]
+fn serve_doors_only_records_a_callbacks_call_and_queues_its_body_for_a_worker() {
+    let told = Told::default();
+    let project = Project::new("callback", serve(told.clone()));
+    std::fs::write(
+        project.0.join("movements/ask.mvt"),
+        "function ask(run: <manual-[:Invocation]->>) {\n  question = callback((note: <text>) => {})\n  c = await first(question-[:Called]->)\n  return c.note\n}\n\nlisten to manual fire ask\n",
+    )
+    .unwrap();
+    let (code, out) = project.lf(&["run", "ask", "--json"]);
+    assert_eq!(code, 0, "lf run: {out}");
+    let ran: serde_json::Value = serde_json::from_str(&out).unwrap_or_else(|e| panic!("{e}: {out}"));
+    assert_eq!(ran["runs"][0]["status"], "parked", "{out}");
+    let run_id = ran["runs"][0]["runId"].as_str().unwrap().to_string();
+    let callback_id: String = rusqlite::Connection::open(project.0.join(".lf/state.db")).unwrap().query_row("select id from callback", [], |r| r.get(0)).unwrap();
+    let status_of = |project: &Project| {
+        let (code, out) = project.lf(&["runs", "show", &run_id, "--json"]);
+        assert_eq!(code, 0, "lf runs show: {out}");
+        let shown: serde_json::Value = serde_json::from_str(&out).unwrap();
+        shown["run"]["status"].as_str().unwrap().to_string()
+    };
+
+    let (serving, port) = serve_doors_only(&project);
+    let (status, body) = post(port, &format!("/api/cb/{callback_id}"), "", r#"{"note":"yes"}"#);
+    assert_eq!(status, 202, "{body}");
+    assert!(body.contains("\"recorded\""), "{body}");
+    assert!(told.all().contains(&("now".to_string(), "fire_callback".to_string())), "the body's row is ready now: {:?}", told.all());
+    // Past serve's drain tick: had it run the body, the run would have finished.
+    std::thread::sleep(std::time::Duration::from_millis(2_500));
+    assert_eq!(status_of(&project), "parked", "nothing ran in the request");
+    drop(serving);
+
+    let (code, out) = project.lf(&["drain", "--until-idle"]);
+    assert_eq!(code, 0, "lf drain: {out}");
+    assert_eq!(status_of(&project), "completed", "the worker ran the body and woke the await: {out}");
 }

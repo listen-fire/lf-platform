@@ -966,8 +966,9 @@ const CALLBACK_BACKSTOP_MS: i64 = 30_000;
 /// What calling a callback came to (`CallOutcome`).
 pub struct Called {
     pub call: CallOutcome,
-    /// The run was being stepped elsewhere: the body waits on its work row,
-    /// due now, for whichever lf process drains next.
+    /// The body waits on its work row, due now, for whichever lf process
+    /// drains next: the run was being stepped elsewhere, or the door only
+    /// records (`lf serve --doors-only`).
     pub queued: bool,
     pub outcomes: Vec<RunOutcome>,
 }
@@ -1018,6 +1019,16 @@ impl Session {
                 Ok(Called { call, queued: true, outcomes: Vec::new() })
             }
         }
+    }
+
+    /// Call a callback without running its body (the door under `lf serve
+    /// --doors-only`, on compute frozen once it answers): the call recorded
+    /// with its body's row due now, and the wake slot told, so a worker runs
+    /// the body and wakes the callback's awaits.
+    pub fn queue_callback(&self, id: &str, values: &Obj) -> Result<Called, String> {
+        let call = record_callback_call(&*self.store, id, values, &iso(0), &iso(CALLBACK_BACKSTOP_MS)).map_err(|e| e.to_string())?;
+        let queued = matches!(call, CallOutcome::Recorded { .. });
+        Ok(Called { call, queued, outcomes: Vec::new() })
     }
 
     /// Run one recorded call's body under its run's lease, then the awaits

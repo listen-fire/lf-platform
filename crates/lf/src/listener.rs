@@ -5,8 +5,8 @@
 //!
 //! `--doors-only` (or `LF_DOORS_ONLY=1`) is serve for compute billed by the
 //! request, which is frozen or stopped once a response is sent: nothing
-//! drains in this process, and `/hooks/…` queues its events instead of
-//! running them inside the request. Workers (`lf drain`) run the work, started
+//! drains in this process, and `/hooks/…` queues its events (and `/api/cb/…`
+//! its callback's body) instead of running them inside the request. Workers (`lf drain`) run the work, started
 //! by the wake slot's module (crate::wake) or a schedule.
 
 
@@ -270,7 +270,7 @@ async fn route(listening: &Listening, request: Request) -> Result<Response, Stri
     }
 
     if let Some([id]) = segments(&request.path, "/api/cb/").as_deref() {
-        return callback_door(session, poke, &decoded(id)?, &request).await;
+        return callback_door(listening, &decoded(id)?, &request).await;
     }
     match segments(&request.path, "/api/public/adapter/").as_deref() {
         Some([_, "models"]) => return Ok(models_door(session.credentials(), &request).await),
@@ -409,11 +409,14 @@ pub async fn only_doors<S: InboundStore + PushStore>(stores: &S, request: Reques
 
 /// `POST /api/cb/<id>`: the call's values are the JSON body's keys over the
 /// query string's, every key passed raw (the callback's signature judges them).
-async fn callback_door(session: &Session, poke: &Notify, id: &str, request: &Request) -> Result<Response, String> {
+async fn callback_door(listening: &Listening, id: &str, request: &Request) -> Result<Response, String> {
+    let (session, poke) = (&*listening.session, &*listening.poke);
     let Some(values) = call_values(&request.body, &request.query) else {
         return Ok(Response::json(400, &Js::Obj(obj! { "outcome" => Js::str("mismatch"), "message" => Js::str("the body is not a JSON object of values") })));
     };
-    let called = session.call_callback(id, &values).await?;
+    // Under --doors-only the body is a worker's: the instance is frozen
+    // once this answers, so nothing may run on past the response.
+    let called = if listening.doors_only { session.queue_callback(id, &values)? } else { session.call_callback(id, &values).await? };
     log_runs(&called.outcomes);
     let (status, message) = call_answer(&called);
     // A queued body, and the wake backstop, are drained work.
