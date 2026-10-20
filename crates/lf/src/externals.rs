@@ -215,7 +215,7 @@ fn validate(manifest: &ExternalManifest) -> Result<(), String> {
             return Err(format!("slot: a core module names the slot it fills ({})", slots.join(", ")));
         }
         if manifest.command.is_none() {
-            return Err("command: a core module is started by its `command` and spoken to over its stdin and stdout".into());
+            return Err("command: a core module is started by its `command` and spoken to over adapter protocol 2's HTTP".into());
         }
     } else if manifest.slot.is_some() || !manifest.settings.is_empty() {
         return Err("slot and settings are a core module's (`kind: core`); an adapter declares its settings in its manifest answer".into());

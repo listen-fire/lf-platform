@@ -131,7 +131,7 @@ const host = inProcessHost({
 });
 ```
 
-The host has the same slots as `lf.yaml`'s `core:` section ([core slots](core-slots.md)). You fill each with your own part.
+`lf.yaml`'s `core:` section has eight slots ([core slots](core-slots.md)): models, judge, store, files, limiter, loopGuard, browser and wake. An embedded engine's host has the first four; you fill each with your own part. The rest belong to lf's run host.
 
 | slot | what a run asks of it | how you fill it |
 |---|---|---|

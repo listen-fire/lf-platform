@@ -18,6 +18,7 @@ core:
 | `limiter` | keeps calls to modules and models inside the providers' limits | `@lf/memory-limiter` (in lf's own process) | |
 | `loopGuard` | tells a movement's own write echoing back from a real change | none: the slot is empty and nothing is suppressed | `@lf/fingerprint-guard` (opt in) |
 | `browser` | a real page a module drives: a gated deck, a viewer that draws with script ([browser-slot.md](contracts/browser-slot.md)) | none: lf has no browser, and a module asking for a page is refused by name | none in lf; the platform's api image fills it with `@lf/chromium` |
+| `wake` | is told when work is ready ("ready now", "ready at T") so something outside lf can start a worker | none: the slot is empty and a worker drains on its own schedule | none |
 
 A slot accepts only a module of its own kind; `lf check` and `lf run` refuse anything else, naming the slots.
 
@@ -103,8 +104,8 @@ LF_SECRET__POSTGRES_STORE__URL=postgres://…?sslmode=verify-full
 
 `lf --store <state.db | postgres://…>` overrides the store slot for one command.
 
-A module of your own, served as a process, fills the `store`, `limiter` or `loopGuard` slot (`kind: core` in its `lf-external.yaml`; see [the store's wire](contracts/store-slot.md), [the limiter's](contracts/limiter-slot.md) and [the guard's](contracts/loop-guard-slot.md)). The other slots take only lf's built-ins.
+A module of your own, served as a process or at a URL, fills any of the eight slots (`kind: core` and `slot:` in its `lf-external.yaml`; see [the store's contract](contracts/store-slot.md), [the limiter's](contracts/limiter-slot.md), [the guard's](contracts/loop-guard-slot.md) and [the browser's](contracts/browser-slot.md)).
 
 ## Embedding
 
-An embedded engine has the same four slots; you fill each with your own part of the host. See [`embedding.md`](embedding.md#5-the-host-filling-the-slots).
+An embedded engine has four of these slots (models, judge, store, files); you fill each with your own part of the host. The limiter, loop guard, browser and wake slots are lf's. See [`embedding.md`](embedding.md#5-the-host-filling-the-slots).
