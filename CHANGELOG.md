@@ -28,6 +28,7 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
   - Dropped: pipeline configurations, inputs, outputs and message types, the dealflow pipeline, and the output-run tables, with the columns that pointed at them.
   - Also removed: the pipeline-runs usage limit and the per-pipeline LLM usage view.
   - Saving a movement no longer needs a pipeline configuration. A deploy applies the drop.
+- **lf: a movement's return value is its run's output**, as a cron job's is. Every run records it in its history, capped at 64 KiB of JSON; a returned file is kept as a reference. `lf run`, `lf resume` and `lf call` print it, and `lf runs show` and the `--json` documents carry `returned`. Runs that events start send it nowhere, and no door ever answers with it. `@lf/postgres-store` adds migration 6: run `lf connect @lf/postgres-store` to migrate.
 - **Extraction graphs, extraction plugins and the `/enrichment` page are removed**, along with the admin trigger-events page. Movements are now the only automation into the knowledge graph. A deploy drops their tables.
 - **Removed: the in-platform agent** (the assistant panel, the model onboarding chat, `/v1/system/conversations`, `pnpm dev:chat`). Use your own agent over the MCP connectors; every MCP tool is unchanged. Conversation history tables are kept, read-only.
 - A GET to a webhook door answers 404, as before, unless its provider checks its own inbound (Meta's handshake).
