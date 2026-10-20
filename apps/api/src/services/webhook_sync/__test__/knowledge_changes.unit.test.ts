@@ -63,6 +63,13 @@ jest.mock('../../translation_graph/adapters/resolve', () => ({
   resolveAdapter: jest.fn(),
 }));
 
+jest.mock('../../work/drain', () => ({
+  registerWorkKinds: jest.fn(),
+  registerWorkHandler: jest.fn(),
+  notifyWork: jest.fn(),
+}));
+jest.mock('../../knowledge/mutation_outbox/worker', () => ({ drainOnce: jest.fn() }));
+
 import { changeEventsOf, kgManifest } from '@listen-fire/kg';
 
 jest.mock('../../translation_graph/adapters/registry', () => {
@@ -76,7 +83,7 @@ jest.mock('../../translation_graph/adapters/registry', () => {
   };
 });
 
-import { queueKnowledgeChange } from '../knowledge_changes';
+import { queueKnowledgeChange, registerKnowledgeChangeWork } from '../knowledge_changes';
 
 const { findTriggersByKind } = jest.requireMock('../../translation_graph/storage/tg_table') as {
   findTriggersByKind: jest.Mock;
@@ -254,5 +261,39 @@ describe('the module manifest the platform lists the graph by', () => {
   it('declares its subscription methods only where the store POSTs its events', () => {
     expect(kgManifest({ changeWebhooks: false }).methods).not.toContain('ensureEventSubscription');
     expect(kgManifest({ changeWebhooks: true }).methods).toContain('ensureEventSubscription');
+  });
+});
+
+// The previous release delivered an outbox row by calling the engine in the
+// same process and persisted nothing of its own: no receipt, no work row. The
+// only state an upgrade can catch mid-flight is the outbox row itself, still
+// undelivered (perhaps retried), and its envelope has not changed shape. The new
+// kind picks it up like any other row.
+describe('an outbox row left undelivered by the previous release', () => {
+  const { registerWorkKinds } = jest.requireMock('../../work/drain') as { registerWorkKinds: jest.Mock };
+  const { drainOnce } = jest.requireMock('../../knowledge/mutation_outbox/worker') as { drainOnce: jest.Mock };
+
+  const oldRow = { teamId: TEAM, envelope: companyChange(), outboxId: 'old-1' };
+  type Drain = (input: { deliverLocally: (change: typeof oldRow) => Promise<void> }) => Promise<void>;
+
+  async function runKind(): Promise<void> {
+    registerKnowledgeChangeWork();
+    const [[kinds]] = registerWorkKinds.mock.calls as [[Array<{ kind: string; handler: { run(): Promise<void> } }>]];
+    expect(kinds.map((k) => k.kind)).toEqual(['knowledge_changes']);
+    await kinds[0]!.handler.run();
+  }
+
+  it('is queued exactly once when the drain delivers it', async () => {
+    drainOnce.mockImplementation(async ({ deliverLocally }: Parameters<Drain>[0]) => deliverLocally(oldRow));
+    await runKind();
+    expect(enqueueWork).toHaveBeenCalledTimes(1);
+  });
+
+  it('is still queued once when the drain dies after queueing and delivers it again', async () => {
+    drainOnce.mockImplementation(async ({ deliverLocally }: Parameters<Drain>[0]) => deliverLocally(oldRow));
+    await runKind();
+    registerWorkKinds.mockClear();
+    await runKind();
+    expect(enqueueWork).toHaveBeenCalledTimes(1);
   });
 });

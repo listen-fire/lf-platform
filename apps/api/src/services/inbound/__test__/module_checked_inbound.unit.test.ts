@@ -92,3 +92,19 @@ describe('a module that checks its own inbound', () => {
     expect(queued).toEqual([]);
   });
 });
+
+describe('a provider the host verifies', () => {
+  it('answers a GET as not found, like the POST-only door it was', async () => {
+    const { store } = storeAnswering({ outcome: 'refused' });
+    const signed: InboundStore<DiscriminableEvent> = {
+      ...store,
+      sourceFor: async () => ({
+        verifier: { scheme: 'remote', signatureHeaders: ['x-listen-fire-signature'] },
+        secret: 'key',
+        open: async () => null,
+      }),
+    };
+    const answer = await deliver(signed, 'GET');
+    expect([answer.status, answer.body]).toEqual([404, { error: 'method_not_allowed' }]);
+  });
+});

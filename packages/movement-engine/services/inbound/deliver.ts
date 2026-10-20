@@ -395,7 +395,9 @@ const REFUSAL_STATUS: Record<DeliveryRefusal, number> = {
   subscription_not_found: 404,
   provider_mismatch: 400,
   signature_invalid: 401,
-  method_not_allowed: 405,
+  // A GET to a door that takes only POST answers as it did before the handshake
+  // existed, when the route was not there at all.
+  method_not_allowed: 404,
   'adapter cannot preprocess inbound': 500,
 };
 
