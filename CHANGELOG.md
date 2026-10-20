@@ -15,6 +15,8 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 
 ### hover
 
+- The Slack app's events and button doors now save each delivery before acknowledging it. The work runs from the queue, so a restart or a frozen instance no longer loses it, and a Slack retry never dispatches twice.
+
 - Hover in `.mvt` files leads with what the adapter or plugin says about itself, then the record's fields and where a walk can go next. Comments get no tooltips, and plugin package names get one. Adapters, record types, fields, edges and plugins may send an optional `description`, which the catalog snapshot carries (still contract version 1). The built-ins reference now lives with the language (`crates/movement-language/src/builtins.md`); the handbook reads it from there.
 - A Zed extension for movement files (`editors/zed`), launching `lf lsp`.
 
