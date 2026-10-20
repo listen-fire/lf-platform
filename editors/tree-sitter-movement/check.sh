@@ -6,7 +6,8 @@
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(cd "$here/../.." && pwd)"
-(cd "$here" && tree-sitter generate)
+# ABI 14: older editors (Zed before tree-sitter 0.25) panic on ABI 15.
+(cd "$here" && tree-sitter generate --abi 14)
 failed=0
 count=0
 while IFS= read -r file; do
