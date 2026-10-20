@@ -110,11 +110,21 @@ describe('the host grafts the Response type an ask\'s own literals fix', () => {
     const name = schema.genericLandings?.[key];
     expect(name).toBe('Choose Response<Seed | Series A>');
     expect(schema.positions[name!]).toEqual({
+      description: 'The answer to a Choose ask — read it, await it, or write it to answer.',
+      fieldDocs: {
+        Answer:
+          'The option they chose — one of the offered `Options` (typed as those exact options when the ask lists them literally).',
+      },
       properties: { Answer: { kind: 'enum', options: ['Seed', 'Series A'] } },
       edges: {},
     });
     // The BASE type is untouched — an ask whose options we can't see still gets it.
     expect(schema.positions['Choose Response']).toEqual({
+      description: 'The answer to a Choose ask — read it, await it, or write it to answer.',
+      fieldDocs: {
+        Answer:
+          'The option they chose — one of the offered `Options` (typed as those exact options when the ask lists them literally).',
+      },
       properties: { Answer: 'text' },
       edges: {},
     });
@@ -128,6 +138,11 @@ describe('the host grafts the Response type an ask\'s own literals fix', () => {
       genericLandingKey({ target: 'Select Response', values: ['a', 'b'] })
     ];
     expect(schema.positions[name!]).toEqual({
+      description: 'The answer to a Select ask — read it, await it, or write it to answer.',
+      fieldDocs: {
+        Answer:
+          'The subset of `Options` they chose, possibly empty (typed as those exact options when the ask lists them literally).',
+      },
       properties: { Answer: { kind: 'list', of: { kind: 'enum', options: ['a', 'b'] } } },
       edges: {},
     });
@@ -148,7 +163,15 @@ describe('the host grafts the Response type an ask\'s own literals fix', () => {
         genericLandingKey({ target: 'Provide Response', values: [declared] })
       ];
       expect(name).toBe(`Provide Response<${declared}>`);
-      expect(schema.positions[name!]).toEqual({ properties: { Answer: expected }, edges: {} });
+      expect(schema.positions[name!]).toEqual({
+        description: 'The answer to a Provide ask — read it, await it, or write it to answer.',
+        fieldDocs: {
+          Answer:
+            'The value they supplied, typed by the declared `Answer Type` (text/number/date/boolean).',
+        },
+        properties: { Answer: expected },
+        edges: {},
+      });
     }
   });
 
@@ -193,11 +216,26 @@ describe('the host grafts the Response type an ask\'s own literals fix', () => {
     ];
     expect(name).toBe('Form Response<Budget | Timeline>');
     expect(schema.positions[name!]).toEqual({
+      description: 'The answer to a Form ask — read it, await it, or write it to answer.',
+      fieldDocs: {
+        Answer:
+          'One object carrying a value for every named `Field` (when the ask lists its `Fields` literally, each is also a property of its own — read `` r.`Budget` `` rather than digging into this object).',
+        Budget: "The answer given for 'Budget'.",
+        Timeline: "The answer given for 'Timeline'.",
+      },
       properties: { Answer: 'json', Budget: 'text', Timeline: 'text' },
       edges: {},
     });
     // The BASE type is untouched — a form whose fields we can't see still gets it.
-    expect(schema.positions['Form Response']).toEqual({ properties: { Answer: 'json' }, edges: {} });
+    expect(schema.positions['Form Response']).toEqual({
+      description: 'The answer to a Form ask — read it, await it, or write it to answer.',
+      fieldDocs: {
+        Answer:
+          'One object carrying a value for every named `Field` (when the ask lists its `Fields` literally, each is also a property of its own — read `` r.`Budget` `` rather than digging into this object).',
+      },
+      properties: { Answer: 'json' },
+      edges: {},
+    });
   });
 
   it('NON-literal Fields graft nothing — the answer stays the opaque json object', async () => {

@@ -48,6 +48,7 @@
           }
         }
       ],
+      "description": "Discover, classify, and fetch URLs in a message. Emits one ephemeral Url record per fetched resource.",
       "package": "@lf/web",
       "name": "vc_url_retrieval"
     },
@@ -78,6 +79,7 @@
           "of": "text"
         }
       },
+      "description": "Fetch one named URL and hand back its content. Emits a single ephemeral Url record.",
       "package": "@lf/web",
       "name": "fetch_url"
     },
@@ -105,6 +107,7 @@
           }
         }
       },
+      "description": "For an identified person without a LinkedIn profile, find their profile — searching the web for it unless the person already carries the address — and attach the profile URL and page content.",
       "package": "@lf/web",
       "name": "linkedin_enrichment"
     },
@@ -150,6 +153,7 @@
           }
         }
       },
+      "description": "From a LinkedIn profile address, research what that person is currently doing — their role, their organisation, and their recent public activity — and attach a summary, a confidence, and the sources it rests on.",
       "package": "@lf/web",
       "name": "linkedin_research"
     },
@@ -189,6 +193,7 @@
           }
         }
       },
+      "description": "Find a company's own website from its name and what a message said about it, and fetch it. Stands down for a record that already carries a link.",
       "package": "@lf/web",
       "name": "web_research"
     },
@@ -248,6 +253,7 @@
           }
         }
       },
+      "description": "Research one person or company from whatever the record carries — a name, a line of context, a website, a profile address — and attach a dossier that answers what you ask, with its sources and a confidence.",
       "package": "@lf/web",
       "name": "research"
     },
@@ -281,6 +287,7 @@
         "kind": "value",
         "type": "file"
       },
+      "description": "Draw text or HTML as a PDF file with the host's browser. HTML keeps its layout; plain text is wrapped in a page. Refuses when the host has no browser.",
       "package": "@lf/web",
       "name": "render"
     },
@@ -310,6 +317,7 @@
         "kind": "value",
         "type": "file"
       },
+      "description": "Draw plain text as a PDF file. A character the default writer has no glyph for prints as \"?\", with a warning on the run.",
       "package": "@lf/pdf",
       "name": "render"
     }
@@ -363,6 +371,7 @@
           }
         }
       ],
+      "description": "Discover, classify, and fetch URLs in a message. Emits one ephemeral Url record per fetched resource.",
       "package": "@lf/web",
       "name": "vc_url_retrieval"
     },
@@ -393,6 +402,7 @@
           "of": "text"
         }
       },
+      "description": "Fetch one named URL and hand back its content. Emits a single ephemeral Url record.",
       "package": "@lf/web",
       "name": "fetch_url"
     },
@@ -420,6 +430,7 @@
           }
         }
       },
+      "description": "For an identified person without a LinkedIn profile, find their profile — searching the web for it unless the person already carries the address — and attach the profile URL and page content.",
       "package": "@lf/web",
       "name": "linkedin_enrichment"
     },
@@ -465,6 +476,7 @@
           }
         }
       },
+      "description": "From a LinkedIn profile address, research what that person is currently doing — their role, their organisation, and their recent public activity — and attach a summary, a confidence, and the sources it rests on.",
       "package": "@lf/web",
       "name": "linkedin_research"
     },
@@ -504,6 +516,7 @@
           }
         }
       },
+      "description": "Find a company's own website from its name and what a message said about it, and fetch it. Stands down for a record that already carries a link.",
       "package": "@lf/web",
       "name": "web_research"
     },
@@ -563,6 +576,7 @@
           }
         }
       },
+      "description": "Research one person or company from whatever the record carries — a name, a line of context, a website, a profile address — and attach a dossier that answers what you ask, with its sources and a confidence.",
       "package": "@lf/web",
       "name": "research"
     },
@@ -596,6 +610,7 @@
         "kind": "value",
         "type": "file"
       },
+      "description": "Draw text or HTML as a PDF file with the host's browser. HTML keeps its layout; plain text is wrapped in a page. Refuses when the host has no browser.",
       "package": "@lf/web",
       "name": "render"
     },
@@ -625,6 +640,7 @@
         "kind": "value",
         "type": "file"
       },
+      "description": "Draw plain text as a PDF file. A character the default writer has no glyph for prints as \"?\", with a warning on the run.",
       "package": "@lf/pdf",
       "name": "render"
     }
@@ -656,6 +672,7 @@
         "kind": "value",
         "type": "file"
       },
+      "description": "Draw plain text as a PDF file. A character the default writer has no glyph for prints as \"?\", with a warning on the run.",
       "package": "@lf/pdf",
       "name": "render"
     },
@@ -686,6 +703,7 @@
           "of": "text"
         }
       },
+      "description": "Fetch one named URL and hand back its content. Emits a single ephemeral Url record.",
       "package": "@lf/web",
       "name": "fetch_url"
     },
@@ -716,6 +734,7 @@
           "of": "text"
         }
       },
+      "description": "Fetch one named URL and hand back its content. Emits a single ephemeral Url record.",
       "package": "@lf/web",
       "name": "fetch_url"
     },
@@ -743,6 +762,7 @@
           }
         }
       },
+      "description": "For an identified person without a LinkedIn profile, find their profile — searching the web for it unless the person already carries the address — and attach the profile URL and page content.",
       "package": "@lf/web",
       "name": "linkedin_enrichment"
     },
@@ -770,6 +790,7 @@
           }
         }
       },
+      "description": "For an identified person without a LinkedIn profile, find their profile — searching the web for it unless the person already carries the address — and attach the profile URL and page content.",
       "package": "@lf/web",
       "name": "linkedin_enrichment"
     },
@@ -815,6 +836,7 @@
           }
         }
       },
+      "description": "From a LinkedIn profile address, research what that person is currently doing — their role, their organisation, and their recent public activity — and attach a summary, a confidence, and the sources it rests on.",
       "package": "@lf/web",
       "name": "linkedin_research"
     },
@@ -860,6 +882,7 @@
           }
         }
       },
+      "description": "From a LinkedIn profile address, research what that person is currently doing — their role, their organisation, and their recent public activity — and attach a summary, a confidence, and the sources it rests on.",
       "package": "@lf/web",
       "name": "linkedin_research"
     },
@@ -893,6 +916,7 @@
         "kind": "value",
         "type": "file"
       },
+      "description": "Draw text or HTML as a PDF file with the host's browser. HTML keeps its layout; plain text is wrapped in a page. Refuses when the host has no browser.",
       "package": "@lf/web",
       "name": "render"
     },
@@ -952,6 +976,7 @@
           }
         }
       },
+      "description": "Research one person or company from whatever the record carries — a name, a line of context, a website, a profile address — and attach a dossier that answers what you ask, with its sources and a confidence.",
       "package": "@lf/web",
       "name": "research"
     },
@@ -1011,6 +1036,7 @@
           }
         }
       },
+      "description": "Research one person or company from whatever the record carries — a name, a line of context, a website, a profile address — and attach a dossier that answers what you ask, with its sources and a confidence.",
       "package": "@lf/web",
       "name": "research"
     },
@@ -1062,6 +1088,7 @@
           }
         }
       ],
+      "description": "Discover, classify, and fetch URLs in a message. Emits one ephemeral Url record per fetched resource.",
       "package": "@lf/web",
       "name": "vc_url_retrieval"
     },
@@ -1113,6 +1140,7 @@
           }
         }
       ],
+      "description": "Discover, classify, and fetch URLs in a message. Emits one ephemeral Url record per fetched resource.",
       "package": "@lf/web",
       "name": "vc_url_retrieval"
     },
@@ -1152,6 +1180,7 @@
           }
         }
       },
+      "description": "Find a company's own website from its name and what a message said about it, and fetch it. Stands down for a record that already carries a link.",
       "package": "@lf/web",
       "name": "web_research"
     },
@@ -1191,6 +1220,7 @@
           }
         }
       },
+      "description": "Find a company's own website from its name and what a message said about it, and fetch it. Stands down for a record that already carries a link.",
       "package": "@lf/web",
       "name": "web_research"
     }
