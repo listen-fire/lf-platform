@@ -164,6 +164,47 @@ pub struct ClaimedWork {
     pub key: String,
     pub payload: Js,
     pub claim: String,
+    /// The row's claims since it last succeeded, this one included, less
+    /// those released as `busy`.
+    pub attempts: i64,
+}
+
+/// One park's kind and what wakes it (`parks.commit`'s `park`).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum ParkKind {
+    /// Arms the run's `resume_timer` row at `wake_at` (an earlier due time kept).
+    #[serde(rename_all = "camelCase")]
+    Timer { wake_at: String },
+    /// Kept with its correlation.
+    #[serde(rename_all = "camelCase")]
+    Await { team_id: String, adapter_type: String, correlation_key: String },
+    /// Drops the address's correlation.
+    Limit,
+}
+
+/// What a `work.release` says of the claim.
+#[derive(Debug, Clone, Copy, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ReleaseWhy {
+    /// The work failed: the claim was an attempt.
+    #[default]
+    Failed,
+    /// The row's run was held elsewhere: the attempt is given back.
+    Busy,
+    /// The work was done and is due again: the attempts start over.
+    Rescheduled,
+}
+
+/// A work row to queue, as `work.enqueue` takes it.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewWork {
+    pub kind: String,
+    pub key: String,
+    pub payload: Js,
+    pub due_at: Option<String>,
+    pub team_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -226,6 +267,12 @@ slot! {
         /// Always the first request.
         "store.open" => fn open(StoreOpen { #[serde(default)] settings: BTreeMap<String, String> }) -> Opened;
         "runs.start" => fn start_run(RunsStart { id: String, file: String, movement: String, started_at: String, input: String }) -> ();
+        /// `runs.start` and `events.claim` as one write: `false`, and no run,
+        /// for an event the listen has run before.
+        "events.startRun" => fn start_event_run(EventsStartRun { listen: String, key: String, id: String, file: String, movement: String, started_at: String, input: String }) -> bool;
+        /// Runs still `running` whose lease lapsed or was never taken,
+        /// started more than `stale_ms` ago; oldest first.
+        "runs.lapsed" => fn lapsed_runs(RunsLapsed { stale_ms: i64, limit: i64 }) -> Vec<String>;
         /// `status`: `completed`, `parked`, `running` or `failed`; an ending
         /// revokes the run's live callbacks.
         "runs.settle" => fn settle_run(RunsSettle { run_id: String, status: String, outcome: Js, at: String }) -> ();
@@ -248,6 +295,8 @@ slot! {
         "parks.finishLeaf" => fn finish_leaf(ParksFinishLeaf { run_id: String, address: String, fence: Option<String> }) -> ();
         "parks.leaves" => fn leaves(ParksLeaves { run_id: String, parked_only: bool, reason: Option<String>, due_by: Option<String> }) -> Vec<LeafRow>;
         "parks.deleteLeaves" => fn delete_leaves(ParksDeleteLeaves { run_id: String, addresses: Vec<String> }) -> ();
+        /// One fenced write: the leaf, its kind's row, the run marked parked.
+        "parks.commit" => fn commit_park(ParksCommit { run_id: String, address: String, state: Js, fence: Option<String>, park: ParkKind }) -> ();
         "joins.recordJoin" => fn record_join(JoinsRecordJoin { run_id: String, frame_address: String, pending: i64, fence: Option<String> }) -> ();
         "joins.decrementJoin" => fn decrement_join(JoinsDecrementJoin { run_id: String, frame_address: String, branch_address: String, leaf_address: String }) -> JoinClosed;
         "joins.persistBranchExport" => fn persist_branch_export(JoinsPersistBranchExport { run_id: String, frame_address: String, branch_address: String, branch_index: i64, exports: Js }) -> ();
@@ -269,7 +318,10 @@ slot! {
         /// `kinds` (a drain pool's) leases only rows of those kinds; absent, every kind.
         "work.claimDue" => fn claim_due(WorkClaimDue { limit: i64, lease_ms: i64, due_by: Option<String>, kinds: Option<Vec<String>> }) -> Vec<ClaimedWork>;
         "work.complete" => fn complete_work(WorkComplete { id: String, claim: String }) -> ();
-        "work.release" => fn release_work(WorkRelease { id: String, claim: String, due_at: Option<String> }) -> ();
+        /// `why` absent is `failed`.
+        "work.release" => fn release_work(WorkRelease { id: String, claim: String, due_at: Option<String>, #[serde(default)] why: ReleaseWhy }) -> ();
+        /// Never claimed again, kept with `reason`, unless re-armed since the claim.
+        "work.bury" => fn bury_work(WorkBury { id: String, claim: String, reason: String }) -> ();
         "sources.put" => fn put_source(SourcesPut { team_id: String, hash: String, source: String }) -> ();
         "sources.get" => fn source(SourcesGet { team_id: String, hash: String }) -> Option<String>;
         "callbacks.mint" => fn mint_callback(CallbacksMint { team_id: String, run_id: String, address: String, params: Js, state: Js, single_use: bool, expires_at: Option<String> }) -> Minted;
@@ -281,6 +333,8 @@ slot! {
         "callbacks.revokeRun" => fn revoke_run_callbacks(CallbacksRevokeRun { run_id: String }) -> ();
         "inbound.checkpoint" => fn inbound_checkpoint(InboundCheckpoint { subscription_id: String }) -> Option<Checkpoint>;
         "inbound.saveCheckpoint" => fn save_inbound_checkpoint(InboundSaveCheckpoint { subscription_id: String, checkpoint: Js }) -> ();
+        /// One write: the cursor (absent: left as it is) and the work rows.
+        "inbound.keepDelivery" => fn keep_delivery(InboundKeepDelivery { subscription_id: String, #[serde(default, deserialize_with = "present")] checkpoint: Option<Js>, work: Vec<NewWork> }) -> ();
         /// The module processes the hosts on this store started (so the next
         /// stops what a killed one left), with the list's version.
         "processes.list" => fn module_processes(ProcessesList {}) -> ModuleProcesses;
@@ -291,6 +345,12 @@ slot! {
         /// for a redelivery, which runs nothing.
         "events.claim" => fn claim_event(EventsClaim { listen: String, key: String }) -> bool;
     }
+}
+
+/// A field that is present, even as `null`, is Some: `inbound.keepDelivery`'s
+/// cursor is absent when it did not move, and may move to `null`.
+fn present<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Option<Js>, D::Error> {
+    Js::deserialize(deserializer).map(Some)
 }
 
 // ── limiter ──────────────────────────────────────────────────────────────────

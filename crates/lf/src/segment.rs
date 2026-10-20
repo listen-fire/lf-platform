@@ -24,9 +24,9 @@ use crate::file_ref::{descriptor_of, field_type_of, files_at_type, owner_of, Own
 use crate::json::{Js, Obj};
 use crate::obj;
 use crate::remote::{ADAPTER_METHODS, SegmentAdapters, WRITE_METHODS};
-use crate::run_host::{arm_timer_wake, cancel_subtrees, queue_await_wake, save_source, settle_if_cancel_requested};
+use crate::run_host::{cancel_subtrees, queue_await_wake, save_source, settle_if_cancel_requested};
 use crate::backend::{MintCallback, RunHostStore};
-use crate::store::StoreError;
+use crate::store::{Park, ParkKind, StoreError};
 use crate::wire::{Hv, Wire, js_of_json, json_of_js};
 
 /// The one tenant a local project's files are (`LOCAL_TENANT`); its run
@@ -700,29 +700,19 @@ async fn route(host: &SegmentHost<'_>, label: &str, args: &Json) -> Result<Answe
             let state = read_wire(host, args.get("state"))?.js();
             let address = text(args, "address", "park.sink.commitTimerPark")?;
             let wake_at = text(args, "wakeAt", "park.sink.commitTimerPark")?;
-            park(host, || {
-                store.put_leaf(run_id, address, "timer", Some(wake_at), &state, fence).map_err(store_failure)?;
-                // The leaf is the truth; the work row only says when to look.
-                arm_timer_wake(store, run_id, wake_at).map_err(rules_failure)
-            })
+            park(host, Park { run_id, address, state: &state, fence, kind: ParkKind::Timer { wake_at } })
         }
         "park.sink.commitAwaitPark" => {
             let state = read_wire(host, args.get("state"))?.js();
             let address = text(args, "address", "park.sink.commitAwaitPark")?;
             let adapter_type = text(args, "adapterType", "park.sink.commitAwaitPark")?;
-            let key = text(args, "correlationKey", "park.sink.commitAwaitPark")?;
-            park(host, || {
-                store.put_leaf(run_id, address, "await", None, &state, fence).map_err(store_failure)?;
-                store.correlate(run_id, store.tenant(), address, adapter_type, key).map_err(store_failure)
-            })
+            let correlation_key = text(args, "correlationKey", "park.sink.commitAwaitPark")?;
+            park(host, Park { run_id, address, state: &state, fence, kind: ParkKind::Await { team_id: store.tenant(), adapter_type, correlation_key } })
         }
         "park.sink.commitSuspension" => {
             let state = read_wire(host, args.get("state"))?.js();
             let address = text(args, "address", "park.sink.commitSuspension")?;
-            park(host, || {
-                store.put_leaf(run_id, address, "limit", None, &state, fence).map_err(store_failure)?;
-                store.drop_correlation(run_id, address).map_err(store_failure)
-            })
+            park(host, Park { run_id, address, state: &state, fence, kind: ParkKind::Limit })
         }
         "park.sink.recordJoin" => {
             let frame = text(args, "frameAddress", "park.sink.recordJoin")?;
@@ -1026,11 +1016,11 @@ fn stored_plugin_files(host: &SegmentHost<'_>, files: Option<&Js>) -> Result<Vec
     Ok(made)
 }
 
-/// A park's write, then what follows every park: the run is observably
-/// parked, and a cancel stamped meanwhile settles it at once.
-fn park(host: &SegmentHost<'_>, write: impl FnOnce() -> Result<(), HostFailure>) -> Answer {
-    write()?;
-    host.store.mark_parked(&host.run_id).map_err(store_failure)?;
+/// A park, kept as one write with what wakes it and the run marked parked
+/// (a crash never leaves a leaf nothing wakes); then a cancel stamped
+/// meanwhile settles the run at once.
+fn park(host: &SegmentHost<'_>, park: Park<'_>) -> Answer {
+    host.store.commit_park(&park).map_err(store_failure)?;
     // Never break the park path: a cancel that fails to settle here
     // settles at the run's next entry.
     let _ = settle_if_cancel_requested(host.store, &host.run_id, None);

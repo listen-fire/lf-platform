@@ -22,14 +22,17 @@ use rusqlite::{OptionalExtension, params};
 use crate::check::LOCAL_TENANT;
 use crate::credential_calls::{Sending, Target, send};
 use crate::externals::RunningExternal;
-use crate::inbound::{Answer, Declaration, Delivery, Extraction, InboundStore, Intercept, PushAuth, PushCaller, PushStore, RawRequest, Scheme, Source, Subscription, answer_delivery, same_secret};
+use crate::inbound::{
+    Answer, Declaration, Delivery, Extraction, InboundStore, Intercept, Kept, PushAuth, PushCaller, PushStore, RawRequest, Scheme, Source, Subscription, answer_delivery,
+    same_secret,
+};
 use crate::json::Js;
 use crate::obj;
-use crate::run_host::queue_await_wake;
+use crate::run_host::{await_wake_work, queue_await_wake};
 use crate::runs::{RunOutcome, Session};
 use crate::secrets::{Binding, Credential, Credentials, install_of, signer_of};
 use crate::backend::RunHostStore;
-use crate::store::{Store, StoreError};
+use crate::store::{NewWork, Store, StoreError};
 
 /// The field of an install's credential that holds the webhook secret when
 /// the external declares `inbound` and `lf-external.yaml` names none.
@@ -145,8 +148,8 @@ impl<R: Reader> LfDoors<'_, R> {
     async fn fire(&self, external: &str, event: Js) -> Result<(), String> {
         match &self.sink {
             EventSink::Queue => {
-                let payload = Js::Obj(obj! { "external" => Js::str(external), "event" => event });
-                self.store.enqueue("fire_event", &format!("fire_event:{}", uuid::Uuid::new_v4()), &payload, None, None).map_err(|e| e.to_string())
+                let row = fire_event_work(external, event);
+                self.store.enqueue(&row.kind, &row.key, &row.payload, None, None).map_err(|e| e.to_string())
             }
             EventSink::Inline { session, outcomes } => {
                 let fired = session.fire_event(external, &event, false).await?;
@@ -233,16 +236,31 @@ impl<R: Reader> InboundStore for LfDoors<'_, R> {
         Ok(event.clone())
     }
 
-    async fn save_checkpoint(&self, subscription_id: &str, checkpoint: &Js) -> Result<(), String> {
-        self.store.save_inbound_checkpoint(subscription_id, checkpoint).map_err(|e| e.to_string())
-    }
-
-    async fn enqueue(&self, captured: Js, source: &Source) -> Result<(), String> {
-        self.fire(&source.adapter_type, captured).await
-    }
-
-    async fn enqueue_wakes(&self, adapter_type: &str, team_id: &str, keys: &[String]) -> Result<(), String> {
-        self.queue_wakes(adapter_type, team_id, keys)
+    /// One store write: the cursor, a `fire_event` row per event and a
+    /// `wake_await` row per key. Run inline instead, the events run first,
+    /// so a cursor is never kept past an event that never ran.
+    async fn keep(&self, kept: Kept<'_>) -> Result<(), String> {
+        let adapter_type = &kept.source.adapter_type;
+        let mut work = Vec::new();
+        let mut failures = Vec::new();
+        match &self.sink {
+            EventSink::Queue => work.extend(kept.receipts.into_iter().map(|event| fire_event_work(adapter_type, event))),
+            EventSink::Inline { .. } => {
+                // One event's failure never stops the next.
+                for event in kept.receipts {
+                    if let Err(error) = self.fire(adapter_type, event).await {
+                        eprintln!("Webhook event processing failed: {error}");
+                        failures.push(error);
+                    }
+                }
+            }
+        }
+        work.extend(kept.wake_keys.iter().map(|key| await_wake_work(adapter_type, kept.team_id, key)));
+        self.store.keep_delivery(kept.subscription_id, kept.checkpoint, &work).map_err(|e| e.to_string())?;
+        if !failures.is_empty() {
+            return Err(format!("{} event(s) of the delivery failed: {}", failures.len(), failures.join("; ")));
+        }
+        Ok(())
     }
 
     fn notify(&self) {
@@ -387,6 +405,17 @@ fn carried_credential<'a>(credentials: &'a Credentials, external: &str, named: &
     }
 }
 
+/// A queued event's `fire_event` row, for the drain.
+fn fire_event_work(external: &str, event: Js) -> NewWork {
+    NewWork {
+        kind: "fire_event".into(),
+        key: format!("fire_event:{}", uuid::Uuid::new_v4()),
+        payload: Js::Obj(obj! { "external" => Js::str(external), "event" => event }),
+        due_at: None,
+        team_id: None,
+    }
+}
+
 // ── The pull cursor ─────────────────────────────────────────────────────────
 
 impl Store {
@@ -404,11 +433,28 @@ impl Store {
     }
 
     pub fn save_inbound_checkpoint(&self, subscription_id: &str, checkpoint: &Js) -> Result<(), StoreError> {
-        self.db.execute(
+        Self::save_checkpoint_in(&self.db, subscription_id, checkpoint)
+    }
+
+    fn save_checkpoint_in(db: &rusqlite::Connection, subscription_id: &str, checkpoint: &Js) -> Result<(), StoreError> {
+        db.execute(
             "insert into inbound_checkpoint (subscription_id, checkpoint) values (?, ?) on conflict (subscription_id) do update set checkpoint = excluded.checkpoint",
             params![subscription_id, checkpoint.to_json()],
         )?;
         Ok(())
+    }
+
+    /// crate::backend::RunHostStore::keep_delivery: one transaction.
+    pub fn keep_delivery(&self, subscription_id: &str, checkpoint: Option<&Js>, work: &[NewWork]) -> Result<(), StoreError> {
+        self.transaction(|db| {
+            if let Some(checkpoint) = checkpoint {
+                Self::save_checkpoint_in(db, subscription_id, checkpoint)?;
+            }
+            for row in work {
+                Store::enqueue_in(db, &row.kind, &row.key, &row.payload, row.due_at.as_deref())?;
+            }
+            Ok(())
+        })
     }
 }
 

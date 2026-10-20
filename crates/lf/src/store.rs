@@ -124,17 +124,23 @@ create table if not exists work (
   due_at text not null,
   lease_token text,
   lease_until text,
-  version integer not null default 0
+  version integer not null default 0,
+  attempts integer not null default 0,
+  dead_at text,
+  dead_reason text
 );
 ";
 
 /// The core's park reasons (`CORE_PARK_REASONS`).
 pub const CORE_PARK_REASONS: &[&str] = &["timer", "await", "limit"];
+/// A polled listen's row in the work queue: its next poll.
+pub const POLL_WORK_KIND: &str = "poll_listen";
 /// The work kinds lf queues.
 pub const WORK_KINDS: &[&str] = &["resume_timer", "wake_await", "fire_event", "fire_callback", "poll_listen"];
 
 /// Columns a state file written by an earlier lf lacks, added on open.
 const ADDED_RUN_COLUMNS: &[&str] = &["cancel_requested_at", "cancel_reason"];
+const ADDED_WORK_COLUMNS: &[(&str, &str)] = &[("attempts", "integer not null default 0"), ("dead_at", "text"), ("dead_reason", "text")];
 
 #[derive(Debug)]
 pub enum StoreError {
@@ -226,6 +232,103 @@ pub struct ClaimedWork {
     pub key: String,
     pub payload: Js,
     pub claim: String,
+    /// The row's claims since it last succeeded, this one included, less
+    /// those given back ([`Release::Busy`]): a claim whose worker died counts.
+    pub attempts: i64,
+}
+
+/// What a claimed row's release says of the claim (`work.release`'s `why`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Release {
+    /// The work failed: the claim was an attempt.
+    Failed,
+    /// The row's run was held elsewhere: the claim was no attempt.
+    Busy,
+    /// The work was done and is due again (a polled listen's next poll):
+    /// its attempts start over.
+    Rescheduled,
+}
+
+impl Release {
+    pub fn wire(self) -> &'static str {
+        match self {
+            Release::Failed => "failed",
+            Release::Busy => "busy",
+            Release::Rescheduled => "rescheduled",
+        }
+    }
+
+    /// Absent is `failed`: a release before `why` existed was a retry.
+    pub fn of_wire(why: Option<&str>) -> Result<Release> {
+        match why {
+            None | Some("failed") => Ok(Release::Failed),
+            Some("busy") => Ok(Release::Busy),
+            Some("rescheduled") => Ok(Release::Rescheduled),
+            Some(other) => Err(StoreError::Invalid(format!("not a release: {other} (failed, busy or rescheduled)"))),
+        }
+    }
+}
+
+/// A work row to queue, as `work.enqueue` takes it.
+#[derive(Debug, Clone)]
+pub struct NewWork {
+    pub kind: String,
+    pub key: String,
+    pub payload: Js,
+    /// None: now.
+    pub due_at: Option<String>,
+    /// None: the store's own tenant's row.
+    pub team_id: Option<String>,
+}
+
+/// A run's `resume_timer` row: one per run, due at its earliest timer.
+pub fn timer_work_key(run_id: &str) -> String {
+    format!("resume_timer:{run_id}")
+}
+
+pub fn timer_work_payload(run_id: &str) -> Js {
+    Js::Obj(crate::obj! { "runId" => Js::str(run_id) })
+}
+
+/// One park, kept as one with what wakes it (`parks.commit`): the leaf, the
+/// kind's own row, and the run marked parked.
+pub struct Park<'a> {
+    pub run_id: &'a str,
+    pub address: &'a str,
+    pub state: &'a Js,
+    /// The lease the write is fenced on; a lost one writes nothing.
+    pub fence: Option<&'a str>,
+    pub kind: ParkKind<'a>,
+}
+
+pub enum ParkKind<'a> {
+    /// Woken by the run's `resume_timer` row, armed at `wake_at` (an earlier
+    /// due time it already has is kept).
+    Timer { wake_at: &'a str },
+    /// Woken by a wake of its correlation, kept with it.
+    Await { team_id: &'a str, adapter_type: &'a str, correlation_key: &'a str },
+    /// Paused at a run limit: a correlation the address had is dropped.
+    Limit,
+}
+
+impl ParkKind<'_> {
+    pub fn reason(&self) -> &'static str {
+        match self {
+            ParkKind::Timer { .. } => "timer",
+            ParkKind::Await { .. } => "await",
+            ParkKind::Limit => "limit",
+        }
+    }
+}
+
+/// A new run's row (`runs.start`).
+pub struct RunStart<'a> {
+    pub id: &'a str,
+    pub file: &'a str,
+    pub movement: &'a str,
+    pub started_at: &'a str,
+    /// The run's facts a resume needs, as JSON.
+    pub input: &'a str,
 }
 
 pub struct CorrelatedAwait {
@@ -305,6 +408,16 @@ impl Store {
                 db.execute_batch(&format!("alter table run add column {column} real not null default 0"))?;
             }
         }
+        // Added to a state file written before a failing row's retries were capped.
+        let work_columns = db
+            .prepare("select name from pragma_table_info('work')")?
+            .query_map([], |r| r.get::<_, String>(0))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        for (column, declared) in ADDED_WORK_COLUMNS {
+            if !work_columns.iter().any(|c| c == column) {
+                db.execute_batch(&format!("alter table work add column {column} {declared}"))?;
+            }
+        }
         Ok(Store { db })
     }
 
@@ -345,11 +458,38 @@ impl Store {
     // ── Runs ────────────────────────────────────────────────────────────────
 
     pub fn start_run(&self, id: &str, file: &str, movement: &str, started_at: &str, input: &str) -> Result<()> {
-        self.db.execute(
+        Self::start_run_in(&self.db, &RunStart { id, file, movement, started_at, input })
+    }
+
+    fn start_run_in(db: &Connection, run: &RunStart<'_>) -> Result<()> {
+        db.execute(
             "insert into run (id, file, movement, status, started_at, input) values (?, ?, ?, ?, ?, ?)",
-            params![id, file, movement, "running", started_at, input],
+            params![run.id, run.file, run.movement, "running", run.started_at, run.input],
         )?;
         Ok(())
+    }
+
+    /// crate::backend::RunHostStore::start_event_run: the receipt and the
+    /// run, or neither.
+    pub fn start_event_run(&self, listen: &str, key: &str, run: &RunStart<'_>) -> Result<bool> {
+        self.transaction(|db| {
+            if !Self::claim_event_in(db, listen, key)? {
+                return Ok(false);
+            }
+            Self::start_run_in(db, run)?;
+            Ok(true)
+        })
+    }
+
+    /// crate::backend::RunHostStore::lapsed_runs.
+    pub fn lapsed_runs(&self, stale_ms: i64, limit: i64) -> Result<Vec<String>> {
+        let now = iso(0);
+        let mut statement = self.db.prepare(
+            "select id from run
+             where status = 'running' and (lease_until is null or lease_until < ?) and started_at < ?
+             order by started_at limit ?",
+        )?;
+        Ok(statement.query_map(params![now, iso(-stale_ms), limit], |r| r.get(0))?.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
     /// Record where the run stands. A run that ends, however it ends, revokes
@@ -370,7 +510,11 @@ impl Store {
 
     /// The run is observably parked (a park landed). A settled run stays.
     pub fn mark_parked(&self, id: &str) -> Result<()> {
-        self.db.execute("update run set status = 'parked' where id = ? and status in ('running', 'parked')", params![id])?;
+        Self::mark_parked_in(&self.db, id)
+    }
+
+    fn mark_parked_in(db: &Connection, id: &str) -> Result<()> {
+        db.execute("update run set status = 'parked' where id = ? and status in ('running', 'parked')", params![id])?;
         Ok(())
     }
 
@@ -459,14 +603,35 @@ impl Store {
     pub fn put_leaf(&self, run_id: &str, address: &str, reason: &str, wake_at: Option<&str>, state: &Js, fence: Option<&str>) -> Result<()> {
         // `rewritten` is not kept: lf has no limit resume to read it.
         reason_of(reason.to_string())?;
+        self.fenced(run_id, fence, |db| Self::put_leaf_in(db, run_id, address, reason, wake_at, state))
+    }
+
+    fn put_leaf_in(db: &Connection, run_id: &str, address: &str, reason: &str, wake_at: Option<&str>, state: &Js) -> Result<()> {
+        db.execute(
+            "insert into leaf (run_id, address, reason, status, wake_at, state) values (?, ?, ?, 'parked', ?, ?)
+             on conflict (run_id, address) do update set
+               reason = excluded.reason, status = 'parked', wake_at = excluded.wake_at, state = excluded.state",
+            params![run_id, address, reason, wake_at, text_of(state)],
+        )?;
+        Ok(())
+    }
+
+    /// crate::backend::RunHostStore::commit_park: one transaction, fenced.
+    pub fn commit_park(&self, park: &Park<'_>) -> Result<()> {
+        let Park { run_id, address, state, fence, ref kind } = *park;
         self.fenced(run_id, fence, |db| {
-            db.execute(
-                "insert into leaf (run_id, address, reason, status, wake_at, state) values (?, ?, ?, 'parked', ?, ?)
-                 on conflict (run_id, address) do update set
-                   reason = excluded.reason, status = 'parked', wake_at = excluded.wake_at, state = excluded.state",
-                params![run_id, address, reason, wake_at, text_of(state)],
-            )?;
-            Ok(())
+            let wake_at = match kind {
+                ParkKind::Timer { wake_at } => Some(*wake_at),
+                ParkKind::Await { .. } | ParkKind::Limit => None,
+            };
+            Self::put_leaf_in(db, run_id, address, kind.reason(), wake_at, state)?;
+            match kind {
+                // The leaf is the truth; the work row only says when to look.
+                ParkKind::Timer { wake_at } => Self::enqueue_in(db, "resume_timer", &timer_work_key(run_id), &timer_work_payload(run_id), Some(wake_at))?,
+                ParkKind::Await { team_id, adapter_type, correlation_key } => Self::correlate_in(db, run_id, team_id, address, adapter_type, correlation_key)?,
+                ParkKind::Limit => Self::drop_correlation_in(db, run_id, address)?,
+            }
+            Self::mark_parked_in(db, run_id)
         })
     }
 
@@ -619,7 +784,11 @@ impl Store {
     // ── Correlations ────────────────────────────────────────────────────────
 
     pub fn correlate(&self, run_id: &str, team_id: &str, address: &str, adapter_type: &str, correlation_key: &str) -> Result<()> {
-        self.db.execute(
+        Self::correlate_in(&self.db, run_id, team_id, address, adapter_type, correlation_key)
+    }
+
+    fn correlate_in(db: &Connection, run_id: &str, team_id: &str, address: &str, adapter_type: &str, correlation_key: &str) -> Result<()> {
+        db.execute(
             "insert into await_correlation (run_id, team_id, address, adapter_type, correlation_key) values (?, ?, ?, ?, ?)
              on conflict (run_id, address) do update set
                team_id = excluded.team_id, adapter_type = excluded.adapter_type, correlation_key = excluded.correlation_key",
@@ -648,7 +817,11 @@ impl Store {
     }
 
     pub fn drop_correlation(&self, run_id: &str, address: &str) -> Result<()> {
-        self.db.execute("delete from await_correlation where run_id = ? and address = ?", params![run_id, address])?;
+        Self::drop_correlation_in(&self.db, run_id, address)
+    }
+
+    fn drop_correlation_in(db: &Connection, run_id: &str, address: &str) -> Result<()> {
+        db.execute("delete from await_correlation where run_id = ? and address = ?", params![run_id, address])?;
         Ok(())
     }
 
@@ -704,17 +877,26 @@ impl Store {
     // ── The work queue ──────────────────────────────────────────────────────
 
     pub fn enqueue(&self, kind: &str, key: &str, payload: &Js, due_at: Option<&str>) -> Result<()> {
+        Self::enqueue_in(&self.db, kind, key, payload, due_at)
+    }
+
+    pub(crate) fn enqueue_in(db: &Connection, kind: &str, key: &str, payload: &Js, due_at: Option<&str>) -> Result<()> {
         if !WORK_KINDS.contains(&kind) {
             return Err(StoreError::Invalid(format!("not a work kind: {kind}")));
         }
         // Against a held row the new due time wins: its holder's completion
-        // leaves the row for the re-arm.
+        // leaves the row for the re-arm. A dead row queued again is new
+        // work: it lives again, its attempts from nought.
         let now = iso(0);
-        self.db.execute(
+        db.execute(
             "insert into work (kind, key, payload, due_at) values (?, ?, ?, ?)
              on conflict (key) do update set
-               due_at = case when work.lease_until > ? then excluded.due_at else min(work.due_at, excluded.due_at) end,
+               due_at = case when work.dead_at is not null then excluded.due_at
+                             when work.lease_until > ? then excluded.due_at else min(work.due_at, excluded.due_at) end,
                payload = excluded.payload,
+               attempts = case when work.dead_at is null then work.attempts else 0 end,
+               dead_at = null,
+               dead_reason = null,
                version = work.version + 1",
             params![kind, key, text_of(payload), due_at.unwrap_or(&now), now],
         )?;
@@ -728,24 +910,25 @@ impl Store {
         let lease_ms = claim.lease_ms;
         self.transaction(|db| {
             let mut select = db.prepare(
-                "select id, kind, key, payload, version from work
-                 where due_at <= ? and (lease_until is null or lease_until < ?) and kind in (select value from json_each(?))
+                "select id, kind, key, payload, version, attempts from work
+                 where due_at <= ? and (lease_until is null or lease_until < ?) and dead_at is null and kind in (select value from json_each(?))
                  order by due_at, id limit ?",
             )?;
             let due = select
                 .query_map(params![due_by, now, kinds, claim.limit], |r| {
-                    Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, String>(3)?, r.get::<_, i64>(4)?))
+                    Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, String>(3)?, r.get::<_, i64>(4)?, r.get::<_, i64>(5)?))
                 })?
                 .collect::<rusqlite::Result<Vec<_>>>()?;
-            let mut lease = db.prepare("update work set lease_token = ?, lease_until = ?, version = version + 1 where id = ?")?;
+            let mut lease = db.prepare("update work set lease_token = ?, lease_until = ?, version = version + 1, attempts = attempts + 1 where id = ?")?;
             due.into_iter()
-                .map(|(id, kind, key, payload, version)| {
+                .map(|(id, kind, key, payload, version, attempts)| {
                     if !WORK_KINDS.contains(&kind.as_str()) {
                         return Err(StoreError::Invalid(format!("not a work kind: {kind}")));
                     }
                     let lease_token = uuid();
                     lease.execute(params![lease_token, iso(lease_ms), id])?;
-                    Ok(ClaimedWork { id: id.to_string(), kind, key, payload: parse_text(&payload)?, claim: format!("{lease_token}/{}", version + 1) })
+                    let claim = format!("{lease_token}/{}", version + 1);
+                    Ok(ClaimedWork { id: id.to_string(), kind, key, payload: parse_text(&payload)?, claim, attempts: attempts + 1 })
                 })
                 .collect()
         })
@@ -763,15 +946,37 @@ impl Store {
         })
     }
 
-    pub fn release_work(&self, id: &str, claim: &str, due_at: Option<&str>) -> Result<()> {
+    pub fn release_work(&self, id: &str, claim: &str, due_at: Option<&str>, why: Release) -> Result<()> {
         let (lease_token, version) = work_claim(claim)?;
+        let attempts = match why {
+            Release::Failed => "attempts",
+            Release::Busy => "max(attempts - 1, 0)",
+            Release::Rescheduled => "0",
+        };
         self.db.execute(
-            "update work set lease_token = null, lease_until = null,
-               due_at = case when version = ? then coalesce(?, due_at) else due_at end
-             where id = ? and lease_token = ?",
+            &format!(
+                "update work set lease_token = null, lease_until = null, attempts = {attempts},
+                   due_at = case when version = ? then coalesce(?, due_at) else due_at end
+                 where id = ? and lease_token = ?"
+            ),
             params![version, due_at, work_id(id)?, lease_token],
         )?;
         Ok(())
+    }
+
+    /// crate::backend::RunHostStore::bury_work: dead, unless re-armed since
+    /// the claim (as `complete`): then only unleased, for its new due time.
+    pub fn bury_work(&self, id: &str, claim: &str, reason: &str) -> Result<()> {
+        let (lease_token, version) = work_claim(claim)?;
+        let id = work_id(id)?;
+        self.transaction(|db| {
+            db.execute(
+                "update work set dead_at = ?, dead_reason = ? where id = ? and lease_token = ? and version = ?",
+                params![iso(0), reason, id, lease_token, version],
+            )?;
+            db.execute("update work set lease_token = null, lease_until = null where id = ? and lease_token = ?", params![id, lease_token])?;
+            Ok(())
+        })
     }
 
     // ── Library sources ─────────────────────────────────────────────────────
@@ -787,7 +992,11 @@ impl Store {
 
     /// crate::backend::RunHostStore::claim_event.
     pub fn claim_event(&self, listen: &str, key: &str) -> Result<bool> {
-        let inserted = self.db.execute("insert into event_receipt (listen, key, received_at) values (?, ?, ?) on conflict do nothing", params![listen, key, iso(0)])?;
+        Self::claim_event_in(&self.db, listen, key)
+    }
+
+    fn claim_event_in(db: &Connection, listen: &str, key: &str) -> Result<bool> {
+        let inserted = db.execute("insert into event_receipt (listen, key, received_at) values (?, ?, ?) on conflict do nothing", params![listen, key, iso(0)])?;
         Ok(inserted == 1)
     }
 }
@@ -864,7 +1073,7 @@ mod tests {
         store.enqueue("wake_await", "k", &no_payload(), Some(&due)).unwrap();
         let claimed = store.claim_due(&claim(10, 60_000)).unwrap().pop().unwrap();
         assert!(work_row(&store, "k").1.is_some());
-        store.release_work(&claimed.id, &claimed.claim, None).unwrap();
+        store.release_work(&claimed.id, &claimed.claim, None, Release::Failed).unwrap();
         assert_eq!(work_row(&store, "k"), (due, None));
     }
 
@@ -919,5 +1128,170 @@ mod tests {
         assert!(other.claim_lease("run-1", 60_000).unwrap().is_some());
         let parked: Vec<String> = other.leaves("run-1", true, None, None).unwrap().into_iter().map(|l| l.address).collect();
         assert_eq!(parked, ["s1"]);
+    }
+
+    /// A write that fails partway: the statement `on` names aborts, as a
+    /// crash between the old separate writes would have stopped them.
+    fn failing(store: &Store, name: &str, on: &str) {
+        store.db.execute_batch(&format!("create trigger {name} {on} begin select raise(abort, 'injected'); end;")).unwrap();
+    }
+
+    fn unfail(store: &Store, name: &str) {
+        store.db.execute_batch(&format!("drop trigger {name}")).unwrap();
+    }
+
+    fn status(store: &Store, run_id: &str) -> String {
+        store.run(run_id).unwrap().unwrap().status
+    }
+
+    fn work_keys(store: &Store) -> Vec<String> {
+        let mut statement = store.db.prepare("select key from work order by key").unwrap();
+        statement.query_map([], |r| r.get(0)).unwrap().collect::<rusqlite::Result<Vec<_>>>().unwrap()
+    }
+
+    fn running(store: &Store, run_id: &str) -> String {
+        store.start_run(run_id, "f", "m", &iso(0), "{}").unwrap();
+        store.claim_lease(run_id, 60_000).unwrap().unwrap()
+    }
+
+    #[test]
+    fn a_timer_park_is_its_leaf_its_wake_and_the_run_parked_or_none_of_them() {
+        let (store, _) = state_file();
+        let fence = running(&store, "run-1");
+        let wake_at = iso(60_000);
+        let park = Park { run_id: "run-1", address: "s1", state: &no_payload(), fence: Some(&fence), kind: ParkKind::Timer { wake_at: &wake_at } };
+        // Before: the leaf was written, then the crash, and nothing ever woke it.
+        failing(&store, "no_work", "before insert on work");
+        assert!(store.commit_park(&park).is_err());
+        assert!(store.leaves("run-1", false, None, None).unwrap().is_empty());
+        assert_eq!(status(&store, "run-1"), "running");
+        unfail(&store, "no_work");
+        store.commit_park(&park).unwrap();
+        assert_eq!(store.leaves("run-1", true, Some("timer"), None).unwrap()[0].wake_at.as_deref(), Some(wake_at.as_str()));
+        assert_eq!(work_row(&store, "resume_timer:run-1").0, wake_at);
+        assert_eq!(status(&store, "run-1"), "parked");
+    }
+
+    #[test]
+    fn an_await_park_is_kept_with_its_correlation_and_a_limit_park_with_its_drop() {
+        let (store, _) = state_file();
+        let fence = running(&store, "run-1");
+        let kind = ParkKind::Await { team_id: "local", adapter_type: "mail", correlation_key: "thread-1" };
+        let park = Park { run_id: "run-1", address: "s1", state: &no_payload(), fence: Some(&fence), kind };
+        failing(&store, "no_correlation", "before insert on await_correlation");
+        assert!(store.commit_park(&park).is_err());
+        assert!(store.leaves("run-1", false, None, None).unwrap().is_empty());
+        unfail(&store, "no_correlation");
+        store.commit_park(&park).unwrap();
+        assert_eq!(store.correlated("mail", "local", "thread-1").unwrap()[0].address, "s1");
+        // The run's status is the last write: failing it undoes the leaf and the drop.
+        let limit = Park { run_id: "run-1", address: "s1", state: &no_payload(), fence: Some(&fence), kind: ParkKind::Limit };
+        failing(&store, "no_status", "before update of status on run");
+        assert!(store.commit_park(&limit).is_err());
+        assert_eq!(store.leaves("run-1", false, None, None).unwrap()[0].reason, "await");
+        assert_eq!(store.correlated("mail", "local", "thread-1").unwrap().len(), 1);
+        unfail(&store, "no_status");
+        store.commit_park(&limit).unwrap();
+        assert!(store.correlated("mail", "local", "thread-1").unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_park_under_a_lost_lease_writes_nothing() {
+        let (store, _) = state_file();
+        running(&store, "run-1");
+        let wake_at = iso(1_000);
+        let park = Park { run_id: "run-1", address: "s1", state: &no_payload(), fence: Some("not-the-lease"), kind: ParkKind::Timer { wake_at: &wake_at } };
+        assert!(matches!(store.commit_park(&park), Err(StoreError::LeaseLost { .. })));
+        assert!(store.leaves("run-1", false, None, None).unwrap().is_empty());
+        assert!(work_keys(&store).is_empty());
+        assert_eq!(status(&store, "run-1"), "running");
+    }
+
+    #[test]
+    fn an_event_receipt_and_its_run_are_one_write() {
+        let (store, _) = state_file();
+        let start = |id: &'static str| RunStart { id, file: "f", movement: "m", started_at: "2026-10-20T00:00:00.000Z", input: "{}" };
+        // Before: the receipt was noted, then the crash, and the event never ran.
+        failing(&store, "no_run", "before insert on run");
+        assert!(store.start_event_run("listen:f:m", "delivery-1", &start("run-1")).is_err());
+        unfail(&store, "no_run");
+        assert!(store.start_event_run("listen:f:m", "delivery-1", &start("run-1")).unwrap(), "its receipt went with the failed run");
+        assert!(!store.start_event_run("listen:f:m", "delivery-1", &start("run-2")).unwrap());
+        assert!(store.run("run-1").unwrap().is_some());
+        assert!(store.run("run-2").unwrap().is_none(), "a redelivery starts no run");
+    }
+
+    #[test]
+    fn a_delivery_keeps_its_cursor_only_with_its_work() {
+        let (store, _) = state_file();
+        let cursor = Js::str("c-2");
+        let row = |key: &str| NewWork { kind: "fire_event".into(), key: key.into(), payload: no_payload(), due_at: None, team_id: None };
+        let work = [row("fire_event:1"), row("fire_event:2")];
+        // Before: the cursor moved past events that were then never queued.
+        failing(&store, "no_work", "before insert on work");
+        assert!(store.keep_delivery("sub", Some(&cursor), &work).is_err());
+        assert_eq!(store.inbound_checkpoint("sub").unwrap(), None);
+        unfail(&store, "no_work");
+        store.keep_delivery("sub", Some(&cursor), &work).unwrap();
+        assert_eq!(store.inbound_checkpoint("sub").unwrap(), Some(cursor));
+        assert_eq!(work_keys(&store), ["fire_event:1", "fire_event:2"]);
+        // No cursor: the saved one stays.
+        store.keep_delivery("sub", None, &[row("fire_event:3")]).unwrap();
+        assert_eq!(store.inbound_checkpoint("sub").unwrap(), Some(Js::str("c-2")));
+    }
+
+    #[test]
+    fn a_run_is_lapsed_when_it_is_running_without_a_live_lease_a_lease_length_after_it_started() {
+        let (store, _) = state_file();
+        let long_ago = iso(-120_000);
+        let start = |id: &str, at: &str| store.start_run(id, "f", "m", at, "{}").unwrap();
+        let lease_until = |id: &str, until: Option<String>| {
+            store.db.execute("update run set lease_token = 't', lease_until = ? where id = ?", params![until, id]).unwrap();
+        };
+        start("lapsed", &long_ago);
+        lease_until("lapsed", Some(iso(-1_000)));
+        start("live", &long_ago);
+        lease_until("live", Some(iso(40_000)));
+        start("never-leased", &long_ago);
+        start("just-started", &iso(0));
+        start("parked", &long_ago);
+        store.mark_parked("parked").unwrap();
+        assert_eq!(store.lapsed_runs(60_000, 10).unwrap(), ["lapsed", "never-leased"]);
+    }
+
+    #[test]
+    fn a_rows_attempts_count_its_claims_less_those_busy_and_start_over_when_it_succeeds() {
+        let (store, _) = state_file();
+        let due_soon = || claim(10, 60_000);
+        store.enqueue("resume_timer", "k", &no_payload(), Some(&iso(-1_000))).unwrap();
+        let first = store.claim_due(&due_soon()).unwrap().pop().unwrap();
+        assert_eq!(first.attempts, 1);
+        store.release_work(&first.id, &first.claim, Some(&iso(-1_000)), Release::Failed).unwrap();
+        let second = store.claim_due(&due_soon()).unwrap().pop().unwrap();
+        assert_eq!(second.attempts, 2);
+        store.release_work(&second.id, &second.claim, Some(&iso(-1_000)), Release::Busy).unwrap();
+        let third = store.claim_due(&due_soon()).unwrap().pop().unwrap();
+        assert_eq!(third.attempts, 2, "a busy release gives its attempt back");
+        store.release_work(&third.id, &third.claim, Some(&iso(-1_000)), Release::Rescheduled).unwrap();
+        assert_eq!(store.claim_due(&due_soon()).unwrap().pop().unwrap().attempts, 1);
+    }
+
+    #[test]
+    fn a_buried_row_is_never_claimed_until_it_is_queued_again() {
+        let (store, _) = state_file();
+        store.enqueue("wake_await", "k", &no_payload(), Some(&iso(-1_000))).unwrap();
+        let claimed = store.claim_due(&claim(10, 60_000)).unwrap().pop().unwrap();
+        store.bury_work(&claimed.id, &claimed.claim, "gave up").unwrap();
+        let dead: (Option<String>, Option<String>) = store.db.query_row("select dead_reason, lease_token from work where key = 'k'", [], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
+        assert_eq!(dead, (Some("gave up".into()), None));
+        assert!(store.claim_due(&claim(10, 60_000)).unwrap().is_empty());
+        store.enqueue("wake_await", "k", &no_payload(), Some(&iso(-1_000))).unwrap();
+        assert_eq!(store.claim_due(&claim(10, 60_000)).unwrap().pop().unwrap().attempts, 1);
+        // Re-armed during its claim, a row is not buried: the new work stands.
+        store.enqueue("resume_timer", "t", &no_payload(), Some(&iso(-1_000))).unwrap();
+        let held = store.claim_due(&claim(10, 60_000)).unwrap().pop().unwrap();
+        store.enqueue("resume_timer", "t", &no_payload(), Some(&iso(-500))).unwrap();
+        store.bury_work(&held.id, &held.claim, "gave up").unwrap();
+        assert_eq!(store.claim_due(&claim(10, 60_000)).unwrap().len(), 1);
     }
 }

@@ -25,8 +25,8 @@ use crate::backend::{MintCallback, RunHostStore, StoreSpec, open_store};
 use crate::json::Js;
 use crate::obj;
 use crate::slot_server::{Listen, Refusal};
-use crate::store::{ClaimDue, StoreError, iso};
-use crate::store_wire::{Wire, num, opt, to_rows};
+use crate::store::{ClaimDue, NewWork, Park, Release, RunStart, StoreError, iso};
+use crate::store_wire::{Wire, num, opt, park_kind, rows, to_rows};
 
 /// The store slot's methods (docs/contracts/store-slot.md), as its manifest lists them.
 pub const STORE_METHODS: &[&str] = &[
@@ -38,7 +38,7 @@ pub const STORE_METHODS: &[&str] = &[
     "joins.frames", "joins.deleteFrames", "correlations.correlate", "correlations.correlated", "correlations.ofRun", "correlations.drop",
     "correlations.dropRun", "leases.claim", "leases.renew", "leases.release", "leases.dropRunState", "work.enqueue", "work.claimDue",
     "work.complete", "work.release", "sources.put", "sources.get", "inbound.checkpoint", "inbound.saveCheckpoint", "processes.list",
-    "processes.swap", "events.claim",
+    "processes.swap", "events.claim", "events.startRun", "runs.lapsed", "parks.commit", "work.bury", "inbound.keepDelivery",
 ];
 
 pub async fn serve(spec: &StoreSpec, listen: Listen) -> Result<(), String> {
@@ -180,6 +180,7 @@ fn dispatch(store: &dyn RunHostStore, method: &str, p: &Params) -> Result<Js, Fa
             store.append_trace(p.str("runId")?, p.str("segmentId")?, entries)?;
             none
         }
+        "runs.lapsed" => Ok(Js::strings(store.lapsed_runs(p.int("staleMs")?, p.int("limit")?)?)),
         "runs.traceLength" => Ok(Js::Num(store.trace_len(p.str("runId")?)?.into())),
         "runs.spent" => Ok(num(store.run_spent(p.str("runId")?)?)),
         "runs.addSpend" => {
@@ -228,6 +229,12 @@ fn dispatch(store: &dyn RunHostStore, method: &str, p: &Params) -> Result<Js, Fa
 
         "parks.putLeaf" => {
             store.put_leaf(p.str("runId")?, p.str("address")?, p.str("reason")?, p.opt_str("wakeAt")?, &p.value("state"), p.opt_str("fence")?)?;
+            none
+        }
+        "parks.commit" => {
+            let (state, kind) = (p.value("state"), p.value("park"));
+            let kind = park_kind(&kind).ok_or_else(|| Failure::Params("park: expected { kind: timer | await | limit, … }".into()))?;
+            store.commit_park(&Park { run_id: p.str("runId")?, address: p.str("address")?, state: &state, fence: p.opt_str("fence")?, kind })?;
             none
         }
         "parks.claimLeaf" => Ok(match store.claim_leaf(p.str("runId")?, p.str("address")?, p.opt_str("reason")?)? {
@@ -304,7 +311,11 @@ fn dispatch(store: &dyn RunHostStore, method: &str, p: &Params) -> Result<Js, Fa
             none
         }
         "work.release" => {
-            store.release_work(p.str("id")?, p.str("claim")?, p.opt_str("dueAt")?)?;
+            store.release_work(p.str("id")?, p.str("claim")?, p.opt_str("dueAt")?, Release::of_wire(p.opt_str("why")?)?)?;
+            none
+        }
+        "work.bury" => {
+            store.bury_work(p.str("id")?, p.str("claim")?, p.str("reason")?)?;
             none
         }
 
@@ -318,6 +329,11 @@ fn dispatch(store: &dyn RunHostStore, method: &str, p: &Params) -> Result<Js, Fa
             None => Js::Null,
             Some(checkpoint) => Js::from(obj! { "checkpoint" => checkpoint }),
         }),
+        "inbound.keepDelivery" => {
+            let work: Vec<NewWork> = rows(&p.value("work")).ok_or_else(|| Failure::Params("work: expected a list of { kind, key, payload, dueAt, teamId }".into()))?;
+            store.keep_delivery(p.str("subscriptionId")?, p.0.get("checkpoint"), &work)?;
+            none
+        }
         "inbound.saveCheckpoint" => {
             store.save_inbound_checkpoint(p.str("subscriptionId")?, &p.value("checkpoint"))?;
             none
@@ -330,7 +346,69 @@ fn dispatch(store: &dyn RunHostStore, method: &str, p: &Params) -> Result<Js, Fa
         "processes.swap" => Ok(Js::Bool(store.swap_module_processes(p.int("version")?, &p.value("processes"))?)),
 
         "events.claim" => Ok(Js::Bool(store.claim_event(p.str("listen")?, p.str("key")?)?)),
+        "events.startRun" => {
+            let run = RunStart { id: p.str("id")?, file: p.str("file")?, movement: p.str("movement")?, started_at: p.str("startedAt")?, input: p.str("input")? };
+            Ok(Js::Bool(store.start_event_run(p.str("listen")?, p.str("key")?, &run)?))
+        }
 
         _ => Err(Failure::Unknown),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::store::{NewWork, Park, ParkKind, RunStart, Store};
+    use crate::store_wire::{event_run_params, park_params};
+
+    fn state_file() -> Store {
+        let dir = std::env::temp_dir().join(format!("lf-contract-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        Store::open(&dir.join("state.db")).unwrap()
+    }
+
+    fn call(store: &dyn RunHostStore, method: &str, params: crate::json::Obj) -> Js {
+        answer(store, method, &Js::from(params)).unwrap_or_else(|refusal| panic!("{method}: {}", refusal.message))
+    }
+
+    /// The composite writes as a store module's client sends them
+    /// (crate::store_module), served over lf's own store.
+    #[test]
+    fn the_composite_writes_cross_the_store_wire() {
+        let store = state_file();
+        let run = RunStart { id: "run-1", file: "f", movement: "m", started_at: &iso(-120_000), input: "{}" };
+        assert_eq!(call(&store, "events.startRun", event_run_params("listen:f:m", "d-1", &run)), Js::Bool(true));
+        assert_eq!(call(&store, "events.startRun", event_run_params("listen:f:m", "d-1", &run)), Js::Bool(false));
+        assert_eq!(call(&store, "runs.lapsed", obj! { "staleMs" => Js::Num(60_000.into()), "limit" => Js::Num(10.into()) }), Js::strings(["run-1"]));
+
+        let token = store.claim_lease("run-1", 60_000).unwrap().unwrap();
+        let wake_at = iso(60_000);
+        let park = Park { run_id: "run-1", address: "s1", state: &Js::Null, fence: Some(&token), kind: ParkKind::Timer { wake_at: &wake_at } };
+        call(&store, "parks.commit", park_params(&park));
+        assert_eq!(store.run("run-1").unwrap().unwrap().status, "parked");
+        let lost = Park { fence: Some("gone"), ..park };
+        let refused = answer(&store, "parks.commit", &Js::from(park_params(&lost))).err().unwrap();
+        assert_eq!(refused.code, crate::store_module::LEASE_LOST);
+
+        let work = NewWork { kind: "wake_await".into(), key: "w".into(), payload: Js::Null, due_at: Some(iso(-1_000)), team_id: None };
+        call(&store, "inbound.keepDelivery", obj! { "subscriptionId" => Js::str("sub"), "checkpoint" => Js::str("c"), "work" => crate::store_wire::to_rows(&[work]) });
+        assert_eq!(store.inbound_checkpoint("sub").unwrap(), Some(Js::str("c")));
+        let claimed = call(&store, "work.claimDue", obj! { "limit" => Js::Num(10.into()), "leaseMs" => Js::Num(60_000.into()), "kinds" => Js::strings(["wake_await"]) });
+        let row = claimed.as_array().unwrap()[0].clone();
+        assert_eq!(row.get("attempts"), Some(&Js::Num(1.into())));
+        let (id, claim) = (row.get("id").unwrap().clone(), row.get("claim").unwrap().clone());
+        call(&store, "work.release", obj! { "id" => id.clone(), "claim" => claim, "dueAt" => Js::str(iso(-1_000)), "why" => Js::str("busy") });
+        let again = call(&store, "work.claimDue", obj! { "limit" => Js::Num(10.into()), "leaseMs" => Js::Num(60_000.into()), "kinds" => Js::strings(["wake_await"]) });
+        let row = again.as_array().unwrap()[0].clone();
+        assert_eq!(row.get("attempts"), Some(&Js::Num(1.into())), "a busy release gave its attempt back");
+        call(&store, "work.bury", obj! { "id" => id, "claim" => row.get("claim").unwrap().clone(), "reason" => Js::str("gave up") });
+        assert_eq!(call(&store, "work.claimDue", obj! { "limit" => Js::Num(10.into()), "leaseMs" => Js::Num(60_000.into()) }), Js::Arr(vec![]));
+    }
+
+    #[test]
+    fn every_method_served_is_listed() {
+        for method in ["events.startRun", "runs.lapsed", "parks.commit", "work.bury", "inbound.keepDelivery"] {
+            assert!(STORE_METHODS.contains(&method), "{method}");
+        }
     }
 }

@@ -48,7 +48,10 @@ use tokio_postgres::{Client, Row};
 use crate::backend::{CallbackClaim, CallbackRecord, MintCallback, RunHostStore};
 use crate::json::Js;
 use crate::obj;
-use crate::store::{BranchExport, ClaimDue, ClaimedWork, CorrelatedAwait, LeafRow, Result, RunRow, StoreError, WORK_KINDS};
+use crate::store::{
+    BranchExport, ClaimDue, ClaimedWork, CorrelatedAwait, LeafRow, NewWork, Park, ParkKind, Release, Result, RunRow, RunStart, StoreError, WORK_KINDS,
+    timer_work_key, timer_work_payload,
+};
 
 type Params<'a> = [&'a (dyn ToSql + Sync)];
 
@@ -122,7 +125,7 @@ pub(crate) fn block_on<F: Future>(future: F) -> F::Output {
 /// never to be reused: it made `lf.write_echo`, which moved to the loop
 /// guard, and databases that applied it record it as done.
 const MIGRATIONS: &[(i32, &str)] =
-    &[(1, include_str!("pg_store_schema_1.sql")), (2, include_str!("pg_store_schema_2.sql")), (4, include_str!("pg_store_schema_4.sql"))];
+    &[(1, include_str!("pg_store_schema_1.sql")), (2, include_str!("pg_store_schema_2.sql")), (4, include_str!("pg_store_schema_4.sql")), (5, include_str!("pg_store_schema_5.sql"))];
 
 /// The advisory lock the migrations run under: "lf-store" as a number.
 const MIGRATION_LOCK: i64 = 0x6c66_2d73_746f_7265;
@@ -313,6 +316,17 @@ impl PgStore {
         }
     }
 
+    fn start_run_row(&self, run: &RunStart<'_>) -> Result<()> {
+        let trigger = format!("listen:{}:{}", run.file, run.movement);
+        self.execute(
+            "insert into lf.trigger_run (id, team_id, trigger_id, trigger_type, status, started_at, trigger_payload)
+             values ($1::text::uuid, $2::text::uuid, $3::text, 'webhook', 'running', $4::text::timestamptz,
+                     jsonb_build_object('file', $5::text, 'movement', $6::text, 'facts', $7::text))",
+            &[&run.id, &self.tenant, &trigger, &run.started_at, &run.file, &run.movement, &run.input],
+        )?;
+        Ok(())
+    }
+
     fn enqueue_row(&self, kind: &str, key: &str, payload: &Js, due_at: Option<&str>, team_id: &str) -> Result<()> {
         if !WORK_KINDS.contains(&kind) {
             return Err(StoreError::Invalid(format!("not a work kind: {kind}")));
@@ -323,8 +337,12 @@ impl PgStore {
                 "insert into lf.work (kind, key, team_id, payload, due_at, updated_at)
                  values ($1::text, $2::text, $3::text::uuid, $4::text::jsonb, coalesce($5::text::timestamptz, now()), date_trunc('milliseconds', clock_timestamp()))
                  on conflict (key) do update set
-                   due_at = case when work.lease_until > now() then excluded.due_at else least(work.due_at, excluded.due_at) end,
+                   due_at = case when work.dead_at is not null then excluded.due_at
+                                 when work.lease_until > now() then excluded.due_at else least(work.due_at, excluded.due_at) end,
                    payload = excluded.payload,
+                   attempts = case when work.dead_at is null then work.attempts else 0 end,
+                   dead_at = null,
+                   dead_reason = null,
                    team_id = coalesce(excluded.team_id, work.team_id),
                    updated_at = {NEXT_VERSION_OF_WORK}"
             ),
@@ -352,16 +370,33 @@ impl RunHostStore for PgStore {
     // ── lf's run records ────────────────────────────────────────────────────
 
     fn start_run(&self, id: &str, file: &str, movement: &str, started_at: &str, input: &str) -> Result<()> {
-        let trigger = format!("listen:{file}:{movement}");
-        self.execute(
-            "insert into lf.trigger_run (id, team_id, trigger_id, trigger_type, status, started_at, trigger_payload)
-             values ($1::text::uuid, $2::text::uuid, $3::text, 'webhook', 'running', $4::text::timestamptz,
-                     jsonb_build_object('file', $5::text, 'movement', $6::text, 'facts', $7::text))",
-            &[&id, &self.tenant, &trigger, &started_at, &file, &movement, &input],
-        )?;
-        Ok(())
+        self.start_run_row(&RunStart { id, file, movement, started_at, input })
     }
 
+    fn start_event_run(&self, listen: &str, key: &str, run: &RunStart<'_>) -> Result<bool> {
+        self.transaction(|| {
+            if !self.claim_event(listen, key)? {
+                return Ok(false);
+            }
+            self.start_run_row(run)?;
+            Ok(true)
+        })
+    }
+
+    /// Judged by the database's clock, as the leases are.
+    fn lapsed_runs(&self, stale_ms: i64, limit: i64) -> Result<Vec<String>> {
+        Ok(self
+            .query(
+                "select id::text from lf.trigger_run
+                 where team_id = $1::text::uuid and status = 'running' and trigger_payload ? 'facts'
+                   and (lease_until is null or lease_until < now()) and started_at < now() - $2::int8 * interval '1 millisecond'
+                 order by started_at limit $3::int8",
+                &[&self.tenant, &stale_ms, &limit],
+            )?
+            .iter()
+            .map(|r| r.get(0))
+            .collect())
+    }
     fn settle_run(&self, id: &str, status: &str, outcome: &Js, at: &str) -> Result<()> {
         let status = hosted_status(status);
         let writes = outcome.get("writes").and_then(|w| if let Js::Num(n) = w { n.as_i64() } else { None });
@@ -574,6 +609,32 @@ impl RunHostStore for PgStore {
         }
         self.execute("delete from lf.parked_run where run_id = $1::text::uuid and address = any($2::text[])", &[&run_id, &addresses])?;
         Ok(())
+    }
+
+    /// One transaction; a fenced one holds the run's row for it, so the lease
+    /// cannot change hands between the check and the writes.
+    fn commit_park(&self, park: &Park<'_>) -> Result<()> {
+        let Park { run_id, address, state, fence, ref kind } = *park;
+        self.transaction(|| {
+            if let Some(fence) = fence {
+                let held = self.query_opt(&format!("select id from lf.trigger_run where id = $1::text::uuid and {LEASED_TO}$2::text for update"), &[&run_id, &fence])?;
+                if held.is_none() {
+                    return Err(Self::not_written(run_id, Some(fence)));
+                }
+            }
+            let wake_at = match kind {
+                ParkKind::Timer { wake_at } => Some(*wake_at),
+                ParkKind::Await { .. } | ParkKind::Limit => None,
+            };
+            self.put_leaf(run_id, address, kind.reason(), wake_at, state, fence)?;
+            match kind {
+                // The leaf is the truth; the work row only says when to look.
+                ParkKind::Timer { wake_at } => self.enqueue_row("resume_timer", &timer_work_key(run_id), &timer_work_payload(run_id), Some(wake_at), &self.tenant)?,
+                ParkKind::Await { team_id, adapter_type, correlation_key } => self.correlate(run_id, team_id, address, adapter_type, correlation_key)?,
+                ParkKind::Limit => self.drop_correlation(run_id, address)?,
+            }
+            self.mark_parked(run_id)
+        })
     }
 
     // ── Joins ───────────────────────────────────────────────────────────────
@@ -806,7 +867,7 @@ impl RunHostStore for PgStore {
                 "with c as materialized (
                    select id from lf.work
                    where due_at <= coalesce($1::text::timestamptz, now()) and (lease_until is null or lease_until < now())
-                     and kind = any($2::text[]) and team_id = $3::text::uuid
+                     and dead_at is null and kind = any($2::text[]) and team_id = $3::text::uuid
                    order by due_at
                    limit $4::int8
                    for update skip locked
@@ -815,7 +876,7 @@ impl RunHostStore for PgStore {
                  set lease_owner = $5::text, lease_until = now() + $6::int8 * interval '1 millisecond', lease_token = gen_random_uuid(),
                      attempts = attempts + 1, updated_at = {NEXT_VERSION_OF_W}
                  from c where w.id = c.id
-                 returning w.id::text, w.kind, w.key, w.payload::text, w.lease_token::text, {}",
+                 returning w.id::text, w.kind, w.key, w.payload::text, w.lease_token::text, {}, w.attempts::int8",
                 iso!("w.updated_at")
             ),
             &[&due_by, &kinds, &self.tenant, &limit, &self.owner, &lease_ms],
@@ -823,7 +884,7 @@ impl RunHostStore for PgStore {
         rows.iter()
             .map(|r| {
                 let claim = Js::Obj(obj! { "leaseToken" => Js::Str(r.get(4)), "claimedUpdatedAt" => Js::Str(r.get(5)) });
-                Ok(ClaimedWork { id: r.get(0), kind: r.get(1), key: r.get(2), payload: parse_text(r.get(3))?, claim: claim.to_json() })
+                Ok(ClaimedWork { id: r.get(0), kind: r.get(1), key: r.get(2), payload: parse_text(r.get(3))?, claim: claim.to_json(), attempts: r.get(6) })
             })
             .collect()
     }
@@ -848,16 +909,37 @@ impl RunHostStore for PgStore {
         Ok(())
     }
 
-    /// Unleased for a retry at `due_at`, unless re-armed since the claim.
-    fn release_work(&self, id: &str, claim: &str, due_at: Option<&str>) -> Result<()> {
+    /// Unleased for a retry at `due_at`, unless re-armed since the claim. A
+    /// busy run's release gives the attempt back (`deferWork`).
+    fn release_work(&self, id: &str, claim: &str, due_at: Option<&str>, why: Release) -> Result<()> {
         let (token, version) = work_claim(claim)?;
+        let attempts = match why {
+            Release::Failed => "attempts",
+            Release::Busy => "greatest(attempts - 1, 0), deferrals = deferrals + 1",
+            Release::Rescheduled => "0, deferrals = 0",
+        };
         self.execute(
-            "update lf.work set lease_owner = null, lease_until = null, lease_token = null,
-               due_at = case when updated_at = $3::text::timestamptz then coalesce($4::text::timestamptz, due_at) else due_at end
-             where id = $1::text::uuid and lease_token::text = $2::text",
+            &format!(
+                "update lf.work set lease_owner = null, lease_until = null, lease_token = null, attempts = {attempts},
+                   due_at = case when updated_at = $3::text::timestamptz then coalesce($4::text::timestamptz, due_at) else due_at end
+                 where id = $1::text::uuid and lease_token::text = $2::text"
+            ),
             &[&id, &token, &version, &due_at],
         )?;
         Ok(())
+    }
+
+    fn bury_work(&self, id: &str, claim: &str, reason: &str) -> Result<()> {
+        let (token, version) = work_claim(claim)?;
+        let held = "id = $1::text::uuid and lease_token::text = $2::text";
+        self.transaction(|| {
+            self.execute(
+                &format!("update lf.work set dead_at = now(), dead_reason = $4::text where {held} and updated_at = $3::text::timestamptz"),
+                &[&id, &token, &version, &reason],
+            )?;
+            self.execute(&format!("update lf.work set lease_owner = null, lease_until = null, lease_token = null where {held}"), &[&id, &token])?;
+            Ok(())
+        })
     }
 
     // ── Library sources ─────────────────────────────────────────────────────
@@ -1000,6 +1082,18 @@ impl RunHostStore for PgStore {
             &[&self.tenant, &subscription_id, &text],
         )?;
         Ok(())
+    }
+
+    fn keep_delivery(&self, subscription_id: &str, checkpoint: Option<&Js>, work: &[NewWork]) -> Result<()> {
+        self.transaction(|| {
+            if let Some(checkpoint) = checkpoint {
+                self.save_inbound_checkpoint(subscription_id, checkpoint)?;
+            }
+            for row in work {
+                self.enqueue_row(&row.kind, &row.key, &row.payload, row.due_at.as_deref(), row.team_id.as_deref().unwrap_or(&self.tenant))?;
+            }
+            Ok(())
+        })
     }
 
     fn module_processes(&self) -> Result<crate::backend::ModuleProcesses> {
