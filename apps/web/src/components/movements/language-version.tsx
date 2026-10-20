@@ -88,8 +88,8 @@ export function LanguageVersionNotice({
       </p>
       {languageVersion !== CURRENT_LANGUAGE_VERSION && issues.length === 0 && (
         <p className="mt-2 text-[12.5px] leading-relaxed text-gray-600">
-          It keeps running as <VersionTag name={name} /> until you ask your
-          assistant to upgrade it.
+          It keeps running as <VersionTag name={name} /> until you upgrade it:
+          ask your own agent to, through the MCP connector.
         </p>
       )}
       {issues.length > 0 && (
@@ -97,7 +97,7 @@ export function LanguageVersionNotice({
           <p className="mt-2 text-[12.5px] leading-relaxed text-gray-600">
             It keeps running as <VersionTag name={name} />.{" "}
             <VersionTag name={current} /> reports the issues below; fix them,
-            then ask your assistant to upgrade it.
+            then ask your own agent to upgrade it, through the MCP connector.
           </p>
           <ul className="mt-2 space-y-1.5">
             {issues.map((d, i) => (
