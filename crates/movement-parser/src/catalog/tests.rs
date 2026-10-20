@@ -165,6 +165,33 @@ fn a_member_the_typescript_does_not_declare_is_refused() {
 }
 
 #[test]
+fn the_adapter_s_own_words_are_read_wherever_it_may_write_them() {
+    let schema = json!({
+        "positions": { "Row": {
+            "properties": { "Name": "text" },
+            "edges": { "Cells": { "target": "Row", "description": "The row's cells." } },
+            "description": "One row.",
+            "fieldDocs": { "Name": "What the row is called." }
+        } },
+        "collections": {},
+        "writableRoots": {}
+    });
+    let snapshot = json!({
+        "adapters": { "sheets": { "constructionArgs": [], "description": "Spreadsheets.", "schemas": { "": schema } } },
+        "credentials": {},
+        "plugins": { "shout": { "args": [], "priced": false, "description": "Says it louder." } }
+    });
+    let catalog = CatalogSnapshot::load(&snapshot.to_string()).unwrap();
+    let adapter = &catalog.adapters["sheets"];
+    assert_eq!(adapter.spec.description.as_deref(), Some("Spreadsheets."));
+    let row = &adapter.schemas[""].positions["Row"];
+    assert_eq!(row.description.as_deref(), Some("One row."));
+    assert_eq!(row.field_docs.as_ref().and_then(|d| d.get("Name")).map(String::as_str), Some("What the row is called."));
+    assert_eq!(row.edges["Cells"].description.as_deref(), Some("The row's cells."));
+    assert_eq!(catalog.plugins["shout"].description.as_deref(), Some("Says it louder."));
+}
+
+#[test]
 fn a_snapshot_carries_its_contract_version_and_an_unsupported_one_is_refused() {
     let at = |version: Value| json!({ "contractVersion": version, "adapters": {}, "credentials": {}, "plugins": {} }).to_string();
     assert_eq!(CatalogSnapshot::load(&at(json!(1))).unwrap().contract_version, Some(1));

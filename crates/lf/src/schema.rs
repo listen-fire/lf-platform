@@ -711,3 +711,37 @@ pub fn probe(input: &Js) -> Result<Js, String> {
     });
     Ok(Js::from(obj! { "schema" => projection.schema, "notes" => Js::strings(projection.notes) }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn js(text: &str) -> Js {
+        Js::parse(text.as_bytes()).unwrap()
+    }
+
+    /// The type's words fall back to its entry point's; every described field
+    /// lands on the position, write-only ones too; a reference's on its edge.
+    #[test]
+    fn the_adapter_s_own_words_ride_the_projection() {
+        let entries = [js(r#"{ "typeId": "co", "displayName": "Company", "writable": true, "readable": true, "description": "A company." }"#)];
+        let descriptor = js(
+            r#"{ "typeId": "co", "displayName": "Company",
+                 "fields": [
+                   { "fieldId": "n", "displayName": "Name", "kind": "string", "writable": true, "description": "Its legal name." },
+                   { "fieldId": "s", "displayName": "Secret", "kind": "string", "writable": true, "readable": false, "description": "Read it on the Notes edge." },
+                   { "fieldId": "t", "displayName": "Tag", "kind": "string", "writable": false, "description": "" }
+                 ],
+                 "references": [{ "fieldId": "notes", "name": "Notes", "targetTypeId": "co", "cardinality": "many", "direction": "outgoing", "description": "What people wrote." }] }"#,
+        );
+        let descriptors: IndexMap<String, Js> = [("co".to_string(), descriptor)].into_iter().collect();
+        let schema = describe_external_schema("crm", &entries, &descriptors);
+        let company = schema.get("positions").and_then(|p| p.get("Company")).unwrap();
+        assert_eq!(company.get("description").and_then(Js::as_str), Some("A company."));
+        let docs = company.get("fieldDocs").unwrap();
+        assert_eq!(docs.get("Name").and_then(Js::as_str), Some("Its legal name."));
+        assert_eq!(docs.get("Secret").and_then(Js::as_str), Some("Read it on the Notes edge."));
+        assert!(docs.get("Tag").is_none(), "an empty description says nothing");
+        assert_eq!(company.get("edges").and_then(|e| e.get("Notes")).and_then(|e| e.get("description")).and_then(Js::as_str), Some("What people wrote."));
+    }
+}
