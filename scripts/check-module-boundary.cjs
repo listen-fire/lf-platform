@@ -30,6 +30,10 @@ if (fs.existsSync(modulesDir)) {
 
 const DATABASE_CLIENTS = /^(kysely|pg|pg-[^/]+|postgres|@prisma\/.*|prisma|\.prisma\/.*|better-sqlite3|sqlite3|knex|mysql2?)(\/|$)/;
 
+// A module that is a database client by purpose: a process module (never loaded
+// in a host's process) whose whole job is state kept in a shared database.
+const DATABASE_MODULES = [path.join(modulesDir, 'postgres-limiter')];
+
 function sourceFiles(dir, found = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
@@ -63,7 +67,7 @@ function refusal(specifier, fromFile) {
     return null;
   }
   if (specifier === 'api' || specifier.startsWith('api/')) return 'reaches the hosted product';
-  if (DATABASE_CLIENTS.test(specifier)) return 'reaches a database client';
+  if (DATABASE_CLIENTS.test(specifier) && !DATABASE_MODULES.some((dir) => fromFile.startsWith(dir + path.sep))) return 'reaches a database client';
   if (/(^|\/)lib\/recording$/.test(specifier)) return 'reaches the recording layer';
   if (specifier === 'movement-engine' || (specifier.startsWith('movement-engine/') && !specifier.startsWith('movement-engine/public/'))) {
     return 'reaches an engine internal (import movement-engine/public/*)';

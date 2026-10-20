@@ -22,6 +22,8 @@
   },
   "devDependencies": {
     "@types/node": "22.19.15",
+    "@types/pg": "8.11.9",
+    "pg": "8.12.0",
     "typescript": "5.5.4"
   }
 }
