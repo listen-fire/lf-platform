@@ -18,8 +18,9 @@
 //     and serve-module today — a document source fails naming the slot.
 //     A page whose body is not HTML or text is not kept.
 //   - A plain PDF, PowerPoint or spreadsheet link is fetched and read through
-//     the file-text package (a PDF's text layer; a scanned one has no OCR
-//     here and reads as nothing).
+//     the file-text package: a PDF's text layer, else the host's ocr slot
+//     (`ctx.ocr`, a deck of screenshots compiled into a PDF). Where the slot
+//     is empty a scanned PDF reads as nothing, the log saying why.
 //
 // `ctx.config.baseUrlOverride` stands in for api.brightdata.com and Anthropic
 // alike, so a test serves both from one fake.
@@ -177,7 +178,14 @@ export async function standaloneTools(ctx: ModuleContext): Promise<WebTools> {
 
   const readFile: FileTextReader<DownloadedFile> = makeFileTextResolver<DownloadedFile>({
     openBytes: async (file) => ({ stream: Readable.from(file.bytes), size: file.bytes.length }),
-    ocrPdf: async () => ({ unreadable: 'extraction_failed', detail: 'a scanned PDF needs OCR, which is not available off the platform' }),
+    // A PDF with no text layer of its own (screenshots compiled into a deck)
+    // is read by the host's ocr slot, its cost charged to this call.
+    ocrPdf: async (stream) => {
+      if (ctx.ocr.emptyBecause !== undefined) return { unreadable: 'extraction_failed', detail: `a scanned PDF needs OCR: ${ctx.ocr.emptyBecause}` };
+      const chunks: Buffer[] = [];
+      for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+      return (await ctx.ocr.read({ bytes: Buffer.concat(chunks), contentType: 'application/pdf', label: '@lf/web' })).text;
+    },
     transcribe: async () => {
       throw new Error('@lf/web: audio is not read off the platform');
     },
