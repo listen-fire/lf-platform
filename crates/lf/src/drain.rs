@@ -18,7 +18,7 @@
 use std::io::Write;
 use std::time::{Duration, Instant};
 
-use crate::runs::{Session, report};
+use crate::runs::{Returned, Session, report};
 use crate::store::WORK_KINDS;
 
 /// One row per claim, so workers draining one queue share it row by row.
@@ -86,7 +86,7 @@ pub async fn drain(session: &Session, options: &DrainOptions, out: &mut impl Wri
         // As `lf resume`: a row that fails is retried later, its reason on stderr.
         let (claimed, outcomes) = session.drain_work(ROWS_PER_CLAIM, &mut std::io::stderr()).await?;
         if !outcomes.is_empty() {
-            code = code.max(report(&outcomes, out)?);
+            code = code.max(report(&outcomes, Returned::Withheld, out)?);
             out.flush().map_err(|e| e.to_string())?;
         }
         if claimed > 0 {

@@ -24,7 +24,9 @@
 //!
 //! `done` is one of:
 //!
-//! - `{result: {movementName, writes, parked?, parkedAddress?, cancelled?}}`;
+//! - `{result: {movementName, writes, parked?, parkedAddress?, cancelled?,
+//!   returned?, returnedUnwritable?}}` (`returned`: what the movement
+//!   returned, for a host that records it);
 //! - `{failed: {error, result}}`: the body failed (`MovementRunFailed`,
 //!   which carries what the run did before it);
 //! - `{thrown: error}`: it failed before the body ran;
@@ -187,6 +189,11 @@ pub struct SegmentInput {
     /// environment. Absent: the defaults.
     #[serde(default)]
     pub limits: crate::limits::Limits,
+    /// The host records what the movement returned: a segment in which the
+    /// movement's body returns carries the value in its result (`returned`).
+    /// Off for a host that reads no such member.
+    #[serde(default)]
+    pub records_returned: bool,
 }
 
 /// A field that is there, null included (serde reads a null `Option` as
@@ -847,7 +854,7 @@ impl Run<'_> {
         let (movement, index, scope) = self.prepare().await?;
         let path = format!("/statements/{index}/body");
         let ran = match &self.input.resume {
-            None => self.body(&movement.body, &scope, &Address::default(), &path, 0).await.map(|_| ()),
+            None => self.body(&movement.body, &scope, &Address::default(), &path, 0).await.map(|flow| matches!(flow, Flow::Returned)),
             Some(resume) => {
                 // The state as it was stored, keys in their stored order (on
                 // the eval wire, as the event is).
@@ -874,12 +881,13 @@ impl Run<'_> {
                 self.resume_along(&movement, &scope, &path, &state, leaf).await
             }
         };
-        let (cancelled, parked) = match ran {
+        let (cancelled, parked, returned) = match ran {
+            Ok(returned) => (false, None, returned),
             // Find-on-missing at the top scope: the body simply stops, its
             // earlier writes stand, and the run completes.
-            Ok(()) | Err(Stop::EndedQuietly) => (false, None),
-            Err(Stop::Cancelled) => (true, None),
-            Err(Stop::Parked(address)) => (false, Some(address)),
+            Err(Stop::EndedQuietly) => (false, None, false),
+            Err(Stop::Cancelled) => (true, None, false),
+            Err(Stop::Parked(address)) => (false, Some(address), false),
             Err(Stop::Thrown(failure)) => return Err(Stop::Failed(failure, self.result(false, None))),
             Err(other) => return Err(other),
         };
@@ -890,7 +898,24 @@ impl Run<'_> {
             || (parked.is_none()
                 && self.input.settle.is_none()
                 && self.ask_bool(host::control::cancelled_now(self.segment())).await.map_err(|f| Stop::Failed(f, self.result(false, None)))?);
-        Ok(self.result(cancelled, parked.as_deref()))
+        let mut result = self.result(cancelled, parked.as_deref());
+        if returned && !cancelled && self.input.records_returned {
+            self.add_returned(&mut result, &scope);
+        }
+        Ok(result)
+    }
+
+    /// What the movement's body returned into `scope`, as the host records
+    /// it: every record in it read down to plain data, a file kept as the
+    /// file. A value with no plain form (a function) says why instead: the
+    /// run has completed, and what it returned is only ever recorded.
+    fn add_returned(&self, result: &mut Json, scope: &Rc<Scope>) {
+        let value = scope.resolve_own(RETURN_SLOT).unwrap_or_else(crate::combinator::null_slot);
+        match crate::record::plain_value_of(&crate::record::held(value)) {
+            Ok(plain) => result["returned"] = self.wire.encode_result(&plain),
+            Err(EvalError::Thrown { message, .. } | EvalError::Fallback(message)) => result["returnedUnwritable"] = json!(message),
+            Err(_) => result["returnedUnwritable"] = json!("it has no plain form"),
+        }
     }
 
     // ── prepareMovement ──
@@ -3078,6 +3103,23 @@ mod tests {
         // declared position.
         // (Its data is the event's own object, named by the id it was sent with.)
         assert!(seen[3].args["position"].to_string().contains(r#"["recordType","message"]"#), "{}", seen[3].args["position"]);
+    }
+
+    /// A host that records what the movement returned gets it in the
+    /// result, a `return` in an `if` arm included; a body that falls through
+    /// returned nothing, and a host that does not record it never sees it.
+    #[test]
+    fn a_host_that_records_the_returned_value_gets_it_in_the_result() {
+        let source = "import { email } from adapters\ninbox = email()\nmovement m(msg: <inbox-[:message]->>) {\n  s = msg.`subject`\n  if s == \"Hi\" {\n    return { said: \"${s}!\", n: [1, 2] }\n  }\n}";
+        let recording = |subject: &str| {
+            let mut input = segment_input(source, json!(["o", [["subject", subject]]]), &[]);
+            input["recordsReturned"] = json!(true);
+            drive_input(input, plain_host(json!({ "subject": subject }))).0
+        };
+        assert_eq!(recording("Hi")["result"]["returned"], json!(["o", [["said", "Hi!"], ["n", ["l", [1.0, 2.0]]]]]));
+        assert!(recording("Bye")["result"].get("returned").is_none());
+        let (unrecorded, _) = drive(source, json!(["o", [["subject", "Hi"]]]), plain_host(json!({ "subject": "Hi" })));
+        assert_eq!(unrecorded, json!({ "result": { "movementName": "m", "writes": ["l", []] } }));
     }
 
     /// The event's position crosses once, registered by handle on its first

@@ -111,6 +111,9 @@ pub struct Ran {
     pub deferred_race_frames: Vec<String>,
     /// A rehearsal's captured writes.
     pub captured: Vec<Js>,
+    /// What the movement returned, as the run's history keeps it
+    /// (crate::returned), when its body returned in this segment.
+    pub returned: Option<Js>,
 }
 
 /// Why a segment did not run to a result.
@@ -273,6 +276,7 @@ fn input_text(host: &SegmentHost<'_>, input: &SegmentInput<'_>) -> Result<String
     segment.insert("spend".into(), spend);
     segment.insert("now".into(), json!(input.fired_at));
     segment.insert("serves".into(), json!(SERVES));
+    segment.insert("recordsReturned".into(), json!(true));
     segment.insert("extractionFileChars".into(), json!(knob("EXTRACTION_FILE_CHARS", 50_000.0)));
     segment.insert("maxCallDepth".into(), json!(max_call_depth()?));
     segment.insert("limits".into(), segment_limits()?);
@@ -499,7 +503,18 @@ fn read_result(host: &SegmentHost<'_>, done: &Json) -> Result<Ran, Ended> {
         },
     };
     let parked = result.get("parked") == Some(&json!(true));
+    // Only ever recorded, so a value that does not read is recorded as
+    // unwritable rather than failing a run that completed.
+    let returned = match (result.get("returned"), result.get("returnedUnwritable")) {
+        (Some(wire), _) => Some(match host.wire.borrow_mut().read(wire) {
+            Ok(value) => crate::returned::recorded(&value),
+            Err(message) => crate::returned::unwritable(&message),
+        }),
+        (None, Some(why)) => Some(crate::returned::unwritable(why.as_str().unwrap_or_default())),
+        (None, None) => None,
+    };
     Ok(Ran {
+        returned,
         writes,
         parked_address: parked.then(|| result.get("parkedAddress").and_then(Json::as_str).unwrap_or_default().to_string()),
         cancelled: result.get("cancelled") == Some(&json!(true)),

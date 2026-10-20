@@ -85,6 +85,7 @@ pub fn outcome(o: &RunOutcome) -> Js {
         "dryRunWrites" => o.captured.as_ref().map_or(Js::Null, |writes| Js::Arr(writes.clone())),
         "traceEntries" => num(o.trace_entries),
         "error" => opt(o.error.as_deref()),
+        "returned" => o.returned.clone().unwrap_or(Js::Null),
     })
 }
 
@@ -161,6 +162,7 @@ pub fn run_show_doc(store: &dyn RunHostStore, run_id: &str) -> Result<Js, String
     shown.insert("event".into(), facts.get("event").cloned().unwrap_or(Js::Null));
     shown.insert("writes".into(), outcome.get("writes").cloned().unwrap_or(Js::Null));
     shown.insert("error".into(), outcome.get("error").cloned().unwrap_or(Js::Null));
+    shown.insert("returned".into(), outcome.get("returned").cloned().unwrap_or(Js::Null));
     shown.insert("outcome".into(), outcome);
     shown.insert("costMicrodollars".into(), serde_json::Number::from_f64(store.run_spent(run_id).map_err(io)?).map_or(Js::Null, Js::Num));
     shown.insert("traceEntries".into(), num(store.trace_len(run_id).map_err(io)?));

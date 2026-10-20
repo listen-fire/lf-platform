@@ -108,10 +108,13 @@ type CallbackRow = {
 };
 ```
 
+A run's `outcome` is the JSON object lf settled it with: `{ writes, returned? }`, or `{ error }` for a failed run. `returned` is what the movement returned, as lf records it (at most 64 KiB of JSON, a file by its reference). A store hands the outcome back as it was given (its members may be kept in columns of their own, as `@lf/postgres-store` keeps them). A store that drops `returned` still works with lf: its runs show no returned value.
+
 `lf --contract-store <state.db|postgres://…>` serves these methods over lf's own stores, as a store module on a Unix socket. A module may forward to it, as the test module does (`apps/cli/src/__test__/store_module/forward.mjs`). `runs.status` and `runs.complete` are the contract suite's helpers and are not called by lf.
 
 ## Changes
 
+- **2026-10-20** (within adapter protocol 2): a run's settled `outcome` may carry `returned`, what its movement returned. No method changed: a store that hands the outcome back as it was given keeps it.
 - **2026-10-20** (within adapter protocol 2): a crash never tears lf's state. `parks.commit`, `events.startRun` and `inbound.keepDelivery` each keep in one write what lf wrote in several; `runs.lapsed` finds the runs whose worker was lost, which lf fails; `work.claimDue`'s rows carry `attempts`, `work.release` says `why`, and `work.bury` keeps a row that gave up dead, so a failing row is no longer retried forever.
 
 - **2026-10-19** (within adapter protocol 2): `processes.list` and `processes.swap`, the list of module processes the hosts on a store started, written by compare-and-set on its version so two lfs on one store never overwrite each other's entries. lf used to keep it in an inbound checkpoint row.

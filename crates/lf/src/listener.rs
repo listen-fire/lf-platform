@@ -478,4 +478,27 @@ mod tests {
         assert!(call_values(b"not json", "").is_none());
         assert_eq!(call_values(b"", "a=b").map(|v| Js::Obj(v).to_json()).as_deref(), Some(r#"{"a":"b"}"#));
     }
+
+    /// What a run returned is never a door's answer: a webhook's sender hears
+    /// which runs it started, never their values (and under `--doors-only`
+    /// it is answered before any run).
+    #[test]
+    fn the_hooks_answer_never_carries_what_a_run_returned() {
+        let outcome = RunOutcome {
+            run_id: "r1".into(),
+            file: "notes.mvt".into(),
+            movement: "note".into(),
+            entry: "fired",
+            status: "completed".into(),
+            writes: 0,
+            captured: None,
+            trace_entries: 0,
+            error: None,
+            returned: Some(Js::Obj(obj! { "value" => Js::str("secret summary") })),
+        };
+        assert_eq!(
+            outcome_js(&outcome).to_json(),
+            r#"{"runId":"r1","file":"notes.mvt","movement":"note","entry":"fired","status":"completed","writes":0,"traceEntries":0}"#
+        );
+    }
 }

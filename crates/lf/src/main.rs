@@ -116,6 +116,7 @@ mod pg_store;
 mod pg_tls;
 mod project;
 mod remote_slots;
+mod returned;
 mod prompt;
 mod protocol;
 mod remote;
@@ -506,7 +507,7 @@ async fn run(argv: Vec<String>) -> Result<i32, String> {
 }
 
 fn report_runs(outcomes: &[runs::RunOutcome], json: bool, out: &mut impl Write) -> Result<i32, String> {
-    if json { lfjson::emit(out, &lfjson::runs_doc(outcomes, &[]), lfjson::exit_of(outcomes)) } else { runs::report(outcomes, out) }
+    if json { lfjson::emit(out, &lfjson::runs_doc(outcomes, &[]), lfjson::exit_of(outcomes)) } else { runs::report(outcomes, runs::Returned::Shown, out) }
 }
 
 fn report_fired(fired: &runs::Fired, json: bool, out: &mut impl Write) -> Result<i32, String> {

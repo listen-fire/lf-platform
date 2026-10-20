@@ -43,7 +43,7 @@ fn has(doc: &Value, keys: &[&str]) {
     }
 }
 
-const OUTCOME_KEYS: &[&str] = &["runId", "file", "movement", "entry", "status", "writes", "dryRunWrites", "traceEntries", "error"];
+const OUTCOME_KEYS: &[&str] = &["runId", "file", "movement", "entry", "status", "writes", "dryRunWrites", "traceEntries", "error", "returned"];
 
 fn first_run(doc: &Value) -> &Value {
     let run = &doc["runs"][0];
@@ -83,10 +83,15 @@ fn a_run_is_driven_listed_shown_resumed_and_cancelled() {
     let (done, code) = project.lf(&["run", "hello"]);
     has(&done, &["ok", "runs", "redelivered"]);
     assert_eq!((first_run(&done)["status"].clone(), code), ("completed".into(), 0));
+    let greeting = first_run(&done)["returned"]["value"].as_str().unwrap().to_string();
+    assert!(greeting.starts_with("Hello, ") && greeting.ends_with('!'), "{greeting}");
+    let (hello, _) = project.lf(&["runs", "show", first_run(&done)["runId"].as_str().unwrap()]);
+    assert_eq!(hello["run"]["returned"]["value"], greeting.as_str());
 
     let (parked, _) = project.lf(&["run", "nap"]);
     let run = first_run(&parked);
     assert_eq!(run["status"], "parked");
+    assert_eq!(run["returned"], Value::Null, "a parked run has returned nothing yet");
     let run_id = run["runId"].as_str().unwrap().to_string();
 
     let (listed, _) = project.lf(&["runs"]);
@@ -95,7 +100,7 @@ fn a_run_is_driven_listed_shown_resumed_and_cancelled() {
 
     let (shown, _) = project.lf(&["runs", "show", &run_id]);
     let shown = &shown["run"];
-    has(shown, &["runId", "file", "movement", "status", "startedAt", "firedAt", "languageVersion", "event", "writes", "error", "outcome", "costMicrodollars", "traceEntries", "trace", "parked", "cancelRequested", "cancelReason"]);
+    has(shown, &["runId", "file", "movement", "status", "startedAt", "firedAt", "languageVersion", "event", "writes", "error", "returned", "outcome", "costMicrodollars", "traceEntries", "trace", "parked", "cancelRequested", "cancelReason"]);
     assert_eq!(shown["parked"][0]["reason"], "timer");
     has(&shown["parked"][0], &["address", "reason", "wakeAt"]);
 
@@ -104,6 +109,9 @@ fn a_run_is_driven_listed_shown_resumed_and_cancelled() {
 
     let (resumed, _) = project.lf(&["resume", &run_id]);
     assert_eq!(first_run(&resumed)["runId"], run_id.as_str());
+    assert_eq!(first_run(&resumed)["returned"]["value"], "rested", "recorded when the run completes after a resume");
+    let (rested, _) = project.lf(&["runs", "show", &run_id]);
+    assert_eq!(rested["run"]["returned"]["value"], "rested");
     let (cancelled, code) = project.lf(&["cancel", &second_id]);
     has(&cancelled, &["ok", "runId", "result"]);
     assert_eq!((cancelled["result"].clone(), code), ("cancelled".into(), 0));
@@ -147,4 +155,15 @@ fn connect_and_credential_list_name_things_and_never_values() {
     let credential = &listed["credentials"][0];
     has(credential, &["name", "module", "binding", "declaredCredential", "kept", "expiresAt"]);
     assert!(!listed.to_string().contains("s3cret"));
+}
+
+/// `lf run` shows a person what the movement returned, under its run's line.
+#[test]
+fn a_manual_run_prints_what_it_returned() {
+    let project = Project::new("printed");
+    let out = Command::new(env!("CARGO_BIN_EXE_lf")).args(["run", "hello"]).arg(format!("--dir={}", project.0.display())).current_dir(&project.0).output().unwrap();
+    let text = String::from_utf8(out.stdout).unwrap();
+    let lines: Vec<&str> = text.lines().collect();
+    assert!(lines[0].contains("completed"), "{text}");
+    assert!(lines[1].starts_with("  returned \"Hello, ") && lines[1].ends_with("!\""), "{text}");
 }
