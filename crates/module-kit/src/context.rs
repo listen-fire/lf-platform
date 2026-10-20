@@ -8,6 +8,7 @@ use module_wire::json::{Js, Obj};
 use serde::Serialize;
 
 use crate::host_limits::HostLimits;
+use crate::host_ocr::HostDoors;
 use serde::de::DeserializeOwned;
 
 /// A method's answer: its result, or the error the envelope carries.
@@ -28,6 +29,8 @@ pub struct Ctx {
     pub settings: Option<Js>,
     /// The limits door the call handed the module (crate::host_limits).
     host_limits: Option<HostLimits>,
+    /// The host's doors the process was told of (crate::host_ocr).
+    host_doors: Option<HostDoors>,
     beside: RefCell<Beside>,
 }
 
@@ -40,7 +43,7 @@ pub(crate) struct Beside {
 
 impl Ctx {
     pub fn new(team_id: Option<String>, cache_scope_id: Option<String>, credential: Option<Js>, settings: Option<Js>) -> Ctx {
-        Ctx { team_id, cache_scope_id, credential, settings, host_limits: None, beside: RefCell::default() }
+        Ctx { team_id, cache_scope_id, credential, settings, host_limits: None, host_doors: None, beside: RefCell::default() }
     }
 
     /// The limits door the call handed the module, if any.
@@ -51,6 +54,16 @@ impl Ctx {
 
     pub(crate) fn host_limits(&self) -> Option<&HostLimits> {
         self.host_limits.as_ref()
+    }
+
+    /// The host's doors (its OCR door), when the host that started the module named them.
+    pub fn with_host_doors(mut self, doors: Option<HostDoors>) -> Ctx {
+        self.host_doors = doors;
+        self
+    }
+
+    pub(crate) fn host_doors(&self) -> Option<&HostDoors> {
+        self.host_doors.as_ref()
     }
 
     /// A setting the install supplied, when it is text.

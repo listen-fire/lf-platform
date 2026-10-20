@@ -427,6 +427,46 @@ slot! {
     }
 }
 
+// ── ocr ──────────────────────────────────────────────────────────────────────
+
+/// One cost line of a read: what it spent, as the run's spend counts it.
+#[derive(Debug, Clone, Serialize)]
+pub struct OcrCost {
+    pub label: String,
+    pub microdollars: u64,
+}
+
+/// An `ocr.read`'s answer.
+#[derive(Debug, Clone, Serialize)]
+pub struct OcrRead {
+    /// Every page's text, in page order; empty when the pages hold none.
+    pub text: String,
+    /// The pages read (an image is one).
+    pub pages: u64,
+    /// Required, and not zero for pages read unless the module is free:
+    /// the host refuses a read its run's cost cap cannot count.
+    pub cost: Vec<OcrCost>,
+}
+
+slot! {
+    /// The ocr slot: a scanned PDF's or an image's bytes in, their text out.
+    /// The host asks it of a file with no text layer of its own; a module
+    /// asks it through the host (`Ctx::ocr`). Refuse bytes of a type the
+    /// module does not read with the code `unsupported_type`. The optional
+    /// `ocr.prices` (a price per page) is not part of this trait: a module
+    /// publishing one serves it beside it.
+    pub trait Ocr served as OcrModule in slot "ocr" {
+        "ocr.read" => fn read(OcrReadRequest {
+            #[serde(deserialize_with = "crate::host_ocr::base64_bytes")]
+            bytes: Vec<u8>,
+            content_type: String,
+            #[serde(default)]
+            name: Option<String>,
+            label: String,
+        }) -> OcrRead;
+    }
+}
+
 // ── loop guard ───────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Deserialize)]

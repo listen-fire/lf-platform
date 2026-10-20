@@ -31,6 +31,8 @@ hyper = { version = "1", features = ["server", "client", "http1"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 http-body-util = "0.1"
 bytes = "1"
+# A file's bytes on the ocr slot's wire (src/host_ocr.rs).
+base64 = "0.22"
 
 [dev-dependencies]
 hyper = { version = "1", features = ["client", "server", "http1"] }

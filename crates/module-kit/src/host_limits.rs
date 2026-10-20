@@ -60,28 +60,34 @@ impl HostLimits {
 
     async fn ask(&self, question: Js) -> Answer<Js> {
         let failed = |e: &dyn std::fmt::Display| ModuleError::adapter(format!("the host's limits door at {}: {e}", self.url));
-        let (authority, path) = self
-            .url
-            .strip_prefix("http://")
-            .map(|rest| rest.split_at(rest.find('/').unwrap_or(rest.len())))
-            .ok_or_else(|| failed(&"the door is reached over plain HTTP on this box"))?;
-        let stream = tokio::net::TcpStream::connect(authority).await.map_err(|e| failed(&e))?;
-        let (mut sender, connection) = hyper::client::conn::http1::handshake(TokioIo::new(stream)).await.map_err(|e| failed(&e))?;
-        tokio::task::spawn_local(connection);
-        let request = hyper::Request::post(if path.is_empty() { "/" } else { path })
-            .header("host", authority)
-            .header("content-type", "application/json")
-            .header("authorization", format!("Bearer {}", self.ticket))
-            .body(Full::new(Bytes::from(question.to_json())))
-            .map_err(|e| failed(&e))?;
-        let response = sender.send_request(request).await.map_err(|e| failed(&e))?;
-        let status = response.status();
-        let body = response.into_body().collect().await.map_err(|e| failed(&e))?.to_bytes();
-        if !status.is_success() {
+        let (status, body) = post_to_door(&self.url, &self.ticket, question.to_json()).await.map_err(|e| failed(&e))?;
+        if !(200..300).contains(&status) {
             return Err(failed(&format!("answered {status}: {}", String::from_utf8_lossy(&body))));
         }
         Js::parse(&body).map_err(|e| failed(&e))
     }
+}
+
+/// One JSON POST to a door of the host's on this box (plain HTTP): its
+/// status and body.
+pub(crate) async fn post_to_door(url: &str, bearer: &str, body: String) -> Result<(u16, Bytes), String> {
+    let (authority, path) = url
+        .strip_prefix("http://")
+        .map(|rest| rest.split_at(rest.find('/').unwrap_or(rest.len())))
+        .ok_or("the door is reached over plain HTTP on this box")?;
+    let stream = tokio::net::TcpStream::connect(authority).await.map_err(|e| e.to_string())?;
+    let (mut sender, connection) = hyper::client::conn::http1::handshake(TokioIo::new(stream)).await.map_err(|e| e.to_string())?;
+    tokio::task::spawn_local(connection);
+    let request = hyper::Request::post(if path.is_empty() { "/" } else { path })
+        .header("host", authority)
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {bearer}"))
+        .body(Full::new(Bytes::from(body)))
+        .map_err(|e| e.to_string())?;
+    let response = sender.send_request(request).await.map_err(|e| e.to_string())?;
+    let status = response.status().as_u16();
+    let body = response.into_body().collect().await.map_err(|e| e.to_string())?.to_bytes();
+    Ok((status, body))
 }
 
 /// Leave to send one request to the provider. Hand it back with

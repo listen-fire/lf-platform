@@ -194,10 +194,10 @@ impl Host {
             return plain(StatusCode::NOT_FOUND, "not found");
         }
         let path = request.uri().path().trim_matches('/').to_string();
-        let module = match (path.as_str(), self.modules.as_slice()) {
-            ("", [(_, only)]) => only.clone(),
+        let (name, module) = match (path.as_str(), self.modules.as_slice()) {
+            ("", [(name, only)]) => (name.clone(), only.clone()),
             (name, modules) => match modules.iter().find(|(n, _)| n == name) {
-                Some((_, module)) => module.clone(),
+                Some((name, module)) => (name.clone(), module.clone()),
                 None => {
                     let served: Vec<&str> = modules.iter().map(|(n, _)| n.as_str()).collect();
                     return plain(StatusCode::NOT_FOUND, &format!("no module at /{path} (this host serves /{})", served.join(", /")));
@@ -226,7 +226,8 @@ impl Host {
         }
         let text = |key: &str| envelope.get(key).and_then(Js::as_str).map(str::to_string);
         let ctx = Ctx::new(team_id, text("cacheScopeId"), envelope.get("credential").cloned(), envelope.get("settings").cloned())
-            .with_host_limits(crate::host_limits::HostLimits::of(&envelope));
+            .with_host_limits(crate::host_limits::HostLimits::of(&envelope))
+            .with_host_doors(crate::host_ocr::HostDoors::of_env(&name));
         let params = envelope.get("params").cloned().unwrap_or(Js::Obj(Obj::new()));
         let result = match method {
             "manifest" => Ok(module.manifest()),

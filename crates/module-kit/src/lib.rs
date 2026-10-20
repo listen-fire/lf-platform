@@ -5,7 +5,11 @@
 //! - [`Adapter`]: a system a movement connects to, reads and writes.
 //! - [`Plugins`]: a package of functions a movement calls.
 //! - A core slot: [`Store`] (run state), [`Limiter`] (provider limits),
-//!   [`LoopGuard`] (a movement's own write coming back).
+//!   [`LoopGuard`] (a movement's own write coming back), [`Wake`] (work is
+//!   due), [`Ocr`] (a scanned file's text).
+//!
+//! A module of any kind asks the host's ocr slot for a scanned file's text
+//! with [`Ctx::ocr`].
 //!
 //! A [`Host`] serves one or several modules, each at `/<name>`, over HTTP on
 //! loopback TCP or a Unix socket. It is its own process: lf speaks to it as
@@ -41,14 +45,16 @@ pub mod context;
 pub mod core;
 pub mod host;
 pub mod host_limits;
+pub mod host_ocr;
 pub mod module;
 pub mod plugin;
 
 pub use adapter::*;
 pub use context::{Answer, Ctx, ModuleError, from_js, to_js};
-pub use core::{Limiter, LoopGuard, Store, Wake};
+pub use core::{Limiter, LoopGuard, Ocr, Store, Wake};
 pub use host::{Address, Host, Listener};
 pub use host_limits::{HostLimits, Permit};
+pub use host_ocr::{HostDoors, OcrFile, OcrText};
 pub use module::Module;
 pub use module_wire::json::{Js, Obj};
 pub use module_wire::obj;
