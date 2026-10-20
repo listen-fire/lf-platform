@@ -123,10 +123,12 @@ lf resume [<run-id>]                           # step a parked run, or every due
 ## 6. Serve
 
 ```
-lf serve [--port N]
+lf serve [--port N] [--doors-only]
 ```
 
 `lf serve` receives webhooks and callbacks, fires `cron` listens on their schedule, polls polled sources on their interval, and drains due work, so listens fire on their own. `lf drain` does the same work once and exits (`--until-idle`): a tick or poll missed while nothing ran happens once on the next drain, and two workers never poll one listen at once. `lf drain --kinds poll_listen` is a pool: it claims only work of those kinds (`resume_timer`, `wake_await`, `fire_event`, `fire_callback`, `poll_listen`, and `cron` for the cron ticks), so polls and run steps can be drained by separate fleets. Set `publicUrl` in `lf.yaml` when the outside world reaches it at another address. A module that registers its own webhooks (Attio) gets one when `lf serve` starts, for the events its listens name, at `<publicUrl>/api/public/webhook-sync/<provider>/<credential>`; a restart keeps it, and it is removed once no listen needs it. `lf call <callback-id>` and `lf cancel <run-id>` act on a parked or running run.
+
+`lf serve --doors-only` (or `LF_DOORS_ONLY=1`) is for compute billed by the request, which is frozen once a response is sent. It runs no drain, and `/hooks/…` queues its events (answering 202 with the rows queued) instead of running them inside the request. `lf drain` workers run the work, started on a schedule or by the [wake slot](core-slots.md#the-wake)'s module.
 
 ## 7. Upgrade a project
 

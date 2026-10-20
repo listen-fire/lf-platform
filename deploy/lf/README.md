@@ -6,7 +6,7 @@ The image is node-based and large (about 2.3 GB): the built-in modules are TypeS
 
 Two commands make the whole deployment:
 
-- **`lf serve --port $PORT`** is the doors: webhooks at `/hooks/<external>/<install>` and OAuth callbacks. It also drains due work while it is up. Run it as a container behind HTTPS.
+- **`lf serve --port $PORT`** is the doors: webhooks at `/hooks/<external>/<install>` and OAuth callbacks. It also drains due work while it is up. Run it as a container behind HTTPS. On compute billed by the request (frozen once a response is sent), add `--doors-only` (or set `LF_DOORS_ONLY=1`): it then drains nothing, and `/hooks/…` queues its events (202, the rows listed) instead of running them in the request.
 - **`lf drain --until-idle --max-seconds N`** is a worker. It claims due work rows, runs them, and exits when none is due or after N seconds. Run it as a job.
 
 The container keeps no state. Everything lives in Postgres, so any container can be stopped or replaced at any time, and any number of workers can drain at once (each row is claimed by one worker, each run stepped by whoever holds its lease).
@@ -27,6 +27,7 @@ The container keeps no state. Everything lives in Postgres, so any container can
    - on a schedule (every minute) for timers and awaits to wake, or
    - by queue depth, where the platform can scale jobs on a Postgres query: start one worker per few due rows.
 3. A worker that finds nothing due exits at once, so a frequent schedule costs little.
+4. To start a worker as soon as work is due rather than on the next tick, fill the [wake slot](../../docs/core-slots.md#the-wake) with a queue module (Google Cloud Tasks ships separately). lf tells it "ready now" when the doors queue an event and "ready at T" when a run parks on a timer. Keep the schedule: it finds work whose wake failed.
 
 Set `--max-seconds` below the platform's job time limit: it stops claiming new rows after N seconds, and a run in progress finishes its step first.
 
