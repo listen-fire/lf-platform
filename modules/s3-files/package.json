@@ -1,7 +1,7 @@
 {
   "name": "@listen-fire/s3-files",
   "license": "Apache-2.0",
-  "version": "0.12.0-rc.3",
+  "version": "0.12.0-rc.4",
   "description": "The files slot's module over S3 (`@lf/s3-files`): lf keeps a run's documents in a bucket of AWS S3, Google Cloud Storage (its S3 interoperability endpoint), Cloudflare R2, MinIO or any S3 compatible service, instead of a container's disk. Served as a process lf starts (kind: core, slot: files). Its tests borrow apps/api's jest runner (jest.config.borrowed.cjs)",
   "engines": {
     "node": "22.20.0"

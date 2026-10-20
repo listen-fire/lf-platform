@@ -13,6 +13,10 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 
 ## [Unreleased]
 
+## [0.12.0-rc.4] - 2026-10-20 (pre-release)
+
+A third pre-release of the 0.12 line, published the same way as rc.2 and rc.3.
+
 ### hover
 
 - The platform's WhatsApp number door saves each message durably before acknowledging Meta, so a restart, deploy or frozen instance no longer loses it; Meta's resends never dispatch twice. The WhatsApp module's events now carry the message id as their idempotency key, so lf also runs a resent message once.
@@ -2132,7 +2136,8 @@ Releases before v0.11 are kept one file per minor line, newest first:
 - [v0.2.x](docs/changelog/v0.2.md) (v0.2.0)
 - [v0.1.x](docs/changelog/v0.1.md) (v0.1.0 to v0.1.2)
 
-[Unreleased]: https://github.com/listen-fire/listen-fire/compare/v0.12.0-rc.3...HEAD
+[Unreleased]: https://github.com/listen-fire/listen-fire/compare/v0.12.0-rc.4...HEAD
+[0.12.0-rc.4]: https://github.com/listen-fire/listen-fire/compare/v0.12.0-rc.3...v0.12.0-rc.4
 [0.12.0-rc.3]: https://github.com/listen-fire/listen-fire/compare/v0.12.0-rc.2...v0.12.0-rc.3
 [0.12.0-rc.2]: https://github.com/listen-fire/listen-fire/compare/v0.11.0...v0.12.0-rc.2
 [v0.11.0]: https://github.com/listen-fire/listen-fire/compare/v0.10.9...v0.11.0

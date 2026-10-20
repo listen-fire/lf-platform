@@ -1,7 +1,7 @@
 {
   "name": "@listen-fire/anthropic",
   "license": "Apache-2.0",
-  "version": "0.12.0-rc.3",
+  "version": "0.12.0-rc.4",
   "description": "The models slot's module for Claude (`@lf/anthropic`): the client every model call goes through (chat, structured output, the tool loop, web chat with Anthropic's hosted search and fetch), the chat seam a provider stands behind, Anthropic's API on a key the caller holds, the price table every call is billed from (prices.json, which the Rust lf embeds too), and the extraction and `AI()` clients the engine's models slot is filled with. Its tests borrow apps/api's jest runner (jest.config.borrowed.cjs)",
   "engines": {
     "node": "22.20.0"

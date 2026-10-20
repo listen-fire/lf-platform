@@ -1,7 +1,7 @@
 {
   "name": "@listen-fire/files-s3",
   "license": "Apache-2.0",
-  "version": "0.12.0-rc.3",
+  "version": "0.12.0-rc.4",
   "description": "The files slot over S3 or any S3-compatible service (R2, MinIO, Supabase Storage): store, stream, presign and delete a team's files. Its own package, so a deployment that stores no files carries no AWS SDK. Its tests borrow apps/api's jest runner (jest.config.borrowed.cjs)",
   "engines": {
     "node": "22.20.0"

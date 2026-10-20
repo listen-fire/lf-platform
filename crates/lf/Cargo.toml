@@ -55,19 +55,19 @@ serve = ["cli", "hyper/server"]
 pdf = ["cli", "dep:lopdf", "dep:libc"]
 
 [dependencies]
-movement-parser = { package = "listen-fire-parser", version = "0.12.0-rc.3", path = "../movement-parser" }
+movement-parser = { package = "listen-fire-parser", version = "0.12.0-rc.4", path = "../movement-parser" }
 # The checker with its native zone database: the same one the engine's
 # artifact answers zones from.
-movement-checker = { package = "listen-fire-checker", version = "0.12.0-rc.3", path = "../movement-checker" }
+movement-checker = { package = "listen-fire-checker", version = "0.12.0-rc.4", path = "../movement-checker" }
 # The engine, natively: a segment runs in this process, its requests served
 # by the run host here (src/segment.rs), with the native environment
 # services (zones, URLs, Unicode data) the engine's default feature links.
 # The language service `lf lsp` serves (src/lsp.rs).
-movement-language = { package = "listen-fire-language", version = "0.12.0-rc.3", path = "../movement-language" }
-movement-engine = { package = "listen-fire-engine", version = "0.12.0-rc.3", path = "../movement-engine" }
+movement-language = { package = "listen-fire-language", version = "0.12.0-rc.4", path = "../movement-language" }
+movement-engine = { package = "listen-fire-engine", version = "0.12.0-rc.4", path = "../movement-engine" }
 # Adapter protocol 2's envelope, JSON in JavaScript's key order and the
 # result checks: shared with the module kit (crates/module-kit).
-module-wire = { package = "listen-fire-module-wire", version = "0.12.0-rc.3", path = "../module-wire", optional = true }
+module-wire = { package = "listen-fire-module-wire", version = "0.12.0-rc.4", path = "../module-wire", optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
 # As the parser's. `preserve_order` must stay off: features unify across the
 # workspace, and the parser's sorted output depends on it being off.

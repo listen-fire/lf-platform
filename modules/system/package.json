@@ -2,7 +2,7 @@
   "name": "@listen-fire/system",
   "private": true,
   "license": "Apache-2.0",
-  "version": "0.12.0-rc.3",
+  "version": "0.12.0-rc.4",
   "description": "The platform itself as a source (a run failed or paused, a release was deployed) as a module. Platform-supplied: the platform hosts it in process and hands it its own records of runs and events; it has no story outside the platform, so it is never published or served as a process. Its tests borrow apps/api's jest runner (jest.config.borrowed.cjs)",
   "engines": {
     "node": "22.20.0"
