@@ -32,6 +32,16 @@ pub struct PluginSpec {
     pub spec: Js,
 }
 
+impl PluginSpec {
+    /// What the plugin does: shown when an author hovers a call of it.
+    pub fn description(mut self, text: impl Into<String>) -> PluginSpec {
+        if let Js::Obj(spec) = &mut self.spec {
+            spec.insert("description".into(), Js::Str(text.into()));
+        }
+        self
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginCall {

@@ -187,6 +187,9 @@ export interface AdapterSpec {
    * reads it.
    */
   schemaShape?: 'static' | 'introspected';
+  /** What the adapter says it is (its manifest's `description`). The checker
+   *  never reads it; the language service's hover leads with it. */
+  description?: string;
 }
 
 /**
@@ -411,6 +414,8 @@ export interface PluginSpec {
    * two packages can each serve a `render`. Absent: the key is the name.
    */
   name?: string;
+  /** What it does, in its author's words (its signature's `description`). */
+  description?: string;
 }
 
 /** One `fedArgs` entry: the argument's name, and whether a PLAIN call must
@@ -1373,6 +1378,9 @@ export interface EdgeSchema {
    * only: nothing resolves `_resources` to it.
    */
   resources?: true;
+  /** What the adapter says the edge is (a reference's `description`). The
+   *  checker never reads it; the language service's hover leads with it. */
+  description?: string;
 }
 
 /** A readable position type: its properties and outgoing references. */
@@ -1514,6 +1522,13 @@ export interface PositionSchema {
    * undescribed or pending position says nothing, so nothing is refused).
    */
   deletable?: boolean;
+  /** What the adapter says a record of this type is, in its own words (its
+   *  describe's or entry point's `description`). The checker never reads it;
+   *  the language service's hover leads with it. */
+  description?: string;
+  /** What the adapter says each field is, by name — every field it described,
+   *  readable or write-only. */
+  fieldDocs?: Record<string, string>;
 }
 
 /**

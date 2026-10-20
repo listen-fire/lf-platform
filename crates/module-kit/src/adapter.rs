@@ -51,6 +51,11 @@ impl AdapterManifest {
         self.declarations.insert(key.into(), value);
         self
     }
+
+    /// What the system is, in a sentence or two: shown when an author hovers the adapter.
+    pub fn description(self, text: impl Into<String>) -> AdapterManifest {
+        self.declare("description", Js::Str(text.into()))
+    }
 }
 
 /// How the host hands a record back: its type, the id the adapter minted
@@ -173,6 +178,28 @@ impl Field {
             enum_values: None,
             rest: Obj::new(),
         }
+    }
+
+    /// What the field holds: shown when an author hovers it.
+    pub fn description(mut self, text: impl Into<String>) -> Field {
+        self.rest.insert("description".into(), Js::Str(text.into()));
+        self
+    }
+}
+
+impl TypeDescriptor {
+    /// What a record of this type is: shown when an author hovers it.
+    pub fn description(mut self, text: impl Into<String>) -> TypeDescriptor {
+        self.rest.insert("description".into(), Js::Str(text.into()));
+        self
+    }
+}
+
+impl Reference {
+    /// What walking the edge reaches: shown when an author hovers it.
+    pub fn description(mut self, text: impl Into<String>) -> Reference {
+        self.rest.insert("description".into(), Js::Str(text.into()));
+        self
     }
 }
 

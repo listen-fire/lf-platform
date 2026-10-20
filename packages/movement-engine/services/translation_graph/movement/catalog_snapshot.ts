@@ -199,6 +199,7 @@ function adapterSnapshotOf(input: CatalogAdapterInput): AdapterSnapshot {
     ...(connectActions.length > 0 ? { connectActions } : {}),
     ...(input.connect !== undefined ? { connect: input.connect } : {}),
     ...(manifest.triggerExpectation !== undefined ? { triggerExpectation: manifest.triggerExpectation } : {}),
+    ...(manifest.description !== undefined && manifest.description.length > 0 ? { description: manifest.description } : {}),
     schemaShape: manifest.introspectedSchema ? 'introspected' : 'static',
     schemas: input.schemas ?? {},
     ...(input.schemaNotes !== undefined ? { schemaNotes: input.schemaNotes } : {}),

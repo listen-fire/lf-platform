@@ -342,6 +342,7 @@ pub fn instance_schema_from_descriptors(input: &ProjectionInput) -> Projection {
         let mut ambiguous_properties: Vec<String> = Vec::new();
         let mut required_fields: Vec<String> = Vec::new();
         let mut field_docs = Obj::new();
+        let mut position_field_docs = Obj::new();
         let mut write_field_name_by_id: HashMap<String, String> = HashMap::new();
         let mut dropped_field = false;
         let fields = items(descriptor.get("fields"));
@@ -360,6 +361,10 @@ pub fn instance_schema_from_descriptors(input: &ProjectionInput) -> Projection {
                 notes.push(format!("{adapter_type}: '{name}' has more than one field named '{field_name}' — reads resolve to the first"));
                 continue;
             }
+            let description = described(field);
+            if let Some(description) = &description {
+                position_field_docs.insert(field_name.clone(), Js::str(description));
+            }
             if Js::is_false(field.get("readable")) {
                 write_only_properties.push(field_name.clone());
             } else {
@@ -374,9 +379,7 @@ pub fn instance_schema_from_descriptors(input: &ProjectionInput) -> Projection {
                 if Js::is_true(field.get("required")) {
                     required_fields.push(field_name.clone());
                 }
-                if let Some(Js::Str(description)) = field.get("description")
-                    && !description.is_empty()
-                {
+                if let Some(description) = description {
                     field_docs.insert(field_name.clone(), Js::str(description));
                 }
             }
@@ -441,6 +444,12 @@ pub fn instance_schema_from_descriptors(input: &ProjectionInput) -> Projection {
             }
             if Js::is_true(descriptor.get("deletable")) {
                 position.insert("deletable".into(), Js::Bool(true));
+            }
+            if let Some(description) = described(descriptor).or_else(|| described(entry)) {
+                position.insert("description".into(), Js::str(description));
+            }
+            if !position_field_docs.is_empty() {
+                position.insert("fieldDocs".into(), Js::from(position_field_docs));
             }
             positions.insert(name.clone(), Js::from(position));
         }
@@ -642,7 +651,15 @@ fn edge_schema(reference: &Js, target: Option<&str>, polymorphic: bool, field_id
         flag("genericOver", true, generic_over.clone());
     }
     flag("resources", field_id == RESOURCES_REFERENCE_FIELD_ID, Js::Bool(true));
+    if let Some(description) = described(reference) {
+        edge.insert("description".into(), Js::str(description));
+    }
     edge
+}
+
+/// A non-empty `description` the adapter wrote on a type, field or reference.
+fn described(declared: &Js) -> Option<String> {
+    declared.get("description").and_then(Js::as_str).filter(|d| !d.is_empty()).map(str::to_string)
 }
 
 /// The projection over an adapter's own introspection answers, as
