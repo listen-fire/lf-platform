@@ -11,7 +11,7 @@
 import { strict as assert } from 'node:assert';
 
 import { PROTOCOL_VERSION, type WireCoreSlotShape as CoreSlot } from 'engine-contracts';
-import { FilesOpenAnswer, JudgeArbitrateAnswer, ModelsCallAnswer, StoredFile, WireSlotManifest } from 'engine-contracts/slots';
+import { FilesOpenAnswer, JudgeArbitrateAnswer, MODELS_PRICES_METHOD, ModelsCallAnswer, ModelsPricesAnswer, StoredFile, WireSlotManifest, isFreePrice, type ModelPriceShape } from 'engine-contracts/slots';
 
 import { SlotClient, SlotRefused, postTo } from './wire';
 
@@ -73,8 +73,36 @@ export function commonSlotCases(slot: CoreSlot, methods: readonly string[]): Slo
   ];
 }
 
+/** The module's published price for `model`, when it publishes prices. */
+async function publishedPrice(client: SlotClient, model: string): Promise<ModelPriceShape | undefined> {
+  const manifest = await client.read('manifest', {}, WireSlotManifest);
+  if (!manifest.methods.includes(MODELS_PRICES_METHOD)) return undefined;
+  const { prices } = await client.read(MODELS_PRICES_METHOD, {}, ModelsPricesAnswer);
+  return prices[model];
+}
+
 /** The models slot. `client` carries settings that reach a model. */
 export const modelsSlotCases: SlotConformanceCase[] = [
+  {
+    name: 'models: a call that spent tokens reports what it cost, unless the model is published as free',
+    async run(client) {
+      const answer = await client.read('models.call', { label: 'conformance.priced', system: 'Answer briefly.', userMessage: 'Say hello.', model: 'sonnet' }, ModelsCallAnswer);
+      const spent = answer.usage.inputTokens + answer.usage.outputTokens;
+      const price = await publishedPrice(client, 'sonnet');
+      if (spent === 0 || (price !== undefined && isFreePrice(price))) return;
+      const total = answer.cost.reduce((sum, line) => sum + line.microdollars, 0);
+      assert.ok(total > 0, `the call spent ${spent} tokens and reported a cost of ${total} microdollars`);
+    },
+  },
+  {
+    name: 'models: models.prices, when listed, prices the names a call writes in dollars per million tokens',
+    async run(client) {
+      const manifest = await client.read('manifest', {}, WireSlotManifest);
+      if (!manifest.methods.includes(MODELS_PRICES_METHOD)) return;
+      const { prices } = await client.read(MODELS_PRICES_METHOD, {}, ModelsPricesAnswer);
+      assert.ok(prices.sonnet !== undefined, 'the table prices `sonnet`, a name every host writes');
+    },
+  },
   {
     name: 'models: one call, one answer: its text, what it cost and the tokens it spent',
     async run(client) {

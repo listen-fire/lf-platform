@@ -6,7 +6,8 @@
 //! to the meaning a third-party module filling the slot is held to.
 //!
 //! - models (`@lf/anthropic`): its settings ride on each request
-//!   (`api_key`, `base_url`), as they would for any module.
+//!   (`api_key`, `base_url`), as they would for any module; it publishes
+//!   its prices (`models.prices`).
 //! - judge (`@lf/judge`): declines every question, saying why.
 //! - files (`@lf/local-files`): a fresh folder of its own.
 
@@ -18,7 +19,7 @@ use crate::secrets::{Binding, Credential, Origin};
 use crate::slot_server::{Listen, Refusal};
 
 #[cfg(feature = "anthropic")]
-pub const MODELS_METHODS: &[&str] = &["models.call"];
+pub const MODELS_METHODS: &[&str] = &["models.call", "models.prices"];
 pub const JUDGE_METHODS: &[&str] = &["judge.arbitrate"];
 pub const FILES_METHODS: &[&str] = &["files.put", "files.owns", "files.open"];
 
@@ -26,8 +27,10 @@ pub const FILES_METHODS: &[&str] = &["files.put", "files.owns", "files.open"];
 pub async fn serve_models(listen: Listen) -> Result<(), String> {
     let manifest = crate::slot_server::manifest(crate::core::ANTHROPIC, "models", MODELS_METHODS);
     crate::slot_server::serve_async(listen, manifest, |method: String, params: Js, settings: Js| async move {
-        if method != "models.call" {
-            return Err(Refusal::unknown(&method));
+        match method.as_str() {
+            "models.call" => {}
+            "models.prices" => return Ok(crate::models::price_table_js(crate::models::builtin_prices())),
+            other => return Err(Refusal::unknown(other)),
         }
         let fields = match &settings {
             Js::Obj(given) => given.iter().filter_map(|(k, v)| Some((k.clone(), v.as_str()?.to_string()))).collect(),

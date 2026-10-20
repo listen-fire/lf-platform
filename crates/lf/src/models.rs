@@ -106,6 +106,74 @@ pub fn cost_microdollars(key: &str, tokens: TokenCounts) -> Option<i64> {
     Some((input + output + cache_read + cache_creation).round() as i64)
 }
 
+impl Price {
+    /// Free for every kind of token: an answer at this price may cost nothing.
+    pub fn is_free(&self) -> bool {
+        self.input == 0.0 && self.output == 0.0 && self.cache_read.unwrap_or(0.0) == 0.0 && self.cache_creation.unwrap_or(0.0) == 0.0
+    }
+
+    /// `{ input, output, cacheRead?, cacheCreation? }` (engine-contracts `ModelPrice`).
+    pub fn to_js(self) -> Js {
+        let rate = |n: f64| Js::Num(serde_json::Number::from_f64(n).unwrap_or_else(|| 0.into()));
+        let mut out = crate::json::Obj::new();
+        out.insert("input".into(), rate(self.input));
+        out.insert("output".into(), rate(self.output));
+        if let Some(n) = self.cache_read {
+            out.insert("cacheRead".into(), rate(n));
+        }
+        if let Some(n) = self.cache_creation {
+            out.insert("cacheCreation".into(), rate(n));
+        }
+        Js::Obj(out)
+    }
+
+    /// A row of a published table, as `to_js` writes it; `None` for one that
+    /// is not a price (a missing or negative rate).
+    pub fn of_js(row: &Js) -> Option<Price> {
+        let rate = |field: &str| match row.get(field) {
+            Some(Js::Num(n)) => n.as_f64().filter(|n| n.is_finite() && *n >= 0.0),
+            _ => None,
+        };
+        let optional = |field: &str| match row.get(field) {
+            None | Some(Js::Null) => Some(None),
+            Some(_) => rate(field).map(Some),
+        };
+        Some(Price { input: rate("input")?, output: rate("output")?, cache_read: optional("cacheRead")?, cache_creation: optional("cacheCreation")? })
+    }
+}
+
+/// What a models module publishes (`models.prices`): the price of each model
+/// name a call writes.
+pub type PriceTable = BTreeMap<String, Price>;
+
+/// A `models.prices` answer read: `{ prices: { <name>: <price> } }`, rows that
+/// are no price left out.
+pub fn price_table_of(answer: &Js) -> PriceTable {
+    match answer.get("prices") {
+        Some(Js::Obj(rows)) => rows.iter().filter_map(|(name, row)| Some((name.clone(), Price::of_js(row)?))).collect(),
+        _ => PriceTable::new(),
+    }
+}
+
+/// @lf/anthropic's published prices: every name a call writes (the tier
+/// names and the chat models) at the price of the Anthropic model it calls.
+pub fn builtin_prices() -> &'static PriceTable {
+    static TABLE: OnceLock<PriceTable> = OnceLock::new();
+    TABLE.get_or_init(|| {
+        ["opus", "opus5", "sonnet", "haiku"]
+            .iter()
+            .chain(CHAT_MODELS)
+            .filter_map(|name| Some((name.to_string(), *prices().get(&format!("anthropic/{}", wire_model(name)?))?)))
+            .collect()
+    })
+}
+
+/// A table as `models.prices` answers it.
+pub fn price_table_js(table: &PriceTable) -> Js {
+    let rows = table.iter().map(|(name, price)| (name.clone(), price.to_js())).collect();
+    Js::Obj(crate::obj! { "prices" => Js::Obj(rows) })
+}
+
 thread_local! {
     static UNPRICED_WARNED: RefCell<HashSet<String>> = RefCell::new(HashSet::new());
 }
@@ -198,6 +266,24 @@ mod tests {
             let counts = TokenCounts { input: tokens[0], output: tokens[1], cache_read: tokens[2], cache_creation: tokens[3] };
             assert_eq!(cost_microdollars(key, counts), case["microdollars"].as_i64(), "{key}");
         }
+    }
+
+    #[test]
+    fn the_builtin_publishes_every_name_a_call_writes_at_its_anthropic_price() {
+        let table = builtin_prices();
+        assert_eq!(table.get("sonnet"), prices().get("anthropic/claude-sonnet-5"));
+        assert_eq!(table.get("claude-haiku-4-5"), prices().get("anthropic/claude-haiku-4-5"));
+        assert_eq!(table.len(), 4 + CHAT_MODELS.len());
+    }
+
+    #[test]
+    fn a_published_table_reads_back_as_it_was_written_and_drops_what_is_no_price() {
+        let table = builtin_prices();
+        assert_eq!(&price_table_of(&price_table_js(table)), table);
+        let odd = Js::parse(br#"{"prices":{"free":{"input":0,"output":0},"bad":{"input":-1,"output":2},"half":{"input":1}}}"#).unwrap();
+        let read = price_table_of(&odd);
+        assert_eq!(read.keys().collect::<Vec<_>>(), vec!["free"]);
+        assert!(read["free"].is_free());
     }
 
     #[test]
