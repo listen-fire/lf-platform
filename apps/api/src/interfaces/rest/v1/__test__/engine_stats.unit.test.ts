@@ -10,7 +10,6 @@ import type { AddressInfo } from 'node:net';
 jest.mock('../../../../services/work/drain', () => ({ drainUntilIdle: jest.fn(), recordExternalDrainPass: jest.fn() }));
 jest.mock('../../../../services/context', () => ({ currentContext: jest.fn() }));
 jest.mock('../../../../services/system_debug', () => ({ listTgRuns: jest.fn(), getTgRun: jest.fn() }));
-jest.mock('../../../../lib/knowledge/orchestrator', () => ({ runConversationTurn: jest.fn() }));
 jest.mock('../../../../lib/llm_usage', () => ({ LlmUsageContext: jest.fn() }));
 jest.mock('principal', () => ({ currentPrincipal: jest.fn() }));
 

@@ -1,7 +1,6 @@
 import { sql } from 'kysely';
 
 import type { ResourceId } from '../../generated/kysely/knowledge/Resource';
-import type { SourceRef } from './agent_types';
 
 import { getQb, getKnowledgeQb } from '../kysely';
 import { logger } from 'movement-engine/public/log';
@@ -439,6 +438,15 @@ async function getNodeDetail(nodeId: string, teamId: string, mode: 'full' | 'con
     _summary: node.summary,
     _sourceRefs: sourceRefs,
   };
+}
+
+/** A resource a node was read from. */
+interface SourceRef {
+  resourceId: string;
+  resourceName: string;
+  resourceType: string;
+  resourceUrl?: string;
+  rawText?: string;
 }
 
 async function loadSourceRefsForNode(nodeId: string): Promise<SourceRef[]> {

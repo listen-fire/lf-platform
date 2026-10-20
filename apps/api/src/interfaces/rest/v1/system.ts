@@ -7,11 +7,8 @@ import { currentPrincipal } from 'principal';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
 
-import { currentContext } from '../../../services/context';
 import { catchingRoutes } from '../async_route';
 import { listTgRuns, getTgRun } from '../../../services/system_debug';
-import { runConversationTurn } from '../../../lib/knowledge/orchestrator';
-import { LlmUsageContext } from '../../../lib/llm_usage';
 import { drainUntilIdle, recordExternalDrainPass } from '../../../services/work/drain';
 import { mounts } from '../../../products';
 import { rustRunStats } from 'movement-engine/public/movement-engine';
@@ -32,9 +29,7 @@ function internalError(res: Parameters<RequestHandler>[1], err: unknown) {
 }
 
 /** The floor under every route in this router — see `async_route.ts` for why an
- *  unwrapped async handler HANGS rather than 500s. Two of the four handlers
- *  below read identity before their own try/catch, which is exactly the shape
- *  that used to leave the socket unanswered. */
+ *  unwrapped async handler HANGS rather than 500s. */
 const route = catchingRoutes(internalError);
 
 /**
@@ -47,26 +42,6 @@ const route = catchingRoutes(internalError);
 function actingTeamId(): TeamId {
   return currentPrincipal().teamId as TeamId;
 }
-
-/**
- * The acting USER, for the one route that needs a person rather than a tenant.
- * Absent for a machine principal.
- */
-function actingUserId(): string | undefined {
-  return currentPrincipal().userId;
-}
-
-/**
- * Starting a conversation binds it to an owner: `agent_conversation.user_id` is
- * NOT NULL, so there is no null upstream of this throw for attribution to
- * degrade to, and inventing a user id to satisfy the column is the failure mode
- * the carve exists to prevent. So it refuses, naming the credential that works.
- * Continuing an EXISTING conversation is tenancy and keeps working.
- */
-const NO_ACTING_USER = {
-  error:
-    'Starting a conversation records who owns it, but this connection authenticates as a machine (an API key with no user behind it). Reconnect with a user-anchored credential, or continue an existing conversation.',
-};
 
 const paginationSchema = z.object({
   limit: z.coerce.number().int().positive().max(100).optional(),
@@ -107,125 +82,6 @@ const getTgRunHandler: RequestHandler = async (req, res) => {
     });
     if (!data) return res.status(404).json({ error: 'Trigger run not found' });
     return res.status(200).json(data);
-  } catch (err) {
-    return internalError(res, err);
-  }
-};
-
-// ── Chat (system agent) ──
-
-const startConversationSchema = z.object({
-  message: z.string().min(1).max(50000),
-});
-
-const startConversationHandler: RequestHandler = async (req, res) => {
-  const teamId = actingTeamId();
-  const userId = actingUserId();
-  if (userId === undefined) {
-    return res.status(400).json(NO_ACTING_USER);
-  }
-
-  const ctx = currentContext();
-  const parsed = startConversationSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
-  }
-
-  const { message } = parsed.data;
-
-  try {
-    const conversation = await ctx.prisma.agentConversation.create({
-      data: {
-        teamId,
-        userId,
-        agentType: 'knowledge_system',
-        activeAgent: 'system',
-        title: message.slice(0, 100),
-      },
-    });
-
-    await ctx.prisma.agentMessage.create({
-      data: {
-        conversationId: conversation.id,
-        role: 'user',
-        content: message,
-        agent: 'system',
-        messageType: 'chat',
-      },
-    });
-
-    const sid = `mcp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const usageContext = new LlmUsageContext({ teamId, conversationId: conversation.id });
-    const result = await usageContext.runAsync(() =>
-      runConversationTurn({
-        conversationId: conversation.id,
-        userMessage: message,
-        sessionId: sid,
-      }),
-    );
-
-    return res.status(200).json({
-      conversationId: conversation.id,
-      response: result.text,
-    });
-  } catch (err) {
-    return internalError(res, err);
-  }
-};
-
-const sendMessageSchema = z.object({
-  message: z.string().min(1).max(50000),
-});
-
-const sendMessageHandler: RequestHandler = async (req, res) => {
-  const ctx = currentContext();
-  const teamId = actingTeamId();
-
-  const parsed = sendMessageSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
-  }
-
-  const conversationId = req.params.id;
-  const { message } = parsed.data;
-
-  try {
-    const conversation = await ctx.prisma.agentConversation.findFirst({
-      where: { id: conversationId, teamId },
-    });
-    if (!conversation) {
-      return res.status(404).json({ error: 'Conversation not found' });
-    }
-
-    await ctx.prisma.agentMessage.create({
-      data: {
-        conversationId,
-        role: 'user',
-        content: message,
-        agent: conversation.activeAgent,
-        messageType: 'chat',
-      },
-    });
-
-    const sid = `mcp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const usageContext = new LlmUsageContext({ teamId, conversationId });
-    const result = await usageContext.runAsync(() =>
-      runConversationTurn({
-        conversationId,
-        userMessage: message,
-        sessionId: sid,
-      }),
-    );
-
-    const updatedConv = await ctx.prisma.agentConversation.findUniqueOrThrow({
-      where: { id: conversationId },
-    });
-
-    return res.status(200).json({
-      conversationId,
-      response: result.text,
-      activeAgent: updatedConv.activeAgent,
-    });
   } catch (err) {
     return internalError(res, err);
   }
@@ -274,14 +130,12 @@ const systemRouter: ReturnType<typeof Router> = Router();
 // (services/system_auth): the `system` API key by default.
 systemRouter.use(requireSystemCaller());
 
-// The run listings and the system agent act in the tenant of the key's owner.
+// The run listings act in the tenant of the key's owner.
 const tenant = requireTenantCaller();
 
 systemRouter.get('/tg-runs', tenant, route(listTgRunsHandler));
 systemRouter.get('/tg-runs/:id', tenant, route(getTgRunHandler));
 systemRouter.get('/engine-stats', route(engineStatsHandler));
-systemRouter.post('/conversations', tenant, route(startConversationHandler));
-systemRouter.post('/conversations/:id/messages', tenant, route(sendMessageHandler));
 // `system` is mounted on every installation, so the route gates itself the way
 // index.ts gates the automations routers: absent, not refused, without the unit.
 if (mounts('automations')) {

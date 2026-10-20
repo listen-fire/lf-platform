@@ -1,24 +1,13 @@
-// The unified agent's deterministic tools, exposed as first-class REST/MCP
-// primitives so an external Claude can author movements, read + edit the
-// knowledge graph, and read the handbook DIRECTLY — without proxying through
-// `start_conversation` (which runs the whole agent loop).
+// The knowledge and automation tools an external agent calls over MCP: author
+// movements, read and edit the knowledge graph, read the handbook. Every op is
+// bound to the MCP session's team (the ambient Principal's `teamId`, via
+// `resolveToolTeam`) and the underlying service clamps to it, so a cross-team
+// id simply isn't found and is denied.
 //
-// Every handler here REUSES the exact same service function the agent's
-// `buildScopedTools` (lib/knowledge/unified_agent.ts) wires — single source of
-// logic, no duplication, no routing through the agent loop. Team-scoping is
-// identical to the agent's: every op is bound to the MCP session's team (the
-// ambient Principal's `teamId`, via `resolveToolTeam`) and the underlying
-// service clamps to it, so a cross-team id simply isn't found → denied.
-//
-// Mechanism: every agent-facing op is a first-class top-level MCP tool in
-// `interfaces/mcp/server.ts` (the knowledge MCP surface is FLAT — no
-// describe_api/call_api shim). Each tool maps to one of the REST handlers
-// mounted here, so the in-app agent, the MCP surface, and any other REST
-// caller share one implementation. The route metadata is still registered on
-// the registry (`registerKnowledgeAgentToolRoutes`) for non-MCP discovery.
-//
-// sibling of the
-//   async-conversation surface; this is the DIRECT (non-agent) half.
+// Each top-level MCP tool (`interfaces/mcp/connectors`) maps to one of the REST
+// handlers mounted here, so the MCP surface and any other REST caller share one
+// implementation. The route metadata is also registered on the registry
+// (`registerKnowledgeAgentToolRoutes`) for non-MCP discovery.
 
 import { randomUUID } from "node:crypto";
 
@@ -67,7 +56,7 @@ import {
   bulkDeleteRelationships,
 } from '../../../lib/knowledge/query_agent_crud';
 import { mergeNodes } from '../../../lib/knowledge/merge';
-import { createOntologyAgentTools } from '../../../lib/knowledge/ontology_agent';
+import { createOntologyTools } from '../../../lib/knowledge/ontology_tools';
 import {
   assessMovementValidity,
   validateMovementForTeam,
@@ -169,8 +158,7 @@ const NO_ACTING_USER = {
 /**
  * Wrap a handler that takes validated input and returns a JSON-serialisable
  * value. The service functions surface "team-scoped not found" / validation
- * problems as a returned `{ error }` object (the agent's `announce`
- * convention) — we map that to a 404/400 so the MCP caller sees a clean
+ * problems as a returned `{ error }` object — we map that to a 404/400 so the MCP caller sees a clean
  * status, exactly as a cross-team id is denied.
  */
 /** A handler's answer that the request lost a race and may be retried:
@@ -204,11 +192,6 @@ function jsonHandler<I>(
     }
   };
 }
-
-// A no-op event sink for the agent tool factories — these tools emit UI
-// "tool_call" hints into a chat stream; on the MCP path there is no stream,
-// so we discard them. The underlying mutation/read logic is unchanged.
-const noopEmit = () => {};
 
 // ---------------------------------------------------------------------------
 // library.read — readBook
@@ -303,7 +286,7 @@ const getOntologyHandler: RequestHandler = async (req, res) => {
   try {
     const team = typeof req.query.team === 'string' ? req.query.team : undefined;
     const resolvedTeam = await resolveToolTeam(team);
-    const tools = createOntologyAgentTools(noopEmit, resolvedTeam);
+    const tools = createOntologyTools(resolvedTeam);
     const result = await tools.getOntology();
     return res.status(200).json(result);
   } catch (err) {
@@ -398,7 +381,7 @@ const saveRecipeHandler: RequestHandler = jsonHandler(saveRecipeSchema, 'body', 
   return { success: true, action: 'created', name: input.name };
 });
 
-/** The ontology-mutation tool names (reuses the agent's createOntologyAgentTools impls). */
+/** The ontology-mutation tool names (each one of createOntologyTools' operations). */
 const ONTOLOGY_MUTATION_TOOLS = [
   'createNodeType',
   'updateNodeType',
@@ -417,7 +400,7 @@ const ontologyMutationHandler = (name: (typeof ONTOLOGY_MUTATION_TOOLS)[number])
     try {
       const { team, ...args } = (req.body ?? {}) as { team?: string } & Record<string, unknown>;
       const resolvedTeam = await resolveToolTeam(team);
-      const tools = createOntologyAgentTools(noopEmit, resolvedTeam) as Record<
+      const tools = createOntologyTools(resolvedTeam) as Record<
         string,
         (args: any) => Promise<unknown>
       >;
@@ -1750,7 +1733,7 @@ function registerKnowledgeAgentToolRoutes(): void {
   reg('POST', '/merge', 'Merge a duplicate entity into another. Body: { targetNodeId, sourceNodeId }.', { inputSchema: mergeNodesSchema, latency: 'medium' });
   reg('POST', '/recipes', 'Save or update a recipe. Body: { name, description, instructions }.', { inputSchema: saveRecipeSchema, latency: 'fast' });
   for (const name of ONTOLOGY_MUTATION_TOOLS) {
-    reg('POST', `/ontology/${name}`, `Model mutation: ${name}. Edits the knowledge model itself (entity/field/relationship types, dedup rules), validated exactly as the agent's version. Body matches the agent tool's args.`, { latency: 'medium' });
+    reg('POST', `/ontology/${name}`, `Model mutation: ${name}. Edits the knowledge model itself (entity/field/relationship types, dedup rules). Body names the types it touches; ids are never needed.`, { latency: 'medium' });
   }
 }
 

@@ -65,8 +65,7 @@ function stub(meta: Omit<LibraryBook, 'chapters' | 'intentIndex'>): LibraryBook 
 }
 
 /**
- * The Library reader — the single source the `readBook` tool calls, on both
- * the agent path (lib/knowledge/unified_agent.ts) and the direct MCP path
+ * The Library reader — the single source the MCP `readBook` tool calls
  * (interfaces/rest/v1/knowledge_agent_tools.ts).
  *
  * No args → the shelf. bookId → that book's chapter index (+ when-to-read-what,

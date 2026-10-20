@@ -1,4 +1,3 @@
-import { agentUpdatesExchange } from './queues/agentUpdates';
 import { profilesExchange } from './queues/profiles';
 import { usersExchange } from './queues/users';
 import { triggerRunsExchange } from './queues/triggerRuns';
@@ -6,7 +5,6 @@ import { triggerRunActivityExchange } from './queues/triggerRunActivity';
 import { resourceChangesExchange } from './queues/resourceChanges';
 
 const mq = {
-  agentUpdates: agentUpdatesExchange,
   resourceChanges: resourceChangesExchange,
   triggerRunActivity: triggerRunActivityExchange,
   profiles: profilesExchange,
