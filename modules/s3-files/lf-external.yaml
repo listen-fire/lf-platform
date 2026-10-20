@@ -1,0 +1,17 @@
+# The install entry for lf: put this file in <project>/externals/s3_files/
+# (with the package installed there), run `lf connect s3_files`, and name it
+# in lf.yaml:
+#   core:
+#     files: s3_files
+name: s3_files
+kind: core
+slot: files
+command: [node, node_modules/@listen-fire/s3-files/dist/serve.js]
+settings:
+  - { name: bucket, label: the bucket documents are kept in }
+  - { name: region, label: "the bucket's region (auto for R2; us-east-1 for MinIO and GCS)" }
+  - { name: endpoint, label: "the S3 endpoint of a service that is not AWS (https://storage.googleapis.com, https://<account>.r2.cloudflarestorage.com, http://minio:9000)", optional: true }
+  - { name: key_prefix, label: a folder inside the bucket to keep documents under, optional: true }
+  - { name: path_style, label: "true to put the bucket in the path (MinIO, a bare IP); empty for AWS, GCS and R2", optional: true }
+  - { name: access_key_id, label: "the access key id (empty on AWS with an IAM role)", secret: true, optional: true }
+  - { name: secret_access_key, label: the secret access key, secret: true, optional: true }

@@ -192,4 +192,75 @@ mod tests {
         assert_eq!(documents.open(&uri).unwrap(), b"hello");
         std::fs::remove_dir_all(dir).unwrap();
     }
+
+    /// A files module reached at its url, keeping documents in memory, whose
+    /// request log the test reads back.
+    fn fake_files_module() -> (String, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/", listener.local_addr().unwrap());
+        let methods = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let log = methods.clone();
+        std::thread::spawn(move || {
+            let mut stored: Vec<(String, String, String)> = Vec::new();
+            for mut stream in listener.incoming().flatten() {
+                let mut received = Vec::new();
+                let mut chunk = [0u8; 4096];
+                let body = loop {
+                    let n = stream.read(&mut chunk).unwrap();
+                    received.extend_from_slice(&chunk[..n]);
+                    let text = String::from_utf8_lossy(&received).to_string();
+                    if let Some((head, rest)) = text.split_once("\r\n\r\n") {
+                        let length = head.lines().find_map(|l| l.to_ascii_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap())).unwrap_or(0);
+                        if rest.len() >= length {
+                            break rest[..length].to_string();
+                        }
+                    }
+                    if n == 0 {
+                        return;
+                    }
+                };
+                let request = Js::parse(body.as_bytes()).unwrap();
+                let method = request.get("method").and_then(Js::as_str).unwrap().to_string();
+                log.lock().unwrap().push(method.clone());
+                let params = request.get("params").unwrap();
+                let field = |k: &str| params.get(k).and_then(Js::as_str).unwrap_or_default().to_string();
+                let result = match method.as_str() {
+                    "files.put" => {
+                        let uri = format!("fake://{}", stored.len());
+                        stored.push((uri.clone(), field("tenant"), field("bytes")));
+                        obj! {
+                            "__brand" => Js::str("FileRef"),
+                            "name" => Js::str(field("name")),
+                            "contentType" => Js::str(field("contentType")),
+                            "size" => Js::Num(5.into()),
+                            "source" => Js::Obj(obj! { "store" => Js::str("document"), "objectUri" => Js::str(uri) }),
+                        }
+                        .into()
+                    }
+                    "files.owns" => Js::Bool(stored.iter().any(|(uri, tenant, _)| *uri == field("objectUri") && *tenant == field("tenant"))),
+                    _ => Js::Obj(obj! { "bytes" => Js::str(stored.iter().find(|(uri, _, _)| *uri == field("objectUri")).map(|(_, _, b)| b.clone()).unwrap()) }),
+                };
+                let answer = Js::Obj(obj! { "ok" => Js::Bool(true), "result" => result }).to_json();
+                write!(stream, "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{answer}", answer.len()).unwrap();
+            }
+        });
+        (url, methods)
+    }
+
+    #[test]
+    fn a_files_module_keeps_the_documents_instead_of_the_folder() {
+        let (url, methods) = fake_files_module();
+        let process = crate::core::ProcessModule { dir: PathBuf::from("."), command: Vec::new(), env: Default::default(), url: Some(url), auth_field: None };
+        let client = crate::slot_client::SlotClient::start("files", "acme_files", &process, &Default::default()).unwrap();
+        let dir = std::env::temp_dir().join(format!("lf-docs-{}", uuid::Uuid::new_v4()));
+        let documents = Documents::with_module(&dir, Some(client));
+        let file = documents.put("local", b"hello", "a.txt", "text/plain").unwrap();
+        let uri = file["source"].get("objectUri").and_then(Js::as_str).unwrap().to_string();
+        assert!(documents.owns(&uri, "local"));
+        assert!(!documents.owns(&uri, "other"));
+        assert_eq!(documents.open(&uri).unwrap(), b"hello");
+        assert_eq!(*methods.lock().unwrap(), ["files.put", "files.owns", "files.owns", "files.open"]);
+        assert!(!dir.join("files").exists(), "nothing was written to the project's folder");
+    }
 }

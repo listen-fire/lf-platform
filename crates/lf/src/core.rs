@@ -399,12 +399,13 @@ mod tests {
 
     #[test]
     fn a_module_lf_does_not_build_in_fills_any_slot_of_its_kind() {
-        let installed = [process_module("acme_store", Slot::Store), process_module("acme_llm", Slot::Models), process_module("acme_limits", Slot::Limiter), process_module("acme_guard", Slot::LoopGuard)];
-        let choice = CoreChoice::of(&named(&[("store", "acme_store"), ("limiter", "acme_limits"), ("loopGuard", "acme_guard"), ("models", "acme_llm")]), &installed, "lf.yaml").unwrap();
+        let installed = [process_module("acme_store", Slot::Store), process_module("acme_llm", Slot::Models), process_module("acme_limits", Slot::Limiter), process_module("acme_guard", Slot::LoopGuard), process_module("acme_files", Slot::Files)];
+        let choice = CoreChoice::of(&named(&[("store", "acme_store"), ("limiter", "acme_limits"), ("loopGuard", "acme_guard"), ("models", "acme_llm"), ("files", "acme_files")]), &installed, "lf.yaml").unwrap();
         assert_eq!(choice.store, installed[0]);
         assert_eq!(choice.models, installed[1]);
         assert_eq!(choice.limiter, installed[2]);
         assert_eq!(choice.loop_guard, Some(installed[3].clone()));
+        assert_eq!(choice.files, installed[4]);
         assert!(CoreChoice::of(&named(&[("models", "acme_store")]), &installed, "lf.yaml").unwrap_err().contains("fills the store slot"));
     }
 }

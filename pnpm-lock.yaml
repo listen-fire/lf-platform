@@ -1603,6 +1603,40 @@ importers:
         specifier: 5.5.4
         version: 5.5.4
 
+  modules/s3-files:
+    dependencies:
+      '@aws-sdk/client-s3':
+        specifier: 3.649.0
+        version: 3.649.0
+      '@listen-fire/engine-contracts':
+        specifier: workspace:^
+        version: link:../../packages/engine-contracts
+      '@listen-fire/files-s3':
+        specifier: workspace:^
+        version: link:../../packages/files-s3
+      '@listen-fire/module-runtime':
+        specifier: workspace:^
+        version: link:../../packages/module-runtime
+    devDependencies:
+      '@types/jest':
+        specifier: 29.5.14
+        version: 29.5.14
+      '@types/node':
+        specifier: 20.16.5
+        version: 20.16.5
+      engine-contracts:
+        specifier: workspace:@listen-fire/engine-contracts@*
+        version: link:../../packages/engine-contracts
+      files-s3:
+        specifier: workspace:@listen-fire/files-s3@*
+        version: link:../../packages/files-s3
+      module-runtime:
+        specifier: workspace:@listen-fire/module-runtime@*
+        version: link:../../packages/module-runtime
+      typescript:
+        specifier: 5.5.4
+        version: 5.5.4
+
   modules/slack:
     dependencies:
       '@listen-fire/engine':

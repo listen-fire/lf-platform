@@ -2,7 +2,7 @@
 
 Part of [the adapter protocol](adapter-protocol.md), version 2 (an addition within it; no version of its own).
 
-A files module keeps the documents a host's runs make and read. lf ships `@lf/local-files` (the project's `.lf/files/`). Another (S3, a bucket of its own) is a module lf starts, or reaches at its URL, over [the transport](adapter-protocol.md#transport), installed with `slot: files` and named in `core: { files: … }`.
+A files module keeps the documents a host's runs make and read. lf ships `@lf/local-files` (the project's `.lf/files/`). Another (`@listen-fire/s3-files`: a bucket of AWS S3, Google Cloud Storage, R2 or MinIO) is a module lf starts, or reaches at its URL, over [the transport](adapter-protocol.md#transport), installed with `slot: files` and named in `core: { files: … }`.
 
 ## Methods
 
