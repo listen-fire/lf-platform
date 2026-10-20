@@ -234,6 +234,7 @@ describe('METHODS registry', () => {
       'refreshCredential',
       'runPeriodic',
       'invokePlugin',
+      'checkInbound',
     ];
     expect(Object.keys(METHODS).sort()).toEqual([...expected].sort());
   });

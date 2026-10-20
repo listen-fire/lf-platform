@@ -719,6 +719,17 @@ describe('File duality — movement compile against the real projected schema', 
       descriptors,
     });
     catalog = mockCatalog({
+      plugins: {
+        render: {
+          args: ['text'],
+          priced: false,
+          requiredArgs: ['text'],
+          argTypes: { text: 'text' },
+          effects: {},
+          output: { kind: 'value', type: 'file' },
+          package: '@lf/pdf',
+        },
+      },
       adapters: {
         whatsapp: {
           constructionArgs: [],
@@ -741,6 +752,7 @@ describe('File duality — movement compile against the real projected schema', 
       parseProgram(
         [
           'import { whatsapp } from adapters',
+          'import { `@lf/pdf` as pdf } from plugins',
           '',
           'wa = connect whatsapp',
           '',
@@ -797,7 +809,7 @@ describe('File duality — movement compile against the real projected schema', 
         [
           '  write m-[:Reactions]-> { Emoji: "👍" }',
           '  write m-[:Typing]-> {}',
-          '  write m-[:Replies]-> { Body: "Noted: ${m.`Body`}", File: File.from("summary", "pdf") }',
+          '  write m-[:Replies]-> { Body: "Noted: ${m.`Body`}", File: pdf.render("summary") }',
         ].join('\n'),
       ),
     ).toEqual([]);
