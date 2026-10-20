@@ -180,6 +180,8 @@ The manifest file registers your server with a team:
   `supportedTriggers` and `runtimeCapabilities` come from the file. Keep the
   two answers the same.
 - `supportedTriggers` is `["webhook"]` if your system announces events, else `[]`.
+- `description` (optional): one or two sentences about your system. An
+  author's editor shows it when they hover your adapter or a connection to it.
 - Optional fields: `handbookSection` (`{ title, content }`, prose the authoring
   handbook shows about your system), `vocabulary` (an icon and event phrasing),
   `webhookEventTypeId`.
@@ -253,6 +255,10 @@ reads every declaration from it, the listen declarations included.
   pushed, never listed.
 - Publish every type your edges reach, even one only reached along an edge
   (`Comment` above), so it is named.
+- `description` (optional): what a record of this type is. An author's
+  editor leads with it when they hover the type, a walk to it or a
+  parameter holding one. A `description` on the type's `describe` answer
+  wins over this one.
 
 ### describe
 
@@ -263,12 +269,14 @@ reads every declaration from it, the listen declarations included.
   "typeId": "Company",
   "displayName": "Company",
   "fields": [
-    { "fieldId": "Name", "displayName": "Name", "kind": "string", "writable": true, "required": true },
+    { "fieldId": "Name", "displayName": "Name", "kind": "string", "writable": true, "required": true,
+      "description": "The company's legal name." },
     { "fieldId": "Description", "displayName": "Description", "kind": "string", "writable": true, "required": false }
   ],
   "references": [
     { "fieldId": "Comments", "name": "Comments", "targetTypeId": "Comment", "cardinality": "many",
-      "direction": "outgoing", "writable": false, "awaitable": true, "watchable": true, "resolvesEmpty": true }
+      "direction": "outgoing", "writable": false, "awaitable": true, "watchable": true, "resolvesEmpty": true,
+      "description": "What people said about the company, oldest first." }
   ]
 }
 ```
@@ -285,6 +293,11 @@ reads every declaration from it, the listen declarations included.
     absent means read-only;
   - `awaitable`, `watchable`, `resolvesEmpty` (see
     [awaits](#waiting-on-your-system-awaits)).
+- `description` (optional) on the type, a field or a reference: what it is,
+  in a sentence. An author's editor shows it when they hover the record, the
+  field or the walk along the reference. A write-only field's description is
+  also quoted when an automation tries to read it, so say there where the
+  value can be read instead.
 - `deletable` (optional, on the type): `true` says your `deleteRecord`
   removes a record of this type. Absent means no. Under language version 5
   (Dancing Wren) a `delete` of a type that does not say `"deletable": true`
@@ -957,7 +970,8 @@ its tag:
         "argTypes": { "url": "text", "email": "text" },
         "requiredArgs": ["url"],
         "effects": { "reads": ["the web"] },
-        "output": { "kind": "value", "type": "text" }
+        "output": { "kind": "value", "type": "text" },
+        "description": "The page at a URL, as text."
       }
     }
   ]
@@ -977,7 +991,9 @@ page = web.fetchUrl(u)
   types, the required ones, its effects, whether it may cost money
   (`priced`), what it hands back (`output`), the arguments a
   `through [ … ]` stage feeds it (`fedArgs`), and `fedByExtraction` for a
-  plugin that only reads what the stage extracted.
+  plugin that only reads what the stage extracted. Its optional
+  `description` says what the plugin does; an author's editor shows it when
+  they hover a call.
 - `plugins` pairs with the method `invokePlugin`:
   `{ name, config, extractedContext }` → `{ text?, data?, records?, outcome?, costMicrodollars?, files?, warnings? }`.
   `config` is the author's arguments by name; `extractedContext` the fields
@@ -1395,6 +1411,11 @@ from the root, so no automation can walk the collection.
   declares none of them and is unchanged, and an older host ignores them. The
   ruling: no protocol version bump. See
   [Modules](#modules-credentials-signatures-and-schedules).
+- **Descriptions an editor shows** (within version 2, no bump; 2026-10-20).
+  A manifest's `description`, a type's, a field's and a reference's, and a
+  plugin spec's, all optional. Additive: an older server sends none and is
+  unchanged, and nothing is checked against them. See
+  [describe](#describe) and [Plugins](#plugins).
 - **Plugin modules** (within version 2, no bump). The manifest may declare
   `plugins` (a package of them), paired with the optional method
   `invokePlugin`. Additive: a server that declares none is unchanged, and an
