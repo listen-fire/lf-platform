@@ -167,8 +167,12 @@ FROM api-slim AS api-browser
 # Notion) and PDF rendering. Installed through the api's own playwright so the
 # browser build matches the lockfile's version. The skip flag above only guards
 # the install step, so it is cleared for this one command. A fixed path keeps
-# the browser findable by whatever user the container runs as.
+# the browser findable by whatever user the container runs as. The Noto fonts
+# are there so text in every script renders (Playwright's own font set has no
+# CJK or most other scripts, which would draw as empty boxes).
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 ENV LISTEN_FIRE_IMAGE_VARIANT=browser
 RUN PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=0 pnpm exec playwright install --with-deps chromium \
+  && apt-get install -y --no-install-recommends fonts-noto-core fonts-noto-cjk fonts-noto-color-emoji \
+  && fc-cache -f \
   && rm -rf /var/lib/apt/lists/*
