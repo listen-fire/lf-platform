@@ -14,8 +14,8 @@ use crate::core::ProcessModule;
 use crate::json::{Js, Obj};
 use crate::obj;
 use crate::slot_client::SlotClient;
-use crate::store::{BranchExport, ClaimDue, ClaimedWork, CorrelatedAwait, LeafRow, Result, RunRow, StoreError};
-use crate::store_wire::{Wire, int, num, opt, rows};
+use crate::store::{BranchExport, ClaimDue, ClaimedWork, CorrelatedAwait, LeafRow, NewWork, Park, Release, Result, RunRow, RunStart, StoreError};
+use crate::store_wire::{Wire, event_run_params, int, num, opt, park_params, rows, to_rows};
 
 /// The error code a fenced write answers when the run's lease is gone
 /// (`RunLeaseLost`), its `data` `{ runId }`.
@@ -99,6 +99,12 @@ impl RunHostStore for ProcessStore {
     fn start_run(&self, id: &str, file: &str, movement: &str, started_at: &str, input: &str) -> Result<()> {
         self.unit("runs.start", obj! { "id" => s(id), "file" => s(file), "movement" => s(movement), "startedAt" => s(started_at), "input" => s(input) })
     }
+    fn start_event_run(&self, listen: &str, key: &str, run: &RunStart<'_>) -> Result<bool> {
+        self.flag("events.startRun", event_run_params(listen, key, run))
+    }
+    fn lapsed_runs(&self, stale_ms: i64, limit: i64) -> Result<Vec<String>> {
+        self.strings("runs.lapsed", obj! { "staleMs" => Js::Num(stale_ms.into()), "limit" => Js::Num(limit.into()) })
+    }
     fn settle_run(&self, id: &str, status: &str, outcome: &Js, at: &str) -> Result<()> {
         self.unit("runs.settle", obj! { "runId" => s(id), "status" => s(status), "outcome" => outcome.clone(), "at" => s(at) })
     }
@@ -170,6 +176,9 @@ impl RunHostStore for ProcessStore {
     }
     fn delete_leaves(&self, run_id: &str, addresses: &[String]) -> Result<()> {
         self.unit("parks.deleteLeaves", obj! { "runId" => s(run_id), "addresses" => strings(addresses) })
+    }
+    fn commit_park(&self, park: &Park<'_>) -> Result<()> {
+        self.unit("parks.commit", park_params(park))
     }
 
     fn record_join(&self, run_id: &str, frame_address: &str, pending: i64, fence: Option<&str>) -> Result<()> {
@@ -257,8 +266,11 @@ impl RunHostStore for ProcessStore {
     fn complete(&self, id: &str, claim: &str) -> Result<()> {
         self.unit("work.complete", obj! { "id" => s(id), "claim" => s(claim) })
     }
-    fn release_work(&self, id: &str, claim: &str, due_at: Option<&str>) -> Result<()> {
-        self.unit("work.release", obj! { "id" => s(id), "claim" => s(claim), "dueAt" => opt(due_at) })
+    fn release_work(&self, id: &str, claim: &str, due_at: Option<&str>, why: Release) -> Result<()> {
+        self.unit("work.release", obj! { "id" => s(id), "claim" => s(claim), "dueAt" => opt(due_at), "why" => s(why.wire()) })
+    }
+    fn bury_work(&self, id: &str, claim: &str, reason: &str) -> Result<()> {
+        self.unit("work.bury", obj! { "id" => s(id), "claim" => s(claim), "reason" => s(reason) })
     }
 
     fn put_source(&self, team_id: &str, hash: &str, source: &str) -> Result<()> {
@@ -310,6 +322,14 @@ impl RunHostStore for ProcessStore {
     }
     fn save_inbound_checkpoint(&self, subscription_id: &str, checkpoint: &Js) -> Result<()> {
         self.unit("inbound.saveCheckpoint", obj! { "subscriptionId" => s(subscription_id), "checkpoint" => checkpoint.clone() })
+    }
+    fn keep_delivery(&self, subscription_id: &str, checkpoint: Option<&Js>, work: &[NewWork]) -> Result<()> {
+        let mut params = obj! { "subscriptionId" => s(subscription_id), "work" => to_rows(work) };
+        // Absent, not null: a null cursor is one to keep.
+        if let Some(checkpoint) = checkpoint {
+            params.insert("checkpoint".into(), checkpoint.clone());
+        }
+        self.unit("inbound.keepDelivery", params)
     }
 
     fn module_processes(&self) -> Result<crate::backend::ModuleProcesses> {

@@ -47,14 +47,15 @@ The store slot's envelope ([store-slot.md](store-slot.md#the-envelope)): adapter
 
 ## When lf calls it
 
-After every work row lf writes or puts back with a due time, once the write is in the store, so the worker a wake starts finds the row:
+After every work row lf writes or puts back with a due time, once the write is in the store, so the worker a wake starts finds the row. A row written inside one of the store's composite calls (a park with its timer row, a delivery's cursor with its rows) is announced after that call commits, never before:
 
 - a delivery's or a push's event queued (`fire_event`, now): `/hooks/…` under `lf serve --doors-only`, and the webhook and push doors
 - a wake for parked awaits queued (`wake_await`, now)
 - a timer park (`resume_timer`, at its due time)
 - a callback's call (`fire_callback` at its backstop, and now when its run is busy; `wake_await` at its backstop)
 - a polled listen's first poll (`poll_listen`, now) and each next one (at the next interval)
-- a row put back for a retry (its kind, at the retry time)
+- a row put back for a retry (its kind, at the retry time): its backoff after a failure, or a short wait while its run is held elsewhere
+- nothing for a row that gives up: it is kept dead, never due again
 
 ## A failed wake loses no work
 

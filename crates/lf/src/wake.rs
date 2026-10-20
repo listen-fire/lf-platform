@@ -104,6 +104,14 @@ pub fn queued(kind: &str, due_at: Option<&str>) {
     }
 }
 
+/// The rows one store call wrote (`inbound.keepDelivery`), each announced
+/// once that call has committed.
+pub fn queued_rows(rows: &[crate::store::NewWork]) {
+    for row in rows {
+        queued(&row.kind, row.due_at.as_deref());
+    }
+}
+
 /// A due time not after `now` is now. One that does not read as an instant
 /// is now too: waking early costs one worker that finds nothing, waking late
 /// leaves the work waiting.
@@ -189,6 +197,20 @@ pub mod tests {
         crate::callbacks::queue_body(&store, "cb-1", store.tenant(), 0, &crate::store::iso(0)).unwrap();
         let told = wake.told.borrow().clone();
         assert_eq!(told, vec![(When::At(at), "resume_timer".into()), (When::Now, "wake_await".into()), (When::Now, "fire_callback".into())]);
+        install(None);
+    }
+
+    #[tokio::test]
+    async fn a_failed_rows_retry_is_announced_at_its_backoff() {
+        let store = store();
+        crate::run_host::queue_await_wake(&store, "acme", store.tenant(), "k").unwrap();
+        let wake = recording();
+        let claim = crate::store::ClaimDue { limit: 10, lease_ms: 60_000, due_by: None, kinds: None };
+        let claimed = RunHostStore::claim_due(&store, &claim).unwrap().remove(0);
+        let before = crate::limiter::now_ms();
+        crate::run_host::work_failed(&store, &claimed, "the module refused").await.unwrap();
+        let told = wake.told.borrow().clone();
+        assert!(matches!(told.as_slice(), [(When::At(at), kind)] if kind == "wake_await" && *at >= before + 30_000), "{told:?}");
         install(None);
     }
 

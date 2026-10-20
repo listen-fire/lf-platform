@@ -7,7 +7,7 @@
 use crate::backend::{CallbackClaim, CallbackRecord};
 use crate::json::{Js, Obj};
 use crate::obj;
-use crate::store::{BranchExport, ClaimedWork, CorrelatedAwait, LeafRow, RunRow};
+use crate::store::{BranchExport, ClaimedWork, CorrelatedAwait, LeafRow, NewWork, Park, ParkKind, RunRow, RunStart};
 
 /// A row as the store wire carries it.
 pub trait Wire: Sized {
@@ -102,11 +102,80 @@ impl Wire for ClaimedWork {
             "key" => Js::str(&self.key),
             "payload" => self.payload.clone(),
             "claim" => Js::str(&self.claim),
+            "attempts" => Js::Num(self.attempts.into()),
         })
     }
 
     fn from_wire(v: &Js) -> Option<Self> {
-        Some(ClaimedWork { id: text(v, "id")?, kind: text(v, "kind")?, key: text(v, "key")?, payload: v.get("payload")?.clone(), claim: text(v, "claim")? })
+        Some(ClaimedWork {
+            id: text(v, "id")?,
+            kind: text(v, "kind")?,
+            key: text(v, "key")?,
+            payload: v.get("payload")?.clone(),
+            claim: text(v, "claim")?,
+            attempts: int(v.get("attempts")?)?,
+        })
+    }
+}
+
+impl Wire for NewWork {
+    fn to_wire(&self) -> Js {
+        Js::from(obj! {
+            "kind" => Js::str(&self.kind),
+            "key" => Js::str(&self.key),
+            "payload" => self.payload.clone(),
+            "dueAt" => opt(self.due_at.as_deref()),
+            "teamId" => opt(self.team_id.as_deref()),
+        })
+    }
+
+    fn from_wire(v: &Js) -> Option<Self> {
+        Some(NewWork { kind: text(v, "kind")?, key: text(v, "key")?, payload: v.get("payload")?.clone(), due_at: opt_text(v, "dueAt")?, team_id: opt_text(v, "teamId")? })
+    }
+}
+
+/// `parks.commit`'s params.
+pub fn park_params(park: &Park<'_>) -> Obj {
+    let kind = match &park.kind {
+        ParkKind::Timer { wake_at } => obj! { "kind" => Js::str("timer"), "wakeAt" => Js::str(*wake_at) },
+        ParkKind::Await { team_id, adapter_type, correlation_key } => obj! {
+            "kind" => Js::str("await"),
+            "teamId" => Js::str(*team_id),
+            "adapterType" => Js::str(*adapter_type),
+            "correlationKey" => Js::str(*correlation_key),
+        },
+        ParkKind::Limit => obj! { "kind" => Js::str("limit") },
+    };
+    obj! {
+        "runId" => Js::str(park.run_id),
+        "address" => Js::str(park.address),
+        "state" => park.state.clone(),
+        "fence" => opt(park.fence),
+        "park" => Js::from(kind),
+    }
+}
+
+/// `parks.commit`'s `park`, read back; None when it is not one.
+pub fn park_kind(value: &Js) -> Option<ParkKind<'_>> {
+    let field = |key: &str| value.get(key).and_then(Js::as_str);
+    Some(match field("kind")? {
+        "timer" => ParkKind::Timer { wake_at: field("wakeAt")? },
+        "await" => ParkKind::Await { team_id: field("teamId")?, adapter_type: field("adapterType")?, correlation_key: field("correlationKey")? },
+        "limit" => ParkKind::Limit,
+        _ => return None,
+    })
+}
+
+/// `events.startRun`'s params.
+pub fn event_run_params(listen: &str, key: &str, run: &RunStart<'_>) -> Obj {
+    obj! {
+        "listen" => Js::str(listen),
+        "key" => Js::str(key),
+        "id" => Js::str(run.id),
+        "file" => Js::str(run.file),
+        "movement" => Js::str(run.movement),
+        "startedAt" => Js::str(run.started_at),
+        "input" => Js::str(run.input),
     }
 }
 
@@ -239,5 +308,24 @@ mod tests {
         let claim = CallbackClaim::Recorded { callback, call_index: 2 };
         assert_eq!(CallbackClaim::from_wire(&claim.to_wire()).map(|c| c.to_wire()), Some(claim.to_wire()));
         assert!(LeafRow::from_wire(&Js::str("not a row")).is_none());
+    }
+
+    #[test]
+    fn a_composite_writes_rows_read_back_as_written() {
+        let claimed = ClaimedWork { id: "1".into(), kind: "wake_await".into(), key: "k".into(), payload: Js::Null, claim: "t/1".into(), attempts: 3 };
+        assert_eq!(ClaimedWork::from_wire(&claimed.to_wire()).map(|w| w.attempts), Some(3));
+        let work = NewWork { kind: "fire_event".into(), key: "k".into(), payload: Js::Null, due_at: None, team_id: Some("t".into()) };
+        assert_eq!(NewWork::from_wire(&work.to_wire()).map(|w| w.to_wire()), Some(work.to_wire()));
+        let kinds = [
+            ParkKind::Timer { wake_at: "2026-10-20T00:00:00.000Z" },
+            ParkKind::Await { team_id: "t", adapter_type: "mail", correlation_key: "k" },
+            ParkKind::Limit,
+        ];
+        for kind in kinds {
+            let reason = kind.reason();
+            let params = Js::from(park_params(&Park { run_id: "r", address: "s1", state: &Js::Null, fence: None, kind }));
+            assert_eq!(params.get("park").and_then(park_kind).map(|k| k.reason()), Some(reason));
+        }
+        assert!(park_kind(&Js::from(obj! { "kind" => Js::str("timer") })).is_none(), "a timer park names its wake");
     }
 }

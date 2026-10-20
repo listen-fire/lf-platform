@@ -22,28 +22,25 @@ use crate::project::{Project, refuse_below_lf};
 use crate::remote::{Externals, SegmentAdapters};
 use crate::routing::{Listen, collect_listens, event_matches_trigger_scope, trigger_event_of};
 use crate::run_host::{
-    CANCELLED_BY_OPERATOR, Lease, Settled, StepOutcome, StepRequest, Stepper, after_step, arm_timer_wake, clear_if_quiescent, drain_due_timers, drain_run,
-    fail_run, next_timer_wake, run_complete_without, run_quiescent, settle_if_cancel_requested, with_run_lease,
+    BUSY_RETRY_MS, CANCELLED_BY_OPERATOR, FailedWork, Lease, Settled, StepOutcome, StepRequest, Stepper, WORKER_LOST, after_step, arm_timer_wake,
+    clear_if_quiescent, drain_due_timers, drain_run, fail_lost_runs, fail_run, give_up_work, next_timer_wake, past_cap, run_complete_without, run_quiescent,
+    settle_if_cancel_requested, with_run_lease, work_failed,
 };
 use crate::secrets::{Credentials, load_secrets, missing_credentials};
 use crate::segment::{Ended, Entry, Ran, SegmentHost, SegmentHostParts, SegmentInput, run_segment};
 use crate::sources::{MovementFile, scan_movements};
 use crate::backend::{RunHostStore, StoreSpec, open_store};
-use crate::store::{ClaimDue, iso};
+use crate::store::{ClaimDue, POLL_WORK_KIND, Release, RunStart, iso};
 use module_wire::results as wire_results;
-
-/// A polled listen's row in the work queue: its next poll.
-const POLL_WORK_KIND: &str = "poll_listen";
 
 /// How many due work rows one drain of `lf resume` or `lf serve` claims.
 pub const WORK_ROWS_PER_DRAIN: i64 = 100;
 
 /// How long a work row's claim lasts (`LEASE_TTL_MS`).
 const WORK_LEASE_MS: i64 = 60_000;
-/// How long a work row waits before it is tried again: when its run was
-/// held elsewhere, and when it failed.
-const BUSY_RETRY_MS: i64 = 5_000;
-const FAILED_RETRY_MS: i64 = 30_000;
+/// How often a drain looks for runs whose worker was lost (the platform's
+/// `run_orphan_sweep` interval).
+const LOST_RUN_SWEEP_EVERY: std::time::Duration = std::time::Duration::from_secs(30);
 /// Where `lf serve` listens unless told otherwise (`DEFAULT_PORT`).
 pub const DEFAULT_PORT: u16 = 4400;
 
@@ -69,6 +66,8 @@ pub struct Session {
     pub pool: crate::drain::Pool,
     /// The loopGuard slot's module; None unless lf.yaml names one.
     loop_guard: Option<std::sync::Arc<dyn LoopGuard>>,
+    /// When this session's drain last looked for lost runs.
+    swept_at: std::cell::Cell<Option<std::time::Instant>>,
 }
 
 impl Drop for Session {
@@ -152,7 +151,7 @@ pub async fn open_session(project: Project, ephemeral: bool, store: &StoreSpec) 
         .clone()
         .or_else(|| crate::serve::host_url().map(str::to_string))
         .unwrap_or_else(|| format!("http://127.0.0.1:{DEFAULT_PORT}"));
-    Ok(Session { project, store, credentials, running, documents, files, catalog, listens, due_offset_ms, user, public_url, ephemeral_dir, pool: Default::default(), loop_guard })
+    Ok(Session { project, store, credentials, running, documents, files, catalog, listens, due_offset_ms, user, public_url, ephemeral_dir, pool: Default::default(), loop_guard, swept_at: Default::default() })
 }
 
 /// What firing one event came to: the runs it started, and a line per
@@ -286,20 +285,26 @@ impl Session {
             let run_id = uuid::Uuid::new_v4().to_string();
             let file = &self.files[listen.file];
             let pipeline = format!("listen:{}:{}", file.name, listen.movement_name);
-            if let Some(key) = key
-                && !dry_run
-                && !self.store.claim_event(&pipeline, key).map_err(|e| e.to_string())?
-            {
-                fired.redelivered.push(format!("{}:{} has run the event {key} before: this delivery runs nothing", file.name, listen.movement_name));
-                continue;
-            }
+            let receipt = key.filter(|_| !dry_run);
+            let ran_before = |key: &str| format!("{}:{} has run the event {key} before: this delivery runs nothing", file.name, listen.movement_name);
             if !dry_run && self.is_own_echo(external, event, &pipeline, &now_reads).await {
+                // The echo's receipt is noted all the same, so its redelivery
+                // runs nothing however the record moves meanwhile.
+                if let Some(key) = receipt
+                    && !self.store.claim_event(&pipeline, key).map_err(|e| e.to_string())?
+                {
+                    fired.redelivered.push(ran_before(key));
+                    continue;
+                }
                 let record = crate::loop_guard::event_record(event).unwrap_or_default();
                 fired.redelivered.push(format!("{}:{} wrote the record {record} and it is unchanged since: this event is that write's echo and runs nothing", file.name, listen.movement_name));
                 continue;
             }
             let trigger = trigger_event_of(&pipeline, external, event, &event_types, &iso(0));
-            fired.outcomes.push(self.run_listen(&run_id, listen, trigger, dry_run).await?);
+            match self.run_listen(&run_id, listen, trigger, dry_run, receipt.map(|key| (pipeline.as_str(), key))).await? {
+                Some(outcome) => fired.outcomes.push(outcome),
+                None => fired.redelivered.push(ran_before(key.unwrap_or_default())),
+            }
         }
         Ok(fired)
     }
@@ -457,7 +462,10 @@ impl Session {
         Ok(types.as_array().map(<[Js]>::to_vec).unwrap_or_default())
     }
 
-    async fn run_listen(&self, run_id: &str, listen: &Listen, event: Js, dry_run: bool) -> Result<RunOutcome, String> {
+    /// Start the run and step its first segment. With a `receipt` (the
+    /// listen and the event's key), the receipt and the run are one write:
+    /// None, and nothing run, for an event the listen has run before.
+    async fn run_listen(&self, run_id: &str, listen: &Listen, event: Js, dry_run: bool, receipt: Option<(&str, &str)>) -> Result<Option<RunOutcome>, String> {
         let file = &self.files[listen.file];
         let fired_at = iso(0);
         let facts = RunFacts {
@@ -467,7 +475,16 @@ impl Session {
             movement_name: listen.movement_name.clone(),
             fired_at: fired_at.clone(),
         };
-        self.store.start_run(run_id, &file.name, &facts.movement_name, &fired_at, &facts.to_js().to_json()).map_err(|e| e.to_string())?;
+        let input = facts.to_js().to_json();
+        let start = RunStart { id: run_id, file: &file.name, movement: &facts.movement_name, started_at: &fired_at, input: &input };
+        match receipt {
+            None => self.store.start_run(run_id, start.file, start.movement, start.started_at, start.input).map_err(|e| e.to_string())?,
+            Some((listen, key)) => {
+                if !self.store.start_event_run(listen, key, &start).map_err(|e| e.to_string())? {
+                    return Ok(None);
+                }
+            }
+        }
         let tally = RefCell::new(Tally::default());
         let captured = RefCell::new(Vec::new());
         let held = with_run_lease(&*self.store, run_id, async |lease: &Lease| -> Result<bool, String> {
@@ -487,7 +504,7 @@ impl Session {
         if dry_run {
             outcome.captured = Some(captured.into_inner());
         }
-        Ok(outcome)
+        Ok(Some(outcome))
     }
 
     /// Run one segment and record what it came to on the run's row
@@ -760,35 +777,58 @@ impl Session {
         }
         let due_by = self.due_by();
         let claim = ClaimDue { limit, lease_ms: WORK_LEASE_MS, due_by: Some(&due_by), kinds: self.pool.work_kinds() };
+        self.sweep_lost_runs(log).await?;
         let due = self.store.claim_due(&claim).map_err(|e| e.to_string())?;
         let claimed_rows = due.len();
         for claimed in due {
-            match self.do_work(&claimed.kind, &claimed.payload).await {
-                Ok((next, done)) => {
-                    outcomes.extend(done);
-                    let again = match next {
-                        Next::Done => None,
-                        Next::Busy => Some(iso(BUSY_RETRY_MS)),
-                        Next::DueAt(at) => Some(at),
-                    };
-                    match &again {
-                        None => self.store.complete(&claimed.id, &claimed.claim),
-                        Some(at) => self.store.release_work(&claimed.id, &claimed.claim, Some(at)),
+            let failed = if past_cap(&claimed) {
+                give_up_work(&*self.store, &claimed, "its last attempts never finished (each worker stopped, or outran its lease)").await?
+            } else {
+                match self.do_work(&claimed.kind, &claimed.payload).await {
+                    Ok((next, done)) => {
+                        outcomes.extend(done);
+                        let again = match next {
+                            Next::Done => None,
+                            Next::Busy => Some((iso(BUSY_RETRY_MS), Release::Busy)),
+                            Next::DueAt(at) => Some((at, Release::Rescheduled)),
+                        };
+                        match &again {
+                            None => self.store.complete(&claimed.id, &claimed.claim),
+                            Some((at, why)) => self.store.release_work(&claimed.id, &claimed.claim, Some(at), *why),
+                        }
+                        .map_err(|e| e.to_string())?;
+                        if let Some((at, _)) = &again {
+                            crate::wake::queued(&claimed.kind, Some(at));
+                        }
+                        continue;
                     }
-                    .map_err(|e| e.to_string())?;
-                    if let Some(at) = &again {
-                        crate::wake::queued(&claimed.kind, Some(at));
+                    Err(message) => {
+                        let _ = writeln!(log, "work {} failed (attempt {}): {message}", claimed.key, claimed.attempts);
+                        work_failed(&*self.store, &claimed, &message).await?
                     }
                 }
-                Err(message) => {
-                    let _ = writeln!(log, "work {} failed: {message}", claimed.key);
-                    let again = iso(FAILED_RETRY_MS);
-                    self.store.release_work(&claimed.id, &claimed.claim, Some(&again)).map_err(|e| e.to_string())?;
-                    crate::wake::queued(&claimed.kind, Some(&again));
+            };
+            if let FailedWork::GaveUp { reason, runs } = failed {
+                for run_id in runs {
+                    let _ = writeln!(log, "run {run_id} failed: {reason}");
                 }
+                let _ = writeln!(log, "work {} is dead: {reason}", claimed.key);
             }
         }
         Ok((claimed_rows, outcomes))
+    }
+
+    /// The lost-run sweep (crate::run_host::fail_lost_runs), at most once
+    /// per LOST_RUN_SWEEP_EVERY.
+    async fn sweep_lost_runs(&self, log: &mut impl Write) -> Result<(), String> {
+        if self.swept_at.get().is_some_and(|at| at.elapsed() < LOST_RUN_SWEEP_EVERY) {
+            return Ok(());
+        }
+        self.swept_at.set(Some(std::time::Instant::now()));
+        for run_id in fail_lost_runs(&*self.store, WORK_ROWS_PER_DRAIN).await? {
+            let _ = writeln!(log, "run {run_id} failed: {WORKER_LOST}");
+        }
+        Ok(())
     }
 
     async fn do_work(&self, kind: &str, payload: &Js) -> Result<(Next, Vec<RunOutcome>), String> {

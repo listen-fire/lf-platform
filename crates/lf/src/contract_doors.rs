@@ -20,7 +20,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpListener;
 
 use crate::doors::{EventSink, InboundSetup, LfDoors, Reader, Served};
-use crate::inbound::{Declaration, Extraction, InboundStore, PushAuth, PushCaller, PushStore, Source, Subscription};
+use crate::inbound::{Declaration, Extraction, InboundStore, Kept, PushAuth, PushCaller, PushStore, Source, Subscription};
 use crate::json::Js;
 use crate::obj;
 use crate::secrets::{Binding, Credential, Origin};
@@ -209,7 +209,7 @@ impl Observed<'_> {
         if self.faults.enqueue_wakes {
             return Err("wake queue unavailable".into());
         }
-        InboundStore::enqueue_wakes(&self.lf(), adapter_type, team_id, keys).await?;
+        PushStore::enqueue_pushed_wakes(&self.lf(), adapter_type, team_id, keys).await?;
         self.note(|seen| seen.wakes.extend(keys.iter().cloned()));
         Ok(())
     }
@@ -257,23 +257,29 @@ impl InboundStore for Observed<'_> {
         Ok(captured)
     }
 
-    async fn save_checkpoint(&self, subscription_id: &str, checkpoint: &Js) -> Result<(), String> {
-        self.lf().save_checkpoint(subscription_id, checkpoint).await?;
-        self.note(|seen| seen.checkpoints.push(checkpoint.clone()));
-        Ok(())
-    }
-
-    async fn enqueue(&self, captured: Js, source: &Source) -> Result<(), String> {
-        if self.faults.enqueue {
+    /// lf keeps a delivery in one write, so the suite's faults land on it
+    /// whole: wakes that cannot be queued keep nothing; receipts that cannot
+    /// be queued are each refused, the rest kept (the suite's per-receipt
+    /// failure), and the delivery fails.
+    async fn keep(&self, mut kept: Kept<'_>) -> Result<(), String> {
+        if self.faults.enqueue_wakes && !kept.wake_keys.is_empty() {
+            return Err("wake queue unavailable".into());
+        }
+        let refused = self.faults.enqueue && !kept.receipts.is_empty();
+        if refused {
+            kept.receipts.clear();
+        }
+        let (checkpoint, receipts, wakes) = (kept.checkpoint.cloned(), kept.receipts.len() as u64, kept.wake_keys.to_vec());
+        self.lf().keep(kept).await?;
+        self.note(|seen| {
+            seen.checkpoints.extend(checkpoint);
+            seen.enqueued += receipts;
+            seen.wakes.extend(wakes);
+        });
+        if refused {
             return Err("work table unavailable".into());
         }
-        self.lf().enqueue(captured, source).await?;
-        self.note(|seen| seen.enqueued += 1);
         Ok(())
-    }
-
-    async fn enqueue_wakes(&self, adapter_type: &str, team_id: &str, keys: &[String]) -> Result<(), String> {
-        self.queue_wakes(adapter_type, team_id, keys).await
     }
 
     fn notify(&self) {

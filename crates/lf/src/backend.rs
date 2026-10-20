@@ -23,7 +23,7 @@ use crate::json::Js;
 use crate::pg_store::PgStore;
 use crate::core;
 use crate::project::Project;
-use crate::store::{BranchExport, ClaimDue, ClaimedWork, CorrelatedAwait, LeafRow, Result, RunRow, Store};
+use crate::store::{BranchExport, ClaimDue, ClaimedWork, CorrelatedAwait, LeafRow, NewWork, Park, Release, Result, RunRow, RunStart, Store};
 
 /// The tenant a SQLite state file's rows belong to (`LOCAL_TENANT`).
 pub const SQLITE_TENANT: &str = "local";
@@ -161,6 +161,14 @@ pub trait RunHostStore {
 
     // ── Run records ─────────────────────────────────────────────────────────
     fn start_run(&self, id: &str, file: &str, movement: &str, started_at: &str, input: &str) -> Result<()>;
+    /// Note the event's receipt on the listen (as `claim_event`) and start
+    /// its run, as one write: false, and no run, for a redelivery. A crash
+    /// never leaves a receipt whose run was never started.
+    fn start_event_run(&self, listen: &str, key: &str, run: &RunStart<'_>) -> Result<bool>;
+    /// Runs still `running` whose lease lapsed, or which hold none, started
+    /// more than `stale_ms` ago: their worker is gone (a live first firing
+    /// holds its lease and renews it). Oldest first.
+    fn lapsed_runs(&self, stale_ms: i64, limit: i64) -> Result<Vec<String>>;
     /// `completed`, `parked`, `running` or `failed`; an ending revokes the run's live callbacks.
     fn settle_run(&self, id: &str, status: &str, outcome: &Js, at: &str) -> Result<()>;
     fn mark_parked(&self, id: &str) -> Result<()>;
@@ -194,6 +202,10 @@ pub trait RunHostStore {
     fn finish_leaf(&self, run_id: &str, address: &str, fence: Option<&str>) -> Result<()>;
     fn leaves(&self, run_id: &str, parked_only: bool, reason: Option<&str>, due_by: Option<&str>) -> Result<Vec<LeafRow>>;
     fn delete_leaves(&self, run_id: &str, addresses: &[String]) -> Result<()>;
+    /// A park and what wakes it, as one fenced write: the leaf, its kind's
+    /// row (a timer's `resume_timer` row, an await's correlation, a limit's
+    /// correlation dropped), and the run marked parked.
+    fn commit_park(&self, park: &Park<'_>) -> Result<()>;
 
     // ── Joins ───────────────────────────────────────────────────────────────
     fn record_join(&self, run_id: &str, frame_address: &str, pending: i64, fence: Option<&str>) -> Result<()>;
@@ -222,7 +234,10 @@ pub trait RunHostStore {
     fn enqueue(&self, kind: &str, key: &str, payload: &Js, due_at: Option<&str>, team_id: Option<&str>) -> Result<()>;
     fn claim_due(&self, claim: &ClaimDue<'_>) -> Result<Vec<ClaimedWork>>;
     fn complete(&self, id: &str, claim: &str) -> Result<()>;
-    fn release_work(&self, id: &str, claim: &str, due_at: Option<&str>) -> Result<()>;
+    fn release_work(&self, id: &str, claim: &str, due_at: Option<&str>, why: Release) -> Result<()>;
+    /// The row gave up: never claimed again, kept with `reason` (unless it
+    /// was re-armed since the claim, which then stands).
+    fn bury_work(&self, id: &str, claim: &str, reason: &str) -> Result<()>;
 
     // ── Library sources ─────────────────────────────────────────────────────
     fn put_source(&self, team_id: &str, hash: &str, source: &str) -> Result<()>;
@@ -241,6 +256,10 @@ pub trait RunHostStore {
     /// An install's saved pull cursor (a notify-then-pull source's), or None.
     fn inbound_checkpoint(&self, subscription_id: &str) -> Result<Option<Js>>;
     fn save_inbound_checkpoint(&self, subscription_id: &str, checkpoint: &Js) -> Result<()>;
+    /// What one inbound delivery leaves, as one write: its pull cursor (when
+    /// it moved) and its work rows (its events, its wakes). A crash never
+    /// leaves a cursor past events that were never queued.
+    fn keep_delivery(&self, subscription_id: &str, checkpoint: Option<&Js>, work: &[NewWork]) -> Result<()>;
 
     // ── The module processes lf started ─────────────────────────────────────
     /// The list of module processes the lfs on this store started (so the
@@ -267,6 +286,12 @@ impl RunHostStore for Store {
 
     fn start_run(&self, id: &str, file: &str, movement: &str, started_at: &str, input: &str) -> Result<()> {
         Store::start_run(self, id, file, movement, started_at, input)
+    }
+    fn start_event_run(&self, listen: &str, key: &str, run: &RunStart<'_>) -> Result<bool> {
+        Store::start_event_run(self, listen, key, run)
+    }
+    fn lapsed_runs(&self, stale_ms: i64, limit: i64) -> Result<Vec<String>> {
+        Store::lapsed_runs(self, stale_ms, limit)
     }
     fn settle_run(&self, id: &str, status: &str, outcome: &Js, at: &str) -> Result<()> {
         Store::settle_run(self, id, status, outcome, at)
@@ -322,6 +347,9 @@ impl RunHostStore for Store {
     }
     fn delete_leaves(&self, run_id: &str, addresses: &[String]) -> Result<()> {
         Store::delete_leaves(self, run_id, addresses)
+    }
+    fn commit_park(&self, park: &Park<'_>) -> Result<()> {
+        Store::commit_park(self, park)
     }
 
     fn record_join(&self, run_id: &str, frame_address: &str, pending: i64, fence: Option<&str>) -> Result<()> {
@@ -385,8 +413,11 @@ impl RunHostStore for Store {
     fn complete(&self, id: &str, claim: &str) -> Result<()> {
         Store::complete(self, id, claim)
     }
-    fn release_work(&self, id: &str, claim: &str, due_at: Option<&str>) -> Result<()> {
-        Store::release_work(self, id, claim, due_at)
+    fn release_work(&self, id: &str, claim: &str, due_at: Option<&str>, why: Release) -> Result<()> {
+        Store::release_work(self, id, claim, due_at, why)
+    }
+    fn bury_work(&self, id: &str, claim: &str, reason: &str) -> Result<()> {
+        Store::bury_work(self, id, claim, reason)
     }
 
     fn put_source(&self, team_id: &str, hash: &str, source: &str) -> Result<()> {
@@ -420,6 +451,9 @@ impl RunHostStore for Store {
     }
     fn save_inbound_checkpoint(&self, subscription_id: &str, checkpoint: &Js) -> Result<()> {
         Store::save_inbound_checkpoint(self, subscription_id, checkpoint)
+    }
+    fn keep_delivery(&self, subscription_id: &str, checkpoint: Option<&Js>, work: &[NewWork]) -> Result<()> {
+        Store::keep_delivery(self, subscription_id, checkpoint, work)
     }
 
     fn module_processes(&self) -> Result<ModuleProcesses> {

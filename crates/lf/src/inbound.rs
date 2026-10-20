@@ -404,13 +404,24 @@ pub trait InboundStore {
     async fn check_inbound(&self, source: &Source, request: &RawRequest<'_>, secret: Option<&str>, checkpoint: Option<&Js>) -> Result<Js, String>;
     /// The correlation keys a delivery wakes; empty when the adapter names none.
     async fn wake_keys(&self, source: &Source, raw: &Js) -> Result<Vec<String>, String>;
-    /// An event's receipt: what `enqueue` later queues.
+    /// An event's receipt: what `keep` later queues.
     async fn capture(&self, event: &Js, source: &Source) -> Result<Js, String>;
-    async fn save_checkpoint(&self, subscription_id: &str, checkpoint: &Js) -> Result<(), String>;
-    async fn enqueue(&self, captured: Js, source: &Source) -> Result<(), String>;
-    async fn enqueue_wakes(&self, adapter_type: &str, team_id: &str, keys: &[String]) -> Result<(), String>;
+    /// What the delivery leaves, kept as one: its pull cursor, its receipts
+    /// queued and its wakes. A failure is the sender's to retry, whole.
+    async fn keep(&self, kept: Kept<'_>) -> Result<(), String>;
     /// Poke whatever drains the work rows.
     fn notify(&self);
+}
+
+/// Everything one delivery leaves behind (`InboundStore::keep`).
+pub struct Kept<'a> {
+    pub subscription_id: &'a str,
+    /// The pull cursor, when the delivery moved it.
+    pub checkpoint: Option<&'a Js>,
+    pub receipts: Vec<Js>,
+    pub source: &'a Source,
+    pub team_id: &'a str,
+    pub wake_keys: &'a [String],
 }
 
 pub struct Delivery<'a> {
@@ -552,25 +563,20 @@ async fn receive_delivery<S: InboundStore>(store: &S, provider_key: &str, delive
     if extraction.events.is_empty() && wakes.as_ref().is_ok_and(Vec::is_empty) {
         return Ok(Ok(0));
     }
-    // The pull cursor rides on "receipted", not "run".
-    if let Some(checkpoint) = &extraction.checkpoint {
-        store.save_checkpoint(&subscription.id, checkpoint).await?;
-    }
-
-    // One event's failure never stops the next; the wakes still go in.
+    // The pull cursor rides on "receipted", not "run", and is kept with the
+    // receipts it moved past: never one without the other.
     let events_processed = captured.len();
-    let mut failures = Vec::new();
-    for receipt in captured {
-        if let Err(error) = store.enqueue(receipt, &source).await {
-            eprintln!("Webhook event processing failed: {error}");
-            failures.push(error);
-        }
-    }
-    let keys = wakes.map_err(|error| format!("wakeKeys failed for adapter {}: {error}", source.adapter_type))?;
-    store.enqueue_wakes(&source.adapter_type, &subscription.team_id, &keys).await?;
-    if !failures.is_empty() {
-        return Err(format!("{} receipt(s) of the delivery could not be queued: {}", failures.len(), failures.join("; ")));
-    }
+    let kept = Kept {
+        subscription_id: &subscription.id,
+        checkpoint: extraction.checkpoint.as_ref(),
+        receipts: captured,
+        source: &source,
+        team_id: &subscription.team_id,
+        wake_keys: wakes.as_deref().unwrap_or(&[]),
+    };
+    store.keep(kept).await?;
+    // The events are in; a failing wake door is still the sender's to retry.
+    wakes.map_err(|error| format!("wakeKeys failed for adapter {}: {error}", source.adapter_type))?;
     Ok(Ok(events_processed))
 }
 
@@ -848,15 +854,9 @@ mod tests {
         async fn capture(&self, event: &Js, _source: &Source) -> Result<Js, String> {
             Ok(event.clone())
         }
-        async fn save_checkpoint(&self, _subscription_id: &str, _checkpoint: &Js) -> Result<(), String> {
-            Ok(())
-        }
-        async fn enqueue(&self, _captured: Js, _source: &Source) -> Result<(), String> {
-            self.queued.set(self.queued.get() + 1);
-            Ok(())
-        }
-        async fn enqueue_wakes(&self, _adapter_type: &str, _team_id: &str, keys: &[String]) -> Result<(), String> {
-            self.wakes.borrow_mut().extend(keys.iter().cloned());
+        async fn keep(&self, kept: Kept<'_>) -> Result<(), String> {
+            self.queued.set(self.queued.get() + kept.receipts.len());
+            self.wakes.borrow_mut().extend(kept.wake_keys.iter().cloned());
             Ok(())
         }
         fn notify(&self) {}
