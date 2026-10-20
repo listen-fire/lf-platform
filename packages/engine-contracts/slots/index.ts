@@ -7,3 +7,4 @@ export * from './models';
 export * from './judge';
 export * from './files';
 export * from './browser';
+export * from './wake';

@@ -1,5 +1,5 @@
 // The conformance suites of the slots with no family contract of their own
-// (models, judge, files), and the cases every slot module answers alike (its
+// (models, judge, files, wake), and the cases every slot module answers alike (its
 // manifest, the envelope's refusals). Each runs against any server over the
 // wire: written once here, they hold lf's built-ins (`lf --contract-<slot>`)
 // and a third-party module in any language to the same meaning. The store,
@@ -173,6 +173,85 @@ export const filesSlotCases: SlotConformanceCase[] = [
       assert.notEqual(first.source.objectUri, second.source.objectUri);
       const opened = await client.read('files.open', { objectUri: first.source.objectUri }, FilesOpenAnswer);
       assert.equal(Buffer.from(opened.bytes, 'base64').toString(), 'one');
+    },
+  },
+];
+
+// ── The wake slot ───────────────────────────────────────────────────────────
+
+/** What the wake slot's cases drive: the module, and the workers it has
+ *  started. A wake module's effect is outside it (a queue service starting a
+ *  worker), so the harness observes it: for a cloud queue module, the
+ *  deliveries its queue makes to an endpoint the harness serves. */
+export interface WakeHarness {
+  client: SlotClient;
+  /** When (epoch milliseconds, the harness's clock) each worker the module
+   *  started began, since this harness was made. */
+  started(): Promise<number[]>;
+  /** How late after its due time a worker may start: the queue's delivery delay. */
+  slackMs: number;
+}
+
+export interface WakeConformanceCase {
+  name: string;
+  run(harness: WakeHarness): Promise<void>;
+}
+
+const POLL_MS = 50;
+
+/** The starts at or after `since`, once there is one; a failure at `by`. */
+async function startsSince(harness: WakeHarness, since: number, by: number, what: string): Promise<number[]> {
+  for (;;) {
+    const starts = (await harness.started()).filter((at) => at >= since);
+    if (starts.length > 0) return starts;
+    if (Date.now() > by) assert.fail(`${what}: no worker started by ${new Date(by).toISOString()}`);
+    await new Promise((done) => setTimeout(done, POLL_MS));
+  }
+}
+
+/** The wake slot (docs/contracts/wake-slot.md). */
+export const wakeSlotCases: WakeConformanceCase[] = [
+  {
+    name: 'wake: now is answered null, and a worker starts soon after',
+    async run(harness) {
+      const asked = Date.now();
+      assert.equal(await harness.client.call('wake.now', { kind: 'fire_event' }), null);
+      await startsSince(harness, asked, Date.now() + harness.slackMs, 'wake.now');
+    },
+  },
+  {
+    name: 'wake: at an instant ahead, a worker starts then and not before',
+    async run(harness) {
+      const at = Date.now() + 1_500;
+      assert.equal(await harness.client.call('wake.at', { kind: 'resume_timer', at: new Date(at).toISOString() }), null);
+      const starts = await startsSince(harness, 0, at + harness.slackMs, 'wake.at');
+      for (const start of starts) assert.ok(start >= at, `a worker started ${at - start}ms before its instant`);
+    },
+  },
+  {
+    name: 'wake: at an instant already past is now',
+    async run(harness) {
+      const asked = Date.now();
+      assert.equal(await harness.client.call('wake.at', { kind: 'resume_timer', at: new Date(asked - 60_000).toISOString() }), null);
+      await startsSince(harness, asked, Date.now() + harness.slackMs, 'wake.at in the past');
+    },
+  },
+  {
+    name: 'wake: many nows in a row are each answered, and start a worker',
+    async run(harness) {
+      const asked = Date.now();
+      for (const kind of ['fire_event', 'wake_await', 'fire_event', 'poll_listen', 'fire_callback']) {
+        assert.equal(await harness.client.call('wake.now', { kind }), null);
+      }
+      await startsSince(harness, asked, Date.now() + harness.slackMs, 'five wake.now');
+    },
+  },
+  {
+    name: 'wake: an at that is not an instant, or a wake without its kind, is refused as bad_request',
+    async run(harness) {
+      await refusedWith('bad_request', harness.client.call('wake.at', { kind: 'resume_timer', at: 'soon' }));
+      await refusedWith('bad_request', harness.client.call('wake.at', { kind: 'resume_timer' }));
+      await refusedWith('bad_request', harness.client.call('wake.now', {}));
     },
   },
 ];
