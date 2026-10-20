@@ -20,7 +20,7 @@ name = "module_wire"
 
 [dependencies]
 # JavaScript's object key order (array-index keys first) lives in the parser.
-movement-parser = { package = "listen-fire-parser", version = "0.12.0-rc.2", path = "../movement-parser" }
+movement-parser = { package = "listen-fire-parser", version = "0.12.0-rc.3", path = "../movement-parser" }
 serde = { version = "1", features = ["derive"] }
 # As the parser's: `preserve_order` must stay off (features unify).
 serde_json = { version = "1", features = ["float_roundtrip", "raw_value", "unbounded_depth"] }

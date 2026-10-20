@@ -2,7 +2,7 @@
   "name": "@listen-fire/native-valuations",
   "private": true,
   "license": "Apache-2.0",
-  "version": "0.12.0-rc.2",
+  "version": "0.12.0-rc.3",
   "description": "The platform's own Valuations product, reached through its REST API, as a module. Platform-supplied: the platform hosts it in process and hands it the api-key it provisioned and its own address; it has no story outside the platform, so it is never published or served as a process. Its tests borrow apps/api's jest runner (jest.config.borrowed.cjs)",
   "engines": {
     "node": "22.20.0"

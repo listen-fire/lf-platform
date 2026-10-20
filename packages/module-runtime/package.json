@@ -1,7 +1,7 @@
 {
   "name": "@listen-fire/module-runtime",
   "license": "Apache-2.0",
-  "version": "0.12.0-rc.2",
+  "version": "0.12.0-rc.3",
   "description": "What a module and the host that loads it share at run time on Node, beside the runtime-neutral contracts (@listen-fire/engine-contracts): a live adapter's file bytes as a stream, the files slot, the secrets family with the generic OAuth 2 refresh and connect, the in-memory vault, the browser slot and a bounded concurrency queue. The engine and the module kit both depend on it, so the kit never depends on the engine",
   "engines": {
     "node": "22.20.0"

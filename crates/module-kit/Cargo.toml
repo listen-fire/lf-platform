@@ -19,7 +19,7 @@ include = ["src/**/*", "Cargo.toml"]
 name = "module_kit"
 
 [dependencies]
-module-wire = { package = "listen-fire-module-wire", version = "0.12.0-rc.2", path = "../module-wire" }
+module-wire = { package = "listen-fire-module-wire", version = "0.12.0-rc.3", path = "../module-wire" }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip", "raw_value", "unbounded_depth"] }
 # A wire object (`Obj`) inside a typed request or answer.

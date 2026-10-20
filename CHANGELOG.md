@@ -13,6 +13,10 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 
 ## [Unreleased]
 
+## [0.12.0-rc.3] - 2026-10-20 (pre-release)
+
+A second pre-release of the 0.12 line, published the same way as rc.2: images at this tag only, npm under `next`, a pre-release GitHub release, docs under `/docs/next/`.
+
 ### rc3-build
 
 - **lf in the cloud.** `lf serve --doors-only` (`LF_DOORS_ONLY=1`) is for compute billed by the request. It runs no drain. `/hooks` and callback links queue their work and answer 202, listing what they queued; a drain (`lf drain`) runs it. An unrecognised `LF_DOORS_ONLY` value is refused.
@@ -2112,6 +2116,7 @@ Releases before v0.11 are kept one file per minor line, newest first:
 - [v0.2.x](docs/changelog/v0.2.md) (v0.2.0)
 - [v0.1.x](docs/changelog/v0.1.md) (v0.1.0 to v0.1.2)
 
-[Unreleased]: https://github.com/listen-fire/listen-fire/compare/v0.12.0-rc.2...HEAD
+[Unreleased]: https://github.com/listen-fire/listen-fire/compare/v0.12.0-rc.3...HEAD
+[0.12.0-rc.3]: https://github.com/listen-fire/listen-fire/compare/v0.12.0-rc.2...v0.12.0-rc.3
 [0.12.0-rc.2]: https://github.com/listen-fire/listen-fire/compare/v0.11.0...v0.12.0-rc.2
 [v0.11.0]: https://github.com/listen-fire/listen-fire/compare/v0.10.9...v0.11.0

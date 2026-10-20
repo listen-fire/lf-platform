@@ -1,7 +1,7 @@
 {
   "name": "@listen-fire/ask",
   "license": "Apache-2.0",
-  "version": "0.12.0-rc.2",
+  "version": "0.12.0-rc.3",
   "description": "Asking a person mid-run (the ask families, their answers, the Response edge a run awaits) as a module. Loaded in process by the platform, whose asks table is its kv. Its tests borrow apps/api's jest runner (jest.config.borrowed.cjs)",
   "engines": {
     "node": "22.20.0"

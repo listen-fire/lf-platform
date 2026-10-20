@@ -2,7 +2,7 @@
   "name": "@lf/postgres-limiter",
   "private": true,
   "license": "Apache-2.0",
-  "version": "0.12.0-rc.2",
+  "version": "0.12.0-rc.3",
   "description": "The limiter slot kept in Postgres, so many lf workers share one count of calls and held places instead of each allowing the full limit. A process module lf starts (kind: core, slot: limiter); see lf-external.yaml. Tests borrow apps/api's jest runner (jest.config.borrowed.cjs); the contract suite runs in apps/cli",
   "engines": {
     "node": "22.20.0"
