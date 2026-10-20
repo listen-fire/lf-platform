@@ -152,6 +152,8 @@ test("a module's inbound declaration verifies its deliveries: @lf/telegram's sec
   appendFileSync(join(dir, '.lf/secrets.yaml'), '\ntg:\n  module: telegram\n  webhook_secret: tok\n');
   const update = { update_id: 1, message: { message_id: 5, date: 1760000000, chat: { id: 42, type: 'private' }, from: { id: 7, is_bot: false, first_name: 'Ada' }, text: 'hi' } };
   writeFileSync(join(dir, 'update.json'), JSON.stringify(update));
+  // A module starts only when a movement imports it (or a webhook is registered for it).
+  writeFileSync(join(dir, 'movements/telegram.mvt'), 'import { `@lf/telegram` as telegram } from adapters\n');
   const deliver = (...header: string[]) => lf(dir, 'run', '--ephemeral', '--webhook', 'telegram', '--body', 'update.json', ...header);
 
   for (const refused of [deliver(), deliver('--header', 'x-telegram-bot-api-secret-token:nope')]) {
