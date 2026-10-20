@@ -1,0 +1,22 @@
+{
+  "grammars": [
+    {
+      "name": "movement",
+      "camelcase": "Movement",
+      "scope": "source.movement",
+      "path": ".",
+      "file-types": [
+        "mvt"
+      ],
+      "highlights": "../zed/languages/movement/highlights.scm"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "Apache-2.0",
+    "description": "listen-fire movement language (.mvt), language version 5",
+    "links": {
+      "repository": "https://github.com/listen-fire/listen-fire"
+    }
+  }
+}
