@@ -750,7 +750,7 @@ impl Session {
         if tally.stepped == 0 {
             return Ok(Parked::NotStepped);
         }
-        Ok(Parked::Stepped(self.settled_outcome(run_id, "resumed", tally, lease_lost)?))
+        Ok(Parked::Stepped(Box::new(self.settled_outcome(run_id, "resumed", tally, lease_lost)?)))
     }
 
     /// A parked run's step for the core's drains, under the lease. None when
@@ -773,7 +773,7 @@ impl Session {
         match self.drive_parked_run(run_id, Drain::EveryParkedLeaf).await? {
             Parked::Busy => Err(run_busy(run_id)),
             Parked::NotStepped => Err(format!("run {run_id} is parked but has no parked leaf")),
-            Parked::Stepped(outcome) => Ok(outcome),
+            Parked::Stepped(outcome) => Ok(*outcome),
         }
     }
 
@@ -786,7 +786,7 @@ impl Session {
             match self.drive_parked_run(&run_id, Drain::EveryParkedLeaf).await? {
                 Parked::Busy => return Err(run_busy(&run_id)),
                 Parked::NotStepped => {}
-                Parked::Stepped(outcome) => outcomes.push(outcome),
+                Parked::Stepped(outcome) => outcomes.push(*outcome),
             }
         }
         Ok(outcomes)
@@ -876,7 +876,7 @@ impl Session {
                 Ok(match self.drive_parked_run(&run_id, Drain::DueTimers).await? {
                     Parked::Busy => (Next::Busy, Vec::new()),
                     Parked::NotStepped => (Next::Done, Vec::new()),
-                    Parked::Stepped(outcome) => (Next::Done, vec![outcome]),
+                    Parked::Stepped(outcome) => (Next::Done, vec![*outcome]),
                 })
             }
             "wake_await" => {
@@ -893,7 +893,7 @@ impl Session {
                     match self.drive_parked_run(&run_id, Drain::Awaits(addresses)).await? {
                         Parked::Busy => busy = true,
                         Parked::NotStepped => {}
-                        Parked::Stepped(outcome) => outcomes.push(outcome),
+                        Parked::Stepped(outcome) => outcomes.push(*outcome),
                     }
                 }
                 Ok((if busy { Next::Busy } else { Next::Done }, outcomes))
@@ -951,7 +951,7 @@ async fn drain_awaits(store: &dyn RunHostStore, run_id: &str, extra: &[String], 
 enum Parked {
     Busy,
     NotStepped,
-    Stepped(RunOutcome),
+    Stepped(Box<RunOutcome>),
 }
 
 fn run_busy(run_id: &str) -> String {
