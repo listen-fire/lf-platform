@@ -22,9 +22,11 @@ impl zed::Extension for ListenFire {
              \"lsp\": { \"lf\": { \"binary\": { \"path\": \"/path/to/lf\" } } } in Zed's settings."
                 .to_string()
         })?;
+        // Zed hands an unset `arguments` over as an empty list, not as none.
         let args = binary
             .as_ref()
             .and_then(|b| b.arguments.clone())
+            .filter(|args| !args.is_empty())
             .unwrap_or_else(|| vec!["lsp".to_string()]);
 
         // The login shell's environment, so `lf` finds the same `node` a
