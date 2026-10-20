@@ -40,7 +40,7 @@ function project(credentials: Declaration[], secrets?: string): string {
   const methods = "    methods: Object.keys(METHODS).filter((m) => m !== 'manifest'),\n";
   assert.ok(source.includes(methods), 'the example external changed; update this test patch');
   writeFileSync(server, source.replace(methods, `${methods}    credentials: ${JSON.stringify(credentials)},\n`));
-  if (secrets !== undefined) writeFileSync(join(dir, '.lf/secrets.yaml'), secrets);
+  if (secrets !== undefined) writeFileSync(join(dir, '.lf/secrets.yaml'), secrets, { mode: 0o600 });
   return dir;
 }
 
@@ -244,7 +244,7 @@ test('lf credential add refuses a module not installed, and an OAuth module with
     assert.equal(missing.code, 1);
     assert.match(missing.out, /module "hubspot" is not installed here; set it up first: lf connect hubspot/);
     // The install has only its server secret: no app at the provider.
-    writeFileSync(join(dir, '.lf/secrets.yaml'), 'acme_crm:\n  module: acme_crm\n  token: dev-acme-token\n');
+    writeFileSync(join(dir, '.lf/secrets.yaml'), 'acme_crm:\n  module: acme_crm\n  token: dev-acme-token\n', { mode: 0o600 });
     const noApp = await lf(dir, ['credential', 'add', '--module', 'acme_crm', 'x', '--no-browser']).done;
     assert.equal(noApp.code, 1);
     assert.match(noApp.out, /module "acme_crm" has no OAuth app set up: lf connect acme_crm/);
@@ -359,7 +359,7 @@ for (const store of ['plain', 'SOPS'] as const) {
     const env: Record<string, string> = {};
     let read = () => secretsFile(dir);
     if (store === 'SOPS') {
-      writeFileSync(file, 'sops:\n  version: 3.9.0\n');
+      writeFileSync(file, 'sops:\n  version: 3.9.0\n', { mode: 0o600 });
       writeFileSync(`${file}.plain`, '{}\n');
       env.PATH = `${sopsStandIn()}:${process.env.PATH ?? ''}`;
       read = () => secretsFile(dir, `${file}.plain`);

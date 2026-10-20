@@ -589,6 +589,14 @@ fn listen_declarations(raw: &Js) -> Result<Obj, String> {
     Ok(out)
 }
 
+/// A module's own env, with `{lf}` standing for the module's own folder
+/// (`.lf/externals/<name>/`), never the project's `.lf`, which holds lf's
+/// state and the secrets.
+fn module_env(env: &BTreeMap<String, String>, module_dir: &Path) -> BTreeMap<String, String> {
+    let dir = module_dir.display().to_string();
+    env.iter().map(|(k, v)| (k.clone(), v.replace("{lf}", &dir))).collect()
+}
+
 /// How `external` is reached: its URL, or the process lf starts for it — a
 /// place in the shared host for a trusted module whose install sets only
 /// per-module settings, else a process of its own.
@@ -599,8 +607,7 @@ fn reach(project: &Project, external: &External, base_url_override: Option<&str>
     }
     let state_dir = project.lf_dir.join("externals").join(name);
     std::fs::create_dir_all(&state_dir).map_err(|e| format!("{}: {e}", state_dir.display()))?;
-    let lf = project.lf_dir.display().to_string();
-    let mut own_env: BTreeMap<String, String> = external.manifest.env.iter().map(|(k, v)| (k.clone(), v.replace("{lf}", &lf))).collect();
+    let mut own_env = module_env(&external.manifest.env, &state_dir);
     if let Some(url) = base_url_override.filter(|_| external.manifest.module.is_some()) {
         own_env.insert("MODULE_BASE_URL_OVERRIDE".into(), url.to_string());
     }
@@ -696,6 +703,14 @@ fn serve_module_command(project: &Project, external: &str) -> Result<Vec<String>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn lf_in_a_module_env_is_the_modules_own_folder() {
+        let env: BTreeMap<String, String> = [("STATE".to_string(), "{lf}/state.json".to_string()), ("PLAIN".to_string(), "x".to_string())].into();
+        let resolved = module_env(&env, Path::new("/p/.lf/externals/acme"));
+        assert_eq!(resolved["STATE"], "/p/.lf/externals/acme/state.json");
+        assert_eq!(resolved["PLAIN"], "x");
+    }
 
     #[test]
     fn serve_module_is_found_in_the_projects_node_modules_then_the_workspace() {

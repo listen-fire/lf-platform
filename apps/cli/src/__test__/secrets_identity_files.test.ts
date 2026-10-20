@@ -42,7 +42,7 @@ function project(options: { secrets?: string | null; rejectStale?: boolean } = {
     ),
   );
   const secrets = options.secrets === undefined ? credentialYaml() : options.secrets;
-  if (secrets !== null) writeFileSync(join(dir, '.lf/secrets.yaml'), secrets);
+  if (secrets !== null) writeFileSync(join(dir, '.lf/secrets.yaml'), secrets, { mode: 0o600 });
   return dir;
 }
 
@@ -78,7 +78,7 @@ async function tokenServer(answer: object): Promise<{ url: string; forms: URLSea
   return { url: `http://127.0.0.1:${address.port}/token`, forms, close: () => server.close() };
 }
 
-const authLog = (dir: string): string[] => readFileSync(join(dir, '.lf/auth.log'), 'utf8').trim().split('\n');
+const authLog = (dir: string): string[] => readFileSync(join(dir, '.lf/externals/acme_crm/auth.log'), 'utf8').trim().split('\n');
 
 test('an expiring token is refreshed before the call and written back to the plain file, comments kept', async () => {
   const token = await tokenServer({ access_token: 'fresh-token', expires_in: 3600, refresh_token: 'r2' });
@@ -173,11 +173,22 @@ test('a credential can be made wholly from LF_SECRET__ variables, and they overr
 test('LF_SECRETS_FILE names the secrets file; a missing one is an error', async () => {
   const dir = project({ secrets: null });
   const file = join(dir, 'mounted.yaml');
-  writeFileSync(file, credentialYaml());
+  writeFileSync(file, credentialYaml(), { mode: 0o600 });
   assert.equal((await lf(dir, ['run', '--event', EVENT], { LF_SECRETS_FILE: file })).code, 0);
   const missing = await lf(dir, ['run', '--event', EVENT], { LF_SECRETS_FILE: join(dir, 'nope.yaml') });
   assert.equal(missing.code, 1);
   assert.match(missing.out, /LF_SECRETS_FILE .*nope\.yaml.* does not exist/);
+});
+
+test('a secrets file other users can read is refused, naming the file and the fix', async () => {
+  const dir = project();
+  const file = join(dir, '.lf/secrets.yaml');
+  chmodSync(file, 0o644);
+  const refused = await lf(dir, ['run', '--event', EVENT]);
+  assert.equal(refused.code, 1);
+  assert.match(refused.out, /chmod 600 \S+\/\.lf\/secrets\.yaml/);
+  chmodSync(file, 0o600);
+  assert.equal((await lf(dir, ['run', '--event', EVENT])).code, 0);
 });
 
 test('a credential the program imports but nothing configures is named, with the file and where it was looked for', async () => {

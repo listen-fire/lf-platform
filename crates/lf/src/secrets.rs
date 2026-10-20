@@ -127,9 +127,32 @@ pub fn parse_entry(raw: serde_yaml::Value) -> Result<(String, Binding, BTreeMap<
     Ok((owner, binding, fields))
 }
 
+/// Like ssh with a private key: a secrets file that group or world can read is
+/// refused rather than used. Unix only.
+#[cfg(unix)]
+fn refuse_if_readable_by_others(path: &Path) -> Result<(), String> {
+    use std::os::unix::fs::PermissionsExt;
+    let mode = std::fs::metadata(path).map_err(|e| format!("{}: {e}", path.display()))?.permissions().mode();
+    if mode & 0o044 != 0 {
+        return Err(format!(
+            "{} is readable by other users (mode {:03o}); lf refuses to read secrets that others can read. Fix: chmod 600 {}",
+            path.display(),
+            mode & 0o777,
+            path.display()
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn refuse_if_readable_by_others(_path: &Path) -> Result<(), String> {
+    Ok(())
+}
+
 /// A secrets file's entries, decrypted with `sops -d` when it carries SOPS
 /// metadata, and whether it did.
 pub fn read_secrets_file(path: &Path) -> Result<(Vec<(String, serde_yaml::Value)>, bool), String> {
+    refuse_if_readable_by_others(path)?;
     let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let parsed = mapping_of(&text).map_err(|_| format!("{}: expected a mapping of credential names", path.display()))?;
     if !parsed.iter().any(|(k, _)| k == "sops") {
@@ -274,6 +297,27 @@ pub fn missing_credentials(
 #[cfg(test)]
 mod tests {
     use super::{Binding, Credential, Credentials, Origin, apply_environment, parse_entry};
+
+    #[cfg(unix)]
+    #[test]
+    fn a_secrets_file_others_can_read_is_refused_and_one_only_the_owner_reads_is_not() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("lf-secrets-mode-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("secrets.yaml");
+        std::fs::write(&path, "acme:\n  external: acme_crm\n  token: t\n").unwrap();
+        for (mode, readable) in [(0o644, false), (0o640, false), (0o604, false), (0o600, true), (0o400, true)] {
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).unwrap();
+            let read = super::read_secrets_file(&path);
+            if readable {
+                assert!(read.is_ok(), "{mode:o}: {read:?}");
+            } else {
+                let refused = read.unwrap_err();
+                assert!(refused.contains(&path.display().to_string()) && refused.contains(&format!("chmod 600 {}", path.display())), "{refused}");
+            }
+        }
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     type Entry = (String, Binding, Vec<(String, String)>);
 

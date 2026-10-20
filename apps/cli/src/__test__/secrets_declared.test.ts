@@ -69,6 +69,7 @@ function project(tokenUrl: string, options: { secrets?: string; answering?: stri
     join(dir, '.lf/secrets.yaml'),
     options.secrets ??
       'acme:\n  external: acme_crm\n  access_token: stale-token\n  refresh_token: r1\n  client_id: cid\n  client_secret: csecret\n  webhook_secret: w\n  expires_at: 2000-01-01T00:00:00Z\n',
+    { mode: 0o600 },
   );
   return dir;
 }
@@ -93,7 +94,7 @@ test('a declared oauth2 credential is refreshed from the declaration, sent with 
     assert.equal(token.forms[0]?.get('refresh_token'), 'r1');
     // The protocol's default client auth for a declared credential: HTTP Basic.
     assert.equal(token.authorizations[0], `Basic ${Buffer.from('cid:csecret').toString('base64')}`);
-    const sent = readFileSync(join(dir, '.lf/credential.log'), 'utf8')
+    const sent = readFileSync(join(dir, '.lf/externals/acme_crm/credential.log'), 'utf8')
       .trim()
       .split('\n')
       .map((line) => JSON.parse(line) as { name: string; fields: Record<string, string> } | null)

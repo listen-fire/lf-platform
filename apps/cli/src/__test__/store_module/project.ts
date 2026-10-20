@@ -25,5 +25,5 @@ export function withStoreModule(dir: string, statePath: string): void {
   );
   writeFileSync(join(dir, 'lf.yaml'), '\ncore:\n  store: acme_store\n', { flag: 'a' });
   mkdirSync(join(dir, '.lf'), { recursive: true });
-  writeFileSync(join(dir, '.lf/secrets.yaml'), `\nacme_store:\n  module: acme_store\n  path: ${JSON.stringify(statePath)}\n`, { flag: 'a' });
+  writeFileSync(join(dir, '.lf/secrets.yaml'), `\nacme_store:\n  module: acme_store\n  path: ${JSON.stringify(statePath)}\n`, { flag: 'a', mode: 0o600 });
 }

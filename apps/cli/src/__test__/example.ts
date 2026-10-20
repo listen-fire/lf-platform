@@ -2,7 +2,7 @@
 // test, and the real `lf` binary (lf_bin.ts) run against it.
 
 import { spawn, spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -21,6 +21,7 @@ export function project(fixture?: string): string {
   cpSync(EXAMPLE, dir, { recursive: true, filter: (src) => !src.includes(`${EXAMPLE}/.lf`) });
   mkdirSync(join(dir, '.lf'), { recursive: true });
   cpSync(join(dir, 'secrets.example.yaml'), join(dir, '.lf', 'secrets.yaml'));
+  chmodSync(join(dir, '.lf', 'secrets.yaml'), 0o600);
   if (fixture !== undefined) {
     rmSync(join(dir, 'movements'), { recursive: true });
     cpSync(resolve(__dirname, 'movements', fixture), join(dir, 'movements'), { recursive: true });

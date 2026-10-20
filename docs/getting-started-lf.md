@@ -99,6 +99,7 @@ A movement imports only modules installed in `externals/`; installing is always 
 - A module that crashes starts again on its next call. A run whose call it broke fails or retries as any failed call does.
 - One call may take `callTimeout` seconds (default 600).
 - A module process exits when lf does. A process left behind by a killed lf is stopped the next time lf opens the same store.
+- A module's `env:` values may use `{lf}`, which lf replaces with the module's own folder, `.lf/externals/<name>/` (a place for its state and logs; not the project's `.lf`, which holds lf's state and secrets).
 - `runtime: node 22` in `lf-external.yaml` says what the module runs on; a served module (`module:`) runs on node 22 unless it says otherwise. `lf check` refuses, by name, a runtime this machine lacks or has too old.
 
 ## 4. Add a credential
@@ -107,7 +108,7 @@ A movement imports only modules installed in `externals/`; installing is always 
 lf credential add --module <module> my_credential
 ```
 
-This signs you in at the provider (OAuth) or asks for the module's fields, and stores the result in `.lf/secrets.yaml`. A movement names it with `import { my_credential } from credentials`. `lf credential list|update|delete` manage the rest. In containers and CI, set `LF_SECRET__<NAME>__<FIELD>` instead of keeping a file.
+This signs you in at the provider (OAuth) or asks for the module's fields, and stores the result in `.lf/secrets.yaml`. A movement names it with `import { my_credential } from credentials`. `lf credential list|update|delete` manage the rest. In containers and CI, set `LF_SECRET__<NAME>__<FIELD>` instead of keeping a file. Like ssh with a private key, lf refuses a secrets file that other users can read; fix it with `chmod 600 <path>` (lf itself always writes it that way).
 
 ## 5. Run
 

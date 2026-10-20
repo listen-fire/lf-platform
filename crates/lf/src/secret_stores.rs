@@ -615,6 +615,24 @@ pub fn delete_entry(text: &str, name: &str) -> String {
 mod tests {
     use super::*;
 
+    #[cfg(unix)]
+    #[test]
+    fn a_secrets_file_lf_writes_is_readable_by_its_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("lf-secrets-write-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("secrets.yaml");
+        let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        write_staged(&path, "secrets", "a:\n  b: c\n").unwrap();
+        assert_eq!(mode(&path), 0o600);
+        // A file made by hand with looser bits is replaced by a 0600 one, which then reads back.
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+        write_staged(&path, "secrets", "a:\n  b: d\n").unwrap();
+        assert_eq!(mode(&path), 0o600);
+        assert!(crate::secrets::read_secrets_file(&path).is_ok());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
     fn fields(pairs: &[(&str, &str)]) -> Fields {
         pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
     }

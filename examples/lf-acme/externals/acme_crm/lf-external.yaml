@@ -14,4 +14,4 @@ webhook:
   header: x-listen-fire-signature
   secretField: webhook_secret
 env:
-  ACME_CRM_STATE: "{lf}/externals/acme_crm/state.json"
+  ACME_CRM_STATE: "{lf}/state.json"

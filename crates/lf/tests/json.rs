@@ -150,7 +150,10 @@ fn connect_and_credential_list_name_things_and_never_values() {
     let (credentials, _) = project.lf(&["credential", "list"]);
     assert!(credentials["credentials"].is_array());
 
-    std::fs::write(project.0.join(".lf/secrets.yaml"), "acme:\n  module: acme\n  credential: login\n  token: s3cret\n  expires_at: 2030-01-01T00:00:00Z\n").unwrap();
+    let secrets = project.0.join(".lf/secrets.yaml");
+    std::fs::write(&secrets, "acme:\n  module: acme\n  credential: login\n  token: s3cret\n  expires_at: 2030-01-01T00:00:00Z\n").unwrap();
+    #[cfg(unix)]
+    std::fs::set_permissions(&secrets, std::os::unix::fs::PermissionsExt::from_mode(0o600)).unwrap();
     let (listed, _) = project.lf(&["credential", "list"]);
     let credential = &listed["credentials"][0];
     has(credential, &["name", "module", "binding", "declaredCredential", "kept", "expiresAt"]);

@@ -69,6 +69,7 @@ function hubspotProject(fake: FakeHubSpot): string {
       alice_hubspot: { module: 'hubspot', credential: 'oauth', ...fake.signIn('alice', { expired: true }) },
       bob_hubspot: { module: 'hubspot', credential: 'oauth', ...fake.signIn('bob') },
     }),
+    { mode: 0o600 },
   );
   return dir;
 }
@@ -116,7 +117,7 @@ test('a connection naming the install, another declaration’s credential or ano
     const file = secrets(dir);
     file.alice_key = { module: 'hubspot', credential: 'api_key', api_key: 'k' };
     file.acme = { external: 'acme_crm', token: 't' };
-    writeFileSync(join(dir, '.lf/secrets.yaml'), stringify(file));
+    writeFileSync(join(dir, '.lf/secrets.yaml'), stringify(file), { mode: 0o600 });
     const refused = async (using: string): Promise<string> => {
       writeFileSync(join(dir, 'movements/mirror.mvt'), MIRROR.replace('connect hubspot using alice_hubspot', `connect hubspot using ${using}`).replace('import { alice_hubspot, bob_hubspot }', `import { ${using}, bob_hubspot }`));
       const check = await lfAsync(dir, 'check');

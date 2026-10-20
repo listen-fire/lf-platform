@@ -97,7 +97,7 @@ function suite(label: string, make: (opened: Opened) => SecretsContractBackend, 
 
 suite('Rust plain file', (opened) => {
   const path = join(mkdtempSync(join(tmpdir(), 'lf-secrets-plain-')), 'secrets.yaml');
-  writeFileSync(path, '# a comment that survives\n');
+  writeFileSync(path, '# a comment that survives\n', { mode: 0o600 });
   return fileBackend(opened, path, (text) => appendFileSync(path, text));
 });
 
@@ -106,7 +106,7 @@ suite(
   'Rust SOPS file (stand-in sops)',
   (opened) => {
     const path = join(mkdtempSync(join(tmpdir(), 'lf-secrets-sops-')), 'secrets.yaml');
-    writeFileSync(path, 'sops:\n  version: 3.9.0\n');
+    writeFileSync(path, 'sops:\n  version: 3.9.0\n', { mode: 0o600 });
     writeFileSync(`${path}.plain`, '');
     return fileBackend(opened, path, (text) => appendFileSync(`${path}.plain`, text));
   },
@@ -126,7 +126,7 @@ suite(
     const path = join(dir, 'secrets.yaml');
     const plain: Record<string, unknown> = {};
     const encrypt = () => {
-      writeFileSync(path, stringify(Object.keys(plain).length > 0 ? plain : { placeholder: { external: 'none' } }));
+      writeFileSync(path, stringify(Object.keys(plain).length > 0 ? plain : { placeholder: { external: 'none' } }), { mode: 0o600 });
       const run = spawnSync('sops', ['--encrypt', '--age', recipient, '--in-place', path], { encoding: 'utf8' });
       if (run.status !== 0) throw new Error(`sops --encrypt failed: ${run.stderr}`);
     };
