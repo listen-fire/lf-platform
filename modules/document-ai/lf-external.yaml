@@ -1,0 +1,19 @@
+# The install entry for lf: put this file in <project>/externals/document_ai/
+# (with the package installed there), run `lf connect document_ai`, and name
+# it in lf.yaml:
+#   core:
+#     ocr: document_ai
+name: document_ai
+kind: core
+slot: ocr
+command: [node, node_modules/@listen-fire/document-ai/dist/serve.js]
+settings:
+  - { name: project, label: "the Google Cloud project the OCR processor is in" }
+  - { name: location, label: "where the processor lives: eu or us" }
+  - { name: processor_id, label: "the OCR processor's id (Document AI → Processors)" }
+  - { name: bucket, label: "a Cloud Storage bucket for files past 15 pages or 20 MB, read in batch (empty: such a file is refused)", optional: true }
+  - { name: client_email, label: "a service account's email (empty to use the environment's own Google credentials)", optional: true }
+  - { name: private_key, label: "that service account's private key", secret: true, optional: true }
+  - { name: price_per_page, label: "what a page costs you, in dollars (default 0.0015, the list price)", optional: true }
+  - { name: base_url, label: "another endpoint speaking Document AI's REST API (a proxy); empty for Google's", optional: true }
+  - { name: storage_url, label: "another endpoint speaking Cloud Storage's API; empty for Google's", optional: true }

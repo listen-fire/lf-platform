@@ -1139,6 +1139,40 @@ importers:
         specifier: 5.5.4
         version: 5.5.4
 
+  modules/document-ai:
+    dependencies:
+      '@listen-fire/engine-contracts':
+        specifier: workspace:^
+        version: link:../../packages/engine-contracts
+      '@listen-fire/module-runtime':
+        specifier: workspace:^
+        version: link:../../packages/module-runtime
+      '@listen-fire/ocr-google':
+        specifier: workspace:^
+        version: link:../../packages/ocr-google
+      unpdf:
+        specifier: 1.8.1
+        version: 1.8.1
+    devDependencies:
+      '@types/jest':
+        specifier: 29.5.14
+        version: 29.5.14
+      '@types/node':
+        specifier: 20.16.5
+        version: 20.16.5
+      engine-contracts:
+        specifier: workspace:@listen-fire/engine-contracts@*
+        version: link:../../packages/engine-contracts
+      module-runtime:
+        specifier: workspace:@listen-fire/module-runtime@*
+        version: link:../../packages/module-runtime
+      tsx:
+        specifier: 4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: 5.5.4
+        version: 5.5.4
+
   modules/dropbox:
     dependencies:
       '@listen-fire/engine':
