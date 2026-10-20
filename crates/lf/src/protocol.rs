@@ -19,11 +19,13 @@ use crate::outgoing_auth::OutgoingAuth;
 pub use module_wire::envelope::{ADAPTER_TEAM_HEADER, CREDENTIAL_REFUSED_CODE, PROTOCOL_VERSION, shape_error};
 
 /// What a request carries beside its params: the one credential the
-/// connection names, and the install's settings.
+/// connection names, the install's settings, and the limits door the
+/// module asks before each request to its provider (crate::limits_door).
 #[derive(Default)]
 pub struct Carried {
     pub credential: Option<serde_json::Value>,
     pub settings: Option<serde_json::Value>,
+    pub host_limits: Option<serde_json::Value>,
 }
 
 tokio::task_local! {
@@ -179,7 +181,7 @@ async fn post(call: Call<'_>, carried: Carried, beside: &mut Beside) -> Result<J
         "cacheScopeId": call.cache_scope_id,
         "params": call.params,
     });
-    for (key, value) in [("credential", carried.credential), ("settings", carried.settings)] {
+    for (key, value) in [("credential", carried.credential), ("settings", carried.settings), ("hostLimits", carried.host_limits)] {
         if let Some(value) = value {
             body[key] = value;
         }

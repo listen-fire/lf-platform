@@ -40,6 +40,7 @@ pub mod adapter;
 pub mod context;
 pub mod core;
 pub mod host;
+pub mod host_limits;
 pub mod module;
 pub mod plugin;
 
@@ -47,6 +48,7 @@ pub use adapter::*;
 pub use context::{Answer, Ctx, ModuleError, from_js, to_js};
 pub use core::{Limiter, LoopGuard, Store};
 pub use host::{Address, Host, Listener};
+pub use host_limits::{HostLimits, Permit};
 pub use module::Module;
 pub use module_wire::json::{Js, Obj};
 pub use module_wire::obj;

@@ -221,7 +221,8 @@ impl Host {
             return json(answered(Err(refused), &Ctx::default()));
         }
         let text = |key: &str| envelope.get(key).and_then(Js::as_str).map(str::to_string);
-        let ctx = Ctx::new(team_id, text("cacheScopeId"), envelope.get("credential").cloned(), envelope.get("settings").cloned());
+        let ctx = Ctx::new(team_id, text("cacheScopeId"), envelope.get("credential").cloned(), envelope.get("settings").cloned())
+            .with_host_limits(crate::host_limits::HostLimits::of(&envelope));
         let params = envelope.get("params").cloned().unwrap_or(Js::Obj(Obj::new()));
         let result = match method {
             "manifest" => Ok(module.manifest()),

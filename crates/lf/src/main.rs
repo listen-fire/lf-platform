@@ -79,6 +79,7 @@ mod json_repair;
 mod guard_module;
 mod limiter;
 mod limiter_module;
+mod limits_door;
 mod loop_guard;
 #[cfg(feature = "anthropic")]
 mod llm_calls;

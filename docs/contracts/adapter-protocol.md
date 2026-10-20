@@ -1066,6 +1066,47 @@ page = web.fetchUrl(u)
   duration: `500ms`, `10s`, `1m`, `1h`, `1d`) go together; `concurrent` caps
   calls at once. The host holds a call until it is within all of them (its
   [limiter slot](limiter-slot.md)).
+- **The limits door.** One call to a module can become several requests to
+  its provider, plus retries. A module that declares `"hostLimits": true`
+  asks the host before each of those requests, so its `limits` count them
+  rather than the host's calls. On each call the host hands it the door:
+
+  ```json
+  { "method": "listEntryPoints", …, "hostLimits": { "url": "http://127.0.0.1:4100/api/public/adapter/%40acme%2Fcrm/limits", "ticket": "…" } }
+  ```
+
+  Before each provider request, and after it:
+
+  ```
+  POST {hostLimits.url}            Authorization: Bearer {hostLimits.ticket}
+  { "op": "acquire" }                          → { "outcome": "granted", "permit": "p7" }
+                                               or { "outcome": "wait", "retryAfterMs": 400 }
+  { "op": "release", "permit": "p7" }          → {}
+  { "op": "throttle", "retryAfterMs": 30000 }  → {}
+  ```
+
+  - The door never waits. On `wait`, wait that long and ask again.
+  - `throttle` reports a provider's "too many requests" (HTTP 429) and its
+    `Retry-After`. Every request counted as the same credential (or install)
+    is held until then, the host's own calls included.
+  - The ticket names the call to the host. The host counts under the
+    module, install, credential and team it resolved for that call; the
+    module sees no counter and no scope's value.
+  - The ticket is good until the call answers. A permit not yet released
+    then is released by the host.
+  - A call that carries `hostLimits` is not counted by the host itself, so
+    no request counts twice. A call without it was counted by the host as a
+    whole (lf offers the door only to a module on its own box, from a
+    process that listens). The module then asks nobody.
+  - The module kit does all of this inside `ctx.fetch`, and declares
+    `hostLimits` for a module that declares `limits`. Requests to the host's
+    own address (its files, its doors) are not counted. A kit module must
+    make its provider requests through `ctx.fetch` to be counted. The Rust
+    kit has no HTTP client of its own: take `ctx.permit()` before each
+    request, and hand it back with `release()` or `throttled(retry_after)`.
+  - A host that loads modules in process (the platform) or an embedder that
+    hands no door is unchanged: `ctx.fetch` is then the plain fetch, and the
+    host counts calls as before.
 - **Throttle.** An answer (on success or failure) may carry `retryAfter`, in
   seconds: the provider asked for quiet. The host sends no further call as
   that credential (or install, without one) until then.
@@ -1352,6 +1393,12 @@ from the root, so no automation can walk the collection.
   `plugins` (a package of them), paired with the optional method
   `invokePlugin`. Additive: a server that declares none is unchanged, and an
   older host ignores the declaration. See [Plugins](#plugins).
+- **The limits door** (within version 2, no bump; 2026-10-20). The
+  manifest may declare `hostLimits`; a request may carry `hostLimits` (the
+  door's `url` and the call's `ticket`). Additive: a module that declares
+  none is counted per call as before, a host that hands no door counts the
+  call itself, and an older module ignores the field. See
+  [the limits door](#kinds-settings-spend-and-the-hosts-models).
 - **One credential per request** (within version 2, no bump; 2026-10-17). The request's `credentials` list is removed; `credential` is the one the connection names. A module declaring several credentials declares alternatives.
 - **Core modules, settings, spend** (within version 2, no bump; 2026-10-17).
   The manifest may declare `kind`, `slot`, `settings` and `hostModels`; a

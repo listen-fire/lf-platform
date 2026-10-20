@@ -50,10 +50,14 @@ pub async fn open_models_door(credentials: &crate::secrets::Credentials) -> Resu
     tokio::task::spawn_local(crate::http::serve(listener, MAX_BODY_BYTES, move |request| {
         let credentials = credentials.clone();
         async move {
-            if request.method == "POST" && matches!(segments(&request.path, "/api/public/adapter/").as_deref(), Some([_, "models"])) {
-                return models_door(&credentials, &request).await;
+            if request.method == "POST" {
+                match segments(&request.path, "/api/public/adapter/").as_deref() {
+                    Some([_, "models"]) => return models_door(&credentials, &request).await,
+                    Some([module, crate::limits_door::DOOR_VERB]) => return limits_door(module, &request),
+                    _ => {}
+                }
             }
-            Response::json(404, &Js::Obj(obj! { "error" => Js::str("not_found"), "message" => Js::str("outside lf serve, lf serves only the models door") }))
+            Response::json(404, &Js::Obj(obj! { "error" => Js::str("not_found"), "message" => Js::str("outside lf serve, lf serves only the models and limits doors") }))
         }
     }));
     Ok(())
@@ -231,8 +235,10 @@ async fn route(session: &Session, poke: &Notify, request: Request) -> Result<Res
     if let Some([id]) = segments(&request.path, "/api/cb/").as_deref() {
         return callback_door(session, poke, &decoded(id)?, &request).await;
     }
-    if let Some([_, "models"]) = segments(&request.path, "/api/public/adapter/").as_deref() {
-        return Ok(models_door(session.credentials(), &request).await);
+    match segments(&request.path, "/api/public/adapter/").as_deref() {
+        Some([_, "models"]) => return Ok(models_door(session.credentials(), &request).await),
+        Some([module, crate::limits_door::DOOR_VERB]) => return Ok(limits_door(module, &request)),
+        _ => {}
     }
 
     let notify = || poke.notify_one();
@@ -282,6 +288,23 @@ async fn models_door(credentials: &crate::secrets::Credentials, request: &Reques
         Ok(answer) => Response::json(200, &answer),
         Err(message) => Response::json(502, &Js::Obj(obj! { "error" => Js::str("model_call_failed"), "message" => Js::Str(message) })),
     }
+}
+
+/// The limits door: a module asking before a request to its provider, under
+/// the ticket of the call lf is making to it (crate::limits_door).
+fn limits_door(module: &str, request: &Request) -> Response {
+    let bad = |message: String| Response::json(400, &Js::Obj(obj! { "error" => Js::str("bad_request"), "message" => Js::Str(message) }));
+    let module = match decoded(module) {
+        Ok(module) => module,
+        Err(message) => return bad(message),
+    };
+    let body = match Js::parse(&request.body) {
+        Ok(body) => body,
+        Err(message) => return bad(message),
+    };
+    let bearer = request.headers.iter().find(|(k, _)| k == "authorization").map(|(_, v)| v.as_str());
+    let (status, answer) = crate::limits_door::answer(&module, bearer, &body);
+    Response::json(status, &answer)
 }
 
 /// The webhook door and the push doors, over any host's stores: `lf serve`'s,

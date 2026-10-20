@@ -21,7 +21,8 @@ use serde_json::json;
 use crate::externals::External;
 use crate::json::Js;
 use crate::oauth2::{ClientApp, ClientAuth, Declaration, accepted_fields, client_from_fields, declared_fields, refresh_grant};
-use crate::limiter::{Caller, DeclaredLimit};
+use crate::limiter::{Caller, Held, ModuleLimits};
+use crate::limits_door::Ticket;
 use crate::protocol::{Answered, CREDENTIAL_REFUSED_CODE, Call, Carried, RpcError, post_rpc_carrying};
 use crate::remote::CallFailure;
 use crate::secret_stores::{current_fields, secrets_of};
@@ -37,8 +38,8 @@ pub struct Target<'a> {
     pub methods: &'a [String],
     /// The settings the manifest declares, by name.
     pub settings: &'a [String],
-    /// The limits the manifest declares on calls (crate::limiter).
-    pub limits: &'a [DeclaredLimit],
+    /// The limits the manifest declares (crate::limiter).
+    pub limits: &'a ModuleLimits,
 }
 
 #[derive(Debug)]
@@ -175,18 +176,40 @@ impl<'a> Presented<'a> {
     }
 }
 
+/// How a call is counted against its module's limits, until it answers.
+enum Counted {
+    /// The call itself holds a permit.
+    Call(#[allow(dead_code)] Held),
+    /// The module asks the limits door before each request to its provider.
+    Door(#[allow(dead_code)] Ticket),
+}
+
 /// One request, once the limiter slot grants it (crate::limiter): the
 /// module's declared limits, and any throttle its provider reported, hold it
-/// until then. A throttle it answers is reported back for the calls after it.
+/// until then. A module that asks per provider request (`hostLimits`) is
+/// handed the limits door instead, and the call itself is not counted, so no
+/// request counts twice. A throttle it answers is reported back for the calls
+/// after it.
 async fn post(target: &Target<'_>, credentials: &Credentials, sending: &Sending<'_>, bearer: Option<&str>, presented: Presented<'_>) -> Answered {
     let name = &target.external.manifest.name;
     let install = install_of(credentials, name);
     let caller = Caller { module: name, install: install.map(|i| i.name.as_str()), credential: presented.entry, team: sending.tenant };
-    let request = caller.request(target.limits);
+    let request = caller.request(&target.limits.declared);
     let limiter = crate::limiter::slot();
-    let held = match crate::limiter::acquire(&limiter, &request).await {
-        Ok(held) => held,
-        Err(message) => return Answered { answer: Err(RpcError::Unreachable(format!("the limiter refused a call to \"{name}\": {message}"))), update: None, retry_after_ms: None },
+    let refused = |message: String| Answered { answer: Err(RpcError::Unreachable(format!("the limiter refused a call to \"{name}\": {message}"))), update: None, retry_after_ms: None };
+    let door = match target.limits.per_request {
+        true => match crate::limits_door::offer(name, target.base_url, request.clone(), limiter.clone()) {
+            Ok(door) => door,
+            Err(message) => return refused(message),
+        },
+        false => None,
+    };
+    let (counted, host_limits) = match door {
+        Some((ticket, carried)) => (Counted::Door(ticket), Some(carried)),
+        None => match crate::limiter::acquire(&limiter, &request).await {
+            Ok(held) => (Counted::Call(held), None),
+            Err(message) => return refused(message),
+        },
     };
     let settings = install.map(|install| {
         let fields = current_fields(install);
@@ -195,11 +218,12 @@ async fn post(target: &Target<'_>, credentials: &Credentials, sending: &Sending<
     let carried = Carried {
         credential: presented.sent,
         settings: settings.filter(|s| s.as_object().is_some_and(|o| !o.is_empty())),
+        host_limits,
     };
     let auth = match crate::outgoing_auth::OutgoingAuth::of_fields(&install.map(current_fields).unwrap_or_default(), target.base_url) {
         Ok(auth) => auth,
         Err(message) => {
-            drop(held);
+            drop(counted);
             return Answered { answer: Err(RpcError::Unreachable(format!("external \"{name}\": {message}"))), update: None, retry_after_ms: None };
         }
     };
@@ -213,7 +237,7 @@ async fn post(target: &Target<'_>, credentials: &Credentials, sending: &Sending<
         auth,
     };
     let answered = post_rpc_carrying(call, carried).await;
-    drop(held);
+    drop(counted);
     if let Some(after) = answered.retry_after_ms
         && let Err(message) = limiter.throttle(&request.key, crate::limiter::now_ms().saturating_add(i64::try_from(after).unwrap_or(i64::MAX)))
     {
