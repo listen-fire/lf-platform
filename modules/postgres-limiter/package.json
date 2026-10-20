@@ -1,0 +1,27 @@
+{
+  "name": "@lf/postgres-limiter",
+  "private": true,
+  "license": "Apache-2.0",
+  "version": "0.12.0-rc.2",
+  "description": "The limiter slot kept in Postgres, so many lf workers share one count of calls and held places instead of each allowing the full limit. A process module lf starts (kind: core, slot: limiter); see lf-external.yaml. Tests borrow apps/api's jest runner (jest.config.borrowed.cjs); the contract suite runs in apps/cli",
+  "engines": {
+    "node": "22.20.0"
+  },
+  "scripts": {
+    "code:type-check": "tsc --pretty --noEmit && node ../../scripts/check-module-boundary.cjs",
+    "test": "node ../../apps/api/node_modules/jest/bin/jest.js --config jest.config.borrowed.cjs"
+  },
+  "type": "commonjs",
+  "dependencies": {
+    "@listen-fire/engine": "workspace:^",
+    "pg": "8.12.0",
+    "zod": "4.1.12"
+  },
+  "devDependencies": {
+    "@types/jest": "29.5.14",
+    "@types/node": "20.16.5",
+    "@types/pg": "8.11.9",
+    "movement-engine": "workspace:@listen-fire/engine@*",
+    "typescript": "5.5.4"
+  }
+}
