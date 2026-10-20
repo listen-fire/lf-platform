@@ -171,7 +171,7 @@ impl Fired {
         if self.outcomes.is_empty() && !self.redelivered.is_empty() {
             return Ok(0);
         }
-        report(&self.outcomes, out)
+        report(&self.outcomes, Returned::Shown, out)
     }
 }
 
@@ -189,6 +189,18 @@ pub struct RunOutcome {
     pub captured: Option<Vec<Js>>,
     pub trace_entries: i64,
     pub error: Option<String>,
+    /// What the movement returned, as the run's history keeps it
+    /// (crate::returned), once the run has completed.
+    pub returned: Option<Js>,
+}
+
+/// Whether a report shows what each completed run returned: yes to a person
+/// who started or drove the run; no in a worker's log of the runs events
+/// started, where it only sits in the run's history.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Returned {
+    Shown,
+    Withheld,
 }
 
 /// What a run entry has done so far: its writes, and how many segments ran.
@@ -539,11 +551,21 @@ impl Session {
             tally.writes
         };
         let at = iso(0);
-        let outcome = Js::Obj(obj! { "writes" => Js::Num(writes.into()) });
         if ran.cancelled {
             let reason = self.store.cancel_request(run_id).map_err(|e| e.to_string())?.flatten();
             return Ok(StepOutcome::Cancelled(reason));
         }
+        let mut outcome = obj! { "writes" => Js::Num(writes.into()) };
+        // The body returns in one segment; a later one (a callback's body, a
+        // branch the run still waited on) keeps what it returned.
+        let returned = match ran.returned {
+            Some(returned) => Some(returned),
+            None => self.store.run(run_id).map_err(|e| e.to_string())?.and_then(|row| crate::returned::of_outcome(row.outcome.as_deref())),
+        };
+        if let Some(returned) = returned {
+            outcome.insert("returned".into(), returned);
+        }
+        let outcome = Js::Obj(outcome);
         if let Some(address) = ran.parked_address {
             self.store.settle_run(run_id, "parked", &outcome, &at).map_err(|e| e.to_string())?;
             return Ok(StepOutcome::Parked { address: Some(address), deferred_race_frames: ran.deferred_race_frames });
@@ -670,13 +692,17 @@ impl Session {
             captured: None,
             trace_entries,
             error: None,
+            returned: None,
         };
         if lease_lost {
             outcome.status = "leaseLost".into();
             return Ok(outcome);
         }
         match row.status.as_str() {
-            "completed" => outcome.status = "completed".into(),
+            "completed" => {
+                outcome.status = "completed".into();
+                outcome.returned = crate::returned::of_outcome(row.outcome.as_deref());
+            }
             "failed" => {
                 outcome.status = "failed".into();
                 let error = row.outcome.as_deref().and_then(|o| Js::parse(o.as_bytes()).ok()).and_then(|o| o.get("error").and_then(Js::as_str).map(str::to_string));
@@ -1160,7 +1186,7 @@ pub async fn cancel_run(store: &dyn RunHostStore, run_id: &str, reason: Option<&
 
 /// `report`: each outcome's line, its error and a dry run's writes; the exit
 /// code 1 when any failed.
-pub fn report(outcomes: &[RunOutcome], out: &mut impl Write) -> Result<i32, String> {
+pub fn report(outcomes: &[RunOutcome], returned: Returned, out: &mut impl Write) -> Result<i32, String> {
     let io = |e: std::io::Error| e.to_string();
     if outcomes.is_empty() {
         writeln!(out, "no listen matched").map_err(io)?;
@@ -1170,6 +1196,9 @@ pub fn report(outcomes: &[RunOutcome], out: &mut impl Write) -> Result<i32, Stri
         let error = o.error.as_ref().map(|e| format!("\n  {e}")).unwrap_or_default();
         let verb = if o.entry == "called" { "called" } else { "run" };
         writeln!(out, "{verb} {} {}:{} {} — {} write(s), {} trace {entries}{error}", o.run_id, o.file, o.movement, o.status, o.writes, o.trace_entries).map_err(io)?;
+        if let (Returned::Shown, Some(value)) = (returned, &o.returned) {
+            writeln!(out, "  {}", crate::returned::shown(value)).map_err(io)?;
+        }
         for w in o.captured.iter().flatten() {
             writeln!(out, "  dry run, not written: {}", w.to_json()).map_err(io)?;
         }

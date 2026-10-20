@@ -23,7 +23,7 @@ use crate::callbacks::CallOutcome;
 use crate::doors::Webhook;
 use crate::json::{Js, Obj};
 use crate::project::Project;
-use crate::runs::{Cancelled, RunOutcome, Session, cancel_run, open_session, report};
+use crate::runs::{Cancelled, Returned, RunOutcome, Session, cancel_run, open_session, report};
 
 
 /// Where this process serves, once `serve` listens: every external started
@@ -97,7 +97,7 @@ pub async fn call_command(project: Project, store: &StoreSpec, args: CallArgs<'_
             } else {
                 writeln!(out, "callback {id}: recorded").map_err(io)?;
             }
-            if called.outcomes.is_empty() { Ok(0) } else { report(&called.outcomes, out) }
+            if called.outcomes.is_empty() { Ok(0) } else { report(&called.outcomes, Returned::Shown, out) }
         }
         CallOutcome::Mismatch(message) => {
             writeln!(out, "callback {id}: refused — {message}").map_err(io)?;

@@ -120,6 +120,16 @@ lf runs                                        # the runs, most recent first
 lf resume [<run-id>]                           # step a parked run, or every due one
 ```
 
+What a movement returns is its run's output, as a cron job's output is. Every run records it in its history, however the run started, and `lf runs show <run-id>` shows it. `lf run`, `lf resume` and `lf call` also print it when they complete the run:
+
+```
+$ lf run hello
+run 32bc… hello:hello completed — 0 write(s), 0 trace entries
+  returned "Hello, Ada!"
+```
+
+A run started by an event (a webhook, `cron`, a poll) sends the value nowhere: it only sits in the run's history. It never reaches an external system, and no door answers with it. The history keeps up to 64 KiB of the value's JSON, and says when it cut one short. A returned file is kept as a reference to the file, never its bytes.
+
 ## 6. Serve
 
 ```

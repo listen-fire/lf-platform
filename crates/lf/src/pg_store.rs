@@ -124,8 +124,13 @@ pub(crate) fn block_on<F: Future>(future: F) -> F::Output {
 /// applied ones are recorded in `lf.schema_migration`. Version 3 is retired,
 /// never to be reused: it made `lf.write_echo`, which moved to the loop
 /// guard, and databases that applied it record it as done.
-const MIGRATIONS: &[(i32, &str)] =
-    &[(1, include_str!("pg_store_schema_1.sql")), (2, include_str!("pg_store_schema_2.sql")), (4, include_str!("pg_store_schema_4.sql")), (5, include_str!("pg_store_schema_5.sql"))];
+const MIGRATIONS: &[(i32, &str)] = &[
+    (1, include_str!("pg_store_schema_1.sql")),
+    (2, include_str!("pg_store_schema_2.sql")),
+    (4, include_str!("pg_store_schema_4.sql")),
+    (5, include_str!("pg_store_schema_5.sql")),
+    (6, include_str!("pg_store_schema_6.sql")),
+];
 
 /// The advisory lock the migrations run under: "lf-store" as a number.
 const MIGRATION_LOCK: i64 = 0x6c66_2d73_746f_7265;
@@ -154,7 +159,7 @@ fn callback_of(row: &Row) -> Result<CallbackRecord> {
 const RUN_COLUMNS: &str = concat!(
     "id::text, trigger_payload->>'file', trigger_payload->>'movement', status, ",
     iso!("started_at"),
-    ", trigger_payload->>'facts', nodes_written::int8, failure_reason"
+    ", trigger_payload->>'facts', nodes_written::int8, failure_reason, returned::text"
 );
 
 fn run_of(row: &Row) -> Result<RunRow> {
@@ -167,7 +172,11 @@ fn run_of(row: &Row) -> Result<RunRow> {
     let outcome = if status == "failed" {
         Js::Obj(obj! { "error" => Js::str(failure.unwrap_or_default()) })
     } else {
-        Js::Obj(obj! { "writes" => Js::Num(row.get::<_, i64>(6).into()) })
+        let mut outcome = obj! { "writes" => Js::Num(row.get::<_, i64>(6).into()) };
+        if let Some(returned) = row.get::<_, Option<String>>(8) {
+            outcome.insert("returned".into(), parse_text(&returned)?);
+        }
+        Js::Obj(outcome)
     };
     Ok(RunRow {
         file: lf_field(1, "file")?,
@@ -401,6 +410,7 @@ impl RunHostStore for PgStore {
         let status = hosted_status(status);
         let writes = outcome.get("writes").and_then(|w| if let Js::Num(n) = w { n.as_i64() } else { None });
         let error = outcome.get("error").and_then(Js::as_str);
+        let returned = outcome.get("returned").map(Js::to_json);
         let ended = status == "success" || status == "failed";
         self.transaction(|| {
             self.execute(
@@ -409,9 +419,10 @@ impl RunHostStore for PgStore {
                    nodes_written = coalesce($3::int8, nodes_written),
                    failure_reason = case when $2::text = 'failed' then $4::text else failure_reason end,
                    completed_at = case when $2::text = 'success' then $5::text::timestamptz else completed_at end,
-                   failed_at = case when $2::text = 'failed' then $5::text::timestamptz else failed_at end
+                   failed_at = case when $2::text = 'failed' then $5::text::timestamptz else failed_at end,
+                   returned = $6::text::json
                  where id = $1::text::uuid",
-                &[&id, &status, &writes, &error, &at],
+                &[&id, &status, &writes, &error, &at, &returned],
             )?;
             if ended {
                 self.revoke_run_callbacks(id)?;
