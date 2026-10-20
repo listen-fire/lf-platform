@@ -505,22 +505,17 @@ export async function requeueReceipt(input: {
   });
 }
 
-/**
- * Re-run a stored event (playback) as a new queued run. Team-scoped unless
- * `teamId` is omitted (the cross-team admin replay); the receipt's own team
- * scopes the run either way.
- */
+/** Re-run one of the team's stored events (playback) as a new queued run. */
 export async function replayTriggerEvent(input: {
   eventId: string;
-  teamId?: TeamId;
-  dryRun?: boolean;
+  teamId: TeamId;
 }): Promise<{ replayed: false } | { replayed: true; runId: TriggerRunId }> {
-  let query = getAutomationsQb(['trigger_event'])
+  const row = await getAutomationsQb(['trigger_event'])
     .selectFrom('trigger_event')
     .where('id', '=', input.eventId as TriggerEventId)
-    .select(['id', 'team_id', 'trigger_id', 'payload']);
-  if (input.teamId !== undefined) query = query.where('team_id', '=', input.teamId);
-  const row = await query.executeTakeFirst();
+    .where('team_id', '=', input.teamId)
+    .select(['id', 'team_id', 'trigger_id', 'payload'])
+    .executeTakeFirst();
   if (!row) return { replayed: false };
   const receipt = parseCapturedTriggerEvent({
     triggerId: row.trigger_id,
@@ -535,7 +530,6 @@ export async function replayTriggerEvent(input: {
     event: receipt.triggerEvent,
     storedEventId: row.id,
     movementVersionId: await currentMovementVersionId(receipt),
-    ...(input.dryRun === true ? { dryRun: true } : {}),
   });
   return { replayed: true, runId };
 }

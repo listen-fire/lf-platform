@@ -11,14 +11,10 @@ import { sql } from 'kysely';
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type OpsDetailLevel from '../../../../generated/kysely/automations/OpsDetailLevel';
 import type { UserEmailId } from '../../../../generated/kysely/core/UserEmail';
-import type { TriggerRunId } from '../../../../generated/kysely/automations/TriggerRun';
 
 import { trpc } from '../../trpc';
-import { currentContext } from '../../../../services/context';
-import { getAutomationsQb, getCoreQb, getQb } from '../../../../lib/kysely';
+import { getCoreQb, getQb } from '../../../../lib/kysely';
 import { checkUsage, getBillingContacts } from '../../../../services/usage';
-import { replayTriggerEvent } from '../../../../services/translation_graph/triggers/dispatch_event';
-import { getMovementRunStatus } from '../../../../services/translation_graph/movement/run_now';
 import { GLOBAL_DEFAULT_OPS_DETAIL_LEVEL } from '../../../../services/team/ops_detail';
 
 
@@ -30,17 +26,6 @@ const paginationInput = {
   limit: z.number().int().min(1).max(200).default(50),
   offset: z.number().int().min(0).default(0),
 };
-
-/** Enumerate ALL teams (admin = no team gate). Returns `{ id, name }`
- *  ordered by name. Used internally to attach team identity to cross-team
- *  rows; the paginated `listTeams` procedure is the frontend-facing source. */
-async function allTeams(): Promise<Array<{ id: string; name: string }>> {
-  const ctx = currentContext();
-  return ctx.prisma.team.findMany({
-    select: { id: true, name: true },
-    orderBy: { name: 'asc' },
-  });
-}
 
 /** One page of teams matching an optional name prefix, plus the total count
  *  of matching teams. Prefix search is `name ILIKE search || '%'`. */
@@ -166,110 +151,6 @@ const crossTeamOpsRouter = (procedure: typeof trpc.procedure) =>
           .execute();
 
         return { success: true };
-      }),
-
-    // ── Trigger events (replay feed) ─────────────────────────────────────
-    // Cross-team window over `public.trigger_event`, newest first, with
-    // optional team/trigger filters. Team names attached from `listTeams`.
-    listTriggerEvents: procedure
-      .input(
-        z.object({
-          teamId: z.string().optional(),
-          triggerId: z.string().optional(),
-          ...paginationInput,
-        }),
-      )
-      .query(async ({ input }) => {
-        const teams = await allTeams();
-        const teamNames = new Map(teams.map((t) => [t.id, t.name]));
-
-        const qb = getAutomationsQb(['trigger_event']);
-        const searchPrefix =
-          input.search !== undefined && input.search.length > 0 ? `${input.search}%` : null;
-
-        let listQuery = qb
-          .selectFrom('trigger_event')
-          .select([
-            'id',
-            'team_id',
-            'trigger_id',
-            'adapter_type',
-            'trigger_type',
-            'status',
-            'failure_reason',
-            'occurred_at',
-            'created_at',
-          ])
-          .orderBy('created_at', 'desc')
-          .limit(input.limit)
-          .offset(input.offset);
-        let countQuery = qb
-          .selectFrom('trigger_event')
-          .select(sql<number>`count(*)::int`.as('total'));
-
-        if (input.teamId !== undefined) {
-          listQuery = listQuery.where('team_id', '=', input.teamId as TeamId);
-          countQuery = countQuery.where('team_id', '=', input.teamId as TeamId);
-        }
-        if (input.triggerId !== undefined) {
-          listQuery = listQuery.where('trigger_id', '=', input.triggerId);
-          countQuery = countQuery.where('trigger_id', '=', input.triggerId);
-        }
-        if (searchPrefix !== null) {
-          listQuery = listQuery.where('adapter_type', 'ilike', searchPrefix);
-          countQuery = countQuery.where('adapter_type', 'ilike', searchPrefix);
-        }
-
-        const rows = await listQuery.execute();
-        const countRow = await countQuery.executeTakeFirst();
-
-        const items = rows.map((row) => ({
-          id: row.id as unknown as string,
-          teamId: row.team_id as unknown as string,
-          teamName: teamNames.get(row.team_id as unknown as string) ?? null,
-          trigger_id: row.trigger_id,
-          adapter_type: row.adapter_type,
-          trigger_type: row.trigger_type,
-          status: row.status,
-          failure_reason: row.failure_reason,
-          occurred_at: row.occurred_at,
-          created_at: row.created_at,
-        }));
-        return { items, total: countRow?.total ?? 0 };
-      }),
-
-    // ── Replay (the safety-critical one) ─────────────────────────────────
-    // Queue a stored trigger_event again as a new run through the normal
-    // movement dispatch path, and answer with the run's id at once; the run
-    // happens on a worker and `replayRunStatus` follows it. `dryRun` DEFAULTS
-    // TO TRUE — a rehearsal whose writes are captured, not committed. Only
-    // `dryRun: false` lets the live dispatch proceed (which then still
-    // respects the trigger's own `run_mode`). Admin = cross-team: the event is
-    // loaded by id with no team gate, and its stored `team_id` scopes the run.
-    replayTriggerEvent: procedure
-      .input(
-        z.object({
-          eventId: z.string(),
-          dryRun: z.boolean().default(true),
-        }),
-      )
-      .mutation(async ({ input }) => {
-        const replay = await replayTriggerEvent({ eventId: input.eventId, dryRun: input.dryRun });
-        if (!replay.replayed) throw new Error(`Trigger event ${input.eventId} not found`);
-        return { dryRun: input.dryRun, runId: replay.runId as string };
-      }),
-
-    /** A replayed run's status, cross-team: the run's own team scopes the read. */
-    replayRunStatus: procedure
-      .input(z.object({ runId: z.string().uuid() }))
-      .query(async ({ input }) => {
-        const run = await getAutomationsQb(['trigger_run'])
-          .selectFrom('trigger_run')
-          .where('id', '=', input.runId as TriggerRunId)
-          .select('team_id')
-          .executeTakeFirst();
-        if (!run) return { error: `run ${input.runId} not found` };
-        return getMovementRunStatus({ teamId: run.team_id, runId: input.runId });
       }),
   });
 

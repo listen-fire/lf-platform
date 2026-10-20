@@ -7,7 +7,6 @@ import {
   Activity,
   BarChart2,
   Coins,
-  GitBranch,
   PanelLeftClose,
   PanelLeftOpen,
   TrendingUp,
@@ -229,13 +228,6 @@ export function Sidebar({
           icon={<TrendingUp size={16} className="shrink-0" />}
           label="Onboarding"
           active={isPathActive(pathname, "/journey")}
-          collapsed={iconOnly}
-        />
-        <NavItem
-          href="/pipelines"
-          icon={<GitBranch size={16} className="shrink-0" />}
-          label="Trigger events"
-          active={isPathActive(pathname, "/pipelines")}
           collapsed={iconOnly}
         />
       </nav>
