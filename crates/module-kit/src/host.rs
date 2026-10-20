@@ -21,7 +21,7 @@ use tokio::net::TcpListener;
 
 use crate::adapter::{Adapter, AdapterModule};
 use crate::context::{Ctx, ModuleError};
-use crate::core::{Limiter, LimiterModule, LoopGuard, LoopGuardModule, Store, StoreModule, Wake, WakeModule};
+use crate::core::{Limiter, LimiterModule, LoopGuard, LoopGuardModule, Ocr, OcrModule, Store, StoreModule, Wake, WakeModule};
 use crate::module::Module;
 use crate::plugin::{PluginModule, Plugins};
 
@@ -134,6 +134,10 @@ impl Host {
 
     pub fn wake(self, name: &str, wake: impl Wake + 'static) -> Host {
         self.module(WakeModule::new(name, wake))
+    }
+
+    pub fn ocr(self, name: &str, ocr: impl Ocr + 'static) -> Host {
+        self.module(OcrModule::new(name, ocr))
     }
 
     /// Require `Authorization: Bearer <token>` on every call.
