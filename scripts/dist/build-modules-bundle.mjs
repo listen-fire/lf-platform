@@ -59,8 +59,13 @@ for (const source of sources) {
   }
 }
 writeFileSync(join(bundle, 'package.json'), JSON.stringify({ private: true, dependencies: thirdParty }));
+// npm refuses a peer range mismatch that pnpm only warns about in the workspace
+// (openai's optional zod ^3 peer against the zod 4 everything else uses), so
+// peers are not resolved by npm: the root above already names every peer the
+// shipped packages load, and npm installs exactly those.
+const install = ['install', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund', '--legacy-peer-deps'];
 // npm prunes whatever it did not install, so third-party packages go in first.
-execFileSync('npm', ['install', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund', ...platform], { cwd: bundle, stdio: 'inherit' });
+execFileSync('npm', [...install, ...platform], { cwd: bundle, stdio: 'inherit' });
 
 // A Linux archive serves glibc and musl machines alike (install.sh always picks
 // the musl archive), but a few packages ship one native binary per libc
@@ -71,7 +76,7 @@ if (os === 'linux' && libc) {
   const other = join(bundle, '.other-libc');
   mkdirSync(other, { recursive: true });
   writeFileSync(join(other, 'package.json'), JSON.stringify({ private: true, dependencies: thirdParty }));
-  execFileSync('npm', ['install', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund', `--os=${os}`, `--cpu=${cpu}`, `--libc=${otherLibc}`], { cwd: other, stdio: 'inherit' });
+  execFileSync('npm', [...install, `--os=${os}`, `--cpu=${cpu}`, `--libc=${otherLibc}`], { cwd: other, stdio: 'inherit' });
   const scopes = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.name.startsWith('@') ? readdirSync(join(dir, e.name)).map((n) => `${e.name}/${n}`) : [e.name]));
   for (const name of scopes(join(other, 'node_modules')).filter((n) => !n.startsWith('.'))) {
     const target = join(bundle, 'node_modules', name);
