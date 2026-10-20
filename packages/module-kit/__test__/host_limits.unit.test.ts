@@ -108,24 +108,27 @@ const FETCH_TWICE: PluginDeclaration = {
   },
 };
 
-const paced = defineModule({
-  kind: 'plugin',
-  name: '@lf/paced',
-  credentials: [],
-  limits: [{ scope: 'credential', calls: 10, per: '1s' }],
-  plugins: [FETCH_TWICE],
-  create: (ctx) => ({
-    invokePlugin: async () => {
-      await ctx.fetch(PROVIDER);
-      await ctx.fetch(PROVIDER);
-      return { text: 'done' };
-    },
-  }),
-});
+function pacedModule(options: { hostLimits: boolean }) {
+  return defineModule({
+    kind: 'plugin',
+    name: '@lf/paced',
+    credentials: [],
+    limits: [{ scope: 'credential', calls: 10, per: '1s' }],
+    ...(options.hostLimits ? { hostLimits: true as const } : {}),
+    plugins: [FETCH_TWICE],
+    create: (ctx) => ({
+      invokePlugin: async () => {
+        await ctx.fetch(PROVIDER);
+        await ctx.fetch(PROVIDER);
+        return { text: 'done' };
+      },
+    }),
+  });
+}
 
-async function post(impl: typeof fetch, envelope: Record<string, unknown>): Promise<Record<string, unknown>> {
+async function post(impl: typeof fetch, envelope: Record<string, unknown>, definition = pacedModule({ hostLimits: true })): Promise<Record<string, unknown>> {
   const handler = createModuleProtocolHandler({
-    definition: paced,
+    definition,
     log: { debug: () => undefined, info: () => undefined, warn: () => undefined, error: () => undefined },
     fetch: impl,
     files: refusingFiles('no files'),
@@ -142,13 +145,20 @@ async function post(impl: typeof fetch, envelope: Record<string, unknown>): Prom
 
 const invoke = { method: 'invokePlugin', params: { name: 'fetch_twice', config: {}, extractedContext: {} } };
 
-test('a module with limits says it asks per request, and asks the door its call was handed', async () => {
+test('a module that declares hostLimits says it asks per request, and asks the door its call was handed', async () => {
   const { impl, log } = fakeFetch();
   const manifest = await post(impl, { method: 'manifest', params: {} });
   expect(manifest.result).toMatchObject({ hostLimits: true, limits: [{ scope: 'credential', calls: 10, per: '1s' }] });
   const body = await post(impl, { ...invoke, hostLimits: door });
   expect(body.ok).toBe(true);
   expect(log.filter((line) => line === 'door:acquire')).toHaveLength(2);
+});
+
+test('limits alone do not declare hostLimits: the host keeps counting calls', async () => {
+  const { impl } = fakeFetch();
+  const manifest = await post(impl, { method: 'manifest', params: {} }, pacedModule({ hostLimits: false }));
+  expect(manifest.result).toMatchObject({ limits: [{ scope: 'credential', calls: 10, per: '1s' }] });
+  expect(manifest.result).not.toHaveProperty('hostLimits');
 });
 
 test('a call handed no door (the host counted it) asks nobody', async () => {

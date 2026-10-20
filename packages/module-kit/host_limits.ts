@@ -6,6 +6,12 @@
 // is counted, and the module never sees a counter. A host that hands no door
 // on the call (a platform loading the module in process, an embedder, a host
 // that counts the call itself) leaves `ctx.fetch` as it is.
+//
+// A module opts in with `hostLimits: true` in its definition, only if every
+// provider request goes through `ctx.fetch`. A request made with the global
+// `fetch` or another client never asks the door, and the host (told the
+// module counts for itself) would not count it either. Without the
+// declaration the host counts each call once.
 
 import { HostLimitGrant, type HostLimitRequestShape, type WireHostLimitsDoorShape } from 'engine-contracts';
 

@@ -1068,6 +1068,7 @@ page = web.fetchUrl(u)
   [limiter slot](limiter-slot.md)).
 - **The limits door.** One call to a module can become several requests to
   its provider, plus retries. A module that declares `"hostLimits": true`
+  (its author's choice, never implied by `limits`; see the last bullet)
   asks the host before each of those requests, so its `limits` count them
   rather than the host's calls. On each call the host hands it the door:
 
@@ -1098,12 +1099,17 @@ page = web.fetchUrl(u)
     no request counts twice. A call without it was counted by the host as a
     whole (lf offers the door only to a module on its own box, from a
     process that listens). The module then asks nobody.
-  - The module kit does all of this inside `ctx.fetch`, and declares
-    `hostLimits` for a module that declares `limits`. Requests to the host's
-    own address (its files, its doors) are not counted. A kit module must
-    make its provider requests through `ctx.fetch` to be counted. The Rust
-    kit has no HTTP client of its own: take `ctx.permit()` before each
-    request, and hand it back with `release()` or `throttled(retry_after)`.
+  - The module kit does all of this inside `ctx.fetch`. A module declares
+    `hostLimits` (TypeScript: `hostLimits: true` in `defineModule`; Rust:
+    `.declare("hostLimits", Js::Bool(true))`) only if every provider
+    request goes through `ctx.fetch` (TypeScript) or `ctx.permit()` (Rust).
+    A request made any other way (the global `fetch`, another client) is
+    counted by nobody, since the host stops counting that module's calls.
+    The kit never declares it for you: `limits` alone leaves the host
+    counting each call once. Requests to the host's own address (its files,
+    its doors) are not counted. The Rust kit has no HTTP client of its own:
+    take `ctx.permit()` before each request, and hand it back with
+    `release()` or `throttled(retry_after)`.
   - A host that loads modules in process (the platform) or an embedder that
     hands no door is unchanged: `ctx.fetch` is then the plain fetch, and the
     host counts calls as before.
