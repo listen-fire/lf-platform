@@ -1,0 +1,8 @@
+("(" @open ")" @close)
+("[" @open "]" @close)
+("{" @open "}" @close)
+(hop ["-[" "<-["] @open ["]->" "]-"] @close)
+(type_marker "<" @open ">" @close)
+(interpolation "${" @open "}" @close)
+(("\"" @open "\"" @close) (#set! rainbow.exclude))
+(("'" @open "'" @close) (#set! rainbow.exclude))

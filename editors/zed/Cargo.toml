@@ -1,0 +1,17 @@
+[package]
+name = "zed-listen-fire"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+# Its own workspace: Zed builds this crate for wasm32-wasip2 on its own,
+# apart from the repository's workspace.
+[workspace]
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+zed_extension_api = "0.7.0"
