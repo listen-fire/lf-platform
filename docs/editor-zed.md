@@ -11,6 +11,7 @@
   "lf": {
     "binary": {
       "path": "/path/to/listen-fire/target/release/lf",
+      "arguments": ["lsp"],
       "env": { "PATH": "/path/to/node-22/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin" }
     }
   }
@@ -18,5 +19,5 @@
 ```
 
 - The server runs with your login shell's PATH. Projects with custom plugins need node 22: with an older `node` first on that PATH, the plugins do not start, and every plugin call shows as an unknown import. Set `env.PATH` as above, or make node 22 your shell's default (`nvm alias default 22`).
-- `env` entries replace the shell's own; `arguments` replaces the default `["lsp"]`.
+- With a `path`, Zed runs that binary itself with exactly `arguments`, so `["lsp"]` is required there; without one, the extension finds `lf` on PATH and adds `lsp`. `env` entries replace the shell's own.
 - Zed fetches the grammar at the commit `rev` names in [`extension.toml`](../editors/zed/extension.toml). After changing the grammar, run `editors/tree-sitter-movement/check.sh` (every `.mvt` in the repository must parse without an error node), commit, then move `rev` to that commit. Until that commit is pushed, set the grammar's `repository` to `file:///path/to/your/clone` to rebuild locally.
