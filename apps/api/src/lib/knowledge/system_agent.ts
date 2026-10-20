@@ -38,7 +38,7 @@ A user typically asks one of:
 You have access to specialist agents via the \`handoff\` tool:
 
 - **query** — if the user wants to inspect actual knowledge graph data (entities, relationships, properties), not the run that produced it.
-- **ontology** — if the user is asking about schema/model design (node types, edge types, extraction graphs).
+- **ontology** — if the user is asking about schema/model design (node types, edge types).
 - **output** — if the user wants to configure or modify outputs/integrations.
 
 The handoff is invisible to the user — do NOT announce it. Just call \`handoff\` directly with a thorough referral.`;

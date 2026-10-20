@@ -30,7 +30,7 @@
 import { z } from 'zod';
 
 import type { ExpressionType } from 'movement-engine/public/catalog';
-import type { StoredUniquenessConstraints } from '../../../knowledge_pipeline/uniqueness_constraints';
+import type { StoredUniquenessConstraints } from '../../../../lib/knowledge/uniqueness_constraints';
 import type { Bundle } from './bundle';
 import type { ExtractInvocation, ExtractValueInvocation } from '../evaluator/batcher';
 

@@ -68,9 +68,6 @@ jest.mock('@listen-fire/kg/manifest', () => ({
     }),
 }));
 
-jest.mock('../../knowledge_pipeline/facts', () => ({
-  extractFactsForResource: jest.fn(async () => []),
-}));
 
 // The judge is the host's (`host.llm.arbitrateEntities`, mocked below); the
 // engine's own rules (the short-circuits, the exactness rule) still run. The

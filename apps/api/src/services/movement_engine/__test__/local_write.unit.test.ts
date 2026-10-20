@@ -70,9 +70,6 @@ jest.mock('@listen-fire/kg/manifest', () => ({
     }),
 }));
 
-jest.mock('../../knowledge_pipeline/facts', () => ({
-  extractFactsForResource: jest.fn(async () => []),
-}));
 
 // The ONE judge — mocked at the LLM seam, so the real arbitration (the
 // short-circuits, the exactness rule) still runs and only the decision is

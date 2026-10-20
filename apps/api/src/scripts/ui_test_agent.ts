@@ -511,12 +511,12 @@ async function seedTestTeam(): Promise<{ teamId: TeamId; token: string; template
   } as any).execute();
 
   // Materialize ontology
-  const matQb = getKnowledgeQb(['node_type', 'property_type', 'edge_type', 'extraction_graph', 'extraction_graph_node', 'extraction_graph_edge']);
+  const matQb = getKnowledgeQb(['node_type', 'property_type', 'edge_type']);
   const result = await (matQb as any).transaction().execute((trx: any) =>
     materializeTemplate(trx, teamId, 'vc-dealflow'),
   );
   console.log(`🌱 Created test team: ${teamId}`);
-  console.log(`   ${result.nodeTypesCreated} node types, ${result.edgeTypesCreated} edge types, ${result.extractionGraphsCreated} extraction graphs`);
+  console.log(`   ${result.nodeTypesCreated} node types, ${result.edgeTypesCreated} edge types`);
 
   // Create mock Attio credentials
   if (process.env.MOCK_OUTPUT_ADAPTERS === 'true') {

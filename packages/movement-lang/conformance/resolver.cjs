@@ -62,12 +62,23 @@ const OUT_OF_ENGINE = {
   'lib/utils/queue': 'module-runtime/queue',
 };
 
+// Platform files an older corpus mocks that later left apps/api/src, by that
+// path, mapped to where they went (from the repository root). A mock replaces
+// the module wholesale, so it only needs the path to resolve.
+const LEFT_THE_PLATFORM = {
+  // The knowledge pipeline's fact extraction was retired with the pipeline;
+  // its fact search lives on in the knowledge library.
+  'services/knowledge_pipeline/facts': 'apps/api/src/lib/knowledge/facts',
+};
+
 function movedOutOfEngine(request, engineBasedir, options) {
   const match = engineBasedir.match(/^(.*[\\/]packages)[\\/]movement-engine(?=[\\/]|$)/);
   if (!match) return undefined;
   const inEngine = path.relative(path.join(match[1], 'movement-engine'), path.resolve(engineBasedir, request)).split(path.sep).join('/').replace(/\.ts$/, '');
   const target = OUT_OF_ENGINE[inEngine];
-  return target === undefined ? undefined : options.defaultResolver(path.join(match[1], target), options);
+  if (target !== undefined) return options.defaultResolver(path.join(match[1], target), options);
+  const platformTarget = LEFT_THE_PLATFORM[inEngine];
+  return platformTarget === undefined ? undefined : options.defaultResolver(path.join(match[1], '..', platformTarget), options);
 }
 
 function throwError(error) {

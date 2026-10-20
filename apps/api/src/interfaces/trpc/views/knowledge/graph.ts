@@ -15,7 +15,7 @@ import EvidenceType from '../../../../generated/kysely/knowledge/EvidenceType';
 import PropertyIdentity from '../../../../generated/kysely/knowledge/PropertyIdentity';
 import PropertyValueType from '../../../../generated/kysely/knowledge/PropertyValueType';
 import { resolveDisplayNames } from '../../../../lib/knowledge/resolve_display_name';
-import { collectEdgeTypeIds, isEdgeToEntry, type StoredUniquenessConstraints } from '../../../../services/knowledge_pipeline/uniqueness_constraints';
+import { collectEdgeTypeIds, isEdgeToEntry, type StoredUniquenessConstraints } from '../../../../lib/knowledge/uniqueness_constraints';
 import { mergeEdges, mergeNodes, reEvaluateProperty } from '../../../../lib/knowledge/merge';
 import {
   createNode as createStoreNode,

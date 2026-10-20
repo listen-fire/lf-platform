@@ -56,7 +56,7 @@ import { executeCypher, getSchema, stripCypherComments, ParseError, TranspileErr
 import { parseAnyCypher } from './cypher/parser';
 import { isMutation } from './cypher/types';
 import { getNodeDetail } from './knowledge_query';
-import { searchFacts } from '../../services/knowledge_pipeline/facts';
+import { searchFacts } from './facts';
 import {
   createEntity,
   updateEntity,
@@ -1062,10 +1062,7 @@ const MOVEMENT_DOCTRINE = getMovementDoctrine();
 const MOVEMENT_AUTHORING_SECTION = `## Authoring movements
 
 Extracting data from inbound messages, emails, or documents IS a
-movement: a listener whose action carries \`#extract\`. Never propose or
-create an "extraction graph" — that is the legacy mechanism; the ones
-that exist keep running, but every new extraction is authored as a
-movement. Extraction can also run the source through plugins to clean or
+movement: a listener whose action carries \`#extract\`. Extraction can also run the source through plugins to clean or
 enrich it before extracting (\`through [scrub_sensitive, fetch_pages]\`) —
 reach for them rather than doing that work yourself.
 
@@ -1086,10 +1083,7 @@ Save at coherent milestones — the skeleton, then a completed write target at a
 const MOVEMENT_AUTHORING_SECTION_PLAIN = `## Authoring movements
 
 Extracting data from inbound messages, emails, or documents IS a
-movement: a listener whose action carries \`#extract\`. Never propose or
-create an "extraction graph" — that is the legacy mechanism; the ones
-that exist keep running, but every new extraction is authored as a
-movement. Extraction can also run the source through plugins to clean or
+movement: a listener whose action carries \`#extract\`. Extraction can also run the source through plugins to clean or
 enrich it before extracting (\`through [scrub_sensitive, fetch_pages]\`) —
 reach for them rather than doing that work yourself.
 

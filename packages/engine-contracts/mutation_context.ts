@@ -45,7 +45,7 @@ const mutationSourceSchema = z.object({
   actor: actorSchema.optional(),
   // Translation graph that produced this write (when applicable).
   translationGraphId: z.string().optional(),
-  // The ActionNode/ExtractionNode `id` field within the translation graph.
+  // The ActionNode `id` field within the translation graph.
   translationGraphNodeId: z.string().optional(),
   // Identity bridge to an external record (when applicable).
   linkedObjectId: z.string().optional(),

@@ -16,7 +16,6 @@ export type {
   OntologyTemplate,
   TemplateNodeType,
   TemplateEdgeType,
-  TemplateExtractionGraph,
   TemplatePropertyDef,
   TemplateConstraintEntry,
   TemplateUniquenessConstraint,

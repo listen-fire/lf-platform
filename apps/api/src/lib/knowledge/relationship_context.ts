@@ -2,11 +2,6 @@ import type { NodeId } from '../../generated/kysely/knowledge/Node';
 import type { NodeTypeId } from '../../generated/kysely/knowledge/NodeType';
 import type { EdgeTypeId } from '../../generated/kysely/knowledge/EdgeType';
 import type { TeamId } from '../../generated/kysely/core/Team';
-import type {
-  ExtractedSubgraph,
-  ExtractedProperty,
-  ResolutionDecision,
-} from '../../services/knowledge_pipeline/types';
 
 import { resolveDisplayNames } from './resolve_display_name';
 import { getKnowledgeQb } from '../kysely';
@@ -67,23 +62,6 @@ async function loadEdgeTypeMeta(options: {
     });
   }
   return map;
-}
-
-async function loadNodeTypeNames(options: {
-  nodeTypeIds: string[];
-  teamId: TeamId;
-}): Promise<Map<string, string>> {
-  const { nodeTypeIds, teamId } = options;
-  if (!nodeTypeIds.length) return new Map();
-
-  const rows = await getKnowledgeQb(['node_type'])
-    .selectFrom('node_type')
-    .where('node_type.id', 'in', nodeTypeIds as NodeTypeId[])
-    .where('node_type.team_id', '=', teamId)
-    .select(['node_type.id', 'node_type.name'])
-    .execute();
-
-  return new Map(rows.map((r) => [r.id as string, r.name]));
 }
 
 // -- Direction helper --
@@ -213,123 +191,6 @@ async function buildRelationshipContextFromDb(options: {
   return entries;
 }
 
-// -- Build from extracted subgraph --
-
-function buildRelationshipContextFromSubgraph(options: {
-  tempId: string;
-  subgraph: ExtractedSubgraph;
-  resolved: Map<string, ResolutionDecision>;
-  edgeTypeMeta: EdgeTypeMetaMap;
-  resolvedDisplayNames?: Map<string, string | null>;
-}): { entries: RelationshipEntry[]; dbNodeIdsToResolve: string[] } {
-  const { tempId, subgraph, resolved, edgeTypeMeta, resolvedDisplayNames } = options;
-
-  // Find edges involving this node
-  const relatedEdges = subgraph.edges.filter(
-    (e) => e.sourceTempId === tempId || e.targetTempId === tempId,
-  );
-
-  if (!relatedEdges.length) return { entries: [], dbNodeIdsToResolve: [] };
-
-  // Group by edge type and cap
-  const byEdgeType = new Map<string, typeof relatedEdges>();
-  for (const edge of relatedEdges) {
-    const key = edge.edgeType as string;
-    const arr = byEdgeType.get(key) ?? [];
-    arr.push(edge);
-    byEdgeType.set(key, arr);
-  }
-
-  const selectedEdges: typeof relatedEdges = [];
-  const overflowByEdgeType = new Map<string, number>();
-
-  for (const [etId, edgesOfType] of byEdgeType) {
-    if (edgesOfType.length > CAP_PER_EDGE_TYPE) {
-      selectedEdges.push(...edgesOfType.slice(0, CAP_PER_EDGE_TYPE));
-      overflowByEdgeType.set(etId, edgesOfType.length - CAP_PER_EDGE_TYPE);
-    } else {
-      selectedEdges.push(...edgesOfType);
-    }
-  }
-
-  // Determine neighbor names — either from resolved DB node or from subgraph identity props
-  const dbNodeIdsToResolve: string[] = [];
-  const entries: RelationshipEntry[] = [];
-
-  for (const edge of selectedEdges) {
-    const entityIsSource = edge.sourceTempId === tempId;
-    const neighborTempId = entityIsSource ? edge.targetTempId : edge.sourceTempId;
-    const etMeta = edgeTypeMeta.get(edge.edgeType as string);
-    if (!etMeta) continue;
-
-    const neighborResolution = resolved.get(neighborTempId);
-    let neighborName: string | null = null;
-
-    if (neighborResolution?.action === 'match') {
-      // Neighbor matched a DB node — use pre-resolved display name if available
-      const dbId = neighborResolution.existingNodeId as string;
-      neighborName = resolvedDisplayNames?.get(dbId) ?? null;
-      if (!neighborName) dbNodeIdsToResolve.push(dbId);
-    }
-
-    if (!neighborName) {
-      // Fall back to identity properties from the subgraph
-      neighborName = getSubgraphNodeName(neighborTempId, subgraph);
-    }
-
-    const edgeName = orientEdgeName(etMeta, entityIsSource);
-
-    // Gather edge properties from subgraph
-    const edgeKey = `${edge.sourceTempId}:${edge.targetTempId}:${edge.edgeType}`;
-    const edgeProps = getSubgraphEdgeProperties(edgeKey, subgraph.properties);
-
-    entries.push({
-      edgeName,
-      targetName: neighborName ?? '(unknown)',
-      ...(edgeProps ? { edgeProperties: edgeProps } : {}),
-    });
-  }
-
-  // Add overflow markers
-  for (const [etId, count] of overflowByEdgeType) {
-    const etMeta = edgeTypeMeta.get(etId);
-    if (!etMeta) continue;
-    const edgeName = etMeta.outboundName.replace(/_/g, ' ');
-    entries.push({
-      edgeName,
-      targetName: `(+${count} more)`,
-    });
-  }
-
-  return { entries, dbNodeIdsToResolve };
-}
-
-function getSubgraphNodeName(tempId: string, subgraph: ExtractedSubgraph): string | null {
-  // Use the first property value as a name — mirrors the identity-property fallback
-  const props = subgraph.properties.filter(
-    (p) => p.parentTempId === tempId && p.value != null && !p.ownerEdgeKey,
-  );
-  if (!props.length) return null;
-  // Return the first text-like value
-  for (const p of props) {
-    if (typeof p.value === 'string' && p.value.length > 0) return p.value;
-  }
-  return props[0].value != null ? String(props[0].value) : null;
-}
-
-function getSubgraphEdgeProperties(
-  edgeKey: string,
-  properties: ExtractedProperty[],
-): Record<string, unknown> | null {
-  const edgeProps = properties.filter((p) => p.ownerEdgeKey === edgeKey && p.value != null);
-  if (!edgeProps.length) return null;
-  const result: Record<string, unknown> = {};
-  for (const p of edgeProps) {
-    result[p.propertyTypeId as string] = p.value;
-  }
-  return result;
-}
-
 // -- Format to plain text --
 
 function formatEntityContext(context: EntityContext): string {
@@ -366,11 +227,5 @@ function titleCase(str: string): string {
   return str.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export {
-  loadEdgeTypeMeta,
-  loadNodeTypeNames,
-  buildRelationshipContextFromDb,
-  buildRelationshipContextFromSubgraph,
-  formatEntityContext,
-};
+export { buildRelationshipContextFromDb, formatEntityContext };
 export type { EdgeTypeMeta, EdgeTypeMetaMap, RelationshipEntry, EntityContext };

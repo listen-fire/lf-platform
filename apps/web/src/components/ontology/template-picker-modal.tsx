@@ -8,7 +8,7 @@ export function TemplatePickerModal({ isOpen, onClose }: { isOpen: boolean; onCl
     <Modal isOpen={isOpen} onClose={onClose} title="Choose a Template">
       <div className="p-5">
         <p className="mb-4 text-[13px] text-gray-500">
-          Start with a pre-built ontology template. This will create node types, edge types, and extraction graphs.
+          Start with a pre-built ontology template. This will create node types and edge types.
         </p>
         <TemplateGallery />
       </div>

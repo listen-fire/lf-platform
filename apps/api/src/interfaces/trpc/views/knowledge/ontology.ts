@@ -766,13 +766,7 @@ const ontologyRouter = (procedure: typeof trpc.procedure) => {
       .mutation(async ({ input }) => {
         const teamId = actingTeamId();
 
-        const qb = getKnowledgeQb([
-          'node_type',
-          'property_type',
-          'edge_type',
-          'extraction_graph',
-          'extraction_graph_edge',
-        ]);
+        const qb = getKnowledgeQb(['node_type', 'property_type', 'edge_type']);
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const result = await qb.transaction().execute((trx: any) =>

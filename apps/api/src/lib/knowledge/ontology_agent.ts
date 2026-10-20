@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import type { AgentUpdate } from '../openai/types';
-import type { StoredUniquenessConstraints, ConstraintEntry } from '../../services/knowledge_pipeline/uniqueness_constraints';
+import type { StoredUniquenessConstraints, ConstraintEntry } from './uniqueness_constraints';
 import type { Expression, EdgeStep } from '#shared/expression/types';
 
 import { getKnowledgeQb } from '../kysely';
@@ -12,14 +12,13 @@ import { mq } from '../message_queue';
 import { TeamId } from '../../generated/kysely/core/Team';
 import { NodeTypeId } from '../../generated/kysely/knowledge/NodeType';
 import { EdgeTypeId } from '../../generated/kysely/knowledge/EdgeType';
-import { ExtractionGraphId } from '../../generated/kysely/knowledge/ExtractionGraph';
 import NodeTypeCategory from '../../generated/kysely/knowledge/NodeTypeCategory';
 import PropertyValueType from '../../generated/kysely/knowledge/PropertyValueType';
 import PropertyIdentity from '../../generated/kysely/knowledge/PropertyIdentity';
 import EvaluationStrategy from '../../generated/kysely/knowledge/EvaluationStrategy';
 import { PropertyTypeId } from '../../generated/kysely/knowledge/PropertyType';
 import { getStyleBlock } from './style_preferences';
-import { parseConstraintText, serializeConstraintEntries } from '../../services/knowledge_pipeline/uniqueness_constraints';
+import { parseConstraintText, serializeConstraintEntries } from './uniqueness_constraints';
 import { unsupportedCategoryReason } from './node_type_category_policy';
 
 export const ONTOLOGY_AGENT_SYSTEM_PROMPT = `You are an ontology configuration assistant. You help users design and build their knowledge graph schema through conversation.
@@ -69,14 +68,13 @@ The ontology defines the structure of the knowledge graph:
 
 ## How to communicate
 
-The user is non-technical. Never mention implementation details like node types, edge types, property types, schemas, categories, IDs, scopes, extraction graphs, or any internal concepts. Speak exclusively in terms of the user's domain — use the actual names of their entity types, relationships, and fields.
+The user is non-technical. Never mention implementation details like node types, edge types, property types, schemas, categories, IDs, scopes, or any internal concepts. Speak exclusively in terms of the user's domain — use the actual names of their entity types, relationships, and fields.
 
 - Instead of "I'll create a node type 'Company' with category 'object'" → "I'll set up Company as one of the things you track"
 - Instead of "I'll add an edge type from Deal to Company" → "I'll link Deals to their Company so each deal belongs to a specific company"
 - Instead of "I'll create a property type 'Revenue' with value_type number" → "I'll add a Revenue field to Company"
-- Instead of "The extraction graph will have..." → "When messages come in, the system will extract..."
 
-When presenting a plan, describe the data model in business terms: what types of things are tracked, how they relate, what information is captured about each, and what gets extracted from incoming messages.
+When presenting a plan, describe the data model in business terms: what types of things are tracked, how they relate, and what information is captured about each.
 
 ## Active listening
 
@@ -110,7 +108,7 @@ Multi-agent flows are tabular, not narrative. The conversation may pass through 
 
 ## Guidelines
 
-- **Deletes cascade.** Deleting a node type removes all its properties, edges, and extraction graph references. Deleting an edge type removes its edge properties and extraction graph edges. Mention cascading effects when deleting.
+- **Deletes cascade.** Deleting a node type removes all its properties and edges. Deleting an edge type removes its edge properties. Mention cascading effects when deleting.
 - Create property types on each node type for its attributes (e.g. Name, Revenue on Company)
 - Properties can belong to either a node type or an edge type. Use edge properties for attributes of relationships (e.g. role, status on a member_of edge between Person and Organisation). Use node properties for attributes of entities (e.g. Name, Revenue on Company).
 - When creating a field, provide EITHER nodeTypeName (for entity fields) or edgeTypeOutboundName (for relationship fields), never both.
@@ -145,7 +143,7 @@ interface OntologyAgentOptions {
 
 // Tool: Get current ontology
 async function getOntology(teamId: string) {
-  const [nodeTypes, propertyTypes, edgeTypes, extractionGraphs] = await Promise.all([
+  const [nodeTypes, propertyTypes, edgeTypes] = await Promise.all([
     getKnowledgeQb(['node_type'])
       .selectFrom('node_type')
       .where('team_id', '=', teamId as TeamId)
@@ -189,14 +187,6 @@ async function getOntology(teamId: string) {
       ])
       .orderBy('et.outbound_name asc')
       .execute(),
-    getKnowledgeQb(['extraction_graph', 'extraction_graph_node', 'node_type'])
-      .selectFrom('extraction_graph as eg')
-      .innerJoin('extraction_graph_node as rn', 'rn.id', 'eg.root_node_id')
-      .leftJoin('node_type as mnt', 'mnt.id', 'rn.node_type_id')
-      .where('eg.team_id', '=', teamId as TeamId)
-      .select(['eg.id', 'eg.name', 'eg.description', 'mnt.name as message_node_type_name'])
-      .orderBy('eg.name asc')
-      .execute(),
   ]);
 
   if (nodeTypes.length === 0) {
@@ -225,7 +215,7 @@ async function getOntology(teamId: string) {
     return { ...nt, uniqueness_constraints: undefined, uniquenessConstraintExpressions: expressions };
   });
 
-  return { nodeTypes: enrichedNodeTypes, propertyTypes, edgeTypes, extractionGraphs };
+  return { nodeTypes: enrichedNodeTypes, propertyTypes, edgeTypes };
 }
 
 // Tool: Create a node type
@@ -434,7 +424,7 @@ async function updateEdgeType(
   return result;
 }
 
-// Tool: Delete a node type (cascades to properties, edges, extraction graph nodes)
+// Tool: Delete a node type (cascades to properties and edges)
 async function deleteNodeType(args: { id: string }, teamId: string) {
   await getKnowledgeQb(['node_type'])
     .deleteFrom('node_type')
@@ -454,21 +444,11 @@ async function deletePropertyType(args: { id: string }, teamId: string) {
   return { deleted: true, id: args.id };
 }
 
-// Tool: Delete an edge type (cascades to edge properties and extraction graph edges)
+// Tool: Delete an edge type (cascades to edge properties)
 async function deleteEdgeType(args: { id: string }, teamId: string) {
   await getKnowledgeQb(['edge_type'])
     .deleteFrom('edge_type')
     .where('id', '=', args.id as EdgeTypeId)
-    .where('team_id', '=', teamId as TeamId)
-    .executeTakeFirstOrThrow();
-  return { deleted: true, id: args.id };
-}
-
-// Tool: Delete an extraction graph (cascades to nodes and edges)
-async function deleteExtractionGraph(args: { id: string }, teamId: string) {
-  await getKnowledgeQb(['extraction_graph'])
-    .deleteFrom('extraction_graph')
-    .where('id', '=', args.id as ExtractionGraphId)
     .where('team_id', '=', teamId as TeamId)
     .executeTakeFirstOrThrow();
   return { deleted: true, id: args.id };
@@ -557,7 +537,7 @@ export const ONTOLOGY_TOOL_DEFINITIONS = [
     type: 'function',
     name: 'getOntology',
     description:
-      'Get the current ontology (entity types, fields, relationships, extraction graphs). Call this first.',
+      'Get the current ontology (entity types, fields, relationships). Call this first.',
     parameters: { type: 'object', properties: {} },
   },
   {
@@ -690,9 +670,6 @@ export const ONTOLOGY_TOOL_DEFINITIONS = [
       ],
     },
   },
-  // Extraction graph CREATION tools are gone (2026-06-12): extraction is
-  // authored as a movement (`#extract` in the movement language); the
-  // legacy graphs that exist keep running but no agent makes new ones.
   {
     type: 'function',
     name: 'updateNodeType',
@@ -785,7 +762,7 @@ export const ONTOLOGY_TOOL_DEFINITIONS = [
     type: 'function',
     name: 'deleteNodeType',
     description:
-      'Delete an entity type by name. WARNING: This cascades — all fields, relationships, and extraction graph references for this entity type will also be deleted.',
+      'Delete an entity type by name. WARNING: This cascades — all fields and relationships for this entity type will also be deleted.',
     parameters: {
       type: 'object',
       properties: {
@@ -818,25 +795,13 @@ export const ONTOLOGY_TOOL_DEFINITIONS = [
     type: 'function',
     name: 'deleteEdgeType',
     description:
-      'Delete a relationship by its outbound name. WARNING: This cascades — its fields and any extraction graph references using this relationship will also be deleted.',
+      'Delete a relationship by its outbound name. WARNING: This cascades — its fields will also be deleted.',
     parameters: {
       type: 'object',
       properties: {
         outboundName: { type: 'string', description: 'Outbound name of the relationship to delete' },
       },
       required: ['outboundName'],
-    },
-  },
-  {
-    type: 'function',
-    name: 'deleteExtractionGraph',
-    description: 'Delete an extraction graph and all its nodes and edges, by name.',
-    parameters: {
-      type: 'object',
-      properties: {
-        name: { type: 'string', description: 'Name of the extraction graph to delete' },
-      },
-      required: ['name'],
     },
   },
   {
@@ -890,19 +855,6 @@ async function resolveEdgeTypeIdByOutboundName(
     .selectFrom('edge_type')
     .where('team_id', '=', teamId as TeamId)
     .where('outbound_name', '=', outboundName)
-    .select('id')
-    .executeTakeFirst();
-  return row ? (row.id as unknown as string) : null;
-}
-
-async function resolveExtractionGraphIdByName(
-  name: string,
-  teamId: string,
-): Promise<string | null> {
-  const row = await getKnowledgeQb(['extraction_graph'])
-    .selectFrom('extraction_graph')
-    .where('team_id', '=', teamId as TeamId)
-    .where('name', '=', name)
     .select('id')
     .executeTakeFirst();
   return row ? (row.id as unknown as string) : null;
@@ -966,7 +918,6 @@ function createWrappedTools(
         nodeTypes: result.nodeTypes.map((nt) => stripIds(nt)),
         propertyTypes: result.propertyTypes.map((pt) => stripIds(pt)),
         edgeTypes: result.edgeTypes.map((et) => stripIds(et)),
-        extractionGraphs: result.extractionGraphs.map((eg) => stripIds(eg)),
       };
     },
     createNodeType: async (args: any) => {
@@ -1228,22 +1179,6 @@ function createWrappedTools(
         return { error: errMsg };
       }
     },
-    deleteExtractionGraph: async (args: any) => {
-      const msg = `Deleting extraction graph: ${args.name}...`;
-      emitUpdate({ type: 'tool_call', message: msg });
-      try {
-        const id = await resolveExtractionGraphIdByName(args.name, teamId);
-        if (!id) return { error: `No extraction graph named '${args.name}' was found.` };
-        await deleteExtractionGraph({ id }, teamId);
-        emitUpdate({ type: 'tool_call', message: `${msg} — done` });
-        return { deleted: true, name: args.name };
-      } catch (error) {
-        const errMsg = error instanceof Error ? error.message : String(error);
-        console.error(`deleteExtractionGraph failed:`, errMsg);
-        emitUpdate({ type: 'tool_call', message: `${msg} — failed: ${errMsg}` });
-        return { error: errMsg };
-      }
-    },
     setUniquenessConstraints: async (args: any) => {
       const msg = `Setting uniqueness constraints on: ${args.nodeTypeName}...`;
       emitUpdate({ type: 'tool_call', message: msg });
@@ -1314,7 +1249,7 @@ async function runOntologyAgent(
       if (onboarding) {
         systemPrompt += `\n\n## Onboarding mode
 
-The user has just opened the model page for the first time. Their knowledge model is completely empty — no node types, edges, properties, or extraction graphs exist yet. You do NOT need to call getOntology — it will return nothing.
+The user has just opened the model page for the first time. Their knowledge model is completely empty — no node types, edges, or properties exist yet. You do NOT need to call getOntology — it will return nothing.
 
 Your role right now is to act like a brilliant Field Data Engineer meeting a new client for the first time. Your goal is to deeply understand the user's world before proposing any solution:
 

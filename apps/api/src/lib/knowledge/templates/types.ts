@@ -76,40 +76,6 @@ function exact(expr: Expression): TemplateConstraintEntry {
   return { expr };
 }
 
-// ── Extraction plugins ──
-
-type PluginHookRef = {
-  pluginId: string;
-  config?: Record<string, unknown>;
-};
-
-// ── Extraction graph: explicit tree of nodes connected by edges ──
-
-type ExtractionNodeOptions = {
-  instructions?: string;
-  /** @deprecated Use entityPlugins instead */
-  gather?: boolean;
-  filters?: EdgeFilter[];
-  contentPlugins?: PluginHookRef[];
-  entityPlugins?: PluginHookRef[];
-};
-
-type ExtractionTreeNode = ExtractionNodeOptions & {
-  edge: string;
-  nodeType: string;
-  children?: ExtractionTreeNode[];
-};
-
-type TemplateExtractionGraph = {
-  key: string;
-  name: string;
-  description: string;
-  messageNodeType: string;
-  contentPlugins?: PluginHookRef[];
-  entityPlugins?: PluginHookRef[];
-  children: ExtractionTreeNode[];
-};
-
 type OntologyTemplate = {
   key: string;
   name: string;
@@ -117,7 +83,6 @@ type OntologyTemplate = {
   preview: string[];
   nodeTypes: TemplateNodeType[];
   edgeTypes: TemplateEdgeType[];
-  extractionGraphs: TemplateExtractionGraph[];
 };
 
 export { prop, edge, fuzzy, exact };
@@ -126,11 +91,8 @@ export type {
   OntologyTemplate,
   TemplateNodeType,
   TemplateEdgeType,
-  ExtractionTreeNode,
-  TemplateExtractionGraph,
   TemplatePropertyDef,
   TemplateConstraintEntry,
   TemplateUniquenessConstraint,
   EdgeFilter,
-  PluginHookRef,
 };

@@ -1458,32 +1458,10 @@ export type SavedFilterId = string & {
     __brand: 'knowledge.saved_filter';
 };
 
-/** Identifier type for knowledge.extraction_graph_node */
-export type ExtractionGraphNodeId = string & {
-    __brand: 'knowledge.extraction_graph_node';
-};
-
-/** Identifier type for knowledge.extraction_graph */
-export type ExtractionGraphId = string & {
-    __brand: 'knowledge.extraction_graph';
-};
-
-/** Identifier type for knowledge.extraction_graph_edge */
-export type ExtractionGraphEdgeId = string & {
-    __brand: 'knowledge.extraction_graph_edge';
-};
-
-/** Identifier type for knowledge.plugin */
-export type PluginId = string & {
-    __brand: 'knowledge.plugin';
-};
-
 export type MaterializeResult = {
     nodeTypesCreated: number;
     propertyTypesCreated: number;
     edgeTypesCreated: number;
-    extractionGraphsCreated: number;
-    extractionGraphEdgesCreated: number;
 };
 
 /**
@@ -3362,113 +3340,6 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 }, {
                     success: boolean;
                 }>;
-                listTriggerEvents: _trpc_server.BuildProcedure<"query", {
-                    _config: _trpc_server.RootConfig<{
-                        ctx: {
-                            authorise: () => Promise<void>;
-                        };
-                        meta: object;
-                        errorShape: {
-                            message: string;
-                            code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
-                            data: _trpc_server_dist_error_formatter.DefaultErrorData;
-                        };
-                        transformer: _trpc_server.DefaultDataTransformer;
-                    }>;
-                    _meta: object;
-                    _ctx_out: {
-                        authorise: () => Promise<void>;
-                    };
-                    _input_in: {
-                        search?: string | undefined;
-                        limit?: number | undefined;
-                        offset?: number | undefined;
-                        teamId?: string | undefined;
-                        triggerId?: string | undefined;
-                    };
-                    _input_out: {
-                        limit: number;
-                        offset: number;
-                        search?: string | undefined;
-                        teamId?: string | undefined;
-                        triggerId?: string | undefined;
-                    };
-                    _output_in: typeof _trpc_server.unsetMarker;
-                    _output_out: typeof _trpc_server.unsetMarker;
-                }, {
-                    items: {
-                        id: string;
-                        teamId: string;
-                        teamName: string | null;
-                        trigger_id: string;
-                        adapter_type: string;
-                        trigger_type: string;
-                        status: string;
-                        failure_reason: string | null;
-                        occurred_at: Date;
-                        created_at: Date;
-                    }[];
-                    total: number;
-                }>;
-                replayTriggerEvent: _trpc_server.BuildProcedure<"mutation", {
-                    _config: _trpc_server.RootConfig<{
-                        ctx: {
-                            authorise: () => Promise<void>;
-                        };
-                        meta: object;
-                        errorShape: {
-                            message: string;
-                            code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
-                            data: _trpc_server_dist_error_formatter.DefaultErrorData;
-                        };
-                        transformer: _trpc_server.DefaultDataTransformer;
-                    }>;
-                    _meta: object;
-                    _ctx_out: {
-                        authorise: () => Promise<void>;
-                    };
-                    _input_in: {
-                        eventId: string;
-                        dryRun?: boolean | undefined;
-                    };
-                    _input_out: {
-                        eventId: string;
-                        dryRun: boolean;
-                    };
-                    _output_in: typeof _trpc_server.unsetMarker;
-                    _output_out: typeof _trpc_server.unsetMarker;
-                }, {
-                    dryRun: boolean;
-                    runId: string;
-                }>;
-                replayRunStatus: _trpc_server.BuildProcedure<"query", {
-                    _config: _trpc_server.RootConfig<{
-                        ctx: {
-                            authorise: () => Promise<void>;
-                        };
-                        meta: object;
-                        errorShape: {
-                            message: string;
-                            code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
-                            data: _trpc_server_dist_error_formatter.DefaultErrorData;
-                        };
-                        transformer: _trpc_server.DefaultDataTransformer;
-                    }>;
-                    _meta: object;
-                    _ctx_out: {
-                        authorise: () => Promise<void>;
-                    };
-                    _input_in: {
-                        runId: string;
-                    };
-                    _input_out: {
-                        runId: string;
-                    };
-                    _output_in: typeof _trpc_server.unsetMarker;
-                    _output_out: typeof _trpc_server.unsetMarker;
-                }, MovementRunStatus | {
-                    error: string;
-                }>;
             }>;
             signups: _trpc_server.CreateRouterInner<_trpc_server.RootConfig<{
                 ctx: {
@@ -4808,16 +4679,17 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 id: TriggerRunId;
                 created_at: Date;
                 team_id: string;
+                status: string;
+                steps: unknown;
+                diagnostics: unknown;
+                errors: unknown;
+                engine: string | null;
                 trigger_id: string;
                 trigger_type: string;
-                status: string;
                 record_id: string | null;
                 movement_version_id: MovementVersionId | null;
                 trigger_payload: unknown;
                 changed_fields: string[] | null;
-                steps: unknown;
-                diagnostics: unknown;
-                errors: unknown;
                 nodes_written: number;
                 dry_run: boolean;
                 started_at: Date;
@@ -4833,7 +4705,6 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 lease_owner: string | null;
                 lease_until: Date | null;
                 lease_token: string | null;
-                engine: string | null;
             }>;
         }>;
         controlTower: _trpc_server.CreateRouterInner<_trpc_server.RootConfig<{
@@ -6869,642 +6740,6 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     svg: string;
                 }>;
             }>;
-            extractionGraph: _trpc_server.CreateRouterInner<_trpc_server.RootConfig<{
-                ctx: {
-                    authorise: () => Promise<void>;
-                };
-                meta: object;
-                errorShape: {
-                    message: string;
-                    code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
-                    data: _trpc_server_dist_error_formatter.DefaultErrorData;
-                };
-                transformer: _trpc_server.DefaultDataTransformer;
-            }>, {
-                getPlugins: _trpc_server.BuildProcedure<"query", {
-                    _config: _trpc_server.RootConfig<{
-                        ctx: {
-                            authorise: () => Promise<void>;
-                        };
-                        meta: object;
-                        errorShape: {
-                            message: string;
-                            code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
-                            data: _trpc_server_dist_error_formatter.DefaultErrorData;
-                        };
-                        transformer: _trpc_server.DefaultDataTransformer;
-                    }>;
-                    _meta: object;
-                    _ctx_out: {
-                        authorise: () => Promise<void>;
-                    };
-                    _input_in: typeof _trpc_server.unsetMarker;
-                    _input_out: typeof _trpc_server.unsetMarker;
-                    _output_in: typeof _trpc_server.unsetMarker;
-                    _output_out: typeof _trpc_server.unsetMarker;
-                }, {
-                    description: string | null;
-                    type: string;
-                    name: string;
-                    id: PluginId;
-                    stages: string[];
-                    endpoint: string | null;
-                    method: string;
-                    auth: unknown;
-                    headers: unknown;
-                }[]>;
-                createPlugin: _trpc_server.BuildProcedure<"mutation", {
-                    _config: _trpc_server.RootConfig<{
-                        ctx: {
-                            authorise: () => Promise<void>;
-                        };
-                        meta: object;
-                        errorShape: {
-                            message: string;
-                            code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
-                            data: _trpc_server_dist_error_formatter.DefaultErrorData;
-                        };
-                        transformer: _trpc_server.DefaultDataTransformer;
-                    }>;
-                    _meta: object;
-                    _ctx_out: {
-                        authorise: () => Promise<void>;
-                    };
-                    _input_in: {
-                        name: string;
-                        stages: ("content" | "entity")[];
-                        description?: string | undefined;
-                        type?: "bundled" | "external" | undefined;
-                        endpoint?: string | null | undefined;
-                        method?: "POST" | "PUT" | "PATCH" | undefined;
-                        auth?: {
-                            type: "none";
-                        } | {
-                            type: "bearer";
-                            token: string;
-                        } | {
-                            type: "basic";
-                            username: string;
-                            password: string;
-                        } | {
-                            type: "api_key";
-                            headerName: string;
-                            apiKey: string;
-                        } | undefined;
-                        headers?: Record<string, string> | undefined;
-                    };
-                    _input_out: {
-                        name: string;
-                        type: "bundled" | "external";
-                        method: "POST" | "PUT" | "PATCH";
-                        stages: ("content" | "entity")[];
-                        description?: string | undefined;
-                        endpoint?: string | null | undefined;
-                        auth?: {
-                            type: "none";
-                        } | {
-                            type: "bearer";
-                            token: string;
-                        } | {
-                            type: "basic";
-                            username: string;
-                            password: string;
-                        } | {
-                            type: "api_key";
-                            headerName: string;
-                            apiKey: string;
-                        } | undefined;
-                        headers?: Record<string, string> | undefined;
-                    };
-                    _output_in: typeof _trpc_server.unsetMarker;
-                    _output_out: typeof _trpc_server.unsetMarker;
-                }, {
-                    name: string;
-                    id: PluginId;
-                }>;
-                updatePlugin: _trpc_server.BuildProcedure<"mutation", {
-                    _config: _trpc_server.RootConfig<{
-                        ctx: {
-                            authorise: () => Promise<void>;
-                        };
-                        meta: object;
-                        errorShape: {
-                            message: string;
-                            code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
-                            data: _trpc_server_dist_error_formatter.DefaultErrorData;
-                        };
-                        transformer: _trpc_server.DefaultDataTransformer;
-                    }>;
-                    _meta: object;
-                    _ctx_out: {
-                        authorise: () => Promise<void>;
-                    };
-                    _input_in: {
-                        id: string;
-                        name?: string | undefined;
-                        description?: string | null | undefined;
-                        endpoint?: string | null | undefined;
-                        method?: "POST" | "PUT" | "PATCH" | undefined;
-                        auth?: {
-                            type: "none";
-                        } | {
-                            type: "bearer";
-                            token: string;
-                        } | {
-                            type: "basic";
-                            username: string;
-                            password: string;
-                        } | {
-                            type: "api_key";
-                            headerName: string;
-                            apiKey: string;
-                        } | null | undefined;
-                        headers?: Record<string, string> | null | undefined;
-                        stages?: ("content" | "entity")[] | undefined;
-                    };
-                    _input_out: {
-                        id: string;
-                        name?: string | undefined;
-                        description?: string | null | undefined;
-                        endpoint?: string | null | undefined;
-                        method?: "POST" | "PUT" | "PATCH" | undefined;
-                        auth?: {
-                            type: "none";
-                        } | {
-                            type: "bearer";
-                            token: string;
-                        } | {
-                            type: "basic";
-                            username: string;
-                            password: string;
-                        } | {
-                            type: "api_key";
-                            headerName: string;
-                            apiKey: string;
-                        } | null | undefined;
-                        headers?: Record<string, string> | null | undefined;
-                        stages?: ("content" | "entity")[] | undefined;
-                    };
-                    _output_in: typeof _trpc_server.unsetMarker;
-                    _output_out: typeof _trpc_server.unsetMarker;
-                }, {
-                    name: string;
-                    id: PluginId;
-                }>;
-                deletePlugin: _trpc_server.BuildProcedure<"mutation", {
-                    _config: _trpc_server.RootConfig<{
-                        ctx: {
-                            authorise: () => Promise<void>;
-                        };
-                        meta: object;
-                        errorShape: {
-                            message: string;
-                            code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
-                            data: _trpc_server_dist_error_formatter.DefaultErrorData;
-                        };
-                        transformer: _trpc_server.DefaultDataTransformer;
-                    }>;
-                    _meta: object;
-                    _ctx_out: {
-                        authorise: () => Promise<void>;
-                    };
-                    _input_in: {
-                        id: string;
-                    };
-                    _input_out: {
-                        id: string;
-                    };
-                    _output_in: typeof _trpc_server.unsetMarker;
-                    _output_out: typeof _trpc_server.unsetMarker;
-                }, {
-                    id: PluginId;
-                }>;
-                getExtractionGraphs: _trpc_server.BuildProcedure<"query", {
-                    _config: _trpc_server.RootConfig<{
-                        ctx: {
-                            authorise: () => Promise<void>;
-                        };
-                        meta: object;
-                        errorShape: {
-                            message: string;
-                            code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
-                            data: _trpc_server_dist_error_formatter.DefaultErrorData;
-                        };
-                        transformer: _trpc_server.DefaultDataTransformer;
-                    }>;
-                    _meta: object;
-                    _ctx_out: {
-                        authorise: () => Promise<void>;
-                    };
-                    _input_in: typeof _trpc_server.unsetMarker;
-                    _input_out: typeof _trpc_server.unsetMarker;
-                    _output_in: typeof _trpc_server.unsetMarker;
-                    _output_out: typeof _trpc_server.unsetMarker;
-                }, {
-                    root_node_id: ExtractionGraphNodeId;
-                    description: string;
-                    name: string;
-                    id: ExtractionGraphId;
-                    created_at: Date;
-                    updated_at: Date;
-                    message_node_type_id: NodeTypeId;
-                    message_node_type_name: string | null;
-                    edge_count: string | number | bigint | null;
-                }[]>;
-                getExtractionGraphEdgesByMessageType: _trpc_server.BuildProcedure<"query", {
-                    _config: _trpc_server.RootConfig<{
-                        ctx: {
-                            authorise: () => Promise<void>;
-                        };
-                        meta: object;
-                        errorShape: {
-                            message: string;
-                            code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
-                            data: _trpc_server_dist_error_formatter.DefaultErrorData;
-                        };
-                        transformer: _trpc_server.DefaultDataTransformer;
-                    }>;
-                    _meta: object;
-                    _ctx_out: {
-                        authorise: () => Promise<void>;
-                    };
-                    _input_in: {
-                        messageNodeTypeId: string;
-                    };
-                    _input_out: {
-                        messageNodeTypeId: string;
-                    };
-                    _output_in: typeof _trpc_server.unsetMarker;
-                    _output_out: typeof _trpc_server.unsetMarker;
-                }, {
-                    target_node_type_name: string;
-                    edge_type_id: EdgeTypeId;
-                    source_node_type_id: NodeTypeId;
-                    edge_type_name: string;
-                    target_node_type_id: NodeTypeId;
-                }[]>;
-                getExtractionGraph: _trpc_server.BuildProcedure<"query", {
-                    _config: _trpc_server.RootConfig<{
-                        ctx: {
-                            authorise: () => Promise<void>;
-                        };
-                        meta: object;
-                        errorShape: {
-                            message: string;
-                            code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
-                            data: _trpc_server_dist_error_formatter.DefaultErrorData;
-                        };
-                        transformer: _trpc_server.DefaultDataTransformer;
-                    }>;
-                    _meta: object;
-                    _ctx_out: {
-                        authorise: () => Promise<void>;
-                    };
-                    _input_in: {
-                        id: string;
-                    };
-                    _input_out: {
-                        id: string;
-                    };
-                    _output_in: typeof _trpc_server.unsetMarker;
-                    _output_out: typeof _trpc_server.unsetMarker;
-                }, {
-                    nodes: {
-                        node_type_id: NodeTypeId;
-                        id: ExtractionGraphNodeId;
-                        filters: unknown;
-                        instructions: string | null;
-                        expand: boolean;
-                        gather: boolean;
-                        sort_order: number;
-                        property_overrides: unknown;
-                        edge_property_overrides: unknown;
-                        content_plugins: unknown;
-                        entity_plugins: unknown;
-                        default_property_mappings: unknown;
-                        node_type_name: string | null;
-                        node_type_category: NodeTypeCategory | null;
-                    }[];
-                    edges: {
-                        id: ExtractionGraphEdgeId;
-                        edge_type_id: EdgeTypeId;
-                        source_node_id: ExtractionGraphNodeId;
-                        target_node_id: ExtractionGraphNodeId;
-                        edge_type_outbound_name: string | null;
-                        edge_type_inbound_name: string | null;
-                    }[];
-                    propertyTypes: {
-                        description: string;
-                        name: string;
-                        id: PropertyTypeId;
-                        identity: PropertyIdentity;
-                        node_type_id: NodeTypeId | null;
-                        edge_type_id: EdgeTypeId | null;
-                        value_type: PropertyValueType;
-                    }[];
-                    edgePropertyTypes: {
-                        description: string;
-                        name: string;
-                        id: PropertyTypeId;
-                        identity: PropertyIdentity;
-                        node_type_id: NodeTypeId | null;
-                        edge_type_id: EdgeTypeId | null;
-                        value_type: PropertyValueType;
-                    }[];
-                    root_node_id: ExtractionGraphNodeId;
-                    description: string;
-                    name: string;
-                    id: ExtractionGraphId;
-                    created_at: Date;
-                    updated_at: Date;
-                    message_node_type_id: NodeTypeId;
-                    message_node_type_name: string | null;
-                }>;
-                createExtractionGraph: _trpc_server.BuildProcedure<"mutation", {
-                    _config: _trpc_server.RootConfig<{
-                        ctx: {
-                            authorise: () => Promise<void>;
-                        };
-                        meta: object;
-                        errorShape: {
-                            message: string;
-                            code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
-                            data: _trpc_server_dist_error_formatter.DefaultErrorData;
-                        };
-                        transformer: _trpc_server.DefaultDataTransformer;
-                    }>;
-                    _meta: object;
-                    _ctx_out: {
-                        authorise: () => Promise<void>;
-                    };
-                    _input_in: {
-                        name: string;
-                        messageNodeTypeId: string;
-                        description?: string | undefined;
-                    };
-                    _input_out: {
-                        name: string;
-                        description: string;
-                        messageNodeTypeId: string;
-                    };
-                    _output_in: typeof _trpc_server.unsetMarker;
-                    _output_out: typeof _trpc_server.unsetMarker;
-                }, {
-                    name: string;
-                    id: ExtractionGraphId;
-                }>;
-                updateExtractionGraph: _trpc_server.BuildProcedure<"mutation", {
-                    _config: _trpc_server.RootConfig<{
-                        ctx: {
-                            authorise: () => Promise<void>;
-                        };
-                        meta: object;
-                        errorShape: {
-                            message: string;
-                            code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
-                            data: _trpc_server_dist_error_formatter.DefaultErrorData;
-                        };
-                        transformer: _trpc_server.DefaultDataTransformer;
-                    }>;
-                    _meta: object;
-                    _ctx_out: {
-                        authorise: () => Promise<void>;
-                    };
-                    _input_in: {
-                        id: string;
-                        name?: string | undefined;
-                        description?: string | undefined;
-                    };
-                    _input_out: {
-                        id: string;
-                        name?: string | undefined;
-                        description?: string | undefined;
-                    };
-                    _output_in: typeof _trpc_server.unsetMarker;
-                    _output_out: typeof _trpc_server.unsetMarker;
-                }, {
-                    name: string;
-                    id: ExtractionGraphId;
-                }>;
-                deleteExtractionGraph: _trpc_server.BuildProcedure<"mutation", {
-                    _config: _trpc_server.RootConfig<{
-                        ctx: {
-                            authorise: () => Promise<void>;
-                        };
-                        meta: object;
-                        errorShape: {
-                            message: string;
-                            code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
-                            data: _trpc_server_dist_error_formatter.DefaultErrorData;
-                        };
-                        transformer: _trpc_server.DefaultDataTransformer;
-                    }>;
-                    _meta: object;
-                    _ctx_out: {
-                        authorise: () => Promise<void>;
-                    };
-                    _input_in: {
-                        id: string;
-                    };
-                    _input_out: {
-                        id: string;
-                    };
-                    _output_in: typeof _trpc_server.unsetMarker;
-                    _output_out: typeof _trpc_server.unsetMarker;
-                }, {
-                    id: ExtractionGraphId;
-                }>;
-                addExtractionGraphEdge: _trpc_server.BuildProcedure<"mutation", {
-                    _config: _trpc_server.RootConfig<{
-                        ctx: {
-                            authorise: () => Promise<void>;
-                        };
-                        meta: object;
-                        errorShape: {
-                            message: string;
-                            code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
-                            data: _trpc_server_dist_error_formatter.DefaultErrorData;
-                        };
-                        transformer: _trpc_server.DefaultDataTransformer;
-                    }>;
-                    _meta: object;
-                    _ctx_out: {
-                        authorise: () => Promise<void>;
-                    };
-                    _input_in: {
-                        extractionGraphId: string;
-                        sourceExtractionNodeId: string;
-                        edgeTypeId: string;
-                        targetNodeTypeId: string;
-                        instructions?: string | null | undefined;
-                        gather?: boolean | undefined;
-                        filters?: {
-                            side: "source" | "target";
-                            property: string;
-                            value: string;
-                        }[] | undefined;
-                        edgePropertyOverrides?: {
-                            property_type_id: string;
-                            instructions?: string | undefined;
-                        }[] | null | undefined;
-                    };
-                    _input_out: {
-                        extractionGraphId: string;
-                        sourceExtractionNodeId: string;
-                        edgeTypeId: string;
-                        targetNodeTypeId: string;
-                        instructions?: string | null | undefined;
-                        gather?: boolean | undefined;
-                        filters?: {
-                            side: "source" | "target";
-                            property: string;
-                            value: string;
-                        }[] | undefined;
-                        edgePropertyOverrides?: {
-                            property_type_id: string;
-                            instructions?: string | undefined;
-                        }[] | null | undefined;
-                    };
-                    _output_in: typeof _trpc_server.unsetMarker;
-                    _output_out: typeof _trpc_server.unsetMarker;
-                }, {
-                    id: ExtractionGraphEdgeId;
-                }>;
-                updateExtractionGraphNode: _trpc_server.BuildProcedure<"mutation", {
-                    _config: _trpc_server.RootConfig<{
-                        ctx: {
-                            authorise: () => Promise<void>;
-                        };
-                        meta: object;
-                        errorShape: {
-                            message: string;
-                            code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
-                            data: _trpc_server_dist_error_formatter.DefaultErrorData;
-                        };
-                        transformer: _trpc_server.DefaultDataTransformer;
-                    }>;
-                    _meta: object;
-                    _ctx_out: {
-                        authorise: () => Promise<void>;
-                    };
-                    _input_in: {
-                        id: string;
-                        propertyOverrides?: {
-                            property_type_id: string;
-                            instructions?: string | undefined;
-                        }[] | null | undefined;
-                        edgePropertyOverrides?: {
-                            property_type_id: string;
-                            instructions?: string | undefined;
-                        }[] | null | undefined;
-                        instructions?: string | null | undefined;
-                        gather?: boolean | undefined;
-                        filters?: {
-                            side: "source" | "target";
-                            property: string;
-                            value: string;
-                        }[] | undefined;
-                        contentPlugins?: {
-                            pluginId: string;
-                            config?: Record<string, unknown> | undefined;
-                        }[] | null | undefined;
-                        entityPlugins?: {
-                            pluginId: string;
-                            config?: Record<string, unknown> | undefined;
-                        }[] | null | undefined;
-                        defaultPropertyMappings?: {
-                            source: {
-                                mode: "property";
-                                fieldKey: string;
-                            } | {
-                                mode: "static";
-                                value: string;
-                            } | {
-                                mode: "llm";
-                                prompt: string;
-                            };
-                            targetPropertyTypeId: string;
-                            traversal?: {
-                                edgeTypeId: string;
-                            }[] | undefined;
-                        }[] | undefined;
-                    };
-                    _input_out: {
-                        id: string;
-                        propertyOverrides?: {
-                            property_type_id: string;
-                            instructions?: string | undefined;
-                        }[] | null | undefined;
-                        edgePropertyOverrides?: {
-                            property_type_id: string;
-                            instructions?: string | undefined;
-                        }[] | null | undefined;
-                        instructions?: string | null | undefined;
-                        gather?: boolean | undefined;
-                        filters?: {
-                            side: "source" | "target";
-                            property: string;
-                            value: string;
-                        }[] | undefined;
-                        contentPlugins?: {
-                            pluginId: string;
-                            config?: Record<string, unknown> | undefined;
-                        }[] | null | undefined;
-                        entityPlugins?: {
-                            pluginId: string;
-                            config?: Record<string, unknown> | undefined;
-                        }[] | null | undefined;
-                        defaultPropertyMappings?: {
-                            source: {
-                                mode: "property";
-                                fieldKey: string;
-                            } | {
-                                mode: "static";
-                                value: string;
-                            } | {
-                                mode: "llm";
-                                prompt: string;
-                            };
-                            traversal: {
-                                edgeTypeId: string;
-                            }[];
-                            targetPropertyTypeId: string;
-                        }[] | undefined;
-                    };
-                    _output_in: typeof _trpc_server.unsetMarker;
-                    _output_out: typeof _trpc_server.unsetMarker;
-                }, {
-                    id: ExtractionGraphNodeId;
-                }>;
-                removeExtractionGraphEdge: _trpc_server.BuildProcedure<"mutation", {
-                    _config: _trpc_server.RootConfig<{
-                        ctx: {
-                            authorise: () => Promise<void>;
-                        };
-                        meta: object;
-                        errorShape: {
-                            message: string;
-                            code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
-                            data: _trpc_server_dist_error_formatter.DefaultErrorData;
-                        };
-                        transformer: _trpc_server.DefaultDataTransformer;
-                    }>;
-                    _meta: object;
-                    _ctx_out: {
-                        authorise: () => Promise<void>;
-                    };
-                    _input_in: {
-                        id: string;
-                    };
-                    _input_out: {
-                        id: string;
-                    };
-                    _output_in: typeof _trpc_server.unsetMarker;
-                    _output_out: typeof _trpc_server.unsetMarker;
-                }, {
-                    id: ExtractionGraphEdgeId;
-                }>;
-            }>;
             graph: _trpc_server.CreateRouterInner<_trpc_server.RootConfig<{
                 ctx: {
                     authorise: () => Promise<void>;
@@ -7551,11 +6786,11 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 }, {
                     nodes: {
                         display_value: string | null;
-                        node_type_name: string | null;
                         node_type_id: NodeTypeId;
                         id: NodeId;
                         created_at: Date;
                         updated_at: Date;
+                        node_type_name: string | null;
                     }[];
                     total: number;
                 }>;
@@ -7836,20 +7071,20 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     outgoingEdges: {
                         target_display_value: string | null;
                         target_node_type_name: string;
-                        edge_type_outbound_name: string;
-                        edge_type_inbound_name: string;
                         edge_type_id: EdgeTypeId;
                         edge_id: EdgeId;
+                        edge_type_outbound_name: string;
+                        edge_type_inbound_name: string;
                         target_node_id: NodeId;
                         target_node_type_id: NodeTypeId;
                     }[];
                     incomingEdges: {
                         source_display_value: string | null;
                         source_node_type_name: string;
-                        edge_type_outbound_name: string;
-                        edge_type_inbound_name: string;
                         edge_type_id: EdgeTypeId;
                         edge_id: EdgeId;
+                        edge_type_outbound_name: string;
+                        edge_type_inbound_name: string;
                         source_node_id: NodeId;
                         source_node_type_id: NodeTypeId;
                     }[];
@@ -7865,14 +7100,14 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         property_type_id: PropertyTypeId;
                         property_name: string;
                     }[];
-                    category: NodeTypeCategory | null;
-                    node_type_name: string | null;
                     node_type_id: NodeTypeId;
                     id: NodeId;
                     created_at: Date;
                     updated_at: Date;
                     start_date: Date;
                     end_date: Date;
+                    category: NodeTypeCategory | null;
+                    node_type_name: string | null;
                 }>;
                 getPropertyEvidence: _trpc_server.BuildProcedure<"query", {
                     _config: _trpc_server.RootConfig<{
@@ -8604,9 +7839,9 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     data: unknown;
                     id: LinkedObjectId;
                     updated_at: Date;
-                    adapter_type: string;
                     source: LinkedObjectSource;
                     external_id: string;
+                    adapter_type: string;
                     external_object_type: string | null;
                     fetched_at: Date | null;
                 }[]>;
@@ -10657,8 +9892,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 updated_at: Date | null;
                 team_id: string | null;
                 title: string;
-                status: OpsRunStatus | null;
                 detail: unknown;
+                status: OpsRunStatus | null;
                 severity: OpsSeverity;
                 request_id: string | null;
                 entity_refs: unknown;
@@ -10908,9 +10143,9 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     id: string;
                     createdAt: Date;
                     updatedAt: Date;
-                    eventId: string | null;
                     investmentId: string | null;
                     closeDate: Date;
+                    eventId: string | null;
                     convertedToId: string | null;
                     dueToRightsFromAssetId: string | null;
                 } & {
@@ -12930,8 +12165,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 };
                 supportedTriggers: string[];
                 webhookEventTypeId?: string | undefined;
-                kind?: "plugin" | "core" | "adapter" | undefined;
-                slot?: "models" | "files" | "judge" | "store" | "limiter" | "loopGuard" | "browser" | undefined;
+                kind?: "core" | "adapter" | "plugin" | undefined;
+                slot?: "models" | "files" | "judge" | "store" | "limiter" | "loopGuard" | "browser" | "wake" | undefined;
                 settings?: {
                     name: string;
                     label?: string | undefined;
@@ -12939,6 +12174,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     optional?: boolean | undefined;
                 }[] | undefined;
                 hostModels?: boolean | undefined;
+                hostLimits?: boolean | undefined;
                 credentials?: ({
                     name: string;
                     kind: "static";
@@ -13084,8 +12320,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     };
                     supportedTriggers: string[];
                     webhookEventTypeId?: string | undefined;
-                    kind?: "plugin" | "core" | "adapter" | undefined;
-                    slot?: "models" | "files" | "judge" | "store" | "limiter" | "loopGuard" | "browser" | undefined;
+                    kind?: "core" | "adapter" | "plugin" | undefined;
+                    slot?: "models" | "files" | "judge" | "store" | "limiter" | "loopGuard" | "browser" | "wake" | undefined;
                     settings?: {
                         name: string;
                         label?: string | undefined;
@@ -13093,6 +12329,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         optional?: boolean | undefined;
                     }[] | undefined;
                     hostModels?: boolean | undefined;
+                    hostLimits?: boolean | undefined;
                     credentials?: ({
                         name: string;
                         kind: "static";
@@ -13223,8 +12460,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     };
                     supportedTriggers: string[];
                     webhookEventTypeId?: string | undefined;
-                    kind?: "plugin" | "core" | "adapter" | undefined;
-                    slot?: "models" | "files" | "judge" | "store" | "limiter" | "loopGuard" | "browser" | undefined;
+                    kind?: "core" | "adapter" | "plugin" | undefined;
+                    slot?: "models" | "files" | "judge" | "store" | "limiter" | "loopGuard" | "browser" | "wake" | undefined;
                     settings?: {
                         name: string;
                         label?: string | undefined;
@@ -13232,6 +12469,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         optional?: boolean | undefined;
                     }[] | undefined;
                     hostModels?: boolean | undefined;
+                    hostLimits?: boolean | undefined;
                     credentials?: ({
                         name: string;
                         kind: "static";
@@ -13643,12 +12881,12 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
             }, {
                 id: TriggerEventId;
                 created_at: Date;
-                trigger_id: string;
-                adapter_type: string;
-                trigger_type: string;
                 status: string;
-                dispatched_at: Date | null;
+                trigger_id: string;
+                trigger_type: string;
                 failure_reason: string | null;
+                adapter_type: string;
+                dispatched_at: Date | null;
                 occurred_at: Date;
             }[]>;
             replayTriggerEvent: _trpc_server.BuildProcedure<"mutation", {

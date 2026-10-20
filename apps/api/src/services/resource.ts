@@ -10,7 +10,6 @@ type ResourceGetOrCreateParams = {
   name: string;
   url?: string;
   documentId?: string | null;
-  inboundPayloadId?: string | null;
   rawTextId?: string | null;
   metadata?: InputJsonValue;
   retrievedAt?: Date | null;
@@ -36,7 +35,6 @@ type ResourceUpdateParams = {
   rawTextId?: string | null;
   documentId?: string | null;
   retrievedAt?: Date | null;
-  inboundPayloadId?: string | null;
   isDemo?: boolean;
 };
 
@@ -75,19 +73,6 @@ class Resource extends ModelService<'resource'> {
       }
     }
 
-    if (params.inboundPayloadId) {
-      const existing = await this.model.findFirst({
-        where: {
-          inboundPayloadId: params.inboundPayloadId,
-          ...visibleToActingTeam(ctx.user.teamId),
-        },
-      });
-
-      if (existing) {
-        resource = existing; // don't override a resource by payloadId - there should be no differing info
-      }
-    }
-
     if (!resource) {
       resource = await this.model.create({
         data: {
@@ -95,7 +80,6 @@ class Resource extends ModelService<'resource'> {
           name: params.name,
           url: params.url,
           documentId: params.documentId,
-          inboundPayloadId: params.inboundPayloadId,
           rawTextId: params.rawTextId,
           metadata: params.metadata,
           retrievedAt: params.retrievedAt,
@@ -107,25 +91,6 @@ class Resource extends ModelService<'resource'> {
     }
 
     return resource;
-  }
-
-  async linkToPayload({
-    inboundPayloadId,
-    resourceId,
-    isPrivate,
-  }: {
-    inboundPayloadId: string;
-    resourceId: string;
-    isPrivate: boolean;
-  }) {
-    const ctx = currentContext();
-    return ctx.prisma.resourcePayload.create({
-      data: {
-        inboundPayloadId,
-        resourceId,
-        teamId: isPrivate ? ctx.user.teamId : null,
-      },
-    });
   }
 
   async update(id: string, params: ResourceUpdateParams) {

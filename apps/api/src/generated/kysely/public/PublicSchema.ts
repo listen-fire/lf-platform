@@ -22,7 +22,6 @@ import type { default as InventoryDeltaEventTable } from './InventoryDeltaEvent'
 import type { default as AgentMessageTable } from './AgentMessage';
 import type { default as TeamJourneyTable } from './TeamJourney';
 import type { default as InventoryDeltaHoldingTable } from './InventoryDeltaHolding';
-import type { default as ResourcePayloadTable } from './ResourcePayload';
 import type { default as TeamUsageConfigTable } from './TeamUsageConfig';
 import type { default as LlmUsageTable } from './LlmUsage';
 import type { default as UsageAlertTable } from './UsageAlert';
@@ -69,8 +68,6 @@ export default interface PublicSchema {
   team_journey: TeamJourneyTable;
 
   inventory_delta_holding: InventoryDeltaHoldingTable;
-
-  resource_payload: ResourcePayloadTable;
 
   team_usage_config: TeamUsageConfigTable;
 

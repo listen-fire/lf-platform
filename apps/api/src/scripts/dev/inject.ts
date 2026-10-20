@@ -1786,14 +1786,6 @@ interface SlackEventInjectArgs {
    * Useful for replaying the exact fixture G1 / I1 reference.
    */
   fixture?: string;
-  /**
-   * Bypass the new TG-bridge path and POST to the legacy
-   * `/private/slack/callback` route (which lands in `inbound_payload`).
-   * The legacy path is preserved by I1; this flag is the only way to
-   * reach it from the CLI now that the default re-points at the new
-   * webhook-sync endpoint.
-   */
-  legacy?: boolean;
 }
 
 /** Seed one message into the fake-channels Slack store (the `/admin/slack/seed`
@@ -1858,17 +1850,6 @@ async function injectSlackEvent(args: SlackEventInjectArgs) {
         text: args.text,
       });
     }
-  }
-
-  if (args.legacy) {
-    // Legacy path: lands at /private/slack/callback → inboundSlackHandler
-    // → `inbound_payload`. Preserved by I1 in parallel with the new
-    // webhook-sync route.
-    return injectRaw({
-      url: `/private/slack/callback`,
-      method: 'POST',
-      body,
-    });
   }
 
   // New path: routes through services/webhook_sync/handler.ts and into
@@ -2434,13 +2415,13 @@ async function main() {
     const useFixture = Boolean(flags.fixture);
     if (!useFixture && (!flags.channel || !flags.user || !flags.text)) {
       console.error(
-        'Usage: pnpm dev:inject slack-event --channel <c> --user <u> --text "<t>" [--event-type message] [--thread-ts <root-ts>] [--legacy]',
+        'Usage: pnpm dev:inject slack-event --channel <c> --user <u> --text "<t>" [--event-type message] [--thread-ts <root-ts>]',
       );
       console.error(
         '  --thread-ts <root-ts>  inject a THREAD REPLY under that message ts (resolves an `await m-[:Replies]->`).',
       );
       console.error(
-        '   or: pnpm dev:inject slack-event --fixture <path-to-event-callback.json> [--legacy]',
+        '   or: pnpm dev:inject slack-event --fixture <path-to-event-callback.json>',
       );
       process.exit(2);
     }
@@ -2453,7 +2434,6 @@ async function main() {
       threadTs: flags['thread-ts'],
       teamId: flags['slack-team'],
       fixture: flags.fixture,
-      legacy: 'legacy' in flags,
     });
     printResult(out, PRETTY);
     return;

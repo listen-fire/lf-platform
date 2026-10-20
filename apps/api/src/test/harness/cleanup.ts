@@ -46,9 +46,6 @@ const KNOWLEDGE_TABLES_TEAM_SCOPED: readonly string[] = [
   'edge',
   'node',
   // Ontology — node/property/edge types.
-  'extraction_graph_edge',
-  'extraction_graph_node',
-  'extraction_graph',
   'property_type',
   'edge_type',
   'node_type',

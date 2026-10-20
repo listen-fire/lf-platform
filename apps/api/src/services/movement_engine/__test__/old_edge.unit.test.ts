@@ -71,9 +71,6 @@ jest.mock('@listen-fire/kg/manifest', () => ({
     }),
 }));
 
-jest.mock('../../knowledge_pipeline/facts', () => ({
-  extractFactsForResource: jest.fn(async () => []),
-}));
 
 jest.mock('../../translation_graph/adapters/resolve', () => ({
   resolveAdapter: jest.fn(() => {

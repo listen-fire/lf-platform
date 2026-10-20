@@ -970,24 +970,23 @@ model Edge {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model EdgeType {
-  id                                         String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  teamId                                     String                @map("team_id") @db.Uuid
-  outboundName                               String                @map("outbound_name")
-  inboundName                                String                @default("") @map("inbound_name")
-  description                                String                @default("")
-  sourceNodeTypeId                           String                @map("source_node_type_id") @db.Uuid
-  targetNodeTypeId                           String                @map("target_node_type_id") @db.Uuid
-  required                                   Boolean               @default(false)
-  scopes                                     Boolean               @default(false)
-  filters                                    Json                  @default("[]")
-  edgeGroup                                  String?               @map("edge_group")
-  sortOrder                                  Int                   @default(0) @map("sort_order")
-  createdAt                                  DateTime              @default(now()) @map("created_at")
-  updatedAt                                  DateTime              @default(now()) @map("updated_at")
+  id                                         String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  teamId                                     String         @map("team_id") @db.Uuid
+  outboundName                               String         @map("outbound_name")
+  inboundName                                String         @default("") @map("inbound_name")
+  description                                String         @default("")
+  sourceNodeTypeId                           String         @map("source_node_type_id") @db.Uuid
+  targetNodeTypeId                           String         @map("target_node_type_id") @db.Uuid
+  required                                   Boolean        @default(false)
+  scopes                                     Boolean        @default(false)
+  filters                                    Json           @default("[]")
+  edgeGroup                                  String?        @map("edge_group")
+  sortOrder                                  Int            @default(0) @map("sort_order")
+  createdAt                                  DateTime       @default(now()) @map("created_at")
+  updatedAt                                  DateTime       @default(now()) @map("updated_at")
   edges                                      Edge[]
-  nodeTypeEdgeTypeSourceNodeTypeIdTonodeType NodeType              @relation("edge_type_source_node_type_idTonode_type", fields: [sourceNodeTypeId], references: [id], onDelete: Cascade)
-  nodeTypeEdgeTypeTargetNodeTypeIdTonodeType NodeType              @relation("edge_type_target_node_type_idTonode_type", fields: [targetNodeTypeId], references: [id], onDelete: Cascade)
-  extractionGraphEdges                       ExtractionGraphEdge[]
+  nodeTypeEdgeTypeSourceNodeTypeIdTonodeType NodeType       @relation("edge_type_source_node_type_idTonode_type", fields: [sourceNodeTypeId], references: [id], onDelete: Cascade)
+  nodeTypeEdgeTypeTargetNodeTypeIdTonodeType NodeType       @relation("edge_type_target_node_type_idTonode_type", fields: [targetNodeTypeId], references: [id], onDelete: Cascade)
   propertyTypes                              PropertyType[]
 
   @@index([sourceNodeTypeId])
@@ -1043,75 +1042,6 @@ model ExtractionFact {
   @@index([resourceId])
   @@index([teamId])
   @@map("extraction_fact")
-  @@schema("knowledge")
-}
-
-/// This model has constraints using non-default deferring rules and requires additional setup for migrations. Visit https://pris.ly/d/constraint-deferring for more info.
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-model ExtractionGraph {
-  id                                                                        String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  teamId                                                                    String                @map("team_id") @db.Uuid
-  name                                                                      String
-  description                                                               String                @default("")
-  rootNodeId                                                                String                @map("root_node_id") @db.Uuid
-  createdAt                                                                 DateTime              @default(now()) @map("created_at")
-  updatedAt                                                                 DateTime              @default(now()) @map("updated_at")
-  extractionGraphNodeExtractionGraphRootNodeIdToextractionGraphNode         ExtractionGraphNode   @relation("extraction_graph_root_node_idToextraction_graph_node", fields: [rootNodeId], references: [id])
-  extractionGraphEdges                                                      ExtractionGraphEdge[]
-  extractionGraphNodeExtractionGraphNodeExtractionGraphIdToextractionGraphs ExtractionGraphNode[] @relation("extraction_graph_node_extraction_graph_idToextraction_graph")
-
-  @@index([teamId])
-  @@map("extraction_graph")
-  @@schema("knowledge")
-}
-
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-model ExtractionGraphEdge {
-  id                                                                      String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  teamId                                                                  String              @map("team_id") @db.Uuid
-  extractionGraphId                                                       String              @map("extraction_graph_id") @db.Uuid
-  sourceNodeId                                                            String              @map("source_node_id") @db.Uuid
-  edgeTypeId                                                              String              @map("edge_type_id") @db.Uuid
-  targetNodeId                                                            String              @map("target_node_id") @db.Uuid
-  createdAt                                                               DateTime            @default(now()) @map("created_at")
-  edgeType                                                                EdgeType            @relation(fields: [edgeTypeId], references: [id], onDelete: Cascade)
-  extractionGraph                                                         ExtractionGraph     @relation(fields: [extractionGraphId], references: [id], onDelete: Cascade)
-  extractionGraphNodeExtractionGraphEdgeSourceNodeIdToextractionGraphNode ExtractionGraphNode @relation("extraction_graph_edge_source_node_idToextraction_graph_node", fields: [sourceNodeId], references: [id], onDelete: Cascade)
-  extractionGraphNodeExtractionGraphEdgeTargetNodeIdToextractionGraphNode ExtractionGraphNode @relation("extraction_graph_edge_target_node_idToextraction_graph_node", fields: [targetNodeId], references: [id], onDelete: Cascade)
-
-  @@unique([extractionGraphId, sourceNodeId, edgeTypeId, targetNodeId], map: "extraction_graph_edge_unique")
-  @@index([extractionGraphId])
-  @@index([teamId])
-  @@map("extraction_graph_edge")
-  @@schema("knowledge")
-}
-
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-model ExtractionGraphNode {
-  id                                                                       String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  teamId                                                                   String                @map("team_id") @db.Uuid
-  extractionGraphId                                                        String                @map("extraction_graph_id") @db.Uuid
-  nodeTypeId                                                               String                @map("node_type_id") @db.Uuid
-  propertyOverrides                                                        Json?                 @map("property_overrides")
-  edgePropertyOverrides                                                    Json?                 @map("edge_property_overrides")
-  sortOrder                                                                Int                   @default(0) @map("sort_order")
-  instructions                                                             String?
-  expand                                                                   Boolean               @default(false)
-  gather                                                                   Boolean               @default(false)
-  filters                                                                  Json                  @default("[]")
-  contentPlugins                                                           Json?                 @map("content_plugins")
-  entityPlugins                                                            Json?                 @map("entity_plugins")
-  defaultPropertyMappings                                                  Json                  @default("[]") @map("default_property_mappings")
-  createdAt                                                                DateTime              @default(now()) @map("created_at")
-  extractionGraphExtractionGraphRootNodeIdToextractionGraphNodes           ExtractionGraph[]     @relation("extraction_graph_root_node_idToextraction_graph_node")
-  extractionGraphEdgeExtractionGraphEdgeSourceNodeIdToextractionGraphNodes ExtractionGraphEdge[] @relation("extraction_graph_edge_source_node_idToextraction_graph_node")
-  extractionGraphEdgeExtractionGraphEdgeTargetNodeIdToextractionGraphNodes ExtractionGraphEdge[] @relation("extraction_graph_edge_target_node_idToextraction_graph_node")
-  extractionGraphExtractionGraphNodeExtractionGraphIdToextractionGraph     ExtractionGraph       @relation("extraction_graph_node_extraction_graph_idToextraction_graph", fields: [extractionGraphId], references: [id], onDelete: Cascade)
-  nodeType                                                                 NodeType              @relation(fields: [nodeTypeId], references: [id], onDelete: Cascade)
-
-  @@index([extractionGraphId])
-  @@index([teamId])
-  @@map("extraction_graph_node")
   @@schema("knowledge")
 }
 
@@ -1206,22 +1136,21 @@ model NodeResource {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model NodeType {
-  id                                          String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  teamId                                      String                @map("team_id") @db.Uuid
+  id                                          String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  teamId                                      String           @map("team_id") @db.Uuid
   name                                        String
-  description                                 String                @default("")
+  description                                 String           @default("")
   category                                    NodeTypeCategory
-  iconSvg                                     String?               @map("icon_svg")
-  iconMetaphor                                String?               @map("icon_metaphor")
-  displayNameTemplate                         String?               @map("display_name_template")
-  displayNameExpression                       Json?                 @map("display_name_expression")
-  sortOrder                                   Int                   @default(0) @map("sort_order")
-  uniquenessConstraints                       Json?                 @map("uniqueness_constraints")
-  createdAt                                   DateTime              @default(now()) @map("created_at")
-  updatedAt                                   DateTime              @default(now()) @map("updated_at")
-  edgeTypeEdgeTypeSourceNodeTypeIdTonodeTypes EdgeType[]            @relation("edge_type_source_node_type_idTonode_type")
-  edgeTypeEdgeTypeTargetNodeTypeIdTonodeTypes EdgeType[]            @relation("edge_type_target_node_type_idTonode_type")
-  extractionGraphNodes                        ExtractionGraphNode[]
+  iconSvg                                     String?          @map("icon_svg")
+  iconMetaphor                                String?          @map("icon_metaphor")
+  displayNameTemplate                         String?          @map("display_name_template")
+  displayNameExpression                       Json?            @map("display_name_expression")
+  sortOrder                                   Int              @default(0) @map("sort_order")
+  uniquenessConstraints                       Json?            @map("uniqueness_constraints")
+  createdAt                                   DateTime         @default(now()) @map("created_at")
+  updatedAt                                   DateTime         @default(now()) @map("updated_at")
+  edgeTypeEdgeTypeSourceNodeTypeIdTonodeTypes EdgeType[]       @relation("edge_type_source_node_type_idTonode_type")
+  edgeTypeEdgeTypeTargetNodeTypeIdTonodeTypes EdgeType[]       @relation("edge_type_target_node_type_idTonode_type")
   nodes                                       Node[]
   propertyTypes                               PropertyType[]
   savedFilters                                SavedFilter[]
@@ -1229,24 +1158,6 @@ model NodeType {
   @@index([teamId, category], map: "node_type_category_idx")
   @@index([teamId])
   @@map("node_type")
-  @@schema("knowledge")
-}
-
-model Plugin {
-  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  teamId       String?  @map("team_id") @db.Uuid
-  name         String
-  description  String?
-  type         String   @default("bundled")
-  endpoint     String?
-  method       String   @default("POST")
-  auth         Json?
-  headers      Json?
-  stages       String[] @default(["content", "entity"])
-  configSchema Json?    @map("config_schema")
-  createdAt    DateTime @default(now()) @map("created_at")
-
-  @@map("plugin")
   @@schema("knowledge")
 }
 
@@ -1576,7 +1487,6 @@ model InboundPayload {
   isContextRequest Boolean?
   isInjection      Boolean?
   dedupId          String?            @map("dedup_id")
-  resourcePayloads ResourcePayload[]
 
   @@map("inbound_payload")
   @@schema("public")
@@ -1761,22 +1671,6 @@ model PushSubscription {
   deviceLabel String?  @map("device_label")
 
   @@map("push_subscription")
-  @@schema("public")
-}
-
-model ResourcePayload {
-  id               String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  teamId           String?        @map("team_id") @db.Uuid
-  resourceId       String         @map("resource_id") @db.Uuid
-  inboundPayloadId String         @map("inbound_payload_id") @db.Uuid
-  createdAt        DateTime       @default(now()) @map("created_at")
-  updatedAt        DateTime       @default(now()) @map("updated_at")
-  inboundPayload   InboundPayload @relation(fields: [inboundPayloadId], references: [id])
-
-  @@index([inboundPayloadId])
-  @@index([resourceId])
-  @@index([teamId])
-  @@map("resource_payload")
   @@schema("public")
 }
 

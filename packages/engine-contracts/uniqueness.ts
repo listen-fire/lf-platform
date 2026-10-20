@@ -11,9 +11,8 @@
 //   - The adapter compiles it to its native search (KG → pg_trgm SQL;
 //     Attio/Airtable → filterByFormula).
 //
-// The extraction-consolidation path keeps its own richer
-// `StoredUniquenessConstraints` (see services/knowledge_pipeline/
-// uniqueness_constraints.ts) — that is a separate pipeline and is untouched.
+// A KG node type stores its own richer `StoredUniquenessConstraints` (see
+// apps/api/src/lib/knowledge/uniqueness_constraints.ts) — a separate shape.
 
 import { z } from 'zod';
 import { since, type LanguageVersion } from 'movement-lang';

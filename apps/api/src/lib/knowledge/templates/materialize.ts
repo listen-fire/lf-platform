@@ -8,14 +8,12 @@ import KnowledgeSchema from '../../../generated/kysely/knowledge/KnowledgeSchema
 import { NodeTypeId } from '../../../generated/kysely/knowledge/NodeType';
 import { EdgeTypeId } from '../../../generated/kysely/knowledge/EdgeType';
 import { PropertyTypeId } from '../../../generated/kysely/knowledge/PropertyType';
-import { ExtractionGraphId } from '../../../generated/kysely/knowledge/ExtractionGraph';
-import { ExtractionGraphNodeId } from '../../../generated/kysely/knowledge/ExtractionGraphNode';
 import { TeamId } from '../../../generated/kysely/core/Team';
 import PropertyValueType from '../../../generated/kysely/knowledge/PropertyValueType';
 import PropertyIdentity from '../../../generated/kysely/knowledge/PropertyIdentity';
 import EvaluationStrategy from '../../../generated/kysely/knowledge/EvaluationStrategy';
 import NodeTypeCategory from '../../../generated/kysely/knowledge/NodeTypeCategory';
-import { OntologyTemplate, ExtractionTreeNode, TemplateUniquenessConstraint } from './types';
+import { OntologyTemplate, TemplateUniquenessConstraint } from './types';
 import { getTemplateIcon } from './icons';
 
 
@@ -72,17 +70,12 @@ function resolveConstraintKeys(
   );
 }
 
-type MaterializeDb = Pick<
-  KnowledgeSchema,
-  'node_type' | 'property_type' | 'edge_type' | 'extraction_graph' | 'extraction_graph_node' | 'extraction_graph_edge'
->;
+type MaterializeDb = Pick<KnowledgeSchema, 'node_type' | 'property_type' | 'edge_type'>;
 
 type MaterializeResult = {
   nodeTypesCreated: number;
   propertyTypesCreated: number;
   edgeTypesCreated: number;
-  extractionGraphsCreated: number;
-  extractionGraphEdgesCreated: number;
 };
 
 async function materializeTemplate(
@@ -291,121 +284,10 @@ async function materialize(
       .execute();
   }
 
-  // Build edge type key → template definition lookup
-  const edgeTypeByKey = new Map(template.edgeTypes.map((et) => [et.key, et]));
-
-  // 5. Insert extraction graphs by recursively walking the template tree
-  let extractionGraphEdgesCreated = 0;
-
-  for (const eg of template.extractionGraphs) {
-    const messageNodeTypeId = nodeTypeIdMap.get(eg.messageNodeType);
-    if (!messageNodeTypeId) {
-      throw new Error(
-        `Extraction graph "${eg.key}" references unknown message node type: "${eg.messageNodeType}"`,
-      );
-    }
-
-    // Create graph row with temporary root_node_id (deferred FK)
-    const graphRow = await trx
-      .insertInto('extraction_graph')
-      .values({
-        team_id: teamId,
-        name: eg.name,
-        description: eg.description,
-        root_node_id: '00000000-0000-0000-0000-000000000000' as ExtractionGraphNodeId,
-      })
-      .returning('id')
-      .executeTakeFirstOrThrow();
-
-    const graphId = graphRow.id as ExtractionGraphId;
-
-    // Create root extraction node for the message node type
-    const rootNode = await trx
-      .insertInto('extraction_graph_node')
-      .values({
-        team_id: teamId,
-        extraction_graph_id: graphId,
-        node_type_id: messageNodeTypeId,
-        sort_order: 0,
-        content_plugins: eg.contentPlugins?.length ? JSON.stringify(eg.contentPlugins) : null,
-        entity_plugins: eg.entityPlugins?.length ? JSON.stringify(eg.entityPlugins) : null,
-      })
-      .returning('id')
-      .executeTakeFirstOrThrow();
-
-    await trx
-      .updateTable('extraction_graph')
-      .set({ root_node_id: rootNode.id })
-      .where('id', '=', graphId)
-      .execute();
-
-    let sortOrder = 1;
-
-    // Recursively materialize tree children
-    async function materializeChildren(
-      parentExtractionNodeId: ExtractionGraphNodeId,
-      children: ExtractionTreeNode[],
-    ) {
-      for (const child of children) {
-        const edgeTypeId = edgeTypeIdMap.get(child.edge);
-        if (!edgeTypeId) {
-          throw new Error(
-            `Extraction graph "${eg.key}" references unknown edge type: "${child.edge}"`,
-          );
-        }
-
-        const childNodeTypeId = nodeTypeIdMap.get(child.nodeType);
-        if (!childNodeTypeId) {
-          throw new Error(
-            `Extraction graph "${eg.key}" references unknown node type: "${child.nodeType}"`,
-          );
-        }
-
-        const childExtNode = await trx
-          .insertInto('extraction_graph_node')
-          .values({
-            team_id: teamId,
-            extraction_graph_id: graphId,
-            node_type_id: childNodeTypeId,
-            sort_order: sortOrder++,
-            instructions: child.instructions ?? null,
-            expand: false,
-            gather: child.gather ?? false,
-            filters: JSON.stringify(child.filters ?? []),
-            content_plugins: child.contentPlugins?.length ? JSON.stringify(child.contentPlugins) : null,
-            entity_plugins: child.entityPlugins?.length ? JSON.stringify(child.entityPlugins) : null,
-          })
-          .returning('id')
-          .executeTakeFirstOrThrow();
-
-        await trx
-          .insertInto('extraction_graph_edge')
-          .values({
-            team_id: teamId,
-            extraction_graph_id: graphId,
-            source_node_id: parentExtractionNodeId,
-            edge_type_id: edgeTypeId,
-            target_node_id: childExtNode.id,
-          })
-          .execute();
-
-        extractionGraphEdgesCreated++;
-
-        if (child.children?.length) {
-          await materializeChildren(childExtNode.id, child.children);
-        }
-      }
-    }
-
-    await materializeChildren(rootNode.id, eg.children);
-  }
-
   return {
     nodeTypesCreated: template.nodeTypes.length,
     propertyTypesCreated,
     edgeTypesCreated: template.edgeTypes.length,
-    extractionGraphsCreated: template.extractionGraphs.length,
-    extractionGraphEdgesCreated,
   };
 }
 

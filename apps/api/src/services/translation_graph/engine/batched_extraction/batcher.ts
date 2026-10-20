@@ -41,7 +41,7 @@ import type {
 } from '../evaluator/batcher';
 import type { EphemeralNode } from 'movement-engine/public/catalog';
 import type { Adapter, Fact, Resource } from 'movement-engine/public/adapter';
-import type { StoredUniquenessConstraints } from '../../../knowledge_pipeline/uniqueness_constraints';
+import type { StoredUniquenessConstraints } from '../../../../lib/knowledge/uniqueness_constraints';
 import type { LlmClient } from 'movement-engine/public/models';
 
 import { assembleBundle, type Bundle } from './bundle';

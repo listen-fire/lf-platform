@@ -5,13 +5,16 @@
 // call inside a transaction holds the connection open for the length of an API
 // call, and the store never calls a model at all (K-5).
 
+import { z } from 'zod';
+
 import type { NodeId } from '../../generated/kysely/knowledge/Node';
 import type { EdgeId } from '../../generated/kysely/knowledge/Edge';
 import type { PropertyId } from '../../generated/kysely/knowledge/Property';
 import type { TeamId } from '../../generated/kysely/core/Team';
 
 import { execute } from '../prompts/execute';
-import { evaluationPromptDef, setPropertyValue } from '../../services/knowledge_pipeline/apply';
+import { promptDef } from '../prompts/definition';
+import { setPropertyValue } from './property_policies';
 import EvaluationStrategy from '../../generated/kysely/knowledge/EvaluationStrategy';
 import EvidenceType from '../../generated/kysely/knowledge/EvidenceType';
 import { getKnowledgeQb } from '../kysely';
@@ -23,6 +26,37 @@ import {
   type WriteContext,
 } from './store';
 import { recordChange, ChangeSource, ChangeKind, propertyToChangeValue, changeValuesEqual } from './changes';
+
+const evaluationPromptDef = promptDef({
+  description: 'Evaluate property value from evidence',
+  arguments: ['propertyName', 'propertyDescription', 'propertyType', 'evidence'] as const,
+  messages: [
+    {
+      role: 'system' as const,
+      content: `You are evaluating a property value from pieces of evidence.
+Synthesize the evidence into the most accurate current value for this property.
+The value must match the property's description and type — read both carefully.
+More recent evidence is generally more reliable.
+Note if there's a significant conflict between sources.
+
+Respond with a JSON object: {"value": <the value or null>, "has_conflict": <true/false>, "reasoning": "<explanation>"}`,
+    },
+    {
+      role: 'user' as const,
+      content: `Property: {{{propertyName}}}
+Description: {{{propertyDescription}}}
+Type: {{{propertyType}}}
+
+Evidence (most recent first):
+{{{evidence}}}`,
+    },
+  ],
+  validator: z.object({
+    value: z.union([z.string(), z.number(), z.boolean(), z.null()]).nullable(),
+    has_conflict: z.boolean(),
+    reasoning: z.string(),
+  }),
+});
 
 interface MergeParams {
   targetNodeId: NodeId;

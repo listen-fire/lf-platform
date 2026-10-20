@@ -1201,13 +1201,6 @@ The list below is what the **dev-loop** doesn't yet cover — distinct from
 product features that don't exist. If any of these blocks you on a real
 task, extend them; don't work around them.
 
-- **Slack inbound — only the legacy path is blocked.** The default
-  `pnpm dev:inject slack-event` now POSTs at
-  `/api/public/webhook-sync/slack/<subId>` with the `isTestHarnessTeam`
-  signature bypass and works. Only `--legacy` (the old
-  `/private/slack/callback` route) still 403s — that handler identifies the
-  team by Slack workspace ID, not by webhook subscription, so a
-  Slack-team-id → team-id mapping would be needed to bypass it.
 - **Input agent for chat-driven config.** `agent_registry.ts` has
   query/ontology/output domains. There's no `input` domain that knows
   how to call `webhookSubscriptions.create`, edit triggers, etc. When that exists, `pnpm dev:chat

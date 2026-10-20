@@ -48,14 +48,12 @@ async function seedKnowledgeData(teamId: TeamId) {
   const kqb = getKnowledgeQb([
     'node_type',
     'edge_type',
-    'extraction_graph',
-    'extraction_graph_edge',
     'node',
     'edge',
   ]);
 
   // Materialize VC dealflow template
-  const matQb = getKnowledgeQb(['node_type', 'property_type', 'edge_type', 'extraction_graph', 'extraction_graph_node', 'extraction_graph_edge']);
+  const matQb = getKnowledgeQb(['node_type', 'property_type', 'edge_type']);
   const result = await (matQb as any).transaction().execute((trx: any) =>
     materializeTemplate(trx, teamId, 'vc-dealflow'),
   );
@@ -155,8 +153,6 @@ async function cleanupTeam(teamId: TeamId) {
     'property',
     'edge',
     'node',
-    'extraction_graph_edge',
-    'extraction_graph',
     'edge_type',
     'property_type',
     'node_type',
@@ -167,8 +163,6 @@ async function cleanupTeam(teamId: TeamId) {
   await kqb.deleteFrom('property').where('team_id', '=', teamId).execute();
   await kqb.deleteFrom('edge').where('team_id', '=', teamId).execute();
   await kqb.deleteFrom('node').where('team_id', '=', teamId).execute();
-  await kqb.deleteFrom('extraction_graph_edge').where('team_id', '=', teamId).execute();
-  await kqb.deleteFrom('extraction_graph').where('team_id', '=', teamId).execute();
   await kqb.deleteFrom('edge_type').where('team_id', '=', teamId).execute();
   await kqb.deleteFrom('property_type').where('team_id', '=', teamId).execute();
   await kqb.deleteFrom('node_type').where('team_id', '=', teamId).execute();

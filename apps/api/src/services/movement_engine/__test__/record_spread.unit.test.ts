@@ -70,9 +70,6 @@ jest.mock('@listen-fire/kg/manifest', () => ({
     }),
 }));
 
-jest.mock('../../knowledge_pipeline/facts', () => ({
-  extractFactsForResource: jest.fn(async () => []),
-}));
 jest.mock('../../../lib/anthropic', () => ({
   anthropicChat: jest.fn(async () => '{}'),
   anthropicChatDetailed: jest.fn(async () => ({

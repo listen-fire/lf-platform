@@ -1200,7 +1200,7 @@ export interface ResolveEntityInput {
    * `targetField` (e.g. KG property type id, Attio attribute slug).
    * Adapters interpret these values against their own identity model:
    *   - KG-as-target: feeds the node type's `uniqueness_constraints`
-   *     (see `services/knowledge_pipeline/uniqueness_constraints.ts`).
+   *     (see `apps/api/src/lib/knowledge/uniqueness_constraints.ts`).
    *   - External-as-target: native rules — e.g. Attio's per-attribute
    *     `is_unique` flag (deferred today).
    *

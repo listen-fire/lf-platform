@@ -68,8 +68,6 @@ const nextConfig: NextConfig = {
       { source: '/inputs/:id', destination: '/sources/:id', permanent: true },
       { source: '/outputs', destination: '/destinations', permanent: true },
       { source: '/outputs/:id', destination: '/destinations/:id', permanent: true },
-      // `/plugins` now serves the movement-language plugin catalogue; the
-      // legacy enrichment-plugin page stays reachable at `/enrichment`.
       // U2: substrate-named routes → user-vocabulary nav. The
       // underlying pages still exist (sources/destinations/integrations
       // are sub-sections of /connections; the deep pages stay live for

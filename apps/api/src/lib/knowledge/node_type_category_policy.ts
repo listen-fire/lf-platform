@@ -1,6 +1,6 @@
 // Which node-type categories the ontology agent may still create.
 //
-// `message` and `scoped_object` are deprecated — they belong to the older
+// `message` and `scoped_object` are deprecated — they belong to the retired
 // message-rooted extraction-graph / scoping mechanism that automations
 // (translation graphs) supersede. The agent must neither propose them nor
 // be able to add them; only plain `object` types remain creatable. Property

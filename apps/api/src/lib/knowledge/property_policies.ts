@@ -54,3 +54,23 @@ export function unionTextSet(
   }
   return [...seen.values()];
 }
+
+/** The value columns a single-valued property of `valueType` stores `value` in. */
+export function setPropertyValue(
+  valueType: string | null,
+  value: unknown,
+): { value_text?: string; value_number?: string | null; value_date?: string; value_boolean?: boolean; value_json?: unknown } {
+  if (value == null) return {};
+  switch (valueType) {
+    case 'number':
+      return { value_number: coerceNumeric(value) };
+    case 'date':
+      return { value_date: String(value) };
+    case 'boolean':
+      return { value_boolean: Boolean(value) };
+    case 'json':
+      return { value_json: value };
+    default:
+      return { value_text: String(value) };
+  }
+}

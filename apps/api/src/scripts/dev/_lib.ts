@@ -475,14 +475,7 @@ export async function ensureDevLoopTeam(): Promise<SeedResult> {
     .limit(1)
     .execute();
   if (existingNodeTypes.length === 0) {
-    const matQb = getKnowledgeQb([
-      'node_type',
-      'property_type',
-      'edge_type',
-      'extraction_graph',
-      'extraction_graph_node',
-      'extraction_graph_edge',
-    ]);
+    const matQb = getKnowledgeQb(['node_type', 'property_type', 'edge_type']);
     await (matQb as any).transaction().execute((trx: any) =>
       materializeTemplate(trx, teamId as TeamId, 'vc-dealflow'),
     );

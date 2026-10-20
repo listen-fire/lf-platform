@@ -240,31 +240,6 @@ const clinicalTrials: OntologyTemplate = {
       required: true,
     },
   ],
-
-  extractionGraphs: [
-    {
-      key: 'clinical_extraction',
-      name: 'Clinical Trial Extraction',
-      description: 'Extract drugs, companies, trials, researchers, and results from pharma communications',
-      messageNodeType: 'pharma_update',
-      children: [
-        {
-          edge: 'update_mentions_drug', nodeType: 'drug',
-          children: [
-            { edge: 'drug_developed_by', nodeType: 'pharma_company' },
-            { edge: 'drug_targets_indication', nodeType: 'indication' },
-            {
-              edge: 'trial_for_drug', nodeType: 'trial',
-              children: [
-                { edge: 'trial_led_by', nodeType: 'researcher' },
-                { edge: 'trial_result_from_trial', nodeType: 'trial_result' },
-              ],
-            },
-          ],
-        },
-      ],
-    },
-  ],
 };
 
 export { clinicalTrials };

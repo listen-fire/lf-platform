@@ -28,9 +28,6 @@ async function resetTeam() {
     'property',
     'edge',
     'node',
-    'extraction_graph_edge',
-    'extraction_graph_node',
-    'extraction_graph',
     'edge_type',
     'property_type',
     'node_type',
@@ -40,14 +37,6 @@ async function resetTeam() {
   await kqb.deleteFrom('property').where('team_id', '=', teamId).execute();
   await kqb.deleteFrom('edge').where('team_id', '=', teamId).execute();
   await kqb.deleteFrom('node').where('team_id', '=', teamId).execute();
-  await kqb.deleteFrom('extraction_graph_edge').where('team_id', '=', teamId).execute();
-  // extraction_graph.root_node_id → extraction_graph_node is ON DELETE RESTRICT (and the
-  // column is NOT NULL), so a node can't be deleted while its graph still points at it.
-  // Delete the GRAPH first: extraction_graph_node.extraction_graph_id is ON DELETE CASCADE,
-  // so removing the graph removes its nodes too. The explicit node delete below then mops up
-  // any orphans (normally a no-op).
-  await kqb.deleteFrom('extraction_graph').where('team_id', '=', teamId).execute();
-  await (kqb as any).deleteFrom('extraction_graph_node').where('team_id', '=', teamId).execute();
   await kqb.deleteFrom('edge_type').where('team_id', '=', teamId).execute();
   await kqb.deleteFrom('property_type').where('team_id', '=', teamId).execute();
   await kqb.deleteFrom('node_type').where('team_id', '=', teamId).execute();

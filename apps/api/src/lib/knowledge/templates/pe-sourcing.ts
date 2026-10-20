@@ -203,30 +203,6 @@ const peSourcing: OntologyTemplate = {
       required: false,
     },
   ],
-
-  extractionGraphs: [
-    {
-      key: 'sourcing',
-      name: 'Sourcing',
-      description:
-        'Extract company, deal, and contact information from sourcing communications',
-      messageNodeType: 'sourcing_message',
-      children: [
-        {
-          edge: 'mentions_company', nodeType: 'company',
-          children: [
-            {
-              edge: 'deal_at_company', nodeType: 'deal',
-              children: [
-                { edge: 'deal_sourced_by', nodeType: 'contact' },
-                { edge: 'deal_coinvestor', nodeType: 'fund' },
-              ],
-            },
-          ],
-        },
-      ],
-    },
-  ],
 };
 
 export { peSourcing };

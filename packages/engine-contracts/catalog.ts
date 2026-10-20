@@ -313,21 +313,6 @@ const nodeRelationshipSchema = z.object({
 
 export type NodeRelationship = z.infer<typeof nodeRelationshipSchema>;
 
-// ── ExtractionTemplate: what the LLM is asked to produce ───────────────────
-// Initially only the foreign-key-to-extraction-graph form is supported (so the
-// engine can dispatch to the existing extraction execution code without forking).
-// Inline native templates are a future enhancement.
-
-const extractionTemplateSchema = z.discriminatedUnion('kind', [
-  z.object({
-    kind: z.literal('extraction_graph_ref'),
-    extractionGraphId: z.string(),
-  }),
-  // Future: kind: 'inline' with a structural template definition.
-]);
-
-type ExtractionTemplate = z.infer<typeof extractionTemplateSchema>;
-
 // ── Node taxonomy ─────────────────────────────────────────────────────────
 
 export type ActionNode = {
@@ -378,25 +363,6 @@ type BranchNode = {
   filter: FilterExpression;
   match?: TranslationGraphNode;
   noMatch?: TranslationGraphNode;
-};
-
-/**
- * @deprecated `ExtractionNode` is retired (see
- * `plans/2026-05-19-tg-extraction-parity/gaps_inventory.md` "ExtractionNode
- * is dead"). The replacement is the `#extract` traversal step, which
- * produces ephemeral source-side positions inline within a TG. Bodies
- * containing `kind: 'extraction'` nodes are rejected at zod validation
- * time with a migration pointer.
- *
- * The type is kept exported only so legacy reads (e.g. the now-dead
- * `ExtractionGraphProjection`) still compile until they are deleted.
- * Do not author new code against this type.
- */
-export type ExtractionNode = {
-  kind: 'extraction';
-  id: string;
-  parentContext?: TGFieldMapping[];
-  template: ExtractionTemplate;
 };
 
 export type TranslationGraphNode = ActionNode | BranchNode;

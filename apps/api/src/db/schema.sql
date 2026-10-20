@@ -857,6 +857,11 @@ CREATE INDEX inventory_delta_holding_asset_id_idx ON public.inventory_delta_hold
 
 -- ### Inbound Payload ----------------------------------------------------------
 
+-- Nothing writes here any more: inbound events now reach the knowledge graph
+-- only through movements. The rows stay because they are the source material
+-- of resources the legacy ingestion created, which the node resource panel
+-- still shows.
+--
 -- The channel a legacy inbound payload arrived on. The enum outlived the
 -- `pipeline_input` table that first used it.
 CREATE TYPE public."PipelineInputType" AS ENUM (
@@ -974,41 +979,15 @@ CREATE UNIQUE INDEX inbound_payload_team_dedup_unique
 -- `document` backs a live download. That is knowledge machinery, so it moves
 -- rather than drops.
 --
--- What stayed behind, and why: the join tables below (`resource_payload`,
--- `resource_source`) are residue awaiting deletion. Their FKs into the moved
--- tables are cross-schema and are dropped per D3 — the columns stay as plain
--- uuids. (Three siblings of the same shape — one for resource segments, one
+-- What stayed behind, and why: the join table below (`resource_source`) is
+-- residue awaiting deletion. Its FK into the moved table is cross-schema and
+-- is dropped per D3 — the column stays a plain uuid. (Its sibling linking
+-- resources to inbound payloads went with the last payload ingestion. Three
+-- siblings of the same shape — one for resource segments, one
 -- for legal entities, one for investor updates — plus the investor-update
 -- table they hung off of, had zero live callers — see ResourceService — and
 -- are gone entirely.)
 
-
-
-
--- ### Resource Payload -----------------------------------------------------
-
-CREATE TABLE public.resource_payload (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    team_id uuid,
-    resource_id uuid NOT NULL, -- FK dropped: `resource` moved to the `knowledge` schema (D3)
-    inbound_payload_id uuid NOT NULL, -- @DEF: resource_payload_inbound_payload_id_fkey
-    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
-);
-
-
-ALTER TABLE ONLY public.resource_payload
-    ADD CONSTRAINT resource_payload_pkey PRIMARY KEY (id);
-
--- @DEF: resource_payload_inbound_payload_id_fkey
-ALTER TABLE ONLY public.resource_payload
-    ADD CONSTRAINT resource_payload_inbound_payload_id_fkey FOREIGN KEY (inbound_payload_id) REFERENCES public.inbound_payload(id) ON UPDATE CASCADE ON DELETE RESTRICT;
-
-CREATE INDEX resource_payload_inbound_payload_id_idx ON public.resource_payload USING btree (inbound_payload_id);
-CREATE INDEX resource_payload_resource_id_idx ON public.resource_payload USING btree (resource_id);
-CREATE INDEX resource_payload_team_id_idx ON public.resource_payload USING btree (team_id);
-
-CREATE TRIGGER resource_payload_audit AFTER INSERT OR DELETE OR UPDATE ON public.resource_payload FOR EACH ROW EXECUTE FUNCTION public.audit();
 
 
 
@@ -1568,134 +1547,6 @@ CREATE INDEX property_type_node_type_id_idx ON knowledge.property_type USING btr
 CREATE INDEX property_type_edge_type_id_idx ON knowledge.property_type USING btree (edge_type_id);
 
 CREATE TRIGGER property_type_audit AFTER INSERT OR DELETE OR UPDATE ON knowledge.property_type FOR EACH ROW EXECUTE FUNCTION knowledge.audit();
-
-
--- ## Plugins
--- Registered extraction plugins (bundled or external) that can be called as hooks
--- on extraction graph nodes at content or entity stage.
-
-CREATE TABLE knowledge.plugin (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    team_id uuid,
-    name text NOT NULL,
-    description text,
-    type text NOT NULL DEFAULT 'bundled',
-    endpoint text,
-    method text NOT NULL DEFAULT 'POST',
-    auth jsonb,
-    headers jsonb,
-    stages text[] NOT NULL DEFAULT '{content,entity}'::text[],
-    config_schema jsonb,
-    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
-);
-
-ALTER TABLE ONLY knowledge.plugin
-    ADD CONSTRAINT plugin_pkey PRIMARY KEY (id);
-
-
-CREATE TRIGGER plugin_audit AFTER INSERT OR DELETE OR UPDATE ON knowledge.plugin FOR EACH ROW EXECUTE FUNCTION knowledge.audit();
-
-
--- ## Extraction Graphs
--- Curated subsets of the ontology defining what to extract for a given input type.
-
-CREATE TABLE knowledge.extraction_graph (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    team_id uuid NOT NULL,
-    name text NOT NULL,
-    description text NOT NULL DEFAULT '',
-    root_node_id uuid NOT NULL,
-    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
-);
-
-ALTER TABLE ONLY knowledge.extraction_graph
-    ADD CONSTRAINT extraction_graph_pkey PRIMARY KEY (id);
-
-
-CREATE INDEX extraction_graph_team_id_idx ON knowledge.extraction_graph USING btree (team_id);
-
-CREATE TRIGGER extraction_graph_audit AFTER INSERT OR DELETE OR UPDATE ON knowledge.extraction_graph FOR EACH ROW EXECUTE FUNCTION knowledge.audit();
-
--- ── extraction_graph_node ──
-
-CREATE TABLE knowledge.extraction_graph_node (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    team_id uuid NOT NULL,
-    extraction_graph_id uuid NOT NULL,
-    node_type_id uuid NOT NULL,
-    property_overrides jsonb,
-    edge_property_overrides jsonb,
-    sort_order integer NOT NULL DEFAULT 0,
-    instructions text,
-    expand boolean DEFAULT false NOT NULL,
-    gather boolean DEFAULT false NOT NULL,
-    filters jsonb NOT NULL DEFAULT '[]'::jsonb,
-    content_plugins jsonb,
-    entity_plugins jsonb,
-    default_property_mappings jsonb NOT NULL DEFAULT '[]'::jsonb,
-    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
-);
-
-ALTER TABLE ONLY knowledge.extraction_graph_node
-    ADD CONSTRAINT extraction_graph_node_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY knowledge.extraction_graph_node
-    ADD CONSTRAINT extraction_graph_node_extraction_graph_id_fkey FOREIGN KEY (extraction_graph_id) REFERENCES knowledge.extraction_graph(id) ON UPDATE CASCADE ON DELETE CASCADE;
-
-ALTER TABLE ONLY knowledge.extraction_graph_node
-    ADD CONSTRAINT extraction_graph_node_node_type_id_fkey FOREIGN KEY (node_type_id) REFERENCES knowledge.node_type(id) ON UPDATE CASCADE ON DELETE CASCADE;
-
-
-CREATE INDEX extraction_graph_node_extraction_graph_id_idx ON knowledge.extraction_graph_node USING btree (extraction_graph_id);
-CREATE INDEX extraction_graph_node_team_id_idx ON knowledge.extraction_graph_node USING btree (team_id);
-
-CREATE TRIGGER extraction_graph_node_audit AFTER INSERT OR DELETE OR UPDATE ON knowledge.extraction_graph_node FOR EACH ROW EXECUTE FUNCTION knowledge.audit();
-
--- Deferred FK: extraction_graph → extraction_graph_node (circular dependency)
-ALTER TABLE ONLY knowledge.extraction_graph
-    ADD CONSTRAINT extraction_graph_root_node_id_fkey FOREIGN KEY (root_node_id) REFERENCES knowledge.extraction_graph_node(id) ON UPDATE CASCADE ON DELETE RESTRICT
-    DEFERRABLE INITIALLY DEFERRED;
-
-
--- ## Extraction Graph Edges
--- Which edges to follow during extraction. Each row connects a source extraction
--- node to a target extraction node via an edge type.
-
-CREATE TABLE knowledge.extraction_graph_edge (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    team_id uuid NOT NULL,
-    extraction_graph_id uuid NOT NULL,
-    source_node_id uuid NOT NULL,
-    edge_type_id uuid NOT NULL,
-    target_node_id uuid NOT NULL,
-    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
-);
-
-ALTER TABLE ONLY knowledge.extraction_graph_edge
-    ADD CONSTRAINT extraction_graph_edge_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY knowledge.extraction_graph_edge
-    ADD CONSTRAINT extraction_graph_edge_extraction_graph_id_fkey FOREIGN KEY (extraction_graph_id) REFERENCES knowledge.extraction_graph(id) ON UPDATE CASCADE ON DELETE CASCADE;
-
-ALTER TABLE ONLY knowledge.extraction_graph_edge
-    ADD CONSTRAINT extraction_graph_edge_source_node_id_fkey FOREIGN KEY (source_node_id) REFERENCES knowledge.extraction_graph_node(id) ON UPDATE CASCADE ON DELETE CASCADE;
-
-ALTER TABLE ONLY knowledge.extraction_graph_edge
-    ADD CONSTRAINT extraction_graph_edge_edge_type_id_fkey FOREIGN KEY (edge_type_id) REFERENCES knowledge.edge_type(id) ON UPDATE CASCADE ON DELETE CASCADE;
-
-ALTER TABLE ONLY knowledge.extraction_graph_edge
-    ADD CONSTRAINT extraction_graph_edge_target_node_id_fkey FOREIGN KEY (target_node_id) REFERENCES knowledge.extraction_graph_node(id) ON UPDATE CASCADE ON DELETE CASCADE;
-
-
--- No duplicate edges within a graph
-ALTER TABLE ONLY knowledge.extraction_graph_edge
-    ADD CONSTRAINT extraction_graph_edge_unique UNIQUE (extraction_graph_id, source_node_id, edge_type_id, target_node_id);
-
-CREATE INDEX extraction_graph_edge_extraction_graph_id_idx ON knowledge.extraction_graph_edge USING btree (extraction_graph_id);
-CREATE INDEX extraction_graph_edge_team_id_idx ON knowledge.extraction_graph_edge USING btree (team_id);
-
-CREATE TRIGGER extraction_graph_edge_audit AFTER INSERT OR DELETE OR UPDATE ON knowledge.extraction_graph_edge FOR EACH ROW EXECUTE FUNCTION knowledge.audit();
 
 
 -- =============================================================================
@@ -2532,24 +2383,6 @@ GRANT SELECT ON knowledge.edge_type TO agent;
 ALTER TABLE knowledge.edge_type ENABLE ROW LEVEL SECURITY;
 CREATE POLICY non_agent_full_access ON knowledge.edge_type FOR ALL USING (current_user != 'agent');
 CREATE POLICY agent_team_isolation ON knowledge.edge_type FOR SELECT TO agent USING (team_id::text = knowledge.current_team_id());
-
--- extraction_graph
-GRANT SELECT ON knowledge.extraction_graph TO agent;
-ALTER TABLE knowledge.extraction_graph ENABLE ROW LEVEL SECURITY;
-CREATE POLICY non_agent_full_access ON knowledge.extraction_graph FOR ALL USING (current_user != 'agent');
-CREATE POLICY agent_team_isolation ON knowledge.extraction_graph FOR SELECT TO agent USING (team_id::text = knowledge.current_team_id());
-
--- extraction_graph_node
-GRANT SELECT ON knowledge.extraction_graph_node TO agent;
-ALTER TABLE knowledge.extraction_graph_node ENABLE ROW LEVEL SECURITY;
-CREATE POLICY non_agent_full_access ON knowledge.extraction_graph_node FOR ALL USING (current_user != 'agent');
-CREATE POLICY agent_team_isolation ON knowledge.extraction_graph_node FOR SELECT TO agent USING (team_id::text = knowledge.current_team_id());
-
--- extraction_graph_edge
-GRANT SELECT ON knowledge.extraction_graph_edge TO agent;
-ALTER TABLE knowledge.extraction_graph_edge ENABLE ROW LEVEL SECURITY;
-CREATE POLICY non_agent_full_access ON knowledge.extraction_graph_edge FOR ALL USING (current_user != 'agent');
-CREATE POLICY agent_team_isolation ON knowledge.extraction_graph_edge FOR SELECT TO agent USING (team_id::text = knowledge.current_team_id());
 
 -- node
 GRANT SELECT ON knowledge.node TO agent;

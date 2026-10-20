@@ -111,9 +111,6 @@ jest.mock('@listen-fire/kg/manifest', () => ({
 // LLM seams pulled in by production_deps (facts → anthropic). No fixture
 // here extracts or judges >1 candidate — stubbed to keep the module
 // graph loadable.
-jest.mock('../../knowledge_pipeline/facts', () => ({
-  extractFactsForResource: jest.fn(async () => []),
-}));
 jest.mock('../../../lib/anthropic', () => ({
   anthropicChat: jest.fn(async () => '{}'),
   anthropicChatDetailed: jest.fn(async () => ({

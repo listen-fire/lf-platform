@@ -80,9 +80,6 @@ jest.mock('@listen-fire/kg/manifest', () => ({
     }),
 }));
 
-jest.mock('../../knowledge_pipeline/facts', () => ({
-  extractFactsForResource: jest.fn(async () => []),
-}));
 // The TG-side parity run drives the PRODUCTION batcher, whose LlmClient
 // wraps `anthropicChat` — the per-test responder is installed on this mock.
 jest.mock('../../../lib/anthropic', () => ({

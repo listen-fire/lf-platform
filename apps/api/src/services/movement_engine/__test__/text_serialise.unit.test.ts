@@ -59,9 +59,6 @@ jest.mock('@listen-fire/kg/manifest', () => ({
     }),
 }));
 
-jest.mock('../../knowledge_pipeline/facts', () => ({
-  extractFactsForResource: jest.fn(async () => []),
-}));
 
 import { runMovement } from 'movement-engine/services/movement_engine/run';
 import type { ExtractCallLlmClient } from 'movement-engine/services/movement_engine/extraction_call';
