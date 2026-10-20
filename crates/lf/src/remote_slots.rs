@@ -90,10 +90,12 @@ impl ModelsModule {
         if let Some(known) = self.prices.lock().unwrap_or_else(|p| p.into_inner()).clone() {
             return Ok(known);
         }
-        let published = match self.client.call_async_coded("models.prices", Obj::new()).await {
-            Ok(answer) => Some(Arc::new(crate::models::price_table_of(&answer))),
-            Err(error) if error.code == "method_not_implemented" => None,
-            Err(error) => return Err(format!("{}: models.prices: {}", self.client.label, error.message)),
+        // Asked only of a module whose manifest lists it: the method is optional.
+        let manifest = self.client.call_async("manifest", Obj::new()).await?;
+        let lists = |method: &str| manifest.get("methods").and_then(Js::as_array).is_some_and(|methods| methods.iter().any(|m| m.as_str() == Some(method)));
+        let published = match lists("models.prices") {
+            true => Some(Arc::new(crate::models::price_table_of(&self.client.call_async("models.prices", Obj::new()).await?))),
+            false => None,
         };
         *self.prices.lock().unwrap_or_else(|p| p.into_inner()) = Some(published.clone());
         Ok(published)

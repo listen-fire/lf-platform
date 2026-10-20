@@ -291,8 +291,8 @@ impl Run<'_> {
     }
 
     /// One priced call answered on the eval wire: its cost charged, a
-    /// refusal included; a budget refusal the run's cap where its own
-    /// figures say so (run_context.ts `charged`).
+    /// refusal included; a budget refusal the run's cap, in its own figures,
+    /// wherever the run has one (crate::ledger `refused`).
     pub(crate) async fn priced(&self, request: host::Request) -> Result<Js, Failure> {
         let answer = self.ask(request).await?.unwrap_or(Json::Null);
         let answer = self.wire.decode(&answer).map_err(|e| Failure::engine("MOVENG_RUNTIME", e))?;
@@ -305,7 +305,7 @@ impl Run<'_> {
         if let Js::Object(error) = member("error")
             && matches!(error.get("kind"), Some(Js::String(kind)) if kind == "budget")
         {
-            if let Some(cap) = self.ledger.exceeded() {
+            if let Some(cap) = self.ledger.refused() {
                 return Err(Failure::CapExceeded(cap));
             }
             let message = error.get("message").map(Js::to_js_string).unwrap_or_default();
