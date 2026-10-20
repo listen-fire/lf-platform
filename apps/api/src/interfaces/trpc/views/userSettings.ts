@@ -9,7 +9,6 @@ import { whatsappLinkVerification } from '../../../services/whatsapp/phone_verif
 import { trpc } from '../trpc';
 import { userProcedure as sharedUserProcedure } from '../procedures';
 import { UserService } from '../../../services/user';
-import { getKnowledgeQb } from '../../../lib/kysely';
 import { WHATSAPP_MOVEMENTS_NUMBER } from '../../../services/translation_graph/adapters/whatsapp';
 import { LISTEN_FIRE_VERSION } from '../../../constants';
 
@@ -69,33 +68,6 @@ const userSettingsRouter = (procedure: typeof trpc.procedure) => {
         });
       }),
 
-    // How the team's agents should talk lives with the agents
-    // (`knowledge.team_agent_settings`), not on the team row.
-    getAgentStylePreferences: userProcedure.query(async () => {
-      const ctx = currentContext();
-      const row = await getKnowledgeQb(['team_agent_settings'])
-        .selectFrom('team_agent_settings')
-        .select('style_preferences')
-        .where('team_id', '=', ctx.user.teamId)
-        .executeTakeFirst();
-      return { preferences: row?.style_preferences ?? '' };
-    }),
-    updateAgentStylePreferences: userProcedure
-      .input(z.object({ preferences: z.string() }))
-      .mutation(async ({ input }) => {
-        const ctx = currentContext();
-        const preferences = input.preferences || null;
-        await getKnowledgeQb(['team_agent_settings'])
-          .insertInto('team_agent_settings')
-          .values({ team_id: ctx.user.teamId, style_preferences: preferences })
-          .onConflict((oc) =>
-            oc
-              .column('team_id')
-              .doUpdateSet({ style_preferences: preferences, updated_at: new Date() }),
-          )
-          .execute();
-        return { success: true };
-      }),
     getEmails: userProcedure.query(async () => {
       const ctx = currentContext();
       const emails = await ctx.prisma.userEmail.findMany({

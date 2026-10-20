@@ -1,12 +1,7 @@
 // The knowledge-model design handbook — chapters teaching how to shape,
 // identify, relate, and evolve the knowledge model. Mirrors the
 // movement_handbook registry pattern: consumer-neutral chapter bodies
-// (the same text can serve a design agent's reference tool and the
-// Library reader) behind a thin index/lookup surface.
-//
-// Seeded from the teaching content the ontology assistant works from
-// (lib/knowledge/ontology_agent.ts), rewritten for a reader designing
-// their own model.
+// behind a thin index/lookup surface, read through the Library.
 
 import type { Handbook, ChapterId, Chapter, IntentEntry } from './types';
 

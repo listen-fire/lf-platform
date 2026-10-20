@@ -171,7 +171,8 @@ export default function AutomationsPage() {
 
   const { data: movements, isLoading } = trpc.views.movement.list.useQuery();
 
-  // The assistant saved or deleted a movement — refresh the list so the
+  // A movement was saved or deleted elsewhere (another tab, or an agent over
+  // MCP) — refresh the list so the
   // new/changed/removed automation appears without a manual reload.
   const utils = trpc.useUtils();
   trpc.views.knowledge.ontology.onResourceChange.useSubscription(

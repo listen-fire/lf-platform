@@ -15,13 +15,12 @@
  * Library's adapter-authoring handbook stub.
  */
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { trpc, type RouterOutputs } from "@/lib/trpc";
 import type { ExternalServiceType } from "#trpc";
 import { usePageTitle } from "@/components/page-title";
-import { usePublishPageContext } from "@/components/page-context";
 import {
   IntegrationModal,
   CONNECTABLE_CREDENTIAL_TYPES,
@@ -139,24 +138,6 @@ export default function AdaptersPage() {
   const { data } = trpc.views.adapters.list.useQuery();
   const [connectType, setConnectType] = useState<ExternalServiceType | null>(
     null,
-  );
-
-  // Tell the global assistant which adapters are on screen.
-  usePublishPageContext(
-    useMemo(
-      () =>
-        data
-          ? {
-              page: "Adapters",
-              entities: data.map((entry) => ({
-                kind: "adapter",
-                id: entry.slug,
-                name: entry.name,
-              })),
-            }
-          : null,
-      [data],
-    ),
   );
 
   return (

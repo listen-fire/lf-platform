@@ -35,7 +35,7 @@ process.on('unhandledRejection', (reason, promise) => {
   });
 });
 import { requireEnv } from './lib/utils/environment';
-import { assertModelMapConfigured, modelKeyWarning, providerCredentialsPresent, resolveModel } from 'movement-engine/public/models';
+import { assertModelMapConfigured, modelKeyWarning, resolveModel } from 'movement-engine/public/models';
 import { assertKnowledgeLlmModelConfigured, isKnowledgeLlmConfigured, knowledgeLlmModel } from './lib/knowledge/llm';
 import { assertJevConfigured } from './lib/jev/client';
 import { assertRunCostCapConfigured } from 'movement-engine/public/models';
@@ -83,7 +83,6 @@ import { storyRouter } from './interfaces/rest/story';
 import { callbacksRouter } from './interfaces/rest/callbacks';
 import { connectRouter } from './interfaces/rest/connect';
 import { initialiseWebSockets } from './lib/webSockets';
-import { shutdownAgents } from './lib/knowledge/agent_sessions';
 import { createOAuthRouter } from './interfaces/mcp/oauth';
 import { createProtectedResourceRouter, mcpAuthChallenge, MCP_BASE_PATH } from './interfaces/mcp/protected_resource';
 import { mountMcpConnectors } from './interfaces/mcp/connectors';
@@ -303,15 +302,11 @@ async function main() {
   }
   // A keyless deployment is supported and boots on purpose — the platform
   // client reads its key on first call rather than on import, exactly so that
-  // it can. What is not supported is finding out only when the first agent
-  // request fails, so the process says it at boot as well. This is not "is any
-  // vendor key set anywhere" — MODEL_MAP can route every model this process
-  // actually calls around a missing one — it is whether the default agent
-  // model and knowledge's own chat model resolve to a provider with
-  // credentials here.
-  const defaultAgentModel = resolveModel('claude-sonnet-5');
+  // it can. What is not supported is finding out only when the first model
+  // call fails, so the process says it at boot as well: whether knowledge's own
+  // chat model resolves to a provider with credentials here (MODEL_MAP can
+  // route it around a missing vendor key).
   const bootModelKeyWarning = modelKeyWarning([
-    { resolved: defaultAgentModel, configured: providerCredentialsPresent(defaultAgentModel.provider) },
     { resolved: resolveModel(knowledgeLlmModel()), configured: isKnowledgeLlmConfigured() },
   ]);
   if (bootModelKeyWarning) logger.warn(bootModelKeyWarning);
@@ -324,9 +319,7 @@ async function main() {
   await new Promise<void>((resolve) => httpServer.listen({ port: PORT }, resolve));
 
   const handleShutdown = async () => {
-    console.warn('Shutting down server — draining active agents...');
-    await shutdownAgents(10_000);
-    console.warn('Agents drained, closing server');
+    console.warn('Shutting down server...');
     // The watchdog holds an inspector session on this thread; a process that
     // exits with one attached waits for a debugger that is never coming.
     await eventLoopWatchdog?.stop();

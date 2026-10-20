@@ -251,20 +251,4 @@ describe('a tool that acts on one person’s account', () => {
       phoneNumber: '+447700900000',
     });
   });
-
-  // Starting a conversation is the same shape one layer down: it is not that a
-  // machine may not chat, it is that `agent_conversation.user_id` is NOT NULL, so
-  // there is no null upstream of the throw for attribution to degrade to and no
-  // user to invent. Continuing an existing one is tenancy and stays open.
-  it('refuses to start a conversation it would have to name an owner for', async () => {
-    const res = await fetch(`${baseUrl}/v1/system/conversations`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ message: 'hello' }),
-    });
-    const body = (await res.json()) as { error?: string };
-
-    expect(res.status).toBe(400);
-    expect(body.error).toMatch(/machine/i);
-  });
 });

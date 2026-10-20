@@ -64,13 +64,15 @@ const STEPS = [
     title: "Describe your automation",
     detail: (
       <>
-        Open <span className="font-medium text-gray-900">Automations</span> and
-        create a new one. Describe what you want in plain language — &quot;when
-        a pitch email arrives, extract the company and round details, then
-        create or update the Attio Company and add it to our Dealflow
-        list&quot; — and the assistant drafts it as a short, readable program.
-        You can read exactly what it will do, and change it by asking or by
-        editing it directly.
+        Connect Claude, or your own agent, to the Listen-Fire automation
+        connector (see <span className="font-medium text-gray-900">Settings</span>).
+        Describe what you want in plain language — &quot;when a pitch email
+        arrives, extract the company and round details, then create or update
+        the Attio Company and add it to our Dealflow list&quot; — and your
+        agent drafts it as a short, readable program. You can read exactly
+        what it will do under{" "}
+        <span className="font-medium text-gray-900">Automations</span>, and
+        change it by asking or by editing it directly.
       </>
     ),
   },

@@ -59,7 +59,6 @@ import {
   type UpgradeDiagnostic,
 } from "@/components/movements/language-version";
 import { TAB_ORIGIN_ID } from "@/lib/tab-origin";
-import { usePublishPageContext } from "@/components/page-context";
 import {
   MovementEditor,
   type MovementEditorHandle,
@@ -882,7 +881,7 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
     void utils.views.movement.list.invalidate();
   }, [movementId, utils]);
 
-  // The AGENT edited THIS movement (from the assistant overlay). When the
+  // THIS movement was edited elsewhere (another tab, or an agent over MCP). When the
   // editor is clean, reload silently. When the user has unsaved edits,
   // DON'T clobber them — raise a banner and let them choose (the save-time
   // guard is the backstop if they keep editing and save).
@@ -1002,31 +1001,6 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [handleSave]);
-
-  // Tell the global assistant what's on screen — which movement, and the
-  // CURRENT draft script (not just the saved one), so "this movement" /
-  // "why doesn't this check?" questions land with full context.
-  usePublishPageContext(
-    useMemo(
-      () => ({
-        page: "Movement editor",
-        entities: [
-          {
-            kind: "movement",
-            ...(movementId ? { id: movementId } : {}),
-            name: props.movementName ?? "New movement (unsaved)",
-          },
-        ],
-        extras: {
-          ...(validityStatus ? { validity: validityStatus } : {}),
-          ...(currentSource !== null
-            ? { "current draft script": currentSource }
-            : {}),
-        },
-      }),
-      [movementId, props.movementName, validityStatus, currentSource],
-    ),
-  );
 
   // Trigger-side listener details (channel, inbound address): the latest
   // clean save wins, falling back to what the page loaded with.
@@ -1376,7 +1350,7 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
       ) : staleByAgent ? (
         <div className="flex shrink-0 items-center justify-between gap-3 border-t border-amber-200 bg-amber-50 px-4 py-2 text-[12px] text-amber-900">
           <span>
-            The assistant changed this automation while you were editing it.
+            This automation changed elsewhere while you were editing it.
           </span>
           <div className="flex shrink-0 items-center gap-2">
             <button

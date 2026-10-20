@@ -26,8 +26,7 @@
  *
  * 2026-06-11: the Advanced section is gone — Library is an ordinary
  * top-level page, API Explorer lives with the Knowledge Graph it
- * queries, Schema types was deleted, and Ask was replaced by the
- * assistant panel's in-place expansion (no /ask page).
+ * queries, Schema types was deleted, and Ask was retired (no /ask page).
  *
  * 2026-08-04: Asks promoted to its own top-level section (was a single
  * "Waiting" item mixed in with Automations/Runs) — Inbox (open questions +

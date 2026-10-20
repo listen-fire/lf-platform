@@ -75,43 +75,6 @@ export function ObjectIcon({ className = defaultClass }: IconProps) {
   );
 }
 
-/**
- * The product mark from public/logo.svg, in its native 200×200
- * coordinate space — the two monogram letters as filled outlines, since
- * every surface here fills rather than strokes. The mark is fattened by
- * an 8-unit stroke wherever it renders. Shared by the static
- * AssistantIcon below and the launcher's MorphingAssistantIcon.
- */
-export const LISTEN_FIRE_MARK_PATHS = {
-  letterL: "M 40,40 L 60,40 L 60,140 L 96,140 L 96,160 L 40,160 Z",
-  letterF: "M 102,40 L 160,40 L 160,60 L 122,60 L 122,160 L 102,160 Z",
-  letterFBar: "M 102,90 L 150,90 L 150,110 L 102,110 Z",
-} as const;
-
-/**
- * The assistant's identity: the bare product mark from public/logo.svg, filled with
- * currentColor — the launcher's morph established that the mark IS the
- * assistant, so the static surfaces show the same mark at rest.
- */
-export function AssistantIcon({ className = defaultClass }: IconProps) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none">
-      <g
-        transform="translate(-1 -0.74) scale(0.13)"
-        fill="currentColor"
-        stroke="currentColor"
-        strokeWidth="8"
-        strokeLinejoin="miter"
-        strokeLinecap="butt"
-      >
-        <path d={LISTEN_FIRE_MARK_PATHS.letterL} />
-        <path d={LISTEN_FIRE_MARK_PATHS.letterF} />
-        <path d={LISTEN_FIRE_MARK_PATHS.letterFBar} />
-      </g>
-    </svg>
-  );
-}
-
 export function ApiExplorerIcon({ className = defaultClass }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">

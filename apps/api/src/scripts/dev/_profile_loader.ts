@@ -1,6 +1,6 @@
 /**
  * Side-effect module: discover the active dev-loop profile and merge its env
- * into `process.env` so the dev CLIs (`dev:chat`, `dev:inject`, …) target
+ * into `process.env` so the dev CLIs (`dev:inject`, `dev:graph`, …) target
  * the right stack without the caller having to prefix env vars.
  *
  * Resolution order:
