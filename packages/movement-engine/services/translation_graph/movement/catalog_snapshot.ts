@@ -39,6 +39,7 @@ type CatalogManifest = Pick<
   | 'construction'
   | 'triggerExpectation'
   | 'introspectedSchema'
+  | 'description'
 >;
 
 /**
