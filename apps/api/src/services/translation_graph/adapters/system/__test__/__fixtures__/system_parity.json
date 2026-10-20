@@ -114,7 +114,7 @@
               ],
               "readable": false,
               "writable": false,
-              "description": "A saved automation does not validate cleanly under the release's current language version, so it stays on the version it is written in. `Reason` lists what to repair. Emitted by the check that runs as a new release is deployed."
+              "description": "A saved automation does not validate cleanly under the release's current language version, so it cannot be upgraded to it yet. `Reason` lists what to repair. Emitted by the check that runs as a new release is deployed."
             },
             {
               "fieldId": "deprecated_version",
@@ -142,7 +142,7 @@
               ],
               "readable": false,
               "writable": false,
-              "description": "A new release was deployed and its check ran over this workspace's automations. `Reason` names the release and how many automations moved to the current language version, stayed with warnings, or failed. Not about one automation: `Automation` is empty. Emitted by the check that runs as a new release is deployed."
+              "description": "A new release was deployed and its check ran over this workspace's automations. `Reason` names the release and how many automations validate cleanly under the current language version (upgraded only when someone asks), do not, or failed. Not about one automation: `Automation` is empty. Emitted by the check that runs as a new release is deployed."
             }
           ]
         },
@@ -318,7 +318,7 @@
           "validation_issue": {
             "typeId": "validation_issue",
             "displayName": "Validation Issue",
-            "description": "A saved automation does not validate cleanly under the release's current language version, so it stays on the version it is written in. `Reason` lists what to repair. Emitted by the check that runs as a new release is deployed.",
+            "description": "A saved automation does not validate cleanly under the release's current language version, so it cannot be upgraded to it yet. `Reason` lists what to repair. Emitted by the check that runs as a new release is deployed.",
             "fields": [
               {
                 "fieldId": "automation",
@@ -444,7 +444,7 @@
           "release_applied": {
             "typeId": "release_applied",
             "displayName": "Release Applied",
-            "description": "A new release was deployed and its check ran over this workspace's automations. `Reason` names the release and how many automations moved to the current language version, stayed with warnings, or failed. Not about one automation: `Automation` is empty. Emitted by the check that runs as a new release is deployed.",
+            "description": "A new release was deployed and its check ran over this workspace's automations. `Reason` names the release and how many automations validate cleanly under the current language version (upgraded only when someone asks), do not, or failed. Not about one automation: `Automation` is empty. Emitted by the check that runs as a new release is deployed.",
             "fields": [
               {
                 "fieldId": "automation",
@@ -646,7 +646,7 @@
       "answer": {
         "typeId": "validation_issue",
         "displayName": "Validation Issue",
-        "description": "A saved automation does not validate cleanly under the release's current language version, so it stays on the version it is written in. `Reason` lists what to repair. Emitted by the check that runs as a new release is deployed.",
+        "description": "A saved automation does not validate cleanly under the release's current language version, so it cannot be upgraded to it yet. `Reason` lists what to repair. Emitted by the check that runs as a new release is deployed.",
         "fields": [
           {
             "fieldId": "automation",
@@ -780,7 +780,7 @@
       "answer": {
         "typeId": "release_applied",
         "displayName": "Release Applied",
-        "description": "A new release was deployed and its check ran over this workspace's automations. `Reason` names the release and how many automations moved to the current language version, stayed with warnings, or failed. Not about one automation: `Automation` is empty. Emitted by the check that runs as a new release is deployed.",
+        "description": "A new release was deployed and its check ran over this workspace's automations. `Reason` names the release and how many automations validate cleanly under the current language version (upgraded only when someone asks), do not, or failed. Not about one automation: `Automation` is empty. Emitted by the check that runs as a new release is deployed.",
         "fields": [
           {
             "fieldId": "automation",
@@ -914,7 +914,7 @@
       "answer": {
         "typeId": "release_applied",
         "displayName": "Release Applied",
-        "description": "A new release was deployed and its check ran over this workspace's automations. `Reason` names the release and how many automations moved to the current language version, stayed with warnings, or failed. Not about one automation: `Automation` is empty. Emitted by the check that runs as a new release is deployed.",
+        "description": "A new release was deployed and its check ran over this workspace's automations. `Reason` names the release and how many automations validate cleanly under the current language version (upgraded only when someone asks), do not, or failed. Not about one automation: `Automation` is empty. Emitted by the check that runs as a new release is deployed.",
         "fields": [
           {
             "fieldId": "automation",

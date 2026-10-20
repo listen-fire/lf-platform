@@ -504,7 +504,7 @@ type ResumeFiringInput = {
   /** The pinned version's source (P11) — what resume re-parses + executes. */
   pinnedSource: string;
   /** The pinned version's language version — the one the run STARTED under,
-   *  never the movement's pin now (the deploy check may have advanced it
+   *  never the movement's pin now (an upgrade may have moved it
    *  while the run was parked). */
   pinnedLanguageVersion: LanguageVersion;
   movementVersionId: string | null;

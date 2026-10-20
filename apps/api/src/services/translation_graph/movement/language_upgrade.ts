@@ -1,24 +1,22 @@
-// Moving a movement's language version pin — the only two ways it moves.
+// A movement's language version pin moves ONLY by an explicit upgrade a person
+// asks for (`upgradeMovement`): validation under the current version, shown to
+// the caller first; the pin moves only when the caller acknowledges a clean
+// result. Nothing moves a pin automatically (Henry, 2026-10-20).
 //
-//   1. THE DEPLOY CHECK, once per release, over every team's movements
-//      (`runDeployCheck`). Each movement is validated under its own pin, which
-//      must pass (the release preserves every supported version's behaviour, so
-//      a failure there is a bug in that preservation), then under the release's
-//      current version. Clean there — no errors, and no diagnostic the checker
-//      raised because the check is a move up (one marking a construct whose
-//      meaning changed) — advances the pin. Any other warning (a cost note,
-//      say) reads the same under either version: it is printed as a note and
-//      never blocks. Anything else keeps the pin, stores what stood in the way
-//      on the movement, and tells the team through a `Validation Issue`.
-//   2. AN EXPLICIT UPGRADE of one movement (`upgradeMovement`): the same
-//      validation under the current version, shown to the caller first; the pin
-//      moves only when the caller acknowledges a clean result.
+// THE DEPLOY CHECK, once per release over every team's movements
+// (`runDeployCheck`), only reports. Each movement is validated under its own
+// pin, which must pass (the release preserves every supported version's
+// behaviour, so a failure there is a bug in that preservation), then under the
+// release's current version. Clean there — no errors, and no diagnostic the
+// checker raised because the check is a move up (one marking a construct whose
+// meaning changed) — makes the movement `upgradable`: offered the upgrade,
+// pin untouched. Any other warning (a cost note, say) reads the same under
+// either version: it is printed as a note and never blocks. Anything else
+// stores what stood in the way on the movement and tells the team through a
+// `Validation Issue`.
 //
-// The deploy check NEVER rewrites a movement's text (Henry, 2026-10-16): it
-// judges the text as written, and advances only a pin whose text is already
-// clean under the current version. A movement in an older spelling stays on
-// its pin, with what stands in the way stored and the team told, until
-// someone upgrades it.
+// The deploy check NEVER rewrites a movement's text either (Henry,
+// 2026-10-16): it judges the text as written.
 //
 // Only the explicit upgrade REWRITES the text, by the fixes the checker offers
 // under the current version (movement-lang checker/upgrade.ts — the loop
@@ -92,8 +90,7 @@ export function blockingDiagnostics(diagnostics: AuthoringDiagnostic[]): Authori
 }
 
 /** What `upgradeMovement` refuses outright. A move-up warning is not here: the
- *  deploy check holds the pin on it (nothing advances behind the author's
- *  back), but it fires on every use of a construct whose meaning changed
+ *  deploy check reports it as standing in the way, but it fires on every use of a construct whose meaning changed
  *  whether or not the author edits, so the explicit upgrade lets the author
  *  acknowledge it, or the pin could never move. */
 function hardErrors(diagnostics: AuthoringDiagnostic[]): AuthoringDiagnostic[] {
@@ -127,8 +124,8 @@ export type ValidateUnder = (input: {
  *  can still land short of shipping. */
 export type AdvanceOutcome = { ok: true } | { ok: false; detail: string };
 
-/** Move `movement`'s pin to `to` — with `source`, saving that text with it
- *  (only an explicit upgrade passes one). */
+/** Move `movement`'s pin to `to` — with `source`, saving that text with it.
+ *  Only an explicit upgrade calls it. */
 export type Advance = (input: { movement: MovementRow; to: LanguageVersion; source?: string }) => Promise<AdvanceOutcome>;
 
 // ── The rewrite ─────────────────────────────────────────────────────────────
@@ -222,10 +219,11 @@ function diagnosticsText(diagnostics: AuthoringDiagnostic[]): string {
 
 // ── The deploy check ─────────────────────────────────────────────────────────
 
-/** What the check did with one movement. */
+/** What the check found for one movement. It never moves a pin. */
 export type DeployCheckOutcome =
-  /** Clean under the current version: the pin moved to it. */
-  | 'advanced'
+  /** Clean under the current version as written: offered the upgrade, the pin
+   *  stays until someone asks for it. */
+  | 'upgradable'
   /** Already on the current version, and validates under it. */
   | 'current'
   /** Validates under its pin but not cleanly under the current version: the
@@ -239,7 +237,7 @@ export type DeployCheckOutcome =
   | 'unverified';
 
 export const DEPLOY_CHECK_OUTCOMES: readonly DeployCheckOutcome[] = [
-  'advanced',
+  'upgradable',
   'current',
   'warned',
   'refused',
@@ -251,15 +249,17 @@ export interface DeployCheckEntry {
   teamId: string;
   name: string;
   outcome: DeployCheckOutcome;
-  /** The pin before the check. */
+  /** The movement's pin, which the check leaves where it is. */
   from: LanguageVersionView;
-  /** The pin after it. */
+  /** The version an upgrade would move it to: the current one when
+   *  `upgradable`, otherwise the pin. */
   to: LanguageVersionView;
-  /** Whether the pin (after the check) is one the release deprecates. */
+  /** Whether the pin is one the release deprecates. */
   deprecated: boolean;
-  /** Why it did not advance: the blocking diagnostics, or what went wrong. */
+  /** What stands in the way of an upgrade: the blocking diagnostics, or what
+   *  went wrong. */
   detail: string;
-  /** Warnings under the current version that did not block the move. Absent
+  /** Warnings under the current version that would not block an upgrade. Absent
    *  when there were none (and on summaries recorded before v0.8.1). */
   notes?: string;
 }
@@ -305,7 +305,6 @@ export interface DeployCheckDeps {
     diagnostics: AuthoringDiagnostic[];
     checkedAgainst: LanguageVersion;
   }): Promise<void>;
-  advance: Advance;
   emit(input: { teamId: string; kind: SystemEventKind; payload: SystemEventPayload }): Promise<void>;
   /** Record the run — what makes a second run on this release a no-op. */
   recordRun(input: { tag: string; languageRelease: string; summary: DeployCheckSummary }): Promise<void>;
@@ -433,9 +432,9 @@ async function checkOne(input: {
     return entryFor(movement, 'current', pin, releaseLanguage, '');
   }
 
-  // (b) Under the current version, as written — whether the pin may move. The
-  // check never rewrites the text: an old spelling blocks like any error, and
-  // the explicit upgrade is what rewrites it.
+  // (b) Under the current version, as written — whether an upgrade is on
+  // offer. The check never rewrites the text: an old spelling blocks like any
+  // error, and the explicit upgrade is what rewrites it.
   const underCurrent = await deps.validate(validationUnder(movement, current));
   const blocking = blockingDiagnostics(underCurrent.diagnostics);
   await deps.recordUpgradeCheck({ movement, diagnostics: blocking, checkedAgainst: current });
@@ -465,15 +464,10 @@ async function checkOne(input: {
     return withNotes(entryFor(movement, 'unverified', pin, releaseLanguage, gapsText(underCurrent.gaps)));
   }
 
-  // Clean as written: only the pin moves (the text is untouched).
-  const advanced = await deps.advance({ movement, to: current });
-  if (!advanced.ok) {
-    await emitDeprecation(deps, movement, pin, at);
-    return withNotes(entryFor(movement, 'unverified', pin, releaseLanguage, advanced.detail));
-  }
-  await deps.recordValidity({ movement, validation: underCurrent, checkedAgainst: current });
-  await emitDeprecation(deps, movement, current, at);
-  return withNotes(entryFor(movement, 'advanced', current, releaseLanguage, ''));
+  // Clean as written: offered, never applied — only an explicit upgrade moves
+  // a pin (Henry, 2026-10-20).
+  await emitDeprecation(deps, movement, pin, at);
+  return withNotes(entryFor(movement, 'upgradable', current, releaseLanguage, ''));
 }
 
 /** A movement left on a deprecated version is told so, once per release. */
@@ -541,7 +535,7 @@ function entryFor(
     outcome,
     from: languageVersionView(movement.languageVersion),
     to: languageVersionView(to),
-    deprecated: languageVersionStanding(to, release) === 'deprecated',
+    deprecated: languageVersionStanding(movement.languageVersion, release) === 'deprecated',
     detail,
   };
 }
@@ -552,7 +546,7 @@ function gapsText(gaps: TeamMovementValidation['gaps']): string {
 
 function countOutcomes(entries: DeployCheckEntry[]): Record<DeployCheckOutcome, number> {
   const counts: Record<DeployCheckOutcome, number> = {
-    advanced: 0,
+    upgradable: 0,
     current: 0,
     warned: 0,
     refused: 0,
@@ -568,8 +562,8 @@ function releaseAppliedReason(
   counts: Record<DeployCheckOutcome, number>,
 ): string {
   return (
-    `Release ${tag} applied. Moved to ${describeLanguageVersion(current)}: ${counts.advanced}. ` +
-    `Already on it: ${counts.current}. Stayed on an older version with warnings: ${counts.warned}. ` +
+    `Release ${tag} applied. Clean under ${describeLanguageVersion(current)}, upgraded when you ask: ${counts.upgradable}. ` +
+    `Already on it: ${counts.current}. Not clean under it: ${counts.warned}. ` +
     `Not validating: ${counts.refused}. Could not be checked: ${counts.unverified}.`
   );
 }
@@ -619,7 +613,6 @@ export function liveDeployCheckDeps(release: DeployCheckRelease): DeployCheckDep
     },
     recordUpgradeCheck: ({ movement, diagnostics, checkedAgainst }) =>
       recordUpgradeCheck({ id: movement.id, diagnostics, checkedAgainst }),
-    advance: advanceLive,
     emit: recordSystemEvent,
     recordRun: async ({ tag, languageRelease, summary }) => {
       await getAutomationsQb(['deploy_check'])
@@ -633,10 +626,9 @@ export function liveDeployCheckDeps(release: DeployCheckRelease): DeployCheckDep
 }
 
 /**
- * Move a pin for real. Without a rewrite (the deploy check's advance), the pin
- * moves on its own (and the current snapshot is re-minted under it). With one
- * (an explicit upgrade's), the rewritten text is
- * saved under the new pin in one save — the text and the pin it is written in
+ * Move a pin for real, for an explicit upgrade. Without a rewrite, the pin
+ * moves on its own (and the current snapshot is re-minted under it). With one,
+ * the rewritten text is saved under the new pin in one save — the text and the pin it is written in
  * move together, its listeners are reconciled and its snapshot minted — so no
  * run ever sees the new spelling under the old pin or the old under the new.
  */

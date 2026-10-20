@@ -3099,7 +3099,7 @@ CREATE TABLE automations.movement_version (
     content_hash text NOT NULL,                  -- hash of source; dedups identical re-saves (D1)
     -- The movement's language version when this snapshot was minted. A run pins
     -- the snapshot, so a parked run resumes under the version it STARTED with,
-    -- even after the deploy check advances the movement's pin.
+    -- even after an upgrade moves the movement's pin.
     language_version integer NOT NULL,
     created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL
 );

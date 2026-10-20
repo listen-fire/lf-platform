@@ -324,8 +324,8 @@ export async function recordUpgradeCheck(input: {
 }
 
 /**
- * Move a movement's pin — the deploy check's auto-advance or an explicit
- * upgrade, never an edit. Clears what stood in the way, and re-mints the
+ * Move a movement's pin — only an explicit upgrade, never an edit or the
+ * deploy check. Clears what stood in the way, and re-mints the
  * movement's current snapshot under the new version so new runs pin it while
  * parked ones keep the version they started with.
  */

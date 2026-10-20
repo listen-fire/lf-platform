@@ -1,7 +1,8 @@
-// The deploy check's sweep, over a fake movement store: which pins advance,
-// which stay with their diagnostics stored and a Validation Issue emitted,
-// which are refused (a preservation failure), and that a second run on the same
-// release does nothing.
+// The deploy check's sweep, over a fake movement store: it moves no pin (only
+// an explicit upgrade does); which movements are offered the upgrade, which
+// have their diagnostics stored and a Validation Issue emitted, which are
+// refused (a preservation failure), and that a second run on the same release
+// does nothing.
 
 jest.mock('movement-engine/services/logger', () => ({
   logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
@@ -34,7 +35,8 @@ import {
 
 import { assessMovementValidity, type AuthoringDiagnostic } from '../authoring';
 
-import { getMovementRow, type MovementRow } from '../store';
+import { advanceMovementLanguageVersion, getMovementRow, type MovementRow } from '../store';
+import { saveMovement } from '../provision';
 import {
   runDeployCheck,
   upgradeMovement,
@@ -92,21 +94,17 @@ function fakeStore(input: {
   verdicts: Verdicts;
   release?: LanguageRelease;
 }) {
-  const pins = new Map(input.movements.map((m) => [m.id, m.languageVersion]));
   const upgradeDiagnostics = new Map<string, AuthoringDiagnostic[]>();
   const validity = new Map<string, LanguageVersion>();
   const events: Array<{ teamId: string; kind: string; reason: string; version: string }> = [];
   const runs: Array<{ tag: string; languageRelease: string; summary: DeployCheckSummary }> = [];
   const validations: Array<Parameters<ValidateUnder>[0]> = [];
-  const sources = new Map<string, string>();
 
   const deps: DeployCheckDeps = {
     release: { tag: 'v0.8.0', language: input.release ?? RELEASE },
     alreadyRan: async ({ tag, languageRelease }) =>
       runs.some((r) => r.tag === tag && r.languageRelease === languageRelease),
-    // Read the pins fresh, as the real store does.
-    listMovements: async () =>
-      input.movements.map((m) => ({ ...m, languageVersion: pins.get(m.id) ?? m.languageVersion })),
+    listMovements: async () => input.movements,
     sourceHash: (source) => `hash:${source}`,
     validate: async (validation) => {
       validations.push(validation);
@@ -121,11 +119,6 @@ function fakeStore(input: {
     recordUpgradeCheck: async ({ movement: m, diagnostics }) => {
       upgradeDiagnostics.set(m.id, diagnostics);
     },
-    advance: async ({ movement: m, to, source }) => {
-      pins.set(m.id, to);
-      if (source !== undefined) sources.set(m.id, source);
-      return { ok: true };
-    },
     emit: async ({ teamId, kind, payload }) => {
       events.push({ teamId, kind: kind.typeId, reason: payload.reason, version: payload.version });
     },
@@ -134,21 +127,31 @@ function fakeStore(input: {
     },
     now: () => new Date('2026-09-29T12:00:00.000Z'),
   };
-  return { deps, pins, upgradeDiagnostics, validity, events, runs, validations, sources };
+  return { deps, upgradeDiagnostics, validity, events, runs, validations };
 }
 
+/** The check has no seam that moves a pin; this proves it reached for no
+ *  other way to move one either. */
+function expectNoPinMoved(): void {
+  expect(advanceMovementLanguageVersion).not.toHaveBeenCalled();
+  expect(saveMovement).not.toHaveBeenCalled();
+}
+
+beforeEach(() => jest.clearAllMocks());
+
 describe('the deploy check', () => {
-  it('advances a pin that validates cleanly under the current version', async () => {
+  it('offers the upgrade to a movement clean under the current version, and keeps its pin', async () => {
     const store = fakeStore({ movements: [movement({ id: 'clean' })], verdicts: {} });
 
     const summary = await runDeployCheck(store.deps);
 
-    expect(store.pins.get('clean')).toBe(2);
-    expect(store.validity.get('clean')).toBe(2);
+    expectNoPinMoved();
+    expect(store.validity.get('clean')).toBe(1);
+    expect(store.upgradeDiagnostics.get('clean')).toEqual([]);
     expect(summary?.automations).toEqual([
       expect.objectContaining({
         name: 'clean',
-        outcome: 'advanced',
+        outcome: 'upgradable',
         from: { version: 1, name: 'Quiet Heron' },
         to: { version: 2, name: 'Bright Otter' },
       }),
@@ -156,7 +159,7 @@ describe('the deploy check', () => {
     expect(store.events.map((e) => e.kind)).toEqual([RELEASE_APPLIED.typeId]);
   });
 
-  it('advances a pin whose only warning is a cost note, and prints the note', async () => {
+  it('offers the upgrade when the only warning is a cost note, and prints the note', async () => {
     const note = {
       ...diagnostic('warning', "WHERE on 'Searches' runs here, not at the source"),
       code: 'MOV_HOP_WHERE_ENGINE',
@@ -165,18 +168,18 @@ describe('the deploy check', () => {
 
     const summary = await runDeployCheck(store.deps);
 
-    expect(store.pins.get('noted')).toBe(2);
+    expectNoPinMoved();
     expect(store.upgradeDiagnostics.get('noted')).toEqual([]);
     expect(store.events.map((e) => e.kind)).toEqual([RELEASE_APPLIED.typeId]);
     expect(summary?.automations[0]).toEqual(
       expect.objectContaining({
-        outcome: 'advanced',
+        outcome: 'upgradable',
         notes: "line 3: WHERE on 'Searches' runs here, not at the source",
       }),
     );
   });
 
-  it('keeps the pin on a meaning-changed warning, stores it, and emits a Validation Issue', async () => {
+  it('stores a meaning-changed warning as standing in the way, and emits a Validation Issue', async () => {
     const warning = meaningChanged('extracted text is never null under this version');
     const note = diagnostic('warning', "ORDER BY on 'Messages' runs here");
     const store = fakeStore({
@@ -186,13 +189,13 @@ describe('the deploy check', () => {
 
     const summary = await runDeployCheck(store.deps);
 
-    expect(store.pins.get('warns')).toBe(1);
+    expectNoPinMoved();
     // Only what blocks the move is stored — the cost note and the info say
     // nothing about it.
     expect(store.upgradeDiagnostics.get('warns')).toEqual([warning]);
     expect(summary?.automations[0]?.notes).toBe("line 3: ORDER BY on 'Messages' runs here");
     expect(summary?.counts).toEqual(
-      expect.objectContaining({ advanced: 0, warned: 1, refused: 0 }),
+      expect.objectContaining({ upgradable: 0, warned: 1, refused: 0 }),
     );
     const issue = store.events.find((e) => e.kind === VALIDATION_ISSUE.typeId);
     expect(issue).toEqual(
@@ -201,7 +204,7 @@ describe('the deploy check', () => {
     expect(issue?.reason).toContain('line 3: extracted text is never null under this version');
   });
 
-  it('refuses a movement that fails under its own pin: logs, stores, never advances', async () => {
+  it('refuses a movement that fails under its own pin: logs and stores it', async () => {
     const store = fakeStore({
       movements: [movement({ id: 'broken' })],
       verdicts: { broken: { 1: [diagnostic('error', 'unknown field')] } },
@@ -209,7 +212,7 @@ describe('the deploy check', () => {
 
     const summary = await runDeployCheck(store.deps);
 
-    expect(store.pins.get('broken')).toBe(1);
+    expectNoPinMoved();
     expect(store.validity.get('broken')).toBe(1);
     expect(summary?.automations[0]).toEqual(
       expect.objectContaining({ outcome: 'refused', detail: 'line 3: unknown field' }),
@@ -278,8 +281,8 @@ describe('the deploy check', () => {
     const applied = store.events.filter((e) => e.kind === RELEASE_APPLIED.typeId);
     expect(applied.map((e) => e.teamId)).toEqual(['team-1', 'team-2']);
     expect(applied[1]?.reason).toContain('Release v0.8.0 applied');
-    expect(applied[1]?.reason).toContain('Moved to "Bright Otter" (2): 1');
-    expect(applied[1]?.reason).toContain('with warnings: 1');
+    expect(applied[1]?.reason).toContain('Clean under "Bright Otter" (2), upgraded when you ask: 1');
+    expect(applied[1]?.reason).toContain('Not clean under it: 1');
   });
 
   it('tells a movement left on a deprecated version so', async () => {
@@ -310,9 +313,9 @@ describe('the deploy check', () => {
 
     expect(summary?.automations.map((a) => [a.name, a.outcome])).toEqual([
       ['flaky', 'unverified'],
-      ['clean', 'advanced'],
+      ['clean', 'upgradable'],
     ]);
-    expect(store.pins.get('flaky')).toBe(1);
+    expectNoPinMoved();
   });
 });
 
@@ -450,8 +453,7 @@ describe('the upgrade rewrites the text by its fixes first', () => {
     store.deps.validate = underFive();
     const summary = await runDeployCheck(store.deps);
     expect(summary?.automations.map((a) => a.outcome)).toEqual(['warned']);
-    expect(store.pins.get('old')).toBe(4);
-    expect(store.sources.has('old')).toBe(false);
+    expectNoPinMoved();
     expect(store.upgradeDiagnostics.get('old')?.map((d) => d.code)).toEqual(['MOV_V5_SPELLING', 'MOV_V5_SPELLING', 'MOV_V5_SPELLING']);
     const issue = store.events.find((e) => e.kind === VALIDATION_ISSUE.typeId);
     expect(issue?.reason).toContain('Upgrading the automation rewrites what the checker can fix');
@@ -463,16 +465,15 @@ describe('the upgrade rewrites the text by its fixes first', () => {
     store.deps.validate = underFive([left]);
     const summary = await runDeployCheck(store.deps);
     expect(summary?.automations.map((a) => a.outcome)).toEqual(['warned']);
-    expect(store.pins.get('old')).toBe(4);
-    expect(store.sources.has('old')).toBe(false);
+    expectNoPinMoved();
   });
 
-  it('a movement already in the new spelling advances its pin alone, its text untouched', async () => {
+  it('a movement already in the new spelling is offered the upgrade, its pin and text untouched', async () => {
     const store = fakeStore({ movements: [movement({ id: 'new', languageVersion: 4, source: NEW })], verdicts: {}, release: FIVE });
     store.deps.validate = underFive();
-    await runDeployCheck(store.deps);
-    expect(store.pins.get('new')).toBe(CURRENT_LANGUAGE_VERSION);
-    expect(store.sources.has('new')).toBe(false);
+    const summary = await runDeployCheck(store.deps);
+    expect(summary?.automations.map((a) => a.outcome)).toEqual(['upgradable']);
+    expectNoPinMoved();
   });
 
   it('an explicit upgrade shows the rewrite, and saves it with the pin once acknowledged', async () => {
@@ -581,7 +582,7 @@ describe('a meaning-changed construct inside an imported library', () => {
 
     const summary = await runDeployCheck(store.deps);
 
-    expect(store.pins.get('importer')).toBe(1);
+    expectNoPinMoved();
     expect(summary?.automations[0]?.outcome).toBe('warned');
     expect(store.upgradeDiagnostics.get('importer')).toEqual([
       expect.objectContaining({

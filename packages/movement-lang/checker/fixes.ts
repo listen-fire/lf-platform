@@ -19,10 +19,10 @@ export interface SourceEdit {
 export interface DiagnosticFix {
   /** Applied together; no two overlap. */
   edits: SourceEdit[];
-  /** Safe to apply automatically: the rewrite provably keeps the program's
-   *  meaning (an old spelling read into the very tree it was). Only such
-   *  fixes move a pin on their own (the deploy check's advance); a person's
-   *  upgrade applies them and lists the rest, or applies all when asked. */
+  /** Safe to apply without review: the rewrite provably keeps the program's
+   *  meaning (an old spelling read into the very tree it was). An upgrade a
+   *  person asks for applies these and lists the rest, or applies all when
+   *  asked. Nothing applies any fix on its own. */
   safe?: true;
 }
 

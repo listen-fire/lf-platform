@@ -47,8 +47,8 @@ it always has.
 To upgrade one, repair what the current version reports — in text that still
 validates as the older version — then upgrade it: the check runs again, shows
 what it finds, and moves the automation only when that is clean and the move is
-confirmed. Each new release moves every automation that is clean under its
-current version by itself.
+confirmed. Only an upgrade someone requests moves an automation; a new release
+never does.
 
 ### the-cardinal-rule
 

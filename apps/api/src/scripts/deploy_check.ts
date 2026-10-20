@@ -1,7 +1,8 @@
 /**
  * The deploy check: once per release, after migrations and before the api
- * takes traffic, re-validate every saved automation and advance the language
- * version pins that validate cleanly under the release's current version
+ * takes traffic, re-validate every saved automation and report which ones
+ * validate cleanly under the release's current version. It never moves a
+ * language version pin: only an explicit upgrade does
  * (services/translation_graph/movement/language_upgrade.ts).
  *
  * It runs in the `migrate` one-shot (deploy/docker-compose.yml; Render's
@@ -10,8 +11,7 @@
  * release does nothing.
  *
  * It never fails the deployment: a check that cannot finish logs why and exits
- * 0, because every pin it did not reach simply stays where it was — which is
- * always safe — while a failed one-shot would keep the api from starting.
+ * 0, because it changes no pin — while a failed one-shot would keep the api from starting.
  *
  * Usage:
  *   node build/scripts/deploy_check.js             # run the check
@@ -36,8 +36,8 @@ import { neverAsAny } from 'movement-engine/public/types';
 
 function outcomeHeading(outcome: DeployCheckOutcome): string {
   switch (outcome) {
-    case 'advanced':
-      return 'Moved to the current language version';
+    case 'upgradable':
+      return 'Clean under the current language version — offered the upgrade, pin unchanged';
     case 'current':
       return 'Already on the current language version';
     case 'warned':
@@ -51,7 +51,7 @@ function outcomeHeading(outcome: DeployCheckOutcome): string {
   }
 }
 
-/** The table `deploy/up.sh` prints: advanced / warned / refused, by name. */
+/** The table `deploy/up.sh` prints: upgradable / warned / refused, by name. */
 export function renderSummary(summary: DeployCheckSummary): string {
   const lines = [
     `Deploy check for release ${summary.release} (${summary.ranAt}), ` +
@@ -103,7 +103,7 @@ export async function deployCheckMain(): Promise<void> {
   try {
     await runCheck();
   } catch (err) {
-    logger.error('[DeployCheck] the check could not finish — every pin it did not reach stays put', {
+    logger.error('[DeployCheck] the check could not finish — it moves no pin, so nothing changed', {
       error: err instanceof Error ? (err.stack ?? err.message) : String(err),
     });
   }

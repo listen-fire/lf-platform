@@ -50,7 +50,7 @@ export const VALIDATION_ISSUE: SystemEventKind = {
   tag: 'system:validation_issue',
   description:
     `A saved automation does not validate cleanly under the release's current language ` +
-    `version, so it stays on the version it is written in. \`Reason\` lists what to repair. ${ON_DEPLOY}`,
+    `version, so it cannot be upgraded to it yet. \`Reason\` lists what to repair. ${ON_DEPLOY}`,
 };
 
 export const DEPRECATED_VERSION: SystemEventKind = {
@@ -68,8 +68,8 @@ export const RELEASE_APPLIED: SystemEventKind = {
   tag: 'system:release_applied',
   description:
     `A new release was deployed and its check ran over this workspace's automations. ` +
-    `\`Reason\` names the release and how many automations moved to the current language ` +
-    `version, stayed with warnings, or failed. Not about one automation: \`Automation\` is empty. ${ON_DEPLOY}`,
+    `\`Reason\` names the release and how many automations validate cleanly under the current ` +
+    `language version (upgraded only when someone asks), do not, or failed. Not about one automation: \`Automation\` is empty. ${ON_DEPLOY}`,
 };
 
 export const SYSTEM_EVENT_KINDS: readonly SystemEventKind[] = [

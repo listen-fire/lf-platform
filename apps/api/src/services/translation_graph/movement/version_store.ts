@@ -9,8 +9,8 @@
 // drifted while the run waited (P11).
 //
 // A version also carries the movement's LANGUAGE version when it was minted,
-// so a parked run resumes under the version it started with even after the
-// deploy check advances the movement's pin. A pin that moves mints a fresh
+// so a parked run resumes under the version it started with even after an
+// upgrade moves the movement's pin. A pin that moves mints a fresh
 // snapshot of the same text, so new runs pin a version carrying the new one.
 //
 // See plans/2026-06-21-movement-versioning/1_decisions.md and
