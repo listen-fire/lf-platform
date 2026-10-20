@@ -69,8 +69,9 @@ pub struct TokenCounts {
 }
 
 /// The one price table, @lf/anthropic's (modules/anthropic/prices.json): the
-/// TypeScript client bills from the same file.
-static PRICES_TEXT: &str = include_str!("../../../modules/anthropic/prices.json");
+/// TypeScript client bills from the same file. This is a copy inside the crate
+/// so `cargo publish` packages it; a test holds it equal to the module's.
+static PRICES_TEXT: &str = include_str!("../data/prices.json");
 
 fn prices() -> &'static BTreeMap<String, Price> {
     static PRICES: OnceLock<BTreeMap<String, Price>> = OnceLock::new();
@@ -143,6 +144,12 @@ pub fn provider_key(credentials: &Credentials) -> Result<ProviderKey, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_packaged_price_table_is_the_modules() {
+        let module = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../modules/anthropic/prices.json")).unwrap();
+        assert_eq!(PRICES_TEXT, module, "crates/lf/data/prices.json is a copy of modules/anthropic/prices.json: cp it over");
+    }
 
     /// The names the TypeScript registry holds as chat models, in its order.
     fn registry_chat_models() -> Vec<String> {

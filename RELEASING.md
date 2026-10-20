@@ -20,7 +20,9 @@ A suffixed tag never moves `:latest`, npm `latest`, or the default docs.
    cargo publish -p listen-fire-checker
    cargo publish -p listen-fire-engine
    cargo publish -p listen-fire-language
+   cargo publish -p listen-fire-module-wire
    cargo publish -p listen-fire
+   cargo publish -p listen-fire-module-kit
    ```
    A pre-release version is never picked by `cargo install listen-fire` without `--version 0.12.0-rc.2`.
 4. Publish the npm packages; each has `publishConfig.tag: "next"`, so none takes `latest`.
