@@ -30,6 +30,12 @@ const WORKSPACE = {
   'movement-lang': 'packages/movement-lang',
   'file-text': 'packages/file-text',
   'files-s3': 'packages/files-s3',
+  // models (the models slot on any vendor, and models_ocr) speaks through the
+  // platform's provider translators and the shared Anthropic client.
+  'model-providers': 'packages/model-providers',
+  '@listen-fire/anthropic': 'modules/anthropic',
+  // document-ai (the ocr slot) is the platform's Document AI reader, served.
+  '@listen-fire/ocr-google': 'packages/ocr-google',
   // gmail and google-drive reuse google-sheets' OAuth code by its package name.
   '@listen-fire/google-sheets': 'modules/google-sheets',
   '#shared': 'packages/shared',

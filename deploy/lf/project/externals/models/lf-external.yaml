@@ -1,0 +1,21 @@
+# The models slot on Gemini, OpenAI, Claude on Anthropic's API or Claude on
+# Vertex (the module in /srv/lf/modules/models), installed in the image. Not the
+# default: name it in lf.yaml (core: { models: models }) and give it its
+# settings as LF_SECRET__MODELS__VENDOR, __API_KEY, … (see lf.yaml). Also needs
+# LF_SECRET__MODELS__EXTERNAL=models.
+name: models
+kind: core
+slot: models
+# A core module is started by `command` (`module:` is for adapters), from this
+# folder, so the paths are absolute.
+command: [node, --require, /srv/lf/packages/module-kit/node_modules/tsx/dist/cjs/index.cjs, /srv/lf/modules/models/serve.ts]
+settings:
+  - { name: vendor, label: "who answers: gemini, openai, anthropic (Claude on Anthropic's API) or vertex (Claude on Google Cloud)" }
+  - { name: api_key, label: "the vendor's API key (gemini: a Gemini API key; leave empty to use Google Cloud instead)", secret: true, optional: true }
+  - { name: model, label: "the vendor model every movement model name goes to (default gemini-3.8-flash, gpt-5-mini; Claude names keep their own)", optional: true }
+  - { name: model_map, label: "per name overrides, as the platform's MODEL_MAP: {\"claude-opus-5\": \"gemini/gemini-3.1-pro-preview\"}", optional: true }
+  - { name: google_project, label: "Google Cloud: the project (gemini without an API key, and vertex)", optional: true }
+  - { name: google_region, label: "Google Cloud: where models are addressed (default global)", optional: true }
+  - { name: google_client_email, label: "Google Cloud: a service account's email (empty to use the environment's own Google credentials)", optional: true }
+  - { name: google_private_key, label: "Google Cloud: that service account's private key", secret: true, optional: true }
+  - { name: base_url, label: "another endpoint speaking the vendor's API (a proxy); empty for the vendor itself", optional: true }

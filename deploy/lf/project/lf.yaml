@@ -20,3 +20,17 @@ core:
 #   __ACCESS_KEY_ID, __SECRET_ACCESS_KEY as the service needs)
 #   LF_SECRET__POSTGRES_LIMITER__EXTERNAL=postgres_limiter
 #   LF_SECRET__POSTGRES_LIMITER__URL=postgres://…?sslmode=verify-full
+# Models on another vendor than Anthropic, and reading scanned PDFs and images
+# (the ocr slot, empty by default: a scanned file is refused, saying so). On
+# Gemini, through Google Cloud's own identity where the container has one:
+#   core:
+#     models: models
+#     ocr: document_ai        # Google Document AI, the platform's reader
+#     # ocr: models_ocr       # or Gemini reading the file itself
+#   LF_SECRET__MODELS__EXTERNAL=models
+#   LF_SECRET__MODELS__VENDOR=gemini
+#   LF_SECRET__MODELS__GOOGLE_PROJECT=…  (or __API_KEY=… for a Gemini API key)
+#   LF_SECRET__DOCUMENT_AI__EXTERNAL=document_ai
+#   LF_SECRET__DOCUMENT_AI__PROJECT=… __LOCATION=eu __PROCESSOR_ID=…
+#   LF_SECRET__DOCUMENT_AI__BUCKET=…  (files past 15 pages or 20 MB)
+#   LF_SECRET__MODELS_OCR__EXTERNAL=models_ocr  (the models settings again, as __VENDOR=gemini, …)
