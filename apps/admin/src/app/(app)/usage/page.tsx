@@ -118,7 +118,6 @@ const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frid
 type TeamUsageRow = {
   teamId: string;
   teamName: string;
-  pipelineRuns: UsageStatus | null;
   queryInputs: UsageStatus | null;
   alertThresholdPct: number;
   weekStartsOn: number;
@@ -157,7 +156,7 @@ export default function UsagePage() {
           emptyLabel="No teams found."
           renderRow={(row) => {
             const resetDay = DAY_NAMES[row.weekStartsOn] ?? 'Monday';
-            const hasConfig = row.pipelineRuns !== null || row.queryInputs !== null;
+            const hasConfig = row.queryInputs !== null;
             const isSelected = selectedTeam?.id === row.teamId;
 
             return (
@@ -183,17 +182,6 @@ export default function UsagePage() {
 
                   {hasConfig ? (
                     <div className="flex gap-6">
-                      {row.pipelineRuns ? (
-                        <UsageMeter
-                          label="Pipeline runs"
-                          status={row.pipelineRuns}
-                          thresholdPct={row.alertThresholdPct}
-                        />
-                      ) : (
-                        <div className="flex-1 min-w-0">
-                          <span className="text-[12px] text-gray-400">Pipeline runs — no config</span>
-                        </div>
-                      )}
                       {row.queryInputs ? (
                         <UsageMeter
                           label="Questions"

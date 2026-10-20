@@ -10,7 +10,7 @@ import { ExtractionGraphId } from '../../../../generated/kysely/knowledge/Extrac
 import { ExtractionGraphNodeId } from '../../../../generated/kysely/knowledge/ExtractionGraphNode';
 import { ExtractionGraphEdgeId } from '../../../../generated/kysely/knowledge/ExtractionGraphEdge';
 import { PluginId } from '../../../../generated/kysely/knowledge/Plugin';
-import { inputPropertyMappingSchema } from '../../../../adapters/pipeline/inbound/metadata';
+import { inputPropertyMappingSchema } from '../../../../services/knowledge_pipeline/types';
 import { userProcedure as sharedUserProcedure } from '../../procedures';
 
 const pluginAuthSchema = z.discriminatedUnion('type', [

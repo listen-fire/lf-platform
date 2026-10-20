@@ -92,7 +92,7 @@ audit_triggers=`psql -v ON_ERROR_STOP=ON "$DATABASE_URL" <<-EOSQL
       'public.auto_recharge_confirm_token',
       'public.alexamdria_api_key', 'public.push_subscription',
       'public.dropped_inbound_email',
-      'public.waitlist', 'public.pipeline_input_message_type',
+      'public.waitlist',
       'public.signup_event',
       'public.integration_suggestion',
       -- core: a pending signup is a short-lived pre-account token (no account
@@ -100,7 +100,7 @@ audit_triggers=`psql -v ON_ERROR_STOP=ON "$DATABASE_URL" <<-EOSQL
       -- Everything else in the unit is audited -- by core.audit(), which the
       -- check below enforces.
       'core.pending_signup', 'core.audit_log',
-      'public.early_access_config', 'public.dealflow_pipeline',
+      'public.early_access_config',
       -- valuations: the changelog IS the audit trail for funding edits (and
       -- its join table has no id), the outbox is a transient capture queue,
       -- and audit_log is the trail itself. Everything else in the unit is

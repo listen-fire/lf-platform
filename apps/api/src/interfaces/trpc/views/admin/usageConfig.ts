@@ -24,9 +24,7 @@ const usageConfigRouter = (procedure: typeof trpc.procedure) => {
       .input(
         z.object({
           teamId: z.string().uuid(),
-          maxWeeklyPipelineRuns: z.number().int().min(0),
           maxWeeklyQueryInputs: z.number().int().min(0),
-          additionalPipelineRuns: z.number().int().min(0).default(0),
           additionalQueryInputs: z.number().int().min(0).default(0),
           alertThresholdPct: z.number().int().min(0).max(100).default(80),
           weekStartsOn: z.number().int().min(0).max(6).default(1),
@@ -43,9 +41,7 @@ const usageConfigRouter = (procedure: typeof trpc.procedure) => {
           await getQb(['team_usage_config'])
             .updateTable('team_usage_config')
             .set({
-              max_weekly_pipeline_runs: input.maxWeeklyPipelineRuns,
               max_weekly_query_inputs: input.maxWeeklyQueryInputs,
-              additional_pipeline_runs: input.additionalPipelineRuns,
               additional_query_inputs: input.additionalQueryInputs,
               alert_threshold_pct: input.alertThresholdPct,
               week_starts_on: input.weekStartsOn,
@@ -59,9 +55,7 @@ const usageConfigRouter = (procedure: typeof trpc.procedure) => {
             .values({
               id: crypto.randomUUID() as TeamUsageConfigId,
               team_id: input.teamId as TeamId,
-              max_weekly_pipeline_runs: input.maxWeeklyPipelineRuns,
               max_weekly_query_inputs: input.maxWeeklyQueryInputs,
-              additional_pipeline_runs: input.additionalPipelineRuns,
               additional_query_inputs: input.additionalQueryInputs,
               alert_threshold_pct: input.alertThresholdPct,
               week_starts_on: input.weekStartsOn,

@@ -28,7 +28,6 @@ import { resolveAdapterSlug, siblingKindsForAdapter } from '../adapters/registry
 export async function loadTriggerById(triggerId: string): Promise<{
   id: string;
   teamId: string;
-  pipelineConfigurationId: string;
   name: string;
   kind: string;
   config: unknown;
@@ -49,7 +48,6 @@ export async function loadTriggerById(triggerId: string): Promise<{
     .select([
       'id',
       'team_id',
-      'pipeline_configuration_id',
       'name',
       'kind',
       'config',
@@ -64,7 +62,6 @@ export async function loadTriggerById(triggerId: string): Promise<{
   return {
     id: row.id as unknown as string,
     teamId: row.team_id as unknown as string,
-    pipelineConfigurationId: row.pipeline_configuration_id as unknown as string,
     name: row.name,
     kind: row.kind,
     config: row.config,

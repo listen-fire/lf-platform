@@ -24,10 +24,6 @@ export default interface LinkedObjectTable {
 
   data: ColumnType<unknown, unknown | undefined, unknown>;
 
-  retrieval_source_id: ColumnType<string | null, string | null, string | null>;
-
-  output_id: ColumnType<string | null, string | null, string | null>;
-
   action_node_id: ColumnType<string | null, string | null, string | null>;
 
   external_object_type: ColumnType<string | null, string | null, string | null>;

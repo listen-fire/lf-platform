@@ -30,12 +30,11 @@ import { eventAddressKey, CURRENT_LANGUAGE_VERSION } from 'movement-lang';
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type { TriggerId } from '../../../../generated/kysely/automations/Trigger';
 import type { MovementId } from '../../../../generated/kysely/automations/Movement';
-import type { PipelineConfigurationId } from '../../../../generated/kysely/public/PipelineConfiguration';
 import type { Adapter, RuntimeCapabilities } from 'movement-engine/services/translation_graph/adapter';
 import type { Catalog, CatalogSnapshot, InstanceSchema, PositionSchema } from 'movement-lang';
 import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
 
-import { getAutomationsQb, getCoreQb, getQb } from '../../../../lib/kysely';
+import { getAutomationsQb, getCoreQb } from '../../../../lib/kysely';
 import { cleanupTeam } from '../../../../test/harness/cleanup';
 import { seedTeamCredential } from '../../../../test/harness/credentials';
 import { dispatchTriggerByIdEvent } from '../../triggers/router';
@@ -220,12 +219,6 @@ async function seedMovementWithAttioTrigger(teamId: TeamId): Promise<{
   movementId: MovementId;
   triggerId: TriggerId;
 }> {
-  const pipelineConfigurationId = randomUUID() as PipelineConfigurationId;
-  await getQb(['pipeline_configuration'])
-    .insertInto('pipeline_configuration')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .values({ id: pipelineConfigurationId, team_id: teamId, name: `cfg-${pipelineConfigurationId.slice(0, 8)}` } as any)
-    .execute();
 
   const movementId = randomUUID() as MovementId;
   await getAutomationsQb(['movement'])
@@ -241,7 +234,6 @@ async function seedMovementWithAttioTrigger(teamId: TeamId): Promise<{
     .values({
       id: triggerId,
       team_id: teamId,
-      pipeline_configuration_id: pipelineConfigurationId,
       name: 'Attio record changes',
       kind: 'attio',
       movement_id: movementId,

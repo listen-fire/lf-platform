@@ -2,7 +2,7 @@ import './_profile_loader';
 
 import { randomUUID } from 'node:crypto';
 
-import { getAutomationsQb, getCoreQb, getKnowledgeQb, getQb } from '../../lib/kysely';
+import { getAutomationsQb, getKnowledgeQb, getQb } from '../../lib/kysely';
 import { materializeTemplate } from '../../lib/knowledge/templates/materialize';
 import { generateJWT } from '../../lib/middleware/authentication/token';
 import { encryptToken, decryptToken } from '../../lib/credentials';
@@ -24,7 +24,6 @@ import { ensurePublicIdentity } from '../../startup/core';
 
 import type { TeamId } from '../../generated/kysely/core/Team';
 import type { UserId } from '../../generated/kysely/core/User';
-import type { PipelineConfigurationId } from '../../generated/kysely/public/PipelineConfiguration';
 import type { ExternalServiceCredentialsId } from '../../generated/kysely/automations/ExternalServiceCredentials';
 
 import ExternalServiceType from '../../generated/kysely/automations/ExternalServiceType';
@@ -320,7 +319,6 @@ export interface SeedResult {
     team: boolean;
     user: boolean;
     ontology: boolean;
-    pipelineConfig: boolean;
     attioCredentials: boolean;
     airtableCredentials: boolean;
     evertraceCredentials: boolean;
@@ -365,7 +363,6 @@ export async function ensureDevLoopTeam(): Promise<SeedResult> {
     team: false,
     user: false,
     ontology: false,
-    pipelineConfig: false,
     attioCredentials: false,
     airtableCredentials: false,
     evertraceCredentials: false,
@@ -490,26 +487,6 @@ export async function ensureDevLoopTeam(): Promise<SeedResult> {
       materializeTemplate(trx, teamId as TeamId, 'vc-dealflow'),
     );
     created.ontology = true;
-  }
-
-  // 4. Pipeline configuration
-  const teamRow = await getCoreQb(['team'])
-    .selectFrom('team')
-    .where('id', '=', teamId as TeamId)
-    .select('active_pipeline_configuration_id')
-    .executeTakeFirst();
-  if (!teamRow?.active_pipeline_configuration_id) {
-    const configId = randomUUID() as PipelineConfigurationId;
-    await getQb(['pipeline_configuration'])
-      .insertInto('pipeline_configuration')
-      .values({ id: configId, name: 'Dev Loop Configuration', team_id: teamId } as any)
-      .execute();
-    await getCoreQb(['team'])
-      .updateTable('team')
-      .set({ active_pipeline_configuration_id: configId })
-      .where('id', '=', teamId as TeamId)
-      .execute();
-    created.pipelineConfig = true;
   }
 
   // 5. Mock Attio credentials — picks up fake-channels via injectFakeBaseUrl.

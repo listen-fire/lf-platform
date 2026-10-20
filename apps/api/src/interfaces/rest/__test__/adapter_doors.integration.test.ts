@@ -33,10 +33,9 @@ import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
 import type { MovementId } from '../../../generated/kysely/automations/Movement';
 import type { MovementVersionId } from '../../../generated/kysely/automations/MovementVersion';
 import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
-import type { PipelineConfigurationId } from '../../../generated/kysely/public/PipelineConfiguration';
 
 import { cleanupTeam } from '../../../test/harness/cleanup';
-import { getAutomationsQb, getCoreQb, getQb } from '../../../lib/kysely';
+import { getAutomationsQb, getCoreQb } from '../../../lib/kysely';
 import {
   FAKE_CRM_ADAPTER_TYPE,
   FAKE_CRM_COMPANY_CREATED,
@@ -95,12 +94,6 @@ const SOURCE = 'movement on_company(ev) {\n}\n';
 
 /** A movement-derived listen on the CRM, as a save would reconcile it. */
 async function seedListen(team: TeamId): Promise<{ triggerId: TriggerId; versionId: MovementVersionId }> {
-  const pipelineConfigurationId = randomUUID() as PipelineConfigurationId;
-  await getQb(['pipeline_configuration'])
-    .insertInto('pipeline_configuration')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .values({ id: pipelineConfigurationId, team_id: team, name: `cfg-${pipelineConfigurationId.slice(0, 8)}` } as any)
-    .execute();
   const movementId = randomUUID() as MovementId;
   await getAutomationsQb(['movement'])
     .insertInto('movement')
@@ -120,7 +113,6 @@ async function seedListen(team: TeamId): Promise<{ triggerId: TriggerId; version
     .values({
       id,
       team_id: team,
-      pipeline_configuration_id: pipelineConfigurationId,
       name: 'CRM companies',
       kind: FAKE_CRM_ADAPTER_TYPE,
       config: JSON.stringify({ events: [FAKE_CRM_COMPANY_CREATED] }),

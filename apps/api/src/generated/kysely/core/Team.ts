@@ -19,8 +19,6 @@ export default interface TeamTable {
 
   auto_add_company_to_portfolio_via_update: ColumnType<boolean, boolean | undefined, boolean>;
 
-  active_pipeline_configuration_id: ColumnType<string | null, string | null, string | null>;
-
   default_user_id: ColumnType<UserId | null, UserId | null, UserId | null>;
 
   domain: ColumnType<string | null, string | null, string | null>;

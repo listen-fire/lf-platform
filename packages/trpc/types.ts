@@ -1800,11 +1800,6 @@ export type TeamUsageConfigId = string & {
     __brand: 'public.team_usage_config';
 };
 
-/** Identifier type for public.dealflow_pipeline */
-export type DealflowPipelineId = string & {
-    __brand: 'public.dealflow_pipeline';
-};
-
 /** Identifier type for public.agent_conversation */
 export type AgentConversationId = string & {
     __brand: 'public.agent_conversation';
@@ -1820,11 +1815,6 @@ export type CreatedMember = {
     id: UserId;
     username: string;
     email: string;
-};
-
-/** Identifier type for public.pipeline_configuration */
-export type PipelineConfigurationId = string & {
-    __brand: 'public.pipeline_configuration';
 };
 
 /** Represents the enum automations.OpsDetailLevel */
@@ -2568,10 +2558,6 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         id: TeamId;
                         name: string;
                     };
-                    pipelineConfiguration: {
-                        id: PipelineConfigurationId;
-                        name: string;
-                    };
                     users: {
                         id: UserId;
                         username: string;
@@ -3035,46 +3021,6 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     total_cost_microdollars: number;
                     label: string;
                 }[]>;
-                byPipeline: _trpc_server.BuildProcedure<"query", {
-                    _config: _trpc_server.RootConfig<{
-                        ctx: {
-                            authorise: () => Promise<void>;
-                        };
-                        meta: object;
-                        errorShape: {
-                            message: string;
-                            code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
-                            data: _trpc_server_dist_error_formatter.DefaultErrorData;
-                        };
-                        transformer: _trpc_server.DefaultDataTransformer;
-                    }>;
-                    _meta: object;
-                    _ctx_out: {
-                        authorise: () => Promise<void>;
-                    };
-                    _input_in: {
-                        startDate: string;
-                        endDate: string;
-                        teamId?: string | undefined;
-                        limit?: number | undefined;
-                    };
-                    _input_out: {
-                        startDate: string;
-                        endDate: string;
-                        limit: number;
-                        teamId?: string | undefined;
-                    };
-                    _output_in: typeof _trpc_server.unsetMarker;
-                    _output_out: typeof _trpc_server.unsetMarker;
-                }, {
-                    pipeline_id: DealflowPipelineId | null;
-                    team_name: string;
-                    call_count: number;
-                    total_input_tokens: number;
-                    total_output_tokens: number;
-                    total_cost_microdollars: number;
-                    pipeline_created_at: Date;
-                }[]>;
                 byConversation: _trpc_server.BuildProcedure<"query", {
                     _config: _trpc_server.RootConfig<{
                         ctx: {
@@ -3116,50 +3062,6 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     conversation_title: string | null;
                     conversation_created_at: Date;
                 }[]>;
-                pipelineDetail: _trpc_server.BuildProcedure<"query", {
-                    _config: _trpc_server.RootConfig<{
-                        ctx: {
-                            authorise: () => Promise<void>;
-                        };
-                        meta: object;
-                        errorShape: {
-                            message: string;
-                            code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
-                            data: _trpc_server_dist_error_formatter.DefaultErrorData;
-                        };
-                        transformer: _trpc_server.DefaultDataTransformer;
-                    }>;
-                    _meta: object;
-                    _ctx_out: {
-                        authorise: () => Promise<void>;
-                    };
-                    _input_in: {
-                        pipelineId: string;
-                    };
-                    _input_out: {
-                        pipelineId: string;
-                    };
-                    _output_in: typeof _trpc_server.unsetMarker;
-                    _output_out: typeof _trpc_server.unsetMarker;
-                }, {
-                    id: LlmUsageId;
-                    created_at: Date;
-                    team_id: string;
-                    provider: string;
-                    model: string;
-                    call_type: string;
-                    label: string | null;
-                    input_tokens: number;
-                    output_tokens: number;
-                    cache_read_tokens: number;
-                    cache_creation_tokens: number;
-                    cost_microdollars: number;
-                    duration_ms: number | null;
-                    pipeline_id: DealflowPipelineId | null;
-                    conversation_id: AgentConversationId | null;
-                    trigger_run_id: string | null;
-                    preferred_model: string | null;
-                }[]>;
                 conversationDetail: _trpc_server.BuildProcedure<"query", {
                     _config: _trpc_server.RootConfig<{
                         ctx: {
@@ -3199,7 +3101,6 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     cache_creation_tokens: number;
                     cost_microdollars: number;
                     duration_ms: number | null;
-                    pipeline_id: DealflowPipelineId | null;
                     conversation_id: AgentConversationId | null;
                     trigger_run_id: string | null;
                     preferred_model: string | null;
@@ -3272,9 +3173,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     created_at: Date;
                     updated_at: Date;
                     team_id: string;
-                    max_weekly_pipeline_runs: number;
                     max_weekly_query_inputs: number;
-                    additional_pipeline_runs: number;
                     additional_query_inputs: number;
                     alert_threshold_pct: number;
                     week_starts_on: number;
@@ -3298,18 +3197,14 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     };
                     _input_in: {
                         teamId: string;
-                        maxWeeklyPipelineRuns: number;
                         maxWeeklyQueryInputs: number;
-                        additionalPipelineRuns?: number | undefined;
                         additionalQueryInputs?: number | undefined;
                         alertThresholdPct?: number | undefined;
                         weekStartsOn?: number | undefined;
                     };
                     _input_out: {
                         teamId: string;
-                        maxWeeklyPipelineRuns: number;
                         maxWeeklyQueryInputs: number;
-                        additionalPipelineRuns: number;
                         additionalQueryInputs: number;
                         alertThresholdPct: number;
                         weekStartsOn: number;
@@ -3402,7 +3297,6 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     items: {
                         teamId: string;
                         teamName: string;
-                        pipelineRuns: UsageStatus | null;
                         queryInputs: UsageStatus | null;
                         alertThresholdPct: number;
                         weekStartsOn: number;
@@ -3669,7 +3563,6 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 createdAt: Date;
                 scopes: string[];
                 expiresAt: Date | null;
-                pipelineInputId: string | null;
                 keyPrefix: string;
                 lastUsedAt: Date | null;
             }[]>;
@@ -3694,13 +3587,11 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     name: string;
                     scopes?: string[] | undefined;
                     expiresAt?: Date | undefined;
-                    pipelineInputId?: string | undefined;
                 };
                 _input_out: {
                     name: string;
                     scopes?: string[] | undefined;
                     expiresAt?: Date | undefined;
-                    pipelineInputId?: string | undefined;
                 };
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
@@ -3712,7 +3603,6 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 scopes: string[];
                 expiresAt: Date | null;
                 createdAt: Date;
-                pipelineInputId: string | null;
             }>;
             revoke: _trpc_server.BuildProcedure<"mutation", {
                 _config: _trpc_server.RootConfig<{
@@ -4918,16 +4808,16 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 id: TriggerRunId;
                 created_at: Date;
                 team_id: string;
-                status: string;
-                steps: unknown;
-                errors: unknown;
                 trigger_id: string;
                 trigger_type: string;
+                status: string;
                 record_id: string | null;
                 movement_version_id: MovementVersionId | null;
                 trigger_payload: unknown;
                 changed_fields: string[] | null;
+                steps: unknown;
                 diagnostics: unknown;
+                errors: unknown;
                 nodes_written: number;
                 dry_run: boolean;
                 started_at: Date;
@@ -6053,14 +5943,14 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 };
                 _input_in: {
                     subject: "user" | "team";
-                    stuckAt?: "created" | "signed_up" | "mcp_connected" | "first_mcp_call" | "first_automation_saved" | "first_run" | null | undefined;
+                    stuckAt?: "signed_up" | "mcp_connected" | "first_mcp_call" | "first_automation_saved" | "created" | "first_run" | null | undefined;
                     limit?: number | undefined;
                     cursor?: string | undefined;
                 };
                 _input_out: {
                     subject: "user" | "team";
                     limit: number;
-                    stuckAt?: "created" | "signed_up" | "mcp_connected" | "first_mcp_call" | "first_automation_saved" | "first_run" | null | undefined;
+                    stuckAt?: "signed_up" | "mcp_connected" | "first_mcp_call" | "first_automation_saved" | "created" | "first_run" | null | undefined;
                     cursor?: string | undefined;
                 };
                 _output_in: typeof _trpc_server.unsetMarker;
@@ -8158,11 +8048,11 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         property_id: PropertyId | null;
                         id: ChangeId;
                         created_at: Date;
-                        created_by: string | null;
-                        request_id: string;
                         source: ChangeSource;
                         kind: ChangeKind;
                         edge_id: EdgeId | null;
+                        created_by: string | null;
+                        request_id: string;
                         evidence_id: EvidenceId | null;
                         old_value: unknown;
                         new_value: unknown;
@@ -8205,11 +8095,11 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         property_id: PropertyId | null;
                         id: ChangeId;
                         created_at: Date;
-                        created_by: string | null;
-                        request_id: string;
                         source: ChangeSource;
                         kind: ChangeKind;
                         edge_id: EdgeId | null;
+                        created_by: string | null;
+                        request_id: string;
                         evidence_id: EvidenceId | null;
                         old_value: unknown;
                         new_value: unknown;
@@ -8251,7 +8141,6 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     resourceId: string | null;
                     context: {
                         adapterLabel: string | null;
-                        pipelineInputName: string | null;
                         triggerType: string | null;
                     } | null;
                     createdAt: Date | string;
@@ -10695,10 +10584,10 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     created_at: Date;
                     updated_at: Date | null;
                     team_id: string | null;
-                    status: OpsRunStatus | null;
-                    request_id: string | null;
                     title: string;
+                    status: OpsRunStatus | null;
                     severity: OpsSeverity;
+                    request_id: string | null;
                     resolved_at: Date | null;
                 }[];
                 nextCursor: string | null;
@@ -10767,11 +10656,11 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 created_at: Date;
                 updated_at: Date | null;
                 team_id: string | null;
-                status: OpsRunStatus | null;
-                request_id: string | null;
                 title: string;
+                status: OpsRunStatus | null;
                 detail: unknown;
                 severity: OpsSeverity;
+                request_id: string | null;
                 entity_refs: unknown;
                 parent_run_id: string | null;
                 resolved_at: Date | null;
@@ -13754,10 +13643,10 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
             }, {
                 id: TriggerEventId;
                 created_at: Date;
-                status: string;
                 trigger_id: string;
                 adapter_type: string;
                 trigger_type: string;
+                status: string;
                 dispatched_at: Date | null;
                 failure_reason: string | null;
                 occurred_at: Date;
@@ -14500,8 +14389,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
             }, {
-                pipelineRuns: UsageStatus | null;
-                queryInputs: UsageStatus | null;
+                queryInputs: UsageStatus;
                 alertThresholdPct: number;
                 weekStartsOn: number;
             } | null>;

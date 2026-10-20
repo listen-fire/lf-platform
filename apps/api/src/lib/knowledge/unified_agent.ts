@@ -1164,7 +1164,7 @@ ${CYPHER_REFERENCE}`);
   if (enabled.has('runs.read')) {
     parts.push(`## Debugging what happened
 
-For "what happened to my message?" / "why didn't this sync?" questions: orient first (listMessages / listPipelineInputs / listPipelineOutputs), then walk the specific run (getPipelineRun stage by stage, or listTgRuns → getTgRun for automation firings). Quote error text directly; when nothing is wrong, say what you checked.`);
+For "what happened to my message?" / "why didn't this sync?" questions: find the automation firing (listTgRuns), then walk it (getTgRun). Quote error text directly; when nothing is wrong, say what you checked.`);
   }
 
   const blocks: AnthropicSystemBlock[] = [

@@ -27,10 +27,9 @@ import { triggerEventOf } from 'movement-engine/services/translation_graph/trigg
 import type { TeamId } from '../../../../../generated/kysely/core/Team';
 import type { TriggerId } from '../../../../../generated/kysely/automations/Trigger';
 import type { MovementId } from '../../../../../generated/kysely/automations/Movement';
-import type { PipelineConfigurationId } from '../../../../../generated/kysely/public/PipelineConfiguration';
 import type { ExternalServiceCredentialsId } from '../../../../../generated/kysely/automations/ExternalServiceCredentials';
 
-import { getAutomationsQb, getCoreQb, getQb } from '../../../../../lib/kysely';
+import { getAutomationsQb, getCoreQb } from '../../../../../lib/kysely';
 import { decryptToken } from '../../../../../lib/credentials';
 import { cleanupTeam } from '../../../../../test/harness/cleanup';
 import { beginRemoteModuleSignIn, completeRemoteModuleSignIn } from '../../../../credentials/remote_module_connect';
@@ -109,12 +108,6 @@ async function credentialFields(id: string): Promise<Record<string, string>> {
 }
 
 async function seedMirror(): Promise<{ triggerId: TriggerId; movementId: MovementId }> {
-  const pipelineConfigurationId = randomUUID() as PipelineConfigurationId;
-  await getQb(['pipeline_configuration'])
-    .insertInto('pipeline_configuration')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .values({ id: pipelineConfigurationId, team_id: teamId, name: `cfg-${pipelineConfigurationId.slice(0, 8)}` } as any)
-    .execute();
   const movementId = randomUUID() as MovementId;
   await getAutomationsQb(['movement'])
     .insertInto('movement')
@@ -129,7 +122,6 @@ async function seedMirror(): Promise<{ triggerId: TriggerId; movementId: Movemen
     .values({
       id: triggerId,
       team_id: teamId,
-      pipeline_configuration_id: pipelineConfigurationId,
       name: 'Alice’s new deals',
       kind: 'hubspot',
       config: JSON.stringify({ events: ['deal.created'] }),

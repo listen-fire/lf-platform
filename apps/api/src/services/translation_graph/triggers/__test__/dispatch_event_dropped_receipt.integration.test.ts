@@ -26,7 +26,6 @@ import { SUPPRESS_SELF_KEY } from 'movement-lang';
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type { TriggerId } from '../../../../generated/kysely/automations/Trigger';
 import type { MovementId } from '../../../../generated/kysely/automations/Movement';
-import type { PipelineConfigurationId } from '../../../../generated/kysely/public/PipelineConfiguration';
 import type { Adapter, DiscriminableEvent } from 'movement-engine/services/translation_graph/adapter';
 import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
 
@@ -46,16 +45,6 @@ async function seedTrigger(input: {
   kind: string;
   config?: Record<string, unknown>;
 }): Promise<{ triggerId: TriggerId; movementId: MovementId }> {
-  const pipelineConfigurationId = randomUUID() as PipelineConfigurationId;
-  await getQb(['pipeline_configuration'])
-    .insertInto('pipeline_configuration')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .values({
-      id: pipelineConfigurationId,
-      team_id: input.teamId,
-      name: `cfg-${pipelineConfigurationId.slice(0, 8)}`,
-    } as any)
-    .execute();
 
   const movementId = randomUUID() as MovementId;
   await getAutomationsQb(['movement'])
@@ -78,7 +67,6 @@ async function seedTrigger(input: {
     .values({
       id: triggerId,
       team_id: input.teamId,
-      pipeline_configuration_id: pipelineConfigurationId,
       name: `trigger-${input.kind}`,
       kind: input.kind,
       movement_id: movementId,

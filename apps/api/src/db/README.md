@@ -38,7 +38,7 @@ This approach enables advanced PostgreSQL features like Row-Level Security (RLS)
 
 1. Edit `schema.sql`:
    ```sql
-   CREATE TABLE public.pipeline_output (
+   CREATE TABLE public.widget (
        ...
        config_version integer DEFAULT 1 NOT NULL,  -- Add new column
        ...
@@ -53,10 +53,10 @@ This approach enables advanced PostgreSQL features like Row-Level Security (RLS)
 3. Review and optionally add a backfill to the generated migration:
    ```sql
    -- Auto-generated
-   ALTER TABLE public.pipeline_output ADD COLUMN config_version integer DEFAULT 1 NOT NULL;
+   ALTER TABLE public.widget ADD COLUMN config_version integer DEFAULT 1 NOT NULL;
    
    -- Manual addition: backfill existing rows
-   UPDATE pipeline_output SET config_version = 1 WHERE config_version IS NULL;
+   UPDATE widget SET config_version = 1 WHERE config_version IS NULL;
    ```
 
 4. Apply:

@@ -21,7 +21,6 @@ import type { TeamId } from '../../generated/kysely/core/Team';
 import type { UserId } from '../../generated/kysely/core/User';
 import type { AgentConversationId } from '../../generated/kysely/public/AgentConversation';
 import type { TriggerId } from '../../generated/kysely/automations/Trigger';
-import type { PipelineConfigurationId } from '../../generated/kysely/public/PipelineConfiguration';
 
 import { cleanupTeam } from '../../test/harness/cleanup';
 import { getAutomationsQb, getCoreQb, getQb } from '../../lib/kysely';
@@ -69,32 +68,13 @@ async function seedTeamAndConversation(): Promise<Seeded> {
   return { teamId, userId, conversationId };
 }
 
-/** A trigger needs a pipeline_configuration FK — provision one per team
- *  on demand, idempotently (the first trigger seed creates it). */
-async function pipelineConfigurationFor(teamId: TeamId): Promise<PipelineConfigurationId> {
-  const existing = await getQb(['pipeline_configuration'])
-    .selectFrom('pipeline_configuration')
-    .where('team_id', '=', teamId)
-    .select(['id'])
-    .executeTakeFirst();
-  if (existing) return existing.id as PipelineConfigurationId;
-  const id = randomUUID() as PipelineConfigurationId;
-  await getQb(['pipeline_configuration'])
-    .insertInto('pipeline_configuration')
-    .values({ id, team_id: teamId, name: `cfg-${id.slice(0, 8)}` } as any)
-    .execute();
-  return id;
-}
-
 async function seedTrigger(teamId: TeamId, name: string, updatedAt?: Date): Promise<TriggerId> {
   const id = randomUUID() as TriggerId;
-  const pipelineConfigurationId = await pipelineConfigurationFor(teamId);
   await getAutomationsQb(['trigger'])
     .insertInto('trigger')
     .values({
       id,
       team_id: teamId,
-      pipeline_configuration_id: pipelineConfigurationId,
       name,
       kind: 'web',
       ...(updatedAt ? { updated_at: updatedAt } : {}),

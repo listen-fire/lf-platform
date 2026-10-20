@@ -21,14 +21,13 @@ jest.mock('../../translation_graph/adapters/resolve', () => {
   return { ...actual, resolveAdapter: jest.fn() };
 });
 
-import { getAutomationsQb, getCoreQb, getQb } from '../../../lib/kysely';
+import { getAutomationsQb, getCoreQb } from '../../../lib/kysely';
 import { cleanupTeam } from '../../../test/harness/cleanup';
 import { seedTeamCredential } from '../../../test/harness/credentials';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
 import type { MovementId } from '../../../generated/kysely/automations/Movement';
 import type { ParkLibrarySourceTeamId } from '../../../generated/kysely/automations/ParkLibrarySource';
-import type { PipelineConfigurationId } from '../../../generated/kysely/public/PipelineConfiguration';
 import { dispatchTriggerByIdEvent } from '../../translation_graph/triggers/router';
 import { runCatalogSnapshotForTeam, snapshotOverManifests, staticCatalogFromManifests } from '../../translation_graph/movement/catalog';
 import { resolveAdapter } from '../../translation_graph/adapters/resolve';
@@ -256,12 +255,6 @@ describe('a paused run resumes on the text it was pinned to (real DB, Rust engin
   });
 
   it('runs the movement and library text it parked with, though both were edited while it waited', async () => {
-    const pipelineConfigurationId = randomUUID() as PipelineConfigurationId;
-    await getQb(['pipeline_configuration'])
-      .insertInto('pipeline_configuration')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .values({ id: pipelineConfigurationId, team_id: teamId, name: `cfg-${pipelineConfigurationId.slice(0, 8)}` } as any)
-      .execute();
     const movementId = randomUUID() as MovementId;
     await getAutomationsQb(['movement'])
       .insertInto('movement')
@@ -273,7 +266,7 @@ describe('a paused run resumes on the text it was pinned to (real DB, Rust engin
     await getAutomationsQb(['trigger'])
       .insertInto('trigger')
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .values({ id: triggerId, team_id: teamId, pipeline_configuration_id: pipelineConfigurationId, name: 'Attio record changes', kind: 'attio', movement_id: movementId, fired_movement_name: 'pinned' } as any)
+      .values({ id: triggerId, team_id: teamId, name: 'Attio record changes', kind: 'attio', movement_id: movementId, fired_movement_name: 'pinned' } as any)
       .execute();
 
     // The run parks inside the library function, before its closure runs.

@@ -6,10 +6,9 @@
 // rows a fully-working account requires. The complete row set is:
 //
 //   1. team
-//   2. pipeline_configuration (+ team.active_pipeline_configuration_id link)
-//   3. user            — granted_access_at + completed_registration_at stamped
-//   4. user_email       — primary email (the email -> user auth mapping)
-//   5. team_membership  — admin ('write') access
+//   2. user            — granted_access_at + completed_registration_at stamped
+//   3. user_email       — primary email (the email -> user auth mapping)
+//   4. team_membership  — admin ('write') access
 //
 // Written in Kysely (`getQb`), not the authorised Prisma client: that client's
 // `team_membership.upsert` is a generated `notImplemented` stub, which is what
@@ -18,13 +17,11 @@
 
 import type { TeamId } from '../generated/kysely/core/Team';
 import type { UserId } from '../generated/kysely/core/User';
-import type { PipelineConfigurationId } from '../generated/kysely/public/PipelineConfiguration';
 
-import { getCoreQb, getQb } from '../lib/kysely';
+import { getCoreQb } from '../lib/kysely';
 
 export type ProvisionedTeam = {
   teamId: TeamId;
-  pipelineConfigurationId: PipelineConfigurationId;
 };
 
 export type ProvisionedUser = {
@@ -34,7 +31,7 @@ export type ProvisionedUser = {
 };
 
 /**
- * Create a team and its active pipeline_configuration. No users — pair with
+ * Create a team. No users — pair with
  * `provisionUser` to add admins.
  *
  * `id` pins the row instead of minting one, for an installation whose identity
@@ -45,8 +42,7 @@ export type ProvisionedUser = {
  * Pinning implies ADOPTING: a pinned id may already be a row, put there by an
  * earlier boot or by whatever seeded first, and minting a second team would
  * split the installation in two. So the existing row is taken as-is (its name
- * is left alone — renaming somebody's team is not provisioning), and only the
- * pieces it is missing are added.
+ * is left alone — renaming somebody's team is not provisioning).
  */
 async function provisionTeam({
   name,
@@ -72,29 +68,7 @@ async function provisionTeam({
       .returning('id')
       .executeTakeFirstOrThrow());
 
-  // Read rather than assume: an adopted team already has a configuration, and
-  // a second one would leave the team pointing at whichever was linked last.
-  const existingConfiguration = await getQb(['pipeline_configuration'])
-    .selectFrom('pipeline_configuration')
-    .select('id')
-    .where('team_id', '=', team.id)
-    .executeTakeFirst();
-
-  const pipelineConfiguration =
-    existingConfiguration ??
-    (await getQb(['pipeline_configuration'])
-      .insertInto('pipeline_configuration')
-      .values({ team_id: team.id, name })
-      .returning('id')
-      .executeTakeFirstOrThrow());
-
-  await getCoreQb(['team'])
-    .updateTable('team')
-    .set({ active_pipeline_configuration_id: pipelineConfiguration.id })
-    .where('id', '=', team.id)
-    .execute();
-
-  return { teamId: team.id, pipelineConfigurationId: pipelineConfiguration.id };
+  return { teamId: team.id };
 }
 
 /**
@@ -197,9 +171,9 @@ async function provisionTeamWithAdmin({
   termsAccepted?: boolean;
   /** A personal (team-of-one) workspace — see provisionUser. */
   personal?: boolean;
-}): Promise<{ teamId: TeamId; userId: UserId; pipelineConfigurationId: PipelineConfigurationId }> {
+}): Promise<{ teamId: TeamId; userId: UserId }> {
   const lower = email.toLowerCase();
-  const { teamId, pipelineConfigurationId } = await provisionTeam({
+  const { teamId } = await provisionTeam({
     name: teamName ?? lower,
     id: pinnedTeamId,
   });
@@ -211,7 +185,7 @@ async function provisionTeamWithAdmin({
     termsAccepted,
     personal,
   });
-  return { teamId, userId, pipelineConfigurationId };
+  return { teamId, userId };
 }
 
 export const ProvisioningService = { provisionTeam, provisionUser, provisionTeamWithAdmin };

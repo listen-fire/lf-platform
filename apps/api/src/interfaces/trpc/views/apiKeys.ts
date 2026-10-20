@@ -15,7 +15,6 @@ const apiKeysRouter = (procedure: typeof trpc.procedure) => {
           name: z.string().min(1),
           scopes: z.array(z.string()).optional(),
           expiresAt: z.date().optional(),
-          pipelineInputId: z.string().uuid().optional(),
         }),
       )
       .mutation(async ({ input }) => {
@@ -28,7 +27,6 @@ const apiKeysRouter = (procedure: typeof trpc.procedure) => {
           scopes: result.scopes,
           expiresAt: result.expiresAt,
           createdAt: result.createdAt,
-          pipelineInputId: result.pipelineInputId,
         };
       }),
 

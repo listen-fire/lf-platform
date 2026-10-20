@@ -246,7 +246,6 @@ export function EvidenceSidebar({
                         <p className="text-[12px] leading-relaxed text-gray-700">
                           {[
                             entry.context.adapterLabel,
-                            entry.context.pipelineInputName,
                             entry.context.triggerType,
                           ]
                             .filter(Boolean)

@@ -10,8 +10,7 @@
  * editor and orchestration storage are gone (kill-tg phase 6).
  *
  * Counterpart to `/sources` + `/destinations`, reading the trigger
- * substrate instead of the legacy `pipeline_input` / `pipeline_output`
- * tables.
+ * substrate.
  *
  */
 
@@ -23,7 +22,6 @@ import { observable } from '@trpc/server/observable';
 
 import type { TriggerRunEvent } from '../../../lib/message_queue/queues/triggerRuns';
 import type { TeamId } from '../../../generated/kysely/core/Team';
-import type { PipelineConfigurationId } from '../../../generated/kysely/public/PipelineConfiguration';
 import type { ExternalServiceCredentialsId } from '../../../generated/kysely/automations/ExternalServiceCredentials';
 import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
 import type { MovementId } from '../../../generated/kysely/automations/Movement';
@@ -31,7 +29,7 @@ import type { MovementId } from '../../../generated/kysely/automations/Movement'
 import { currentContext } from '../../../services/context';
 import { mq } from '../../../lib/message_queue';
 import { trpc } from '../trpc';
-import { getAutomationsQb, getCoreQb, getKnowledgeQb, getQb } from '../../../lib/kysely';
+import { getAutomationsQb, getKnowledgeQb } from '../../../lib/kysely';
 import { runMovementTestRun } from '../../../services/translation_graph/movement/test_run';
 import { describeAutomation } from '../../../lib/automation/describe';
 import {
@@ -941,16 +939,12 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
           credentialsId = (cred?.id as ExternalServiceCredentialsId | undefined) ?? null;
         }
 
-        const pipelineConfigurationId =
-          await ensureActivePipelineConfiguration(teamId);
-
         const triggerId = randomUUID();
         await getAutomationsQb(['trigger'])
           .insertInto('trigger')
           .values({
             id: triggerId as unknown as TriggerId,
             team_id: teamId,
-            pipeline_configuration_id: pipelineConfigurationId,
             name: input.name,
             kind: triggerKind,
             config: sql`'{}'::jsonb` as unknown as never,
@@ -1009,43 +1003,6 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
       ),
   });
 };
-
-/**
- * Resolve the team's active `pipeline_configuration`, creating one (and
- * marking it active) if the team has none. A `automations.trigger` row
- * requires a non-null `pipeline_configuration_id`; this mirrors the
- * setup-agent's provisioning helper without reaching into it (that path
- * is owned by a sibling task).
- */
-async function ensureActivePipelineConfiguration(
-  teamId: TeamId,
-): Promise<PipelineConfigurationId> {
-  const team = await getCoreQb(['team'])
-    .selectFrom('team')
-    .where('id', '=', teamId)
-    .select(['id', 'active_pipeline_configuration_id', 'name'])
-    .executeTakeFirst();
-  if (!team) throw new Error('No team found');
-  if (team.active_pipeline_configuration_id) {
-    return team.active_pipeline_configuration_id as PipelineConfigurationId;
-  }
-
-  const newId = randomUUID() as PipelineConfigurationId;
-  await getQb(['pipeline_configuration'])
-    .insertInto('pipeline_configuration')
-    .values({
-      id: newId,
-      team_id: teamId,
-      name: `${team.name} configuration`,
-    } as never)
-    .execute();
-  await getCoreQb(['team'])
-    .updateTable('team')
-    .set({ active_pipeline_configuration_id: newId })
-    .where('id', '=', teamId)
-    .execute();
-  return newId;
-}
 
 /**
  * DB-bound implementation of `renameTrigger`. Pulled out of the

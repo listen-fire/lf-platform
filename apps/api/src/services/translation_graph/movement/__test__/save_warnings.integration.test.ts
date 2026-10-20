@@ -18,7 +18,7 @@ import { randomUUID } from 'node:crypto';
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type { FakeCrmServer } from '../../../../scripts/dev/fake_crm_adapter';
 
-import { getAutomationsQb, getCoreQb, getQb } from '../../../../lib/kysely';
+import { getAutomationsQb, getCoreQb } from '../../../../lib/kysely';
 import { cleanupTeam } from '../../../../test/harness/cleanup';
 import { saveMovement } from '../provision';
 import { findTriggersByKind } from '../../storage/tg_table';
@@ -84,18 +84,6 @@ describe('save warnings (real Postgres + live adapter socket)', () => {
       .insertInto('team')
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .values({ id: teamId, name: `warn-${teamId.slice(0, 8)}` } as any)
-      .execute();
-    const pcId = randomUUID();
-    await getQb(['pipeline_configuration'])
-      .insertInto('pipeline_configuration')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .values({ id: pcId, team_id: teamId, name: 'warn-probe' } as any)
-      .execute();
-    await getCoreQb(['team'])
-      .updateTable('team')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .set({ active_pipeline_configuration_id: pcId } as any)
-      .where('id', '=', teamId)
       .execute();
     server = await startFakeCrmServer({ secret: 'warn-secret' });
     await installRemoteAdapterFromManifest({

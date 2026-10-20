@@ -6,7 +6,7 @@ import { sendSlackNotification } from '../lib/slack';
 import { sendEmail } from '../email/send';
 import { logger } from 'movement-engine/public/log';
 
-type EventType = 'pipeline_run' | 'query_input';
+type EventType = 'query_input';
 
 interface UsageStatus {
   allowed: boolean;
@@ -36,14 +36,8 @@ function getPeriodBounds(weekStartsOn: number): { periodStart: Date; periodEnd: 
   return { periodStart, periodEnd };
 }
 
-function getConfigColumn(eventType: EventType, prefix: 'max_weekly' | 'additional') {
-  return eventType === 'pipeline_run'
-    ? `${prefix}_pipeline_runs` as const
-    : `${prefix}_query_inputs` as const;
-}
-
-function eventTypeLabel(eventType: EventType): string {
-  return eventType === 'pipeline_run' ? 'pipeline runs' : 'query inputs';
+function getConfigColumn(prefix: 'max_weekly' | 'additional') {
+  return `${prefix}_query_inputs` as const;
 }
 
 async function getConfig(teamId: string) {
@@ -73,8 +67,8 @@ async function checkUsage(teamId: string, eventType: EventType): Promise<UsageSt
 
   const { periodStart, periodEnd } = getPeriodBounds(config.week_starts_on);
   const used = await countUsageForPeriod(teamId, eventType, periodStart);
-  const weeklyMax = config[getConfigColumn(eventType, 'max_weekly')];
-  const additional = config[getConfigColumn(eventType, 'additional')];
+  const weeklyMax = config[getConfigColumn('max_weekly')];
+  const additional = config[getConfigColumn('additional')];
   const effectiveLimit = weeklyMax + additional;
   const remaining = Math.max(0, effectiveLimit - used);
 
@@ -114,13 +108,13 @@ async function checkAndAlert(teamId: string, eventType: EventType): Promise<void
 
   const { periodStart } = getPeriodBounds(config.week_starts_on);
   const used = await countUsageForPeriod(teamId, eventType, periodStart);
-  const weeklyMax = config[getConfigColumn(eventType, 'max_weekly')];
-  const additional = config[getConfigColumn(eventType, 'additional')];
+  const weeklyMax = config[getConfigColumn('max_weekly')];
+  const additional = config[getConfigColumn('additional')];
   const effectiveLimit = weeklyMax + additional;
 
   // Decrement additional balance when in overage
   if (used > weeklyMax && additional > 0) {
-    const col = getConfigColumn(eventType, 'additional');
+    const col = getConfigColumn('additional');
     const qb = getQb(['team_usage_config']);
     await qb
       .updateTable('team_usage_config')
@@ -164,16 +158,15 @@ async function tryAlert(
   // If null, the alert already fired this period
   if (!inserted) return;
 
-  await sendUsageAlert(teamId, eventType, alertKind);
+  await sendUsageAlert(teamId, alertKind);
 }
 
 async function sendUsageAlert(
   teamId: string,
-  eventType: EventType,
   alertKind: 'threshold' | 'exhausted',
 ): Promise<void> {
   const contacts = await getBillingContacts(teamId);
-  const label = eventTypeLabel(eventType);
+  const label = 'query inputs';
 
   const subject = alertKind === 'threshold'
     ? `Usage alert: approaching ${label} limit`
@@ -181,7 +174,7 @@ async function sendUsageAlert(
 
   const body = alertKind === 'threshold'
     ? `Your team is approaching its weekly ${label} limit. Consider purchasing additional usage to avoid interruption.`
-    : `Your team has reached its weekly ${label} limit. New ${label === 'pipeline runs' ? 'pipelines' : 'questions'} will be blocked until the period resets or additional usage is purchased.`;
+    : `Your team has reached its weekly ${label} limit. New questions will be blocked until the period resets or additional usage is purchased.`;
 
   let successes = 0;
   for (const contact of contacts) {
@@ -226,8 +219,6 @@ async function getBillingContacts(teamId: string): Promise<Array<{ email: string
 }
 
 const USAGE_EXHAUSTED_MESSAGES = {
-  pipeline_run:
-    "Your team has reached its weekly pipeline run limit. New messages won't be processed until the period resets. Contact your team admin to purchase additional usage.",
   query_input:
     "Your team has reached its weekly question limit. Please wait for the period to reset or contact your team admin to purchase additional usage.",
 } as const;

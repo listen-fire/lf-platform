@@ -80,7 +80,7 @@ import { unsafeCurrentContext } from '../../../services/context';
 import { logger } from 'movement-engine/public/log';
 import { collectFileListeners, type FileListener } from 'movement-engine/public/inbound';
 import { recordUserMilestone, recordTeamMilestone } from '../../../lib/journey';
-import { getAutomationsQb, getCoreQb } from '../../../lib/kysely';
+import { getAutomationsQb } from '../../../lib/kysely';
 import { getAdapterManifest, inboundAddressFor } from '../adapters/registry';
 import { syncListenSubscriptions } from './listen_subscriptions';
 import { addressHops, resolveListenAddress } from './listen_address';
@@ -374,8 +374,6 @@ export function planListenerReconciliation(input: {
 
 async function reconcileDerivedTriggers(input: {
   teamId: TeamId;
-  /** Required whenever `desired` is non-empty (new rows need the FK). */
-  pipelineConfigurationId: string | null;
   movementRow: MovementRow;
   desired: DesiredListener[];
   /** What to tell a run parked on a listener this reconciliation retires.
@@ -462,9 +460,6 @@ async function reconcileDerivedTriggers(input: {
         .where('id', '=', triggerId as TriggerId)
         .execute();
     } else {
-      if (input.pipelineConfigurationId === null) {
-        throw new Error('reconcileDerivedTriggers: pipelineConfigurationId required to create rows');
-      }
       triggerId = randomUUID();
       runMode = textRunMode;
       await qb
@@ -472,7 +467,6 @@ async function reconcileDerivedTriggers(input: {
         .values({
           id: triggerId as TriggerId,
           team_id: input.teamId,
-          pipeline_configuration_id: input.pipelineConfigurationId,
           name,
           kind: desired.adapter,
           config: desired.config as never,
@@ -617,22 +611,9 @@ async function provisionListeners(input: {
     };
   }
 
-  // A library file (zero listens) derives no trigger rows, so it saves
-  // fine on a team that was never seeded for dispatch.
-  const pipelineConfigurationId =
-    desired.length > 0 ? await activePipelineConfigurationId(input.teamId) : null;
-  if (desired.length > 0 && !pipelineConfigurationId) {
-    return {
-      ok: false,
-      errors: ['team has no active pipeline_configuration — seed the team first'],
-      catalogNotes: teamCatalog.notes,
-    };
-  }
-
   const listeners = await within('reconcile', () =>
     reconcileDerivedTriggers({
       teamId: input.teamId,
-      pipelineConfigurationId,
       movementRow: input.movementRow,
       desired,
     }),
@@ -1105,7 +1086,6 @@ async function runSave(
       // to avoid — consent covers this consequence.
       await reconcileDerivedTriggers({
         teamId: input.teamId as TeamId,
-        pipelineConfigurationId: null,
         movementRow: row,
         desired: [],
         retirementReason:
@@ -1378,15 +1358,4 @@ export function movementNameFromSource(source: string): string | undefined {
     if (keyword === null) return undefined;
     return scanName(source, keyword.index + keyword[0].length)?.name;
   }
-}
-
-// ── DB helpers ──────────────────────────────────────────────────────────────
-
-async function activePipelineConfigurationId(teamId: TeamId): Promise<string | null> {
-  const team = await getCoreQb(['team'])
-    .selectFrom('team')
-    .where('id', '=', teamId)
-    .select(['active_pipeline_configuration_id'])
-    .executeTakeFirst();
-  return (team?.active_pipeline_configuration_id as unknown as string) ?? null;
 }

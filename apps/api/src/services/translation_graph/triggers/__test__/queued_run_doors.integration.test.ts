@@ -17,7 +17,7 @@ import type { TriggerId } from '../../../../generated/kysely/automations/Trigger
 import type { TriggerRunId } from '../../../../generated/kysely/automations/TriggerRun';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 
-import { getAutomationsQb, getCoreQb, getQb } from '../../../../lib/kysely';
+import { getAutomationsQb, getCoreQb } from '../../../../lib/kysely';
 import { cleanupTeam } from '../../../../test/harness/cleanup';
 import { testWorkContext } from '../../../../test/harness/work';
 import { saveMovement } from '../../movement/provision';
@@ -91,18 +91,6 @@ describe('queued runs: the doors answer, a worker runs the movement', () => {
       .insertInto('team')
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .values({ id: teamId, name: `queued-${teamId.slice(0, 8)}` } as any)
-      .execute();
-    const pcId = randomUUID();
-    await getQb(['pipeline_configuration'])
-      .insertInto('pipeline_configuration')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .values({ id: pcId, team_id: teamId, name: 'queued-probe' } as any)
-      .execute();
-    await getCoreQb(['team'])
-      .updateTable('team')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .set({ active_pipeline_configuration_id: pcId } as any)
-      .where('id', '=', teamId)
       .execute();
 
     const saved = await saveMovement({ teamId: teamId as string, source: SOURCE, name: 'queued-probe' });

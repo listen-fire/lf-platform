@@ -54,18 +54,12 @@ async function resetTeam() {
 
   // Clear the team's CONFIG + run history + credentials, but KEEP the pinned
   // identity (team / user / user_email / team_membership).
-  // `ensureDevLoopTeam` is idempotent and rebuilds the ontology, pipeline
-  // configuration and Attio credential after a reset. Deleting the team row
+  // `ensureDevLoopTeam` is idempotent and rebuilds the ontology and Attio
+  // credential after a reset. Deleting the team row
   // itself is avoided on purpose: ~65 tables carry an ON DELETE RESTRICT FK to
   // `team`, so a full team delete needs an exhaustive, constantly-rotting
   // ordered teardown. Wiping the re-seedable data is what "reset" actually needs.
-  const qb = getQb([
-    'automations.external_service_credentials',
-    'pipeline_configuration',
-    'pipeline_input',
-    'pipeline_output',
-    'core.team',
-  ]);
+  const qb = getQb(['automations.external_service_credentials']);
   const aqb = getAutomationsQb(['trigger_run', 'trigger_event']);
 
   // Run history first. Everything inside `automations` still cascades off the
@@ -75,31 +69,10 @@ async function resetTeam() {
   await aqb.deleteFrom('trigger_run').where('team_id', '=', teamId).execute();
   await aqb.deleteFrom('trigger_event').where('team_id', '=', teamId).execute();
 
-  // pipeline_configuration's RESTRICT children are scoped via config id, not team_id.
-  const configs = await qb
-    .selectFrom('pipeline_configuration')
-    .where('team_id', '=', teamId)
-    .select('id')
-    .execute();
-  const configIds = configs.map((c) => c.id);
-  if (configIds.length > 0) {
-    await qb.deleteFrom('pipeline_output').where('pipeline_configuration_id', 'in', configIds).execute();
-    await qb.deleteFrom('pipeline_input').where('pipeline_configuration_id', 'in', configIds).execute();
-  }
-
-  // Triggers used to disappear here by cascade, when their pipeline_configuration
-  // went. That FK is gone (D3 — the column stays, the constraint crossed schemas),
-  // so the reset deletes them itself; leaving them behind would leave the team
-  // dispatching against configuration that no longer exists.
+  // Triggers carry no foreign key to the team (D3), so the reset deletes them
+  // itself; leaving them behind would leave the team dispatching.
   await getAutomationsQb(['trigger']).deleteFrom('trigger').where('team_id', '=', teamId).execute();
 
-  // Detach the active config pointer (SET NULL FK), then drop the config + creds.
-  await qb
-    .updateTable('core.team as team')
-    .set({ active_pipeline_configuration_id: null } as any)
-    .where('id', '=', teamId)
-    .execute();
-  await qb.deleteFrom('pipeline_configuration').where('team_id', '=', teamId).execute();
   await qb.deleteFrom('automations.external_service_credentials as external_service_credentials').where('team_id', '=', teamId).execute();
 }
 
@@ -120,7 +93,7 @@ async function main() {
     console.log(`  web:     ${result.webBaseUrl}`);
     console.log(`  token:   ${result.token.slice(0, 20)}…`);
     console.log(
-      `  created: team=${c.team} user=${c.user} ontology=${c.ontology} pipelineConfig=${c.pipelineConfig} attioCreds=${c.attioCredentials} airtableCreds=${c.airtableCredentials} remoteAdapter=${c.remoteAdapter} currencies=${c.currencies}`,
+      `  created: team=${c.team} user=${c.user} ontology=${c.ontology} attioCreds=${c.attioCredentials} airtableCreds=${c.airtableCredentials} remoteAdapter=${c.remoteAdapter} currencies=${c.currencies}`,
     );
   } else {
     console.log(JSON.stringify(result, null, 2));

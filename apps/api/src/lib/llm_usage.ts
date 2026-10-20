@@ -4,7 +4,6 @@ import { sql } from 'kysely';
 
 import type { Resolved } from 'movement-engine/public/models';
 import type { TeamId } from '../generated/kysely/core/Team';
-import type { DealflowPipelineId } from '../generated/kysely/public/DealflowPipeline';
 import type { AgentConversationId } from '../generated/kysely/public/AgentConversation';
 import type { TriggerRunId } from '../generated/kysely/automations/TriggerRun';
 
@@ -35,7 +34,6 @@ interface CancelSink {
 
 interface LlmUsageContextData {
   teamId: string;
-  pipelineId?: string;
   conversationId?: string;
   /** The trigger_run this LLM call attributes to (movement firings) — threaded
    *  onto each `llm_usage` row for the per-run rollup (billing spec §2.3). */
@@ -192,7 +190,6 @@ async function recordLlmUsage(options: RecordUsageOptions): Promise<void> {
         cache_creation_tokens: options.cacheCreationTokens ?? 0,
         cost_microdollars: costMicrodollars,
         duration_ms: options.durationMs ?? null,
-        pipeline_id: (ctx?.data.pipelineId ?? null) as DealflowPipelineId | null,
         conversation_id: (ctx?.data.conversationId ?? null) as AgentConversationId | null,
         trigger_run_id: (ctx?.data.triggerRunId ?? null) as TriggerRunId | null,
       })

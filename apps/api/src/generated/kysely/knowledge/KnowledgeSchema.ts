@@ -4,7 +4,6 @@
 import type { default as DocumentTable } from './Document';
 import type { default as ExtractionGraphTable } from './ExtractionGraph';
 import type { default as ChangeTable } from './Change';
-import type { default as OutputRunTable } from './OutputRun';
 import type { default as WebhookEndpointTable } from './WebhookEndpoint';
 import type { default as EvidenceTable } from './Evidence';
 import type { default as PluginTable } from './Plugin';
@@ -36,8 +35,6 @@ export default interface KnowledgeSchema {
   extraction_graph: ExtractionGraphTable;
 
   change: ChangeTable;
-
-  output_run: OutputRunTable;
 
   webhook_endpoint: WebhookEndpointTable;
 

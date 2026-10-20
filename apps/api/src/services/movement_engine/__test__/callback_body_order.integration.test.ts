@@ -15,13 +15,12 @@ jest.mock('../../translation_graph/adapters/resolve', () => {
   return { ...actual, resolveAdapter: jest.fn() };
 });
 
-import { getAutomationsQb, getCoreQb, getQb } from '../../../lib/kysely';
+import { getAutomationsQb, getCoreQb } from '../../../lib/kysely';
 import { cleanupTeam } from '../../../test/harness/cleanup';
 import { seedTeamCredential } from '../../../test/harness/credentials';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
 import type { MovementId } from '../../../generated/kysely/automations/Movement';
-import type { PipelineConfigurationId } from '../../../generated/kysely/public/PipelineConfiguration';
 import { dispatchTriggerByIdEvent } from '../../translation_graph/triggers/router';
 import { runCatalogSnapshotForTeam, snapshotOverManifests, staticCatalogFromManifests } from '../../translation_graph/movement/catalog';
 import { resolveAdapter } from '../../translation_graph/adapters/resolve';
@@ -190,12 +189,6 @@ async function seedMovement(
   teamId: TeamId,
   opts: { source: string; firedName: string; name: string },
 ): Promise<{ movementId: MovementId; triggerId: TriggerId }> {
-  const pipelineConfigurationId = randomUUID() as PipelineConfigurationId;
-  await getQb(['pipeline_configuration'])
-    .insertInto('pipeline_configuration')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .values({ id: pipelineConfigurationId, team_id: teamId, name: `cfg-${pipelineConfigurationId.slice(0, 8)}` } as any)
-    .execute();
 
   const movementId = randomUUID() as MovementId;
   await getAutomationsQb(['movement'])
@@ -214,7 +207,6 @@ async function seedMovement(
     .values({
       id: triggerId,
       team_id: teamId,
-      pipeline_configuration_id: pipelineConfigurationId,
       name: 'Attio record changes',
       kind: 'attio',
       movement_id: movementId,

@@ -11,8 +11,23 @@ import type PropertyIdentity from '../../generated/kysely/knowledge/PropertyIden
 import type EvaluationStrategy from '../../generated/kysely/knowledge/EvaluationStrategy';
 import type EvidenceType from '../../generated/kysely/knowledge/EvidenceType';
 import type { EdgeFilter } from '../../lib/knowledge/templates/types';
-import type { InputPropertyMapping } from '../../adapters/pipeline/inbound/metadata';
 import type * as db from '@prisma/client';
+import { z } from 'zod';
+
+// -- Default property mappings: how an extraction graph node fills a property
+// without extraction (a fixed value, an LLM prompt, or a field of the input) --
+
+const inputPropertyMappingSchema = z.object({
+  source: z.discriminatedUnion('mode', [
+    z.object({ mode: z.literal('property'), fieldKey: z.string() }),
+    z.object({ mode: z.literal('static'), value: z.string() }),
+    z.object({ mode: z.literal('llm'), prompt: z.string() }),
+  ]),
+  traversal: z.array(z.object({ edgeTypeId: z.string() })).default([]),
+  targetPropertyTypeId: z.string(),
+});
+
+type InputPropertyMapping = z.infer<typeof inputPropertyMappingSchema>;
 
 // -- Segments (extraction input) --
 
@@ -182,7 +197,9 @@ interface KnowledgePipelineInput {
   segments: Segment[];
 }
 
+export { inputPropertyMappingSchema };
 export type {
+  InputPropertyMapping,
   Segment,
   TextClassification,
   ExtractionTree,

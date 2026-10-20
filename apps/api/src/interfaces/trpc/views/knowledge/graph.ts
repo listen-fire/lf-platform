@@ -1247,26 +1247,6 @@ const graphRouter = (procedure: typeof trpc.procedure) => {
         const userIds = [...new Set(changes.map((c) => c.created_by).filter(Boolean))] as string[];
         const userMap = await resolveUserNames(userIds);
 
-        // Resolve pipeline_input UUIDs found in evidence.mutation_context to
-        // their friendly names so the timeline sidebar can show "Listen-Fire
-        // Valuations · Dev Loop Valuations" instead of raw UUIDs. Single
-        // round-trip — UUIDs collected first, then batched.
-        const pipelineInputIds = new Set<string>();
-        for (const e of evidence) {
-          const mc = e.mutation_context as { source?: { pipelineInputId?: string } } | null;
-          const pid = mc?.source?.pipelineInputId;
-          if (pid) pipelineInputIds.add(pid);
-        }
-        const pipelineInputNameMap = new Map<string, string>();
-        if (pipelineInputIds.size > 0) {
-          const rows = await getQb(['pipeline_input'])
-            .selectFrom('pipeline_input')
-            .where('id', 'in', [...pipelineInputIds] as never)
-            .select(['id', 'name'])
-            .execute();
-          for (const r of rows) pipelineInputNameMap.set(r.id, r.name);
-        }
-
         function adapterLabel(adapterType: string | undefined): string | null {
           if (!adapterType) return null;
           const friendly: Record<string, string> = {
@@ -1285,17 +1265,14 @@ const graphRouter = (procedure: typeof trpc.procedure) => {
 
         type EvidenceContext = {
           adapterLabel: string | null;
-          pipelineInputName: string | null;
           triggerType: string | null;
         } | null;
 
         function buildContext(mc: unknown): EvidenceContext {
-          const ctx = mc as { source?: { adapterType?: string; pipelineInputId?: string; triggerType?: string } } | null;
+          const ctx = mc as { source?: { adapterType?: string; triggerType?: string } } | null;
           if (!ctx?.source) return null;
-          const pid = ctx.source.pipelineInputId;
           return {
             adapterLabel: adapterLabel(ctx.source.adapterType),
-            pipelineInputName: pid ? pipelineInputNameMap.get(pid) ?? null : null,
             triggerType: ctx.source.triggerType ?? null,
           };
         }

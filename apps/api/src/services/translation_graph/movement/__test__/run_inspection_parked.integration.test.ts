@@ -18,14 +18,13 @@ import type { TriggerRunId } from '../../../../generated/kysely/automations/Trig
 import type { TriggerId } from '../../../../generated/kysely/automations/Trigger';
 import type { MovementId } from '../../../../generated/kysely/automations/Movement';
 import type { NodeId } from '../../../../generated/kysely/knowledge/Node';
-import type { PipelineConfigurationId } from '../../../../generated/kysely/public/PipelineConfiguration';
 import type { MovementRunResult } from 'movement-engine/services/movement_engine/run';
 import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
 
 import { TriggerRunRecorder } from '../../runs/trigger_run';
 import { failRunAndCancelRequests } from '../../../interaction/run_failure';
 import { cleanupTeam } from '../../../../test/harness/cleanup';
-import { getAutomationsQb, getCoreQb, getQb } from '../../../../lib/kysely';
+import { getAutomationsQb, getCoreQb } from '../../../../lib/kysely';
 import { listMovementRuns, inspectMovementRun } from '../run_now';
 
 function makeEvent(): TriggerEvent {
@@ -62,12 +61,6 @@ async function seedMovementWithManualLane(teamId: TeamId): Promise<{
   movementId: MovementId;
   triggerId: TriggerId;
 }> {
-  const pipelineConfigurationId = randomUUID() as PipelineConfigurationId;
-  await getQb(['pipeline_configuration'])
-    .insertInto('pipeline_configuration')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .values({ id: pipelineConfigurationId, team_id: teamId, name: `cfg-${pipelineConfigurationId.slice(0, 8)}` } as any)
-    .execute();
 
   const movementId = randomUUID() as MovementId;
   await getAutomationsQb(['movement'])
@@ -83,7 +76,6 @@ async function seedMovementWithManualLane(teamId: TeamId): Promise<{
     .values({
       id: triggerId,
       team_id: teamId,
-      pipeline_configuration_id: pipelineConfigurationId,
       name: 'Run now',
       kind: 'manual',
       movement_id: movementId,

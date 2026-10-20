@@ -56,9 +56,11 @@ PGPASSWORD="$PGPASSWORD" psql "$BASE_URL" -c "DROP DATABASE IF EXISTS \"$TMP_DB\
 PGPASSWORD="$PGPASSWORD" psql "$BASE_URL" -c "CREATE DATABASE \"$TMP_DB\";" -w
 TMP_URL="$(echo "$DB_URL" | sed -E "s|/[^/]+$|/$TMP_DB|")"
 
+# One transaction per file, as migrate.sh applies them: a migration may rely on
+# it (a TEMP table created ON COMMIT DROP lives for the whole file).
 for f in "$MIGRATIONS_DIR"/*.sql; do
   echo "Applying migration to temp DB: $f"
-  PGPASSWORD="$PGPASSWORD" psql "$TMP_URL" -v ON_ERROR_STOP=1 -w -f "$f"
+  PGPASSWORD="$PGPASSWORD" psql "$TMP_URL" -v ON_ERROR_STOP=1 --single-transaction -w -f "$f"
 done
 
 echo "PGPASSWORD=\"$PGPASSWORD\" docker run --rm --network=host -e PGPASSWORD=\"$PGPASSWORD\" -v \"$(pwd)\":/workspace pgvector/pgvector:pg16 \
