@@ -11,7 +11,7 @@ core:
 
 | slot | what it is | default | other built-in |
 |---|---|---|---|
-| `models` | the model calls a run makes: `ai(…)`, `extract(…)` | `@lf/anthropic` | |
+| `models` | the model calls a run makes: `ai(…)`, `extract(…)` | `@lf/anthropic` | none in lf; `@listen-fire/models` fills it with Gemini, OpenAI or Claude on Vertex |
 | `judge` | settles whether a written record is one already there, when the rules cannot | `@lf/judge` (declines every question, so an ambiguous match creates a new record) | |
 | `store` | where run state lives: runs, parks, callbacks, work to drain | `@lf/sqlite-store` (`.lf/state.db`) | `@lf/postgres-store` |
 | `files` | where documents a run stores are kept | `@lf/local-files` (`.lf/files/`) | |
@@ -117,6 +117,14 @@ LF_SECRET__POSTGRES_STORE__URL=postgres://…?sslmode=verify-full
 ```
 
 `lf --store <state.db | postgres://…>` overrides the store slot for one command.
+
+## Models on another vendor
+
+`@listen-fire/models` fills `models` with Gemini (a Gemini API key, or Google Cloud), OpenAI, Claude on Anthropic's API or Claude on Vertex, so a project needs no Anthropic key ([its README](../modules/models/README.md)). Install it as `externals/models`, name it (`core: { models: models }`), and `lf connect models` asks for `vendor` and its credentials.
+
+- A movement keeps its model names (`sonnet`, `claude-opus-5`); the module sends each to its vendor's model the way the platform's `MODEL_MAP` does. Every name goes to one model (`model`, default `gemini-3.8-flash` or `gpt-5-mini`) unless `model_map` sends it elsewhere.
+- Every answer is priced from the shared price table, and the module publishes its prices, so `maxRunCostUsd` counts its calls and lf refuses a call whose prompt alone costs more than the run has left.
+- The judge needs no key either: `@lf/judge` asks no model, and `@listen-fire/judge-llm` (installed as `externals/judge_llm`, `core: { judge: judge_llm }`) asks lf for its model calls, which go to whatever fills `models`.
 
 A module of your own, started from its `command` or reached at its `url`, fills any slot (`kind: core` in its `lf-external.yaml`; see each slot's wire in [the contracts](contracts/README.md), such as [the store's](contracts/store-slot.md), [the files slot's](contracts/files-slot.md) or [the wake's](contracts/wake-slot.md)). `@listen-fire/s3-files` fills `files` with a bucket on AWS S3, Google Cloud Storage, Cloudflare R2 or MinIO ([its README](../modules/s3-files/README.md)).
 

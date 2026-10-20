@@ -1,0 +1,10 @@
+# The install entry for lf: put this file in <project>/externals/judge_llm/
+# (with the package installed there) and name it in lf.yaml:
+#   core:
+#     judge: judge_llm
+# It has no settings: its model calls go through lf's models slot, so it runs
+# on whatever fills that (Claude, or Gemini through @lf/models).
+name: judge_llm
+kind: core
+slot: judge
+command: [node, node_modules/@listen-fire/judge-llm/dist/serve.js]

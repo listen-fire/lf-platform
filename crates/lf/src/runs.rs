@@ -118,10 +118,10 @@ pub async fn open_session(project: Project, ephemeral: bool, store: &StoreSpec) 
     crate::wake::install(crate::wake::of_project(&project, &credentials)?);
     // Before any call: the manifest calls below ask it too.
     crate::limiter::install(crate::limiter::of_project(&project, &env)?);
+    // Before the externals and the slots' modules start, so they are told where it is.
+    crate::listener::open_models_door(&credentials).await?;
     // Before the externals start too: a browser module's address is handed to them.
     crate::remote_slots::install(&project, &credentials).await?;
-    // Before the externals start, so they are told where it is.
-    crate::listener::open_models_door(&credentials).await?;
     let due_offset_ms = due_clock_offset()?;
     let (store, ephemeral_dir) = if ephemeral {
         let dir = std::env::temp_dir().join(format!("lf-{}", uuid::Uuid::new_v4()));

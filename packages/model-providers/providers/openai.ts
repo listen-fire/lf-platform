@@ -444,6 +444,12 @@ export function openAiClient(env: NodeJS.ProcessEnv): OpenAI {
   }));
 }
 
+/** A client on a key the caller holds, rather than this process's environment. */
+export function openAiClientOf(access: { apiKey: string; baseUrl?: string }): OpenAI {
+  const sdk: typeof import('openai') = require('openai');
+  return new sdk.default({ apiKey: access.apiKey, ...(access.baseUrl !== undefined ? { baseURL: access.baseUrl } : {}) });
+}
+
 export function openAiChatProvider(env: NodeJS.ProcessEnv): ChatProvider {
   return (provider ??= openAiChatProviderOver(openAiClient(env)));
 }

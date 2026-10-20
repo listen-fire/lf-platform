@@ -1106,10 +1106,9 @@ impl Run<'_> {
             .charge(answer.get("cost"))
             .map_err(|message| thrown(Failure::Engine { class: crate::eval::ErrorClass::Error, message }))?;
         if let Some(error) = answer.get("error") {
-            // A budget refusal is the run's cap, from the run's own
-            // figures, where they say it is met.
+            // A budget refusal is the run's cap, in the run's own figures.
             if error.get("kind").and_then(Json::as_str) == Some("budget")
-                && let Some(cap) = self.ledger.exceeded()
+                && let Some(cap) = self.ledger.refused()
             {
                 return Err(thrown(Failure::CapExceeded(cap)));
             }

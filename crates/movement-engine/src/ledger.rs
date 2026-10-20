@@ -9,10 +9,10 @@
 //! `capBaselineMicrodollars`. The engine refuses one priced call itself: a
 //! priced plugin once the run has spent its cap (`plugin_refusal`), before
 //! the host is asked. Any other the host refuses past the budget, and that
-//! refusal, once charged, is the run's cap met (`exceeded`) when the run's
-//! own figures say so, at which the run suspends (crate::park); otherwise it
-//! fails the statement with the host's message, as run_context.ts `charged`
-//! does.
+//! refusal, once charged, is the run's cap met (`refused`) whenever the run
+//! has a cap, at which the run suspends (crate::park): a host may refuse a
+//! call up front that would go past what is left. With no cap it fails the
+//! statement with the host's message, as run_context.ts `charged` does.
 
 use std::cell::RefCell;
 
@@ -74,6 +74,15 @@ impl Ledger {
         let cap = self.spend.cap_microdollars?;
         let spent = self.since_reset();
         (spent >= cap).then_some(CapExceeded { cap_microdollars: cap, spent_microdollars: spent })
+    }
+
+    /// A host's budget refusal, in the run's own figures: under a cap, the
+    /// cap met, even where the run has not yet spent it all, because a host
+    /// refuses up front a call that cannot fit what is left (its prompt alone
+    /// costs more). `None` with no cap: a refusal no cap explains fails.
+    pub fn refused(&self) -> Option<CapExceeded> {
+        let cap = self.spend.cap_microdollars?;
+        Some(CapExceeded { cap_microdollars: cap, spent_microdollars: self.since_reset() })
     }
 
     /// Charge an answer's `cost`. A malformed line fails, with the
@@ -189,6 +198,13 @@ mod tests {
         ledger.charge(Some(&json!([{ "source": "model:judge", "microdollars": 1 }]))).unwrap();
         assert_eq!(ledger.exceeded(), Some(CapExceeded { cap_microdollars: 100.0, spent_microdollars: 100.0 }));
         assert_eq!(Ledger::new(&Spend { prior_microdollars: 1e9, ..Spend::default() }).exceeded(), None);
+    }
+
+    #[test]
+    fn a_hosts_budget_refusal_under_a_cap_is_the_cap_met_in_the_runs_own_figures() {
+        let ledger = Ledger::new(&Spend { prior_microdollars: 50.0, cap_baseline_microdollars: 20.0, cap_microdollars: Some(100.0) });
+        assert_eq!(ledger.refused(), Some(CapExceeded { cap_microdollars: 100.0, spent_microdollars: 30.0 }));
+        assert_eq!(Ledger::new(&Spend::default()).refused(), None);
     }
 
     #[test]

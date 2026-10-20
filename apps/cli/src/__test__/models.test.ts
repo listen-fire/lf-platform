@@ -6,11 +6,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { appendFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingHttpHeaders } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { FAKE_TEXT as GEMINI_TEXT, fakeGemini } from '../../../../modules/models/__test__/fake_vendors';
 import { companies, lfCommand, project } from './example';
 import { ACME_LLM_ANSWER, withModelsModule } from './models_module/project';
 
@@ -21,8 +22,9 @@ interface Received {
   body: { model: string; messages: Array<{ content: unknown }> };
 }
 
-// Answers every request as a stream, the way the shared client asks for it.
-async function fakeAnthropic(): Promise<{ url: string; received: Received[]; close: () => void }> {
+// Answers every request as a stream, the way the shared client asks for it,
+// spending 10 input tokens and `outputTokens` output tokens.
+async function fakeAnthropic(outputTokens = 8): Promise<{ url: string; received: Received[]; close: () => void }> {
   const received: Received[] = [];
   const server = createServer((req, res) => {
     let raw = '';
@@ -34,7 +36,7 @@ async function fakeAnthropic(): Promise<{ url: string; received: Received[]; clo
         ['content_block_start', { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } }],
         ['content_block_delta', { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: ANSWER } }],
         ['content_block_stop', { type: 'content_block_stop', index: 0 }],
-        ['message_delta', { type: 'message_delta', delta: { stop_reason: 'end_turn', stop_sequence: null }, usage: { output_tokens: 8 } }],
+        ['message_delta', { type: 'message_delta', delta: { stop_reason: 'end_turn', stop_sequence: null }, usage: { output_tokens: outputTokens } }],
         ['message_stop', { type: 'message_stop' }],
       ];
       res.writeHead(200, { 'content-type': 'text/event-stream' });
@@ -118,15 +120,33 @@ test('lf run: a model call with no provider key fails naming the secrets entry',
   assert.match(run.out, /a model call needs a provider key/);
 });
 
-// As on the
-// platform, a run that meets its cap pauses before the priced call that would
-// go over it, and an explicit resume carries on with its usage reset.
-test('lf run: lf.yaml maxRunCostUsd pauses a run at its cap; lf resume carries on', async () => {
+// A call whose prompt alone, at the model's published input price, costs
+// more than the run has left is not made: the run pauses before it, as at its cap.
+test('lf run: a call the run cannot afford is refused before it is made, and the run pauses', async () => {
   const fake = await fakeAnthropic();
   try {
     const dir = project();
     appendFileSync(join(dir, '.lf/secrets.yaml'), `\nanthropic:\n  external: "@lf/anthropic"\n  api_key: test-key\n  base_url: ${fake.url}\n`);
     appendFileSync(join(dir, 'lf.yaml'), '\nmaxRunCostUsd: 0.000001\n');
+    writeFileSync(join(dir, 'movements/named.mvt'), TWO_CALLS);
+    const run = await lfAsync(dir, 'run', '--event', 'events/company_created.json');
+    assert.match(run.out, /^run \S+ named:name_it parked/m);
+    assert.equal(fake.received.length, 0, run.out);
+  } finally {
+    fake.close();
+  }
+});
+
+// As on the
+// platform, a run that meets its cap pauses before the priced call that would
+// go over it, and an explicit resume carries on with its usage reset.
+test('lf run: lf.yaml maxRunCostUsd pauses a run at its cap; lf resume carries on', async () => {
+  // 100,000 output tokens is $1 at sonnet's price: the first answer spends past a cent's cap.
+  const fake = await fakeAnthropic(100_000);
+  try {
+    const dir = project();
+    appendFileSync(join(dir, '.lf/secrets.yaml'), `\nanthropic:\n  external: "@lf/anthropic"\n  api_key: test-key\n  base_url: ${fake.url}\n`);
+    appendFileSync(join(dir, 'lf.yaml'), '\nmaxRunCostUsd: 0.01\n');
     writeFileSync(
       join(dir, 'movements/named.mvt'),
       [
@@ -271,5 +291,42 @@ test('lf run: a plugin module asks the host for a model call through the models 
     assert.ok(companies(dir).includes(ANSWER), `${companies(dir).join(', ')}\n${run.out}`);
   } finally {
     fake.close();
+  }
+});
+
+// @lf/models (modules/models) filling the models slot on Gemini, its settings
+// in the secrets file as `lf connect models` writes them: AI() reaches the
+// fake Gemini API on the install's key, and what the module priced the call
+// at (from the shared price table) is the run's spend.
+test('lf run: @lf/models on Gemini answers AI() and its priced cost is the run\'s spend', async () => {
+  const gemini = await fakeGemini();
+  try {
+    const dir = project();
+    const serve = resolve(__dirname, '../../../../modules/models/serve.ts');
+    const command = [process.execPath, '--conditions=movement-engine-internals', '--require', require.resolve('tsx/cjs'), serve];
+    const manifest = readFileSync(resolve(__dirname, '../../../../modules/models/lf-external.yaml'), 'utf8')
+      .replace(/^command: .*$/m, `command: [${command.map((part) => JSON.stringify(part)).join(', ')}]`);
+    mkdirSync(join(dir, 'externals/models'), { recursive: true });
+    writeFileSync(join(dir, 'externals/models/lf-external.yaml'), manifest);
+    appendFileSync(join(dir, 'lf.yaml'), '\ncore:\n  models: models\n');
+    appendFileSync(join(dir, '.lf/secrets.yaml'), `\nmodels:\n  external: models\n  vendor: gemini\n  api_key: test-key\n  base_url: ${gemini.url}\n`);
+    writeFileSync(join(dir, 'movements/named.mvt'), TWO_CALLS);
+
+    const run = await lfAsync(dir, 'run', '--event', 'events/company_created.json');
+    assert.equal(run.code, 0, run.out);
+    assert.ok(companies(dir).includes(GEMINI_TEXT), `${companies(dir).join(', ')}\n${run.out}`);
+    assert.equal(gemini.received.length, 2, run.out);
+    assert.match(gemini.received[0]?.path ?? '', /\/models\/gemini-3\.8-flash:streamGenerateContent/);
+    assert.match(JSON.stringify(gemini.received[0]?.body), /Write a welcome line for Vireo Robotics/);
+    const db = new DatabaseSync(join(dir, '.lf', 'state.db'));
+    try {
+      const rows = db.prepare('select spent_microdollars as spent from run').all() as Array<{ spent: number }>;
+      // Two calls, each 10 tokens in and 4 out at gemini-3.8-flash's $1.50 / $7.50 per million: 45 apiece.
+      assert.deepEqual(rows.map((r) => r.spent).sort((a, b) => a - b), [0, 90]);
+    } finally {
+      db.close();
+    }
+  } finally {
+    await gemini.close();
   }
 });

@@ -16,12 +16,12 @@ use crate::json::{Js, Obj};
 use crate::obj;
 use crate::slot_client::SlotClient;
 
-static MODELS: RwLock<Option<Arc<SlotClient>>> = RwLock::new(None);
+static MODELS: RwLock<Option<Arc<ModelsModule>>> = RwLock::new(None);
 static JUDGE: RwLock<Option<Arc<SlotClient>>> = RwLock::new(None);
 /// The browser module's address and secret, held for the session.
 static BROWSER_HELD: std::sync::Mutex<Option<(crate::module_hosts::Lease, Option<String>)>> = std::sync::Mutex::new(None);
 
-pub fn models() -> Option<Arc<SlotClient>> {
+pub fn models() -> Option<Arc<ModelsModule>> {
     MODELS.read().unwrap_or_else(|p| p.into_inner()).clone()
 }
 
@@ -38,7 +38,7 @@ pub async fn install(project: &crate::project::Project, credentials: &crate::sec
         let fields = crate::core::settings_of(credentials, module);
         SlotClient::start(kind, &module.name, process, &fields).map(|c| Some(Arc::new(c)))
     };
-    *MODELS.write().unwrap_or_else(|p| p.into_inner()) = reach("models", &core.models)?;
+    *MODELS.write().unwrap_or_else(|p| p.into_inner()) = reach("models", &core.models)?.map(|client| Arc::new(ModelsModule::new(client)));
     *JUDGE.write().unwrap_or_else(|p| p.into_inner()) = reach("judge", &core.judge)?;
     let held = match &core.browser {
         Some(module) => match reach("browser", module)? {
@@ -70,6 +70,37 @@ pub fn browser_env() -> Vec<(String, String)> {
 }
 
 // ── The models slot ─────────────────────────────────────────────────────────
+
+/// The models slot's module, and the prices it publishes (`models.prices`),
+/// asked at its first call and kept for the process.
+pub struct ModelsModule {
+    pub client: Arc<SlotClient>,
+    /// `Some(None)` once asked of a module that publishes none.
+    prices: std::sync::Mutex<Option<Option<Arc<crate::models::PriceTable>>>>,
+}
+
+impl ModelsModule {
+    pub fn new(client: Arc<SlotClient>) -> ModelsModule {
+        ModelsModule { client, prices: std::sync::Mutex::new(None) }
+    }
+
+    /// The module's price table; `None` for a module that publishes none. A
+    /// failed ask is not kept: the next call asks again.
+    pub async fn prices(&self) -> Result<Option<Arc<crate::models::PriceTable>>, String> {
+        if let Some(known) = self.prices.lock().unwrap_or_else(|p| p.into_inner()).clone() {
+            return Ok(known);
+        }
+        // Asked only of a module whose manifest lists it: the method is optional.
+        let manifest = self.client.call_async("manifest", Obj::new()).await?;
+        let lists = |method: &str| manifest.get("methods").and_then(Js::as_array).is_some_and(|methods| methods.iter().any(|m| m.as_str() == Some(method)));
+        let published = match lists("models.prices") {
+            true => Some(Arc::new(crate::models::price_table_of(&self.client.call_async("models.prices", Obj::new()).await?))),
+            false => None,
+        };
+        *self.prices.lock().unwrap_or_else(|p| p.into_inner()) = Some(published.clone());
+        Ok(published)
+    }
+}
 
 /// One model call as `models.call` asks it (engine-contracts
 /// `slots/models.ts` `ModelsCallRequest`).

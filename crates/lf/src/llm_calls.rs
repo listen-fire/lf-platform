@@ -135,6 +135,13 @@ impl Meter {
         self.remaining.is_none_or(|remaining| (self.spent.get() as f64) < remaining)
     }
 
+    /// Whether a call that cannot cost less than `floor` microdollars fits
+    /// what is left: one that cannot is refused before it is made, not after
+    /// it has spent past the cap.
+    fn affords(&self, floor: f64) -> bool {
+        self.open() && self.remaining.is_none_or(|remaining| self.spent.get() as f64 + floor <= remaining)
+    }
+
     fn charge(&self, source: String, microdollars: i64) {
         self.spent.set(self.spent.get() + microdollars);
         let mut by_source = self.by_source.borrow_mut();
@@ -280,6 +287,11 @@ async fn answer(request: &ModelRequest, credentials: &Credentials, meter: &Meter
     if let Some(module) = crate::remote_slots::models() {
         return answer_by_module(&module, request, meter).await;
     }
+    if let Some(price) = models::builtin_prices().get(request.wire_model) {
+        if !meter.affords(input_floor(request, price)) {
+            return Err(ChatError::BudgetSpent);
+        }
+    }
     let key = models::provider_key(credentials).map_err(ChatError::Failed)?;
     let provider = Provider::new(key);
     // The caller's own ceiling wins where it named one.
@@ -341,9 +353,17 @@ async fn answer(request: &ModelRequest, credentials: &Credentials, meter: &Meter
 
 /// A call the models slot's module answers (crate::remote_slots): one
 /// request, one answer, priced by the module (its `cost` lines).
-async fn answer_by_module(module: &crate::slot_client::SlotClient, request: &ModelRequest, meter: &Meter) -> Result<Obj, ChatError> {
+async fn answer_by_module(models: &crate::remote_slots::ModelsModule, request: &ModelRequest, meter: &Meter) -> Result<Obj, ChatError> {
+    let module = &models.client;
     if !meter.open() {
         return Err(ChatError::BudgetSpent);
+    }
+    let prices = models.prices().await.map_err(ChatError::Failed)?;
+    let price = prices.as_ref().and_then(|table| table.get(request.wire_model)).copied();
+    if let Some(price) = &price {
+        if !meter.affords(input_floor(request, price)) {
+            return Err(ChatError::BudgetSpent);
+        }
     }
     let user_message = match &request.user {
         UserMessage::Text(text) => text.clone(),
@@ -358,6 +378,18 @@ async fn answer_by_module(module: &crate::slot_client::SlotClient, request: &Mod
         max_tokens: request.max_tokens,
     };
     let answered = crate::remote_slots::call_model(module, &call).await.map_err(ChatError::Failed)?;
+    let spent = answered.usage;
+    let tokens = spent.input + spent.output + spent.cache_read + spent.cache_creation;
+    let charged: i64 = answered.cost.iter().map(|(_, microdollars)| microdollars).sum();
+    // Refused rather than let through with a warning: a call the cap counts
+    // as free is a cap that no longer holds, and a module that prices
+    // nothing would otherwise be found out on the vendor's bill.
+    if tokens > 0 && charged == 0 && !price.is_some_and(|p| p.is_free()) {
+        return Err(ChatError::Failed(format!(
+            "{}: models.call answered {tokens} tokens spent on {} and no cost: a priced call reports what it cost (docs/contracts/models-slot.md), and an answer the run's cost cap cannot count is refused",
+            module.label, request.wire_model
+        )));
+    }
     for (label, microdollars) in answered.cost {
         meter.charge(label, microdollars);
     }
@@ -377,6 +409,16 @@ async fn answer_by_module(module: &crate::slot_client::SlotClient, request: &Mod
         );
     }
     Ok(out)
+}
+
+/// The least a call can cost: its prompt's tokens, estimated from its
+/// characters as the output ceiling is, at the model's input rate.
+fn input_floor(request: &ModelRequest, price: &models::Price) -> f64 {
+    let user = match &request.user {
+        UserMessage::Text(text) => text.chars().count(),
+        UserMessage::Blocks(blocks) => blocks.iter().map(|b| b.text.chars().count()).sum(),
+    };
+    ((request.system.chars().count() + user) as f64 / CHARS_PER_TOKEN).floor() * price.input
 }
 
 /// `chargeToRun`: the usage priced from the shared table, under `model:<wire model>`.
@@ -662,6 +704,117 @@ mod tests {
         let answer = host_model_call(&body, &credentials(&url)).await.unwrap();
         assert_eq!(answer.get("data").and_then(|d| d.get("city")).and_then(Js::as_str), Some("Paris"));
         assert_eq!(answer.get("cost").unwrap().to_json(), r#"[{"microdollars":7000,"label":"anthropic/claude-sonnet-5"}]"#);
+    }
+
+    #[tokio::test]
+    async fn a_built_in_call_whose_prompt_alone_costs_more_than_is_left_is_refused_before_it_is_made() {
+        let (url, seen) = fake_anthropic(vec![Scripted::Stream(stream_of(&[("text", "{}")], "end_turn", (1, 1)))]).await;
+        // 4,000 characters is 1,000 tokens in; claude-sonnet-5's $2 per million makes 2,000 microdollars.
+        let mut args = request(json!({ "remainingMicrodollars": 1_999 }));
+        args["userMessage"] = json!("x".repeat(3_999));
+        let answer = serve("llm.client.call", &args, &credentials(&url)).await.ok().unwrap();
+        assert_eq!(answer.get("error").unwrap().get("kind"), Some(&Js::str("budget")));
+        assert!(seen.lock().unwrap().is_empty());
+        args["budget"] = json!({ "remainingMicrodollars": 2_000 });
+        let answer = serve("llm.client.call", &args, &credentials(&url)).await.ok().unwrap();
+        assert!(answer.get("error").is_none(), "{}", answer.to_json());
+    }
+
+    // ── A models module (crate::remote_slots) ──
+
+    /// A models module on a socket of its own, answering every `models.call`
+    /// with `answer` and `models.prices` with `prices` (none: the method is
+    /// not implemented), counting the calls. Run inside a `LocalSet`.
+    async fn models_module(answer: Js, prices: Option<Js>) -> (crate::remote_slots::ModelsModule, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
+        use crate::slot_server::{Listen, Refusal};
+        let socket = std::env::temp_dir().join(format!("lf-models-{}.sock", uuid::Uuid::new_v4()));
+        let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counted = calls.clone();
+        let methods: &[&str] = if prices.is_some() { &["models.call", "models.prices"] } else { &["models.call"] };
+        let manifest = crate::slot_server::manifest("acme_llm", "models", methods);
+        tokio::task::spawn_local(crate::slot_server::serve_async(Listen::Unix(socket.clone()), manifest, move |method: String, _params: Js, _settings: Js| {
+            let answered = match (method.as_str(), &prices) {
+                ("models.call", _) => {
+                    counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    Ok(answer.clone())
+                }
+                ("models.prices", Some(prices)) => Ok(prices.clone()),
+                (other, _) => Err(Refusal::unknown(other)),
+            };
+            async move { answered }
+        }));
+        while !socket.exists() {
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+        let process = crate::core::ProcessModule { dir: std::env::temp_dir(), command: Vec::new(), env: Default::default(), url: Some(format!("unix:{}", socket.display())), auth_field: None };
+        let client = crate::slot_client::SlotClient::start("models", "acme_llm", &process, &Default::default()).unwrap();
+        (crate::remote_slots::ModelsModule::new(std::sync::Arc::new(client)), calls)
+    }
+
+    fn module_request(user: &str) -> ModelRequest {
+        ModelRequest {
+            label: "test".into(),
+            system: String::new(),
+            user: UserMessage::Text(user.into()),
+            wire_model: "claude-sonnet-5",
+            effort: None,
+            max_tokens: None,
+            budget: None,
+            reports_usage: false,
+            output_budget: false,
+        }
+    }
+
+    fn answered(cost: i64) -> Js {
+        Js::parse(format!(r#"{{"text":"hi","cost":[{{"label":"acme/small","microdollars":{cost}}}],"usage":{{"inputTokens":12,"outputTokens":7}}}}"#).as_bytes()).unwrap()
+    }
+
+    fn priced_at(input: f64, output: f64) -> Js {
+        Js::parse(format!(r#"{{"prices":{{"claude-sonnet-5":{{"input":{input},"output":{output}}}}}}}"#).as_bytes()).unwrap()
+    }
+
+    #[tokio::test]
+    async fn a_modules_published_price_refuses_a_call_whose_prompt_alone_costs_more_than_is_left() {
+        tokio::task::LocalSet::new()
+            .run_until(async {
+                let (module, calls) = models_module(answered(2_500), Some(priced_at(10.0, 30.0))).await;
+                // 400 characters is 100 tokens in, at $10 per million: 1,000 microdollars.
+                let request = module_request(&"x".repeat(400));
+                let refused = answer_by_module(&module, &request, &Meter::new(Some(999.0))).await;
+                assert!(matches!(refused, Err(ChatError::BudgetSpent)));
+                assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 0);
+                let meter = Meter::new(Some(1_000.0));
+                assert!(answer_by_module(&module, &request, &meter).await.is_ok());
+                assert_eq!(meter.spent.get(), 2_500);
+            })
+            .await;
+    }
+
+    #[tokio::test]
+    async fn an_answer_that_spent_tokens_and_reports_no_cost_is_refused_unless_its_model_is_published_free() {
+        tokio::task::LocalSet::new()
+            .run_until(async {
+                let (unpriced, _) = models_module(answered(0), None).await;
+                let Err(ChatError::Failed(message)) = answer_by_module(&unpriced, &module_request("u"), &Meter::new(None)).await else { panic!("expected a refusal") };
+                assert!(message.contains("answered 19 tokens spent on claude-sonnet-5 and no cost"), "{message}");
+
+                let (free, _) = models_module(answered(0), Some(priced_at(0.0, 0.0))).await;
+                assert!(answer_by_module(&free, &module_request("u"), &Meter::new(None)).await.is_ok());
+            })
+            .await;
+    }
+
+    #[tokio::test]
+    async fn a_module_that_publishes_no_prices_is_still_charged_what_it_reports() {
+        tokio::task::LocalSet::new()
+            .run_until(async {
+                let (module, calls) = models_module(answered(2_500), None).await;
+                let meter = Meter::new(Some(1_000_000.0));
+                answer_by_module(&module, &module_request(&"x".repeat(100_000)), &meter).await.ok().unwrap();
+                answer_by_module(&module, &module_request("u"), &meter).await.ok().unwrap();
+                assert_eq!((calls.load(std::sync::atomic::Ordering::SeqCst), meter.spent.get()), (2, 5_000));
+            })
+            .await;
     }
 
     #[tokio::test]
