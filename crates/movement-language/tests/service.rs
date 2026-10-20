@@ -6,12 +6,12 @@ use movement_parser::catalog::types::CatalogSnapshot;
 const CATALOG: &str = r#"{"adapters":{
   "cron":{"constructionArgs":[],"canFire":true,"triggerConfig":["schedule","timezone"],"triggerConfigRequired":["schedule"],"triggerConfigFormats":{"schedule":"cron","timezone":"timezone"},"schemas":{"":{"positions":{"Tick":{"properties":{"Fired at":"date"},"edges":{}}},"collections":{},"writableRoots":{},"eventPosition":"Tick","eventPositions":[{"position":"Tick"}]}}},
   "manual":{"constructionArgs":[],"canFire":true,"schemas":{"":{"positions":{"Invocation":{"properties":{"Text":"text","Run by (name)":"text"},"edges":{}}},"collections":{},"writableRoots":{},"eventPosition":"Invocation","eventPositions":[{"position":"Invocation"}]}}},
-  "slack":{"constructionArgs":[],"canFire":true,"triggerConfig":["channel","pollIntervalSeconds"],"triggerConfigRequired":["channel"],"schemas":{"":{"positions":{
-    "channel":{"properties":{"Name":"text"},"edges":{"Messages":{"target":"message","readable":true,"sequenced":"chronological"}}},
+  "slack":{"constructionArgs":[],"canFire":true,"description":"The team's chat.","triggerConfig":["channel","pollIntervalSeconds"],"triggerConfigRequired":["channel"],"schemas":{"":{"positions":{
+    "channel":{"properties":{"Name":"text"},"edges":{"Messages":{"target":"message","readable":true,"sequenced":"chronological","description":"What was said in the channel, oldest first."}},"description":"A place the team talks.","fieldDocs":{"Name":"The channel's name, without its #."}},
     "message":{"properties":{"Body":"text","Score":"number"},"edges":{}}},
     "collections":{"Channels":{"target":"channel"}},"writableRoots":{}}}}},
   "credentials":{"acme_bot":{"adapters":["slack"]},"other_crm":{"adapters":["attio"]}},
-  "plugins":{"fetch_url":{"args":["url"],"package":"@lf/web"},"summarise":{"args":["text"]}},
+  "plugins":{"@lf/web/fetch_url":{"args":["url"],"package":"@lf/web","name":"fetch_url","argTypes":{"url":"text"},"requiredArgs":["url"],"output":{"kind":"value","type":"text"},"description":"The page at a URL, as text."},"summarise":{"args":["text"]}},
   "files":{"lib/greet":{"source":"export function greet(name: <text>) {\n  return \"Hi ${name}\"\n}\n"}}}"#;
 
 const PROGRAM: &str = "import { `@lf/slack` as slack } from adapters
@@ -173,6 +173,60 @@ fn credential_names_follow_using() {
     assert_eq!(labels(&items), ["acme_bot"]);
 }
 
+const HOVERED: &str = "import { `@lf/slack` as slack } from adapters
+import { `@lf/web` as web } from plugins
+chat = connect slack
+
+# Reads the `count` of what only arrives first.
+function scan(c: <chat-[:channel]->>) {
+  page = web.fetchUrl(c.Name)
+  ms = c-[m:Messages]->
+  return count(ms)
+}
+";
+
+#[test]
+fn hover_leads_with_the_adapter_s_own_words() {
+    let service = service();
+    let hover = service.hover(HOVERED, after(HOVERED, "c-[m:Mess", 0)).unwrap();
+    assert!(hover.contents.starts_with("```movement\nc-[:Messages]-> message\n```\nWhat was said in the channel, oldest first.\n\nmessage records in chat."), "{}", hover.contents);
+    assert!(hover.contents.contains("Fields: Body: text, Score: number"), "{}", hover.contents);
+    let hover = service.hover(HOVERED, after(HOVERED, "c.Na", 0)).unwrap();
+    assert!(hover.contents.contains("Name: text\n```\nThe channel's name, without its #.\n\nOn a channel record from chat."), "{}", hover.contents);
+    let hover = service.hover(HOVERED, after(HOVERED, "function scan(", 0)).unwrap();
+    assert!(hover.contents.contains("c: channel (from chat)\n```\nA place the team talks.\n\nParameter of scan."), "{}", hover.contents);
+    assert!(hover.contents.contains("Walk on: Messages → message"), "{}", hover.contents);
+    let hover = service.hover(HOVERED, after(HOVERED, "\ncha", 0)).unwrap();
+    assert!(hover.contents.contains("chat = connect slack\n```\nThe team's chat.\n\nA connection to slack.\n\nHolds: channel, message"), "{}", hover.contents);
+}
+
+#[test]
+fn a_plugin_package_and_its_members_have_cards() {
+    let service = service();
+    let hover = service.hover(HOVERED, after(HOVERED, "page = we", 0)).unwrap();
+    assert!(hover.contents.contains("Plugin package @lf/web.\n\n`fetchUrl(url: text) → text`"), "{}", hover.contents);
+    let hover = service.hover(HOVERED, after(HOVERED, "as we", 0)).unwrap();
+    assert!(hover.contents.contains("Plugin package @lf/web."), "{}", hover.contents);
+    let hover = service.hover(HOVERED, after(HOVERED, "web.fetch", 0)).unwrap();
+    assert!(hover.contents.contains("web.fetchUrl(url: text) → text\n```\nThe page at a URL, as text.\n\nFrom plugin package @lf/web."), "{}", hover.contents);
+}
+
+#[test]
+fn words_in_a_comment_have_no_card() {
+    let service = service();
+    assert!(service.hover(HOVERED, after(HOVERED, "# Reads the `co", 0)).is_none());
+    assert!(service.hover(HOVERED, after(HOVERED, "what on", 0)).is_none());
+    assert!(service.hover(HOVERED, after(HOVERED, "return cou", 0)).is_some());
+}
+
+#[test]
+fn a_built_in_s_card_is_the_reference_s_own_line() {
+    let service = service();
+    let hover = service.hover(HOVERED, after(HOVERED, "return cou", 0)).unwrap();
+    assert!(hover.contents.contains("`count(list | walk)` → `number`, always present"), "{}", hover.contents);
+    assert!(!hover.contents.contains("before version 5") && !hover.contents.contains("follows from its arguments"), "{}", hover.contents);
+}
+
 #[test]
 fn hover_shows_the_type_a_doc_line_and_a_versioned_link() {
     let service = service();
@@ -180,16 +234,22 @@ fn hover_shows_the_type_a_doc_line_and_a_versioned_link() {
     assert!(hover.contents.contains("greeting: text"), "{}", hover.contents);
     assert!(hover.contents.contains(&format!("{}/reference#top-level", movement_language::docs_base())), "{}", hover.contents);
     let hover = service.hover(PROGRAM, after(PROGRAM, "Text.up", 0)).unwrap();
-    assert!(hover.contents.contains("Text.upper(text)") && hover.contents.contains("`UPPER`"), "{}", hover.contents);
+    assert!(hover.contents.contains("Text.upper(text)") && hover.contents.contains("the text, uppercased"), "{}", hover.contents);
     assert!(hover.contents.contains(&format!("/docs/{}/builtins#textupper", movement_language::DOCS_SLUG)), "{}", hover.contents);
     let hover = service.hover(PROGRAM, after(PROGRAM, "run.`Te", 0)).unwrap();
     assert!(hover.contents.contains("Text: text"), "{}", hover.contents);
     let hover = service.hover(PROGRAM, after(PROGRAM, "m.Sco", 0)).unwrap();
     assert!(hover.contents.contains("Score: number"), "{}", hover.contents);
     let hover = service.hover(PROGRAM, after(PROGRAM, "c-[m:Mess", 0)).unwrap();
-    assert!(hover.contents.contains("landing on"), "{}", hover.contents);
+    assert!(hover.contents.contains("c-[:Messages]-> message"), "{}", hover.contents);
     let hover = service.hover(PROGRAM, after(PROGRAM, "function sc", 0)).unwrap();
-    assert!(hover.contents.contains("function scan(c: <chat-[:channel]->>)"), "{}", hover.contents);
+    assert!(hover.contents.contains("function scan(c: <chat-[:channel]->>)\n```\nNo listen fires it"), "{}", hover.contents);
+    let hover = service.hover(PROGRAM, after(PROGRAM, "function hel", 0)).unwrap();
+    assert!(hover.contents.contains("Runs when: `listen to manual`."), "{}", hover.contents);
+    let hover = service.hover(PROGRAM, after(PROGRAM, "<manu", 0)).unwrap();
+    assert!(hover.contents.contains("Built into lf; no import needed.\n\nGives: Invocation (Text, `Run by (name)`)"), "{}", hover.contents);
+    let hover = service.hover(PROGRAM, after(PROGRAM, "  greeti", 0)).unwrap();
+    assert!(hover.contents.contains("Set on line 6."), "{}", hover.contents);
 }
 
 #[test]

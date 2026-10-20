@@ -153,3 +153,28 @@ pub fn inside_quotes(text: &str) -> bool {
     }
     inside
 }
+
+/// Whether a line's text before the cursor ends inside a `#` comment: a `#`
+/// outside quotes and backticks, unless it opens a hop's head (`-[#linked`).
+pub fn in_comment(before: &str) -> bool {
+    let mut quote: Option<char> = None;
+    let mut escaped = false;
+    let mut previous: Option<char> = None;
+    for c in before.chars() {
+        match quote {
+            Some(open) => {
+                if c == open && !escaped {
+                    quote = None;
+                }
+                escaped = open != '`' && c == '\\' && !escaped;
+            }
+            None => match c {
+                '"' | '\'' | '`' => quote = Some(c),
+                '#' if !matches!(previous, Some('[' | ':')) => return true,
+                _ => {}
+            },
+        }
+        previous = Some(c);
+    }
+    false
+}
