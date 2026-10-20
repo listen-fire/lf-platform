@@ -21,12 +21,11 @@
  *
  */
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import { trpc } from "@/lib/trpc";
 import { usePageTitle } from "@/components/page-title";
-import { usePublishPageContext } from "@/components/page-context";
 import {
   CONNECTABLE_CREDENTIAL_TYPES,
   IntegrationModal,
@@ -116,28 +115,6 @@ export default function ConnectionsPage() {
   const integrations = data?.integrations ?? [];
   const sourceChannels = data?.sourceChannels ?? [];
   const custom = data?.custom ?? [];
-
-  // Tell the global assistant which credentials and channels are on screen.
-  usePublishPageContext(
-    useMemo(
-      () => ({
-        page: "Credentials",
-        entities: [
-          ...integrations.map((i) => ({
-            kind: "credential",
-            id: i.id,
-            name: i.name,
-          })),
-          ...sourceChannels.map((c) => ({
-            kind: "channel",
-            id: c.kind,
-            name: c.name,
-          })),
-        ].slice(0, 40),
-      }),
-      [integrations, sourceChannels],
-    ),
-  );
 
   return (
     <div className="flex h-full flex-col">

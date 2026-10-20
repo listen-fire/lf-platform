@@ -12,12 +12,10 @@
  * Library's plugin-authoring handbook stub.
  */
 
-import { useMemo } from "react";
 import Link from "next/link";
 import { ArrowUpRight, Puzzle } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { usePageTitle } from "@/components/page-title";
-import { usePublishPageContext } from "@/components/page-context";
 import { ImportSnippet } from "@/components/import-snippet";
 import {
   Badge,
@@ -32,24 +30,6 @@ export default function PluginsPage() {
   usePageTitle("Plugins — Listen-Fire");
 
   const { data } = trpc.views.plugins.list.useQuery();
-
-  // Tell the global assistant which plugins are on screen.
-  usePublishPageContext(
-    useMemo(
-      () =>
-        data
-          ? {
-              page: "Plugins",
-              entities: data.map((plugin) => ({
-                kind: "plugin",
-                id: plugin.importName,
-                name: plugin.name,
-              })),
-            }
-          : null,
-      [data],
-    ),
-  );
 
   return (
     <div className="flex h-full flex-col">

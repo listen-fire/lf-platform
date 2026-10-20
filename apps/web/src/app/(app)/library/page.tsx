@@ -10,7 +10,6 @@ import { ArrowLeft, ArrowUpRight, BookOpen } from "lucide-react";
 
 import { trpc } from "@/lib/trpc";
 import { usePageTitle } from "@/components/page-title";
-import { usePublishPageContext } from "@/components/page-context";
 import { AgentMarkdown } from "@/components/agent-markdown";
 import { Badge, PageBody, PageHeader, PageIntro } from "@/components/ui";
 
@@ -88,18 +87,6 @@ function BookReader({ book, onBack }: { book: Book; onBack: () => void }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const current =
     book.chapters.find((c) => c.id === selectedId) ?? book.chapters[0] ?? null;
-
-  // Tell the global assistant which handbook and chapter is open.
-  usePublishPageContext(
-    useMemo(
-      () => ({
-        page: "Library — reading a handbook",
-        entities: [{ kind: "handbook", id: book.bookId, name: book.title }],
-        ...(current ? { extras: { chapter: current.title } } : {}),
-      }),
-      [book.bookId, book.title, current],
-    ),
-  );
 
   return (
     <div className="flex min-h-0 flex-1">
@@ -184,25 +171,6 @@ export default function LibraryPage() {
   const openBookId = searchParams.get("book");
   const openBook =
     books.find((b) => b.bookId === openBookId && b.chapters.length > 0) ?? null;
-
-  // Shelf view: publish the page + available handbooks. When a book is
-  // open, BookReader (mounted instead) publishes the book + chapter.
-  usePublishPageContext(
-    useMemo(
-      () =>
-        openBook
-          ? null
-          : {
-              page: "Library",
-              entities: books.map((b) => ({
-                kind: "handbook",
-                id: b.bookId,
-                name: b.title,
-              })),
-            },
-      [openBook, books],
-    ),
-  );
 
   const open = (bookId: string) => router.push(`/library?book=${bookId}`);
   const back = () => router.push("/library");

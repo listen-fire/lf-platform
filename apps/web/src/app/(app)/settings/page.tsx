@@ -24,7 +24,6 @@ export default function SettingsPage() {
       <UsageSection />
       <BillingContactsSection />
       <WhatsAppSection />
-      <StylePreferencesSection />
       <RecipesSection />
       <PasswordSection />
       <VersionSection />
@@ -586,54 +585,6 @@ function PasswordSection() {
   );
 }
 
-function StylePreferencesSection() {
-  const { data, isLoading } =
-    trpc.views.userSettings.getAgentStylePreferences.useQuery();
-  const { mutateAsync: update } =
-    trpc.views.userSettings.updateAgentStylePreferences.useMutation();
-
-  const [value, setValue] = useState("");
-  const [saved, setSaved] = useState(false);
-
-  useEffect(() => {
-    if (data) setValue(data.preferences);
-  }, [data]);
-
-  const save = useCallback(async () => {
-    await update({ preferences: value });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  }, [update, value]);
-
-  return (
-    <Card>
-      <h2 className="text-[13px] font-semibold text-gray-900">
-        Agent Style Preferences
-      </h2>
-      <p className="mt-1 text-[12px] text-gray-400">
-        Control how all AI agents communicate — tone, verbosity, formatting.
-        These preferences apply to your whole team.
-      </p>
-      <textarea
-        className={`${inputClass} mt-3`}
-        rows={5}
-        placeholder="e.g. Be concise. Use bullet points. Show financials in USD millions."
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        disabled={isLoading}
-      />
-      <div className="mt-3 flex items-center gap-3">
-        <button onClick={save} disabled={isLoading} className={btnPrimary}>
-          Save
-        </button>
-        {saved && (
-          <span className="text-[12px] text-gray-400">Saved</span>
-        )}
-      </div>
-    </Card>
-  );
-}
-
 interface RecipeFormState {
   id?: string;
   name: string;
@@ -697,8 +648,8 @@ function RecipesSection() {
         <div>
           <h2 className="text-[13px] font-semibold text-gray-900">Recipes</h2>
           <p className="mt-1 text-[12px] text-gray-400">
-            Reusable instructions the ask agent follows for specific tasks. The
-            agent auto-matches recipes to requests.
+            Reusable instructions for specific tasks. Your own agent reads
+            and saves them by name over the knowledge connector.
           </p>
         </div>
         {!editing && (
@@ -762,8 +713,7 @@ function RecipesSection() {
         )}
         {recipes && recipes.length === 0 && !editing && (
           <p className="text-[12px] text-gray-400">
-            No recipes yet. Create one or ask the agent to save a recipe during
-            a conversation.
+            No recipes yet. Create one here, or have your agent save one.
           </p>
         )}
         {recipes?.map((r) => (

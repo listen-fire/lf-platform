@@ -2,13 +2,11 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Search, MessageSquare } from "lucide-react";
+import { Search } from "lucide-react";
 import { unitIsMounted } from "@/lib/capabilities";
 import { useCapabilities } from "@/lib/capabilities-provider";
 import { trpc } from "@/lib/trpc";
 import { NodeIcon } from "./node-icon";
-import { AssistantIcon } from "./icons";
-import { useAssistant } from "./assistant";
 
 function useDebounce(value: string, ms: number) {
   const [debounced, setDebounced] = useState(value);
@@ -21,7 +19,6 @@ function useDebounce(value: string, ms: number) {
 
 function SearchModal({ onClose }: { onClose: () => void }) {
   const router = useRouter();
-  const { sendToAssistant } = useAssistant();
   const [query, setQuery] = useState("");
   const debouncedQuery = useDebounce(query, 200);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -55,9 +52,7 @@ function SearchModal({ onClose }: { onClose: () => void }) {
     [router, close],
   );
 
-  // Total selectable count: AI chat option + results
-  const showAiOption = query.length > 0;
-  const totalItems = items.length + (showAiOption ? 1 : 0);
+  const totalItems = items.length;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown") {
@@ -68,13 +63,7 @@ function SearchModal({ onClose }: { onClose: () => void }) {
       setSelectedIndex((i) => Math.max(i - 1, 0));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      if (showAiOption && selectedIndex === 0) {
-        sendToAssistant(query);
-        close();
-      } else {
-        const itemIdx = showAiOption ? selectedIndex - 1 : selectedIndex;
-        if (items[itemIdx]) navigate(`/nodes/${items[itemIdx].nodeId}`);
-      }
+      if (items[selectedIndex]) navigate(`/nodes/${items[selectedIndex].nodeId}`);
     } else if (e.key === "Escape") {
       close();
     }
@@ -97,8 +86,8 @@ function SearchModal({ onClose }: { onClose: () => void }) {
     return acc;
   }, []);
 
-  // Flat index for keyboard nav (offset by 1 when AI option is shown)
-  let flatIndex = showAiOption ? 1 : 0;
+  // Flat index for keyboard nav
+  let flatIndex = 0;
 
   return (
     <div
@@ -141,31 +130,6 @@ function SearchModal({ onClose }: { onClose: () => void }) {
             </div>
           ) : (
             <div className="py-2">
-              {/* AI chat option */}
-              <button
-                onMouseEnter={() => setSelectedIndex(0)}
-                onClick={() => {
-                  sendToAssistant(query);
-                  close();
-                }}
-                className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                  selectedIndex === 0 ? "bg-primary-50" : "hover:bg-gray-50"
-                }`}
-              >
-                <AssistantIcon />
-                <span className="min-w-0 flex-1 text-[14px] text-gray-900">
-                  Ask AI about &ldquo;{query}&rdquo;
-                </span>
-                <kbd className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-400">
-                  ↵
-                </kbd>
-              </button>
-
-              {/* Divider */}
-              {items.length > 0 && (
-                <div className="mx-4 my-1 border-t border-gray-100" />
-              )}
-
               {/* Node results grouped by type */}
               {items.length === 0 && !isFetching ? (
                 <div className="px-4 py-4 text-center text-[13px] text-gray-400">

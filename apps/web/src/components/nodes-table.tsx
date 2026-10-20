@@ -1049,7 +1049,7 @@ export const NodesTable = forwardRef<
     utils.views.knowledge.graph.getNodesTable.invalidate();
   }, [utils]);
 
-  // The assistant changed records while this table is open. Rather than
+  // Records changed elsewhere while this table is open. Rather than
   // reorder rows under the user's cursor, surface a dismissible "refresh"
   // pill — they pull the change in when ready.
   const [agentChangedData, setAgentChangedData] = useState(false);
@@ -1751,7 +1751,7 @@ export const NodesTable = forwardRef<
                 <button
                   onClick={applyAgentRefresh}
                   className="flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-primary/30 bg-primary/5 px-2.5 text-[12px] font-medium text-primary transition-colors hover:bg-primary/10"
-                  title="The assistant changed records — refresh to see them"
+                  title="Records changed elsewhere — refresh to see them"
                 >
                   <span className="relative flex h-1.5 w-1.5">
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
@@ -2398,7 +2398,7 @@ export const NodesTable = forwardRef<
         </div>
 
         {/* Right panel — node detail, only when a row is selected
-            (desktop only). The assistant lives in the global panel. */}
+            (desktop only). */}
         {!isMobile && selectedNodeId && (
           <ResizablePanel
             side="right"

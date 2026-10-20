@@ -16,7 +16,6 @@ import { CreateEdgeTypeModal } from "@/components/ontology/create-edge-type-moda
 import { CreateEdgeGroupModal } from "@/components/ontology/create-edge-group-modal";
 import { TemplatePickerModal } from "@/components/ontology/template-picker-modal";
 import { PanelRight } from "lucide-react";
-import { OnboardingChat } from "@/components/ontology/onboarding-chat";
 import { TAB_ORIGIN_ID } from "@/lib/tab-origin";
 
 type ModalId = "nodeType" | "edgeType" | "edgeGroup" | "template" | null;
@@ -56,9 +55,9 @@ export default function OntologyPage() {
   const { data: summary } =
     trpc.views.knowledge.ontology.getOntologySummary.useQuery();
 
-  // When the agent edits the model (from the assistant overlay), refresh
-  // — but don't yank a detail panel the user has open (they may be mid-
-  // edit). With a panel open, defer to a "refresh" pill; otherwise the
+  // When the model is edited elsewhere (another tab, or an agent over MCP),
+  // refresh — but don't yank a detail panel the user has open (they may be
+  // mid-edit). With a panel open, defer to a "refresh" pill; otherwise the
   // canvas updates live.
   const utils = trpc.useUtils();
   const [modelChanged, setModelChanged] = useState(false);
@@ -106,20 +105,6 @@ export default function OntologyPage() {
   }, []);
 
   const hasDetail = selectedNodeTypeId || selectedEdgeTypeId;
-  const isEmpty = summary && summary.nodeTypes.length === 0;
-
-  if (isEmpty) {
-    return (
-      <div className="flex h-full flex-col">
-        <div className="flex h-14 shrink-0 items-center justify-between border-b border-gray-100 px-5">
-          <h1 className="text-base font-semibold text-gray-900">Model</h1>
-        </div>
-        <div className="flex-1 overflow-hidden">
-          <OnboardingChat />
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="flex h-full flex-col">
@@ -131,7 +116,7 @@ export default function OntologyPage() {
             <button
               onClick={refreshModel}
               className="flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/5 px-2.5 py-1 text-[12px] font-medium text-primary transition-colors hover:bg-primary/10"
-              title="The assistant changed the model — refresh to see it"
+              title="The model changed elsewhere — refresh to see it"
             >
               <span className="relative flex h-1.5 w-1.5">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
