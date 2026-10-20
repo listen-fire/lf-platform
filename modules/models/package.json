@@ -15,7 +15,8 @@
   "main": "index.ts",
   "types": "index.ts",
   "bin": {
-    "lf-models": "./dist/serve.js"
+    "lf-models": "./dist/serve.js",
+    "lf-models-ocr": "./dist/serve_ocr.js"
   },
   "type": "commonjs",
   "dependencies": {
@@ -47,14 +48,16 @@
   },
   "files": [
     "dist",
-    "lf-external.yaml"
+    "lf-external.yaml",
+    "lf-external.ocr.yaml"
   ],
   "publishConfig": {
     "access": "public",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "bin": {
-      "lf-models": "./dist/serve.js"
+      "lf-models": "./dist/serve.js",
+      "lf-models-ocr": "./dist/serve_ocr.js"
     },
     "exports": {
       ".": {
