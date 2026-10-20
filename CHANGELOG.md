@@ -13,6 +13,24 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 
 ## [Unreleased]
 
+### rc3-build
+
+- **lf in the cloud.** `lf serve --doors-only` (`LF_DOORS_ONLY=1`) is for compute billed by the request. It runs no drain. `/hooks` and callback links queue their work and answer 202, listing what they queued; a drain (`lf drain`) runs it. An unrecognised `LF_DOORS_ONLY` value is refused.
+- **A new `wake` core slot**, empty by default. After queuing work, and only once the write has committed, lf tells it "ready now" or "ready at T", so whatever starts lf's workers (such as a cloud task queue) can start one then. A failed wake is logged and the work stays queued. Its wire and conformance cases are in `docs/contracts/wake-slot.md` and `lf --contract-wake-slot`. A core module reached only at its `url` now passes the manifest check.
+- **`@listen-fire/s3-files` (`@lf/s3-files`)** fills the files slot with an S3-interface bucket (AWS S3, Google Cloud Storage, Cloudflare R2, MinIO). Its credentials live in lf's secrets.
+- **`@lf/postgres-limiter`** fills the limiter slot from Postgres, so many lf workers share one count. Permits expire on the server, and its tables live in their own schema.
+- **Rate limits can count a module's own provider requests, retries included.** A module that declares `hostLimits: true` (never inferred from `limits`) asks lf's limits door before each request: through `ctx.fetch` in the TypeScript kit, or `ctx.permit()` in the Rust kit. lf then stops counting the call itself. This is an additive change within adapter protocol 2. Declare `hostLimits` only if every provider request goes through the kit; otherwise lf counts each call once, as before.
+- **lf: a crash no longer leaves run state half written.**
+  - A park, an event's receipt with its run, and an inbound delivery's cursor with its queued work are each written in one transaction. The store contract gains `parks.commit`, `events.startRun` and `inbound.keepDelivery`.
+  - A run whose worker died is failed with "worker lost: lease lapsed". Drains check for these every 30 seconds.
+  - A failing queue row backs off from 30 seconds to an hour, then gives up after 10 attempts and fails its runs (Postgres migration 5).
+- **The legacy pipelines are gone.**
+  - Dropped: pipeline configurations, inputs, outputs and message types, the dealflow pipeline, and the output-run tables, with the columns that pointed at them.
+  - Also removed: the pipeline-runs usage limit and the per-pipeline LLM usage view.
+  - Saving a movement no longer needs a pipeline configuration. A deploy applies the drop.
+- A GET to a webhook door answers 404, as before, unless its provider checks its own inbound (Meta's handshake).
+- The lf crate ships its own copy of the model price table, so `cargo publish` works. The published crate set now includes `listen-fire-module-wire` and `listen-fire-module-kit`. The Chromium image ships Noto fonts.
+
 ### merge-3
 
 - `ctx.kv.compareAndSet` is atomic everywhere: on the platform an ask or a grant is written by one conditional statement, and the file kv (`MODULE_STATE_DIR`) writes under a lock file, so processes sharing the directory never lose a write.
