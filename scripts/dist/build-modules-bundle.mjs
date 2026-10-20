@@ -24,10 +24,12 @@ const platform = [os && `--os=${os}`, cpu && `--cpu=${cpu}`, libc && `--libc=${l
 // Workspace packages the modules load at run time, by the name they import them under.
 const WORKSPACE = {
   'module-kit': 'packages/module-kit',
+  'module-runtime': 'packages/module-runtime',
   'engine-contracts': 'packages/engine-contracts',
   'movement-engine': 'packages/movement-engine',
   'movement-lang': 'packages/movement-lang',
   'file-text': 'packages/file-text',
+  'files-s3': 'packages/files-s3',
   // gmail and google-drive reuse google-sheets' OAuth code by its package name.
   '@listen-fire/google-sheets': 'modules/google-sheets',
   '#shared': 'packages/shared',
@@ -42,8 +44,11 @@ const sources = [...new Set([...Object.values(WORKSPACE), ...modules.map((m) => 
 
 const thirdParty = {};
 for (const source of sources) {
-  const { dependencies = {} } = JSON.parse(readFileSync(join(source, 'package.json'), 'utf8'));
-  for (const [name, range] of Object.entries(dependencies)) {
+  // The bundle is the application these packages run in, so it installs their
+  // peers too: module-kit's optional peer tsx is what serves the TypeScript
+  // sources the bundle ships.
+  const { dependencies = {}, peerDependencies = {} } = JSON.parse(readFileSync(join(source, 'package.json'), 'utf8'));
+  for (const [name, range] of Object.entries({ ...peerDependencies, ...dependencies })) {
     if (!String(range).startsWith('workspace:')) thirdParty[name] = range;
   }
 }
