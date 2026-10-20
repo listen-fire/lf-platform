@@ -100,6 +100,8 @@ pub trait Reader {
 pub enum EventSink<'a> {
     /// A `fire_event` work row, for the drain.
     Queue,
+    /// The same, each row listed for the answer (`/hooks/…` under `lf serve --doors-only`).
+    Listed(&'a RefCell<Vec<Js>>),
     /// Run now, inside the request, its runs kept (`/hooks/…`, `lf run --webhook`).
     Inline { session: &'a Session, outcomes: &'a RefCell<Vec<RunOutcome>> },
 }
@@ -144,9 +146,15 @@ impl<R: Reader> LfDoors<'_, R> {
 
     async fn fire(&self, external: &str, event: Js) -> Result<(), String> {
         match &self.sink {
-            EventSink::Queue => {
+            EventSink::Queue | EventSink::Listed(_) => {
+                let key = format!("fire_event:{}", uuid::Uuid::new_v4());
                 let payload = Js::Obj(obj! { "external" => Js::str(external), "event" => event });
-                self.store.enqueue("fire_event", &format!("fire_event:{}", uuid::Uuid::new_v4()), &payload, None, None).map_err(|e| e.to_string())
+                self.store.enqueue("fire_event", &key, &payload, None, None).map_err(|e| e.to_string())?;
+                crate::wake::queued("fire_event", None);
+                if let EventSink::Listed(listed) = &self.sink {
+                    listed.borrow_mut().push(Js::Obj(obj! { "kind" => Js::str("fire_event"), "key" => Js::Str(key), "external" => Js::str(external) }));
+                }
+                Ok(())
             }
             EventSink::Inline { session, outcomes } => {
                 let fired = session.fire_event(external, &event, false).await?;

@@ -433,6 +433,7 @@ async fn connect_core(project: &Project, module: &crate::core::CoreModule, promp
         crate::core::Slot::Limiter => Some(&project.core.limiter),
         crate::core::Slot::LoopGuard => project.core.loop_guard.as_ref(),
         crate::core::Slot::Browser => project.core.browser.as_ref(),
+        crate::core::Slot::Wake => project.core.wake.as_ref(),
     };
     if filling.is_none_or(|filling| filling.name != module.name) {
         prompter.print(&format!("to use it, name it in lf.yaml: core: {{ {}: \"{}\" }}", module.slot.name(), module.name));

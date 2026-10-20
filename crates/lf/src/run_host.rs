@@ -108,13 +108,17 @@ pub fn timer_work_key(run_id: &str) -> String {
 }
 
 pub fn arm_timer_wake(store_: &dyn RunHostStore, run_id: &str, wake_at: &str) -> Result<()> {
-    store(store_.enqueue("resume_timer", &timer_work_key(run_id), &Js::Obj(obj! { "runId" => Js::str(run_id) }), Some(wake_at), None))
+    store(store_.enqueue("resume_timer", &timer_work_key(run_id), &Js::Obj(obj! { "runId" => Js::str(run_id) }), Some(wake_at), None))?;
+    crate::wake::queued("resume_timer", Some(wake_at));
+    Ok(())
 }
 
 /// The wake for one adapter identity, never coalesced.
 pub fn queue_await_wake(store_: &dyn RunHostStore, adapter_type: &str, team_id: &str, correlation_key: &str) -> Result<()> {
     let payload = Js::Obj(obj! { "adapterType" => Js::str(adapter_type), "teamId" => Js::str(team_id), "correlationKey" => Js::str(correlation_key) });
-    store(store_.enqueue("wake_await", &format!("wake_await:{}", uuid::Uuid::new_v4()), &payload, None, Some(team_id)))
+    store(store_.enqueue("wake_await", &format!("wake_await:{}", uuid::Uuid::new_v4()), &payload, None, Some(team_id)))?;
+    crate::wake::queued("wake_await", None);
+    Ok(())
 }
 
 // ── Completion ──────────────────────────────────────────────────────────────

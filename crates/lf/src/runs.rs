@@ -116,6 +116,7 @@ pub async fn open_session(project: Project, ephemeral: bool, store: &StoreSpec) 
     let registered = |e: &crate::externals::External| crate::subscriptions::has_registered_webhook(&credentials, &e.manifest.name);
     let externals = needed_externals(scan_externals(&project)?, &files, project.language_version, registered);
     let loop_guard = crate::loop_guard::of_project(&project, &env)?;
+    crate::wake::install(crate::wake::of_project(&project, &credentials)?);
     // Before any call: the manifest calls below ask it too.
     crate::limiter::install(crate::limiter::of_project(&project, &env)?);
     // Before the externals start too: a browser module's address is handed to them.
@@ -379,6 +380,7 @@ impl Session {
             self.store.save_inbound_checkpoint(&subscription, &Js::Obj(obj! { "armed" => Js::Bool(true) })).map_err(|e| e.to_string())?;
             let payload = Js::Obj(obj! { "subscription" => Js::str(&subscription) });
             self.store.enqueue(POLL_WORK_KIND, &format!("{POLL_WORK_KIND}:{subscription}"), &payload, None, None).map_err(|e| e.to_string())?;
+            crate::wake::queued(POLL_WORK_KIND, None);
         }
         Ok(())
     }
@@ -764,16 +766,25 @@ impl Session {
             match self.do_work(&claimed.kind, &claimed.payload).await {
                 Ok((next, done)) => {
                     outcomes.extend(done);
-                    match next {
-                        Next::Done => self.store.complete(&claimed.id, &claimed.claim),
-                        Next::Busy => self.store.release_work(&claimed.id, &claimed.claim, Some(&iso(BUSY_RETRY_MS))),
-                        Next::DueAt(at) => self.store.release_work(&claimed.id, &claimed.claim, Some(&at)),
+                    let again = match next {
+                        Next::Done => None,
+                        Next::Busy => Some(iso(BUSY_RETRY_MS)),
+                        Next::DueAt(at) => Some(at),
+                    };
+                    match &again {
+                        None => self.store.complete(&claimed.id, &claimed.claim),
+                        Some(at) => self.store.release_work(&claimed.id, &claimed.claim, Some(at)),
                     }
                     .map_err(|e| e.to_string())?;
+                    if let Some(at) = &again {
+                        crate::wake::queued(&claimed.kind, Some(at));
+                    }
                 }
                 Err(message) => {
                     let _ = writeln!(log, "work {} failed: {message}", claimed.key);
-                    self.store.release_work(&claimed.id, &claimed.claim, Some(&iso(FAILED_RETRY_MS))).map_err(|e| e.to_string())?;
+                    let again = iso(FAILED_RETRY_MS);
+                    self.store.release_work(&claimed.id, &claimed.claim, Some(&again)).map_err(|e| e.to_string())?;
+                    crate::wake::queued(&claimed.kind, Some(&again));
                 }
             }
         }
