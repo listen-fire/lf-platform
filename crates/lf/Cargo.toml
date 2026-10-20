@@ -38,7 +38,7 @@ required-features = ["cli"]
 # client, no sign-in flow, no inbound doors), the host to embed or to run
 # `lf check` and a manual run with. Each omitted piece refuses by name when a
 # project asks for it.
-default = ["cli", "anthropic", "oauth", "postgres", "serve"]
+default = ["cli", "anthropic", "oauth", "postgres", "serve", "pdf"]
 cli = ["dep:module-wire", "dep:serde", "dep:serde_json", "dep:serde_yaml", "dep:indexmap", "dep:tokio", "dep:hyper", "dep:hyper-util", "dep:hmac", "dep:base64", "dep:http-body-util", "dep:bytes", "dep:rusqlite", "dep:getrandom", "dep:uuid", "dep:sha2", "dep:jiff", "dep:url"]
 # HTTPS out, pure-Rust TLS: the pieces below that speak to a provider, a token
 # endpoint or a database over TLS need it; nothing else does.
@@ -51,6 +51,8 @@ oauth = ["cli", "tls"]
 postgres = ["cli", "tls", "dep:tokio-postgres"]
 # The hyper server bits: `lf serve`, the inbound doors and their signature checks.
 serve = ["cli", "hyper/server"]
+# A PDF's own text layer (src/pdf_text.rs), read before the ocr slot is asked.
+pdf = ["cli", "dep:lopdf"]
 
 [dependencies]
 movement-parser = { package = "listen-fire-parser", version = "0.12.0-rc.3", path = "../movement-parser" }
@@ -105,6 +107,9 @@ webpki-roots = { version = "1", optional = true }
 # strings written as WHATWG URL / URLSearchParams do, and the random state
 # and PKCE verifier of a sign-in.
 url = { version = "2", optional = true }
+# A PDF's pages and the text its fonts draw (src/pdf_text.rs). Its default
+# features are dates and threads lf does not need.
+lopdf = { version = "0.42", default-features = false, optional = true }
 
 [dev-dependencies]
 # Paused time: a test of the wall clock's grace runs in no time.

@@ -72,11 +72,14 @@ impl Response {
     }
 }
 
+/// The most bytes of body a request to a path is read into memory for.
+pub type BodyLimit = fn(&str) -> usize;
+
 /// Accept connections on `listener` for as long as the task runs, each
 /// request answered by `handler`. A body over `limit` bytes is read through
 /// (so the sender sees the answer, not a reset) but not kept.
 #[cfg(feature = "serve")]
-pub async fn serve<H, F>(listener: TcpListener, limit: usize, handler: H)
+pub async fn serve<H, F>(listener: TcpListener, limit: BodyLimit, handler: H)
 where
     H: Fn(Request) -> F + 'static,
     F: Future<Output = Response> + 'static,
@@ -89,7 +92,7 @@ where
 
 /// `serve`, on a Unix socket.
 #[cfg(all(unix, feature = "serve"))]
-pub async fn serve_unix<H, F>(listener: tokio::net::UnixListener, limit: usize, handler: H)
+pub async fn serve_unix<H, F>(listener: tokio::net::UnixListener, limit: BodyLimit, handler: H)
 where
     H: Fn(Request) -> F + 'static,
     F: Future<Output = Response> + 'static,
@@ -101,7 +104,7 @@ where
 }
 
 #[cfg(feature = "serve")]
-fn connection<S, H, F>(stream: S, limit: usize, handler: Rc<H>)
+fn connection<S, H, F>(stream: S, limit: BodyLimit, handler: Rc<H>)
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + 'static,
     H: Fn(Request) -> F + 'static,
@@ -133,8 +136,9 @@ where
 }
 
 #[cfg(feature = "serve")]
-async fn read(request: hyper::Request<Incoming>, limit: usize) -> Request {
+async fn read(request: hyper::Request<Incoming>, limit: BodyLimit) -> Request {
     let (parts, mut body) = request.into_parts();
+    let limit = limit(parts.uri.path());
     let headers = {
         let mut seen: Vec<(String, String)> = Vec::new();
         for (name, value) in &parts.headers {

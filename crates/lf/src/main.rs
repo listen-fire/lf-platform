@@ -26,6 +26,7 @@
 //!   lf --contract-guard                                          the built-in loop guard served as a loop guard module
 //!   lf --contract-guard-slot [--dir <project>]                   the same, over the project's loopGuard slot
 //!   lf --contract-wake-slot [--dir <project>]                    the project's wake module, served through lf's client of it
+//!   lf --contract-ocr-slot [--dir <project>]                     the project's OCR module, served through lf's client of it
 //!   lf --contract-models | --contract-judge | --contract-files   the built-in models, judge, files module served
 //!     (each --contract-<slot> server speaks adapter protocol 2 on --listen unix:<path> | <port>, default a fresh socket)
 //!   lf --contract-secrets <file|env>    a secrets store over stdio JSON-RPC
@@ -60,6 +61,8 @@ mod contract_guard;
 mod contract_limiter;
 #[cfg(feature = "serve")]
 mod contract_wake;
+#[cfg(feature = "serve")]
+mod contract_ocr;
 #[cfg(feature = "serve")]
 mod contract_slots;
 #[cfg(feature = "serve")]
@@ -106,10 +109,13 @@ mod oauth2;
 #[cfg(feature = "oauth")]
 mod oauth2_flow;
 mod oauth_redirect;
+mod ocr;
 #[cfg(feature = "oauth")]
 mod oauth_signin;
 mod outgoing_auth;
 mod park_files;
+#[cfg(feature = "pdf")]
+mod pdf_text;
 #[cfg(feature = "postgres")]
 mod pg_store;
 #[cfg(feature = "postgres")]
@@ -165,6 +171,7 @@ const USAGE: &str = "usage: lf <init|check|catalog|lsp|run|resume|runs|drain|ser
        lf --contract-guard
        lf --contract-guard-slot [--dir <project>]
        lf --contract-wake-slot [--dir <project>]
+       lf --contract-ocr-slot [--dir <project>]
        lf --contract-models | --contract-judge | --contract-files
        lf --contract-secrets <secrets file | env>
        lf --contract-doors
@@ -225,6 +232,7 @@ struct Args {
     contract_guard: bool,
     contract_guard_slot: bool,
     contract_wake_slot: bool,
+    contract_ocr_slot: bool,
     doors_only: bool,
     contract_models: bool,
     contract_judge: bool,
@@ -267,6 +275,7 @@ fn parse_args(argv: &[String]) -> Result<Args, String> {
         contract_guard: false,
         contract_guard_slot: false,
         contract_wake_slot: false,
+        contract_ocr_slot: false,
         doors_only: false,
         contract_models: false,
         contract_judge: false,
@@ -310,6 +319,7 @@ fn parse_args(argv: &[String]) -> Result<Args, String> {
             "--contract-guard" => args.contract_guard = true,
             "--contract-guard-slot" => args.contract_guard_slot = true,
             "--contract-wake-slot" => args.contract_wake_slot = true,
+            "--contract-ocr-slot" => args.contract_ocr_slot = true,
             "--doors-only" => args.doors_only = true,
             "--contract-models" => args.contract_models = true,
             "--contract-judge" => args.contract_judge = true,
@@ -579,6 +589,10 @@ async fn serve_contract_bridge(args: &Args) -> Result<Option<i32>, String> {
         let Some(module) = &project.core.wake else { return Err("the project's wake slot is empty: name a wake module in lf.yaml's `core: { wake: … }`".to_string()) };
         let Some(wake) = wake::of_project(&project, &secrets::load_secrets(&project, &env)?)? else { return Err(format!("{}: no wake module to serve", module.name)) };
         contract_wake::serve(wake, &module.name, listen()?).await?;
+    } else if args.contract_ocr_slot {
+        let (project, env) = project_env()?;
+        let Some(module) = &project.core.ocr else { return Err("the project's ocr slot is empty: name an OCR module in lf.yaml's `core: { ocr: … }`".to_string()) };
+        contract_ocr::serve(module, &secrets::load_secrets(&project, &env)?, listen()?).await?;
     } else if args.contract_judge {
         contract_slots::serve_judge(listen()?).await?;
     } else if args.contract_files {
@@ -599,6 +613,7 @@ async fn serve_contract_bridge(args: &Args) -> Result<Option<i32>, String> {
         || args.contract_guard
         || args.contract_guard_slot
         || args.contract_wake_slot
+        || args.contract_ocr_slot
         || args.contract_models
         || args.contract_judge
         || args.contract_files;

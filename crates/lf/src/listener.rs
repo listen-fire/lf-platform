@@ -36,6 +36,20 @@ use crate::runs::{Called, DEFAULT_PORT, RunOutcome, Session, WORK_ROWS_PER_DRAIN
 use crate::serve::{HOST_TOKEN, HOST_URL, MODELS_DOOR_URL, externals_host_url, host_token};
 
 pub const MAX_BODY_BYTES: usize = 1024 * 1024;
+/// The OCR door's limit: a module's file, base64 (a 64 MB PDF, the
+/// platform's own ceiling for reading one, and the JSON around it).
+const MAX_OCR_BODY_BYTES: usize = 96 * 1024 * 1024;
+
+/// What a request's body may hold: a file to read at the OCR door, else the
+/// doors' megabyte. Only a module lf started holds the door's token, but the
+/// body is read before the token is checked, so the larger limit is the
+/// door's alone.
+fn body_limit(path: &str) -> usize {
+    match segments(path, "/api/public/adapter/").as_deref() {
+        Some([_, "ocr"]) => MAX_OCR_BODY_BYTES,
+        _ => MAX_BODY_BYTES,
+    }
+}
 /// The webhook door's own limit, the hosted door's: a delivery is a
 /// notification, and a provider's bigger one carries ids to pull.
 const MAX_DELIVERY_BYTES: usize = 100 * 1024;
@@ -54,17 +68,18 @@ pub async fn open_models_door(credentials: &crate::secrets::Credentials) -> Resu
     let _ = HOST_TOKEN.set(crate::http_out::hex(&crate::http_out::random_bytes(24)?));
     let _ = MODELS_DOOR_URL.set(format!("http://127.0.0.1:{port}"));
     let credentials = Rc::new(credentials.clone());
-    tokio::task::spawn_local(crate::http::serve(listener, MAX_BODY_BYTES, move |request| {
+    tokio::task::spawn_local(crate::http::serve(listener, body_limit, move |request| {
         let credentials = credentials.clone();
         async move {
             if request.method == "POST" {
                 match segments(&request.path, "/api/public/adapter/").as_deref() {
                     Some([_, "models"]) => return models_door(&credentials, &request).await,
+                    Some([_, "ocr"]) => return ocr_door(&request).await,
                     Some([module, crate::limits_door::DOOR_VERB]) => return limits_door(module, &request),
                     _ => {}
                 }
             }
-            Response::json(404, &Js::Obj(obj! { "error" => Js::str("not_found"), "message" => Js::str("outside lf serve, lf serves only the models and limits doors") }))
+            Response::json(404, &Js::Obj(obj! { "error" => Js::str("not_found"), "message" => Js::str("outside lf serve, lf serves only the models, OCR and limits doors") }))
         }
     }));
     Ok(())
@@ -123,7 +138,7 @@ pub async fn run(project: Project, serving: Serving<'_>) -> Result<i32, String> 
     let poke = Rc::new(Notify::new());
     let listening = Rc::new(Listening { session: session.clone(), poke: poke.clone(), doors_only });
 
-    let doors = tokio::task::spawn_local(crate::http::serve(listener, MAX_BODY_BYTES, move |request| {
+    let doors = tokio::task::spawn_local(crate::http::serve(listener, body_limit, move |request| {
         let listening = listening.clone();
         async move { route(&listening, request).await.unwrap_or_else(|message| Response::json(500, &Js::Obj(obj! { "error" => Js::Str(message) }))) }
     }));
@@ -274,6 +289,7 @@ async fn route(listening: &Listening, request: Request) -> Result<Response, Stri
     }
     match segments(&request.path, "/api/public/adapter/").as_deref() {
         Some([_, "models"]) => return Ok(models_door(session.credentials(), &request).await),
+        Some([_, "ocr"]) => return Ok(ocr_door(&request).await),
         Some([module, crate::limits_door::DOOR_VERB]) => return Ok(limits_door(module, &request)),
         _ => {}
     }
@@ -346,6 +362,25 @@ async fn models_door(credentials: &crate::secrets::Credentials, request: &Reques
         Ok(answer) => Response::json(200, &answer),
         Err(message) => Response::json(502, &Js::Obj(obj! { "error" => Js::str("model_call_failed"), "message" => Js::Str(message) })),
     }
+}
+
+/// The OCR door: a read by the ocr slot's module, for an external this
+/// process started (it holds LF_HOST_TOKEN): its `ctx.ocr` (crate::ocr).
+async fn ocr_door(request: &Request) -> Response {
+    let presented = request.headers.iter().find(|(k, _)| k == "authorization").map(|(_, v)| v.as_str());
+    let expected = host_token().map(|t| format!("Bearer {t}"));
+    if expected.is_none() || presented != expected.as_deref() {
+        return Response::json(401, &Js::Obj(obj! { "error" => Js::str("unauthorized") }));
+    }
+    if request.too_large {
+        return Response::json(413, &Js::Obj(obj! { "error" => Js::str("payload_too_large"), "message" => Js::Str(format!("the OCR door reads files up to {MAX_OCR_BODY_BYTES} bytes of request")) }));
+    }
+    let body = match Js::parse(&request.body) {
+        Ok(body) => body,
+        Err(e) => return Response::json(400, &Js::Obj(obj! { "error" => Js::str("bad_request"), "message" => Js::Str(e) })),
+    };
+    let (status, answer) = crate::ocr::door(crate::ocr::module().as_deref(), &body).await;
+    Response::json(status, &answer)
 }
 
 /// The limits door: a module asking before a request to its provider, under

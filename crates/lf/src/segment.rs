@@ -920,8 +920,17 @@ async fn route(host: &SegmentHost<'_>, label: &str, args: &Json) -> Result<Answe
                 Hv::File { descriptor, .. } => descriptor,
                 _ => return Err(Fault("files.resolveFileText file is a file the engine holds".into())),
             };
-            let answer = local_file_text(host, &file);
-            Ok(Some(host.wire.borrow().write(&Hv::of_js(&answer))))
+            let remaining = match args.get("budget").and_then(|b| b.get("remainingMicrodollars")) {
+                None | Some(Json::Null) => None,
+                Some(n) => Some(n.as_f64().ok_or_else(|| Fault("files.resolveFileText budget is {remainingMicrodollars: number | null}".into()))?),
+            };
+            match file_text(host, &file, remaining).await {
+                Ok(answer) => {
+                    host.charge(answer.get("cost"));
+                    Ok(Some(host.wire.borrow().write(&Hv::of_js(&answer))))
+                }
+                Err(message) => Err(failure(message)),
+            }
         }
         "llm.transforms.invoke" => invoke_plugin(host, args).await?,
         #[cfg(not(feature = "anthropic"))]
@@ -1188,15 +1197,20 @@ fn set_path(value: &mut Hv, path: &[&str], to: Hv) {
     }
 }
 
-/// `localFileText`: a file's text, when it is a text file whose bytes are
-/// to hand.
-fn local_file_text(host: &SegmentHost<'_>, file: &Obj) -> Js {
+/// `files.resolveFileText` on lf: a text file's text; a PDF's own text
+/// layer, else the ocr slot's reading of it; an image's text from the ocr
+/// slot (crate::ocr). `remaining` is the run's budget, in microdollars, for
+/// a read OCR charges. Err fails the run.
+async fn file_text(host: &SegmentHost<'_>, file: &Obj, remaining: Option<f64>) -> Result<Js, String> {
     let content_type = file.get("contentType").and_then(Js::as_str).unwrap_or_default();
-    let extension = file.get("name").and_then(Js::as_str).unwrap_or_default().rsplit('.').next().unwrap_or_default().to_lowercase();
+    let name = file.get("name").and_then(Js::as_str);
+    let extension = name.unwrap_or_default().rsplit('.').next().unwrap_or_default().to_lowercase();
+    let pdf = content_type.to_lowercase().contains("pdf") || (content_type.is_empty() && extension == "pdf");
+    let image = crate::ocr::image_type(content_type, &extension);
     let textual = if content_type.is_empty() {
         ["txt", "md", "markdown", "json", "csv", "tsv", "xml", "yaml", "yml", "html", "log"].contains(&extension.as_str())
     } else {
-        is_text_type(content_type) || content_type == "application/pdf"
+        is_text_type(content_type)
     };
     let unreadable = |why: &str, detail: Option<String>| {
         let mut out = obj! { "unreadable" => Js::str(why) };
@@ -1205,9 +1219,9 @@ fn local_file_text(host: &SegmentHost<'_>, file: &Obj) -> Js {
         }
         Js::Obj(out)
     };
-    if !textual {
+    if !textual && !pdf && image.is_none() {
         let named = if !content_type.is_empty() { content_type.to_string() } else if !extension.is_empty() { extension } else { "an unknown type".into() };
-        return unreadable("unsupported_type", Some(format!("lf reads text files only, not {named}")));
+        return Ok(unreadable("unsupported_type", Some(format!("lf reads text files, PDFs and images, not {named}"))));
     }
     let bytes = match owner_of(file.get("source")) {
         Some(Owner::Document { object_uri }) if host.documents.owns(&object_uri, TEAM) => host.documents.open(&object_uri),
@@ -1217,13 +1231,35 @@ fn local_file_text(host: &SegmentHost<'_>, file: &Obj) -> Js {
     };
     let bytes = match bytes {
         Ok(bytes) => bytes,
-        Err(message) => return unreadable("bytes_unavailable", Some(message)),
+        Err(message) => return Ok(unreadable("bytes_unavailable", Some(message))),
     };
-    if bytes.starts_with(b"%PDF-") {
-        return unreadable("unsupported_type", Some("lf cannot extract text from a PDF yet".into()));
+    let ocr = crate::ocr::module();
+    if let Some(image) = image {
+        return crate::ocr::file_text(ocr.as_deref(), crate::ocr::Scanned::Image, &bytes, image, name, remaining).await;
+    }
+    // A PDF named as text is still a PDF: its bytes say so.
+    if pdf || bytes.starts_with(b"%PDF-") {
+        return pdf_text(ocr.as_deref(), &bytes, name, remaining).await;
     }
     let text = String::from_utf8_lossy(&bytes).into_owned();
-    if text.trim().is_empty() { unreadable("no_text", None) } else { Js::Obj(obj! { "text" => Js::Str(text) }) }
+    Ok(if text.trim().is_empty() { unreadable("no_text", None) } else { Js::Obj(obj! { "text" => Js::Str(text) }) })
+}
+
+/// A PDF: its own text layer first, the ocr slot second (packages/file-text's rule).
+#[cfg(feature = "pdf")]
+async fn pdf_text(ocr: Option<&crate::ocr::OcrModule>, bytes: &[u8], name: Option<&str>, remaining: Option<f64>) -> Result<Js, String> {
+    match crate::pdf_text::text_layer(bytes) {
+        crate::pdf_text::Layer::Text(text) => Ok(Js::Obj(obj! { "text" => Js::Str(text) })),
+        crate::pdf_text::Layer::Scanned { pages } => crate::ocr::file_text(ocr, crate::ocr::Scanned::Pdf { pages }, bytes, "application/pdf", name, remaining).await,
+    }
+}
+
+#[cfg(not(feature = "pdf"))]
+async fn pdf_text(_: Option<&crate::ocr::OcrModule>, _: &[u8], _: Option<&str>, _: Option<f64>) -> Result<Js, String> {
+    Ok(Js::Obj(obj! {
+        "unreadable" => Js::str("unsupported_type"),
+        "detail" => Js::str("this lf was built without the `pdf` feature, so it reads no PDF (install the full lf)"),
+    }))
 }
 
 /// `TEXT_TYPES`: `text/*`, the textual `application/*` types and their `+json`/`+xml` kin.

@@ -29,7 +29,7 @@ pub fn judge() -> Option<Arc<SlotClient>> {
     JUDGE.read().unwrap_or_else(|p| p.into_inner()).clone()
 }
 
-/// Reach the project's models, judge and browser modules that are not
+/// Reach the project's models, judge, OCR and browser modules that are not
 /// built in (the files slot's lives with the run's documents).
 pub async fn install(project: &crate::project::Project, credentials: &crate::secrets::Credentials) -> Result<(), String> {
     let core = &project.core;
@@ -40,6 +40,10 @@ pub async fn install(project: &crate::project::Project, credentials: &crate::sec
     };
     *MODELS.write().unwrap_or_else(|p| p.into_inner()) = reach("models", &core.models)?.map(|client| Arc::new(ModelsModule::new(client)));
     *JUDGE.write().unwrap_or_else(|p| p.into_inner()) = reach("judge", &core.judge)?;
+    crate::ocr::install(match &core.ocr {
+        Some(module) => reach("ocr", module)?,
+        None => None,
+    });
     let held = match &core.browser {
         Some(module) => match reach("browser", module)? {
             Some(client) => Some(client.hold().await?),

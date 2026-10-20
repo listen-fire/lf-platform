@@ -139,7 +139,7 @@ impl Documents {
         let listener = TcpListener::bind("127.0.0.1:0").await.map_err(|e| format!("the file listener: {e}"))?;
         let port = listener.local_addr().map_err(|e| e.to_string())?.port();
         let exposed = self.root.join(EXPOSED);
-        tokio::task::spawn_local(crate::http::serve(listener, 0, move |request| {
+        tokio::task::spawn_local(crate::http::serve(listener, |_| 0, move |request| {
             let found = match request.path.strip_prefix("/files/") {
                 Some(id) if request.method == "GET" => exposed_file(&exposed, id),
                 _ => None,

@@ -163,10 +163,13 @@ impl SlotClient {
     /// One method awaited on the caller's runtime: for a slot whose calls
     /// are long (a model's answer), so the run's other requests go on meanwhile.
     pub async fn call_async(&self, method: &str, params: Obj) -> Result<Js, String> {
-        send(&self.label, &self.target, self.auth.as_ref(), self.body(method, params))
-            .await
-            .map_err(|e| self.named(method, e))
-            .map_err(|e| self.text(method, e))
+        self.call_async_coded(method, params).await.map_err(|e| self.text(method, e))
+    }
+
+    /// `call_async`, the module's error kept whole: for a caller that
+    /// passes its code on (the OCR door, `unsupported_type`).
+    pub async fn call_async_coded(&self, method: &str, params: Obj) -> Result<Js, SlotError> {
+        send(&self.label, &self.target, self.auth.as_ref(), self.body(method, params)).await.map_err(|e| self.named(method, e))
     }
 
     fn text(&self, method: &str, error: SlotError) -> String {

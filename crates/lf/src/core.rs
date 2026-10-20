@@ -22,7 +22,9 @@
 //! the modules it starts (docs/contracts/browser-slot.md). The wake slot
 //! (lf telling whatever starts its workers, a cloud queue, that work is
 //! ready now or at a time) has no built-in either, so it is empty unless
-//! named (crate::wake, docs/contracts/wake-slot.md).
+//! named (crate::wake, docs/contracts/wake-slot.md). The ocr slot (a scanned
+//! file's text) has no built-in either: empty unless named, a scanned file
+//! is refused saying so (crate::ocr, docs/contracts/ocr-slot.md).
 
 use std::borrow::Cow;
 use std::collections::BTreeMap;
@@ -42,10 +44,11 @@ pub enum Slot {
     LoopGuard,
     Browser,
     Wake,
+    Ocr,
 }
 
 impl Slot {
-    pub const ALL: [Slot; 8] = [Slot::Models, Slot::Judge, Slot::Store, Slot::Files, Slot::Limiter, Slot::LoopGuard, Slot::Browser, Slot::Wake];
+    pub const ALL: [Slot; 9] = [Slot::Models, Slot::Judge, Slot::Store, Slot::Files, Slot::Limiter, Slot::LoopGuard, Slot::Browser, Slot::Wake, Slot::Ocr];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -57,6 +60,7 @@ impl Slot {
             Slot::LoopGuard => "loopGuard",
             Slot::Browser => "browser",
             Slot::Wake => "wake",
+            Slot::Ocr => "ocr",
         }
     }
 
@@ -65,7 +69,7 @@ impl Slot {
     }
 
     /// The module a project gets when lf.yaml names none for the slot; None
-    /// for a slot that stays empty unless filled (the loop guard, the browser, the wake).
+    /// for a slot that stays empty unless filled (the loop guard, the browser, the wake, OCR).
     pub fn default_module(self) -> Option<&'static CoreModule> {
         let name = match self {
             Slot::Models => ANTHROPIC,
@@ -73,7 +77,7 @@ impl Slot {
             Slot::Store => SQLITE_STORE,
             Slot::Files => LOCAL_FILES,
             Slot::Limiter => MEMORY_LIMITER,
-            Slot::LoopGuard | Slot::Browser | Slot::Wake => return None,
+            Slot::LoopGuard | Slot::Browser | Slot::Wake | Slot::Ocr => return None,
         };
         Some(builtin(name).expect("a slot's default is a built-in"))
     }
@@ -184,6 +188,8 @@ pub struct CoreChoice {
     pub browser: Option<CoreModule>,
     /// None: lf tells no one when work is due; a drain finds it on its own tick.
     pub wake: Option<CoreModule>,
+    /// None: a file with no text layer is unreadable, saying the slot is empty.
+    pub ocr: Option<CoreModule>,
 }
 
 impl Default for CoreChoice {
@@ -197,6 +203,7 @@ impl Default for CoreChoice {
             loop_guard: None,
             browser: None,
             wake: None,
+            ocr: None,
         }
     }
 }
@@ -228,6 +235,11 @@ impl CoreChoice {
                         "{at}: core.wake: {module_name} is not a folder in the externals folder whose lf-external.yaml says `kind: core` and `name: {module_name}`; lf builds no wake in, so the slot takes a wake module (a process or a remote url) or stays empty"
                     ));
                 }
+                None if slot == Slot::Ocr => {
+                    return Err(format!(
+                        "{at}: core.ocr: {module_name} is not a folder in the externals folder whose lf-external.yaml says `kind: core` and `name: {module_name}`; lf builds no OCR in, so the slot takes an OCR module (a process or a remote url, such as @listen-fire/document-ai) or stays empty"
+                    ));
+                }
                 None => {
                     return Err(format!(
                         "{at}: core.{slot_name}: {module_name} is neither one of lf's built-in {slot_name} modules ({}) nor a folder in the externals folder whose lf-external.yaml says `kind: core` and `name: {module_name}`",
@@ -244,6 +256,7 @@ impl CoreChoice {
                 Slot::LoopGuard => choice.loop_guard = Some(module),
                 Slot::Browser => choice.browser = Some(module),
                 Slot::Wake => choice.wake = Some(module),
+                Slot::Ocr => choice.ocr = Some(module),
             }
         }
         Ok(choice)
@@ -284,7 +297,7 @@ pub fn set_up(project: &Project, module: &CoreModule, settings: &BTreeMap<String
         crate::limiter_module::ProcessLimiter::start(&module.name, process, settings)?;
         return Ok(vec![format!("{} answered as a limiter", module.name)]);
     }
-    if let (Some(process), slot @ (Slot::Models | Slot::Judge | Slot::Files | Slot::Browser | Slot::Wake)) = (&module.process, module.slot) {
+    if let (Some(process), slot @ (Slot::Models | Slot::Judge | Slot::Files | Slot::Browser | Slot::Wake | Slot::Ocr)) = (&module.process, module.slot) {
         let client = crate::slot_client::SlotClient::start(slot.name(), &module.name, process, settings)?;
         let manifest = client.call_text("manifest", Default::default())?;
         let answered = manifest.get("slot").and_then(crate::json::Js::as_str);
@@ -392,6 +405,18 @@ mod tests {
     }
 
     #[test]
+    fn the_ocr_slot_stays_empty_unless_an_ocr_module_is_installed() {
+        assert_eq!(Slot::of("ocr"), Some(Slot::Ocr));
+        assert_eq!(Slot::Ocr.default_module(), None);
+        assert_eq!(CoreChoice::of(&BTreeMap::new(), &[], "lf.yaml").unwrap().ocr, None);
+        let refused = CoreChoice::of(&named(&[("ocr", "@listen-fire/document-ai")]), &[], "lf.yaml").unwrap_err();
+        assert!(refused.contains("lf builds no OCR in"), "{refused}");
+        let installed = [process_module("document_ai", Slot::Ocr)];
+        assert_eq!(CoreChoice::of(&named(&[("ocr", "document_ai")]), &installed, "lf.yaml").unwrap().ocr, Some(installed[0].clone()));
+        assert!(CoreChoice::of(&named(&[("models", "document_ai")]), &installed, "lf.yaml").unwrap_err().contains("fills the ocr slot"));
+    }
+
+    #[test]
     fn the_loop_guard_is_filled_only_when_named() {
         let choice = CoreChoice::of(&named(&[("loopGuard", FINGERPRINT_GUARD)]), &[], "lf.yaml").unwrap();
         assert_eq!(choice.loop_guard.unwrap().name, FINGERPRINT_GUARD);
@@ -414,7 +439,7 @@ mod tests {
     fn a_slot_takes_only_a_module_of_its_kind() {
         assert_eq!(CoreChoice::of(&named(&[("store", POSTGRES_STORE)]), &[], "lf.yaml").unwrap().store.name, POSTGRES_STORE);
         assert!(CoreChoice::of(&named(&[("store", ANTHROPIC)]), &[], "lf.yaml").unwrap_err().contains("fills the models slot"));
-        assert!(CoreChoice::of(&named(&[("ocr", ANTHROPIC)]), &[], "lf.yaml").unwrap_err().contains("not a core slot"));
+        assert!(CoreChoice::of(&named(&[("vision", ANTHROPIC)]), &[], "lf.yaml").unwrap_err().contains("not a core slot"));
         assert!(CoreChoice::of(&named(&[("models", "@acme/llm")]), &[], "lf.yaml").unwrap_err().contains("kind: core"));
     }
 

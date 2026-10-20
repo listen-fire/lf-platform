@@ -120,7 +120,7 @@ where
             let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await.map_err(|e| format!("127.0.0.1:{port}: {e}"))?;
             let port = listener.local_addr().map_err(|e| e.to_string())?.port();
             println!("listening {port}");
-            until_stopped(crate::http::serve(listener, LIMIT, handle)).await;
+            until_stopped(crate::http::serve(listener, |_| LIMIT, handle)).await;
         }
         #[cfg(unix)]
         Listen::Unix(path) => {
@@ -128,7 +128,7 @@ where
             let listener = tokio::net::UnixListener::bind(&path).map_err(|e| format!("unix:{}: {e}", path.display()))?;
             println!("listening unix:{}", path.display());
             let removed = Removed(path);
-            until_stopped(crate::http::serve_unix(listener, LIMIT, handle)).await;
+            until_stopped(crate::http::serve_unix(listener, |_| LIMIT, handle)).await;
             drop(removed);
         }
         #[cfg(not(unix))]
