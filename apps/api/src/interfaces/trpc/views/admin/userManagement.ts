@@ -88,7 +88,7 @@ const userManagementRouter = (procedure: typeof trpc.procedure) => {
         const ctx = currentContext();
         await ctx.enterTransaction();
 
-        const { teamId, pipelineConfigurationId } = await ProvisioningService.provisionTeam({
+        const { teamId } = await ProvisioningService.provisionTeam({
           name: input.teamName,
         });
 
@@ -105,7 +105,6 @@ const userManagementRouter = (procedure: typeof trpc.procedure) => {
 
         return {
           team: { id: teamId, name: input.teamName },
-          pipelineConfiguration: { id: pipelineConfigurationId, name: input.teamName },
           users: createdUsers,
         };
       }),

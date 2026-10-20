@@ -112,10 +112,7 @@ const crossTeamOpsRouter = (procedure: typeof trpc.procedure) =>
         const { items: teams, total } = await pageTeams(input);
         const summaries = await Promise.all(
           teams.map(async (team) => {
-            const [pipelineRuns, queryInputs] = await Promise.all([
-              checkUsage(team.id, 'pipeline_run'),
-              checkUsage(team.id, 'query_input'),
-            ]);
+            const queryInputs = await checkUsage(team.id, 'query_input');
 
             const config = await getQb(['team_usage_config'])
               .selectFrom('team_usage_config')
@@ -126,7 +123,6 @@ const crossTeamOpsRouter = (procedure: typeof trpc.procedure) =>
             return {
               teamId: team.id,
               teamName: team.name,
-              pipelineRuns,
               queryInputs,
               alertThresholdPct: config?.alert_threshold_pct ?? 80,
               weekStartsOn: config?.week_starts_on ?? 1,

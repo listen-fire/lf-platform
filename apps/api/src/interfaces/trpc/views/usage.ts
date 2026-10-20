@@ -17,11 +17,10 @@ const usageRouter = (procedure: typeof trpc.procedure) => {
       const ctx = currentContext();
       const teamId = ctx.user.teamId;
 
-      const pipelineUsage = await checkUsage(teamId, 'pipeline_run');
       const queryUsage = await checkUsage(teamId, 'query_input');
 
       // If no config exists, return null — UI shows "no limits configured"
-      if (!pipelineUsage && !queryUsage) return null;
+      if (!queryUsage) return null;
 
       const qb = getQb(['team_usage_config']);
       const config = await qb
@@ -31,7 +30,6 @@ const usageRouter = (procedure: typeof trpc.procedure) => {
         .executeTakeFirst();
 
       return {
-        pipelineRuns: pipelineUsage,
         queryInputs: queryUsage,
         alertThresholdPct: config?.alert_threshold_pct ?? 80,
         weekStartsOn: config?.week_starts_on ?? 1,

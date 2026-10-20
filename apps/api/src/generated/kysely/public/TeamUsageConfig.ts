@@ -12,11 +12,7 @@ export default interface TeamUsageConfigTable {
 
   team_id: ColumnType<string, string, string>;
 
-  max_weekly_pipeline_runs: ColumnType<number, number, number>;
-
   max_weekly_query_inputs: ColumnType<number, number, number>;
-
-  additional_pipeline_runs: ColumnType<number, number | undefined, number>;
 
   additional_query_inputs: ColumnType<number, number | undefined, number>;
 

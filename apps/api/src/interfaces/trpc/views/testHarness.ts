@@ -122,31 +122,6 @@ const testHarnessRouter = (procedure: typeof trpc.procedure) => {
           .execute();
       }
 
-      // Ensure team has a pipeline configuration
-      const existingConfig = await getQb(['pipeline_configuration'])
-        .selectFrom('pipeline_configuration')
-        .where('team_id', '=', teamId as TeamId)
-        .select(['id'])
-        .executeTakeFirst();
-
-      if (!existingConfig) {
-        const configId = randomUUID();
-        await getQb(['pipeline_configuration'])
-          .insertInto('pipeline_configuration')
-          .values({
-            id: configId as any,
-            team_id: teamId as TeamId,
-            name: 'Default',
-          })
-          .execute();
-
-        await getCoreQb(['team'])
-          .updateTable('team')
-          .set({ active_pipeline_configuration_id: configId as any })
-          .where('id', '=', teamId as TeamId)
-          .execute();
-      }
-
       // Dummy credential values per service type — actual tokens don't matter
       // because injectFakeBaseUrl rewrites the baseUrl to fake-channels at runtime.
       // Names are deliberately user-facing (no "Test " prefix): dev-fixture

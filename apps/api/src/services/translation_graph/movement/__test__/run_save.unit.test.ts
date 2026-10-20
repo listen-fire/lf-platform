@@ -253,7 +253,7 @@ listen to runs {} fire backfill
 
 beforeEach(() => {
   db.__reset();
-  db.__tables.team.push({ id: TEAM, active_pipeline_configuration_id: 'pc-1' });
+  db.__tables.team.push({ id: TEAM });
 });
 
 describe('saveMovement — a manual listener is the Run-now channel', () => {

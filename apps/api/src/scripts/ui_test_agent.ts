@@ -10,7 +10,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { chromium, type Page, type Browser } from 'playwright';
 import Anthropic from '@anthropic-ai/sdk';
 
-import { getAutomationsQb, getCoreQb, getKnowledgeQb, getQb } from '../lib/kysely';
+import { getAutomationsQb, getCoreQb, getKnowledgeQb } from '../lib/kysely';
 import { materializeTemplate } from '../lib/knowledge/templates/materialize';
 import { getTemplate } from '../lib/knowledge/templates/index';
 import { generateJWT } from '../lib/middleware/authentication/token';
@@ -18,7 +18,6 @@ import { encryptToken } from '../lib/credentials';
 import { getEnvVar } from '../lib/utils/environment';
 
 import type { TeamId } from '../generated/kysely/core/Team';
-import type { PipelineConfigurationId } from '../generated/kysely/public/PipelineConfiguration';
 import type { ExternalServiceCredentialsId } from '../generated/kysely/automations/ExternalServiceCredentials';
 
 import ExternalServiceType from '../generated/kysely/automations/ExternalServiceType';
@@ -447,26 +446,6 @@ async function seedTestTeam(): Promise<{ teamId: TeamId; token: string; template
   if (existingTeam) {
     const teamId = existingTeam.id as TeamId;
 
-    // Ensure pipeline configuration exists
-    const existingConfig = await getCoreQb(['team'])
-      .selectFrom('team')
-      .where('id', '=', teamId)
-      .select('active_pipeline_configuration_id')
-      .executeTakeFirst();
-    if (!existingConfig?.active_pipeline_configuration_id) {
-      const configId = randomUUID() as PipelineConfigurationId;
-      await getQb(['pipeline_configuration'])
-        .insertInto('pipeline_configuration')
-        .values({ id: configId, name: 'Test Configuration', team_id: teamId } as any)
-        .execute();
-      await getCoreQb(['team'])
-        .updateTable('team')
-        .set({ active_pipeline_configuration_id: configId })
-        .where('id', '=', teamId)
-        .execute();
-      console.log(`   Added pipeline configuration: ${configId}`);
-    }
-
     // Ensure mock credentials exist
     if (process.env.MOCK_OUTPUT_ADAPTERS === 'true') {
       const existingCreds = await getAutomationsQb(['external_service_credentials'])
@@ -538,19 +517,6 @@ async function seedTestTeam(): Promise<{ teamId: TeamId; token: string; template
   );
   console.log(`🌱 Created test team: ${teamId}`);
   console.log(`   ${result.nodeTypesCreated} node types, ${result.edgeTypesCreated} edge types, ${result.extractionGraphsCreated} extraction graphs`);
-
-  // Create pipeline configuration
-  const configId = randomUUID() as PipelineConfigurationId;
-  await getQb(['pipeline_configuration'])
-    .insertInto('pipeline_configuration')
-    .values({ id: configId, name: 'Test Configuration', team_id: teamId } as any)
-    .execute();
-  await getCoreQb(['team'])
-    .updateTable('team')
-    .set({ active_pipeline_configuration_id: configId })
-    .where('id', '=', teamId)
-    .execute();
-  console.log(`   Pipeline configuration: ${configId}`);
 
   // Create mock Attio credentials
   if (process.env.MOCK_OUTPUT_ADAPTERS === 'true') {

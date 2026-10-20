@@ -557,7 +557,6 @@ model TelegramToken {
 model Trigger {
   id                                  String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   teamId                              String                      @map("team_id") @db.Uuid
-  pipelineConfigurationId             String                      @map("pipeline_configuration_id") @db.Uuid
   name                                String
   kind                                String
   config                              Json                        @default("{}")
@@ -704,21 +703,20 @@ model Work {
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model ApiKey {
-  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  teamId          String?   @map("team_id") @db.Uuid
-  name            String
-  keyHash         String    @unique(map: "api_key_key_hash_idx") @map("key_hash")
-  keyPrefix       String    @map("key_prefix")
-  scopes          String[]  @default(["ingest"])
-  lastUsedAt      DateTime? @map("last_used_at")
-  expiresAt       DateTime? @map("expires_at")
-  revokedAt       DateTime? @map("revoked_at")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @default(now()) @map("updated_at")
-  createdBy       String    @map("created_by") @db.Uuid
-  pipelineInputId String?   @map("pipeline_input_id") @db.Uuid
-  user            User      @relation(fields: [createdBy], references: [id])
-  team            Team?     @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  teamId     String?   @map("team_id") @db.Uuid
+  name       String
+  keyHash    String    @unique(map: "api_key_key_hash_idx") @map("key_hash")
+  keyPrefix  String    @map("key_prefix")
+  scopes     String[]  @default(["ingest"])
+  lastUsedAt DateTime? @map("last_used_at")
+  expiresAt  DateTime? @map("expires_at")
+  revokedAt  DateTime? @map("revoked_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @default(now()) @map("updated_at")
+  createdBy  String    @map("created_by") @db.Uuid
+  user       User      @relation(fields: [createdBy], references: [id])
+  team       Team?     @relation(fields: [teamId], references: [id], onDelete: Restrict)
 
   @@index([teamId])
   @@map("api_key")
@@ -782,7 +780,6 @@ model Team {
   createdAt                          DateTime         @default(now()) @map("created_at")
   updatedAt                          DateTime         @default(now()) @map("updated_at")
   autoAddCompanyToPortfolioViaUpdate Boolean          @default(true) @map("auto_add_company_to_portfolio_via_update")
-  activePipelineConfigurationId      String?          @unique @map("active_pipeline_configuration_id") @db.Uuid
   defaultUserId                      String?          @unique @map("default_user_id") @db.Uuid
   domain                             String?          @unique
   apiKeys                            ApiKey[]
@@ -1127,8 +1124,6 @@ model LinkedObject {
   adapterType        String             @default("") @map("adapter_type")
   externalId         String             @map("external_id")
   data               Json               @default("{}")
-  retrievalSourceId  String?            @map("retrieval_source_id") @db.Uuid
-  outputId           String?            @map("output_id") @db.Uuid
   actionNodeId       String?            @map("action_node_id")
   externalObjectType String?            @map("external_object_type")
   fetchedAt          DateTime?          @map("fetched_at")
@@ -1139,7 +1134,6 @@ model LinkedObject {
 
   @@unique([nodeId, adapterType, externalId], map: "linked_object_node_adapter_external_idx")
   @@index([nodeId])
-  @@index([retrievalSourceId])
   @@index([teamId])
   @@map("linked_object")
   @@schema("knowledge")
@@ -1164,25 +1158,23 @@ model MutationOutbox {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model Node {
-  id                                     String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  teamId                                 String                   @map("team_id") @db.Uuid
-  nodeTypeId                             String                   @map("node_type_id") @db.Uuid
-  startDate                              DateTime                 @default(dbgenerated("'-infinity'::timestamp without time zone")) @map("start_date")
-  endDate                                DateTime                 @default(dbgenerated("'infinity'::timestamp without time zone")) @map("end_date")
-  createdAt                              DateTime                 @default(now()) @map("created_at")
-  updatedAt                              DateTime                 @default(now()) @map("updated_at")
-  summary                                String?
-  summaryTsvector                        Unsupported("tsvector")? @default(dbgenerated("to_tsvector('english'::regconfig, COALESCE(summary, ''::text))")) @map("summary_tsvector")
-  changes                                Change[]
-  edgeEdgeSourceNodeIdTonodes            Edge[]                   @relation("edge_source_node_idTonode")
-  edgeEdgeTargetNodeIdTonodes            Edge[]                   @relation("edge_target_node_idTonode")
-  extractionFacts                        ExtractionFact[]
-  linkedObjects                          LinkedObject[]
-  nodeType                               NodeType                 @relation(fields: [nodeTypeId], references: [id])
-  nodeResources                          NodeResource[]
-  outputRunOutputRunContextNodeIdTonodes OutputRun[]              @relation("output_run_context_node_idTonode")
-  outputRunOutputRunRootNodeIdTonodes    OutputRun[]              @relation("output_run_root_node_idTonode")
-  properties                             Property[]
+  id                          String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  teamId                      String                   @map("team_id") @db.Uuid
+  nodeTypeId                  String                   @map("node_type_id") @db.Uuid
+  startDate                   DateTime                 @default(dbgenerated("'-infinity'::timestamp without time zone")) @map("start_date")
+  endDate                     DateTime                 @default(dbgenerated("'infinity'::timestamp without time zone")) @map("end_date")
+  createdAt                   DateTime                 @default(now()) @map("created_at")
+  updatedAt                   DateTime                 @default(now()) @map("updated_at")
+  summary                     String?
+  summaryTsvector             Unsupported("tsvector")? @default(dbgenerated("to_tsvector('english'::regconfig, COALESCE(summary, ''::text))")) @map("summary_tsvector")
+  changes                     Change[]
+  edgeEdgeSourceNodeIdTonodes Edge[]                   @relation("edge_source_node_idTonode")
+  edgeEdgeTargetNodeIdTonodes Edge[]                   @relation("edge_target_node_idTonode")
+  extractionFacts             ExtractionFact[]
+  linkedObjects               LinkedObject[]
+  nodeType                    NodeType                 @relation(fields: [nodeTypeId], references: [id])
+  nodeResources               NodeResource[]
+  properties                  Property[]
 
   @@index([nodeTypeId])
   @@index([teamId])
@@ -1214,58 +1206,29 @@ model NodeResource {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model NodeType {
-  id                                          String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  teamId                                      String                     @map("team_id") @db.Uuid
+  id                                          String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  teamId                                      String                @map("team_id") @db.Uuid
   name                                        String
-  description                                 String                     @default("")
+  description                                 String                @default("")
   category                                    NodeTypeCategory
-  iconSvg                                     String?                    @map("icon_svg")
-  iconMetaphor                                String?                    @map("icon_metaphor")
-  displayNameTemplate                         String?                    @map("display_name_template")
-  displayNameExpression                       Json?                      @map("display_name_expression")
-  sortOrder                                   Int                        @default(0) @map("sort_order")
-  uniquenessConstraints                       Json?                      @map("uniqueness_constraints")
-  createdAt                                   DateTime                   @default(now()) @map("created_at")
-  updatedAt                                   DateTime                   @default(now()) @map("updated_at")
-  edgeTypeEdgeTypeSourceNodeTypeIdTonodeTypes EdgeType[]                 @relation("edge_type_source_node_type_idTonode_type")
-  edgeTypeEdgeTypeTargetNodeTypeIdTonodeTypes EdgeType[]                 @relation("edge_type_target_node_type_idTonode_type")
+  iconSvg                                     String?               @map("icon_svg")
+  iconMetaphor                                String?               @map("icon_metaphor")
+  displayNameTemplate                         String?               @map("display_name_template")
+  displayNameExpression                       Json?                 @map("display_name_expression")
+  sortOrder                                   Int                   @default(0) @map("sort_order")
+  uniquenessConstraints                       Json?                 @map("uniqueness_constraints")
+  createdAt                                   DateTime              @default(now()) @map("created_at")
+  updatedAt                                   DateTime              @default(now()) @map("updated_at")
+  edgeTypeEdgeTypeSourceNodeTypeIdTonodeTypes EdgeType[]            @relation("edge_type_source_node_type_idTonode_type")
+  edgeTypeEdgeTypeTargetNodeTypeIdTonodeTypes EdgeType[]            @relation("edge_type_target_node_type_idTonode_type")
   extractionGraphNodes                        ExtractionGraphNode[]
   nodes                                       Node[]
   propertyTypes                               PropertyType[]
   savedFilters                                SavedFilter[]
-  pipelineInputMessageTypes                   PipelineInputMessageType[]
-  pipelineOutputs                             PipelineOutput[]
 
   @@index([teamId, category], map: "node_type_category_idx")
   @@index([teamId])
   @@map("node_type")
-  @@schema("knowledge")
-}
-
-model OutputRun {
-  id                               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  teamId                           String   @map("team_id") @db.Uuid
-  pipelineOutputId                 String   @map("pipeline_output_id") @db.Uuid
-  actionNodeId                     String   @map("action_node_id")
-  contextNodeId                    String?  @map("context_node_id") @db.Uuid
-  adapterType                      String   @map("adapter_type")
-  externalId                       String?  @map("external_id")
-  externalObjectType               String?  @map("external_object_type")
-  status                           String   @default("success")
-  error                            String?
-  fieldValues                      Json?    @map("field_values")
-  runGroupId                       String?  @map("run_group_id") @db.Uuid
-  created                          Boolean?
-  dealflowPipelineId               String?  @map("dealflow_pipeline_id") @db.Uuid
-  rootNodeId                       String?  @map("root_node_id") @db.Uuid
-  createdAt                        DateTime @default(now()) @map("created_at")
-  nodeOutputRunContextNodeIdTonode Node?    @relation("output_run_context_node_idTonode", fields: [contextNodeId], references: [id], onDelete: Cascade)
-  nodeOutputRunRootNodeIdTonode    Node?    @relation("output_run_root_node_idTonode", fields: [rootNodeId], references: [id])
-
-  @@index([createdAt])
-  @@index([pipelineOutputId])
-  @@index([runGroupId])
-  @@map("output_run")
   @@schema("knowledge")
 }
 
@@ -1584,25 +1547,6 @@ model ContextLogs {
   @@schema("public")
 }
 
-model DealflowPipeline {
-  id         String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  teamId     String                 @map("team_id") @db.Uuid
-  status     DealflowPipelineStatus @default(PROCESSING)
-  steps      Json                   @default("[]")
-  options    Json                   @default("{}")
-  createdBy  String                 @map("created_by") @db.Uuid
-  createdAt  DateTime               @default(now()) @map("created_at")
-  updatedAt  DateTime               @default(now()) @map("updated_at")
-  requestId  String                 @map("request_id") @db.Uuid
-  errors     Json?
-  numericId  BigInt                 @unique @default(autoincrement()) @map("numeric_id")
-  finalGraph Json?                  @map("final_graph")
-  llmUsages  LlmUsage[]
-
-  @@map("dealflow_pipeline")
-  @@schema("public")
-}
-
 model DroppedInboundEmail {
   id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   createdAt  DateTime  @default(now()) @map("created_at")
@@ -1631,9 +1575,7 @@ model InboundPayload {
   isContext        Boolean?
   isContextRequest Boolean?
   isInjection      Boolean?
-  pipelineInputId  String?            @map("pipeline_input_id") @db.Uuid
   dedupId          String?            @map("dedup_id")
-  pipelineInput    PipelineInput?     @relation(fields: [pipelineInputId], references: [id])
   resourcePayloads ResourcePayload[]
 
   @@map("inbound_payload")
@@ -1696,17 +1638,14 @@ model LlmUsage {
   cacheCreationTokens Int                @default(0) @map("cache_creation_tokens")
   costMicrodollars    Int                @default(0) @map("cost_microdollars")
   durationMs          Int?               @map("duration_ms")
-  pipelineId          String?            @map("pipeline_id") @db.Uuid
   conversationId      String?            @map("conversation_id") @db.Uuid
   triggerRunId        String?            @map("trigger_run_id") @db.Uuid
   createdAt           DateTime           @default(now()) @map("created_at")
   preferredModel      String?            @map("preferred_model")
   agentConversation   AgentConversation? @relation(fields: [conversationId], references: [id])
-  dealflowPipeline    DealflowPipeline?  @relation(fields: [pipelineId], references: [id])
 
   @@index([conversationId])
   @@index([createdAt])
-  @@index([pipelineId])
   @@index([teamId])
   @@index([triggerRunId])
   @@map("llm_usage")
@@ -1742,92 +1681,6 @@ model OpsEvent {
   @@index([createdAt])
   @@index([parentRunId])
   @@map("ops_event")
-  @@schema("public")
-}
-
-model PipelineConfiguration {
-  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  teamId          String           @map("team_id") @db.Uuid
-  name            String
-  createdAt       DateTime         @default(now()) @map("created_at")
-  updatedAt       DateTime         @default(now()) @map("updated_at")
-  deletedAt       DateTime?        @map("deleted_at")
-  pipelineInputs  PipelineInput[]
-  pipelineOutputs PipelineOutput[]
-
-  @@unique([teamId, name])
-  @@map("pipeline_configuration")
-  @@schema("public")
-}
-
-model PipelineInput {
-  id                        String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  pipelineConfigurationId   String                     @map("pipeline_configuration_id") @db.Uuid
-  type                      PipelineInputType
-  name                      String
-  config                    Json
-  createdAt                 DateTime                   @default(now()) @map("created_at")
-  updatedAt                 DateTime                   @default(now()) @map("updated_at")
-  deletedAt                 DateTime?                  @map("deleted_at")
-  contentType               PipelineInputContentType   @map("content_type")
-  credentialsId             String?                    @map("credentials_id") @db.Uuid
-  knowledgeEnabled          Boolean                    @default(false) @map("knowledge_enabled")
-  dealflowEnabled           Boolean                    @default(true) @map("dealflow_enabled")
-  defaultFor                PipelineInputType?         @map("default_for")
-  pollIntervalMinutes       Int?                       @map("poll_interval_minutes")
-  pollCheckpoint            Json?                      @map("poll_checkpoint")
-  pollEnabled               Boolean                    @default(false) @map("poll_enabled")
-  pollLastAt                DateTime?                  @map("poll_last_at") @db.Timestamptz(3)
-  pollConsecutiveFailures   Int                        @default(0) @map("poll_consecutive_failures")
-  pollLastError             String?                    @map("poll_last_error")
-  tgEventBody               Json?                      @map("tg_event_body")
-  provisionedBySetupAgent   Boolean                    @default(false) @map("provisioned_by_setup_agent")
-  inboundPayloads           InboundPayload[]
-  pipelineConfiguration     PipelineConfiguration      @relation(fields: [pipelineConfigurationId], references: [id])
-  pipelineInputMessageTypes PipelineInputMessageType[]
-
-  @@map("pipeline_input")
-  @@schema("public")
-}
-
-model PipelineInputMessageType {
-  id               String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  pipelineInputId  String        @map("pipeline_input_id") @db.Uuid
-  nodeTypeId       String        @map("node_type_id") @db.Uuid
-  propertyMappings Json          @default("[]") @map("property_mappings")
-  createdAt        DateTime      @default(now()) @map("created_at")
-  nodeType         NodeType      @relation(fields: [nodeTypeId], references: [id], onDelete: Cascade)
-  pipelineInput    PipelineInput @relation(fields: [pipelineInputId], references: [id], onDelete: Cascade)
-
-  @@unique([pipelineInputId, nodeTypeId], map: "pipeline_input_message_type_unique")
-  @@index([pipelineInputId])
-  @@map("pipeline_input_message_type")
-  @@schema("public")
-}
-
-model PipelineOutput {
-  id                      String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  pipelineConfigurationId String                @map("pipeline_configuration_id") @db.Uuid
-  type                    PipelineOutputType
-  name                    String
-  config                  Json
-  createdAt               DateTime              @default(now()) @map("created_at")
-  updatedAt               DateTime              @default(now()) @map("updated_at")
-  deletedAt               DateTime?             @map("deleted_at")
-  credentialsId           String?               @map("credentials_id") @db.Uuid
-  mode                    PipelineOutputMode    @default(PER_COMPANY)
-  configVersion           Int                   @default(1) @map("config_version")
-  runMode                 String                @default("live") @map("run_mode")
-  triggerNodeTypeId       String?               @map("trigger_node_type_id") @db.Uuid
-  triggerEvent            String?               @map("trigger_event")
-  trigger                 Json?
-  position                Int                   @default(0)
-  tgEventBody             Json?                 @map("tg_event_body")
-  provisionedBySetupAgent Boolean               @default(false) @map("provisioned_by_setup_agent")
-  pipelineConfiguration   PipelineConfiguration @relation(fields: [pipelineConfigurationId], references: [id])
-  nodeType                NodeType?             @relation(fields: [triggerNodeTypeId], references: [id])
-
-  @@map("pipeline_output")
   @@schema("public")
 }
 
@@ -1972,16 +1825,14 @@ model TeamJourney {
 }
 
 model TeamUsageConfig {
-  id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  teamId                 String   @unique @map("team_id") @db.Uuid
-  maxWeeklyPipelineRuns  Int      @map("max_weekly_pipeline_runs")
-  maxWeeklyQueryInputs   Int      @map("max_weekly_query_inputs")
-  additionalPipelineRuns Int      @default(0) @map("additional_pipeline_runs")
-  additionalQueryInputs  Int      @default(0) @map("additional_query_inputs")
-  alertThresholdPct      Int      @default(80) @map("alert_threshold_pct")
-  weekStartsOn           Int      @default(1) @map("week_starts_on")
-  createdAt              DateTime @default(now()) @map("created_at")
-  updatedAt              DateTime @default(now()) @map("updated_at")
+  id                    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  teamId                String   @unique @map("team_id") @db.Uuid
+  maxWeeklyQueryInputs  Int      @map("max_weekly_query_inputs")
+  additionalQueryInputs Int      @default(0) @map("additional_query_inputs")
+  alertThresholdPct     Int      @default(80) @map("alert_threshold_pct")
+  weekStartsOn          Int      @default(1) @map("week_starts_on")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @default(now()) @map("updated_at")
 
   @@map("team_usage_config")
   @@schema("public")
@@ -2646,15 +2497,6 @@ enum PropertyValueType {
   @@schema("knowledge")
 }
 
-enum DealflowPipelineStatus {
-  PROCESSING
-  COMPLETE
-  CANCELLED
-  BLOCKED
-
-  @@schema("public")
-}
-
 enum PublicNativeDatabaseOperation {
   DELETE
   INSERT
@@ -2698,16 +2540,6 @@ enum OpsSeverity {
   @@schema("public")
 }
 
-enum PipelineInputContentType {
-  DEALFLOW
-  INVESTOR_UPDATE
-  REQUEST
-  UNKNOWN
-  COMPANY_INFO
-
-  @@schema("public")
-}
-
 enum PipelineInputType {
   MAILGUN
   TWILIO
@@ -2725,34 +2557,6 @@ enum PipelineInputType {
   ATTIO
   AFFINITY
   PIPEDRIVE
-  NATIVE_VALUATIONS
-
-  @@schema("public")
-}
-
-enum PipelineOutputMode {
-  PER_COMPANY
-  PER_MESSAGE
-
-  @@schema("public")
-}
-
-enum PipelineOutputType {
-  WEBHOOK
-  INBOUND_EMAIL
-  INBOUND_WHATSAPP
-  MAILGUN
-  TWILIO
-  ATTIO
-  AFFINITY
-  PIPEDRIVE
-  SLACK
-  SLACK_REACTION
-  AIRTABLE
-  GOOGLE_SHEETS
-  GOOGLE_DRIVE
-  DROPBOX
-  NATIVE
   NATIVE_VALUATIONS
 
   @@schema("public")

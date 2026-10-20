@@ -892,15 +892,6 @@ function UsageSection() {
         Weekly usage for your team. Resets every {resetDay}.
       </p>
       <div className="mt-3 flex gap-6">
-        {data.pipelineRuns && (
-          <UsageMeter
-            label="Pipeline runs"
-            used={data.pipelineRuns.used}
-            weeklyMax={data.pipelineRuns.weeklyMax}
-            additional={data.pipelineRuns.additional}
-            thresholdPct={data.alertThresholdPct}
-          />
-        )}
         {data.queryInputs && (
           <UsageMeter
             label="Questions"

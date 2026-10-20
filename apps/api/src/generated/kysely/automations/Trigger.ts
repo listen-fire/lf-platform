@@ -14,8 +14,6 @@ export default interface TriggerTable {
 
   team_id: ColumnType<string, string, string>;
 
-  pipeline_configuration_id: ColumnType<string, string, string>;
-
   name: ColumnType<string, string, string>;
 
   kind: ColumnType<string, string, string>;

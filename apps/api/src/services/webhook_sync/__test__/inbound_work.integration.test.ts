@@ -42,10 +42,9 @@ import type { TriggerRunId } from '../../../generated/kysely/automations/Trigger
 import type { TriggerEventId } from '../../../generated/kysely/automations/TriggerEvent';
 import type { ExternalServiceCredentialsId } from '../../../generated/kysely/automations/ExternalServiceCredentials';
 import type { WebhookSubscriptionId } from '../../../generated/kysely/automations/WebhookSubscription';
-import type { PipelineConfigurationId } from '../../../generated/kysely/public/PipelineConfiguration';
 
 import type { Catalog, CatalogSnapshot, InstanceSchema, PositionSchema } from 'movement-lang';
-import { getAutomationsQb, getCoreQb, getQb } from '../../../lib/kysely';
+import { getAutomationsQb, getCoreQb } from '../../../lib/kysely';
 import { cleanupTeam } from '../../../test/harness/cleanup';
 import { seedTeamCredential } from '../../../test/harness/credentials';
 import { testWorkContext } from '../../../test/harness/work';
@@ -183,12 +182,6 @@ const SLEEP_THEN_NOTIFY = [
 ].join('\n');
 
 async function seedMovementTrigger(teamId: TeamId): Promise<TriggerId> {
-  const pipelineConfigurationId = randomUUID() as PipelineConfigurationId;
-  await getQb(['pipeline_configuration'])
-    .insertInto('pipeline_configuration')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .values({ id: pipelineConfigurationId, team_id: teamId, name: `cfg-${pipelineConfigurationId.slice(0, 8)}` } as any)
-    .execute();
   const movementId = randomUUID() as MovementId;
   await getAutomationsQb(['movement'])
     .insertInto('movement')
@@ -208,7 +201,6 @@ async function seedMovementTrigger(teamId: TeamId): Promise<TriggerId> {
     .values({
       id: triggerId,
       team_id: teamId,
-      pipeline_configuration_id: pipelineConfigurationId,
       name: 'Attio record changes',
       kind: 'attio',
       movement_id: movementId,

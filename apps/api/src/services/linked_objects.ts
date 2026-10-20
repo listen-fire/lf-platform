@@ -32,8 +32,6 @@ interface LinkedObjectRow {
   external_id: string;
   external_object_type: string | null;
   data: unknown;
-  retrieval_source_id: string | null;
-  output_id: string | null;
   action_node_id: string | null;
   fetched_at: Date | null;
   created_at: Date;
@@ -48,8 +46,6 @@ async function storeLinkedObject(options: {
   externalId: string;
   externalObjectType?: string;
   data?: Record<string, unknown>;
-  retrievalSourceId?: string;
-  outputId?: string;
   actionNodeId?: string;
 }): Promise<void> {
   const qb = getKnowledgeQb([]);
@@ -57,19 +53,18 @@ async function storeLinkedObject(options: {
   const adapterType = normalizeAdapterType(options.adapterType);
   await sql`
     INSERT INTO knowledge.linked_object
-      (team_id, node_id, source, adapter_type, external_id, external_object_type, data, retrieval_source_id, output_id, action_node_id)
+      (team_id, node_id, source, adapter_type, external_id, external_object_type, data, action_node_id)
     VALUES (
       ${options.teamId}, ${options.nodeId}, ${options.source},
       ${adapterType}, ${options.externalId}, ${options.externalObjectType ?? null},
       ${JSON.stringify(options.data ?? {})}::jsonb,
-      ${options.retrievalSourceId ?? null}, ${options.outputId ?? null}, ${options.actionNodeId ?? null}
+      ${options.actionNodeId ?? null}
     )
     ON CONFLICT (node_id, adapter_type, external_id)
     DO UPDATE SET
       data = EXCLUDED.data,
       external_object_type = COALESCE(EXCLUDED.external_object_type, knowledge.linked_object.external_object_type),
       source = EXCLUDED.source,
-      output_id = COALESCE(EXCLUDED.output_id, knowledge.linked_object.output_id),
       action_node_id = COALESCE(EXCLUDED.action_node_id, knowledge.linked_object.action_node_id),
       updated_at = CURRENT_TIMESTAMP
   `.execute(qb);
@@ -84,7 +79,7 @@ async function loadLinkedObjects(
 
   let query = sql<LinkedObjectRow>`
     SELECT id, node_id, source, adapter_type, external_id, external_object_type, data,
-           retrieval_source_id, output_id, action_node_id,
+           action_node_id,
            fetched_at, created_at, updated_at
     FROM knowledge.linked_object
     WHERE node_id = ${nodeId} AND team_id = ${teamId}`;
@@ -106,49 +101,6 @@ async function deleteLinkedObject(id: string, teamId: TeamId): Promise<void> {
   await sql`
     DELETE FROM knowledge.linked_object
     WHERE id = ${id} AND team_id = ${teamId}
-  `.execute(qb);
-}
-
-async function storeOutputRun(options: {
-  teamId: TeamId;
-  pipelineOutputId: string;
-  actionNodeId: string;
-  contextNodeId: NodeId | null;
-  adapterType: string;
-  externalId: string | null;
-  externalObjectType?: string;
-  status: string;
-  error?: string;
-  fieldValues?: Record<string, unknown>;
-  runGroupId?: string;
-  created?: boolean;
-  rootNodeId?: NodeId | null;
-}): Promise<void> {
-  const qb = getKnowledgeQb([]);
-
-  const fieldValuesJson = options.fieldValues ? JSON.stringify(options.fieldValues) : null;
-
-  // During initial ingestion dry runs, context/root node IDs may be temp changeset IDs
-  // that don't exist in the DB. Verify they exist before inserting.
-  const idsToCheck = [options.contextNodeId, options.rootNodeId].filter(Boolean) as string[];
-  const existingIds = new Set<string>();
-  if (idsToCheck.length > 0) {
-    const idLiterals = idsToCheck.map((id) => `'${id}'::uuid`).join(', ');
-    const rows = await sql<{ id: string }>`
-      SELECT id FROM knowledge.node WHERE id IN (${sql.raw(idLiterals)})
-    `.execute(qb);
-    for (const row of rows.rows) existingIds.add(row.id);
-  }
-
-  const ctxId = options.contextNodeId && existingIds.has(options.contextNodeId as string) ? options.contextNodeId : null;
-  const rootId = options.rootNodeId && existingIds.has(options.rootNodeId as string) ? options.rootNodeId : null;
-
-  // output_run.adapter_type joins back to linked_object.adapter_type,
-  // so the same lowercase canon applies.
-  const adapterType = normalizeAdapterType(options.adapterType);
-  await sql`
-    INSERT INTO knowledge.output_run (team_id, pipeline_output_id, action_node_id, context_node_id, adapter_type, external_id, external_object_type, status, error, field_values, run_group_id, created, root_node_id)
-    VALUES (${options.teamId}, ${options.pipelineOutputId}, ${options.actionNodeId}, ${ctxId}, ${adapterType}, ${options.externalId}, ${options.externalObjectType ?? null}, ${options.status}, ${options.error ?? null}, ${fieldValuesJson}::jsonb, ${options.runGroupId ?? null}::uuid, ${options.created ?? null}, ${rootId}::uuid)
   `.execute(qb);
 }
 
@@ -181,5 +133,5 @@ async function updateLinkedObjectExternalId(
   `.execute(qb);
 }
 
-export { storeLinkedObject, loadLinkedObjects, deleteLinkedObject, updateLinkedObjectExternalId, storeOutputRun };
+export { storeLinkedObject, loadLinkedObjects, deleteLinkedObject, updateLinkedObjectExternalId };
 export type { LinkedObjectRow };

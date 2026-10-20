@@ -23,7 +23,6 @@
 import { randomUUID } from 'node:crypto';
 
 import type { TeamId } from '../../generated/kysely/core/Team';
-import type { PipelineConfigurationId } from '../../generated/kysely/public/PipelineConfiguration';
 import type { TriggerId } from '../../generated/kysely/automations/Trigger';
 
 import { getAutomationsQb } from '../../lib/kysely';
@@ -131,62 +130,50 @@ async function main() {
   // ── 3. team-budget PAUSE: set + resume the persistent guard state ─────────
   {
     // A throwaway trigger row so we can roundtrip the pause state on real PG.
-    const config = await getAutomationsQb(['trigger'])
-      .selectFrom('trigger')
-      .where('team_id', '=', teamId)
-      .select('pipeline_configuration_id')
-      .executeTakeFirst();
-    if (!config) {
-      log('3. pause/resume', false, 'no existing trigger to borrow a pipeline_configuration_id from');
-      mark(false);
-    } else {
+    await getAutomationsQb(['trigger'])
+      .insertInto('trigger')
+      .values({
+        id: triggerId as unknown as TriggerId,
+        team_id: teamId,
+        name: 'loop-guard-check (throwaway)',
+        kind: 'web',
+      })
+      .execute();
+    try {
+      const guard = await import('../../services/loop_guard');
+      const set = await guard.setGuardPaused({
+        triggerId,
+        reason: 'dev-loop verification: simulated team-budget breach',
+        signal: 'team_budget',
+      });
+      const paused = await guard.loadGuardPausedState(triggerId);
+      const okSet = set.newlyPaused && paused.pausedAt !== null && paused.signal === 'team_budget';
+      mark(okSet);
+      log('3a. setGuardPaused → persistent paused state', okSet, JSON.stringify(paused));
+
+      // Idempotent re-breach is a no-op (original pause preserved).
+      const reSet = await guard.setGuardPaused({
+        triggerId,
+        reason: 'second breach',
+        signal: 'trigger_rate',
+      });
+      mark(!reSet.newlyPaused);
+      log('3b. re-breach is idempotent (no second pause)', !reSet.newlyPaused, `newlyPaused=${reSet.newlyPaused}`);
+
+      const resume = await guard.clearGuardPaused({
+        triggerId,
+        teamId: teamId as unknown as string,
+        resumedBy: 'dev-loop-check',
+      });
+      const afterResume = await guard.loadGuardPausedState(triggerId);
+      const okResume = resume.resumed && afterResume.pausedAt === null;
+      mark(okResume);
+      log('3c. clearGuardPaused (manual resume) → state cleared', okResume, JSON.stringify(afterResume));
+    } finally {
       await getAutomationsQb(['trigger'])
-        .insertInto('trigger')
-        .values({
-          id: triggerId as unknown as TriggerId,
-          team_id: teamId,
-          pipeline_configuration_id:
-            config.pipeline_configuration_id as unknown as PipelineConfigurationId,
-          name: 'loop-guard-check (throwaway)',
-          kind: 'web',
-        })
+        .deleteFrom('trigger')
+        .where('id', '=', triggerId as unknown as TriggerId)
         .execute();
-      try {
-        const guard = await import('../../services/loop_guard');
-        const set = await guard.setGuardPaused({
-          triggerId,
-          reason: 'dev-loop verification: simulated team-budget breach',
-          signal: 'team_budget',
-        });
-        const paused = await guard.loadGuardPausedState(triggerId);
-        const okSet = set.newlyPaused && paused.pausedAt !== null && paused.signal === 'team_budget';
-        mark(okSet);
-        log('3a. setGuardPaused → persistent paused state', okSet, JSON.stringify(paused));
-
-        // Idempotent re-breach is a no-op (original pause preserved).
-        const reSet = await guard.setGuardPaused({
-          triggerId,
-          reason: 'second breach',
-          signal: 'trigger_rate',
-        });
-        mark(!reSet.newlyPaused);
-        log('3b. re-breach is idempotent (no second pause)', !reSet.newlyPaused, `newlyPaused=${reSet.newlyPaused}`);
-
-        const resume = await guard.clearGuardPaused({
-          triggerId,
-          teamId: teamId as unknown as string,
-          resumedBy: 'dev-loop-check',
-        });
-        const afterResume = await guard.loadGuardPausedState(triggerId);
-        const okResume = resume.resumed && afterResume.pausedAt === null;
-        mark(okResume);
-        log('3c. clearGuardPaused (manual resume) → state cleared', okResume, JSON.stringify(afterResume));
-      } finally {
-        await getAutomationsQb(['trigger'])
-          .deleteFrom('trigger')
-          .where('id', '=', triggerId as unknown as TriggerId)
-          .execute();
-      }
     }
   }
 

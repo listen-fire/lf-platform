@@ -39,9 +39,6 @@ export default interface ApiKeyTable {
   updated_at: ColumnType<Date, Date | string | undefined, Date | string>;
 
   created_by: ColumnType<UserId, UserId, UserId>;
-
-  /** Optional link to a specific pipeline input. When set, API requests using this key will be routed to this input instead of the default API input. */
-  pipeline_input_id: ColumnType<string | null, string | null, string | null>;
 }
 
 export type ApiKey = Selectable<ApiKeyTable>;

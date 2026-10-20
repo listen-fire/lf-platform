@@ -15,9 +15,8 @@ import type { Attachment } from '../file_generation';
  *    orchestrator normalises those retired domains onto `unified` at
  *    dispatch; their registrations below remain only for direct callers
  *    that haven't migrated (tRPC views, Slack, WhatsApp).
- *  - `output` is a tiny no-LLM dispatcher. Upstream agents hand off here
- *    when the user wants to work with pipeline outputs/inputs; it
- *    immediately hands off to the unified agent.
+ *  - `output` is a tiny no-LLM dispatcher kept for conversations tagged
+ *    with it; it immediately hands off to the unified agent.
  */
 export type AgentDomain =
   | 'unified'
@@ -236,8 +235,8 @@ export async function initAgentRegistry(): Promise<void> {
     },
   });
 
-  // Output dispatcher — no LLM, pure routing. Pipeline outputs/inputs are
-  // authored by the unified agent; the legacy v3 output agent is gone.
+  // Output dispatcher — no LLM, pure routing. The legacy pipelines it once
+  // served are gone; data movement is authored by the unified agent.
   registerAgent({
     domain: 'output',
     canHandoffTo: ['unified'],
@@ -245,9 +244,7 @@ export async function initAgentRegistry(): Promise<void> {
       const { HandoffSignal } = await import('./handoff');
       throw new HandoffSignal(
         'unified',
-        'User wants to work with pipeline outputs/inputs. ' +
-          'The unified agent authors the data movement; use listOutputs / listInputs ' +
-          'to surface candidates.',
+        'User wants to move data between systems. The unified agent authors the data movement.',
       );
     },
   });

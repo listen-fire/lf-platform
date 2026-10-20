@@ -2,7 +2,6 @@ import { z } from 'zod';
 import { sql } from 'kysely';
 
 import type { TeamId } from '../../../../generated/kysely/core/Team';
-import type { DealflowPipelineId } from '../../../../generated/kysely/public/DealflowPipeline';
 import type { AgentConversationId } from '../../../../generated/kysely/public/AgentConversation';
 
 import { getQb } from '../../../../lib/kysely';
@@ -111,45 +110,6 @@ const llmUsageRouter = (procedure: typeof trpc.procedure) =>
         return query.execute();
       }),
 
-    byPipeline: procedure
-      .input(
-        z.object({
-          teamId: z.string().uuid().optional(),
-          startDate: z.string().datetime(),
-          endDate: z.string().datetime(),
-          limit: z.number().min(1).max(100).default(50),
-        }),
-      )
-      .query(async ({ input }) => {
-        const qb = getQb(['llm_usage', 'dealflow_pipeline', 'core.team']);
-
-        let query = qb
-          .selectFrom('llm_usage as u')
-          .innerJoin('dealflow_pipeline as dp', 'u.pipeline_id', 'dp.id')
-          .innerJoin('core.team as t', 'u.team_id', 't.id')
-          .select([
-            'u.pipeline_id',
-            't.name as team_name',
-            'dp.created_at as pipeline_created_at',
-            sql<number>`count(*)::int`.as('call_count'),
-            sql<number>`sum(u.input_tokens)::int`.as('total_input_tokens'),
-            sql<number>`sum(u.output_tokens)::int`.as('total_output_tokens'),
-            sql<number>`sum(u.cost_microdollars)::int`.as('total_cost_microdollars'),
-          ])
-          .where('u.created_at', '>=', new Date(input.startDate))
-          .where('u.created_at', '<=', new Date(input.endDate))
-          .where('u.pipeline_id', 'is not', null)
-          .groupBy(['u.pipeline_id', 't.name', 'dp.created_at'])
-          .orderBy('dp.created_at', 'desc')
-          .limit(input.limit);
-
-        if (input.teamId) {
-          query = query.where('u.team_id', '=', input.teamId as TeamId);
-        }
-
-        return query.execute();
-      }),
-
     byConversation: procedure
       .input(
         z.object({
@@ -188,17 +148,6 @@ const llmUsageRouter = (procedure: typeof trpc.procedure) =>
         }
 
         return query.execute();
-      }),
-
-    pipelineDetail: procedure
-      .input(z.object({ pipelineId: z.string().uuid() }))
-      .query(async ({ input }) => {
-        return getQb(['llm_usage'])
-          .selectFrom('llm_usage')
-          .selectAll()
-          .where('pipeline_id', '=', input.pipelineId as DealflowPipelineId)
-          .orderBy('created_at', 'asc')
-          .execute();
       }),
 
     conversationDetail: procedure

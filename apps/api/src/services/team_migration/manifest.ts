@@ -368,7 +368,6 @@ export const MANIFEST: Record<Product, TableSpec[]> = {
     { table: 'team_agent_settings', tenancy: { kind: 'team_column' } },
     { table: 'webhook_endpoint', tenancy: { kind: 'team_column' } },
     { table: 'change', tenancy: { kind: 'team_column' }, history: true },
-    { table: 'output_run', tenancy: { kind: 'team_column' }, history: true },
     {
       table: 'mutation_outbox',
       tenancy: { kind: 'team_column' },

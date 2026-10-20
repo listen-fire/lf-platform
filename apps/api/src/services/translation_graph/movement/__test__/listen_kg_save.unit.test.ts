@@ -394,7 +394,7 @@ listen to crm { events: [${events}] } fire on_new_record
 
 beforeEach(() => {
   db.__reset();
-  db.__tables.team.push({ id: TEAM, active_pipeline_configuration_id: 'pc-1' });
+  db.__tables.team.push({ id: TEAM });
   ensureCalls.length = 0;
   removeCalls.length = 0;
 });

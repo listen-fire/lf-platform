@@ -22,13 +22,12 @@ import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
 import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
 import type { MovementId } from '../../../generated/kysely/automations/Movement';
-import type { PipelineConfigurationId } from '../../../generated/kysely/public/PipelineConfiguration';
 import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
 import type { AwaitResolution } from 'engine-contracts/awaitable';
 
 import { testWorkContext } from '../../../test/harness/work';
 import { cleanupTeam } from '../../../test/harness/cleanup';
-import { getAsksQb, getAutomationsQb, getCoreQb, getQb } from '../../../lib/kysely';
+import { getAsksQb, getAutomationsQb, getCoreQb } from '../../../lib/kysely';
 import { TriggerRunRecorder } from '../../translation_graph/runs/trigger_run';
 import { registerAwaitWork } from '../../movement_engine/await_resume';
 import { enqueueAwaitWake } from '../../movement_engine/await_wake';
@@ -61,12 +60,6 @@ beforeAll(async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .values({ id: teamId, name: `ask-expiry-${teamId.slice(0, 8)}` } as any)
     .execute();
-  const pipelineConfigurationId = randomUUID() as PipelineConfigurationId;
-  await getQb(['pipeline_configuration'])
-    .insertInto('pipeline_configuration')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .values({ id: pipelineConfigurationId, team_id: teamId, name: `cfg-${pipelineConfigurationId.slice(0, 8)}` } as any)
-    .execute();
   const movementId = randomUUID() as MovementId;
   await getAutomationsQb(['movement'])
     .insertInto('movement')
@@ -93,7 +86,6 @@ beforeAll(async () => {
     .values({
       id: triggerId,
       team_id: teamId,
-      pipeline_configuration_id: pipelineConfigurationId,
       name: 'Ask then wait',
       kind: 'webhook',
       movement_id: movementId,

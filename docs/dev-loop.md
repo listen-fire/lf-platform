@@ -203,7 +203,6 @@ Idempotently provisions the dev-loop team using `TEST_HARNESS_TEAM_ID`:
 
 - creates the team (pinned id), the dev-loop user (`_lib.ts`'s `DEV_LOOP_EMAIL`), platform admin
 - materialises the `vc-dealflow` ontology template
-- creates a pipeline configuration
 - creates mock Attio credentials
 
 Flags: `--pretty`, `--reset` (wipe + recreate).
@@ -399,8 +398,8 @@ to `--to`, computes the HMAC-SHA256 signature
 against the dev-loop's hard-coded `test-harness-dummy-key` (matching
 the adapter wired in `services.ts`), and POSTs at
 `/api/mailgun/callback`. The recipient routes via the
-plus-address parser to the matching CUSTOM_EMAIL
-pipeline_input — pass the activation-minted address (per
+plus-address parser to the matching email
+trigger — pass the activation-minted address (per
 `mailgun_activation.ts:bindExtractionTg`) as `--to`. The default
 fixture's `sender` is the dev-loop user, so the sender lookup
 resolves to the dev-loop user / team and the plus-key dispatch runs;
@@ -1118,8 +1117,8 @@ when an Attio webhook fires:
 
 1. Webhook arrives at `/api/public/webhook-sync/attio/<subId>`
 2. Handler bypasses HMAC for the test-harness team
-3. Subscription found → events dispatched to TG triggers on the matching
-   `pipeline_input.translation_graphs`
+3. Subscription found → events dispatched to the matching trigger rows
+   (`automations.trigger`)
 4. Engine seeds a `webhook-event` SourcePosition from the trigger payload
 5. Engine queries `linked_object` for an existing bridge
    (`team, adapter_type, external_id`)
@@ -1156,8 +1155,8 @@ no prior context can `dev:loop` + `dev:seed` + your-new-CLIs and
 exercise every trigger kind your input supports. Concretely:
 
 1. **Provisioning** — a `pnpm dev:<input>` script that idempotently
-   creates the credentials row, the pipeline_input with at least one
-   trigger entry per supported trigger kind (webhook / manual / mutation),
+   creates the credentials row, a movement with at least one
+   `listen` per supported trigger kind (webhook / manual / mutation),
    and any provider-specific scaffolding (webhook_subscription,
    platform_owned_token, …). Pattern: `apps/api/src/scripts/dev/valuations.ts`
    (in-process) or the Attio path baked into `dev:seed` (real third-party
@@ -1211,8 +1210,7 @@ task, extend them; don't work around them.
   Slack-team-id → team-id mapping would be needed to bypass it.
 - **Input agent for chat-driven config.** `agent_registry.ts` has
   query/ontology/output domains. There's no `input` domain that knows
-  how to call `webhookSubscriptions.create`, edit pipeline_input
-  translation_graphs JSONB, etc. When that exists, `pnpm dev:chat
+  how to call `webhookSubscriptions.create`, edit triggers, etc. When that exists, `pnpm dev:chat
   input "wire up Attio companies → Deal updates"` will close the
   agent-configures-it loop.
 - **Richer fake Attio value shape.** Real Attio responses include

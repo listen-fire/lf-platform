@@ -828,28 +828,10 @@ CREATE INDEX inventory_delta_holding_asset_id_idx ON public.inventory_delta_hold
 -- ## Pipeline
 -------------------------------------------------------------------------------------------------------------------------
 
--- ### Pipeline Configuration -------------------------------------------------------
-
-CREATE TABLE public.pipeline_configuration (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    team_id uuid NOT NULL,
-    name text NOT NULL,
-    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    deleted_at timestamp(3) without time zone
-);
-
-
-ALTER TABLE ONLY public.pipeline_configuration
-    ADD CONSTRAINT pipeline_configuration_pkey PRIMARY KEY (id);
-
-
-
-CREATE UNIQUE INDEX pipeline_configuration_team_id_name_key ON public.pipeline_configuration USING btree (team_id, name);
-
-CREATE TRIGGER pipeline_configuration_audit AFTER INSERT OR DELETE OR UPDATE ON public.pipeline_configuration FOR EACH ROW EXECUTE FUNCTION public.audit();
-
-
+-- The legacy pipelines (`pipeline_configuration`, `pipeline_input`,
+-- `pipeline_input_message_type`, `pipeline_output`) and `dealflow_pipeline`
+-- were dropped (rc.3): data movement runs as movements, and nothing read or
+-- wrote these rows.
 
 -- (The credentials vault — `external_service_credentials`, its `ExternalServiceType`
 -- enum, and the three satellites `connect_token`, `google_granted_item` and
@@ -858,17 +840,25 @@ CREATE TRIGGER pipeline_configuration_audit AFTER INSERT OR DELETE OR UPDATE ON 
 -- in-schema; the encrypted bytes were not touched.)
 
 
+-- (The engine-runtime tables that used to sit here — `trigger_run`,
+-- `adapter_await`, `callback`, `parked_run`, `join_pending`,
+-- `join_branch_export`, `record_binding` and `trigger_event` — moved to the
+-- AUTOMATIONS SCHEMA at the end of this file. They are the movement engine's
+-- own run ledger and park machinery; nothing outside automations writes them.
+-- What stayed behind is the ops-residual side of the split: `llm_usage` keeps a
+-- `trigger_run_id` COLUMN and lost the constraint (D3/D8) — usage recording is
+-- the operating company, not part of the product.)
 
--- ### Pipeline Input -------------------------------------------------------
 
-CREATE TYPE public."PipelineInputContentType" AS ENUM (
-    'DEALFLOW',
-    'INVESTOR_UPDATE',
-    'REQUEST',
-    'UNKNOWN',
-    'COMPANY_INFO'
-);
+-- (`webhook_subscription` moved to the AUTOMATIONS SCHEMA at the end of this file,
+-- with the credential it points at; the listen reconciler is its only writer.)
 
+
+
+-- ### Inbound Payload ----------------------------------------------------------
+
+-- The channel a legacy inbound payload arrived on. The enum outlived the
+-- `pipeline_input` table that first used it.
 CREATE TYPE public."PipelineInputType" AS ENUM (
     'MAILGUN',
     'TWILIO',
@@ -883,203 +873,11 @@ CREATE TYPE public."PipelineInputType" AS ENUM (
     'CHROME_EXTENSION',
     'GMAIL',
     'GRANOLA',
-    -- Structured inputs (per plans/2026-05-07-structured-input-containers/).
-    -- These pipeline_input types hold typed translation_graphs[] entries
-    -- instead of message-type extraction graphs; configured via the new
-    -- input editor page.
     'ATTIO',
     'AFFINITY',
     'PIPEDRIVE',
     'NATIVE_VALUATIONS'
 );
-
-CREATE TABLE public.pipeline_input (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    pipeline_configuration_id uuid NOT NULL, -- @DEF: pipeline_input_pipeline_configuration_id_fkey
-    type public."PipelineInputType" NOT NULL,
-    name text NOT NULL,
-    config jsonb NOT NULL,
-    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    deleted_at timestamp(3) without time zone,
-    content_type public."PipelineInputContentType" NOT NULL,
-    credentials_id uuid, -- FK dropped: the vault moved to `automations` (D3); this table dies with dealflow (D17)
-    knowledge_enabled boolean NOT NULL DEFAULT false,
-    dealflow_enabled boolean NOT NULL DEFAULT true,
-    default_for public."PipelineInputType",
-    poll_interval_minutes integer,
-    poll_checkpoint jsonb,
-    poll_enabled boolean NOT NULL DEFAULT false,
-    poll_last_at timestamp(3) with time zone,
-    poll_consecutive_failures integer NOT NULL DEFAULT 0,
-    poll_last_error text,
-    -- Event-mode TG body — one canonical NodeMappings + Edges map per
-    -- input, shared by every event-mode trigger entry on this input. This
-    -- is consumer-level shared configuration (analogous to `config`), NOT
-    -- a per-TG body — every event-mode trigger on this input dispatches
-    -- against this same map. Per-trigger TG bodies live in
-    -- `knowledge.translation_graph` rows keyed by `pipeline_input_id`.
-    --
-    -- Shape: { nodeMappings: NodeMapping[], edges: TGEdge[] }
-    tg_event_body jsonb,
-    -- (router_tg_id removed: content routing is now a `branch` at the root
-    -- of a trigger's orchestration, not a separate router TG. See
-    -- plans/2026-06-04-automation-as-program/3c_substrate-collapse.md.)
-    -- V8: provenance marker. True iff this row was minted by
-    -- `provisionSync` in the Setup-agent flow. Lets provisionSync's
-    -- idempotency check distinguish rows it owns from legacy rows that
-    -- happen to share (pipeline_configuration_id, type, knowledge_enabled).
-    -- See plans/2026-05-23-onboarding-funnel/_execution/_escalations.md
-    -- (2026-05-23 22:55).
-    provisioned_by_setup_agent boolean NOT NULL DEFAULT false
-);
-
-
-ALTER TABLE ONLY public.pipeline_input
-    ADD CONSTRAINT pipeline_input_pkey PRIMARY KEY (id);
-
--- At most one default per channel per pipeline configuration
-CREATE UNIQUE INDEX pipeline_input_default_for_unique
-  ON public.pipeline_input (default_for, pipeline_configuration_id)
-  WHERE default_for IS NOT NULL AND deleted_at IS NULL;
-
--- @DEF: pipeline_input_pipeline_configuration_id_fkey
-ALTER TABLE ONLY public.pipeline_input
-    ADD CONSTRAINT pipeline_input_pipeline_configuration_id_fkey FOREIGN KEY (pipeline_configuration_id) REFERENCES public.pipeline_configuration(id) ON UPDATE CASCADE ON DELETE RESTRICT;
-
-
-CREATE TRIGGER pipeline_input_audit AFTER INSERT OR DELETE OR UPDATE ON public.pipeline_input FOR EACH ROW EXECUTE FUNCTION public.audit();
-
-
--- ### Pipeline Input Message Type ---------------------------------------------
--- Junction table: which knowledge message types a pipeline input should process.
-
-CREATE TABLE public.pipeline_input_message_type (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    pipeline_input_id uuid NOT NULL,
-    node_type_id uuid NOT NULL, -- FK to knowledge.node_type, defined in knowledge schema section
-    property_mappings jsonb NOT NULL DEFAULT '[]'::jsonb,
-    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
-);
-
-ALTER TABLE ONLY public.pipeline_input_message_type
-    ADD CONSTRAINT pipeline_input_message_type_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY public.pipeline_input_message_type
-    ADD CONSTRAINT pipeline_input_message_type_unique UNIQUE (pipeline_input_id, node_type_id);
-
-ALTER TABLE ONLY public.pipeline_input_message_type
-    ADD CONSTRAINT pipeline_input_message_type_pipeline_input_id_fkey FOREIGN KEY (pipeline_input_id) REFERENCES public.pipeline_input(id) ON UPDATE CASCADE ON DELETE CASCADE;
-
-CREATE INDEX pipeline_input_message_type_pipeline_input_id_idx ON public.pipeline_input_message_type USING btree (pipeline_input_id);
-
-
-
--- ### Pipeline Output -------------------------------------------------------
-
-CREATE TYPE public."PipelineOutputMode" AS ENUM (
-    'PER_COMPANY',
-    'PER_MESSAGE'
-);
-
-CREATE TYPE public."PipelineOutputType" AS ENUM (
-    'WEBHOOK',
-    'INBOUND_EMAIL',
-    'INBOUND_WHATSAPP',
-    'MAILGUN',
-    'TWILIO',
-    'ATTIO',
-    'AFFINITY',
-    'PIPEDRIVE',
-    'SLACK',
-    'SLACK_REACTION',
-    'AIRTABLE',
-    'GOOGLE_SHEETS',
-    'GOOGLE_DRIVE',
-    'DROPBOX',
-    'NATIVE',
-    'NATIVE_VALUATIONS'
-);
-
-CREATE TABLE public.pipeline_output (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    pipeline_configuration_id uuid NOT NULL, -- @DEF: pipeline_output_pipeline_configuration_id_fkey
-    type public."PipelineOutputType" NOT NULL,
-    name text NOT NULL,
-    config jsonb NOT NULL,
-    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    deleted_at timestamp(3) without time zone,
-    credentials_id uuid, -- FK dropped: the vault moved to `automations` (D3); this table dies with dealflow (D17)
-    mode public."PipelineOutputMode" DEFAULT 'PER_COMPANY'::public."PipelineOutputMode" NOT NULL,
-    config_version integer DEFAULT 1 NOT NULL,  -- 1 = legacy modal config, 2 = graph-based config
-    run_mode text DEFAULT 'live' NOT NULL,  -- 'off', 'dry_run', 'live'
-    -- Knowledge model trigger config
-    trigger_node_type_id uuid, -- FK to knowledge.node_type, defined in knowledge schema section
-    trigger_event text,
-    trigger jsonb,
-    position integer DEFAULT 0 NOT NULL,
-    -- Event-mode TG body — one canonical NodeMappings + Edges map per
-    -- output, shared by every event-mode trigger entry on this output.
-    -- Consumer-level shared configuration (not a per-TG body). Per-trigger
-    -- TG bodies live in `knowledge.translation_graph` rows keyed by
-    -- `pipeline_output_id`. Mirrors pipeline_input.tg_event_body.
-    --
-    -- Shape: { nodeMappings: NodeMapping[], edges: TGEdge[] }
-    tg_event_body jsonb,
-    -- V8: provenance marker. True iff this row was minted by
-    -- `provisionSync` in the Setup-agent flow. Lets provisionSync's
-    -- idempotency check distinguish rows it owns from legacy rows that
-    -- happen to share (pipeline_configuration_id, type, credentials_id).
-    -- See plans/2026-05-23-onboarding-funnel/_execution/_escalations.md
-    -- (2026-05-23 22:55).
-    provisioned_by_setup_agent boolean NOT NULL DEFAULT false
-);
-
-
-ALTER TABLE ONLY public.pipeline_output
-    ADD CONSTRAINT pipeline_output_pkey PRIMARY KEY (id);
-
--- @DEF: pipeline_output_pipeline_configuration_id_fkey
-ALTER TABLE ONLY public.pipeline_output
-    ADD CONSTRAINT pipeline_output_pipeline_configuration_id_fkey FOREIGN KEY (pipeline_configuration_id) REFERENCES public.pipeline_configuration(id) ON UPDATE CASCADE ON DELETE RESTRICT;
-
-CREATE TRIGGER pipeline_output_audit AFTER INSERT OR DELETE OR UPDATE ON public.pipeline_output FOR EACH ROW EXECUTE FUNCTION public.audit();
-
-
-
--- (The engine-runtime tables that used to sit here — `trigger_run`,
--- `adapter_await`, `callback`, `parked_run`, `join_pending`,
--- `join_branch_export`, `record_binding` and `trigger_event` — moved to the
--- AUTOMATIONS SCHEMA at the end of this file. They are the movement engine's
--- own run ledger and park machinery; nothing outside automations writes them.
--- What stayed behind is the ops-residual side of the split: `llm_usage` keeps a
--- `trigger_run_id` COLUMN and lost the constraint (D3/D8) — usage recording is
--- the operating company, not part of the product.)
-
-
-
--- ### Pipeline Mapping -------------------------------------------------------
-
-
-
-
--- ### Pipeline Retrieval Source ----------------------------------------------
-
-
-
-
-
-
--- (`webhook_subscription` moved to the AUTOMATIONS SCHEMA at the end of this file,
--- with the credential it points at; the listen reconciler is its only writer.)
-
-
-
-
-
-
--- ### Inbound Payload ----------------------------------------------------------
 
 CREATE TABLE public.inbound_payload (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -1095,7 +893,6 @@ CREATE TABLE public.inbound_payload (
     "isContext" boolean,
     "isContextRequest" boolean,
     "isInjection" boolean,
-    pipeline_input_id uuid, -- @DEF: inbound_payload_pipeline_input_id_fkey
     dedup_id text
 );
 
@@ -1106,55 +903,6 @@ ALTER TABLE ONLY public.inbound_payload
 CREATE UNIQUE INDEX inbound_payload_team_dedup_unique
   ON public.inbound_payload (team_id, dedup_id)
   WHERE dedup_id IS NOT NULL;
-
--- @DEF: inbound_payload_pipeline_input_id_fkey
-ALTER TABLE ONLY public.inbound_payload
-    ADD CONSTRAINT inbound_payload_pipeline_input_id_fkey FOREIGN KEY (pipeline_input_id) REFERENCES public.pipeline_input(id) ON UPDATE CASCADE ON DELETE SET NULL;
-
--- TODO: Add audit trigger ?
-
-
-
--- ### Dealflow Pipeline -----------------------------------------------------
-
-CREATE TYPE public."DealflowPipelineStatus" AS ENUM (
-    'PROCESSING',
-    'COMPLETE',
-    'CANCELLED',
-    'BLOCKED'
-);
-
-CREATE TABLE public.dealflow_pipeline (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    team_id uuid NOT NULL,
-    status public."DealflowPipelineStatus" DEFAULT 'PROCESSING'::public."DealflowPipelineStatus" NOT NULL,
-    steps jsonb DEFAULT '[]'::jsonb NOT NULL,
-    options jsonb DEFAULT '{}'::jsonb NOT NULL,
-    created_by uuid NOT NULL,
-    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    request_id uuid NOT NULL,
-    errors jsonb,
-    numeric_id bigint NOT NULL,
-    final_graph jsonb
-);
-
-
-CREATE SEQUENCE public.dealflow_pipeline_numeric_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-ALTER SEQUENCE public.dealflow_pipeline_numeric_id_seq OWNED BY public.dealflow_pipeline.numeric_id;
-ALTER TABLE ONLY public.dealflow_pipeline ALTER COLUMN numeric_id SET DEFAULT nextval('public.dealflow_pipeline_numeric_id_seq'::regclass);
-
-
-ALTER TABLE ONLY public.dealflow_pipeline
-    ADD CONSTRAINT dealflow_pipeline_pkey PRIMARY KEY (id);
-
-
-CREATE UNIQUE INDEX dealflow_pipeline_numeric_id_key ON public.dealflow_pipeline USING btree (numeric_id);
 
 -- TODO: Add audit trigger ?
 
@@ -1465,7 +1213,6 @@ CREATE TABLE public.llm_usage (
     cache_creation_tokens integer NOT NULL DEFAULT 0,
     cost_microdollars integer NOT NULL DEFAULT 0,
     duration_ms integer,
-    pipeline_id uuid, -- @DEF: llm_usage_pipeline_id_fkey
     conversation_id uuid, -- @DEF: llm_usage_conversation_id_fkey
     trigger_run_id uuid, -- opaque automations run id, no foreign key (D3) — per-run LLM cost rollup (billing spec §2.3)
     -- The registry name the caller asked for; `model` is what the model map sent
@@ -1477,15 +1224,11 @@ CREATE TABLE public.llm_usage (
 ALTER TABLE ONLY public.llm_usage
     ADD CONSTRAINT llm_usage_pkey PRIMARY KEY (id);
 
--- @DEF: llm_usage_pipeline_id_fkey
-ALTER TABLE ONLY public.llm_usage
-    ADD CONSTRAINT llm_usage_pipeline_id_fkey FOREIGN KEY (pipeline_id) REFERENCES public.dealflow_pipeline(id) ON UPDATE CASCADE ON DELETE SET NULL;
 -- @DEF: llm_usage_conversation_id_fkey
 ALTER TABLE ONLY public.llm_usage
     ADD CONSTRAINT llm_usage_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES public.agent_conversation(id) ON UPDATE CASCADE ON DELETE SET NULL;
 
 CREATE INDEX llm_usage_team_id_idx ON public.llm_usage USING btree (team_id);
-CREATE INDEX llm_usage_pipeline_id_idx ON public.llm_usage USING btree (pipeline_id);
 CREATE INDEX llm_usage_conversation_id_idx ON public.llm_usage USING btree (conversation_id);
 CREATE INDEX llm_usage_created_at_idx ON public.llm_usage USING btree (created_at);
 CREATE INDEX llm_usage_trigger_run_id_idx ON public.llm_usage USING btree (trigger_run_id);
@@ -1504,9 +1247,7 @@ CREATE INDEX llm_usage_trigger_run_id_idx ON public.llm_usage USING btree (trigg
 -- (`api_key` moved to the CORE SCHEMA at the end of this file — it is a
 -- credential-to-act, which is core's one job (C-7). `oauth_client` went with
 -- it and was then deleted outright (D26). Its
--- `team_id`/`created_by` FKs travelled with it and are in-schema;
--- `api_key.pipeline_input_id` kept its column and lost its FK, since
--- `pipeline_input` is dealflow and dies with it.)
+-- `team_id`/`created_by` FKs travelled with it and are in-schema.)
 
 -- Webhook URLs for simple ingest without API key auth.
 -- The secret is embedded in the URL itself for simplicity with partially technical users.
@@ -2166,8 +1907,6 @@ CREATE TABLE knowledge.linked_object (
     adapter_type text NOT NULL DEFAULT '',
     external_id text NOT NULL,
     data jsonb NOT NULL DEFAULT '{}'::jsonb,
-    retrieval_source_id uuid,
-    output_id uuid,
     action_node_id text,
     external_object_type text,
     fetched_at timestamp(3) without time zone,
@@ -2181,15 +1920,12 @@ ALTER TABLE ONLY knowledge.linked_object
 ALTER TABLE ONLY knowledge.linked_object
     ADD CONSTRAINT linked_object_node_id_fkey FOREIGN KEY (node_id) REFERENCES knowledge.node(id) ON UPDATE CASCADE ON DELETE CASCADE;
 
--- `retrieval_source_id` / `output_id` are plain uuids into the `public.pipeline_*`
--- family (D3); both COLUMNS are owed a drop once the v3 output tree that writes
--- them dies (doc 6 §1). The `(node_id, adapter_type, external_id)` unique index
--- below is the bridge contract and stays.
+-- The `(node_id, adapter_type, external_id)` unique index below is the bridge
+-- contract.
 
 
 CREATE UNIQUE INDEX linked_object_node_adapter_external_idx ON knowledge.linked_object USING btree (node_id, adapter_type, external_id);
 CREATE INDEX linked_object_node_id_idx ON knowledge.linked_object USING btree (node_id);
-CREATE INDEX linked_object_retrieval_source_id_idx ON knowledge.linked_object USING btree (retrieval_source_id);
 CREATE INDEX linked_object_team_id_idx ON knowledge.linked_object USING btree (team_id);
 
 CREATE TRIGGER linked_object_audit AFTER INSERT OR DELETE OR UPDATE ON knowledge.linked_object FOR EACH ROW EXECUTE FUNCTION knowledge.audit();
@@ -2512,54 +2248,15 @@ CREATE INDEX extraction_fact_object_idx ON knowledge.extraction_fact USING gin (
 CREATE TRIGGER extraction_fact_audit AFTER INSERT OR DELETE OR UPDATE ON knowledge.extraction_fact FOR EACH ROW EXECUTE FUNCTION knowledge.audit();
 
 
+-- `output_run` (the v3 output tree's run log) was dropped with the legacy
+-- pipelines (rc.3).
+
 -- `linked_object_field` and `evidence_source_mapping` were DROPPED here (D9).
 -- They described what a dealflow retrieval source returns and which property
 -- type each of its fields evidenced; both were tenanted only through
 -- `public.pipeline_configuration`, so their row-level security reached across
 -- the schema boundary — the one class of cross-schema dependency an FK grep
 -- does not find. Neither table had a single application reference left.
-
-
--- ## Output Runs
--- Logs each execution of an output action node, independent of link-back.
-
-CREATE TABLE knowledge.output_run (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    team_id uuid NOT NULL,
-    pipeline_output_id uuid NOT NULL,
-    action_node_id text NOT NULL,
-    context_node_id uuid,
-    adapter_type text NOT NULL,
-    external_id text,
-    external_object_type text,
-    status text NOT NULL DEFAULT 'success',
-    error text,
-    field_values jsonb,
-    run_group_id uuid,
-    created boolean,
-    dealflow_pipeline_id uuid,
-    root_node_id uuid,
-    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
-);
-
-ALTER TABLE ONLY knowledge.output_run
-    ADD CONSTRAINT output_run_pkey PRIMARY KEY (id);
-
-
--- `pipeline_output_id` is a plain uuid into `public.pipeline_output` (D3). The
--- table is owed a DROP (D9) with the rest of the v3 output tree.
-
-ALTER TABLE ONLY knowledge.output_run
-    ADD CONSTRAINT output_run_context_node_id_fkey FOREIGN KEY (context_node_id) REFERENCES knowledge.node(id) ON UPDATE CASCADE ON DELETE CASCADE;
-
-ALTER TABLE ONLY knowledge.output_run
-    ADD CONSTRAINT output_run_root_node_id_fkey FOREIGN KEY (root_node_id) REFERENCES knowledge.node(id) ON UPDATE CASCADE ON DELETE SET NULL;
-
-CREATE INDEX output_run_pipeline_output_id_idx ON knowledge.output_run USING btree (pipeline_output_id);
-CREATE INDEX output_run_created_at_idx ON knowledge.output_run USING btree (created_at);
-CREATE INDEX output_run_run_group_id_idx ON knowledge.output_run USING btree (run_group_id);
-
-CREATE TRIGGER output_run_audit AFTER INSERT OR DELETE OR UPDATE ON knowledge.output_run FOR EACH ROW EXECUTE FUNCTION knowledge.audit();
 
 
 -- ## Recipes
@@ -2939,9 +2636,7 @@ GRANT EXECUTE ON FUNCTION knowledge.edge_prop_num(uuid, text) TO agent;
 CREATE TABLE public.team_usage_config (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     team_id uuid NOT NULL,
-    max_weekly_pipeline_runs integer NOT NULL,
     max_weekly_query_inputs integer NOT NULL,
-    additional_pipeline_runs integer DEFAULT 0 NOT NULL,
     additional_query_inputs integer DEFAULT 0 NOT NULL,
     alert_threshold_pct integer DEFAULT 80 NOT NULL,
     week_starts_on integer DEFAULT 1 NOT NULL,
@@ -3119,13 +2814,8 @@ CREATE INDEX dropped_inbound_email_team_pending_idx ON public.dropped_inbound_em
 -- These FK constraints must come after the knowledge schema tables are created.
 
 
--- pipeline_input_message_type.node_type_id → knowledge.node_type
-ALTER TABLE ONLY public.pipeline_input_message_type
-    ADD CONSTRAINT pipeline_input_message_type_node_type_id_fkey FOREIGN KEY (node_type_id) REFERENCES knowledge.node_type(id) ON UPDATE CASCADE ON DELETE CASCADE;
 
--- pipeline_output.trigger_node_type_id → knowledge.node_type
-ALTER TABLE ONLY public.pipeline_output
-    ADD CONSTRAINT pipeline_output_trigger_node_type_id_fkey FOREIGN KEY (trigger_node_type_id) REFERENCES knowledge.node_type(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
 
 
 -- (The `adapters` schema is GONE. Its two tables — `telegram_identity` and
@@ -3272,8 +2962,7 @@ CREATE UNIQUE INDEX asks_worker_heartbeat_worker_idx ON asks.worker_heartbeat US
 -- were born — all four are the automations product, and the eviction is what
 -- lets each unit leave in one `pg_dump --schema=X`.
 --
--- Outward references (`team_id`, `created_by_user_id`, `pipeline_configuration_id`,
--- `ops_run_id`) are OPAQUE uuids with no foreign key, exactly like the `asks`
+-- Outward references (`team_id`, `created_by_user_id`, `ops_run_id`) are OPAQUE uuids with no foreign key, exactly like the `asks`
 -- schema above; the in-schema FKs — every park table to its run, the run to the
 -- version it pinned, every satellite to the credential it belongs to — are kept
 -- and are the reason the eviction is worth doing.
@@ -3442,14 +3131,13 @@ $$;
 CREATE TABLE automations.trigger (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     team_id uuid NOT NULL,                       -- opaque tenant id; NO foreign key (D3 — the unit ships without a `team` table)
-    pipeline_configuration_id uuid NOT NULL,     -- WRITE-ONLY vestige (provision.ts stamps it, nothing branches on it); the FK is gone and the column dies with dealflow (7_automations.md M-2)
     name text NOT NULL,
     kind text NOT NULL,                          -- source adapter slug ('web', 'email', 'attio', …) — the adapter the trigger interprets events with (legacy rows may carry an uppercase routing kind; readers resolve via resolveAdapterSlug)
     config jsonb DEFAULT '{}'::jsonb NOT NULL,   -- kind-specific config
     credentials_id uuid,                         -- optional; the vault credential this trigger reads (in-schema FK below, after automations.external_service_credentials)
     movement_id uuid,                            -- the movement whose `listen` statement derives this trigger (FK below, after automations.movement) — null = legacy/orphan (no longer dispatched)
     fired_movement_name text,                    -- the movement the `listen … fire <name>` clause runs, decoupled from `name` (which is a human-readable `listen as "…"` label when aliased). Dispatch passes this to the engine to pick the movement in a multi-movement file. NULL = legacy/single-movement (engine then requires exactly one declaration)
-    run_mode text NOT NULL DEFAULT 'live',       -- 'off' | 'dry_run' | 'live' — mirrors pipeline_output.run_mode; gates dispatch (off = drop, dry_run = run but capture writes, live = commit)
+    run_mode text NOT NULL DEFAULT 'live',       -- 'off' | 'dry_run' | 'live' — gates dispatch (off = drop, dry_run = run but capture writes, live = commit)
     cron_last_fired_at timestamptz,              -- movement-scheduler checkpoint for kind='cron' rows: occurrences due since this mark fire, then it advances (NULL = not yet established; reconciliation never touches it)
     -- Poll-source checkpoints (plans/2026-06-19-granola-adapter): the platform
     -- half of the PollSource seam. The poll-source worker scans trigger rows
@@ -5860,7 +5548,6 @@ CREATE TABLE core.team (
     created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     auto_add_company_to_portfolio_via_update boolean DEFAULT true NOT NULL,
-    active_pipeline_configuration_id uuid,
     default_user_id uuid, -- @DEF: team_default_user_id_fkey
     domain text
     -- `agent_style_preferences` MOVED OUT to
@@ -5881,7 +5568,6 @@ ALTER TABLE ONLY core.team
 
 
 
-CREATE UNIQUE INDEX team_active_pipeline_configuration_id_key ON core.team USING btree (active_pipeline_configuration_id);
 CREATE UNIQUE INDEX team_default_user_id_key ON core.team USING btree (default_user_id);
 CREATE UNIQUE INDEX team_domain_key ON core.team USING btree (domain);
 
@@ -6072,15 +5758,13 @@ CREATE TABLE core.api_key (
     revoked_at timestamp(3) without time zone,
     created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    created_by uuid NOT NULL, -- @DEF: api_key_created_by_fkey
-    pipeline_input_id uuid
+    created_by uuid NOT NULL -- @DEF: api_key_created_by_fkey
 );
 
 COMMENT ON TABLE core.api_key IS 'API keys for authenticated external API access. Keys are hashed and shown only once on creation.';
 COMMENT ON COLUMN core.api_key.key_hash IS 'SHA-256 hash of the full API key';
 COMMENT ON COLUMN core.api_key.key_prefix IS 'First 12 characters of the key for identification in UI (e.g., "lf_live_abc1")';
 COMMENT ON COLUMN core.api_key.scopes IS 'Permissions granted to this key, e.g., ["ingest"], ["ingest", "ask"]';
-COMMENT ON COLUMN core.api_key.pipeline_input_id IS 'Optional link to a specific pipeline input. When set, API requests using this key will be routed to this input instead of the default API input.';
 
 ALTER TABLE ONLY core.api_key
     ADD CONSTRAINT api_key_pkey PRIMARY KEY (id);
@@ -6094,7 +5778,6 @@ ALTER TABLE ONLY core.api_key
 
 CREATE INDEX api_key_team_id_idx ON core.api_key USING btree (team_id);
 CREATE UNIQUE INDEX api_key_key_hash_idx ON core.api_key USING btree (key_hash);
-CREATE INDEX api_key_pipeline_input_id_idx ON core.api_key USING btree (pipeline_input_id) WHERE pipeline_input_id IS NOT NULL;
 
 CREATE TRIGGER api_key_audit AFTER INSERT OR DELETE OR UPDATE ON core.api_key FOR EACH ROW EXECUTE FUNCTION core.audit();
 

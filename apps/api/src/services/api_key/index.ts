@@ -33,14 +33,12 @@ interface CreateApiKeyInput {
    */
   scopes?: string[];
   expiresAt?: Date;
-  pipelineInputId?: string;
   /**
    * The team the key is pinned to (`api_key.team_id`). Omit to let the scope
-   * decide: a knowledge-scoped key with no pipeline binding is minted
-   * USER-ANCHORED (`team_id: null`) — it spans every team the creating user is
-   * a member of, exactly like the MCP OAuth mint. Pass `null` to force
-   * user-anchored; pass a team id to force a pin. Anything ingest/valuations
-   * or pipeline-bound defaults to the creator's acting team.
+   * decide: a knowledge-scoped key is minted USER-ANCHORED (`team_id: null`) —
+   * it spans every team the creating user is a member of, exactly like the MCP
+   * OAuth mint. Pass `null` to force user-anchored; pass a team id to force a
+   * pin. Anything ingest/valuations defaults to the creator's acting team.
    */
   teamId?: string | null;
 }
@@ -52,7 +50,6 @@ interface ApiKeyValidationResult {
     teamId: string | null;
     userId: string;
     scopes: string[];
-    pipelineInputId: string | null;
   };
 }
 
@@ -63,20 +60,17 @@ class ApiKey extends ModelService<'apiKey'> {
     name,
     scopes = installedScopes(),
     expiresAt,
-    pipelineInputId,
     teamId,
   }: CreateApiKeyInput) {
     const ctx = currentContext();
     const { plaintext, hash, prefix } = generateApiKey();
 
-    // An automation- or knowledge-scoped key with no pipeline binding is the
-    // MCP/agent surface (the Automation and Knowledge connectors): mint it
-    // user-anchored (`team_id: null`) so it spans the creator's teams.
-    // Pipeline-bound and ingest/valuations keys stay pinned to the acting team.
-    // An explicit `teamId` (including `null`) overrides this default.
-    const defaultsUserAnchored =
-      (scopes.includes('automation') || scopes.includes('knowledge')) &&
-      pipelineInputId === undefined;
+    // An automation- or knowledge-scoped key is the MCP/agent surface (the
+    // Automation and Knowledge connectors): mint it user-anchored
+    // (`team_id: null`) so it spans the creator's teams. Ingest/valuations
+    // keys stay pinned to the acting team. An explicit `teamId` (including
+    // `null`) overrides this default.
+    const defaultsUserAnchored = scopes.includes('automation') || scopes.includes('knowledge');
     const resolvedTeamId =
       teamId !== undefined ? teamId : defaultsUserAnchored ? null : ctx.user.teamId;
 
@@ -89,7 +83,6 @@ class ApiKey extends ModelService<'apiKey'> {
         scopes,
         expiresAt,
         createdBy: ctx.user.id,
-        pipelineInputId,
       },
     });
 
@@ -114,7 +107,6 @@ class ApiKey extends ModelService<'apiKey'> {
     teamId: string | null;
     createdBy: string;
     expiresAt?: Date;
-    pipelineInputId?: string;
   }): Promise<{ id: string; key: string }> {
     const { plaintext, hash, prefix } = generateApiKey();
     const [row] = await getCoreQb(['api_key'])
@@ -127,7 +119,6 @@ class ApiKey extends ModelService<'apiKey'> {
         scopes: input.scopes,
         created_by: input.createdBy,
         ...(input.expiresAt !== undefined ? { expires_at: input.expiresAt } : {}),
-        ...(input.pipelineInputId !== undefined ? { pipeline_input_id: input.pipelineInputId } : {}),
       } as never)
       .returning(['id'])
       .execute();
@@ -161,7 +152,6 @@ class ApiKey extends ModelService<'apiKey'> {
         'scopes',
         'revoked_at',
         'expires_at',
-        'pipeline_input_id',
       ])
       .executeTakeFirst();
 
@@ -194,7 +184,6 @@ class ApiKey extends ModelService<'apiKey'> {
         teamId: apiKey.team_id,
         userId: apiKey.created_by,
         scopes: apiKey.scopes,
-        pipelineInputId: apiKey.pipeline_input_id,
       },
     };
   }
@@ -228,7 +217,6 @@ class ApiKey extends ModelService<'apiKey'> {
         lastUsedAt: true,
         expiresAt: true,
         createdAt: true,
-        pipelineInputId: true,
       },
     });
   }

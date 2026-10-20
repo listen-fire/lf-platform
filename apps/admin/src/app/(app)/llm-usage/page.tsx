@@ -75,7 +75,6 @@ const TABS = [
   { id: 'team', label: 'By Team' },
   { id: 'model', label: 'By Model' },
   { id: 'label', label: 'By Label' },
-  { id: 'pipeline', label: 'By Pipeline' },
   { id: 'conversation', label: 'By Conversation' },
 ] as const;
 
@@ -208,50 +207,6 @@ function LabelTable({ params }: { params: DateParams }) {
             <Td mono>{row.label}</Td>
             <Td>
               <Badge tone="gray">{row.call_type}</Badge>
-            </Td>
-            <Td right>{row.call_count.toLocaleString()}</Td>
-            <Td right>{formatTokens(row.total_input_tokens)}</Td>
-            <Td right>{formatTokens(row.total_output_tokens)}</Td>
-            <Td right bold>{formatCost(row.total_cost_microdollars)}</Td>
-          </tr>
-        ))}
-      </tbody>
-    </Table>
-  );
-}
-
-function PipelineTable({ params }: { params: DateParams }) {
-  const { data, isLoading } = trpc.views.admin.llmUsage.byPipeline.useQuery({
-    ...params,
-    limit: 50,
-  });
-
-  if (isLoading) return <Skeleton />;
-  if (!data?.length)
-    return <EmptyState title="No pipeline data for this period." />;
-
-  return (
-    <Table>
-      <thead>
-        <tr>
-          <Th>Pipeline</Th>
-          <Th>Team</Th>
-          <Th>Created</Th>
-          <Th right>Calls</Th>
-          <Th right>Input tokens</Th>
-          <Th right>Output tokens</Th>
-          <Th right>Cost</Th>
-        </tr>
-      </thead>
-      <tbody>
-        {data.map((row) => (
-          <tr key={row.pipeline_id} className="hover:bg-gray-50">
-            <Td mono>{row.pipeline_id?.slice(0, 8)}</Td>
-            <Td>{row.team_name}</Td>
-            <Td>
-              {row.pipeline_created_at
-                ? new Date(row.pipeline_created_at).toLocaleDateString()
-                : '—'}
             </Td>
             <Td right>{row.call_count.toLocaleString()}</Td>
             <Td right>{formatTokens(row.total_input_tokens)}</Td>
@@ -405,7 +360,6 @@ export default function LlmUsagePage() {
         {activeTab === 'team' && <TeamTable params={dateParams} />}
         {activeTab === 'model' && <ModelTable params={dateParams} />}
         {activeTab === 'label' && <LabelTable params={dateParams} />}
-        {activeTab === 'pipeline' && <PipelineTable params={dateParams} />}
         {activeTab === 'conversation' && <ConversationTable params={dateParams} />}
       </PageBody>
     </>

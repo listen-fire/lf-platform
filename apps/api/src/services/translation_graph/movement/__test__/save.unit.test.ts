@@ -417,7 +417,7 @@ beforeEach(() => {
   // must be set explicitly each time.
   contextMock.unsafeCurrentContext.mockReturnValue(undefined);
   db.__reset();
-  db.__tables.team.push({ id: TEAM, active_pipeline_configuration_id: 'pc-1' });
+  db.__tables.team.push({ id: TEAM });
 });
 
 function triggerRows() {
@@ -670,31 +670,6 @@ describe('saveMovement — listener derivation', () => {
     // …but run_mode stays what the operator set.
     expect(triggerRows()[0].run_mode).toBe('off');
     expect(second.listeners[0].runMode).toBe('off');
-  });
-
-  it('clean check but provisioning failure: text saved, save fails honestly', async () => {
-    // No active pipeline configuration → listener provisioning errors after
-    // a clean check.
-    db.__tables.team.length = 0;
-
-    const result = await saveMovement({ teamId: TEAM, source: SOURCE_V1, userId: 'user-1' });
-
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.needsConfirmation).toBeUndefined();
-    expect(result.errors?.[0]).toContain('pipeline_configuration');
-
-    const [row] = db.__tables.movement;
-    expect(row).toMatchObject({ source: SOURCE_V1, name: 'intake' });
-
-    // Journey taps: a VALID save whose provisioning failed on infrastructure
-    // still counts for the team milestone — the source is durably persisted
-    // and the user did everything in their control. No MCP context here, so
-    // the MCP-gated user milestone does not fire.
-    expect(journey.recordUserMilestone).not.toHaveBeenCalled();
-    expect(journey.recordTeamMilestone).toHaveBeenCalledWith(TEAM, {
-      milestone: 'first_automation_saved',
-    });
   });
 
   it('an engine-unsupported construct refuses the save with the construct named (consent gate)', async () => {
@@ -1329,7 +1304,7 @@ const ALIASED_SOURCE = [
 describe('saveMovement — backtick credential args (provision-path)', () => {
   beforeEach(() => {
     db.__reset();
-    db.__tables.team.push({ id: TEAM, active_pipeline_configuration_id: 'pc-1' });
+    db.__tables.team.push({ id: TEAM });
   });
 
   it('direct backtick cred: trigger provisions with the correct credentials_id (non-null)', async () => {
@@ -1355,7 +1330,7 @@ describe('saveMovement — backtick credential args (provision-path)', () => {
     const aliasCredId = aliasResult.listeners[0].credentialsId;
 
     db.__reset();
-    db.__tables.team.push({ id: TEAM, active_pipeline_configuration_id: 'pc-1' });
+    db.__tables.team.push({ id: TEAM });
 
     // Direct backtick path (the previously broken form).
     catalogMock.movementCatalogForTeam.mockResolvedValueOnce(makeAttioTeamCatalog());
