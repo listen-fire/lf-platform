@@ -2,7 +2,7 @@
 
 Part of [the adapter protocol](adapter-protocol.md), version 2 (an addition within it; no version of its own).
 
-A judge module settles the identity question an engine's rules cannot settle alone: which of a write's search candidates the asserted record is. lf ships `@lf/judge`, which declines every question (an ambiguous match creates a new record). Another is a module lf starts, or reaches at its URL, over [the transport](adapter-protocol.md#transport), installed with `slot: judge` and named in `core: { judge: … }`.
+A judge module settles the identity question an engine's rules cannot settle alone: which of a write's search candidates the asserted record is. lf ships `@lf/judge`, which declines every question (an ambiguous match creates a new record). `@listen-fire/judge-llm` (modules/judge-llm) is the model-backed judge served as a module: it asks its model call of the host's models door (`LF_HOST_URL`, which lf hands the slots' modules it starts), so it runs on whatever fills the host's models slot. Another is a module lf starts, or reaches at its URL, over [the transport](adapter-protocol.md#transport), installed with `slot: judge` and named in `core: { judge: … }`.
 
 ## Methods
 
@@ -24,3 +24,4 @@ A judge module settles the identity question an engine's rules cannot settle alo
 ## Changes
 
 - **2026-10-19** (within adapter protocol 2): the judge slot's methods, and modules filling it over the transport.
+- **2026-10-20** (within adapter protocol 2): lf hands the models door (`LF_HOST_URL`, `LF_HOST_TOKEN`) to the slots' modules it starts, as to the externals, so a judge module can ask it for model calls.

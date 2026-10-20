@@ -124,7 +124,7 @@ LF_SECRET__POSTGRES_STORE__URL=postgres://…?sslmode=verify-full
 
 - A movement keeps its model names (`sonnet`, `claude-opus-5`); the module sends each to its vendor's model the way the platform's `MODEL_MAP` does. Every name goes to one model (`model`, default `gemini-3.8-flash` or `gpt-5-mini`) unless `model_map` sends it elsewhere.
 - Every answer is priced from the shared price table, and the module publishes its prices, so `maxRunCostUsd` counts its calls and lf refuses a call whose prompt alone costs more than the run has left.
-- The judge is unaffected: `@lf/judge` asks no model.
+- The judge needs no key either: `@lf/judge` asks no model, and `@listen-fire/judge-llm` (installed as `externals/judge_llm`, `core: { judge: judge_llm }`) asks lf for its model calls, which go to whatever fills `models`.
 
 A module of your own, started from its `command` or reached at its `url`, fills any slot (`kind: core` in its `lf-external.yaml`; see each slot's wire in [the contracts](contracts/README.md), such as [the store's](contracts/store-slot.md), [the files slot's](contracts/files-slot.md) or [the wake's](contracts/wake-slot.md)). `@listen-fire/s3-files` fills `files` with a bucket on AWS S3, Google Cloud Storage, Cloudflare R2 or MinIO ([its README](../modules/s3-files/README.md)).
 

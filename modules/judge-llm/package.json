@@ -2,7 +2,7 @@
   "name": "@listen-fire/judge-llm",
   "license": "Apache-2.0",
   "version": "0.12.0-rc.3",
-  "description": "The judge slot's module (`@lf/judge-llm`): the model-backed identity judge that decides, for a fuzzy write whose search found several candidates, which record (if any) is the same real-world entity, leaning toward declining. It owns the decision rules and the prompts (prompts/*.md); the shell hands in the model call and, optionally, Jev. Its recorded replay lives in __fixtures__. Its tests borrow apps/api's jest runner (jest.config.borrowed.cjs)",
+  "description": "The judge slot's module (`@lf/judge-llm`): the model-backed identity judge that decides, for a fuzzy write whose search found several candidates, which record (if any) is the same real-world entity, leaning toward declining. It owns the decision rules and the prompts (prompts/*.md); the shell hands in the model call and, optionally, Jev; served to a host that starts it (lf: kind core, slot judge), it asks the host's models door, so it runs on whatever fills the host's models slot. Its recorded replay lives in __fixtures__. Its tests borrow apps/api's jest runner (jest.config.borrowed.cjs)",
   "engines": {
     "node": "22.20.0"
   },
@@ -14,14 +14,23 @@
   },
   "main": "index.ts",
   "types": "index.ts",
+  "bin": {
+    "lf-judge-llm": "./dist/serve.js"
+  },
   "type": "commonjs",
   "dependencies": {
     "@listen-fire/engine": "workspace:^",
+    "@listen-fire/engine-contracts": "workspace:^",
+    "@listen-fire/module-kit": "workspace:^",
+    "@listen-fire/module-runtime": "workspace:^",
     "zod": "4.1.12"
   },
   "devDependencies": {
     "@types/jest": "29.5.14",
     "@types/node": "20.16.5",
+    "engine-contracts": "workspace:@listen-fire/engine-contracts@*",
+    "module-kit": "workspace:@listen-fire/module-kit@*",
+    "module-runtime": "workspace:@listen-fire/module-runtime@*",
     "movement-engine": "workspace:@listen-fire/engine@*",
     "typescript": "5.5.4"
   },
@@ -31,12 +40,16 @@
     "directory": "modules/judge-llm"
   },
   "files": [
-    "dist"
+    "dist",
+    "lf-external.yaml"
   ],
   "publishConfig": {
     "access": "public",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
+    "bin": {
+      "lf-judge-llm": "./dist/serve.js"
+    },
     "exports": {
       ".": {
         "types": "./dist/index.d.ts",

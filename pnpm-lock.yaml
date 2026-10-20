@@ -1469,6 +1469,15 @@ importers:
       '@listen-fire/engine':
         specifier: workspace:^
         version: link:../../packages/movement-engine
+      '@listen-fire/engine-contracts':
+        specifier: workspace:^
+        version: link:../../packages/engine-contracts
+      '@listen-fire/module-kit':
+        specifier: workspace:^
+        version: link:../../packages/module-kit
+      '@listen-fire/module-runtime':
+        specifier: workspace:^
+        version: link:../../packages/module-runtime
       zod:
         specifier: 4.1.12
         version: 4.1.12
@@ -1479,6 +1488,15 @@ importers:
       '@types/node':
         specifier: 20.16.5
         version: 20.16.5
+      engine-contracts:
+        specifier: workspace:@listen-fire/engine-contracts@*
+        version: link:../../packages/engine-contracts
+      module-kit:
+        specifier: workspace:@listen-fire/module-kit@*
+        version: link:../../packages/module-kit
+      module-runtime:
+        specifier: workspace:@listen-fire/module-runtime@*
+        version: link:../../packages/module-runtime
       movement-engine:
         specifier: workspace:@listen-fire/engine@*
         version: link:../../packages/movement-engine

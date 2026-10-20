@@ -93,8 +93,12 @@ impl SlotClient {
             None => {
                 let token = crate::http_out::hex(&crate::http_out::random_bytes(24)?);
                 let (program, args) = process.command.split_first().ok_or_else(|| format!("{label} has neither a command nor a url"))?;
+                // The host's models door too, as the externals lf starts are
+                // told it: a judge module asks its model calls there.
                 let env = [("PATH".to_string(), std::env::var("PATH").unwrap_or_default()), ("MODULE_TOKEN".to_string(), token.clone())]
                     .into_iter()
+                    .chain(crate::serve::externals_host_url().map(|url| ("LF_HOST_URL".to_string(), url.to_string())))
+                    .chain(crate::serve::host_token().map(|token| ("LF_HOST_TOKEN".to_string(), token.to_string())))
                     .chain(process.env.iter().map(|(k, v)| (k.clone(), v.clone())))
                     .collect();
                 let launch = Launch { program: program.clone(), args: args.to_vec(), dir: process.dir.clone(), env, start_timeout: START_TIMEOUT };
