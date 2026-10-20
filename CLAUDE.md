@@ -22,7 +22,6 @@ details.
 
 - `pnpm dev:loop:agent` — **agents boot the stack with this**, not `pnpm dev:loop`. Runs on the 3500-range, because the 3000-range is reserved for a developer's own instance, and has its own docker compose project (`listen-fire-dev-agent`) and its own Postgres/Redis ports (9434/6381), isolated from the developer's stack and from unrelated compose projects on the same host. Still, **only one `dev:loop:agent` stack runs at a time** — parallel implementation jobs must serialize their end-to-end verification. Dev CLIs auto-detect the active stack via `.dev-loop/profiles/<profile>.json`.
 - `pnpm dev:seed` — provision the dev-loop team
-- `pnpm dev:chat <agent> "<msg>"` — converse with knowledge agents (query/ontology/output)
 - `pnpm dev:ui screenshot <path>` — full-page screenshot you can `Read`
 - `pnpm dev:inject {raw,attio-webhook,slack-event}` — fire synthetic inbound events
 - `pnpm dev:inspect` — read fake-channels state (Attio records, email outbox, …)

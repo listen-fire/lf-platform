@@ -29,6 +29,7 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
   - Also removed: the pipeline-runs usage limit and the per-pipeline LLM usage view.
   - Saving a movement no longer needs a pipeline configuration. A deploy applies the drop.
 - **Extraction graphs, extraction plugins and the `/enrichment` page are removed**, along with the admin trigger-events page. Movements are now the only automation into the knowledge graph. A deploy drops their tables.
+- **Removed: the in-platform agent** (the assistant panel, the model onboarding chat, `/v1/system/conversations`, `pnpm dev:chat`). Use your own agent over the MCP connectors; every MCP tool is unchanged. Conversation history tables are kept, read-only.
 - A GET to a webhook door answers 404, as before, unless its provider checks its own inbound (Meta's handshake).
 - The lf crate ships its own copy of the model price table, so `cargo publish` works. The published crate set now includes `listen-fire-module-wire` and `listen-fire-module-kit`. The Chromium image ships Noto fonts.
 
