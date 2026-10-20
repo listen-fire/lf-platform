@@ -13,6 +13,11 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 
 ## [Unreleased]
 
+### hover
+
+- Hover in `.mvt` files leads with what the adapter or plugin says about itself, then the record's fields and where a walk can go next. Comments get no tooltips, and plugin package names get one. Adapters, record types, fields, edges and plugins may send an optional `description`, which the catalog snapshot carries (still contract version 1). The built-ins reference now lives with the language (`crates/movement-language/src/builtins.md`); the handbook reads it from there.
+- A Zed extension for movement files (`editors/zed`), launching `lf lsp`.
+
 ## [0.12.0-rc.3] - 2026-10-20 (pre-release)
 
 A second pre-release of the 0.12 line, published the same way as rc.2: images at this tag only, npm under `next`, a pre-release GitHub release, docs under `/docs/next/`.
