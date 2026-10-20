@@ -59,6 +59,26 @@ pub struct DeclaredLimit {
     pub concurrent: Option<u64>,
 }
 
+/// What a module's manifest says about its limits: the limits, and whether
+/// it asks the host before each request to its provider (`hostLimits`).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ModuleLimits {
+    pub declared: Vec<DeclaredLimit>,
+    /// Counted per provider request at the limits door (crate::limits_door)
+    /// on a call lf hands the door; per call otherwise.
+    pub per_request: bool,
+}
+
+/// A manifest answer's `limits` and `hostLimits`.
+pub fn module_limits_of(manifest: &Js) -> Result<ModuleLimits, String> {
+    let per_request = match manifest.get("hostLimits") {
+        None => false,
+        Some(Js::Bool(asks)) => *asks,
+        Some(_) => return Err("hostLimits: expected true or false".into()),
+    };
+    Ok(ModuleLimits { declared: limits_of(manifest)?, per_request })
+}
+
 /// A manifest answer's `limits`, held to `WireDeclaredLimit`.
 pub fn limits_of(manifest: &Js) -> Result<Vec<DeclaredLimit>, String> {
     let Some(limits) = manifest.get("limits") else { return Ok(Vec::new()) };
@@ -434,6 +454,14 @@ mod tests {
         }
         assert_eq!(limits_of(&Js::parse(b"{}").unwrap()).unwrap(), []);
         assert_eq!((duration_ms("500ms"), duration_ms("1d"), duration_ms("05s"), duration_ms("s")), (Some(500), Some(86_400_000), None, None));
+    }
+
+    #[test]
+    fn a_module_that_asks_per_request_says_so_in_its_manifest() {
+        let read = |text: &str| module_limits_of(&Js::parse(text.as_bytes()).unwrap());
+        assert!(read(r#"{"hostLimits":true,"limits":[{"scope":"module","concurrent":1}]}"#).unwrap().per_request);
+        assert!(!read(r#"{"limits":[{"scope":"module","concurrent":1}]}"#).unwrap().per_request);
+        assert!(read(r#"{"hostLimits":"yes"}"#).is_err());
     }
 
     #[test]

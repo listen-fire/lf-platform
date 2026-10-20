@@ -256,9 +256,9 @@ pub struct RunningExternal {
     /// The settings its manifest declares (`settings`), by name: sent on each
     /// call from its install entry.
     pub settings: Vec<String>,
-    /// The limits its manifest declares on calls (`limits`), kept by the
+    /// The limits its manifest declares (`limits`, `hostLimits`), kept by the
     /// limiter slot (crate::limiter).
-    pub limits: Vec<crate::limiter::DeclaredLimit>,
+    pub limits: crate::limiter::ModuleLimits,
     /// Its manifest answer as it came (what `lf connect` reads of it).
     pub manifest_answer: Js,
     /// How its manifest says its webhooks are signed (crate::doors).
@@ -412,7 +412,7 @@ pub async fn start_externals(project: &Project, externals: &[External], credenti
         let name = &external.manifest.name;
         let install = install_of(credentials, name);
         let lease = reach.lease().await?;
-        let target = Target { external, base_url: &lease.address, declarations: &[], methods: &[], settings: &[], limits: &[] };
+        let target = Target { external, base_url: &lease.address, declarations: &[], methods: &[], settings: &[], limits: &crate::limiter::ModuleLimits::default() };
         let raw = call(&target, credentials, tenant, "manifest", json!({})).await?;
         drop(lease);
         let version = raw.get("protocolVersion");
@@ -427,7 +427,7 @@ pub async fn start_externals(project: &Project, externals: &[External], credenti
             return Err(format!("external folder \"{name}\" serves \"{}\"; the names must agree", manifest.adapter_type));
         }
         let credential_declarations = with_install_endpoints(declarations_of(&raw).map_err(|expected| shape_error("manifest", name, &raw, &expected))?, install);
-        let limits = crate::limiter::limits_of(&raw).map_err(|expected| shape_error("manifest", name, &raw, &expected))?;
+        let limits = crate::limiter::module_limits_of(&raw).map_err(|expected| shape_error("manifest", name, &raw, &expected))?;
         if external.manifest.kind == "plugin" && manifest.plugins.is_none() {
             return Err(format!("external \"{name}\" is a plugin external, but its manifest declares no plugins"));
         }
