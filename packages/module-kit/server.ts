@@ -42,7 +42,7 @@ import type { Adapter } from 'module-runtime/adapter';
 import type { ServedFile } from './served_files';
 
 import { Readable } from 'node:stream';
-import type { MethodName, RpcResponseShape, WireCredentialShape } from 'engine-contracts';
+import type { MethodName, RpcResponseShape, WireCredentialShape, WireHostLimitsDoorShape } from 'engine-contracts';
 
 /**
  * Protocol method names that exist purely as server-side concepts (no
@@ -213,6 +213,8 @@ export interface CheckedRequest {
   credential?: WireCredentialShape;
   /** The install's declared settings. */
   settings?: Readonly<Record<string, string>>;
+  /** The limits door the host handed this call (`host_limits.ts`). */
+  hostLimits?: WireHostLimitsDoorShape;
 }
 
 /**
@@ -266,6 +268,7 @@ export async function readProtocolRequest(
       params,
       ...(parsed.credential !== undefined ? { credential: parsed.credential } : {}),
       ...(parsed.settings !== undefined ? { settings: parsed.settings } : {}),
+      ...(parsed.hostLimits !== undefined ? { hostLimits: parsed.hostLimits } : {}),
     },
   };
 }

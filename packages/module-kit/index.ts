@@ -11,6 +11,7 @@ export * from './served_files';
 export * from './module_server';
 export * from './serve';
 export * from './host_models';
+export * from './host_limits';
 export * from './embed';
 export * from './inbound';
 export {

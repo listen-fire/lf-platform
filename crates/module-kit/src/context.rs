@@ -6,6 +6,8 @@ use std::cell::RefCell;
 use module_wire::envelope::{ADAPTER_ERROR_CODE, BAD_REQUEST_CODE, CREDENTIAL_REFUSED_CODE, METHOD_NOT_IMPLEMENTED_CODE};
 use module_wire::json::{Js, Obj};
 use serde::Serialize;
+
+use crate::host_limits::HostLimits;
 use serde::de::DeserializeOwned;
 
 /// A method's answer: its result, or the error the envelope carries.
@@ -24,6 +26,8 @@ pub struct Ctx {
     pub credential: Option<Js>,
     /// The install's declared settings, by name.
     pub settings: Option<Js>,
+    /// The limits door the call handed the module (crate::host_limits).
+    host_limits: Option<HostLimits>,
     beside: RefCell<Beside>,
 }
 
@@ -36,7 +40,17 @@ pub(crate) struct Beside {
 
 impl Ctx {
     pub fn new(team_id: Option<String>, cache_scope_id: Option<String>, credential: Option<Js>, settings: Option<Js>) -> Ctx {
-        Ctx { team_id, cache_scope_id, credential, settings, beside: RefCell::default() }
+        Ctx { team_id, cache_scope_id, credential, settings, host_limits: None, beside: RefCell::default() }
+    }
+
+    /// The limits door the call handed the module, if any.
+    pub fn with_host_limits(mut self, door: Option<HostLimits>) -> Ctx {
+        self.host_limits = door;
+        self
+    }
+
+    pub(crate) fn host_limits(&self) -> Option<&HostLimits> {
+        self.host_limits.as_ref()
     }
 
     /// A setting the install supplied, when it is text.

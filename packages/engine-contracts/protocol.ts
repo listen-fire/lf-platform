@@ -81,6 +81,15 @@ export type WireCostLineShape = z.infer<typeof WireCostLine>;
  *  the names its manifest's `settings` declare, as the install holds them. */
 export const WireModuleSettingValues = z.record(z.string(), z.string());
 
+/** The limits door a call hands a module that declares `hostLimits`: where
+ *  to ask before each request to its provider, and the ticket (the bearer)
+ *  that names this call to the host. Good until the call answers. */
+export const WireHostLimitsDoor = z.object({
+  url: z.string().min(1),
+  ticket: z.string().min(1),
+});
+export type WireHostLimitsDoorShape = z.infer<typeof WireHostLimitsDoor>;
+
 export const RpcRequest = z.object({
   protocolVersion: z.string(),
   method: z.string(),
@@ -94,6 +103,10 @@ export const RpcRequest = z.object({
   credential: WireCredential.optional(),
   /** Within version 2: the install's declared settings. */
   settings: WireModuleSettingValues.optional(),
+  /** Within version 2: the limits door, on a call to a module that declares
+   *  `hostLimits` from a host that offers one. Absent, the host counted the
+   *  call itself and the module asks nobody. */
+  hostLimits: WireHostLimitsDoor.optional(),
 });
 export type RpcRequestShape = z.infer<typeof RpcRequest>;
 
@@ -907,6 +920,10 @@ export const WireModuleDeclarations = z.object({
   settings: z.array(WireModuleSetting).optional(),
   /** The module asks the host's models (`POST …/models`, the models slot). */
   hostModels: z.boolean().optional(),
+  /** The module asks the host's limits door before each request to its
+   *  provider (`HostLimitRequest`), so its `limits` count those requests,
+   *  retries included; a host that hands it the door counts no call itself. */
+  hostLimits: z.boolean().optional(),
   credentials: z.array(WireCredentialDeclaration).optional(),
   inbound: WireInboundDeclaration.optional(),
   poll: WirePollDeclaration.optional(),
@@ -1110,6 +1127,27 @@ export const HostModelAnswer = z.object({
   usage: WireModelUsage.optional(),
 });
 export type HostModelAnswerShape = z.infer<typeof HostModelAnswer>;
+
+/** One question at the limits door a call handed the module (`hostLimits`
+ *  on the request: `POST {url}`, `Authorization: Bearer {ticket}`): may I
+ *  send a request to my provider now; I am done with that permit; the
+ *  provider answered "too many requests" and asked for this much quiet. The
+ *  host answers from its limiter slot under the limits the module declared,
+ *  counted by the caller it resolved for the call; the module sees no counter. */
+export const HostLimitRequest = z.discriminatedUnion('op', [
+  z.object({ op: z.literal('acquire') }),
+  z.object({ op: z.literal('release'), permit: z.string().min(1) }),
+  z.object({ op: z.literal('throttle'), retryAfterMs: z.number().int().nonnegative() }),
+]);
+export type HostLimitRequestShape = z.infer<typeof HostLimitRequest>;
+
+/** The door's answer to `acquire`. It never waits: `wait` says when to ask
+ *  again. `release` and `throttle` answer `{}`. */
+export const HostLimitGrant = z.discriminatedUnion('outcome', [
+  z.object({ outcome: z.literal('granted'), permit: z.string().min(1) }),
+  z.object({ outcome: z.literal('wait'), retryAfterMs: z.number().int().nonnegative() }),
+]);
+export type HostLimitGrantShape = z.infer<typeof HostLimitGrant>;
 
 export const WireEventType = z.object({
   tag: z.string(),

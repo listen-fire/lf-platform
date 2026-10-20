@@ -54,8 +54,10 @@ function adapterManifest(definition: AdapterModuleDefinition, instance: AdapterM
   };
 }
 
-function declaredLimits(definition: ModuleDefinition): { limits?: unknown[] } {
-  return definition.limits !== undefined && definition.limits.length > 0 ? { limits: [...definition.limits] } : {};
+/** A module's limits count its requests to the provider: `ctx.fetch` asks
+ *  the host's limits door before each one (`host_limits.ts`). */
+function declaredLimits(definition: ModuleDefinition): { limits?: unknown[]; hostLimits?: true } {
+  return definition.limits !== undefined && definition.limits.length > 0 ? { limits: [...definition.limits], hostLimits: true } : {};
 }
 
 function pluginManifest(definition: PluginModuleDefinition, instance: PluginModuleMethods): unknown {

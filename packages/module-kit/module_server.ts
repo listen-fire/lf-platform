@@ -15,6 +15,7 @@ import { METHODS, type MethodName, type RpcResponseShape, type WireCostLineShape
 
 import type { CredentialFields, ModuleCredential, ModuleDefinition, ModuleFiles, ModuleKv, ModuleLog, ModuleModels, ModuleSpend } from './define';
 
+import { limitedFetch } from './host_limits';
 import { moduleContext, noCredential } from './in_process';
 import { servedFiles, type ServedFile, type ServedFiles } from './served_files';
 import { loadedModule, moduleManifest, type LoadedModule } from './manifest';
@@ -34,6 +35,9 @@ export interface ModuleServerOptions {
   /** Gates every request; false answers HTTP 401. */
   authenticate?: (headers: IncomingHttpHeaders) => boolean;
   log: ModuleLog;
+  /** The module's `ctx.fetch` before the limits door wraps it, on a call
+   *  that hands one. Default: the global fetch. */
+  fetch?: typeof fetch;
   files: ModuleFiles;
   /** The kv of the tenant a request names. */
   kvFor: (tenant: string) => ModuleKv;
@@ -157,6 +161,7 @@ async function answer(
         tenant,
         credential,
         spend,
+        fetch: limitedFetch(options.fetch ?? fetch, request.hostLimits),
         log: options.log,
         files: options.files,
         kv: options.kvFor(tenant),

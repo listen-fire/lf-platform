@@ -25,8 +25,9 @@ serde_json = { version = "1", features = ["float_roundtrip", "raw_value", "unbou
 # A wire object (`Obj`) inside a typed request or answer.
 indexmap = { version = "2", features = ["serde"] }
 # A host is one thread, as lf is: a module's futures need not be Send.
-tokio = { version = "1", features = ["rt", "net", "io-util", "macros"] }
-hyper = { version = "1", features = ["server", "http1"] }
+tokio = { version = "1", features = ["rt", "net", "io-util", "macros", "time"] }
+# The client asks the host's limits door (src/host_limits.rs).
+hyper = { version = "1", features = ["server", "client", "http1"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 http-body-util = "0.1"
 bytes = "1"
