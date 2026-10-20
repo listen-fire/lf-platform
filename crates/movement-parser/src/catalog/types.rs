@@ -316,6 +316,10 @@ pub struct EdgeSchema {
     /// to the adapter by the reserved field id (kg.ts `surfaceReadAdapter`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub resources: Option<bool>,
+    /// What the adapter says the edge is, in its own words (a reference's
+    /// `description`); the language service's hover leads with it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -342,6 +346,14 @@ pub struct PositionSchema {
     /// `delete` of a type that does not say so.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deletable: Option<bool>,
+    /// What the adapter says a record of this type is (its describe's or
+    /// entry point's `description`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// What the adapter says each field is, by name: every field it
+    /// described, readable or write-only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub field_docs: Option<JsMap<String>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -398,6 +410,8 @@ pub struct WritableRootSchema {
     pub edges: Option<JsMap<EdgeSchema>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub required_fields: Option<Vec<String>>,
+    /// The writable fields' descriptions only, which the TypeScript checker
+    /// reads; this checker reads the position's (`PositionSchema::field_docs`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub field_docs: Option<JsMap<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -542,6 +556,9 @@ pub struct AdapterSpec {
     pub trigger_expectation: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub schema_shape: Option<SchemaShape>,
+    /// What the adapter says it is (its manifest's `description`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -632,6 +649,9 @@ pub struct PluginSpec {
     /// packages can each serve a `render`. Absent: the key is the name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    /// What the plugin does, in its author's words (its signature's `description`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
 }
 
 impl PluginSpec {

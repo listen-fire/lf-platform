@@ -828,6 +828,8 @@ export const WirePluginSpec = z.object({
   fedByExtraction: z.literal(true).optional(),
   output: z.record(z.string(), z.unknown()).optional(),
   earlierOutputs: z.array(z.object({ before: z.number().int().positive(), output: z.record(z.string(), z.unknown()) })).optional(),
+  /** What the plugin does, in its author's words: shown when an author hovers a call. */
+  description: z.string().optional(),
 });
 export type WirePluginSpecShape = z.infer<typeof WirePluginSpec>;
 
@@ -1002,6 +1004,8 @@ export const WireManifestResult = z.object({
   // adapter's webhook/synthetic event type. Pure config, declared in the
   // manifest rather than answered by an RPC.
   webhookEventTypeId: z.string().optional(),
+  /** What the adapter is, in one or two sentences: shown when an author hovers it. */
+  description: z.string().optional(),
 }).superRefine(refuseUnpairedDeclarations);
 export type WireManifestResultShape = z.infer<typeof WireManifestResult>;
 

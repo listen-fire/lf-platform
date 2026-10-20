@@ -126,6 +126,9 @@ COPY --from=deploy /deploy/ ./
 COPY apps/api ./
 COPY --from=build /srv/listen-fire/apps/api/build ./build
 COPY --from=build /srv/listen-fire/apps/api/public ./public
+# The handbook's built-ins chapter is the language's own reference, read where
+# the language keeps it (the language service compiles the same file in).
+COPY crates/movement-language/src/builtins.md /srv/listen-fire/crates/movement-language/src/builtins.md
 
 # `deploy` copies a workspace package as `npm pack` would (shared's "files" is
 # just dist/), but `#shared/...` is imported by path and needs the .js its build

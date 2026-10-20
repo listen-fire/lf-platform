@@ -35,6 +35,7 @@ function adapterManifest(definition: AdapterModuleDefinition, instance: AdapterM
     runtimeCapabilities: instance.runtimeCapabilities(),
     methods: [...adapterProtocolMethods(instance), ...moduleMethods(instance, ['poll', 'runPeriodic', 'refreshCredential'])],
     ...(instance.webhookEventTypeId !== undefined ? { webhookEventTypeId: instance.webhookEventTypeId } : {}),
+    ...(manifest.description !== undefined ? { description: manifest.description } : {}),
     ...(manifest.subscribableEvents !== undefined ? { subscribableEvents: [...manifest.subscribableEvents] } : {}),
     ...(manifest.defaultSubscribedEvents !== undefined ? { defaultSubscribedEvents: [...manifest.defaultSubscribedEvents] } : {}),
     ...(manifest.listenConfig !== undefined

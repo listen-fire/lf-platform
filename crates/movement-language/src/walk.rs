@@ -85,7 +85,8 @@ fn land(from: &Position, edge: &str, version: u32) -> Option<Position> {
     }
 }
 
-fn strip(position: &Position) -> &Position {
+/// The record itself, whether or not it may be missing.
+pub fn strip(position: &Position) -> &Position {
     match position {
         Position::MaybeEmpty(of) => strip(of),
         other => other,
@@ -110,6 +111,19 @@ pub fn edges(position: &Position, version: u32) -> Vec<(String, String)> {
             (name.clone(), landing)
         })
         .collect()
+}
+
+/// One edge off a record: its name, what the schema says of it, and where it lands.
+pub struct Edge {
+    pub name: String,
+    pub schema: movement_parser::catalog::types::EdgeSchema,
+    pub landing: Option<Position>,
+}
+
+/// The edges a walk can take next off a record, each with its schema and landing.
+pub fn edge_schemas(position: &Position, version: u32) -> Vec<Edge> {
+    let Some(schema) = position_schema_of_ref(strip(position)) else { return Vec::new() };
+    schema.edges.iter().map(|(name, edge)| Edge { name: name.clone(), schema: edge.clone(), landing: land(position, name, version) }).collect()
 }
 
 /// A field's type off a record, as the author reads it.

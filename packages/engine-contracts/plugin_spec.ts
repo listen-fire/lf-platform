@@ -108,6 +108,8 @@ export function pluginSpecOf(declaration: PluginDeclaration): PluginSpec {
     ...(fedByExtraction ? { fedByExtraction: true } : {}),
     ...(signature.output !== undefined ? { output: pluginOutputOf(signature.output) } : {}),
     ...(earlierOutputs.length > 0 ? { earlierOutputs } : {}),
+    // The author's words, which the language service's hover leads with.
+    ...(signature.description !== undefined && signature.description.length > 0 ? { description: signature.description } : {}),
   };
 }
 

@@ -2012,10 +2012,9 @@ pub fn report_write_only_property(typing: &mut Typing, position: Option<&Positio
         (Position::Union(_), Some(variant)) => describe_position(&Position::record(instance.clone(), variant.clone())),
         _ => describe_position(position),
     };
-    let doc = type_name
+    let doc = schema
+        .field_docs
         .as_ref()
-        .and_then(|t| instance.schema.writable_roots.get(t).or_else(|| instance.schema.create_shapes.as_ref().and_then(|c| c.get(t))))
-        .and_then(|shape| shape.field_docs.as_ref())
         .and_then(|docs| docs.get(property))
         .map(|doc| format!(" {doc}"))
         .unwrap_or_default();

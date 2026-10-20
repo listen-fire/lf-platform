@@ -31,9 +31,16 @@ const HANDBOOK_CHAPTERS = [
 
 const read = (path) => readFileSync(join(root, path), 'utf8');
 
+// Chapters whose text travels with the language (the language service reads it too): the module reads this file.
+const LANGUAGE_SIDE = { builtins: 'crates/movement-language/src/builtins.md' };
+
 /** A chapter is a TypeScript module whose `content` is one template literal with every backtick and `${` escaped. */
 function readChapter(name) {
   const text = read(`${HANDBOOK_DIR}/${name}.ts`);
+  if (name in LANGUAGE_SIDE) {
+    const title = text.match(/title:\s*(['"`])(.*?)\1/)?.[2] ?? name;
+    return { title, content: read(LANGUAGE_SIDE[name]) };
+  }
   const start = text.indexOf('content: `');
   if (start === -1) throw new Error(`${name}: no content template literal`);
   const bodyStart = start + 'content: `'.length;
@@ -58,7 +65,7 @@ const addFile = (group, page, source, title) => {
 for (const name of HANDBOOK_CHAPTERS) {
   const { title, content } = readChapter(name);
   const page = name.replace(/_/g, '-');
-  pages.push({ page, group: 'Language handbook', source: `${HANDBOOK_DIR}/${name}.ts`, markdown: content, title });
+  pages.push({ page, group: 'Language handbook', source: LANGUAGE_SIDE[name] ?? `${HANDBOOK_DIR}/${name}.ts`, markdown: content, title });
 }
 addFile('Guides', 'getting-started-lf', 'docs/getting-started-lf.md');
 addFile('Guides', 'core-slots', 'docs/core-slots.md');

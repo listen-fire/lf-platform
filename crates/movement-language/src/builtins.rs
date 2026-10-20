@@ -1,5 +1,7 @@
 //! Built-ins as language version 5 spells them: the spelling table's v5
-//! names, with each one's signature from the standard library's.
+//! names, with each one's signature from the standard library's and what it
+//! does from the built-ins reference (`builtins.md`, which the platform's
+//! handbook serves as its builtins chapter, so the two cannot drift).
 
 use movement_checker::types::stdlib::{Builtin, ParamType, lookup_builtin};
 use movement_parser::surface::table::{CORE_WORDS, NAMESPACES, SPELLINGS, Shape, Spelling, by_v5};
@@ -68,22 +70,48 @@ impl V5Builtin {
         format!("{}({})", self.name, params.join(", "))
     }
 
-    /// One line: what it returns, and its spelling before version 5.
-    pub fn doc(&self) -> String {
+    /// What it does: the reference's paragraph under its heading, else what it
+    /// returns (nothing when that depends on its arguments).
+    pub fn doc(&self) -> Option<String> {
         use movement_checker::types::stdlib::Returns;
-        let returns = match self.library().map(|b| b.returns) {
-            Some(Returns::Text) => "Returns text.",
-            Some(Returns::Number) => "Returns a number.",
-            Some(Returns::Boolean) => "Returns true or false.",
-            Some(Returns::Date) => "Returns a date.",
-            Some(Returns::Datetime) => "Returns a date and time.",
-            Some(Returns::File) => "Returns a file.",
-            Some(Returns::ListOfText) => "Returns a list of text.",
-            Some(Returns::MaybeAbsentText) => "Returns text, or null.",
-            Some(Returns::MaybeAbsentDate) => "Returns a date, or null.",
-            Some(Returns::Never) => "Fails the run here.",
-            Some(Returns::Derived) | None => "Its type follows from its arguments.",
+        if let Some(line) = reference_line(self.name) {
+            return Some(line.to_string());
+        }
+        let returns = match self.library()?.returns {
+            Returns::Text => "Returns text.",
+            Returns::Number => "Returns a number.",
+            Returns::Boolean => "Returns true or false.",
+            Returns::Date => "Returns a date.",
+            Returns::Datetime => "Returns a date and time.",
+            Returns::File => "Returns a file.",
+            Returns::ListOfText => "Returns a list of text.",
+            Returns::MaybeAbsentText => "Returns text, or null.",
+            Returns::MaybeAbsentDate => "Returns a date, or null.",
+            Returns::Never => "Fails the run here.",
+            Returns::Derived => return None,
         };
-        format!("{returns} Written `{}` before version 5.", self.spelling.canonical)
+        Some(returns.to_string())
+    }
+}
+
+const REFERENCE: &str = include_str!("builtins.md");
+
+/// The paragraph under the reference's `### name` heading: the signature, what
+/// it gives back and what it does, in one line.
+pub fn reference_line(name: &str) -> Option<&'static str> {
+    let heading = format!("\n### {name}\n");
+    let body = &REFERENCE[REFERENCE.find(&heading)? + heading.len()..];
+    body.trim_start_matches('\n').split("\n\n").next().map(str::trim).filter(|line| !line.is_empty() && !line.starts_with('#'))
+}
+
+#[cfg(test)]
+mod tests {
+    /// A heading renamed in the reference would quietly drop a built-in's
+    /// card back to what it returns. `fail` and `callback` are explained in
+    /// other chapters (`crate::docs::builtin_page`).
+    #[test]
+    fn every_built_in_has_a_line_in_the_reference() {
+        let missing: Vec<&str> = super::v5_builtins().iter().map(|b| b.name).filter(|name| super::reference_line(name).is_none()).collect();
+        assert_eq!(missing, vec!["fail", "callback"]);
     }
 }

@@ -215,6 +215,11 @@ export function importIdentifier(raw: string): string {
   return /^[0-9]/.test(named) ? `_${named}` : named;
 }
 
+/** A non-empty `description` the adapter wrote on a type, field or reference. */
+function describedBy(declared: { description?: string }): string | undefined {
+  return declared.description !== undefined && declared.description.length > 0 ? declared.description : undefined;
+}
+
 /** Map one adapter field descriptor to a movement SchemaFieldType. `reference`
  *  fields return undefined (they surface as edges, not properties). */
 export function fieldTypeFromDescriptor(
@@ -515,6 +520,8 @@ export function instanceSchemaFromDescriptors(input: {
     const ambiguousProperties: string[] = [];
     const requiredFields: string[] = [];
     const fieldDocs: Record<string, string> = {};
+    /** Every described field's words, readable or write-only: the position's. */
+    const positionFieldDocs: Record<string, string> = {};
     /** Writable field id → the surface name it projected to — what an
      *  UNTAGGED write union's variants (declared in field ids) map through. */
     const writeFieldNameById = new Map<string, string>();
@@ -543,6 +550,8 @@ export function instanceSchemaFromDescriptors(input: {
         );
         continue;
       }
+      const description = describedBy(field);
+      if (description !== undefined) positionFieldDocs[fieldName] = description;
       if (field.readable === false) {
         // A WRITE-ONLY field (WhatsApp's send-side `File`): it stays on the
         // write shape below, but is DELIBERATELY absent from the readable
@@ -564,9 +573,7 @@ export function instanceSchemaFromDescriptors(input: {
         // Authoring guidance rides along — value conventions and live
         // workspace facts (e.g. Slack's actual channel names) that an
         // author can't know from the type alone.
-        if (typeof field.description === 'string' && field.description.length > 0) {
-          fieldDocs[fieldName] = field.description;
-        }
+        if (description !== undefined) fieldDocs[fieldName] = description;
       }
     }
 
@@ -639,6 +646,7 @@ export function instanceSchemaFromDescriptors(input: {
         existing === undefined ||
         (existing.resources === true && ref.fieldId !== RESOURCES_REFERENCE_FIELD_ID)
       ) {
+        const edgeDescription = describedBy(ref);
         edges[edge] = {
           target,
           // The landing type varies per record: reads type as the union and
@@ -693,6 +701,7 @@ export function instanceSchemaFromDescriptors(input: {
           // address, not its name), and since language version 5 the checker's
           // refusal of `x-[f:_resources]->` off a record names it.
           ...(ref.fieldId === RESOURCES_REFERENCE_FIELD_ID ? { resources: true as const } : {}),
+          ...(edgeDescription !== undefined ? { description: edgeDescription } : {}),
         };
         if (ref.required === true) requiredEdges.push({ edge, from: target });
       }
@@ -720,6 +729,7 @@ export function instanceSchemaFromDescriptors(input: {
       // `fires` is not gated on `readable`, and that is the point: nobody can
       // enumerate an inbox, so an event entry says `readable: false` honestly
       // — it mints this position but never a root collection.
+      const typeDescription = describedBy(descriptor) ?? describedBy(entry);
       positions[name] = {
         properties,
         edges,
@@ -730,6 +740,10 @@ export function instanceSchemaFromDescriptors(input: {
         // The system removes a record of this type (its `deleteRecord`) — the
         // promise `delete x` is checked against since language version 5.
         ...(descriptor.deletable === true ? { deletable: true } : {}),
+        // The adapter's own words for the type and its fields, which the
+        // language service's hover leads with.
+        ...(typeDescription !== undefined ? { description: typeDescription } : {}),
+        ...(Object.keys(positionFieldDocs).length > 0 ? { fieldDocs: positionFieldDocs } : {}),
       };
     }
     // A purely read-only type (no writable field) needs no write shape at

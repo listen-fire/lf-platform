@@ -65,7 +65,18 @@ pub fn catalog_of(running: &[RunningExternal], schemas: &IndexMap<String, Js>, c
         } else {
             Vec::new()
         };
-        adapters.insert(name.clone(), adapter_snapshot_of(&r.supported_triggers, &r.listen, construction_args, &declared_names(&r.credential_declarations), adapter_schemas));
+        let description = r.manifest_answer.get("description").and_then(Js::as_str).filter(|d| !d.is_empty()).map(str::to_string);
+        adapters.insert(
+            name.clone(),
+            adapter_snapshot_of(AdapterDeclarations {
+                supported_triggers: &r.supported_triggers,
+                listen: &r.listen,
+                construction_args,
+                declared_credentials: &declared_names(&r.credential_declarations),
+                description,
+                schemas: adapter_schemas,
+            }),
+        );
     }
     let files: Obj = files.iter().map(|f| (f.name.clone(), Js::from(obj! { "source" => Js::str(&f.source) }))).collect();
     Js::from(obj! {
@@ -85,25 +96,46 @@ fn unit_snapshot(unit: &str) -> Js {
         crate::units::descriptors(unit).into_iter().map(|d| (d.get("typeId").and_then(Js::as_str).unwrap_or_default().to_string(), d)).collect();
     let schema = crate::schema::describe_external_schema(unit, &entries, &descriptors);
     let schemas: Obj = [(instance_schema_key(None), schema)].into_iter().collect();
-    adapter_snapshot_of(&["webhook".to_string()], &crate::units::listen_vocabulary(unit), Vec::new(), &[], schemas)
+    adapter_snapshot_of(AdapterDeclarations {
+        supported_triggers: &["webhook".to_string()],
+        listen: &crate::units::listen_vocabulary(unit),
+        construction_args: Vec::new(),
+        declared_credentials: &[],
+        description: None,
+        schemas,
+    })
 }
 
 fn declared_names(declarations: &[crate::oauth2::Declaration]) -> Vec<String> {
     declarations.iter().map(|d| d.name.clone()).collect()
 }
 
+/// What one adapter's catalog entry is made of.
+struct AdapterDeclarations<'a> {
+    supported_triggers: &'a [String],
+    listen: &'a Obj,
+    construction_args: Vec<Js>,
+    declared_credentials: &'a [String],
+    /// Its manifest's `description`.
+    description: Option<String>,
+    schemas: Obj,
+}
+
 /// `adapterSnapshotOf` for a remote adapter's manifest: no construction
 /// blocks, no connect affordance, no trigger expectation, an introspected schema.
-fn adapter_snapshot_of(supported_triggers: &[String], listen: &Obj, construction_args: Vec<Js>, declared_credentials: &[String], schemas: Obj) -> Js {
-    let mut snapshot = obj! { "constructionArgs" => Js::Arr(construction_args) };
-    if !declared_credentials.is_empty() {
-        snapshot.insert("declaredCredentials".into(), Js::strings(declared_credentials));
+fn adapter_snapshot_of(adapter: AdapterDeclarations) -> Js {
+    let mut snapshot = obj! { "constructionArgs" => Js::Arr(adapter.construction_args) };
+    if !adapter.declared_credentials.is_empty() {
+        snapshot.insert("declaredCredentials".into(), Js::strings(adapter.declared_credentials));
     }
-    for (k, v) in trigger_config_vocabulary(supported_triggers, listen) {
+    for (k, v) in trigger_config_vocabulary(adapter.supported_triggers, adapter.listen) {
         snapshot.insert(k, v);
     }
+    if let Some(description) = adapter.description {
+        snapshot.insert("description".into(), Js::str(description));
+    }
     snapshot.insert("schemaShape".into(), Js::str("introspected"));
-    snapshot.insert("schemas".into(), Js::from(schemas));
+    snapshot.insert("schemas".into(), Js::from(adapter.schemas));
     Js::from(snapshot)
 }
 
