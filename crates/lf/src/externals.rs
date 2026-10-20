@@ -214,8 +214,8 @@ fn validate(manifest: &ExternalManifest) -> Result<(), String> {
         if manifest.slot.as_deref().and_then(crate::core::Slot::of).is_none() {
             return Err(format!("slot: a core module names the slot it fills ({})", slots.join(", ")));
         }
-        if manifest.command.is_none() {
-            return Err("command: a core module is started by its `command` and spoken to over its stdin and stdout".into());
+        if manifest.command.is_none() && manifest.url.is_none() {
+            return Err("command: a core module is started by its `command`, or reached at its `url` (a remote module)".into());
         }
     } else if manifest.slot.is_some() || !manifest.settings.is_empty() {
         return Err("slot and settings are a core module's (`kind: core`); an adapter declares its settings in its manifest answer".into());
