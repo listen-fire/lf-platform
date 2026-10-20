@@ -1,0 +1,80 @@
+{
+  "name": "@listen-fire/models",
+  "license": "Apache-2.0",
+  "version": "0.12.0-rc.3",
+  "description": "The models slot's module for any vendor the platform speaks (`@lf/models`): Gemini (on Google Cloud or with a Gemini API key), OpenAI, Claude on Anthropic's API or on Vertex. Movement model names map to the vendor's models through the platform's model map, every answer is priced from the shared price table, and the module publishes its prices (`models.prices`). Served as a process lf starts (kind: core, slot: models). Its tests borrow apps/api's jest runner (jest.config.borrowed.cjs)",
+  "engines": {
+    "node": "22.20.0"
+  },
+  "scripts": {
+    "code:type-check": "tsc --pretty --noEmit && node ../../scripts/check-module-boundary.cjs",
+    "test": "node ../../apps/api/node_modules/jest/bin/jest.js --config jest.config.borrowed.cjs",
+    "prepack": "node ../../scripts/build-packages.cjs .",
+    "postpack": "node ../../scripts/build-packages.cjs --restore ."
+  },
+  "main": "index.ts",
+  "types": "index.ts",
+  "bin": {
+    "lf-models": "./dist/serve.js"
+  },
+  "type": "commonjs",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.126.0",
+    "@anthropic-ai/vertex-sdk": "^0.19.9",
+    "@google/genai": "^2.24.0",
+    "@listen-fire/anthropic": "workspace:^",
+    "@listen-fire/engine": "workspace:^",
+    "@listen-fire/engine-contracts": "workspace:^",
+    "@listen-fire/model-providers": "workspace:^",
+    "@listen-fire/module-runtime": "workspace:^",
+    "google-auth-library": "10.3.0",
+    "openai": "5.22.0",
+    "zod": "4.1.12"
+  },
+  "devDependencies": {
+    "@types/jest": "29.5.14",
+    "@types/node": "20.16.5",
+    "engine-contracts": "workspace:@listen-fire/engine-contracts@*",
+    "model-providers": "workspace:@listen-fire/model-providers@*",
+    "module-runtime": "workspace:@listen-fire/module-runtime@*",
+    "movement-engine": "workspace:@listen-fire/engine@*",
+    "typescript": "5.5.4"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/listen-fire/listen-fire.git",
+    "directory": "modules/models"
+  },
+  "files": [
+    "dist",
+    "lf-external.yaml"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "bin": {
+      "lf-models": "./dist/serve.js"
+    },
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./*": {
+        "types": "./dist/*.d.ts",
+        "default": "./dist/*.js"
+      },
+      "./package.json": "./package.json"
+    },
+    "typesVersions": {
+      "*": {
+        "*": [
+          "dist/*",
+          "*"
+        ]
+      }
+    },
+    "tag": "next"
+  }
+}

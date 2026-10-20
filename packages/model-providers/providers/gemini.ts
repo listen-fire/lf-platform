@@ -60,7 +60,7 @@ function refuseUnknownKeys(value: object, known: readonly string[], where: strin
 let provider: ChatProvider | undefined;
 
 export function geminiChatProvider(env: NodeJS.ProcessEnv): ChatProvider {
-  return (provider ??= buildProvider(geminiClient(env)));
+  return (provider ??= geminiChatProviderOver(geminiClient(env)));
 }
 
 // The SDK is an optional peer of this package: loaded when a Gemini call is
@@ -70,6 +70,21 @@ let sdk: GenAiSdk | undefined;
 function genai(): GenAiSdk {
   return (sdk ??= require('@google/genai'));
 }
+
+/** Google Cloud, as a caller holding its own settings reaches it: a project
+ *  and the location models are addressed in, and a service account, or none
+ *  to use the environment's own Google credentials (Application Default
+ *  Credentials: a workload identity, `gcloud auth application-default login`). */
+export interface GoogleCloudAccess {
+  project: string;
+  location: string;
+  serviceAccount?: { clientEmail: string; privateKey: string };
+  /** Another endpoint speaking the same API (a proxy, a test fake). */
+  baseUrl?: string;
+}
+
+/** Gemini on Google Cloud (Vertex AI), or on Google's Gemini API with an API key. */
+export type GeminiAccess = { cloud: GoogleCloudAccess } | { apiKey: string; baseUrl?: string };
 
 const clients = new Map<string, GoogleGenAI>();
 
@@ -88,18 +103,23 @@ export function geminiClient(
   const location = options.location ?? googleModelRegion(env);
   let client = clients.get(location);
   if (!client) {
-    client = buildClient(env, location);
+    const { projectId, privateKey, clientEmail } = googleServiceAccount(env);
+    const baseUrl = env.GEMINI_BASE_URL;
+    client = geminiClientOf({ cloud: { project: projectId, location, serviceAccount: { clientEmail, privateKey }, ...(baseUrl ? { baseUrl } : {}) } });
     clients.set(location, client);
   }
   return client;
 }
 
-function buildClient(env: NodeJS.ProcessEnv, location: string): GoogleGenAI {
-  const { projectId, privateKey, clientEmail } = googleServiceAccount(env);
-  const baseUrl = env.GEMINI_BASE_URL;
+/** A client on settings the caller holds, rather than this process's environment. */
+export function geminiClientOf(access: GeminiAccess): GoogleGenAI {
+  if ('apiKey' in access) {
+    return new (genai().GoogleGenAI)({ apiKey: access.apiKey, ...(access.baseUrl ? { httpOptions: { baseUrl: access.baseUrl } } : {}) });
+  }
+  const { project, location, serviceAccount, baseUrl } = access.cloud;
   return new (genai().GoogleGenAI)({
     vertexai: true,
-    project: projectId,
+    project,
     location,
     // Pinned rather than the SDK's `v1beta1` default: the GA surface is the one
     // the fake mirrors, and a beta default can move under a package upgrade.
@@ -114,16 +134,18 @@ function buildClient(env: NodeJS.ProcessEnv, location: string): GoogleGenAI {
           apiKey: 'dev-loop-gemini-key',
           httpOptions: { baseUrl },
         }
-      : {
-          googleAuthOptions: {
-            credentials: { client_email: clientEmail, private_key: privateKey },
-            scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-          },
-        }),
+      : serviceAccount !== undefined
+        ? {
+            googleAuthOptions: {
+              credentials: { client_email: serviceAccount.clientEmail, private_key: serviceAccount.privateKey },
+              scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+            },
+          }
+        : {}),
   });
 }
 
-function buildProvider(client: GoogleGenAI): ChatProvider {
+export function geminiChatProviderOver(client: GoogleGenAI): ChatProvider {
   const run = async (
     params: Anthropic.MessageCreateParamsNonStreaming,
     options?: Anthropic.RequestOptions,
