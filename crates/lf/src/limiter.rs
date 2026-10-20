@@ -3,6 +3,8 @@
 //! the provider's limits. The engine knows nothing of limits; lf asks the
 //! slot before each call to a module (crate::credential_calls) and each
 //! model request (crate::anthropic), and holds the call until it is granted.
+//! A module that declares `hostLimits` asks instead, before each request to
+//! its provider, at the limits door (crate::limits_door).
 //!
 //! The contract (docs/contracts/limiter-slot.md) never waits: `acquire`
 //! answers granted (with a permit to release) or refused (with when to ask

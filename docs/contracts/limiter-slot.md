@@ -6,6 +6,12 @@ A limiter module keeps a host's calls to modules and models inside the providers
 
 The engine knows nothing of limits. Only the host asks.
 
+## What one acquire counts
+
+- Usually one call from the host to a module.
+- For a module that declares `hostLimits`, one request from the module to its provider, retries included. The module asks the host's [limits door](adapter-protocol.md#kinds-settings-spend-and-the-hosts-models) before each one, and the host asks this slot on its behalf, under the caller it resolved for the call. The host then does not count the call itself.
+- Either way the limiter sees the same `acquire`, `release` and `throttle`. Nothing here changes for a limiter, and a module never reaches one.
+
 ## Installing one
 
 A folder in the project's externals folder, with an `lf-external.yaml`:
@@ -52,5 +58,6 @@ No method waits. A refusal says when to ask again; the host does the waiting.
 
 ## Changes
 
+- **2026-10-20** (within adapter protocol 2): a module that declares `hostLimits` is counted per provider request at the host's limits door, not per call. The slot's methods are unchanged.
 - **2026-10-19** (within adapter protocol 2): the methods ride adapter protocol 2's HTTP; the stdin/stdout JSON-RPC wire is retired.
 - **2026-10-18** (within adapter protocol 2): the limiter slot, its wire, and process modules filling it.
