@@ -46,7 +46,7 @@ pub mod plugin;
 
 pub use adapter::*;
 pub use context::{Answer, Ctx, ModuleError, from_js, to_js};
-pub use core::{Limiter, LoopGuard, Store};
+pub use core::{Limiter, LoopGuard, Store, Wake};
 pub use host::{Address, Host, Listener};
 pub use host_limits::{HostLimits, Permit};
 pub use module::Module;

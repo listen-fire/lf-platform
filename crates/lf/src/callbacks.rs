@@ -184,6 +184,13 @@ pub enum Refusal {
 /// The body's work row (`callbackBodyWork`): keyed by the call, so a call is
 /// queued once however often this is reached.
 pub fn queue_body(store: &dyn RunHostStore, callback_id: &str, team_id: &str, call_index: usize, due_at: &str) -> Result<()> {
+    enqueue_body(store, callback_id, team_id, call_index, due_at)?;
+    crate::wake::queued(CALLBACK_BODY_WORK_KIND, Some(due_at));
+    Ok(())
+}
+
+/// `queue_body` inside a transaction: the wake is the caller's, once it commits.
+fn enqueue_body(store: &dyn RunHostStore, callback_id: &str, team_id: &str, call_index: usize, due_at: &str) -> Result<()> {
     let payload = Js::Obj(obj! { "callbackId" => Js::str(callback_id), "teamId" => Js::str(team_id), "callIndex" => Js::Num((call_index as u64).into()) });
     store.enqueue(CALLBACK_BODY_WORK_KIND, &format!("{CALLBACK_BODY_WORK_KIND}:{callback_id}:{call_index}"), &payload, Some(due_at), Some(team_id))
 }
@@ -274,7 +281,7 @@ impl Store {
                 params![callback.calls.to_json(), callback.status, i64::from(callback.single_use), now, id],
             )?;
             let call_index = calls.len() - 1;
-            queue_body(self, id, &callback.team_id, call_index, body_due_at)?;
+            enqueue_body(self, id, &callback.team_id, call_index, body_due_at)?;
             Ok(CallbackClaim::Recorded { callback, call_index: call_index as i64 })
         })
     }
@@ -464,6 +471,9 @@ pub fn record_callback_call(store: &dyn RunHostStore, id: &str, values: &Obj, bo
     let call_index = usize::try_from(call_index).map_err(|_| invalid("calls"))?;
     let wake = Js::Obj(obj! { "adapterType" => Js::str(CALLBACK_AWAIT_TYPE), "teamId" => Js::str(&callback.team_id), "correlationKey" => Js::str(&callback.id) });
     store.enqueue("wake_await", &format!("wake_await:callback_backstop:{}", callback.id), &wake, Some(wake_due_at), Some(&callback.team_id))?;
+    // The store queued the body with the call (its backstop, if no one runs it now).
+    crate::wake::queued(CALLBACK_BODY_WORK_KIND, Some(body_due_at));
+    crate::wake::queued("wake_await", Some(wake_due_at));
     Ok(CallOutcome::Recorded { callback: Box::new(callback), call_index })
 }
 

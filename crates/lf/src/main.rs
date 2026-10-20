@@ -11,7 +11,7 @@
 //!   lf runs [show <run-id>]             the runs, most recent first; one run in full
 //!   --json                              (check, catalog, run, resume, runs, call, cancel, connect, credential list) one JSON document
 //!   lf drain [--until-idle] [--max-seconds N]  a worker over the work queue (scale from zero)
-//!   lf serve [--port N]                 the inbound doors, the callback door and the work drain
+//!   lf serve [--port N] [--doors-only]  the inbound doors, the callback door and the work drain (--doors-only: no drain)
 //!   lf call <callback-id> [--body <values.json>]
 //!   lf cancel <run-id> [--reason <text>]
 //!   lf catalog [--dir <project>]        the catalog snapshot `check` reads, as JSON
@@ -25,6 +25,7 @@
 //!   lf --contract-limiter-slot [--dir <project>]                 the same, over the project's limiter slot
 //!   lf --contract-guard                                          the built-in loop guard served as a loop guard module
 //!   lf --contract-guard-slot [--dir <project>]                   the same, over the project's loopGuard slot
+//!   lf --contract-wake-slot [--dir <project>]                    the project's wake module, served through lf's client of it
 //!   lf --contract-models | --contract-judge | --contract-files   the built-in models, judge, files module served
 //!     (each --contract-<slot> server speaks adapter protocol 2 on --listen unix:<path> | <port>, default a fresh socket)
 //!   lf --contract-secrets <file|env>    a secrets store over stdio JSON-RPC
@@ -57,6 +58,8 @@ mod contract_secrets;
 mod contract_guard;
 #[cfg(feature = "serve")]
 mod contract_limiter;
+#[cfg(feature = "serve")]
+mod contract_wake;
 #[cfg(feature = "serve")]
 mod contract_slots;
 #[cfg(feature = "serve")]
@@ -135,6 +138,7 @@ mod store_wire;
 mod subscriptions;
 mod units;
 mod upgrade;
+mod wake;
 mod wire;
 
 use std::io::Write;
@@ -149,7 +153,7 @@ const USAGE: &str = "usage: lf <init|check|catalog|lsp|run|resume|runs|drain|ser
        lf run --webhook <external> --body <file> [--install <credential>] [--header k:v]...
        lf resume [<run-id>]
        lf drain [--until-idle] [--max-seconds <n>] [--kinds <kind,…>]
-       lf serve [--port N]
+       lf serve [--port N] [--doors-only]
        lf call <callback-id> [--body <values.json>]
        lf cancel <run-id> [--reason <text>]
        lf runs [show <run-id>]
@@ -159,6 +163,7 @@ const USAGE: &str = "usage: lf <init|check|catalog|lsp|run|resume|runs|drain|ser
        lf --contract-limiter-slot [--dir <project>]
        lf --contract-guard
        lf --contract-guard-slot [--dir <project>]
+       lf --contract-wake-slot [--dir <project>]
        lf --contract-models | --contract-judge | --contract-files
        lf --contract-secrets <secrets file | env>
        lf --contract-doors
@@ -175,6 +180,7 @@ const USAGE: &str = "usage: lf <init|check|catalog|lsp|run|resume|runs|drain|ser
   --json    check, catalog, run, resume, runs, call, cancel, connect, credential list: one JSON document (docs/lf-json.md); a failure is {\"error\": …}
   drain     fire each cron listen's due tick (once, however many workers drain), then claim due work rows one at a time and run them (a polled listen's row is its next poll, due every interval its source declares); with --until-idle exit once none is due, with --max-seconds stop claiming after n seconds, with --kinds only rows of those kinds (resume_timer, wake_await, fire_event, fire_callback, poll_listen) and the cron ticks only when it names cron
   serve     the inbound doors, the callback door and the work queue's drain (as `lf serve`)
+  --doors-only  (serve) only the doors, for compute billed by the request: nothing drains in this process, and `/hooks/…` queues its events (answering 202 with the rows queued) instead of running them in the request; workers (`lf drain`) run the work, started by the wake slot's module or a schedule. Also LF_DOORS_ONLY=1
   call      call a callback, as its url's POST does (the values: a JSON object)
   cancel    cancel a run: settled failed now, or at its next statement if another lf is stepping it
   --store   where run state is kept: a SQLite file or a Postgres database (set up by `lf connect @lf/postgres-store`), instead of lf.yaml's `core: { store: … }`
@@ -186,6 +192,7 @@ const USAGE: &str = "usage: lf <init|check|catalog|lsp|run|resume|runs|drain|ser
   --contract-limiter-slot  the same, over the limiter module the project's limiter slot names
   --contract-guard  serve lf's built-in loop guard as a loop guard module, on --listen
   --contract-guard-slot  the same, over the loop guard module the project's loopGuard slot names
+  --contract-wake-slot  serve the wake module the project's wake slot names, through lf's client of it, on --listen
   --contract-models, --contract-judge, --contract-files  serve lf's built-in models, judge or files module, on --listen (the slot conformance suites' bridges)
   --contract-doors  serve the inbound doors over HTTP, their world arranged over stdin/stdout JSON-RPC (the inbound contract suite's bridge)
   --project-schema  project one adapter introspection (JSON on stdin) into its schema and notes (the projection's parity probe)
@@ -216,6 +223,8 @@ struct Args {
     contract_limiter_slot: bool,
     contract_guard: bool,
     contract_guard_slot: bool,
+    contract_wake_slot: bool,
+    doors_only: bool,
     contract_models: bool,
     contract_judge: bool,
     contract_files: bool,
@@ -256,6 +265,8 @@ fn parse_args(argv: &[String]) -> Result<Args, String> {
         contract_limiter_slot: false,
         contract_guard: false,
         contract_guard_slot: false,
+        contract_wake_slot: false,
+        doors_only: false,
         contract_models: false,
         contract_judge: false,
         contract_files: false,
@@ -297,6 +308,8 @@ fn parse_args(argv: &[String]) -> Result<Args, String> {
             "--contract-limiter-slot" => args.contract_limiter_slot = true,
             "--contract-guard" => args.contract_guard = true,
             "--contract-guard-slot" => args.contract_guard_slot = true,
+            "--contract-wake-slot" => args.contract_wake_slot = true,
+            "--doors-only" => args.doors_only = true,
             "--contract-models" => args.contract_models = true,
             "--contract-judge" => args.contract_judge = true,
             "--contract-files" => args.contract_files = true,
@@ -473,7 +486,8 @@ async fn run(argv: Vec<String>) -> Result<i32, String> {
         "serve" => {
             let project = load()?;
             let store = store_of(&args, &project)?;
-            listener::run(project, args.ephemeral, &store, args.port.as_deref()).await
+            let doors_only = listener::doors_only(args.doors_only, std::env::var("LF_DOORS_ONLY").ok().as_deref())?;
+            listener::run(project, listener::Serving { ephemeral: args.ephemeral, store: &store, port: args.port.as_deref(), doors_only }).await
         }
         "call" => {
             let project = load()?;
@@ -559,6 +573,11 @@ async fn serve_contract_bridge(args: &Args) -> Result<Option<i32>, String> {
         contract_slots::serve_models(listen()?).await?;
         #[cfg(not(feature = "anthropic"))]
         return Err("this lf was built without the `anthropic` feature, so it has no built-in models module to serve".to_string());
+    } else if args.contract_wake_slot {
+        let (project, env) = project_env()?;
+        let Some(module) = &project.core.wake else { return Err("the project's wake slot is empty: name a wake module in lf.yaml's `core: { wake: … }`".to_string()) };
+        let Some(wake) = wake::of_project(&project, &secrets::load_secrets(&project, &env)?)? else { return Err(format!("{}: no wake module to serve", module.name)) };
+        contract_wake::serve(wake, &module.name, listen()?).await?;
     } else if args.contract_judge {
         contract_slots::serve_judge(listen()?).await?;
     } else if args.contract_files {
@@ -578,6 +597,7 @@ async fn serve_contract_bridge(args: &Args) -> Result<Option<i32>, String> {
         || args.contract_limiter_slot
         || args.contract_guard
         || args.contract_guard_slot
+        || args.contract_wake_slot
         || args.contract_models
         || args.contract_judge
         || args.contract_files;

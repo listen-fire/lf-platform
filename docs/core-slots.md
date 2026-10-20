@@ -18,7 +18,7 @@ core:
 | `limiter` | keeps calls to modules and models inside the providers' limits | `@lf/memory-limiter` (in lf's own process) | |
 | `loopGuard` | tells a movement's own write echoing back from a real change | none: the slot is empty and nothing is suppressed | `@lf/fingerprint-guard` (opt in) |
 | `browser` | a real page a module drives: a gated deck, a viewer that draws with script ([browser-slot.md](contracts/browser-slot.md)) | none: lf has no browser, and a module asking for a page is refused by name | none in lf; the platform's api image fills it with `@lf/chromium` |
-| `wake` | is told when work is ready ("ready now", "ready at T") so something outside lf can start a worker | none: the slot is empty and a worker drains on its own schedule | none |
+| `wake` | told when work is due, so whatever starts lf's workers starts one then ([wake-slot.md](contracts/wake-slot.md)) | none: nobody is told, and work waits for a scheduled `lf drain` | none in lf; a cloud queue module (Google Cloud Tasks) ships separately |
 
 A slot accepts only a module of its own kind; `lf check` and `lf run` refuse anything else, naming the slots.
 
@@ -84,6 +84,20 @@ core:
 - The platform's listen flag `suppress_self` is separate and unchanged.
 - The wire a guard module of your own speaks: [loop-guard-slot.md](contracts/loop-guard-slot.md).
 
+## The wake
+
+On a scale-from-zero platform no worker runs between jobs. The wake slot tells a module when lf's work is due, so it can start a worker (`lf drain --until-idle`) then:
+
+```yaml
+core:
+  wake: acme_wake
+```
+
+- lf tells it "ready now" when it queues an event or a wake, and "ready at T" when it parks a timer or schedules a poll or a retry.
+- lf calls it after the work is written. A failed wake is logged and the work stays queued, so keep a scheduled worker (every minute) as the safety net.
+- Pair it with `lf serve --doors-only`: the doors queue what arrives, and the wake starts a worker for it.
+- lf builds none in. A module filling it speaks [its wire](contracts/wake-slot.md), and the conformance cases there hold it to the slot's meaning.
+
 ## Filling a slot
 
 1. Name the module in `lf.yaml`'s `core:` (not needed for a default).
@@ -104,7 +118,7 @@ LF_SECRET__POSTGRES_STORE__URL=postgres://…?sslmode=verify-full
 
 `lf --store <state.db | postgres://…>` overrides the store slot for one command.
 
-A module of your own, served as a process or at a URL, fills any of the eight slots (`kind: core` and `slot:` in its `lf-external.yaml`; see [the store's contract](contracts/store-slot.md), [the limiter's](contracts/limiter-slot.md), [the guard's](contracts/loop-guard-slot.md), [the files slot's](contracts/files-slot.md) and [the browser's](contracts/browser-slot.md)). `@listen-fire/s3-files` fills `files` with a bucket on AWS S3, Google Cloud Storage, Cloudflare R2 or MinIO ([its README](../modules/s3-files/README.md)).
+A module of your own, started from its `command` or reached at its `url`, fills any slot (`kind: core` in its `lf-external.yaml`; see each slot's wire in [the contracts](contracts/README.md), such as [the store's](contracts/store-slot.md), [the files slot's](contracts/files-slot.md) or [the wake's](contracts/wake-slot.md)). `@listen-fire/s3-files` fills `files` with a bucket on AWS S3, Google Cloud Storage, Cloudflare R2 or MinIO ([its README](../modules/s3-files/README.md)).
 
 ## Embedding
 

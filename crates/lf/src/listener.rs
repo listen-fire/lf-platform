@@ -2,8 +2,15 @@
 //! listener, the inbound doors, the callback door, the models door and the
 //! work queue's drain. A light build leaves it out; `lf call`, `lf cancel`
 //! and `lf run --webhook` (src/serve.rs) need no listener.
+//!
+//! `--doors-only` (or `LF_DOORS_ONLY=1`) is serve for compute billed by the
+//! request, which is frozen or stopped once a response is sent: nothing
+//! drains in this process, and `/hooks/…` queues its events instead of
+//! running them inside the request. Workers (`lf drain`) run the work, started
+//! by the wake slot's module (crate::wake) or a schedule.
 
 
+use std::cell::RefCell;
 use std::io::Write;
 use std::rc::Rc;
 use std::time::Duration;
@@ -63,8 +70,36 @@ pub async fn open_models_door(credentials: &crate::secrets::Credentials) -> Resu
     Ok(())
 }
 
-/// `lf serve [--port N]`: until SIGINT or SIGTERM.
-pub async fn run(project: Project, ephemeral: bool, store: &StoreSpec, port: Option<&str>) -> Result<i32, String> {
+/// How `lf serve` runs.
+pub struct Serving<'a> {
+    pub ephemeral: bool,
+    pub store: &'a StoreSpec,
+    pub port: Option<&'a str>,
+    /// Only the doors: no drain in this process, `/hooks/…` queues.
+    pub doors_only: bool,
+}
+
+/// `--doors-only`, or `LF_DOORS_ONLY` (`1`/`true`; empty, `0` or `false` is off).
+pub fn doors_only(flag: bool, env: Option<&str>) -> Result<bool, String> {
+    match env.map(|v| v.trim().to_ascii_lowercase()).as_deref() {
+        _ if flag => Ok(true),
+        None | Some("" | "0" | "false") => Ok(false),
+        Some("1" | "true") => Ok(true),
+        Some(other) => Err(format!("LF_DOORS_ONLY is \"{other}\": set it to 1 (or true) for doors only, or leave it empty")),
+    }
+}
+
+/// What every request the listener answers shares.
+struct Listening {
+    session: Rc<Session>,
+    /// Wakes this process's drain; nothing waits on it under `--doors-only`.
+    poke: Rc<Notify>,
+    doors_only: bool,
+}
+
+/// `lf serve [--port N] [--doors-only]`: until SIGINT or SIGTERM.
+pub async fn run(project: Project, serving: Serving<'_>) -> Result<i32, String> {
+    let Serving { ephemeral, store, port, doors_only } = serving;
     let port = match port {
         None => DEFAULT_PORT,
         Some(text) => text.trim().parse::<u16>().map_err(|_| format!("--port {text}: expected a port number"))?,
@@ -86,19 +121,20 @@ pub async fn run(project: Project, ephemeral: bool, store: &StoreSpec, port: Opt
     // A file exposed to an external is fetched from this listener.
     session.documents.serve_at(port);
     let poke = Rc::new(Notify::new());
+    let listening = Rc::new(Listening { session: session.clone(), poke: poke.clone(), doors_only });
 
-    let doors = {
-        let (session, poke) = (session.clone(), poke.clone());
-        tokio::task::spawn_local(crate::http::serve(listener, MAX_BODY_BYTES, move |request| {
-            let (session, poke) = (session.clone(), poke.clone());
-            async move { route(&session, &poke, request).await.unwrap_or_else(|message| Response::json(500, &Js::Obj(obj! { "error" => Js::Str(message) }))) }
-        }))
-    };
-    let drain = tokio::task::spawn_local(drain_forever(session.clone(), poke.clone()));
+    let doors = tokio::task::spawn_local(crate::http::serve(listener, MAX_BODY_BYTES, move |request| {
+        let listening = listening.clone();
+        async move { route(&listening, request).await.unwrap_or_else(|message| Response::json(500, &Js::Obj(obj! { "error" => Js::Str(message) }))) }
+    }));
+    let drain = (!doors_only).then(|| tokio::task::spawn_local(drain_forever(session.clone(), poke.clone())));
     println!("lf serving on http://127.0.0.1:{port}/hooks/<external>/<install>");
+    if doors_only {
+        println!("doors only: nothing drains in this process; workers (`lf drain`) run what the doors queue");
+    }
 
     stopped().await;
-    for task in [doors, drain] {
+    for task in std::iter::once(doors).chain(drain) {
         task.abort();
         let _ = task.await;
     }
@@ -205,7 +241,8 @@ fn send(answer: Answer, notify: impl FnOnce()) -> Response {
     response
 }
 
-async fn route(session: &Session, poke: &Notify, request: Request) -> Result<Response, String> {
+async fn route(listening: &Listening, request: Request) -> Result<Response, String> {
+    let (session, poke) = (&*listening.session, &*listening.poke);
     if request.too_large {
         return Ok(Response::json(413, &Js::Obj(obj! { "error" => Js::str("payload_too_large") })));
     }
@@ -256,6 +293,9 @@ async fn route(session: &Session, poke: &Notify, request: Request) -> Result<Res
         return Ok(Response::json(404, &Js::Obj(obj! { "error" => Js::str("unknown_provider") })));
     };
     let delivery = Delivery { provider: &provider, subscription_id: &subscription_id, raw_body: &request.body, headers: &request.headers, method: "POST", path: &request.path, query: &request.query };
+    if listening.doors_only {
+        return Ok(hook_queued(session, delivery, &notify).await);
+    }
     let (answer, outcomes) = deliver_inline(session, delivery, &notify).await;
     log_runs(&outcomes);
     if answer.status != 200 {
@@ -264,6 +304,24 @@ async fn route(session: &Session, poke: &Notify, request: Request) -> Result<Res
     // A delivery may have queued wakes.
     poke.notify_one();
     Ok(Response::json(202, &Js::Obj(obj! { "runs" => Js::Arr(outcomes.iter().map(outcome_js).collect()) })))
+}
+
+/// `/hooks/…` under `--doors-only`: the delivery's events queued for a
+/// worker, the answer listing each row (`queued`).
+async fn hook_queued(session: &Session, delivery: Delivery<'_>, notify: &dyn Fn()) -> Response {
+    let listed = RefCell::new(Vec::new());
+    let doors = LfDoors::of_session(session, EventSink::Listed(&listed), notify);
+    let answer = answer_delivery(&doors, delivery).await;
+    drop(doors);
+    if answer.status != 200 {
+        return send(answer, notify);
+    }
+    let mut body = match answer.body {
+        Js::Obj(body) => body,
+        _ => Obj::new(),
+    };
+    body.insert("queued".into(), Js::Arr(listed.into_inner()));
+    Response::json(202, &Js::Obj(body))
 }
 
 /// The models door: a model call by the models slot's module, for an
@@ -395,6 +453,18 @@ mod tests {
         assert_eq!(segments("/api/cb/", "/api/cb/"), None);
         assert_eq!(segments("/hooks/acme//x", "/hooks/"), None);
         assert_eq!(segments("/hooks/acme/x", "/hooks/"), Some(vec!["acme", "x"]));
+    }
+
+    #[test]
+    fn doors_only_is_the_flag_or_the_environment() {
+        assert_eq!(doors_only(false, None), Ok(false));
+        assert_eq!(doors_only(true, None), Ok(true));
+        assert_eq!(doors_only(false, Some("1")), Ok(true));
+        assert_eq!(doors_only(false, Some(" TRUE ")), Ok(true));
+        assert_eq!(doors_only(false, Some("0")), Ok(false));
+        assert_eq!(doors_only(false, Some("")), Ok(false));
+        assert!(doors_only(false, Some("yes")).unwrap_err().contains("LF_DOORS_ONLY"));
+        assert_eq!(doors_only(true, Some("0")), Ok(true), "the flag wins");
     }
 
     #[test]

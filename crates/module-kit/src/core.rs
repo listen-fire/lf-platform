@@ -1,5 +1,6 @@
 //! Core slots: the host's own services, filled by a module
-//! (docs/contracts/store-slot.md, limiter-slot.md, loop-guard-slot.md). Each
+//! (docs/contracts/store-slot.md, limiter-slot.md, loop-guard-slot.md,
+//! wake-slot.md). Each
 //! slot's methods are those documents' tables, method for method, carried in
 //! the adapter protocol's envelope like every other module's (`store.open`,
 //! `runs.start`, …), with a slot's results as its table gives them.
@@ -345,6 +346,24 @@ slot! {
         "limiter.release" => fn release(LimiterRelease { permit: String }) -> ();
         /// No call on `key` before `until`.
         "limiter.throttle" => fn throttle(LimiterThrottle { key: String, until: String }) -> ();
+    }
+}
+
+// ── wake ─────────────────────────────────────────────────────────────────────
+
+slot! {
+    /// The wake slot: the host saying work is due, so whatever starts its
+    /// workers (a cloud queue, a scheduled task service) starts one then.
+    /// Each method answers once the wake is arranged, not once the work ran.
+    /// `kind` is the work row's kind (`fire_event`, `resume_timer`, …); a
+    /// module may start a worker for that kind's pool, or ignore it.
+    pub trait Wake served as WakeModule in slot "wake" {
+        /// Start a worker soon. Many in a row may start one.
+        "wake.now" => fn now(WakeNow { kind: String }) -> ();
+        /// Start a worker at `at` (an instant, as `Date.toISOString` writes
+        /// it), never before; one in the past is `now`. Refuse an `at` that
+        /// is not an instant with `ModuleError::bad_request`.
+        "wake.at" => fn at(WakeAt { kind: String, at: String }) -> ();
     }
 }
 

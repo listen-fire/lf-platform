@@ -21,7 +21,7 @@ use tokio::net::TcpListener;
 
 use crate::adapter::{Adapter, AdapterModule};
 use crate::context::{Ctx, ModuleError};
-use crate::core::{Limiter, LimiterModule, LoopGuard, LoopGuardModule, Store, StoreModule};
+use crate::core::{Limiter, LimiterModule, LoopGuard, LoopGuardModule, Store, StoreModule, Wake, WakeModule};
 use crate::module::Module;
 use crate::plugin::{PluginModule, Plugins};
 
@@ -130,6 +130,10 @@ impl Host {
 
     pub fn loop_guard(self, name: &str, guard: impl LoopGuard + 'static) -> Host {
         self.module(LoopGuardModule::new(name, guard))
+    }
+
+    pub fn wake(self, name: &str, wake: impl Wake + 'static) -> Host {
+        self.module(WakeModule::new(name, wake))
     }
 
     /// Require `Authorization: Bearer <token>` on every call.
