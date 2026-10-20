@@ -30,7 +30,6 @@ The dev loop boots the whole stack against real Postgres and Redis and *fake* th
 ```bash
 pnpm dev:loop                   # boot the stack; leave it running
 pnpm dev:seed                   # provision the dev-loop team (idempotent)
-pnpm dev:chat "Set up an ontology to track companies and people"
 pnpm dev:inject attio-webhook --event record.updated --object companies --record 1
 pnpm dev:inspect attio          # what the fake services now hold
 pnpm dev:graph summary          # knowledge graph state

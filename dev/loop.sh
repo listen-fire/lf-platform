@@ -167,8 +167,8 @@ export FAKE_ISSUER_PORT="${FAKE_ISSUER_PORT:-$((HARNESS_BASE + 3))}"
 # the default stack's admin.
 export ADMIN_PORT="${ADMIN_PORT:-$((API_BASE + 4))}"
 
-# Inter-app URL hints. These flow into the dev CLIs (dev:chat, dev:inject,
-# dev:ui, dev:graph) and frontend builds so they target the right stack.
+# Inter-app URL hints. These flow into the dev CLIs (dev:inject, dev:ui,
+# dev:graph) and frontend builds so they target the right stack.
 export API_BASE_URL="${API_BASE_URL:-http://localhost:$PORT}"
 export APP_BASE_URL="${APP_BASE_URL:-http://localhost:$APP_PORT}"
 export WEB_BASE_URL="${WEB_BASE_URL:-http://localhost:$WEB_PORT}"
@@ -422,7 +422,7 @@ JSON
 )
 fi
 
-# Write a marker file so that out-of-band dev CLIs (e.g. `pnpm dev:chat`
+# Write a marker file so that out-of-band dev CLIs (e.g. `pnpm dev:inject`
 # invoked in a fresh shell) auto-discover the active stack's ports.
 # `_profile_loader.ts` reads this and merges into process.env without
 # overwriting existing values. Removed on shutdown.

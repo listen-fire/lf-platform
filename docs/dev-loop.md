@@ -1,8 +1,7 @@
 # DEV_LOOP.md
 
 A reference for autonomous coding agents (and humans) working in this repo.
-Tells you how to boot the full stack, drive the knowledge agents, drive the
-UI, simulate inbound third-party events, and inspect state — so you can
+Tells you how to boot the full stack, drive the UI, simulate inbound third-party events, and inspect state — so you can
 verify your changes end-to-end without touching production.
 
 > Design intent in `plans/2026-05-09-autonomous-dev-loop/`. This file is the
@@ -17,11 +16,8 @@ pnpm dev:loop
 # 2. Provision the dev-loop test team (idempotent)
 pnpm dev:seed --pretty
 
-# 3. Talk to the unified knowledge agent (one agent for model, data,
-#    movements, catalog, and run debugging)
-pnpm dev:chat "Set up an ontology to track companies and people"
-pnpm dev:chat "List all companies in the graph"
-pnpm dev:chat "When an email arrives at the intake address, create the company in Attio"
+# 3. Read the knowledge graph
+pnpm dev:graph summary
 
 # 4. Drive the UI / take screenshots
 pnpm dev:ui screenshot /model --out /tmp/model.png
@@ -130,7 +126,7 @@ still share a single Postgres/Redis pair on the default ports, so concurrent
 stacks among *those three* see each other's database writes. Don't run
 agents whose work could collide on the same KG rows at the same time.
 
-The dev CLIs (`dev:chat`, `dev:inject`, `dev:graph`, `dev:ui`, `dev:link`,
+The dev CLIs (`dev:inject`, `dev:graph`, `dev:ui`, `dev:link`,
 `dev:inspect`, `dev:seed`, `dev:whatsapp`, `dev:airtable`, `dev:movement`) auto-detect the
 active stack by scanning `.dev-loop/profiles/*.json`. Resolution:
 
@@ -209,38 +205,6 @@ Flags: `--pretty`, `--reset` (wipe + recreate).
 
 Output JSON includes `teamId`, `userId`, `email`, `token` (JWT), `webBaseUrl`,
 `appBaseUrl`. The token works for apps/web (cookie `listen_fire_token`).
-
-### `pnpm dev:chat "<message>"`
-
-Converse with the unified knowledge agent — one consultant covering the
-model, data queries/edits (Cypher-backed reads), movement authoring, the
-adapter catalog, and run debugging. Calls the agent runner directly —
-bypasses tRPC + the `onUpdate` subscription. Conversations persist in
-`agent_conversation` / `agent_message`, so the web UI sees the same convo.
-
-```bash
-pnpm dev:chat "Add a Lead Investor edge from Funding Round to Investor"
-pnpm dev:chat "What's the total amount raised across all rounds?"
-pnpm dev:chat "When an email arrives at the intake address, create the company in Attio"
-```
-
-An explicit agent name still works as the first argument: `unified`
-(default), `translation`, `setup`, plus the legacy names (`query`,
-`ontology`, `output`, `movement`, `system`) — the orchestrator routes the
-legacy ones to the unified agent.
-
-Flags:
-
-- `--scopes a,b` — enable only the named capability scopes for the turn
-  (default: all). E.g. `--scopes library.read,knowledge.read` simulates a
-  read-only channel; the agent declines out-of-scope requests and names
-  the missing scope. See `AGENT_SCOPES` in
-  `apps/api/src/lib/knowledge/unified_agent.ts`.
-- `--conversation <id>` (`-c`) — resume a specific conversation
-- `--resume` — reuse the most recent conversation for this agent (cached at `.dev-loop/last-<agent>.json`)
-- `--pretty` — render text + tool calls + built config human-readably
-
-> Cost: real Anthropic calls. Each turn typically uses thousands of tokens.
 
 ### `pnpm dev:ui screenshot <path>`
 
@@ -752,7 +716,7 @@ hidden spec, connections, fixtures, assertions).
 ### Watching the API logs
 
 `pnpm dev:loop` tees the parallel-process stdout into `.dev-loop/loop.log`.
-After firing an inject or chat command, check what the handler did:
+After firing an inject command, check what the handler did:
 
 ```bash
 tail -F .dev-loop/loop.log                              # follow everything
@@ -1104,8 +1068,6 @@ To see one run entered from both at once: save a movement that sleeps and then a
   active stack's API origin (`/api/files/blob/:id` is served by the API,
   not the web app `OAUTH_REDIRECT_BASE_URL` resolves to — without this the
   blob-URL byte path can't resolve in-loop).
-- Conversations from `pnpm dev:chat` are visible in the web UI and vice
-  versa — they share the `agent_conversation` table.
 - `pnpm dev:graph node <id>` is your fastest path to "what's actually in
   the database for this node?" — properties, edges, linked_objects all in
   one JSON dump.
@@ -1201,11 +1163,6 @@ The list below is what the **dev-loop** doesn't yet cover — distinct from
 product features that don't exist. If any of these blocks you on a real
 task, extend them; don't work around them.
 
-- **Input agent for chat-driven config.** `agent_registry.ts` has
-  query/ontology/output domains. There's no `input` domain that knows
-  how to call `webhookSubscriptions.create`, edit triggers, etc. When that exists, `pnpm dev:chat
-  input "wire up Attio companies → Deal updates"` will close the
-  agent-configures-it loop.
 - **Richer fake Attio value shape.** Real Attio responses include
   `active_from`, `active_until`, `created_by_actor` per typed value
   entry. Fake-channels currently emits the minimum fields needed for

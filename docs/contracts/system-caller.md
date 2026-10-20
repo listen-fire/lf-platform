@@ -51,7 +51,7 @@ type SystemAction = 'drain';         // run a drain pass: POST /api/v1/system/au
 ```
 
 - **A verifier refuses what it does not recognise** with a reason, and does not throw. One that throws has refused (`the verifier failed`); its error goes to the server log only.
-- **Actions are what the caller may do.** A route that performs an action refuses a caller that does not hold it. The routes that act in a tenant (the run listings and the system agent) act as the owner of a `system` key, so they accept only a caller the `api_key` verifier accepted, whatever another verifier grants and whatever other key the request also carried.
+- **Actions are what the caller may do.** A route that performs an action refuses a caller that does not hold it. The routes that act in a tenant (the run listings) act as the owner of a `system` key, so they accept only a caller the `api_key` verifier accepted, whatever another verifier grants and whatever other key the request also carried.
 - **The deferral.** When any verifier other than `api_key` is registered (`oidc`, or an embedder's own), a request to the system surface that the host's own authentication refused goes on to the verifiers with no principal; with `api_key` alone, the host's refusal stands as it always has. A deferred request is never half-authenticated: it reaches a route only through a verifier's acceptance.
 
 ## Changes

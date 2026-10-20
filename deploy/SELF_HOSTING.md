@@ -274,7 +274,7 @@ An embedding line must name a model the product knows the widths of, and one wid
 
 Usage rows now name the provider that served each call (`anthropic`, `vertex`, `openai`, `gemini` or `jev`) rather than `google`, the wire model in `model`, and the model name the product asked for in `preferred_model`.
 
-**The map moves one name at a time**, so a deployment can keep Claude on its own Anthropic key while sending only the OpenAI names to Gemini: map just those names, keep `ANTHROPIC_API_KEY`, and set the Google service account. The knowledge agents are no exception: they name `claude-sonnet-5` (the unified agent an Opus name), and run wherever the map sends that name.
+**The map moves one name at a time**, so a deployment can keep Claude on its own Anthropic key while sending only the OpenAI names to Gemini: map just those names, keep `ANTHROPIC_API_KEY`, and set the Google service account.
 
 **Web research searches with its own service off the Claude doors.** Only `anthropic` and `vertex` run hosted web search. When the map sends the research model to `openai` or `gemini`, the model's searches are answered by the product's own web search service instead (Google Programmable Search through `GOOGLE_CUSTOM_SEARCH_API_KEY` and `GOOGLE_CX`, or Bright Data with `WEB_SEARCH_PROVIDER=brightdata`), and its page reads by its own page reader as on Vertex.
 
@@ -360,7 +360,7 @@ On GCP:
 The system endpoints (`/api/v1/system/*`, the drain tick among them) accept whoever one of the configured verifiers accepts. `SYSTEM_AUTH_MODES` names them, comma-separated, asked in that order:
 
 - **`api_key`** (the default): an API key holding the `system` scope, as `Authorization: Bearer lf_…`.
-- **`oidc`**: an OpenID Connect identity token as the bearer. It is accepted when it is signed by one of the issuer's published keys, has not expired, names `SYSTEM_AUTH_OIDC_ISSUER` as its issuer and `SYSTEM_AUTH_OIDC_AUDIENCE` as its audience, and its `sub` (or verified `email`) is on `SYSTEM_AUTH_OIDC_ALLOWED_SUBJECTS`. For Google the issuer is `https://accounts.google.com` (tokens naming it as `accounts.google.com`, which Google also issues, are accepted too), the audience is the drain URL, and the subject is the push subscription's or the scheduler job's service account email. An oidc caller may drain; the run listings and the system agent act in a tenant and still need the key.
+- **`oidc`**: an OpenID Connect identity token as the bearer. It is accepted when it is signed by one of the issuer's published keys, has not expired, names `SYSTEM_AUTH_OIDC_ISSUER` as its issuer and `SYSTEM_AUTH_OIDC_AUDIENCE` as its audience, and its `sub` (or verified `email`) is on `SYSTEM_AUTH_OIDC_ALLOWED_SUBJECTS`. For Google the issuer is `https://accounts.google.com` (tokens naming it as `accounts.google.com`, which Google also issues, are accepted too), the audience is the drain URL, and the subject is the push subscription's or the scheduler job's service account email. An oidc caller may drain; the run listings act in a tenant and still need the key.
 
 Naming `oidc` without all three of its settings, or an issuer that is not `https` in production, fails boot naming what is missing. So does `oidc` without `api_key` while `AUTOMATIONS_TICK_URLS` is set, since the notifier sends the key. A refused call answers `403` with each verifier's reason, and the refusal is logged at most once a minute per caller address and verifier; tokens are never logged.
 
@@ -552,7 +552,7 @@ The onboarding screen shows these steps and the exact URL to paste; nobody needs
 
 ### What a single-tenant installation cannot do
 
-Four things bind to a **person** rather than to a credential, and refuse a machine credential with a message naming the fix rather than inventing a user: connecting a credential to a third-party system, granting access to a specific file or folder, linking a WhatsApp number, and confirming its code. Starting a new conversation with the authoring agent refuses for the same reason; continuing an existing one works.
+Four things bind to a **person** rather than to a credential, and refuse a machine credential with a message naming the fix rather than inventing a user: connecting a credential to a third-party system, granting access to a specific file or folder, linking a WhatsApp number, and confirming its code.
 
 The consequence, bluntly: **a single-tenant installation can register the third-party apps but cannot attach anybody's account to them.** Connecting accounts needs `core` in the unit list.
 
