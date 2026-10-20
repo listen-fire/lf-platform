@@ -19,6 +19,7 @@ core:
 | `loopGuard` | tells a movement's own write echoing back from a real change | none: the slot is empty and nothing is suppressed | `@lf/fingerprint-guard` (opt in) |
 | `browser` | a real page a module drives: a gated deck, a viewer that draws with script ([browser-slot.md](contracts/browser-slot.md)) | none: lf has no browser, and a module asking for a page is refused by name | none in lf; the platform's api image fills it with `@lf/chromium` |
 | `wake` | told when work is due, so whatever starts lf's workers starts one then ([wake-slot.md](contracts/wake-slot.md)) | none: nobody is told, and work waits for a scheduled `lf drain` | none in lf; a cloud queue module (Google Cloud Tasks) ships separately |
+| `ocr` | the text of a scanned PDF or an image, for `extract(…)`, `File.read` and a plugin's `ctx.ocr` ([ocr-slot.md](contracts/ocr-slot.md)) | none: a file with no text layer is unreadable, saying the slot is empty | none in lf; `@listen-fire/document-ai` (Google Document AI) and `@listen-fire/models` on Gemini fill it |
 
 A slot accepts only a module of its own kind; `lf check` and `lf run` refuse anything else, naming the slots.
 
@@ -98,6 +99,22 @@ core:
 - Pair it with `lf serve --doors-only`: the doors queue what arrives, and the wake starts a worker for it.
 - lf builds none in. A module filling it speaks [its wire](contracts/wake-slot.md), and the conformance cases there hold it to the slot's meaning.
 
+## OCR
+
+A deck of screenshots compiled into a PDF has no text of its own. Name an OCR module and `extract(…)` reads it with no change to the movement:
+
+```yaml
+core:
+  ocr: document_ai
+```
+
+- lf reads a born-digital PDF's own text first. Only a PDF whose text layer is too thin (fewer than 50 non-whitespace characters a page, so page numbers stamped on a scan do not count) goes to the slot. An image always does.
+- `@listen-fire/document-ai` is the platform's own Google Document AI reader ([its README](../modules/document-ai/README.md)): install it as `externals/document_ai`, `lf connect document_ai`. A long file needs its `bucket`.
+- `@listen-fire/models` reads files on Gemini as a second install entry, `models_ocr` ([its README](../modules/models/README.md#reading-scanned-files-the-ocr-slot)).
+- Every read reports its cost, which counts against `maxRunCostUsd` as a model call does; a module that publishes its price per page has a read the run cannot afford refused before it is made.
+- A plugin lf starts asks the slot through `ctx.ocr` (`@lf/web` reads the PDFs a dealflow message links to this way).
+- With the slot empty, a scanned file is unreadable and says why; nothing is guessed.
+
 ## Filling a slot
 
 1. Name the module in `lf.yaml`'s `core:` (not needed for a default).
@@ -130,4 +147,4 @@ A module of your own, started from its `command` or reached at its `url`, fills 
 
 ## Embedding
 
-An embedded engine has four of these slots (models, judge, store, files); you fill each with your own part of the host. The limiter, loop guard, browser and wake slots are lf's. See [`embedding.md`](embedding.md#5-the-host-filling-the-slots).
+An embedded engine has four of these slots (models, judge, store, files); you fill each with your own part of the host. The limiter, loop guard, browser, wake and ocr slots are lf's (an embedder's file-to-text is its own, OCR included). See [`embedding.md`](embedding.md#5-the-host-filling-the-slots).

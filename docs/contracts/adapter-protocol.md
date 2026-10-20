@@ -1070,6 +1070,18 @@ page = web.fetchUrl(u)
   `toolName` and `toolDescription`) asks for the reply as `data`. The door
   bills no run itself: add its `cost` to the `cost` of the answer whose work
   asked it. The module kit does both for you.
+- **The host's OCR.** Any module the host started may ask its ocr slot for
+  the text of a scanned PDF or an image ([ocr-slot.md](ocr-slot.md)):
+
+  ```
+  POST {listen-fire}/api/public/adapter/{adapterType}/ocr
+  { "bytes": "<base64>", "contentType": "application/pdf", "label": "web.vc-url-retrieval" }
+  → { "text": "…", "pages": 12, "cost": [{ "microdollars": 18000, "label": "document-ai/ocr" }] }
+  ```
+
+  Authentication is the models door's. An empty slot answers 503
+  `ocr_slot_empty`, saying so. Like the models door it bills no run itself;
+  the module kit's `ctx.ocr` charges the read to the answer that asked.
 - **Limits.** The manifest may declare the provider's limits on calls, so the
   host never sends more than it allows:
 
@@ -1393,6 +1405,7 @@ from the root, so no automation can walk the collection.
 
 ## Changes
 
+- **The ocr slot and the host's OCR door** (within version 2, no bump; 2026-10-20; additive). A ninth core slot, `ocr` ([ocr-slot.md](ocr-slot.md)), and `POST …/{adapterType}/ocr` for a module's `ctx.ocr`.
 - **One transport for every module kind** (within version 2, no bump; 2026-10-19). Every core slot's methods ride this envelope ([Transport](#transport)): a Unix socket on the host's box, loopback TCP without one, HTTPS for a remote module; the store, limiter and loop guard slots' stdin/stdout JSON-RPC wire is retired. New slot methods for models, judge, files and browser; a core module's manifest; per-install outgoing auth; `ctx.kv.compareAndSet`. Additive for adapters and plugins: an older server is unchanged.
 - **Conformance CLI.** `pnpm adapter:conformance` checks a server against this protocol; run it first when building an adapter ([Build your first adapter](#build-your-first-adapter)).
 - **Version 2** (current; the only version this release speaks). Breaking for a server built against version 1:
