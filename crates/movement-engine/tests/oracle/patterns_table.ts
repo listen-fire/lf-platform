@@ -217,7 +217,8 @@ export const PATTERNS: Pattern[] = [
     ends: 'whole',
     note: "FILE() asks files.render",
     programs: [
-      (pick) => ({ body: `  f = FILE("report on \${msg.\`subject\`}", "${pick(['pdf', 'text'])}")\n  write crm-[:notes]-> { body: COALESCE(f.name, "none") }` }),
+      // From version 5 a PDF is the @lf/pdf plugin's, not a FILE() kind; the draw stays, so every later case keeps its seeded pick.
+      (pick) => ({ body: `  f = FILE("${pick(['report on', 'notes on'])} \${msg.\`subject\`}", "text")\n  write crm-[:notes]-> { body: COALESCE(f.name, "none") }` }),
       () => ({ body: '  items = msg-[f:files]-> {\n    return f.`filename`\n  }\n  doc = FILE(JOIN(items, ", "), "text")\n  write crm-[:notes]-> { body: doc.contentType }' }),
     ],
   },
