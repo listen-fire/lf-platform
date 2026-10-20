@@ -740,6 +740,7 @@ dependencies = [
  "hyper-util",
  "indexmap",
  "jiff",
+ "libc",
  "listen-fire-checker",
  "listen-fire-engine",
  "listen-fire-language",

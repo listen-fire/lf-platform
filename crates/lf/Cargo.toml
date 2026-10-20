@@ -52,7 +52,7 @@ postgres = ["cli", "tls", "dep:tokio-postgres"]
 # The hyper server bits: `lf serve`, the inbound doors and their signature checks.
 serve = ["cli", "hyper/server"]
 # A PDF's own text layer (src/pdf_text.rs), read before the ocr slot is asked.
-pdf = ["cli", "dep:lopdf"]
+pdf = ["cli", "dep:lopdf", "dep:libc"]
 
 [dependencies]
 movement-parser = { package = "listen-fire-parser", version = "0.12.0-rc.3", path = "../movement-parser" }
@@ -110,6 +110,8 @@ url = { version = "2", optional = true }
 # A PDF's pages and the text its fonts draw (src/pdf_text.rs). Its default
 # features are dates and threads lf does not need.
 lopdf = { version = "0.42", default-features = false, optional = true }
+# The PDF reader child's address-space limit (setrlimit before exec).
+libc = { version = "0.2", optional = true }
 
 [dev-dependencies]
 # Paused time: a test of the wall clock's grace runs in no time.

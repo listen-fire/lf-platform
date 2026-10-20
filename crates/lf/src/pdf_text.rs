@@ -8,7 +8,8 @@
 /// well under any real page of prose, well over a scan's headers and page numbers.
 pub const TEXT_LAYER_CHARS_PER_PAGE: usize = 50;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Layer {
     /// The pages' text, page after page.
     Text(String),
@@ -17,8 +18,10 @@ pub enum Layer {
     Scanned { pages: Option<u32> },
 }
 
-/// The file's text layer, judged per page.
-pub fn text_layer(bytes: &[u8]) -> Layer {
+/// The file's text layer, judged per page. Runs only in the child process
+/// (`read`): the file is the sender's, and a parser panic under the release
+/// profile's `panic = "abort"` would end the whole host.
+fn text_layer(bytes: &[u8]) -> Layer {
     let Ok(document) = lopdf::Document::load_mem(bytes) else { return Layer::Scanned { pages: None } };
     let numbers: Vec<u32> = document.get_pages().keys().copied().collect();
     let pages = u32::try_from(numbers.len()).ok();
@@ -32,6 +35,97 @@ pub fn text_layer(bytes: &[u8]) -> Layer {
     } else {
         Layer::Scanned { pages }
     }
+}
+
+/// The largest PDF lf parses; a bigger one is refused rather than handed to the parser.
+const MAX_BYTES: usize = 64 << 20;
+/// The child's wall clock: a hostile file may send the parser into a loop.
+const TIME_LIMIT: std::time::Duration = std::time::Duration::from_secs(30);
+/// The child's address space: a hostile file may ask the parser for gigabytes.
+#[cfg(unix)]
+const MEMORY_LIMIT_BYTES: u64 = 2 << 30;
+/// The most JSON the child may answer with (the text of a 64 MiB PDF, with room for escapes).
+const MAX_ANSWER_BYTES: u64 = 256 << 20;
+
+/// The hidden `lf --pdf-text` mode: the PDF on stdin, its `Layer` as JSON on stdout.
+pub fn child_main() -> i32 {
+    use std::io::{Read, Write};
+    let mut bytes = Vec::new();
+    if std::io::stdin().take(MAX_BYTES as u64 + 1).read_to_end(&mut bytes).is_err() || bytes.len() > MAX_BYTES {
+        return 2;
+    }
+    // Only a debug build reads this: a way to prove the parent survives its child dying.
+    #[cfg(debug_assertions)]
+    match std::env::var("LF_PDF_TEXT_FAULT").as_deref() {
+        Ok("panic") => panic!("injected fault"),
+        Ok("hang") => loop {
+            std::thread::sleep(std::time::Duration::from_secs(60));
+        },
+        _ => {}
+    }
+    let Ok(answer) = serde_json::to_vec(&text_layer(&bytes)) else { return 2 };
+    if std::io::stdout().write_all(&answer).is_err() {
+        return 2;
+    }
+    0
+}
+
+/// The file's text layer, read by a short-lived child of this binary, so a
+/// parser that panics, hangs or balloons ends only the child. Err says why
+/// the file could not be read; that is not "no text layer" (the caller must
+/// not send a file that crashed the parser on to a paid OCR read).
+pub async fn read(bytes: &[u8]) -> Result<Layer, String> {
+    let exe = std::env::current_exe().map_err(|e| format!("lf cannot find its own binary to read the PDF in a child process: {e}"))?;
+    let mut command = tokio::process::Command::new(exe);
+    command.arg("--pdf-text");
+    read_with(command, bytes).await
+}
+
+async fn read_with(mut command: tokio::process::Command, bytes: &[u8]) -> Result<Layer, String> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    if bytes.len() > MAX_BYTES {
+        return Err(format!("the PDF is {} MiB, over the {} MiB lf reads", bytes.len() >> 20, MAX_BYTES >> 20));
+    }
+    command.stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::null()).kill_on_drop(true);
+    #[cfg(unix)]
+    // SAFETY: setrlimit is async-signal-safe and touches no memory of ours.
+    unsafe {
+        command.pre_exec(|| {
+            let limit = libc::rlimit { rlim_cur: MEMORY_LIMIT_BYTES as libc::rlim_t, rlim_max: MEMORY_LIMIT_BYTES as libc::rlim_t };
+            // Refused on platforms that do not bound address space (macOS): the time limit still holds.
+            libc::setrlimit(libc::RLIMIT_AS, &limit);
+            Ok(())
+        });
+    }
+    let unreadable = |why: String| format!("the PDF's text layer could not be read safely ({why})");
+    let mut child = command.spawn().map_err(|e| unreadable(format!("its reader process did not start: {e}")))?;
+    let (Some(mut stdin), Some(stdout)) = (child.stdin.take(), child.stdout.take()) else { return Err(unreadable("its reader process had no pipes".into())) };
+    let exchange = async {
+        let feed = async {
+            // A child that dies early closes the pipe: its exit status says why.
+            let _ = stdin.write_all(bytes).await;
+            drop(stdin);
+        };
+        let drain = async {
+            let mut answer = Vec::new();
+            stdout.take(MAX_ANSWER_BYTES + 1).read_to_end(&mut answer).await.map(|_| answer)
+        };
+        let (_, answer) = tokio::join!(feed, drain);
+        let status = child.wait().await;
+        (answer, status)
+    };
+    let Ok((answer, status)) = tokio::time::timeout(TIME_LIMIT, exchange).await else {
+        return Err(unreadable(format!("its reader process was stopped after {} seconds", TIME_LIMIT.as_secs())));
+    };
+    let status = status.map_err(|e| unreadable(format!("its reader process was lost: {e}")))?;
+    if !status.success() {
+        return Err(unreadable(format!("its reader process failed: {status}")));
+    }
+    let answer = answer.map_err(|e| unreadable(format!("its answer was unreadable: {e}")))?;
+    if answer.len() as u64 > MAX_ANSWER_BYTES {
+        return Err(unreadable("its answer was over the size limit".into()));
+    }
+    serde_json::from_slice(&answer).map_err(|e| unreadable(format!("its answer was malformed: {e}")))
 }
 
 #[cfg(test)]
@@ -88,5 +182,41 @@ mod tests {
     #[test]
     fn bytes_that_are_no_pdf_lf_can_read_are_left_to_ocr() {
         assert_eq!(text_layer(b"%PDF-1.4 truncated"), Layer::Scanned { pages: None });
+    }
+
+    fn shell(script: &str) -> tokio::process::Command {
+        let mut command = tokio::process::Command::new("sh");
+        command.arg("-c").arg(script);
+        command
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_child_that_dies_is_reported_and_the_parent_lives() {
+        let why = read_with(shell("kill -ABRT $$"), b"%PDF-1.4").await.unwrap_err();
+        assert!(why.contains("could not be read safely") && why.contains("failed"), "{why}");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_child_that_exits_zero_with_junk_is_reported() {
+        let why = read_with(shell("echo nonsense"), b"%PDF-1.4").await.unwrap_err();
+        assert!(why.contains("malformed"), "{why}");
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn a_child_that_hangs_is_stopped_at_the_time_limit() {
+        let why = read_with(shell("sleep 600"), b"%PDF-1.4").await.unwrap_err();
+        assert!(why.contains("stopped after 30 seconds"), "{why}");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_pdf_over_the_size_limit_is_refused_unparsed() {
+        let why = read_with(shell("cat >/dev/null"), &vec![0; MAX_BYTES + 1]).await.unwrap_err();
+        assert!(why.contains("over the 64 MiB"), "{why}");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_layer_survives_the_trip_through_a_child() {
+        let json = serde_json::to_string(&Layer::Scanned { pages: Some(3) }).unwrap();
+        assert_eq!(read_with(shell(&format!("cat >/dev/null; printf '%s' '{json}'")), b"x").await, Ok(Layer::Scanned { pages: Some(3) }));
     }
 }

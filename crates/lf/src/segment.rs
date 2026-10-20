@@ -1248,7 +1248,12 @@ async fn file_text(host: &SegmentHost<'_>, file: &Obj, remaining: Option<f64>) -
 /// A PDF: its own text layer first, the ocr slot second (packages/file-text's rule).
 #[cfg(feature = "pdf")]
 async fn pdf_text(ocr: Option<&crate::ocr::OcrModule>, bytes: &[u8], name: Option<&str>, remaining: Option<f64>) -> Result<Js, String> {
-    match crate::pdf_text::text_layer(bytes) {
+    // A file the reader could not survive is unreadable, not "scanned": OCR is paid, and the sender chose these bytes.
+    let layer = match crate::pdf_text::read(bytes).await {
+        Ok(layer) => layer,
+        Err(why) => return Ok(Js::Obj(obj! { "unreadable" => Js::str("extraction_failed"), "detail" => Js::Str(why), "cost" => Js::Arr(Vec::new()) })),
+    };
+    match layer {
         crate::pdf_text::Layer::Text(text) => Ok(Js::Obj(obj! { "text" => Js::Str(text) })),
         crate::pdf_text::Layer::Scanned { pages } => crate::ocr::file_text(ocr, crate::ocr::Scanned::Pdf { pages }, bytes, "application/pdf", name, remaining).await,
     }

@@ -531,6 +531,11 @@ fn store_of(args: &Args, project: &project::Project) -> Result<backend::StoreSpe
 
 fn main() {
     let argv: Vec<String> = std::env::args().skip(1).collect();
+    // Hidden: the isolated PDF reader (src/pdf_text.rs) re-executes lf in this mode.
+    #[cfg(feature = "pdf")]
+    if argv.as_slice() == ["--pdf-text"] {
+        std::process::exit(pdf_text::child_main());
+    }
     let wants_json = argv.iter().any(|a| a == "--json");
     let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().expect("a tokio runtime");
     // A LocalSet, so a listener's connections run as tasks on this one thread.
