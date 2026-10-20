@@ -854,6 +854,7 @@
               "attachments": []
             },
             "externalId": "wamid.T1",
+            "idempotencyKey": "wamid.T1",
             "recordType": "whatsapp:message",
             "eventType": "message",
             "tag": "message"
@@ -876,6 +877,7 @@
               ]
             },
             "externalId": "wamid.I1",
+            "idempotencyKey": "wamid.I1",
             "recordType": "whatsapp:message",
             "eventType": "message",
             "tag": "message"
@@ -898,6 +900,7 @@
               ]
             },
             "externalId": "wamid.S1",
+            "idempotencyKey": "wamid.S1",
             "recordType": "whatsapp:message",
             "eventType": "message",
             "tag": "message"
@@ -913,6 +916,7 @@
               "reactedMessageId": "wamid.T1"
             },
             "externalId": "wamid.R1",
+            "idempotencyKey": "wamid.R1",
             "recordType": "whatsapp:reaction",
             "eventType": "reaction",
             "tag": "reaction"
@@ -930,6 +934,7 @@
               "address": "1 Road"
             },
             "externalId": "wamid.L1",
+            "idempotencyKey": "wamid.L1",
             "recordType": "whatsapp:location",
             "eventType": "location",
             "tag": "location"

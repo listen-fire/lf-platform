@@ -231,6 +231,8 @@ export function whatsappInboundEvents(body: unknown): DiscriminableEvent[] {
         events.push({
           payload: classified.payload,
           externalId: message.id,
+          // Meta resends a delivery it saw no 2xx for: the message id lets the host run it once.
+          idempotencyKey: message.id,
           recordType: classified.rootRecordType,
           eventType: classified.kind,
           tag: classified.kind,
