@@ -6,6 +6,8 @@ Works against AWS S3, Google Cloud Storage (its S3 interoperability endpoint), C
 
 ## Install
 
+The lf cloud image (`deploy/lf`) already carries this module with a ready install entry (`s3_files`); see its README. Elsewhere:
+
 1. Install the package into the project's externals folder and keep `lf-external.yaml` (shipped in the package) beside it, as `externals/s3_files/lf-external.yaml`.
 2. Name it in `lf.yaml`:
 

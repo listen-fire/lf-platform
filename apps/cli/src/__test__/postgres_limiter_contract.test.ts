@@ -1,4 +1,4 @@
-// The limiter slot's contract suite against @lf/postgres-limiter (modules/
+// The limiter slot's contract suite against @listen-fire/postgres-limiter (modules/
 // postgres-limiter) as a process, over the slot wire, on the repo's test
 // database in a schema of its own that the run drops. Skipped without
 // DATABASE_URL_TEST. Two module processes share the one schema in the last
@@ -21,7 +21,7 @@ function start(): RpcLimiter {
   return new RpcLimiter(process.execPath, ['--conditions=movement-engine-internals', '--require', require.resolve('tsx/cjs'), resolve(MODULE, 'serve.ts')]);
 }
 
-describe('@lf/postgres-limiter', { skip: url === undefined ? 'DATABASE_URL_TEST is not set' : false }, () => {
+describe('@listen-fire/postgres-limiter', { skip: url === undefined ? 'DATABASE_URL_TEST is not set' : false }, () => {
   const limiters: RpcLimiter[] = [];
   const settings = { url: url ?? '', schema };
 

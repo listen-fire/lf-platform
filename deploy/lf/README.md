@@ -1,6 +1,6 @@
 # Deploying lf to a scale-from-zero platform
 
-The image (`deploy/lf/Dockerfile`, built from the repository root) holds one binary, `lf`, plus the built-in Dealroom and web modules.
+The image (`deploy/lf/Dockerfile`, built from the repository root) holds one binary, `lf`, plus the built-in Dealroom and web modules, and the two cloud slot modules: `s3-files` (the files slot, a bucket on S3, GCS, R2 or MinIO) and `postgres-limiter` (the limiter slot, one shared count across workers). Nothing is installed from npm.
 
 The image is node-based and large (about 2.3 GB): the built-in modules are TypeScript and run under node (`serve-module` and tsx) from the pnpm workspace, whose install brings its dev tooling too. That is accepted, since size only costs pull time on a cold start.
 
@@ -15,6 +15,7 @@ The container keeps no state. Everything lives in Postgres, so any container can
 
 - The store: the default project's `lf.yaml` names the Postgres store module (`core: { store: "@lf/postgres-store" }`). Its settings come from the environment: `LF_SECRET__POSTGRES_STORE__EXTERNAL=@lf/postgres-store` and `LF_SECRET__POSTGRES_STORE__URL`, the Postgres URL ending `?sslmode=verify-full` (TLS, certificate and host name checked). Set the URL as a platform secret.
 - The store's schema: run `lf connect @lf/postgres-store` once (and again after an upgrade) with the same environment. It creates and migrates the store's own `lf` schema and exits.
+- The files and limiter slots (both off by default): the image carries ready install entries `s3_files` and `postgres_limiter` under `/srv/lf/project/externals/`. Name them in `lf.yaml` (`core: { files: s3_files, limiter: postgres_limiter }`) and set their settings from the environment, as for the store: `LF_SECRET__S3_FILES__EXTERNAL=s3_files` with `__BUCKET`, `__REGION` and, as the service needs, `__ENDPOINT`, `__PATH_STYLE`, `__ACCESS_KEY_ID`, `__SECRET_ACCESS_KEY`; `LF_SECRET__POSTGRES_LIMITER__EXTERNAL=postgres_limiter` with `__URL`. If you mount your own project over `/srv/lf/project`, copy those two folders from the image's `externals/`. They start by `command` under tsx, since a core module is not served with `module:`.
 - `PORT`: the port `serve` listens on (default 8080). `LF_BIND` defaults to `0.0.0.0` in the image (the binary's own default is loopback).
 - Credentials for third parties: `LF_SECRET__<CREDENTIAL>__<FIELD>` environment variables.
 - `publicUrl` in `lf.yaml`: the HTTPS address the platform gives the serve container, needed for OAuth redirects.

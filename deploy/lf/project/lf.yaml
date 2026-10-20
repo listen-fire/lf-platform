@@ -8,3 +8,15 @@ externals: externals
 #   LF_SECRET__POSTGRES_STORE__URL=postgres://…?sslmode=verify-full
 core:
   store: "@lf/postgres-store"
+# Two more slot modules are in the image, off by default. To keep documents in an
+# S3-interface bucket and to share rate limits across workers, set:
+#   core:
+#     store: "@lf/postgres-store"
+#     files: s3_files
+#     limiter: postgres_limiter
+# with their settings from the environment, never this file:
+#   LF_SECRET__S3_FILES__EXTERNAL=s3_files
+#   LF_SECRET__S3_FILES__BUCKET=… __REGION=… (and __ENDPOINT, __PATH_STYLE,
+#   __ACCESS_KEY_ID, __SECRET_ACCESS_KEY as the service needs)
+#   LF_SECRET__POSTGRES_LIMITER__EXTERNAL=postgres_limiter
+#   LF_SECRET__POSTGRES_LIMITER__URL=postgres://…?sslmode=verify-full

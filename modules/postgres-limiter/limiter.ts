@@ -1,4 +1,4 @@
-// @lf/postgres-limiter: the limiter slot kept in Postgres, so every host
+// @listen-fire/postgres-limiter: the limiter slot kept in Postgres, so every host
 // sharing the database shares one count. Each acquire is one transaction that
 // locks the rows of the buckets it names (in a fixed order, so two acquires
 // cannot deadlock), reads the database's own clock, decides (windowing.ts) and

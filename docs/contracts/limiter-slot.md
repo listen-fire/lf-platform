@@ -25,7 +25,7 @@ settings:                      # optional; prompted by `lf connect acme_limits`
   - { name: url, label: the Redis URL, secret: true }
 ```
 
-- `modules/postgres-limiter` (`@lf/postgres-limiter`) is one such module: the limits kept in Postgres, in a schema of its own (setting `schema`, default `lf_postgres_limiter`, created when it is opened), so every worker sharing the database shares one count. Its `url` setting is secret. It reads the database's clock, so hosts with drifting clocks agree.
+- `modules/postgres-limiter` (`@listen-fire/postgres-limiter`) is one such module: the limits kept in Postgres, in a schema of its own (setting `schema`, default `lf_postgres_limiter`, created when it is opened), so every worker sharing the database shares one count. Its `url` setting is secret. It reads the database's clock, so hosts with drifting clocks agree.
 - lf.yaml names it for the slot: `core: { limiter: acme_limits }`.
 - `lf connect acme_limits` asks its settings and opens it once.
 
