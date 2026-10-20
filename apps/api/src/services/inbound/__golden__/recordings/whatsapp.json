@@ -62,7 +62,7 @@
   {
     "id": "message-good-signature",
     "door": "whatsapp",
-    "note": "A signed text message: acked EVENT_RECEIVED; the sender is announced to ops and the message dispatched to its team (off-request).",
+    "note": "A signed text message is written as a whatsapp_message row keyed on its wamid, then acked EVENT_RECEIVED; the ops notice and the dispatch run when the row drains.",
     "request": {
       "method": "POST",
       "path": "/api/public/whatsapp/webhook",
@@ -82,33 +82,36 @@
     },
     "effects": [
       {
-        "kind": "ops_notification",
-        "type": "OVI",
-        "teamId": "team-1",
-        "text": ":speech_balloon: New WhatsApp message from: Ada (15550002222)\n*Message*: \"see https://example.com/a/b\"",
-        "opsTitle": "New WhatsApp message from Ada"
+        "kind": "enqueue_work",
+        "row": {
+          "kind": "whatsapp_message",
+          "key": "whatsapp_message:wamid.10",
+          "payload": {
+            "message": {
+              "from": "15550002222",
+              "id": "wamid.10",
+              "timestamp": "1760702400",
+              "type": "text",
+              "text": {
+                "body": "see https://example.com/a/b"
+              }
+            },
+            "profileName": "Ada",
+            "businessNumber": "15550001111",
+            "businessPhoneNumberId": "pn-1",
+            "announce": true
+          }
+        }
       },
       {
-        "kind": "whatsapp_dispatch_message",
-        "message": {
-          "from": "15550002222",
-          "id": "wamid.10",
-          "timestamp": "1760702400",
-          "type": "text",
-          "text": {
-            "body": "see https://example.com/a/b"
-          }
-        },
-        "profileName": "Ada",
-        "businessNumber": "15550001111",
-        "businessPhoneNumberId": "pn-1"
+        "kind": "notify_work"
       }
     ]
   },
   {
     "id": "message-unknown-sender",
     "door": "whatsapp",
-    "note": "An unknown sender is announced with the raw number; dispatch still runs.",
+    "note": "An unknown sender is queued exactly like a known one; who the sender is gets resolved when the row drains.",
     "request": {
       "method": "POST",
       "path": "/api/public/whatsapp/webhook",
@@ -128,26 +131,29 @@
     },
     "effects": [
       {
-        "kind": "ops_notification",
-        "type": "OVI",
-        "teamId": null,
-        "text": ":speech_balloon: New WhatsApp message from: Unknown user: 15550002222\n*Message*: \"see https://example.com/a/b\"",
-        "opsTitle": "New WhatsApp message from 15550002222"
+        "kind": "enqueue_work",
+        "row": {
+          "kind": "whatsapp_message",
+          "key": "whatsapp_message:wamid.10",
+          "payload": {
+            "message": {
+              "from": "15550002222",
+              "id": "wamid.10",
+              "timestamp": "1760702400",
+              "type": "text",
+              "text": {
+                "body": "see https://example.com/a/b"
+              }
+            },
+            "profileName": "Ada",
+            "businessNumber": "15550001111",
+            "businessPhoneNumberId": "pn-1",
+            "announce": true
+          }
+        }
       },
       {
-        "kind": "whatsapp_dispatch_message",
-        "message": {
-          "from": "15550002222",
-          "id": "wamid.10",
-          "timestamp": "1760702400",
-          "type": "text",
-          "text": {
-            "body": "see https://example.com/a/b"
-          }
-        },
-        "profileName": "Ada",
-        "businessNumber": "15550001111",
-        "businessPhoneNumberId": "pn-1"
+        "kind": "notify_work"
       }
     ]
   },
@@ -199,7 +205,7 @@
   {
     "id": "interactive-reply-fires-callback",
     "door": "whatsapp",
-    "note": "A tapped reply button with a callback id fires it and replies from the receiving number.",
+    "note": "A tapped reply button is queued as its whatsapp_message row; the callback fires and the reply goes out from the receiving number when the row drains.",
     "request": {
       "method": "POST",
       "path": "/api/public/whatsapp/webhook",
@@ -219,49 +225,38 @@
     },
     "effects": [
       {
-        "kind": "fire_callback",
-        "id": "cb_golden0001",
-        "values": {}
-      },
-      {
-        "kind": "whatsapp_send_text",
-        "businessPhoneNumberId": "pn-1",
-        "to": "15550002222",
-        "text": "Thanks — that has been recorded.",
-        "options": {
-          "replyToMessageId": "wamid.11"
+        "kind": "enqueue_work",
+        "row": {
+          "kind": "whatsapp_message",
+          "key": "whatsapp_message:wamid.11",
+          "payload": {
+            "message": {
+              "from": "15550002222",
+              "id": "wamid.11",
+              "timestamp": "1760702400",
+              "type": "interactive",
+              "interactive": {
+                "type": "button_reply",
+                "button_reply": {
+                  "id": "cb_golden0001",
+                  "title": "Approve"
+                }
+              }
+            },
+            "businessPhoneNumberId": "pn-1",
+            "announce": true
+          }
         }
       },
       {
-        "kind": "ops_notification",
-        "type": "OVI",
-        "teamId": "team-1",
-        "text": ":speech_balloon: New WhatsApp message from: Ada (15550002222)\n*Message*: \"Interactive Button: Approve (cb_golden0001)\"",
-        "opsTitle": "New WhatsApp message from Ada"
-      },
-      {
-        "kind": "whatsapp_dispatch_message",
-        "message": {
-          "from": "15550002222",
-          "id": "wamid.11",
-          "timestamp": "1760702400",
-          "type": "interactive",
-          "interactive": {
-            "type": "button_reply",
-            "button_reply": {
-              "id": "cb_golden0001",
-              "title": "Approve"
-            }
-          }
-        },
-        "businessPhoneNumberId": "pn-1"
+        "kind": "notify_work"
       }
     ]
   },
   {
     "id": "statuses-only-delivery",
     "door": "whatsapp",
-    "note": "Delivery receipts are acked and not processed.",
+    "note": "Delivery receipts are acked and nothing is queued.",
     "request": {
       "method": "POST",
       "path": "/api/public/whatsapp/webhook",
@@ -301,6 +296,29 @@
         "content-length": "14"
       },
       "body": "EVENT_RECEIVED"
+    },
+    "effects": []
+  },
+  {
+    "id": "enqueue-fails",
+    "door": "whatsapp",
+    "note": "The message could not be written as its whatsapp_message row: 500, so Meta resends.",
+    "request": {
+      "method": "POST",
+      "path": "/api/public/whatsapp/webhook",
+      "headers": {
+        "content-type": "application/json",
+        "x-hub-signature-256": "sha256=11b6287da66af5fca53fe77462353b0810364a9bb71f4918330a22cf8e29c91f"
+      },
+      "body": "{\"object\":\"whatsapp_business_account\",\"entry\":[{\"id\":\"waba-1\",\"changes\":[{\"field\":\"messages\",\"value\":{\"metadata\":{\"display_phone_number\":\"15550001111\",\"phone_number_id\":\"pn-1\"},\"contacts\":[{\"wa_id\":\"15550002222\",\"profile\":{\"name\":\"Ada\"}}],\"messages\":[{\"from\":\"15550002222\",\"id\":\"wamid.10\",\"timestamp\":\"1760702400\",\"type\":\"text\",\"text\":{\"body\":\"see https://example.com/a/b\"}}]}}]}]}"
+    },
+    "response": {
+      "status": 500,
+      "headers": {
+        "content-type": "text/plain; charset=utf-8",
+        "content-length": "21"
+      },
+      "body": "Internal Server Error"
     },
     "effects": []
   },
@@ -348,26 +366,29 @@
     },
     "effects": [
       {
-        "kind": "ops_notification",
-        "type": "OVI",
-        "teamId": "team-1",
-        "text": ":speech_balloon: New WhatsApp message from: Ada (15550002222)\n*Message*: \"see https://example.com/a/b\"",
-        "opsTitle": "New WhatsApp message from Ada"
+        "kind": "enqueue_work",
+        "row": {
+          "kind": "whatsapp_message",
+          "key": "whatsapp_message:wamid.10",
+          "payload": {
+            "message": {
+              "from": "15550002222",
+              "id": "wamid.10",
+              "timestamp": "1760702400",
+              "type": "text",
+              "text": {
+                "body": "see https://example.com/a/b"
+              }
+            },
+            "profileName": "Ada",
+            "businessNumber": "15550001111",
+            "businessPhoneNumberId": "pn-1",
+            "announce": true
+          }
+        }
       },
       {
-        "kind": "whatsapp_dispatch_message",
-        "message": {
-          "from": "15550002222",
-          "id": "wamid.10",
-          "timestamp": "1760702400",
-          "type": "text",
-          "text": {
-            "body": "see https://example.com/a/b"
-          }
-        },
-        "profileName": "Ada",
-        "businessNumber": "15550001111",
-        "businessPhoneNumberId": "pn-1"
+        "kind": "notify_work"
       }
     ]
   }

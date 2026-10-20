@@ -1,16 +1,10 @@
 import { type Request, type Response } from 'express';
 
 import { logger } from 'movement-engine/public/log';
-import { sendSlackNotification } from '../../lib/slack';
 import { authorizeUnsignedWebhook } from '../../lib/unsigned_webhooks';
-import { dispatchWhatsappMessage } from '../../services/whatsapp/dispatch';
 import { verifyWithScheme } from 'movement-engine/public/inbound';
-import { resolveWhatsappSender } from '../../services/whatsapp/utils';
-import {
-  defaultWhatsappCallbackResponder,
-  handleWhatsappInteractiveReplies,
-  ownsWhatsappInteractiveReply,
-} from '../../services/webhook_sync/whatsapp_callback_door';
+import { enqueueWhatsappMessage, whatsappMessageRowsOf } from '../../services/whatsapp/inbound_message';
+import { notifyWork } from '../../services/work/drain';
 
 interface WhatsAppWebhookEntry {
   changes?: Array<{
@@ -238,137 +232,29 @@ const receiveWebhook = (config: WhatsappDoorConfig) => async (req: Request, res:
       return;
     }
     logger.info('Received WhatsApp webhook:', req.body);
+
+    // Durable, then answered: each message is written as a `whatsapp_message`
+    // row keyed on its wamid, and the drain does the dispatch, a tapped
+    // callback's fire and reply, and the ops notice. Work done after the answer
+    // would be lost to a restart, a deploy or a frozen instance. A row that
+    // could not be written answers 500, so Meta resends; a resend folds onto
+    // the same row or finds its receipts already stored, so it never
+    // dispatches twice. A delivery with no messages (delivery receipts, another
+    // Meta product) writes nothing and is acked, since Meta retries anything
+    // that is not a 200.
+    const rows = whatsappMessageRowsOf(req.body as WhatsAppWebhookBody);
     try {
-      const body = req.body as WhatsAppWebhookBody;
-      if (body.object === 'whatsapp_business_account') {
-        // Process each entry in the webhook
-        const processingPromises: Promise<void>[] = [];
-
-        // A tapped reply button arrives as an ordinary message carrying
-        // `interactive.button_reply`/`list_reply` — branch FIRST, before any
-        // movement-event parsing, exactly like Telegram's callback_query check
-        // (services/webhook_sync/telegram_callback_door.ts). Unlike Telegram's
-        // single callback_query per delivery, a batch can carry several
-        // messages, so this does not gate what follows: `classifyMetaMessage`
-        // already drops an interactive-typed message as unclassified, so
-        // letting the rest of this handler also see it is harmless — never a
-        // double dispatch. Off-request, like every other promise here.
-        if (ownsWhatsappInteractiveReply(body)) {
-          processingPromises.push(
-            handleWhatsappInteractiveReplies({
-              raw: body,
-              responder: defaultWhatsappCallbackResponder(),
-            })
-              .then((results) => {
-                logger.info('Handled WhatsApp interactive callback replies', {
-                  count: results.length,
-                });
-              })
-              .catch((error: unknown) => {
-                logger.error('Error handling WhatsApp callback replies:', error);
-              }),
-          );
-        }
-
-        body.entry?.forEach(async (entry: WhatsAppWebhookEntry) => {
-          // Get the webhook event
-          const webhookEvent = entry.changes?.[0];
-
-          if (webhookEvent?.field === 'messages') {
-            const value = webhookEvent.value;
-            // Only send notification for NEW MESSAGES
-            if (value.messages && value.messages.length > 0) {
-              // Send notification once per webhook that contains new messages
-              const firstMessage = value.messages[0];
-              const sender = await resolveWhatsappSender(firstMessage.from);
-
-              let messageContent = '';
-              if (firstMessage.text?.body) {
-                messageContent = firstMessage.text.body;
-              } else if (firstMessage.button) {
-                messageContent = `Template Button: ${firstMessage.button.text} (${firstMessage.button.payload})`;
-              } else if (firstMessage.interactive?.button_reply) {
-                messageContent = `Interactive Button: ${firstMessage.interactive.button_reply.title} (${firstMessage.interactive.button_reply.id})`;
-              } else if (firstMessage.contacts && firstMessage.contacts.length > 0) {
-                const contact = firstMessage.contacts[0];
-                messageContent = `Contact Card: ${contact.name.formatted_name}`;
-                if (contact.org?.company) {
-                  messageContent += ` @ ${contact.org.company}`;
-                }
-              } else {
-                messageContent = '[No text content]';
-              }
-
-              const senderLabel = sender.displayName
-                ? `${sender.displayName} (${firstMessage.from})`
-                : `Unknown user: ${firstMessage.from}`;
-              await sendSlackNotification({
-                type: 'OVI',
-                teamId: sender.teamId,
-                text: `:speech_balloon: New WhatsApp message from: ${senderLabel}\n*Message*: "${messageContent}"`,
-                opsTitle: `New WhatsApp message from ${sender.displayName ?? firstMessage.from}`,
-              });
-
-              // Dumb dispatch: each message goes straight to the sender team's
-              // wired movement trigger or pipeline_input — no agent. The
-              // receiving number (`metadata.phone_number_id`) rides along so a
-              // reply goes out from the number it arrived on (primary vs
-              // movements); `display_phone_number` is the human-facing `to`.
-              const profileName = value.contacts?.[0]?.profile?.name;
-              const businessPhoneNumberId = value.metadata?.phone_number_id;
-              const businessNumber = value.metadata?.display_phone_number;
-              value.messages.forEach((message: WhatsAppMessage) => {
-                const processingPromise = dispatchWhatsappMessage({
-                  message,
-                  profileName,
-                  businessNumber,
-                  businessPhoneNumberId,
-                })
-                  .then(() => {
-                    logger.info('Dispatched WhatsApp message', { messageId: message.id });
-                  })
-                  .catch((error: unknown) => {
-                    logger.error('Error dispatching WhatsApp message:', {
-                      messageId: message.id,
-                      error,
-                    });
-                  });
-
-                processingPromises.push(processingPromise);
-              });
-            }
-
-            // `value.statuses` (delivery/read receipts) is intentionally
-            // unprocessed: its only consumer, `updateMessageStatus`, wrote to
-            // the writerless `whatsapp_messages` table, dropped at Phase 6
-            // close (D57) — the row-creation loop it would have updated left
-            // with the legacy dealflow era, so the write was already a no-op in
-            // production. The field stays on the payload type below as
-            // documentation of what Meta can send.
-          }
-        });
-
-        Promise.all(processingPromises).catch((error: unknown) => {
-          logger.error('Error in webhook processing:', error);
-        });
-        res.status(200).send('EVENT_RECEIVED');
-        return;
-      }
-      // A signed delivery for some other Meta product (a page, an Instagram
-      // account): nothing here to do. Meta retries anything that is not a 200,
-      // so ack it like the ignorable statuses-only delivery rather than hang.
-      res.status(200).send('EVENT_RECEIVED');
-      return;
+      for (const row of rows) await enqueueWhatsappMessage(row);
     } catch (error) {
-      logger.warn('Failed to process request', {
-        body: JSON.stringify(req.body),
-        error: error,
-      });
-      if (!res.headersSent) res.sendStatus(500);
+      logger.error('[whatsapp/webhook] queueing the delivery failed:', error);
+      res.sendStatus(500);
+      return;
     }
+    if (rows.length > 0) notifyWork();
+    res.status(200).send('EVENT_RECEIVED');
   } catch (error: unknown) {
     logger.error('Error processing WhatsApp webhook:', error);
-    res.sendStatus(500);
+    if (!res.headersSent) res.sendStatus(500);
   }
 };
 

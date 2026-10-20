@@ -37,6 +37,7 @@ import { logGrandfatheredUnsignedInbounds } from '../services/translation_graph/
 import { registerLinkedObjectWork } from '../services/webhook_sync/linked_object_refresh';
 import { registerSlackEventWork } from '../services/webhook_sync/slack_events';
 import { registerSlackResponseWork } from '../services/webhook_sync/slack_response_url';
+import { registerWhatsappMessageWork } from '../services/whatsapp/inbound_message';
 import { registerKnowledgeChangeWork } from '../services/webhook_sync/knowledge_changes';
 import { mutationDelivery } from '../services/knowledge/mutation_outbox/delivery_mode';
 import { ensureAutomationsPeriodicWork, registerCoreWork } from '../services/work/register';
@@ -167,6 +168,7 @@ async function registerAutomationsWork(): Promise<void> {
   registerLinkedObjectWork();
   registerSlackEventWork();
   registerSlackResponseWork();
+  registerWhatsappMessageWork();
   // Knowledge emits, the engine listens, and neither imports the other to do
   // it (M-38): where the graph's store runs beside us, its change events come
   // off its outbox into the inbound path as a work kind of this drain, so the

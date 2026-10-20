@@ -130,19 +130,33 @@ export function interactiveRepliesOf(raw: unknown): WhatsappInteractiveReply[] {
       if (change.field && change.field !== 'messages') continue;
       const businessPhoneNumberId = change.value.metadata?.phone_number_id;
       for (const message of change.value.messages ?? []) {
-        const replyId =
-          message.interactive?.button_reply?.id ?? message.interactive?.list_reply?.id;
-        if (replyId === undefined) continue;
-        replies.push({
-          messageId: message.id,
-          from: message.from,
-          replyId,
-          ...(businessPhoneNumberId !== undefined ? { businessPhoneNumberId } : {}),
-        });
+        const reply = interactiveReplyOf(message, businessPhoneNumberId);
+        if (reply !== undefined) replies.push(reply);
       }
     }
   }
   return replies;
+}
+
+/** The interactive button/list reply ONE message carries, if any — for a
+ *  caller that already holds the message apart from its delivery (the
+ *  platform number door's drained `whatsapp_message` row). */
+export function interactiveReplyOf(
+  message: {
+    id: string;
+    from: string;
+    interactive?: { button_reply?: { id: string }; list_reply?: { id: string } };
+  },
+  businessPhoneNumberId: string | undefined,
+): WhatsappInteractiveReply | undefined {
+  const replyId = message.interactive?.button_reply?.id ?? message.interactive?.list_reply?.id;
+  if (replyId === undefined) return undefined;
+  return {
+    messageId: message.id,
+    from: message.from,
+    replyId,
+    ...(businessPhoneNumberId !== undefined ? { businessPhoneNumberId } : {}),
+  };
 }
 
 /** Whether this delivery carries at least one button/list reply this door
@@ -176,6 +190,16 @@ export async function handleWhatsappInteractiveReplies(input: {
     results.push(await fireAndAck(input.responder, reply));
   }
   return results;
+}
+
+/** One reply: fired and acked when its id is a callback id, otherwise null
+ *  and untouched (someone's own button vocabulary). */
+export async function handleWhatsappInteractiveReply(input: {
+  reply: WhatsappInteractiveReply;
+  responder: WhatsappCallbackResponder;
+}): Promise<WhatsappCallbackResult | null> {
+  if (!isCallbackId(input.reply.replyId)) return null;
+  return await fireAndAck(input.responder, input.reply);
 }
 
 async function fireAndAck(

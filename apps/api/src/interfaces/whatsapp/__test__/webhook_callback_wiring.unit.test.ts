@@ -1,6 +1,9 @@
-// Wiring pin for the shared-number WhatsApp door: a tapped interactive reply
-// button must be recognised and acked BEFORE the ordinary dumb-dispatch path
-// sees it, and — unlike Telegram's single callback_query per delivery — the
+// Wiring pin for the shared-number WhatsApp door. The door answers Meta only
+// once every message of the delivery is a `whatsapp_message` row, keyed on its
+// wamid, and does nothing else in the request; the dispatch, a tapped
+// callback's fire and reply, and the ops notice run when the row drains. A
+// tapped interactive reply button must be recognised and acked by the callback
+// door, and — unlike Telegram's single callback_query per delivery — the
 // rest of the SAME batch must still reach `dispatchWhatsappMessage`
 // unaffected (a delivery can carry a tap alongside a plain message). The
 // callback door's own recognition/ack/mismatch rules are pinned in
@@ -39,7 +42,22 @@ jest.mock('../../../services/movement_engine/callback_fire', () => ({
   fireCallback: (input: unknown) => fireCallback(input),
 }));
 
+/** The rows the door queued, in order: what the drain would run. */
+let queued: { kind: string; key: string; payload: unknown }[] = [];
+let holdEnqueue: Promise<void> | undefined;
+jest.mock('../../../services/work/store', () => ({
+  enqueueWork: async (row: { kind: string; key: string; payload: unknown }) => {
+    await holdEnqueue;
+    queued.push(row);
+  },
+}));
+jest.mock('../../../services/work/drain', () => ({
+  ...jest.requireActual('../../../services/work/drain'),
+  notifyWork: () => {},
+}));
+
 import { receiveWebhook } from '../webhook';
+import { whatsappMessageHandler } from '../../../services/whatsapp/inbound_message';
 
 function fakeRes() {
   return {
@@ -83,14 +101,95 @@ function metaBody(message: Record<string, unknown>) {
 beforeEach(() => {
   jest.clearAllMocks();
   sendTextMessageMock.mockResolvedValue('wamid.ACK');
+  queued = [];
+  holdEnqueue = undefined;
 });
 
-// Off-request: the handler kicks off promises but returns before they settle
-// (the fire-and-forget doctrine every branch here shares). Flush the
-// microtask queue once so the fire-and-forget promises land before assertions.
+const ctx = (attempts: number) => ({ now: new Date(), owner: 'test', attempts, heartbeat: async () => {} });
+
+/** Run the rows the door queued, as the drain would. */
 async function flush() {
-  await new Promise((r) => setImmediate(r));
+  for (const row of queued) {
+    expect(row.kind).toBe('whatsapp_message');
+    await whatsappMessageHandler.run(row.payload, ctx(1));
+  }
 }
+
+describe('durable, then answered: the drain does the work', () => {
+  const text = (id: string) => ({ from: '15551234567', id, timestamp: '1700000000', type: 'text', text: { body: 'hi' } });
+  const { sendSlackNotification } = jest.requireMock('../../../lib/slack') as { sendSlackNotification: jest.Mock };
+
+  it('answers only after the row is written, and does nothing in the request', async () => {
+    let release: () => void = () => {};
+    holdEnqueue = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const { res, promise } = deliver(metaBody(text('wamid.HELD')));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(res.status).not.toHaveBeenCalled();
+    expect(res.sendStatus).not.toHaveBeenCalled();
+
+    release();
+    await promise;
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.send).toHaveBeenCalledWith('EVENT_RECEIVED');
+    expect(queued.map((row) => [row.kind, row.key])).toEqual([['whatsapp_message', 'whatsapp_message:wamid.HELD']]);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(dispatchWhatsappMessage).not.toHaveBeenCalled();
+    expect(sendSlackNotification).not.toHaveBeenCalled();
+  });
+
+  it('runs the dispatch and the ops notice when the row drains', async () => {
+    await deliver(metaBody(text('wamid.D1'))).promise;
+    await flush();
+
+    expect(dispatchWhatsappMessage).toHaveBeenCalledWith({
+      message: text('wamid.D1'),
+      profileName: 'Dev Sender',
+      businessNumber: '15550000000',
+      businessPhoneNumberId: 'PNID_1',
+    });
+    expect(sendSlackNotification).toHaveBeenCalledTimes(1);
+  });
+
+  it("keys Meta's resend onto the same row as the first delivery", async () => {
+    await deliver(metaBody(text('wamid.R1'))).promise;
+    await deliver(metaBody(text('wamid.R1'))).promise;
+
+    expect(queued.map((row) => row.key)).toEqual(['whatsapp_message:wamid.R1', 'whatsapp_message:wamid.R1']);
+  });
+
+  it('answers 500 when a row cannot be written, so Meta resends', async () => {
+    holdEnqueue = Promise.reject(new Error('work table unreachable'));
+    holdEnqueue.catch(() => {});
+
+    const { res, promise } = deliver(metaBody(text('wamid.F1')));
+    await promise;
+
+    expect(res.sendStatus).toHaveBeenCalledWith(500);
+    expect(res.status).not.toHaveBeenCalledWith(200);
+  });
+
+  it('acks a delivery with no messages and writes nothing', async () => {
+    const { res, promise } = deliver({ object: 'whatsapp_business_account', entry: [{ changes: [{ field: 'messages', value: { statuses: [{ id: 'wamid.1' }] } }] }] });
+    await promise;
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(queued).toHaveLength(0);
+  });
+
+  it('a failed dispatch fails the row so it retries, before the ops notice, and is given up on after many attempts', async () => {
+    dispatchWhatsappMessage.mockRejectedValue(new Error('trigger table unreachable'));
+    await deliver(metaBody(text('wamid.X1'))).promise;
+    const payload = queued[0]?.payload;
+
+    await expect(whatsappMessageHandler.run(payload, ctx(1))).rejects.toThrow(/unreachable/);
+    expect(sendSlackNotification).not.toHaveBeenCalled();
+    await expect(whatsappMessageHandler.run(payload, ctx(10))).resolves.toBeUndefined();
+    dispatchWhatsappMessage.mockReset();
+    dispatchWhatsappMessage.mockResolvedValue(undefined);
+  });
+});
 
 describe('the shared WhatsApp door: a callback-id tap', () => {
   it('is fired and acked with a threaded reply — and never reaches dumb dispatch for THIS message', async () => {
@@ -272,7 +371,7 @@ describe('a signature that does not verify', () => {
     };
     const { res, promise } = deliverWithSignature(metaBody(message), 'sha256=valid');
     await promise;
-    await new Promise((r) => setImmediate(r));
+    await flush();
 
     expect(res.status).toHaveBeenCalledWith(200);
     expect(logger.warn).not.toHaveBeenCalled();

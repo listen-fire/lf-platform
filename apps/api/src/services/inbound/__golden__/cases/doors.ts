@@ -457,12 +457,12 @@ export const whatsappCases: GoldenCase[] = define('whatsapp', [
   },
   {
     id: 'message-good-signature',
-    note: 'A signed text message: acked EVENT_RECEIVED; the sender is announced to ops and the message dispatched to its team (off-request).',
+    note: 'A signed text message is written as a whatsapp_message row keyed on its wamid, then acked EVENT_RECEIVED; the ops notice and the dispatch run when the row drains.',
     request: post('/api/public/whatsapp/webhook', json(META_TEXT), metaSig(SECRETS.whatsappApp)),
   },
   {
     id: 'message-unknown-sender',
-    note: 'An unknown sender is announced with the raw number; dispatch still runs.',
+    note: 'An unknown sender is queued exactly like a known one; who the sender is gets resolved when the row drains.',
     arrange: () => {
       world.whatsappSender = { teamId: null, displayName: null };
     },
@@ -480,12 +480,12 @@ export const whatsappCases: GoldenCase[] = define('whatsapp', [
   },
   {
     id: 'interactive-reply-fires-callback',
-    note: 'A tapped reply button with a callback id fires it and replies from the receiving number.',
+    note: 'A tapped reply button is queued as its whatsapp_message row; the callback fires and the reply goes out from the receiving number when the row drains.',
     request: post('/api/public/whatsapp/webhook', json(META_INTERACTIVE), metaSig(SECRETS.whatsappApp)),
   },
   {
     id: 'statuses-only-delivery',
-    note: 'Delivery receipts are acked and not processed.',
+    note: 'Delivery receipts are acked and nothing is queued.',
     request: post(
       '/api/public/whatsapp/webhook',
       json({ object: 'whatsapp_business_account', entry: [{ id: 'waba-1', changes: [{ field: 'messages', value: { statuses: [{ id: 'wamid.1', status: 'delivered', timestamp: '1', recipient_id: '1' }] } }] }] }),
@@ -496,6 +496,14 @@ export const whatsappCases: GoldenCase[] = define('whatsapp', [
     id: 'other-object-acked',
     note: 'A signed body whose object is not whatsapp_business_account is acked 200 and nothing is delivered (Meta retries anything else).',
     request: post('/api/public/whatsapp/webhook', json({ object: 'page', entry: [] }), metaSig(SECRETS.whatsappApp)),
+  },
+  {
+    id: 'enqueue-fails',
+    note: 'The message could not be written as its whatsapp_message row: 500, so Meta resends.',
+    arrange: () => {
+      world.enqueueFails = true;
+    },
+    request: post('/api/public/whatsapp/webhook', json(META_TEXT), metaSig(SECRETS.whatsappApp)),
   },
   {
     id: 'unsigned-door-refuses-without-secret',
