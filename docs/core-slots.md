@@ -103,7 +103,7 @@ LF_SECRET__POSTGRES_STORE__URL=postgres://…?sslmode=verify-full
 
 `lf --store <state.db | postgres://…>` overrides the store slot for one command.
 
-A module of your own, served as a process, fills the `store`, `limiter` or `loopGuard` slot (`kind: core` in its `lf-external.yaml`; see [the store's wire](contracts/store-slot.md), [the limiter's](contracts/limiter-slot.md) and [the guard's](contracts/loop-guard-slot.md)). The other slots take only lf's built-ins.
+A module of your own, served as a process, fills the `store`, `limiter`, `loopGuard`, `models`, `judge` or `files` slot (`kind: core` in its `lf-external.yaml`; see [the store's wire](contracts/store-slot.md), [the limiter's](contracts/limiter-slot.md), [the guard's](contracts/loop-guard-slot.md) and [the files slot's](contracts/files-slot.md)). `@listen-fire/s3-files` fills `files` with a bucket on AWS S3, Google Cloud Storage, Cloudflare R2 or MinIO ([its README](../modules/s3-files/README.md)).
 
 ## Embedding
 

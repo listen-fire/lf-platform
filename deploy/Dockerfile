@@ -74,6 +74,7 @@ COPY modules/system/package.json modules/system/
 COPY modules/native-valuations/package.json modules/native-valuations/
 COPY modules/whatsapp/package.json modules/whatsapp/
 COPY modules/email/package.json modules/email/
+COPY modules/s3-files/package.json modules/s3-files/
 COPY packages/engine-contracts/package.json packages/engine-contracts/
 COPY packages/module-runtime/package.json packages/module-runtime/
 COPY packages/movement-engine/package.json packages/movement-engine/
