@@ -218,6 +218,11 @@ interface Common {
   credentials: readonly WireCredentialDeclarationShape[];
   /** The provider's limits on calls, kept by the host's limiter. */
   limits?: readonly WireDeclaredLimitShape[];
+  /** Declare only if every request to the provider goes through `ctx.fetch`:
+   *  the host then stops counting calls, and `limits` count those requests.
+   *  A request made any other way (the global `fetch`, another client) would
+   *  go uncounted. Default: the host counts each call once. */
+  hostLimits?: true;
 }
 
 export interface AdapterModuleDefinition extends Common {

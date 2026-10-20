@@ -5,6 +5,12 @@
 //! counter: a call hands it the door's URL and a ticket, and the host counts
 //! under the caller it resolved for that call.
 //!
+//! A module opts in by declaring `hostLimits` (`.declare("hostLimits",
+//! Js::Bool(true))`), only if every provider request takes a permit first:
+//! a request made without one is counted by nobody, because the host stops
+//! counting calls to a module that declares it. Without the declaration the
+//! host counts each call once.
+//!
 //! This kit has no HTTP client of its own (a module brings its own), so the
 //! hook is a permit: take one before each provider request, hand it back
 //! after, and say so when the provider answered "too many requests":

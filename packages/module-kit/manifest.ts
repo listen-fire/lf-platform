@@ -54,10 +54,13 @@ function adapterManifest(definition: AdapterModuleDefinition, instance: AdapterM
   };
 }
 
-/** A module's limits count its requests to the provider: `ctx.fetch` asks
- *  the host's limits door before each one (`host_limits.ts`). */
+/** `hostLimits` is the author's word, never inferred from `limits`: it moves
+ *  the counting from the host's calls to the module's own requests
+ *  (`ctx.fetch` asks the host's limits door, `host_limits.ts`), which only
+ *  holds if the module sends every request through `ctx.fetch`. */
 function declaredLimits(definition: ModuleDefinition): { limits?: unknown[]; hostLimits?: true } {
-  return definition.limits !== undefined && definition.limits.length > 0 ? { limits: [...definition.limits], hostLimits: true } : {};
+  if (definition.limits === undefined || definition.limits.length === 0) return {};
+  return { limits: [...definition.limits], ...(definition.hostLimits === true ? { hostLimits: true } : {}) };
 }
 
 function pluginManifest(definition: PluginModuleDefinition, instance: PluginModuleMethods): unknown {
