@@ -1,7 +1,11 @@
 // The Slack interactivity door, end to end through the route: a signed
-// block_actions POST in, an ack out at the payload's `response_url`.
+// block_actions POST in, the tap recorded and its reply queued as a
+// `slack_response` row before the answer, and the reply posted at the
+// payload's `response_url` when that row drains.
 //
-// Three claims carry it:
+// Four claims carry it:
+//   0. Nothing runs after the answer: Slack hears 200 only once the reply row
+//      is written, and the post to Slack happens in the drain, not the request.
 //   1. The outcome the router returns is what the tapper is told — every
 //      refusal is SAID, never swallowed into a silent 200.
 //   2. The message is edited only when the tap SERVED it (`interactionServed`):
@@ -29,6 +33,19 @@ jest.mock('../../../services/movement_engine/callback_fire', () => ({
 jest.mock('../../../services/asks/doors', () => ({
   answerAskByToken: (...args: unknown[]) => answerAskByToken(...args),
 }));
+/** The rows the door queued, in order: what the drain would run. */
+let queued: { kind: string; key: string; payload: unknown }[] = [];
+let holdEnqueue: Promise<void> | undefined;
+jest.mock('../../../services/work/store', () => ({
+  enqueueWork: async (row: { kind: string; key: string; payload: unknown }) => {
+    await holdEnqueue;
+    queued.push(row);
+  },
+}));
+jest.mock('../../../services/work/drain', () => ({
+  ...jest.requireActual('../../../services/work/drain'),
+  notifyWork: () => {},
+}));
 // The signature is Slack's business, not this door's — verified by
 // slackEvents' own suite.
 jest.mock('../slackEvents', () => ({
@@ -36,6 +53,7 @@ jest.mock('../slackEvents', () => ({
 }));
 
 import { slackInteractivityRouter } from '../slackInteractivity';
+import { slackResponseHandler } from '../../../services/webhook_sync/slack_response_url';
 
 let server: Server;
 let baseUrl: string;
@@ -84,6 +102,8 @@ const realFetch = global.fetch;
 beforeEach(() => {
   jest.clearAllMocks();
   acks = [];
+  queued = [];
+  holdEnqueue = undefined;
   jest.spyOn(global, 'fetch').mockImplementation(async (url, init) => {
     if (String(url) !== RESPONSE_URL) return await realFetch(url, init);
     acks.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
@@ -95,24 +115,63 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-/** POST one block action, then wait for the off-request half (the door acks
- *  Slack first and does the work in a `setImmediate`). */
-async function tap(action: Record<string, unknown>): Promise<void> {
+function post(action: Record<string, unknown>): Promise<Response> {
   const payload = {
     type: 'block_actions',
     response_url: RESPONSE_URL,
+    trigger_id: 'trig-1',
     actions: [action],
   };
-  const res = await fetch(`${baseUrl}/api/public/slack-actions`, {
+  return fetch(`${baseUrl}/api/public/slack-actions`, {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ payload: JSON.stringify(payload) }).toString(),
   });
-  expect(res.status).toBe(200);
-  // Two turns: the setImmediate, then the ack's own await chain.
-  await new Promise((resolve) => setImmediate(resolve));
-  await new Promise((resolve) => setImmediate(resolve));
 }
+
+/** POST one block action, then run the rows it queued as the drain would. */
+async function tap(action: Record<string, unknown>): Promise<void> {
+  const res = await post(action);
+  expect(res.status).toBe(200);
+  expect(acks).toHaveLength(0);
+  for (const row of queued) {
+    expect(row.kind).toBe('slack_response');
+    await slackResponseHandler.run(row.payload, { now: new Date(), owner: 'test', attempts: 1, heartbeat: async () => {} });
+  }
+}
+
+describe('nothing runs after the answer', () => {
+  it('answers only once the reply row is written, and posts nothing in the request', async () => {
+    fireCallback.mockResolvedValue({ kind: 'recorded', callback: record({ singleUse: true }) });
+    let release: () => void = () => {};
+    holdEnqueue = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    let answered = false;
+    const response = post({ type: 'button', action_id: 'ship', value: 'cb_abc' }).then((res) => {
+      answered = true;
+      return res;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(fireCallback).toHaveBeenCalledTimes(1);
+    expect(answered).toBe(false);
+
+    release();
+    expect((await response).status).toBe(200);
+    expect(queued).toEqual([
+      { kind: 'slack_response', key: 'slack_response:trig-1', payload: expect.objectContaining({ responseUrl: RESPONSE_URL }) },
+    ]);
+    expect(acks).toHaveLength(0);
+  });
+
+  it('keys the reply on the interaction, so a second delivery of it folds onto one row', async () => {
+    fireCallback.mockResolvedValue({ kind: 'recorded', callback: record() });
+    await post({ type: 'button', action_id: 'ship', value: 'cb_abc' });
+    await post({ type: 'button', action_id: 'ship', value: 'cb_abc' });
+    expect(new Set(queued.map((row) => row.key))).toEqual(new Set(['slack_response:trig-1']));
+  });
+});
 
 describe('a tap that fires a callback', () => {
   it('tells the tapper something went wrong when firing throws, rather than nothing', async () => {
@@ -211,11 +270,12 @@ describe('the migration window', () => {
     });
   });
 
-  it('an ordinary block action fires nothing and acks nothing', async () => {
+  it('an ordinary block action fires nothing and queues nothing', async () => {
     await tap({ type: 'button', action_id: 'open_expense_42', value: 'expense_42' });
 
     expect(fireCallback).not.toHaveBeenCalled();
     expect(answerAskByToken).not.toHaveBeenCalled();
+    expect(queued).toHaveLength(0);
     expect(acks).toHaveLength(0);
   });
 });

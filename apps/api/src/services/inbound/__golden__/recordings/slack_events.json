@@ -2,7 +2,7 @@
   {
     "id": "good-signature",
     "door": "slack_events",
-    "note": "A signed event_callback is acked {ok:true} at once and handed to the router off-request.",
+    "note": "A signed event_callback is written as a slack_event row keyed on its event_id, then acked {ok:true}.",
     "request": {
       "method": "POST",
       "path": "/api/public/slack/events",
@@ -23,19 +23,28 @@
     },
     "effects": [
       {
-        "kind": "slack_events_inbound",
-        "raw": {
-          "type": "event_callback",
-          "event_id": "Ev9",
-          "team_id": "T9",
-          "event": {
-            "type": "message",
-            "channel": "C9",
-            "user": "U9",
-            "ts": "1760702400.000900",
-            "text": "hi"
+        "kind": "enqueue_work",
+        "row": {
+          "kind": "slack_event",
+          "key": "slack_event:Ev9",
+          "payload": {
+            "envelope": {
+              "type": "event_callback",
+              "event_id": "Ev9",
+              "team_id": "T9",
+              "event": {
+                "type": "message",
+                "channel": "C9",
+                "user": "U9",
+                "ts": "1760702400.000900",
+                "text": "hi"
+              }
+            }
           }
         }
+      },
+      {
+        "kind": "notify_work"
       }
     ]
   },
@@ -173,19 +182,28 @@
     },
     "effects": [
       {
-        "kind": "slack_events_inbound",
-        "raw": {
-          "type": "event_callback",
-          "event_id": "Ev9",
-          "team_id": "T9",
-          "event": {
-            "type": "message",
-            "channel": "C9",
-            "user": "U9",
-            "ts": "1760702400.000900",
-            "text": "hi"
+        "kind": "enqueue_work",
+        "row": {
+          "kind": "slack_event",
+          "key": "slack_event:Ev9",
+          "payload": {
+            "envelope": {
+              "type": "event_callback",
+              "event_id": "Ev9",
+              "team_id": "T9",
+              "event": {
+                "type": "message",
+                "channel": "C9",
+                "user": "U9",
+                "ts": "1760702400.000900",
+                "text": "hi"
+              }
+            }
           }
         }
+      },
+      {
+        "kind": "notify_work"
       }
     ]
   },
@@ -214,9 +232,9 @@
     "effects": []
   },
   {
-    "id": "processing-fails-after-ack",
+    "id": "enqueue-fails",
     "door": "slack_events",
-    "note": "A router failure after the ack is logged only; Slack already has its 200.",
+    "note": "The delivery could not be written as its slack_event row: 500 enqueue_failed, so Slack redelivers.",
     "request": {
       "method": "POST",
       "path": "/api/public/slack/events",
@@ -228,29 +246,13 @@
       "body": "{\"type\":\"event_callback\",\"event_id\":\"Ev9\",\"team_id\":\"T9\",\"event\":{\"type\":\"message\",\"channel\":\"C9\",\"user\":\"U9\",\"ts\":\"1760702400.000900\",\"text\":\"hi\"}}"
     },
     "response": {
-      "status": 200,
+      "status": 500,
       "headers": {
         "content-type": "application/json; charset=utf-8",
-        "content-length": "11"
+        "content-length": "37"
       },
-      "body": "{\"ok\":true}"
+      "body": "{\"ok\":false,\"error\":\"enqueue_failed\"}"
     },
-    "effects": [
-      {
-        "kind": "slack_events_inbound",
-        "raw": {
-          "type": "event_callback",
-          "event_id": "Ev9",
-          "team_id": "T9",
-          "event": {
-            "type": "message",
-            "channel": "C9",
-            "user": "U9",
-            "ts": "1760702400.000900",
-            "text": "hi"
-          }
-        }
-      }
-    ]
+    "effects": []
   }
 ]

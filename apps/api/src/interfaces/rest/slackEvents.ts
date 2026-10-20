@@ -9,7 +9,8 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 
 import { admitShared, authenticateInbound, type InboundAuth, type InboundHeaders, type SharedDoor } from 'movement-engine/public/inbound';
-import { handleSlackEventsInbound } from '../../services/webhook_sync/slack_events';
+import { enqueueSlackEvent } from '../../services/webhook_sync/slack_events';
+import { notifyWork } from '../../services/work/drain';
 import { logger } from 'movement-engine/public/log';
 import { authorizeUnsignedWebhook } from '../../lib/unsigned_webhooks';
 import { sendInboundAnswer } from './inbound_answer';
@@ -80,18 +81,21 @@ slackEventsRouter.post('/events', async (req: Request, res: Response) => {
     return;
   }
 
-  // Ack within Slack's 3-second budget, THEN process off the request cycle.
-  // Blocking the ack on the full dispatch (which makes live Slack API calls for
-  // the channel/actor filters and kicks the engine) blew past 3s, so Slack
-  // retried the same event and — before the receipt became idempotent — that
-  // produced duplicate runs. The receipt store dedupes redeliveries on the
-  // envelope `event_id` regardless, so a late-arriving retry is a safe no-op.
+  // Durable, then answered: the delivery is written as a `slack_event` row and
+  // the drain does the routing and dispatch, which make live Slack reads that
+  // can outlast Slack's 3 s budget. Work done after the answer would be lost to
+  // a restart or a frozen instance. A row that could not be written answers
+  // 500, so Slack redelivers; a redelivery folds onto the same row or finds
+  // its receipts already stored, so it never dispatches twice.
+  try {
+    await enqueueSlackEvent({ envelope: raw, rawBody });
+  } catch (err) {
+    logger.error('[slack/events] queueing the delivery failed:', err);
+    res.status(500).json({ ok: false, error: 'enqueue_failed' });
+    return;
+  }
+  notifyWork();
   res.status(200).json({ ok: true });
-  setImmediate(() => {
-    void handleSlackEventsInbound(raw).catch((err) => {
-      logger.error('[slack/events] inbound failed:', err);
-    });
-  });
 });
 
 export { slackEventsRouter };

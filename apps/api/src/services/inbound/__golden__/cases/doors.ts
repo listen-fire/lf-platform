@@ -270,7 +270,7 @@ const SLACK_EVENT = { type: 'event_callback', event_id: 'Ev9', team_id: 'T9', ev
 export const slackEventsCases: GoldenCase[] = define('slack_events', [
   {
     id: 'good-signature',
-    note: 'A signed event_callback is acked {ok:true} at once and handed to the router off-request.',
+    note: 'A signed event_callback is written as a slack_event row keyed on its event_id, then acked {ok:true}.',
     request: post('/api/public/slack/events', json(SLACK_EVENT), slackHeaders(SECRETS.slackApp)),
   },
   {
@@ -311,12 +311,10 @@ export const slackEventsCases: GoldenCase[] = define('slack_events', [
     request: post('/api/public/slack/events', text('not json at all'), slackHeaders(SECRETS.slackApp)),
   },
   {
-    id: 'processing-fails-after-ack',
-    note: 'A router failure after the ack is logged only; Slack already has its 200.',
+    id: 'enqueue-fails',
+    note: 'The delivery could not be written as its slack_event row: 500 enqueue_failed, so Slack redelivers.',
     arrange: () => {
-      world.slackEvents = () => {
-        throw new Error('router failed');
-      };
+      world.enqueueFails = true;
     },
     request: post('/api/public/slack/events', json(SLACK_EVENT), slackHeaders(SECRETS.slackApp)),
   },
@@ -330,6 +328,7 @@ const FORM = 'application/x-www-form-urlencoded';
 const blockActions = (action: Record<string, unknown>, extra: Record<string, unknown> = {}) => ({
   type: 'block_actions',
   response_url: RESPONSE_URL,
+  trigger_id: '1760702400.golden',
   actions: [action],
   ...extra,
 });
@@ -337,7 +336,7 @@ const blockActions = (action: Record<string, unknown>, extra: Record<string, unk
 export const slackActionsCases: GoldenCase[] = define('slack_actions', [
   {
     id: 'button-tap-fires-callback',
-    note: 'A signed block action carrying a callback id fires it and replaces the original message via response_url.',
+    note: 'A signed block action carrying a callback id fires it and queues the reply that replaces the original message (a slack_response row keyed on trigger_id).',
     request: post('/api/public/slack-actions', formOf(blockActions({ action_id: 'btn', value: 'cb_golden0001' })), slackHeaders(SECRETS.slackApp, FORM)),
   },
   {
@@ -383,7 +382,7 @@ export const slackActionsCases: GoldenCase[] = define('slack_actions', [
   },
   {
     id: 'unrelated-action-ignored',
-    note: 'A block action that is neither a callback nor an ask is ignored after the ack.',
+    note: 'A block action that is neither a callback nor an ask is acked and ignored.',
     request: post('/api/public/slack-actions', formOf(blockActions({ action_id: 'overflow', value: 'something' })), slackHeaders(SECRETS.slackApp, FORM)),
   },
   {

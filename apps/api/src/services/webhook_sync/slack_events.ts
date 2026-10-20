@@ -8,9 +8,22 @@
 //   →  dispatch the team's Slack movements (which reply via that install).
 //
 // A workspace with no Slack credential (not installed / uninstalled) is dropped.
+//
+// The door only writes the delivery down (`enqueueSlackEvent`); the routing and
+// dispatch below run when its `slack_event` row drains. They make live Slack
+// reads (the channel and actor filters), which can outlast Slack's 3 s ack
+// budget, and work done after the answer is lost to a restart or a frozen
+// instance.
+
+import { createHash } from 'node:crypto';
+
+import { z } from 'zod';
 
 import type { TeamId } from '../../generated/kysely/core/Team';
+import type { WorkHandler } from '../work/kinds';
 
+import { registerWorkKinds } from '../work/drain';
+import { enqueueWork } from '../work/store';
 import { getAutomationsQb } from '../../lib/kysely';
 import { logger } from 'movement-engine/public/log';
 import { parseSlackEvents } from './providers/slack';
@@ -58,6 +71,10 @@ async function resolveSlackInstall(
  * each event through the shared trigger fan-out with that install's credential
  * (so trigger matching + the reply both use the right token). url_verification
  * is handled at the route before this runs.
+ *
+ * Runs as a drained `slack_event` row. A wake or dispatch that failed is logged
+ * and the rest still run; then it throws, so the row retries the whole delivery,
+ * which the receipts make safe (an event already captured is a duplicate).
  */
 export async function handleSlackEventsInbound(raw: unknown): Promise<SlackEventsResult> {
   const teamId = (raw as { team_id?: unknown } | null | undefined)?.team_id;
@@ -76,6 +93,8 @@ export async function handleSlackEventsInbound(raw: unknown): Promise<SlackEvent
     return { ok: true, classification: 'unknown_workspace', teamId };
   }
 
+  const failures: string[] = [];
+
   // The wake door, independent of dispatch below (consent-by-silence, S18).
   const nativeTeamId = install.nativeTeamId;
   try {
@@ -92,10 +111,9 @@ export async function handleSlackEventsInbound(raw: unknown): Promise<SlackEvent
       });
     }
   } catch (err) {
-    logger.error('[SlackEvents] await wake failed', {
-      teamId,
-      error: err instanceof Error ? err.message : String(err),
-    });
+    const error = err instanceof Error ? err.message : String(err);
+    logger.error('[SlackEvents] await wake failed', { teamId, error });
+    failures.push(`wake: ${error}`);
   }
 
   let processed = 0;
@@ -118,12 +136,59 @@ export async function handleSlackEventsInbound(raw: unknown): Promise<SlackEvent
       });
       processed += 1;
     } catch (err) {
-      logger.error('[SlackEvents] dispatch failed', {
-        teamId,
-        error: err instanceof Error ? err.message : String(err),
-      });
+      const error = err instanceof Error ? err.message : String(err);
+      logger.error('[SlackEvents] dispatch failed', { teamId, error });
+      failures.push(`dispatch: ${error}`);
     }
   }
+  if (failures.length > 0) throw new Error(`Slack delivery for ${teamId} incomplete (${failures.join('; ')})`);
 
   return { ok: true, classification: 'dispatched', teamId, eventsProcessed: processed };
+}
+
+declare module '../work/kinds' {
+  interface UnitWorkKinds {
+    slack_event: true;
+  }
+}
+
+const slackEventPayloadSchema = z.object({ envelope: z.unknown() });
+
+const slackEventIdSchema = z.object({ event_id: z.string().min(1) });
+
+/**
+ * The door's whole job inside Slack's ack budget: the delivery, durably, as one
+ * `slack_event` row. Keyed on Slack's envelope `event_id`, which is stable
+ * across Slack's retries, so a retry that lands while the row still waits folds
+ * onto it. A retry that lands after the row ran runs the delivery again and
+ * finds every trigger receipt already stored under the same id, so nothing
+ * dispatches twice. A delivery without an `event_id` is keyed on its bytes.
+ */
+export async function enqueueSlackEvent(input: { envelope: unknown; rawBody: Buffer }): Promise<void> {
+  const eventId = slackEventIdSchema.safeParse(input.envelope);
+  const id = eventId.success ? eventId.data.event_id : createHash('sha256').update(input.rawBody).digest('hex');
+  await enqueueWork({ kind: 'slack_event', key: `slack_event:${id}`, payload: { envelope: input.envelope } });
+}
+
+// A store outage backs a row off to minutes between attempts; past this many
+// the delivery is given up on, loudly, rather than retried forever.
+const MAX_SLACK_EVENT_ATTEMPTS = 10;
+
+export const slackEventHandler: WorkHandler = {
+  async run(payload, ctx) {
+    const { envelope } = slackEventPayloadSchema.parse(payload);
+    try {
+      await handleSlackEventsInbound(envelope);
+    } catch (error) {
+      if (ctx.attempts < MAX_SLACK_EVENT_ATTEMPTS) throw error;
+      logger.error('[SlackEvents] giving up on the delivery', {
+        attempts: ctx.attempts,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  },
+};
+
+export function registerSlackEventWork(): void {
+  registerWorkKinds([{ kind: 'slack_event', handler: slackEventHandler }]);
 }

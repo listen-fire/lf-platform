@@ -213,7 +213,13 @@ export function workDrainFake(): AnyRecord {
 }
 
 export function workStoreFake(): AnyRecord {
-  return { awaitTeamWorkSettled: async () => true };
+  return {
+    awaitTeamWorkSettled: async () => true,
+    enqueueWork: async (input: AnyRecord) => {
+      if (world.enqueueFails) throw new Error('queue unavailable');
+      record({ kind: 'enqueue_work', row: input });
+    },
+  };
 }
 
 export function callbackFireFake(actual: AnyRecord): AnyRecord {

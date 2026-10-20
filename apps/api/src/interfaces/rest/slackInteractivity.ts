@@ -6,7 +6,8 @@
 // What a tap CARRIES is one opaque callback id, in `value` or `action_id`; the
 // door recognises the id's namespace prefix and hands it to the router, which
 // owns everything that happens next. The door keeps only what is genuinely
-// Slack-shaped: signature verification, the ack, and the message edit.
+// Slack-shaped: signature verification, the ack, and the message edit (queued
+// as a `slack_response` row before the ack, posted when it drains).
 //
 // Legacy ask answer links (`<url-or-token>?answer=`) stay RECOGNISED for
 // movements authored before callbacks — tried after the prefix check, no longer
@@ -34,6 +35,8 @@ import {
   interactionServed,
   type CallbackFireOutcome,
 } from '../../services/movement_engine/callback_fire';
+import { enqueueSlackResponse } from '../../services/webhook_sync/slack_response_url';
+import { notifyWork } from '../../services/work/drain';
 
 // The link parse lives with the minting (the `@lf/ask` module), not with Slack: a
 // second platform door (Telegram's callback queries) reads the same shapes, and
@@ -60,6 +63,8 @@ export interface BlockAction {
 interface BlockActionsPayload {
   type?: string;
   response_url?: string;
+  /** One per interaction: the reply row's key. */
+  trigger_id?: string;
   actions?: BlockAction[];
 }
 
@@ -203,112 +208,108 @@ slackInteractivityRouter.post('/', async (req: Request, res: Response) => {
     return;
   }
 
-  // Ack the interaction immediately (Slack's 3s budget); do the answer + message
-  // edit off the request cycle, addressed by the payload's response_url.
+  // Recorded, then answered. The tap is captured inside the request (a
+  // callback's claim writes its body's `fire_callback` row in the same
+  // transaction; an ask's answer settles it) and the reply to the tapper is
+  // queued as a `slack_response` row. The movement work and the post to Slack
+  // run when their rows drain: work done after the answer would be lost to a
+  // restart or a frozen instance.
+  const reply = await captureBlockActions(payload);
+  const responseUrl = typeof payload.response_url === 'string' ? payload.response_url : undefined;
+  if (reply !== null && responseUrl !== undefined) {
+    try {
+      await enqueueSlackResponse({
+        response: { responseUrl, body: reply },
+        ...(typeof payload.trigger_id === 'string' ? { interactionId: payload.trigger_id } : {}),
+      });
+      notifyWork();
+    } catch (err) {
+      // The tap is recorded; only the tapper's notice is lost, which is no
+      // reason to tell Slack the tap failed.
+      logger.error('[slack/actions] queueing the reply failed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
   res.status(200).json({ ok: true });
-  setImmediate(() => {
-    void handleBlockActions(payload).catch((err) => {
-      logger.error('[slack/actions] handling failed:', err);
-    });
-  });
 });
 
-async function handleBlockActions(payload: BlockActionsPayload): Promise<void> {
-  const responseUrl = typeof payload.response_url === 'string' ? payload.response_url : undefined;
+type SlackReply = Record<string, unknown>;
+
+const SOMETHING_WENT_WRONG: SlackReply = {
+  response_type: 'ephemeral',
+  replace_original: false,
+  text: 'Something went wrong recording that.',
+};
+
+/** Capture the first action this door owns and say what the tapper is told,
+ *  or null when no action is the door's. One control per message in practice:
+ *  only the first owned action is acted on, so a stray second one can't
+ *  double-record. */
+async function captureBlockActions(payload: BlockActionsPayload): Promise<SlackReply | null> {
   for (const action of payload.actions ?? []) {
     const resolved = resolveBlockAction(action);
     if (!resolved) continue;
-
-    if (resolved.kind === 'callback') {
-      let outcome: CallbackFireOutcome;
-      try {
-        outcome = await fireCallback({
-          id: resolved.id,
-          values: {},
-          ...(resolved.suppliedValue !== undefined ? { suppliedValue: resolved.suppliedValue } : {}),
-        });
-      } catch (err) {
-        // The tapper still hears back — silence reads as "it worked" — and the
-        // failure itself is not swallowed.
-        logger.error('[slack/actions] callback firing failed', {
-          id: resolved.id,
-          error: err instanceof Error ? err.message : String(err),
-        });
-        if (responseUrl) {
-          await postToResponseUrl(responseUrl, {
-            response_type: 'ephemeral',
-            replace_original: false,
-            text: 'Something went wrong recording that.',
-          });
-        }
-        return;
+    try {
+      if (resolved.kind === 'callback') {
+        return callbackReply(
+          await fireCallback({
+            id: resolved.id,
+            values: {},
+            ...(resolved.suppliedValue !== undefined ? { suppliedValue: resolved.suppliedValue } : {}),
+          }),
+        );
       }
-      if (responseUrl) await ackCallbackToSlack(responseUrl, outcome);
-    } else {
-      const outcome = await answerAskByToken(resolved.token, resolved.answer);
-      if (responseUrl) await ackToSlack(responseUrl, outcome);
+      return askReply(await answerAskByToken(resolved.token, resolved.answer));
+    } catch (err) {
+      // The tapper still hears back (silence reads as "it worked") and the
+      // failure itself is not swallowed.
+      logger.error('[slack/actions] recording the tap failed', {
+        action: resolved.kind,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return SOMETHING_WENT_WRONG;
     }
-    // One control per message in practice — stop after the first action this
-    // door owns so a stray second action can't double-ack.
-    return;
   }
+  return null;
 }
 
-/** Ack a fired callback via the payload's response_url. The message itself is
- *  replaced only when the tap SERVED it (`interactionServed` — the shared,
- *  provisional rule); everything else is an ephemeral notice, so a message whose
- *  controls are still live keeps them, and a refusal never rewrites what the
- *  person who acted first is looking at. */
-async function ackCallbackToSlack(responseUrl: string, outcome: CallbackFireOutcome): Promise<void> {
+/** The reply to a fired callback. The message itself is replaced only when the
+ *  tap SERVED it (`interactionServed`, the shared, provisional rule);
+ *  everything else is an ephemeral notice, so a message whose controls are
+ *  still live keeps them, and a refusal never rewrites what the person who
+ *  acted first is looking at. */
+function callbackReply(outcome: CallbackFireOutcome): SlackReply {
   const text = callbackAckText(outcome);
-  const body = interactionServed(outcome)
+  return interactionServed(outcome)
     ? {
         replace_original: true,
         text,
         blocks: [{ type: 'section', text: { type: 'mrkdwn', text: `:white_check_mark: ${text}` } }],
       }
     : { response_type: 'ephemeral', replace_original: false, text };
-
-  await postToResponseUrl(responseUrl, body);
 }
 
-/** LEGACY (migration window): ack a resolved (or already-closed) ask by editing
- *  the Slack message via its response_url — replacing the buttons with a
- *  confirmation line. A late click on a settled/expired ask gets an EPHEMERAL
- *  "closed" notice instead (closed-request-wins), so the original message is
- *  left intact for whoever answered. */
-async function ackToSlack(responseUrl: string, outcome: AskDoorOutcome): Promise<void> {
-  const body =
-    outcome.kind === 'answered'
-      ? {
-          replace_original: true,
-          text: 'Thanks — your answer was recorded.',
-          blocks: [
-            {
-              type: 'section',
-              text: { type: 'mrkdwn', text: ':white_check_mark: Thanks — your answer was recorded.' },
-            },
-          ],
-        }
-      : outcome.kind === 'invalid'
-        ? { response_type: 'ephemeral', replace_original: false, text: `That answer could not be accepted: ${outcome.message}` }
-        : { response_type: 'ephemeral', replace_original: false, text: 'This request was already closed.' };
-
-  await postToResponseUrl(responseUrl, body);
-}
-
-async function postToResponseUrl(responseUrl: string, body: unknown): Promise<void> {
-  try {
-    await fetch(responseUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-  } catch (err) {
-    logger.warn('[slack/actions] response_url ack failed', {
-      error: err instanceof Error ? err.message : String(err),
-    });
-  }
+/** LEGACY (migration window): the reply to a resolved (or already-closed) ask,
+ *  replacing the buttons with a confirmation line. A late click on a
+ *  settled/expired ask gets an EPHEMERAL "closed" notice instead
+ *  (closed-request-wins), so the original message is left intact for whoever
+ *  answered. */
+function askReply(outcome: AskDoorOutcome): SlackReply {
+  return outcome.kind === 'answered'
+    ? {
+        replace_original: true,
+        text: 'Thanks — your answer was recorded.',
+        blocks: [
+          {
+            type: 'section',
+            text: { type: 'mrkdwn', text: ':white_check_mark: Thanks — your answer was recorded.' },
+          },
+        ],
+      }
+    : outcome.kind === 'invalid'
+      ? { response_type: 'ephemeral', replace_original: false, text: `That answer could not be accepted: ${outcome.message}` }
+      : { response_type: 'ephemeral', replace_original: false, text: 'This request was already closed.' };
 }
 
 function parsePayload(rawBody: Buffer): BlockActionsPayload | null {
