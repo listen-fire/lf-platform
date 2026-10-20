@@ -11,11 +11,12 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { AddressInfo } from 'node:net';
 import { resolve as resolvePath } from 'node:path';
 
-import { moduleSlug, type ModuleDefinition, type ModuleLog, type ModuleModels, type ModuleSpend } from './define';
+import { moduleSlug, type ModuleDefinition, type ModuleLog, type ModuleModels, type ModuleOcr, type ModuleSpend } from './define';
 import { hostModels } from './host_models';
+import { hostOcr } from './host_ocr';
 
 import { fileKv } from './file_kv';
-import { refusingFiles, refusingKv, refusingModels } from './in_process';
+import { emptyOcrSlot, refusingFiles, refusingKv, refusingModels } from './in_process';
 import { createModuleProtocolHandler } from './module_server';
 import { emptyBrowserSlot, type BrowserSlot } from 'module-runtime/browser';
 import { remoteBrowserSlot } from 'module-runtime/module-wire';
@@ -63,6 +64,9 @@ export interface ServeModuleOptions {
   /** A browser to lend the module (an embedder's). Absent: the browser slot
    *  is empty, and a module call that opens a page is refused by name. */
   browser?: BrowserSlot;
+  /** OCR to lend the module (an embedder's), or the host's OCR door
+   *  (`hostOcr`). Absent: the OCR slot is empty, and a read is refused by name. */
+  ocr?: ModuleOcr | ((spend: ModuleSpend) => ModuleOcr);
 }
 
 export async function serveModule(options: ServeModuleOptions): Promise<ServedModules> {
@@ -177,6 +181,7 @@ function moduleHandler(options: Omit<ServeModuleOptions, 'port' | 'host' | 'sock
     browser:
       options.browser ??
       emptyBrowserSlot(`module ${definition.name} is served by the serve-module command line, which lends no browser (the platform's api image fills the slot with Chromium)`),
+    ocr: options.ocr ?? emptyOcrSlot(`module ${definition.name} is served by the serve-module command line with no host to ask (LF_HOST_URL), so no OCR is lent`),
     ...(options.baseUrlOverride !== undefined ? { baseUrlOverride: options.baseUrlOverride } : {}),
     ...(options.constructionArgs !== undefined ? { constructionArgs: options.constructionArgs } : {}),
     publicUrl,
@@ -221,8 +226,8 @@ export function parseConstructionArgs(text: string): Record<string, string> {
 
 /** A module's options from its environment: MODULE_TOKEN,
  *  MODULE_BASE_URL_OVERRIDE, MODULE_STATE_DIR, MODULE_CONSTRUCTION_ARGS,
- *  MODULE_PUBLIC_URL, the host's models door (LF_HOST_URL, LF_HOST_TOKEN)
- *  and its browser module (LF_BROWSER_URL, LF_BROWSER_TOKEN). */
+ *  MODULE_PUBLIC_URL, the host's models and OCR doors (LF_HOST_URL,
+ *  LF_HOST_TOKEN) and its browser module (LF_BROWSER_URL, LF_BROWSER_TOKEN). */
 function moduleOptionsOf(definition: ModuleDefinition, env: Readonly<Record<string, string | undefined>>): Omit<ServeModuleOptions, 'port' | 'host' | 'socket'> {
   const set = (name: string): string | undefined => (env[name] !== undefined && env[name] !== '' ? env[name] : undefined);
   const token = set('MODULE_TOKEN');
@@ -243,17 +248,16 @@ function moduleOptionsOf(definition: ModuleDefinition, env: Readonly<Record<stri
     ...(publicUrl !== undefined ? { publicUrl } : {}),
     // A host that serves the models door names itself (LF_HOST_URL) and the
     // token its doors take from this process (LF_HOST_TOKEN).
-    ...(hostUrl !== undefined
-      ? {
-          models: hostModels({
-            url: `${hostUrl.replace(/\/$/, '')}/api/public/adapter/${moduleSlug(definition.name)}/models`,
-            headers: hostToken !== undefined ? { authorization: `Bearer ${hostToken}` } : {},
-          }),
-        }
-      : {}),
+    ...(hostUrl !== undefined ? hostDoors(`${hostUrl.replace(/\/$/, '')}/api/public/adapter/${moduleSlug(definition.name)}`, hostToken) : {}),
     // A host whose browser slot a browser module fills hands it on (LF_BROWSER_URL).
     ...(browserUrl !== undefined ? { browser: remoteBrowserSlot({ baseUrl: browserUrl, ...(browserToken !== undefined ? { token: browserToken } : {}) }) } : {}),
   };
+}
+
+/** The host's doors a module asks through: its models and its OCR. */
+function hostDoors(base: string, token: string | undefined): Pick<ServeModuleOptions, 'models' | 'ocr'> {
+  const headers: Record<string, string> = token !== undefined ? { authorization: `Bearer ${token}` } : {};
+  return { models: hostModels({ url: `${base}/models`, headers }), ocr: hostOcr({ url: `${base}/ocr`, headers }) };
 }
 
 /** `MODULE_MOUNTS`: a JSON array of `{ path, module, cwd?, env? }` — each

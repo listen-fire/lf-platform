@@ -868,8 +868,9 @@ export type WireModuleKindShape = z.infer<typeof WireModuleKind>;
  *  `browser`, which the platform's api image fills with Chromium and every
  *  other host leaves empty (a module asking for a page is refused by name),
  *  and `wake`, which stays empty unless named (nobody is told work is due;
- *  a scheduled worker finds it). */
-export const CORE_SLOTS = ['models', 'judge', 'store', 'files', 'limiter', 'loopGuard', 'browser', 'wake'] as const;
+ *  a scheduled worker finds it), and `ocr`, which stays empty unless named
+ *  (a scanned file is refused, saying the slot is empty). */
+export const CORE_SLOTS = ['models', 'judge', 'store', 'files', 'limiter', 'loopGuard', 'browser', 'wake', 'ocr'] as const;
 export const WireCoreSlot = z.enum(CORE_SLOTS);
 export type WireCoreSlotShape = z.infer<typeof WireCoreSlot>;
 

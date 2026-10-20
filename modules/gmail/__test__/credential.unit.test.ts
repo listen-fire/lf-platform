@@ -1,7 +1,7 @@
 // The module's side of its credential: the declarations it answers with, and
 // how the fields a host hands it become a client.
 
-import { loadedModule, moduleManifest, refusingFiles, refusingIdentities, refusingKv, refusingModels } from 'module-kit';
+import { emptyOcrSlot, loadedModule, moduleManifest, refusingFiles, refusingIdentities, refusingKv, refusingModels } from 'module-kit';
 import { emptyBrowserSlot } from 'movement-engine/public/browser';
 
 import { GMAIL_SCOPES, GMAIL_SEND_SCOPE } from '../api_client';
@@ -23,6 +23,7 @@ describe('the declarations', () => {
         models: refusingModels('none'),
         identities: refusingIdentities('none'),
         browser: emptyBrowserSlot('none'),
+        ocr: emptyOcrSlot('none'),
         config: { tenant: 't', constructionArgs: {} },
       }),
     );

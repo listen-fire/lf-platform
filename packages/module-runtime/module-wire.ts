@@ -2,8 +2,10 @@
 // HTTP: a Unix socket on the same box, TCP, or HTTPS for a remote module): a
 // client for any module's address, a server to serve a slot from, starting a
 // module process, the browser slot over the wire, and the conformance cases
-// that hold any slot server to its slot's meaning over the wire.
+// that hold any slot server to its slot's meaning over the wire, and the
+// scanned files the OCR slot's cases read.
 
 export * from './module_wire/wire';
 export * from './module_wire/conformance';
 export * from './module_wire/browser';
+export * from './module_wire/scanned';

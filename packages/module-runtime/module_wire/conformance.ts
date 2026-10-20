@@ -1,5 +1,5 @@
 // The conformance suites of the slots with no family contract of their own
-// (models, judge, files, wake), and the cases every slot module answers alike (its
+// (models, judge, files, wake, ocr), and the cases every slot module answers alike (its
 // manifest, the envelope's refusals). Each runs against any server over the
 // wire: written once here, they hold lf's built-ins (`lf --contract-<slot>`)
 // and a third-party module in any language to the same meaning. The store,
@@ -11,8 +11,23 @@
 import { strict as assert } from 'node:assert';
 
 import { PROTOCOL_VERSION, type WireCoreSlotShape as CoreSlot } from 'engine-contracts';
-import { FilesOpenAnswer, JudgeArbitrateAnswer, MODELS_PRICES_METHOD, ModelsCallAnswer, ModelsPricesAnswer, StoredFile, WireSlotManifest, isFreePrice, type ModelPriceShape } from 'engine-contracts/slots';
+import {
+  FilesOpenAnswer,
+  JudgeArbitrateAnswer,
+  MODELS_PRICES_METHOD,
+  ModelsCallAnswer,
+  ModelsPricesAnswer,
+  OCR_PRICES_METHOD,
+  OCR_UNSUPPORTED_TYPE_CODE,
+  OcrPricesAnswer,
+  OcrReadAnswer,
+  StoredFile,
+  WireSlotManifest,
+  isFreePrice,
+  type ModelPriceShape,
+} from 'engine-contracts/slots';
 
+import { pngOf, scannedPdfOf, textImage } from './scanned';
 import { SlotClient, SlotRefused, postTo } from './wire';
 
 export interface SlotConformanceCase {
@@ -201,6 +216,67 @@ export const filesSlotCases: SlotConformanceCase[] = [
       assert.notEqual(first.source.objectUri, second.source.objectUri);
       const opened = await client.read('files.open', { objectUri: first.source.objectUri }, FilesOpenAnswer);
       assert.equal(Buffer.from(opened.bytes, 'base64').toString(), 'one');
+    },
+  },
+];
+
+// ── The OCR slot ────────────────────────────────────────────────────────────
+
+const SCANNED_LINES = ['ACME ROBOTICS', 'SERIES A: $4,000,000'];
+
+/** The OCR slot. `client` carries settings that reach a backend. */
+export const ocrSlotCases: SlotConformanceCase[] = [
+  {
+    name: 'ocr: a scanned PDF is read: its text, the pages read and what they cost',
+    async run(client) {
+      const pdf = scannedPdfOf([textImage(SCANNED_LINES), textImage(['PAGE TWO'])]);
+      const answer = await client.read('ocr.read', { bytes: pdf.toString('base64'), contentType: 'application/pdf', name: 'deck.pdf', label: 'conformance.pdf' }, OcrReadAnswer);
+      assert.ok(answer.text.trim().length > 0, 'the answer has text');
+      assert.equal(answer.pages, 2, 'both pages were read');
+      for (const line of answer.cost) assert.ok(line.microdollars >= 0 && line.label.length > 0);
+    },
+  },
+  {
+    name: 'ocr: an image is read as one page',
+    async run(client) {
+      const png = pngOf(textImage(SCANNED_LINES));
+      const answer = await client.read('ocr.read', { bytes: png.toString('base64'), contentType: 'image/png', name: 'shot.png', label: 'conformance.image' }, OcrReadAnswer);
+      assert.ok(answer.text.trim().length > 0, 'the answer has text');
+      assert.equal(answer.pages, 1);
+    },
+  },
+  {
+    name: 'ocr: a read that read pages reports what it cost, unless the module publishes its price as free',
+    async run(client) {
+      const png = pngOf(textImage(SCANNED_LINES));
+      const answer = await client.read('ocr.read', { bytes: png.toString('base64'), contentType: 'image/png', label: 'conformance.priced' }, OcrReadAnswer);
+      const manifest = await client.read('manifest', {}, WireSlotManifest);
+      const free = manifest.methods.includes(OCR_PRICES_METHOD) && (await client.read(OCR_PRICES_METHOD, {}, OcrPricesAnswer)).perPage === 0;
+      if (answer.pages === 0 || free) return;
+      const total = answer.cost.reduce((sum, line) => sum + line.microdollars, 0);
+      assert.ok(total > 0, `the read read ${answer.pages} pages and reported a cost of ${total} microdollars`);
+    },
+  },
+  {
+    name: 'ocr: ocr.prices, when listed, prices a page in dollars',
+    async run(client) {
+      const manifest = await client.read('manifest', {}, WireSlotManifest);
+      if (!manifest.methods.includes(OCR_PRICES_METHOD)) return;
+      const { perPage } = await client.read(OCR_PRICES_METHOD, {}, OcrPricesAnswer);
+      assert.ok(Number.isFinite(perPage) && perPage >= 0);
+    },
+  },
+  {
+    name: 'ocr: a request without bytes is refused as bad_request',
+    async run(client) {
+      await refusedWith('bad_request', client.call('ocr.read', { contentType: 'application/pdf', label: 'conformance.bad' }));
+    },
+  },
+  {
+    name: 'ocr: bytes of a type the module does not read are refused as unsupported_type',
+    async run(client) {
+      const bytes = Buffer.from('PK\u0003\u0004 not a document').toString('base64');
+      await refusedWith(OCR_UNSUPPORTED_TYPE_CODE, client.call('ocr.read', { bytes, contentType: 'application/zip', label: 'conformance.zip' }));
     },
   },
 ];

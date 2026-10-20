@@ -85,6 +85,25 @@ export interface ModuleModels {
   chatStructured<T>(input: ModuleChat & { schema: ZodType<T>; toolName: string; toolDescription: string }): Promise<T>;
 }
 
+/** One file the host's OCR slot reads: a scanned PDF's or an image's bytes. */
+export interface ModuleOcrRead {
+  bytes: Uint8Array;
+  /** `application/pdf`, or an image type (`image/png`, `image/jpeg`, …). */
+  contentType: string;
+  name?: string;
+  /** Names the read in cost lines and logs (`web.vc-url-retrieval`). */
+  label: string;
+}
+
+/** The host's OCR slot: the text of a file with no text layer of its own.
+ *  The read's cost is charged to the call that asked (`ctx.spend`). */
+export interface ModuleOcr {
+  /** Why the slot is empty, when the host knows it before a read; a read on
+   *  an empty slot refuses saying so in any case. */
+  readonly emptyBecause?: string;
+  read(input: ModuleOcrRead): Promise<{ text: string; pages: number }>;
+}
+
 /** Someone who linked their account on the provider to a user of the host
  *  (the platform's Telegram `/start` handshake): the provider's id for them,
  *  the host user's email as linked, and when. */
@@ -161,6 +180,9 @@ export interface ModuleContext {
    *  that draws with script). Refuses by name, saying which slot is empty,
    *  on a host that has none. */
   browser: BrowserSlot;
+  /** The host's OCR slot. Refuses by name, saying the slot is empty, on a
+   *  host whose slot nothing fills. */
+  ocr: ModuleOcr;
   config: ModuleConfig;
 }
 

@@ -23,6 +23,7 @@ import type {
   ModuleKv,
   ModuleLog,
   ModuleModels,
+  ModuleOcr,
   PluginAnswer,
   PluginInvocation,
   PluginModuleDefinition,
@@ -49,6 +50,8 @@ export interface ModuleHost {
   identities?: ModuleIdentities;
   /** Default: the empty slot, refused by name (a host with no browser). */
   browser?: BrowserSlot;
+  /** Default: the empty slot, refused by name (a host with no OCR). */
+  ocr?: ModuleOcr;
   baseUrlOverride?: string;
   constructionArgs?: Readonly<Record<string, string>>;
   credentialRef?: string;
@@ -79,6 +82,7 @@ export function moduleContext(host: ModuleHost): ModuleContext {
     models: host.models ?? refusingModels('this host lends no models to its modules'),
     identities: host.identities ?? refusingIdentities('this host keeps no linked identities'),
     browser: host.browser ?? emptyBrowserSlot('this host has no browser to lend its modules'),
+    ocr: host.ocr ?? emptyOcrSlot('this host has no OCR to lend its modules'),
     config: {
       tenant: host.tenant,
       ...(host.baseUrlOverride !== undefined ? { baseUrlOverride: host.baseUrlOverride } : {}),
@@ -250,6 +254,17 @@ export function refusingModels(reason: string): ModuleModels {
     },
     chatStructured: async () => {
       throw new Error(reason);
+    },
+  };
+}
+
+/** An OCR slot nothing fills: every read refuses, saying why. */
+export function emptyOcrSlot(reason: string): ModuleOcr {
+  const because = `the ocr slot is empty: ${reason}`;
+  return {
+    emptyBecause: because,
+    read: async () => {
+      throw new Error(because);
     },
   };
 }

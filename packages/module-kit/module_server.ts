@@ -13,7 +13,7 @@ import type { BrowserSlot } from 'module-runtime/browser';
 import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from 'node:http';
 import { METHODS, type MethodName, type RpcResponseShape, type WireCostLineShape, type WireCredentialShape } from 'engine-contracts';
 
-import type { CredentialFields, ModuleCredential, ModuleDefinition, ModuleFiles, ModuleKv, ModuleLog, ModuleModels, ModuleSpend } from './define';
+import type { CredentialFields, ModuleCredential, ModuleDefinition, ModuleFiles, ModuleKv, ModuleLog, ModuleModels, ModuleOcr, ModuleSpend } from './define';
 
 import { limitedFetch } from './host_limits';
 import { moduleContext, noCredential } from './in_process';
@@ -47,6 +47,9 @@ export interface ModuleServerOptions {
   /** The browser the serving host lends; default: the empty slot, refused
    *  by name. */
   browser?: BrowserSlot;
+  /** The OCR the serving host lends; default: the empty slot, refused by
+   *  name. Given each request's spend, as the models are. */
+  ocr?: ModuleOcr | ((spend: ModuleSpend) => ModuleOcr);
   baseUrlOverride?: string;
   /** Construction arguments for every request (an entry position); a
    *  request's own `settings` (its install's) are laid over them. */
@@ -151,6 +154,7 @@ async function answer(
   const costs: WireCostLineShape[] = [];
   const spend: ModuleSpend = { charge: (line) => void costs.push(line) };
   const models = typeof options.models === 'function' ? options.models(spend) : options.models;
+  const ocr = typeof options.ocr === 'function' ? options.ocr(spend) : options.ocr;
   const constructionArgs = { ...(options.constructionArgs ?? {}), ...(request.settings ?? {}) };
   const tenant = headerValue(req.headers, ADAPTER_TEAM_HEADER) ?? '';
   let loaded: LoadedModule;
@@ -167,6 +171,7 @@ async function answer(
         kv: options.kvFor(tenant),
         ...(models !== undefined ? { models } : {}),
         ...(options.browser !== undefined ? { browser: options.browser } : {}),
+        ...(ocr !== undefined ? { ocr } : {}),
         ...(options.baseUrlOverride !== undefined ? { baseUrlOverride: options.baseUrlOverride } : {}),
         constructionArgs,
         validateResults: false,
