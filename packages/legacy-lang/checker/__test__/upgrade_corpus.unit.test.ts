@@ -30,7 +30,7 @@ declare function require(id: string): unknown;
 const path = require('path') as { join(...parts: string[]): string };
 const fs = require('fs') as { readFileSync(path: string, encoding: 'utf8'): string };
 
-const ORACLE = path.join(__dirname, '../../../../crates/movement-engine/tests/oracle/handles.json');
+const ORACLE = path.join(__dirname, '../../../legacy-engine/__fixtures__/oracle/handles.json');
 
 /** 2026-10-16, at the v5 surface spine: 3,127 of 3,468 checks records.
  *  2026-10-16, v5b-upgrade: 4,082 of 4,449 programs (91.8%).

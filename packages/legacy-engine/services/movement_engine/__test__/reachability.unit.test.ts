@@ -39,10 +39,14 @@ import { runMovement } from 'movement-engine/public/movement-engine';
 import { resetRustRunStats, rustRunStats } from 'movement-engine/public/movement-engine';
 import { credentialIdsFor, makeFakeParkSink, makeTestHost } from 'movement-engine/public/testing';
 
+import { PATTERNS_CATALOG } from '../../../__fixtures__/oracle/patterns_catalog';
 import { KNOWN_GAPS, reasonOf } from '../../../../movement-engine/services/movement_engine/__test__/reachability_gaps';
 
 const ROOT = path.resolve(__dirname, '../../../../..');
+// The engine's version 5 patterns stay with the language; the oracles pinned
+// below 5 are the platform's.
 const ORACLES = path.join(ROOT, 'crates/movement-engine/tests/oracle');
+const LEGACY_ORACLES = path.join(__dirname, '../../../__fixtures__/oracle');
 const TEAM = tenantIdOf('00000000-0000-0000-0000-0000000000ab');
 
 interface Candidate {
@@ -159,27 +163,19 @@ function oracleCorpus(): Candidate[] {
     out.push({ corpus, ...spelled });
   };
   for (const file of ['records.json', 'handles.json', 'parallel.json']) {
-    const oracle = JSON.parse(readFileSync(path.join(ORACLES, file), 'utf8')) as { prelude: string; catalog: CatalogSnapshot; cases: Array<{ body: string }> };
+    const oracle = JSON.parse(readFileSync(path.join(LEGACY_ORACLES, file), 'utf8')) as { prelude: string; catalog: CatalogSnapshot; cases: Array<{ body: string }> };
     for (const c of oracle.cases) add(`oracle ${file}`, oracle.prelude.replace('BODY', c.body), oracle.catalog);
   }
   const patterns = JSON.parse(readFileSync(path.join(ORACLES, 'patterns.json'), 'utf8')) as {
     prelude: string;
     cases: Array<{ program: { body?: string; file?: string; files?: CatalogSnapshot['files'] } }>;
   };
-  const catalog = patternsCatalog();
+  const catalog = PATTERNS_CATALOG;
   for (const { program } of patterns.cases) {
     const source = program.file !== undefined ? patterns.prelude + program.file : `${patterns.prelude}movement m(msg: <inbox-[:message]->>) {\n${program.body ?? ''}\n}`;
     add('oracle patterns', source, program.files !== undefined ? { ...catalog, files: program.files } : catalog);
   }
   return out;
-}
-
-/** The patterns oracle's world, as the parity harness reads it
- *  (packages/legacy-lang/parity/reference.ts). */
-function patternsCatalog(): CatalogSnapshot {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { PATTERNS_CATALOG } = require(path.join(ORACLES, 'patterns_oracle.ts')) as { PATTERNS_CATALOG: CatalogSnapshot };
-  return PATTERNS_CATALOG;
 }
 
 /** What a run ended in that a check should have refused, or undefined. */
