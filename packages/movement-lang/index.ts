@@ -21,6 +21,7 @@ export * from './checker/fixes';
 export * from './checker/diagnostic';
 export * from './checker/linked_types';
 export * from './checker/rust_checker';
+export * from './checker/standard_library';
 export type { MExpr } from './parser/expression/tree';
 export * from './service/snapshot';
 export * from './language_version';

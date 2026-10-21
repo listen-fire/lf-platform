@@ -94,6 +94,17 @@ pub unsafe fn check_compatible_with(request_ptr: *const u8, request_len: u32, ou
     write_answer(&answer, out_ptr_ptr, out_len_ptr)
 }
 
+/// `standard_library()`: the built-in table (crate::types::stdlib::
+/// standard_library_json) and 0. Takes no input: the table is the same under
+/// every language version this release reads.
+///
+/// # Safety
+/// The out slots must be writable.
+pub unsafe fn standard_library_with(out_ptr_ptr: *mut usize, out_len_ptr: *mut usize) -> u32 {
+    install_panic_hook();
+    write_answer(&crate::types::stdlib::standard_library_json(), out_ptr_ptr, out_len_ptr)
+}
+
 /// Writes `answer` out as `JSON.stringify` writes it (the engine's text form
 /// undone), and its status: 1 for `{error}`.
 fn write_answer(answer: &serde_json::Value, out_ptr_ptr: *mut usize, out_len_ptr: *mut usize) -> u32 {

@@ -65,7 +65,7 @@ type CatalogFunction = 'catalog_query';
 type WasmFunction = ParserFunction | LoweringFunction | CatalogFunction;
 
 /** The Rust checker's exports, which only the engine's artifact carries. */
-type CheckerFunction = 'check_program' | 'check_answer' | 'check_compatible';
+type CheckerFunction = 'check_program' | 'check_answer' | 'check_compatible' | 'standard_library';
 
 interface ParserExports extends BufferExports {
   call(fn: WasmFunction, args: number[]): number;
@@ -223,6 +223,17 @@ export function callCheckAnswer(
  */
 export function callCheckCompatible(requestJson: string): { ok: boolean; json: unknown } {
   return callChecker('check_compatible', [requestJson], []);
+}
+
+/**
+ * The Rust checker's built-in table (crates/movement-checker/src/types/
+ * stdlib.rs `standard_library_json`): no input, and the reply — the table as
+ * a JSON array.
+ *
+ * @internal Used by the table's wrapper (checker/standard_library.ts).
+ */
+export function callStandardLibrary(): { ok: boolean; json: unknown } {
+  return callChecker('standard_library', [], []);
 }
 
 function callChecker(fn: CheckerFunction, inputs: string[], extra: number[]): { ok: boolean; json: unknown } {
@@ -478,7 +489,7 @@ function readExports(raw: Record<string, unknown>): ParserExports {
     catalog_query: exported('catalog_query'),
   };
   const checker: ParserExports['checker'] = {};
-  for (const fn of ['check_program', 'check_answer', 'check_compatible'] as const) {
+  for (const fn of ['check_program', 'check_answer', 'check_compatible', 'standard_library'] as const) {
     if (typeof raw[fn] !== 'function') continue;
     const call = exported(fn);
     checker[fn] = (...args) => number(call(...args), fn);

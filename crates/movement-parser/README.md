@@ -111,7 +111,8 @@ cargo would otherwise reuse dependencies built without the wrapper.
 | `last_panic` | `(out_ptr_ptr, out_len_ptr)` | the last panic's message, in a static buffer (not freed) |
 
 The artifact also carries the engine's exports (`engine_start`, `engine_answer`,
-`engine_finish`), documented in crates/movement-engine/README.md.
+`engine_finish`) and the checker's (`check_program`, `check_answer`,
+`check_compatible`, `standard_library`), documented in crates/movement-engine/README.md.
 
 Status 0 means the output is the tree; 1 means it is `{"error": {…}}`. The
 output is UTF-8 JSON the caller must `dealloc`. Every value is an i32 on

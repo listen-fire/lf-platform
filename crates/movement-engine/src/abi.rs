@@ -172,6 +172,15 @@ pub unsafe extern "C" fn check_compatible(request_ptr: *const u8, request_len: u
     unsafe { movement_checker::abi::check_compatible_with(request_ptr, request_len, out_ptr_ptr, out_len_ptr) }
 }
 
+/// The checker's built-in table (`movement_checker::abi::standard_library_with`).
+///
+/// # Safety
+/// The out slots must be writable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn standard_library(out_ptr_ptr: *mut usize, out_len_ptr: *mut usize) -> u32 {
+    unsafe { movement_checker::abi::standard_library_with(out_ptr_ptr, out_len_ptr) }
+}
+
 #[cfg(test)]
 mod tests {
     use movement_parser::abi::{alloc, dealloc, last_panic};
@@ -258,6 +267,25 @@ mod tests {
         assert_eq!(call_answer(1, r#"{"value":1,"extra":2}"#).0, ERROR);
         assert_eq!(call_answer(1, r#"{"error":{}}"#).0, ERROR);
         finish();
+    }
+
+    #[test]
+    fn the_standard_library_is_the_checker_table() {
+        let (mut out_ptr, mut out_len) = (0usize, 0usize);
+        let status = unsafe { standard_library(&mut out_ptr, &mut out_len) };
+        assert_eq!(status, OK);
+        let table = output(out_ptr, out_len);
+        let rows = table.as_array().unwrap();
+        assert_eq!(rows.len(), movement_checker::types::stdlib::STANDARD_LIBRARY.len());
+        assert_eq!(
+            rows[13],
+            json!({
+                "name": "SPLIT",
+                "params": [{ "name": "text", "type": "text" }, { "name": "separator", "type": "text", "optional": true }],
+                "returns": "list of text",
+                "summary": "text cut into its trimmed, non-empty parts",
+            })
+        );
     }
 
     #[test]
