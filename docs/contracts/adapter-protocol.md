@@ -10,7 +10,7 @@ your system. Your server calls Listen-Fire back when something happens.
 This document is the contract. The source of truth is the zod schema in
 `packages/engine-contracts/protocol.ts`; where this page
 and the schema disagree, the schema wins. The reference adapter is the fake
-CRM in `apps/api/src/scripts/dev/fake_crm_adapter.ts` (see
+CRM, a single file in lf-platform, `apps/api/src/scripts/dev/fake_crm_adapter.ts` (see
 [Build your first adapter](#build-your-first-adapter)).
 
 Contents:
@@ -1274,7 +1274,7 @@ Use your own `code` for anything else; set `retryable` honestly.
 
 ## Build your first adapter
 
-The fake CRM is a complete protocol-2 adapter in one file:
+The fake CRM is a complete protocol-2 adapter in one file, in lf-platform:
 `apps/api/src/scripts/dev/fake_crm_adapter.ts`. It has one type, `Company`,
 with a comment thread. It uses both push doors and the host door's methods,
 and it pages. Read it next to this walkthrough.

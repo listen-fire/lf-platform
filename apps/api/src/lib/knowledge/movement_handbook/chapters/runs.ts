@@ -5,11 +5,11 @@ export const runs: Chapter = {
   title: 'Runs — reading what an automation did',
   content: `## Runs — reading what an automation did
 
-Every firing of an automation — a live event arriving, a "run now" backfill, a dry-run rehearsal — is recorded as a **run**: one entry in the automation's history holding what the automation wrote, where, and why — the surface for verifying it does what the text says, and for tracing any written value back to its source.
+Every firing of an automation — a live event arriving, a "run now" backfill, a dry-run rehearsal — is recorded by the engine as a **run**: one record holding what the automation wrote, where, and why — the record for verifying it does what the text says, and for tracing any written value back to its source. Wherever you read runs (\`lf runs show\` in a project, or the platform's run history), you are reading this same record.
 
 ### run-history
 
-Each listener keeps its own history, and an unchanged \`listen\` keeps its history across saves (retiring a listener orphans its history rather than deleting it — the record of what ran outlives the line that ran it). A run records, in program order, every write the firing performed:
+The engine keeps each listener's runs together as its history, and an unchanged \`listen\` keeps its history across saves (retiring a listener orphans its history rather than deleting it — the record of what ran outlives the line that ran it). A run records, in program order, every write the firing performed:
 
 - the target system and record type, and what the write did — **created** the record, **updated** it (at least one field was sent), **attached** it to its parent (a matched record whose own fields were all unchanged, hung off the parent the write names — the target system confirmed the attachment, so \`attach\` means the relationship is there), or **noop** (a matched record with nothing to send at all). Duplicate prevention is visible as "updated" where you expected "created";
 - the written record's id in the target (and a link, where the target provides one);
@@ -33,11 +33,11 @@ A value combined from several sources (an interpolated message, say) lists every
 
 ### failures
 
-A failed firing is recorded too, with the reason named — a missing required field, a construct the engine can't execute yet, a target that refused the write. The run history is therefore also the debugging surface: the failure sits next to the event that caused it, and the fix is a text edit plus the next event (or a "run now").
+A failed firing is recorded too, with the reason named — a missing required field, a construct the engine can't execute yet, a target that refused the write. The run record is therefore also the debugging surface: the failure sits next to the event that caused it, and the fix is a text edit plus the next event (or a "run now").
 
 ### what-a-run-costs
 
-A run's cost is the language-model work inside it: an \`ai\` call on the default tier is far cheaper than one asking for \`"thorough"\`, and a large \`extract\` is the most expensive shape there is (its chapter covers why — and it takes the same tier, which is the biggest lever there is on what one costs). Time a run spends paused (waiting for a person at an \`ask\`) or asleep costs nothing, so a long approval wait or a scheduled delay is free.
+A run's cost is the language-model work inside it, and the run record carries it: an \`ai\` call on the default tier is far cheaper than one asking for \`"thorough"\`, and a large \`extract\` is the most expensive shape there is (its chapter covers why — and it takes the same tier, which is the biggest lever there is on what one costs). Time a run spends paused (waiting for a person at an \`ask\`) or asleep costs nothing, so a long approval wait or a scheduled delay is free.
 
 ### Pitfalls
 

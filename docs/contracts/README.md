@@ -69,19 +69,14 @@ A host recording is one entry into the engine as data: what it was handed, every
 
 A divergence over a request with no recorded counterpart also carries that request in full (`unmatched` on the verdict). The first divergence is named: the request with no counterpart and the nearest recorded one, the request reordered and the one it waited on, the recorded request never made, or the path where the results first differ. The rules are `packages/engine-contracts/conformance/replay.ts`.
 
-**Replaying ours against your engine or host.** Our corpora are `apps/api/src/services/movement_engine/conformance/__fixtures__/engine-runs.v1.json` and `.v2.json`, one recording per line: every distinct conversation the v1 and v2 engine corpora have (the entry, its input and its requests). Each line replays on its own.
+**Replaying a recording against your engine or host.** A recording is one line of JSON, and each line replays on its own.
 
 - To test an engine: hand it each recording's input and a host built from `RecordedConversation` (it answers by the matching rule), then judge with `verdictOf`.
-- To test a host over a wire: our HTTP host double is the model. It serves `POST /host/<family>/<method>` with the request object as the body, and answers `{ "answer": … }`, `{}` for a method that answers nothing, or `{ "error": { class, code?, message } }`, always with status 200: a host's thrown error is an answer, carried in the envelope. A request the recording lacks, or one made out of its order, answers 409 `{ "divergence": "…" }` (`http_host_double.ts`). Transport failures are not modelled, and the double does not advertise the methods it serves: both halves are built from the recording's `methods`.
-- Ours runs every recording against three targets on each change: the TypeScript engine in process, the Rust engine through its shim, and the TypeScript engine against the HTTP double (`conformance/__test__/engine_runs.v<n>.unit.test.ts`). The Rust target takes only the recordings its shim routes and runs whole, and skips the rest with the reason.
+- To test a host over a wire: serve `POST /host/<family>/<method>` with the request object as the body, and answer `{ "answer": … }`, `{}` for a method that answers nothing, or `{ "error": { class, code?, message } }`, always with status 200: a host's thrown error is an answer, carried in the envelope. A request the recording lacks, or one made out of its order, answers 409 `{ "divergence": "…" }`. Transport failures are not modelled, and the double does not advertise the methods it serves: both halves are built from the recording's `methods`.
 
-**Recording your own host.** Wrap any `EngineHost` with the recorder (`apps/api/src/services/movement_engine/conformance/recorder.ts`, `recordEntry`). It hands the engine and the host each other's own values, keeps JSON copies, and refuses a request or answer JSON cannot carry, and any request made after the entry ended. To re-harvest ours:
+**Recording your own host.** Wrap any `EngineHost` with a recorder: it hands the engine and the host each other's own values, keeps JSON copies, and refuses a request or answer JSON cannot carry, and any request made after the entry ended. The recording and replay rules are `packages/engine-contracts/conformance/`.
 
-```bash
-cd apps/api && pnpm harvest:engine-runs
-```
-
-This records both corpora (`UPDATE_ENGINE_RUNS=1 pnpm test:conformance:v<n>`) with the tests' own wall clock held at one instant and their own random UUIDs numbered per test file (the inputs a test builds and the ids its host invents), so two harvests write the same bytes. It then checks that every recording replays on the TypeScript engine, in process and over the HTTP double. A recording that does not fails the harvest, naming it and its first divergence, unless a known reason accounts for it (`UNPORTABLE` in `conformance/__test__/engine_runs_replay.ts`, each reason with its exact count per corpus); those are dropped from the fixture.
+**What proves the host contract here.** The language's proof is the engine package's shim tests (the Rust engine run through its shim against a host, `packages/movement-engine`), `apps/cli`'s slot conformance (`slot_conformance.test.ts`, every slot module held to the same cases over the wire) and its run-host contract (`run_host_contract.test.ts`, the host `lf` itself provides). The recorded-run harness, with its corpora, its HTTP host double and its re-harvest command, is a host's own proof and belongs to the host that records them: [lf-platform](https://github.com/listen-fire/lf-platform) has one, under `apps/api/src/services/movement_engine/conformance/`.
 
 ### The language kit: checked programs
 

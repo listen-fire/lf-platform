@@ -6,7 +6,7 @@ A catalog snapshot is a tenant's catalog as plain JSON: the adapters it can cons
 
 - **The type:** `CatalogSnapshot` (`packages/movement-lang/service/snapshot.ts`, re-exported by `engine-contracts`).
 - **Read by:** `fromCatalogSnapshot` (the TypeScript checker, the editor, the TypeScript engine's check) and `CatalogSnapshot::load` (`crates/movement-parser/src/catalog/`, the Rust catalog the Rust engine and the browser parser load). The Rust reader refuses any member the TypeScript does not declare.
-- **Built by:** this repository's run host (`toCatalogSnapshot` and `runCatalogSnapshotForTeam` in `translation_graph/movement/catalog.ts`) per team and per run, and `catalogSnapshotOf` (`service/snapshot.ts`) over any live `Catalog`.
+- **Built by:** a host, per tenant and per run (lf-platform builds it per team in `apps/api/src/services/translation_graph/movement/catalog.ts`; `lf` builds it from the project), and `catalogSnapshotOf` (`service/snapshot.ts`) over any live `Catalog`.
 
 ## Versions
 

@@ -70,10 +70,10 @@ write crm-[:Companies]-> {
 Values that come from the run itself rather than from any record wear an \`@\` prefix and read like any other value, anywhere an expression can appear. There are eight, in three groups:
 
 - \`@current_date\` (\`"2026-03-12"\`) and \`@current_timestamp\`, the moment the run fires, in UTC — \`Deadline: Date.addDays(@current_date, 14)\`. Every clock reading in a run gives that same moment, however long the run takes. For the date somewhere in particular, reach for \`Date.today(zone)\`.
-- \`@user_email\`, \`@user_name\`, \`@user_id\` — the workspace member the run acts *on behalf of*. Forwarders are followed back to the real person: a message forwarded in by a teammate still names the original sender, the person whose work this is.
+- \`@user_email\`, \`@user_name\`, \`@user_id\` — the identity the host resolves for the run: the person it acts *on behalf of*. The platform resolves it through its workspace members, \`lf\` through the project. Forwarders are followed back to the real person: a message forwarded in by a teammate still names the original sender, the person whose work this is.
 - \`@actor_email\`, \`@actor_name\`, \`@actor_id\` — whoever literally triggered the event in the source system, exactly as it reported them, member or not.
 
-The two agree until a forward, relay, or service account sits between the originator and the responsible person. A meta-field the run can't resolve — an event that maps to no workspace member, a source that reports no sender — is simply empty, never an error.
+The two agree until a forward, relay, or service account sits between the originator and the responsible person. A meta-field the run can't resolve — an event the host maps to no identity, a source that reports no sender — is simply empty, never an error.
 
 ### aggregates
 

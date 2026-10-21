@@ -54,7 +54,7 @@ A browser module is a protocol-2 server ([the transport](adapter-protocol.md#tra
 
 ## Contract suite
 
-[`contract.ts`](../../packages/movement-engine/services/browser/contract.ts) holds every module filling the slot to the same cases: open a page and read it, screenshot the page and an element, print to PDF, pass on what the session answers or throws, close early, wait for a place beyond the limit, refuse a session past its time. `@lf/chromium` passes it against a page on loopback (`apps/api/src/services/__test__/chromium_browser.unit.test.ts`); the scripted page the tests drive instead of a browser (`fakeBrowser`, `movement-engine/public/testing`) passes it in `services/browser/__test__`.
+[`contract.ts`](../../packages/movement-engine/services/browser/contract.ts) holds every module filling the slot to the same cases: open a page and read it, screenshot the page and an element, print to PDF, pass on what the session answers or throws, close early, wait for a place beyond the limit, refuse a session past its time. `@lf/chromium` passes it against a page on loopback (a host's own test; lf-platform's is `apps/api/src/services/__test__/chromium_browser.unit.test.ts`); the scripted page the tests drive instead of a browser (`fakeBrowser`, `movement-engine/public/testing`) passes it in `services/browser/__test__`.
 
 Over the wire, the same cases hold the scripted page served as a browser module, driven through the wire client (`apps/cli/src/__test__/slot_conformance.test.ts`).
 
