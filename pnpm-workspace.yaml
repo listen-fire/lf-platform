@@ -2,5 +2,4 @@ packages:
   - "apps/*"
   - "packages/*"
   - "modules/*"
-  - "tools/*"
   - "examples/embed-saas"

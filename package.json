@@ -44,7 +44,6 @@
     "dev:link": "cd apps/api && pnpm run dev:link",
     "dev:movement": "cd apps/api && pnpm run dev:movement",
     "deploy:check": "cd apps/api && pnpm run deploy:check",
-    "engine:patterns": "cd apps/api && pnpm run engine:patterns --",
     "dev:automation-eval": "cd apps/api && pnpm run dev:automation-eval",
     "dev:extraction-bakeoff": "cd apps/api && pnpm run dev:extraction-bakeoff",
     "dev:eval-research": "cd apps/api && pnpm run dev:eval-research",
