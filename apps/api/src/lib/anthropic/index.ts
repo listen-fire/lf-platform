@@ -41,6 +41,7 @@ import { logger } from '../../services/logger';
 import { SECOND } from '../../constants';
 import { recordLlmUsage, runFields } from '../llm_usage';
 import { assertRunBudget } from '../run_spend';
+import { rateLimitDelayMs } from './retry_after';
 
 const rateLimitQueue = new Queue<any>({ concurrency: 8 });
 
@@ -63,8 +64,12 @@ async function enqueueQuery<T>(fn: () => Promise<T>, signal?: AbortSignal) {
       retry: async (e, attempt) => {
         if (signal?.aborted) return false;
         if (e instanceof Error && e.message.includes('429')) {
-          logger.info(`Hit Anthropic rate limit, waiting ${RATE_LIMIT_DELAY / SECOND}s`);
-          await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_DELAY));
+          const asked = rateLimitDelayMs(e);
+          const wait = asked ?? RATE_LIMIT_DELAY;
+          logger.info(
+            `Hit model vendor rate limit, waiting ${wait / SECOND}s (${asked === undefined ? 'default' : 'from retry-after'})`,
+          );
+          await new Promise((resolve) => setTimeout(resolve, wait));
         } else if (e instanceof Error && e.message.includes('401')) {
           return false;
         }
