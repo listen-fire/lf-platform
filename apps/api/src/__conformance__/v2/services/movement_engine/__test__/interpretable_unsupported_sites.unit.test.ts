@@ -230,7 +230,7 @@ const SITES: Site[] = [
 ];
 
 const ENGINE_DIR = path.resolve(__dirname, '..');
-const CHECKER_DIR = path.resolve(__dirname, '../../../../../../packages/movement-lang/checker');
+const CHECKER_DIR = path.resolve(__dirname, '../../../../../../packages/legacy-lang/checker');
 
 const PRELUDE = `
 import { email, attio, kg } from adapters

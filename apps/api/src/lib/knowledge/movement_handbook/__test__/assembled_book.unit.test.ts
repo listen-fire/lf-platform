@@ -101,7 +101,7 @@ describe('the assembled book', () => {
 });
 
 // The added sections' examples, held exactly as the handbook holds its own
-// (packages/handbook/__test__/engine_claims.unit.test.ts): against the catalog
+// (listen-fire's packages/handbook/__test__/engine_claims.unit.test.ts): against the catalog
 // captured from the real adapters, by the check a run on the Rust engine passes
 // before it executes.
 describe('the added sections\' engine claims', () => {
@@ -163,7 +163,7 @@ describe('through the Library reader', () => {
 // ── The knowledge graph surface the handbook's examples are checked against ──
 //
 // The handbook carries a representative graph ontology over the graph's real
-// event surface as a fixture (packages/handbook/__test__/kg_ontology.fixture.json),
+// event surface as a fixture (listen-fire's packages/handbook/__test__/kg_ontology.fixture.json),
 // because the graph is this platform's module and the handbook cannot import
 // it. Rebuilt here from the module, it must still equal the fixture: a rename
 // in the graph module fails here rather than leaving the examples teaching a

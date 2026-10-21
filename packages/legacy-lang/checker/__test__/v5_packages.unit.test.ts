@@ -1,7 +1,7 @@
 // A plugin package from language version 5 (design §2.10, §4.3), through the
 // TypeScript checker: ``import { `@lf/web` as web } from plugins`` binds each
 // member as `web.fetchUrl`, a call of which is an ordinary plugin call. The
-// Rust twin is crates/movement-checker/tests/v5_packages.rs.
+// Rust twin is listen-fire's crates/movement-checker/tests/v5_packages.rs.
 
 import { parseProgram } from '../../parser/parse';
 import { checkProgram, type Diagnostic } from '../check';

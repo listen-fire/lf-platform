@@ -1,6 +1,6 @@
 // How the hosted product answers model-providers' questions: its process
 // environment (with the dev-loop key defaults), its usage ledger, and its
-// tokenizer. The vendor code itself lives in packages/model-providers, which
+// tokenizer. The vendor code itself lives in listen-fire's packages/model-providers, which
 // reads none of these on its own.
 
 import type { ModelHost } from 'model-providers/host';

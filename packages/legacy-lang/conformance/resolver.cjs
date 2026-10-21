@@ -29,16 +29,16 @@ module.exports = (request, options) => {
     return defaultResolver(request, { ...options, basedir: live });
   } catch (error) {
     // What the language package kept (the wasm bindings, the expression AST,
-    // the catalog types, the version table) sits in packages/movement-lang at
-    // the path it had when this package was one with it.
+    // the catalog types, the version table) sits in the movement-lang package,
+    // installed from the registry, at the path it had when this package was one with it.
     const language = live.replace(/([\\/])packages[\\/]legacy-lang(?=[\\/]|$)/, '$1packages$1movement-lang');
     if (language !== live) {
       const kept = inLanguagePackage(request, live, options);
       if (kept !== undefined) return kept;
       // Not a kept file either — fall through to the engine's old places.
     }
-    // The engine moved out of apps/api into packages/movement-engine with its
-    // paths kept (apps/api/src/X -> packages/movement-engine/X), so a corpus
+    // The engine moved out of apps/api into the engine package with its
+    // paths kept (apps/api/src/X -> the package's X), so a corpus
     // test's relative import of an engine module resolves there.
     const moved = live.replace(/([\\/])apps[\\/]api[\\/]src(?=[\\/]|$)/, '$1packages$1movement-engine');
     if (moved === live) throw error;
@@ -97,7 +97,7 @@ const LEFT_THE_PLATFORM = {
 };
 
 // The engine's file at the position `request` names from `engineBasedir` (a
-// directory inside packages/movement-engine), where the engine is installed
+// directory inside the engine package as the combined repository laid it out), where the engine is installed
 // rather than beside this package (the platform, from the registry): its
 // build, at the same path inside the package.
 function inInstalledEngine(request, engineBasedir, options) {

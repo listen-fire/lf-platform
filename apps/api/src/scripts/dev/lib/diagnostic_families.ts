@@ -1,7 +1,7 @@
 // The failure families authoring evals bucket checker diagnostics into, shared
 // by every eval that re-validates an agent's final source (mvt_eval in-process,
 // automation_eval over the MCP tools) so the two report the same families.
-// Codes from packages/movement-lang/checker/check.ts.
+// Codes from packages/legacy-lang/checker/check.ts.
 
 const INVENTED_NAME_CODES = new Set([
   'MOV_IMPORT_UNKNOWN',

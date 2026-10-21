@@ -20,7 +20,7 @@
 //   --partial   keep the pin, and assemble what was found (./harvest.sh's
 //               first pass, which the corpus's own readers then extend).
 //
-// Run by ./harvest.sh, from packages/movement-lang, under ts-node (the pin's
+// Run by ./harvest.sh, from packages/legacy-lang, under ts-node (the pin's
 // format is checks_pin.ts):
 //
 //   node -r <ts-node>/register/transpile-only checker/harvest/build_fixture.cjs [--pin | --partial] <corpus>=<harvest.jsonl>...

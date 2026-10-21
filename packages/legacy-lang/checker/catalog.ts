@@ -117,7 +117,7 @@ export function packageMembers(catalog: Pick<Catalog, 'plugin' | 'pluginNames'>,
 
 /** The local name an unnamed package import's fix suggests: the tag's last
  *  word in camelCase (`@lf/web-tools` → `webTools`), or `pkg`. The Rust twin
- *  is `local_name_for_tag` (crates/movement-parser/src/stmt.rs). */
+ *  is `local_name_for_tag` (listen-fire's crates/movement-parser/src/stmt.rs). */
 export function packageLocalName(tag: string): string {
   const last = tag.split(/[/@.:]/).filter(w => w !== '').pop() ?? '';
   let out = '';
@@ -136,7 +136,7 @@ export function packageLocalName(tag: string): string {
 
 /** The package a bare name stands for when the program imported none: the tag
  *  whose default local name is `name` (`@lf/pdf` → `pdf`). The Rust twin is
- *  `package_called` (crates/movement-parser/src/catalog/packages.rs). */
+ *  `package_called` (listen-fire's crates/movement-parser/src/catalog/packages.rs). */
 export function packageCalled(catalog: Pick<Catalog, 'plugin' | 'pluginNames'>, name: string): string | undefined {
   for (const key of catalog.pluginNames?.() ?? []) {
     const tag = catalog.plugin(key)?.package;
@@ -191,7 +191,7 @@ export const EXTRACTED_RECORD_PARAM = 'record';
  * stage: what the stage fed it implicitly — the record it enriched — becomes
  * its one required input, written by position like any fed argument and
  * taking structured data. Versions 1–4 read the spec as it is, and refuse the
- * call. The Rust twin is `PluginSpec::under` (crates/movement-parser/src/catalog/plugin_args.rs).
+ * call. The Rust twin is `PluginSpec::under` (listen-fire's crates/movement-parser/src/catalog/plugin_args.rs).
  */
 export function pluginSpecUnder(spec: PluginSpec, languageVersion: LanguageVersion): PluginSpec {
   if (spec.fedByExtraction !== true || before(languageVersion, 5)) return spec;

@@ -39,12 +39,6 @@ const rules = [
       '--config <package>/jest.config.cjs, --testPathPattern or a file path.',
   },
   {
-    test: (c) => /packages\/movement-lang/.test(c) && /\b(pnpm|npm|yarn)\b.*\bbuild\b/.test(c),
-    message:
-      'Blocked: never build packages/movement-lang in place — emitted .js files shadow the .ts ' +
-      'sources and break jest resolution. Test it with `pnpm --filter @listen-fire/movement-lang test`.',
-  },
-  {
     test: (c) => /\bgit\s+clean\b.*-[a-zA-Z]*[xX]/.test(c),
     message:
       'Blocked: `git clean -x/-X` deletes ignored build state other sessions depend on. ' +

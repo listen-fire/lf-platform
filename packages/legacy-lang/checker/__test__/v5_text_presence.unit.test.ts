@@ -3,7 +3,7 @@
 // absent, so the test can only ever answer one way. From version 5 it is
 // refused (MOV_PRESENCE_TEST_ON_TEXT), as the keyword's result has been since
 // 2; versions 3 and 4 let it through, so a move up across 5 is warned of. The
-// Rust checker's twin is crates/movement-checker/tests/v5_text_presence.rs,
+// Rust checker's twin is listen-fire's crates/movement-checker/tests/v5_text_presence.rs,
 // same programs, same messages.
 
 import { parseProgram } from '../../parser/parse';

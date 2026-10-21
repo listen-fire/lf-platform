@@ -3,7 +3,7 @@
 // the engine reads it (a value binding before a field) on every version; an
 // alias read is the field under 5 even where the scope binds its name; and
 // which fixes are marked safe to apply automatically. The Rust twin is
-// crates/movement-checker/tests/v5_integration.rs.
+// listen-fire's crates/movement-checker/tests/v5_integration.rs.
 
 import { parseProgram } from '../../parser/parse';
 import { checkProgram, type Diagnostic } from '../check';

@@ -7,7 +7,7 @@
 // `!= null` guard, a guard clause that leaves, `coalesce`, and `?:` each clear
 // it; a fold's list is cleared by `List.compact` or a `coalesce` map. Versions
 // 1–4 keep reading absent as 0, and a move up across 5 is warned of. The Rust
-// twin is crates/movement-checker/tests/v5_absent_arithmetic.rs, same
+// twin is listen-fire's crates/movement-checker/tests/v5_absent_arithmetic.rs, same
 // programs, same messages.
 
 import { parseProgram } from '../../parser/parse';

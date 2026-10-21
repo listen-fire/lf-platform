@@ -29,10 +29,8 @@ COPY apps/admin/package.json apps/admin/
 COPY packages/trpc/package.json packages/trpc/
 COPY packages/legacy-engine/package.json packages/legacy-engine/
 COPY packages/legacy-lang/package.json packages/legacy-lang/
-COPY packages/movement-lang/package.json packages/movement-lang/
 COPY packages/story-view/package.json packages/story-view/
 COPY packages/principal/package.json packages/principal/
-COPY packages/file-text/package.json packages/file-text/
 RUN pnpm install --frozen-lockfile --filter web... --filter admin...
 
 COPY . .
@@ -86,23 +84,19 @@ EXPOSE 3000
 CMD ["node", "apps/admin/server.js"]
 
 # ── the demo's fake third-party services ───────────────────────────────────
-# Only reached under the `demo` profile. `tsx` runs the TypeScript directly, as
-# `pnpm dev` does; better-sqlite3 needs a toolchain when no prebuild matches.
+# Only reached under the `demo` profile. The fakes are the language's package,
+# installed from npm at the version the api's devDependency names; its bin runs
+# the TypeScript under its own `tsx`. better-sqlite3 needs a toolchain when no
+# prebuild matches.
 FROM node:22.20.0-slim AS fake-channels
-ENV PNPM_HOME=/pnpm
-ENV PATH=$PNPM_HOME:$PATH
+ARG FAKE_CHANNELS_VERSION=0.12.0-rc.5
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ ca-certificates \
   && rm -rf /var/lib/apt/lists/*
-RUN corepack enable && corepack prepare pnpm@9.5.0 --activate
-WORKDIR /srv/listen-fire
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY packages/fake-channels/package.json packages/fake-channels/
-RUN pnpm install --frozen-lockfile --filter @listen-fire/fake-channels...
-COPY packages/fake-channels packages/fake-channels
+WORKDIR /srv/fake-channels
+RUN npm init -y >/dev/null && npm install --omit=dev @listen-fire/fake-channels@${FAKE_CHANNELS_VERSION}
 ENV NODE_ENV=development
 ENV TZ=UTC
 ENV FAKE_CHANNELS_PORT=5556
 EXPOSE 5556
-WORKDIR /srv/listen-fire/packages/fake-channels
-CMD ["pnpm", "start"]
+CMD ["node_modules/.bin/fake-channels"]

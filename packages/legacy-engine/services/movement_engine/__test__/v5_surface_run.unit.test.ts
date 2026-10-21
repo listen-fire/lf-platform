@@ -120,7 +120,7 @@ function inputOf(
 // 5_design.md): the everyday spelling is read into the tree versions 1-4 parse,
 // so a v5 run runs whole, parks and resumes exactly as before.
 // Every slot is re-read under the run's version on each poll, a resumed one
-// included (crates/movement-parser/src/surface).
+// included (listen-fire's crates/movement-parser/src/surface).
 
 const V5 = (...body: string[]) =>
   [

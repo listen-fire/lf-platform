@@ -54,7 +54,7 @@ import { logger } from 'movement-engine/public/log';
 import { FileOutsideTeamError } from 'movement-engine/public/files';
 import { streamFileRef, type StreamFileRefOptions } from '../engine/files/retrieve';
 
-// The format readers and the rules around them live in `packages/file-text`;
+// The format readers and the rules around them live in listen-fire's `packages/file-text`;
 // this file binds them to the hosted product's OCR, transcription, spreadsheet
 // model call, byte store and logger.
 

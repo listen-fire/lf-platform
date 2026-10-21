@@ -1,6 +1,6 @@
 // The flat built-ins the evaluator applies (expression.ts `evalMovementExpr`'s
 // function case): pure, argument for argument. Apart from the evaluator so the
-// Rust engine's oracle (crates/movement-engine/tests/oracle/generate.ts) can
+// Rust engine's oracle (listen-fire's crates/movement-engine/tests/oracle/generate.ts) can
 // call them without loading the evaluator's import graph.
 
 import { coerceToDate, coerceToDatetime, coerceToNumber } from 'legacy-lang';

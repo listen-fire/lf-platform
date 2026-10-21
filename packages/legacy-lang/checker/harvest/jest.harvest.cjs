@@ -8,7 +8,7 @@
 // HARVEST_OUT names the JSON
 // lines file to append to. ./build_fixture.cjs folds the output into the
 // checks pin; ./harvest.sh runs every corpus and the fold. From
-// packages/movement-lang:
+// packages/legacy-lang:
 //
 //   HARVEST_CORPUS=v1 HARVEST_OUT=/tmp/checks.jsonl \
 //     node ../../node_modules/jest/bin/jest.js \

@@ -1,4 +1,4 @@
-// The Rust catalog (crates/movement-parser/src/catalog) against the
+// The Rust catalog (listen-fire's crates/movement-parser/src/catalog) against the
 // TypeScript one, over the checker conformance corpus. Every record of the
 // assembled corpus (`pnpm checks:corpus`; the pin holds no program text) is replayed through the TypeScript checker (as checks_regression
 // replays it) with its catalog wrapped to record each lookup and its answer,

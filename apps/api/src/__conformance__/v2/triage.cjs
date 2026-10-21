@@ -31,7 +31,7 @@ const BODY_CLOSURE_PARK_FORMAT =
   'body closures park their scope by reference (61a58921); the park format is not language semantics';
 
 const RUN_HOST_CORE =
-  "mocks hosted resume modules the shared run-host core replaced (packages/movement-engine/services/run_host); the await/resume behaviour is now held by the run-host contract suite, run against both the Postgres and SQLite backends, so no movement observes the difference";
+  "mocks hosted resume modules the shared run-host core replaced (listen-fire's packages/movement-engine/services/run_host); the await/resume behaviour is now held by the run-host contract suite, run against both the Postgres and SQLite backends, so no movement observes the difference";
 
 const PLATFORM_TABLE =
   "mocks movement-lang's `languageVersionDiagnostic` as the engine's view of a pin's standing; the language release now names only the versions it serves, and the engine reads the platform's table (legacy-lang, which still serves versions 1 to 5), so the mock no longer reaches it. The same behaviour is held by today's language_version_run test, which mocks the platform's table; no movement observes the difference";

@@ -62,7 +62,7 @@ const PANEL_PROPS: ListenersPanelProps = {
 };
 
 function artifact(): Uint8Array {
-  return fs.readFileSync(path.join(__dirname, '../../../../../packages/movement-lang/wasm/movement_parser.wasm'));
+  return fs.readFileSync(require.resolve('movement-lang/wasm/movement_parser.wasm'));
 }
 
 function frozenArtifact(): Uint8Array {

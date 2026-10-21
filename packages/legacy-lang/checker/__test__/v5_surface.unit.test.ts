@@ -3,7 +3,7 @@
 // spelling is refused with its rewrite (MOV_V5_SPELLING, a DiagnosticFix), and
 // a message names built-ins as the program's own version spells them. The
 // spelling table and the rewrite are the Rust parser's
-// (crates/movement-parser/src/surface); this pins what the TypeScript checker
+// (listen-fire's crates/movement-parser/src/surface); this pins what the TypeScript checker
 // makes of them.
 
 import { parseProgram } from '../../parser/parse';
@@ -101,7 +101,7 @@ function cmp(a: { line: number; col: number }, b: { line: number; col: number })
 }
 
 // A PDF is drawn by the @lf/pdf plugin from version 5 (the Rust twin:
-// crates/movement-checker/tests/surface.rs).
+// listen-fire's crates/movement-checker/tests/surface.rs).
 describe('a PDF', () => {
   const pdfBody = (call: string): string => `function go(t: <text>) {\n  f = ${call}\n}`;
   const refusals = (source: string, languageVersion: number): Diagnostic[] =>

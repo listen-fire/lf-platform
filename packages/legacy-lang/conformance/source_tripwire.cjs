@@ -6,7 +6,7 @@
 const path = require('path');
 
 const CURE =
-  'Delete the compiled files beside the sources (every .js under packages/movement-lang and packages/legacy-lang ' +
+  'Delete the compiled files beside the sources (every .js under packages/legacy-lang ' +
   'outside node_modules and dist). Compile only through the package\'s own build script, ' +
   'which emits to dist/ — never a bare tsc in the package.';
 

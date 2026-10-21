@@ -366,7 +366,7 @@ function unrecognisedCharacter(token: Token): ParseError {
 
 /** The refusal of a character no expression grammar reads, with the spelling
  *  the author most likely meant. Shared with the movement language's grammar
- *  (packages/movement-lang/parser/expression), so both say the same thing. */
+ *  (packages/legacy-lang/parser/expression), so both say the same thing. */
 export function unrecognisedCharacterMessage(ch: string): string {
   const hint = UNRECOGNISED_HINTS[ch];
   return `Unrecognised character '${ch}'${hint !== undefined ? ` — ${hint}` : ''}`;
@@ -1667,7 +1667,7 @@ export type ExprType =
   /**
    * File — a typed binary handle. Mirrors `ExpressionType { kind: 'file' }`
    * on the API side (see
-   * `packages/engine-contracts/catalog.ts`). Produced by
+   * listen-fire's `packages/engine-contracts/catalog.ts`). Produced by
    * reading a property whose `valueType === 'file'` — i.e., an
    * adapter-declared file field like the Email attachment's `data` slot
    * or the Slack file's `data` slot.

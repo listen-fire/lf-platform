@@ -8,15 +8,13 @@
   },
   "scripts": {
     "code:type-check": "tsc --pretty --noEmit",
-    "test": "jest --config jest.config.cjs",
-    "prepack": "node ../../scripts/build-packages.cjs .",
-    "postpack": "node ../../scripts/build-packages.cjs --restore ."
+    "test": "jest --config jest.config.cjs"
   },
   "type": "commonjs",
   "dependencies": {
-    "@listen-fire/engine": "workspace:^",
+    "@listen-fire/engine": "0.12.0-rc.5",
     "zod": "4.1.12",
-    "@listen-fire/model-providers": "workspace:^"
+    "@listen-fire/model-providers": "0.12.0-rc.5"
   },
   "peerDependencies": {
     "@google/genai": "^2.24.0",
@@ -34,10 +32,10 @@
     "@google/genai": "^2.24.0",
     "@types/jest": "29.5.14",
     "@types/node": "20.16.5",
-    "movement-engine": "workspace:@listen-fire/engine@*",
+    "movement-engine": "npm:@listen-fire/engine@0.12.0-rc.5",
     "openai": "5.22.0",
     "typescript": "5.5.4",
-    "model-providers": "workspace:@listen-fire/model-providers@*"
+    "model-providers": "npm:@listen-fire/model-providers@0.12.0-rc.5"
   },
   "repository": {
     "type": "git",

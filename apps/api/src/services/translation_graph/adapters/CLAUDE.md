@@ -2,7 +2,7 @@
 
 These rules (2026-07-17), issued reviewing the interactive type-graph explorer
 (the `/graph-explorer` page). Apply them to every adapter surface; the explorer
-is the acceptance test. See also `packages/movement-lang/CLAUDE.md` (the two questions)
+is the acceptance test. See also listen-fire's `packages/movement-lang/CLAUDE.md` (the two questions)
 and `plans/2026-07-10-adapter-entry-positions/` layers 6–9 (the model).
 
 1. **1:1 nodes with no fields are a smell.** If an event node carries no facts of

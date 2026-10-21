@@ -6,7 +6,7 @@
 // a member proves it present. So the filtered list clears MOV_ABSENT_REQUIRED
 // on `List.sum` and its siblings. Nothing is keyed on a name. Versions 1–4
 // keep the members' type as it was. The Rust twin is
-// crates/movement-checker/tests/v5_filter_narrowing.rs, same programs, same
+// listen-fire's crates/movement-checker/tests/v5_filter_narrowing.rs, same programs, same
 // answers.
 
 import { parseProgram } from '../../parser/parse';

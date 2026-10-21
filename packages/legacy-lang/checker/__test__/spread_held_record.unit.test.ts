@@ -3,7 +3,7 @@
 // `node { … }` literal), and an `extractOne` answer, which may be absent, is
 // no such record (MOV_WRITE_SPREAD_SOURCE): `positionTypeOf` reads the held
 // value's type as it is. Every version. The Rust twin is
-// crates/movement-checker/tests/spread_held_record.rs, same programs.
+// listen-fire's crates/movement-checker/tests/spread_held_record.rs, same programs.
 
 import { parseProgram } from '../../parser/parse';
 import { checkProgram } from '../check';

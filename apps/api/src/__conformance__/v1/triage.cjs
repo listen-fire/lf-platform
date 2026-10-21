@@ -6,7 +6,7 @@
 // own title. An entry `{ file, wholeFile: true, reason }` (no `test`) rules out
 // a file that cannot load; the jest config leaves it unopened.
 const RUN_HOST_CORE =
-  "mocks hosted resume modules the shared run-host core replaced (packages/movement-engine/services/run_host); the await/resume behaviour is now held by the run-host contract suite, run against both the Postgres and SQLite backends, so no movement observes the difference";
+  "mocks hosted resume modules the shared run-host core replaced (listen-fire's packages/movement-engine/services/run_host); the await/resume behaviour is now held by the run-host contract suite, run against both the Postgres and SQLite backends, so no movement observes the difference";
 
 const NODE_FIELD_ORDER =
   "hand-built synthesised node: a synthesised node now carries its fields' declaration order (`fieldOrder`), which this test's literal binding predates; runs build it themselves, so no movement observes the difference";

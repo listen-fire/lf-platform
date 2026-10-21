@@ -168,7 +168,7 @@ interface WhatsAppTemplateDetails {
  * Base of the Meta Graph API, version segment included. Defaults to the live
  * host; overridable via `WHATSAPP_GRAPH_BASE_URL` so the dev loop can point
  * media download / send / template traffic at the fake Meta Cloud API
- * (`packages/fake-channels`) and prove the inbound-media path end-to-end without a
+ * (the `@listen-fire/fake-channels` package) and prove the inbound-media path end-to-end without a
  * real Graph token. See docs/dev-loop.md ("fake Meta media").
  */
 function graphBaseUrl(): string {

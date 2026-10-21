@@ -43,8 +43,11 @@ const FIXTURE = join(__dirname, '__fixtures__/web_plugins_parity.json');
 const RECORD = process.env.WEB_PARITY_RECORD === '1';
 // What each plugin asked of its tools on this platform, and the module's
 // answer: the recording @lf/web's own tests replay in process and as a
-// process (serve-module), where the platform's services do not exist.
-const TOOLS_FIXTURE = join(__dirname, '../../../../../../../../modules/web/__test__/__fixtures__/web_tools_parity.json');
+// process (serve-module), where the platform's services do not exist. The
+// module is listen-fire's, so a recording writes into a checkout of it
+// (LISTEN_FIRE_REPO, by default a sibling of this repository).
+const LANGUAGE_REPO = process.env.LISTEN_FIRE_REPO ?? join(__dirname, '../../../../../../../../../listen-fire');
+const TOOLS_FIXTURE = join(LANGUAGE_REPO, 'modules', 'web', '__test__', '__fixtures__', 'web_tools_parity.json');
 
 interface Recorded {
   name: string;

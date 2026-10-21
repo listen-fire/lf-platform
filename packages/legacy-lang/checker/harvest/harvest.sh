@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs every test corpus with the checks recorder, then folds the harvest
-# (./build_fixture.cjs). From packages/movement-lang:
+# (./build_fixture.cjs). From packages/legacy-lang:
 #
 #   checker/harvest/harvest.sh          # pnpm checks:corpus — keep the pin; assemble target/checks/
 #   checker/harvest/harvest.sh --pin    # pnpm harvest:checks — rewrite the pin, then assemble

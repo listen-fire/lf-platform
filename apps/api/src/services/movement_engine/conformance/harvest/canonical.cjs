@@ -1,5 +1,5 @@
 // The harvest's dedupe key: must stay identical to `canonicalJson` in
-// packages/engine-contracts/conformance/recording.ts.
+// listen-fire's packages/engine-contracts/conformance/recording.ts.
 function canonical(value) {
   return JSON.stringify(value, (_key, member) => {
     if (member === null || typeof member !== 'object' || Array.isArray(member)) return member;

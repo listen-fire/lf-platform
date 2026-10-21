@@ -1,6 +1,6 @@
 // The credential the platform hands `@lf/gmail` for one install: whichever
 // way the mailbox was connected, the module reads the same fields
-// (modules/gmail/credential.ts) — the mailbox, a token per scope, how it was
+// (listen-fire's modules/gmail/credential.ts) — the mailbox, a token per scope, how it was
 // connected and what a sign-in was granted. Nothing stored changes.
 //
 // The row's `app_id` says which shape it is, without decrypting anything (a

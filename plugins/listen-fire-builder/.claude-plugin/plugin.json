@@ -1,9 +1,0 @@
-{
-  "name": "listen-fire-builder",
-  "description": "Teaches Claude to build automations on your real tools with Listen-Fire.",
-  "version": "1.0.0",
-  "author": {
-    "name": "Listen-Fire"
-  },
-  "keywords": ["automation", "listen-fire", "crm", "workflow", "integrations"]
-}

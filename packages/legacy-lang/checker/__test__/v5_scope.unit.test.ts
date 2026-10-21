@@ -2,7 +2,7 @@
 // (plans/naming-rethink-2026-10-14/5_design.md): old spellings in imported
 // libraries and in block closures nested in expressions; a name that hides a
 // built-in; plugins by their exact-case names and package tags. Each under 4
-// as before. The Rust checker's twin is crates/movement-checker/tests/v5_scope.rs.
+// as before. The Rust checker's twin is listen-fire's crates/movement-checker/tests/v5_scope.rs.
 
 import { parseProgram } from '../../parser/parse';
 import { checkProgram, type Diagnostic } from '../check';

@@ -16,11 +16,11 @@
   "dependencies": {
     "@listen-fire/ask": "workspace:*",
     "@prisma/client": "5.22.0",
-    "engine-contracts": "workspace:@listen-fire/engine-contracts@*",
+    "engine-contracts": "npm:@listen-fire/engine-contracts@0.12.0-rc.5",
     "kysely": "0.27.4",
     "legacy-lang": "workspace:@listen-fire/legacy-lang@*",
-    "movement-engine": "workspace:@listen-fire/engine@*",
-    "movement-lang": "workspace:@listen-fire/movement-lang@*",
+    "movement-engine": "npm:@listen-fire/engine@0.12.0-rc.5",
+    "movement-lang": "npm:@listen-fire/movement-lang@0.12.0-rc.5",
     "story-view": "workspace:*",
     "typescript": "5.5.4",
     "zod": "4.1.12"

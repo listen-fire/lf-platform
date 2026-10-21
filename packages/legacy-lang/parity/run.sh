@@ -17,7 +17,10 @@ PACKAGE="$(cd "$HERE/.." && pwd)"
 ROOT="$(cd "$PACKAGE/../.." && pwd)"
 WORK="${PARITY_WORK:-$ROOT/target/parity}"
 TS_NODE=(node -r "$ROOT/node_modules/ts-node/register/transpile-only")
-PATTERNS="$ROOT/crates/movement-engine/tests/oracle/patterns.json"
+# The engine's pattern programs are the language's: read from a checkout of
+# listen-fire (LISTEN_FIRE_REPO, by default a sibling of this repository).
+LANGUAGE_REPO="${LISTEN_FIRE_REPO:-$(cd "$ROOT/.." && pwd)/listen-fire}"
+PATTERNS="$LANGUAGE_REPO/crates/movement-engine/tests/oracle/patterns.json"
 case "${1:-}" in "" | --corpus | --patterns | --wasm) ;; *) echo "usage: $0 [--corpus | --patterns | --wasm]" >&2; exit 1 ;; esac
 mkdir -p "$WORK"
 if [ "${1:-}" = "" ]; then

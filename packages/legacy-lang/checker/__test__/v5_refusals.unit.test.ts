@@ -4,7 +4,7 @@
 // outside a hop's WHERE (MOV_WALK_ROOTLESS), and a `unique by` on a write to a
 // declared node (MOV_WRITE_SHAPE_UNIQUE). `_resources` reads off an
 // extraction call's result as off the keyword's. Versions 1–4 are unchanged.
-// The Rust twin is crates/movement-checker/tests/v5_refusals.rs, same
+// The Rust twin is listen-fire's crates/movement-checker/tests/v5_refusals.rs, same
 // programs, same messages.
 
 import { parseProgram } from '../../parser/parse';

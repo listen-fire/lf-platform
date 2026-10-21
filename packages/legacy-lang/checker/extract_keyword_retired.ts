@@ -8,7 +8,7 @@
 // the call's prompt. A `through […]` stage has no rewrite: no composition of
 // plugin calls is provably the same.
 //
-// Pure over the AST, so crates/movement-checker (families/extract_keyword.rs)
+// Pure over the AST, so listen-fire's crates/movement-checker (families/extract_keyword.rs)
 // builds the same message and the same fix.
 
 import type { DeclaredExtractNode, ExprSlot, ExtractExpression, ExtractNode, ExtractStage, Loc, ShapeNode } from 'movement-lang/parser/ast';

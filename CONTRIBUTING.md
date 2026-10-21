@@ -1,4 +1,6 @@
-# Contributing to Listen-Fire
+# Contributing to lf-platform
+
+This is the platform repository. The language (`lf`, the engine, the handbook, the modules) is the `listen-fire` repository in the same GitHub organisation; the platform installs its published packages, and a change to the language is made and released there.
 
 ## Setting up
 
@@ -25,7 +27,7 @@ Install the whole workspace, not a filtered subset. `apps/api` typechecks agains
 
 ## The dev loop
 
-The dev loop boots the whole stack against real Postgres and Redis and *fake* third-party services, so you can exercise a change end to end without an account anywhere. Slack, Attio, Affinity, email, WhatsApp, Telegram, Airtable, Sheets, Granola, Evertrace, Dealroom and Gmail are all served by [`packages/fake-channels`](packages/fake-channels); the real adapters simply talk to a different base URL when the active team is the dev-loop team, so there is no separate test code path.
+The dev loop boots the whole stack against real Postgres and Redis and *fake* third-party services, so you can exercise a change end to end without an account anywhere. Slack, Attio, Affinity, email, WhatsApp, Telegram, Airtable, Sheets, Granola, Evertrace, Dealroom and Gmail are all served by the language's `@listen-fire/fake-channels` package, which the dev loop starts from its installed bin; the real adapters simply talk to a different base URL when the active team is the dev-loop team, so there is no separate test code path.
 
 ```bash
 pnpm dev:loop                   # boot the stack; leave it running
@@ -87,19 +89,7 @@ The integration suites are the ones that need a database. `pnpm test:integration
 
 `pnpm test:smoke` (also in `apps/api`) is the bounded set CI runs: a unit-only pass over the paths that have broken production before: the engine arbiter, webhook signatures, ask escalation, the file-blob route, dispatch routing, movement execution and the poll worker. It takes about a minute.
 
-The movement language has its own suites, run from its own package:
-
-```bash
-cd packages/movement-lang && pnpm test
-```
-
-They borrow `apps/api`'s ts-jest transform rather than the package's own jest install, so the whole workspace has to be installed; [`packages/movement-lang/CLAUDE.md`](packages/movement-lang/CLAUDE.md) has the detail.
-
 `pnpm health` at the repository root runs the full local sweep, and `pnpm --filter api verify:local` runs the quick hygiene pass (lint plus unused-export detection). Lint and unused-export checks are deliberately not CI gates; they are local hygiene.
-
-## Working on the language
-
-The parser, checker and type model live in [`packages/movement-lang`](packages/movement-lang). Read [`packages/movement-lang/CLAUDE.md`](packages/movement-lang/CLAUDE.md) before changing any of them. It carries the two questions that have repeatedly turned a proposed feature into a deletion: "what is the simplest way to solve this using the structure of the graph?" and "what would TypeScript do?": along with the invariants that keep costing time when they are ignored: the type system is structural rather than nominal, a magic string is one that gets parsed rather than compared, and silent degradation is the absence of a guarantee rather than a weaker one.
 
 ## Commits
 

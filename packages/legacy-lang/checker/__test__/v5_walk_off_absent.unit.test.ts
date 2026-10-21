@@ -4,7 +4,7 @@
 // version, and runs when it is there. From version 5 the checker refuses it
 // (MOV_ABSENT_REQUIRED) until a `!= null` guard proves the record there;
 // versions 1–4 keep it, and a move up across 5 is warned of. The Rust twin is
-// crates/movement-checker/tests/v5_walk_off_absent.rs, same programs, same
+// listen-fire's crates/movement-checker/tests/v5_walk_off_absent.rs, same programs, same
 // messages.
 
 import { parseProgram } from '../../parser/parse';

@@ -86,7 +86,7 @@ describe('the parser entry points on the Rust grammar', () => {
     expect(() => expression.parseExpression(deep)).toThrow('nesting too deep');
   });
 
-  describe('a chain (crates/movement-parser MAX_CHAIN = 1,024 levels)', () => {
+  describe('a chain (the movement-parser crate in listen-fire: MAX_CHAIN = 1,024 levels)', () => {
     const LIMIT = 1024;
     const lowered = (source: string) => lowerExpression(expression.parseExpression(source), source);
 

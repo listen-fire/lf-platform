@@ -1,19 +1,23 @@
 # Changelog
 
-Every pull request that changes what an operator sets or an author writes adds a line under
+Every pull request that changes what an operator sets or what a deploy applies adds a line under
 Unreleased in the same pull request. Tagging a release moves the Unreleased entries under a heading
 for the new version, with the date. When a new minor line is cut, move the previous minor's sections
 (with their link references) into `docs/changelog/v0.N.md` and list it under Earlier releases.
 
-Entries are written for two readers: an operator running a self-hosted installation (what to set,
-what a deploy applies, what behaves differently) and an author writing automations in the movement
-language (new or changed constructs, plugins, adapters, handbook idioms). The format follows [Keep a
-Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags described in
-[`deploy/UPGRADING.md`](deploy/UPGRADING.md).
+This file is shared history. Up to the split into two repositories (0.12.0) it was one file for two
+audiences, an operator running a self-hosted installation and an author writing automations in the
+movement language, and both repositories keep it in full. From the split on, this repository's
+Unreleased section takes only the platform's entries (configuration, the deploy, the web app, the
+API, integrations the platform hosts, upgrading automations pinned to versions 1 to 4); the language's
+entries live in `listen-fire`'s `CHANGELOG.md`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
+versions are the git tags described in [`deploy/UPGRADING.md`](deploy/UPGRADING.md).
 
 ## [Unreleased]
 
 <!-- add merged PRs here -->
+
+- The language is installed from the `@listen-fire/*` packages on npm, version 0.12.0-rc.5; this repository no longer builds it.
 
 ## [0.12.0-rc.5] - 2026-10-21
 

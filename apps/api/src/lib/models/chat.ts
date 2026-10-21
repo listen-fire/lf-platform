@@ -1,6 +1,6 @@
 // The hosted product's answer to which provider serves each chat model name:
 // its MODEL_MAP and environment pick the vendor and its credentials. The
-// routing lives in packages/model-providers; this binds it to the process.
+// routing lives in listen-fire's packages/model-providers; this binds it to the process.
 
 import type { ChatCall, ChatProvider } from '@listen-fire/anthropic';
 import type { ChatModelName } from 'movement-engine/public/models';

@@ -65,10 +65,10 @@ done
 # Profile-specific port assignments. Each profile reserves an api/web
 # pair in the 3000-range and a fake-channels pair in the 5000-6000 range.
 # Exporting these makes them visible to the parallel app processes started
-# by `pnpm dev`. Each app reads them:
+# by `pnpm dev` and to the helpers the loop starts itself. Each reads them:
 #   - api:           process.env.PORT          (server.ts)
 #   - web (next):    $WEB_PORT in package.json dev script
-#   - fake-channels: process.env.FAKE_CHANNELS_PORT (index.ts)
+#   - fake-channels: process.env.FAKE_CHANNELS_PORT (the installed package's bin)
 #   - fake CRM:      process.env.FAKE_REMOTE_ADAPTER_PORT (fake_crm_adapter.ts)
 #
 # STACK_NAME_DEFAULT / POSTGRES_HOST_PORT_DEFAULT / REDIS_HOST_PORT_DEFAULT
@@ -248,7 +248,7 @@ fi
 # sibling repo's `dev` compose project) containers.
 PORTS_TO_CHECK=("$PORT" "$WEB_PORT" "$FAKE_CHANNELS_PORT" "$FAKE_REMOTE_ADAPTER_PORT" "$ADMIN_PORT" "$FAKE_ISSUER_PORT")
 
-# The loop's own background helpers (fake CRM, fake issuer, scheduler) each run
+# The loop's own background helpers (fake-channels, fake CRM, fake issuer, scheduler) each run
 # in a process group of their own, recorded here, so a stop takes down the
 # whole group — the subshell AND the node process it started — and a
 # --force-kill can sweep groups a loop that died without its trap left behind.
@@ -306,7 +306,7 @@ export MOCK_OUTPUT_ADAPTERS="${MOCK_OUTPUT_ADAPTERS:-true}"
 # endpoint so inbound media download (services/whatsapp/dispatch.ts →
 # metaApi.downloadMedia) resolves bytes through the fake instead of the real
 # graph.facebook.com. The fake mounts the Graph media surface under
-# /whatsapp/graph (packages/fake-channels/src/routes/whatsapp.ts).
+# /whatsapp/graph (the fake-channels package's whatsapp route).
 export WHATSAPP_GRAPH_BASE_URL="${WHATSAPP_GRAPH_BASE_URL:-$FAKE_CHANNELS_URL/whatsapp/graph}"
 
 # `exposeFile` (engine/files/expose.ts) mints blob URLs at /api/files/blob/:id,
@@ -465,13 +465,33 @@ echo "[dev:loop] Building the standalone story bundle..."
 pnpm --filter story-view bundle >/dev/null \
   || echo "[dev:loop]   WARNING: story bundle build failed — /api/story pages will not render."
 
+# The fake third-party services. They are the language's package
+# (@listen-fire/fake-channels, the api's devDependency), not workspace source,
+# so `pnpm -r --parallel dev` doesn't reach them: the loop starts the package's
+# bin on this profile's FAKE_CHANNELS_PORT, and the cleanup trap takes it down
+# with the stack. The store lives in the package's install.
+FAKE_CHANNELS_LOG="$LOG_DIR/fake-channels.log"
+mkdir -p "$(dirname "$HELPERS_FILE")"
+: > "$HELPERS_FILE"
+set -m
+( cd apps/api && exec pnpm exec fake-channels ) > "$FAKE_CHANNELS_LOG" 2>&1 &
+FAKE_CHANNELS_PID=$!
+set +m
+echo "$FAKE_CHANNELS_PID" >> "$HELPERS_FILE"
+echo -n "[dev:loop] Waiting for fake-channels"
+for i in $(seq 1 60); do
+  if grep -q "Fake channel server running on http://localhost:$FAKE_CHANNELS_PORT" "$FAKE_CHANNELS_LOG"; then echo " up."; break; fi
+  echo -n "."
+  sleep 1
+  if [ "$i" -eq 60 ]; then echo; echo "[dev:loop] fake-channels did not come up in 60s (log $FAKE_CHANNELS_LOG)"; kill_helper_groups; exit 1; fi
+done
+echo "[dev:loop] fake-channels: $FAKE_CHANNELS_URL (pid $FAKE_CHANNELS_PID, log $FAKE_CHANNELS_LOG)"
+
 # The fake CRM fixture. It isn't a workspace package (it lives in apps/api's
 # dev scripts and imports the engine's own protocol server), so
 # `pnpm -r --parallel dev` doesn't reach it — the loop starts it itself, and the
 # cleanup trap takes it down with the stack.
 FAKE_CRM_LOG="$LOG_DIR/fake-crm.log"
-mkdir -p "$(dirname "$HELPERS_FILE")"
-: > "$HELPERS_FILE"
 # Job control gives each background job its own process group (pgid = its pid).
 set -m
 ( cd apps/api && exec pnpm run dev:fake-crm ) > "$FAKE_CRM_LOG" 2>&1 &
@@ -534,7 +554,7 @@ if [ "$SHAPE" = "push-tick" ]; then
   echo "[dev:loop] scheduler: ticks $API_BASE_URL's drain every 5 s (pid $SCHEDULER_PID, log $SCHEDULER_LOG)"
 fi
 
-echo "[dev:loop] Starting pnpm dev (parallel: api, web, fake-channels)..."
+echo "[dev:loop] Starting pnpm dev (parallel: api, web, admin)..."
 echo
 
 # Use `script` (BSD/macOS) to keep child stdout flushed line-by-line; falls

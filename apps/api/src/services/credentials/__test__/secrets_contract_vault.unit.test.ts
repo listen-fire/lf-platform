@@ -1,4 +1,4 @@
-// The secrets family's contract suite (packages/movement-engine/services/
+// The secrets family's contract suite (listen-fire's packages/movement-engine/services/
 // secrets/contract.ts) against the in-memory vault an embedder starts from.
 
 import { randomUUID } from 'node:crypto';

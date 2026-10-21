@@ -1173,7 +1173,7 @@ describe('unique by — entity resolution through the shared arbitration split',
     expect(attio.creates).toHaveLength(1);
 
     const second = await run('second message');
-    // The contract's write record (packages/engine-contracts
+    // The contract's write record (listen-fire's packages/engine-contracts
     // write_record.ts): what `-[:@old]->` lands on is the engine's own, and
     // never leaves the run; old_edge.unit.test.ts reads it through programs
     // on both engines.

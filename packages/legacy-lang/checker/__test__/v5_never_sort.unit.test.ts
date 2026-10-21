@@ -1,7 +1,7 @@
 // Language version 5: `fail(…)` inside an expression (a value that never
 // arrives, TypeScript's `never`) and `sort` by a function key, through the
 // TypeScript checker. The Rust checker's twin is
-// crates/movement-checker/tests/v5_never_sort.rs.
+// listen-fire's crates/movement-checker/tests/v5_never_sort.rs.
 
 import { parseProgram } from '../../parser/parse';
 import { checkProgram, type Diagnostic } from '../check';
@@ -144,7 +144,7 @@ describe('language version 5: sort by a function key', () => {
   });
 });
 
-// The Rust checker's twin (crates/movement-checker/tests/v5_never_sort.rs)
+// The Rust checker's twin (listen-fire's crates/movement-checker/tests/v5_never_sort.rs)
 // holds the same answers by code; here every program above is held to the
 // Rust checker's exact diagnostics, messages, spans and fixes included.
 const SNAPSHOT = JSON.parse(

@@ -19,10 +19,10 @@
   },
   "type": "commonjs",
   "dependencies": {
-    "engine-contracts": "workspace:@listen-fire/engine-contracts@*",
+    "engine-contracts": "npm:@listen-fire/engine-contracts@0.12.0-rc.5",
     "legacy-lang": "workspace:@listen-fire/legacy-lang@*",
-    "movement-engine": "workspace:@listen-fire/engine@*",
-    "movement-lang": "workspace:@listen-fire/movement-lang@*",
+    "movement-engine": "npm:@listen-fire/engine@0.12.0-rc.5",
+    "movement-lang": "npm:@listen-fire/movement-lang@0.12.0-rc.5",
     "zod": "4.1.12"
   },
   "devDependencies": {

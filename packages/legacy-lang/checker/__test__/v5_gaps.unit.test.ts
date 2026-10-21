@@ -2,7 +2,7 @@
 // 5_design.md) through the TypeScript checker: the v5 form checks under 5 as
 // the old form does under 4, the old form under 5 is MOV_V5_SPELLING with a
 // fix, and the fixed text checks under 5 as the old form did under 4. The
-// Rust checker's twin is crates/movement-checker/tests/v5_gaps.rs.
+// Rust checker's twin is listen-fire's crates/movement-checker/tests/v5_gaps.rs.
 
 import { parseProgram } from '../../parser/parse';
 import { checkProgram, type Diagnostic } from '../check';

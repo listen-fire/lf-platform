@@ -2,7 +2,7 @@
 // own, it reads the record a `through […]` stage enriched) is a function from
 // language version 5: the record it runs on is its one positional argument,
 // and its call hands back what it declared. Versions 1–4 keep refusing the
-// call. The Rust twin is crates/movement-checker/tests/v5_fed_by_extraction.rs.
+// call. The Rust twin is listen-fire's crates/movement-checker/tests/v5_fed_by_extraction.rs.
 
 import { parseProgram } from '../../parser/parse';
 import { checkProgram, type Diagnostic } from '../check';

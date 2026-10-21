@@ -2,7 +2,7 @@
 // number (the engine's `NUMBER("")` is null), so it is `number | absent`: a
 // required value must come from a `!= null` guard, a guard clause that always
 // leaves, or a fallback (MOV_ABSENT_REQUIRED). Versions 1–4 type it `number`.
-// The Rust checker's twin is crates/movement-checker/tests/v5_number_parse.rs,
+// The Rust checker's twin is listen-fire's crates/movement-checker/tests/v5_number_parse.rs,
 // same programs, same messages.
 
 import { parseProgram } from '../../parser/parse';

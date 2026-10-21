@@ -3,11 +3,11 @@
 // `count(xs)`, text's `Text.length(t)`; a list holds a value by
 // `List.includes(xs, v)`, text by `Text.includes(t, v)`; a list's presence is
 // `count(xs) > 0`, a value's `x != null`. The spelling rewrite
-// (crates/movement-parser/src/surface) cannot see a type, so its fix for an
+// (listen-fire's crates/movement-parser/src/surface) cannot see a type, so its fix for an
 // old spelling is the one whose tree is the old one's (`Text.length`,
 // `Text.includes`, `!= null`); here the checker, which can, rewrites that fix
 // where the operand is a list, and refuses a v5 call given the wrong kind.
-// The Rust twin is crates/movement-checker/src/families/typed_spelling.rs.
+// The Rust twin is listen-fire's crates/movement-checker/src/families/typed_spelling.rs.
 
 import { children } from '../parser/expression/lower';
 import type { At, Hop, MExpr, Name } from 'movement-lang/parser/expression/tree';

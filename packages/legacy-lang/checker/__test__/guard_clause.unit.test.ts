@@ -9,7 +9,7 @@
 // `x != null && …` and `x == null || …` narrow `x` on the right side too.
 //
 // Both checkers answer every case, the TypeScript one and the Rust one; the
-// Rust twin is crates/movement-checker/tests/guard_clause.rs.
+// Rust twin is listen-fire's crates/movement-checker/tests/guard_clause.rs.
 
 import { parseProgram } from '../../parser/parse';
 import { checkProgram, type Diagnostic } from '../check';

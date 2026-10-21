@@ -9,7 +9,7 @@
 //     ../conformance/checks_pin.ts): every check under version 5, and again
 //     under version 5 each program pinned at version 3 or 4, where it still
 //     parses (what a move up would be checked as);
-//   - the engine's pattern programs (crates/movement-engine/tests/oracle/
+//   - the engine's pattern programs (listen-fire's crates/movement-engine/tests/oracle/
 //     patterns.json), each in the version 5 spelling the Rust engine ran.
 //
 // Usage (run.sh does this): node -r <ts-node>/register/transpile-only parity/reference.ts <out-dir> [--checks <checks.json>] [--patterns <patterns.json>]

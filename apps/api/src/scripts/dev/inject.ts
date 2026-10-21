@@ -333,11 +333,14 @@ interface TelegramEventInjectArgs {
   voiceFile?: string;
 }
 
+/** The fakes' committed sample files, from the installed package. */
+const FAKE_CHANNELS_ASSETS = path.join(path.dirname(require.resolve('@listen-fire/fake-channels/package.json')), 'assets');
+
 /**
  * Seed real audio bytes into the fake Telegram media store (`POST
  * /telegram/media`) so the adapter's two-leg `getFile` → file-path download
  * yields decodable audio. Defaults to the committed speech sample
- * (`packages/fake-channels/assets/voice-sample.ogg`) — real OGG/OPUS words, so the
+ * (the fake-channels package's `assets/voice-sample.ogg`) — real OGG/OPUS words, so the
  * downstream transcription produces recognisable text.
  */
 async function seedTelegramVoice(fileOverride?: string): Promise<{
@@ -345,7 +348,7 @@ async function seedTelegramVoice(fileOverride?: string): Promise<{
   fileSize: number;
 }> {
   const samplePath =
-    fileOverride ?? path.resolve(__dirname, '../../../../packages/fake-channels/assets/voice-sample.ogg');
+    fileOverride ?? path.join(FAKE_CHANNELS_ASSETS, 'voice-sample.ogg');
   const bytes = readFileSync(samplePath);
   const fileId = `voice_${Date.now()}`;
   const res = await fetch(`${FAKE_CHANNELS_URL}/telegram/media`, {
@@ -691,7 +694,7 @@ const FAKE_WHATSAPP_IMAGE_B64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 /** A one-page PDF with a text layer — the bytes seeded for an injected
  *  document, so file-text's extraction has something to read end to end. */
-const WHATSAPP_PDF_ASSET = path.resolve(__dirname, '../../../../packages/fake-channels/assets/dev-document.pdf');
+const WHATSAPP_PDF_ASSET = path.join(FAKE_CHANNELS_ASSETS, 'dev-document.pdf');
 
 /**
  * Seed the inbound media bytes into the fake Meta Cloud API so the
@@ -772,7 +775,7 @@ async function injectWhatsapp(args: WhatsappInjectArgs) {
         ? readFileSync(WHATSAPP_PDF_ASSET).toString('base64')
         : mediaType === 'audio'
           ? readFileSync(
-              path.resolve(__dirname, '../../../../packages/fake-channels/assets/voice-sample.ogg'),
+              path.join(FAKE_CHANNELS_ASSETS, 'voice-sample.ogg'),
             ).toString('base64')
           : FAKE_WHATSAPP_IMAGE_B64;
     // Seed the bytes the dispatcher will download from the fake Graph API.

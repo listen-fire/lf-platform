@@ -1,6 +1,0 @@
-{
-  "about": "How @lf/anthropic's client treats the provider, in one place: the TypeScript client (client.ts) reads it, and the Rust lf's client (crates/lf/src/anthropic.rs) is held to it by a test.",
-  "concurrentRequests": 8,
-  "retry": { "attempts": 4, "initialDelayMs": 1000, "multiple": 4, "rateLimitWaitMs": 30000 },
-  "maxChatContinuations": 5
-}

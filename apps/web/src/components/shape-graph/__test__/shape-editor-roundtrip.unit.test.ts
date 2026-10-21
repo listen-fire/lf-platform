@@ -29,7 +29,7 @@ import { formatPropertyType } from '../format';
 //
 // The web app cannot import from apps/api directly. The schema
 // re-declared here is the drift-detector: keeping it in lockstep
-// with `packages/engine-contracts/catalog.ts` is the
+// with listen-fire's `packages/engine-contracts/catalog.ts` is the
 // whole point. If F2 adds a new `ExpressionType` arm, this schema
 // stops parsing the primitive's output and the test fails.
 

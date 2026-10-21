@@ -7,7 +7,7 @@
 // From version 5 a read or a write off it is refused (MOV_EVENT_UNDESCRIBED) —
 // a movement's, a closure's or a library function's parameter; on a check for
 // a move up across 5 it is the upgrade warning instead; before 5 it stays
-// unsaid. The Rust checker's twin is crates/movement-checker/tests/
+// unsaid. The Rust checker's twin is listen-fire's crates/movement-checker/tests/
 // event_undescribed.rs, on the same catalog.
 
 import { parseProgram } from '../../parser/parse';

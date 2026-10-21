@@ -376,7 +376,7 @@ export const DiagnosticCodes = {
   IMPORT_FILE_UNSUPPORTED: 'MOV_IMPORT_FILE_UNSUPPORTED',
   EXPR_PARSE: 'MOV_EXPR_PARSE',
   /** Language version 5: an old spelling, refused with its rewrite as the fix
-   *  (the parser's finding, crates/movement-parser/src/surface). */
+   *  (the parser's finding, listen-fire's crates/movement-parser/src/surface). */
   V5_SPELLING: 'MOV_V5_SPELLING',
   /** Language version 5: a standard namespace has no such member. */
   V5_UNKNOWN_MEMBER: 'MOV_V5_UNKNOWN_MEMBER',
@@ -4450,7 +4450,7 @@ class Checker {
     if (hidden !== undefined) {
       // The design allows it with a warning, a call going to the name; refused
       // for now, because the spelling rewrite reads a core word's or a
-      // namespace's call before any name is bound (crates/movement-parser/src/
+      // namespace's call before any name is bound (listen-fire's crates/movement-parser/src/
       // surface/canonical.rs), so a call written with the name would still
       // run the built-in.
       this.report(

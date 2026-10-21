@@ -8,26 +8,24 @@
     "node": "22.20.0"
   },
   "scripts": {
-    "code:type-check": "tsc --pretty --noEmit && node ../../scripts/check-module-boundary.cjs",
-    "test": "jest --config jest.config.cjs",
-    "prepack": "node ../../scripts/build-packages.cjs .",
-    "postpack": "node ../../scripts/build-packages.cjs --restore ."
+    "code:type-check": "tsc --pretty --noEmit",
+    "test": "jest --config jest.config.cjs"
   },
   "main": "index.ts",
   "types": "index.ts",
   "type": "commonjs",
   "dependencies": {
-    "@listen-fire/engine": "workspace:^",
-    "@listen-fire/engine-contracts": "workspace:^",
-    "@listen-fire/module-kit": "workspace:^",
+    "@listen-fire/engine": "0.12.0-rc.5",
+    "@listen-fire/engine-contracts": "0.12.0-rc.5",
+    "@listen-fire/module-kit": "0.12.0-rc.5",
     "zod": "4.1.12"
   },
   "devDependencies": {
     "@types/jest": "29.5.14",
     "@types/node": "20.16.5",
-    "engine-contracts": "workspace:@listen-fire/engine-contracts@*",
-    "module-kit": "workspace:@listen-fire/module-kit@*",
-    "movement-engine": "workspace:@listen-fire/engine@*",
+    "engine-contracts": "npm:@listen-fire/engine-contracts@0.12.0-rc.5",
+    "module-kit": "npm:@listen-fire/module-kit@0.12.0-rc.5",
+    "movement-engine": "npm:@listen-fire/engine@0.12.0-rc.5",
     "typescript": "5.5.4"
   },
   "repository": {

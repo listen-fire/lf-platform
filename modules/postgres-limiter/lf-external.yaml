@@ -1,8 +1,0 @@
-name: postgres_limiter
-kind: core
-slot: limiter
-# Started in this folder; the workspace install provides tsx and the repo's packages.
-command: [node, --conditions=movement-engine-internals, --require, tsx/cjs, serve.ts]
-settings:
-  - { name: url, label: the Postgres connection string, secret: true }
-  - { name: schema, label: the schema holding the limiter's tables (default lf_postgres_limiter), secret: false, optional: true }

@@ -34,15 +34,9 @@ If a change touches an integration or an agent path, verify it through the dev
 loop before reporting done. If the tooling can't verify a kind of change,
 extend the tooling.
 
-## Language work (movement-lang)
+## The language repository
 
-Changing the parser, checker, or type model? **Read
-`packages/movement-lang/CLAUDE.md` first.** It carries the two questions that
-have repeatedly turned a feature into a deletion — *"what is the simplest way to
-solve this using the structure of the graph?"* and *"what would TypeScript
-do?"* — plus the corollaries that keep costing us when ignored (structural not
-nominal; a magic string is one that's PARSED rather than compared; silent
-degradation is the absence of a guarantee, not a weaker one).
+The language (parser, checker, engine, `lf`, the modules, the handbook) is the `listen-fire` repository, in the same GitHub organisation; this repository installs its published `@listen-fire/*` packages. Changing the parser, checker or type model happens there: read its `packages/movement-lang/CLAUDE.md` first. The language serves version 5 and later only; everything that serves language versions 1 to 4 (`@listen-fire/legacy-lang`, `@listen-fire/legacy-engine`, the conformance corpora, `upgradeAutomation`) is this repository's.
 
 ## Language versions (breaking changes never break a saved movement)
 
@@ -55,7 +49,7 @@ Every saved movement is pinned to the language version it was written against (a
 - The pin moves only by an explicit upgrade; never automatically, and never by an ordinary edit.
 - The CHANGELOG entry for a break says which version introduces it and why.
 
-Plan: `plans/language-versioning-2026-09-29/` (gitignored, on Henry's machine).
+Plan: `plans/language-versioning-2026-09-29/` (gitignored, on Henry's machine). Version conditionals for versions 1 to 4 live here, in the legacy packages; the language repository carries none.
 
 ## TypeScript & Code Quality
 

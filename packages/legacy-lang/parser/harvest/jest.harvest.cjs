@@ -3,7 +3,7 @@
 // corpora, under their own language version) or `current` (this package's own
 // tests, under the current version); HARVEST_OUT names the JSON lines file to
 // append to. ./build_fixture.cjs folds the output into the programs fixture.
-// From packages/movement-lang:
+// From packages/legacy-lang:
 //
 //   HARVEST_CORPUS=v1 HARVEST_OUT=/tmp/programs.jsonl \
 //     node ../../node_modules/jest/bin/jest.js \

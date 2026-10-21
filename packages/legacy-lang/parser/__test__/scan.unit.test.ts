@@ -1,5 +1,5 @@
 // The no-drift guarantee: the completion service and the checker recognise a NAME
-// through `scanName`, and the parser (the Rust grammar, crates/movement-parser/src/
+// through `scanName`, and the parser (the Rust grammar, listen-fire's crates/movement-parser/src/
 // scan.rs) through its own copy. The last block below holds the two to the same
 // answers, so the editor's completion context cannot silently drift from what the
 // parser actually accepts.

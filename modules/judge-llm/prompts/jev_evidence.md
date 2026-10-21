@@ -1,1 +1,0 @@
-The asserted record and the record at candidates.{{{option}}} agree on at least one specific identifying field besides the name (such as website or domain, email, linkedin, or employer), so the comparison does not rest on the name alone.

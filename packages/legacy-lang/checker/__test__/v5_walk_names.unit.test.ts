@@ -4,7 +4,7 @@
 // read); a name that is neither a variable nor a field of the hop's known type
 // is one unknown name (MOV_NAME_UNRESOLVED), its did-you-mean over the hop's
 // fields and the names in scope. The Rust checker's twin is
-// crates/movement-checker/tests/v5_walk_names.rs, same programs, same messages.
+// listen-fire's crates/movement-checker/tests/v5_walk_names.rs, same programs, same messages.
 
 import { parseProgram } from '../../parser/parse';
 import { checkProgram } from '../check';

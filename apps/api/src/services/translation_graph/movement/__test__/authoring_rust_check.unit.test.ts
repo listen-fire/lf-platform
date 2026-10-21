@@ -2,7 +2,7 @@
 // (5 on) is the Rust checker's, against the snapshot its run checks against:
 // the diagnostics an author sees are the ones the run enforces. Versions 1–4
 // keep the TypeScript checker. The two report the same diagnostics (the
-// parity corpus, crates/movement-checker/PARITY.md); here a few programs,
+// parity corpus, listen-fire's crates/movement-checker/PARITY.md); here a few programs,
 // clean and refused, are compared through the authoring surface itself.
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports

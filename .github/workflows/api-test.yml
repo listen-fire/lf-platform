@@ -40,9 +40,9 @@ jobs:
         with:
           node-version: 22.20.0
           cache: "pnpm"
-      # Full workspace install — apps/api typechecks against workspace packages
-      # (movement-lang, engine-contracts) that are consumed as raw TS source via
-      # symlinks. A filtered install omits those symlinks → TS2307. (Was
+      # Full workspace install — apps/api typechecks against the platform's
+      # workspace packages (legacy-lang, legacy-engine, the providers) consumed
+      # as raw TS source via symlinks; the language's arrive built from npm. A filtered install omits those symlinks → TS2307. (Was
       # `--filter api --filter prisma-generator-casl`.)
       - run: pnpm install --frozen-lockfile
       - run: pnpm prisma generate
@@ -78,9 +78,6 @@ jobs:
       # parser, checker and engine, and the version 1 and 2 corpora. They
       # borrow nothing from apps/api.
       - name: Legacy language and engine
-        # Two known suites fail to load (2/2 suites fail to load; gate item in
-        # PLAN-01 Task 9). Not hidden: the step's failure shows in the log.
-        continue-on-error: true
         working-directory: .
         run: |
           status=0

@@ -85,7 +85,7 @@ describe('the browser parser provider when the parser fails to load', () => {
   });
 
   it('shows an error with Try again, and a retry that succeeds renders the children', async () => {
-    const artifact = fs.readFileSync(path.join(__dirname, '../../../../../packages/movement-lang/wasm/movement_parser.wasm'));
+    const artifact = fs.readFileSync(require.resolve('movement-lang/wasm/movement_parser.wasm'));
     const frozen = fs.readFileSync(path.join(__dirname, '../../../../../packages/legacy-lang/wasm/movement_parser.frozen.wasm'));
     Reflect.set(globalThis, 'window', globalThis);
     // The page fetches both parsers at once: the live one fails first time.

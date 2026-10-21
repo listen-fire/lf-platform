@@ -8,32 +8,6 @@ description: Run the batched shippability gate — full monorepo typecheck + the
 The only place expensive verification runs (see CLAUDE.md "Done vs shippable").
 Gates everything accumulated on local main since the last gate.
 
-## Language-side gate (the language repository after the split)
-
-The language packages gate on their own, with no apps/api leg. Run in
-parallel, in the background:
-
-- Filtered typecheck: `NODE_OPTIONS=--max-old-space-size=8192 pnpm --filter
-  @listen-fire/engine-contracts --filter @listen-fire/movement-engine --filter
-  @listen-fire/handbook --filter @listen-fire/module-kit code:type-check`
-  (movement-lang defines no type-check script; its sources are checked
-  through the packages that import it).
-- The test sets, each through its own `pnpm --filter <package> test`
-  (jest and ts-jest are the root install's): `@listen-fire/movement-lang`,
-  `@listen-fire/movement-engine`, `@listen-fire/engine-contracts`,
-  `@listen-fire/handbook`, `@listen-fire/module-kit`.
-- `cargo test` over the workspace (the crates' own suites and corpora).
-- The wasm rebuild check: `./scripts/build-movement-wasm.sh`, then
-  `sha256sum` of `packages/movement-lang/wasm/movement.wasm` and
-  `movement_parser.wasm` before and after must match (the
-  `rebuild-matches-committed` job in movement-wasm.yml).
-- `node scripts/check-split-boundary.cjs`: no language package reaches into
-  the platform.
-
-## Platform-side gate
-
-The Procedure below is the platform side's gate and keeps its text.
-
 ## Procedure
 
 1. Run both, in parallel, in the background (independent processes):
@@ -53,23 +27,17 @@ The Procedure below is the platform side's gate and keeps its text.
      Add `--maxWorkers=4` on the command line: the unit config pins
      `maxWorkers: 1` for interactive runs, and a gate leg of ~240 suites at
      ~12s each takes ~50 min serially (seen 2026-10-05).
-   - The engine package's own suites (every gate that touched the engine, a
-     host family, the module kit or a module): in packages/movement-engine,
-     `pnpm test` (the suites moved out of apps/api, with the TypeScript host's
-     limits and the run host's in-memory store among them), and in
-     packages/module-kit, `pnpm test`. No CI workflow runs them (only the
-     Rust shim's five run in movement-wasm.yml), so this leg is their gate.
-   - The checks corpus (every gate, whatever the chunk touched): in
-     packages/movement-lang, `pnpm checks:corpus` (about 16 min). It runs the
-     three corpus-wide checks that CI does not, because the checks pin holds
-     no program text and only a harvest of the test suites finds it: the
-     checker regression's full replay (0 drifted), the upgrade floor, and
-     reachability. It exits non-zero on any of them.
+   - The checks corpus (every gate that touched the legacy language): in
+     packages/legacy-lang, `pnpm checks:corpus`. It runs the corpus-wide
+     checks that CI does not: the checker regression's full replay (0
+     drifted), the upgrade floor, and reachability. It exits non-zero on any
+     of them.
    - Two tiers of test scope:
      - **Chunk gate** (every gate): only the dirs the chunk touched, plus
        the language-version conformance corpora when the chunk touched the
-       language (`test:conformance:v1` / `:v2` in packages/movement-lang and
-       apps/api). Target ~15–20 min wall time.
+       legacy language or engine, or moved the installed language version
+       (`test:conformance:v1`..`:v4` in packages/legacy-lang, `:v1` / `:v2`
+       in apps/api). Target ~15–20 min wall time.
      - **Wide sweep** (before a push only, once per push): the broad apps/api
        pattern across every area the unpushed commits touched (adapters,
        translation_graph, mcp, trpc, lib, …), with `--maxWorkers=4`, as

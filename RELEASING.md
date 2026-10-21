@@ -1,42 +1,25 @@
 # Releasing
 
-## Pre-release 0.12.0-rc.5 (run in this order, from a clean `main`)
+This repository releases the platform: the container images, under `v*` tags. The language (the crates, the `@listen-fire/*` packages, the `lf` binaries and the documentation site) is released from `listen-fire`, in the same GitHub organisation, under its own tags. The two version numbers were aligned once, at 0.12.0, and are independent from then on.
 
-Every crate and every `@listen-fire/*` package is at `0.12.0-rc.5`.
-A suffixed tag never moves `:latest`, npm `latest`, or the default docs.
+A release of the platform installs a stated version of each `@listen-fire/*` package it consumes (set in the workspace's `package.json` files). Raise those first, regenerate the lockfile, and gate, before tagging.
+
+## Pre-release (run in this order, from a clean `main`)
+
+A suffixed tag never moves `:latest`.
 
 1. Push the branch.
    ```sh
    git push origin main
    ```
-2. Push the three tags (images, `lf` binaries + pre-release GitHub release, docs under `/docs/next/`).
+2. Push the tag. The `release` workflow builds and pushes the five images to `ghcr.io/listen-fire/`: `api`, `api-slim`, `web`, `admin` and `fake-channels`.
    ```sh
-   git tag v0.12.0-rc.5 && git tag lf-v0.12.0-rc.5 && git tag docs-v0.12.0-rc.5
-   git push origin v0.12.0-rc.5 lf-v0.12.0-rc.5 docs-v0.12.0-rc.5
+   git tag v0.12.0-rc.4
+   git push origin v0.12.0-rc.4
    ```
-3. Publish the crates, in dependency order (wait a minute between each for the index).
-   ```sh
-   cargo publish -p listen-fire-parser
-   cargo publish -p listen-fire-checker
-   cargo publish -p listen-fire-engine
-   cargo publish -p listen-fire-language
-   cargo publish -p listen-fire-module-wire
-   cargo publish -p listen-fire
-   cargo publish -p listen-fire-module-kit
-   ```
-   A pre-release version is never picked by `cargo install listen-fire` without `--version 0.12.0-rc.5`.
-4. Publish the npm packages; each has `publishConfig.tag: "next"`, so none takes `latest`.
-   ```sh
-   pnpm -r build
-   pnpm -r publish --tag next --access public --no-git-checks
-   ```
-   (`pnpm -r publish` publishes in dependency order and skips private packages.)
 
 ## Promoting to a full release
 
-1. Set the version (workspace `Cargo.toml`, the `version = "…"` of each path dependency in `crates/*/Cargo.toml`, every published `package.json`) to the plain version, e.g. `0.12.0`. Update `Cargo.lock`.
-2. In `CHANGELOG.md`, rename the pre-release heading to the version and date, and drop the "preview" wording once it is no longer true.
-3. Repeat the steps above with plain tags (`v0.12.0`, `lf-v0.12.0`, `docs-v0.12.0`): images also get `:latest`, the GitHub release is a full release, docs become the default.
-4. npm: publish without `--tag next`, or move `latest` explicitly: `npm dist-tag add @listen-fire/<name>@0.12.0 latest`. Remove `publishConfig.tag` from the packages before publishing, otherwise they still take `next`.
-
-Note: `0.12.0-rc.5` sorts above the released `0.11.0` and below `0.12.0`. The docs stay under `/docs/next/` until the plain `docs-v0.12.0` tag publishes `/docs/v5/` (and the language server's links switch with the crate version).
+1. Set the plain version (e.g. `0.12.0`) wherever the platform states its own version. In `CHANGELOG.md`, rename the pre-release heading to the version and date, and drop the "preview" wording once it is no longer true.
+2. Push the plain tag (`v0.12.0`): the images also get `:latest`.
+3. Operators pin `LISTEN_FIRE_VERSION` in `deploy/.env` and move only when they change that line; `deploy/UPGRADING.md` says what each release asks of them.

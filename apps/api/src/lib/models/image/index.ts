@@ -1,5 +1,5 @@
 // Image generation behind the model map, bound to the hosted product's
-// environment and usage ledger. The vendors live in packages/model-providers.
+// environment and usage ledger. The vendors live in listen-fire's packages/model-providers.
 
 import type { ImageModelName } from 'movement-engine/public/models';
 import type { GeneratedImage, ImageRequest } from 'image-providers';

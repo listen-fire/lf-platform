@@ -1,7 +1,7 @@
 // The v5 surface's spine gaps run: each program in the v5 spelling on the Rust
 // engine writes what its v4 spelling writes on the TypeScript engine. The
 // harness is engine_by_version's; the checkers' twins are
-// crates/movement-checker/tests/v5_gaps.rs and checker/__test__/v5_gaps.unit.test.ts.
+// listen-fire's crates/movement-checker/tests/v5_gaps.rs and checker/__test__/v5_gaps.unit.test.ts.
 
 import { mockCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import { tenantIdOf } from 'engine-contracts';

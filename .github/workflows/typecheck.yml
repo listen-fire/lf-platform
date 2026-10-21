@@ -6,31 +6,6 @@ on:
       - main
 
 jobs:
-  language:
-    timeout-minutes: 20
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22.20.0
-          cache: "pnpm"
-      - run: pnpm install --frozen-lockfile
-      # No Prisma: the language side imports nothing from the platform.
-      - name: Typecheck, language side
-        run: >-
-          pnpm -r
-          --filter './packages/**'
-          --filter '!./packages/legacy-lang'
-          --filter '!./packages/legacy-engine'
-          --filter './modules/**'
-          --filter './apps/cli'
-          code:type-check
-
   platform:
     timeout-minutes: 20
     runs-on: ubuntu-latest
@@ -44,9 +19,10 @@ jobs:
         with:
           node-version: 22.20.0
           cache: "pnpm"
-      # Full workspace install: apps/api typechecks against workspace packages
-      # consumed as raw TS source via symlinks, so a filtered install omits
-      # those symlinks and every cross-package import fails with TS2307.
+      # Full workspace install: apps/api typechecks against the platform's
+      # workspace packages consumed as raw TS source via symlinks (the
+      # language's arrive built from npm), so a filtered install omits those
+      # symlinks and every cross-package import fails with TS2307.
       - run: pnpm install --frozen-lockfile
       # Reads the schema only; no database needed. Everything that touches the
       # DB imports the client this writes into node_modules, so the typecheck

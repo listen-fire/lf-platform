@@ -5,7 +5,7 @@
 // or a plugin (written whole or nested in the value), a write, a walk, a wait
 // or a node is refused at save, as the engines refuse it at run time. Before 5
 // the save scan refused the same forms (interpretable.ts). The Rust checker's
-// twin is crates/movement-checker/tests/file_value.rs.
+// twin is listen-fire's crates/movement-checker/tests/file_value.rs.
 
 import { parseProgram } from '../../parser/parse';
 import { fromCatalogSnapshot, type CatalogSnapshot } from 'movement-lang/service/snapshot';

@@ -5,7 +5,7 @@
 // (MOV_ABSENT_REQUIRED) until a `!= null` guard proves the record there;
 // versions 1–4 keep it, and a move up across 5 is warned of. `exists(found)`
 // has no hop and answers false for an absent record, so it is no walk. The
-// Rust twin is crates/movement-checker/tests/v5_expression_walk_off_absent.rs,
+// Rust twin is listen-fire's crates/movement-checker/tests/v5_expression_walk_off_absent.rs,
 // same programs, same messages.
 
 import { parseProgram } from '../../parser/parse';

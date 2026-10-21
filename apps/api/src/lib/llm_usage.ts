@@ -120,7 +120,7 @@ function calculateCostMicrodollars(options: {
       unpricedKeysWarned.add(key);
       logger.warn(
         `[llm_usage] no price for "${key}" (from ${originOf(options.served)}) — its usage is recorded ` +
-          'at zero cost. Add it to modules/anthropic/prices.json.',
+          'at zero cost. Add it to the anthropic module\'s prices.json (in listen-fire, modules/anthropic).',
       );
     }
     return 0;

@@ -11,7 +11,7 @@ release serves version 5 only; `frozen_parser.ts` loads this file, and
 - size: 1,318,624 bytes
 
 Rebuild (byte-identical on macOS and Linux): check out `a6465f60c2`, run
-`scripts/build-movement-wasm.sh`, and copy `packages/movement-lang/wasm/movement_parser.wasm` here.
+`scripts/build-movement-wasm.sh`, and copy `packages/movement-lang/wasm/movement_parser.wasm` here (in the combined repository: tag `last-combined` or earlier).
 
 Never rebuild it from a later commit: the point of the file is that it does
 not change when the language does.

@@ -1,22 +1,20 @@
 #!/usr/bin/env node
-// The engine boundary guard. apps/api production code may reach the engine
-// package only through `movement-engine/public/*` (published: `@listen-fire/engine/public/*`),
-// and so may every other consumer of it (the command line, the model providers,
-// the modules, the example embedder); this lists every import of
-// an internal module (anything else under `movement-engine/`) and compares the
-// count with the baseline in engine-boundary-baseline.json.
+// The engine boundary guard. The platform reaches the installed engine
+// (`@listen-fire/engine`, spelled `movement-engine` by the alias most manifests
+// use) only through its public entries, `movement-engine/public/*`; this lists
+// every import of an internal module (anything else under the package) and
+// compares the count with the baseline in engine-boundary-baseline.json.
 //
-// The platform's trees hold their tests to the same rule: a platform test
-// installs the published engine, which has no internals to reach, so it uses
-// the public entries (the test host and the contract cases are in
-// `public/testing`, the log lines in `public/log`'s sink) and a `jest.mock` of
-// an internal module counts as an import of it. Only the engine package's own
-// tests reach its internals.
+// Every file in the platform's trees is held to the rule, tests too: the
+// published engine has no internals to reach, so a test uses the public
+// entries (the test host and the contract cases are in `public/testing`, the
+// log lines in `public/log`'s sink), and a `jest.mock` of an internal module
+// counts as an import of it. The engine is an installed package, so the check
+// is by name: a relative path cannot reach it.
 //
 // The baseline is empty: any import of an internal fails. ESLint's
 // no-restricted-imports (apps/api/eslint.config.js) says the same in the
-// editor, and the package's `exports` map refuses an internal at run time
-// outside the test runners' `movement-engine-internals` condition.
+// editor, and the package's `exports` map refuses an internal at run time.
 //
 //   node scripts/check-engine-boundary.cjs            report / gate
 //   node scripts/check-engine-boundary.cjs --update   rewrite the baseline
@@ -27,49 +25,21 @@ const path = require('node:path');
 const ts = require('typescript');
 
 const repoRoot = path.resolve(__dirname, '..');
-const modulesDir = path.join(repoRoot, 'modules');
 /** Every tree that consumes the engine, relative to the repo root. */
 const CONSUMER_ROOTS = [
   'apps/api/src',
-  'apps/cli/src',
-  'packages/model-providers',
-  'packages/embedding-providers',
-  'packages/image-providers',
-  'packages/transcription-providers',
-  'packages/ocr-google',
-  'packages/module-kit',
-  'packages/file-text',
-  'examples/embed-saas/src',
-  'packages/legacy-engine',
-  'packages/legacy-lang',
-  'packages/trpc',
-  'packages/story-view',
-  ...fs.readdirSync(modulesDir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => `modules/${e.name}`),
+  ...['packages', 'modules'].flatMap((dir) =>
+    fs
+      .readdirSync(path.join(repoRoot, dir), { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => `${dir}/${e.name}`),
+  ),
 ].filter((root) => fs.existsSync(path.join(repoRoot, root)));
-const engineRoot = path.join(repoRoot, 'packages/movement-engine');
 const baselineFile = path.join(__dirname, 'engine-boundary-baseline.json');
 
 const PACKAGE = 'movement-engine';
 const PUBLISHED = '@listen-fire/engine';
 const args = new Set(process.argv.slice(2));
-
-/** The platform's trees: every file in them is held to the rule, tests too. */
-const PLATFORM_ROOTS = new Set([
-  'apps/api/src',
-  'packages/legacy-engine',
-  'packages/legacy-lang',
-  'packages/trpc',
-  'packages/story-view',
-]);
-
-// Not production code, outside the platform's trees: tests, their fixtures
-// and setup, and the dev-loop scripts that exercise the engine by hand.
-const NOT_PRODUCTION = [
-  /\.(test|spec)\.tsx?$/,
-  /(^|\/)__(test|tests|conformance|fixtures)__(\/|$)/,
-  /^test\//,
-  /^scripts\/dev\//,
-];
 
 function sourceFiles(dir, found = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -86,15 +56,10 @@ function sourceFiles(dir, found = []) {
 
 /** The module an import names, as a path inside the engine package, or null
  *  when it does not reach the package. '' is the package root. */
-function enginePathOf(specifier, fromFile) {
+function enginePathOf(specifier) {
   for (const name of [PACKAGE, PUBLISHED]) {
     if (specifier === name) return '';
     if (specifier.startsWith(`${name}/`)) return specifier.slice(name.length + 1);
-  }
-  if (specifier.startsWith('.')) {
-    const target = path.resolve(path.dirname(fromFile), specifier);
-    const inside = path.relative(engineRoot, target);
-    if (!inside.startsWith('..') && !path.isAbsolute(inside)) return inside;
   }
   return null;
 }
@@ -135,12 +100,11 @@ for (const root of CONSUMER_ROOTS) {
   const rootDir = path.join(repoRoot, root);
   for (const file of sourceFiles(rootDir)) {
     const relative = path.relative(rootDir, file).split(path.sep).join('/');
-    if (!PLATFORM_ROOTS.has(root) && NOT_PRODUCTION.some((pattern) => pattern.test(relative))) continue;
     const text = fs.readFileSync(file, 'utf8');
-    if (!text.includes(PACKAGE) && !text.includes(PUBLISHED) && !text.includes('packages/')) continue;
+    if (!text.includes(PACKAGE) && !text.includes(PUBLISHED)) continue;
     const parsed = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, false);
     for (const { specifier, line } of specifiersIn(parsed)) {
-      const inside = enginePathOf(specifier, file);
+      const inside = enginePathOf(specifier);
       if (inside === null) continue;
       if (inside === 'public' || inside.startsWith('public/')) continue;
       sites.push({ module: inside === '' ? '(package root)' : inside, file: `${root}/${relative}`, line });

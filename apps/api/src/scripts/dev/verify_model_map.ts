@@ -10,7 +10,7 @@
  *
  *   cd apps/api && pnpm dev:verify-model-map
  *
- * Everything on the fake OpenAI. The fake lives in `packages/fake-channels` at
+ * Everything on the fake OpenAI. The fake lives in the `@listen-fire/fake-channels` package at
  * `/openai/v1`; the agent dev loop (`pnpm dev:loop:agent`) serves it on port
  * 6056 (`dev/loop.sh`: HARNESS_BASE 6055 + 1, recorded as FAKE_CHANNELS_URL in
  * `.dev-loop/profiles/agent.json`). `--fake-openai` points OPENAI_BASE_URL at

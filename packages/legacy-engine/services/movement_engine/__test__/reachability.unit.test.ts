@@ -16,9 +16,9 @@
 //   - the checks corpus's version-5 records: every program the language's and
 //     the engine's tests hand the checker, harvested. The pin holds no program
 //     text, so this runs over the corpus the harvest assembles
-//     (`pnpm checks:corpus` in packages/movement-lang runs it, with
+//     (`pnpm checks:corpus` in packages/legacy-lang runs it, with
 //     CHECKS_CORPUS=1);
-//   - the engine oracles' programs (crates/movement-engine/tests/oracle:
+//   - the engine oracles' programs (listen-fire's crates/movement-engine/tests/oracle:
 //     records, handles, parallel and patterns), each respelled to version 5
 //     by the upgrade tool's own rewrites.
 // A program whose check fails ends at MOVENG_CHECK and is counted apart.
@@ -43,9 +43,11 @@ import { PATTERNS_CATALOG } from '../../../__fixtures__/oracle/patterns_catalog'
 import { KNOWN_GAPS, reasonOf } from './reachability_gaps';
 
 const ROOT = path.resolve(__dirname, '../../../../..');
-// The engine's version 5 patterns stay with the language; the oracles pinned
-// below 5 are the platform's.
-const ORACLES = path.join(ROOT, 'crates/movement-engine/tests/oracle');
+// The engine's version 5 patterns stay with the language, read from a
+// checkout of listen-fire (LISTEN_FIRE_REPO, by default a sibling of this
+// repository); the oracles pinned below 5 are the platform's.
+const LANGUAGE_REPO = process.env.LISTEN_FIRE_REPO ?? path.resolve(ROOT, '../listen-fire');
+const ORACLES = path.join(LANGUAGE_REPO, 'crates', 'movement-engine', 'tests', 'oracle');
 const LEGACY_ORACLES = path.join(__dirname, '../../../__fixtures__/oracle');
 const TEAM = tenantIdOf('00000000-0000-0000-0000-0000000000ab');
 

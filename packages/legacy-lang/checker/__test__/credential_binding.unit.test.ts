@@ -1,7 +1,7 @@
 // A connection's credential must belong to the module it connects, and fill
 // one of the credentials that module declares — refused at check, never sent
 // to the wrong module. The Rust checker's twin is
-// crates/movement-checker/tests/credential_binding.rs; here both checkers are
+// listen-fire's crates/movement-checker/tests/credential_binding.rs; here both checkers are
 // also held to each other's exact diagnostics.
 
 import { parseProgram } from '../../parser/parse';

@@ -292,7 +292,7 @@ export interface BuiltinOptionsSpec {
   /**
    * The name of a rule spanning two options that literal values already
    * settle (`overlap` under `size`). The rule is code, and lives once, in the
-   * lowering (crates/movement-parser/src/lowering/call_shape.rs, `agree`):
+   * lowering (listen-fire's crates/movement-parser/src/lowering/call_shape.rs, `agree`):
    * it reads the LITERAL value of each key, absent where the author wrote an
    * expression, and answers with the sentence to refuse the call with.
    */

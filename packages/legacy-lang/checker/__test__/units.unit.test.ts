@@ -1,6 +1,6 @@
 // The run host's units (`cron`, `manual`): from version 5 in every file's
 // scope, connected, with no import; before it, imported and constructed as any
-// adapter. The Rust checker's twin is crates/movement-checker/tests/units.rs,
+// adapter. The Rust checker's twin is listen-fire's crates/movement-checker/tests/units.rs,
 // on the same catalog.
 
 import { parseProgram } from '../../parser/parse';

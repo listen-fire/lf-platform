@@ -29,7 +29,7 @@ const MOVEMENT_NAME = 'appendable_local_node_probe';
 const FAKE_CHANNELS_URL = process.env.FAKE_CHANNELS_URL || 'http://localhost:5556';
 
 // The exact syntax taught in the handbook's `collect-what-you-wrote` section
-// (packages/handbook/chapters/anatomy.ts), against
+// (listen-fire's packages/handbook/chapters/anatomy.ts), against
 // the seeded dev-loop team's Slack credential and its `dealflow` channel.
 const SOURCE = `import { manual, slack } from adapters
 import { \`Dev Loop Slack\` } from credentials

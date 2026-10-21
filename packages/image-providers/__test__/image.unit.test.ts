@@ -12,7 +12,7 @@ jest.mock('model-providers/providers/gemini', () => ({
   geminiClient: (...args: unknown[]) => geminiClient(...(args as [])),
 }));
 
-jest.mock('movement-engine/services/logger', () => ({ logger: { info: jest.fn() } }));
+jest.mock('movement-engine/public/log', () => ({ logger: { info: jest.fn() } }));
 
 const recordLlmUsage = jest.fn().mockResolvedValue(undefined);
 

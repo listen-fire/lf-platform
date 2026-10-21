@@ -2,7 +2,7 @@
 // through the TypeScript checker: its required inputs in the manifest's
 // order, then one settings record; the named form versions 1–4 write is
 // refused with the positional rewrite, which the upgrade applies. The Rust
-// twin is crates/movement-checker/tests/v5_plugins.rs.
+// twin is listen-fire's crates/movement-checker/tests/v5_plugins.rs.
 
 import { parseProgram } from '../../parser/parse';
 import { checkProgram, type Diagnostic } from '../check';

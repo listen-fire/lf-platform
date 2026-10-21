@@ -44,44 +44,15 @@ FROM scratch AS manifests
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api/package.json apps/api/
 COPY packages/principal/package.json packages/principal/
-COPY packages/file-text/package.json packages/file-text/
-COPY packages/model-providers/package.json packages/model-providers/
-COPY modules/anthropic/package.json modules/anthropic/
-COPY modules/judge-llm/package.json modules/judge-llm/
 COPY packages/embedding-providers/package.json packages/embedding-providers/
 COPY packages/image-providers/package.json packages/image-providers/
 COPY packages/transcription-providers/package.json packages/transcription-providers/
-COPY packages/files-s3/package.json packages/files-s3/
-COPY packages/ocr-google/package.json packages/ocr-google/
-COPY packages/module-kit/package.json packages/module-kit/
-COPY modules/dealroom/package.json modules/dealroom/
-COPY modules/granola/package.json modules/granola/
-COPY modules/evertrace/package.json modules/evertrace/
-COPY modules/dropbox/package.json modules/dropbox/
-COPY modules/google-sheets/package.json modules/google-sheets/
-COPY modules/google-drive/package.json modules/google-drive/
-COPY modules/gmail/package.json modules/gmail/
-COPY modules/web/package.json modules/web/
-COPY modules/pdf/package.json modules/pdf/
-COPY modules/affinity/package.json modules/affinity/
-COPY modules/airtable/package.json modules/airtable/
-COPY modules/attio/package.json modules/attio/
-COPY modules/telegram/package.json modules/telegram/
 COPY modules/ask/package.json modules/ask/
 COPY modules/kg/package.json modules/kg/
-COPY modules/slack/package.json modules/slack/
 COPY modules/system/package.json modules/system/
 COPY modules/native-valuations/package.json modules/native-valuations/
-COPY modules/whatsapp/package.json modules/whatsapp/
-COPY modules/email/package.json modules/email/
-COPY modules/s3-files/package.json modules/s3-files/
-COPY packages/engine-contracts/package.json packages/engine-contracts/
-COPY packages/module-runtime/package.json packages/module-runtime/
-COPY packages/movement-engine/package.json packages/movement-engine/
 COPY packages/legacy-engine/package.json packages/legacy-engine/
 COPY packages/legacy-lang/package.json packages/legacy-lang/
-COPY packages/handbook/package.json packages/handbook/
-COPY packages/movement-lang/package.json packages/movement-lang/
 COPY packages/story-view/package.json packages/story-view/
 
 # ---- build: every dependency, the compiler, the source. Never shipped. ----
@@ -95,10 +66,11 @@ COPY . .
 WORKDIR /srv/listen-fire/apps/api
 RUN pnpm prisma generate
 
-# The compiled artifact. Nothing here runs ts-node: `principal` and
-# `engine-contracts` are vendored into the api's own build output by this step
-# (see each package's tsconfig.build.json), which is what makes
-# `node build/server.js` resolvable.
+# The compiled artifact. Nothing here runs ts-node: the platform's own packages
+# (`principal`, the providers, the four platform modules, the legacy packages)
+# are vendored into the api's own build output by this step (see each package's
+# tsconfig.build.json), which is what makes `node build/server.js` resolvable.
+# The language's packages (`@listen-fire/*`) are installed from npm, already built.
 ARG BUILD_HEAP_MB=6144
 RUN NODE_OPTIONS=--max-old-space-size=${BUILD_HEAP_MB} pnpm build
 
@@ -116,8 +88,9 @@ ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 WORKDIR /srv/listen-fire/apps/api
 
 # The api's own tree (migrations, the prisma schema, the migrate script), its
-# production node_modules, and the compiled output. The other workspace packages
-# are already inside build/node_modules, vendored by the build.
+# production node_modules (the language's packages among them, from npm), and the
+# compiled output. The other workspace packages are already inside
+# build/node_modules, vendored by the build.
 COPY --from=deploy /deploy/ ./
 COPY apps/api ./
 COPY --from=build /srv/listen-fire/apps/api/build ./build

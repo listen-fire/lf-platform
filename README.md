@@ -2,6 +2,8 @@
 
 Listen-Fire runs small programs over the systems a team already uses. A program is a plain text file with a `.mvt` extension, written in a language called movement: it names the systems it touches, traverses them as graphs of records joined by edges, and moves data between them. The platform around it holds the connections and their credentials, receives the inbound events, runs the programs, parks them when they need a person to answer something, and resumes them when the answer arrives.
 
+This repository is the platform. The language it runs (the `lf` command, the engine, the handbook and the modules that connect systems) is a separate repository, `listen-fire`, in the same GitHub organisation; the platform consumes its published packages.
+
 ## Listen and fire
 
 An automation **listens** to something in one of your systems and **fires** a named automation in response. That is the whole shape of a program, and it is where the name comes from.
@@ -25,11 +27,11 @@ listen to inbox { key: "intake" } fire `Inbound Intake`
 
 The event that arrives is a *position*: a point in the graph of the system it came from. From there the program traverses to related records, fans out across them, and writes into other systems along their own edges. `unique by` makes a repeat update an existing record instead of duplicating it.
 
-The language lives in [`packages/movement-lang`](packages/movement-lang). The reference the authoring agents read is the handbook in [`packages/handbook`](packages/handbook), its chapters under [`chapters`](packages/handbook/chapters); `foundations.ts` and `anatomy.ts` are the two to start with.
+The language and its handbook live in the `listen-fire` repository; the platform serves the handbook to authoring agents.
 
 ## What you can connect
 
-Each system is reached through an adapter, which presents it as a graph. The adapters in the tree are:
+Each system is reached through an adapter, which presents it as a graph. Most are modules published by the `listen-fire` repository; `kg`, `ask`, `cron`, `manual` and the valuations unit are the platform's own. The adapters are:
 
 | adapter | system |
 |---|---|
@@ -90,18 +92,17 @@ Applications:
 - [`apps/api`](apps/api): the API. One long-running process, with the background workers, schedulers and the movement engine inside it.
 - [`apps/web`](apps/web): the web UI (Next.js), including the automation authoring surface.
 - [`apps/admin`](apps/admin): the operator console, served only on a `core` installation.
-- [`packages/fake-channels`](packages/fake-channels): stand-in implementations of the third-party services, used by the dev loop and by `--demo`.
+- `@listen-fire/fake-channels` (installed from npm, the api's devDependency): stand-in implementations of the third-party services, used by the dev loop and by `--demo`.
 
 Packages:
 
-- [`packages/movement-lang`](packages/movement-lang): the movement language: parser, checker and type model.
+- [`@listen-fire/legacy-lang`](packages/legacy-lang): the TypeScript parser, checker and editor service for language versions 1-4, and their parity proof against the language's checker. Private.
 - [`packages/principal`](packages/principal): the identity contracts (Principal and Directory) that `core` and the single-tenant stub both satisfy.
 - [`@listen-fire/legacy-engine`](packages/legacy-engine): the deprecated language versions' (1-4) formula text parser, platform-only.
 - [`@listen-fire/trpc`](packages/trpc): the generated tRPC types the web app builds against.
 - [`packages/story-view`](packages/story-view): the shareable picture of an automation's structure.
 
-Also: [`deploy/`](deploy) for the container images, compose file and self-hosting runbook, and [`docs/`](docs/README.md) for the contributor and API documentation.
-
+Also: [`deploy/`](deploy) for the container images, compose file and self-hosting runbook, and [`docs/`](docs/README.md) for the platform documentation.
 
 ## Developing
 

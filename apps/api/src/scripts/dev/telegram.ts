@@ -46,7 +46,7 @@ import { saveMovement } from '../../services/translation_graph/movement/provisio
  * Three SEPARATE programs, not one file with three listens.
  *
  * The checker enforces one listener per (instance, config) identity PER
- * PARSED PROGRAM (`packages/movement-lang/checker/check.ts` —
+ * PARSED PROGRAM (`packages/legacy-lang/checker/check.ts` —
  * `MOV_LISTEN_DUPLICATE`, unchanged since the listen-derived-triggers design
  * of 2026-06-10): `listen to tg {}` repeated three times in one file collides
  * on identity regardless of which movement each fires, and the Telegram

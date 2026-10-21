@@ -1,5 +1,5 @@
 // Version 5 fix-ups the handbook found (the Rust twin is
-// crates/movement-checker/tests/v5_fixups.rs): a namespace member bound or
+// listen-fire's crates/movement-checker/tests/v5_fixups.rs): a namespace member bound or
 // returned whole (`t = Date.today(z)`) reads as versions 1–4 read
 // `DATE.TODAY(z)`, an expression, never a call; and a type's address names
 // the event's fields through its hop's alias (`e.action`), as every WHERE

@@ -182,7 +182,7 @@ export function writeCorpus(records: readonly CheckRecord[]): void {
 export function corpusFile(): string {
   if (!fs.existsSync(CORPUS_FILE)) {
     throw new Error(
-      `no assembled checks corpus at ${CORPUS_FILE}: the pin holds no program text, so run \`pnpm checks:corpus\` in packages/movement-lang first (it harvests the programs from their tests and assembles the corpus)`,
+      `no assembled checks corpus at ${CORPUS_FILE}: the pin holds no program text, so run \`pnpm checks:corpus\` in packages/legacy-lang first (it harvests the programs from their tests and assembles the corpus)`,
     );
   }
   return CORPUS_FILE;

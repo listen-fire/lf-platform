@@ -1,6 +1,6 @@
 // Folds the harvest's JSON lines (./harvest.setup.cjs) into the programs
 // fixture: one record per distinct (source, version), sorted by (version,
-// source). Usage, from packages/movement-lang:
+// source). Usage, from packages/legacy-lang:
 //
 //   node parser/harvest/build_fixture.cjs v1=<a.jsonl> v2=<b.jsonl> current=<c.jsonl>
 const fs = require('fs');

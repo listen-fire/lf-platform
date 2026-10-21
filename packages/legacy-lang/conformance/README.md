@@ -69,7 +69,7 @@ dropped).
   holds no program text: each check names its program by a hash of the text,
   and its diagnostics by key in its version's table. The text lives in the
   test that checks it.
-- `pnpm checks:corpus` in `packages/movement-lang` harvests the texts and
+- `pnpm checks:corpus` in `packages/legacy-lang` harvests the texts and
   writes the corpus, in the format above, to `target/checks/checks.json`
   (with `checks.snapshots.json` beside it). It then holds every pinned check
   with its text, or the command fails naming the checks it could not find.
