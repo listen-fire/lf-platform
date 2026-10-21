@@ -42,6 +42,7 @@ import { BUILTIN_MODULES } from '../../builtin_modules';
 import { recordingServer, replayingServer, type Exchange } from '../../__test__/parity/exchange';
 import { bootFakeGranola } from './parity/fake_granola';
 import { runParityScript, type ParitySubject, type TranscriptEntry } from './parity/script';
+import { packageDir, SERVE_MODULE } from '../../__test__/parity/serve_module';
 
 const FIXTURE = join(__dirname, '__fixtures__/granola_parity.json');
 const API_KEY = 'dev-loop-granola-token';
@@ -165,9 +166,8 @@ async function expectParity(
 
 /** `serve-module @lf/granola` as a child process. */
 async function serveGranola(): Promise<{ url: string; stop(): void }> {
-  const repo = join(__dirname, '../../../../../../../..');
-  const child = spawn(process.execPath, [join(repo, 'packages/module-kit/bin/serve-module.cjs'), '.'], {
-    cwd: join(repo, 'modules/granola'),
+  const child = spawn(process.execPath, [SERVE_MODULE, '.'], {
+    cwd: packageDir('@listen-fire/granola'),
     env: { ...process.env, PORT: '0' },
     stdio: ['ignore', 'pipe', 'inherit'],
   });

@@ -33,6 +33,7 @@ import { getAdapter } from '../../registry';
 import { BUILTIN_MODULES } from '../../builtin_modules';
 import { createMemoryVault, createSecretsFamily } from 'movement-engine/public/secrets';
 import { createRemoteAdapter, fetchRemoteManifest } from 'movement-engine/public/modules';
+import { packageDir, SERVE_MODULE } from '../../__test__/parity/serve_module';
 
 // `mime` is an ES module, which this jest runtime cannot load; the adapter
 // reads it with a dynamic import. Answer from the real library, run by Node.
@@ -309,9 +310,8 @@ function sameRealmFetch(nodeFetch: typeof fetch): typeof fetch {
 
 /** `serve-module @lf/whatsapp` as a child process. */
 async function serveWhatsapp(): Promise<{ url: string; stop(): void }> {
-  const repo = join(__dirname, '../../../../../../../..');
-  const child = spawn(process.execPath, [join(repo, 'packages/module-kit/bin/serve-module.cjs'), '.'], {
-    cwd: join(repo, 'modules/whatsapp'),
+  const child = spawn(process.execPath, [SERVE_MODULE, '.'], {
+    cwd: packageDir('@listen-fire/whatsapp'),
     env: { ...process.env, PORT: '0' },
     stdio: ['ignore', 'pipe', 'inherit'],
   });

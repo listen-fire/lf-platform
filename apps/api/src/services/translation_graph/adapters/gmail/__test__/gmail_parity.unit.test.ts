@@ -81,6 +81,7 @@ import { createGmailPollSource } from '../poll';
 import { recordingServer, replayingServer, requestOf, type Exchange, type ExchangeRequest } from '../../__test__/parity/exchange';
 import { bootFakeChannels } from '../../__test__/parity/fake_channels';
 import { PARITY_ACCESS_TOKEN, PARITY_MAILBOX, PARITY_SEED, REFUSED, runParityScript, type ParitySubject, type TranscriptEntry } from './parity/script';
+import { packageDir, SERVE_MODULE } from '../../__test__/parity/serve_module';
 
 // gaxios finds its fetch (node-fetch) by a dynamic import, which jest's VM
 // refuses: the legacy line is handed Node's own fetch instead.
@@ -142,9 +143,8 @@ function vaultFields(shape: Shape): Record<string, string> {
 
 /** `serve-module @lf/gmail` as a child process. */
 async function serveGmail(env: Record<string, string>): Promise<{ url: string; stop(): void }> {
-  const repo = join(__dirname, '../../../../../../../..');
-  const child = spawn(process.execPath, [join(repo, 'packages/module-kit/bin/serve-module.cjs'), '.'], {
-    cwd: join(repo, 'modules/gmail'),
+  const child = spawn(process.execPath, [SERVE_MODULE, '.'], {
+    cwd: packageDir('@listen-fire/gmail'),
     env: { ...process.env, PORT: '0', ...env },
     stdio: ['ignore', 'pipe', 'inherit'],
   });

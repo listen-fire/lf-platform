@@ -107,6 +107,7 @@ import { createGoogleDriveAdapter } from '../index';
 import { recordingServer, replayingServer, requestOf, type Exchange, type ExchangeRequest } from '../../__test__/parity/exchange';
 import { bootFakeChannels } from '../../__test__/parity/fake_channels';
 import { PARITY_ACCESS_TOKEN, PARITY_GRANTS, REFUSED, runParityScript, type ParitySubject, type TranscriptEntry } from './parity/script';
+import { packageDir, SERVE_MODULE } from '../../__test__/parity/serve_module';
 
 // gaxios finds its fetch (node-fetch) by a dynamic import, which jest's VM
 // refuses. The legacy line is handed Node's own fetch instead, its bodies as
@@ -202,9 +203,8 @@ async function expectParity(
 
 /** `serve-module @lf/google-drive` as a child process. */
 async function serveDrive(env: Record<string, string>): Promise<{ url: string; stop(): void }> {
-  const repo = join(__dirname, '../../../../../../../..');
-  const child = spawn(process.execPath, [join(repo, 'packages/module-kit/bin/serve-module.cjs'), '.'], {
-    cwd: join(repo, 'modules/google-drive'),
+  const child = spawn(process.execPath, [SERVE_MODULE, '.'], {
+    cwd: packageDir('@listen-fire/google-drive'),
     env: { ...process.env, PORT: '0', ...env },
     stdio: ['ignore', 'pipe', 'inherit'],
   });

@@ -43,6 +43,7 @@ import { logger } from 'movement-engine/public/log';
 import { recordingServer, replayingServer, type Exchange } from '../../__test__/parity/exchange';
 import { bootFakeDealroom } from './parity/fake_dealroom';
 import { runParityScript, type ParitySubject, type TranscriptEntry } from './parity/script';
+import { packageDir, SERVE_MODULE } from '../../__test__/parity/serve_module';
 
 const FIXTURE = join(__dirname, '__fixtures__/dealroom_parity.json');
 const API_KEY = 'dev-loop-dealroom-key';
@@ -148,9 +149,8 @@ async function expectParity(subjectAt: (baseUrl: string) => Promise<ParitySubjec
 
 /** `serve-module @lf/dealroom` as a child process. */
 async function serveDealroom(): Promise<{ url: string; stop(): void }> {
-  const repo = join(__dirname, '../../../../../../../..');
-  const child = spawn(process.execPath, [join(repo, 'packages/module-kit/bin/serve-module.cjs'), '.'], {
-    cwd: join(repo, 'modules/dealroom'),
+  const child = spawn(process.execPath, [SERVE_MODULE, '.'], {
+    cwd: packageDir('@listen-fire/dealroom'),
     env: { ...process.env, PORT: '0' },
     stdio: ['ignore', 'pipe', 'inherit'],
   });

@@ -28,10 +28,9 @@ jest.mock('../../../../lib/jev/client', () => {
 const mockExecute = execute as jest.MockedFunction<typeof execute>;
 const mockAskJev = askJev as jest.MockedFunction<typeof askJev>;
 
-const FIXTURE_PATH = path.resolve(
-  __dirname,
-  '../../../../../../../modules/judge-llm/__fixtures__/replay.json',
-);
+// Beside this test, its only reader: the judge is the module's, the recording
+// of it on this platform is the platform's.
+const FIXTURE_PATH = path.join(__dirname, '__fixtures__/identity_judge_replay.json');
 
 type Scripted =
   | { returns: unknown }

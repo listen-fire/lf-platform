@@ -64,6 +64,7 @@ import {
   svixSignature,
   verifySvixSignature,
 } from '@listen-fire/email';
+import { packageDir, SERVE_MODULE } from '../../__test__/parity/serve_module';
 
 const FIXTURE = join(__dirname, '__fixtures__/email_parity.json');
 /** Senders post form-encoded and multipart bodies: the content type is part
@@ -359,9 +360,8 @@ function sameRealmFetch(inner: typeof fetch): typeof fetch {
 
 /** `serve-module @lf/email` as a child process. */
 async function serveEmail(): Promise<{ url: string; stop(): void }> {
-  const repo = join(__dirname, '../../../../../../../..');
-  const child = spawn(process.execPath, [join(repo, 'packages/module-kit/bin/serve-module.cjs'), '.'], {
-    cwd: join(repo, 'modules/email'),
+  const child = spawn(process.execPath, [SERVE_MODULE, '.'], {
+    cwd: packageDir('@listen-fire/email'),
     env: { ...process.env, PORT: '0' },
     stdio: ['ignore', 'pipe', 'inherit'],
   });

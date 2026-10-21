@@ -109,6 +109,7 @@ import {
   type ParitySubject,
   type TranscriptEntry,
 } from './parity/script';
+import { packageDir, SERVE_MODULE } from '../../__test__/parity/serve_module';
 
 const FIXTURE = join(__dirname, '__fixtures__/google_sheets_parity.json');
 const TEAM = 'team-parity' as TeamId;
@@ -192,9 +193,8 @@ async function expectParity(
 
 /** `serve-module @lf/google-sheets` as a child process. */
 async function serveSheets(env: Record<string, string>): Promise<{ url: string; stop(): void }> {
-  const repo = join(__dirname, '../../../../../../../..');
-  const child = spawn(process.execPath, [join(repo, 'packages/module-kit/bin/serve-module.cjs'), '.'], {
-    cwd: join(repo, 'modules/google-sheets'),
+  const child = spawn(process.execPath, [SERVE_MODULE, '.'], {
+    cwd: packageDir('@listen-fire/google-sheets'),
     env: { ...process.env, PORT: '0', ...env },
     stdio: ['ignore', 'pipe', 'inherit'],
   });
