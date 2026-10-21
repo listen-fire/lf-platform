@@ -39,9 +39,6 @@ jest.mock('../../../lib/kysely', () => ({
   getCoreQb: jest.fn(() => mockChainable()),
 }));
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 jest.mock('../../context', () => ({
   unsafeCurrentContext: () => undefined,
   currentContext: () => ({
@@ -93,12 +90,12 @@ import type {
   LlmCallResult,
 } from '../../translation_graph/engine/batched_extraction';
 import type { FileTextResolution } from '@listen-fire/legacy-engine/services/movement_engine/extraction';
-import type { Adapter, FileRef } from 'movement-engine/services/translation_graph/adapter';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+import type { Adapter, FileRef } from 'movement-engine/public/adapter';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { positionData } from 'engine-contracts/catalog';
 import { tenantIdOf } from 'engine-contracts';
-import type { Priced, Scoped } from 'movement-engine/services/movement_engine/host';
-import { makeTestHost } from 'movement-engine/services/movement_engine/test_host';
+import type { Priced, Scoped } from 'movement-engine/public/host';
+import { makeTestHost } from 'movement-engine/public/testing';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000052');
 const FIXTURE = path.join(__dirname, '__fixtures__', 'extract_keyword_prompts.json');

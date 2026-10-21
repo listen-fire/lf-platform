@@ -18,7 +18,7 @@ import {
   systemCallerOf,
 } from '../index';
 import { registeredSystemCallerVerifiers, resetSystemCallerVerifiersForTests } from '../verifier';
-import { logger } from 'movement-engine/services/logger';
+import { logger } from 'movement-engine/public/log';
 import { startFakeIssuer, type FakeIssuer } from './fake_issuer';
 
 

@@ -81,10 +81,7 @@ async function loadWorker(options: {
     setCalls,
   );
 
-  jest.doMock('movement-engine/services/logger', () => ({
-    logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-  }));
-  jest.doMock('../../../../lib/kysely', () => ({ getKnowledgeQb: jest.fn(() => qb) }));
+    jest.doMock('../../../../lib/kysely', () => ({ getKnowledgeQb: jest.fn(() => qb) }));
   const workerLoop = jest.fn();
   jest.doMock('../../../../lib/worker', () => ({ worker: workerLoop }));
 

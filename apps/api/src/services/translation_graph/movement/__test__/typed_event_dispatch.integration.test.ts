@@ -31,9 +31,9 @@ import { eventAddressKey } from 'legacy-lang';
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type { TriggerId } from '../../../../generated/kysely/automations/Trigger';
 import type { MovementId } from '../../../../generated/kysely/automations/Movement';
-import type { Adapter, RuntimeCapabilities } from 'movement-engine/services/translation_graph/adapter';
+import type { Adapter, RuntimeCapabilities } from 'movement-engine/public/adapter';
 import type { Catalog, CatalogSnapshot, InstanceSchema, PositionSchema } from 'movement-lang';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 
 import { getAutomationsQb, getCoreQb } from '../../../../lib/kysely';
 import { cleanupTeam } from '../../../../test/harness/cleanup';
@@ -50,7 +50,7 @@ import {
   makeStablePosition,
   positionData,
 } from 'engine-contracts/catalog';
-import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
+import { containerAssociation } from 'movement-engine/public/adapter';
 
 
 const mockedCatalog = runCatalogSnapshotForTeam as jest.Mock;

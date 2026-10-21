@@ -1,4 +1,4 @@
-import { InMemoryWriteLocks, lockKey } from 'movement-engine/services/write_locks/write_locks';
+import { InMemoryWriteLocks, lockKey } from 'movement-engine/public/write-locks';
 
 async function settle(): Promise<void> {
   for (let i = 0; i < 5; i++) await new Promise((resolve) => setImmediate(resolve));

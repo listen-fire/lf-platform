@@ -15,8 +15,8 @@ import type {
   GetRelatedInput,
   RelatedResult,
   WriteInput,
-} from 'movement-engine/services/translation_graph/adapter';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+} from 'movement-engine/public/adapter';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import {
   META_RECORD_TYPE,
   makeStablePosition,
@@ -24,8 +24,8 @@ import {
 } from 'engine-contracts/catalog';
 import { tenantIdOf } from 'engine-contracts';
 import { createManualAdapter } from '../../translation_graph/adapters/manual';
-import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
-import { makeTestHost } from 'movement-engine/services/movement_engine/test_host';
+import { containerAssociation } from 'movement-engine/public/adapter';
+import { makeTestHost } from 'movement-engine/public/testing';
 import { teamOfTenant } from '../../translation_graph/movement/tenant';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000041');

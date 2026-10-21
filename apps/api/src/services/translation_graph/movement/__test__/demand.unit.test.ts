@@ -14,7 +14,7 @@ import {
   closeDemandOverWriteVariants,
   demandSeed,
 } from '../demand';
-import { instanceSchemaFromDescriptors } from 'movement-engine/services/translation_graph/movement/schema_projection';
+import { instanceSchemaFromDescriptors } from 'movement-engine/public/catalog';
 
 const entries: SchemaEntryPoint[] = [
   { typeId: 'obj-companies', displayName: 'Companies', writable: true, readable: true },

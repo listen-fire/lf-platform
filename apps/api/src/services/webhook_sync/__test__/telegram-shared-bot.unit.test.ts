@@ -26,10 +26,6 @@
 
 import type { WebhookEvent } from '../providers';
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
-
 // ── telegram_identity reverse lookup: telegram_user_id → [team_id] ────────────
 interface IdentityRow { team_id: string; telegram_user_id: string }
 const identities: IdentityRow[] = [];

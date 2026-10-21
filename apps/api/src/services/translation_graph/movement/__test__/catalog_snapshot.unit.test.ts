@@ -5,7 +5,7 @@
 import { fromCatalogSnapshot } from 'movement-lang';
 import { checkProgram } from 'legacy-lang';
 import { parseProgram } from 'legacy-lang';
-import { buildCatalogSnapshot } from 'movement-engine/services/translation_graph/movement/catalog_snapshot';
+import { buildCatalogSnapshot } from 'movement-engine/public/catalog';
 
 import { RemoteAdapterManifestFile, remoteAdapterManifest } from '../../adapters/remote/manifest';
 

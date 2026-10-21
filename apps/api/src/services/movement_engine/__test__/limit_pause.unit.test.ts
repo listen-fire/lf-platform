@@ -23,22 +23,18 @@ process.env.ENCRYPTION_SALT_BASE64 ??= Buffer.alloc(16, 2).toString('base64');
 process.env.DATABASE_URL_TEST ??= 'postgresql://unit:unit@localhost:5432/unit-test-unused';
 process.env.DATABASE_URL_TEST_READONLY ??= 'postgresql://unit:unit@localhost:5432/unit-test-unused';
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
-
 import { resumeMovement, runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { runFailureCause, MovementRunFailed, type MovementRunResult, type ParkSink, type RunLimitPause } from '@listen-fire/legacy-engine/services/movement_engine/run';
 import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
-import { RunCostCapExceeded } from 'movement-engine/lib/run_cost';
-import { assertRunBudget, reportRunCost, runCostCapFromEnv, withSpendMeter } from 'movement-engine/lib/run_spend';
+import { RunCostCapExceeded } from 'movement-engine/public/models';
+import { assertRunBudget, reportRunCost, runCostCapFromEnv, withSpendMeter } from 'movement-engine/public/models';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
-import { type Adapter, type RuntimeCapabilities } from 'movement-engine/services/translation_graph/adapter';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+import { type Adapter, type RuntimeCapabilities } from 'movement-engine/public/adapter';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { positionData } from 'engine-contracts/catalog';
 import { tenantIdOf } from 'engine-contracts';
-import type { HostTransformInvoker } from 'movement-engine/services/movement_engine/host';
-import { credentialIdsFor, makeTestHost } from 'movement-engine/services/movement_engine/test_host';
+import type { HostTransformInvoker } from 'movement-engine/public/host';
+import { credentialIdsFor, makeTestHost } from 'movement-engine/public/testing';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000053');
 const ENV_VAR = 'MOVEMENT_MAX_RUN_COST_USD';

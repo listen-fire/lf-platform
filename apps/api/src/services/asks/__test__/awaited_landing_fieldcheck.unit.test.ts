@@ -24,7 +24,7 @@ import { parseProgram } from 'legacy-lang';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { SchemaTypeDescriptor } from 'engine-contracts/catalog';
 
-import { instanceSchemaFromDescriptors } from 'movement-engine/services/translation_graph/movement/schema_projection';
+import { instanceSchemaFromDescriptors } from 'movement-engine/public/catalog';
 import { AskAdapter } from '@listen-fire/ask';
 import { platformAskRecords } from '../store';
 

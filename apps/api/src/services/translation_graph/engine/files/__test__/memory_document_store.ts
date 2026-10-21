@@ -11,13 +11,13 @@
 import { Readable } from 'node:stream';
 
 import type { DocumentProvider } from '../../../../../adapters/document/interface';
-import type { FileRef } from 'movement-engine/services/translation_graph/adapter';
+import type { FileRef } from 'movement-engine/public/adapter';
 
 import type { TeamId } from '../../../../../generated/kysely/core/Team';
 
 import { services } from '../../../../../adapters/registry';
 import { storeKey } from '../../../../../adapters/document/interface';
-import { teamDocumentKeyPrefix } from 'movement-engine/services/translation_graph/engine/files/document_store';
+import { teamDocumentKeyPrefix } from 'movement-engine/public/files';
 import { useDocumentOwnership } from '../retrieve';
 
 export interface MemoryDocumentStore {

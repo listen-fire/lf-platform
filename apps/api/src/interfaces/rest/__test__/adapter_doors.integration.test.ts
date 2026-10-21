@@ -60,7 +60,7 @@ import {
   resetWorkHandlersForTests,
   setWorkNotifier,
 } from '../../../services/work/drain';
-import { signRemoteDelivery, REMOTE_SIGNATURE_HEADER } from 'movement-engine/services/webhook_sync/remote_inbound';
+import { signRemoteDelivery, REMOTE_SIGNATURE_HEADER } from 'movement-engine/public/inbound';
 import { webhookSyncRouter } from '../webhookSync';
 import { adapterDoorsRouter } from '../adapterDoors';
 import { postgresRunHostStore } from '../../../services/movement_engine/run_host_store';

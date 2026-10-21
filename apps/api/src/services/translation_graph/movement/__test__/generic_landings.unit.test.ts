@@ -21,7 +21,7 @@ import type { SchemaTypeDescriptor } from 'engine-contracts/catalog';
 
 import { AskAdapter } from '@listen-fire/ask';
 import { platformAskRecords } from '../../../asks/store';
-import { instanceSchemaFromDescriptors } from 'movement-engine/services/translation_graph/movement/schema_projection';
+import { instanceSchemaFromDescriptors } from 'movement-engine/public/catalog';
 import { graftGenericLandings } from '../generic_landings';
 
 const PRELUDE = `import { questions } from adapters\nqa = connect questions\n`;

@@ -30,7 +30,7 @@ import {
   EMAIL_ATTACHMENTS_FIELD,
   type EmailPayload,
 } from '../adapters/email';
-import { RESOURCES_REFERENCE_FIELD_ID } from 'movement-engine/services/translation_graph/adapter';
+import { RESOURCES_REFERENCE_FIELD_ID } from 'movement-engine/public/adapter';
 import { makeStablePosition, makeUnstablePosition } from 'engine-contracts/catalog';
 
 const TEAM_ID = 'team-1' as TeamId;

@@ -76,11 +76,6 @@ jest.mock('../../../lib/kysely', () => ({
   getCoreQb: jest.fn(() => mockChainable()),
 }));
 
-// services/logger pulls services/context → prisma → DATABASE_URL_* env
-// requirements at import time.
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 jest.mock('../../context', () => ({
   unsafeCurrentContext: () => undefined,
   currentContext: () => ({
@@ -142,22 +137,22 @@ import { createSingleFlight } from '../single_flight';
 import type { Binding, SourceRead } from '@listen-fire/legacy-engine/services/movement_engine/expression';
 import { binding, Environment, MovementEngineError, evalMovementExpr } from '@listen-fire/legacy-engine/services/movement_engine/expression';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
-import type { CapturedWrite } from 'movement-engine/services/translation_graph/engine/dry_run_adapter';
+import type { CapturedWrite } from 'movement-engine/public/adapter';
 import type {
   Adapter,
   RuntimeCapabilities,
   ExternalRecordRef,
-} from 'movement-engine/services/translation_graph/adapter';
-import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+} from 'movement-engine/public/adapter';
+import { containerAssociation } from 'movement-engine/public/adapter';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import type { LlmClient } from '../../translation_graph/engine/batched_extraction';
 import { makeStablePosition, makeUnstablePosition, positionData } from 'engine-contracts/catalog';
 import type { SchemaTypeDescriptor } from 'engine-contracts/catalog';
 import { tenantIdOf, type ActingPrincipal } from 'engine-contracts';
-import type { EngineHost } from 'movement-engine/services/movement_engine/host';
-import { credentialIdsFor, makeTestHost, TEST_HOST_NOW } from 'movement-engine/services/movement_engine/test_host';
-import type { ActingUserLookup } from 'movement-engine/services/movement_engine/host_kit';
-import type { ActingUser } from 'movement-engine/services/translation_graph/adapter';
+import type { EngineHost } from 'movement-engine/public/host';
+import { credentialIdsFor, makeTestHost, TEST_HOST_NOW } from 'movement-engine/public/testing';
+import type { ActingUserLookup } from 'movement-engine/public/host';
+import type { ActingUser } from 'movement-engine/public/adapter';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000010');
 
@@ -4337,7 +4332,6 @@ function makeFakeParkSink(_opts: { created?: boolean } = {}): {
   };
   return { sink, joins, timerParks, awaitParks, cancelled };
 }
-
 
 /** A slack source whose `files` edge yields one position per entry of the
  *  payload's `files` array — a deterministic fan-out (no LLM). */

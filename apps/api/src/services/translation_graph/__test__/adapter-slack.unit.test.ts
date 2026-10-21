@@ -35,12 +35,12 @@ import {
   SLACK_MESSAGE_TYPE_ID,
   slackEventToDiscriminable,
 } from '../adapters/slack';
-import { RESOURCES_REFERENCE_FIELD_ID } from 'movement-engine/services/translation_graph/adapter';
+import { RESOURCES_REFERENCE_FIELD_ID } from 'movement-engine/public/adapter';
 import { makeStablePosition, makeUnstablePosition } from 'engine-contracts/catalog';
 import { parseSlackEvents } from '../../webhook_sync/providers/slack';
 import { webhookEventToDiscriminable } from '../../webhook_sync/event_conversion';
-import { discriminateEvent } from 'movement-engine/services/translation_graph/engine/inbound/discriminate';
-import { instanceSchemaFromDescriptors } from 'movement-engine/services/translation_graph/movement/schema_projection';
+import { discriminateEvent } from 'movement-engine/public/inbound';
+import { instanceSchemaFromDescriptors } from 'movement-engine/public/catalog';
 
 const TEAM_ID = 'team-1' as TeamId;
 

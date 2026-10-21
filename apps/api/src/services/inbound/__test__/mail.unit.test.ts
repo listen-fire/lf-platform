@@ -14,10 +14,6 @@ import {
 import { signMailgunPayload } from '../../../scripts/dev/lib/mailgun-sign';
 import { signResendWebhook } from '../../../scripts/dev/lib/resend-sign';
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
-
 const ROUTED: InboundEmailDecision = {
   outcome: 'routed',
   userId: 'user-1',

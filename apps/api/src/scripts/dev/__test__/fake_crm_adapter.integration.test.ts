@@ -17,16 +17,16 @@ import http from 'node:http';
 
 import type { AddressInfo } from 'node:net';
 import type { MutationContext } from 'engine-contracts/mutation_context';
-import type { RemoteAdapterConfig } from 'movement-engine/services/translation_graph/adapters/remote';
+import type { RemoteAdapterConfig } from 'movement-engine/public/modules';
 import type { FakeCrmServer } from '../fake_crm_adapter';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 
-import { BASE_RUNTIME_CAPABILITIES } from 'movement-engine/services/translation_graph/adapter';
+import { BASE_RUNTIME_CAPABILITIES } from 'movement-engine/public/adapter';
 import {
   createRemoteAdapter,
   fetchRemoteManifest,
   RemoteAdapter,
-} from 'movement-engine/services/translation_graph/adapters/remote';
+} from 'movement-engine/public/modules';
 import { makeMetaPosition, positionData } from 'engine-contracts/catalog';
 import {
   FAKE_CRM_ADAPTER_TYPE,

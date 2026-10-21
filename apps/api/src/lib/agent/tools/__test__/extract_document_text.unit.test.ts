@@ -24,10 +24,6 @@ jest.mock('../../../../services/raw_text', () => ({
   },
 }));
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
-
 const extractTextMock = jest.fn();
 jest.mock('unpdf', () => ({
   extractText: (...args: unknown[]) => extractTextMock(...args),

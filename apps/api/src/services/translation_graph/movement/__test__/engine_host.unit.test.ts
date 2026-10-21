@@ -10,7 +10,7 @@ jest.mock('../file_text', () => ({
     resolverStores.push(store);
     return async () => {
       if (fileTextSpends) {
-        const spend = jest.requireActual('movement-engine/lib/run_spend');
+        const spend = jest.requireActual('movement-engine/public/models');
         spend.reportRunCost({ source: { kind: 'model', name: 'whisper' }, microdollars: 700 });
         spend.assertRunBudget();
       }
@@ -40,13 +40,13 @@ jest.mock('../../../credentials/credential_ownership', () => ({
 
 import { HOST_FAMILIES_VERSION, tenantIdOf } from 'engine-contracts';
 
-import type { Adapter } from 'movement-engine/services/translation_graph/adapter';
-import type { CapturedWrite } from 'movement-engine/services/translation_graph/engine/dry_run_adapter';
+import type { Adapter } from 'movement-engine/public/adapter';
+import type { CapturedWrite } from 'movement-engine/public/adapter';
 
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
-import { createRemoteAdapter } from 'movement-engine/services/translation_graph/adapters/remote';
+import { createRemoteAdapter } from 'movement-engine/public/modules';
 
 import { hostedDocumentStore } from '../../engine/files/retrieve';
 import { productionEngineHost } from '../engine_host';

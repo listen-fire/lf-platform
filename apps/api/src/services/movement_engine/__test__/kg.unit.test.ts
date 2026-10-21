@@ -51,9 +51,6 @@ jest.mock('../../../lib/kysely', () => ({
   getCoreQb: jest.fn(() => mockChainable()),
 }));
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 jest.mock('../../context', () => ({
   unsafeCurrentContext: () => undefined,
   currentContext: () => ({
@@ -102,22 +99,22 @@ import { runFailureCause } from '@listen-fire/legacy-engine/services/movement_en
 
 import { MovementEngineError } from '@listen-fire/legacy-engine/services/movement_engine/expression';
 import type { ExtractCallLlmInput, ExtractCallLlmResult } from '@listen-fire/legacy-engine/services/movement_engine/extraction_call';
-import type { CapturedWrite } from 'movement-engine/services/translation_graph/engine/dry_run_adapter';
+import type { CapturedWrite } from 'movement-engine/public/adapter';
 import type {
   Adapter,
   RuntimeCapabilities,
   LinkRecordsInput,
   UpdateInput,
   WriteInput,
-} from 'movement-engine/services/translation_graph/adapter';
-import { writeParentLinks } from 'movement-engine/services/translation_graph/adapter';
-import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
+} from 'movement-engine/public/adapter';
+import { writeParentLinks } from 'movement-engine/public/adapter';
+import { containerAssociation } from 'movement-engine/public/adapter';
 import type { SchemaTypeDescriptor } from 'engine-contracts/catalog';
 import type { UniquenessConstraints } from 'engine-contracts/uniqueness';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { positionData } from 'engine-contracts/catalog';
 import { tenantIdOf } from 'engine-contracts';
-import { makeTestHost } from 'movement-engine/services/movement_engine/test_host';
+import { makeTestHost } from 'movement-engine/public/testing';
 
 /**
  * The error a rejected run really died of. A failure raised once the
@@ -133,7 +130,6 @@ async function rejectionCause(promise: Promise<unknown>): Promise<unknown> {
   );
   return runFailureCause(settled);
 }
-
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000010');
 const KG = 'kg';

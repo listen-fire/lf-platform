@@ -51,9 +51,6 @@ jest.mock('../../../lib/anthropic', () => ({
   anthropicChat: (input: unknown) => anthropicChat(input),
   anthropicChatStructured: (input: unknown) => anthropicChatStructured(input),
 }));
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 
 import { timingSafeEqual } from 'node:crypto';
 

@@ -7,9 +7,6 @@ import { runHarnessDelivery } from '../harness';
 
 jest.mock('../drain', () => ({ drainUntilIdle: jest.fn() }));
 jest.mock('../store', () => ({ awaitTeamWorkSettled: jest.fn() }));
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn(), debug: jest.fn() },
-}));
 
 const drain = jest.mocked(drainUntilIdle);
 const settled = jest.mocked(awaitTeamWorkSettled);

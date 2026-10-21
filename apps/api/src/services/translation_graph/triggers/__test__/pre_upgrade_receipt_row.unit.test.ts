@@ -4,7 +4,7 @@
 // run is recorded under the type it names, so an old row neither fails to parse
 // nor changes how it is dispatched.
 //
-// Mocked: the receipt/run lookups, the router, the logger.
+// Mocked: the receipt/run lookups and the router.
 
 const mockRows: { trigger_event?: { status: string }; trigger_run?: undefined } = {};
 function chain(table: string): object {
@@ -26,9 +26,6 @@ jest.mock('../../../../lib/kysely', () => ({
     updateTable: (table: string) => chain(table),
     [tables[0] ?? '']: undefined,
   })),
-}));
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 jest.mock('../router', () => {
   const actual = jest.requireActual('../router');

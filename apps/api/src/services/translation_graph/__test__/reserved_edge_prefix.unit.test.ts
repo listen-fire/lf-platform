@@ -5,7 +5,7 @@
 // file proves no registered adapter declares one today.
 
 import type { SchemaEntryPoint, SchemaTypeDescriptor } from 'engine-contracts/catalog';
-import { instanceSchemaFromDescriptors } from 'movement-engine/services/translation_graph/movement/schema_projection';
+import { instanceSchemaFromDescriptors } from 'movement-engine/public/catalog';
 import { staticCatalogFromManifests } from '../movement/catalog';
 import { listAdapterTypes } from '../adapters/registry';
 import adapterSchemas from '../../../../../../packages/handbook/__test__/adapter_schemas.fixture.json';

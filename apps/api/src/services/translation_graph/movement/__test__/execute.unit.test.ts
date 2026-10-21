@@ -112,10 +112,6 @@ jest.mock('../firing_context', () => ({
   withFiringContext: <T>(_firing: unknown, fn: () => Promise<T>) => fn(),
 }));
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
-
 const sendSlackNotification = jest.fn(async () => undefined);
 jest.mock('../../../../lib/slack', () => ({
   sendSlackNotification: (...args: unknown[]) => sendSlackNotification(...(args as [])),
@@ -128,7 +124,7 @@ jest.mock('../issues', () => ({
   resolveMovementIssues: jest.fn(async () => undefined),
 }));
 
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 
 import { RunLeaseLost } from '../../../movement_engine/run_lease';

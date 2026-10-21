@@ -91,10 +91,6 @@ jest.mock('../../../../lib/kysely', () => {
   };
 });
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
-
 // One container-shaped adapter: two address hops (shelf, crate) — NOT
 // Airtable's names, so nothing here can pass by matching a hardcoded shape.
 jest.mock('../../adapters/registry', () => {

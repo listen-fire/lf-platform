@@ -7,9 +7,9 @@
 import { parseTraversalPath } from 'legacy-lang';
 import type { Expression } from 'movement-lang/expression/types';
 import { awaitLandingMatches } from '@listen-fire/legacy-engine/services/movement_engine/run';
-import type { Adapter, RuntimeCapabilities } from 'movement-engine/services/translation_graph/adapter';
+import type { Adapter, RuntimeCapabilities } from 'movement-engine/public/adapter';
 import { AdapterNameDriftError } from 'module-kit/adapter/name_resolution';
-import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
+import { containerAssociation } from 'movement-engine/public/adapter';
 import { positionData } from 'engine-contracts/catalog';
 
 function filterOf(where: string): Expression {

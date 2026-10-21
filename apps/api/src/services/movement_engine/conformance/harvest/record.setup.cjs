@@ -50,7 +50,8 @@ if (process.env.UPDATE_ENGINE_RUNS === '1' && DIR !== undefined && !UNRECORDED.i
     });
   }
 
-  const RUN = path.resolve(__dirname, 'movement-engine/services/movement_engine/run');
+  // The corpora (versions 1 and 2) run the TypeScript engine, the platform's.
+  const RUN = require.resolve('@listen-fire/legacy-engine/services/movement_engine/run');
   const RECORDER = path.resolve(__dirname, '../recorder.ts');
   const file = testFile;
   const lines = [];

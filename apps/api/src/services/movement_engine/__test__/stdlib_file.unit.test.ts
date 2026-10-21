@@ -47,9 +47,6 @@ jest.mock('../../../lib/kysely', () => ({
   getCoreQb: jest.fn(() => mockChainable()),
 }));
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 jest.mock('../../context', () => ({
   unsafeCurrentContext: () => undefined,
   currentContext: () => ({
@@ -90,20 +87,20 @@ jest.mock('../../translation_graph/adapters/acting_user/resolve', () => ({
 
 import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
-import type { CapturedWrite } from 'movement-engine/services/translation_graph/engine/dry_run_adapter';
+import type { CapturedWrite } from 'movement-engine/public/adapter';
 import type {
   Adapter,
   ExternalRecordRef,
   FileRef,
   RuntimeCapabilities,
-} from 'movement-engine/services/translation_graph/adapter';
-import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+} from 'movement-engine/public/adapter';
+import { containerAssociation } from 'movement-engine/public/adapter';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { makeStablePosition, positionData } from 'engine-contracts/catalog';
 import { tenantIdOf } from 'engine-contracts';
 import { Readable } from 'node:stream';
 import { services } from '../../../adapters/registry';
-import { makeTestHost } from 'movement-engine/services/movement_engine/test_host';
+import { makeTestHost } from 'movement-engine/public/testing';
 import { streamFileRef } from '../../translation_graph/engine/files/retrieve';
 import { renderFileArtifact } from '../../translation_graph/movement/file_render';
 import { transformInvokerFor } from '../../translation_graph/movement/transform_invoker';

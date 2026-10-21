@@ -17,8 +17,8 @@ import ts from 'typescript';
 import { CURRENT_LANGUAGE_VERSION, type InstanceSchema } from 'movement-lang';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
-import type { CapturedWrite } from 'movement-engine/services/translation_graph/engine/dry_run_adapter';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+import type { CapturedWrite } from 'movement-engine/public/adapter';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import type { MovementTraceEntry } from '@listen-fire/legacy-engine/services/movement_engine/expression';
 import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
 
@@ -30,15 +30,15 @@ import {
   type GetRelatedInput,
   type RelatedPage,
   type RelatedResult,
-} from 'movement-engine/services/translation_graph/adapter';
+} from 'movement-engine/public/adapter';
 import { createEmailAdapter } from '../../translation_graph/adapters/email';
 import { createManualAdapter } from '../../translation_graph/adapters/manual';
-import { adapterErrorOf } from 'movement-engine/services/translation_graph/engine/adapter_table';
+import { adapterErrorOf } from 'movement-engine/public/host';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import { productionEngineHost } from '../../translation_graph/movement/engine_host';
 import { inMemoryRawTextStore } from '../../translation_graph/movement/raw_text_store';
 import { makeUnstablePosition, positionData } from 'engine-contracts/catalog';
-import { InMemoryWriteLocks } from 'movement-engine/services/write_locks/write_locks';
+import { InMemoryWriteLocks } from 'movement-engine/public/write-locks';
 import {
   HOST_FAMILIES,
   hostMethodPaths,
@@ -47,11 +47,11 @@ import {
   type EngineHost,
   type RenderFile,
   type ResolveFileText,
-} from 'movement-engine/services/movement_engine/host';
-import type { QueuedWake } from 'movement-engine/services/movement_engine/host_kit';
+} from 'movement-engine/public/host';
+import type { QueuedWake } from 'movement-engine/public/host';
 import { resumeMovement, runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { MovementRunFailed, type ParkSink, type ResumeMovementInput, type RunLimitPause, type RunMovementInput } from '@listen-fire/legacy-engine/services/movement_engine/run';
-import { makeFakeParkSink, makeMemoryParkSources, makeTestHost, type TestHostOverrides } from 'movement-engine/services/movement_engine/test_host';
+import { makeFakeParkSink, makeMemoryParkSources, makeTestHost, type TestHostOverrides } from 'movement-engine/public/testing';
 import { awaitingSource, makeAwaitingAdapter, runAwaiting } from './awaitable_fixture';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import { methodPaths, notJsonAt, roundTripHost } from './round_trip_host';

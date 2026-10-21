@@ -20,21 +20,21 @@
 import type { InstanceSchema, LanguageVersion } from 'movement-lang';
 import { CURRENT_LANGUAGE_VERSION, fromCatalogSnapshot } from 'movement-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
-import type { Adapter, RuntimeCapabilities, WriteInput } from 'movement-engine/services/translation_graph/adapter';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+import type { Adapter, RuntimeCapabilities, WriteInput } from 'movement-engine/public/adapter';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { tenantIdOf } from 'engine-contracts';
-import type { CallbackSink } from 'movement-engine/services/movement_engine/host';
+import type { CallbackSink } from 'movement-engine/public/host';
 import type { CallbackCall } from 'engine-contracts';
 import type { BindingDescriptor, ParkedScopeState, RehydrationContext } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
 
 import { createManualAdapter } from '../../translation_graph/adapters/manual';
 import { binding } from '@listen-fire/legacy-engine/services/movement_engine/expression';
 import { assertParkRead, newParkReader, rehydrateBinding } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
-import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
+import { containerAssociation } from 'movement-engine/public/adapter';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import { resumeMovement, runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { type MovementRunResult, type ParkSink } from '@listen-fire/legacy-engine/services/movement_engine/run';
-import { makeTestHost } from 'movement-engine/services/movement_engine/test_host';
+import { makeTestHost } from 'movement-engine/public/testing';
 import { teamOfTenant } from '../../translation_graph/movement/tenant';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000077');

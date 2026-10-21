@@ -25,7 +25,7 @@ import {
   fieldTypeFromDescriptor,
   importIdentifier,
   instanceSchemaFromDescriptors,
-} from 'movement-engine/services/translation_graph/movement/schema_projection';
+} from 'movement-engine/public/catalog';
 import { bundledPluginSpecs } from 'movement-engine/public/plugins';
 import {
   adapterNameResolver,

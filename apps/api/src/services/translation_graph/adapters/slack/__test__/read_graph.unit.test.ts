@@ -9,10 +9,6 @@ jest.mock('../../../../../lib/credentials', () => ({
   encryptToken: async () => '',
 }));
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
-
 jest.mock('../../../../../lib/recording', () => ({
   isTestHarnessTeam: () => false,
   injectFakeBaseUrl: (p: unknown) => p,
@@ -27,7 +23,7 @@ import type { TeamId } from '../../../../../generated/kysely/core/Team';
 
 import { isStablePosition, makeMetaPosition, makeStablePosition, positionData } from 'engine-contracts/catalog';
 import { SlackAdapter, SLACK_MANIFEST } from '../index';
-import { instanceSchemaFromDescriptors } from 'movement-engine/services/translation_graph/movement/schema_projection';
+import { instanceSchemaFromDescriptors } from 'movement-engine/public/catalog';
 
 const TEAM = 'team-1' as TeamId;
 

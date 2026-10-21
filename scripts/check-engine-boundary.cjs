@@ -6,6 +6,13 @@
 // an internal module (anything else under `movement-engine/`) and compares the
 // count with the baseline in engine-boundary-baseline.json.
 //
+// The platform's trees hold their tests to the same rule: a platform test
+// installs the published engine, which has no internals to reach, so it uses
+// the public entries (the test host and the contract cases are in
+// `public/testing`, the log lines in `public/log`'s sink) and a `jest.mock` of
+// an internal module counts as an import of it. Only the engine package's own
+// tests reach its internals.
+//
 // The baseline is empty: any import of an internal fails. ESLint's
 // no-restricted-imports (apps/api/eslint.config.js) says the same in the
 // editor, and the package's `exports` map refuses an internal at run time
@@ -34,6 +41,9 @@ const CONSUMER_ROOTS = [
   'packages/file-text',
   'examples/embed-saas/src',
   'packages/legacy-engine',
+  'packages/legacy-lang',
+  'packages/trpc',
+  'packages/story-view',
   ...fs.readdirSync(modulesDir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => `modules/${e.name}`),
 ].filter((root) => fs.existsSync(path.join(repoRoot, root)));
 const engineRoot = path.join(repoRoot, 'packages/movement-engine');
@@ -43,8 +53,17 @@ const PACKAGE = 'movement-engine';
 const PUBLISHED = '@listen-fire/engine';
 const args = new Set(process.argv.slice(2));
 
-// Not production code: tests, their fixtures and setup, and the dev-loop
-// scripts that exercise the engine by hand.
+/** The platform's trees: every file in them is held to the rule, tests too. */
+const PLATFORM_ROOTS = new Set([
+  'apps/api/src',
+  'packages/legacy-engine',
+  'packages/legacy-lang',
+  'packages/trpc',
+  'packages/story-view',
+]);
+
+// Not production code, outside the platform's trees: tests, their fixtures
+// and setup, and the dev-loop scripts that exercise the engine by hand.
 const NOT_PRODUCTION = [
   /\.(test|spec)\.tsx?$/,
   /(^|\/)__(test|tests|conformance|fixtures)__(\/|$)/,
@@ -98,7 +117,12 @@ function specifiersIn(sourceFile) {
     } else if (ts.isCallExpression(node) && node.arguments.length > 0) {
       const callee = node.expression;
       const isRequire = ts.isIdentifier(callee) && callee.text === 'require';
-      if (isRequire || callee.kind === ts.SyntaxKind.ImportKeyword) add(node.arguments[0]);
+      const isJestModuleCall =
+        ts.isPropertyAccessExpression(callee) &&
+        ts.isIdentifier(callee.expression) &&
+        callee.expression.text === 'jest' &&
+        ['mock', 'doMock', 'unmock', 'requireActual', 'requireMock'].includes(callee.name.text);
+      if (isRequire || isJestModuleCall || callee.kind === ts.SyntaxKind.ImportKeyword) add(node.arguments[0]);
     }
     ts.forEachChild(node, visit);
   };
@@ -111,7 +135,7 @@ for (const root of CONSUMER_ROOTS) {
   const rootDir = path.join(repoRoot, root);
   for (const file of sourceFiles(rootDir)) {
     const relative = path.relative(rootDir, file).split(path.sep).join('/');
-    if (NOT_PRODUCTION.some((pattern) => pattern.test(relative))) continue;
+    if (!PLATFORM_ROOTS.has(root) && NOT_PRODUCTION.some((pattern) => pattern.test(relative))) continue;
     const text = fs.readFileSync(file, 'utf8');
     if (!text.includes(PACKAGE) && !text.includes(PUBLISHED) && !text.includes('packages/')) continue;
     const parsed = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, false);
@@ -147,7 +171,7 @@ for (const [name, count] of Object.entries(sortedModules)) {
 }
 
 console.log(
-  `engine boundary: ${total} production imports of engine internals outside movement-engine/public (baseline ${baseline.total}, ${Object.keys(sortedModules).length} modules)`,
+  `engine boundary: ${total} imports of engine internals outside movement-engine/public (baseline ${baseline.total}, ${Object.keys(sortedModules).length} modules)`,
 );
 if (args.has('--list')) {
   for (const site of sites) console.log(`  ${site.file}:${site.line}  ${site.module}`);

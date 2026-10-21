@@ -40,10 +40,6 @@ jest.mock('../../../services/work/store', () => ({
   awaitTeamWorkSettled: (input: unknown) => awaitTeamWorkSettled(input),
 }));
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
-
 import { telegramBuiltinRouter } from '../telegramBuiltin';
 
 let server: Server;

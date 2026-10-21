@@ -17,14 +17,14 @@ import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import { tenantIdOf, type AnyParkedScopeState } from 'engine-contracts';
 import { hostRecordingSchema, type HostRecording } from 'engine-contracts/conformance';
 
-import { RunCostCapExceeded } from 'movement-engine/lib/run_cost';
+import { RunCostCapExceeded } from 'movement-engine/public/models';
 import type {
   Adapter,
   ExternalRecordRef,
-} from 'movement-engine/services/translation_graph/adapter';
-import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
-import type { CapturedWrite } from 'movement-engine/services/translation_graph/engine/dry_run_adapter';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+} from 'movement-engine/public/adapter';
+import { containerAssociation } from 'movement-engine/public/adapter';
+import type { CapturedWrite } from 'movement-engine/public/adapter';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { staticCatalogFromManifests } from '../../translation_graph/movement/catalog';
 import type { MovementTraceEntry } from '@listen-fire/legacy-engine/services/movement_engine/expression';
 import type { SchemaTypeDescriptor } from 'engine-contracts/catalog';
@@ -37,17 +37,17 @@ import {
   endedInRust,
   TEST_HOST_NOW,
   type TestHostOverrides,
-} from 'movement-engine/services/movement_engine/test_host';
+} from 'movement-engine/public/testing';
 import { resumeMovement, runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { runFailureCause, type MovementRunResult, type ParkSink, type ResumeMovementInput, type RunLimitPause, type RunMovementInput } from '@listen-fire/legacy-engine/services/movement_engine/run';
 import {
   MovementEngineError,
   isCheckFailure,
-} from 'movement-engine/services/movement_engine/errors';
+} from 'movement-engine/public/errors';
 import {
   resetRustRunStats,
   rustRunStats,
-} from 'movement-engine/services/movement_engine/rust_stats';
+} from 'movement-engine/public/movement-engine';
 import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
 import { recordEntry } from '../conformance/recorder';
 

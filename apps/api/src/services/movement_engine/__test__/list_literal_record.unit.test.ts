@@ -39,9 +39,6 @@ jest.mock('../../../lib/kysely', () => ({
   getCoreQb: jest.fn(() => mockChainable()),
 }));
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 jest.mock('../../context', () => ({
   unsafeCurrentContext: () => undefined,
   currentContext: () => ({
@@ -80,12 +77,12 @@ jest.mock('../../../lib/anthropic', () => ({
 import { CURRENT_LANGUAGE_VERSION, fromCatalogSnapshot, mockCatalogSnapshot, type InstanceSchema } from 'movement-lang';
 import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
-import type { CapturedWrite } from 'movement-engine/services/translation_graph/engine/dry_run_adapter';
-import { containerAssociation, type Adapter } from 'movement-engine/services/translation_graph/adapter';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+import type { CapturedWrite } from 'movement-engine/public/adapter';
+import { containerAssociation, type Adapter } from 'movement-engine/public/adapter';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { positionData } from 'engine-contracts/catalog';
 import { tenantIdOf } from 'engine-contracts';
-import { makeTestHost } from 'movement-engine/services/movement_engine/test_host';
+import { makeTestHost } from 'movement-engine/public/testing';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000077');
 

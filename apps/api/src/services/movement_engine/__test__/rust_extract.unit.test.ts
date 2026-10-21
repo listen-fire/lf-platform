@@ -18,17 +18,17 @@ import {
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 
 import { tenantIdOf } from 'engine-contracts';
-import type { Adapter } from 'movement-engine/services/translation_graph/adapter';
-import type { LlmCallResult } from 'movement-engine/services/translation_graph/engine/batched_extraction/llm_call';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+import type { Adapter } from 'movement-engine/public/adapter';
+import type { LlmCallResult } from 'movement-engine/public/models';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import type {
   FileTextResolution,
   TransformInvocationResult,
 } from '@listen-fire/legacy-engine/services/movement_engine/extraction';
 
-import { availableChatModels } from 'movement-engine/lib/models/map';
-import { RunCostCapExceeded } from 'movement-engine/lib/run_cost';
-import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
+import { availableChatModels } from 'movement-engine/public/models';
+import { RunCostCapExceeded } from 'movement-engine/public/models';
+import { containerAssociation } from 'movement-engine/public/adapter';
 import { staticCatalogFromManifests } from '../../translation_graph/movement/catalog';
 import {
   makeUnstablePosition,
@@ -39,18 +39,18 @@ import {
   makeFakeParkSink,
   makeTestHost,
   endedInRust,
-} from 'movement-engine/services/movement_engine/test_host';
+} from 'movement-engine/public/testing';
 import { resumeMovement, runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { runFailureCause, type RunMovementInput } from '@listen-fire/legacy-engine/services/movement_engine/run';
 import {
   MovementEngineError,
   isCheckFailure,
-} from 'movement-engine/services/movement_engine/errors';
+} from 'movement-engine/public/errors';
 import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
 import {
   resetRustRunStats,
   rustRunStats,
-} from 'movement-engine/services/movement_engine/rust_stats';
+} from 'movement-engine/public/movement-engine';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-0000000000b3');
 

@@ -6,17 +6,17 @@
 import type { InstanceSchema } from 'movement-lang';
 
 import { HOST_FAMILIES_VERSION, tenantIdOf } from 'engine-contracts';
-import type { Adapter, WriteInput } from 'movement-engine/services/translation_graph/adapter';
-import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
+import type { Adapter, WriteInput } from 'movement-engine/public/adapter';
+import { containerAssociation } from 'movement-engine/public/adapter';
 import { createManualAdapter } from '../../translation_graph/adapters/manual';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 
-import { isRunCostCapExceeded, RunCostCapExceeded, type Budget } from 'movement-engine/lib/run_cost';
-import { InMemoryWriteLocks, type WriteLockHolder, type WriteLocks } from 'movement-engine/services/write_locks/write_locks';
-import { makeFakeParkSink, makeTestHost } from 'movement-engine/services/movement_engine/test_host';
-import { NEVER_CANCELLED } from 'movement-engine/services/movement_engine/host_kit';
+import { isRunCostCapExceeded, RunCostCapExceeded, type Budget } from 'movement-engine/public/models';
+import { InMemoryWriteLocks, type WriteLockHolder, type WriteLocks } from 'movement-engine/public/write-locks';
+import { makeFakeParkSink, makeTestHost } from 'movement-engine/public/testing';
+import { NEVER_CANCELLED } from 'movement-engine/public/host';
 import { runMovement } from '@listen-fire/legacy-engine/dispatch';
-import { RunCancelledSignal } from 'movement-engine/services/movement_engine/errors';
+import { RunCancelledSignal } from 'movement-engine/public/errors';
 import {
   closeRunContext,
   openRunContext,

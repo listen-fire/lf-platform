@@ -14,11 +14,6 @@
 //     and refuse an explicit null, and the whole write fails over a field the
 //     source simply did not state.
 
-// logger → services/context → casl crashes at module load; stub it (mirrors
-// the sibling tests).
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 jest.mock('../../../../lib/kysely', () => {
   const qb = () => ({
     selectFrom: () => ({

@@ -13,9 +13,6 @@
 
 import './env';
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 jest.mock('../../../lib/kysely', () => ({ ...jest.requireActual('../../../lib/kysely'), ...require('./fakes').kyselyFake() }));
 jest.mock('../../../lib/recording', () => ({ ...jest.requireActual('../../../lib/recording'), ...require('./fakes').recordingFake() }));
 jest.mock('../../translation_graph/adapters/resolve', () => ({

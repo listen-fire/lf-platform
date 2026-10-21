@@ -15,19 +15,19 @@
 //     is the main one, still parked.
 
 import type { InstanceSchema } from 'movement-lang';
-import type { Adapter, RuntimeCapabilities, WriteInput } from 'movement-engine/services/translation_graph/adapter';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+import type { Adapter, RuntimeCapabilities, WriteInput } from 'movement-engine/public/adapter';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { tenantIdOf } from 'engine-contracts';
-import type { CallbackSink } from 'movement-engine/services/movement_engine/host';
+import type { CallbackSink } from 'movement-engine/public/host';
 import type { CallbackCall } from 'engine-contracts';
 import type { AnyParkedScopeState } from 'engine-contracts';
 
 import { createManualAdapter } from '../../translation_graph/adapters/manual';
-import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
+import { containerAssociation } from 'movement-engine/public/adapter';
 import { snapshotOverManifests, staticCatalogFromManifests, staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import { runMovement, fireCallbackBody } from '@listen-fire/legacy-engine/dispatch';
 import { type ParkSink } from '@listen-fire/legacy-engine/services/movement_engine/run';
-import { makeTestHost, TEST_HOST_NOW } from 'movement-engine/services/movement_engine/test_host';
+import { makeTestHost, TEST_HOST_NOW } from 'movement-engine/public/testing';
 import { teamOfTenant } from '../../translation_graph/movement/tenant';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000041');

@@ -11,7 +11,7 @@ import {
   cancelContractCases,
   runHostContractCases,
   type RecordsContractBackend,
-} from 'movement-engine/services/run_host/contract';
+} from 'movement-engine/public/testing';
 
 import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
 

@@ -23,9 +23,6 @@ jest.mock('../../translation_graph/adapters/packages', () => ({ awaitKeepers: ()
 jest.mock('../callback_sink', () => ({ callbackAwaitKeeper: {} }));
 jest.mock('../callback_store', () => ({ revokeRunCallbacks: jest.fn() }));
 jest.mock('../../../lib/kysely', () => ({ getAutomationsQb: jest.fn() }));
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn(), debug: jest.fn() },
-}));
 
 const engineWrites = { pending: Promise.resolve() };
 jest.mock('../run_engine_record', () => ({

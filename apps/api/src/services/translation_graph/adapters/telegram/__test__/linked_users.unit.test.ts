@@ -2,10 +2,6 @@
 // cannot enumerate chats; the handshake's identity table can, and each row's
 // user id IS the private chat id a send targets.
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
-
 jest.mock('../../../../../lib/recording', () => ({
   isTestHarnessTeam: () => false,
   injectFakeBaseUrl: (p: unknown) => p,

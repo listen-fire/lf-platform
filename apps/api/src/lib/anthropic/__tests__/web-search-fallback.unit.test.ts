@@ -8,7 +8,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 
-import type { Provider } from 'movement-engine/lib/models/map';
+import type { Provider } from 'movement-engine/public/models';
 
 const finalMessage = jest.fn();
 const stream = jest.fn(
@@ -27,10 +27,6 @@ jest.mock('../../models/chat', () => ({
 jest.mock('../../llm_usage', () => ({
   recordLlmUsage: jest.fn().mockResolvedValue(undefined),
   runFields: jest.fn().mockReturnValue({}),
-}));
-
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
 import { anthropicWebChat } from '../index';

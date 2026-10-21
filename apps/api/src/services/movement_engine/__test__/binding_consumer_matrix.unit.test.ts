@@ -70,9 +70,6 @@ jest.mock('../../../lib/kysely', () => ({
   getCoreQb: jest.fn(() => mockChainable()),
 }));
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 jest.mock('../../context', () => ({
   unsafeCurrentContext: () => undefined,
   currentContext: () => ({
@@ -115,15 +112,15 @@ import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 
 import type { ExtractCallLlmInput, ExtractCallLlmResult } from '@listen-fire/legacy-engine/services/movement_engine/extraction_call';
 import type { MovementTransformInvoker } from '@listen-fire/legacy-engine/services/movement_engine/extraction';
-import type { CapturedWrite } from 'movement-engine/services/translation_graph/engine/dry_run_adapter';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+import type { CapturedWrite } from 'movement-engine/public/adapter';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { tenantIdOf } from 'engine-contracts';
-import { makeTestHost } from 'movement-engine/services/movement_engine/test_host';
+import { makeTestHost } from 'movement-engine/public/testing';
 
 import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { runFailureCause, type MovementRunResult } from '@listen-fire/legacy-engine/services/movement_engine/run';
-import { MovementEngineError } from 'movement-engine/services/movement_engine/errors';
-import { containerAssociation, type Adapter } from 'movement-engine/services/translation_graph/adapter';
+import { MovementEngineError } from 'movement-engine/public/errors';
+import { containerAssociation, type Adapter } from 'movement-engine/public/adapter';
 import { makeStablePosition, positionData, positionRecordId, META_RECORD_TYPE } from 'engine-contracts/catalog';
 import { ACME, BETA, GAMMA, cellId, cells, expectationAt, row, type Cell, type Rec } from './binding_consumer_matrix.cells';
 import { RELAY, SUMMARISE, catalog, programFor } from './binding_consumer_matrix.program';
@@ -152,7 +149,6 @@ interface TriageEntry {
 const TODO = {} as const;
 
 const TRIAGE: TriageEntry[] = [];
-
 
 // ── Fakes ────────────────────────────────────────────────────────────────────
 

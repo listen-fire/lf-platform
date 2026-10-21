@@ -6,13 +6,13 @@
 // refused loudly.
 
 import { tenantIdOf, type AnyParkedScopeState } from 'engine-contracts';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 
 import { createManualAdapter } from '../../translation_graph/adapters/manual';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import { teamOfTenant } from '../../translation_graph/movement/tenant';
 import { fireCallbackBody, resumeMovement, runMovement, settleRaceFrame } from '@listen-fire/legacy-engine/dispatch';
-import { makeFakeParkSink, makeTestHost } from 'movement-engine/services/movement_engine/test_host';
+import { makeFakeParkSink, makeTestHost } from 'movement-engine/public/testing';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000078');
 const manualAdapter = createManualAdapter({ teamId: teamOfTenant(TEAM_ID) });

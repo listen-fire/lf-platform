@@ -81,7 +81,7 @@ import { runFailureCause, runMovement, MovementRunFailed } from '../run';
 import type { MovementTraceEntry } from '../expression';
 import { recordLlmUsage } from '../../../lib/llm_usage';
 import { RunCostCapExceeded } from '../../../lib/run_cost';
-import { assertRunBudget, runCostCapFromEnv, withSpendMeter } from 'movement-engine/lib/run_spend';
+import { assertRunBudget, runCostCapFromEnv, withSpendMeter } from 'movement-engine/public/models';
 
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import { type Adapter, type RuntimeCapabilities } from '../../translation_graph/adapter';

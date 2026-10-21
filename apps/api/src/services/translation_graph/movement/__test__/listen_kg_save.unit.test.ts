@@ -107,10 +107,6 @@ jest.mock('../../../../lib/kysely', () => {
   };
 });
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
-
 const ATTIO_EVENTS = ['record.created', 'record.updated', 'record.deleted'];
 
 jest.mock('../../adapters/registry', () => {

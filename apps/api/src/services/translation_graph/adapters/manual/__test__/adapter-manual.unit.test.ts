@@ -9,9 +9,9 @@
 import { Readable } from 'node:stream';
 
 import type { TeamId } from '../../../../../generated/kysely/core/Team';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 
-import { RESOURCES_REFERENCE_FIELD_ID } from 'movement-engine/services/translation_graph/adapter';
+import { RESOURCES_REFERENCE_FIELD_ID } from 'movement-engine/public/adapter';
 import { makeUnstablePosition, positionData } from 'engine-contracts/catalog';
 
 // `types.ts` (imported transitively by the adapter) loads the output_v3

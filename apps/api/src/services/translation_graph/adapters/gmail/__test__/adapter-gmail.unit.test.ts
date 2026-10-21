@@ -6,9 +6,6 @@ jest.mock('../../../../../lib/credentials', () => ({
   decryptToken: async () => '{}',
   encryptToken: async () => '',
 }));
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 
 import type { TeamId } from '../../../../../generated/kysely/core/Team';
 import type { Expression } from 'movement-lang/expression/types';
@@ -42,7 +39,7 @@ function adapterOver(client: GmailApiClient): GmailAdapter {
 }
 import { GmailPollSource, listenQuery } from '@listen-fire/gmail';
 import { combineGmailQueries, gmailQueryFromWhere } from '@listen-fire/gmail';
-import { instanceSchemaFromDescriptors } from 'movement-engine/services/translation_graph/movement/schema_projection';
+import { instanceSchemaFromDescriptors } from 'movement-engine/public/catalog';
 import { normaliseSchemaForAgent } from '../../../movement/agent_schema';
 import {
   GMAIL_ATTACHMENT_TYPE_ID,

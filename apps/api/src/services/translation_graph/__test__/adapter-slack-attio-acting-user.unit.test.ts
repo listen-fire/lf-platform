@@ -20,7 +20,7 @@
 // fallback → reject.
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 
 // ── DB mock (user_email / user lookups + creator load) ──────────────────
 const dbQueue: Array<unknown> = [];
@@ -48,9 +48,6 @@ jest.mock('../../../lib/credentials', () => ({
   decryptToken: async () => '{"accessToken":"xoxb-test","baseUrl":"https://slack.test"}',
   encryptToken: async () => '',
 }));
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 // Keep credential baseUrl injection a no-op so the parsed payload above
 // flows through unchanged for both adapters.
 jest.mock('../../../lib/recording', () => ({
@@ -74,7 +71,7 @@ jest.mock('@listen-fire/attio/api_client', () => ({
 }));
 
 import type { ActingUserTriggerContext } from '../adapters/acting_user_shared';
-import type { ActorCandidate } from 'movement-engine/services/translation_graph/adapter';
+import type { ActorCandidate } from 'movement-engine/public/adapter';
 
 import { SlackAdapter } from '../adapters/slack';
 import { createAttioAdapter } from '../adapters/attio';

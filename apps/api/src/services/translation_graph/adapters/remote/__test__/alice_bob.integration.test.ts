@@ -21,8 +21,8 @@ jest.mock('../../../../credentials/credential_lifecycle', () => ({
 }));
 
 import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
-import { postRpc } from 'movement-engine/services/translation_graph/protocol/client';
-import { triggerEventOf } from 'movement-engine/services/translation_graph/triggers/trigger_event';
+import { postRpc } from 'movement-engine/public/adapter';
+import { triggerEventOf } from 'movement-engine/public/inbound';
 
 import type { TeamId } from '../../../../../generated/kysely/core/Team';
 import type { TriggerId } from '../../../../../generated/kysely/automations/Trigger';

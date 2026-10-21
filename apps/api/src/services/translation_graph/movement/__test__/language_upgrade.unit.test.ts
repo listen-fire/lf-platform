@@ -4,9 +4,6 @@
 // refused (a preservation failure), and that a second run on the same release
 // does nothing.
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 jest.mock('../../../../lib/kysely', () => ({ getAutomationsQb: jest.fn() }));
 jest.mock('../authoring', () => ({
   validateMovementForTeam: jest.fn(),

@@ -9,10 +9,6 @@ jest.mock('../../../../lib/credentials', () => ({
   encryptToken: async () => '',
 }));
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
-
 jest.mock('../../../../lib/recording', () => ({
   isTestHarnessTeam: () => false,
   injectFakeBaseUrl: (p: unknown) => p,
@@ -21,7 +17,7 @@ jest.mock('../../../../lib/recording', () => ({
 import { Readable } from 'node:stream';
 
 import type { TeamId } from '../../../../generated/kysely/core/Team';
-import type { FileRef } from 'movement-engine/services/translation_graph/adapter';
+import type { FileRef } from 'movement-engine/public/adapter';
 
 import { isStablePosition, makeMetaPosition } from 'engine-contracts/catalog';
 import { GoogleDriveAdapter, type GoogleDriveClient } from '@listen-fire/google-drive';

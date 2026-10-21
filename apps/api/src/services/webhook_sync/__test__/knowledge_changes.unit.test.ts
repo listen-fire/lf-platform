@@ -32,9 +32,6 @@ jest.mock('../../../lib/kysely', () => ({
   getQb: jest.fn(() => mockChainable()),
   getCoreQb: jest.fn(() => mockChainable()),
 }));
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 
 jest.mock('../../translation_graph/storage/tg_table', () => ({
   findTriggersByKind: jest.fn(),

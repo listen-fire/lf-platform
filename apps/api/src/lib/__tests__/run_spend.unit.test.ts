@@ -3,7 +3,6 @@
 // is refused. (The run's own account is the engine's:
 // movement_engine/__test__/run_context.unit.test.ts.)
 
-jest.mock('movement-engine/services/logger', () => ({ logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
 const insertInto = jest.fn();
 jest.mock('../kysely', () => ({ getQb: () => ({ insertInto }) }));
 
@@ -17,7 +16,7 @@ import {
   RUN_COST_CAP_ENV_VAR,
   type Budget,
   type CostSource,
-} from 'movement-engine/lib/run_cost';
+} from 'movement-engine/public/models';
 import {
   assertRunBudget,
   assertRunCostCapConfigured,
@@ -26,7 +25,7 @@ import {
   reportRunCost,
   runCostCapFromEnv,
   withSpendMeter,
-} from 'movement-engine/lib/run_spend';
+} from 'movement-engine/public/models';
 
 const ENV_VAR = 'MOVEMENT_MAX_RUN_COST_USD';
 const DOLLAR = 1_000_000;

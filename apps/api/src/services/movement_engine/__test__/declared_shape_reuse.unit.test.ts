@@ -33,9 +33,6 @@ jest.mock('../../../lib/kysely', () => ({
   getCoreQb: jest.fn(() => mockChainable()),
 }));
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 jest.mock('../../context', () => ({
   unsafeCurrentContext: () => undefined,
   currentContext: () => ({
@@ -100,20 +97,19 @@ import type {
   LlmCallInput,
   LlmCallResult,
 } from '../../translation_graph/engine/batched_extraction';
-import type { CapturedWrite } from 'movement-engine/services/translation_graph/engine/dry_run_adapter';
+import type { CapturedWrite } from 'movement-engine/public/adapter';
 import type {
   Adapter,
   RuntimeCapabilities,
   ExternalRecordRef,
-} from 'movement-engine/services/translation_graph/adapter';
-import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+} from 'movement-engine/public/adapter';
+import { containerAssociation } from 'movement-engine/public/adapter';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { positionData } from 'engine-contracts/catalog';
 import { tenantIdOf } from 'engine-contracts';
-import { makeTestHost } from 'movement-engine/services/movement_engine/test_host';
+import { makeTestHost } from 'movement-engine/public/testing';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000010');
-
 
 // ── Fake adapters (per run.unit.test.ts patterns) ───────────────────────────
 
@@ -197,7 +193,6 @@ function webhookEvent(adapterType: string, payload: Record<string, unknown>): Tr
     payload,
   };
 }
-
 
 /** A movement-engine LlmClient that records calls and answers from a
  *  queue of hand-written nested responses. */

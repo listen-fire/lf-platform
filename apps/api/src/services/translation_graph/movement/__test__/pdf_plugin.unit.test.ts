@@ -2,9 +2,6 @@
 // stored under the team's key prefix and handed back as the call's file, and
 // its warning carried to the run.
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 jest.mock('../../../document', () => ({
   DocumentService: { getById: jest.fn(async () => null) },
 }));
@@ -23,7 +20,7 @@ jest.mock('../../../../adapters/registry', () => ({
   },
 }));
 
-import { NO_BUDGET_LIMIT } from 'movement-engine/lib/run_cost';
+import { NO_BUDGET_LIMIT } from 'movement-engine/public/models';
 import { bundledPluginSpecs } from 'movement-engine/public/plugins';
 
 import type { TeamId } from '../../../../generated/kysely/core/Team';

@@ -4,15 +4,12 @@
 // under its name), and a throw is no enrichment unless the run is out of
 // money. A plugin no module line serves still goes to the registry.
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 jest.mock('../../../document', () => ({
   DocumentService: { getById: jest.fn(async () => null) },
 }));
 
 import { defineModule } from 'module-kit';
-import { BudgetExhausted, NO_BUDGET_LIMIT, costSourceKey } from 'movement-engine/lib/run_cost';
+import { BudgetExhausted, NO_BUDGET_LIMIT, costSourceKey } from 'movement-engine/public/models';
 
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type { BuiltinModuleTable } from '../../adapters/builtin_modules';

@@ -16,17 +16,17 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fromCatalogSnapshot, type InstanceSchema } from 'movement-lang';
-import type { Adapter, RuntimeCapabilities, WriteInput } from 'movement-engine/services/translation_graph/adapter';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+import type { Adapter, RuntimeCapabilities, WriteInput } from 'movement-engine/public/adapter';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { tenantIdOf } from 'engine-contracts';
 import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
 
 import { createManualAdapter } from '../../translation_graph/adapters/manual';
-import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
+import { containerAssociation } from 'movement-engine/public/adapter';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import { resumeMovement, runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { type MovementRunResult, type ParkSink } from '@listen-fire/legacy-engine/services/movement_engine/run';
-import { makeTestHost } from 'movement-engine/services/movement_engine/test_host';
+import { makeTestHost } from 'movement-engine/public/testing';
 import { teamOfTenant } from '../../translation_graph/movement/tenant';
 import { spelledFor as spelledForSurface } from '../../../../../../packages/legacy-lang/checker/__test__/surface_spelling';
 

@@ -12,7 +12,7 @@ import {
   CredentialChannelRefused,
   createRemoteAdapter,
   type RemoteManifest,
-} from 'movement-engine/services/translation_graph/adapters/remote';
+} from 'movement-engine/public/modules';
 import { hostedDocumentStore } from '../../../engine/files/retrieve';
 
 interface Received {

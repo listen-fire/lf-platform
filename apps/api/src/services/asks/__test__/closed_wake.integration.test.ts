@@ -22,7 +22,7 @@ import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
 import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
 import type { MovementId } from '../../../generated/kysely/automations/Movement';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import type { AwaitResolution } from 'engine-contracts/awaitable';
 
 import { testWorkContext } from '../../../test/harness/work';

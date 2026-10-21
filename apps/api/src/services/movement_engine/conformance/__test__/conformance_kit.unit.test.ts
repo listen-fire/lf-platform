@@ -9,10 +9,6 @@ process.env.ENCRYPTION_SALT_BASE64 ??= Buffer.alloc(16, 2).toString('base64');
 process.env.DATABASE_URL_TEST ??= 'postgresql://unit:unit@localhost:5432/unit-test-unused';
 process.env.DATABASE_URL_TEST_READONLY ??= 'postgresql://unit:unit@localhost:5432/unit-test-unused';
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
-
 import { fileValue, tenantIdOf } from 'engine-contracts';
 import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
 import {
@@ -23,12 +19,12 @@ import {
 } from 'engine-contracts/conformance';
 
 import { staticCatalogSnapshot } from '../../../translation_graph/movement/catalog';
-import type { Adapter, RuntimeCapabilities } from 'movement-engine/services/translation_graph/adapter';
+import type { Adapter, RuntimeCapabilities } from 'movement-engine/public/adapter';
 import { positionData } from 'engine-contracts/catalog';
-import { RunCancelledSignal } from 'movement-engine/services/movement_engine/errors';
-import { VOID_HOST_METHODS, hostMethodPaths, type EngineHost } from 'movement-engine/services/movement_engine/host';
+import { RunCancelledSignal } from 'movement-engine/public/errors';
+import { VOID_HOST_METHODS, hostMethodPaths, type EngineHost } from 'movement-engine/public/host';
 import { runMovement } from '@listen-fire/legacy-engine/dispatch';
-import { credentialIdsFor, makeTestHost } from 'movement-engine/services/movement_engine/test_host';
+import { credentialIdsFor, makeTestHost } from 'movement-engine/public/testing';
 import { NotJson } from '../../__test__/round_trip_host';
 import { startHostDouble, httpHost, type HostDouble } from '../http_host_double';
 import { recordEntry } from '../recorder';

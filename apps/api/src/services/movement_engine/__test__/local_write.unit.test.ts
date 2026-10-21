@@ -42,9 +42,6 @@ jest.mock('../../../lib/kysely', () => ({
   getCoreQb: jest.fn(() => mockChainable()),
 }));
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 jest.mock('../../context', () => ({
   unsafeCurrentContext: () => undefined,
   currentContext: () => ({
@@ -70,7 +67,6 @@ jest.mock('@listen-fire/kg/manifest', () => ({
     }),
 }));
 
-
 // The ONE judge — mocked at the LLM seam, so the real arbitration (the
 // short-circuits, the exactness rule) still runs and only the decision is
 // injected.
@@ -85,11 +81,11 @@ import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { meteredArbitration } from '../../translation_graph/engine/entity_match';
 
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
-import { containerAssociation, type Adapter, type RuntimeCapabilities } from 'movement-engine/services/translation_graph/adapter';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+import { containerAssociation, type Adapter, type RuntimeCapabilities } from 'movement-engine/public/adapter';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { positionData } from 'engine-contracts/catalog';
 import { tenantIdOf } from 'engine-contracts';
-import { makeTestHost } from 'movement-engine/services/movement_engine/test_host';
+import { makeTestHost } from 'movement-engine/public/testing';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000021');
 const mockExecute = execute as jest.MockedFunction<typeof execute>;

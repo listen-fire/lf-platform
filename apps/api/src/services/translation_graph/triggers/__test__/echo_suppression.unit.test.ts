@@ -9,8 +9,8 @@
 //
 // Both are pure (no DB / Redis), so the adapter is constructed directly.
 
-import type { Adapter } from 'movement-engine/services/translation_graph/adapter';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+import type { Adapter } from 'movement-engine/public/adapter';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type { MutationContext } from 'engine-contracts/mutation_context';
 

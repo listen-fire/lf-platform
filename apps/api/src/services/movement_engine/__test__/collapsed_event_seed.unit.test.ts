@@ -47,9 +47,6 @@ jest.mock('../../../lib/kysely', () => ({
   getCoreQb: jest.fn(() => mockChainable()),
 }));
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 jest.mock('../../context', () => ({
   unsafeCurrentContext: () => undefined,
   currentContext: () => ({
@@ -92,11 +89,11 @@ import type { Catalog, InstanceSchema } from 'movement-lang';
 import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { snapshotOverManifests, staticCatalogFromManifests } from '../../translation_graph/movement/catalog';
 import { positionData } from 'engine-contracts/catalog';
-import type { Adapter, ParentLink, RuntimeCapabilities } from 'movement-engine/services/translation_graph/adapter';
-import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+import type { Adapter, ParentLink, RuntimeCapabilities } from 'movement-engine/public/adapter';
+import { containerAssociation } from 'movement-engine/public/adapter';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { tenantIdOf } from 'engine-contracts';
-import { credentialIdsFor, makeTestHost } from 'movement-engine/services/movement_engine/test_host';
+import { credentialIdsFor, makeTestHost } from 'movement-engine/public/testing';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000011');
 const MESSAGE = 'Slack Message';

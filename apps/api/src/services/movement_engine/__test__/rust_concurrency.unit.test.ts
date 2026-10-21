@@ -6,24 +6,24 @@
 // state is shown by its address only; rust_park_identity holds the states),
 // and the assertions beside each case say what it is for.
 
-import { spelledForVersion5 } from 'movement-engine/services/movement_engine/__test__/combinator_spelling';
+import { spelledForVersion5 } from './combinator_spelling';
 import { fromCatalogSnapshot, type InstanceSchema } from 'movement-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import { tenantIdOf, type CallbackCall } from 'engine-contracts';
 
-import type { Adapter, RuntimeCapabilities, WriteInput } from 'movement-engine/services/translation_graph/adapter';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+import type { Adapter, RuntimeCapabilities, WriteInput } from 'movement-engine/public/adapter';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { createManualAdapter } from '../../translation_graph/adapters/manual';
-import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
+import { containerAssociation } from 'movement-engine/public/adapter';
 import { makeStablePosition, makeUnstablePosition, positionData } from 'engine-contracts/catalog';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import { teamOfTenant } from '../../translation_graph/movement/tenant';
-import type { CallbackSink } from 'movement-engine/services/movement_engine/host';
+import type { CallbackSink } from 'movement-engine/public/host';
 import type { MovementTraceEntry } from '@listen-fire/legacy-engine/services/movement_engine/expression';
-import { makeTestHost } from 'movement-engine/services/movement_engine/test_host';
+import { makeTestHost } from 'movement-engine/public/testing';
 import { fireCallbackBody, resumeMovement, runMovement, settleRaceFrame } from '@listen-fire/legacy-engine/dispatch';
 import { type MovementRunResult, type ParkSink } from '@listen-fire/legacy-engine/services/movement_engine/run';
-import { resetRustRunStats, rustRunStats } from 'movement-engine/services/movement_engine/rust_stats';
+import { resetRustRunStats, rustRunStats } from 'movement-engine/public/movement-engine';
 import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-0000000000c4');

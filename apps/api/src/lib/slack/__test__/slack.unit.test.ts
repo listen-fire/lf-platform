@@ -2,10 +2,6 @@
 // writes a flat ops event, with the feed title, team attribution and
 // suppressed-type handling exercised here.
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
-
 // Slack webhook — prevent real HTTP calls
 jest.mock('@slack/webhook', () => ({
   IncomingWebhook: class {

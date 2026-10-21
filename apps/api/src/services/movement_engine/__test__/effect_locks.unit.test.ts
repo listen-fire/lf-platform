@@ -38,9 +38,6 @@ jest.mock('../../../lib/kysely', () => ({
   getCoreQb: jest.fn(() => mockChainable()),
 }));
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 jest.mock('../../context', () => ({
   unsafeCurrentContext: () => undefined,
   currentContext: () => ({
@@ -89,7 +86,7 @@ import {
   recordLock,
   type CrossRunLocks,
 } from '@listen-fire/legacy-engine/services/movement_engine/effect_locks';
-import { InMemoryWriteLocks, type WriteLockHolder } from 'movement-engine/services/write_locks/write_locks';
+import { InMemoryWriteLocks, type WriteLockHolder } from 'movement-engine/public/write-locks';
 
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import {
@@ -97,13 +94,13 @@ import {
   type Adapter,
   type ExternalRecordRef,
   type RuntimeCapabilities,
-} from 'movement-engine/services/translation_graph/adapter';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+} from 'movement-engine/public/adapter';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { positionData, type SchemaTypeDescriptor } from 'engine-contracts/catalog';
 import type { UniquenessConstraints } from 'engine-contracts/uniqueness';
 import { tenantIdOf } from 'engine-contracts';
 import { CURRENT_LANGUAGE_VERSION, type InstanceSchema } from 'movement-lang';
-import { credentialIdsFor, makeTestHost } from 'movement-engine/services/movement_engine/test_host';
+import { credentialIdsFor, makeTestHost } from 'movement-engine/public/testing';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000052');
 

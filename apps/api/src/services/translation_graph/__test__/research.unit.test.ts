@@ -20,7 +20,6 @@ const mockStructured = jest.fn();
 const mockSearch = jest.fn();
 const mockFetchWithTimeout = jest.fn();
 const mockIsSupportedUrl = jest.fn((_url: string) => false);
-const mockLogInfo = jest.fn();
 
 // The client double: one `finalMessage()` per queued server-tool reply. The
 // wrapper itself is REAL, so the agentic engine is tested over the block
@@ -68,9 +67,6 @@ jest.mock('../../../lib/anthropic', () => ({
   anthropicChatStructured: (...args: unknown[]) => mockStructured(...args),
 }));
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: (...args: unknown[]) => mockLogInfo(...args), warn: jest.fn() },
-}));
 jest.mock('../../web_search', () => ({
   WebSearchService: { search: (...args: unknown[]) => mockSearch(...args) },
 }));

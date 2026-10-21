@@ -4,10 +4,6 @@
 // instances from env at load, so each case loads it in isolation with a fresh
 // env.
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
-
 const BASE_ENV = { ...process.env };
 
 function loadRegistry(env: Record<string, string | undefined>): typeof import('../metaApi') {

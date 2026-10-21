@@ -4,18 +4,18 @@
 // without a real ask store or Slack.
 
 import type { InstanceSchema } from 'movement-lang';
-import type { Adapter, RuntimeCapabilities, WriteInput } from 'movement-engine/services/translation_graph/adapter';
+import type { Adapter, RuntimeCapabilities, WriteInput } from 'movement-engine/public/adapter';
 import type { AwaitResolution } from 'engine-contracts/awaitable';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import type { TenantId } from 'engine-contracts';
-import type { AwaitWakeRequest, EngineHost, Scoped } from 'movement-engine/services/movement_engine/host';
-import type { QueuedWake } from 'movement-engine/services/movement_engine/host_kit';
+import type { AwaitWakeRequest, EngineHost, Scoped } from 'movement-engine/public/host';
+import type { QueuedWake } from 'movement-engine/public/host';
 
-import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
+import { containerAssociation } from 'movement-engine/public/adapter';
 import { createManualAdapter } from '../../translation_graph/adapters/manual';
 import { snapshotOverManifests, staticCatalogFromManifests } from '../../translation_graph/movement/catalog';
 import { positionData } from 'engine-contracts/catalog';
-import { makeTestHost } from 'movement-engine/services/movement_engine/test_host';
+import { makeTestHost } from 'movement-engine/public/testing';
 import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { type ParkSink } from '@listen-fire/legacy-engine/services/movement_engine/run';
 import { teamOfTenant } from '../../translation_graph/movement/tenant';

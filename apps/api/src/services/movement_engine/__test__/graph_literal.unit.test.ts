@@ -37,9 +37,6 @@ jest.mock('../../../lib/kysely', () => ({
   getCoreQb: jest.fn(() => mockChainable()),
 }));
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 jest.mock('../../context', () => ({
   unsafeCurrentContext: () => undefined,
   currentContext: () => ({
@@ -79,7 +76,7 @@ import { runMovement, resumeMovement } from '@listen-fire/legacy-engine/dispatch
 import { CURRENT_LANGUAGE_VERSION, fromCatalogSnapshot } from 'movement-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import type { ParkSink } from '@listen-fire/legacy-engine/services/movement_engine/run';
-import type { CallbackSink } from 'movement-engine/services/movement_engine/host';
+import type { CallbackSink } from 'movement-engine/public/host';
 import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
 
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
@@ -88,13 +85,13 @@ import {
   type Adapter,
   type RuntimeCapabilities,
   type Resource,
-} from 'movement-engine/services/translation_graph/adapter';
-import type { FileRef } from 'movement-engine/services/translation_graph/adapter';
-import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+} from 'movement-engine/public/adapter';
+import type { FileRef } from 'movement-engine/public/adapter';
+import { containerAssociation } from 'movement-engine/public/adapter';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { makeStablePosition, makeUnstablePosition, positionData } from 'engine-contracts/catalog';
 import { tenantIdOf } from 'engine-contracts';
-import { makeFakeParkSink, makeTestHost } from 'movement-engine/services/movement_engine/test_host';
+import { makeFakeParkSink, makeTestHost } from 'movement-engine/public/testing';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000020');
 
@@ -209,7 +206,6 @@ function webhookEvent(adapterType: string, payload: Record<string, unknown>): Tr
     payload,
   };
 }
-
 
 // ── Catalog / fixtures ───────────────────────────────────────────────────────
 
@@ -345,8 +341,6 @@ function resume(
     state,
   });
 }
-
-
 
 // ── Graph literals ───────────────────────────────────────────────────────────
 

@@ -35,18 +35,18 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { TeamId } from '../../../../../generated/kysely/core/Team';
 import type { EmailAdapter, EmailPayload } from '../../email';
-import type { Adapter } from 'movement-engine/services/translation_graph/adapter';
+import type { Adapter } from 'movement-engine/public/adapter';
 import type { SourcePosition } from 'engine-contracts/catalog';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
-import type { RemoteAdapterConfig } from 'movement-engine/services/translation_graph/adapters/remote';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
+import type { RemoteAdapterConfig } from 'movement-engine/public/modules';
 
 import {
   createEmailAdapter,
   EMAIL_ADAPTER_TYPE,
   EMAIL_RECORD_TYPE_ID,
 } from '../../email';
-import { RESOURCES_REFERENCE_FIELD_ID } from 'movement-engine/services/translation_graph/adapter';
-import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
+import { RESOURCES_REFERENCE_FIELD_ID } from 'movement-engine/public/adapter';
+import { containerAssociation } from 'movement-engine/public/adapter';
 import { makeUnstablePosition, positionData } from 'engine-contracts/catalog';
 
 
@@ -65,7 +65,7 @@ import {
   createRemoteAdapter,
   fetchRemoteManifest,
   RemoteAdapter,
-} from 'movement-engine/services/translation_graph/adapters/remote';
+} from 'movement-engine/public/modules';
 
 
 const TEST_TEAM_ID = '00000000-0000-0000-0000-000000000001' as TeamId;

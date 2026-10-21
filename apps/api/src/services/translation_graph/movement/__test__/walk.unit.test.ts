@@ -16,7 +16,7 @@ function describedTarget(target: WalkedNodeShape | undefined): WalkedDescribedNo
 
 import { makeUnstablePosition } from 'engine-contracts/catalog';
 
-import type { EdgesFromResult } from 'movement-engine/services/translation_graph/adapter';
+import type { EdgesFromResult } from 'movement-engine/public/adapter';
 import type { SchemaFieldDescriptor } from 'engine-contracts/catalog';
 
 const field = (over: Partial<SchemaFieldDescriptor>): SchemaFieldDescriptor => ({

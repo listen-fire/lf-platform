@@ -11,17 +11,13 @@ jest.mock('../../../../../lib/credentials', () => ({
   encryptToken: async () => '',
 }));
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
-
 jest.mock('../../../../../lib/recording', () => ({
   isTestHarnessTeam: () => false,
   injectFakeBaseUrl: (p: unknown) => p,
 }));
 
 import type { TeamId } from '../../../../../generated/kysely/core/Team';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 
 import { SlackAdapter } from '../index';
 

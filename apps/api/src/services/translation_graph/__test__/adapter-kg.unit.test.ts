@@ -34,7 +34,7 @@
 import type { NodeId } from '../../../generated/kysely/knowledge/Node';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { ResourceId } from '../../../generated/kysely/knowledge/Resource';
-import type { Resource, Fact } from 'movement-engine/services/translation_graph/adapter';
+import type { Resource, Fact } from 'movement-engine/public/adapter';
 import type { WireNodeType, WireOntology } from '../adapters/kg_client';
 
 // ---------------------------------------------------------------------------
@@ -385,10 +385,10 @@ import { KnowledgeGraphAdapter, KG_ADAPTER_TYPE, KG_RESOURCE_TYPE_ID, KG_RESOURC
 import { platformKgStore } from '../adapters/kg_store';
 import { logger } from 'movement-engine/public/log';
 import { persistKgResources } from '../adapters/knowledge_graph_resources';
-import { RESOURCES_REFERENCE_FIELD_ID, type ResourceFilter } from 'movement-engine/services/translation_graph/adapter';
+import { RESOURCES_REFERENCE_FIELD_ID, type ResourceFilter } from 'movement-engine/public/adapter';
 import { makeStablePosition } from 'engine-contracts/catalog';
 import { surfaceReadAdapter } from '@listen-fire/legacy-engine/services/movement_engine/kg';
-import { instanceSchemaFromDescriptors } from 'movement-engine/services/translation_graph/movement/schema_projection';
+import { instanceSchemaFromDescriptors } from 'movement-engine/public/catalog';
 import type { InstanceSchema } from 'movement-lang';
 
 /** A schema whose `Message` declares the knowledge graph's resources edge, as

@@ -11,10 +11,10 @@
 
 import type { EmailPayload } from '../../../adapters/email';
 import type { TeamId } from '../../../../../generated/kysely/core/Team';
-import type { Resource } from 'movement-engine/services/translation_graph/adapter';
+import type { Resource } from 'movement-engine/public/adapter';
 import type { ResourceId } from '../../../../../generated/kysely/knowledge/Resource';
 
-import { matchesResourceFilter, resolvePositionResources, stampResourceIds } from 'movement-engine/services/translation_graph/engine/files/resources';
+import { matchesResourceFilter, resolvePositionResources, stampResourceIds } from 'movement-engine/public/files';
 import { makeStablePosition } from 'engine-contracts/catalog';
 import { EmailAdapter, EMAIL_ADAPTER_TYPE, EMAIL_RECORD_TYPE_ID } from '../../../adapters/email';
 

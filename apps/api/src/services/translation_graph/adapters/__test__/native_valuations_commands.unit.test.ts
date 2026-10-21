@@ -4,11 +4,6 @@
 // create. Parallel to the down-edge parent-first creates covered by
 // `native_valuations_parent_first.unit.test.ts`.
 
-// logger → services/context → casl crashes at module load; stub it (mirrors
-// the sibling tests).
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 // Credentials load hits the DB + decrypt; stub the two seams so requireCreds
 // resolves to a fake connection without a database.
 jest.mock('../../../../lib/kysely', () => {

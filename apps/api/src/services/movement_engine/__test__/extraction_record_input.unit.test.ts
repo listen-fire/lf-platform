@@ -14,9 +14,6 @@ process.env.DATABASE_URL_TEST ??= 'postgresql://unit:unit@localhost:5432/unit-te
 process.env.DATABASE_URL_TEST_READONLY ??= 'postgresql://unit:unit@localhost:5432/unit-test-unused';
 process.env.SCRAPER_API_KEY ??= 'unit-test-unused';
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 jest.mock('../../context', () => ({
   unsafeCurrentContext: () => undefined,
   currentContext: () => ({ user: undefined, runAsync: async <T>(fn: () => Promise<T>) => fn() }),
@@ -25,13 +22,13 @@ jest.mock('../../context', () => ({
 import type { ExtractExpression, Span } from 'movement-lang';
 import { binding, type Binding } from '@listen-fire/legacy-engine/services/movement_engine/expression';
 import { buildExtractSpec, materializeExtract } from '@listen-fire/legacy-engine/services/movement_engine/extraction';
-import { NO_PROVENANCE } from 'movement-engine/services/movement_engine/provenance';
+import { NO_PROVENANCE } from 'movement-engine/public/provenance';
 import type {
   LlmCallInput,
   LlmCallResult,
 } from '../../translation_graph/engine/batched_extraction';
 import type { WriteRecord } from '@listen-fire/legacy-engine/services/movement_engine/expression';
-import { fileValue } from 'movement-engine/services/translation_graph/adapter';
+import { fileValue } from 'movement-engine/public/adapter';
 
 const span: Span = { start: { line: 1, col: 1 }, end: { line: 1, col: 1 } };
 

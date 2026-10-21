@@ -7,10 +7,6 @@ const mockRegisterToken = jest.fn();
 const mockUnregisterToken = jest.fn();
 const mockRevoke = jest.fn();
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
-
 jest.mock('../../../lib/recording', () => ({
   isTestHarnessTeam: () => false,
   injectFakeBaseUrl: (p: unknown) => p,

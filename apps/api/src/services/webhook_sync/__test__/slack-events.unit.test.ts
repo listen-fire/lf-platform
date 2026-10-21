@@ -8,10 +8,6 @@
 
 import crypto from "node:crypto";
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
-
 // external_service_credentials lookup — keyed by the `identifier` (teamId:<id>).
 const installByIdentifier = new Map<string, { id: string; team_id: string }>();
 jest.mock('../../../lib/kysely', () => {

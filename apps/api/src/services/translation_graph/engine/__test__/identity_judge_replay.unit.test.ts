@@ -11,8 +11,8 @@ import path from 'node:path';
 
 import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
 
-import { BudgetExhausted } from 'movement-engine/lib/run_cost';
-import type { ExternalRecordRef } from 'movement-engine/services/translation_graph/adapter';
+import { BudgetExhausted } from 'movement-engine/public/models';
+import type { ExternalRecordRef } from 'movement-engine/public/adapter';
 import type { UniquenessConstraints } from 'engine-contracts/uniqueness';
 
 import { execute } from '../../../../lib/prompts/execute';

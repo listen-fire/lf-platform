@@ -8,10 +8,6 @@
 // every entity. A record fetched from the REST API is already a flat row and
 // must still read directly.
 
-// logger → services/context → casl crashes at module load; stub it.
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 

@@ -32,19 +32,19 @@ import type {
   WriteResult,
   DedupRules,
   FilterTranslationResult,
-} from 'movement-engine/services/translation_graph/adapter';
-import type { FieldEvidence } from 'movement-engine/services/translation_graph/adapter';
+} from 'movement-engine/public/adapter';
+import type { FieldEvidence } from 'movement-engine/public/adapter';
 import type { SchemaEntryPoint, SchemaTypeDescriptor, SourcePosition } from 'engine-contracts/catalog';
-import type { TriggerType } from 'movement-engine/services/translation_graph/triggers/types';
+import type { TriggerType } from 'movement-engine/public/adapter';
 import type { Expression } from 'movement-lang/expression/types';
-import type { RemoteAdapter, RemoteAdapterConfig } from 'movement-engine/services/translation_graph/adapters/remote';
+import type { RemoteAdapter, RemoteAdapterConfig } from 'movement-engine/public/modules';
 import type { TeamId } from '../../../../../generated/kysely/core/Team';
 
 import { BaseAdapter } from 'module-kit/adapter/base';
 import { naturalName } from 'module-kit/adapter/name_resolution';
 import { createAdapterProtocolHandler } from 'module-kit';
-import { createRemoteAdapter, fetchRemoteManifest } from 'movement-engine/services/translation_graph/adapters/remote';
-import { unsupportedAssociation, writeParentLinks } from 'movement-engine/services/translation_graph/adapter';
+import { createRemoteAdapter, fetchRemoteManifest } from 'movement-engine/public/modules';
+import { unsupportedAssociation, writeParentLinks } from 'movement-engine/public/adapter';
 
 /** The team the adapter's calls are made for (sent as `x-listen-fire-team`). */
 const CONFIG_TEAM_ID = '00000000-0000-4000-8000-0000000000c1' as TeamId;

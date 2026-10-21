@@ -12,7 +12,7 @@
 //   - the legacy generic list-entry type staying UNWRITABLE.
 
 
-import { fileValue, type FileValue } from 'movement-engine/services/translation_graph/adapter';
+import { fileValue, type FileValue } from 'movement-engine/public/adapter';
 import type { MutationContext } from 'engine-contracts/mutation_context';
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 

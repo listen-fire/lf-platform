@@ -7,7 +7,7 @@ import {
   postRpc,
   RemoteTransportError,
   RemoteProtocolError,
-} from 'movement-engine/services/translation_graph/protocol/client';
+} from 'movement-engine/public/adapter';
 
 function mockFetchOnce(impl: (url: string, init: RequestInit) => Response | Promise<Response>) {
   const fn = jest.fn(impl);

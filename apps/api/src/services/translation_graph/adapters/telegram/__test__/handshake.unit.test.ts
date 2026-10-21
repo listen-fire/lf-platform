@@ -5,10 +5,6 @@
 // `globalQb` whose `.transaction()` runs the callback over the same store — so
 // the atomicity, one-time, expiry and primary-email branches are all real.
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
-
 // ── In-memory tables ──────────────────────────────────────────────────────────
 interface TokenRow {
   id: string;

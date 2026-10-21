@@ -245,11 +245,11 @@ const SITES: Site[] = [
     cover: { by: 'unreachable', why: "the trigger type comes from dispatch, not the program; nothing in apps/api emits the two unhandled types" } },
 ];
 
-/** The engine lives in its package, the TypeScript engine (versions 1–4) in
- *  the platform's legacy engine package; this app keeps the host side. All
- *  are scanned. */
+/** The TypeScript engine (versions 1–4), which throws MOVENG_UNSUPPORTED,
+ *  lives in the platform's legacy engine package; this app keeps the host
+ *  side. Both are scanned. The engine package is the language's, installed
+ *  from the registry in the platform, so its source is not read here. */
 const ENGINE_DIRS = [
-  path.resolve(__dirname, '../../../../../../packages/movement-engine/services/movement_engine'),
   path.resolve(__dirname, '../../../../../../packages/legacy-engine/services/movement_engine'),
   path.resolve(__dirname, '..'),
 ];

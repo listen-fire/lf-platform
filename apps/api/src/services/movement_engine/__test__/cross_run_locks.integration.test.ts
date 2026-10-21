@@ -32,9 +32,6 @@ jest.mock('../../../lib/kysely', () => ({
   getCoreQb: jest.fn(() => mockChainable()),
 }));
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 jest.mock('../../context', () => ({
   unsafeCurrentContext: () => undefined,
   currentContext: () => ({
@@ -74,7 +71,7 @@ import { randomUUID } from 'node:crypto';
 
 import { Client } from 'pg';
 
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { tenantIdOf } from 'engine-contracts';
 import type { InstanceSchema } from 'movement-lang';
 import type { MovementTransformInvoker } from '@listen-fire/legacy-engine/services/movement_engine/extraction';
@@ -87,11 +84,11 @@ import {
   type Adapter,
   type ExternalRecordRef,
   type RuntimeCapabilities,
-} from 'movement-engine/services/translation_graph/adapter';
+} from 'movement-engine/public/adapter';
 import { makeStablePosition, positionData } from 'engine-contracts/catalog';
-import { InMemoryWriteLocks, type WriteLocks } from 'movement-engine/services/write_locks/write_locks';
+import { InMemoryWriteLocks, type WriteLocks } from 'movement-engine/public/write-locks';
 import { PostgresWriteLocks, type PostgresWriteLockHolder } from '../../write_locks/postgres';
-import { credentialIdsFor, makeTestHost } from 'movement-engine/services/movement_engine/test_host';
+import { credentialIdsFor, makeTestHost } from 'movement-engine/public/testing';
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 

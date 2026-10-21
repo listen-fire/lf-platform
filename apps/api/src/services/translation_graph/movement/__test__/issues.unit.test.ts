@@ -52,9 +52,6 @@ jest.mock('../../../../lib/kysely', () => {
 });
 
 jest.mock('../../../../lib/slack', () => ({ sendSlackNotification: jest.fn(async () => {}) }));
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 
 import { sendSlackNotification } from '../../../../lib/slack';
 import {

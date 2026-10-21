@@ -17,7 +17,7 @@ import type {
   ExtractInvocation,
   ExtractValueInvocation,
 } from '../engine/evaluator/batcher';
-import type { Resource } from 'movement-engine/services/translation_graph/adapter';
+import type { Resource } from 'movement-engine/public/adapter';
 
 import {
   BatchedExtractionBatcher,

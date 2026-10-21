@@ -32,7 +32,7 @@ jest.mock('../../translation_graph/adapters/resolve', () => {
 const mockFetched: string[] = [];
 jest.mock('../../translation_graph/movement/transform_invoker', () => {
   const actual = jest.requireActual('../../translation_graph/movement/transform_invoker');
-  const runSpend = jest.requireActual('movement-engine/lib/run_spend');
+  const runSpend = jest.requireActual('movement-engine/public/models');
   return {
     ...actual,
     // The host asks `transformInvokerFor` for a run's invoker (a plugin on the
@@ -53,7 +53,7 @@ jest.mock('../../translation_graph/movement/transform_invoker', () => {
 let mockJudgements = 0;
 jest.mock('../../../lib/prompts/execute', () => {
   const actual = jest.requireActual('../../../lib/prompts/execute');
-  const runSpend = jest.requireActual('movement-engine/lib/run_spend');
+  const runSpend = jest.requireActual('movement-engine/public/models');
   return {
     ...actual,
     async execute(name: string, ...rest: unknown[]) {
@@ -81,12 +81,12 @@ import { runCatalogSnapshotForTeam, snapshotOverManifests, staticCatalogFromMani
 import { resolveAdapter } from '../../translation_graph/adapters/resolve';
 import { mintMovementVersionIfChanged } from '../../translation_graph/movement/version_store';
 import { positionData } from 'engine-contracts/catalog';
-import type { Adapter, RuntimeCapabilities } from 'movement-engine/services/translation_graph/adapter';
-import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
+import type { Adapter, RuntimeCapabilities } from 'movement-engine/public/adapter';
+import { containerAssociation } from 'movement-engine/public/adapter';
 import type { Catalog, CatalogSnapshot, InstanceSchema, PositionSchema } from 'movement-lang';
 import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
 import { eventAddressKey } from 'legacy-lang';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { postgresRunHostStore } from '../run_host_store';
 
 const mockedCatalog = runCatalogSnapshotForTeam as jest.Mock;

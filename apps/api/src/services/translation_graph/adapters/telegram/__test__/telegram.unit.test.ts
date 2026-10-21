@@ -12,9 +12,9 @@
 //   7. listEventTypes — parse→discriminate pin (both doors use the tagged mapper).
 
 import type { TeamId } from '../../../../../generated/kysely/core/Team';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import type { TelegramUpdate } from '@listen-fire/telegram/types';
-import type { FileRef } from 'movement-engine/services/translation_graph/adapter';
+import type { FileRef } from 'movement-engine/public/adapter';
 
 import { makeStablePosition, makeUnstablePosition } from 'engine-contracts/catalog';
 
@@ -22,10 +22,6 @@ import { makeStablePosition, makeUnstablePosition } from 'engine-contracts/catal
 // The credential read (getQb → external_service_credentials) and decryption are
 // mocked so the adapter constructs a real `TelegramClient` from a fixed bot
 // token without a DB.
-
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 
 jest.mock('../../../../../lib/recording', () => ({
   isTestHarnessTeam: () => false,
@@ -90,7 +86,7 @@ import {
   type TelegramMessagePayload,
 } from '../index';
 import { TELEGRAM_LINKED_USER_TYPE_ID } from '@listen-fire/telegram/types';
-import { discriminateEvent } from 'movement-engine/services/translation_graph/engine/inbound/discriminate';
+import { discriminateEvent } from 'movement-engine/public/inbound';
 import { webhookEventToDiscriminable } from '../../../../webhook_sync/event_conversion';
 
 const TEAM_ID = 'team-1' as TeamId;

@@ -6,11 +6,6 @@
 // write: an Investment converges an investee `Investments` path and an
 // investor `Investments Made` path).
 
-// logger → services/context → casl crashes at module load; stub it (mirrors
-// the sibling tests).
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 // Credentials load hits the DB + decrypt; stub the two seams so requireCreds
 // resolves to a fake connection without a database.
 jest.mock('../../../../lib/kysely', () => {
@@ -38,8 +33,7 @@ import {
   createNativeValuationsAdapter,
 } from '../native_valuations';
 import { ADAPTER_META_TYPE_ID, META_RECORD_TYPE, makeStablePosition } from 'engine-contracts/catalog';
-import { instanceSchemaFromDescriptors } from 'movement-engine/services/translation_graph/movement/schema_projection';
-
+import { instanceSchemaFromDescriptors } from 'movement-engine/public/catalog';
 
 const adapter = () =>
   createNativeValuationsAdapter({ teamId: 'team-1' as TeamId, credentialsId: 'cred-1' });

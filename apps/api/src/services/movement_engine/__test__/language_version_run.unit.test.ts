@@ -18,17 +18,18 @@ import {
 } from 'movement-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import { runMovement } from '@listen-fire/legacy-engine/dispatch';
-import { currentLanguageVersion, hostSegments, segmentScopedCalls } from 'movement-engine/services/translation_graph/segment_scope';
-import { MovementEngineError } from 'movement-engine/services/movement_engine/errors';
+import { currentLanguageVersion } from 'movement-engine/public/adapter-support';
+import { hostSegments, segmentScopedCalls } from 'movement-engine/public/host';
+import { MovementEngineError } from 'movement-engine/public/errors';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import { diagnoseMovementSource } from '../../translation_graph/movement/authoring';
-import type { Adapter, RuntimeCapabilities, UpdateInput } from 'movement-engine/services/translation_graph/adapter';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+import type { Adapter, RuntimeCapabilities, UpdateInput } from 'movement-engine/public/adapter';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { META_RECORD_TYPE, makeStablePosition } from 'engine-contracts/catalog';
 import { tenantIdOf } from 'engine-contracts';
 import { createManualAdapter } from '../../translation_graph/adapters/manual';
-import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
-import { makeTestHost } from 'movement-engine/services/movement_engine/test_host';
+import { containerAssociation } from 'movement-engine/public/adapter';
+import { makeTestHost } from 'movement-engine/public/testing';
 import { teamOfTenant } from '../../translation_graph/movement/tenant';
 
 // A release other than this one, so the deprecated path is reachable while

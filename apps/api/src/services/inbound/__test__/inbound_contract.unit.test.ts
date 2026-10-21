@@ -9,10 +9,6 @@ import express from 'express';
 
 import type { AddressInfo } from 'node:net';
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
-
 import { INBOUND_CONTRACT_CASES, memoryInboundStores, type InboundContractBackend } from 'movement-engine/public/inbound';
 
 import { createAdapterDoorsRouter } from '../../../interfaces/rest/adapterDoors';

@@ -69,13 +69,13 @@ import {
   WHATSAPP_TYPING_TYPE,
   type WhatsappPayload,
 } from '../adapters/whatsapp';
-import { fileValue, RESOURCES_REFERENCE_FIELD_ID } from 'movement-engine/services/translation_graph/adapter';
+import { fileValue, RESOURCES_REFERENCE_FIELD_ID } from 'movement-engine/public/adapter';
 import { installMemoryDocumentStore } from '../engine/files/__test__/memory_document_store';
 import { normalizeWhatsappPhone } from '@listen-fire/whatsapp/phone';
-import { discriminateEvent } from 'movement-engine/services/translation_graph/engine/inbound/discriminate';
+import { discriminateEvent } from 'movement-engine/public/inbound';
 import { whatsappInboundEvents } from '@listen-fire/whatsapp/inbound';
 import { makeStablePosition, makeUnstablePosition } from 'engine-contracts/catalog';
-import { instanceSchemaFromDescriptors } from 'movement-engine/services/translation_graph/movement/schema_projection';
+import { instanceSchemaFromDescriptors } from 'movement-engine/public/catalog';
 
 const TEAM_ID = 'team-1' as TeamId;
 

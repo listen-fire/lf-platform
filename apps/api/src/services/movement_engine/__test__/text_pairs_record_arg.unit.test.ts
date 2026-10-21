@@ -35,9 +35,6 @@ jest.mock('../../../lib/kysely', () => ({
   getCoreQb: jest.fn(() => mockChainable()),
 }));
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 jest.mock('../../context', () => ({
   unsafeCurrentContext: () => undefined,
   currentContext: () => ({
@@ -63,16 +60,15 @@ jest.mock('@listen-fire/kg/manifest', () => ({
     }),
 }));
 
-
 import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import type { ExtractCallLlmClient } from '@listen-fire/legacy-engine/services/movement_engine/extraction_call';
 
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
-import { containerAssociation, type Adapter, type RuntimeCapabilities } from 'movement-engine/services/translation_graph/adapter';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+import { containerAssociation, type Adapter, type RuntimeCapabilities } from 'movement-engine/public/adapter';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { positionData } from 'engine-contracts/catalog';
 import { tenantIdOf } from 'engine-contracts';
-import { makeTestHost } from 'movement-engine/services/movement_engine/test_host';
+import { makeTestHost } from 'movement-engine/public/testing';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000041');
 

@@ -33,10 +33,6 @@ jest.mock('../../../../lib/kysely', () => {
   };
 });
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
-
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 
 import { Context, currentContext, unsafeCurrentContext } from '../../../context';

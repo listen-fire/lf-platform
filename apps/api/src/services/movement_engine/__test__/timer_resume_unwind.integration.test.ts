@@ -48,12 +48,12 @@ import { runCatalogSnapshotForTeam, snapshotOverManifests, staticCatalogFromMani
 import { resolveAdapter } from '../../translation_graph/adapters/resolve';
 import { mintMovementVersionIfChanged } from '../../translation_graph/movement/version_store';
 import { makeStablePosition, positionData } from 'engine-contracts/catalog';
-import type { Adapter, RuntimeCapabilities } from 'movement-engine/services/translation_graph/adapter';
-import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
+import type { Adapter, RuntimeCapabilities } from 'movement-engine/public/adapter';
+import { containerAssociation } from 'movement-engine/public/adapter';
 import type { Catalog, CatalogSnapshot, InstanceSchema, LanguageVersion, PositionSchema } from 'movement-lang';
 import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
 import { eventAddressKey } from 'legacy-lang';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { resumeTimerHandler } from '../timer_resume';
 import { testWorkContext } from '../../../test/harness/work';
 

@@ -23,10 +23,6 @@ jest.mock('../inbound_door', () => ({
   routeInboundEmail: (...args: unknown[]) => routeInboundEmail(...args),
 }));
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { warn: () => undefined, error: () => undefined, info: () => undefined },
-}));
-
 import { fetchResendEmailPayload, verifyResendInboundRequest } from '../resend_inbound';
 
 const SECRET = 'whsec_ZGV2LWxvb3AtcmVzZW5kLXNlY3JldA==';

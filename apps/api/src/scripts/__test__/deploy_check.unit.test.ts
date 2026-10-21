@@ -1,9 +1,6 @@
 // The summary `deploy/up.sh` prints: outcomes by automation name.
 
 jest.mock('../../services', () => ({}));
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 jest.mock('../../services/translation_graph/movement/language_upgrade', () => ({
   DEPLOY_CHECK_OUTCOMES: ['upgradable', 'current', 'warned', 'refused', 'unverified'],
   latestDeployCheckSummary: jest.fn(),

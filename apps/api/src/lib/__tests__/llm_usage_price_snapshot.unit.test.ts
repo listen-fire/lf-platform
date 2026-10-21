@@ -6,7 +6,6 @@ import { join } from 'node:path';
 // into the price table (now @lf/anthropic's prices.json); a price changes only by regenerating it
 // on purpose (PRICE_SNAPSHOT_REGENERATE=1) and reading the diff.
 
-jest.mock('movement-engine/services/logger', () => ({ logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
 jest.mock('../kysely', () => ({ getQb: () => ({}) }));
 
 import { calculateCostMicrodollars } from '../llm_usage';

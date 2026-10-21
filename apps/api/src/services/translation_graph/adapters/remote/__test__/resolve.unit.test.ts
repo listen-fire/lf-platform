@@ -12,7 +12,7 @@
 // (remote_adapter row), the credential decrypt, the kysely qb (credential
 // row fetch), and `createRemoteAdapter` (so no wire/fetch is exercised).
 
-import type { Adapter } from 'movement-engine/services/translation_graph/adapter';
+import type { Adapter } from 'movement-engine/public/adapter';
 
 // ── Mocks ────────────────────────────────────────────────────────────────
 
@@ -64,8 +64,8 @@ jest.mock('../../../../../lib/kysely', () => {
 });
 
 const mockCreateRemoteAdapter = jest.fn();
-jest.mock('movement-engine/services/translation_graph/adapters/remote', () => ({
-  ...jest.requireActual('movement-engine/services/translation_graph/adapters/remote'),
+jest.mock('movement-engine/public/modules', () => ({
+  ...jest.requireActual('movement-engine/public/modules'),
   createRemoteAdapter: (input: unknown) => mockCreateRemoteAdapter(input),
 }));
 

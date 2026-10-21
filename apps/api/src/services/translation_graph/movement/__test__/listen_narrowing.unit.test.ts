@@ -25,7 +25,7 @@
 import { type InstanceSchema } from 'movement-lang';
 import { eventAddressKey, type EventAddressRef } from 'legacy-lang';
 
-import type { ListenConfigKey } from 'movement-engine/services/translation_graph/adapter';
+import type { ListenConfigKey } from 'movement-engine/public/adapter';
 import type { SchemaTypeDescriptor } from 'engine-contracts/catalog';
 
 import { narrowEventPositions } from '../listen_narrowing';

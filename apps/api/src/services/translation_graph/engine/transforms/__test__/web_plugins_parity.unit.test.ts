@@ -21,9 +21,6 @@ jest.mock('../../../../../lib/agent/tools/pitch_deck_url', () => require('./pari
 jest.mock('../../../../../lib/agent/tools/extract_document_text', () => require('./parity/stub_services').extractTextModule);
 jest.mock('../../../../../adapters/registry', () => require('./parity/stub_services').registryModule);
 jest.mock('../../../../../lib/llm_usage', () => ({ runFields: () => ({}), recordLlmUsage: () => undefined }));
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
-}));
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';

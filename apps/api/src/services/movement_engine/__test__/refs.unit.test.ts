@@ -51,9 +51,6 @@ jest.mock('../../../lib/kysely', () => ({
   getCoreQb: jest.fn(() => mockChainable()),
 }));
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 jest.mock('../../context', () => ({
   unsafeCurrentContext: () => undefined,
   currentContext: () => ({
@@ -96,8 +93,8 @@ import type {
   ParentLink,
   ResolveEntityInput,
   WriteInput,
-} from 'movement-engine/services/translation_graph/adapter';
-import { singleParentLink } from 'movement-engine/services/translation_graph/adapter';
+} from 'movement-engine/public/adapter';
+import { singleParentLink } from 'movement-engine/public/adapter';
 import type {
   SchemaEntryPoint,
   SchemaTypeDescriptor,
@@ -109,11 +106,11 @@ import {
   AdapterNameDriftError,
   type AdapterIntrospection,
 } from 'module-kit/adapter/name_resolution';
-import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
-import { instanceSchemaFromDescriptors } from 'movement-engine/services/translation_graph/movement/schema_projection';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+import { containerAssociation } from 'movement-engine/public/adapter';
+import { instanceSchemaFromDescriptors } from 'movement-engine/public/catalog';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { tenantIdOf } from 'engine-contracts';
-import { makeTestHost } from 'movement-engine/services/movement_engine/test_host';
+import { makeTestHost } from 'movement-engine/public/testing';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000010');
 const KG_ADAPTER_TYPE = 'kg';
