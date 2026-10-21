@@ -19,7 +19,7 @@ A working example is in [`examples/embed-saas`](../examples/embed-saas): a small
 | `@listen-fire/file-text` | A file's text: PDF, decks, spreadsheets, audio. The file-reading slot's default module; leave it out and an `extract` over a file is refused by the file's name. Optional. |
 | `@lf/<name>` | Ready-made modules: `@lf/attio`, `@lf/slack`, `@lf/google-sheets`, `@lf/web`, and the rest. |
 
-Every package has the same version as the engine. Node 22 or later. With TypeScript, use `moduleResolution` `node16`, `nodenext` or `bundler` (plain `node` works too, through the packages' `typesVersions`).
+Every package has the same version as the engine. The TypeScript engine is not part of the kit: the kit runs language version 5 and later. Node 22 or later. With TypeScript, use `moduleResolution` `node16`, `nodenext` or `bundler` (plain `node` works too, through the packages' `typesVersions`).
 
 ```sh
 npm install @listen-fire/engine @listen-fire/engine-contracts @listen-fire/module-kit

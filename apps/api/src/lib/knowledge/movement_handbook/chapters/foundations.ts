@@ -20,16 +20,6 @@ into other systems' graphs, moving data between them. Almost everything else in
 this handbook is a *consequence* of this, not a separate rule to memorise: when
 something reads like a special case, look for the position and the edge.
 
-### a-shareable-picture
-
-Every automation carries a picture — a link anyone holding it can open to see
-its structure: what starts it, the steps it runs, and the records it touches.
-Holding the link is enough to view it; no login is required, and opening it
-changes nothing. It shows structure only, never what a run has actually
-captured or written, and it lives only as long as the automation it pictures —
-delete the automation and the link goes with it (it can also be revoked on its
-own, without deleting anything).
-
 ### language-versions
 
 Read the two-word name on an automation — "Quiet Heron", "Bright Otter", the current "Dancing Wren" — as

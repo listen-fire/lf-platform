@@ -157,10 +157,10 @@ export const CONCEPTS: readonly FrontEntry[] = [
   },
 ];
 
-/** Agent-facing, so it names the tools — the one part of the page that does. */
+/** Agent-facing, so it names the tools: the `lf` commands first, then the platform's spelling of each. */
 export const BUILD_LOOP = `### build-loop
 
-getStarted → write → saveAutomation (checks first; saves nothing with errors) → runAutomation → checkRun. No chapters: searchLanguage answers lookups, describeConnection details one system. Batch independent calls in one turn.`;
+\`lf check\`, \`lf run\`, \`lf runs show\`; on the platform: getStarted, saveAutomation (checks first; saves nothing with errors), runAutomation, checkRun. No chapters: searchLanguage answers lookups, describeConnection details one system. Batch calls.`;
 
 function renderExample(example: FrontExample): string {
   return `\n\`\`\`\n${exampleText(example)}\n\`\`\``;

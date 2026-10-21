@@ -30,5 +30,15 @@ go (the route is given for reference). Here is what each one is for.
 
 When a user asks "where do I…", answer with the sidebar label above and
 its route. If you are unsure a page still exists, say where it was rather
-than inventing a new one.`,
+than inventing a new one.
+
+### a-shareable-picture
+
+Every automation carries a picture — a link anyone holding it can open to see
+its structure: what starts it, the steps it runs, and the records it touches.
+Holding the link is enough to view it; no login is required, and opening it
+changes nothing. It shows structure only, never what a run has actually
+captured or written, and it lives only as long as the automation it pictures —
+delete the automation and the link goes with it (it can also be revoked on its
+own, without deleting anything).`,
 };

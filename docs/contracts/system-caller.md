@@ -4,12 +4,12 @@ Version: 1
 
 The system endpoints (`/api/v1/system/*`, the automations drain tick first) are called by an installation's own infrastructure: a scheduler, a push subscription, an operator's script. Who may call them is decided by **system caller verifiers**, asked in turn for each request. The first that accepts decides the caller; when none does, the request is refused `403`, its body naming each verifier's reason, and the refusal is logged at most once a minute per caller address and verifier.
 
-Two verifiers ship (`apps/api/src/services/system_auth/`), chosen by `SYSTEM_AUTH_MODES` (`deploy/SELF_HOSTING.md`):
+Two verifiers are the ones a host is expected to ship, and a host chooses among them by its own configuration (lf-platform does it with `SYSTEM_AUTH_MODES`, described in its self-hosting runbook):
 
 - **`api_key`** (the default): an API key holding the `system` scope, or `*`. The host's own authentication verifies the key, and the verifier reads that verdict (`hostCredential`). The caller is the key, and the routes that act in a tenant act as its owner.
 - **`oidc`**: an OpenID Connect identity token as the bearer, verified against the issuer's published keys: signature (asymmetric algorithms only), a required expiry and any `nbf` (a minute's clock tolerance), issuer, audience, and a subject (`sub`, or a verified `email`) on the allow-list. When the configured issuer is Google's (`https://accounts.google.com`), `iss` may be either spelling Google uses, `https://accounts.google.com` or `accounts.google.com`.
 
-An embedder adds its own with `registerSystemCallerVerifier` before the server serves. Registering any verifier other than `api_key`, an embedder's included, turns on the deferral described under the shape below. This document is the interface it implements: an in-process one, so there is nothing on the wire to carry a version; the version is what an embedder's verifier states it was written against.
+An embedder adds its own before the server serves (lf-platform: `registerSystemCallerVerifier`, in `apps/api/src/services/system_auth/`). Registering any verifier other than `api_key`, an embedder's included, turns on the deferral described under the shape below. This document is the interface it implements: an in-process one, so there is nothing on the wire to carry a version; the version is what an embedder's verifier states it was written against.
 
 ## Versions
 

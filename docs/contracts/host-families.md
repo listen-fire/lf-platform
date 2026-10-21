@@ -8,7 +8,7 @@ This document is the host contract, frozen as JSON. Every host call is one reque
 
 Every call is made inside a segment. Each `segment.open` opens exactly one segment and answers its id; every other call names that id as `segmentId`. The host maps the segment to the run and the team it was opened for, so no request repeats the team. Every `segment.open` carries the version of this contract the engine speaks (`hostFamiliesVersion`), and a host refuses a version it does not serve (see [Versions](#versions)).
 
-Two tests hold the contract to this document (`movement_engine/__test__/seam_guard.unit.test.ts`):
+Two tests hold the contract to this document (lf-platform's, `apps/api/src/services/movement_engine/__test__/seam_guard.unit.test.ts`):
 
 - **The import rules.** An engine file that starts importing host code fails.
 - **The round trip.** Every method of every family is wrapped in a JSON round trip (each request and answer serialised and parsed, anything JSON cannot carry refused by path), and representative programs reach every method. The set of methods is the manifest `HOST_FAMILIES` (`packages/engine-contracts/host_families.ts`), which the compiler holds equal to `EngineHost` (`host.ts`), and which the test holds equal to the method headings below. A third test holds `HOST_FAMILIES_VERSION` (`packages/engine-contracts/versions.ts`) equal to the version at the top of this document.
