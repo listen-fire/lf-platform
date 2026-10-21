@@ -30,12 +30,12 @@ pub struct Listen {
 
 /// `configValueOf`: a listen config value, statically evaluated; anything
 /// that does not reduce to a static value keeps its raw text.
-fn config_value_of(arg: &NamedArg) -> Js {
+fn config_value_of(arg: &NamedArg, language_version: u32) -> Js {
     let raw = external_text(&arg.value.raw).into_owned();
     if arg.is_type == Some(true) {
         return Js::Str(raw.trim().to_string());
     }
-    let lowered = movement_parser::parse_expression(&arg.value.raw, 0)
+    let lowered = movement_parser::parse_expression(&arg.value.raw, language_version)
         .ok()
         .and_then(|tree| movement_parser::lowering::lower_expression_json(&tree, &arg.value.raw).ok());
     let Some(lowered) = lowered else { return Js::Str(raw.trim().to_string()) };
@@ -111,7 +111,7 @@ pub fn collect_listens(files: &[MovementFile], language_version: u32) -> Vec<Lis
             let Some(adapter) = constructions.get(&listen.instance).cloned().or(unit) else { continue };
             let mut config = Obj::new();
             for arg in &listen.config {
-                config.insert(arg.name.clone(), config_value_of(arg));
+                config.insert(arg.name.clone(), config_value_of(arg, language_version));
             }
             listens.push(Listen {
                 file: index,

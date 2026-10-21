@@ -387,12 +387,12 @@ mod tests {
 
     use super::*;
 
-    const SOURCE: &str = "import { attio } from adapters\ncrm = attio()\nfunction f(d: <Deal>) {\n  write crm-[:companies]-> { ...d }\n}\nmovement m(e: <crm>) {\n  x = 1\n}";
+    const SOURCE: &str = "import { attio } from adapters\ncrm = connect attio\nfunction f(d: <Deal>) {\n  write crm-[:companies]-> { ...d }\n}\nfunction m(e: <crm>) {\n  x = 1\n}";
 
     #[test]
     fn a_call_nested_in_an_expression_has_a_place_of_its_own() {
-        let source = "movement m() {\n  x = FIRST(MAP([1], (v) => {\n    g = graph { ...v }\n    return g\n  }))\n}";
-        let root = parse(source, 3).unwrap();
+        let source = "function m() {\n  x = first(map([1], (v) => {\n    g = graph { ...v }\n    return g\n  }))\n}";
+        let root = parse(source, 5).unwrap();
         let slot = "/statements/0/body/0/value/call/expression";
         let raw = root.tree.pointer(&format!("{slot}/raw")).and_then(Json::as_str).unwrap().to_string();
         let nested = format!("{slot}/nested/6-{}", raw.encode_utf16().count() - 1);
@@ -402,7 +402,7 @@ mod tests {
         // The checker's stamp on it lands there, and a park names the
         // closure by the same place.
         let answer = json!({ "diagnostics": [], "stamps": [{ "path": spread, "copy": { "kind": "map" } }] });
-        let checked = join_check(root, &answer, 3).unwrap();
+        let checked = join_check(root, &answer, 5).unwrap();
         assert_eq!(checked.root.stamps.get(&spread), Some(&Stamp::Copy(json!({ "kind": "map" }))));
         assert!(matches!(checked.code(&format!("{nested}/value/call/args/1/closure")), Some(crate::code::CodeAt::Closure(_))));
         // An extent that is no call there is no node.
@@ -411,13 +411,13 @@ mod tests {
 
     #[test]
     fn stamps_land_on_the_nodes_their_paths_name() {
-        let root = parse(SOURCE, 3).unwrap();
+        let root = parse(SOURCE, 5).unwrap();
         assert_eq!(root.tree.pointer("/statements/2/body/0/write/spreads/0/source"), Some(&json!("d")));
         let answer = json!({
             "diagnostics": [{ "code": "MOV_X", "severity": "warning" }],
             "stamps": [{ "path": "/statements/2/body/0/write/spreads/0", "spreadFields": ["name", "stage"] }],
         });
-        let checked = join_check(root, &answer, 3).unwrap();
+        let checked = join_check(root, &answer, 5).unwrap();
         assert_eq!(
             checked.root.stamps.get("/statements/2/body/0/write/spreads/0"),
             Some(&Stamp::SpreadFields(vec!["name".into(), "stage".into()]))
@@ -427,23 +427,23 @@ mod tests {
 
     #[test]
     fn a_reference_stamp_lands_on_a_graph_entry() {
-        let source = "import { attio } from adapters\ncrm = attio()\nmovement m(e: <crm>) {\n  if 1 == 1 {\n    g = graph { owner: e }\n  }\n}";
+        let source = "import { attio } from adapters\ncrm = connect attio\nfunction m(e: <crm>) {\n  if (1 == 1) {\n    g = graph { owner: e }\n  }\n}";
         let path = "/statements/2/body/0/arms/0/body/0/value/node/entries/0";
         let answer = json!({ "diagnostics": [], "stamps": [{ "path": path, "reference": true }] });
-        let checked = join_check(parse(source, 3).unwrap(), &answer, 3).unwrap();
+        let checked = join_check(parse(source, 5).unwrap(), &answer, 5).unwrap();
         assert_eq!(checked.root.stamps.get(path), Some(&Stamp::Reference));
         let spread = json!({ "diagnostics": [], "stamps": [{ "path": "/statements/2/body/0/arms/0/body/0/value/node", "reference": true }] });
-        assert!(join_check(parse(source, 3).unwrap(), &spread, 3).unwrap_err().contains("does not fit"));
+        assert!(join_check(parse(source, 5).unwrap(), &spread, 5).unwrap_err().contains("does not fit"));
     }
 
     #[test]
     fn a_stamp_that_does_not_fit_is_refused() {
         let wrong_kind = json!({ "diagnostics": [], "stamps": [{ "path": "/statements/2/body/0/write/spreads/0", "copy": {} }] });
-        assert!(join_check(parse(SOURCE, 3).unwrap(), &wrong_kind, 3).unwrap_err().contains("does not fit"));
+        assert!(join_check(parse(SOURCE, 5).unwrap(), &wrong_kind, 5).unwrap_err().contains("does not fit"));
         let nowhere = json!({ "diagnostics": [], "stamps": [{ "path": "/statements/9", "spreadFields": [] }] });
-        assert_eq!(join_check(parse(SOURCE, 3).unwrap(), &nowhere, 3).unwrap_err(), "no node at /statements/9");
+        assert_eq!(join_check(parse(SOURCE, 5).unwrap(), &nowhere, 5).unwrap_err(), "no node at /statements/9");
         let unlinked = json!({ "diagnostics": [], "stamps": [{ "file": "lib", "path": "", "spreadFields": [] }] });
-        assert!(join_check(parse(SOURCE, 3).unwrap(), &unlinked, 3).unwrap_err().contains("unlinked file"));
+        assert!(join_check(parse(SOURCE, 5).unwrap(), &unlinked, 5).unwrap_err().contains("unlinked file"));
     }
 
     #[test]
@@ -456,7 +456,7 @@ mod tests {
             },
             "stamps": [],
         });
-        let checked = join_check(parse(SOURCE, 3).unwrap(), &answer, 3).unwrap();
+        let checked = join_check(parse(SOURCE, 5).unwrap(), &answer, 5).unwrap();
         assert_eq!(checked.imports[0].declaration, "/statements/0");
         let (deals, _) = &checked.files["deals"];
         assert_eq!(deals.tree.pointer("/statements/0/name"), Some(&json!("Deal")));
@@ -470,8 +470,8 @@ mod tests {
 
     #[test]
     fn the_declarations_are_the_files_shapes_types_and_plugins_by_local_name() {
-        let source = "import { attio } from adapters\nimport { fetch_url as fetch, research } from plugins\ncrm = attio()\ntype Stage = <\"lead\" | \"won\">\nnode Lead: \"a lead\" {\n  name: <text> \"its name\"\n  stage: <Stage>\n  node founder: \"each founder\" { first: <text> }\n}\nmovement m(e: <crm>) {\n  x = 1\n}";
-        let checked = join_check(parse(source, 3).unwrap(), &json!({ "diagnostics": [], "stamps": [] }), 3).unwrap();
+        let source = "import { attio } from adapters\nimport { fetch_url as fetch, research } from plugins\ncrm = connect attio\ntype Stage = <\"lead\" | \"won\">\nnode Lead: \"a lead\" {\n  name: <text> \"its name\"\n  stage: <Stage>\n  node founder: \"each founder\" { first: <text> }\n}\nfunction m(e: <crm>) {\n  x = 1\n}";
+        let checked = join_check(parse(source, 5).unwrap(), &json!({ "diagnostics": [], "stamps": [] }), 5).unwrap();
         let declarations = &checked.declarations;
         assert_eq!(declarations.root.types["Stage"], ["lead", "won"]);
         assert_eq!(declarations.plugins.iter().map(|(l, p)| (l.as_str(), p.as_str())).collect::<Vec<_>>(), [("fetch", "fetch_url"), ("research", "research")]);
@@ -483,7 +483,7 @@ mod tests {
             "link": { "imports": [{ "local": "Deal", "kind": "shape", "name": "Deal", "file": "deals", "declaration": "/statements/0" }], "files": [] },
             "stamps": [],
         });
-        assert!(join_check(parse(SOURCE, 3).unwrap(), &unlinked, 3).unwrap_err().contains("unlinked file"));
+        assert!(join_check(parse(SOURCE, 5).unwrap(), &unlinked, 5).unwrap_err().contains("unlinked file"));
     }
 
     /// A park names code by its place in the file that wrote it, a

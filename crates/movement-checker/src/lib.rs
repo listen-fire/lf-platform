@@ -113,9 +113,19 @@ pub fn check_source(source: &str, catalog: &CatalogSnapshot, options: CheckOptio
 /// Its diagnostics quote the source in that form; a writer for a reader
 /// outside undoes it (`external_text`).
 pub fn check_form(source: &str, catalog: &CatalogSnapshot, options: CheckOptions) -> Result<Vec<Diagnostic>, ParseRefusal> {
-    let program = movement_parser::stmt::parse_program(source, options.language_version, false)
+    let program = parsed_unless_refused(source, options.language_version)
         .map_err(|e| ParseRefusal { message: format!("{} at line {}, column {}", e.message, e.loc.line, e.loc.col) })?;
     Ok(check_program(&program, catalog, options))
+}
+
+/// The program, or none for a version this release does not support: its
+/// check is the standing diagnostic alone (`run_check`), never the parser's
+/// refusal of the same pin.
+fn parsed_unless_refused(source: &str, version: u32) -> Result<Program, movement_parser::stmt::ParseError> {
+    if !movement_parser::version::SUPPORTED_LANGUAGE_VERSIONS.contains(&version) {
+        return Ok(Program { statements: Vec::new(), spelling: Vec::new() });
+    }
+    movement_parser::stmt::parse_program(source, version, false)
 }
 
 /// The check as JSON: `{diagnostics}`, or `{error}` for a source that does
@@ -140,7 +150,7 @@ pub fn check_answer_json(source: &str, catalog_json: &str, options: CheckOptions
         Ok(catalog) => catalog,
         Err(message) => return serde_json::json!({ "error": { "message": message } }),
     };
-    match movement_parser::stmt::parse_program(&form_of_text(source), options.language_version, false) {
+    match parsed_unless_refused(&form_of_text(source), options.language_version) {
         Ok(program) => answer::check_answer(&program, &catalog, options).to_json(),
         Err(e) => serde_json::json!({ "error": { "message": format!("{} at line {}, column {}", e.message, e.loc.line, e.loc.col) } }),
     }
