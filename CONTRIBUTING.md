@@ -25,7 +25,7 @@ Install the whole workspace, not a filtered subset. `apps/api` typechecks agains
 
 ## The dev loop
 
-The dev loop boots the whole stack against real Postgres and Redis and *fake* third-party services, so you can exercise a change end to end without an account anywhere. Slack, Attio, Affinity, email, WhatsApp, Telegram, Airtable, Sheets, Granola, Evertrace, Dealroom and Gmail are all served by [`apps/fake-channels`](apps/fake-channels); the real adapters simply talk to a different base URL when the active team is the dev-loop team, so there is no separate test code path.
+The dev loop boots the whole stack against real Postgres and Redis and *fake* third-party services, so you can exercise a change end to end without an account anywhere. Slack, Attio, Affinity, email, WhatsApp, Telegram, Airtable, Sheets, Granola, Evertrace, Dealroom and Gmail are all served by [`packages/fake-channels`](packages/fake-channels); the real adapters simply talk to a different base URL when the active team is the dev-loop team, so there is no separate test code path.
 
 ```bash
 pnpm dev:loop                   # boot the stack; leave it running

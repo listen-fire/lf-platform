@@ -36,6 +36,7 @@
     "modules/web",
     "modules/whatsapp",
     "packages/engine-contracts",
+    "packages/fake-channels",
     "packages/file-text",
     "packages/files-s3",
     "packages/handbook",
@@ -50,7 +51,6 @@
   "platform": [
     "apps/admin",
     "apps/api",
-    "apps/fake-channels",
     "apps/web",
     "deploy",
     "dev",

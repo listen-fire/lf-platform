@@ -4,7 +4,7 @@
 // here or raises naming the feature and this provider — a request that would
 // silently lose something on the way to Gemini never leaves.
 //
-// Reaching the fake Gemini in apps/fake-channels (mounted at /gemini), from
+// Reaching the fake Gemini in packages/fake-channels (mounted at /gemini), from
 // apps/api, with the dev loop's fake channels running on FAKE_CHANNELS_PORT:
 //
 //   MODEL_MAP='{"claude-sonnet-5":"gemini/gemini-3-pro"}' \
@@ -14,7 +14,7 @@
 //   pnpm tsx src/scripts/verify_model_map.ts
 //
 // The fake picks its canned reply from an `X-Fake-Scenario` header (`text` by
-// default); see apps/fake-channels/src/routes/gemini.ts for the scenarios.
+// default); see packages/fake-channels/src/routes/gemini.ts for the scenarios.
 
 import { randomUUID } from 'node:crypto';
 

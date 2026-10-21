@@ -306,7 +306,7 @@ export MOCK_OUTPUT_ADAPTERS="${MOCK_OUTPUT_ADAPTERS:-true}"
 # endpoint so inbound media download (services/whatsapp/dispatch.ts →
 # metaApi.downloadMedia) resolves bytes through the fake instead of the real
 # graph.facebook.com. The fake mounts the Graph media surface under
-# /whatsapp/graph (apps/fake-channels/src/routes/whatsapp.ts).
+# /whatsapp/graph (packages/fake-channels/src/routes/whatsapp.ts).
 export WHATSAPP_GRAPH_BASE_URL="${WHATSAPP_GRAPH_BASE_URL:-$FAKE_CHANNELS_URL/whatsapp/graph}"
 
 # `exposeFile` (engine/files/expose.ts) mints blob URLs at /api/files/blob/:id,

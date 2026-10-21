@@ -5,7 +5,7 @@
 // rotates refresh tokens. Every token call is recorded.
 //
 // Unit tests start it in process, with no fake-channels running; the dev
-// loop's provider (apps/fake-channels routes/oauth.ts) serves the running
+// loop's provider (packages/fake-channels routes/oauth.ts) serves the running
 // stack instead, and engine code may not import an app.
 
 import { createHash, randomBytes } from 'node:crypto';

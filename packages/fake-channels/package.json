@@ -1,0 +1,46 @@
+{
+  "name": "@listen-fire/fake-channels",
+  "license": "Apache-2.0",
+  "version": "0.12.0-rc.4",
+  "description": "Stand-in implementations of the third-party services (Slack, Attio, Affinity, Airtable, Sheets, email, WhatsApp, Telegram, Gmail, Drive, Dropbox, an OAuth2 provider, the model vendors and more) with a control door to seed and inspect them. The dev loop, the demo image, lf's test harness and the examples all run these instead of real accounts. Start it with `fake-channels` (port from FAKE_CHANNELS_PORT, 0 for a free one).",
+  "engines": {
+    "node": "22.20.0"
+  },
+  "bin": {
+    "fake-channels": "bin/fake-channels.cjs"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "test": "tsx --test \"src/**/__test__/*.test.ts\"",
+    "code:type-check": "tsc --pretty --noEmit"
+  },
+  "type": "commonjs",
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "express": "^4.21.0",
+    "tsx": "4.21.0",
+    "zod": "4.1.12"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/express": "^4.17.21",
+    "@types/node": "22.19.15",
+    "typescript": "5.5.4"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/listen-fire/listen-fire.git",
+    "directory": "packages/fake-channels"
+  },
+  "files": [
+    "bin",
+    "src",
+    "assets",
+    "!src/**/__test__"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "tag": "next"
+  }
+}

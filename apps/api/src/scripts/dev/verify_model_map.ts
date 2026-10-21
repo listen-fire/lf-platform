@@ -10,7 +10,7 @@
  *
  *   cd apps/api && pnpm dev:verify-model-map
  *
- * Everything on the fake OpenAI. The fake lives in `apps/fake-channels` at
+ * Everything on the fake OpenAI. The fake lives in `packages/fake-channels` at
  * `/openai/v1`; the agent dev loop (`pnpm dev:loop:agent`) serves it on port
  * 6056 (`dev/loop.sh`: HARNESS_BASE 6055 + 1, recorded as FAKE_CHANNELS_URL in
  * `.dev-loop/profiles/agent.json`). `--fake-openai` points OPENAI_BASE_URL at
@@ -23,7 +23,7 @@
  *
  * Without the loop, start the fake alone and name it:
  *
- *   FAKE_CHANNELS_PORT=6056 pnpm --filter fake-channels start
+ *   FAKE_CHANNELS_PORT=6056 pnpm --filter @listen-fire/fake-channels start
  *   cd apps/api && MODEL_MAP='{"claude-sonnet-5":"openai/gpt-5"}' OPENAI_API_KEY=fake \
  *     OPENAI_BASE_URL=http://localhost:6056/openai/v1 pnpm dev:verify-model-map
  *
@@ -33,7 +33,7 @@
  * build the Vertex path, and GOOGLE_MODEL_REGION=global so the path matches
  * the one the chat translator uses:
  *
- *   FAKE_CHANNELS_PORT=6056 pnpm --filter fake-channels start
+ *   FAKE_CHANNELS_PORT=6056 pnpm --filter @listen-fire/fake-channels start
  *   cd apps/api && MODEL_MAP='{"claude-sonnet-5":"gemini/gemini-3-pro",
  *       "whisper-1":"gemini/gemini-3.8-flash",
  *       "text-embedding-3-large":"gemini/gemini-embedding-001",
