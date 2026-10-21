@@ -1,22 +1,21 @@
 // movement-lang's expression bridge for the platform: each entry point that
-// parses a text reads it with the parser for its version (the parser/
-// entry points beside this package's checker). A slot is parsed into the
-// bridge's own slot cache, so movement-lang's lowering then reads it from
-// there as it reads a slot the program's parse filled. Everything else is
-// movement-lang's own.
+// parses or lowers a text does it with the artifact for its version (the
+// parser/ entry points beside this package's checker). A slot is parsed into
+// the bridge's own slot cache, so it is read from there as a slot the
+// program's parse filled is. Everything else is movement-lang's own.
 
 import type { ExprSlot } from 'movement-lang/parser/ast';
 import type { MExpr } from 'movement-lang/parser/expression/tree';
 import type { Expression } from 'movement-lang/expression/types';
-import {
-  conditionOfSlot as liveConditionOfSlot,
-  expressionOfSlot as liveExpressionOfSlot,
-  treeOfSlot as liveTreeOfSlot,
-  type MovementCondition,
-} from 'movement-lang/expression/bridge';
+import { treeOfSlot as liveTreeOfSlot, type MovementCondition } from 'movement-lang/expression/bridge';
 import { BridgeError } from 'movement-lang/expression/error';
 import { slotTrees } from 'movement-lang/expression/slot_trees';
-import { lowerMovementCondition, lowerMovementExpression } from '../parser/expression/lower';
+import {
+  lowerConditionAt,
+  lowerExpressionAt,
+  lowerMovementCondition,
+  lowerMovementExpression,
+} from '../parser/expression/lower';
 import { ExpressionSyntaxError, parseExpression } from '../parser/expression/parse_expression';
 
 export * from 'movement-lang/expression/bridge';
@@ -48,12 +47,15 @@ export function treeOfSlot(slot: ExprSlot, languageVersion?: number): MExpr {
   return liveTreeOfSlot(primed(slot, languageVersion), languageVersion);
 }
 
+/** The slot as a value expression, lowered by the artifact that reads
+ *  `languageVersion` (../parser/expression/lower.ts). */
 export function expressionOfSlot(slot: ExprSlot, languageVersion?: number): Expression {
-  return liveExpressionOfSlot(primed(slot, languageVersion), languageVersion);
+  return lowerExpressionAt(treeOfSlot(slot, languageVersion), slot.raw, languageVersion);
 }
 
+/** The slot as an `if` condition, lowered as `expressionOfSlot` is. */
 export function conditionOfSlot(slot: ExprSlot, languageVersion?: number): MovementCondition {
-  return liveConditionOfSlot(primed(slot, languageVersion), languageVersion);
+  return lowerConditionAt(treeOfSlot(slot, languageVersion), slot.raw, languageVersion);
 }
 
 /** movement-lang's `authoredStringText`, its text read as versions 1 to 4

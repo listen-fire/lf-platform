@@ -3,7 +3,9 @@
 // parser artifact frozen at the last commit that read versions 1–5
 // (./movement_parser.frozen.wasm; README.md beside it says how it was built).
 // The language's own loader (movement-lang/wasm/loader.ts) serves the live
-// artifact; this is the minimal part of it a parse needs, over the frozen one.
+// artifact; this is the minimal part of it a parse and a lowering need, over
+// the frozen one. The frozen artifact lowers the trees it parsed, so an old
+// pin's reading never depends on the live lowering.
 //
 // Loaded on the first parse that needs it, not when this module loads: a
 // process whose movements are all on a version the language serves never
@@ -36,11 +38,14 @@ interface WasmModule {
 /** The parse exports the platform reads an old pin through. */
 export type FrozenParserFunction = 'parse_program_eager' | 'parse_nested_call' | 'parse_expression';
 
+/** The lowering exports the platform lowers an old pin's trees through. */
+export type FrozenLoweringFunction = 'lower_expression' | 'lower_condition';
+
 interface FrozenExports {
   memory: { readonly buffer: unknown };
   alloc(len: number): number;
   dealloc(ptr: number, len: number): void;
-  parse: Record<FrozenParserFunction, (...args: number[]) => unknown>;
+  parse: Record<FrozenParserFunction | FrozenLoweringFunction, (...args: number[]) => unknown>;
 }
 
 const WASM_FILE = 'movement_parser.frozen.wasm';
@@ -83,17 +88,42 @@ export function callFrozenParser(
   input: string,
   extra: number[],
 ): { ok: boolean; json: unknown } {
+  return callFrozen(fn, [input], extra);
+}
+
+/**
+ * Calls one lowering export of the frozen artifact, with the same contract
+ * as the live loader's `callLowering`: the tree (as JSON) and the source it
+ * was parsed from, and the JSON it emits — the lowered value, or `{error: …}`.
+ */
+export function callFrozenLowering(
+  fn: FrozenLoweringFunction,
+  treeJson: string,
+  source: string,
+): { ok: boolean; json: unknown } {
+  return callFrozen(fn, [treeJson, source], []);
+}
+
+function callFrozen(
+  fn: FrozenParserFunction | FrozenLoweringFunction,
+  inputs: string[],
+  extra: number[],
+): { ok: boolean; json: unknown } {
   current ??= instantiate(loadedModule());
   const instance = current;
-  const bytes = encoder.encode(input);
   let status: number;
   let text: string;
   try {
-    const ptr = instance.alloc(bytes.length);
-    new Uint8Array(memoryBuffer(instance)).set(bytes, ptr);
+    const placed = inputs.map((input) => {
+      const bytes = encoder.encode(input);
+      const ptr = instance.alloc(bytes.length);
+      new Uint8Array(memoryBuffer(instance)).set(bytes, ptr);
+      return { ptr, len: bytes.length };
+    });
     const slots = instance.alloc(8);
-    status = number(instance.parse[fn](ptr, bytes.length, ...extra, slots, slots + 4), fn);
-    instance.dealloc(ptr, bytes.length);
+    const pairs = placed.flatMap(({ ptr, len }) => [ptr, len]);
+    status = number(instance.parse[fn](...pairs, ...extra, slots, slots + 4), fn);
+    for (const { ptr, len } of placed) instance.dealloc(ptr, len);
     const view = new DataView(memoryBuffer(instance));
     const outPtr = view.getUint32(slots, true);
     const outLen = view.getUint32(slots + 4, true);
@@ -150,6 +180,8 @@ function instantiate(module: WasmModule): FrozenExports {
       parse_program_eager: exported('parse_program_eager'),
       parse_nested_call: exported('parse_nested_call'),
       parse_expression: exported('parse_expression'),
+      lower_expression: exported('lower_expression'),
+      lower_condition: exported('lower_condition'),
     },
   };
 }

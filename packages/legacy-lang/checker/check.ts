@@ -151,7 +151,7 @@ import {
   endingHop,
   isTransformHop,
   LoweringError,
-  lowerExpression,
+  lowerExpressionAt,
   specialRecordField,
 } from '../parser/expression/lower';
 import { typedSpellings, walkFields, type ValueKind } from './typed_spelling';
@@ -7015,7 +7015,7 @@ class Checker {
     const kindOf = (e: MExpr): ValueKind => {
       let type: FieldType | undefined;
       try {
-        type = this.silentTyping(scope, slot.span).infer(lowerExpression(e, slot.raw));
+        type = this.silentTyping(scope, slot.span).infer(lowerExpressionAt(e, slot.raw, this.languageVersion));
       } catch {
         return undefined;
       }
@@ -7049,7 +7049,7 @@ class Checker {
     let unknown: Map<string, boolean> | undefined;
     try {
       const typing = this.silentTyping(scope, place.spanOf(tree.at));
-      typing.infer(lowerExpression(tree, raw));
+      typing.infer(lowerExpressionAt(tree, raw, this.languageVersion));
       unknown = typing.bareWalkNames;
     } catch {
       unknown = undefined;

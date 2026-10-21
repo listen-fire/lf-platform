@@ -58,21 +58,57 @@ export type MovementCondition =
     }
   | { kind: 'expr'; expr: Expression };
 
+/** One artifact's lowering exports: the tree (as JSON) and the source it
+ *  was parsed from, and the JSON it emits with whether it answered OK. */
+export type LoweringCall = (
+  fn: 'lower_expression' | 'lower_condition',
+  treeJson: string,
+  source: string,
+) => { ok: boolean; json: unknown };
+
+/** The lowering entry points over one artifact. */
+export interface Lowering {
+  expression(tree: MExpr, source: string): Expression;
+  condition(tree: MExpr, source: string): MovementCondition;
+}
+
+/**
+ * The lowering entry points over the artifact `call` reaches. This package's
+ * are over its own artifact (below); the platform builds another over the
+ * parser it keeps for the versions this release no longer serves, so a tree
+ * that parser read is lowered by the same artifact.
+ *
+ * @internal
+ */
+export function loweringOver(call: LoweringCall): Lowering {
+  return {
+    expression(tree, source) {
+      const { ok, json } = call('lower_expression', JSON.stringify(tree), source);
+      if (!ok) throw loweringRefusal(json);
+      if (!isLoweredExpression(json)) throw malformedLowering('expression', json);
+      return json;
+    },
+    condition(tree, source) {
+      const { ok, json } = call('lower_condition', JSON.stringify(tree), source);
+      if (!ok) throw loweringRefusal(json);
+      if (!isLoweredCondition(json)) throw malformedLowering('condition', json);
+      return json;
+    },
+  };
+}
+
+// Called through, not captured, so a test's spy on the loader sees each call.
+const live = loweringOver((fn, treeJson, source) => callLowering(fn, treeJson, source));
+
 /** Lower one expression; `source` is the text `tree` was parsed from. */
 export function lowerExpression(tree: MExpr, source: string): Expression {
-  const { ok, json } = callLowering('lower_expression', JSON.stringify(tree), source);
-  if (!ok) throw loweringRefusal(json);
-  if (!isLoweredExpression(json)) throw malformedLowering('expression', json);
-  return json;
+  return live.expression(tree, source);
 }
 
 /** Lower one `if` condition into its top-level
  *  `AND` conjuncts, each an `IS` type guard or an expression. */
 export function lowerCondition(tree: MExpr, source: string): MovementCondition {
-  const { ok, json } = callLowering('lower_condition', JSON.stringify(tree), source);
-  if (!ok) throw loweringRefusal(json);
-  if (!isLoweredCondition(json)) throw malformedLowering('condition', json);
-  return json;
+  return live.condition(tree, source);
 }
 
 /** Parse and lower one expression text, part of a program under
