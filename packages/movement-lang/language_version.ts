@@ -53,7 +53,7 @@ export const LANGUAGE_VERSIONS: readonly LanguageVersionInfo[] = [
 export const CURRENT_LANGUAGE_VERSION: LanguageVersion = 5;
 
 /** The versions this release parses, checks and runs. */
-export const SUPPORTED_LANGUAGE_VERSIONS: ReadonlySet<LanguageVersion> = new Set([1, 2, 3, 4, 5]);
+export const SUPPORTED_LANGUAGE_VERSIONS: ReadonlySet<LanguageVersion> = new Set([5]);
 
 /** Supported versions that will be removed: they still run, with a warning. */
 export const DEPRECATED_LANGUAGE_VERSIONS: ReadonlySet<LanguageVersion> = new Set<LanguageVersion>();

@@ -12,7 +12,7 @@
 // hardcoded, so the sequenced-edge cases run against both a `chronological`
 // edge in one graph and a `document` edge in another.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, checkProgramWithLink, Diagnostic } from '../check';
 import { mockCatalog, type SchemaFieldType, type InstanceSchema } from '../catalog';
 

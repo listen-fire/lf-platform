@@ -11,7 +11,7 @@
 // Two adapter shapes throughout, per the fixture rule: one adapter's shape
 // cannot tell derived from hardcoded (here, the did-you-mean's rewritten form).
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { FieldType, SchemaFieldType, InstanceSchema, mockCatalog } from '../catalog';
 import { checkArithmeticOperands, maybeAbsent } from '../typing';

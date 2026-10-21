@@ -2,32 +2,42 @@
 
 import { useEffect, useState } from 'react';
 import { initParser, isParserReady, neverAsAny } from 'movement-lang';
+import { initFrozenParser, isFrozenParserReady } from 'legacy-lang/wasm/frozen_parser';
 
-/** Where the browser fetches the parser: next.config.ts copies the artifact
- *  into public/ under a content-hashed name and injects that URL. */
-export const PARSER_URL = requiredUrl(process.env.NEXT_PUBLIC_PARSER_URL);
+/** Where the browser fetches the parsers: next.config.ts copies each artifact
+ *  into public/ under a content-hashed name and injects its URL. The frozen
+ *  one reads the versions the language release no longer serves. */
+export const PARSER_URL = requiredUrl('NEXT_PUBLIC_PARSER_URL', process.env.NEXT_PUBLIC_PARSER_URL);
+export const FROZEN_PARSER_URL = requiredUrl('NEXT_PUBLIC_FROZEN_PARSER_URL', process.env.NEXT_PUBLIC_FROZEN_PARSER_URL);
 
-function requiredUrl(url: string | undefined): string {
-  if (url === undefined) throw new Error('NEXT_PUBLIC_PARSER_URL is not set; next.config.ts injects it');
+function requiredUrl(name: string, url: string | undefined): string {
+  if (url === undefined) throw new Error(`${name} is not set; next.config.ts injects it`);
   return url;
 }
 
 let loading: Promise<void> | undefined;
 
-/** Loads the parser once per page, however many providers mount; a failed
+/** Loads both parsers once per page, however many providers mount; a failed
  *  load is forgotten so "Try again" fetches afresh. */
 export function loadParser(): Promise<void> {
-  loading ??= initParser(PARSER_URL).catch((failure: unknown) => {
-    loading = undefined;
-    throw failure;
-  });
+  loading ??= Promise.all([initParser(PARSER_URL), initFrozenParser(FROZEN_PARSER_URL)]).then(
+    () => undefined,
+    (failure: unknown) => {
+      loading = undefined;
+      throw failure;
+    },
+  );
   return loading;
+}
+
+function parsersReady(): boolean {
+  return isParserReady() && isFrozenParserReady();
 }
 
 type ParserState = { status: 'loading' } | { status: 'ready' } | { status: 'failed'; failure: unknown };
 
 /**
- * Renders its children only once the movement parser has loaded. The
+ * Renders its children only once the movement parsers have loaded. The
  * editors and the listeners panel parse during their first render, and a
  * browser can only load the parser asynchronously (it refuses a large
  * synchronous WASM compile on the main thread), so until then this renders
@@ -36,7 +46,7 @@ type ParserState = { status: 'loading' } | { status: 'ready' } | { status: 'fail
  */
 export function ParserProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<ParserState>(() =>
-    isParserReady() ? { status: 'ready' } : { status: 'loading' },
+    parsersReady() ? { status: 'ready' } : { status: 'loading' },
   );
 
   useEffect(() => {

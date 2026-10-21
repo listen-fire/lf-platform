@@ -10,7 +10,7 @@
 // derived from hardcoded, so every landing assertion runs against two
 // signatures with different parameter names and types.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { mockCatalog, type InstanceSchema } from '../catalog';
 

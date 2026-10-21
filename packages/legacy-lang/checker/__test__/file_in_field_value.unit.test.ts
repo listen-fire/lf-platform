@@ -13,12 +13,13 @@
 // file `upload`, and a ledger entry with a json properties bag and a file
 // `Receipt`.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { InstanceSchema, mockCatalog, type FieldType } from '../catalog';
 import { fieldAssignable, fieldTypeCompatible, handleWithin } from '../typing';
 import { spelledFor } from './surface_spelling';
-import { SUPPORTED_LANGUAGE_VERSIONS, type LanguageVersion } from 'movement-lang/language_version';
+import { type LanguageVersion } from 'movement-lang/language_version';
+import { PLATFORM_SUPPORTED_LANGUAGE_VERSIONS } from '../../language_version';
 
 const crmSchema: InstanceSchema = {
   positions: {
@@ -112,7 +113,7 @@ const note = (company: string): string[] => [`  write crm-[:notes]-> { title: "h
 const FILE_NOT_A_VALUE = 'a file, not a value';
 const GOES_TO_A_FILE_FIELD = 'A file goes only into a field that holds files';
 
-const VERSIONS = [...SUPPORTED_LANGUAGE_VERSIONS];
+const VERSIONS = [...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS];
 
 // A message quotes the fix in the spelling its version reads.
 const quotedFor = (version: LanguageVersion, message: string): string =>

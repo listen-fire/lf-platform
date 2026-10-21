@@ -17,7 +17,7 @@
 // `helpdesk`'s tickets (discriminant `queue`, different fields, different
 // member names).
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { InstanceSchema, mockCatalog, refinementKey } from '../catalog';
 import { parseTraversalPath, scanInstanceChains } from '../../service/selectors';

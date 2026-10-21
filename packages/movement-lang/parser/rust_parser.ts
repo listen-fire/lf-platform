@@ -6,6 +6,7 @@
 
 import { ExpressionSyntaxError } from '../expression/error';
 import { slotTrees } from '../expression/slot_trees';
+import { CURRENT_LANGUAGE_VERSION } from '../language_version';
 import { callParser } from '../wasm/loader';
 import type { ExprSlot, Loc, Program, RValue } from './ast';
 import type { MExpr } from './expression/tree';
@@ -19,12 +20,67 @@ export interface StatementRefusal {
 
 export type StatementParse<T> = { ok: true; value: T } | { ok: false; refusal: StatementRefusal };
 
+/** One artifact's parse exports: `input` as its (pointer, length) pair, then
+ *  `extra`, and the JSON it emits with whether it answered OK. */
+export type ParserCall = (
+  fn: 'parse_program_eager' | 'parse_nested_call' | 'parse_expression',
+  input: string,
+  extra: number[],
+) => { ok: boolean; json: unknown };
+
+/** The parse entry points over one artifact, its JSON read back as the
+ *  TypeScript AST types. */
+export interface RustParser {
+  program(source: string, languageVersion: number): StatementParse<Program>;
+  nestedCall(slot: ExprSlot, at: { start: number; end: number }, languageVersion: number): StatementParse<RValue>;
+  /** Throws `ExpressionSyntaxError`. */
+  expression(source: string, languageVersion: number): MExpr;
+}
+
+/**
+ * The parse entry points over the artifact `call` reaches. This package's
+ * are over its own artifact (below); the platform builds another over the
+ * parser it keeps for the versions this release no longer serves.
+ *
+ * @internal
+ */
+export function parserOver(call: ParserCall): RustParser {
+  return {
+    program(source, languageVersion) {
+      const { ok, json } = call('parse_program_eager', source, [languageVersion]);
+      if (!ok) return { ok: false, refusal: statementRefusal(json) };
+      if (!isProgram(json)) throw malformed('parse_program_eager', json);
+      absorbSlotTrees(json);
+      return { ok: true, value: json };
+    },
+    nestedCall(slot, at, languageVersion) {
+      const origin = slot.span.start;
+      const { ok, json } = call('parse_nested_call', slot.raw, [
+        at.start,
+        at.end,
+        origin.line,
+        origin.col,
+        languageVersion,
+      ]);
+      if (!ok) return { ok: false, refusal: statementRefusal(json) };
+      if (!isRValue(json)) throw malformed('parse_nested_call', json);
+      absorbSlotTrees(json);
+      return { ok: true, value: json };
+    },
+    expression(source, languageVersion) {
+      const { ok, json } = call('parse_expression', source, [languageVersion]);
+      if (!ok) throw expressionError(json, 'parse_expression');
+      if (!isTree(json)) throw malformed('parse_expression', json);
+      return json;
+    },
+  };
+}
+
+// Called through, not captured, so a test's spy on the loader sees each call.
+const live = parserOver((fn, input, extra) => callParser(fn, input, extra));
+
 export function rustParseProgram(source: string, languageVersion: number): StatementParse<Program> {
-  const { ok, json } = callParser('parse_program_eager', source, [languageVersion]);
-  if (!ok) return { ok: false, refusal: statementRefusal(json) };
-  if (!isProgram(json)) throw malformed('parse_program_eager', json);
-  absorbSlotTrees(json);
-  return { ok: true, value: json };
+  return live.program(source, languageVersion);
 }
 
 export function rustParseNestedCall(
@@ -32,31 +88,16 @@ export function rustParseNestedCall(
   at: { start: number; end: number },
   languageVersion: number,
 ): StatementParse<RValue> {
-  const origin = slot.span.start;
-  const { ok, json } = callParser('parse_nested_call', slot.raw, [
-    at.start,
-    at.end,
-    origin.line,
-    origin.col,
-    languageVersion,
-  ]);
-  if (!ok) return { ok: false, refusal: statementRefusal(json) };
-  if (!isRValue(json)) throw malformed('parse_nested_call', json);
-  absorbSlotTrees(json);
-  return { ok: true, value: json };
+  return live.nestedCall(slot, at, languageVersion);
 }
 
 /** Throws `ExpressionSyntaxError`. A text read here is not a program's slot
- *  (those arrive parsed, under their program's version): it reads as versions
- *  1–4 do (version 0), so a probe's text never takes the v5 surface's
- *  meaning — unless the caller reads it as a part of a program, under that
- *  program's `languageVersion` (an engine probing a block head's hops, a
- *  checker reading a type's hops), which reads as its slots did. */
-export function rustParseExpression(source: string, languageVersion = 0): MExpr {
-  const { ok, json } = callParser('parse_expression', source, [languageVersion]);
-  if (!ok) throw expressionError(json, 'parse_expression');
-  if (!isTree(json)) throw malformed('parse_expression', json);
-  return json;
+ *  (those arrive parsed, under their program's version): it reads under the
+ *  current version unless the caller reads it as a part of a program, under
+ *  that program's `languageVersion` (an engine probing a block head's hops,
+ *  a checker reading a type's hops), which reads as its slots did. */
+export function rustParseExpression(source: string, languageVersion: number = CURRENT_LANGUAGE_VERSION): MExpr {
+  return live.expression(source, languageVersion);
 }
 
 /**

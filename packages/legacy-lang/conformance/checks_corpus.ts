@@ -3,7 +3,7 @@
 // drifted. The language kit's command (language_conformance.ts) and the
 // checker regression (checker/__test__/checks_regression.unit.test.ts) are
 // both this replay: one over any corpus, one over ours.
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../parser/parse';
 import { fromCatalogSnapshot, resolveFileFromSnapshot, type CatalogSnapshot } from 'movement-lang/service/snapshot';
 import type { Catalog } from '../checker/catalog';
 import { checkProgram } from '../checker/check';

@@ -29,7 +29,7 @@ import { neverAsAny } from 'movement-lang/never';
 import { type LanguageVersion } from 'movement-lang/language_version';
 import { before, since } from '../version_conditionals';
 import type { CallArg, ExprSlot, Loc, NamedArg, PluginCall, Program, Span, TypeDeclaration } from 'movement-lang/parser/ast';
-import { treeOfSlot } from 'movement-lang/expression/bridge';
+import { treeOfSlot } from '../expression/bridge';
 import { slotTrees } from 'movement-lang/expression/slot_trees';
 import { pluginName } from 'movement-lang/parser/surface';
 import { isMapSpread, type At, type MapMember, type MExpr } from 'movement-lang/parser/expression/tree';

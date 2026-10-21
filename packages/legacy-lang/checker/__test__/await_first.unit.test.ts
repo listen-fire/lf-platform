@@ -5,7 +5,7 @@
 // where the final edge can end the wait (awaitable). The bare `await <walk>`
 // spelling is retired: still parses, refused with the rewrite.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic, DiagnosticCodes as C } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
 

@@ -8,7 +8,7 @@
 // Same-scope rebinding rides here too: it is the other half of "a binding never
 // changes", whose cross-scope half is MOV_SHADOWED_NAME.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, checkProgramWithLink, Diagnostic, DiagnosticCodes as C } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
 

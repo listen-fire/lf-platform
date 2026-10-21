@@ -5,7 +5,7 @@
 // sides, so a move up across 5 warns a read of such a receipt
 // (`MOV_RECEIPT_RECORD_SLOT`); a receipt whose arms hand back values does not.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram } from '../check';
 import { TypedDiagnosticCodes } from '../typing';
 import { InstanceSchema, SchemaFieldType, mockCatalog } from '../catalog';

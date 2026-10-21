@@ -78,8 +78,8 @@ jest.mock('../../../lib/anthropic', () => ({
 
 // Every text the engine parses as an expression is recorded, so a test can
 // prove a host's data never reached the parser.
-jest.mock('movement-lang', () => {
-  const actual = jest.requireActual('movement-lang');
+jest.mock('legacy-lang', () => {
+  const actual = jest.requireActual('legacy-lang');
   return { ...actual, parseMovementExpression: jest.fn(actual.parseMovementExpression) };
 });
 
@@ -89,7 +89,8 @@ jest.mock('../../translation_graph/adapters/resolve', () => ({
   }),
 }));
 
-import { mockCatalogSnapshot, parseMovementExpression, type InstanceSchema } from 'movement-lang';
+import { mockCatalogSnapshot, type InstanceSchema } from 'movement-lang';
+import { parseMovementExpression } from 'legacy-lang';
 import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { MovementEngineError } from 'movement-engine/services/movement_engine/errors';
 import type { Adapter, RuntimeCapabilities } from 'movement-engine/services/translation_graph/adapter';

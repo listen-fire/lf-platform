@@ -6,7 +6,7 @@
 
 import { applyFix, fromCatalogSnapshot, mockCatalogSnapshot, type InstanceSchema } from 'movement-lang';
 import { checkProgram } from 'legacy-lang';
-import { parseProgram } from 'movement-lang';
+import { parseProgram } from 'legacy-lang';
 
 import { tenantIdOf } from 'engine-contracts';
 import { containerAssociation, type Adapter } from 'movement-engine/public/adapter';

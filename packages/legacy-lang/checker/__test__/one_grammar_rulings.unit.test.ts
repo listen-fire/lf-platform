@@ -6,9 +6,10 @@
 //
 // TWO SCHEMAS: a fixture matching one shape cannot tell derived from hardcoded.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
-import { CURRENT_LANGUAGE_VERSION, SUPPORTED_LANGUAGE_VERSIONS } from 'movement-lang/language_version';
+import { CURRENT_LANGUAGE_VERSION } from 'movement-lang/language_version';
+import { PLATFORM_SUPPORTED_LANGUAGE_VERSIONS } from '../../language_version';
 import { mockCatalog, type InstanceSchema } from '../catalog';
 import { spelledFor } from './surface_spelling';
 
@@ -70,7 +71,7 @@ const codes = (shape: Shape, body: string, languageVersion?: number) =>
 describe.each(SHAPES.map(s => [s.edge, s] as const))('over %s', (_edge, s) => {
   const walk = `${s.root}-[x:${s.edge}]->`;
 
-  it.each([...SUPPORTED_LANGUAGE_VERSIONS].map(v => [v]))('a bare walk is its landings in any value position (version %d)', v => {
+  it.each([...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS].map(v => [v]))('a bare walk is its landings in any value position (version %d)', v => {
     // Each of these was a parse refusal under the bridge.
     expect(codes(s, `  n = count(${walk})`, v)).toEqual([]);
     expect(codes(s, `  xs = COALESCE(${walk}, [])`, v)).toEqual([]);

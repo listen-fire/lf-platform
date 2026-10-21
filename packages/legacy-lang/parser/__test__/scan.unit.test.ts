@@ -4,9 +4,9 @@
 // answers, so the editor's completion context cannot silently drift from what the
 // parser actually accepts.
 
-import { MovementParseError, parseProgram } from 'movement-lang/parser/parse';
+import { MovementParseError, parseProgram } from '../parse';
 import { scanName, unwrapCredentialArg, type ScannedName } from 'movement-lang/parser/scan';
-import { parseExpression } from 'movement-lang/parser/expression/parse_expression';
+import { parseExpression } from '../expression/parse_expression';
 import { extractHopAliases } from '../../checker/check';
 import { quoteName } from 'movement-lang/expression/formula';
 

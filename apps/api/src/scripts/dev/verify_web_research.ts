@@ -26,7 +26,7 @@ import './_profile_loader';
 import '../../services';
 import '../../services/translation_graph/engine/transforms/register-bundled';
 
-import { parseProgram } from 'movement-lang';
+import { parseProgram } from 'legacy-lang';
 
 import { runInContext } from '../../services/context/utils';
 import { buildExtractSpec, materializeExtract } from '@listen-fire/legacy-engine/services/movement_engine/extraction';

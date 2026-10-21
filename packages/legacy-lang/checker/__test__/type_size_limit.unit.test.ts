@@ -4,7 +4,7 @@
 // inferred type with more than 10,000 distinct parts stops there, reported on
 // every version (`MOV_TYPE_TOO_LARGE`): a safety limit, not a language rule.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
 import type { LanguageVersion } from 'movement-lang/language_version';

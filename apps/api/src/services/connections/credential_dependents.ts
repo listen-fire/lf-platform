@@ -16,7 +16,8 @@
 // dangling import alone already breaks the movement's next save/run.
 
 import { type Program, type Statement } from 'movement-lang';
-import { MovementParseError, parseProgram } from 'movement-lang';
+import { MovementParseError } from 'movement-lang';
+import { parseProgram } from 'legacy-lang';
 
 /**
  * The de-duplicated ORIGINAL credential import names the source pulls in

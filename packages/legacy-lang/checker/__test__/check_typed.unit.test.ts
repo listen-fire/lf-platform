@@ -4,7 +4,7 @@
 // checker with a schema-less catalog — together they pin the "unknown stays
 // silent" contract.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, checkProgramWithLink, Diagnostic, DiagnosticCodes as C } from '../check';
 import { effectRowOf } from '../effects';
 import { SchemaFieldType, InstanceSchema, mockCatalog, unionDisplay, unionKey } from '../catalog';

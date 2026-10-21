@@ -10,7 +10,7 @@
 //     (the fix writes it) and null everywhere else.
 // Under versions 1 and 2 each is accepted exactly as before.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, DiagnosticCodes as C } from '../check';
 import { applyFix } from 'movement-lang/checker/fixes';
 import { mockCatalog, type InstanceSchema } from '../catalog';

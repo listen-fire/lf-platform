@@ -10,7 +10,8 @@
 
 import { binding, Environment, evalMovementExpr } from '../expression';
 import type { ExtractEmission } from '../extraction';
-import { CURRENT_LANGUAGE_VERSION, parseMovementCondition, parseMovementExpression } from 'movement-lang';
+import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+import { parseMovementCondition, parseMovementExpression } from 'legacy-lang';
 
 function emission(fields: Record<string, unknown>): ExtractEmission {
   return {

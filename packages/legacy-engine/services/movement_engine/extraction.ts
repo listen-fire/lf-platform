@@ -42,7 +42,8 @@
 // constrains what reaches the LLM.
 
 import { z } from 'zod';
-import { BridgeError, fileViews, findPlugin, expressionOfSlot } from 'movement-lang';
+import { BridgeError, fileViews, findPlugin } from 'movement-lang';
+import { expressionOfSlot } from 'legacy-lang';
 import { before, bindStageArgs, borrowedTypeSegments, isEnumType, parseFieldTypeName, pluginArgMisfitMessage, pluginPositionalParams, variantOf } from 'legacy-lang';
 import type { DeclaredExtractNode, ExprSlot, ExtractExpression, ExtractField, ExtractStage, LanguageVersion, NamedArg, PluginCall, PluginSpec, ShapeNode } from 'movement-lang';
 import type { EnumType, FieldType } from 'legacy-lang';

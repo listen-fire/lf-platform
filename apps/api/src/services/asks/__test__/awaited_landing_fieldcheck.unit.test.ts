@@ -19,7 +19,7 @@
 
 import { fromCatalogSnapshot, type CatalogSnapshot, type InstanceSchema } from 'movement-lang';
 import { checkProgram } from 'legacy-lang';
-import { parseProgram } from 'movement-lang';
+import { parseProgram } from 'legacy-lang';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { SchemaTypeDescriptor } from 'engine-contracts/catalog';

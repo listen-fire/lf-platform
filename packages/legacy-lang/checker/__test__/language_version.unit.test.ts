@@ -1,19 +1,20 @@
 // Language versions: the table, the helpers, and the compile context's
 // refusal of a pin this release cannot honour.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, checkProgramWithLink } from '../check';
 import { mockCatalog } from '../catalog';
 import type { ResolveFile } from '../link';
 import { storyOf } from '../../story/story';
-import { CURRENT_LANGUAGE_VERSION, DEPRECATED_LANGUAGE_VERSIONS, LANGUAGE_VERSIONS, LanguageVersionDiagnosticCodes as V, SUPPORTED_LANGUAGE_VERSIONS, THIS_RELEASE, describeLanguageVersion, languageVersionDiagnostic, languageVersionStanding, type LanguageRelease } from 'movement-lang/language_version';
+import { CURRENT_LANGUAGE_VERSION, DEPRECATED_LANGUAGE_VERSIONS, LANGUAGE_VERSIONS, LanguageVersionDiagnosticCodes as V, SUPPORTED_LANGUAGE_VERSIONS, THIS_RELEASE, describeLanguageVersion, type LanguageRelease } from 'movement-lang/language_version';
+import { PLATFORM_DEPRECATED_LANGUAGE_VERSIONS, PLATFORM_RELEASE, PLATFORM_SUPPORTED_LANGUAGE_VERSIONS, languageVersionDiagnostic, languageVersionStanding } from '../../language_version';
 import { before, since } from '../../version_conditionals';
 
 const catalog = mockCatalog({ adapters: {} });
 const SOURCE = 'movement noop() {\n}\n';
 
 describe('the versions table', () => {
-  it('names each integer once; the current version is the newest and supported', () => {
+  it('names each integer once; the current version is the newest and the only one the language supports', () => {
     expect(LANGUAGE_VERSIONS.map((v) => [v.version, v.name])).toEqual([
       [1, 'Quiet Heron'],
       [2, 'Bright Otter'],
@@ -22,10 +23,16 @@ describe('the versions table', () => {
       [5, 'Dancing Wren'],
     ]);
     expect(CURRENT_LANGUAGE_VERSION).toBe(5);
-    expect([...SUPPORTED_LANGUAGE_VERSIONS]).toEqual([1, 2, 3, 4, 5]);
+    expect([...SUPPORTED_LANGUAGE_VERSIONS]).toEqual([5]);
     expect([...DEPRECATED_LANGUAGE_VERSIONS]).toEqual([]);
     expect(SUPPORTED_LANGUAGE_VERSIONS.has(CURRENT_LANGUAGE_VERSION)).toBe(true);
     expect(Math.max(...LANGUAGE_VERSIONS.map((v) => v.version))).toBe(CURRENT_LANGUAGE_VERSION);
+  });
+
+  it('the platform supports every version a saved movement may still be pinned to', () => {
+    expect([...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS]).toEqual([1, 2, 3, 4, 5]);
+    expect([...PLATFORM_DEPRECATED_LANGUAGE_VERSIONS]).toEqual([]);
+    for (const v of SUPPORTED_LANGUAGE_VERSIONS) expect(PLATFORM_SUPPORTED_LANGUAGE_VERSIONS.has(v)).toBe(true);
   });
 
   it('since/before split at the version that introduced a behaviour', () => {
@@ -48,8 +55,8 @@ describe('standing against a release', () => {
     deprecated: new Set([2]),
   };
 
-  it('every version this release supports is clean', () => {
-    for (const v of SUPPORTED_LANGUAGE_VERSIONS) {
+  it('every version the platform supports is clean', () => {
+    for (const v of PLATFORM_SUPPORTED_LANGUAGE_VERSIONS) {
       expect(languageVersionStanding(v)).toBe('supported');
       expect(languageVersionDiagnostic(v)).toBeUndefined();
     }
@@ -72,8 +79,9 @@ describe('standing against a release', () => {
     expect(d?.message).toContain('will be removed');
   });
 
-  it('the default release is this one', () => {
+  it('the default release is the platform\'s, current where the language is', () => {
     expect(THIS_RELEASE.current).toBe(CURRENT_LANGUAGE_VERSION);
+    expect(PLATFORM_RELEASE.current).toBe(CURRENT_LANGUAGE_VERSION);
   });
 });
 

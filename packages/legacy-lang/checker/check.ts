@@ -145,7 +145,7 @@ import {
   authoredStringText,
   slotOfTree,
   treeOfSlot,
-} from 'movement-lang/expression/bridge';
+} from '../expression/bridge';
 import {
   children as expressionChildren,
   endingHop,
@@ -153,11 +153,11 @@ import {
   LoweringError,
   lowerExpression,
   specialRecordField,
-} from 'movement-lang/parser/expression/lower';
+} from '../parser/expression/lower';
 import { typedSpellings, walkFields, type ValueKind } from './typed_spelling';
-import { ExpressionSyntaxError, parseExpression } from 'movement-lang/parser/expression/parse_expression';
+import { ExpressionSyntaxError, parseExpression } from '../parser/expression/parse_expression';
 import { isMapSpread, type At, type Hop, type MapEntry, type MExpr } from 'movement-lang/parser/expression/tree';
-import { MovementParseError, parseNestedCall } from 'movement-lang/parser/parse';
+import { MovementParseError, parseNestedCall } from '../parser/parse';
 import {
   hoistingMemberReads,
   nestedCallName,
@@ -261,7 +261,7 @@ import {
 } from './effects';
 import { InferenceStack } from './call_cycles';
 import { neverAsAny } from 'movement-lang/never';
-import { runHostUnits, CURRENT_LANGUAGE_VERSION, describeLanguageVersion, languageVersionDiagnostic, type LanguageVersion } from 'movement-lang/language_version';
+import { runHostUnits, CURRENT_LANGUAGE_VERSION, describeLanguageVersion, languageVersionDiagnostic, type LanguageVersion } from '../language_version';
 import { before, since, changedBetween } from '../version_conditionals';
 import { bodyExits, terminates } from './flow';
 import { closestByEditDistance, didYouMean } from './meta';

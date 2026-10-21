@@ -17,7 +17,7 @@
  */
 import { fromCatalogSnapshot, type CatalogSnapshot } from 'movement-lang';
 import { checkProgram } from 'legacy-lang';
-import { parseProgram } from 'movement-lang';
+import { parseProgram } from 'legacy-lang';
 
 import type { TeamId } from '../../generated/kysely/core/Team';
 import type { ExternalServiceCredentialsId } from '../../generated/kysely/automations/ExternalServiceCredentials';

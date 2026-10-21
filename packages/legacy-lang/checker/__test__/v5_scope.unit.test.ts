@@ -4,7 +4,7 @@
 // built-in; plugins by their exact-case names and package tags. Each under 4
 // as before. The Rust checker's twin is crates/movement-checker/tests/v5_scope.rs.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, type Diagnostic } from '../check';
 import { mockCatalog } from '../catalog';
 import type { ResolveFile } from '../link';

@@ -7,7 +7,7 @@
 //
 // Set UPDATE_EXPRESSION_TREES_FIXTURE=1 to rewrite the pins from the current
 // parser (after a re-harvest, or a ruling) — then read the diff.
-import { ExpressionSyntaxError, parseExpression } from 'movement-lang/parser/expression/parse_expression';
+import { ExpressionSyntaxError, parseExpression } from '../parse_expression';
 import { canonical, SLOTS } from './lowering_fixture';
 
 declare function require(id: string): unknown;

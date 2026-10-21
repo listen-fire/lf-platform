@@ -3,7 +3,7 @@
 // lacks is refused at save time with the constructs NAMED, instead of
 // failing firings later. Pure AST scan; no DB, no adapter registry.
 
-import { parseProgram } from 'movement-lang';
+import { parseProgram } from 'legacy-lang';
 import { listUnsupportedConstructs } from '../interpretable';
 
 const PRELUDE = `

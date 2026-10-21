@@ -4,7 +4,7 @@
 // where a negation shows in the types, since `EXISTS(x)` proves `x` inside its
 // arm and `NOT EXISTS(x)` proves nothing there.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { mockCatalog, type InstanceSchema } from '../catalog';
 import { notKeywordRetirement } from './keyword_retirement';

@@ -76,9 +76,9 @@ describe('the parser entry points on the Rust grammar', () => {
 
   it('reads a nested call with the file\'s spans, and refuses one with a MovementParseError', () => {
     const slot: ExprSlot = { raw: '1 + f(x)', span: { start: { line: 4, col: 9 }, end: { line: 4, col: 17 } } };
-    const value = parse.parseNestedCall(slot, { start: 4, end: 8 }, 3);
+    const value = parse.parseNestedCall(slot, { start: 4, end: 8 }, 5);
     expect(value).toMatchObject({ kind: 'call', call: { callee: 'f', span: { start: { line: 4, col: 13 }, end: { line: 4, col: 17 } } } });
-    expect(() => parse.parseNestedCall({ ...slot, raw: '1 + f(x' }, { start: 4, end: 7 }, 3)).toThrow(parse.MovementParseError);
+    expect(() => parse.parseNestedCall({ ...slot, raw: '1 + f(x' }, { start: 4, end: 7 }, 5)).toThrow(parse.MovementParseError);
   });
 
   it('refuses nesting deeper than the grammar bounds', () => {

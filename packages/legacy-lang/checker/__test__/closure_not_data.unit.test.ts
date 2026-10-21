@@ -9,7 +9,7 @@
 // map always reads a field. Before 5 a closure is not a value at all, and
 // nothing changes.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
 import type { LanguageVersion } from 'movement-lang/language_version';

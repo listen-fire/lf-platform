@@ -6,8 +6,8 @@
 // Two shapes so a hardcode cannot pass: a root collection (`reg-[:entities]->`)
 // and a record edge off a found handle (`co-[:Branches]->`).
 
-import { parseProgram } from 'movement-lang/parser/parse';
-import { parseMovementExpression } from 'movement-lang/expression/bridge';
+import { parseProgram } from '../../parser/parse';
+import { parseMovementExpression } from '../../expression/bridge';
 import { checkProgram, Diagnostic, DiagnosticCodes as C } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
 import { spelledFor } from './surface_spelling';

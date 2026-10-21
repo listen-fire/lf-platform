@@ -589,8 +589,8 @@ describe('the check host call', () => {
   const catalog = mockCatalogSnapshot({
     adapters: { manual: { constructionArgs: [] } },
   });
-  const SOURCE = ['import { manual } from adapters', 'go = manual()', 'movement m(e: <go>) {', '  x = 1', '}'].join('\n');
-  const check = (source: string) => request(1, 'check', 'program', { source, languageVersion: 3 });
+  const SOURCE = ['import { manual } from adapters', 'go = connect manual', 'function m(e: <go>) {', '  x = 1', '}'].join('\n');
+  const check = (source: string) => request(1, 'check', 'program', { source, languageVersion: 5 });
 
   it("answers check.program with the TypeScript checker's diagnostics, link and stamps", async () => {
     const { engine, answers } = scriptedEngine((seen) => (seen.length === 0 ? { pending: [check(SOURCE)] } : { done: {} }));

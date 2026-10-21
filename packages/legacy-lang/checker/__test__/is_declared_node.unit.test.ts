@@ -10,7 +10,7 @@
 // machinery with the comparator standing in for the name match, arm AND else,
 // and (c) that it decides from the SCHEMA, so nothing about it needs data.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic, DiagnosticCodes as C } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
 

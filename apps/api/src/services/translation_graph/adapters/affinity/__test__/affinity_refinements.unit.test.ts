@@ -4,7 +4,7 @@
 
 import { fromCatalogSnapshot, type CatalogSnapshot } from 'movement-lang';
 import { checkProgram, scanInstanceChains } from 'legacy-lang';
-import { parseProgram } from 'movement-lang';
+import { parseProgram } from 'legacy-lang';
 
 import type { SourcePosition } from 'movement-engine/public/catalog';
 

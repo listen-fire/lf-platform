@@ -12,7 +12,7 @@
 //     expression as the binding it means (checker/nested_calls.ts), and a
 //     built-in that only computes a value is refused as a statement.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, DiagnosticCodes as C, type Diagnostic } from '../check';
 import { mockCatalog, type InstanceSchema } from '../catalog';
 import { TypedDiagnosticCodes as T } from '../typing';

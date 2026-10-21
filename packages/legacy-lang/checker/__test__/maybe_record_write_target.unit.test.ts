@@ -14,7 +14,7 @@
 // records_of_one_type test), so the type is the value's from Dancing Wren (5),
 // and what it refuses there is an upgrade warning before.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
 import type { LanguageVersion } from 'movement-lang/language_version';

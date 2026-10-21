@@ -26,7 +26,8 @@
 import path from 'node:path';
 import { readFileSync, writeFileSync } from 'node:fs';
 
-import { fromCatalogSnapshot, parseProgram, resolveFileFromSnapshot, typeNameOf, type CatalogSnapshot } from 'movement-lang';
+import { fromCatalogSnapshot, resolveFileFromSnapshot, typeNameOf, type CatalogSnapshot } from 'movement-lang';
+import { parseProgram } from 'legacy-lang';
 import { loadChecks, loadSnapshots } from 'legacy-lang/conformance/checks_corpus';
 import { corpusFile, overCorpus, SNAPSHOT_TABLE_FILE } from 'legacy-lang/conformance/checks_pin';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
@@ -174,7 +175,7 @@ function oracleCorpus(): Candidate[] {
 }
 
 /** The patterns oracle's world, as the parity harness reads it
- *  (crates/movement-checker/parity/reference.ts). */
+ *  (packages/legacy-lang/parity/reference.ts). */
 function patternsCatalog(): CatalogSnapshot {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { PATTERNS_CATALOG } = require(path.join(ORACLES, 'patterns_oracle.ts')) as { PATTERNS_CATALOG: CatalogSnapshot };

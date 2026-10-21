@@ -4,8 +4,8 @@
 // call argument, never a value inside an expression. Its entries carry no
 // marker — the entry's KIND is what says field or edge (ruling 1).
 
-import { parseProgram } from 'movement-lang/parser/parse';
-import { MovementParseError } from 'movement-lang/parser/parse';
+import { parseProgram } from '../parse';
+import { MovementParseError } from '../parse';
 import type { AssignStatement, CallStatement, NodeEntry, NodeLiteral, Statement } from 'movement-lang/parser/ast';
 
 function body(source: string): Statement[] {

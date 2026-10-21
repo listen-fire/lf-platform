@@ -9,7 +9,7 @@
 // and `#linked` hops and the `@parent` / `@resource` reads are retired under
 // version 3 outright (translation_graph_reads_retired.unit.test.ts).
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, DiagnosticCodes as C } from '../check';
 import { mockCatalog, type InstanceSchema } from '../catalog';
 import type { LanguageVersion } from 'movement-lang/language_version';

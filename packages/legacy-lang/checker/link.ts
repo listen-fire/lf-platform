@@ -39,7 +39,7 @@ import {
   Statement,
 } from 'movement-lang/parser/ast';
 import { writtenArms } from 'movement-lang/parser/ast';
-import { MovementParseError, parseProgram } from 'movement-lang/parser/parse';
+import { MovementParseError, parseProgram } from '../parser/parse';
 import type { LanguageVersion } from 'movement-lang/language_version';
 import { type ResolveFile, type LinkedExport, type LinkedFile } from 'movement-lang/checker/linked_types';
 

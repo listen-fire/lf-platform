@@ -9,7 +9,7 @@
 // where the operand is a list, and refuses a v5 call given the wrong kind.
 // The Rust twin is crates/movement-checker/src/families/typed_spelling.rs.
 
-import { children } from 'movement-lang/parser/expression/lower';
+import { children } from '../parser/expression/lower';
 import type { At, Hop, MExpr, Name } from 'movement-lang/parser/expression/tree';
 
 export type ValueKind = 'list' | 'text' | undefined;

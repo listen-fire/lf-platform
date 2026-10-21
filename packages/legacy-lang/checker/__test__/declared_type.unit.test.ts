@@ -5,7 +5,7 @@
 // prompt, and checks a literal with the SAME did-you-mean, through the same
 // code. These tests pin that sameness rather than a second mechanism.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic, DiagnosticCodes as C } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
 

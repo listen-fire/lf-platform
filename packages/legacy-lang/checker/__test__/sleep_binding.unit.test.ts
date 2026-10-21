@@ -2,7 +2,7 @@
 // says so (boolean), so `x == true` compares; v1 and v2 left it untyped and
 // keep refusing that comparison.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, DiagnosticCodes as C, type Diagnostic } from '../check';
 import { mockCatalog } from '../catalog';
 import type { LanguageVersion } from 'movement-lang/language_version';

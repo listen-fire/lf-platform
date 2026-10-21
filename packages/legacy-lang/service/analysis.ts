@@ -14,7 +14,7 @@
 // information completions need.
 
 import { Loc, Program, Span } from 'movement-lang/parser/ast';
-import { MovementParseError, parseProgram } from 'movement-lang/parser/parse';
+import { MovementParseError, parseProgram } from '../parser/parse';
 import {
   checkProgramWithLink,
   type CheckRecording,

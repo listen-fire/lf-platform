@@ -44,20 +44,35 @@ export function parseNestedCall(
   at: { start: number; end: number },
   languageVersion: LanguageVersion,
 ): RValue {
+  return readNestedCall(slot, { at, languageVersion, parse: () => rustParseNestedCall(slot, at, languageVersion) });
+}
+
+/**
+ * `parseNestedCall`'s read, once per place in the program, with the parse
+ * it records given: the platform reads a pin this release no longer serves
+ * through its own parser, into the same record `nestedCallsReadIn` answers.
+ *
+ * @internal
+ */
+export function readNestedCall(
+  slot: ExprSlot,
+  read: { at: { start: number; end: number }; languageVersion: LanguageVersion; parse: () => StatementParse<RValue> },
+): RValue {
   // Read once per place in the program, as a call on its own line is: the
   // checker records what it settles on the call's statements (a spread's copy
   // plan, a walk's), and the engine runs those same statements.
   const origin = originalSlot(slot);
-  let read = nestedCallReads.get(origin);
-  if (read === undefined) {
-    read = new Map();
-    nestedCallReads.set(origin, read);
+  let reads = nestedCallReads.get(origin);
+  if (reads === undefined) {
+    reads = new Map();
+    nestedCallReads.set(origin, reads);
   }
-  const key = `${languageVersion}@${at.start}-${at.end}`;
-  let nested = read.get(key);
+  const { at } = read;
+  const key = `${read.languageVersion}@${at.start}-${at.end}`;
+  let nested = reads.get(key);
   if (nested === undefined) {
-    nested = { at: { start: at.start, end: at.end }, value: refusedAsError(rustParseNestedCall(slot, at, languageVersion)) };
-    read.set(key, nested);
+    nested = { at: { start: at.start, end: at.end }, value: refusedAsError(read.parse()) };
+    reads.set(key, nested);
   }
   return nested.value;
 }
@@ -78,7 +93,9 @@ export function nestedCallsReadIn(slot: ExprSlot): NestedCallRead[] {
   return [...(nestedCallReads.get(slot)?.values() ?? [])];
 }
 
-function refusedAsError<T>(parse: StatementParse<T>): T {
+/** A statement parse's value, or its refusal thrown as `MovementParseError`.
+ *  @internal For the platform's reader of old pins. */
+export function refusedAsError<T>(parse: StatementParse<T>): T {
   if (parse.ok) return parse.value;
   throw new MovementParseError(parse.refusal.message, parse.refusal.loc);
 }

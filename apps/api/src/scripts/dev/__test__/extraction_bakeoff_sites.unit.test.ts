@@ -4,7 +4,7 @@
 // the planned spec, where the declaration IS that first stage.
 
 import { type ExtractExpression, type ShapeNode } from 'movement-lang';
-import { parseProgram } from 'movement-lang';
+import { parseProgram } from 'legacy-lang';
 
 import { fixtureSpec, rootSites } from '../extraction_bakeoff';
 

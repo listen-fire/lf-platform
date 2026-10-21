@@ -4,7 +4,7 @@
 // recomposing bare was how `` `The Check`-[:Answer]-> `` failed to re-parse
 // in statement and await form while the pure-expression form worked.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
 

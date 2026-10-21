@@ -8,7 +8,7 @@
 // what makes the utility idiom compose — and (c) that absence rides across the
 // boundary unchanged.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic, DiagnosticCodes as C } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
 

@@ -4,7 +4,7 @@
 // its fix. Under 4 nothing changes; under 5 the old text is refused with a
 // fix, and the fixed program checks clean and means what the old one did.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, type Diagnostic } from '../check';
 import { mockCatalog, type InstanceSchema } from '../catalog';
 import { applyFix } from 'movement-lang/checker/fixes';

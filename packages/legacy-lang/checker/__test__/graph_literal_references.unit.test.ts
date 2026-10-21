@@ -6,7 +6,7 @@
 // write to that record. A walk with a field body and a record spread copy.
 // Plan: plans/functional-extract-2026-10-02/1_design.md, "Rulings (Henry, 2026-10-05)".
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import type { NodeLiteral, Statement } from 'movement-lang/parser/ast';
 import { checkProgram, Diagnostic, DiagnosticCodes as C } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';

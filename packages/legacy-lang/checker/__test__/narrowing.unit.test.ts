@@ -11,7 +11,7 @@
 // members' data). So these tests register refinements the way the host does and
 // assert the checker agrees on the key.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { InstanceSchema, mockCatalog, refinementKey } from '../catalog';
 import { mockCatalogSnapshot } from 'movement-lang/service/snapshot';

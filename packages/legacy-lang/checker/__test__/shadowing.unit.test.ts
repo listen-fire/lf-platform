@@ -10,7 +10,7 @@
 // `Scope.declare`; only authored bindings go through `declareAuthored`), never
 // by inspecting the name.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic, DiagnosticCodes as C } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
 

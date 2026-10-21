@@ -5,7 +5,7 @@
 // value's type as it is. Every version. The Rust twin is
 // crates/movement-checker/tests/spread_held_record.rs, same programs.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram } from '../check';
 import { fromCatalogSnapshot } from 'movement-lang/service/snapshot';
 

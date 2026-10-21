@@ -3,7 +3,7 @@
 // declared shape and `extractOne` where it is mechanical, and no rewrite for a
 // `through […]` stage. Versions 1–4 are unchanged.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, type Diagnostic } from '../check';
 import { mockCatalog, type InstanceSchema } from '../catalog';
 import { applyFix } from 'movement-lang/checker/fixes';

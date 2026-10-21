@@ -4,7 +4,7 @@
 // crates/movement-checker/tests/credential_binding.rs; here both checkers are
 // also held to each other's exact diagnostics.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, type Diagnostic } from '../check';
 import { checkSourceInRust } from 'movement-lang/checker/rust_checker';
 import { fromCatalogSnapshot, type CatalogSnapshot } from 'movement-lang/service/snapshot';

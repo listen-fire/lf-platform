@@ -8,7 +8,7 @@
 //   - a bracket predicate the source can't run is a NOTE about the fetch, not
 //     a refusal — unless nothing at all narrows, which is boundedness.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic, DiagnosticCodes as C } from '../check';
 import { spelledFor } from './surface_spelling';
 import { CollectionSchema, InstanceSchema, mockCatalog } from '../catalog';

@@ -11,11 +11,13 @@ Every saved movement is pinned to the language version it was written against: a
 
 | version | name | supported | deprecated | is |
 |---|---|---|---|---|
-| 1 | Quiet Heron | yes | no | the language as of tag v0.6.0 |
-| 2 | Bright Otter | yes | no | the language from v0.7.0 through v0.9.1 |
-| 3 | Steady Lynx | yes | no | the language from v0.10.0: a list literal is a tuple, exact at a literal index and a list of its members' union elsewhere |
-| 4 | Luminous Owl | yes | no | the language from v0.11.0: a match yields absent on a miss, a write handle reaches its pre-write record through `@old` |
+| 1 | Quiet Heron | no | no | the language as of tag v0.6.0 |
+| 2 | Bright Otter | no | no | the language from v0.7.0 through v0.9.1 |
+| 3 | Steady Lynx | no | no | the language from v0.10.0: a list literal is a tuple, exact at a literal index and a list of its members' union elsewhere |
+| 4 | Luminous Owl | no | no | the language from v0.11.0: a match yields absent on a miss, a write handle reaches its pre-write record through `@old` |
 | 5 | Dancing Wren | yes | no | the language after v0.11.0: no engine-side store and no meta edges; no `write … bind`, no `#` hops (a plugin is a function you call), `delete` only where the system declares a type deletable, `_resources` only on an extraction's result |
+
+The language release names the versions it supports; versions it has dropped are served by the platform's legacy packages until their saved movements are upgraded.
 
 The integer is the identity: code compares it and never parses the name, which is display only. A version keeps its row after it leaves the supported set, so a movement pinned to it can still be refused by name. [`docs/language/steady-lynx-migration.md`](../language/steady-lynx-migration.md) is the migration guide from version 2 to 3, [`docs/language/luminous-owl-migration.md`](../language/luminous-owl-migration.md) from 3 to 4, and [`docs/language/dancing-wren-migration.md`](../language/dancing-wren-migration.md) from 4 to 5.
 

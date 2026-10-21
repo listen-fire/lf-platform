@@ -5,10 +5,11 @@
 // a walk read does. A field the write DID send is the program's own file and
 // stays usable; versions 1 to 4 are unchanged.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
-import { SUPPORTED_LANGUAGE_VERSIONS, type LanguageVersion } from 'movement-lang/language_version';
+import { type LanguageVersion } from 'movement-lang/language_version';
+import { PLATFORM_SUPPORTED_LANGUAGE_VERSIONS } from '../../language_version';
 import { spelledFor } from './surface_spelling';
 
 const driveSchema: InstanceSchema = {
@@ -57,7 +58,7 @@ const SENT = ['  h = write d-[:docs]-> { name: "a", file: f }', '  t = READ(h.`f
 const PASSED_ON = ['  h = write d-[:docs]-> { name: "a" }', '  t = ocr(doc: h.`file`)'];
 
 describe('a write handle\'s unsent file field', () => {
-  it.each([...SUPPORTED_LANGUAGE_VERSIONS].filter(v => v < 5))('is accepted under version %i', version => {
+  it.each([...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS].filter(v => v < 5))('is accepted under version %i', version => {
     expect(errorsUnder(version, UNSENT)).toEqual([]);
   });
 
@@ -72,6 +73,6 @@ describe('a write handle\'s unsent file field', () => {
   });
 
   it('stays usable when the write sent it', () => {
-    for (const version of SUPPORTED_LANGUAGE_VERSIONS) expect(errorsUnder(version, SENT)).toEqual([]);
+    for (const version of PLATFORM_SUPPORTED_LANGUAGE_VERSIONS) expect(errorsUnder(version, SENT)).toEqual([]);
   });
 });

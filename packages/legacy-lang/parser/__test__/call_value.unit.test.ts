@@ -9,7 +9,7 @@
 // a positional invocation is a call as well, whatever it names; resolution says
 // whether that is a built-in (`checker/calls.ts`).
 
-import { parseProgram, MovementParseError } from 'movement-lang/parser/parse';
+import { parseProgram, MovementParseError } from '../parse';
 import type { CallStatement, Statement } from 'movement-lang/parser/ast';
 
 function body(source: string): Statement[] {

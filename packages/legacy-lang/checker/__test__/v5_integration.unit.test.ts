@@ -5,7 +5,7 @@
 // which fixes are marked safe to apply automatically. The Rust twin is
 // crates/movement-checker/tests/v5_integration.rs.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, type Diagnostic } from '../check';
 import { mockCatalog, type InstanceSchema } from '../catalog';
 import { spellingCheck, upgradeSource } from '../upgrade';

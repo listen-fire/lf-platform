@@ -20,7 +20,7 @@
 // teaches the language a movement saved today is pinned to.
 
 import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
-import { parseProgram } from 'movement-lang';
+import { parseProgram } from 'legacy-lang';
 
 import type { EngineClaim } from '../types';
 

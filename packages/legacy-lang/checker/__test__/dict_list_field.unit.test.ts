@@ -4,7 +4,7 @@
 // accept it where it is read back out of the map, and the engine hands them
 // exactly that list.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, checkProgramWithLink, Diagnostic } from '../check';
 import { InstanceSchema, mockCatalog, type FieldType } from '../catalog';
 

@@ -21,7 +21,7 @@
  */
 import { CURRENT_LANGUAGE_VERSION, fromCatalogSnapshot, type CatalogSnapshot, type InstanceSchema } from 'movement-lang';
 import { checkProgram, scanInstanceChains } from 'legacy-lang';
-import { parseProgram } from 'movement-lang';
+import { parseProgram } from 'legacy-lang';
 
 import type { SourcePosition } from 'movement-engine/public/catalog';
 import type { EdgesFromResult } from 'movement-engine/public/adapter';

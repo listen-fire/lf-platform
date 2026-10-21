@@ -11,7 +11,7 @@
 //     absent (version 3). Before it, both were silent.
 // Plan: plans/functional-extract-2026-10-02/1_design.md, "The modern shape".
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import type { NodeLiteral, Statement } from 'movement-lang/parser/ast';
 import { checkProgram, DiagnosticCodes as C } from '../check';
 import { mockCatalog, type InstanceSchema } from '../catalog';

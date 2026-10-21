@@ -5,7 +5,7 @@
 // spellings must answer the same. Only the respellings are applied (the
 // `MOV_V5_*` fixes): a fix for the error a test is about never is.
 
-import { parseProgram, MovementParseError } from 'movement-lang/parser/parse';
+import { parseProgram, MovementParseError } from '../../parser/parse';
 import { checkProgram, type CheckOptions, type Diagnostic } from '../check';
 import type { Catalog } from '../catalog';
 import { spellingCheck, upgradeSource } from '../upgrade';

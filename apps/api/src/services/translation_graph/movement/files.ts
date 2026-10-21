@@ -25,7 +25,8 @@
 
 import { CURRENT_LANGUAGE_VERSION, runHostUnits, type LanguageVersion, type Program, type ResolveFile } from 'movement-lang';
 import { fileExports, referencedFileImports } from 'legacy-lang';
-import { MovementParseError, parseProgram } from 'movement-lang';
+import { MovementParseError } from 'movement-lang';
+import { parseProgram } from 'legacy-lang';
 
 import { getMovementRowByName, listMovementRows, type MovementValidityStatus } from './store';
 

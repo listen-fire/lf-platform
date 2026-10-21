@@ -8,7 +8,7 @@
 // adapter to ask — and that the run's own store resolves identity itself, which
 // is why FUZZY needs no capability here.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, checkProgramWithLink, Diagnostic, DiagnosticCodes as C } from '../check';
 import { effectRowOf, type EffectRow } from '../effects';
 import { InstanceSchema, mockCatalog } from '../catalog';

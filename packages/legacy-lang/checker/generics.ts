@@ -19,7 +19,7 @@
 // is the adapter's own declaration (`EdgeSchema.genericOver`), and what the
 // literals MEAN is the host's synthesis. The checker only agrees on a key.
 
-import { BridgeError, parseMovementExpression } from 'movement-lang/expression/bridge';
+import { BridgeError, parseMovementExpression } from '../expression/bridge';
 import type { LanguageVersion } from 'movement-lang/language_version';
 
 /**

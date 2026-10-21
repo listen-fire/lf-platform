@@ -2,7 +2,7 @@
 // spell it `pollIntervalSeconds: 300`; from version 5 it is the setting
 // `every: 5m`, as `until`'s cadence is. Twin of the Rust checker's tests/listens.rs.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, DiagnosticCodes as C } from '../check';
 import { mockCatalog } from '../catalog';
 import type { LanguageVersion } from 'movement-lang/language_version';

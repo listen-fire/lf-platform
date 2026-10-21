@@ -6,7 +6,8 @@
 // version (plans/functional-extract-2026-10-02/2_one_grammar.md).
 
 import { binding, Environment, evalMovementExpr } from '../expression';
-import { CURRENT_LANGUAGE_VERSION, parseMovementCondition, parseMovementExpression, type MovementCondition } from 'movement-lang';
+import { CURRENT_LANGUAGE_VERSION, type MovementCondition } from 'movement-lang';
+import { parseMovementCondition, parseMovementExpression } from 'legacy-lang';
 
 /** A condition's truth as the run reads it: every top-level conjunct holds. */
 async function holds(condition: MovementCondition, env: Environment): Promise<boolean> {

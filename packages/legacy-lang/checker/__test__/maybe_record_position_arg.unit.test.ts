@@ -13,7 +13,7 @@
 // declaration itself is refused only from version 5. Declared recursion is no
 // call cycle.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { mockCatalog } from '../catalog';
 import type { LanguageVersion } from 'movement-lang/language_version';

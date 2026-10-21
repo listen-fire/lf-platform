@@ -13,10 +13,10 @@
 //      or is reported).
 
 import { objectMemberExpression } from 'movement-lang/expression/types';
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, DiagnosticCodes as C } from '../../checker/check';
 import { mockCatalog } from '../../checker/catalog';
-import { parseMovementCondition, parseMovementExpression, splitUniquenessConjuncts } from 'movement-lang/expression/bridge';
+import { parseMovementCondition, parseMovementExpression, splitUniquenessConjuncts } from '../bridge';
 
 describe('bridge — object literals in an expression slot', () => {
   it('parses to the object node with entries in author order', () => {

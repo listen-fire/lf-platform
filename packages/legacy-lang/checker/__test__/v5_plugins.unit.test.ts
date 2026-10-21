@@ -4,7 +4,7 @@
 // refused with the positional rewrite, which the upgrade applies. The Rust
 // twin is crates/movement-checker/tests/v5_plugins.rs.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, type Diagnostic } from '../check';
 import { bindPluginArgs, mockCatalog, pluginPositionalParams, type PluginSpec } from '../catalog';
 import { typescriptCheck, upgradeSource } from '../upgrade';

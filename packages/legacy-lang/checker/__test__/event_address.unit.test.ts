@@ -20,7 +20,7 @@
 // synthesizes nothing; the narrowed positions are grafted on demand from the
 // addresses the program names.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic, DiagnosticCodes as C } from '../check';
 import { mockCatalog, type SchemaFieldType, type InstanceSchema, type PositionSchema } from '../catalog';
 import { eventAddressDisplay, eventAddressKey, narrowingPrefixKey } from '../event_address';

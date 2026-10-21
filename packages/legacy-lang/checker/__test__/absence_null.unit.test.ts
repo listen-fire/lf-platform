@@ -10,7 +10,7 @@
 // tell derived from hardcoded. `chat` and `board` tell the same story with none
 // of the same names.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic, diagnosticSeverity } from '../check';
 import { mockCatalog, type SchemaFieldType, type InstanceSchema, type PositionSchema } from '../catalog';
 import { eventAddressDisplay, eventAddressKey } from '../event_address';

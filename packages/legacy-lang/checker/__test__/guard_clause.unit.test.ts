@@ -11,7 +11,7 @@
 // Both checkers answer every case, the TypeScript one and the Rust one; the
 // Rust twin is crates/movement-checker/tests/guard_clause.rs.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, type Diagnostic } from '../check';
 import { fromCatalogSnapshot, type CatalogSnapshot } from 'movement-lang/service/snapshot';
 import { checkSourceInRust } from 'movement-lang/checker/rust_checker';

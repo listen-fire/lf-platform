@@ -5,7 +5,7 @@
 // otherwise an ordinary name (like `ask` after chunk G) — the expression form
 // still recognises it specially only inside `await sleep(…)`.
 
-import { MovementParseError, parseProgram } from 'movement-lang/parser/parse';
+import { MovementParseError, parseProgram } from '../parse';
 import { MovementDeclaration, RValue, Statement } from 'movement-lang/parser/ast';
 
 function as<K extends Statement['kind']>(

@@ -13,7 +13,7 @@
 // This one stays while the TypeScript catalog is in use (until the checker
 // port). Gated: MOVEMENT_CATALOG_DIFFERENTIAL=1.
 import { canonical } from '../../parser/expression/__test__/lowering_fixture';
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { callCatalog } from 'movement-lang/wasm/loader';
 import { resolveBorrowedField, declaredTypesIn, type Catalog, type InstanceSchema } from '../catalog';
 import { checkNow, loadChecks, SNAPSHOT_TABLE } from './checks_fixture';

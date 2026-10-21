@@ -7,7 +7,7 @@
 // The Rust twin is crates/movement-checker/tests/v5_refusals.rs, same
 // programs, same messages.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram } from '../check';
 import { fromCatalogSnapshot } from 'movement-lang/service/snapshot';
 import type { LanguageVersion } from 'movement-lang/language_version';

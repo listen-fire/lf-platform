@@ -14,7 +14,7 @@
 // `affinity` is the third: its variants are TYPES of their own, which is what
 // the write's HANDLE stands on.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic, DiagnosticCodes as C } from '../check';
 import { SchemaFieldType, InstanceSchema, mockCatalog } from '../catalog';
 

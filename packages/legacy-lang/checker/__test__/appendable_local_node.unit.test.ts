@@ -7,7 +7,7 @@
 // is checked STRUCTURALLY — a local node belongs to no graph, so there is
 // nothing nominal to compare by and nothing for the effect row to carry.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, checkProgramWithLink, Diagnostic, DiagnosticCodes as C } from '../check';
 import { effectRowOf, type EffectRow } from '../effects';
 import { InstanceSchema, mockCatalog } from '../catalog';

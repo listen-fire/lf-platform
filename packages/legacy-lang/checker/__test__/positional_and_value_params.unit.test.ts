@@ -6,7 +6,7 @@
 //
 // Named calls keep their meaning; a call is all positional or all named.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { spelledFor } from './surface_spelling';
 import type { LanguageVersion } from 'movement-lang/language_version';
 import { checkProgram, Diagnostic, DiagnosticCodes as C } from '../check';

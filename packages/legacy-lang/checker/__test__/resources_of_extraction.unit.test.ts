@@ -9,7 +9,7 @@
 //   - it says the system exposes no files.
 // Under version 4 every one of these is accepted, as it always was.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, DiagnosticCodes as C } from '../check';
 import { mockCatalog, type InstanceSchema } from '../catalog';
 import type { LanguageVersion } from 'movement-lang/language_version';

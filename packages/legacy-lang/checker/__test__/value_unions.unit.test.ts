@@ -3,7 +3,7 @@
 // Versions 1 and 2 had no value unions: there such a tuple read as a list
 // nobody could type, and stays that way under its pin.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, checkProgramWithLink, Diagnostic } from '../check';
 import { describeFieldType, FieldType, InstanceSchema, mockCatalog } from '../catalog';
 import { fieldAssignable, fieldTypeCompatible, fieldTypeEquals, valueUnion } from '../typing';

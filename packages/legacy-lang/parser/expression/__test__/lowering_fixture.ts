@@ -10,8 +10,8 @@
 // names each such ruling.
 
 import type { Expression } from 'movement-lang/expression/types';
-import { lowerMovementCondition, lowerMovementExpression, type MovementCondition } from 'movement-lang/parser/expression/lower';
-import { ExpressionSyntaxError, parseExpression } from 'movement-lang/parser/expression/parse_expression';
+import { lowerMovementCondition, lowerMovementExpression, type MovementCondition } from '../lower';
+import { ExpressionSyntaxError, parseExpression } from '../parse_expression';
 
 // This package carries no Node typings; jest's module scope has `require`,
 // which reads the JSON fixtures natively.

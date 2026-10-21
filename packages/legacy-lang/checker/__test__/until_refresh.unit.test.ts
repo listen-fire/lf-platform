@@ -2,7 +2,7 @@
 // read-only purity) and `refresh <handle>` (stable-head requirement). EXISTS /
 // COUNT polymorphism is exercised through the quorum until condition.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic, DiagnosticCodes as C } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
 

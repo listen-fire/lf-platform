@@ -11,9 +11,10 @@
 // per-team catalog the save path uses (referenced-construction scoped)
 // and runs the core against it.
 
-import { BridgeError, CURRENT_LANGUAGE_VERSION, checkSourceInRust, diagnosticSeverity, languageVersionDiagnostic } from 'movement-lang';
-import { checkProgram, since } from 'legacy-lang';
-import { MovementParseError, parseProgram } from 'movement-lang';
+import { BridgeError, CURRENT_LANGUAGE_VERSION, checkSourceInRust, diagnosticSeverity } from 'movement-lang';
+import { checkProgram, languageVersionDiagnostic, movesFromDroppedVersion, since, upgradeWarnings, withUpgradeWarnings } from 'legacy-lang';
+import { MovementParseError } from 'movement-lang';
+import { parseProgram } from 'legacy-lang';
 
 import type {
   Catalog,
@@ -186,18 +187,26 @@ export function diagnoseMovementSource(
     };
   }
 
-  const { snapshot } = options;
+  const { snapshot, upgradingFrom } = options;
   const checkedInRust = snapshot !== undefined && since(languageVersion, RUST_ENGINE_FROM_VERSION);
-  const upgrading = options.upgradingFrom !== undefined ? { upgradingFrom: options.upgradingFrom } : {};
-  const collected: Diagnostic[] = [
-    ...(checkedInRust
-      ? checkSourceInRust(source, snapshot, { languageVersion, ...upgrading })
-      : checkProgram(program, options.catalog, {
-          languageVersion,
-          ...upgrading,
-          ...(options.resolveFile !== undefined ? { resolveFile: options.resolveFile } : {}),
-        })),
-  ];
+  const upgrading = upgradingFrom !== undefined ? { upgradingFrom } : {};
+  const resolving = options.resolveFile !== undefined ? { resolveFile: options.resolveFile } : {};
+  const collected: Diagnostic[] = [];
+  if (!checkedInRust) {
+    collected.push(...checkProgram(program, options.catalog, { languageVersion, ...upgrading, ...resolving }));
+  } else if (!movesFromDroppedVersion(upgradingFrom)) {
+    collected.push(...checkSourceInRust(source, snapshot, { languageVersion, ...upgrading }));
+  } else {
+    // A move from a version the language release no longer serves: only the
+    // platform's TypeScript checker knows what changed meaning on the way, so
+    // its upgrade warnings join the Rust check of the version moved to.
+    collected.push(
+      ...withUpgradeWarnings(
+        checkSourceInRust(source, snapshot, { languageVersion }),
+        upgradeWarnings(program, options.catalog, { languageVersion, upgradingFrom, ...resolving }),
+      ),
+    );
+  }
   const firedMovements: string[] = [];
   for (const statement of program.statements) {
     if (statement.kind === 'listen') firedMovements.push(statement.movement);

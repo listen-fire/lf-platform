@@ -7,7 +7,7 @@
 // does; and a number index into a list may miss, and needs an order to mean
 // anything, exactly as FIRST does.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { mockCatalog, type InstanceSchema } from '../catalog';
 

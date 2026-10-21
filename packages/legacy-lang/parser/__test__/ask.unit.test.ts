@@ -5,7 +5,7 @@
 // construction shape is rejected with a pointer to the new form, and the `ask`
 // keyword is FREED — it is an ordinary instance / binding name now.
 
-import { MovementParseError, parseProgram } from 'movement-lang/parser/parse';
+import { MovementParseError, parseProgram } from '../parse';
 import { MovementDeclaration, RValue, Statement } from 'movement-lang/parser/ast';
 
 function as<K extends Statement['kind']>(

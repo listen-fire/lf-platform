@@ -5,7 +5,7 @@
 // a LIST of the returned values, or the returned position itself (positions are
 // many-valued already, so plurality lives in the traversal, not a second type).
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, checkProgramWithLink, Diagnostic, DiagnosticCodes as C } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
 

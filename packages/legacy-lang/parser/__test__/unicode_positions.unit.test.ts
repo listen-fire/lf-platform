@@ -8,7 +8,7 @@
 // TypeScript parser quotes one code unit there (half the character), which
 // the Rust parser does not reproduce.
 
-import { MovementParseError, parseProgram } from 'movement-lang/parser/parse';
+import { MovementParseError, parseProgram } from '../parse';
 import type { Span, Statement } from 'movement-lang/parser/ast';
 import { checkProgram } from '../../checker/check';
 import { mockCatalog } from '../../checker/catalog';

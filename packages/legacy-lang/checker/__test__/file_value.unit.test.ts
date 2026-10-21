@@ -7,7 +7,7 @@
 // the save scan refused the same forms (interpretable.ts). The Rust checker's
 // twin is crates/movement-checker/tests/file_value.rs.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { fromCatalogSnapshot, type CatalogSnapshot } from 'movement-lang/service/snapshot';
 import { checkProgram } from '../check';
 

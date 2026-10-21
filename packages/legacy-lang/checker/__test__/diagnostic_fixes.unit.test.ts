@@ -7,7 +7,7 @@
 // Two adapter shapes throughout (`crm` and `board`, `inbox` and `chat`), so a
 // fix derived from the schema cannot pass by matching one hardcoded name.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, DiagnosticCodes as C, type Diagnostic } from '../check';
 import { mockCatalog, type InstanceSchema } from '../catalog';
 import { applyFix } from 'movement-lang/checker/fixes';

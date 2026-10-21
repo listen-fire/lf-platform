@@ -15,7 +15,7 @@
 // polling adapter with two generic edges — one over free-text options (dynamic
 // options are legitimate), one over a closed set that must be literal.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { genericLandingKey, genericLandingName } from '../generics';
 import { fromCatalogSnapshot, type CatalogSnapshot } from 'movement-lang/service/snapshot';

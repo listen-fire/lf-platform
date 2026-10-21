@@ -17,9 +17,11 @@
 // checker diagnostic, or a named gap), is registered in
 // __test__/interpretable_unsupported_sites.unit.test.ts.
 
-import { BridgeError, conditionOfSlot, expressionOfSlot, parseMovementExpression, pathRootName, typeNameOf, CURRENT_LANGUAGE_VERSION, slotOfTree, treeOfSlot } from 'movement-lang';
+import { BridgeError, pathRootName, typeNameOf, CURRENT_LANGUAGE_VERSION, slotOfTree } from 'movement-lang';
+import { conditionOfSlot, expressionOfSlot, parseMovementExpression, treeOfSlot } from 'legacy-lang';
 import { linkImports, parseFieldTypeName, programCallScope, readCall, resolveCallee, hoistingMemberReads, nestedCalls, readingBoundNames, runsAsCall, CHUNKS_FUNCTION_ID, FILE_FUNCTION_ID, INTERPRETED_FUNCTION_IDS, READ_FUNCTION_ID, stdlibFunctionById } from 'legacy-lang';
-import { MovementParseError, parseProgram, parseNestedCall } from 'movement-lang';
+import { MovementParseError } from 'movement-lang';
+import { parseProgram, parseNestedCall } from 'legacy-lang';
 import type { CallArg, CallStatement, CollectionOpExpression, RValue, CombinatorExpression, ExprSlot, ExtractExpression, LanguageVersion, MExpr, MatchExpression, NodeLiteral, PathHead, MovementCondition, Program, ResolveFile, Statement, WriteExpression } from 'movement-lang';
 import type { CallPosition, CallReading, CallScope } from 'legacy-lang';
 import type { Expression } from 'movement-lang/expression/types';

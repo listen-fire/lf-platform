@@ -9,7 +9,7 @@
 // A system that describes nothing says nothing, so nothing is refused there.
 // Under version 4 every one of these is left to the run, as it always was.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, DiagnosticCodes as C } from '../check';
 import { mockCatalog, type InstanceSchema } from '../catalog';
 import type { LanguageVersion } from 'movement-lang/language_version';

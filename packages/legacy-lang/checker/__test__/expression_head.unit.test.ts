@@ -11,7 +11,7 @@
 // the record it waits at, which a parked run has to find again by name — so the
 // one head position that needs a name asks for one.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { mockCatalog, type InstanceSchema } from '../catalog';
 import { storyOf } from '../../story/story';

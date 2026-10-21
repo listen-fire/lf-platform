@@ -20,7 +20,7 @@ import {
   BridgeError,
   parseMovementCondition,
   parseMovementExpression,
-} from 'movement-lang/expression/bridge';
+} from '../bridge';
 import {
   applyStdlib,
   checkDateFormatPattern,

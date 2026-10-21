@@ -3,7 +3,7 @@
 // `node`: only `type <name> =` declares, so a binding called `type` (which the
 // `_resources WHERE type == "FILE"` idiom already leans on) keeps working.
 
-import { MovementParseError, parseProgram } from 'movement-lang/parser/parse';
+import { MovementParseError, parseProgram } from '../parse';
 import { Statement, TypeDeclaration } from 'movement-lang/parser/ast';
 
 function statements(source: string): Statement[] {

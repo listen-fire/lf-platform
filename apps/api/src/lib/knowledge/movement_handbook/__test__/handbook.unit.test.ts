@@ -1,6 +1,6 @@
 import { mockCatalog, type AdapterSpec, type Catalog, type InstanceSchema, type PositionSchema, CURRENT_LANGUAGE_VERSION } from 'movement-lang';
 import { checkProgram, scanInstanceChains, eventAddressDisplay, eventAddressKey, narrowingPrefixKey } from 'legacy-lang';
-import { parseProgram } from 'movement-lang';
+import { parseProgram } from 'legacy-lang';
 
 import type { InstanceChain } from 'legacy-lang';
 import type { ChapterId, EngineClaim } from '../types';

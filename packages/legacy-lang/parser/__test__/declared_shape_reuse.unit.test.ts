@@ -3,7 +3,7 @@
 // <Entry>`); and a write body spreads an extracted record's fields (`...e`,
 // `?...e`). These tests pin the surface — what each spelling parses to.
 
-import { MovementParseError, parseProgram } from 'movement-lang/parser/parse';
+import { MovementParseError, parseProgram } from '../parse';
 import {
   ExtractExpression,
   ShapeDeclaration,

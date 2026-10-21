@@ -6,7 +6,7 @@
 // fields and the names in scope. The Rust checker's twin is
 // crates/movement-checker/tests/v5_walk_names.rs, same programs, same messages.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram } from '../check';
 import { mockCatalog, type InstanceSchema } from '../catalog';
 

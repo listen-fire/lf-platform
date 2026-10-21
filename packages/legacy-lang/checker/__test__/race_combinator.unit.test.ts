@@ -10,7 +10,7 @@
 // awaited: `await` marks only where the run itself parks, and the arms do
 // that. Before 5 the spelling is `await race([…])` / `await parallel([…])`.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, checkProgramWithLink, Diagnostic } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
 import { spelledFor } from './surface_spelling';

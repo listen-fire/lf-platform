@@ -16,7 +16,7 @@
 //     letter case, a bare-walk aggregate's `.prop` reads in any letter case,
 //     and calls in a block head's hops resolve by scope.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, checkProgramWithLink, DiagnosticCodes as C, type Diagnostic } from '../check';
 import { effectRowOf } from '../effects';
 import { mockCatalog, type InstanceSchema } from '../catalog';

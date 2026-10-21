@@ -9,7 +9,7 @@
 // (TypeScript's parameter-versus-argument check, on the "fields in hand"
 // capability). The requirement is inferred from the body, transitively.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, DiagnosticCodes as C, type Diagnostic } from '../check';
 import { mockCatalog, type InstanceSchema } from '../catalog';
 import type { LanguageVersion } from 'movement-lang/language_version';

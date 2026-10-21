@@ -53,8 +53,8 @@ import {
   spellValueType,
   typeNameOf,
 } from 'movement-lang/parser/ast';
-import { MovementParseError, parseProgram } from 'movement-lang/parser/parse';
-import { expressionOfSlot } from 'movement-lang/expression/bridge';
+import { MovementParseError, parseProgram } from '../parser/parse';
+import { expressionOfSlot } from '../expression/bridge';
 import { parseFieldTypeName, type Catalog, type SchemaFieldType } from '../checker/catalog';
 import { EMPTY_ROW, instanceNames, type EffectRow } from '../checker/effects';
 import { bodyExits, terminates, type Exits } from '../checker/flow';

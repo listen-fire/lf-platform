@@ -33,14 +33,14 @@ import { teamOfTenant } from '../../translation_graph/movement/tenant';
 
 // A release other than this one, so the deprecated path is reachable while
 // this release deprecates nothing. Only the ENGINE's view is redirected; the
-// checker inside movement-lang keeps this release's.
+// checker inside legacy-lang keeps the platform's.
 let mockRelease: LanguageRelease | undefined;
-jest.mock('movement-lang', () => {
-  const actual = jest.requireActual('movement-lang');
+jest.mock('legacy-lang', () => {
+  const actual = jest.requireActual('legacy-lang');
   return {
     ...actual,
     languageVersionDiagnostic: (version: number) =>
-      actual.languageVersionDiagnostic(version, mockRelease ?? actual.THIS_RELEASE),
+      actual.languageVersionDiagnostic(version, mockRelease ?? actual.PLATFORM_RELEASE),
   };
 });
 

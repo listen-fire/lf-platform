@@ -5,7 +5,7 @@
 // something else. Version 1's full definition is its own corpus
 // (`__conformance__/v1`); this file pins each conditional by name.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, DiagnosticCodes as C, type CheckOptions, type Diagnostic } from '../check';
 import { mockCatalog, type InstanceSchema, type PluginSpec } from '../catalog';
 import type { ResolveFile } from '../link';

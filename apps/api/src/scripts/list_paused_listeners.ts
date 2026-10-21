@@ -22,7 +22,7 @@
  */
 
 import { type ListenDeclaration } from 'movement-lang';
-import { parseProgram } from 'movement-lang';
+import { parseProgram } from 'legacy-lang';
 
 import type { TeamId } from '../generated/kysely/core/Team';
 import type { MovementId } from '../generated/kysely/automations/Movement';

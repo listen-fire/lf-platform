@@ -11,7 +11,7 @@
 // write in place to one was an internal error until a058fda7, so it never
 // ran, and its checks hold on every version.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
 import type { LanguageVersion } from 'movement-lang/language_version';

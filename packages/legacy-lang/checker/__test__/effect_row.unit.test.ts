@@ -5,7 +5,7 @@
 // that a call folds its callee's row in, that a closure carries its own, and
 // that instance identity is the graph token rather than the binding's spelling.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, checkProgramWithLink, instanceRefOf } from '../check';
 import { effectRowOf, isPureRow, type EffectRow } from '../effects';
 import { InstanceSchema, mockCatalog } from '../catalog';

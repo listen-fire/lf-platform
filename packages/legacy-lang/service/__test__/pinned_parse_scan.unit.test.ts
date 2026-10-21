@@ -3,15 +3,15 @@
 // its own form, not a call; the scan reads that form, so a v1 or v2 program
 // demands the schemas it demanded when the scan parsed it as a call.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { scanInstanceChains } from '../selectors';
 
 // The grammar a scan's program is parsed under, when a test needs a program
 // the pin's own grammar cannot produce: the v1 form of a collection op in a
 // program pinned to version 3.
 let mockParseUnder: number | undefined;
-jest.mock('movement-lang/parser/parse', () => {
-  const actual = jest.requireActual<typeof import('movement-lang/parser/parse')>('../../parser/parse');
+jest.mock('../../parser/parse', () => {
+  const actual = jest.requireActual<typeof import('../../parser/parse')>('../../parser/parse');
   return {
     ...actual,
     parseProgram: (...[source, options]: Parameters<typeof actual.parseProgram>) =>

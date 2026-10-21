@@ -9,7 +9,7 @@
 // importing file. Without a resolver the M2 opaque behavior stands
 // (covered by check.unit.test.ts).
 
-import { parseProgram as parseSource } from 'movement-lang/parser/parse';
+import { parseProgram as parseSource } from '../../parser/parse';
 import { spelledFor } from './surface_spelling';
 import {
   checkProgram,

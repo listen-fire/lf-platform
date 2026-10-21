@@ -8,7 +8,7 @@
 // Plan: plans/functional-extract-2026-10-02/2_one_grammar.md, "Rulings (after
 // steps 4–5)".
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, DiagnosticCodes as C } from '../check';
 import { mockCatalog, type InstanceSchema } from '../catalog';
 import type { LanguageVersion } from 'movement-lang/language_version';

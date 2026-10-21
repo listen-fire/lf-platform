@@ -5,7 +5,7 @@
 // `fallback … to ERROR` terminal used to share), and that `ask` — now an
 // ordinary name — flows through the checker with no special handling.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { mockCatalog } from '../catalog';
 

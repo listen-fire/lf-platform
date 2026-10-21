@@ -20,7 +20,7 @@
 
 import type { ConstructionCall, Program, Statement } from 'movement-lang/parser/ast';
 import { typeNameOf } from 'movement-lang/parser/ast';
-import { MovementParseError, parseProgram } from 'movement-lang/parser/parse';
+import { MovementParseError, parseProgram } from '../parser/parse';
 import { unwrapCredentialArg } from 'movement-lang/parser/scan';
 import { eventAddressOfHops } from '../checker/event_address';
 import { CURRENT_LANGUAGE_VERSION, type LanguageVersion } from 'movement-lang/language_version';

@@ -9,7 +9,8 @@
 // still compare strictly — `shared_filter`'s "undefined is NOT null there".)
 
 import { binding, Environment, evalMovementExpr } from '../expression';
-import { CURRENT_LANGUAGE_VERSION, parseMovementCondition, parseMovementExpression } from 'movement-lang';
+import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+import { parseMovementCondition, parseMovementExpression } from 'legacy-lang';
 import { evaluatePredicate } from 'movement-lang/expression/filter';
 
 async function evaluate(raw: string, bindings: Record<string, unknown>): Promise<unknown> {

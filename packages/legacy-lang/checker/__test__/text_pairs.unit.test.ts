@@ -11,7 +11,7 @@
 // with no "every field" to ask for) — see `text_pairs_record_arg.unit.test.ts`
 // for that half of the rule.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { mockCatalog, InstanceSchema } from '../catalog';
 

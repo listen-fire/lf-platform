@@ -6,7 +6,7 @@
 // (crates/movement-parser/src/surface); this pins what the TypeScript checker
 // makes of them.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { spellMessage, surfaceTable } from 'movement-lang/parser/surface';
 import { checkProgram, type Diagnostic } from '../check';
 import { mockCatalog, type InstanceSchema } from '../catalog';

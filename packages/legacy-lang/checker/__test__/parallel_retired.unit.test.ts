@@ -11,7 +11,7 @@
 // included: the receipt is a tuple, slot by slot. Versions 1 to 4 keep
 // `parallel`.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
 import { applyFix } from 'movement-lang/checker/fixes';

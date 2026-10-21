@@ -11,7 +11,8 @@
 // written-to instance was constructed `dry_run: true`. Mixed dry/live
 // instances surface as 'mixed' with the offending write's span.
 
-import { expressionOfSlot, pathRootName } from 'movement-lang';
+import { pathRootName } from 'movement-lang';
+import { expressionOfSlot } from 'legacy-lang';
 import { collectExpressionNames, extractHopAliases } from 'legacy-lang';
 
 import type {

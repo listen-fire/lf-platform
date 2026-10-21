@@ -20,7 +20,7 @@
  */
 import { fromCatalogSnapshot, type CatalogSnapshot } from 'movement-lang';
 import { checkProgram } from 'legacy-lang';
-import { parseProgram } from 'movement-lang';
+import { parseProgram } from 'legacy-lang';
 
 import type { CapturedWrite } from 'movement-engine/public/adapter';
 import type { TeamId } from '../../generated/kysely/core/Team';

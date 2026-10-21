@@ -3,8 +3,8 @@
 // wherever it is written. It used to surface as whatever the statement scanner
 // tripped over next ("Unbalanced '}' in for the field …").
 
-import { parseProgram } from 'movement-lang/parser/parse';
-import { parseExpression } from 'movement-lang/parser/expression/parse_expression';
+import { parseProgram } from '../parse';
+import { parseExpression } from '../expression/parse_expression';
 
 const REWRITE = /IF is written 'IF … THEN … ELSE … END', not called like a function — write 'IF m\.Body == "a" THEN "b" ELSE "c" END'/;
 

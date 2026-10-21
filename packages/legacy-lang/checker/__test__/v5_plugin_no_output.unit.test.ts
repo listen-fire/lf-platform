@@ -6,7 +6,7 @@
 
 import { mockCatalog } from '../catalog';
 import { checkProgram, type Diagnostic } from '../check';
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { mockCatalogSnapshot } from 'movement-lang/service/snapshot';
 import { checkSourceInRust } from 'movement-lang/checker/rust_checker';
 import type { LanguageVersion } from 'movement-lang/language_version';

@@ -11,7 +11,7 @@
 // awaited landing); `meter` is the same story with different names, and the
 // same story with different names.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { fromCatalogSnapshot, type CatalogSnapshot } from 'movement-lang/service/snapshot';
 import type { InstanceSchema } from '../catalog';

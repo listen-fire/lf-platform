@@ -9,7 +9,7 @@
 //     declaration is used — a parameter, a collecting node's entries, a
 //     spread — not only as an extraction's shape.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic, DiagnosticCodes as C } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
 import { spelledFor } from './surface_spelling';

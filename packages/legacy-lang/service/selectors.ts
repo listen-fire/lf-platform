@@ -38,9 +38,9 @@ import type {
   WriteTarget,
 } from 'movement-lang/parser/ast';
 import { pathRootName, probePathHead, typeNameOf } from 'movement-lang/parser/ast';
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../parser/parse';
 import { unwrapCredentialArg } from 'movement-lang/parser/scan';
-import { expressionOfSlot, parseMovementExpression } from 'movement-lang/expression/bridge';
+import { expressionOfSlot, parseMovementExpression } from '../expression/bridge';
 import { CURRENT_LANGUAGE_VERSION, type LanguageVersion } from 'movement-lang/language_version';
 import { since } from '../version_conditionals';
 

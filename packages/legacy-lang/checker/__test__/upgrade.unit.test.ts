@@ -3,7 +3,7 @@
 
 import { mockCatalog, type InstanceSchema } from '../catalog';
 import { checkProgram, diagnosticSeverity, type Diagnostic } from '../check';
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { mockCatalogSnapshot } from 'movement-lang/service/snapshot';
 import { checkSourceInRust } from 'movement-lang/checker/rust_checker';
 import { rustCheck, spellingCheck, typescriptCheck, unifiedDiff, upgradeSource, type UpgradeCheck } from '../upgrade';

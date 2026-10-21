@@ -10,7 +10,7 @@
 // block's whole return, not the one member a hop alias lands). The checker
 // refuses all three so a saved movement can never reach those throws.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { mockCatalog, InstanceSchema } from '../catalog';
 import { spelledFor } from './surface_spelling';

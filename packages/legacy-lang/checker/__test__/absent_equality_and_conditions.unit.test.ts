@@ -10,11 +10,12 @@
 // Every case runs under both language versions: this was never a refusal, so
 // neither version may start refusing it.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, type Diagnostic } from '../check';
 import { mockCatalog, type InstanceSchema } from '../catalog';
 import { spelledFor } from './surface_spelling';
-import { SUPPORTED_LANGUAGE_VERSIONS, type LanguageVersion } from 'movement-lang/language_version';
+import { type LanguageVersion } from 'movement-lang/language_version';
+import { PLATFORM_SUPPORTED_LANGUAGE_VERSIONS } from '../../language_version';
 import { notKeywordRetirement } from './keyword_retirement';
 
 const chatSchema: InstanceSchema = {
@@ -63,7 +64,7 @@ ${EXTRACT}${body}
     { languageVersion },
   ).filter(notKeywordRetirement).filter((d) => (d.severity ?? 'error') === 'error');
 
-const VERSIONS = [...SUPPORTED_LANGUAGE_VERSIONS];
+const VERSIONS = [...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS];
 
 describe.each(VERSIONS)('under language version %s', (version) => {
   const codes = (body: string): string[] => errorsUnder(body, version).map((d) => d.code);

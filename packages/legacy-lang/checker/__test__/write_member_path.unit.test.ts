@@ -2,7 +2,7 @@
 // `write m.k { … }` and `write m.k-[:child]-> { … }` mean `x = m.k` then
 // `write x …` — the same record, the same rules, the same refusals.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram } from '../check';
 import { mockCatalog, type InstanceSchema } from '../catalog';
 import type { WriteExpression } from 'movement-lang/parser/ast';

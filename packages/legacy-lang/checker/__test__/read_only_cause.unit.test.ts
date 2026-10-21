@@ -5,7 +5,7 @@
 // author to look for a capability we already shipped, instead of at row 1.
 
 import { checkProgram } from '../check';
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { fromCatalogSnapshot } from 'movement-lang/service/snapshot';
 import type { CatalogSnapshot } from 'movement-lang/service/snapshot';
 import type { InstanceSchema } from '../catalog';

@@ -25,7 +25,7 @@ jest.mock('../provision', () => ({ saveMovement: jest.fn() }));
 
 import { CURRENT_LANGUAGE_VERSION, mockCatalog, type LanguageRelease, type LanguageVersion, type ResolveFile } from 'movement-lang';
 import { checkProgram } from 'legacy-lang';
-import { parseProgram } from 'movement-lang';
+import { parseProgram } from 'legacy-lang';
 
 import { assessMovementValidity, type AuthoringDiagnostic } from '../authoring';
 

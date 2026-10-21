@@ -2,6 +2,19 @@
 // 1 to 5). The names the language package keeps (the catalog and schema types,
 // the diagnostic, the snapshot, the wasm bindings) are imported from
 // `movement-lang`, not from here.
+// The parse entry points, each routed to the parser for its version (the
+// language release's own, or the one frozen for the versions it dropped).
+export { parseProgram, parseNestedCall } from './parser/parse';
+export { parseExpression } from './parser/expression/parse_expression';
+export {
+  authoredStringText,
+  conditionOfSlot,
+  expressionOfSlot,
+  parseMovementCondition,
+  parseMovementExpression,
+  treeOfSlot,
+} from './expression/bridge';
+export { initFrozenParser } from './wasm/frozen_parser';
 export * from './parser/duration';
 export * from './expression/stdlib';
 export * from './checker/catalog';
@@ -25,3 +38,10 @@ export * from './service/constructions';
 export * from './service/selectors';
 export * from './service/service';
 export * from './version_conditionals';
+export {
+  PLATFORM_DEPRECATED_LANGUAGE_VERSIONS,
+  PLATFORM_RELEASE,
+  PLATFORM_SUPPORTED_LANGUAGE_VERSIONS,
+  languageVersionDiagnostic,
+  languageVersionStanding,
+} from './language_version';

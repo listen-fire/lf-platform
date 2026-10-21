@@ -17,12 +17,14 @@
 // script beside this package (conformance/upgrade_text.ts). The deploy check
 // never rewrites a movement's text.
 
-import { parseProgram, MovementParseError } from 'movement-lang/parser/parse';
+import { parseProgram, MovementParseError } from '../parser/parse';
 import type { Loc, Span } from 'movement-lang/parser/ast';
-import { CURRENT_LANGUAGE_VERSION, type LanguageVersion } from 'movement-lang/language_version';
-import type { CatalogSnapshot } from 'movement-lang/service/snapshot';
+import { CURRENT_LANGUAGE_VERSION, SUPPORTED_LANGUAGE_VERSIONS, type LanguageVersion } from 'movement-lang/language_version';
+import type { Program } from 'movement-lang/parser/ast';
+import { fromCatalogSnapshot, resolveFileFromSnapshot, type CatalogSnapshot } from 'movement-lang/service/snapshot';
 import { checkProgram, diagnosticSeverity, type Diagnostic } from './check';
 import type { Catalog } from './catalog';
+import type { ResolveFile } from './link';
 import { checkSourceInRust, RustCheckRefused } from 'movement-lang/checker/rust_checker';
 import { applyFix, type DiagnosticFix, type SourceEdit } from 'movement-lang/checker/fixes';
 
@@ -187,32 +189,75 @@ export function spellingCheck(languageVersion: LanguageVersion = CURRENT_LANGUAG
 }
 
 /** The Rust checker against a run's snapshot — the checker a version 5
- *  program is held to (the CLI's, the API's and the corpus test's). */
+ *  program is held to (the CLI's, the API's and the corpus test's). A move
+ *  from a version the language release no longer serves hears what changed
+ *  meaning from the TypeScript checker (`upgradeWarnings`). */
 export function rustCheck(input: {
   snapshot: CatalogSnapshot;
   languageVersion?: LanguageVersion;
   upgradingFrom?: LanguageVersion;
 }): UpgradeCheck {
   const languageVersion = input.languageVersion ?? CURRENT_LANGUAGE_VERSION;
+  const { upgradingFrom } = input;
   return (source) => {
     // The parse first, for its error's place, which the checker's refusal
     // words without one.
+    let program: Program;
     try {
-      parseProgram(source, { languageVersion });
+      program = parseProgram(source, { languageVersion });
     } catch (error) {
       if (error instanceof MovementParseError) return [parseRefusal(error)];
       throw error;
     }
+    let checked: Diagnostic[];
     try {
-      return checkSourceInRust(source, input.snapshot, {
+      checked = checkSourceInRust(source, input.snapshot, {
         languageVersion,
-        ...(input.upgradingFrom !== undefined ? { upgradingFrom: input.upgradingFrom } : {}),
+        ...(upgradingFrom !== undefined && !movesFromDroppedVersion(upgradingFrom) ? { upgradingFrom } : {}),
       });
     } catch (error) {
       if (!(error instanceof RustCheckRefused)) throw error;
       return [{ code: 'MOV_PARSE', message: error.message, span: { start: { line: 1, col: 1 }, end: { line: 1, col: 1 } } }];
     }
+    if (!movesFromDroppedVersion(upgradingFrom)) return checked;
+    const resolveFile = resolveFileFromSnapshot(input.snapshot);
+    return withUpgradeWarnings(
+      checked,
+      upgradeWarnings(program, fromCatalogSnapshot(input.snapshot), {
+        languageVersion,
+        upgradingFrom,
+        ...(resolveFile !== undefined ? { resolveFile } : {}),
+      }),
+    );
   };
+}
+
+/** Whether a check for a move up from `upgradingFrom` is one the language
+ *  release cannot word: a move from a version it no longer serves. */
+export function movesFromDroppedVersion(upgradingFrom: LanguageVersion | undefined): upgradingFrom is LanguageVersion {
+  return upgradingFrom !== undefined && !SUPPORTED_LANGUAGE_VERSIONS.has(upgradingFrom);
+}
+
+/** The TypeScript checker's warnings for what changed meaning on a move from
+ *  `upgradingFrom` to `languageVersion` (`Diagnostic.upgrade`), and nothing
+ *  else of its check. */
+export function upgradeWarnings(
+  program: Program,
+  catalog: Catalog,
+  options: { languageVersion: LanguageVersion; upgradingFrom: LanguageVersion; resolveFile?: ResolveFile },
+): Diagnostic[] {
+  return checkProgram(program, catalog, options).filter((d) => d.upgrade === true);
+}
+
+/**
+ * A check's diagnostics with a move's upgrade warnings in place: a warning
+ * stands where the check reported the same code at the same place (the
+ * refusal a move turns into a warning), and is added otherwise.
+ */
+export function withUpgradeWarnings(checked: Diagnostic[], warnings: Diagnostic[]): Diagnostic[] {
+  const placeOf = (d: Diagnostic) => `${d.code}@${JSON.stringify(d.span)}`;
+  const warned = new Set(warnings.map(placeOf));
+  return [...checked.filter((d) => !warned.has(placeOf(d))), ...warnings];
 }
 
 /** The TypeScript checker against a catalog object — for a test that holds a

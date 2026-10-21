@@ -8,6 +8,7 @@ import path from 'path';
 
 // next.config.ts injects the content-hashed URL; a test names its own.
 process.env.NEXT_PUBLIC_PARSER_URL = '/movement_parser.0123456789ab.wasm';
+process.env.NEXT_PUBLIC_FROZEN_PARSER_URL = '/movement_parser.frozen.0123456789ab.wasm';
 
 import type { ListenersPanelProps } from '@/components/movements/listeners-panel';
 
@@ -64,6 +65,10 @@ function artifact(): Uint8Array {
   return fs.readFileSync(path.join(__dirname, '../../../../../packages/movement-lang/wasm/movement_parser.wasm'));
 }
 
+function frozenArtifact(): Uint8Array {
+  return fs.readFileSync(path.join(__dirname, '../../../../../packages/legacy-lang/wasm/movement_parser.frozen.wasm'));
+}
+
 describe('the browser parser provider', () => {
   const { react, server, lang, provider, panel } = loadAsBrowser();
   const panelElement = react.createElement(panel.ListenersPanel, PANEL_PROPS);
@@ -78,10 +83,13 @@ describe('the browser parser provider', () => {
     expect(() => server.renderToStaticMarkup(panelElement)).toThrow('await initParser()');
   });
 
-  it('fetches the artifact from public/, then renders the panel from the parsed script', async () => {
-    const fetched = jest.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(artifact()));
+  it('fetches both artifacts from public/, then renders the panel from the parsed script', async () => {
+    const fetched = jest
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async (url) => new Response(url === process.env.NEXT_PUBLIC_FROZEN_PARSER_URL ? frozenArtifact() : artifact()));
     await provider.loadParser();
     expect(fetched).toHaveBeenCalledWith('/movement_parser.0123456789ab.wasm');
+    expect(fetched).toHaveBeenCalledWith('/movement_parser.frozen.0123456789ab.wasm');
     expect(lang.isParserReady()).toBe(true);
 
     const html = server.renderToStaticMarkup(gated);

@@ -8,7 +8,7 @@
 // this package. This test pins the checker-level contract: the malformed slot
 // is a diagnostic, not an exception.)
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic, DiagnosticCodes as C } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
 

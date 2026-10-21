@@ -11,7 +11,7 @@
 // an extracted record (`r.size`), a maybe-empty landing (`who`), a field of a
 // record value (`f.size`), a dict key (`d.size`), and a hop WHERE's own field.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram } from '../check';
 import { mockCatalog, type InstanceSchema } from '../catalog';
 import type { LanguageVersion } from 'movement-lang/language_version';

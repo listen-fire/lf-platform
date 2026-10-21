@@ -5,7 +5,7 @@
 // value. Config is always the second argument, so nothing has to guess whether
 // a brace object is arguments or settings.
 
-import { MovementParseError, parseProgram } from 'movement-lang/parser/parse';
+import { MovementParseError, parseProgram } from '../parse';
 import { CallbackExpression, MovementDeclaration, RValue, Statement, typeNameOf } from 'movement-lang/parser/ast';
 
 function as<K extends Statement['kind']>(

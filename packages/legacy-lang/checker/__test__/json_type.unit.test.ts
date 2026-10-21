@@ -12,7 +12,7 @@
 // Two adapter shapes throughout (a structured payload and a properties bag),
 // per the fixture rule: one adapter's shape cannot tell derived from hardcoded.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import {
   SchemaFieldType,

@@ -122,7 +122,8 @@ jest.mock('../../../lib/anthropic', () => ({
 }));
 
 import type { InstanceSchema, LanguageVersion } from 'movement-lang';
-import { CURRENT_LANGUAGE_VERSION, fromCatalogSnapshot, mockCatalogSnapshot, parseMovementExpression } from 'movement-lang';
+import { CURRENT_LANGUAGE_VERSION, fromCatalogSnapshot, mockCatalogSnapshot } from 'movement-lang';
+import { parseMovementExpression } from 'legacy-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import type { Expression } from 'movement-lang/expression/types';
 import { runMovement as runAsWritten, resumeMovement as resumeAsWritten } from '@listen-fire/legacy-engine/dispatch';

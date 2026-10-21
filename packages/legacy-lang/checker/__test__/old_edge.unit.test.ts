@@ -8,7 +8,7 @@
 // shapes carry no `created` field, and a graph whose own types DECLARE one —
 // so a check that only ever met the first could not pass by refusing the name.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, DiagnosticCodes as C } from '../check';
 import { InstanceSchema, SchemaFieldType, mockCatalog } from '../catalog';
 

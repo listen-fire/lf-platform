@@ -6,7 +6,7 @@
 // present, anything typed maybe absent); the settings are written down and
 // checked key by key, the model against what this deployment reaches.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic, DiagnosticCodes as C } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
 import { TypedDiagnosticCodes } from '../typing';

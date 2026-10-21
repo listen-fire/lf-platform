@@ -13,13 +13,23 @@ import { apiProxyRewrites } from './src/lib/api-proxy';
 // its content hash so a long-cached old parser can never be served for a new
 // build; the URL reaches the client through `env` below, which both `next dev`
 // and `next build` inline from this one config evaluation.
-const parserBytes = fs.readFileSync(require.resolve('movement-lang/wasm/movement_parser.wasm'));
-const parserFile = `movement_parser.${createHash('sha256').update(parserBytes).digest('hex').slice(0, 12)}.wasm`;
+// The platform's frozen parser (packages/legacy-lang/wasm) rides along the
+// same way: the editor's service reads the versions the language release no
+// longer serves, and a probe's text, with it.
 const publicDir = path.join(__dirname, 'public');
+const copied = (resolved: string, stem: string): string => {
+  const bytes = fs.readFileSync(require.resolve(resolved));
+  const file = `${stem}.${createHash('sha256').update(bytes).digest('hex').slice(0, 12)}.wasm`;
+  fs.writeFileSync(path.join(publicDir, file), bytes);
+  return file;
+};
+const parserFile = copied('movement-lang/wasm/movement_parser.wasm', 'movement_parser');
+const frozenParserFile = copied('legacy-lang/wasm/movement_parser.frozen.wasm', 'movement_parser.frozen');
 for (const stale of fs.readdirSync(publicDir)) {
-  if (/^movement_parser(\..+)?\.wasm$/.test(stale) && stale !== parserFile) fs.unlinkSync(path.join(publicDir, stale));
+  if (/^movement_parser(\..+)?\.wasm$/.test(stale) && stale !== parserFile && stale !== frozenParserFile) {
+    fs.unlinkSync(path.join(publicDir, stale));
+  }
 }
-fs.writeFileSync(path.join(publicDir, parserFile), parserBytes);
 
 // The SERVER-side rewrite target, read at run time: one prebuilt image runs
 // against any API. `NEXT_PUBLIC_API_URL` stays the escape hatch for a split
@@ -28,7 +38,7 @@ const apiUrl = process.env.API_INTERNAL_URL ?? process.env.NEXT_PUBLIC_API_URL ?
 
 const nextConfig: NextConfig = {
   output: 'standalone',
-  env: { NEXT_PUBLIC_PARSER_URL: `/${parserFile}` },
+  env: { NEXT_PUBLIC_PARSER_URL: `/${parserFile}`, NEXT_PUBLIC_FROZEN_PARSER_URL: `/${frozenParserFile}` },
   // Without this Next guesses the trace root from the nearest lockfiles and can
   // land ABOVE the repo, which moves `server.js` inside the standalone output.
   // Pin it to the workspace root so the image's CMD path is the same everywhere.

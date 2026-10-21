@@ -6,7 +6,7 @@
 // takes what the type supplies (contravariant parameters) and returns what it
 // returns (covariant returns). Before 5 the syntax is refused.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
 import type { LanguageVersion } from 'movement-lang/language_version';

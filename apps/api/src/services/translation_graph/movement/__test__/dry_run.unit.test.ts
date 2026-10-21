@@ -1,4 +1,4 @@
-import { parseProgram } from 'movement-lang';
+import { parseProgram } from 'legacy-lang';
 
 import { movementWriteRunMode } from '../dry_run';
 

@@ -8,7 +8,7 @@
 // Under 5 there are no methods either: a closure is not data, never under a key,
 // so `box.g()` on a value is refused the same way, never a call of a member.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
 import type { LanguageVersion } from 'movement-lang/language_version';

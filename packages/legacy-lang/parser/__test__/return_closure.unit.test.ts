@@ -5,7 +5,7 @@
 // by its ARROW — a parenthesised head could equally start an expression, so the
 // `=>` is what decides, not a guess at the first token.
 
-import { MovementParseError, parseProgram } from 'movement-lang/parser/parse';
+import { MovementParseError, parseProgram } from '../parse';
 import { MovementDeclaration, Statement, typeNameOf } from 'movement-lang/parser/ast';
 
 function bodyOf(source: string): Statement[] {

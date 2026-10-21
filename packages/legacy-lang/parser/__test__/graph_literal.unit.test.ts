@@ -5,7 +5,7 @@
 // it meant. The body is a write body's field syntax read with the node
 // literal's entry rules.
 
-import { parseProgram, MovementParseError } from 'movement-lang/parser/parse';
+import { parseProgram, MovementParseError } from '../parse';
 import type { CallStatement, NodeEntry, NodeLiteral, Statement } from 'movement-lang/parser/ast';
 
 function body(source: string): Statement[] {

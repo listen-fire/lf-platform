@@ -8,7 +8,7 @@
 // delivery path without a key stay legal.
 
 import { checkProgram } from 'legacy-lang';
-import { parseProgram } from 'movement-lang';
+import { parseProgram } from 'legacy-lang';
 
 import { staticCatalogFromManifests } from '../catalog';
 

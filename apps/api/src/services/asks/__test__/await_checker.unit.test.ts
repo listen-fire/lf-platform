@@ -23,7 +23,7 @@
 
 import { fromCatalogSnapshot, type CatalogSnapshot, type InstanceSchema } from 'movement-lang';
 import { checkProgram } from 'legacy-lang';
-import { parseProgram } from 'movement-lang';
+import { parseProgram } from 'legacy-lang';
 
 const askSchema: InstanceSchema = {
   positions: {

@@ -7,6 +7,7 @@ import path from 'path';
 import type { ReactElement, ReactNode } from 'react';
 
 process.env.NEXT_PUBLIC_PARSER_URL = '/movement_parser.0123456789ab.wasm';
+process.env.NEXT_PUBLIC_FROZEN_PARSER_URL = '/movement_parser.frozen.0123456789ab.wasm';
 
 type Effect = { run: () => void | (() => void); deps: readonly unknown[] | undefined };
 
@@ -85,11 +86,13 @@ describe('the browser parser provider when the parser fails to load', () => {
 
   it('shows an error with Try again, and a retry that succeeds renders the children', async () => {
     const artifact = fs.readFileSync(path.join(__dirname, '../../../../../packages/movement-lang/wasm/movement_parser.wasm'));
+    const frozen = fs.readFileSync(path.join(__dirname, '../../../../../packages/legacy-lang/wasm/movement_parser.frozen.wasm'));
     Reflect.set(globalThis, 'window', globalThis);
+    // The page fetches both parsers at once: the live one fails first time.
     const fetched = jest
       .spyOn(globalThis, 'fetch')
       .mockRejectedValueOnce(new Error('offline'))
-      .mockResolvedValue(new Response(artifact));
+      .mockImplementation(async (url) => new Response(url === process.env.NEXT_PUBLIC_FROZEN_PARSER_URL ? frozen : artifact));
 
     let runtime: ReturnType<typeof hookRuntime> | undefined;
     const outcome: { provider?: typeof import('../parser-provider'); lang?: typeof import('movement-lang') } = {};
@@ -104,7 +107,7 @@ describe('the browser parser provider when the parser fails to load', () => {
     if (!runtime || !outcome.lang) throw new Error('isolateModules did not run');
 
     const failed = await runtime.settle((output) => findButton(output) !== undefined);
-    expect(fetched).toHaveBeenCalledTimes(1);
+    expect(fetched).toHaveBeenCalledTimes(2);
     expect(JSON.stringify(failed)).toContain('could not load its parser');
     expect(JSON.stringify(failed)).toContain('offline');
     const retry = findButton(failed);
@@ -112,7 +115,7 @@ describe('the browser parser provider when the parser fails to load', () => {
 
     retry.props.onClick();
     const recovered = await runtime.settle((output) => output === 'the editor' || (typeof output === 'object' && output !== null && 'props' in output && output.props.children === 'the editor'));
-    expect(fetched).toHaveBeenCalledTimes(2);
+    expect(fetched).toHaveBeenCalledTimes(4);
     expect(outcome.lang.isParserReady()).toBe(true);
     expect(recovered).toMatchObject({ props: { children: 'the editor' } });
   });

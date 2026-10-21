@@ -10,13 +10,14 @@
 // fixture rule: a CRM note with a json `company`, and a ledger entry with a
 // json properties bag.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { combinatorsSpelledFor } from './combinator_spelling';
 import { spelledFor } from './surface_spelling';
 import { InstanceSchema, mockCatalog, type FieldType } from '../catalog';
 import { fieldAssignable, fieldTypeCompatible, handleWithin, spellHeldSteps } from '../typing';
-import { SUPPORTED_LANGUAGE_VERSIONS, type LanguageVersion } from 'movement-lang/language_version';
+import { type LanguageVersion } from 'movement-lang/language_version';
+import { PLATFORM_SUPPORTED_LANGUAGE_VERSIONS } from '../../language_version';
 
 const crmSchema: InstanceSchema = {
   positions: {
@@ -91,7 +92,7 @@ const note = (company: string): string[] => [`  write crm-[:notes]-> { title: "h
 
 const RECORD_NOT_A_VALUE = 'a record, not a value';
 
-const VERSIONS = [...SUPPORTED_LANGUAGE_VERSIONS];
+const VERSIONS = [...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS];
 
 describe.each(VERSIONS)('under language version %i, a record inside a field\'s value is refused', version => {
   const refused = (body: string[], where: string): void => {

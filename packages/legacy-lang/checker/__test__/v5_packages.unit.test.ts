@@ -3,7 +3,7 @@
 // member as `web.fetchUrl`, a call of which is an ordinary plugin call. The
 // Rust twin is crates/movement-checker/tests/v5_packages.rs.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, type Diagnostic } from '../check';
 import { expandPackageImports, mockCatalog, packageMembers, type PluginSpec } from '../catalog';
 import { notKeywordRetirement } from './keyword_retirement';

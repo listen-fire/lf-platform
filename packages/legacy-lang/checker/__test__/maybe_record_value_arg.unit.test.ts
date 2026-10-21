@@ -9,7 +9,7 @@
 // and 4 are warned, and the warning blocks the move up. A plugin argument and
 // a written field refuse it on every version, as they always have.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
 import type { LanguageVersion } from 'movement-lang/language_version';

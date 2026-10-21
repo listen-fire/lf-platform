@@ -59,7 +59,8 @@ import { randomUUID } from 'node:crypto';
 
 import { scanName } from 'movement-lang';
 import { checkProgram } from 'legacy-lang';
-import { MovementParseError, parseProgram } from 'movement-lang';
+import { MovementParseError } from 'movement-lang';
+import { parseProgram } from 'legacy-lang';
 
 import type {
   Diagnostic,

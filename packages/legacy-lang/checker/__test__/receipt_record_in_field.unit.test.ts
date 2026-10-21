@@ -11,7 +11,7 @@
 // (1, 3, 4 and 5 asserted; 5 in its own spelling, `all(made, label)`). Arms that hand back values leave the receipt plain
 // data, and it is written.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { combinatorsSpelledFor } from './combinator_spelling';
 import { spelledFor } from './surface_spelling';

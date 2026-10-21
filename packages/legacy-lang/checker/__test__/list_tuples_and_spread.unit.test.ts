@@ -7,8 +7,8 @@
 // literal had before it was a tuple. A spread of a list makes the tuple
 // VARIADIC (`[text, ...file[]]`); a spread of a tuple splices its slots.
 
-import { parseProgram } from 'movement-lang/parser/parse';
-import { parseMovementExpression } from 'movement-lang/expression/bridge';
+import { parseProgram } from '../../parser/parse';
+import { parseMovementExpression } from '../../expression/bridge';
 import { checkProgram, checkProgramWithLink, Diagnostic } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
 import type { LanguageVersion } from 'movement-lang/language_version';

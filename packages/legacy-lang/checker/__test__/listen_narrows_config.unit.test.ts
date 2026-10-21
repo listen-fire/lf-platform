@@ -18,7 +18,7 @@
 // its filter under `watch`, and subscribes to a `file.*` vocabulary. Wherever
 // a diagnostic quotes a key, a value, or a property, both shapes are asserted.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic, DiagnosticCodes as C } from '../check';
 import {
   mockCatalog,

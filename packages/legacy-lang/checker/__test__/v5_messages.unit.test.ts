@@ -3,7 +3,7 @@
 // `connect … using …`), and up to 4 it is byte for byte what it was. The
 // rewrite is the parser's own spelling fixes (spellCode, through the WASM).
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { spellCode, spellIf, spellWord } from 'movement-lang/parser/surface';
 import { checkProgram, type Diagnostic } from '../check';
 import { mockCatalog, type InstanceSchema } from '../catalog';

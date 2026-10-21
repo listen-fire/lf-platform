@@ -5,7 +5,7 @@
 // text field, and text is clean. IF and COALESCE never choose between closures:
 // a closure is not data (closure_not_data).
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
 import type { LanguageVersion } from 'movement-lang/language_version';

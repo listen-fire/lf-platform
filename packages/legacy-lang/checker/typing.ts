@@ -35,7 +35,7 @@ import {
 import { isNullLiteral, isPurePredicate } from 'movement-lang/expression/filter';
 import { isNaturalOrder, orderKeyProperty } from 'movement-lang/expression/order_limit';
 import { quoteName } from 'movement-lang/expression/formula';
-import { POSITION_SENTINEL } from 'movement-lang/expression/bridge';
+import { POSITION_SENTINEL } from '../expression/bridge';
 import {
   builtinOptionsFor,
   CHUNKS_FUNCTION_ID,

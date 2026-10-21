@@ -6,7 +6,7 @@
 // Rust checker's twin is crates/movement-checker/tests/v5_text_presence.rs,
 // same programs, same messages.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram } from '../check';
 import { mockCatalog } from '../catalog';
 import type { LanguageVersion } from 'movement-lang/language_version';

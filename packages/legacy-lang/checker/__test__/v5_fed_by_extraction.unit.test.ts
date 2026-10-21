@@ -4,7 +4,7 @@
 // and its call hands back what it declared. Versions 1–4 keep refusing the
 // call. The Rust twin is crates/movement-checker/tests/v5_fed_by_extraction.rs.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, type Diagnostic } from '../check';
 import { mockCatalog, pluginPositionalParams, pluginSpecUnder, type PluginSpec } from '../catalog';
 

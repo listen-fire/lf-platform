@@ -8,7 +8,7 @@
 // "[OBJECT OBJECT]"), so versions 3 and 4 are warned, and the warning blocks
 // the move up.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
 import type { LanguageVersion } from 'movement-lang/language_version';

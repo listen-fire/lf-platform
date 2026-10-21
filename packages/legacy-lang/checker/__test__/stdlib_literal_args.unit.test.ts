@@ -6,7 +6,7 @@
 // written down (a computed one cannot be read here), and it has to be made of
 // tokens.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
 

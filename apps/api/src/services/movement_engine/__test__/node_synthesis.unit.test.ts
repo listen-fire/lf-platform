@@ -94,7 +94,7 @@ import { containerAssociation, isFileValue } from 'movement-engine/services/tran
 import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
 import { makeUnstablePosition, positionData } from 'engine-contracts/catalog';
 import { tenantIdOf } from 'engine-contracts';
-import { parseProgram } from 'movement-lang';
+import { parseProgram } from 'legacy-lang';
 import { makeTestHost } from 'movement-engine/services/movement_engine/test_host';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000020');

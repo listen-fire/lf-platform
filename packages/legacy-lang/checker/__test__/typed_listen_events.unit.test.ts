@@ -8,7 +8,7 @@
 // record edge on a delete-inclusive event errors "narrow first" (the deleted
 // pin drops `requiresLiveRecord` edges — keyed on the pin, not on a name).
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic, DiagnosticCodes as C } from '../check';
 import { mockCatalog, type SchemaFieldType, type InstanceSchema, type PositionSchema } from '../catalog';
 import { eventAddressDisplay, eventAddressKey } from '../event_address';

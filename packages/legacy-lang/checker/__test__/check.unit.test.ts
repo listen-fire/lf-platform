@@ -3,7 +3,7 @@
 // has a focused negative fixture.
 
 import { spelledFor } from './surface_spelling';
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic, DiagnosticCodes as C } from '../check';
 import { mockCatalog } from '../catalog';
 

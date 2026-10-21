@@ -31,8 +31,8 @@
 //
 // See plans/language-versioning-2026-09-29/1_design.md, "Deploy check".
 
-import { CURRENT_LANGUAGE_VERSION, THIS_RELEASE, describeLanguageVersion, languageVersionDiagnostic, languageVersionStanding, languageVersionView, type LanguageRelease, type LanguageVersion, type LanguageVersionView, type Diagnostic } from 'movement-lang';
-import { before, upgradeSourceAsync } from 'legacy-lang';
+import { CURRENT_LANGUAGE_VERSION, describeLanguageVersion, languageVersionView, type LanguageRelease, type LanguageVersion, type LanguageVersionView, type Diagnostic } from 'movement-lang';
+import { PLATFORM_RELEASE, before, languageVersionDiagnostic, languageVersionStanding, upgradeSourceAsync } from 'legacy-lang';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 
@@ -720,7 +720,8 @@ export async function upgradeMovement(input: {
   return { status: 'upgraded', ...shown, diagnostics };
 }
 
-/** The standing release, for the entry points. */
+/** The standing release, for the entry points: the platform's, which still
+ *  serves the versions the language release has dropped. */
 export function thisDeployCheckRelease(tag: string): DeployCheckRelease {
-  return { tag, language: THIS_RELEASE };
+  return { tag, language: PLATFORM_RELEASE };
 }

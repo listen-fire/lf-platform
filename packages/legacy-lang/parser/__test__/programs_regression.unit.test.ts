@@ -10,13 +10,13 @@
 //
 // Set UPDATE_PROGRAMS_FIXTURE=1 to rewrite the pins from the current parser
 // (after a re-harvest, or a ruling) — then read the diff.
-import { treeOfSlot } from 'movement-lang/expression/bridge';
+import { treeOfSlot } from '../../expression/bridge';
 import * as loader from 'movement-lang/wasm/loader';
 import type { ExprSlot } from 'movement-lang/parser/ast';
 import { canonical, SLOTS } from '../expression/__test__/lowering_fixture';
-import { ExpressionSyntaxError, parseExpression } from 'movement-lang/parser/expression/parse_expression';
+import { ExpressionSyntaxError, parseExpression } from '../expression/parse_expression';
 import type { MExpr } from 'movement-lang/parser/expression/tree';
-import { MovementParseError, parseNestedCall, parseProgram, type ParseOptions } from 'movement-lang/parser/parse';
+import { MovementParseError, parseNestedCall, parseProgram, type ParseOptions } from '../parse';
 
 declare function require(id: string): unknown;
 declare const process: { env: Record<string, string | undefined> };

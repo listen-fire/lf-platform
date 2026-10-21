@@ -7,7 +7,7 @@
 // than by the expression bridge. `members(<T>)` is a closed type's values in
 // the order they were declared.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { mockCatalog, type InstanceSchema } from '../catalog';
 import { notKeywordRetirement } from './keyword_retirement';

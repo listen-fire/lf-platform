@@ -8,8 +8,8 @@
 // (after a re-harvest, or a ruling) — then read the diff: every changed entry
 // must be one a ruling explains.
 import type { Expression } from 'movement-lang/expression/types';
-import { POSITION_SENTINEL, type MovementCondition } from 'movement-lang/parser/expression/lower';
-import { parseMovementCondition, parseMovementExpression } from 'movement-lang/expression/bridge';
+import { POSITION_SENTINEL, type MovementCondition } from '../lower';
+import { parseMovementCondition, parseMovementExpression } from '../../../expression/bridge';
 import { BridgeError } from 'movement-lang/expression/error';
 import {
   CONSTRUCTS,

@@ -3,7 +3,7 @@
 // listen still derives its trigger row (kind = the unit) and, for manual, its
 // "Run now" target. Before 5 a listen names a construction, as it always has.
 
-import { parseProgram } from 'movement-lang';
+import { parseProgram } from 'legacy-lang';
 import { collectFileListeners } from 'movement-engine/public/inbound';
 import { manualListenerMovements } from '../files';
 

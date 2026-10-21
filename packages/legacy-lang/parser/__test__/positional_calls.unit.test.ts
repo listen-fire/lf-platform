@@ -7,7 +7,7 @@
 // (`checker/calls.ts`). A parameter may spell a value type in full: `<text[]>`,
 // `<{ mode: text, owner?: text }>`.
 
-import { parseProgram, MovementParseError } from 'movement-lang/parser/parse';
+import { parseProgram, MovementParseError } from '../parse';
 import type { CallStatement, MovementDeclaration, Statement } from 'movement-lang/parser/ast';
 
 function body(source: string): Statement[] {

@@ -13,7 +13,7 @@
 import { getCompletions as formulaCompletions, type Completion, type CompletionKind, type EdgeInfo, type FormulaCapabilities, type PropertyInfo } from 'movement-lang/expression/formula';
 import type { Loc, Span } from 'movement-lang/parser/ast';
 import { spellParamType } from 'movement-lang/parser/ast';
-import { MovementParseError, parseProgram } from 'movement-lang/parser/parse';
+import { MovementParseError, parseProgram } from '../parser/parse';
 import { CURRENT_LANGUAGE_VERSION, type LanguageVersion } from 'movement-lang/language_version';
 import { since } from '../version_conditionals';
 import { CLOSER, opensHop, scanName, skipOpaque } from 'movement-lang/parser/scan';
@@ -41,7 +41,7 @@ import {
   ExpressionTyping,
 } from '../checker/typing';
 import { MOVEMENT_META_FIELDS as CANONICAL_META_FIELDS } from '../checker/meta';
-import { parseMovementExpression, BridgeError } from 'movement-lang/expression/bridge';
+import { parseMovementExpression, BridgeError } from '../expression/bridge';
 import {
   BARE_COERCERS,
   bareCoercer,

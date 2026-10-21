@@ -15,9 +15,10 @@ import path from 'node:path';
 import { canonicalJson, hostRecordingSchema, type HostRecording, type ReplayTarget, type ReplayVerdict } from 'engine-contracts/conformance';
 
 import { httpTarget, typescriptTarget } from '../replay';
-import { SUPPORTED_LANGUAGE_VERSIONS, type LanguageVersion } from 'movement-lang';
+import { type LanguageVersion } from 'movement-lang';
+import { PLATFORM_SUPPORTED_LANGUAGE_VERSIONS } from 'legacy-lang';
 
-import { parsePinned } from 'movement-engine/services/movement_engine/program_check';
+import { parsePinned } from '@listen-fire/legacy-engine/services/movement_engine/ts_program_check';
 
 const FIXTURES = path.resolve(__dirname, '../__fixtures__');
 
@@ -363,7 +364,7 @@ function sameRefusalButForTheVersionName(divergence: string): boolean {
 /** The recording is pinned to a version this release does not support. */
 function pinnedUnsupported(recording: HostRecording): boolean {
   const version = recording.input.languageVersion;
-  return version !== undefined && !SUPPORTED_LANGUAGE_VERSIONS.has(version as LanguageVersion);
+  return version !== undefined && !PLATFORM_SUPPORTED_LANGUAGE_VERSIONS.has(version as LanguageVersion);
 }
 
 /** The plugins the recording's program names in its `through` stages. */

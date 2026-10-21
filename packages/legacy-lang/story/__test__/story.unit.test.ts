@@ -8,7 +8,7 @@
 // claim being tested here.
 
 import { InstanceSchema, mockCatalog } from '../../checker/catalog';
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgramWithLink } from '../../checker/check';
 import { type Chip, type StoryReference, type Step, type StoryIR, storyOf } from '../story';
 

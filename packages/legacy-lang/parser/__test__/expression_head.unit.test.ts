@@ -12,7 +12,7 @@
 // statement, a node entry's neighbour across a comma) keep the meaning they
 // had; and a write's parent is refused with the repair rather than parsed.
 
-import { MovementParseError, parseProgram } from 'movement-lang/parser/parse';
+import { MovementParseError, parseProgram } from '../parse';
 import { pathRootName, spellPathHead, probePathHead, EXPRESSION_ROOT_PROBE } from 'movement-lang/parser/ast';
 import type { PathHead, Statement } from 'movement-lang/parser/ast';
 

@@ -2,7 +2,7 @@
 // plans/2026-06-10-data-movement-language/3_syntax_sketch.md (§A–G, I) is copied
 // verbatim below and must parse, with structural assertions per example.
 
-import { MovementParseError, parseProgram } from 'movement-lang/parser/parse';
+import { MovementParseError, parseProgram } from '../parse';
 import { fileCallScope, readCall, resolveCallee } from '../../checker/calls';
 import {
   CallArg,

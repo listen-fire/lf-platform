@@ -3,7 +3,7 @@
 // present, and any value is accepted — except a record the program does not
 // hold the fields of (the same refusal TEXT.PAIRS makes for one).
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
 

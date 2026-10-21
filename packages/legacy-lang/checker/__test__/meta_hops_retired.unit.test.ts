@@ -10,7 +10,7 @@
 //   - `-[:#extract]->`: never accepted (the lowering refuses it under every version).
 // Under version 4 every one keeps its old answer.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, DiagnosticCodes as C } from '../check';
 import { mockCatalog, type InstanceSchema } from '../catalog';
 import type { LanguageVersion } from 'movement-lang/language_version';

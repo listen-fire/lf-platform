@@ -5,7 +5,7 @@
 // the event's fields through its hop's alias (`e.action`), as every WHERE
 // does from 5.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram } from '../check';
 import { mockCatalog } from '../catalog';
 import { eventAddressKey, eventAddressOfHops, eventAddressSource } from '../event_address';

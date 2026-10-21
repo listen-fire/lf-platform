@@ -33,6 +33,9 @@ const BODY_CLOSURE_PARK_FORMAT =
 const RUN_HOST_CORE =
   "mocks hosted resume modules the shared run-host core replaced (packages/movement-engine/services/run_host); the await/resume behaviour is now held by the run-host contract suite, run against both the Postgres and SQLite backends, so no movement observes the difference";
 
+const PLATFORM_TABLE =
+  "mocks movement-lang's `languageVersionDiagnostic` as the engine's view of a pin's standing; the language release now names only the versions it serves, and the engine reads the platform's table (legacy-lang, which still serves versions 1 to 5), so the mock no longer reaches it. The same behaviour is held by today's language_version_run test, which mocks the platform's table; no movement observes the difference";
+
 exports.triage = [
   {
     file: 'services/movement_engine/__test__/serialize.unit.test.ts',
@@ -79,4 +82,6 @@ exports.triage = [
   { file: "services/movement_engine/__test__/stdlib_file.unit.test.ts", test: "streams text/plain bytes that are the digest verbatim", reason: HAND_BUILT_STORE },
   { file: 'services/movement_engine/__test__/call_value.unit.test.ts', test: 'parks with the closure in scope — its body as AST, its capture as bindings', reason: BODY_CLOSURE_PARK_FORMAT },
   { file: 'services/movement_engine/__test__/await_resume.unit.test.ts', wholeFile: true, reason: RUN_HOST_CORE },
+  { file: 'services/movement_engine/__test__/language_version_run.unit.test.ts', test: 'refuses a removed version BY NAME', reason: PLATFORM_TABLE },
+  { file: 'services/movement_engine/__test__/language_version_run.unit.test.ts', test: 'runs a deprecated pin, with a warning on the run trace naming it', reason: PLATFORM_TABLE },
 ];

@@ -4,7 +4,7 @@
 // the declaration written out inline would, and the three refusals: a base that
 // is not a node declaration, a chain that comes back round, a restated member.
 
-import { parseProgram as parseSource } from 'movement-lang/parser/parse';
+import { parseProgram as parseSource } from '../../parser/parse';
 import { spelledFor } from './surface_spelling';
 import {
   checkProgram,

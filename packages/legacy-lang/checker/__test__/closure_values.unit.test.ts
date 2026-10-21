@@ -5,7 +5,7 @@
 // (MOV_CLOSURE_NOT_DATA); before 5 it is refused where it is written
 // (MOV_EXPR_CLOSURE_POSITION) — the corpus for versions 1 to 4 pins it.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
 import type { LanguageVersion } from 'movement-lang/language_version';

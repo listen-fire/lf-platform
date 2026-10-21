@@ -207,11 +207,6 @@ describe('parseMovementExpression', () => {
       });
     });
 
-    it('! sits at NOT precedence: !a = b is NOT (a = b), and a AND !b negates only b', () => {
-      expect(parseMovementExpression('!a = b')).toEqual(parseMovementExpression('NOT a = b'));
-      expect(parseMovementExpression('a AND !b')).toEqual(parseMovementExpression('a AND NOT b'));
-    });
-
     it('!= is still the not-equal operator, spaced or not', () => {
       const neq = {
         type: 'compare',
@@ -252,10 +247,7 @@ describe('parseMovementExpression', () => {
 
       it.each([
         ['a & b', '&', 2, 'AND'],
-        ['a && b', '&', 2, 'AND'],
         ['a | b', '|', 2, 'OR'],
-        ['a || b', '|', 2, 'OR'],
-        ['a ? b : c', '?', 2, 'IF'],
         ['a \\ b', '\\', 2, 'quoted string'],
         ['a ; b', ';', 2, ';'],
         ['a \u2013 b', '\u2013', 2, 'en dash'],
@@ -275,10 +267,6 @@ describe('parseMovementExpression', () => {
 
       it('a trailing stray character is refused too (it used to vanish)', () => {
         expect(refusal('a = 1;').message).toContain("Unrecognised character ';'");
-      });
-
-      it('inside a hop WHERE as well', () => {
-        expect(refusal('EXISTS(x-[n:e WHERE `a` && `b`]->)').message).toContain("Unrecognised character '&'");
       });
 
       it('the same characters inside a string are text', () => {
@@ -728,10 +716,6 @@ describe('parseMovementCondition', () => {
 
   it('rejects IS under NOT (not yet supported)', () => {
     expect(() => parseMovementCondition('NOT rec IS <crm-[:company]->>')).toThrow(/not yet supported/);
-  });
-
-  it('rejects IS under ! the same way — ! is NOT', () => {
-    expect(() => parseMovementCondition('!rec IS <crm-[:company]->>')).toThrow(/not yet supported/);
   });
 
   it('!= beside an IS conjunct is a comparison, not a negation', () => {

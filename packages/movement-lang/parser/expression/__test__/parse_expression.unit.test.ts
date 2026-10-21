@@ -154,33 +154,6 @@ describe('parseExpression', () => {
   });
 
   describe('paths', () => {
-    it('reads every clause a hop can carry', () => {
-      expect(parse('x-[r:Funding Round WHERE r.a == 1 ORDER BY r.b DESC LIMIT 3]->.c')).toEqual({
-        kind: 'member',
-        object: {
-          kind: 'path',
-          root: name('x'),
-          hops: [
-            {
-              direction: 'out',
-              arrow: '->',
-              alias: nameOnly('r'),
-              label: nameOnly('Funding Round'),
-              where: {
-                kind: 'binary',
-                op: '==',
-                left: { kind: 'member', object: name('r'), property: nameOnly('a') },
-                right: { kind: 'literal', value: 1 },
-              },
-              orderBy: { key: { kind: 'member', object: name('r'), property: nameOnly('b') }, direction: 'desc' },
-              limit: 3,
-            },
-          ],
-        },
-        property: nameOnly('c'),
-      });
-    });
-
     it('a label may be quoted, meta, or a resource shorthand', () => {
       const labels = (text: string) =>
         (parseExpression(text) as Extract<MExpr, { kind: 'path' }>).hops.map(h => h.label.text);

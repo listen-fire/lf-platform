@@ -6,7 +6,7 @@
 // carrying the respelling. (Before version 5 the cadence was a named argument,
 // `every: 5m`; the parser still reads it and the checker offers the rewrite.)
 
-import { MovementParseError, parseProgram } from 'movement-lang/parser/parse';
+import { MovementParseError, parseProgram } from '../parse';
 import { AwaitSource, MovementDeclaration, Statement } from 'movement-lang/parser/ast';
 
 function as<K extends Statement['kind']>(

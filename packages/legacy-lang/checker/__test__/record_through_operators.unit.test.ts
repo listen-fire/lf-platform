@@ -21,11 +21,12 @@
 // adapter shapes, per the fixture rule: a CRM note with a json `company`, a
 // text `title` and a file `upload`; a ledger entry with a json properties bag.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
 import { spelledFor } from './surface_spelling';
-import { SUPPORTED_LANGUAGE_VERSIONS, type LanguageVersion } from 'movement-lang/language_version';
+import { type LanguageVersion } from 'movement-lang/language_version';
+import { PLATFORM_SUPPORTED_LANGUAGE_VERSIONS } from '../../language_version';
 import { notKeywordRetirement } from './keyword_retirement';
 
 const crmSchema: InstanceSchema = {
@@ -547,7 +548,7 @@ describe.each(VERSIONS)('under language version %i, an adapter instance is no va
   });
 });
 
-describe.each([...SUPPORTED_LANGUAGE_VERSIONS])('B2: under language version %i, a record through COALESCE or MULTI reaches no field or json argument', version => {
+describe.each([...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS])('B2: under language version %i, a record through COALESCE or MULTI reaches no field or json argument', version => {
   // Closed by the operator typing above (COALESCE, IF and MULTI hold what
   // their operands hold), on every supported version; pinned here per version
   // so the engine never again meets the record mid-run.
@@ -563,7 +564,7 @@ describe.each([...SUPPORTED_LANGUAGE_VERSIONS])('B2: under language version %i, 
   });
 });
 
-describe.each([...SUPPORTED_LANGUAGE_VERSIONS])('B3: under language version %i, a map spread into a graph holds no record', version => {
+describe.each([...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS])('B3: under language version %i, a map spread into a graph holds no record', version => {
   // A map spread into a graph copies values and maps; the engine refuses a
   // record under any key when the graph is built (`spreadIntoGraph`, "a graph
   // field cannot hold a record"), on every run that reaches it. Refused where
@@ -623,7 +624,7 @@ describe.each([...SUPPORTED_LANGUAGE_VERSIONS])('B3: under language version %i, 
   });
 });
 
-describe.each([...SUPPORTED_LANGUAGE_VERSIONS])('B3: under language version %i, a graph entry that is not a reference holds no record', version => {
+describe.each([...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS])('B3: under language version %i, a graph entry that is not a reference holds no record', version => {
   // An entry that is ONE record (or a list of them) is a reference — an edge
   // holding the records. Any other entry is a field, and a field holds values:
   // a record in an operator's arm would be stored as a field when the graph is
@@ -668,7 +669,7 @@ describe.each([...SUPPORTED_LANGUAGE_VERSIONS])('B3: under language version %i, 
   });
 });
 
-describe.each([...SUPPORTED_LANGUAGE_VERSIONS])('B5: under language version %i, a record inside a plugin argument of a declared value type is refused', version => {
+describe.each([...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS])('B5: under language version %i, a record inside a plugin argument of a declared value type is refused', version => {
   // A text argument used to refuse a record handed whole, and take one under
   // a key or in an arm, which reached the plugin as the engine's own object.
   it.each([
@@ -848,7 +849,7 @@ describe.each([4, 5] as LanguageVersion[])('B14: under language version %i, a cl
 // out, bound, or handed back by a call. A union that mixes a record with a
 // value is still refused. L1: the union of a call's returns is flattened and
 // deduplicated, so a chain or a fan of calls checks in linear time.
-describe.each([...SUPPORTED_LANGUAGE_VERSIONS])('B14 review: under language version %i, records only are one record', version => {
+describe.each([...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS])('B14 review: under language version %i, records only are one record', version => {
   const two = [
     '  o2 = write crm-[:companies]-> { name: "Other" }',
   ];

@@ -5,7 +5,7 @@
 
 import { fromCatalogSnapshot, type CatalogSnapshot, type InstanceSchema } from 'movement-lang';
 import { checkProgram, scanInstanceChains } from 'legacy-lang';
-import { parseProgram } from 'movement-lang';
+import { parseProgram } from 'legacy-lang';
 
 import type { SchemaEntryPoint, SchemaTypeDescriptor } from 'engine-contracts/catalog';
 

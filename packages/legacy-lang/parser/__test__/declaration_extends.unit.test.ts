@@ -3,7 +3,7 @@
 // refused with the fix. What the base MEANS (its fields, its scope, a cycle, a
 // redefinition) is the checker's — see checker/__test__/declaration_extends.
 
-import { MovementParseError, parseProgram } from 'movement-lang/parser/parse';
+import { MovementParseError, parseProgram } from '../parse';
 import { ShapeDeclaration } from 'movement-lang/parser/ast';
 
 function declarations(source: string): ShapeDeclaration[] {

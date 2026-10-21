@@ -4,7 +4,7 @@
 // nodes — and a write body's spread (`...e`, `?...e`) must be checked exactly
 // as the field lines it stands for. These tests pin that sameness.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic, DiagnosticCodes as C } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
 import type { ResolveFile } from '../link';

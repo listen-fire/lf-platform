@@ -3,7 +3,7 @@
 // checker's stamps keyed by AST path (program_check.ts says the scheme).
 
 import { mockCatalogSnapshot, type InstanceSchema, type Program } from 'movement-lang';
-import { parseNestedCall, parseProgram } from 'movement-lang';
+import { parseNestedCall, parseProgram } from 'legacy-lang';
 
 import { MovementEngineError } from 'movement-engine/public/errors';
 import type { Stamp } from 'movement-engine/public/movement-engine';

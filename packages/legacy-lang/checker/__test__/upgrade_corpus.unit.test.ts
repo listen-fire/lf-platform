@@ -19,7 +19,7 @@
 
 import { checkSourceInRust } from 'movement-lang/checker/rust_checker';
 import { checkProgram, diagnosticSeverity, type Diagnostic } from '../check';
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { fromCatalogSnapshot, resolveFileFromSnapshot, type CatalogSnapshot } from 'movement-lang/service/snapshot';
 import { loadChecks, loadSnapshots, snapshotOf } from '../../conformance/checks_corpus';
 import { corpusFile, overCorpus, SNAPSHOT_TABLE_FILE } from '../../conformance/checks_pin';

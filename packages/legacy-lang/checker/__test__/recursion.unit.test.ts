@@ -14,7 +14,7 @@
 //   - versions 1 and 2 have no return types, and recursion there stays the
 //     run-time refusal it always was.
 
-import { parseProgram, MovementParseError } from 'movement-lang/parser/parse';
+import { parseProgram, MovementParseError } from '../../parser/parse';
 import { checkProgram, checkProgramWithLink, DiagnosticCodes as C, type Diagnostic } from '../check';
 import { effectRowOf } from '../effects';
 import { mockCatalog, type InstanceSchema } from '../catalog';

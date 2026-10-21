@@ -7,7 +7,7 @@
 // Two shapes so a hardcode cannot pass: a root collection (`reg-[:entities]->`)
 // and a record edge off a found record (`-[:Holdings]->`).
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic, DiagnosticCodes as C } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
 

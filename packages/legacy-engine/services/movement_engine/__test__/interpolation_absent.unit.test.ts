@@ -5,7 +5,8 @@
 // pins the runtime half of that promise, so the two cannot drift apart.
 
 import { binding, Environment, evalMovementExpr } from '../expression';
-import { CURRENT_LANGUAGE_VERSION, parseMovementExpression } from 'movement-lang';
+import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+import { parseMovementExpression } from 'legacy-lang';
 
 async function render(raw: string, bindings: Record<string, unknown>): Promise<unknown> {
   const env = new Environment();

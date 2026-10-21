@@ -47,8 +47,8 @@ export function parseMovementCondition(raw: string, languageVersion?: number): M
 //
 // A slot that arrives without one — a closure body's statement inside a slot's
 // tree, code rebuilt from a parked tree — is read here under `languageVersion`,
-// its program's pin: read under none, `Text.upper(v)` or `xs[i]` would take
-// the v1–4 meaning. A reader that runs or checks a program passes its pin.
+// its program's pin, or the current version when none is given. A reader that
+// runs or checks a program passes its pin.
 
 function treeOf(slot: ExprSlot, languageVersion: number | undefined): MExpr {
   let tree = slotTrees.get(slot);

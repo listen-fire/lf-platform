@@ -10,7 +10,7 @@
 // unsaid. The Rust checker's twin is crates/movement-checker/tests/
 // event_undescribed.rs, on the same catalog.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { fromCatalogSnapshot, type CatalogSnapshot } from 'movement-lang/service/snapshot';
 import { checkProgram } from '../check';
 

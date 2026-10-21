@@ -8,7 +8,7 @@ The movement core speaks six contracts. Each is written down here with an intege
 | park-state | [park-state.md](park-state.md) | 2 | 1, 2 | none | `version` on the state |
 | host-families | [host-families.md](host-families.md) | 1 | 1 | none | `hostFamiliesVersion` on `segment.open` |
 | adapter-protocol | [adapter-protocol.md](adapter-protocol.md) | 2 | 2 | none | `protocolVersion` on every request and the manifest |
-| language-versions | [language-versions.md](language-versions.md) | 5 | 1, 2, 3, 4, 5 | none | `languageVersion` beside every program |
+| language-versions | [language-versions.md](language-versions.md) | 5 | 5 | none | `languageVersion` beside every program |
 | system-caller | [system-caller.md](system-caller.md) | 1 | 1 | none | none: an in-process interface |
 
 - **Not a contract of its own:** [run-limits.md](run-limits.md) says what one segment may consume, and what holds a movement away from the network.

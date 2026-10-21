@@ -7,7 +7,7 @@
 // The schemas below are copied from check_typed.unit.test.ts (only the systems
 // these cases reach) so this file stands on its own.
 
-import { parseProgram } from 'movement-lang/parser/parse';
+import { parseProgram } from '../../parser/parse';
 import { checkProgram, DiagnosticCodes as C } from '../check';
 import { spelledFor } from './surface_spelling';
 import type { LanguageVersion } from 'movement-lang/language_version';

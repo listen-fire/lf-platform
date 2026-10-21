@@ -1,5 +1,6 @@
 // The TypeScript engine's check (versions 1–4): the pin and the parse
-// (`parsePinned`, the engine package's), then the TypeScript checker with its
+// (`parsePinned`: the platform's version table and parser, since the language
+// release no longer serves these versions), then the TypeScript checker with its
 // file resolver, throwing MOVENG_LANGUAGE_VERSION, MOVENG_PARSE or
 // MOVENG_CHECK. The TypeScript interpreter calls it in-process. A run on the
 // Rust engine is held to the Rust checker instead (the engine package's
@@ -34,15 +35,15 @@
 // The Rust engine re-reads the call from the slot to resolve one.
 
 import { fromCatalogSnapshot, resolveFileFromSnapshot, CURRENT_LANGUAGE_VERSION } from 'movement-lang';
-import { checkProgramWithLink } from 'legacy-lang';
+import { checkProgramWithLink, languageVersionDiagnostic } from 'legacy-lang';
 import { nestedCallsReadIn } from 'movement-lang';
+import { rustParseProgram } from 'legacy-lang/parser/rust_parser';
 
 import type { Catalog, Diagnostic, ExprSlot, LinkedExport, Program, ResolveFile } from 'movement-lang';
 import type { ProgramLink } from 'legacy-lang';
 
 import { MovementEngineError } from 'movement-engine/public/errors';
 import {
-  parsePinned,
   throwIfBlocking,
   type CheckAnswer,
   type CheckInput,
@@ -66,6 +67,26 @@ export interface CheckedProgram {
  *  resolves no import. */
 export function fileResolverOf(input: Pick<CheckInput, 'catalog'>): ResolveFile | undefined {
   return resolveFileFromSnapshot(input.catalog);
+}
+
+/** The pin, the parse: MOVENG_LANGUAGE_VERSION or MOVENG_PARSE. The engine
+ *  package's `parsePinned`, answered from the platform's version table and
+ *  read by the parser for the pin's version. */
+export function parsePinned(input: Pick<CheckInput, 'source' | 'languageVersion'>): Program {
+  const languageVersion = input.languageVersion ?? CURRENT_LANGUAGE_VERSION;
+  // The pin is answered before the source is read: a version the platform
+  // cannot honour must fail as exactly that, not as whatever the current
+  // grammar makes of the text.
+  const versionDiagnostic = languageVersionDiagnostic(languageVersion);
+  if (versionDiagnostic !== undefined && (versionDiagnostic.severity ?? 'error') === 'error') {
+    throw new MovementEngineError('MOVENG_LANGUAGE_VERSION', versionDiagnostic.message, [versionDiagnostic]);
+  }
+  const parsed = rustParseProgram(input.source, languageVersion);
+  if (!parsed.ok) {
+    const { message, loc } = parsed.refusal;
+    throw new MovementEngineError('MOVENG_PARSE', `${message} (line ${loc.line}, col ${loc.col})`);
+  }
+  return parsed.value;
 }
 
 /** Parse + check, throwing MOVENG_LANGUAGE_VERSION, MOVENG_PARSE or
