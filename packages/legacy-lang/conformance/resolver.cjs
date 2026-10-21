@@ -56,7 +56,11 @@ module.exports = (request, options) => {
           ? found.replace(/services[\\/]movement_engine[\\/]run\.ts$/, 'conformance/run.ts')
           : found;
       } catch {
-        return movedOutOfEngine(request, moved, options) ?? throwError(engineError);
+        return (
+          inInstalledEngine(request, moved, options) ??
+          movedOutOfEngine(request, moved, options) ??
+          throwError(engineError)
+        );
       }
     }
   }
@@ -92,12 +96,44 @@ const LEFT_THE_PLATFORM = {
   'services/knowledge_pipeline/facts': 'apps/api/src/lib/knowledge/facts',
 };
 
+// The engine's file at the position `request` names from `engineBasedir` (a
+// directory inside packages/movement-engine), where the engine is installed
+// rather than beside this package (the platform, from the registry): its
+// build, at the same path inside the package.
+function inInstalledEngine(request, engineBasedir, options) {
+  const match = engineBasedir.match(/^(.*[\\/]packages[\\/]movement-engine)(?=[\\/]|$)/);
+  if (!match) return undefined;
+  const inEngine = path.relative(match[1], path.resolve(engineBasedir, request));
+  let engineRoot;
+  try {
+    engineRoot = path.dirname(options.defaultResolver('movement-engine/package.json', options));
+  } catch {
+    return undefined;
+  }
+  for (const candidate of [path.join(engineRoot, inEngine), path.join(engineRoot, 'dist', inEngine)]) {
+    try {
+      return options.defaultResolver(candidate, options);
+    } catch {
+      // Try the next place.
+    }
+  }
+  return undefined;
+}
+
 function movedOutOfEngine(request, engineBasedir, options) {
   const match = engineBasedir.match(/^(.*[\\/]packages)[\\/]movement-engine(?=[\\/]|$)/);
   if (!match) return undefined;
   const inEngine = path.relative(path.join(match[1], 'movement-engine'), path.resolve(engineBasedir, request)).split(path.sep).join('/').replace(/\.ts$/, '');
   const target = OUT_OF_ENGINE[inEngine];
-  if (target !== undefined) return options.defaultResolver(path.join(match[1], target), options);
+  if (target !== undefined) {
+    // Beside this package in the language's own tree; by package name where
+    // the language is installed.
+    try {
+      return options.defaultResolver(path.join(match[1], target), options);
+    } catch {
+      return options.defaultResolver(target, options);
+    }
+  }
   const platformTarget = LEFT_THE_PLATFORM[inEngine];
   return platformTarget === undefined ? undefined : options.defaultResolver(path.join(match[1], '..', platformTarget), options);
 }

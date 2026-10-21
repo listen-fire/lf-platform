@@ -35,7 +35,8 @@ export default {
     path.join(CONFORMANCE, 'v4.setup.cjs'),
     path.join(CONFORMANCE, 'triage.setup.cjs'),
     '<rootDir>/src/test/movement_lang_source.setup.ts',
-    '<rootDir>/src/test/engine_logs.setup.ts',
+    // No engine_logs setup: a corpus mocks the engine's logger itself and
+    // asserts on the mock, which a sink installed before it would bypass.
     // Hands the corpus's version to every evaluation its context omits.
     '<rootDir>/src/test/conformance_pin.setup.ts',
     // Under UPDATE_ENGINE_RUNS=1: record every entry into the engine as a
