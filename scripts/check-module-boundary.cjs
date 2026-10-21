@@ -16,7 +16,9 @@ const path = require('node:path');
 const ts = require(require.resolve('typescript', { paths: [path.join(__dirname, '../packages/module-kit')] }));
 
 const repoRoot = path.resolve(__dirname, '..');
-const roots = [path.join(repoRoot, 'packages/module-kit'), path.join(repoRoot, 'packages/module-runtime')];
+// The kit and the runtime live where the language does; a tree that installs
+// them as packages (the platform) checks only its own modules.
+const roots = [path.join(repoRoot, 'packages/module-kit'), path.join(repoRoot, 'packages/module-runtime')].filter((root) => fs.existsSync(root));
 // The kit and the runtime it shares with the host are what the engine itself
 // is built on, so neither may reach the engine at all: what a module is written
 // against is engine-contracts' and module-runtime's.
