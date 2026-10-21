@@ -150,7 +150,7 @@ function build({ dir, assets = [], copies = [] }) {
         outDir: 'dist',
         paths,
       },
-      exclude: ['node_modules', 'dist', '**/__test__/**', '**/__conformance__/**', '__embed_smoke__', 'jest.config.ts', 'jest.config.borrowed.cjs', ...(dir === 'packages/movement-lang' ? ['conformance', 'checker/harvest', 'parser/harvest', 'parser/expression/harvest'] : [])],
+      exclude: ['node_modules', 'dist', '**/__test__/**', '**/__conformance__/**', '__embed_smoke__', 'jest.config.ts', 'jest.config.cjs', ...(dir === 'packages/movement-lang' ? ['conformance', 'checker/harvest', 'parser/harvest', 'parser/expression/harvest'] : [])],
     }),
   );
   try {

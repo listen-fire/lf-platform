@@ -11,6 +11,6 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 PACKAGE="$(cd "$HERE/.." && pwd)"
 ROOT="$(cd "$PACKAGE/../.." && pwd)"
 WORK="${PARITY_WORK:-$ROOT/target/parity}"
-TS_NODE=(node -r "$ROOT/apps/api/node_modules/ts-node/register/transpile-only")
+TS_NODE=(node -r "$ROOT/node_modules/ts-node/register/transpile-only")
 (cd "$PACKAGE" && "${TS_NODE[@]}" parity/answer_reference.ts "$WORK")
 (cd "$PACKAGE" && "${TS_NODE[@]}" parity/answer_compare.ts "$WORK")

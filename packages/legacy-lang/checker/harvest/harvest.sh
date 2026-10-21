@@ -26,8 +26,8 @@ cd "$PACKAGE"
 mode="${1:-}"
 case "$mode" in "" | --pin) ;; *) echo "usage: $0 [--pin]" >&2; exit 1 ;; esac
 T="$(mktemp -d)"
-JEST=../../apps/api/node_modules/jest/bin/jest.js
-FOLD=(node -r ../../apps/api/node_modules/ts-node/register/transpile-only checker/harvest/build_fixture.cjs)
+JEST=../../node_modules/jest/bin/jest.js
+FOLD=(node -r ../../node_modules/ts-node/register/transpile-only checker/harvest/build_fixture.cjs)
 
 harvest() {
   HARVEST_CORPUS="$1" HARVEST_OUT="$T/$1.jsonl" CHECKS_CORPUS="${2:-}" node "$JEST" --config checker/harvest/jest.harvest.cjs
@@ -44,5 +44,5 @@ for c in readers engine-readers; do
 done
 "${FOLD[@]}" ${mode:+"$mode"} "${first[@]}" "readers=$T/readers.jsonl" "engine-readers=$T/engine-readers.jsonl"
 
-CHECKS_CORPUS=1 node "$JEST" --config jest.config.borrowed.cjs checker/__test__/checks_regression checker/__test__/upgrade_corpus
-(cd ../movement-engine && CHECKS_CORPUS=1 node "$JEST" --config jest.config.borrowed.cjs services/movement_engine/__test__/reachability)
+CHECKS_CORPUS=1 node "$JEST" --config jest.config.cjs checker/__test__/checks_regression checker/__test__/upgrade_corpus
+(cd ../movement-engine && CHECKS_CORPUS=1 node "$JEST" --config jest.config.cjs services/movement_engine/__test__/reachability)

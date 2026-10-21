@@ -7,12 +7,12 @@
 // listed in `__conformance__/v2/triage.cjs`.
 // Run via `pnpm test:conformance:v2` in this package.
 const path = require('path');
-const borrowed = require('./jest.config.borrowed.cjs');
+const base = require('./jest.config.cjs');
 
-const [tsJest, tsJestOptions] = borrowed.transform['^.+\\.tsx?$'];
+const [tsJest, tsJestOptions] = base.transform['^.+\\.tsx?$'];
 
 module.exports = {
-  ...borrowed,
+  ...base,
   testMatch: ['<rootDir>/__conformance__/v2/**/*.unit.test.ts'],
   testPathIgnorePatterns: ['/node_modules/'],
   resolver: path.join(__dirname, 'conformance/resolver.cjs'),

@@ -11,7 +11,7 @@
 // packages/movement-lang:
 //
 //   HARVEST_CORPUS=v1 HARVEST_OUT=/tmp/checks.jsonl \
-//     node ../../apps/api/node_modules/jest/bin/jest.js \
+//     node ../../node_modules/jest/bin/jest.js \
 //     --config checker/harvest/jest.harvest.cjs
 const path = require('path');
 
@@ -27,16 +27,16 @@ const CORPORA = {
   v2: { root: PACKAGE, config: 'jest.conformance.v2.cjs' },
   v3: { root: PACKAGE, config: 'jest.conformance.v3.cjs' },
   v4: { root: PACKAGE, config: 'jest.conformance.v4.cjs' },
-  current: { root: PACKAGE, config: 'jest.config.borrowed.cjs' },
+  current: { root: PACKAGE, config: 'jest.config.cjs' },
   'api-v4': { root: API, config: 'src/test/jest-conformance-v4.config.ts' },
   'api-current': { root: API, config: 'src/test/jest-unit.config.ts', testMatch: [ENGINE_TESTS] },
-  engine: { root: ENGINE, config: 'jest.config.borrowed.cjs', testMatch: ['<rootDir>/services/**/*.unit.test.ts'] },
+  engine: { root: ENGINE, config: 'jest.config.cjs', testMatch: ['<rootDir>/services/**/*.unit.test.ts'] },
   // The tests that read the assembled corpus (CHECKS_CORPUS=1) and check
   // programs of their own made from it: the upgrade loop's rewrites and the
   // engine oracles' programs respelled to version 5. ./harvest.sh runs them
   // second, over the corpus the first pass assembled.
-  readers: { root: PACKAGE, config: 'jest.config.borrowed.cjs', testMatch: ['<rootDir>/checker/__test__/upgrade_corpus.unit.test.ts'] },
-  'engine-readers': { root: ENGINE, config: 'jest.config.borrowed.cjs', testMatch: ['<rootDir>/services/movement_engine/__test__/reachability.unit.test.ts'] },
+  readers: { root: PACKAGE, config: 'jest.config.cjs', testMatch: ['<rootDir>/checker/__test__/upgrade_corpus.unit.test.ts'] },
+  'engine-readers': { root: ENGINE, config: 'jest.config.cjs', testMatch: ['<rootDir>/services/movement_engine/__test__/reachability.unit.test.ts'] },
 };
 
 const corpus = process.env.HARVEST_CORPUS;

@@ -12,6 +12,10 @@
     "pnpm": "^9.5.0"
   },
   "devDependencies": {
+    "@types/jest": "29.5.14",
+    "jest": "29.7.0",
+    "ts-jest": "29.2.5",
+    "ts-node": "10.9.2",
     "typescript": "5.5.4"
   },
   "scripts": {
@@ -55,7 +59,7 @@
     "carve:import-team": "cd apps/api && pnpm run carve:import-team",
     "carve:delete-team": "cd apps/api && pnpm run carve:delete-team",
     "dev:editor-repro": "cd apps/api && pnpm run dev:editor-repro",
-    "language:conformance": "pnpm --dir packages/movement-lang run language:conformance"
+    "language:conformance": "pnpm --dir packages/legacy-lang run language:conformance"
   },
   "pnpm": {
     "overrides": {

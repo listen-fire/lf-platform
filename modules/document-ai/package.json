@@ -2,13 +2,13 @@
   "name": "@listen-fire/document-ai",
   "license": "Apache-2.0",
   "version": "0.12.0-rc.4",
-  "description": "The ocr slot's module on Google Document AI (`@lf/document-ai`): a scanned PDF's or an image's text, online for short files and batched through a Cloud Storage bucket for long ones, exactly as the platform reads them (packages/ocr-google), each read priced per page. Served as a process lf starts (kind: core, slot: ocr). Its tests borrow apps/api's jest runner (jest.config.borrowed.cjs)",
+  "description": "The ocr slot's module on Google Document AI (`@lf/document-ai`): a scanned PDF's or an image's text, online for short files and batched through a Cloud Storage bucket for long ones, exactly as the platform reads them (packages/ocr-google), each read priced per page. Served as a process lf starts (kind: core, slot: ocr).",
   "engines": {
     "node": "22.20.0"
   },
   "scripts": {
     "code:type-check": "tsc --pretty --noEmit && node ../../scripts/check-module-boundary.cjs",
-    "test": "node ../../apps/api/node_modules/jest/bin/jest.js --config jest.config.borrowed.cjs",
+    "test": "jest --config jest.config.cjs",
     "prepack": "node ../../scripts/build-packages.cjs .",
     "postpack": "node ../../scripts/build-packages.cjs --restore ."
   },
