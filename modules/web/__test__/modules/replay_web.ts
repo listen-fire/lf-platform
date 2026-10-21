@@ -11,7 +11,7 @@ import type { PluginModuleDefinition } from 'module-kit';
 
 import { defineModule } from 'module-kit';
 import { webModuleWith } from '../../index';
-import { replayingTools, type RecordedInvocation } from '../replay_tools';
+import { replayingTools, type RecordedInvocation } from '../../testing';
 
 const FIXTURE = join(__dirname, '../__fixtures__/web_tools_parity.json');
 

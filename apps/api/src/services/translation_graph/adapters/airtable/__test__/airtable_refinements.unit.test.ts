@@ -6,7 +6,7 @@ import { scanInstanceChains } from 'legacy-lang';
 
 import type { AirtableAdapter } from '@listen-fire/airtable';
 
-import { dealsTable, makeMultiBaseAdapter, tasksTable } from '@listen-fire/airtable/__test__/fake_adapter';
+import { dealsTable, makeMultiBaseAdapter, tasksTable } from '@listen-fire/airtable/testing';
 import { instanceSchemaFromDescriptors, makeMetaPosition, positionData } from 'movement-engine/public/catalog';
 import { refineInstanceSchema } from '../../../movement/refinements';
 

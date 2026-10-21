@@ -1,13 +1,14 @@
 // A fake Affinity for the adapter's unit tests: the real AffinityAdapter over
 // a fake client and operations that record every call, with a small seeded
 // workspace (fields, lists, notes, files, opportunities, reminders,
-// interactions). Shared with the platform's tests that run the adapter
-// through its own projection.
+// interactions). Published as the module's `testing` entry for the
+// platform's tests, which run the adapter
+// through their own projection.
 
 import type { FileRef } from 'movement-engine/public/adapter';
 
 import { refusingModels } from 'module-kit';
-import { AffinityAdapter } from '../adapter';
+import { AffinityAdapter } from './adapter';
 
 /** Files the host holds, by handle: what `ctx.files.read` redeems. */
 const heldFiles = new Map<string, Uint8Array>();

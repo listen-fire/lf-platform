@@ -8,7 +8,7 @@ import type { SchemaEntryPoint, SchemaTypeDescriptor } from 'engine-contracts/ca
 import { instanceSchemaFromDescriptors } from 'movement-engine/public/catalog';
 import { staticCatalogFromManifests } from '../movement/catalog';
 import { listAdapterTypes } from '../adapters/registry';
-import adapterSchemas from '../../../../../../packages/handbook/__test__/adapter_schemas.fixture.json';
+import { CAPTURED_ADAPTER_SCHEMAS } from '@listen-fire/handbook/testing';
 
 /** Every edge name a schema publishes, wherever it sits: root collections,
  *  every position's edges, the relationship tables write shapes (and their
@@ -29,8 +29,8 @@ describe('the reserved @ edge prefix', () => {
     // The fixture is the real catalog's projected output for every registered
     // adapter the dev stack connects (see handbook.unit.test.ts for how it is
     // captured); it is the one offline record of the live describe.
-    expect(Object.keys(adapterSchemas.schemas).length).toBeGreaterThan(0);
-    const reserved = Object.entries(adapterSchemas.schemas).flatMap(([system, schema]) =>
+    expect(Object.keys(CAPTURED_ADAPTER_SCHEMAS).length).toBeGreaterThan(0);
+    const reserved = Object.entries(CAPTURED_ADAPTER_SCHEMAS).flatMap(([system, schema]) =>
       edgeNamesOf(schema).filter((edge) => edge.startsWith('@')).map((edge) => `${system}: ${edge}`),
     );
     expect(reserved).toEqual([]);

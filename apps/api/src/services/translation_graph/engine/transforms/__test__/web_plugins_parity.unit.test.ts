@@ -27,7 +27,7 @@ import { dirname, join } from 'node:path';
 
 import { noCredential, pluginsInProcess, refusingFiles, refusingKv } from 'module-kit';
 import { webModuleWith } from '@listen-fire/web';
-import { recordingTools, type RecordedInvocation, type ToolCall } from '@listen-fire/web/__test__/replay_tools';
+import { recordingTools, type RecordedInvocation, type ToolCall } from '@listen-fire/web/testing';
 import { logger } from 'movement-engine/public/log';
 import { hostedWebTools } from '../hosted_tools';
 

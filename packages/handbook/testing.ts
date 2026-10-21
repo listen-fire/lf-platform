@@ -33,6 +33,11 @@ import kgOntology from './__test__/kg_ontology.fixture.json';
 export const CAPTURED_ADAPTERS: readonly string[] = Object.keys(adapterSchemas.schemas);
 
 const capturedSchemas = adapterSchemas.schemas as Record<string, InstanceSchema>;
+
+/** The captured schemas themselves, by adapter type: a host's tests read what
+ *  real adapters publish (the platform proves none declares a reserved edge). */
+export const CAPTURED_ADAPTER_SCHEMAS: Readonly<Record<string, InstanceSchema>> = capturedSchemas;
+
 const capturedSpecs = adapterSchemas.specs as Record<string, Omit<AdapterSpec, 'schema'>>;
 
 /**

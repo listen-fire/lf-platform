@@ -14,7 +14,7 @@ import { createInterface } from 'node:readline';
 
 import { noCredential, pluginsInProcess, refusingFiles, refusingKv } from 'module-kit';
 import { createRemoteAdapter, fetchRemoteManifest, type RemoteAdapter } from 'movement-engine/public/modules';
-import { type RecordedInvocation } from './replay_tools';
+import { type RecordedInvocation } from '../testing';
 import { replayWebModule } from './modules/replay_web';
 
 const recorded = JSON.parse(readFileSync(join(__dirname, '__fixtures__/web_tools_parity.json'), 'utf8')) as RecordedInvocation[];

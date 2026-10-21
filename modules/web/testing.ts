@@ -3,9 +3,10 @@
 // runs on the platform's own tools; replaying hands the same answers back,
 // in the same order, to the same asks — anything else is a mismatch that
 // fails the invocation — so a host that is not the platform (serve-module as
-// a process) is held to what the plugin did on the platform.
+// a process) is held to what the plugin did on the platform. Published as the
+// module's `testing` entry, since the recording side is the platform's.
 
-import type { ProfileFetchBudget, WebTools } from '../tools';
+import type { ProfileFetchBudget, WebTools } from './tools';
 
 export interface ToolCall {
   tool: string;

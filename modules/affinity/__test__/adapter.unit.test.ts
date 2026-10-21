@@ -20,7 +20,7 @@ import type { Expression } from 'engine-contracts/expression/expression';
 import type { SourcePosition } from 'movement-engine/public/catalog';
 
 import { AFFINITY_MANIFEST } from '../index';
-import { makeAdapter, testFileStore } from './fake_adapter';
+import { makeAdapter, testFileStore } from '../testing';
 import { decodedFixedType, listScopedFieldDisplayNames } from '../types';
 import { instanceSchemaFromDescriptors } from 'movement-engine/public/catalog';
 import {

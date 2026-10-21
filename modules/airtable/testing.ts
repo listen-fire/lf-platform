@@ -1,11 +1,12 @@
 // A fake Airtable for the adapter's unit tests: the real AirtableAdapter over
 // a fake client (bases, tables, rows) that records its writes, and files the
-// host exposes at a fixed URL. Shared with the platform's tests that run the
-// adapter through its own projection.
+// host exposes at a fixed URL. Published as the module's `testing` entry for
+// the platform's tests, which run the
+// adapter through their own projection.
 
 import type { FileRef } from 'movement-engine/public/adapter';
 
-import { AirtableAdapter } from '../adapter';
+import { AirtableAdapter } from './adapter';
 
 /** The client every test replaces. */
 async function noClient(): Promise<never> {

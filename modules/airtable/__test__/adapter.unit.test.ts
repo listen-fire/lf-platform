@@ -39,7 +39,7 @@ import {
   tasksTable,
   testFileStore,
   type FakeRecord,
-} from './fake_adapter';
+} from '../testing';
 import { coerceAirtableValue } from '../record';
 import { makeStablePosition, makeMetaPosition, makeUnstablePosition, positionData } from 'movement-engine/public/catalog';
 import { eventsFromPayload } from '../webhook';
