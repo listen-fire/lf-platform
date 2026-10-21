@@ -6,7 +6,7 @@
 // place to find out — so each call site in the engine is registered here with
 // its cover:
 //
-//   checker     — the movement-lang checker refuses every program that reaches it
+//   checker     — the legacy-lang checker (the TypeScript one, which checks pins 1-4) refuses every program that reaches it
 //   dryRun      — the save-time construct scan (interpretable.ts) flags it; the
 //                 snippet here PROVES the scan reaches it
 //   harness     — only reachable when a durable seam is absent (a dry run or a
@@ -259,7 +259,7 @@ function engineFile(file: string): string {
   if (dir === undefined) throw new Error(`no movement_engine file ${file}`);
   return path.join(dir, file);
 }
-const CHECKER_DIR = path.resolve(__dirname, '../../../../../../packages/movement-lang/checker');
+const CHECKER_DIR = path.resolve(__dirname, '../../../../../../packages/legacy-lang/checker');
 
 const PRELUDE = `
 import { email, attio, kg } from adapters
