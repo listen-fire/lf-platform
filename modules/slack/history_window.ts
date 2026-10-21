@@ -130,10 +130,11 @@ function mirrorOp(op: Extract<Expression, { type: 'compare' }>['op']) {
  * as `property`; either way the name denotes the landing record, which is what
  * the window bounds.
  *
- * An alias-qualified read (`m.\`Timestamp\``, a zero-step traverse) is
- * deliberately NOT one: the alias may name an outer position entirely, and a
- * window built from another record's timestamp would drop messages the author
- * asked for. Not pushing costs a page; pushing the wrong bound costs results.
+ * A read through the hop's own alias (`m.\`Timestamp\`` in `[m:Messages …]`)
+ * arrives lowered to that same field read, so it counts. A read through another
+ * hop's alias (a zero-step traverse) deliberately does NOT: a window built from
+ * another record's timestamp would drop messages the author asked for. Not
+ * pushing costs a page; pushing the wrong bound costs results.
  */
 function isFieldRead(
   expr: Expression,
