@@ -40,7 +40,7 @@ import { resetRustRunStats, rustRunStats } from 'movement-engine/public/movement
 import { credentialIdsFor, makeFakeParkSink, makeTestHost } from 'movement-engine/public/testing';
 
 import { PATTERNS_CATALOG } from '../../../__fixtures__/oracle/patterns_catalog';
-import { KNOWN_GAPS, reasonOf } from '../../../../movement-engine/services/movement_engine/__test__/reachability_gaps';
+import { KNOWN_GAPS, reasonOf } from './reachability_gaps';
 
 const ROOT = path.resolve(__dirname, '../../../../..');
 // The engine's version 5 patterns stay with the language; the oracles pinned

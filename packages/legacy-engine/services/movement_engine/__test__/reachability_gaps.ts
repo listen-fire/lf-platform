@@ -1,9 +1,7 @@
 // The reachability gaps still open: a checked-clean version-5 program the
 // Rust engine refuses by construct. One list, read by the reachability test
-// (reachability.unit.test.ts), which fails on a gap not listed and on a
-// listed gap nothing reaches, and by the patterns oracle
-// (crates/movement-engine/tests/oracle/patterns_oracle.ts), which records a
-// program refused so only where its gap is listed here.
+// beside it (reachability.unit.test.ts), which fails on a gap not listed and
+// on a listed gap nothing reaches. It lives with its only reader.
 
 /** A gap's reason with the names it quotes masked, so one construct is one
  *  entry however many programs reach it. */

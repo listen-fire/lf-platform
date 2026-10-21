@@ -4,27 +4,31 @@
 // re-wrapping of paged streams + manifest-gated optional methods. Names on the
 // wire are the caller's natural names, forwarded untranslated.
 
-import { hostedDocumentStore } from '../../../engine/files/retrieve';
-import type { FileRef, RuntimeCapabilities } from 'movement-engine/services/translation_graph/adapter';
-import type { RemoteAdapterConfig, RemoteManifest } from 'movement-engine/services/translation_graph/adapters/remote';
-
-import { streamFileRef } from '../../../engine/files/retrieve';
+import type { FileRef, RuntimeCapabilities } from '../../../adapter';
+import type { DocumentStore } from '../../../engine/files/document_store';
+import { redeemFileRef } from '../../../engine/files/redeem';
+import type { RemoteAdapterConfig, RemoteManifest } from '..';
 
 // Mock the transport. Every forwarder funnels through `postRpc`; we control its
 // return value per-method and inspect the calls.
-jest.mock('movement-engine/services/translation_graph/protocol/client', () => {
-  const actual = jest.requireActual('movement-engine/services/translation_graph/protocol/client');
+jest.mock('../../../protocol/client', () => {
+  const actual = jest.requireActual('../../../protocol/client');
   return { ...actual, postRpc: jest.fn() };
 });
 
-import { postRpc } from 'movement-engine/services/translation_graph/protocol/client';
-import { RemoteAdapter, createRemoteAdapter, fetchRemoteManifest } from 'movement-engine/services/translation_graph/adapters/remote';
-import { limitRequest, MemoryLimiter } from 'movement-engine/services/limiter/limiter';
-
-import type { TeamId } from '../../../../../generated/kysely/core/Team';
+import { postRpc } from '../../../protocol/client';
+import { RemoteAdapter, createRemoteAdapter, fetchRemoteManifest } from '..';
+import { limitRequest, MemoryLimiter } from '../../../../limiter/limiter';
 
 /** The team the adapter's calls are made for (sent as `x-listen-fire-team`). */
-const CONFIG_TEAM_ID = '00000000-0000-4000-8000-0000000000c1' as TeamId;
+const CONFIG_TEAM_ID = '00000000-0000-4000-8000-0000000000c1';
+
+/** The host's document store: these cases hand the adapter no stored
+ *  document, so any use of it is a failure. */
+const unused = (what: string) => async (): Promise<never> => {
+  throw new Error(`the document store's ${what} was not expected here`);
+};
+const documents: DocumentStore = { put: unused('put'), owns: unused('owns'), open: unused('open'), expose: unused('expose') };
 
 const postRpcMock = postRpc as jest.MockedFunction<typeof postRpc>;
 
@@ -81,7 +85,7 @@ function manifest(methods: readonly string[] = ALL_METHODS): RemoteManifest {
 }
 
 function buildAdapter(methods: readonly string[] = ALL_METHODS): RemoteAdapter {
-  return createRemoteAdapter({ documents: hostedDocumentStore,
+  return createRemoteAdapter({ documents,
     config,
     secret: 's3cr3t',
     cacheScopeId: CACHE_SCOPE,
@@ -138,7 +142,7 @@ describe('RemoteAdapter manifest props', () => {
   });
 
   it('exposes webhookEventTypeId from the manifest (static config, no RPC)', () => {
-    const adapter = createRemoteAdapter({ documents: hostedDocumentStore,
+    const adapter = createRemoteAdapter({ documents,
       config,
       secret: 's3cr3t',
       cacheScopeId: CACHE_SCOPE,
@@ -704,8 +708,9 @@ describe('RemoteAdapter FileRefs read off the wire', () => {
     global.fetch = fetchMock as unknown as typeof fetch;
     try {
       const owners: unknown[] = [];
-      const resolved = await streamFileRef(ref, {
-        teamId: CONFIG_TEAM_ID,
+      const resolved = await redeemFileRef(ref, {
+        tenantId: CONFIG_TEAM_ID,
+        documents,
         resolveOwner: (input) => {
           owners.push(input);
           return adapter;
@@ -738,7 +743,7 @@ describe('RemoteAdapter FileRefs read off the wire', () => {
     const fetchMock = jest.fn(async () => new Response('URL-BYTES', { status: 200 }));
     global.fetch = fetchMock as unknown as typeof fetch;
     try {
-      const resolved = await streamFileRef(ref, { teamId: CONFIG_TEAM_ID, resolveOwner: () => adapter });
+      const resolved = await redeemFileRef(ref, { tenantId: CONFIG_TEAM_ID, documents, resolveOwner: () => adapter });
       expect(postRpcMock).toHaveBeenLastCalledWith(
         expect.objectContaining({
           method: 'resolveFileRef',
@@ -871,7 +876,7 @@ describe('RemoteAdapter — the limiter slot', () => {
   it('holds calls past a declared concurrency limit until one ends, and reports a provider throttle', async () => {
     const limiter = new MemoryLimiter();
     const adapter = createRemoteAdapter({
-      documents: hostedDocumentStore,
+      documents,
       config,
       secret: 's',
       cacheScopeId: CACHE_SCOPE,

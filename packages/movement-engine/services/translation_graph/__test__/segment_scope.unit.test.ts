@@ -10,8 +10,8 @@
 // under test too.
 
 import { tenantIdOf } from 'engine-contracts';
-import type { Adapter } from 'movement-engine/services/translation_graph/adapter';
-import { adapterTable } from 'movement-engine/services/translation_graph/engine/adapter_table';
+import type { Adapter } from '../adapter';
+import { adapterTable } from '../engine/adapter_table';
 import {
   AdapterCallCeilingExceeded,
   bindAdapterCallCounter,
@@ -23,13 +23,12 @@ import {
   openSegment,
   segmentScopedCalls,
   withSegment,
-} from 'movement-engine/services/translation_graph/segment_scope';
-import { teamOfTenant } from '../../translation_graph/movement/tenant';
+} from '../segment_scope';
 
 const ENV_VAR = 'AFFINITY_MAX_CALLS_PER_RUN';
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000071');
 
-const inASegment = <T>(fn: () => Promise<T>) => withSegment({ teamId: teamOfTenant(TEAM_ID) }, fn);
+const inASegment = <T>(fn: () => Promise<T>) => withSegment({ teamId: TEAM_ID }, fn);
 
 describe('the per-segment Affinity call ceiling', () => {
   const original = process.env[ENV_VAR];

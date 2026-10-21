@@ -1,4 +1,4 @@
-import { jsonLogLine, logFormatFromEnv, severityOf } from 'movement-engine/services/log_format';
+import { jsonLogLine, logFormatFromEnv, severityOf } from '../log_format';
 
 describe('severityOf', () => {
   it.each([
