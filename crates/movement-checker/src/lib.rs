@@ -9,6 +9,7 @@ pub mod answer;
 mod binding_types;
 mod checker;
 pub mod codes;
+pub mod compatible;
 mod cron;
 mod diagnostic;
 pub mod families;
@@ -170,5 +171,20 @@ pub fn check_json(source: &str, catalog_json: &str, options: CheckOptions) -> se
     match check_source(source, &catalog, options) {
         Ok(diagnostics) => serde_json::json!({ "diagnostics": diagnostics }),
         Err(refusal) => serde_json::json!({ "error": { "message": refusal.message } }),
+    }
+}
+
+/// `checkAnswer` as JSON: `{diagnostics, stamps, link?}` (crate::answer), or
+/// `{error}` for a source that does not parse or a catalog that does not
+/// load. What a host answers the engine's `check.program` with.
+pub fn check_answer_json(source: &str, catalog_json: &str, options: CheckOptions) -> serde_json::Value {
+    let catalog = match CatalogSnapshot::load(&movement_parser::util::form::read_json_text(catalog_json)) {
+        Ok(catalog) => catalog,
+        Err(message) => return serde_json::json!({ "error": { "message": message } }),
+    };
+    let parse_version = options.parse_version.unwrap_or(options.language_version);
+    match movement_parser::stmt::parse_program(&form_of_text(source), parse_version, false) {
+        Ok(program) => answer::check_answer(&program, &catalog, options).to_json(),
+        Err(e) => serde_json::json!({ "error": { "message": format!("{} at line {}, column {}", e.message, e.loc.line, e.loc.col) } }),
     }
 }

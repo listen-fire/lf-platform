@@ -238,6 +238,13 @@ pub fn surface_misfit(supplied: Option<&Surface>, schema: &InstanceSchema, posit
     misfit_at(supplied, schema, position, options, "", &mut vec![])
 }
 
+/// `surface_misfit` at a position reached across declared edges, `seen` the
+/// positions passed on the way there (each edge's target), so a cycle back
+/// to one of them is not compared again.
+pub fn surface_misfit_from(supplied: Option<&Surface>, schema: &InstanceSchema, position: &str, options: MisfitOptions, mut seen: Vec<String>) -> Option<String> {
+    misfit_at(supplied, schema, position, options, "", &mut seen)
+}
+
 /// How `surface_misfit` reads and phrases a misfit.
 #[derive(Clone, Copy)]
 pub struct MisfitOptions {

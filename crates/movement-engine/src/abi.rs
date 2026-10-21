@@ -131,6 +131,47 @@ pub unsafe extern "C" fn check_program(
     }
 }
 
+/// The checker's `check.program` answer (`movement_checker::abi::check_answer_with`),
+/// its zone database this engine's environment services.
+///
+/// # Safety
+/// Both input ranges must be readable; the out slots writable.
+#[unsafe(no_mangle)]
+#[allow(clippy::too_many_arguments)] // the C ABI's arguments
+pub unsafe extern "C" fn check_answer(
+    src_ptr: *const u8,
+    src_len: u32,
+    catalog_ptr: *const u8,
+    catalog_len: u32,
+    version: u32,
+    upgrading_from: u32,
+    out_ptr_ptr: *mut usize,
+    out_len_ptr: *mut usize,
+) -> u32 {
+    unsafe {
+        movement_checker::abi::check_answer_with(
+            &crate::env_services::EnvZones,
+            src_ptr,
+            src_len,
+            catalog_ptr,
+            catalog_len,
+            version,
+            upgrading_from,
+            out_ptr_ptr,
+            out_len_ptr,
+        )
+    }
+}
+
+/// The checker's `check.compatible` answer (`movement_checker::abi::check_compatible_with`).
+///
+/// # Safety
+/// The input range must be readable; the out slots writable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn check_compatible(request_ptr: *const u8, request_len: u32, out_ptr_ptr: *mut usize, out_len_ptr: *mut usize) -> u32 {
+    unsafe { movement_checker::abi::check_compatible_with(request_ptr, request_len, out_ptr_ptr, out_len_ptr) }
+}
+
 #[cfg(test)]
 mod tests {
     use movement_parser::abi::{alloc, dealloc, last_panic};

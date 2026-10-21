@@ -64,12 +64,14 @@ type CatalogFunction = 'catalog_query';
 
 type WasmFunction = ParserFunction | LoweringFunction | CatalogFunction;
 
+/** The Rust checker's exports, which only the engine's artifact carries. */
+type CheckerFunction = 'check_program' | 'check_answer' | 'check_compatible';
+
 interface ParserExports extends BufferExports {
   call(fn: WasmFunction, args: number[]): number;
-  /** Absent from a module built without the engine (the loader test's). */
-  /** The Rust checker's export: absent from a module built without the
-   *  engine (the browser's parser artifact). */
-  checkProgram: ((...args: number[]) => number) | undefined;
+  /** The Rust checker's exports: each absent from a module built without
+   *  the engine (the browser's parser artifact, the loader test's). */
+  checker: Partial<Record<CheckerFunction, (...args: number[]) => number>>;
 }
 
 interface Loaded {
@@ -192,20 +194,50 @@ export function callCheckProgram(
   languageVersion: number,
   upgradingFrom: number,
 ): { ok: boolean; json: unknown } {
+  return callChecker('check_program', [source, snapshotJson], [languageVersion, upgradingFrom]);
+}
+
+/**
+ * The Rust checker's answer to the engine's `check.program` request
+ * (crates/movement-checker/src/answer.rs): `callCheckProgram`'s inputs, and
+ * the reply — `{diagnostics, stamps, link?}`, or `{error}` for a source that
+ * does not parse or a snapshot that does not load.
+ *
+ * @internal Used by the Rust checker's wrapper (checker/rust_checker.ts).
+ */
+export function callCheckAnswer(
+  source: string,
+  snapshotJson: string,
+  languageVersion: number,
+  upgradingFrom: number,
+): { ok: boolean; json: unknown } {
+  return callChecker('check_answer', [source, snapshotJson], [languageVersion, upgradingFrom]);
+}
+
+/**
+ * The Rust checker's answer to the engine's `check.compatible` request
+ * (crates/movement-checker/src/compatible.rs): the request as JSON, and the
+ * reply — `{fits}`, `{undescribed: true}`, or `{error}`.
+ *
+ * @internal Used by the Rust checker's wrapper (checker/rust_checker.ts).
+ */
+export function callCheckCompatible(requestJson: string): { ok: boolean; json: unknown } {
+  return callChecker('check_compatible', [requestJson], []);
+}
+
+function callChecker(fn: CheckerFunction, inputs: string[], extra: number[]): { ok: boolean; json: unknown } {
   const exports = currentExports();
-  const checkProgram = exports.checkProgram;
-  if (checkProgram === undefined) throw new Error('this movement artifact has no check_program()');
+  const checker = exports.checker[fn];
+  if (checker === undefined) throw new Error(`this movement artifact has no ${fn}()`);
   let reply: { status: number; text: string };
   try {
-    reply = exchange(exports, [source, snapshotJson], (pairs, slots) =>
-      checkProgram(...pairs, languageVersion, upgradingFrom, slots, slots + 4),
-    );
+    reply = exchange(exports, inputs, (pairs, slots) => checker(...pairs, ...extra, slots, slots + 4));
   } catch (trap) {
     if (!(trap instanceof WasmTrap)) throw trap;
     if (loaded) loaded.exports = undefined;
-    throw new Error(`movement checker crashed in check_program: ${trap.detail}`, { cause: trap.trapped });
+    throw new Error(`movement checker crashed in ${fn}: ${trap.detail}`, { cause: trap.trapped });
   }
-  return statusReply(reply, 'movement checker returned unknown status %s from check_program');
+  return statusReply(reply, `movement checker returned unknown status %s from ${fn}`);
 }
 
 /** `inputs`: one (pointer, length) pair each, in order, before `extra`. */
@@ -445,12 +477,17 @@ function readExports(raw: Record<string, unknown>): ParserExports {
     lower_condition: exported('lower_condition'),
     catalog_query: exported('catalog_query'),
   };
-  const checkProgram = typeof raw.check_program === 'function' ? exported('check_program') : undefined;
+  const checker: ParserExports['checker'] = {};
+  for (const fn of ['check_program', 'check_answer', 'check_compatible'] as const) {
+    if (typeof raw[fn] !== 'function') continue;
+    const call = exported(fn);
+    checker[fn] = (...args) => number(call(...args), fn);
+  }
   return {
     memory,
     ...buffers,
     call: (fn, args) => number(parsers[fn](...args), fn),
-    checkProgram: checkProgram && ((...args) => number(checkProgram(...args), 'check_program')),
+    checker,
   };
 }
 

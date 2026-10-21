@@ -6,7 +6,7 @@
 // that exercise them are built into test builds only), and the loader's trap
 // path is movement-lang's loader test.
 
-import { EMPTY_CATALOG_SNAPSHOT, openEngineSegment } from 'movement-lang';
+import { EMPTY_CATALOG_SNAPSHOT, checkAnswerInRust, compatibleInRust, openEngineSegment, RustCheckRefused } from 'movement-lang';
 
 import { tenantIdOf } from 'engine-contracts';
 
@@ -103,5 +103,21 @@ describe('the Rust engine artifact', () => {
   it('refuses a protocol misuse loudly through the shim', () => {
     expect(() => openWasmEngine().start({ entry: 'nope' })).toThrow('the Rust engine refused start: no entry `nope`');
     expect(() => openWasmEngine().start({ entry: 'nope' })).toThrow(RustShimError);
+  });
+
+  it("answers the engine's check.program as data: diagnostics, stamps, and no link without imports", () => {
+    const answer = checkAnswerInRust('x = 1\nmovement m() {\n  y = x\n}', EMPTY_CATALOG_SNAPSHOT, { languageVersion: 5 });
+    expect(answer).toEqual({ diagnostics: expect.any(Array), stamps: [] });
+    expect(() => checkAnswerInRust('movement {', EMPTY_CATALOG_SNAPSHOT, { languageVersion: 5 })).toThrow(RustCheckRefused);
+  });
+
+  it("answers the engine's check.compatible by the checker's comparator, extends folded in", () => {
+    const source = 'node Base { name: <text> }\nnode Lead extends Base { stage: <text> }';
+    const schema = (properties: Record<string, string>) => ({ positions: { Person: { properties, edges: {} } }, collections: {} });
+    const ask = (s: unknown, declaration = 'Lead') => compatibleInRust({ source, languageVersion: 5, declaration, schema: s, recordType: 'Person' });
+    expect(ask(schema({ name: 'text', stage: 'text' }))).toEqual({ fits: true });
+    expect(ask(schema({ stage: 'text' }))).toEqual({ fits: false });
+    expect(ask({ positions: {}, collections: {} })).toEqual({ undescribed: true });
+    expect(() => ask(schema({}), 'Ghost')).toThrow("check.compatible: 'Ghost' is not a node declaration of the file");
   });
 });
