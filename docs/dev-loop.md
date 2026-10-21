@@ -734,13 +734,13 @@ Jest compiles each test file without type-checking (ts-jest with `isolatedModule
 ## Regenerating the handbook's adapter schema snapshot
 
 The movement handbook's examples are checked against
-`apps/api/src/lib/knowledge/movement_handbook/__test__/adapter_schemas.fixture.json`,
+`packages/handbook/__test__/adapter_schemas.fixture.json`,
 a capture of what the dev-loop team's real adapters publish. Regenerate it
 whenever an adapter's shape changes:
 
 1. `pnpm dev:loop:agent` (the capture reads its env from the stack's profile file, so the stack must be up)
 2. `pnpm dev:seed`
-3. `pnpm dev:movement snapshot-catalog --handbook --out apps/api/src/lib/knowledge/movement_handbook/__test__/adapter_schemas.fixture.json`
+3. `pnpm dev:movement snapshot-catalog --handbook --out packages/handbook/__test__/adapter_schemas.fixture.json`
 4. `git diff` the fixture and read it.
 
 The capture provisions the Telegram credential itself, and exits non-zero naming

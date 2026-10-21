@@ -38,6 +38,7 @@
     "packages/engine-contracts",
     "packages/file-text",
     "packages/files-s3",
+    "packages/handbook",
     "packages/model-providers",
     "packages/module-kit",
     "packages/module-runtime",

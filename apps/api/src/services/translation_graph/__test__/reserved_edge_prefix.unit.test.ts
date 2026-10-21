@@ -8,7 +8,7 @@ import type { SchemaEntryPoint, SchemaTypeDescriptor } from 'engine-contracts/ca
 import { instanceSchemaFromDescriptors } from 'movement-engine/services/translation_graph/movement/schema_projection';
 import { staticCatalogFromManifests } from '../movement/catalog';
 import { listAdapterTypes } from '../adapters/registry';
-import adapterSchemas from '../../../lib/knowledge/movement_handbook/__test__/adapter_schemas.fixture.json';
+import adapterSchemas from '../../../../../../packages/handbook/__test__/adapter_schemas.fixture.json';
 
 /** Every edge name a schema publishes, wherever it sits: root collections,
  *  every position's edges, the relationship tables write shapes (and their

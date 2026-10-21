@@ -2,7 +2,7 @@
 // the automations connector, which asks for the front page instead of chapters.
 
 import { readBook } from '../index';
-import { renderFrontPage } from '../../movement_handbook/front_page';
+import { renderFrontPage } from '../../movement_handbook';
 
 type Read = {
   chapter?: string;

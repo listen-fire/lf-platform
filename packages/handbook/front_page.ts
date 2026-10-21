@@ -5,9 +5,10 @@
 // Everything else (a built-in's signature, a system's behaviour, a recipe) is
 // looked up on demand through the language search.
 //
-// Every example on the page is the probe the tests hand to the real checker
-// and the engine's interpretability scan: the shown text and the checked text
-// are one string, so the page cannot teach something that does not compile.
+// Every example on the page is the probe the tests hand to the Rust engine's
+// own check (the parse and the checker a run passes before it executes): the
+// shown text and the checked text are one string, so the page cannot teach
+// something that does not compile.
 //
 // Plan: plans/functional-extract-2026-10-02/3_docs_and_evals.md.
 

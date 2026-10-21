@@ -22,7 +22,7 @@ const PRERELEASE = /^version = "[^"]*-/m.test(readFileSync(join(root, 'Cargo.tom
 const VERSIONS = [{ number: 5, name: 'Dancing Wren', slug: PRERELEASE ? 'next' : 'v5' }];
 const CURRENT = VERSIONS[VERSIONS.length - 1];
 
-const HANDBOOK_DIR = 'apps/api/src/lib/knowledge/movement_handbook/chapters';
+const HANDBOOK_DIR = 'packages/handbook/chapters';
 // Reading order; the in-app handbook's own order of registration.
 const HANDBOOK_CHAPTERS = [
   'foundations', 'anatomy', 'expressions', 'writes', 'traversal', 'extraction', 'branching',

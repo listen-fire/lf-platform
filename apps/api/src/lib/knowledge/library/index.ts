@@ -7,8 +7,7 @@
 
 import { chapterRoute, sliceChapterSection, splitChapterRoute } from 'movement-engine/public/handbook';
 import { adapterHandbook } from '../adapter_handbook';
-import { getMovementHandbook } from '../movement_handbook';
-import { frontSection, renderFrontPage } from '../movement_handbook/front_page';
+import { frontSection, getMovementHandbook, renderFrontPage } from '../movement_handbook';
 import { modelHandbook } from '../model_handbook';
 import { queryHandbook } from '../query_handbook';
 import { getUsingListenFireHandbook } from '../using_listen_fire_handbook';

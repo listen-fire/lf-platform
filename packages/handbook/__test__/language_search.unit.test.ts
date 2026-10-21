@@ -1,10 +1,12 @@
 // The language search: generated from the standard library so it cannot
-// drift, ranked plainly, and every anchor it hands out readable in the lean
-// handbook (where whole chapters are not).
+// drift, ranked plainly, and every anchor it hands out readable. Searched here
+// over the hand-written chapters alone; a host searches the book it assembles,
+// and its tests hold the sections it adds (a system found by name, an anchor
+// read through its reader).
 
-import { standardLibrary } from 'legacy-lang';
+import { splitChapterRoute } from 'engine-contracts/handbook_section';
 
-import { readBook } from '../../library';
+import { CORE_CHAPTERS, frontSection, getCoreChapter } from '../index';
 import { exampleText } from '../front_page';
 import {
   CONTROL_FORMS,
@@ -13,14 +15,15 @@ import {
   builtinSignature,
   builtinSummary,
   languageIndex,
+  retiredBuiltins,
   searchLanguage,
   searchableBuiltins,
 } from '../language_search';
-import { proseViolations } from './prose_rules';
+import { proseViolations } from '../prose_rules';
 
-const index = languageIndex();
+const index = languageIndex(CORE_CHAPTERS);
 const top = (query: string, kind?: 'function' | 'concept' | 'recipe') =>
-  searchLanguage({ query, ...(kind ? { kind } : {}) }).results.map((r) => r.name);
+  searchLanguage({ query, ...(kind ? { kind } : {}) }, CORE_CHAPTERS).results.map((r) => r.name);
 
 describe('built-ins come from the registry', () => {
   it('every documented registry function has an entry carrying its generated signature', () => {
@@ -32,7 +35,8 @@ describe('built-ins come from the registry', () => {
   });
 
   it('leaves out only what the registry marks retired', () => {
-    const left = standardLibrary().filter((b) => !searchableBuiltins().includes(b));
+    const left = retiredBuiltins();
+    expect(left.some((b) => searchableBuiltins().includes(b))).toBe(false);
     expect(left.length).toBeGreaterThan(0);
     // Retired, or written as an operator rather than called (`x == null`, `xs[i]`).
     for (const b of left) expect(b.summary.startsWith('RETIRED') || ['ISNULL', 'AT', 'TONUMBER'].includes(b.name)).toBe(true);
@@ -81,31 +85,31 @@ describe('ranking', () => {
     expect(top('wait for an approval or a timeout')).toContain('race');
   });
 
-  it('finds a recipe, and a system by name', () => {
+  it('finds a recipe', () => {
     expect(top('scheduled digest', 'recipe')[0]).toBe('patterns#scheduled-digest');
-    expect(top('slack').some((name) => name.startsWith('system:slack'))).toBe(true);
   });
 
   it('filters by kind, caps the results, and is deterministic', () => {
-    const results = searchLanguage({ query: 'text', kind: 'function' }).results;
+    const results = searchLanguage({ query: 'text', kind: 'function' }, CORE_CHAPTERS).results;
     expect(results.length).toBeLessThanOrEqual(MAX_RESULTS);
     for (const r of results) expect(r.kind).toBe('function');
     expect(top('text')).toEqual(top('text'));
   });
 
   it('says so when nothing matches', () => {
-    const r = searchLanguage({ query: 'the of and' });
+    const r = searchLanguage({ query: 'the of and' }, CORE_CHAPTERS);
     expect(r.results).toEqual([]);
     expect(r.note).toMatch(/Nothing matched/);
   });
 });
 
 describe('what the search hands out', () => {
-  it('every anchor reads with the front page instead of chapters', () => {
+  it('every anchor it hands out resolves to a section', () => {
     const anchors = [...new Set(index.flatMap((e) => (e.anchor ? [e.anchor] : [])))];
     for (const anchor of anchors) {
-      const read = readBook({ bookId: 'automations', chapter: anchor, frontPageInsteadOfChapters: true }) as { content?: string };
-      if (!read.content) throw new Error(`${anchor} does not read with the front page instead of chapters: ${JSON.stringify(read)}`);
+      const route = splitChapterRoute(anchor);
+      const read = route.chapter === 'front' && route.section !== undefined ? frontSection(route.section) : getCoreChapter(route.chapter, route.section);
+      if (!read.ok) throw new Error(`${anchor} does not resolve: ${read.error}`);
     }
   });
 
