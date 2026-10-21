@@ -26,9 +26,6 @@ pub struct SymbolTypes {
     /// A value that is many values under one value's type: a walk read for a
     /// field, or a second name for one (`ScopeSymbol.plural`).
     pub many_valued: bool,
-    /// A combinator's answer one of whose arms hands back a record
-    /// (`receiptHoldsRecord`): its slot read null before version 5.
-    pub receipt_holds_record: bool,
     /// A name bound to a list of functions written down: what each returns,
     /// in order (`ScopeSymbol.armReturns`).
     pub arm_returns: Option<Vec<super::position::ReturnShape>>,
@@ -46,7 +43,6 @@ pub struct ScopeEnv<'s> {
     /// Each function declared with a name read as a value (version 5,
     /// `functionAsValue`), typed before the typing that reads it.
     pub function_values: &'s std::collections::HashMap<crate::scope::SymbolId, super::position::ClosureType>,
-    pub record_unions: &'s super::unions::RecordUnions,
 }
 
 impl ScopeEnv<'_> {
@@ -65,10 +61,6 @@ impl TypeEnv for ScopeEnv<'_> {
 
     fn upgrading_from(&self) -> Option<u32> {
         self.upgrading_from
-    }
-
-    fn record_unions(&self) -> Option<&super::unions::RecordUnions> {
-        Some(self.record_unions)
     }
 
     fn is_zone(&self, zone: &str) -> Option<bool> {
@@ -113,10 +105,6 @@ impl TypeEnv for ScopeEnv<'_> {
 
     fn plural_order_of(&self, name: &str) -> Option<CollectionOrder> {
         self.types(name)?.plural
-    }
-
-    fn is_record_receipt(&self, name: &str) -> bool {
-        self.types(name).is_some_and(|t| t.receipt_holds_record)
     }
 
     fn is_many_valued_name(&self, name: &str) -> bool {

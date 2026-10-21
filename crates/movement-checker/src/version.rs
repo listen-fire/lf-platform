@@ -59,8 +59,8 @@ fn handbook_anchor(code: &str) -> Option<&'static str> {
         "MOV_EXTRACT_CALL_NESTED" | "MOV_EXTRACT_KEYWORD_RETIRED" => "front#extraction",
         "MOV_MATCH_NO_IDENTITY" | "MOV_UNIQUE_UNKNOWN_FIELD" | "MOV_LINKED_HOP_RETIRED" | "MOV_PARENT_READ_RETIRED"
         | "MOV_WRITE_BIND_RETIRED" => "front#identity",
-        "MOV_MATCH_UNNAMED" | "MOV_MATCH_MISS_CONTINUES" | "MOV_LINK_MATCH_BODY_RETIRED" => "writes#match",
-        "MOV_HANDLE_FIELD_RETIRED" | "MOV_HANDLE_READ_FOUND" | "MOV_OLD_EDGE_NOT_A_WRITE" | "MOV_ARTIFICIAL_EDGE_UNKNOWN" => {
+        "MOV_MATCH_UNNAMED" | "MOV_LINK_MATCH_BODY_RETIRED" => "writes#match",
+        "MOV_HANDLE_FIELD_RETIRED" | "MOV_OLD_EDGE_NOT_A_WRITE" | "MOV_ARTIFICIAL_EDGE_UNKNOWN" => {
             "writes#what-the-write-did"
         }
         _ => return None,

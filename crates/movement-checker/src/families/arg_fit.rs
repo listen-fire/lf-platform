@@ -8,7 +8,6 @@
 use movement_parser::ast::{CallArg, ExprSlot, Span};
 use movement_parser::lowering::expression::{Expression, ObjectMember, StaticValue};
 use movement_parser::surface::phrase::spell_word;
-use movement_parser::version::since;
 
 use crate::checker::Checker;
 use crate::codes;
@@ -22,7 +21,6 @@ use crate::types::field::{
     HeldWalk, Ty, describe_field_type, field_assignable, handle_within, holds_records, is_maybe_absent, mixes_record_with_value, spell_held_steps, strip_absent,
     values_beside_record,
 };
-use crate::types::field::shows_more_handles;
 use crate::types::position::{ClosureParam, Position, ReturnShape, describe_position, positions_match, system_difference};
 
 /// `ArgFit`: whose argument this is, the parameter it binds, and its place.
@@ -159,30 +157,16 @@ impl Checker<'_> {
     }
 
     /// `movementReturnType`: what a call of a movement hands back — what it
-    /// declares (version 3), else what its body was found to hand back. A
+    /// declares, else what its body was found to hand back. A
     /// call reached while that body is still being walked gets the unknown.
     /// An imported movement answers with its library declaration.
     pub fn movement_return(&mut self, id: SymbolId) -> ReturnShape {
         let Some((movement, declared_in)) = self.movement_declaration(id) else { return crate::families::returns::unknown_return() };
-        let written = movement.return_type.as_ref().filter(|_| since(self.version, 3));
-        if !(written.is_some() && since(self.version, 5)) {
+        let Some(written) = movement.return_type.as_ref() else {
             self.infer_movement(id);
-        }
-        let inferred = self.movement_inferred_return(id);
-        let Some(written) = written else {
-            return inferred.unwrap_or_else(crate::families::returns::unknown_return);
+            return self.movement_inferred_return(id).unwrap_or_else(crate::families::returns::unknown_return);
         };
-        let declared = ReturnShape { returns: true, plane: self.plane_type_of(written, declared_in), may_hold: None };
-        // Before version 5 a declaration that does not take what a return may
-        // hold is not refused where it is written, so the call still carries
-        // what the body may hand back.
-        if since(self.version, 5) {
-            return declared;
-        }
-        match inferred.and_then(|i| i.may_hold).filter(|held| shows_more_handles(held, declared.plane.field.as_ref())) {
-            Some(held) => ReturnShape { may_hold: Some(held), ..declared },
-            None => declared,
-        }
+        ReturnShape { returns: true, plane: self.plane_type_of(written, declared_in), may_hold: None }
     }
 
     /// Each argument checked, and held to the parameter it binds — by name,
@@ -203,7 +187,7 @@ impl Checker<'_> {
         match arg {
             CallArg::Expr { expr, name } => self.check_expr_arg(fit, name.as_deref(), expr, scope),
             CallArg::Write { write, .. } => {
-                let handle = self.check_write(write, scope, None, true);
+                let handle = self.check_write(write, scope, true);
                 match fit.field_type() {
                     Some(param) => self.check_value_arg_fit(fit, param, handle.map(record_of).as_ref(), ValueArg::at(write.span)),
                     None => {
@@ -222,7 +206,7 @@ impl Checker<'_> {
                     }
                 }
             }
-            CallArg::Closure { closure, span, .. } if since(self.version, 5) => {
+            CallArg::Closure { closure, span, .. } => {
                 // A plugin's argument is never closure-typed: the mismatch is
                 // the error, so the closure is not checked against nothing.
                 if fit.plugin.is_some() {
@@ -256,13 +240,11 @@ impl Checker<'_> {
                     );
                 }
             }
-            // Before version 5 a function is not a value.
-            CallArg::Closure { span, .. } | CallArg::Type { span, .. } => {
-                let what = if matches!(arg, CallArg::Closure { .. }) { "a function written in place" } else { "a type" };
+            CallArg::Type { span, .. } => {
                 self.report(
                     codes::CALL_ARG_TYPE,
                     format!(
-                        "The argument{} to '{}' is {what}, which is not a value an argument can carry — only a built-in that takes one (MAP, FILTER, REDUCE, GROUPBY, KEYBY, MEMBERS) is handed one",
+                        "The argument{} to '{}' is a type, which is not a value an argument can carry — only a built-in that takes one (MAP, FILTER, REDUCE, GROUPBY, KEYBY, MEMBERS) is handed one",
                         describe_arg_place(fit),
                         fit.callee
                     ),
@@ -418,10 +400,10 @@ impl Checker<'_> {
         crate::binding_types::symbol_position(&self.scopes.symbol(id).types)
     }
 
-    /// `refuseValueForPosition` (version 3): a value handed to a parameter that takes a record.
+    /// `refuseValueForPosition`: a value handed to a parameter that takes a record.
     fn refuse_value_for_position(&mut self, fit: &ArgFit, value: Option<&Ty>, span: Span) {
         let (Some(position), Some(value)) = (fit.pos_type(), value) else { return };
-        if holds_records(Some(value)) || !since(self.version, 3) {
+        if holds_records(Some(value)) {
             return;
         }
         self.report(
@@ -437,13 +419,10 @@ impl Checker<'_> {
         );
     }
 
-    /// `refuseMaybeRecordForPosition` (version 5): a value that may be a
-    /// record and may be something else is no record.
+    /// `refuseMaybeRecordForPosition`: a value that may be a record and may
+    /// be something else is no record.
     fn refuse_maybe_record_for_position(&mut self, fit: &ArgFit, types: &[Option<&Ty>], span: Span, written: &str) {
         let Some(position) = fit.pos_type() else { return };
-        if !since(self.version, 5) {
-            return;
-        }
         let Some(mixed) = types.iter().copied().find(|t| mixes_record_with_value(*t)).flatten() else { return };
         let mut others: Vec<String> = Vec::new();
         for member in values_beside_record(Some(mixed)) {
@@ -470,10 +449,9 @@ impl Checker<'_> {
     /// `refuseMaybeRecordForValue`: a value that may be a record (or a file)
     /// and may be something else, handed to a value parameter that takes
     /// neither. Its type cannot say so (no union mixes a record with a value);
-    /// what it may hold does. Refused from version 5; from 3 the call ran with
-    /// the record passed through, so an older pin is warned.
+    /// what it may hold does. Refused.
     pub(crate) fn refuse_maybe_record_for_value(&mut self, fit: &ArgFit, param: &Ty, value: Option<&Ty>, may_hold: Option<&Ty>, span: Span, written: &str) {
-        if !since(self.version, 3) || may_hold.is_none() {
+        if may_hold.is_none() {
             return;
         }
         let walk = HeldWalk::taken_by(Some(param));
@@ -499,19 +477,7 @@ impl Checker<'_> {
             describe_arg_place(fit),
             if file { "a file" } else { "a record" }
         );
-        if since(self.version, 5) {
-            self.report(codes::CALL_ARG_MAYBE_RECORD, message, span);
-            return;
-        }
-        self.report_upgrade_warning(
-            codes::CALL_ARG_MAYBE_RECORD,
-            format!(
-                "{message}. Before {} the {} is passed through as it is; from it, this is refused",
-                crate::version::describe(5),
-                if file { "file" } else { "record" }
-            ),
-            span,
-        );
+        self.report(codes::CALL_ARG_MAYBE_RECORD, message, span);
     }
 
     /// `checkValueArgFit` for a value no author wrote (a member an op hands its function).

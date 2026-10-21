@@ -28,7 +28,7 @@ impl Checker<'_> {
     /// instance its adapter's credential-free construction would be
     /// (`declareUnits`).
     pub(crate) fn declare_units(&mut self, scope: ScopeId) {
-        for unit in movement_parser::version::run_host_units(self.version) {
+        for unit in movement_parser::version::RUN_HOST_UNITS {
             let at = movement_parser::ast::Loc { line: 1, col: 1 };
             let construct = ConstructionCall { callee: unit.to_string(), args: Vec::new(), span: movement_parser::ast::Span { start: at, end: at } };
             let instantiated = self.catalog.instantiate(unit, &Args::default());
@@ -54,7 +54,7 @@ impl Checker<'_> {
 
     /// A typing of expressions against `scope`.
     pub fn typing_env(&self, scope: ScopeId) -> ScopeEnv<'_> {
-        ScopeEnv { scopes: &self.scopes, scope, zones: self.zones, nodes: &self.nodes, upgrading_from: self.upgrading_from, function_values: &self.function_values, record_unions: &self.record_unions }
+        ScopeEnv { scopes: &self.scopes, scope, zones: self.zones, nodes: &self.nodes, upgrading_from: self.upgrading_from, function_values: &self.function_values }
     }
 
     /// An expression slot's type in `scope`, and what it may hold where its
@@ -195,7 +195,7 @@ impl Checker<'_> {
         }
         if let Some(receipt) = &bound.receipt {
             let may_hold = receipt.may_hold.clone().filter(|held| crate::types::field::shows_more_handles(held, receipt.ty.as_ref()));
-            types = Some(SymbolTypes { field: receipt.ty.clone(), may_hold, receipt_holds_record: receipt.holds_record, ..SymbolTypes::default() });
+            types = Some(SymbolTypes { field: receipt.ty.clone(), may_hold, ..SymbolTypes::default() });
         }
         if let Some((returned, ordering)) = &bound.collected {
             types = Some(collected_types(returned, *ordering));
@@ -250,7 +250,7 @@ impl Checker<'_> {
                 ..SymbolTypes::default()
             },
             RValue::ExtractCall { extract_call } => SymbolTypes { field: self.extract_call_type(extract_call, scope), ..SymbolTypes::default() },
-            // From version 3 a positional call is also read as one expression
+            // A positional call is also read as one expression
             // (`n = ONLY(…)`), and `check_call` reads it so.
             RValue::Call { call } if call.expression.is_some() => call.expression.as_ref().and_then(|expr| self.type_of_bound_slot(expr, scope, holds_value))?,
             RValue::Expr { expr } => self.type_of_bound_slot(expr, scope, holds_value)?,
@@ -326,7 +326,7 @@ impl Checker<'_> {
             Some(PathRoot::Name { name }) => {
                 let env = self.typing_env(scope);
                 env.resolve_root(name).or_else(|| {
-                    let held = crate::types::field::widen_tuples(env.resolve_scalar(name), self.version);
+                    let held = crate::types::field::widen_tuples(env.resolve_scalar(name));
                     crate::types::field::record_head_position(held.as_ref())
                 })
             }

@@ -3,4 +3,3 @@
 //!
 //! - MOV_LANGUAGE_VERSION_DEPRECATED, MOV_LANGUAGE_VERSION_UNSUPPORTED: the
 //!   version diagnostic (`crate::version`).
-//! - MOV_PLUGIN_OUTPUT_CHANGED: a plugin's call (`plugin_calls`).

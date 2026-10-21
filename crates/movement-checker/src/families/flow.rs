@@ -13,7 +13,6 @@
 //! - MOV_WAIT_NOT_RESUMABLE
 
 use movement_parser::ast::{DurationLiteral, PathHead, PathRoot, RValue, Span, Statement};
-use movement_parser::version::before;
 
 use movement_parser::lowering::expression::{Expression, TraversalStep};
 
@@ -137,12 +136,9 @@ impl Checker<'_> {
         }
     }
 
-    /// `await` parks on one record, under one key (version 5): a name
-    /// holding a list of them has no one record to park on.
+    /// `await` parks on one record, under one key: a name holding a list of
+    /// them has no one record to park on.
     pub fn report_await_on_list(&mut self, head: &PathHead, scope: crate::scope::ScopeId) {
-        if self.version < 5 {
-            return;
-        }
         let Some(PathRoot::Name { name }) = &head.root else { return };
         let crate::scope::Resolution::Found(id) = self.scopes.resolve(scope, name) else { return };
         let types = &self.scopes.symbol(id).types;
@@ -240,9 +236,8 @@ impl Checker<'_> {
             self.report(
                 codes::AWAIT_IMPURE_CONDITION,
                 format!(
-                    "an 'until' condition is called by the clock, so nothing can supply '{}' — write it with no parameters: 'until(() => {{ … }}, {})'",
-                    param.name,
-                    if self.version >= 5 { "{ every: … }" } else { "every: …" }
+                    "an 'until' condition is called by the clock, so nothing can supply '{}' — write it with no parameters: 'until(() => {{ … }}, {{ every: … }})'",
+                    param.name
                 ),
                 param.span,
             );
@@ -252,7 +247,7 @@ impl Checker<'_> {
     /// A movement deferred by name schedules the run a call would: what it
     /// does is this movement's, and it may not wait.
     pub fn check_callback_suspends(&mut self, movement: &str, name_span: Span, scope: ScopeId) {
-        let callee = self.callee_name(movement, scope);
+        let callee = movement.to_string();
         let crate::scope::Resolution::Found(id) = self.scopes.resolve(scope, &callee) else { return };
         if self.scopes.symbol(id).kind != crate::scope::SymbolKind::Movement {
             return;
@@ -264,12 +259,8 @@ impl Checker<'_> {
         }
     }
 
-    /// `refuseUnresumableWait`: a wait where the run cannot come back to it
-    /// (refused from version 3).
+    /// `refuseUnresumableWait`: a wait where the run cannot come back to it.
     pub fn refuse_unresumable_wait(&mut self, where_: &str, span: Span) {
-        if before(self.version, 3) {
-            return;
-        }
         self.report(
             codes::WAIT_NOT_RESUMABLE,
             format!(

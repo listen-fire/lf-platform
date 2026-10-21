@@ -32,7 +32,8 @@ pub struct CheckOptions<'a> {
     pub language_version: u32,
     /// Checking for a move up from this version (`upgradingFrom`).
     pub upgrading_from: Option<u32>,
-    /// Parse under this version when it differs from the one checked under.
+    /// Ignored: every supported version parses as it checks. (Its callers
+    /// go with it after the language side keeps version 5 alone.)
     pub parse_version: Option<u32>,
     /// The host's zone database (`host`): a cron listen's `timezone`, a
     /// standard-library zone argument.
@@ -45,25 +46,27 @@ pub fn check_program(program: &Program, catalog: &CatalogSnapshot, options: Chec
 }
 
 /// `check_program`, and the walk it made: what it settled on nodes and the
-/// link it resolved imports through (crate::answer).
+/// link it resolved imports through (crate::answer). A version this release
+/// does not support is refused with its standing diagnostic alone, the
+/// program unwalked.
 pub(crate) fn run_check<'c>(program: &Program, catalog: &'c CatalogSnapshot, options: CheckOptions<'c>) -> (Vec<Diagnostic>, checker::Checker<'c>) {
-    // Every slot is re-read under the version its source is written in
+    if !movement_parser::version::SUPPORTED_LANGUAGE_VERSIONS.contains(&options.language_version) {
+        let checker = checker::Checker::new(catalog, &options, catalog.files.is_some());
+        return (version::standing_diagnostic(options.language_version).into_iter().collect(), checker);
+    }
+    // Every slot is re-read under the version the program is checked under
     // (movement_parser::surface).
-    let written_in = options.parse_version.unwrap_or(options.language_version);
-    movement_parser::surface::with_version(written_in, || run_check_here(program, catalog, options))
+    movement_parser::surface::with_version(options.language_version, || run_check_here(program, catalog, options))
 }
 
 fn run_check_here<'c>(program: &Program, catalog: &'c CatalogSnapshot, options: CheckOptions<'c>) -> (Vec<Diagnostic>, checker::Checker<'c>) {
-    let (problems, mut checker) = check_once(program, catalog, options, false);
+    let resolves_files = catalog.files.is_some();
+    let mut link = resolves_files.then(|| families::imports::link_imports(program, catalog, options.language_version));
+    let problems = link.as_mut().map(|l| std::mem::take(&mut l.problems)).unwrap_or_default();
+    let mut checker = checker::Checker::new(catalog, &options, resolves_files);
+    checker.imports = families::imports::ImportState::new(link);
+    checker.run(&program.statements);
     let found = std::mem::take(&mut checker.diagnostics);
-    // Under an older pin a site of the union rule kept its old answer: the
-    // check again applying the rule says what that refuses, as an upgrade
-    // warning (`RecordUnions`).
-    let joined = if checker.record_unions.withheld.get() {
-        refused_once_joined(&found, &check_once(program, catalog, options, true).1.diagnostics)
-    } else {
-        Vec::new()
-    };
     let spelling: Vec<Diagnostic> = program
         .spelling
         .iter()
@@ -85,48 +88,9 @@ fn run_check_here<'c>(program: &Program, catalog: &'c CatalogSnapshot, options: 
         .chain(spelling)
         .chain(std::mem::take(&mut checker.imports.spelling))
         .chain(problems)
-        .chain(
-            found
-                .into_iter()
-                .chain(joined)
-                .map(version::with_handbook_pointer)
-                .map(|d| diagnostic::in_spelling_of(d, options.language_version)),
-        )
+        .chain(found.into_iter().map(version::with_handbook_pointer).map(|d| diagnostic::in_spelling_of(d, options.language_version)))
         .collect();
     (diagnostics, checker)
-}
-
-fn check_once<'c>(program: &Program, catalog: &'c CatalogSnapshot, options: CheckOptions<'c>, join_before5: bool) -> (Vec<Diagnostic>, checker::Checker<'c>) {
-    let resolves_files = catalog.files.is_some();
-    let mut link = resolves_files.then(|| families::imports::link_imports(program, catalog, options.language_version));
-    let problems = link.as_mut().map(|l| std::mem::take(&mut l.problems)).unwrap_or_default();
-    let mut checker = checker::Checker::new(catalog, &options, resolves_files);
-    checker.record_unions.join_before5 = join_before5;
-    checker.imports = families::imports::ImportState::new(link);
-    checker.run(&program.statements);
-    (problems, checker)
-}
-
-/// `refusedOnceJoined`: the errors a check applying the union rule reports
-/// that the check under an older pin did not — each an upgrade warning, since
-/// before version 5 the value was typed otherwise (or not at all) and ran so.
-fn refused_once_joined(under_pin: &[Diagnostic], joined: &[Diagnostic]) -> Vec<Diagnostic> {
-    let key = |d: &Diagnostic| (d.code.clone(), d.message.clone(), format!("{:?}", d.span));
-    let seen: std::collections::HashSet<_> = under_pin.iter().map(key).collect();
-    joined
-        .iter()
-        .filter(|d| d.is_error() && !seen.contains(&key(d)))
-        .map(|d| Diagnostic {
-            message: format!(
-                "{}. Before {} a value that may be one of several records (an IF, a COALESCE, a function's returns, a list's members) was typed by one of them, or not at all, and what it fed ran so; from it, it reads and writes only what every one of them offers, and this is refused",
-                d.message.strip_suffix('.').unwrap_or(&d.message),
-                version::describe(5)
-            ),
-            severity: Some(Severity::Warning),
-            upgrade: Some(true),
-            ..d.clone()
-        })
-        .collect()
 }
 
 /// `languageVersionDiagnostic`: what a pin to `version` says on its own —
@@ -154,8 +118,7 @@ pub fn check_source(source: &str, catalog: &CatalogSnapshot, options: CheckOptio
 /// Its diagnostics quote the source in that form; a writer for a reader
 /// outside undoes it (`external_text`).
 pub fn check_form(source: &str, catalog: &CatalogSnapshot, options: CheckOptions) -> Result<Vec<Diagnostic>, ParseRefusal> {
-    let parse_version = options.parse_version.unwrap_or(options.language_version);
-    let program = movement_parser::stmt::parse_program(source, parse_version, false)
+    let program = movement_parser::stmt::parse_program(source, options.language_version, false)
         .map_err(|e| ParseRefusal { message: format!("{} at line {}, column {}", e.message, e.loc.line, e.loc.col) })?;
     Ok(check_program(&program, catalog, options))
 }
@@ -182,8 +145,7 @@ pub fn check_answer_json(source: &str, catalog_json: &str, options: CheckOptions
         Ok(catalog) => catalog,
         Err(message) => return serde_json::json!({ "error": { "message": message } }),
     };
-    let parse_version = options.parse_version.unwrap_or(options.language_version);
-    match movement_parser::stmt::parse_program(&form_of_text(source), parse_version, false) {
+    match movement_parser::stmt::parse_program(&form_of_text(source), options.language_version, false) {
         Ok(program) => answer::check_answer(&program, &catalog, options).to_json(),
         Err(e) => serde_json::json!({ "error": { "message": format!("{} at line {}, column {}", e.message, e.loc.line, e.loc.col) } }),
     }

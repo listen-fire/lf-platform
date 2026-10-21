@@ -56,10 +56,8 @@ pub fn observe(typing: &mut Typing, expr: &Expression, position: Option<&Positio
             for part in operands {
                 require_transparent(typing, part.as_ref(), "combined into text");
             }
-            if typing.version >= 5 {
-                for (part, ty) in parts.iter().zip(operands) {
-                    refuse_file_in_text(typing, part, ty.as_ref());
-                }
+            for (part, ty) in parts.iter().zip(operands) {
+                refuse_file_in_text(typing, part, ty.as_ref());
             }
         }
         Expression::Arithmetic { op, left, right } => {
@@ -245,10 +243,10 @@ pub fn record_as_value_message(ty: Option<&Ty>, operation: &str) -> Option<Strin
 }
 
 /// `requireTransparent`: a value an operation reads must be one it can read —
-/// not a closure (version 5), not a structured value nothing describes, not a
+/// not a closure, not a structured value nothing describes, not a
 /// record. True when it was refused.
 pub fn require_transparent(typing: &mut Typing, ty: Option<&Ty>, operation: &str) -> bool {
-    if typing.version >= 5 && may_be_closure(ty) {
+    if may_be_closure(ty) {
         typing.report(codes::CLOSURE_NOT_DATA, closure_not_data_message(&format!("a value {operation} is")));
         return true;
     }
@@ -439,20 +437,6 @@ fn refuse_absent_members(typing: &mut Typing, list: &Expression, ty: Option<&Ty>
 }
 
 fn report_absent_number(typing: &mut Typing, message: String) {
-    if typing.version < 5 {
-        return;
-    }
-    if typing.upgrade_crosses(5) {
-        typing.report_upgrade(
-            codes::ABSENT_REQUIRED,
-            format!(
-                "since {} a number computed from a value that may be absent is refused; before, the absent value was read as 0. {}, then upgrade.",
-                crate::version::describe(5),
-                message.strip_suffix('.').unwrap_or(&message)
-            ),
-        );
-        return;
-    }
     typing.report(codes::ABSENT_REQUIRED, message);
 }
 
@@ -662,7 +646,6 @@ fn check_null_comparison(typing: &mut Typing, op: FilterOperator, left: &Express
         if is_null_literal(subject) {
             continue;
         }
-        report_presence_of_returned(typing, subject, eq);
         if refuse_text_presence_test(typing, subject, if eq { PresenceAsk::Absent } else { PresenceAsk::Present }) {
             continue;
         }
@@ -684,25 +667,6 @@ fn check_null_comparison(typing: &mut Typing, op: FilterOperator, left: &Express
             Severity::Info,
         );
     }
-}
-
-/// `reportPresenceOfReturned`: the block's returned records, tested against
-/// null on a move up across 5 — the answer was fixed before (present) and is
-/// the real one from 5.
-fn report_presence_of_returned(typing: &mut Typing, subject: &Expression, eq: bool) {
-    let Some(name) = bare_name(subject) else { return };
-    if typing.env.plural_order_of(name).is_none() || !typing.upgrade_crosses(5) {
-        return;
-    }
-    let test = format!("{name} {} null", if eq { "==" } else { "!=" });
-    typing.report_upgrade(
-        codes::PRESENCE_OF_RETURNED,
-        format!(
-            "since {} '{test}' says whether the block returned any records into '{name}'; before, a block's returned records always counted as present, so it was {}. If the program relied on the old answer, change it, then upgrade.",
-            crate::version::describe(5),
-            if eq { "always false" } else { "always true" }
-        ),
-    );
 }
 
 /// `subjectLabel`: a presence test's subject as the author spelled it.
@@ -731,50 +695,34 @@ enum PresenceAsk {
     Absent,
 }
 
-/// `refuseTextPresenceTest`: an extracted text is never absent. True when it
-/// fired. The keyword's result is refused from version 2; a record the call
-/// (`extract` / `extractOne`) hands back from version 5, since 3 and 4 let
-/// the test through, and a move up across 5 is warned of instead.
+/// `refuseTextPresenceTest`: an extracted text is never absent, whether the
+/// keyword's result or a record the call (`extract` / `extractOne`) hands
+/// back. True when it fired.
 fn refuse_text_presence_test(typing: &mut Typing, subject: &Expression, asks: PresenceAsk) -> bool {
-    if typing.version < 2 {
-        return false;
-    }
     let Some((root, property)) = direct_field_read(subject) else { return false };
     // The call's record as a walk starts from it: one that may not be there
     // (`extractOne`'s, unguarded) reads `text | absent`, and testing that for
     // null says something.
-    let called = match typing.walk_start(&root) {
+    match typing.walk_start(&root) {
         Some(Position::Local(local)) if local.extracted.is_some() => {
-            if !movement_parser::version::since(typing.version, 5) || !matches!(local.reads.get(&property), Some(Some(Ty::Text))) {
+            if !matches!(local.reads.get(&property), Some(Some(Ty::Text))) {
                 return false;
             }
-            true
         }
         Some(Position::Extract { node, .. }) => {
             let Some(declared) = node.properties.get(&property) else { return false };
             if !declared.reads_as_present_text {
                 return false;
             }
-            false
         }
         _ => return false,
-    };
+    }
     let label = format!("{root}.{}", quote_name(&property));
     let (verdict, fix) = match asks {
         PresenceAsk::Present => ("always true", format!("`{label} != \"\"` (or `LENGTH({label}) > 0`)")),
         PresenceAsk::Absent => ("always false", format!("`{label} == \"\"`")),
     };
     let remedy = format!("Annotate it `<text | null>` to keep the null test, or test whether it is empty instead: {fix}");
-    if called && typing.upgrade_crosses(5) {
-        typing.report_upgrade(
-            codes::PRESENCE_TEST_ON_TEXT,
-            format!(
-                "since {} a null test on '{label}' is refused: it is extracted text, and a text the model did not find is \"\" — never absent — so the test was {verdict}. {remedy}, then upgrade.",
-                crate::version::describe(5)
-            ),
-        );
-        return true;
-    }
     typing.report(
         codes::PRESENCE_TEST_ON_TEXT,
         format!("'{label}' is extracted text, and a text the model did not find is \"\" — never absent — so testing it for null is {verdict}. {remedy}."),
@@ -1421,12 +1369,9 @@ impl crate::checker::Checker<'_> {
 // ── Required records ──
 
 impl crate::checker::Checker<'_> {
-    /// `reportAbsentEdgeEnd` (version 4): an end of a link or unlink that may
-    /// not be there; only the first such end is reported.
+    /// `reportAbsentEdgeEnd`: an end of a link or unlink that may not be
+    /// there; only the first such end is reported.
     pub fn report_absent_edge_end(&mut self, verb: &str, from: &str, edge: &str, to: Option<&str>, span: movement_parser::ast::Span, scope: crate::scope::ScopeId) {
-        if self.version < 4 {
-            return;
-        }
         for name in std::iter::once(from).chain(to) {
             let pos = match self.scopes.resolve(scope, name) {
                 crate::scope::Resolution::Found(id) => self.scopes.symbol(id).types.pos.clone(),

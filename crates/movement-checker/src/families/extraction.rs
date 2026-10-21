@@ -162,7 +162,6 @@ impl Checker<'_> {
                 let fields = ThroughFields { prior: prior.clone(), own_or_later: own_or_later.clone() };
                 self.check_plugin_stage(plugin, scope, &fields);
             }
-            self.check_no_prototype_name(stage.fields.iter().map(|f| (f.name.as_str(), f.span)).chain(stage.children.iter().map(extract_node_name_span)));
             let mut seen = HashSet::new();
             for field in &stage.fields {
                 if !seen.insert(field.name.as_str()) {
@@ -209,14 +208,14 @@ impl Checker<'_> {
         self.nodes.declared(id).cloned()
     }
 
-    /// `S = Company`: from version 3 a declaration's name read as a value is
+    /// `S = Company`: a declaration's name read as a value is
     /// the shape itself, a second name for it. The TypeScript binds the name
     /// as a shape (`kind: 'shape'`); here it stays a binding that carries the
     /// declaration, which only an extraction reads.
     pub fn note_shape_alias(&mut self, name: &str, value: &movement_parser::ast::RValue, scope: ScopeId) {
         let movement_parser::ast::RValue::Expr { expr } = value else { return };
         let written = expr.raw.trim();
-        if self.version < 3 || !is_bare_ident(written) {
+        if !is_bare_ident(written) {
             return;
         }
         let Resolution::Found(shape) = self.scopes.resolve(scope, written) else { return };
@@ -254,12 +253,11 @@ impl Checker<'_> {
         shape
     }
 
-    /// `bindPluginStage` (version 5): a stage's arguments by position, as the
-    /// named ones versions 1–4 write, each misfit reported. A stage still
-    /// written with named arguments leaves the plugin's order for the
-    /// parser's finding's fix.
+    /// `bindPluginStage`: a stage's arguments by position, each misfit
+    /// reported. A stage still written with named arguments leaves the
+    /// plugin's order for the parser's finding's fix.
     fn bind_plugin_stage(&mut self, plugin: &PluginCall, spec: Option<&movement_parser::catalog::types::PluginSpec>) -> Vec<movement_parser::ast::NamedArg> {
-        let Some(spec) = spec.filter(|_| movement_parser::version::since(self.version, 5)) else { return plugin.args.clone() };
+        let Some(spec) = spec else { return plugin.args.clone() };
         use movement_parser::catalog::plugin_args::PluginCallSite;
         if let Some(first) = plugin.args.first() {
             let at = first.value.span.start;
@@ -720,22 +718,10 @@ pub fn read_extract_field(typing: &mut Typing, node: &ExtractNodeType, property:
                 field.span,
             ));
         }
-        // Version 1: every annotated field is optional, text included.
-        if typing.version < 2 {
-            return Some(maybe_absent(explicit.clone()));
-        }
         return Some(if field.reads_as_present_text { Ty::Text } else { maybe_absent(explicit.clone()) });
     }
     // An annotation that did not resolve here stays untyped and unremarked.
     if field.annotated {
-        return None;
-    }
-    if typing.version < 2 {
-        if let Some((target, path)) = &write_target
-            && !matches!(strip_absent(target), Ty::Text | Ty::Json)
-        {
-            suggest_annotation(typing, field, property, &node_label, target, path.as_deref());
-        }
         return None;
     }
     let Some((target, path)) = write_target else { return Some(Ty::Text) };
@@ -814,20 +800,18 @@ fn borrowed_annotation_spelling(path: &str) -> String {
 
 // ── Built-ins an extraction's content goes through ──
 
-/// An extraction call written inside an expression: from version 3 it runs a
-/// model once per landing or member, so it is bound first.
+/// An extraction call written inside an expression: it runs a model once per
+/// landing or member, so it is bound first.
 pub fn observe_function(typing: &mut Typing, function: &str) {
     let spelled = match function {
         "extract" => "extract",
         "extractone" => "extractOne",
         _ => return,
     };
-    if typing.version >= 3 {
-        typing.report(
-            codes::EXTRACT_CALL_NESTED,
-            format!("'{spelled}(…)' runs a model over its content, and a walk's WHERE is read once per landing (a SORT key once per member) — bind it first, then use the name: `found = {spelled}(content, Shape)`"),
-        );
-    }
+    typing.report(
+        codes::EXTRACT_CALL_NESTED,
+        format!("'{spelled}(…)' runs a model over its content, and a walk's WHERE is read once per landing (a SORT key once per member) — bind it first, then use the name: `found = {spelled}(content, Shape)`"),
+    );
 }
 
 /// `typeReadCall`: `READ(file)` is the file's text, or nothing; only a file
@@ -897,13 +881,11 @@ impl Checker<'_> {
             return;
         }
         let Some(root) = root else {
-            if self.version >= 5 {
-                self.report(
-                    codes::RESOURCES_NOT_EXTRACTED,
-                    "'-[:_resources]->' with no root reads the event's record, and '-[:_resources]->' is read only off an extraction's result — the source content the extraction read ('found = extract …', then 'found-[f:_resources]-> { … }'). For the event's files, name the event as a parameter and walk the edge its system declares to them.",
-                    span,
-                );
-            }
+            self.report(
+                codes::RESOURCES_NOT_EXTRACTED,
+                "'-[:_resources]->' with no root reads the event's record, and '-[:_resources]->' is read only off an extraction's result — the source content the extraction read ('found = extract …', then 'found-[f:_resources]-> { … }'). For the event's files, name the event as a parameter and walk the edge its system declares to them.",
+                span,
+            );
             return;
         };
         let root = match root {
@@ -962,13 +944,10 @@ impl Checker<'_> {
 }
 
 impl Checker<'_> {
-    /// `checkPathHead`'s resource rule (version 5): a head of one
+    /// `checkPathHead`'s resource rule: a head of one
     /// `-[:_resources]->` hop reads an extraction's source content, so its
     /// root has to be an extraction's result.
     pub fn check_head_resources(&mut self, head: &PathHead, probe: &str, root_name: Option<&str>, scope: ScopeId) {
-        if self.version < 5 {
-            return;
-        }
         let Ok(tree) = movement_parser::expr::parse_expression(probe) else { return };
         let MExpr::Member { object, .. } = &tree else { return };
         let MExpr::Path { hops, .. } = object.as_ref() else { return };
@@ -982,7 +961,7 @@ impl Checker<'_> {
             Some(PathRoot::Name { name }) => {
                 use crate::types::TypeEnv as _;
                 let env = self.typing_env(scope);
-                env.resolve_root(name).or_else(|| record_head_position(crate::types::field::widen_tuples_joining(env.resolve_scalar(name), self.version, self.record_join()).as_ref()))
+                env.resolve_root(name).or_else(|| record_head_position(crate::types::field::widen_tuples_joining(env.resolve_scalar(name)).as_ref()))
             }
             Some(PathRoot::Expression { expr }) => {
                 let held = self.type_of_slot(expr, scope).and_then(|(_, ty, _)| ty);

@@ -2,8 +2,7 @@
 //! whose body is not visible, so everything a call needs has to be declared
 //! — what running it does, what it hands back, what it runs on. Its
 //! arguments are named, held to the types it declares, and the call's value
-//! is the output it declares. Part of the calls family; MOV_PLUGIN_OUTPUT_CHANGED
-//! is the versions family's, MOV_PLUGIN_FED_BY_EXTRACTION and the
+//! is the output it declares. Part of the calls family; MOV_PLUGIN_FED_BY_EXTRACTION and the
 //! MOV_THROUGH_* argument rules the extraction family's (a `through [ … ]`
 //! stage reads its arguments by the same rules).
 
@@ -12,11 +11,9 @@ use std::collections::HashSet;
 use movement_parser::ast::{CallArg, CallStatement, Span};
 use movement_parser::catalog::plugin_args::PluginCallSite;
 use movement_parser::catalog::types::{FieldType as SchemaFieldType, PluginOutput, PluginSpec};
-use movement_parser::version::before;
 
 use crate::checker::Checker;
 use crate::codes;
-use crate::diagnostic::{Diagnostic, Severity};
 use crate::scope::SymbolId;
 use crate::types::field::{CollectionOrder, HandleKinds, HeldHandle, HeldStep, Ty, describe_field_type, holds_records, list_of, spell_held_steps, strip_absent};
 use crate::types::position::{LocalNode, PlaneType, Position, ReturnShape, describe_position};
@@ -24,22 +21,6 @@ use crate::types::position::{LocalNode, PlaneType, Position, ReturnShape, descri
 /// What a plugin call's arguments are held to: the types it declares, by name.
 pub struct PluginArgTypes<'a> {
     pub declared: Option<&'a movement_parser::catalog::types::JsMap<SchemaFieldType>>,
-}
-
-/// `pluginOutputUnder`: the output a plugin hands back under a language version.
-pub fn plugin_output_under(spec: &PluginSpec, version: u32) -> Option<&PluginOutput> {
-    let earlier = spec.earlier_outputs.iter().flatten().find(|entry| before(version, entry.before));
-    earlier.map(|entry| &entry.output).or(spec.output.as_ref())
-}
-
-/// `describePluginOutput`.
-fn describe_plugin_output(output: &PluginOutput) -> String {
-    let fields = |of: &movement_parser::catalog::types::JsMap<SchemaFieldType>| of.0.keys().map(|f| format!("`{f}`")).collect::<Vec<_>>().join(", ");
-    match output {
-        PluginOutput::Value { type_ } => format!("one {}", describe_field_type(&Ty::from_schema(type_))),
-        PluginOutput::Record { fields: of } => format!("one record ({})", fields(of)),
-        PluginOutput::Records { fields: of } => format!("a list of records, one per thing it found ({})", fields(of)),
-    }
 }
 
 /// The record a plugin's output describes: what it found, field by field.
@@ -73,20 +54,8 @@ impl Checker<'_> {
         if let Some(effects) = spec.as_ref().and_then(|s| s.effects.as_ref()) {
             self.absorb_suspend(effects.suspend == Some(true));
         }
-        // From version 5 a plugin's arguments are positional, bound to its
-        // parameters before this reads them (`bind_plugin_call`).
-        if before(self.version, 5) && call.args.first().is_some_and(|a| a.name().is_none()) {
-            let takes = match &spec {
-                Some(spec) if !spec.args.is_empty() => format!(" (it takes: {})", spec.args.join(", ")),
-                _ => String::new(),
-            };
-            self.report(
-                codes::PLUGIN_ARGS_NAMED,
-                format!("'{}' is a plugin, and a plugin's arguments are named — write each as '<parameter>: <value>'{takes}", call.callee),
-                call.span,
-            );
-            return ReturnShape::default();
-        }
+        // A plugin's arguments are positional, bound to its parameters
+        // before this reads them (`bind_plugin_call`).
         let supplied: HashSet<&str> = call.args.iter().filter_map(CallArg::name).collect();
         let stage_only = self.refuse_plain_plugin_call(call, spec.as_ref(), &supplied);
         self.report_plugin_missing_args(&call.callee, spec.as_ref(), &supplied, call.span);
@@ -100,8 +69,7 @@ impl Checker<'_> {
         if stage_only || spec.output.is_none() {
             return ReturnShape::default();
         }
-        self.report_plugin_output_changed(call, &spec);
-        let Some(output) = plugin_output_under(&spec, self.version) else { return ReturnShape::default() };
+        let Some(output) = spec.output.as_ref() else { return ReturnShape::default() };
         let plane = match output {
             PluginOutput::Value { type_ } => PlaneType { field: Some(Ty::from_schema(type_)), pos: None },
             PluginOutput::Record { fields } => PlaneType { pos: Some(Box::new(found(&call.callee, fields))), field: None },
@@ -113,15 +81,12 @@ impl Checker<'_> {
         ReturnShape { returns: true, plane, may_hold: None }
     }
 
-    /// `bindPluginCall` (version 5): a plugin's call with arguments by
-    /// position, as the named call versions 1–4 write, each misfit reported;
-    /// `None` where there is nothing to bind. A call still written with named
-    /// arguments leaves the plugin's order for the parser's finding's fix.
+    /// `bindPluginCall`: a plugin's call with arguments by position, each
+    /// misfit reported; `None` where there is nothing to bind. A call still
+    /// written with named arguments leaves the plugin's order for the
+    /// parser's finding's fix.
     pub fn bind_plugin_call(&mut self, call: &CallStatement, scope: crate::scope::ScopeId) -> Option<CallStatement> {
-        if before(self.version, 5) {
-            return None;
-        }
-        let callee = self.callee_name(&call.callee, scope);
+        let callee = call.callee.clone();
         let crate::scope::Resolution::Found(id) = self.scopes.resolve(scope, &callee) else { return None };
         if self.scopes.symbol(id).kind != crate::scope::SymbolKind::Plugin {
             return None;
@@ -142,35 +107,18 @@ impl Checker<'_> {
     }
 
     /// `refusePlainPluginCall`: whether this plugin can only run as an
-    /// extraction stage, reporting why. From version 5 there is no stage: the
-    /// extraction keyword is retired, so every plugin is an ordinary call, and
-    /// one that has not declared what it does or hands back is called all the
-    /// same (its row partial, its value unknown).
+    /// extraction stage, reporting why. There is no stage: the extraction
+    /// keyword is retired, so every plugin is an ordinary call, and one that
+    /// has not declared what it does or hands back is called all the same
+    /// (its row partial, its value unknown).
     fn refuse_plain_plugin_call(&mut self, call: &CallStatement, spec: Option<&PluginSpec>, supplied: &HashSet<&str>) -> bool {
         let Some(spec) = spec else { return false };
         let callee = &call.callee;
         let stage = format!("write it in a 'through [ … ]' (`extract from [ … ] through [{callee}] {{ … }}`)");
-        let stages_exist = before(self.version, 5);
-        if spec.effects.is_none() && stages_exist {
-            self.report(
-                codes::PLUGIN_ROW_UNDECLARED,
-                format!("'{callee}' is a plugin that hasn't declared what it does, so it can only run as an extraction stage — {stage}."),
-                call.span,
-            );
-            return true;
-        }
         if spec.fed_by_extraction == Some(true) {
             self.report(
                 codes::PLUGIN_FED_BY_EXTRACTION,
                 format!("'{callee}' runs on what an extraction gives it and takes nothing of its own, so it only makes sense as a stage of one — {stage}."),
-                call.span,
-            );
-            return true;
-        }
-        if spec.output.is_none() && stages_exist {
-            self.report(
-                codes::PLUGIN_OUTPUT_UNDECLARED,
-                format!("'{callee}' is a plugin that hasn't declared what it hands back, so there is nothing to bind — it can only run as an extraction stage, where its output goes to the extractor: {stage}."),
                 call.span,
             );
             return true;
@@ -180,16 +128,7 @@ impl Checker<'_> {
             let one = unfed.len() == 1;
             let listed = unfed.iter().map(|n| format!("'{n}'")).collect::<Vec<_>>().join(", ");
             let missing = format!("'{callee}' is missing {} {listed}", if one { "the argument" } else { "the arguments" });
-            let message = if stages_exist {
-                let spelled = unfed.iter().map(|n| format!("{n}: …")).collect::<Vec<_>>().join(", ");
-                format!(
-                    "{missing} — inside a 'through [ … ]' the extraction supplies {}, so a call on its own has to say {} (`{callee}({spelled})`).",
-                    if one { "it" } else { "them" },
-                    if one { "it" } else { "them" },
-                )
-            } else {
-                format!("{missing} — a plugin's inputs are its arguments, by position (`{callee}({})`).", unfed.join(", "))
-            };
+            let message = format!("{missing} — a plugin's inputs are its arguments, by position (`{callee}({})`).", unfed.join(", "));
             self.report(codes::PLUGIN_FED_BY_EXTRACTION, message, call.span);
             return true;
         }
@@ -331,27 +270,14 @@ impl Checker<'_> {
 
     /// `refuseRecordValueForText`: a record value (`{ … }`) that is, or may
     /// be, handed to a plugin's text input, as TypeScript refuses an object
-    /// for a `string`. Refused from version 5; from 3 the record was passed
-    /// through as it is (the call ran), so an older pin is warned, and the
-    /// warning blocks the move up.
+    /// for a `string`. Refused.
     fn refuse_record_value_for_text(&mut self, callee: &str, name: &str, dict: &Ty, may: bool, span: Span) {
-        if before(self.version, 3) {
-            return;
-        }
         let message = format!(
             "'{callee}' takes text for '{name}', and this {} {} — a record, not text, as in TypeScript. Pass the text it should read: one of its fields ('{name}: r.name'), or the text built from them",
             if may { "may be" } else { "is" },
             describe_field_type(dict)
         );
-        if movement_parser::version::since(self.version, 5) {
-            self.report(codes::CALL_ARG_MAYBE_RECORD, message, span);
-            return;
-        }
-        self.report_upgrade_warning(
-            codes::CALL_ARG_MAYBE_RECORD,
-            format!("{message}. Before {} the record is passed through as it is; from it, this is refused", crate::version::describe(5)),
-            span,
-        );
+        self.report(codes::CALL_ARG_MAYBE_RECORD, message, span);
     }
 
     /// `recordAsFieldsProblem`, with this file's declarations as the ones
@@ -389,27 +315,9 @@ impl Checker<'_> {
             crate::families::calls::call_arg_span(arg),
         );
     }
-
-    /// `reportPluginOutputChanged`: on a check for a move up, a plugin whose
-    /// output changed shape between the pin and the version checked.
-    fn report_plugin_output_changed(&mut self, call: &CallStatement, spec: &PluginSpec) {
-        let Some(changed) = spec.earlier_outputs.iter().flatten().find(|entry| self.upgrade_crosses(entry.before)) else { return };
-        let Some(now) = plugin_output_under(spec, self.version) else { return };
-        let message = format!(
-            "'{}' called on its own hands back {} since language version {}; before it, {}. Check that this call reads its result as the new shape.",
-            call.callee,
-            describe_plugin_output(now),
-            crate::version::describe(changed.before),
-            describe_plugin_output(&changed.output)
-        );
-        let mut diagnostic = Diagnostic::error(codes::PLUGIN_OUTPUT_CHANGED, message, call.span);
-        diagnostic.severity = Some(Severity::Warning);
-        diagnostic.upgrade = Some(true);
-        self.push(diagnostic);
-    }
 }
 
-/// A plugin's parameters as a call passes them from version 5: by position,
+/// A plugin's parameters as a call passes them: by position,
 /// then the names its settings record takes.
 pub fn plugin_arg_order(spec: &PluginSpec, site: PluginCallSite) -> crate::families::typed_spelling::ArgOrder {
     let positional: Vec<String> = spec.positional_params(site).into_iter().map(str::to_string).collect();

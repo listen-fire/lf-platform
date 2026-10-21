@@ -73,8 +73,6 @@ pub struct Checker<'c> {
     /// Functions declared with a name, typed as the closures they are when
     /// read as values (version 5).
     pub function_values: std::collections::HashMap<crate::scope::SymbolId, crate::types::position::ClosureType>,
-    /// Receipts already warned about (MOV_RECEIPT_RECORD_SLOT).
-    pub reported_receipts: std::collections::HashSet<crate::scope::SymbolId>,
     /// Closures that call themselves by name without declaring what they return.
     pub selves: crate::families::closures::Selves,
     /// Whether each open body may wait, and what each named function does.
@@ -110,8 +108,6 @@ pub struct Checker<'c> {
     /// Each plugin package imported (version 5), by its local name: the
     /// members it binds as `web.fetchUrl` (crate::families::names).
     pub packages: std::collections::HashMap<String, Vec<movement_parser::catalog::packages::PackageMember>>,
-    /// Whether this check applies the union rule, and whether it withheld it.
-    pub record_unions: crate::types::unions::RecordUnions,
     /// Each scope a body of the program checked opens, with the text it
     /// covers (crate::query): what a position in the file can see.
     pub extents: Vec<(Span, ScopeId)>,
@@ -260,7 +256,6 @@ impl<'c> Checker<'c> {
             return_stack: Vec::new(),
             file_value: None,
             function_returns: Default::default(),
-            reported_receipts: Default::default(),
             function_values: Default::default(),
             param_needs: Default::default(),
             selves: Default::default(),
@@ -275,15 +270,8 @@ impl<'c> Checker<'c> {
             file_statement_spans: Vec::new(),
             file_names: Default::default(),
             packages: Default::default(),
-            record_unions: Default::default(),
             extents: Vec::new(),
         }
-    }
-
-    /// This check's half of `RecordUnions`, as every site of the union rule
-    /// reads it.
-    pub fn record_join(&self) -> crate::types::unions::RecordJoin<'_> {
-        crate::types::unions::RecordJoin::under(self.version, Some(&self.record_unions))
     }
 
     pub fn push(&mut self, diagnostic: Diagnostic) {
@@ -292,20 +280,9 @@ impl<'c> Checker<'c> {
         }
     }
 
-    /// What a typing reported, surfaced: a receipt's record-slot warning
-    /// once per receipt however many times it is read.
-    pub fn push_typed(&mut self, (diagnostics, receipt_reads): (Vec<Diagnostic>, Vec<String>), scope: ScopeId) {
-        let mut receipts = receipt_reads.into_iter();
+    /// What a typing reported, surfaced.
+    pub fn push_typed(&mut self, diagnostics: Vec<Diagnostic>) {
         for diagnostic in diagnostics {
-            if diagnostic.code == crate::codes::RECEIPT_RECORD_SLOT {
-                let receipt = receipts.next().and_then(|name| match self.scopes.resolve(scope, &name) {
-                    Resolution::Found(id) => Some(id),
-                    _ => None,
-                });
-                if self.type_only > 0 || receipt.is_some_and(|id| !self.reported_receipts.insert(id)) {
-                    continue;
-                }
-            }
             self.push(diagnostic);
         }
     }
@@ -422,7 +399,7 @@ impl<'c> Checker<'c> {
             Statement::Import(import) => self.check_import(import, scope),
             Statement::Assign(assign) => {
                 self.check_reserved_name(&assign.name, assign.span);
-                let at_file = self.return_stack.is_empty() && self.version >= 5;
+                let at_file = self.return_stack.is_empty();
                 if at_file {
                     self.report_file_value_kind(&assign.name, &assign.value, assign.span, scope);
                 }
@@ -455,11 +432,11 @@ impl<'c> Checker<'c> {
             Statement::Movement(movement) => self.check_movement(movement, scope),
             Statement::Listen(listen) => self.check_listen(listen, scope),
             Statement::Write(write) => {
-                self.check_write(&write.write, scope, None, false);
+                self.check_write(&write.write, scope, false);
             }
             Statement::Match(statement) => {
                 self.check_match(&statement.r#match, scope);
-                self.check_match_rules(&statement.r#match, scope, None, false);
+                self.check_match_rules(&statement.r#match, scope, false);
                 self.report_unnamed_match(statement.span);
             }
             Statement::Call(call) => self.check_call_statement(call, scope),
@@ -467,7 +444,7 @@ impl<'c> Checker<'c> {
                 self.check_traversal_block(&block.block, scope, None);
             }
             Statement::Link(link) => {
-                self.check_link(&link.link, scope, None);
+                self.check_link(&link.link, scope);
             }
             Statement::Unlink(unlink) => {
                 self.resolve_name(&unlink.from, unlink.span, scope);
@@ -522,18 +499,18 @@ impl<'c> Checker<'c> {
                 return self.check_call_rvalue(call, scope, span);
             }
             RValue::Write { write } => {
-                let handle = self.check_write(write, scope, name, name.is_some());
+                let handle = self.check_write(write, scope, name.is_some());
                 return Bound::on_node_plane(handle);
             }
             RValue::Match { r#match } => {
                 self.check_match(r#match, scope);
-                let handle = self.check_match_rules(r#match, scope, name, false);
-                let handle = if self.version >= 4 { handle.map(|h| crate::types::Position::MaybeEmpty(Box::new(h))) } else { handle };
+                let handle = self.check_match_rules(r#match, scope, false);
+                let handle = handle.map(|h| crate::types::Position::MaybeEmpty(Box::new(h)));
                 return Bound::on_node_plane(handle);
             }
             RValue::Link { link } => {
-                let handle = self.check_link(link, scope, name);
-                return Bound::on_node_plane(handle);
+                self.check_link(link, scope);
+                return Bound::on_node_plane(None);
             }
             RValue::Extract { extract } => self.check_extract(extract, scope, name, span),
             RValue::ExtractCall { extract_call } => self.check_extract_call(extract_call, scope),
@@ -600,15 +577,6 @@ impl<'c> Checker<'c> {
             }
         }
         Bound::default()
-    }
-
-    /// The name a call or a listen fires: under versions 3 and 4 a function
-    /// written in another letter case is the same function; from 5 case counts.
-    pub fn callee_name(&self, written: &str, scope: ScopeId) -> String {
-        if matches!(self.scopes.resolve(scope, written), Resolution::Found(_)) || self.version < 3 || self.version >= 5 {
-            return written.to_string();
-        }
-        self.scopes.resolve_function(scope, written).map(|id| self.scopes.symbol(id).name.clone()).unwrap_or_else(|| written.to_string())
     }
 
     /// `checkExprSlot`: a bare name resolves as written; any other slot is
@@ -685,10 +653,10 @@ impl<'c> Checker<'c> {
             let may_hold = typing.may_hold_type(&parsed);
             let held = slot_held_walk(held_takes, inspect_held, ty.as_ref().or(may_hold.as_ref()))
                 .and_then(|walk| typing.handle_held_by(&parsed, &walk).or_else(|| crate::types::field::handle_within(ty.as_ref(), &walk)));
-            (ty, may_hold, held, (typing.diagnostics, typing.receipt_reads), typing.watchable_reads)
+            (ty, may_hold, held, typing.diagnostics, typing.watchable_reads)
         };
         self.effects.note_watchable_reads(&watchable);
-        self.push_typed(diagnostics, scope);
+        self.push_typed(diagnostics);
         SlotTyped { expr: Some(parsed), ty, may_hold, held }
     }
 
@@ -698,14 +666,14 @@ impl<'c> Checker<'c> {
         if let Some(mixed) = mixed_tuple_message(ty.as_ref(), self.version) {
             self.report(crate::codes::LIST_MIXED, mixed, span);
         }
-        crate::types::field::widen_tuples_joining(ty, self.version, self.record_join())
+        crate::types::field::widen_tuples_joining(ty)
     }
 
     /// `checkIf`: each arm's condition is checked in the arm's own scope and
     /// narrows it, conjunct by conjunct; an arm that always leaves proves its
     /// condition false below the `if` (while every arm before it leaves too);
-    /// the `else` sees every arm's condition false; and from version 3, when
-    /// the `else` and every arm but one leave, that arm's condition holds below.
+    /// the `else` sees every arm's condition false; and when the `else` and
+    /// every arm but one leave, that arm's condition holds below.
     /// A failed bare `IS` test rules its variant out of the arms below it.
     fn check_if(&mut self, statement: &movement_parser::ast::IfStatement, scope: ScopeId) {
         // A failed bare `IS` rules its variant out of every later arm and the `else`.
@@ -718,7 +686,7 @@ impl<'c> Checker<'c> {
             self.declare_eliminated(&ruled_out, scope, arm_scope);
             self.check_condition_slot(&arm.condition, arm_scope, Some(arm_scope));
             self.check_statement_list(&arm.body, arm_scope);
-            let terminating = terminates(&arm.body, self.version);
+            let terminating = terminates(&arm.body);
             arm_terminates.push(terminating);
             if all_prior_terminate && terminating {
                 self.narrow_condition_negation(&arm.condition, scope, scope);
@@ -737,17 +705,14 @@ impl<'c> Checker<'c> {
         }
         self.check_statement_list(&else_arm.body, else_scope);
         let falls_through: Vec<usize> = arm_terminates.iter().enumerate().filter(|(_, leaves)| !**leaves).map(|(i, _)| i).collect();
-        if self.version >= 3 && falls_through.len() == 1 && terminates(&else_arm.body, self.version) {
+        if falls_through.len() == 1 && terminates(&else_arm.body) {
             self.narrow_condition_holds(&statement.arms[falls_through[0]].condition, scope);
         }
     }
 
-    /// `narrowAfterValue`: from version 5, what a bound value proves present
-    /// below it, its arms that only fail never arriving (`proofs_after`).
+    /// `narrowAfterValue`: what a bound value proves present below it, its
+    /// arms that only fail never arriving (`proofs_after`).
     fn narrow_after_value(&mut self, value: &RValue, scope: ScopeId) {
-        if !movement_parser::version::since(self.version, 5) {
-            return;
-        }
         let slot = match value {
             RValue::Expr { expr } => expr,
             RValue::Call { call } => match &call.expression {
@@ -840,15 +805,15 @@ impl<'c> Checker<'c> {
                     let env = self.typing_env(scope);
                     let mut typing = Typing::new(&env, self.version, slot.span);
                     let ty = typing.infer(expr);
-                    (ty, (typing.diagnostics, typing.receipt_reads), typing.watchable_reads)
+                    (ty, typing.diagnostics, typing.watchable_reads)
                 };
                 self.effects.note_watchable_reads(&watchable);
-                self.push_typed(diagnostics, scope);
+                self.push_typed(diagnostics);
                 // Gating on a structured value is always true, never a decision.
                 if let Some(message) = crate::families::values::json_opaque_message(ty.as_ref(), "used as a condition") {
                     self.report(crate::codes::JSON_OPAQUE, message, slot.span);
                 }
-                if self.version >= 5 && crate::types::field::may_be_closure(ty.as_ref()) {
+                if crate::types::field::may_be_closure(ty.as_ref()) {
                     self.report(
                         crate::codes::CLOSURE_NOT_DATA,
                         crate::types::field::closure_not_data_message("a value used as a condition is"),
@@ -876,9 +841,7 @@ impl<'c> Checker<'c> {
                 self.report_param_needs_type(&param.name, param.span, &format!("'{}'", movement.name));
                 continue;
             };
-            if let ParamTypeRef::Value(value) = type_
-                && self.version >= 3
-            {
+            if let ParamTypeRef::Value(value) = type_ {
                 self.report_value_type(value, scope);
             }
             let graph = self.check_param_type(type_, scope);
@@ -913,7 +876,7 @@ impl<'c> Checker<'c> {
     /// What the graph's name resolved to.
     pub(crate) fn check_param_type(&mut self, type_: &ParamTypeRef, scope: ScopeId) -> Option<crate::scope::SymbolId> {
         let ParamTypeRef::Name(reference) = type_ else { return None };
-        if reference.position.is_none() && reference.hops_raw.is_none() && self.version >= 3 {
+        if reference.position.is_none() && reference.hops_raw.is_none() {
             if SCALAR_TYPE_NAMES.contains(&reference.graph.as_str()) {
                 return None;
             }
@@ -1001,13 +964,13 @@ impl<'c> Checker<'c> {
         }
     }
 
-    pub(crate) fn check_write(&mut self, write: &WriteExpression, scope: ScopeId, binding: Option<&str>, is_bound: bool) -> Option<crate::types::Position> {
+    pub(crate) fn check_write(&mut self, write: &WriteExpression, scope: ScopeId, is_bound: bool) -> Option<crate::types::Position> {
         if let Some(by_member) = self.scopes_by_member(&write.target, scope) {
-            let handles = self.every_member(&by_member, |checker, own| checker.check_write_once(write, own, binding, is_bound));
+            let handles = self.every_member(&by_member, |checker, own| checker.check_write_once(write, own, is_bound));
             let landed: Vec<Position> = handles.into_iter().collect::<Option<_>>()?;
             return crate::types::unions::join_positions(&landed.iter().collect::<Vec<_>>()).map(|joined| joined.position);
         }
-        self.check_write_once(write, scope, binding, is_bound)
+        self.check_write_once(write, scope, is_bound)
     }
 
     /// `scopesByMember`: a write starting at a record that may be one of
@@ -1033,7 +996,7 @@ impl<'c> Checker<'c> {
             // list it widens to, so a write off it is held to every member too.
             let held = || match types.field.as_ref().map(crate::types::field::strip_absent) {
                 Some(Ty::Tuple { .. }) => crate::types::field::record_head_position(
-                    crate::types::field::widen_tuples_joining(types.field.clone(), self.version, self.record_join()).as_ref(),
+                    crate::types::field::widen_tuples_joining(types.field.clone()).as_ref(),
                 ),
                 _ => None,
             };
@@ -1098,22 +1061,16 @@ impl<'c> Checker<'c> {
         answers
     }
 
-    fn check_write_once(&mut self, write: &WriteExpression, scope: ScopeId, binding: Option<&str>, is_bound: bool) -> Option<crate::types::Position> {
+    fn check_write_once(&mut self, write: &WriteExpression, scope: ScopeId, is_bound: bool) -> Option<crate::types::Position> {
         self.check_target(&write.target, scope);
-        // From version 5 a `bind` is refused whole (MOV_WRITE_BIND_RETIRED, the writes family's).
-        if let Some(bind) = &write.bind
-            && self.version < 5
-            && let failure @ (Resolution::Pending | Resolution::Escaped { .. } | Resolution::Unknown) = self.scopes.resolve(scope, &bind.name)
-        {
-            self.report_resolution_failure(&bind.name, bind.span, failure);
-        }
+        // A `bind` is refused whole (MOV_WRITE_BIND_RETIRED, the writes family's).
         // Each field's value is checked where the rules reach its line
         // (`check_write_rules`), as `checkWrite` does.
         for spread in write.spreads.iter().flatten() {
             let root = spread.path.as_ref().map_or(spread.source.as_str(), |p| p.root.as_str());
             self.resolve_name(root, spread.span, scope);
         }
-        self.check_write_rules(write, scope, binding, is_bound)
+        self.check_write_rules(write, scope, is_bound)
     }
 
     fn check_match(&mut self, matched: &MatchExpression, scope: ScopeId) {
@@ -1123,7 +1080,7 @@ impl<'c> Checker<'c> {
         }
     }
 
-    fn check_link(&mut self, link: &movement_parser::ast::LinkExpression, scope: ScopeId, binding: Option<&str>) -> Option<crate::types::Position> {
+    fn check_link(&mut self, link: &movement_parser::ast::LinkExpression, scope: ScopeId) {
         self.resolve_name(&link.from, link.span, scope);
         let to = match &link.to {
             LinkTarget::Handle { name } => Some(name.as_str()),
@@ -1136,13 +1093,11 @@ impl<'c> Checker<'c> {
             }
             LinkTarget::Match { r#match, .. } => self.check_match(r#match, scope),
         }
-        self.check_link_rules(link, scope, binding)
+        self.check_link_rules(link, scope);
     }
 
     fn check_extract(&mut self, extract: &ExtractExpression, scope: ScopeId, binding: Option<&str>, statement: Span) {
-        if self.version >= 5 {
-            self.report_extract_keyword_retired(extract, scope, binding, statement);
-        }
+        self.report_extract_keyword_retired(extract, scope, binding, statement);
         self.check_ai_tier(extract.tier.as_deref(), extract.span);
         for input in &extract.from {
             self.check_extract_input(input, scope);
@@ -1163,7 +1118,7 @@ impl<'c> Checker<'c> {
     /// `checkPathHead`, the name half: its root and every name its hops read.
     pub fn check_path_head(&mut self, head: &PathHead, scope: ScopeId) -> Vec<String> {
         let aliases = extract_hop_aliases(&head.hops_raw);
-        if self.version >= 5 && head.root.is_none() {
+        if head.root.is_none() {
             self.report(crate::codes::WALK_ROOTLESS, crate::families::walks::rootless_head_message(&head.hops_raw), head.span);
         }
         if let Some(PathRoot::Name { name }) = &head.root {
@@ -1283,10 +1238,7 @@ impl<'c> Checker<'c> {
             }
             AwaitSource::Sleep { duration, .. } => {
                 self.check_sleep_duration(duration);
-                // A woken sleep binds `true`; before version 3 it was left untyped.
-                if self.version < 3 {
-                    return Bound { record: true, ..Bound::default() };
-                }
+                // A woken sleep binds `true`.
                 let plane = crate::types::position::PlaneType { field: Some(crate::types::Ty::Boolean), pos: None };
                 Bound { returned: Some(crate::types::position::ReturnShape { returns: true, plane, may_hold: None }), ..Bound::default() }
             }
@@ -1346,15 +1298,11 @@ fn until_bound(returns: &crate::types::position::ReturnShape) -> Bound {
 }
 
 /// `terminates` (checker/flow.ts): every path through the list leaves it —
-/// an `ERROR`, from version 3 a `return`, or an `if` whose every arm and
-/// `else` leave.
-fn terminates(statements: &[Statement], version: u32) -> bool {
+/// an `ERROR`, a `return`, or an `if` whose every arm and `else` leave.
+fn terminates(statements: &[Statement]) -> bool {
     statements.iter().any(|statement| match statement {
-        Statement::Error(_) => true,
-        Statement::Return(_) => version >= 3,
-        Statement::If(statement) => {
-            statement.else_arm.as_ref().is_some_and(|e| terminates(&e.body, version)) && statement.arms.iter().all(|arm| terminates(&arm.body, version))
-        }
+        Statement::Error(_) | Statement::Return(_) => true,
+        Statement::If(statement) => statement.else_arm.as_ref().is_some_and(|e| terminates(&e.body)) && statement.arms.iter().all(|arm| terminates(&arm.body)),
         _ => false,
     })
 }

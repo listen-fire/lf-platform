@@ -128,7 +128,7 @@ impl Checker<'_> {
 /// find (never sent).
 pub fn check_answer(program: &Program, catalog: &CatalogSnapshot, options: CheckOptions) -> Answer {
     let (diagnostics, checker) = crate::run_check(program, catalog, options);
-    let version = options.parse_version.unwrap_or(options.language_version);
+    let version = options.language_version;
     let link = checker.imports.link();
     let root = serde_json::to_value(program).expect("an AST is always JSON");
     let mut library_trees: std::collections::HashMap<&str, Json> = std::collections::HashMap::new();

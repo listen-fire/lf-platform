@@ -8,9 +8,7 @@
 //! - MOV_FILE_IN_TEXT
 //! - MOV_HANDLE_FIELD_RETIRED
 //! - MOV_HANDLE_FILE_NOT_SENT
-//! - MOV_HANDLE_READ_FOUND
 //! - MOV_INTERNAL_UNTYPED_BINDING
-//! - MOV_RECEIPT_RECORD_SLOT
 //! - MOV_RECORD_NOT_A_VALUE
 //! - MOV_STDLIB_ARG_LAZY_EDGE
 //! - MOV_STDLIB_ARG_NOT_RECORD
@@ -37,32 +35,6 @@ pub fn report_handle_field_retired(typing: &mut Typing, property: &str) {
             "'{property}' is no longer a field of a write's handle since {} — ask the record before the write instead: `EXISTS(h-[:{OLD_EDGE}]->)` is {} when this write created the record; `FIRST(h-[:{OLD_EDGE}]->) == h` when it was only rehearsed; compare fields against `FIRST(h-[:{OLD_EDGE}]->)` for what changed",
             crate::version::describe(4),
             typing.code("FALSE")
-        ),
-    );
-}
-
-/// `reportHandleReadFound`: a field read off a write's handle that the write
-/// did not set, in a check moving up across 4 — the same type, but from 4 the
-/// record as the write found it rather than what the system handed back.
-pub fn report_handle_read_found(typing: &mut Typing, root: &str, position: Option<&Position>, property: &str) {
-    let Some(at @ Position::Handle(handle)) = position else { return };
-    if !handle.written || handle.set_fields.as_ref().is_some_and(|set| set.contains(property)) {
-        return;
-    }
-    // A name only the write's result declares (the host's `externalId`) is the
-    // handle's own identity, the same on either side of 4. `url` is not.
-    let of_record = crate::types::position::position_schema_of_ref(at).is_some_and(|schema| schema.properties.contains_key(property));
-    if !of_record && property != "url" && handle.result_shape.contains_key(property) {
-        return;
-    }
-    if !typing.upgrade_crosses(4) {
-        return;
-    }
-    typing.report_upgrade(
-        codes::HANDLE_READ_FOUND,
-        format!(
-            "since {} '{property}' on '{root}' reads the record as the write found it; before, it read what the system handed back from the write (often nothing). If the program assumed the old reading, change it, then upgrade.",
-            crate::version::describe(4)
         ),
     );
 }

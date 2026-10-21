@@ -1,7 +1,7 @@
 //! Names and scopes: what a name resolves to, and the rules on declaring one.
 //!
 //! Codes: MOV_NAME_UNRESOLVED, MOV_USE_BEFORE_BIND, MOV_SHADOWED_NAME,
-//! MOV_NAME_PROTO, MOV_DUPLICATE_DECL, MOV_REBOUND_NAME, MOV_RESERVED_NAME,
+//! MOV_DUPLICATE_DECL, MOV_REBOUND_NAME, MOV_RESERVED_NAME,
 //! MOV_CREDENTIAL_NOT_A_VALUE, MOV_FUNCTION_NAME_COLLISION,
 //! MOV_IMPORT_UNKNOWN, MOV_IMPORT_DUPLICATE (and MOV_IMPORT_FILE_UNSUPPORTED,
 //! raised by the import statement this module checks).
@@ -15,7 +15,6 @@ use movement_parser::surface::SpellingFinding;
 use movement_parser::catalog::packages::package_called;
 use movement_parser::catalog::helpers::credential_arg_of;
 use movement_parser::surface::phrase::{Connection, connection};
-use movement_parser::version::{before, since};
 use serde_json::json;
 
 use crate::checker::Checker;
@@ -74,17 +73,7 @@ impl Checker<'_> {
     /// hides a binding of an enclosing scope. The same-scope binding it
     /// replaced comes back, for the caller's own duplicate rule.
     pub fn declare_authored(&mut self, scope: ScopeId, symbol: Symbol, span: Span) -> Option<SymbolId> {
-        // From version 5 a map is a map, and `__proto__` an ordinary key.
-        if before(self.version, 5) && symbol.name == "__proto__" {
-            self.report(
-                codes::NAME_PROTO,
-                "'__proto__' cannot be a name — JavaScript reads that key as an object's prototype, so the engine would lose what it names; give it another name",
-                span,
-            );
-        }
-        if since(self.version, 5)
-            && let Some(hidden) = movement_parser::surface::table::hidden_by(&symbol.name)
-        {
+        if let Some(hidden) = movement_parser::surface::table::hidden_by(&symbol.name) {
             self.report(codes::V5_HIDES_BUILTIN, hides_builtin_message(&symbol.name, &hidden), span);
         }
         if let Some(shadowing) = self.scopes.shadowing(scope, &symbol.name) {
@@ -115,16 +104,11 @@ impl Checker<'_> {
         if self.scopes.symbol(symbol).kind != SymbolKind::Credential {
             return Some(symbol);
         }
+        let connect = connection(&Connection { adapter: "…", args: &[("credentials", name)], credential: Some("credentials") }, self.version);
         self.report(
             codes::CREDENTIAL_NOT_A_VALUE,
             format!(
-                "'{name}' is a credential, which is never a value in a program — it is only named {}, and the host resolves it there",
-                if since(self.version, 5) {
-                    let connect = connection(&Connection { adapter: "…", args: &[("credentials", name)], credential: Some("credentials") }, self.version);
-                    format!("after 'using' where an adapter is connected ('{connect}')")
-                } else {
-                    "as the 'credentials:' argument where an integration is set up".to_string()
-                }
+                "'{name}' is a credential, which is never a value in a program — it is only named after 'using' where an adapter is connected ('{connect}'), and the host resolves it there"
             ),
             span,
         );
@@ -182,7 +166,7 @@ impl Checker<'_> {
                     self.push(diagnostic);
                 } else if self.catalog.plugin(name).is_some() {
                     self.report(codes::NAME_UNRESOLVED, format!("'{name}' is a plugin — import it: import {{ {name} }} from plugins"), span);
-                } else if let Some(tag) = package_called(&self.catalog.plugins, name).filter(|_| since(self.version, 5)) {
+                } else if let Some(tag) = package_called(&self.catalog.plugins, name) {
                     // A plugin package (`pdf.render(…)`) used with no import: the line is the whole fix.
                     let line = format!("import {{ `{tag}` as {name} }} from plugins");
                     let mut diagnostic = Diagnostic::error(
@@ -247,19 +231,13 @@ impl Checker<'_> {
         )
     }
 
-    /// `checkFunctionName`: from version 3 function names are case-insensitive.
+    /// `checkFunctionName`: a function's name against the built-ins.
     pub fn check_function_name(&mut self, name: &str, span: Span, scope: ScopeId) {
-        if before(self.version, 3) {
-            return;
-        }
         let folded = name.to_uppercase();
-        // From version 5 letter case counts: a built-in the spelling table
-        // respells is no longer named `upper` in any case, and a name that
-        // hides a core word or a namespace is `declare_authored`'s to report.
-        let respelled = |builtin: &str| {
-            since(self.version, 5)
-                && (movement_parser::surface::table::by_canonical(builtin).is_some() || movement_parser::surface::table::hidden_by(name).is_some())
-        };
+        // Letter case counts: a built-in the spelling table respells is no
+        // longer named `upper` in any case, and a name that hides a core word
+        // or a namespace is `declare_authored`'s to report.
+        let respelled = |builtin: &str| movement_parser::surface::table::by_canonical(builtin).is_some() || movement_parser::surface::table::hidden_by(name).is_some();
         if let Some(builtin) = FLAT_BUILTINS.iter().find(|b| **b == folded)
             && !respelled(builtin)
         {
@@ -287,10 +265,10 @@ impl Checker<'_> {
     }
 
     /// Notes a call written `written(…)` at `at` where the program binds
-    /// `written` itself (language version 5, §4.2: a call goes to what is in
-    /// scope), so the spelling finding about that name does not stand there.
+    /// `written` itself (§4.2: a call goes to what is in scope), so the
+    /// spelling finding about that name does not stand there.
     pub fn note_callee(&self, written: &str, at: Loc, scope: ScopeId) {
-        if since(self.version, 5) && !matches!(self.scopes.resolve(scope, written), Resolution::Unknown) {
+        if !matches!(self.scopes.resolve(scope, written), Resolution::Unknown) {
             self.bound_callees.borrow_mut().insert((self.imports.current_path().map(str::to_string), at.line, at.col));
         }
     }
@@ -306,11 +284,11 @@ impl Checker<'_> {
         }
     }
 
-    /// Notes an old `SORT(xs, name)` at `at` (language version 5) where a
+    /// Notes an old `SORT(xs, name)` at `at` where a
     /// name its rewrite would read differently is in scope
     /// (`SpellingFinding::unsafe_if_bound`, the key and the parameter `r`).
     pub fn note_sort_key(&self, key: &str, at: Loc, scope: ScopeId) {
-        if since(self.version, 5) && [key, "r"].iter().any(|name| !matches!(self.scopes.resolve(scope, name), Resolution::Unknown)) {
+        if [key, "r"].iter().any(|name| !matches!(self.scopes.resolve(scope, name), Resolution::Unknown)) {
             self.bound_sort_keys.borrow_mut().insert((self.imports.current_path().map(str::to_string), at.line, at.col));
         }
     }
@@ -366,10 +344,10 @@ impl Checker<'_> {
                         _ => (SymbolKind::Plugin, self.catalog.plugin(&imported.name).is_some(), "plugin"),
                     };
                     if !known {
-                        // From version 5 a plugin is imported by its camelCase
-                        // name, read into the catalog's key: the message names
-                        // it as written.
-                        let named = if what == "plugin" && since(self.version, 5) {
+                        // A plugin is imported by its camelCase name, read
+                        // into the catalog's key: the message names it as
+                        // written.
+                        let named = if what == "plugin" {
                             movement_parser::surface::table::plugin_name(&imported.name)
                         } else {
                             imported.name.clone()
@@ -416,7 +394,7 @@ impl Checker<'_> {
     /// the import names no package, which is then an import of one plugin.
     fn declare_package(&mut self, statement: &ImportStatement, imported: &ImportedName, local: &str, scope: ScopeId) -> bool {
         use movement_parser::catalog::packages::{member_local, package_members};
-        if !since(self.version, 5) || !matches!(&statement.source, ImportSource::Builtin { namespace } if namespace == "plugins") {
+        if !matches!(&statement.source, ImportSource::Builtin { namespace } if namespace == "plugins") {
             return false;
         }
         let members = package_members(&self.catalog.plugins, &imported.name);
@@ -532,8 +510,7 @@ impl Checker<'_> {
         let line = import_line(&name, "credentials");
         let mut steps = Vec::new();
         if quoted.is_some() {
-            let keyword = if since(self.version, 5) { "using" } else { "credentials:" };
-            steps.push(format!("write the credential as a name, not a string: '{keyword} {}'", spell_name(&name)));
+            steps.push(format!("write the credential as a name, not a string: 'using {}'", spell_name(&name)));
         }
         if !imported {
             steps.push(format!("add '{line}' at the top of the file"));

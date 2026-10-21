@@ -6,10 +6,9 @@
 //! - MOV_BORROW_MALFORMED, MOV_BORROW_UNKNOWN_FIELD, MOV_BORROW_UNKNOWN_GRAPH,
 //!   MOV_BORROW_UNKNOWN_ROOT, MOV_UNKNOWN_TYPE_NAME (`resolveNamedType`)
 //! - MOV_EXTENDS_CYCLE, MOV_EXTENDS_NOT_A_NODE, MOV_EXTENDS_REDEFINES
-//! - MOV_SHAPE_FIELD_PROTO
 //! - MOV_NODE_ENTRY_DUPLICATE, MOV_NODE_ENTRY_NODE_VALUE, MOV_NODE_ENTRY_TYPE,
 //!   MOV_NODE_LANDING_MISMATCH
-//! - MOV_NODE_LINK_BODY, MOV_NODE_LINK_SHAPE, MOV_NODE_EDGE_UNDECLARED,
+//! - MOV_NODE_LINK_SHAPE, MOV_NODE_EDGE_UNDECLARED,
 //!   MOV_NODE_EDGE_DEFERRED
 //! - MOV_NODE_ARG_SHAPE
 //! - MOV_GRAPH_* (graph literals), MOV_MEMBERS_NOT_CLOSED
@@ -300,8 +299,7 @@ impl Checker<'_> {
     }
 
     /// `resolveShapeFieldTypes`: each field's annotation resolved where the
-    /// declaration is written, patching the schema. Version 1 resolved only
-    /// borrowed paths here.
+    /// declaration is written, patching the schema.
     fn resolve_shape_field_types(&mut self, node: &ShapeNode, key: &str, schema: &mut InstanceSchema, scope: ScopeId) {
         let mut refusals = Vec::new();
         self.apply_shape_field_types(node, key, schema, scope, &mut refusals);
@@ -320,9 +318,6 @@ impl Checker<'_> {
     /// into the schema, and the ones that name no type collected in order.
     fn apply_shape_field_types(&self, node: &ShapeNode, key: &str, schema: &mut InstanceSchema, scope: ScopeId, refusals: &mut Vec<(TypeNameRefusal, Span, String)>) {
         for field in &node.fields {
-            if self.version < 2 && !field.type_.contains('.') {
-                continue;
-            }
             let resolved = match self.named_type(&field.type_, scope) {
                 Ok(Some(resolved)) => resolved,
                 Ok(None) => continue,
@@ -575,7 +570,6 @@ impl Checker<'_> {
     /// words checked against the scope it is declared in.
     pub fn check_shape_descriptions(&mut self, node: &ShapeNode, scope: ScopeId) {
         self.check_field_child_names_apart(node.fields.iter().map(|f| f.name.as_str()), node.children.iter().map(|c| (c.name.as_str(), c.span)));
-        self.check_no_prototype_name(node.fields.iter().map(|f| (f.name.as_str(), f.span)).chain(node.children.iter().map(|c| (c.name.as_str(), c.span))));
         if let Some(description) = &node.description {
             self.check_expr_slot(description, scope);
         }
@@ -597,23 +591,6 @@ impl Checker<'_> {
                 self.report(
                     codes::EXTRACT_FIELD_DUPLICATE,
                     format!("'{name}' is both a field and a child node here — a record's fields and its child nodes share one namespace, so give one of them another name"),
-                    span,
-                );
-            }
-        }
-    }
-
-    /// `checkNoPrototypeName`: none named `__proto__` before version 5 (from
-    /// version 5 a map is a map).
-    pub fn check_no_prototype_name<'n>(&mut self, entries: impl Iterator<Item = (&'n str, Span)>) {
-        if movement_parser::version::since(self.version, 5) {
-            return;
-        }
-        for (name, span) in entries {
-            if name == "__proto__" {
-                self.report(
-                    codes::SHAPE_FIELD_PROTO,
-                    "'__proto__' cannot name a field or a node — JavaScript reads that key as the record's prototype, so the record would never hold it; give it another name",
                     span,
                 );
             }
@@ -1226,7 +1203,7 @@ impl Checker<'_> {
             );
             return;
         }
-        if is_maybe_absent(Some(have)) && !is_maybe_absent(Some(&want)) && self.version >= 3 {
+        if is_maybe_absent(Some(have)) && !is_maybe_absent(Some(&want)) {
             let supplier = via.map_or_else(|| "this value".to_string(), |v| format!("'...{v}' supplies one that"));
             self.report(
                 codes::ABSENT_REQUIRED,
@@ -1379,20 +1356,6 @@ impl Checker<'_> {
 }
 
 impl Checker<'_> {
-    /// A `link` with a body onto a node this run built: the body would find
-    /// among what the edge already holds.
-    pub fn report_local_link_body(&mut self, link: &movement_parser::ast::LinkExpression, label: &str, span: Span) {
-        self.report(
-            codes::NODE_LINK_BODY,
-            format!(
-                "'{from}' is {label} this run built, so a body here would find among what '{edge}' already holds — anything it found is linked already. To pick one of them out, 'match {from}-[:{edge}]-> {{ … }}'; to link a record you hold, 'link {from} -[:{edge}]-> <name>'",
-                from = link.from,
-                edge = link.edge
-            ),
-            span,
-        );
-    }
-
     /// `reportUndeclaredLocalEdge`: a local node's edges are exactly what declared it.
     pub fn report_undeclared_local_edge(&mut self, from: &LocalNode, edge: &str, span: Span, subject: Option<&str>) {
         let declared: Vec<&str> = from.edges.iter().flat_map(|e| e.keys()).map(String::as_str).collect();

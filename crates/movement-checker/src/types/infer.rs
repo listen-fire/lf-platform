@@ -13,7 +13,6 @@ use std::collections::HashMap;
 
 use indexmap::IndexMap;
 use movement_parser::ast::Span;
-use movement_parser::version::since;
 use movement_parser::surface::phrase::spell_word;
 use movement_parser::catalog::types::EdgeSchema;
 use movement_parser::lowering::expression::{
@@ -25,7 +24,7 @@ use crate::diagnostic::{Diagnostic, Severity};
 
 use super::field::*;
 use super::narrowing::{PresenceProof, exists_subject, is_position_terminal, negative_presence_proofs, presence_proofs};
-use super::unions::{RecordJoin, join_field_types, join_positions, joined_under, one_record_of};
+use super::unions::{join_field_types, join_positions, joined_under, one_record_of};
 use super::position::{EdgeLanding, Position, describe_position, edge_landing, refine_selected, instance_of_ref, lookup_property_type, narrow_present, narrow_present_node};
 use super::stdlib::{bare_coercer_returns, movement_meta_key_type, stdlib_function_by_id};
 
@@ -70,17 +69,8 @@ pub trait TypeEnv {
     fn is_declared_graph(&self, _instance: &super::position::InstanceRef) -> bool {
         false
     }
-    /// `isRecordReceipt`: a combinator's answer one of whose arms hands back a record.
-    fn is_record_receipt(&self, _name: &str) -> bool {
-        false
-    }
     /// `upgradingFrom`: the version a check for a move up starts from.
     fn upgrading_from(&self) -> Option<u32> {
-        None
-    }
-    /// Whether the check behind this typing applies the union rule before
-    /// version 5 (`RecordUnions`); `None` outside a check.
-    fn record_unions(&self) -> Option<&super::unions::RecordUnions> {
         None
     }
     /// Whether the host's zone database knows `zone`; `None` for a typing
@@ -125,9 +115,6 @@ pub struct Typing<'a> {
     /// Edges read bare that their source would announce (`onWatchableRead`):
     /// whoever polls decides whether that is worth saying.
     pub watchable_reads: Vec<String>,
-    /// The receipt each MOV_RECEIPT_RECORD_SLOT in `diagnostics` names, in
-    /// order: whoever surfaces them warns once per receipt.
-    pub receipt_reads: Vec<String>,
     /// The field a write puts this value into (`WriteTargetRef`): its type,
     /// and its borrowable spelling (`crm.companies.stage`) when known.
     pub write_target: Option<(Ty, Option<String>)>,
@@ -163,7 +150,6 @@ impl<'a> Typing<'a> {
             last_ordering: CollectionOrder::Unknown,
             last_ordering_edge: None,
             watchable_reads: Vec::new(),
-            receipt_reads: Vec::new(),
             diagnostics: Vec::new(),
             write_target: None,
             bare_walk_names: IndexMap::new(),
@@ -182,15 +168,10 @@ impl<'a> Typing<'a> {
         self.diagnostics.push(Diagnostic::error(code, message, self.span));
     }
 
-    /// Does this typing apply the union rule (`unions::one_record_of`)?
-    pub fn record_join(&self) -> RecordJoin<'a> {
-        RecordJoin::under(self.version, self.env.record_unions())
-    }
-
-    /// What a site whose arms are these types is under the union rule, where
-    /// this check applies it; `old`, its answer before version 5, where not.
+    /// What a site whose arms are these types is under the union rule;
+    /// `old` where that is the same value.
     fn joined_records(&self, types: &[Ty], old: Option<Ty>) -> Option<Ty> {
-        joined_under(Some(self.record_join()), one_record_of(types), old)
+        joined_under(one_record_of(types), old)
     }
 
     /// `probeEach`: one step (a field read, an edge hop) off every record a
@@ -206,11 +187,10 @@ impl<'a> Typing<'a> {
     ) -> Option<Vec<Option<T>>> {
         let mut answers = Vec::new();
         for member in members {
-            let (before, receipts) = (self.diagnostics.len(), self.receipt_reads.len());
+            let before = self.diagnostics.len();
             let answer = step(self, member);
             let gathered = self.diagnostics.split_off(before);
             if let Some(refused) = gathered.iter().find(|d| d.is_error()) {
-                self.receipt_reads.truncate(receipts);
                 let message = refusal(member, refused.message.strip_suffix('.').unwrap_or(&refused.message));
                 self.report(&refused.code.clone(), message);
                 return None;
@@ -268,10 +248,10 @@ impl<'a> Typing<'a> {
         join_field_types(&types)
     }
 
-    /// `refuseClosureAsData` (language version 5): a value whose type is —
-    /// or may be, or holds — a closure is refused where it would be kept.
+    /// `refuseClosureAsData`: a value whose type is — or may be, or holds —
+    /// a closure is refused where it would be kept.
     pub fn refuse_closure_as_data(&mut self, expr: &Expression, ty: Option<&Ty>, where_: &str) {
-        if self.version < 5 || self.closure_operand_refused.contains(&key(expr)) {
+        if self.closure_operand_refused.contains(&key(expr)) {
             return;
         }
         if crate::types::field::may_be_closure(ty) || crate::types::field::may_be_closure(self.may_hold_type(expr).as_ref()) {
@@ -279,14 +259,11 @@ impl<'a> Typing<'a> {
         }
     }
 
-    /// `refuseClosureOperands` (language version 5): a closure as an operand
+    /// `refuseClosureOperands`: a closure as an operand
     /// of a value expression, refused once for the whole expression, which
     /// is remembered so a list or map holding it does not say so again. True
     /// when it fired.
     pub fn refuse_closure_operands(&mut self, operands: &[(&Expression, Option<&Ty>)], whole: &Expression, operation: &str) -> bool {
-        if self.version < 5 {
-            return false;
-        }
         let closure = operands.iter().any(|(operand, ty)| {
             crate::types::field::may_be_closure(*ty) || crate::types::field::may_be_closure(self.may_hold_type(operand).as_ref())
         });
@@ -306,9 +283,7 @@ impl<'a> Typing<'a> {
             return;
         }
         let Some(event) = self.env.undescribed_event(name) else { return };
-        if let Some(diagnostic) = crate::families::walks::undescribed_event_diagnostic(self.version, self.env.upgrading_from(), name, &event, self.span) {
-            self.diagnostics.push(diagnostic);
-        }
+        self.diagnostics.push(crate::families::walks::undescribed_event_diagnostic(name, &event, self.span));
     }
 
     pub fn report_with(&mut self, code: &str, message: impl Into<String>, severity: Severity) {
@@ -317,43 +292,21 @@ impl<'a> Typing<'a> {
         self.diagnostics.push(diagnostic);
     }
 
-    /// A warning said only because this check is for a move up (`'upgrade'`).
-    pub fn report_upgrade(&mut self, code: &str, message: impl Into<String>) {
-        let mut diagnostic = Diagnostic::error(code, message, self.span);
-        diagnostic.severity = Some(Severity::Warning);
-        diagnostic.upgrade = Some(true);
-        self.diagnostics.push(diagnostic);
-    }
-
     /// `upgradeCrosses`: this check is for a move up across version `n`.
+    #[allow(dead_code)] // the mechanism for a move up from 5; the 4→5 data is the platform's TypeScript checker's
     pub fn upgrade_crosses(&self, n: u32) -> bool {
         self.env.upgrading_from().is_some_and(|from| from < n && self.version >= n)
     }
 
-    /// `reportWalkOffMaybeAbsent`: from version 5, a walk inside an expression
+    /// `reportWalkOffMaybeAbsent`: a walk inside an expression
     /// (`COUNT(found-[c:co]->)`, `EXISTS(found-[:a]->)`, a hop read in a write
     /// field) off a name that may hold no record is refused, as a block's walk
-    /// is: the run fails at the hop when the record is absent, on every
-    /// version, and runs when it is there, so versions 1–4 keep the form and a
-    /// move up across 5 is warned of. `EXISTS(found)` has no hop and answers
-    /// false for an absent record, so it is no walk.
+    /// is: the run fails at the hop when the record is absent. `EXISTS(found)`
+    /// has no hop and answers false for an absent record, so it is no walk.
     fn report_walk_off_maybe_absent(&mut self, alias_root: Option<&str>, steps: &[TraversalStep], expression: &Expression, start: Option<&Position>) {
         let (Some(name), Some(Position::MaybeEmpty(_))) = (alias_root, start) else { return };
-        if self.version < 5 {
-            return;
-        }
         let hops = !steps.is_empty() || matches!(expression, Expression::Exists { steps, .. } if !steps.is_empty());
         if !hops {
-            return;
-        }
-        if self.upgrade_crosses(5) {
-            self.report_upgrade(
-                codes::ABSENT_REQUIRED,
-                format!(
-                    "since {} a walk inside an expression off '{name}', which may be absent, is refused: the run fails at the walk when '{name}' is absent. Guard the walk ('if ({name} != null) {{ … }}'), then upgrade.",
-                    crate::version::describe(5)
-                ),
-            );
             return;
         }
         self.report(
@@ -420,24 +373,6 @@ impl<'a> Typing<'a> {
         })
     }
 
-    /// `bareNameType` as the walker reads it: a read of a combinator's
-    /// answer one of whose arms hands back a record is warned on a move up
-    /// across 5 (`reportReceiptRecordSlot`) — that slot read null before.
-    fn read_bare_name(&mut self, name: &str) -> Option<Ty> {
-        if self.env.is_record_receipt(name) && self.upgrade_crosses(5) {
-            self.report_upgrade(
-                crate::codes::RECEIPT_RECORD_SLOT,
-                format!(
-                    "since {} a record an arm hands back reads as that record through '{name}' (`{}`, a field of it, a null check); before, that slot read null. If the program relied on the null, change it, then upgrade.",
-                    crate::version::describe(5),
-                    self.code(&format!("AT({name}, i)"))
-                ),
-            );
-            self.receipt_reads.push(name.to_string());
-        }
-        self.bare_name_type(name)
-    }
-
     /// `walkStart`: where a walk off `name` starts.
     pub fn walk_start(&self, name: &str) -> Option<Position> {
         if let Some(root) = self.root_type(name) {
@@ -447,14 +382,13 @@ impl<'a> Typing<'a> {
         // A tuple of records walks as the list it widens to, its members
         // joined by the union rule, so a walk off `[lead, co]` asks every member.
         let walked = match scalar.as_ref().map(strip_absent) {
-            Some(Ty::Tuple { .. }) => widen_tuples_joining(scalar.clone(), self.version, self.record_join()),
+            Some(Ty::Tuple { .. }) => widen_tuples_joining(scalar.clone()),
             _ => scalar.clone(),
         };
         let position = record_head_position(walked.as_ref())?;
         if !matches!(position, Position::MaybeEmpty(_))
             && is_maybe_absent(scalar.as_ref())
             && scalar.as_ref().is_some_and(|s| matches!(strip_absent(s), Ty::Record(_)))
-            && self.version >= 3
         {
             return Some(Position::MaybeEmpty(Box::new(position)));
         }
@@ -491,7 +425,7 @@ impl<'a> Typing<'a> {
         if let Some(mixed) = mixed_tuple_message(ty.as_ref(), self.version) {
             self.report(codes::LIST_MIXED, mixed);
         }
-        widen_tuples_joining(ty, self.version, self.record_join())
+        widen_tuples_joining(ty)
     }
 
     /// `inferAt`: `expr` read with `position` as the record its bare names read.
@@ -515,15 +449,11 @@ impl<'a> Typing<'a> {
     pub fn with_presence<T>(&mut self, proofs: &[PresenceProof], position: Option<&Position>, body: impl FnOnce(&mut Self, Option<&Position>) -> T) -> T {
         let restore_scalars = self.narrowed_scalars.clone();
         let restore_roots = self.narrowed_roots.clone();
-        let every_plane = self.version >= 3;
         let mut narrowed_position = position.cloned();
         for proof in proofs {
             match proof {
                 PresenceProof::Binding { root } => {
-                    if !every_plane && narrowed_position.is_some() {
-                        continue;
-                    }
-                    let field = if every_plane { narrowed_position.as_ref().and_then(|p| narrow_present(p, root)) } else { None };
+                    let field = narrowed_position.as_ref().and_then(|p| narrow_present(p, root));
                     if field.is_some() {
                         narrowed_position = field;
                         continue;
@@ -532,17 +462,11 @@ impl<'a> Typing<'a> {
                         self.narrowed_scalars.insert(root.clone(), strip_absent(&current).clone());
                         continue;
                     }
-                    if !every_plane {
-                        continue;
-                    }
                     if let Some(present) = self.root_type(root).as_ref().and_then(narrow_present_node) {
                         self.narrowed_roots.insert(root.clone(), present);
                     }
                 }
                 PresenceProof::Field { root, property } => {
-                    if !every_plane {
-                        continue;
-                    }
                     if let Some(dict) = self.dict_with_key_present(root, property) {
                         self.narrowed_scalars.insert(root.clone(), dict);
                         continue;
@@ -589,12 +513,6 @@ impl<'a> Typing<'a> {
     }
 
     fn infer_logical(&mut self, op: LogicalOp, operands: &[Expression], position: Option<&Position>) {
-        if self.version < 3 {
-            for operand in operands {
-                self.infer_at(operand, position);
-            }
-            return;
-        }
         self.walk_logical(op, operands, 0, position);
     }
 
@@ -664,7 +582,7 @@ impl<'a> Typing<'a> {
                         _ => None,
                     };
                     let (next, schema) = match union {
-                        Some(members) if !(edge.edge_type_id.starts_with('#') && self.version >= 5) => (self.step_every_member(members, edge), None),
+                        Some(members) if !edge.edge_type_id.starts_with('#') => (self.step_every_member(members, edge), None),
                         _ => self.step_edge(from.as_ref(), edge),
                     };
                     self.last_edge_schema = schema.clone();
@@ -683,7 +601,6 @@ impl<'a> Typing<'a> {
                         crate::families::values::ordering_key(self, order_by, key_ty.as_ref(), &format!("ORDER BY on '{}'", edge.edge_type_id));
                     }
                     crate::families::walks::observe_hop(self, from.as_ref(), edge, next.as_ref());
-                    crate::families::walks::report_in_memory_hop_order(self, from.as_ref(), edge);
                     current = next;
                 }
                 TraversalStep::MetaEdge(meta) => {
@@ -748,10 +665,10 @@ impl<'a> Typing<'a> {
 
     /// `scalarFieldRead`: `t.Name` (and `t.Name.x`) where `t` holds text, a
     /// number or a true/false value — the field read off a value that has
-    /// none (from version 3).
+    /// none.
     fn scalar_field_read(&self, alias_root: Option<&str>, steps: &[TraversalStep], member: &Expression) -> Option<ScalarFieldRead> {
         let root = alias_root?;
-        if self.version < 3 || !steps.is_empty() || self.root_type(root).is_some() {
+        if !steps.is_empty() || self.root_type(root).is_some() {
             return None;
         }
         let held = self.scalar_type(root)?;
@@ -769,8 +686,7 @@ impl<'a> Typing<'a> {
         Some(ScalarFieldRead { root: root.to_string(), field, scalar })
     }
 
-    /// `reportScalarFieldRead`: refused from version 5; before it both
-    /// engines read null, so a warning.
+    /// `reportScalarFieldRead`: refused.
     fn report_scalar_field_read(&mut self, read: &ScalarFieldRead) {
         let ScalarFieldRead { root, field, scalar } = read;
         let (is, subject, bare) = scalar.nouns();
@@ -780,15 +696,7 @@ impl<'a> Typing<'a> {
         } else {
             format!("'{root}' is {is}, and {subject} has no fields — '{field}' is not something it holds. Use the {bare} itself ('{root}'), or read '{field}' off the record the {bare} came from")
         };
-        if since(self.version, 5) {
-            self.report(codes::TEXT_HAS_NO_FIELDS, message);
-        } else {
-            self.report_with(
-                codes::TEXT_HAS_NO_FIELDS,
-                format!("{message}. Before {} it reads null; from it, this is refused", crate::version::describe(5)),
-                Severity::Warning,
-            );
-        }
+        self.report(codes::TEXT_HAS_NO_FIELDS, message);
     }
 
     fn read_dict_member(&mut self, held: &Ty, member: &Expression, within: bool) -> Option<Option<Ty>> {
@@ -806,9 +714,6 @@ impl<'a> Typing<'a> {
             Some(shape) => shape.get(&key).cloned().flatten(),
         };
         let nested = member_steps.is_some_and(|s| s.is_empty()) && known.as_ref().is_some_and(|k| is_dict(strip_absent(k)));
-        if self.version < 3 && !nested && !holds_records(known.as_ref()) {
-            return None;
-        }
         let ty = match shape {
             None => Some(maybe_absent((**of).clone())),
             Some(shape) => match shape.get(&key) {
@@ -830,9 +735,6 @@ impl<'a> Typing<'a> {
         if nested && let Some(inner_ty) = &ty {
             if let Some(inner) = self.read_dict_member(inner_ty, expression, true) {
                 return Some(inner);
-            }
-            if self.version < 3 {
-                return None;
             }
         }
         let record = record_head_position(ty.as_ref());
@@ -864,7 +766,7 @@ impl<'a> Typing<'a> {
             Expression::Property { property_type_id, .. } => match position {
                 None => {
                     self.bare_names.insert(key(expr), property_type_id.clone());
-                    (self.read_bare_name(property_type_id), Vec::new())
+                    (self.bare_name_type(property_type_id), Vec::new())
                 }
                 Some(_) => (self.read_property(position, property_type_id), Vec::new()),
             },
@@ -895,9 +797,6 @@ impl<'a> Typing<'a> {
                 if !steps.is_empty() && is_position_terminal(expression) {
                     return (Some(list_of(Ty::record(destination), self.last_ordering)), Vec::new());
                 }
-                if let (Some(root), true, Expression::Property { property_type_id, .. }) = (alias_root, steps.is_empty(), &**expression) {
-                    crate::families::records::report_handle_read_found(self, root, destination.as_ref(), property_type_id);
-                }
                 (self.infer_at(expression, destination.as_ref()), Vec::new())
             }
             Expression::ResourceTraverse { expression, .. } => {
@@ -913,7 +812,7 @@ impl<'a> Typing<'a> {
             }
             Expression::List { elements } => {
                 let tuple = self.list_literal_type(elements, position);
-                (if self.version < 3 { self.widen(Some(tuple)) } else { Some(tuple) }, Vec::new())
+                (Some(tuple), Vec::new())
             }
             Expression::Object { entries } => (self.object_literal_type(entries, position), Vec::new()),
             Expression::Concat { parts } => {
@@ -955,7 +854,7 @@ impl<'a> Typing<'a> {
                     negative_presence_proofs(condition, &mut type_of)
                 };
                 let else_ty = self.with_presence(&else_proofs, position, |t, narrowed| t.infer_at(else_, narrowed));
-                // A closure is not data (language version 5): IF chooses
+                // A closure is not data: IF chooses
                 // between values, never between closures.
                 if self.refuse_closure_operands(&[(then, then_ty.as_ref()), (else_, else_ty.as_ref())], expr, &format!("chosen by {}", spell_word("IF … THEN … ELSE … END", self.version))) {
                     return (None, vec![condition_ty, then_ty, else_ty]);
@@ -963,10 +862,8 @@ impl<'a> Typing<'a> {
                 let ty = match (&then_ty, &else_ty) {
                     // An arm that never arrives leaves the other's type.
                     (Some(Ty::Never), other) | (other, Some(Ty::Never)) => other.clone(),
-                    // Before version 5 an IF of one type was its THEN arm's —
-                    // what that arm alone had proved included — and an IF of
-                    // arms of different types, or of one that may be absent
-                    // beside one that may not, untyped.
+                    // `old`, the THEN arm's type where both arms are one, is
+                    // the answer kept where joining changes nothing.
                     (Some(a), Some(b)) => {
                         let arms = [a.clone(), b.clone()];
                         let old = field_type_equals(a, b).then(|| a.clone());
@@ -980,7 +877,7 @@ impl<'a> Typing<'a> {
                             // `c ? a : b` is `A | B`.
                             match &old {
                                 Some(_) if is_maybe_absent(Some(a)) == is_maybe_absent(Some(b)) => old,
-                                _ => joined_under(Some(self.record_join()), value_union(&arms), old),
+                                _ => joined_under(value_union(&arms), old),
                             }
                         }
                     }
@@ -1033,9 +930,9 @@ impl<'a> Typing<'a> {
             }
             Expression::EdgeProperty { property_type_id, field_only } => {
                 // Binding first, field second: the engine's order (typing.ts).
-                // A hop's alias read is only ever the field. From version 5 a
-                // bare name no variable binds, where the hop's type is known
-                // not to carry it, is one unknown name.
+                // A hop's alias read is only ever the field. A bare name no
+                // variable binds, where the hop's type is known not to carry
+                // it, is one unknown name.
                 let name = property_type_id;
                 if !field_only && let Some(bound) = self.scalar_type(name) {
                     return (Some(bound), Vec::new());
@@ -1043,10 +940,10 @@ impl<'a> Typing<'a> {
                 let in_scope = !field_only && self.env.name_in_scope(name);
                 let carries = instance_of_ref(position).is_some_and(|i| i.schema.edges_carry_properties == Some(true));
                 // (`POSITION_SENTINEL` is the records themselves, no name at all.)
-                let v5_bare = !field_only && !in_scope && name != super::narrowing::POSITION_SENTINEL && since(self.version, 5);
-                let fields = if v5_bare && !carries { closed_fields_of(position) } else { None };
+                let bare = !field_only && !in_scope && name != super::narrowing::POSITION_SENTINEL;
+                let fields = if bare && !carries { closed_fields_of(position) } else { None };
                 let unknown = fields.as_ref().is_some_and(|f| !f.contains(name));
-                if v5_bare {
+                if bare {
                     let was = self.bare_walk_names.get(name).copied().unwrap_or(true);
                     self.bare_walk_names.insert(name.clone(), was && unknown);
                 }
@@ -1064,7 +961,7 @@ impl<'a> Typing<'a> {
             }
             Expression::AliasRef { name } => {
                 self.bare_names.insert(key(expr), name.clone());
-                (self.read_bare_name(name), Vec::new())
+                (self.bare_name_type(name), Vec::new())
             }
             Expression::ParentResult { .. }
             | Expression::ActionResult { .. }
@@ -1110,7 +1007,7 @@ impl<'a> Typing<'a> {
             return if is_maybe_absent(Some(inner)) { maybe_absent_opt(slot.clone()) } else { slot.clone() };
         }
         match shape {
-            Ty::Tuple { of, rest } => tuple_slot_type(of, rest.as_ref(), literal_index(index), self.version),
+            Ty::Tuple { of, rest } => tuple_slot_type(of, rest.as_ref(), literal_index(index)),
             Ty::List { of, .. } => Some(maybe_absent((**of).clone())),
             other => Some(maybe_absent(other.clone())),
         }
@@ -1119,16 +1016,6 @@ impl<'a> Typing<'a> {
     fn aggregate_type(&mut self, function: AggregationFunction, inner: Option<&Ty>, operand: &Expression) -> Option<Ty> {
         use AggregationFunction as F;
         let element = inner.map(unwrap_list);
-        if function == F::Count && inner.is_some_and(may_hold_empty_item) && self.upgrade_crosses(5) {
-            self.report_upgrade(
-                crate::codes::COUNT_COUNTS_EMPTY,
-                format!(
-                    "since {} 'count' counts every item of a list, an empty one (null) included, as TypeScript's '.length' does; before, it skipped empty items, and this list may hold one. If the program relied on the old count, count only the items that are there (`{}`), then upgrade.",
-                    crate::version::describe(5),
-                    self.code("count(filter(xs, (x) => x != null))")
-                ),
-            );
-        }
         match function {
             F::Count | F::Sum | F::Avg => Some(Ty::Number),
             F::Join => Some(Ty::Text),
@@ -1159,12 +1046,12 @@ impl<'a> Typing<'a> {
             "read" => return crate::families::extraction::type_read_call(self, args),
             "chunks" => return Some(crate::families::extraction::type_chunks_call(self, args)),
             "coalesce" => return coalesce_type_with(args, |kinds, old| self.joined_records(kinds, old)),
-            "multi" => return multi_type(args, self.record_join()),
+            "multi" => return multi_type(args),
             _ => {}
         }
         if let Some(coerced) = bare_coercer_returns(function) {
-            // From version 5 `Number.parse` answers nothing for text that is no number.
-            if function == "number" && since(self.version, 5) {
+            // `Number.parse` answers nothing for text that is no number.
+            if function == "number" {
                 return Some(maybe_absent(coerced));
             }
             return Some(coerced);
@@ -1172,11 +1059,7 @@ impl<'a> Typing<'a> {
         if let Some(spec) = stdlib_function_by_id(function) {
             return spec.returns.ty();
         }
-        let builtin = if function == "extractone" && self.version < 3 { None } else { super::stdlib::builtin_under(&function.to_ascii_uppercase(), self.version) };
-        match builtin {
-            Some(builtin) if self.version >= 3 => builtin.returns.ty(),
-            _ => None,
-        }
+        super::stdlib::builtin_under(&function.to_ascii_uppercase()).and_then(|builtin| builtin.returns.ty())
     }
 
     fn list_literal_type(&mut self, elements: &[ListElement], position: Option<&Position>) -> Ty {
@@ -1221,7 +1104,7 @@ impl<'a> Typing<'a> {
             of.extend(slots_of(tail));
             return Ty::Tuple { of: Rc::new(of), rest: Some(TupleRest { at, of: run.map(Rc::new) }) };
         }
-        let folded = match tuple_as_list(&slots_of(&parts[first_run..]), None, self.version) {
+        let folded = match tuple_as_list(&slots_of(&parts[first_run..]), None) {
             Some(Ty::List { of, .. }) => Some(of),
             _ => None,
         };
@@ -1269,7 +1152,7 @@ impl<'a> Typing<'a> {
                 ObjectMember::Entry { key: name, value } => {
                     let exact = self.infer_exact_at(value, position);
                     self.refuse_closure_as_data(value, exact.as_ref(), &format!("'{name}' holds"));
-                    read_types.push(widen_tuples_joining(exact.clone(), self.version, self.record_join()));
+                    read_types.push(widen_tuples_joining(exact.clone()));
                     shape.insert(name.clone(), exact);
                     written.insert(name.clone());
                 }
@@ -1330,7 +1213,7 @@ impl<'a> Typing<'a> {
                         };
                         written.remove(&name);
                         shape.insert(name, next.clone());
-                        read_types.push(widen_tuples_joining(next, self.version, self.record_join()));
+                        read_types.push(widen_tuples_joining(next));
                     }
                 }
             }
@@ -1353,9 +1236,6 @@ impl<'a> Typing<'a> {
             }
             _ => Ty::Json,
         };
-        if self.version < 2 {
-            return Some(if agree { Ty::Dict { of: Rc::new(of), shape: None } } else { Ty::Json });
-        }
         let shape: Option<movement_parser::catalog::types::JsMap<Option<Ty>>> = keys_named.then(|| shape.into_iter().collect());
         Some(Ty::Dict { of: Rc::new(of), shape: shape.map(Rc::new) })
     }
@@ -1414,7 +1294,7 @@ impl<'a> Typing<'a> {
             && let Some(held) = self.may_hold_type(expression)
             && let Ty::Tuple { of, rest } = strip_absent(&held)
         {
-            return tuple_slot_type(of, rest.as_ref(), Some(index), self.version);
+            return tuple_slot_type(of, rest.as_ref(), Some(index));
         }
         let picked = self.multi_member_type(operand)?;
         arms_union(&[Some(picked), None])
@@ -1462,7 +1342,7 @@ impl<'a> Typing<'a> {
                 // A literal index over what a tuple may hold (a receipt's arms)
                 // reads its own slot, not any member.
                 let slot = literal_index(index).and_then(|index| match self.may_hold_type(expression).as_ref().map(strip_absent) {
-                    Some(Ty::Tuple { of, rest }) => Some(tuple_slot_type(of, rest.as_ref(), Some(index), self.version)),
+                    Some(Ty::Tuple { of, rest }) => Some(tuple_slot_type(of, rest.as_ref(), Some(index))),
                     _ => None,
                 });
                 match slot {
@@ -1560,7 +1440,7 @@ pub fn holds_fields_in_hand(position: &Position) -> bool {
 }
 
 /// `mayHoldEmptyItem`: a list (or tuple) one of whose items may be empty —
-/// what `COUNT` skipped before version 5 and counts from it.
+/// what `COUNT` counts.
 pub(crate) fn may_hold_empty_item(ty: &Ty) -> bool {
     let empty = |item: Option<&Ty>| matches!(item, Some(Ty::MaybeAbsent(_) | Ty::Absent));
     match strip_absent(ty) {

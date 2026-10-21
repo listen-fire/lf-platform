@@ -165,10 +165,8 @@ impl ClosureType {
 /// Calling it is calling any of them, as TypeScript calls a union of function
 /// types: its value is the union of what they return, and a call is held to
 /// every candidate's parameters (the ones it carries are the first's, as a
-/// placeholder). `typed_by_every` false is the rule before version 5 for a
-/// body's returns: the call is typed by the first closure alone, the others
-/// kept so the call can warn where version 5 holds it to them.
-pub fn one_of_closures(closures: &[ClosureType], typed_by_every: bool) -> ClosureType {
+/// placeholder).
+pub fn one_of_closures(closures: &[ClosureType]) -> ClosureType {
     let mut flat: Vec<ClosureType> = Vec::new();
     for closure in closures {
         for candidate in closure.candidates() {
@@ -181,12 +179,8 @@ pub fn one_of_closures(closures: &[ClosureType], typed_by_every: bool) -> Closur
         return flat.pop().expect("one closure");
     }
     let first = &flat[0];
-    let mut merged = if typed_by_every {
-        let returns: Vec<ReturnShape> = flat.iter().map(|c| c.returns.clone()).collect();
-        ClosureType::new("one of several closures", first.params.clone(), union_returns(&returns), None)
-    } else {
-        ClosureType { candidates: Vec::new(), ..first.clone() }
-    };
+    let returns: Vec<ReturnShape> = flat.iter().map(|c| c.returns.clone()).collect();
+    let mut merged = ClosureType::new("one of several closures", first.params.clone(), union_returns(&returns), None);
     merged.candidates = flat;
     merged
 }
@@ -224,9 +218,7 @@ pub fn union_returns(shapes: &[ReturnShape]) -> ReturnShape {
         }
     }
     let one_arm = arms.len() == 1;
-    // Records are what the union rule makes of them, as an IF of them is. One
-    // of several closures is called so only from version 5 (before it, a
-    // call is typed by the first).
+    // Records are what the union rule makes of them, as an IF of them is.
     let records = if arms.len() > 1 { super::unions::one_record_of(&arms) } else { None };
     let union = match arms.len() {
         0 => None,
@@ -796,13 +788,18 @@ pub fn is_artificial_edge(edge: &str) -> bool {
 }
 
 /// `stepEdge`, the typing half: the landing of `edge` off `from`.
-pub fn edge_landing(from: &Position, edge: &str, version: u32) -> EdgeLanding {
-    if edge.starts_with('#') && version >= 5 {
+/// `_version` stays for the callers in other crates until they drop it.
+pub fn edge_landing(from: &Position, edge: &str, _version: u32) -> EdgeLanding {
+    landing_of(from, edge)
+}
+
+fn landing_of(from: &Position, edge: &str) -> EdgeLanding {
+    if edge.starts_with('#') {
         return EdgeLanding::Untyped { edge: None };
     }
     // `stepArtificialEdge`: `@old` off a write's handle is the same kind of
     // record; any other `@` edge lands nowhere (the walks family says why).
-    if is_artificial_edge(edge) && !matches!(from, Position::MaybeEmpty(_)) && version >= 4 {
+    if is_artificial_edge(edge) && !matches!(from, Position::MaybeEmpty(_)) {
         return match from {
             Position::Handle(h) if h.written && edge == "@old" => EdgeLanding::Landed { landing: from.clone(), edge: None },
             _ => EdgeLanding::Untyped { edge: None },
@@ -899,12 +896,12 @@ pub fn edge_landing(from: &Position, edge: &str, version: u32) -> EdgeLanding {
             },
             None => EdgeLanding::Unknown { available: local.edges.as_ref().map(|e| e.keys().cloned().collect()).unwrap_or_default() },
         },
-        Position::MaybeEmpty(of) => edge_landing(of, edge, version),
+        Position::MaybeEmpty(of) => landing_of(of, edge),
         // Every record it may be lands; the typing walks each (`stepEveryMember`).
         Position::OneOf(members) => {
             let landings: Option<Vec<Position>> = members
                 .iter()
-                .map(|member| match edge_landing(member, edge, version) {
+                .map(|member| match landing_of(member, edge) {
                     EdgeLanding::Landed { landing, .. } => Some(landing),
                     _ => None,
                 })

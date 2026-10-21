@@ -8,47 +8,13 @@
 //! vouches for, so no arm is preferred: a field a guard proved present where
 //! every arm proved it, an `-[:@old]->` where every member was written, a
 //! field read as set where every write set it (`merge_one_type`). Members of
-//! different types make a `Position::OneOf`. Versioned with one switch
-//! (`RecordJoin`): from language version 5 the rule applies; before it every
-//! site answers as it always had, and the check that withheld a joined answer
-//! is checked again joining, so what 5 would refuse is an upgrade warning.
+//! different types make a `Position::OneOf`.
 
-use std::cell::Cell;
 use std::collections::BTreeSet;
 use std::rc::Rc;
 
 use super::field::{Ty, field_type_equals, is_maybe_absent, maybe_absent, strip_absent, value_union};
 use super::position::{HandleIdentity, HandlePosition, Position, same_instance, same_starting_point};
-
-/// Whether this check applies the union rule before version 5, and whether a
-/// check that did not apply it met a site where it would have answered
-/// otherwise. Shared by the root file's checker and every library's in one
-/// check.
-#[derive(Debug, Default)]
-pub struct RecordUnions {
-    pub join_before5: bool,
-    pub withheld: Cell<bool>,
-}
-
-/// One site's view of `RecordUnions`: whether it joins, and where to say it
-/// withheld a joined answer.
-#[derive(Debug, Clone, Copy)]
-pub struct RecordJoin<'a> {
-    pub joins: bool,
-    withheld: Option<&'a Cell<bool>>,
-}
-
-impl<'a> RecordJoin<'a> {
-    pub fn under(version: u32, unions: Option<&'a RecordUnions>) -> Self {
-        RecordJoin { joins: version >= 5 || unions.is_some_and(|u| u.join_before5), withheld: unions.map(|u| &u.withheld) }
-    }
-
-    pub fn withhold(&self) {
-        if let Some(withheld) = self.withheld {
-            withheld.set(true);
-        }
-    }
-}
 
 /// The TypeScript's `===` between a joined answer and a site's old one: the
 /// joined answer is the first member's own value where nothing changed.
@@ -61,21 +27,14 @@ fn same_answer(a: &Ty, b: &Ty) -> bool {
     }
 }
 
-/// `joinedUnder`: `joined` where the check joins, else what the site answered
-/// before (`old`), telling the rule where the two differ.
-pub fn joined_under(rule: Option<RecordJoin>, joined: Option<Ty>, old: Option<Ty>) -> Option<Ty> {
+/// `joinedUnder`: `joined`, or what the site answered (`old`) where that is
+/// the same value or nothing joined.
+pub fn joined_under(joined: Option<Ty>, old: Option<Ty>) -> Option<Ty> {
     let Some(joined) = joined else { return old };
     if old.as_ref().is_some_and(|old| same_answer(&joined, old)) {
         return old;
     }
-    match rule {
-        Some(rule) if rule.joins => Some(joined),
-        Some(rule) => {
-            rule.withhold();
-            old
-        }
-        None => old,
-    }
+    Some(joined)
 }
 
 /// `oneRecordOf`: the records `types` may be, as one value. A record nobody

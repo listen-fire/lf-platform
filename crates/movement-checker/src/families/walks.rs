@@ -66,10 +66,10 @@ pub fn observe_step(typing: &mut Typing, from: Option<&Position>, step: &EdgeSte
 /// `stepEdge`, the reporting half: what the TypeScript says while stepping
 /// `edge` off `from`.
 fn report_step(typing: &mut Typing, from: &Position, edge: &str, filter: Option<&Expression>) {
-    if edge.starts_with('#') && typing.version >= 5 {
+    if edge.starts_with('#') {
         return;
     }
-    if is_artificial_edge(edge) && !matches!(from, Position::MaybeEmpty(_)) && typing.version >= 4 {
+    if is_artificial_edge(edge) && !matches!(from, Position::MaybeEmpty(_)) {
         report_artificial_step(typing, from, edge);
         return;
     }
@@ -147,7 +147,7 @@ fn report_step(typing: &mut Typing, from: &Position, edge: &str, filter: Option<
             }
             if !carrying.is_empty() {
                 let shown: Vec<String> = carrying.iter().map(|v| format!("{}'s {}", u.instance.name, display_name_of(&u.instance, v))).collect();
-                let example = typing.code(&narrowing_example(u, &carrying, typing.version));
+                let example = typing.code(&narrowing_example(u, &carrying));
                 typing.report(
                     codes::NARROWING,
                     format!(
@@ -243,39 +243,17 @@ pub struct UndescribedEvent {
 }
 
 /// MOV_EVENT_UNDESCRIBED for a read or write off `param`, at `span`
-/// (`undescribedEventSeverity`, `undescribedEventMessage`): refused from
-/// version 5; on a check for a move up across 5 the upgrade warning instead,
-/// which holds the pin where the program read null without a word; unsaid
-/// before 5.
-pub fn undescribed_event_diagnostic(
-    version: u32,
-    upgrading_from: Option<u32>,
-    param: &str,
-    event: &UndescribedEvent,
-    span: movement_parser::ast::Span,
-) -> Option<crate::diagnostic::Diagnostic> {
-    if version < 5 {
-        return None;
-    }
+/// (`undescribedEventSeverity`, `undescribedEventMessage`): refused.
+pub fn undescribed_event_diagnostic(param: &str, event: &UndescribedEvent, span: movement_parser::ast::Span) -> crate::diagnostic::Diagnostic {
     let address = format!("'{}-[:{}]->'", event.instance, event.event);
     let source = format!(
         "The catalog describes it from the system behind '{}': check that its connection resolves and the system answers",
         event.instance
     );
-    if upgrading_from.is_some_and(|from| from < 5) {
-        let message = format!(
-            "since {} a read or write off '{param}' is refused while {address} has no description in the catalog; before, it read null. {source}, then upgrade.",
-            crate::version::describe(5)
-        );
-        let mut diagnostic = crate::diagnostic::Diagnostic::error(codes::EVENT_UNDESCRIBED, message, span);
-        diagnostic.severity = Some(Severity::Warning);
-        diagnostic.upgrade = Some(true);
-        return Some(diagnostic);
-    }
     let message = format!(
         "{address} has no description in the catalog, so a read or write off '{param}' can't be checked — it would be null at run time. {source}, then check again."
     );
-    Some(crate::diagnostic::Diagnostic::error(codes::EVENT_UNDESCRIBED, message, span))
+    crate::diagnostic::Diagnostic::error(codes::EVENT_UNDESCRIBED, message, span)
 }
 
 /// `reportUndescribed`: true when nothing can be checked against `schema`
@@ -331,10 +309,10 @@ pub fn observe_read(typing: &mut Typing, position: Option<&Position>, property: 
     }
 }
 
-/// `refuseUnsentFile` (language version 5): a write handle's file field the
-/// write did not send holds the system's description of the file, not the file.
+/// `refuseUnsentFile`: a write handle's file field the write did not send
+/// holds the system's description of the file, not the file.
 fn refuse_unsent_file(typing: &mut Typing, handle: &crate::types::position::HandlePosition, property: &str, ty: &Ty) {
-    if typing.version < 5 || !handle.written || handle.set_fields.as_ref().is_some_and(|set| set.contains(property)) {
+    if !handle.written || handle.set_fields.as_ref().is_some_and(|set| set.contains(property)) {
         return;
     }
     if !crate::types::field::base_kinds(&crate::types::field::unwrap_list(crate::types::field::strip_absent(ty))).contains(&crate::types::field::BaseKind::File) {
@@ -369,7 +347,7 @@ fn report_read(typing: &mut Typing, position: &Position, property: &str) {
             if schema.as_ref().is_some_and(|s| is_write_only(s, property)) {
                 return;
             }
-            if h.written && crate::families::records::is_retired_handle_field(property) && typing.version >= 4 {
+            if h.written && crate::families::records::is_retired_handle_field(property) {
                 crate::families::records::report_handle_field_retired(typing, property);
                 return;
             }
@@ -542,50 +520,6 @@ pub fn observe_hop(typing: &mut Typing, from: Option<&Position>, step: &EdgeStep
     }
     if step.cardinality.as_ref().is_some_and(|c| c.limit.is_some()) && !capability.supports_limit {
         typing.report(codes::HOP_LIMIT_UNSUPPORTED, format!("'{edge}' can't be limited here — this source doesn't support LIMIT across that relationship."));
-    }
-}
-
-/// `reportInMemoryHopOrder`: `ORDER BY` / `LIMIT` on a hop over records the
-/// run already holds, on a move up across 5 — before 5 both engines kept every
-/// record, in the order held; from 5 they sort and cut as any hop does.
-pub fn report_in_memory_hop_order(typing: &mut Typing, from: Option<&Position>, step: &EdgeStep) {
-    let Some(from) = from else { return };
-    let cardinality = step.cardinality.as_ref();
-    let mut clauses = Vec::new();
-    if cardinality.is_some_and(|c| c.order_by.is_some()) {
-        clauses.push("ORDER BY");
-    }
-    if cardinality.is_some_and(|c| c.limit.is_some()) {
-        clauses.push("LIMIT");
-    }
-    if clauses.is_empty() || !holds_in_memory(from, &step.edge_type_id) || !typing.upgrade_crosses(5) {
-        return;
-    }
-    let one = clauses.len() == 1;
-    typing.report_upgrade(
-        codes::IN_MEMORY_HOP_ORDER,
-        format!(
-            "since {} the {} on '-[:{}]->' {} read: the hop walks records the run already holds, and before, such a hop ignored {} and kept every record in the order held. Its result may change: if the program relied on that, change it, then upgrade.",
-            crate::version::describe(5),
-            clauses.join(" and "),
-            step.edge_type_id,
-            if one { "is" } else { "are" },
-            if one { "it" } else { "them" },
-        ),
-    );
-}
-
-/// `holdsInMemory`: whether the hop `edge` off `from` walks records the run
-/// already holds — an extraction's entities, or a local node's landed entries
-/// (a lazy entry walks its source again at every read, so it is not one).
-fn holds_in_memory(from: &Position, edge: &str) -> bool {
-    match from {
-        Position::Extract { .. } => true,
-        Position::Local(local) => local.edges.as_ref().and_then(|edges| edges.get(edge)).is_some_and(|e| !e.deferred),
-        Position::MaybeEmpty(inner) => holds_in_memory(inner, edge),
-        // One of several records: the order may change if any of them is held.
-        Position::OneOf(members) => members.iter().any(|member| holds_in_memory(member, edge)),
-        Position::Meta { .. } | Position::Position(_) | Position::Union(_) | Position::Handle(_) | Position::Closure(_) => false,
     }
 }
 
@@ -883,7 +817,7 @@ impl crate::checker::Checker<'_> {
                 }
                 // Walking a held tuple reads it as the list of records it
                 // widens to, its members joined by the union rule.
-                crate::types::field::widen_tuples_joining(types.field.clone(), self.version, self.record_join())
+                crate::types::field::widen_tuples_joining(types.field.clone())
             }
             None => None,
         }
@@ -908,14 +842,12 @@ impl crate::checker::Checker<'_> {
         symbol_pos.or_else(|| record_head_position(self.head_root_value_type(head, scope).as_ref()))
     }
 
-    /// `reportHeadOffMaybeAbsent`: from version 5, a block whose head walks
-    /// off a root that may hold no record (an `extractOne` answer, a `match`
-    /// that found nothing, an unguarded pick, `rows[0]`) is refused. The run
-    /// fails at the head when the record is absent, on every version, and
-    /// runs when it is there, so versions 1–4 keep the form and a move up
-    /// across 5 is warned of.
+    /// `reportHeadOffMaybeAbsent`: a block whose head walks off a root that
+    /// may hold no record (an `extractOne` answer, a `match` that found
+    /// nothing, an unguarded pick, `rows[0]`) is refused: the run fails at the
+    /// head when the record is absent.
     pub fn report_head_off_maybe_absent(&mut self, head: &PathHead, scope: ScopeId) {
-        if self.version < 5 || Self::head_steps(head).is_none_or(|steps| steps.is_empty()) || self.head_root_type(head, scope).is_none() {
+        if Self::head_steps(head).is_none_or(|steps| steps.is_empty()) || self.head_root_type(head, scope).is_none() {
             return;
         }
         let held_maybe_absent = |ty: Option<Ty>| matches!(ty, Some(Ty::MaybeAbsent(of)) if matches!(&*of, Ty::Record(Some(_))));
@@ -939,17 +871,6 @@ impl crate::checker::Checker<'_> {
             }
             None => return,
         };
-        if self.upgrade_crosses(5) {
-            self.report_upgrade_warning(
-                codes::ABSENT_REQUIRED,
-                format!(
-                    "since {} a block's walk off '{spelled}', which may be absent, is refused: the run fails at the walk when '{spelled}' is absent. Guard the walk ('{guard}'), then upgrade.",
-                    crate::version::describe(5)
-                ),
-                head.span,
-            );
-            return;
-        }
         self.report(
             codes::ABSENT_REQUIRED,
             format!("'{spelled}' may be absent, and a block's walk off a record that is not there fails the run rather than running zero times. Guard the walk: '{guard}'."),
@@ -1071,7 +992,7 @@ impl crate::checker::Checker<'_> {
 
 /// The IS test a NARROWING message suggests: the first `action` option whose
 /// narrowing of the union's own address carries what was asked for.
-fn narrowing_example(u: &crate::types::position::UnionPosition, carrying: &[&String], version: u32) -> String {
+fn narrowing_example(u: &crate::types::position::UnionPosition, carrying: &[&String]) -> String {
     let fallback = format!("x IS <{}-[:`…` WHERE …]->>", u.instance.name);
     let Some(address) = &u.address else { return fallback };
     let action = u.instance.schema.positions.get(&address.event).and_then(|p| p.properties.get("action")).map(Ty::from_schema);
@@ -1084,7 +1005,7 @@ fn narrowing_example(u: &crate::types::position::UnionPosition, carrying: &[&Str
         }
         let key = crate::types::event_address::event_address_key(&crate::types::event_address::EventAddress { event: address.event.clone(), narrowing });
         if carrying.iter().any(|v| **v == key) {
-            let address = crate::families::listens::event_types::address_source(&u.instance.name, &address.event, &[("action".to_string(), option.clone())], version);
+            let address = crate::families::listens::event_types::address_source(&u.instance.name, &address.event, &[("action".to_string(), option.clone())]);
             return format!("x IS {address}");
         }
     }
@@ -1348,11 +1269,11 @@ impl crate::checker::Checker<'_> {
             // `endingHop`: the label up to its first ':' or space.
             let base = label.split(|c: char| c == ':' || c.is_whitespace()).next().unwrap_or(label);
             if base == "#linked" {
-                self.report(codes::LINKED_HOP_RETIRED, crate::families::writes::linked_hop_retired_message(self.version), span);
+                self.report(codes::LINKED_HOP_RETIRED, crate::families::writes::linked_hop_retired_message(), span);
                 continue;
             }
-            // `isRetiredMetaHop`: from version 5 its own diagnostic, never the settings one.
-            if self.version >= 5 && label.starts_with('#') && label != "#extract" {
+            // `isRetiredMetaHop`: its own diagnostic, never the settings one.
+            if label.starts_with('#') && label != "#extract" {
                 self.report(codes::META_HOP_RETIRED, meta_hop_retired_message(label), span);
                 continue;
             }
@@ -1366,12 +1287,9 @@ impl crate::checker::Checker<'_> {
         }
     }
 
-    /// `reportMetaHopsInTypeRef` (language version 5): a type's address walks
-    /// no `#` hop either, refused where the address is written.
+    /// `reportMetaHopsInTypeRef`: a type's address walks no `#` hop either,
+    /// refused where the address is written.
     pub fn report_meta_hops_in_type_ref(&mut self, hops_raw: &str, span: movement_parser::ast::Span) {
-        if self.version < 5 {
-            return;
-        }
         // `hopsOfAddress`: the address read by the expression grammar; none
         // when it does not parse (the address's own check says so).
         let parsed = movement_parser::expr::parse_expression(&format!("__address_probe__{hops_raw}"));
@@ -1386,7 +1304,7 @@ impl crate::checker::Checker<'_> {
     /// `transformHopRetiredMessage`: the call to write instead, named from
     /// the hop's `plugin` setting when the catalog knows it.
     fn transform_hop_retired_message(&self, hop: &movement_parser::tree::Hop) -> String {
-        use crate::families::names::{import_line, spell_name};
+        use crate::families::names::import_line;
         use movement_parser::tree::{MExpr, MapKey, MapMember, StringPart};
         let lead = "the '#transform' hop is retired — the movement engine never runs it. Import the plugin and call it with the value it reads";
         let plugin = hop.config.as_ref().and_then(|config| {
@@ -1409,23 +1327,13 @@ impl crate::checker::Checker<'_> {
             }
         }
         let Some((plugin, spec)) = plugin.and_then(|p| self.plain_plugin_spec(p).map(|spec| (p, spec))) else {
-            let arg = if self.version >= 5 { "m.u" } else { "url: m.u" };
-            return format!("{lead}, e.g. '{}', then 'page = fetch_url({arg})'", import_line("fetch_url", "plugins"));
+            return format!("{lead}, e.g. '{}', then 'page = fetch_url(m.u)'", import_line("fetch_url", "plugins"));
         };
-        if self.version >= 5 {
-            return transform_hop_as_function(plugin, &spec);
-        }
-        let args = spec.required_args.iter().flatten().map(|arg| format!("{arg}: …")).collect::<Vec<_>>().join(", ");
-        format!(
-            "{lead}: '{}', then 'out = {}({})'",
-            import_line(plugin, "plugins"),
-            spell_name(plugin),
-            if args.is_empty() { "…" } else { &args }
-        )
+        transform_hop_as_function(plugin, &spec)
     }
 }
 
-/// `transformHopAsFunction` (language version 5): a plugin is a function,
+/// `transformHopAsFunction`: a plugin is a function,
 /// a stage-only one too (the extraction stage went with the keyword).
 fn transform_hop_as_function(plugin: &str, spec: &movement_parser::catalog::types::PluginSpec) -> String {
     use crate::families::names::{import_line, spell_name};
@@ -1440,7 +1348,7 @@ fn transform_hop_as_function(plugin: &str, spec: &movement_parser::catalog::type
     )
 }
 
-/// `metaHopRetiredMessage` (language version 5).
+/// `metaHopRetiredMessage`.
 fn meta_hop_retired_message(label: &str) -> String {
     let lead = format!("'-[:{label}]->' is a '#' hop, and '#' hops are retired — there are no meta edges, only the edges a system declares");
     if label == "#transform" {
@@ -1475,12 +1383,9 @@ impl crate::checker::Checker<'_> {
         if let Some(id) = self.scopes.scope(body).symbols.get(param).copied() {
             let symbol = self.scopes.symbol_mut(id);
             symbol.undescribed_event = Some(event);
-            // From version 5 it is still a record, only not which one: a
-            // value it reaches is refused as a record is (check.ts
-            // `undescribedEventPlane`). Before 5 it stays untyped.
-            if self.version >= 5 {
-                symbol.types.is_record = true;
-            }
+            // It is still a record, only not which one: a value it reaches is
+            // refused as a record is (check.ts `undescribedEventPlane`).
+            symbol.types.is_record = true;
         }
     }
 
@@ -1499,13 +1404,13 @@ impl crate::checker::Checker<'_> {
         self.note_undescribed_event(body, param, type_, Some(graph));
     }
 
-    /// `x = go`, `go` an undescribed event (version 5): the second name
+    /// `x = go`, `go` an undescribed event: the second name
     /// keeps what reads off it are refused for, as the first does (check.ts,
     /// the alias branch of `checkRValue`).
     pub(crate) fn note_undescribed_alias(&mut self, name: &str, value: &movement_parser::ast::RValue, scope: ScopeId) {
         let movement_parser::ast::RValue::Expr { expr } = value else { return };
         let raw = expr.raw.trim();
-        if self.version < 5 || !crate::slots::is_bare_ident(raw) {
+        if !crate::slots::is_bare_ident(raw) {
             return;
         }
         let crate::scope::Resolution::Found(aliased) = self.scopes.resolve(scope, raw) else { return };
@@ -1526,21 +1431,16 @@ impl crate::checker::Checker<'_> {
             return;
         }
         let Some(event) = symbol.undescribed_event.clone() else { return };
-        if let Some(diagnostic) = undescribed_event_diagnostic(self.version, self.upgrading_from, name, &event, span) {
-            self.push(diagnostic);
-        }
+        self.push(undescribed_event_diagnostic(name, &event, span));
     }
 }
 
-// ── A walk off a json value (version 5) ──
+// ── A walk off a json value ──
 
 impl crate::checker::Checker<'_> {
     /// A walk off a name that holds a json value: a json map has no
     /// relationships, so the walk reaches nothing.
     pub fn report_walk_off_json(&mut self, name: &str, hops: &str, span: movement_parser::ast::Span, scope: crate::scope::ScopeId) {
-        if self.version < 5 {
-            return;
-        }
         let crate::scope::Resolution::Found(id) = self.scopes.resolve(scope, name) else { return };
         let types = &self.scopes.symbol(id).types;
         if types.pos.is_some() || !matches!(types.field.as_ref().map(crate::types::field::strip_absent), Some(crate::types::field::Ty::Json)) {
@@ -1555,7 +1455,7 @@ impl crate::checker::Checker<'_> {
     }
 }
 
-// ── A walk with no root (version 5) ──
+// ── A walk with no root ──
 
 /// A head with no root: the engine walks from a record a name holds, and
 /// none says which.

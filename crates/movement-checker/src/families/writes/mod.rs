@@ -121,6 +121,7 @@ impl<'a> Field<'a> {
 
 impl Checker<'_> {
     /// `upgradeCrosses`: this check is for a move up across version `n`.
+    #[allow(dead_code)] // the mechanism for a move up from 5; the 4→5 data is the platform's TypeScript checker's
     pub fn upgrade_crosses(&self, n: u32) -> bool {
         self.upgrading_from.is_some_and(|from| from < n && self.version >= n)
     }
@@ -128,13 +129,6 @@ impl Checker<'_> {
     pub fn report_with(&mut self, code: &str, message: impl Into<String>, span: Span, severity: Severity) {
         let mut diagnostic = Diagnostic::error(code, message, span);
         diagnostic.severity = Some(severity);
-        self.push(diagnostic);
-    }
-
-    pub(crate) fn report_upgrade_warning(&mut self, code: &str, message: impl Into<String>, span: Span) {
-        let mut diagnostic = Diagnostic::error(code, message, span);
-        diagnostic.severity = Some(Severity::Warning);
-        diagnostic.upgrade = Some(true);
         self.push(diagnostic);
     }
 
@@ -162,7 +156,7 @@ impl Checker<'_> {
     // ── write ──
 
     /// `checkWrite`, the rules half: returns the handle the write hands back.
-    pub fn check_write_rules(&mut self, write: &WriteExpression, scope: ScopeId, binding: Option<&str>, is_bound: bool) -> Option<Position> {
+    pub fn check_write_rules(&mut self, write: &WriteExpression, scope: ScopeId, is_bound: bool) -> Option<Position> {
         let spread_lines = self.expand_write_spreads(write, scope);
         let mut fields: Vec<Field> = write.fields.iter().map(Field::authored).collect();
         fields.extend(spread_lines);
@@ -176,11 +170,10 @@ impl Checker<'_> {
         let mut declared_target = false;
         let mut parents: Vec<Parent> = Vec::new();
         let mut position_write = false;
-        let bind_name = write.bind.as_ref().map(|b| b.name.as_str());
 
         match &write.target {
             WriteTarget::Linked { path, explicit_type, span } => {
-                let linked = self.linked_target(path, explicit_type.as_deref(), *span, Purpose::Write, is_bound, bind_name, scope);
+                let linked = self.linked_target(path, explicit_type.as_deref(), *span, Purpose::Write, is_bound, scope);
                 root = linked.root;
                 handle = linked.handle;
                 local = linked.local;
@@ -193,7 +186,7 @@ impl Checker<'_> {
                 }
             }
             WriteTarget::Tuple { paths, explicit_type, span } => {
-                let tuple = self.tuple_target(paths, explicit_type.as_deref(), *span, &mut parents, Purpose::Write, is_bound, bind_name, scope);
+                let tuple = self.tuple_target(paths, explicit_type.as_deref(), *span, &mut parents, Purpose::Write, is_bound, scope);
                 root = tuple.root;
                 handle = tuple.handle;
                 if let Some(description) = tuple.description {
@@ -208,20 +201,6 @@ impl Checker<'_> {
                 local = position.local;
                 declared_target = position.declared;
                 position_write = true;
-                if let PathRoot::Name { name } = target_root
-                    && matches!(&handle, Some(Position::Handle(h)) if h.written)
-                    && self.upgrade_crosses(4)
-                {
-                    let named = binding.map(|b| format!(" ('{b}' names the same record)")).unwrap_or_default();
-                    self.report_upgrade_warning(
-                        codes::HANDLE_UPDATED_IN_PLACE,
-                        format!(
-                            "since {} '{name}' reads as the updated record below this line{named}; before, it kept the values of its own write",
-                            version::describe(4)
-                        ),
-                        *span,
-                    );
-                }
             }
         }
 
@@ -237,7 +216,7 @@ impl Checker<'_> {
         }
 
         if write.bind.is_some() {
-            self.check_bind_clause(write, scope, handle.as_ref());
+            self.check_bind_clause(write);
         }
         self.check_write_union(write, &fields, root.as_ref(), &root_description);
 
@@ -300,11 +279,9 @@ impl Checker<'_> {
             let relationship = written_edges.as_ref().is_some_and(|edges| edges.contains(&field.name));
             if relationship
                 && let Some(handle_name) = self.bare_handle_name(&field.value, scope)
-                && self.version >= 5
             {
-                // From version 5 a record is never a field's value: no engine
-                // hands one to a system, so it is refused, with the structural
-                // spelling.
+                // A record is never a field's value: no engine hands one to a
+                // system, so it is refused, with the structural spelling.
                 self.report(
                     codes::WRITE_LINK_FIELD,
                     format!(
@@ -359,7 +336,6 @@ impl Checker<'_> {
             if field.semantics == Some(FieldWriteMode::Fill) && is_maybe_absent(value_type.as_ref()) {
                 omittable += 1;
             }
-            self.report_blankable_identity_key(&write.unique_by, field, value_type.as_ref(), &root_description, scope);
             self.report_field_value_type(
                 &field.name,
                 &root_description,
@@ -407,9 +383,7 @@ impl Checker<'_> {
         // A saved program's shape write still runs (the run gate lets the
         // retirement through), but its `unique by` never could: the record
         // lands in memory, with no store to find one in.
-        if self.version >= 5
-            && let Some(clause) = write.unique_by.first()
-        {
+        if let Some(clause) = write.unique_by.first() {
             self.report(
                 codes::WRITE_SHAPE_UNIQUE,
                 format!("'unique by' has no meaning on a write to the declared node '{shape_root}' — the record it makes lands in memory, so there is no store to find an existing one in. Drop the 'unique by' clause (or synthesise the record, 'node {{ {entries} }}')"),
@@ -528,7 +502,6 @@ impl Checker<'_> {
         span: Span,
         purpose: Purpose,
         is_bound: bool,
-        bind_name: Option<&str>,
         scope: ScopeId,
     ) -> Landing {
         let root_name = path_root_name(path);
@@ -546,13 +519,11 @@ impl Checker<'_> {
             self.report(
                 codes::ABSENT_REQUIRED,
                 format!(
-                    "'{root_name}' is {} that may not be there, so a {} off it can't be guaranteed to happen — and nothing in this statement says it might be skipped. Test it first ('{}', or '{}'){}",
+                    "'{root_name}' is {} that may not be there, so a {} off it can't be guaranteed to happen — and nothing in this statement says it might be skipped. Test it first ('{}', or '{}').",
                     describe_position(of),
                     purpose.word(),
                     self.code(&format!("if {root_name} == null {{ ERROR(\"…\") }}")),
                     movement_parser::surface::phrase::spell_if(&format!("EXISTS({root_name})"), self.version),
-                    // From 5 a block's walk off it is refused too: it fails the run when the record is absent.
-                    if self.version >= 5 { ".".to_string() } else { format!(", or gate on it with a traversal block ('{root_name}-[x:…]-> {{ … }}'), which runs zero times when it's empty.") }
                 ),
                 span,
             );
@@ -561,7 +532,7 @@ impl Checker<'_> {
         // The engine creates or finds along one edge, off the record the
         // target starts at; the hops before it would have to be walked first,
         // which is what a block says.
-        if self.version >= 5 && steps.len() > 1 {
+        if steps.len() > 1 {
             let word = purpose.word();
             let last = match &steps[steps.len() - 1] {
                 TraversalStep::Edge(edge) => edge.edge_type_id.clone(),
@@ -649,7 +620,7 @@ impl Checker<'_> {
             if surface_not_enumerated(&parent_schema) {
                 return Landing::default();
             }
-            if edge_name.starts_with('#') && self.version >= 5 {
+            if edge_name.starts_with('#') {
                 return Landing::default();
             }
             let available: Vec<&str> = parent_schema.edges.keys().map(String::as_str).collect();
@@ -744,19 +715,6 @@ impl Checker<'_> {
             }
         };
 
-        if link_step.expression_filter.is_some()
-            && let Some(bind) = bind_name
-            && self.version < 5
-        {
-            self.report(
-                codes::TARGET_WHERE_BIND,
-                format!(
-                    "a WHERE on the target and 'bind {bind}' don't combine — a bound write's identity IS the binding, so there are no candidates for the WHERE to narrow. Drop the WHERE, or the 'bind' to find the record by 'unique by (…)'"
-                ),
-                span,
-            );
-        }
-
         // The final hop's WHERE narrows the identity candidates — each read
         // as the record it is, so it types like a read hop's WHERE at the
         // type the target lands on (`typeTargetFilter`).
@@ -770,9 +728,9 @@ impl Checker<'_> {
                     typing.locals.insert(alias.clone(), landing.clone());
                 }
                 typing.infer_at(filter, landing.as_ref());
-                (typing.diagnostics, typing.receipt_reads)
+                typing.diagnostics
             };
-            self.push_typed(diagnostics, scope);
+            self.push_typed(diagnostics);
         }
 
         let root = instance
@@ -791,7 +749,6 @@ impl Checker<'_> {
                 .map(|p| p.properties.iter().map(|(k, v)| (k.clone(), Ty::from_schema(v))).collect())
                 .unwrap_or_default(),
         };
-        let result_shape = if purpose == Purpose::Write { self.write_result_shape(result_shape) } else { result_shape };
         let handle = Position::Handle(HandlePosition {
             instance: instance.clone(),
             position: instance.schema.positions.contains_key(&written).then(|| written.clone()),
@@ -869,13 +826,12 @@ impl Checker<'_> {
         parents: &mut Vec<Parent>,
         purpose: Purpose,
         is_bound: bool,
-        bind_name: Option<&str>,
         scope: ScopeId,
     ) -> Landing {
         let mut agreed: Option<(Landing, usize)> = None;
         let mut mismatched = false;
         for (i, path) in paths.iter().enumerate() {
-            let mut linked = self.linked_target(path, explicit_type, path.span, purpose, is_bound, bind_name, scope);
+            let mut linked = self.linked_target(path, explicit_type, path.span, purpose, is_bound, scope);
             let Some(resolved) = linked.resolved.take() else { continue };
             parents.push(Parent { type_: resolved.parent_type.clone(), edge: resolved.edge_name.clone() });
             match &agreed {
@@ -1030,27 +986,11 @@ impl Checker<'_> {
             handle.position = Some(position.clone());
         }
         let shape: Vec<(String, Ty)> = variant.result_shape.iter().map(|(k, v)| (k.clone(), Ty::from_schema(v))).collect();
-        let shape = if handle.written { self.write_result_shape(shape) } else { shape };
         handle.result_shape = shape.into_iter().collect();
         if let Some(edges) = &variant.edges {
             handle.edges = Some(edges.clone());
         }
         Some(Position::Handle(handle))
-    }
-
-    /// `writeResultShape`: before 4 a write's handle also read `created` and `committed`.
-    fn write_result_shape(&self, shape: Vec<(String, Ty)>) -> Vec<(String, Ty)> {
-        if self.version >= 4 {
-            return shape;
-        }
-        let mut out = vec![("created".to_string(), Ty::Boolean), ("committed".to_string(), Ty::Boolean)];
-        for (key, ty) in shape {
-            match out.iter_mut().find(|(k, _)| *k == key) {
-                Some(slot) => slot.1 = ty,
-                None => out.push((key, ty)),
-            }
-        }
-        out
     }
 
     /// `checkWriteUnion`: an untagged write union — the body's declared
@@ -1137,64 +1077,10 @@ impl Checker<'_> {
         Some(Position::Handle(handle_position))
     }
 
-    /// `checkBindClause`: a write's `bind` counterpart.
-    fn check_bind_clause(&mut self, write: &WriteExpression, scope: ScopeId, target: Option<&Position>) {
+    /// `checkBindClause`: a write's `bind` is retired.
+    fn check_bind_clause(&mut self, write: &WriteExpression) {
         let Some(bind) = &write.bind else { return };
-        if self.version >= 5 {
-            self.report(codes::WRITE_BIND_RETIRED, write_bind_retired_message(&bind.name), bind.span);
-            return;
-        }
-        if let WriteTarget::Position { root, .. } = &write.target {
-            self.report(
-                codes::WRITE_BIND_POSITION,
-                format!(
-                    "'bind' has no meaning on a position write — 'write {} {{ … }}' already holds the exact record, so there is no counterpart to establish. Drop the 'bind {}'",
-                    spell_path_root(root),
-                    bind.name
-                ),
-                bind.span,
-            );
-            return;
-        }
-        if let Some(instance) = crate::types::position::instance_of_ref(target)
-            && !matches!(target, Some(Position::MaybeEmpty(_)))
-            && instance.schema.supports_in_place_update != Some(true)
-        {
-            self.report(
-                codes::WRITE_BIND_NO_UPDATE,
-                format!(
-                    "'{}' can't update records in place — but a 'bind' write re-fires as an update when '{}' recurs, so the target needs update-by-id. Drop the 'bind {}' (a plain create/append), or bind to a system that supports updates",
-                    instance.name, bind.name, bind.name
-                ),
-                bind.span,
-            );
-            return;
-        }
-        if let Some(clause) = write.unique_by.first() {
-            self.report(
-                codes::WRITE_BIND_UNIQUE,
-                format!(
-                    "'unique by' and 'bind {}' don't combine — a bound write's identity IS the binding, so field uniqueness has no role. Drop the 'unique by' clause (it applies only to writes without a bind)",
-                    bind.name
-                ),
-                clause.span,
-            );
-        }
-        let not_record = |what: String| {
-            format!(
-                "'{}' is {what} — 'bind' names the counterpart RECORD this write corresponds to, so it needs a record position: a traversal alias, a prior write result, or the event position",
-                bind.name
-            )
-        };
-        match self.record_of_name(&bind.name, scope, bind.span) {
-            Some(RecordOf::Value(what)) => self.report(codes::WRITE_BIND_NOT_RECORD, not_record(what), bind.span),
-            Some(RecordOf::Record(position))
-                if !matches!(position, Position::Position(_) | Position::Handle(_) | Position::Union(_) | Position::Local(_) | Position::Extract { .. }) =>
-            {
-                self.report(codes::WRITE_BIND_NOT_RECORD, not_record(describe_position(&position)), bind.span);
-            }
-            _ => {}
-        }
+        self.report(codes::WRITE_BIND_RETIRED, write_bind_retired_message(&bind.name), bind.span);
     }
 
     /// `checkRequiredEdges`: every required edge the written type declares
@@ -1268,12 +1154,9 @@ impl Checker<'_> {
         );
     }
 
-    /// `positionWriteResult`: since 4 `x = write c { … }` is the record's
-    /// latest version, a handle a write produced.
+    /// `positionWriteResult`: `x = write c { … }` is the record's latest
+    /// version, a handle a write produced.
     fn position_write_result(&self, target: Option<Position>, root: Option<&WritableRootSchema>) -> Option<Position> {
-        if self.version < 4 {
-            return target;
-        }
         match target {
             Some(Position::Handle(mut handle)) => {
                 handle.set_fields = None;
@@ -1363,7 +1246,7 @@ impl Checker<'_> {
     }
 
     fn report_field_value_type(&mut self, field_name: &str, subject: &str, target: Option<&Ty>, value: Option<&Ty>, span: Span, fit: FieldFit) {
-        if self.version >= 5 && (may_be_closure(value) || may_be_closure(fit.held.map(|h| &h.handle))) {
+        if may_be_closure(value) || may_be_closure(fit.held.map(|h| &h.handle)) {
             self.report(
                 codes::CLOSURE_NOT_DATA,
                 closure_not_data_message(&format!("'{field_name}' on {subject} is written, and this is")),
@@ -1413,7 +1296,7 @@ impl Checker<'_> {
     // ── match ──
 
     /// `checkMatch`: the identity half of a write, checked by the same rules.
-    pub fn check_match_rules(&mut self, matched: &MatchExpression, scope: ScopeId, binding: Option<&str>, implied_identity: bool) -> Option<Position> {
+    pub fn check_match_rules(&mut self, matched: &MatchExpression, scope: ScopeId, implied_identity: bool) -> Option<Position> {
         let mut root: Option<WritableRootSchema> = None;
         let mut root_description = "the match target".to_string();
         let mut handle: Option<Position> = None;
@@ -1421,7 +1304,7 @@ impl Checker<'_> {
         let mut parents: Vec<Parent> = Vec::new();
         match &matched.target {
             WriteTarget::Linked { path, explicit_type, span } => {
-                let linked = self.linked_target(path, explicit_type.as_deref(), *span, Purpose::Match, false, None, scope);
+                let linked = self.linked_target(path, explicit_type.as_deref(), *span, Purpose::Match, false, scope);
                 root = linked.root;
                 handle = linked.handle;
                 local = linked.local;
@@ -1430,7 +1313,7 @@ impl Checker<'_> {
                 }
             }
             WriteTarget::Tuple { paths, explicit_type, span } => {
-                let tuple = self.tuple_target(paths, explicit_type.as_deref(), *span, &mut parents, Purpose::Match, false, None, scope);
+                let tuple = self.tuple_target(paths, explicit_type.as_deref(), *span, &mut parents, Purpose::Match, false, scope);
                 root = tuple.root;
                 handle = tuple.handle;
                 if let Some(description) = tuple.description {
@@ -1477,7 +1360,6 @@ impl Checker<'_> {
                 );
             }
             let (value_type, held) = self.write_field_value(&field.value, scope, target_type.as_ref(), None);
-            self.report_blankable_identity_key(&matched.unique_by, field, value_type.as_ref(), &root_description, scope);
             self.report_field_value_type(
                 &field.name,
                 &root_description,
@@ -1488,35 +1370,20 @@ impl Checker<'_> {
             );
             self.check_enum_literal_write(&field.value, target_type.as_ref(), &format!("'{}' on {root_description}", field.name));
         }
-        if let Some(binding) = binding
-            && self.upgrade_crosses(4)
-        {
-            self.report_upgrade_warning(
-                codes::MATCH_MISS_CONTINUES,
-                format!(
-                    "since {} a 'match' that finds nothing no longer ends the scope: '{binding}' is absent and the block carries on — guard what depends on it with `{}`",
-                    version::describe(4),
-                    self.code(&format!("if {binding} != null {{ … }}"))
-                ),
-                matched.span,
-            );
-        }
-        found_handle(handle, self.version)
+        found_handle(handle)
     }
 
-    /// A `match` statement nobody names gates nothing since version 4.
+    /// A `match` statement nobody names gates nothing.
     pub fn report_unnamed_match(&mut self, span: Span) {
-        if self.version >= 4 {
-            self.report(
-                codes::MATCH_UNNAMED,
-                format!(
-                    "'match … {{ }}' on its own gates nothing since {}: a miss is absent, not the end of the scope. Bind it and test the name — `existing = match … {{ … }}` then `{}`",
-                    version::describe(4),
-                    self.code("if existing != null { … }")
-                ),
-                span,
-            );
-        }
+        self.report(
+            codes::MATCH_UNNAMED,
+            format!(
+                "'match … {{ }}' on its own gates nothing since {}: a miss is absent, not the end of the scope. Bind it and test the name — `existing = match … {{ … }}` then `{}`",
+                version::describe(4),
+                self.code("if existing != null { … }")
+            ),
+            span,
+        );
     }
 
     // ── refresh, delete ──
@@ -1765,15 +1632,11 @@ fn with_set_fields(handle: Option<Position>, fields: &[Field]) -> Option<Positio
 }
 
 /// `foundHandle`: a match's handle, without the write-outcome facts.
-fn found_handle(handle: Option<Position>, version: u32) -> Option<Position> {
+fn found_handle(handle: Option<Position>) -> Option<Position> {
     match handle {
         Some(Position::Handle(mut h)) => {
             h.written = false;
             h.identity = Default::default();
-            if version < 4 {
-                h.result_shape.shift_remove("created");
-                h.result_shape.shift_remove("committed");
-            }
             Some(Position::Handle(h))
         }
         other => other,
@@ -2023,13 +1886,6 @@ pub fn report_write_only_property(typing: &mut Typing, position: Option<&Positio
 
 /// `MOV_LINKED_HOP_RETIRED`'s message: raised where a walk's hops are read
 /// (`checkWalkKeepsWhatIsWritten`), for a `-[#linked …]->` hop.
-pub fn linked_hop_retired_message(version: u32) -> String {
-    let instead = if version >= 5 {
-        "or store the link in the system that holds it — a field or an edge there"
-    } else {
-        "or tie a write to a record you hold with 'write … bind other { … }'"
-    };
-    format!(
-        "the '-[#linked …]->' hop is retired — it looked a record up by the id another system gave it, not by the record this run wrote. Keep the write's handle and read from it: 'rec = write crm-[:Companies]-> {{ … }}', then 'rec.<field>' or 'rec-[:…]->'; {instead}"
-    )
+pub fn linked_hop_retired_message() -> String {
+    "the '-[#linked …]->' hop is retired — it looked a record up by the id another system gave it, not by the record this run wrote. Keep the write's handle and read from it: 'rec = write crm-[:Companies]-> { … }', then 'rec.<field>' or 'rec-[:…]->'; or store the link in the system that holds it — a field or an edge there".to_string()
 }

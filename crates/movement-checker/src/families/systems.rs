@@ -314,9 +314,6 @@ pub fn static_string_literal_of(slot: &ExprSlot) -> Option<String> {
 /// Whether a parameter's written type names a value rather than a position
 /// (`movementParamValueType` is defined): a scalar, or a declared enum.
 pub fn is_value_param_type(checker: &Checker<'_>, type_: &ParamTypeRef, scope: ScopeId) -> bool {
-    if checker.version < 3 {
-        return false;
-    }
     let ParamTypeRef::Name(reference) = type_ else { return true };
     if reference.hops_raw.is_some() {
         return false;

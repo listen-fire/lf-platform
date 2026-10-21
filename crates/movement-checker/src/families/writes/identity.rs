@@ -4,16 +4,12 @@
 
 use movement_parser::ast::{ExprSlot, Span, UniqueClause};
 use movement_parser::catalog::types::{FuzzyResolution, WritableRootSchema};
-use movement_parser::lowering::expression::{Expression, FilterOperator, ListElement, LogicalOp, StaticValue};
+use movement_parser::lowering::expression::{Expression, FilterOperator, ListElement, LogicalOp};
 
-use super::Field;
 use crate::checker::Checker;
 use crate::codes;
 use crate::scope::{Resolution, ScopeId};
-use crate::slots::{collect_expression_names, expression_of_slot, expression_of_text};
-use crate::types::field::{Ty, strip_absent};
-use crate::types::position::Position;
-use crate::version;
+use crate::slots::{collect_expression_names, expression_of_text};
 
 /// One top-level component of a `unique by (…)` predicate, its leading
 /// `FUZZY` lifted off (`UniquenessConjunct`). `offset` counts UTF-16 units.
@@ -174,51 +170,6 @@ impl Checker<'_> {
                 crate::diagnostic::Severity::Info,
             );
         }
-    }
-
-    /// `reportBlankableIdentityKey`: a text key that may be `""`, on a move
-    /// up across version 2 (where an empty key became no key).
-    pub(super) fn report_blankable_identity_key(&mut self, unique_by: &[UniqueClause], field: &Field, value_type: Option<&Ty>, description: &str, scope: ScopeId) {
-        if !self.upgrade_crosses(2) {
-            return;
-        }
-        if !matches!(value_type.map(strip_absent), Some(Ty::Text)) {
-            return;
-        }
-        if !unique_by.iter().any(|clause| unique_clause_refs(clause).is_some_and(|refs| refs.contains(&field.name))) {
-            return;
-        }
-        let Ok(value) = expression_of_slot(&field.value) else { return };
-        if let Expression::Static { value: StaticValue::String(text) } = &value
-            && !text.trim().is_empty()
-        {
-            return;
-        }
-        if let Some((root, property)) = crate::types::narrowing::direct_field_read(&value)
-            && let Resolution::Found(id) = self.scopes.resolve(scope, &root)
-        {
-            let types = &self.scopes.symbol(id).types;
-            if matches!(types.pos, Some(Position::Extract { .. })) || types.non_blank_fields.contains(&property) {
-                return;
-            }
-        }
-        if let Some(name) = crate::types::narrowing::bare_name(&value)
-            && let Resolution::Found(id) = self.scopes.resolve(scope, name)
-            && self.scopes.symbol(id).types.non_blank
-        {
-            return;
-        }
-        self.report_upgrade_warning(
-            codes::UNIQUE_KEY_MAY_BE_BLANK,
-            format!(
-                "'{}' identifies {description}, and its value may be \"\" — since language version {} an empty key is no key, so when it is \"\" nothing is matched by it (a write creates a new record each time). Before it, \"\" matched another record whose '{}' was \"\". If that matters here, guard the write on '{}' != \"\".",
-                field.name,
-                version::describe(2),
-                field.name,
-                field.name
-            ),
-            field.value.span,
-        );
     }
 }
 

@@ -18,9 +18,7 @@
 //! - MOV_FUNCTION_UNKNOWN
 //! - MOV_NESTED_CALL_SUSPENDS
 //! - MOV_PARAM_NEEDS_TYPE
-//! - MOV_PLUGIN_ARGS_NAMED
 //! - MOV_PLUGIN_OUTPUT_UNDECLARED
-//! - MOV_PLUGIN_ROW_UNDECLARED
 //! - MOV_RECURSIVE_RETURN_TYPE
 //! - MOV_RETURN_NOT_A_VALUE
 //! - MOV_RETURN_OUTSIDE_BODY
@@ -31,7 +29,6 @@
 use movement_parser::ast::{RValue, MovementDeclaration, ArmExpression, CallArg, CallStatement, CollectionOp, CollectionOpExpression, ExprSlot, Loc, MembersExpression, Span};
 use movement_parser::lowering::HeldAsData;
 use movement_parser::lowering::expression::{Expression, StaticValue};
-use movement_parser::version::{before, since};
 
 use movement_parser::tree::{At, MExpr, MapMember, StringPart};
 
@@ -72,9 +69,8 @@ pub fn builtin_form(builtin: &Builtin) -> BuiltinForm {
 pub enum Callee {
     /// The program declares it, under this name.
     Declared(String),
-    /// A built-in, as `version` reads it (from 5 a collection op's settings
-    /// come last).
-    Builtin { builtin: &'static Builtin, version: u32 },
+    /// A built-in.
+    Builtin { builtin: &'static Builtin },
     Unknown,
 }
 
@@ -83,14 +79,12 @@ use crate::types::infer::Typing;
 use crate::types::position::{ClosureParam, ClosureType, PlaneType, Position, ReturnShape, describe_position};
 
 /// A call's argument rules, before its result is typed, in the order
-/// `typeFunctionCall` reads them: a closure handed where a value is read
-/// (version 5), then each argument against the built-in's signature
+/// `typeFunctionCall` reads them: a closure handed where a value is read,
+/// then each argument against the built-in's signature
 /// (`checkBuiltinArgs`). True when a closure was refused: the call then has
 /// no type, and no later rule reads it.
 pub fn check_call_operands(typing: &mut Typing, call: &Expression, function: &str, args: &[Expression], operands: &[Option<Ty>]) -> bool {
-    // `extractOne` was a name like any other before version 3.
-    let builtin = if function == "extractone" && typing.version < 3 { None } else { lookup_builtin(function) };
-    let Some(builtin) = builtin else { return false };
+    let Some(builtin) = lookup_builtin(function) else { return false };
     if refuse_closure_operands(typing, builtin, call, args, operands) {
         return true;
     }
@@ -132,13 +126,10 @@ fn refuse_closure_operands(typing: &mut Typing, builtin: &Builtin, whole: &Expre
     typing.refuse_closure_operands(&read, whole, &format!("handed to {}", builtin.name))
 }
 
-/// `checkBuiltinArgs` (language version 3): each argument a value of the
-/// kind its parameter takes. A record or a json value is the rule every
-/// value-reading site shares; an argument nobody can type stays silent.
+/// `checkBuiltinArgs`: each argument a value of the kind its parameter
+/// takes. A record or a json value is the rule every value-reading site
+/// shares; an argument nobody can type stays silent.
 fn check_builtin_args(typing: &mut Typing, builtin: &Builtin, args: &[Option<Ty>], exprs: &[Expression]) {
-    if typing.version < 3 {
-        return;
-    }
     for (index, ty) in args.iter().enumerate() {
         let Some(param) = builtin.param_at(index) else { continue };
         if !reads_as_value(param.ty) {
@@ -179,8 +170,7 @@ fn check_builtin_args(typing: &mut Typing, builtin: &Builtin, args: &[Option<Ty>
 /// `refuseMaybeRecordForBuiltin`: a value that MAY be a record (or a file)
 /// and may be something else — `ROUND(COALESCE(org, 1))` — handed to a
 /// built-in's argument that does not take one. Its type cannot say it; what
-/// it may hold does. Refused from version 5; an older pin is warned, and the
-/// warning blocks the move up. True when it fired.
+/// it may hold does. Refused. True when it fired.
 fn refuse_maybe_record_for_builtin(typing: &mut Typing, builtin: &Builtin, param: &crate::types::stdlib::Param, ty: Option<&Ty>, expr: &Expression) -> bool {
     use crate::types::field::BaseKind;
     let takes_file = param.ty == ParamType::File;
@@ -205,19 +195,7 @@ fn refuse_maybe_record_for_builtin(typing: &mut Typing, builtin: &Builtin, param
             format!("Narrow it to the record with {} and pass a field off it ('r.`Name`')", movement_parser::surface::phrase::spell_word("IS", typing.version))
         }
     );
-    if typing.version >= 5 {
-        typing.report(codes::CALL_ARG_MAYBE_RECORD, message);
-    } else {
-        typing.report_upgrade(
-            codes::CALL_ARG_MAYBE_RECORD,
-            format!(
-                "{message}. Before {} {} runs on the {} as it is; from it, this is refused",
-                crate::version::describe(5),
-                builtin.name,
-                if file { "file" } else { "record" }
-            ),
-        );
-    }
+    typing.report(codes::CALL_ARG_MAYBE_RECORD, message);
     true
 }
 
@@ -381,12 +359,10 @@ pub fn span_within(slot: &ExprSlot, pos: Option<usize>) -> Span {
 
 impl Checker<'_> {
     /// `reportSlotError`: a slot the expression grammar could not read or
-    /// lower. From version 5 a closure held as a list's element or a map's
-    /// value is refused as a closure kept as data.
+    /// lower. A closure held as a list's element or a map's value is refused
+    /// as a closure kept as data.
     pub fn report_slot_error(&mut self, error: &SlotError, slot: &ExprSlot) {
-        if since(self.version, 5)
-            && let Some(held) = error.held_as_data
-        {
+        if let Some(held) = error.held_as_data {
             let place = match held {
                 HeldAsData::List => "a list's element is",
                 HeldAsData::Map => "a map's value is",
@@ -539,35 +515,24 @@ fn nested_call_name(id: usize) -> String {
 }
 
 impl Checker<'_> {
-    /// `resolveCallee`: the program's own scopes first, exactly as written,
-    /// then (from version 3) a function in any letter case, then the
-    /// standard library.
+    /// `resolveCallee`: the program's own scopes first, exactly as written
+    /// (letter case counts, design §4.1), then the standard library.
     pub fn resolve_callee(&self, written: &str, scope: ScopeId) -> Callee {
         if !matches!(self.scopes.resolve(scope, written), Resolution::Unknown) {
             return Callee::Declared(written.to_string());
         }
-        if !since(self.version, 3) {
-            return Callee::Unknown;
-        }
-        // From version 5 letter case counts (design §4.1): only 3 and 4 fold it.
-        if let Some(id) = self.scopes.resolve_function(scope, written).filter(|_| !since(self.version, 5)) {
-            return Callee::Declared(self.scopes.symbol(id).name.clone());
-        }
-        match crate::types::stdlib::builtin_under(written, self.version) {
-            Some(builtin) if !builtin.name.contains('.') => Callee::Builtin { builtin, version: self.version },
+        match crate::types::stdlib::builtin_under(written) {
+            Some(builtin) if !builtin.name.contains('.') => Callee::Builtin { builtin },
             _ => Callee::Unknown,
         }
     }
 
     /// `calledClosure`, as a yes or no: the name holds a closure a call runs.
     pub fn calls_closure(&self, symbol: &Symbol) -> bool {
-        if !since(self.version, 3) {
-            return false;
-        }
         if symbol.is_closure || symbol.types.pos.as_ref().is_some_and(|p| p.is_closure()) {
             return true;
         }
-        if !since(self.version, 5) || symbol.kind == SymbolKind::Movement || symbol.types.pos.is_some() {
+        if symbol.kind == SymbolKind::Movement || symbol.types.pos.is_some() {
             return false;
         }
         symbol.types.field.as_ref().is_some_and(closure_of_value)
@@ -591,7 +556,7 @@ impl Checker<'_> {
                 }
                 _ => false,
             },
-            Callee::Builtin { builtin, .. } => builtin_form(builtin) != BuiltinForm::Value,
+            Callee::Builtin { builtin } => builtin_form(builtin) != BuiltinForm::Value,
             Callee::Unknown => false,
         }
     }
@@ -669,9 +634,6 @@ impl Checker<'_> {
     /// before the name, so the name ends where the call did and what follows
     /// the call still follows it (`sort(…)[0]` is the name's `[0]`).
     pub fn nested_call_rewrite(&self, slot: &ExprSlot, scope: ScopeId) -> Option<(Vec<HoistedCall>, ExprSlot)> {
-        if !since(self.version, 3) {
-            return None;
-        }
         let tree = movement_parser::expr::parse_expression(&slot.raw).ok()?;
         let mut read = Vec::new();
         member_read_calls(&tree, &mut read);
@@ -789,7 +751,7 @@ fn args_refusal(message: String, span: Span) -> CallReading {
 
 /// `readOneCall`.
 pub(crate) fn read_one_call(call: &CallStatement, resolution: &Callee, position: CallPosition) -> CallReading {
-    let Callee::Builtin { builtin, version } = *resolution else { return CallReading::Function };
+    let Callee::Builtin { builtin } = *resolution else { return CallReading::Function };
     let callee = &call.callee;
     if call.args.iter().any(|arg| arg.name().is_some()) {
         return args_refusal(format!("'{callee}' is a built-in, and a built-in takes its arguments in order — {}", describe_builtin(builtin)), call.span);
@@ -817,7 +779,7 @@ pub(crate) fn read_one_call(call: &CallStatement, resolution: &Callee, position:
                 None => args_refusal(format!("'{callee}' takes {}", describe_builtin(builtin)), call.span),
             }
         }
-        BuiltinForm::Collection => collection_reading(call, builtin, version),
+        BuiltinForm::Collection => collection_reading(call, builtin),
         BuiltinForm::Members => {
             if position == CallPosition::Statement {
                 return CallReading::Refused {
@@ -873,7 +835,7 @@ fn arm_of(arg: &CallArg, spelling: &str) -> Result<ArmExpression, String> {
 
 /// `collectionReading`: `MAP(xs, f)` and its kin, the arguments in the
 /// places the op reads them.
-fn collection_reading(call: &CallStatement, builtin: &Builtin, version: u32) -> CallReading {
+fn collection_reading(call: &CallStatement, builtin: &Builtin) -> CallReading {
     let spelling = &call.callee;
     let op = match builtin.name {
         "MAP" => CollectionOp::Map,
@@ -887,22 +849,15 @@ fn collection_reading(call: &CallStatement, builtin: &Builtin, version: u32) -> 
     // tree's `SORTBY` is no spelling (movement_parser::surface::table::SORT_BY).
     let spelling = if op == CollectionOp::Sort { "sort" } else { spelling.as_str() };
     let configurable = matches!(op, CollectionOp::Map | CollectionOp::Filter | CollectionOp::Sort);
-    // From version 5 the function comes second and the rest after it
-    // (`map(xs, f, { … })`, `reduce(xs, f, start)`); the tree read here still
-    // holds them in the order versions 1–4 write.
-    let function_second = since(version, 5);
+    // The function comes second and the rest after it (`map(xs, f, { … })`,
+    // `reduce(xs, f, start)`); the tree read here holds them with the
+    // function last.
     let shape = if op == CollectionOp::Reduce {
-        if function_second {
-            format!("{spelling}(<collection>, <function>, <starting value>)")
-        } else {
-            format!("{spelling}(<collection>, <starting value>, <function>)")
-        }
+        format!("{spelling}(<collection>, <function>, <starting value>)")
     } else if op == CollectionOp::Sort {
         "sort(<collection>, <function>) or sort(<collection>, <function>, { order: \"desc\" })".to_string()
-    } else if configurable && function_second {
-        format!("{spelling}(<collection>, <function>) or {spelling}(<collection>, <function>, {{ <settings> }})")
     } else if configurable {
-        format!("{spelling}(<collection>, <function>) or {spelling}(<collection>, {{ <settings> }}, <function>)")
+        format!("{spelling}(<collection>, <function>) or {spelling}(<collection>, <function>, {{ <settings> }})")
     } else {
         format!("{spelling}(<collection>, <function>)")
     };
@@ -928,14 +883,9 @@ fn collection_reading(call: &CallStatement, builtin: &Builtin, version: u32) -> 
             _ if op == CollectionOp::Sort => {
                 return refused("'sort' takes its settings as a record written in place, after the function — `sort(xs, (x) => x.key, { order: \"desc\" })`".to_string());
             }
-            _ if function_second => {
-                return refused(format!(
-                    "'{spelling}' takes its settings as a record written in place, after the function — `{spelling}(xs, f, {{ onError: \"warn\", concurrency: 4 }})`"
-                ));
-            }
             _ => {
                 return refused(format!(
-                    "'{spelling}' takes its settings as a record written in place, between the collection and the function — `{spelling}(xs, {{ onError: \"warn\", concurrency: 4 }}, f)`"
+                    "'{spelling}' takes its settings as a record written in place, after the function — `{spelling}(xs, f, {{ onError: \"warn\", concurrency: 4 }})`"
                 ));
             }
         }
@@ -1213,28 +1163,19 @@ impl Checker<'_> {
         format!("Unknown function '{name}'{hint} — a call names a movement or function declared or imported here, or a built-in")
     }
 
-    /// `checkSlotExpression` / `checkExpressionTree` (version 3): what the
-    /// lowering would otherwise decide silently about an expression's calls
-    /// and `IF`s.
+    /// `checkSlotExpression` / `checkExpressionTree`: what the lowering would
+    /// otherwise decide silently about an expression's calls and `IF`s.
     pub fn check_slot_expression(&mut self, slot: &ExprSlot, scope: ScopeId, write_field: bool) {
-        if !since(self.version, 3) {
-            return;
-        }
         let Ok(tree) = movement_parser::expr::parse_expression(&slot.raw) else { return };
-        if since(self.version, 5) {
-            self.check_typed_spelling(&tree, slot, scope);
-            let written = self.written_text(slot).to_string();
-            self.check_walk_fields(&tree, (&written, &slot.raw), TreeAt::Slot(slot), scope);
-        }
+        self.check_typed_spelling(&tree, slot, scope);
+        let written = self.written_text(slot).to_string();
+        self.check_walk_fields(&tree, (&written, &slot.raw), TreeAt::Slot(slot), scope);
         self.visit_expression_tree(&tree, Within::default(), (TreeAt::Slot(slot), None), scope, write_field);
     }
 
-    /// The calls in a block head's hops (version 3), read through the probe
-    /// the head is parsed as; every place is the head's.
+    /// The calls in a block head's hops, read through the probe the head is
+    /// parsed as; every place is the head's.
     pub fn check_head_expression(&mut self, probe: &str, head: &movement_parser::ast::PathHead, scope: ScopeId) {
-        if !since(self.version, 3) {
-            return;
-        }
         let Ok(tree) = movement_parser::expr::parse_expression(probe) else { return };
         // The probe reads a field off the head's walk; that walk is the head.
         let walk = match &tree {
@@ -1242,9 +1183,7 @@ impl Checker<'_> {
             _ => None,
         };
         let at_ = TreeAt::Head { head, probe_len: probe.encode_utf16().count() };
-        if since(self.version, 5) {
-            self.check_walk_fields(&tree, (probe, probe), at_, scope);
-        }
+        self.check_walk_fields(&tree, (probe, probe), at_, scope);
         self.visit_expression_tree(&tree, Within::default(), (at_, walk), scope, false);
     }
 
@@ -1256,8 +1195,7 @@ impl Checker<'_> {
             self.check_resource_walk(root.as_deref(), hops, at_.span_of(*at), head == Some(expr as *const MExpr));
             // A head's own root is the head's to say (`check_path_head`); a
             // rootless `_resources` walk is MOV_RESOURCES_NOT_EXTRACTED.
-            if since(self.version, 5)
-                && root.is_none()
+            if root.is_none()
                 && !rootless_ok
                 && head != Some(expr as *const MExpr)
                 && !hops.last().is_some_and(crate::families::extraction::is_resource_hop)
@@ -1273,8 +1211,7 @@ impl Checker<'_> {
         {
             self.report_walk_off_json(&name.text, &format!("-[:{}]->", first.label.text), at_.span_of(*at), scope);
         }
-        if since(self.version, 5)
-            && let MExpr::Call { callee, at, .. } = expr
+        if let MExpr::Call { callee, at, .. } = expr
             && let MExpr::Name { name, .. } = callee.as_ref()
             && let Some(retired) = ["KG_VALUE", "KG_EXISTS"].into_iter().find(|r| name.text.eq_ignore_ascii_case(r))
         {
@@ -1346,13 +1283,13 @@ impl Checker<'_> {
     }
 
     fn is_extract_call(&self, written: &str, scope: ScopeId) -> bool {
-        matches!(self.resolve_callee(written, scope), Callee::Builtin { builtin: b, .. } if builtin_form(b) == BuiltinForm::Extract)
+        matches!(self.resolve_callee(written, scope), Callee::Builtin { builtin: b } if builtin_form(b) == BuiltinForm::Extract)
     }
 
     /// `checkDottedCall`: `o.f(…)` where `f` is no built-in, outside a write
-    /// field (version 5).
+    /// field.
     fn check_dotted_call(&mut self, object: &str, key: &str, span: Span, scope: ScopeId, write_field: bool) {
-        if !since(self.version, 5) || write_field {
+        if write_field {
             return;
         }
         if !matches!(self.scopes.resolve(scope, object), Resolution::Found(_)) || lookup_builtin(key).is_some() {
@@ -1378,7 +1315,7 @@ impl Checker<'_> {
         let span = at_.span_of(call.at());
         self.note_callee(written, span.start, scope);
         match self.resolve_callee(written, scope) {
-            Callee::Builtin { builtin, .. } => {
+            Callee::Builtin { builtin } => {
                 let form = builtin_form(builtin);
                 if form == BuiltinForm::Extract {
                     return;
@@ -1454,10 +1391,9 @@ impl Checker<'_> {
         }
     }
 
-    /// `notAClosureMessage`: why calling a name that is a value is refused
-    /// under version 5.
+    /// `notAClosureMessage`: why calling a name that is a value is refused.
     pub fn not_a_closure_message(&self, callee: &Symbol, written: &str) -> Option<String> {
-        if !since(self.version, 5) || !matches!(callee.kind, SymbolKind::Binding | SymbolKind::Param) {
+        if !matches!(callee.kind, SymbolKind::Binding | SymbolKind::Param) {
             return None;
         }
         if callee.types.pos.is_some() || self.calls_closure(callee) {
@@ -1507,20 +1443,16 @@ impl Checker<'_> {
         let call = bound.as_ref().unwrap_or(call);
         let mut params = None;
         let mut value = crate::types::position::ReturnShape::default();
-        let callee = self.callee_name(&call.callee, scope);
+        let callee = call.callee.clone();
         let resolution = self.scopes.resolve(scope, &callee);
         let unknown_member = matches!(resolution, Resolution::Unknown).then(|| self.unknown_package_member(&call.callee)).flatten();
         if let Some(message) = unknown_member {
             self.report(codes::V5_UNKNOWN_MEMBER, message, call.span);
-        } else if matches!(resolution, Resolution::Found(_)) || !since(self.version, 3) || !crate::families::names::is_builtin_name(&call.callee) {
-            // From version 3 a built-in's call is read as one (`readOneCall`);
-            // before it a built-in is not a callee (no standard library), so
-            // its name is as unresolved as any other.
+        } else if matches!(resolution, Resolution::Found(_)) || !crate::families::names::is_builtin_name(&call.callee) {
+            // A built-in's call is read as one (`readOneCall`).
             match resolution {
                 Resolution::Found(id) => (params, value) = self.check_callee(call, id, scope),
-                Resolution::Unknown
-                    if since(self.version, 3) && self.catalog.adapter(&callee).is_none() && self.catalog.plugin(&callee).is_none() =>
-                {
+                Resolution::Unknown if self.catalog.adapter(&callee).is_none() && self.catalog.plugin(&callee).is_none() => {
                     let message = self.unknown_function_message(&call.callee, scope, None);
                     self.report(codes::FUNCTION_UNKNOWN, message, call.span);
                 }
@@ -1528,8 +1460,7 @@ impl Checker<'_> {
             }
         }
         let names: Option<Vec<String>> = params.as_ref().map(|ps| ps.iter().map(|p| p.name.clone()).collect());
-        if since(self.version, 5)
-            && let (Some(names), Some(first)) = (&names, call.args.first())
+        if let (Some(names), Some(first)) = (&names, call.args.first())
             && first.name().is_some()
         {
             let at = call_arg_span(first).start;
@@ -1551,7 +1482,7 @@ impl Checker<'_> {
     /// `checkCallbackNamed`'s arguments: bound partially, as the rest are
     /// what the callback is fired with, and each held to its parameter.
     pub fn check_callback_arguments(&mut self, movement: &str, args: &[CallArg], span: Span, scope: ScopeId) {
-        let callee = self.callee_name(movement, scope);
+        let callee = movement.to_string();
         let params = match self.scopes.resolve(scope, &callee) {
             Resolution::Found(id) if self.scopes.symbol(id).kind == SymbolKind::Movement => self.movement_declared_params(id),
             _ => None,
@@ -1569,21 +1500,21 @@ impl Checker<'_> {
         }
         match (&symbol.types.pos, &symbol.types.field) {
             (Some(Position::Closure(c)), _) => Some(c.clone()),
-            // From version 5 a closure is a value like any other, so a name
+            // A closure is a value like any other, so a name
             // whose value is one, or one of several, is called as TypeScript
             // calls `f: (() => A) | (() => B)`.
-            (None, Some(ty)) => closures_of_value(ty).map(|closures| crate::types::position::one_of_closures(&closures, true)),
+            (None, Some(ty)) => closures_of_value(ty).map(|closures| crate::types::position::one_of_closures(&closures)),
             _ => None,
         }
     }
 
-    /// `functionAsValue`: a function declared with a name, read as a value
-    /// (version 5), is a closure like any other, as a TypeScript function
+    /// `functionAsValue`: a function declared with a name, read as a value,
+    /// is a closure like any other, as a TypeScript function
     /// declaration is — its parameters and what calling it returns. One type
     /// per declaration once its body is known; while that body is still
     /// being walked, the type is worked out afresh at each read.
     pub fn function_as_value(&mut self, id: SymbolId) -> Option<crate::types::position::ClosureType> {
-        if self.scopes.symbol(id).kind != SymbolKind::Movement || before(self.version, 5) {
+        if self.scopes.symbol(id).kind != SymbolKind::Movement {
             return None;
         }
         if let Some(known) = self.function_values.get(&id) {
@@ -1601,9 +1532,6 @@ impl Checker<'_> {
 
     /// Types each function among `names` the typing about to run reads as a value.
     pub fn type_function_values<'n>(&mut self, names: impl IntoIterator<Item = &'n str>, scope: ScopeId) {
-        if before(self.version, 5) {
-            return;
-        }
         for name in names {
             if let Resolution::Found(id) = self.scopes.resolve(scope, name)
                 && self.scopes.symbol(id).kind == SymbolKind::Movement
@@ -1666,48 +1594,25 @@ impl Checker<'_> {
     /// `closureCallParams`: the parameters a call through a closure value is
     /// held to, its arity checked. One of several closures is called as
     /// TypeScript calls a union of function types: every candidate's arity,
-    /// and an argument that fits every candidate's parameter. Before version 5
-    /// the closures a body's returns hand back are called as the first of
-    /// them, so what version 5 holds the call to is an upgrade warning.
+    /// and an argument that fits every candidate's parameter.
     fn closure_call_params(&mut self, call: &CallStatement, closure: &ClosureType) -> Vec<ClosureParam> {
         let candidates: Vec<ClosureType> = closure.candidates().into_iter().cloned().collect();
         let given = call.args.len();
-        let strict = candidates.len() == 1 || since(self.version, 5);
-        let say = |this: &mut Self, code: &str, message: String| {
-            if strict {
-                this.report(code, message, call.span);
-            } else {
-                this.report_upgrade_warning(
-                    code,
-                    format!("{message}. Before {} the call is typed by the first; from it, this is refused", crate::version::describe(5)),
-                    call.span,
-                );
-            }
-        };
         let mut arities: Vec<usize> = Vec::new();
         for candidate in &candidates {
             if !arities.contains(&candidate.params.len()) {
                 arities.push(candidate.params.len());
             }
         }
-        if !strict && closure.params.len() != given {
-            let arity = closure.params.len();
-            self.report(codes::CALL_ARITY, format!("'{}' takes {arity} argument{}, got {given}", call.callee, plural(arity)), call.span);
-        } else if arities.iter().any(|&arity| arity != given) {
+        if arities.iter().any(|&arity| arity != given) {
             let arity = if let [only] = arities.as_slice() {
                 format!("takes {only} argument{}", plural(*only))
             } else {
                 format!("may be any of several closures, taking {} arguments", arities.iter().map(usize::to_string).collect::<Vec<_>>().join(" or "))
             };
-            say(self, codes::CALL_ARITY, format!("'{}' {arity}, got {given}", call.callee));
+            self.report(codes::CALL_ARITY, format!("'{}' {arity}, got {given}", call.callee), call.span);
         }
-        if candidates.len() == 1 {
-            return closure.params.clone();
-        }
-        if !strict {
-            self.warn_later_closure_returns(call, &candidates);
-        }
-        if arities.len() != 1 {
+        if candidates.len() == 1 || arities.len() != 1 {
             return closure.params.clone();
         }
         let mut disagreements = Vec::new();
@@ -1720,8 +1625,7 @@ impl Checker<'_> {
             };
             let (a, b) = (first.params.get(index), second.params.get(index));
             let name = |p: Option<&ClosureParam>| p.map_or_else(|| "undefined".to_string(), |p| p.name.clone());
-            say(
-                self,
+            self.report(
                 codes::CALL_ARG_TYPE,
                 format!(
                     "'{}' may be any of several closures, and two disagree about argument {}: {} takes {} for '{}', and {} takes {} for '{}'. No argument fits both, so no call fits every closure it may be, as in TypeScript. Give them parameters one argument fits, or call each where it is known",
@@ -1734,30 +1638,10 @@ impl Checker<'_> {
                     describe(b),
                     name(b),
                 ),
+                call.span,
             );
         }
-        if strict { held } else { closure.params.clone() }
-    }
-
-    /// Before version 5: a later candidate may hand back a record the first —
-    /// which types the call — does not. From 5 the call is any of their
-    /// returns, so each use of it is checked as one that may be that record.
-    fn warn_later_closure_returns(&mut self, call: &CallStatement, candidates: &[ClosureType]) {
-        let first = &candidates[0].returns;
-        let every = crate::types::position::union_returns(&candidates.iter().map(|c| c.returns.clone()).collect::<Vec<_>>());
-        let shown = first.may_hold.clone().or_else(|| first.plane.field.clone()).or_else(|| crate::types::field::record_value_of(first.plane.pos.as_deref()));
-        let held = every.may_hold.as_ref().or(every.plane.field.as_ref());
-        let Some(hidden) = crate::types::field::handle_within(held, &crate::types::field::HeldWalk::taken_by(shown.as_ref())) else { return };
-        self.report_upgrade_warning(
-            codes::CALL_CLOSURE_RETURNS,
-            format!(
-                "'{}' may be any of several closures, and calling one other than the first may hand back {}. Before {} the call is typed by the first; from it, the call is any of their returns, and a use that takes no record is refused",
-                call.callee,
-                describe_field_type(&hidden.handle),
-                crate::version::describe(5)
-            ),
-            call.span,
-        );
+        held
     }
 
     /// `checkArgumentBindings`: named arguments given once, each naming a
@@ -1819,7 +1703,7 @@ impl Checker<'_> {
     /// Whether the function a callee names hands a value back, when the
     /// program shows its body (`calleeReturnKnown`).
     pub fn callee_returns(&self, written: &str, scope: ScopeId) -> Option<bool> {
-        let callee = self.callee_name(written, scope);
+        let callee = written.to_string();
         let Resolution::Found(id) = self.scopes.resolve(scope, &callee) else { return None };
         let symbol = self.scopes.symbol(id);
         if symbol.kind != SymbolKind::Movement && !self.calls_closure(symbol) {
@@ -1828,20 +1712,17 @@ impl Checker<'_> {
         self.function_returns.get(&id).copied()
     }
 
-    /// `pluginWithoutOutput`: from version 5 a plugin whose manifest declares
-    /// no output runs only as a statement, for its effects. (One fed only by
-    /// an extraction is refused as a call already.)
+    /// `pluginWithoutOutput`: a plugin whose manifest declares no output runs
+    /// only as a statement, for its effects. (One fed only by an extraction
+    /// is refused as a call already.)
     pub fn plugin_without_output(&self, written: &str, scope: ScopeId) -> bool {
-        if before(self.version, 5) {
-            return false;
-        }
-        let callee = self.callee_name(written, scope);
+        let callee = written.to_string();
         let Resolution::Found(id) = self.scopes.resolve(scope, &callee) else { return false };
         if self.scopes.symbol(id).kind != SymbolKind::Plugin {
             return false;
         }
         self.plugin_spec_of(id, written)
-            .is_some_and(|spec| spec.fed_by_extraction != Some(true) && crate::families::plugin_calls::plugin_output_under(&spec, self.version).is_none())
+            .is_some_and(|spec| spec.fed_by_extraction != Some(true) && spec.output.is_none())
     }
 
     /// `reportPluginHandsBackNothing`.
@@ -1876,10 +1757,10 @@ impl Checker<'_> {
     /// `callInConstructPosition`: `name(arg: …)` is one surface form, and a
     /// function's name there is a call, not a construction.
     pub fn call_in_construct_position(&self, construct: &movement_parser::ast::ConstructionCall, scope: ScopeId) -> Option<CallStatement> {
-        let callee = self.callee_name(&construct.callee, scope);
+        let callee = construct.callee.clone();
         let Resolution::Found(id) = self.scopes.resolve(scope, &callee) else { return None };
         let symbol = self.scopes.symbol(id);
-        let value = since(self.version, 5) && matches!(symbol.kind, SymbolKind::Binding | SymbolKind::Param);
+        let value = matches!(symbol.kind, SymbolKind::Binding | SymbolKind::Param);
         if !matches!(symbol.kind, SymbolKind::Movement | SymbolKind::Plugin) && !value && !self.calls_closure(symbol) {
             return None;
         }
@@ -1897,7 +1778,7 @@ impl Checker<'_> {
             codes::RETURN_NOT_A_VALUE,
             format!(
                 "'{}' constructs an instance, and an instance is not a value to hand back — its schema belongs to the credential it was built with. Construct it in the movement that uses it.",
-                if since(self.version, 5) { format!("connect {}", construct.callee) } else { format!("{}(…)", construct.callee) }
+                format!("connect {}", construct.callee)
             ),
             span,
         );
@@ -1976,12 +1857,12 @@ impl Checker<'_> {
     }
 
     /// A call reaches movement `id`: what it returns is inferred from its
-    /// body unless declared (from version 5 the declaration is the answer),
-    /// and what it does is the caller's.
+    /// body unless declared (the declaration is the answer), and what it does
+    /// is the caller's.
     pub fn call_movement(&mut self, id: SymbolId) {
         let id = self.declared_id(id);
-        let declared = self.inference.declarations.get(&id).is_some_and(|(m, _)| m.return_type.is_some()) && since(self.version, 3);
-        if !(declared && since(self.version, 5)) {
+        let declared = self.inference.declarations.get(&id).is_some_and(|(m, _)| m.return_type.is_some());
+        if !declared {
             self.infer_movement(id);
         }
         let suspends = self.movement_suspends(id);
@@ -1994,7 +1875,7 @@ impl Checker<'_> {
         if !self.inference.declarations.contains_key(&id) {
             return false;
         }
-        if since(self.version, 3) && self.reaches(id) {
+        if self.reaches(id) {
             return false;
         }
         if let Some(known) = self.inference.suspends.get(&id) {
@@ -2003,7 +1884,7 @@ impl Checker<'_> {
         if !self.inference.inferred.contains_key(&id) {
             self.infer_movement(id);
         }
-        if since(self.version, 3) && self.reaches(id) {
+        if self.reaches(id) {
             return false;
         }
         self.inference.suspends.get(&id).copied().unwrap_or(false)
@@ -2015,9 +1896,7 @@ impl Checker<'_> {
         match self.inference.inferred.get(&id) {
             Some(true) => return,
             Some(false) => {
-                if since(self.version, 3) {
-                    self.reaches(id);
-                }
+                self.reaches(id);
                 return;
             }
             None => {}
@@ -2036,20 +1915,11 @@ impl Checker<'_> {
             }
         }
         let what = format!("'{}'", movement.name);
-        let walked = if since(self.version, 3) {
-            self.enter_inference(id);
-            self.open_effect_frame();
-            let walked = self.check_body(&movement.body, body, what);
-            let row = self.close_effect_frame();
-            self.leave_inference(id, row);
-            walked
-        } else {
-            self.open_effect_frame();
-            let walked = self.check_body(&movement.body, body, what);
-            let row = self.close_effect_frame();
-            self.record_movement_row(id, row);
-            walked
-        };
+        self.enter_inference(id);
+        self.open_effect_frame();
+        let walked = self.check_body(&movement.body, body, what);
+        let row = self.close_effect_frame();
+        self.leave_inference(id, row);
         self.leave_declared_file();
         self.type_only -= 1;
         // A node the body builds is labelled by whose value it is, which is
@@ -2079,7 +1949,7 @@ impl Checker<'_> {
     /// what it returns, unless its body returns nothing.
     pub fn report_movement_cycle(&mut self, id: SymbolId, movement: &MovementDeclaration, returns: bool) {
         let Some(cycle) = self.inference.cycle_of.get(&id).copied() else { return };
-        if movement.return_type.is_some() || !returns || !since(self.version, 3) {
+        if movement.return_type.is_some() || !returns {
             return;
         }
         let chain = self.inference.cycles[cycle].chain_from(&movement.name);

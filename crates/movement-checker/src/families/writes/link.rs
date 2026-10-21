@@ -18,32 +18,23 @@ pub enum LinkVerb {
 }
 
 impl Checker<'_> {
-    /// `checkLink`, the rules half: a body form is a match then the link.
-    pub fn check_link_rules(&mut self, link: &LinkExpression, scope: ScopeId, binding: Option<&str>) -> Option<Position> {
+    /// `checkLink`, the rules half: a body form is retired.
+    pub fn check_link_rules(&mut self, link: &LinkExpression, scope: ScopeId) {
         let from_type = self.symbol_position(&link.from, scope);
-        let retired_body = matches!(link.to, LinkTarget::Match { .. }) && self.version >= 4;
         if let Some(Position::Local(local)) = &from_type {
             match &link.to {
-                LinkTarget::Match { r#match, .. } if retired_body => self.report_link_body_retired(link, r#match.span),
-                LinkTarget::Match { r#match, .. } => self.report_local_link_body(link, &local.label, r#match.span),
+                LinkTarget::Match { r#match, .. } => self.report_link_body_retired(link, r#match.span),
                 LinkTarget::Handle { name } => self.check_local_link(link, name, local, scope),
             }
-            return None;
+            return;
         }
-        let found = match &link.to {
-            LinkTarget::Match { r#match, implied_identity } => {
-                self.check_match_rules(r#match, scope, if retired_body { None } else { binding }, *implied_identity)
-            }
-            LinkTarget::Handle { .. } => None,
-        };
+        if let LinkTarget::Match { r#match, implied_identity } = &link.to {
+            self.check_match_rules(r#match, scope, *implied_identity);
+        }
         self.check_bare_link_edge(&link.from, &link.edge, link.span, LinkVerb::Link, scope);
-        if let LinkTarget::Match { r#match, .. } = &link.to
-            && retired_body
-        {
+        if let LinkTarget::Match { r#match, .. } = &link.to {
             self.report_link_body_retired(link, r#match.span);
-            return None;
         }
-        found
     }
 
     fn report_link_body_retired(&mut self, link: &LinkExpression, span: Span) {
@@ -95,12 +86,9 @@ impl Checker<'_> {
         })
     }
 
-    /// `checkDeleteDeclared`: since version 5 `delete x` needs one stored
-    /// record whose type declares that its system deletes one.
+    /// `checkDeleteDeclared`: `delete x` needs one stored record whose type
+    /// declares that its system deletes one.
     pub fn check_delete_rules(&mut self, name: &str, span: Span, scope: ScopeId) {
-        if self.version < 5 {
-            return;
-        }
         let Resolution::Found(id) = self.scopes.resolve(scope, name) else { return };
         let symbol = self.scopes.symbol(id);
         let (types, kind) = (symbol.types.clone(), symbol.kind);

@@ -9,7 +9,6 @@
 
 use std::rc::Rc;
 use movement_parser::ast::{ClosureExpression, ParamTypeRef, RValue, ReturnStatement, Span, Statement};
-use movement_parser::version::since;
 
 use crate::checker::Checker;
 use crate::codes;
@@ -151,7 +150,7 @@ impl Checker<'_> {
             RValue::Construct { construct } => &construct.callee,
             _ => return false,
         };
-        let callee = self.callee_name(written, scope);
+        let callee = written.to_string();
         let Resolution::Found(id) = self.scopes.resolve(scope, &callee) else { return false };
         let symbol = self.scopes.symbol(id);
         if symbol.kind == crate::scope::SymbolKind::Movement {
@@ -214,7 +213,7 @@ impl Checker<'_> {
             })
             .collect();
         if closures.len() > 1 && closures.len() == collector.returns.len() {
-            let merged = crate::types::position::one_of_closures(&closures, since(self.version, 5));
+            let merged = crate::types::position::one_of_closures(&closures);
             return ReturnShape { returns: true, plane: PlaneType { pos: Some(Box::new(Position::Closure(merged))), field: None }, may_hold: None };
         }
         if let Some(records) = self.joined_returns(&collector.returns) {
@@ -250,9 +249,7 @@ impl Checker<'_> {
     /// `joinedReturns`: returns that each hand back a record are what the
     /// union rule makes of them, as an IF of them is — one type where they
     /// are one, keeping what every return vouches for, and a `OneOf` where
-    /// they are not. Before version 5 the body's type was its FIRST return's;
-    /// under an older pin that stays, and the rule is told it differed.
-    /// `None` where a return is no record, or the rule says what the first
+    /// they are not. `None` where a return is no record, or the rule says what the first
     /// already says.
     fn joined_returns(&self, returns: &[Returned]) -> Option<ReturnShape> {
         let first = returns.first()?;
@@ -274,11 +271,6 @@ impl Checker<'_> {
         if unchanged && maybe == crate::types::field::is_maybe_absent(Some(first_arm)) {
             return None;
         }
-        let rule = self.record_join();
-        if !rule.joins {
-            rule.withhold();
-            return None;
-        }
         if first.shape.plane.pos.is_none() || first.shape.may_hold.is_some() {
             return Some(ReturnShape { returns: true, plane: PlaneType { pos: None, field: Some(joined) }, may_hold: None });
         }
@@ -287,27 +279,20 @@ impl Checker<'_> {
         Some(ReturnShape { returns: true, plane: PlaneType { pos: Some(Box::new(position)), field: None }, may_hold: None })
     }
 
-    /// What a closure's call hands back: what it declares (version 3), else
-    /// what its body was found to (`checkClosure`'s `returns`). Before
-    /// version 5 a declaration that does not take what a return may hold is
-    /// not refused where it is written, so the call still carries it.
+    /// What a closure's call hands back: what it declares, else what its body
+    /// was found to (`checkClosure`'s `returns`).
     pub fn closure_returns(&self, closure: &ClosureExpression, inferred: ReturnShape, scope: ScopeId) -> ReturnShape {
-        let Some(written) = closure.return_type.as_ref().filter(|_| since(self.version, 3)) else {
+        let Some(written) = closure.return_type.as_ref() else {
             let pos = inferred.plane.pos.map(|pos| Box::new(crate::types::position::without_parameter(*pos)));
             return ReturnShape { plane: PlaneType { pos, ..inferred.plane }, ..inferred };
         };
-        let plane = self.plane_type_of(written, scope);
-        let may_hold = inferred.may_hold.filter(|held| !since(self.version, 5) && shows_more_handles(held, plane.field.as_ref()));
-        ReturnShape { returns: true, plane, may_hold }
+        ReturnShape { returns: true, plane: self.plane_type_of(written, scope), may_hold: None }
     }
 
     /// `checkDeclaredReturn`: `): <R>` against what the body hands back —
     /// every `return` assignable to it, and a body that declares one
     /// returns something.
     pub fn check_declared_return(&mut self, written: &ParamTypeRef, what: &str, returns: &[Returned], scope: ScopeId, span: Span) {
-        if !since(self.version, 3) {
-            return;
-        }
         let declared = self.plane_type_of(written, scope);
         let expected = format!("{what} declares it returns <{}>", crate::families::listens::spell_param_type(written));
         if returns.is_empty() {
@@ -329,9 +314,8 @@ impl Checker<'_> {
         let shape = &returned.shape;
         if let Some(target) = &declared.field {
             // A record or file a return MAY hand back is one the declared
-            // type has to take (from version 5; before, the call carries it
-            // and a use that reaches data is refused there).
-            let hidden = if since(self.version, 5) { shape.may_hold.as_ref().and_then(|held| handle_within(Some(held), &HeldWalk::taken_by(Some(target)))) } else { None };
+            // type has to take.
+            let hidden = shape.may_hold.as_ref().and_then(|held| handle_within(Some(held), &HeldWalk::taken_by(Some(target))));
             if let Some(hidden) = hidden {
                 let steps = spell_held_steps(&hidden.steps);
                 let file = hidden.is_file();

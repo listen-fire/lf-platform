@@ -191,27 +191,23 @@ pub static STANDARD_LIBRARY: &[Builtin] = &[
     b!("NUMBER.FORMAT", [p("number", T::Number), p("style", T::Text)], R::MaybeAbsentText, family),
 ];
 
-/// `fail("…")` inside an expression, from language version 5: its canonical
-/// call is `ERROR(…)`, the statement's word, which versions 1–4 never read
-/// as a value — so it is no member of the library they read
-/// (`builtin_under`).
+/// `fail("…")` inside an expression: its canonical call is `ERROR(…)`, the
+/// statement's word — no member of the library (`builtin_under`).
 pub static FAIL: Builtin = b!("ERROR", [p("message", T::Scalar)], R::Never);
 
-/// `sort(xs, f, settings)` by a function key, from language version 5: the
-/// tree calls it `SORTBY(xs, settings, f)` (movement_parser::surface::table::
-/// SORT_BY), a collection op like `GROUPBY`, which no earlier version reads.
+/// `sort(xs, f, settings)` by a function key: the tree calls it
+/// `SORTBY(xs, settings, f)` (movement_parser::surface::table::SORT_BY), a
+/// collection op like `GROUPBY`.
 pub static SORT_BY: Builtin = b!("SORTBY", [p("collection", T::List), opt("settings", T::Options), p("key", T::Function)], R::Derived);
 
-/// The built-in `name` calls under `version`: the library's, and from 5 the
-/// `fail` of an expression and `sort` by a function key.
-pub fn builtin_under(name: &str, version: u32) -> Option<&'static Builtin> {
-    if movement_parser::version::since(version, 5) {
-        if name == FAIL.name {
-            return Some(&FAIL);
-        }
-        if name == SORT_BY.name {
-            return Some(&SORT_BY);
-        }
+/// The built-in `name` calls: the library's, the `fail` of an expression and
+/// `sort` by a function key.
+pub fn builtin_under(name: &str) -> Option<&'static Builtin> {
+    if name == FAIL.name {
+        return Some(&FAIL);
+    }
+    if name == SORT_BY.name {
+        return Some(&SORT_BY);
     }
     lookup_builtin(name)
 }

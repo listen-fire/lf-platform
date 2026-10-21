@@ -28,8 +28,6 @@ use movement_parser::catalog::types::EdgeSchema;
 
 use movement_parser::surface::phrase::{Connection, connection};
 
-use movement_parser::version::since;
-
 use crate::checker::Checker;
 use crate::codes;
 use crate::types::Ty;
@@ -373,7 +371,7 @@ impl Checker<'_> {
             );
         }
 
-        let callee = self.callee_name(&statement.movement, scope);
+        let callee = statement.movement.clone();
         let Some(movement_id) = self.resolve_reference(&callee, statement.span, scope) else { return };
         let movement_kind = self.scopes.symbol(movement_id).kind;
         if movement_kind == SymbolKind::FileImport {
@@ -465,7 +463,7 @@ impl Checker<'_> {
         let movement = &statement.movement;
         let fires = event_types::describe_event_type(schema, mismatch, instance);
         if let Some((signature, binding, event_param)) =
-            event_types::record_signature_rewrite(schema, instance, mismatch, &param.name, &param_type, self.version)
+            event_types::record_signature_rewrite(schema, instance, mismatch, &param.name, &param_type)
         {
             self.report(
                 codes::LISTEN_PARAM_MISMATCH,
@@ -661,17 +659,16 @@ impl Checker<'_> {
         read: &mut ConfigRead,
     ) {
         let vocabulary: &[String] = spec.and_then(|s| s.trigger_config.as_deref()).unwrap_or(&[]);
-        // From version 5 a source's poll interval is spelled `every`; the
-        // manifests still declare it as `pollIntervalSeconds`, which the
-        // parser already refuses under 5 with the fix.
-        let from_five = self.version >= 5;
+        // A source's poll interval is spelled `every`; the manifests still
+        // declare it as `pollIntervalSeconds`, which the parser already
+        // refuses with the fix.
         let polled = vocabulary.iter().any(|k| k == POLL_INTERVAL_KEY);
-        let known = vocabulary.contains(&arg.name) || (from_five && polled && arg.name == EVERY_KEY);
+        let known = vocabulary.contains(&arg.name) || (polled && arg.name == EVERY_KEY);
         if spec.is_some() && !known {
             let accepted = if vocabulary.is_empty() {
                 " — they take no config".to_string()
             } else {
-                let shown: Vec<&str> = vocabulary.iter().map(|k| if from_five && k == POLL_INTERVAL_KEY { EVERY_KEY } else { k.as_str() }).collect();
+                let shown: Vec<&str> = vocabulary.iter().map(|k| if k == POLL_INTERVAL_KEY { EVERY_KEY } else { k.as_str() }).collect();
                 format!(" — they accept: {}", shown.join(", "))
             };
             self.report(
@@ -681,7 +678,7 @@ impl Checker<'_> {
             );
             return;
         }
-        if from_five && polled && arg.name == EVERY_KEY {
+        if polled && arg.name == EVERY_KEY {
             if crate::families::flow::duration_ms(arg.value.raw.trim()).is_none_or(|ms| ms == 0) {
                 self.report(
                     codes::LISTEN_BAD_CONFIG,
@@ -831,7 +828,7 @@ impl Checker<'_> {
     /// `checkCallbackNamed`: a movement deferred by name; the parameters its
     /// arguments leave out are the callback's fire-time signature.
     fn check_callback_named(&mut self, movement: &str, args: &[CallArg], name_span: Span, span: Span, scope: ScopeId) -> Vec<(String, Option<Ty>)> {
-        let callee = match self.scopes.resolve(scope, &self.callee_name(movement, scope)) {
+        let callee = match self.scopes.resolve(scope, movement) {
             Resolution::Found(id) => Some(id),
             _ => None,
         };
@@ -856,12 +853,12 @@ impl Checker<'_> {
         }
         let Some(info) = callee.and_then(|id| self.listens.movements.get(&id)) else { return Vec::new() };
         let params = info.params.clone();
-        // From version 5 a call written in place (`() => f(x)`) is a closure
+        // A call written in place (`() => f(x)`) is a closure
         // with no parameters calling `f`, so `f` is held to its arity as
         // TypeScript holds `() => f(x)`: the platform fills only what the
         // closure declares. A function named bare (`callback(f)`) still
         // leaves every parameter for the platform.
-        if since(self.version, 5) && span.end != name_span.end {
+        if span.end != name_span.end {
             if args.len() != params.len() {
                 let message = callback_call_arity_message(movement, params.len(), args.len());
                 let fix = self.callback_closure_fix(movement, args, &params, span);
