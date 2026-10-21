@@ -11,8 +11,9 @@
 // `AdapterCallCeilingReached` (which `onError` never forgives), anything else
 // is an ordinary failure carrying the host's message.
 
-import type { AdapterCallError, AdapterCallMap, AdapterMethod, EngineHost, HostErrorDetail, ResolvedAdapter } from './host';
+import type { RunInput } from 'engine-contracts';
 
+import type { AdapterCallError, AdapterCallMap, AdapterMethod, EngineHost, HostErrorDetail, ResolvedAdapter } from './host';
 import { neverAsAny } from '../../lib/utils/types';
 import { iterateRelatedPages, type Adapter } from '../translation_graph/adapter';
 
@@ -86,6 +87,13 @@ export function isoDates<T>(value: T): T;
 // once, for every caller, in place of an assertion.
 export function isoDates(value: unknown): unknown {
   return isoDatesIn(value, new Map());
+}
+
+/** The run's input with its event read as the engine reads a host's data: a
+ *  `Date` in it is its ISO text (`isoDates`). */
+export function withIsoEvent<I extends RunInput>(input: I): I {
+  const event = isoDates(input.event);
+  return event === input.event ? input : { ...input, event };
 }
 
 function isoDatesIn(value: unknown, seen: Map<object, unknown>): unknown {

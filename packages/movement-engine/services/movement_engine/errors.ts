@@ -7,6 +7,11 @@
 import { getErrorMessage } from '../../lib/utils/error';
 import type { MovementRunResult } from './run_types';
 
+/** Why a resume is refused when the TypeScript engine parked a run pinned to a
+ *  version only the Rust engine runs. The Rust engine's entry and the
+ *  platform's dispatch both refuse it, with this one reason. */
+export const PARKED_ON_TYPESCRIPT = 'parked_on_typescript';
+
 export type MovementEngineErrorCode =
   | 'MOVENG_PARSE'
   | 'MOVENG_CHECK'

@@ -3,9 +3,9 @@
 import { mockCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import { tenantIdOf } from 'engine-contracts';
 
-import type { Adapter } from 'movement-engine/services/translation_graph/adapter';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
-import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
+import type { Adapter } from 'movement-engine/public/adapter';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
+import { containerAssociation } from 'movement-engine/public/adapter';
 import { positionData } from 'engine-contracts/catalog';
 import { resumeMovement, runMovement } from '../../../dispatch';
 import { type ParkSink, type RunMovementInput } from '../run';
@@ -14,9 +14,9 @@ import {
   rustRunStats,
   setRunEngineRecorder,
   type RunEngineRecord,
-} from 'movement-engine/services/movement_engine/rust_stats';
+} from 'movement-engine/public/movement-engine';
 import type { ParkedScopeState } from '../serialize';
-import { credentialIdsFor, makeTestHost } from 'movement-engine/services/movement_engine/test_host';
+import { credentialIdsFor, makeTestHost } from 'movement-engine/public/testing';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-0000000000e5');
 

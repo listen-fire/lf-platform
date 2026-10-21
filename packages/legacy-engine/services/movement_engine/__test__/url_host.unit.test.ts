@@ -4,7 +4,7 @@
 // was needed; this pins that the registration in stdlib.ts alone is enough.
 
 import { binding, Environment, evalMovementExpr } from '../expression';
-import { listUnsupportedConstructs } from 'movement-engine/services/movement_engine/interpretable';
+import { listUnsupportedConstructs } from 'movement-engine/public/movement-engine';
 import { CURRENT_LANGUAGE_VERSION, parseMovementExpression } from 'movement-lang';
 
 async function evaluate(text: string, bindings: Record<string, unknown> = {}): Promise<unknown> {

@@ -36,7 +36,7 @@ import {
   type UpdateResult,
   type WriteInput,
   type WriteResult,
-} from 'movement-engine/services/translation_graph/adapter';
+} from 'movement-engine/public/adapter';
 import type { UniquenessConstraints } from 'engine-contracts/uniqueness';
 import type { LockRequest } from './effect_locks';
 import { binding, type Binding, type LocalLandingShape, type NodeEdge } from './expression';

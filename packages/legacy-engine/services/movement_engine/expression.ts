@@ -105,7 +105,7 @@ import type { EdgeStep, Expression, FilterOperator } from 'movement-lang/express
 import { isObjectSpread, objectMemberExpression } from 'movement-lang/expression/types';
 import { serialize as serializeExpression } from 'movement-lang/expression/formula';
 import { settledAll } from './fans';
-import { aiExpressionSettings } from 'movement-engine/services/movement_engine/ai_tiers';
+import { aiExpressionSettings } from 'movement-engine/public/models';
 import {
   applyHopOrderLimit,
   compareOrderValues,
@@ -134,13 +134,13 @@ import type {
   Adapter,
   FileRef,
   Resource,
-} from 'movement-engine/services/translation_graph/adapter';
-import { fileHandle, fileValueOf, isFileValue } from 'movement-engine/services/translation_graph/adapter';
+} from 'movement-engine/public/adapter';
+import { fileHandle, fileValueOf, isFileValue } from 'movement-engine/public/adapter';
 import { fileView } from 'movement-lang';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import type { EngineClock, SegmentHost } from './run_context';
-import { hostInstanceOf } from 'movement-engine/services/movement_engine/host_adapter';
-import type { LlmClient } from 'movement-engine/services/translation_graph/engine/batched_extraction/llm_call';
+import { hostInstanceOf } from 'movement-engine/public/host';
+import type { LlmClient } from 'movement-engine/public/models';
 import {
   isStablePosition,
   positionData,
@@ -157,13 +157,13 @@ import {
   type Provenance,
   type ProvenanceOrigin,
   type SummarisedOrigin,
-} from 'movement-engine/services/movement_engine/provenance';
-import { MovementEngineError, type MovementEngineErrorCode } from 'movement-engine/services/movement_engine/errors';
+} from 'movement-engine/public/provenance';
+import { MovementEngineError, type MovementEngineErrorCode } from 'movement-engine/public/errors';
 import { applyMovementFunction } from './builtins';
-import { INTERPRETED_FUNCTIONS, isMovementBuiltinFunction } from 'movement-engine/services/movement_engine/interpretable';
+import { INTERPRETED_FUNCTIONS, isMovementBuiltinFunction } from 'movement-engine/public/movement-engine';
 
-export { INTERPRETED_FUNCTIONS, isMovementBuiltinFunction } from 'movement-engine/services/movement_engine/interpretable';
-import { neverAsAny } from 'movement-engine/lib/utils/types';
+export { INTERPRETED_FUNCTIONS, isMovementBuiltinFunction } from 'movement-engine/public/movement-engine';
+import { neverAsAny } from 'movement-engine/public/types';
 import type { LocalLandingShape, WriteRecord as RecordedWrite } from 'engine-contracts';
 import {
   binding,
@@ -179,30 +179,45 @@ import {
   type NodeEdge,
   type SourceRead,
   type WriteRecord,
-} from 'movement-engine/services/movement_engine/binding';
-export { binding, bindingOf, Environment, isCallableBinding } from 'movement-engine/services/movement_engine/binding';
-export type { Binding, BindingShape, DeferredWalk, ExtractEmission, HandleGraph, NodeEdge, SourceRead, WriteRecord } from 'movement-engine/services/movement_engine/binding';
+} from 'movement-engine/public/binding';
+export {
+  binding,
+  bindingOf,
+  Environment,
+  isCallableBinding,
+} from 'movement-engine/public/binding';
+export type {
+  Binding,
+  BindingShape,
+  DeferredWalk,
+  ExtractEmission,
+  HandleGraph,
+  NodeEdge,
+  SourceRead,
+  WriteRecord,
+} from 'movement-engine/public/binding';
 import {
   isFileUnreadable,
-  isWriteEffect,
-  type ExtractionTraceFile,
   type FileTextResolution,
   type FileTextResult,
   type FileUnreadable,
   type FileUnreadableReason,
+} from 'movement-engine/public/files';
+import {
+  isWriteEffect,
+  type ExtractionTraceFile,
   type MovementTraceEntry,
   type TracedEntity,
-} from 'movement-engine/services/movement_engine/run_types';
-export { isFileUnreadable, isWriteEffect } from 'movement-engine/services/movement_engine/run_types';
+} from 'movement-engine/public/trace';
+export { isFileUnreadable } from 'movement-engine/public/files';
+export { isWriteEffect } from 'movement-engine/public/trace';
+export type { ExtractionTraceFile, MovementTraceEntry, TracedEntity } from 'movement-engine/public/trace';
 export type {
-  ExtractionTraceFile,
   FileTextResolution,
   FileTextResult,
   FileUnreadable,
   FileUnreadableReason,
-  MovementTraceEntry,
-  TracedEntity,
-} from 'movement-engine/services/movement_engine/run_types';
+} from 'movement-engine/public/files';
 
 export type { LocalLandingShape };
 

@@ -40,8 +40,8 @@ import {
   type GetFieldValueInput,
   type GetRelatedInput,
   type RelatedResult,
-} from 'movement-engine/services/translation_graph/adapter';
-import { filesAtType } from 'movement-engine/services/translation_graph/adapter';
+  filesAtType,
+} from 'movement-engine/public/adapter';
 import {
   META_RECORD_TYPE,
   isStablePosition,

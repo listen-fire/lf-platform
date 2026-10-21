@@ -4,7 +4,7 @@
 // save (`listUnsupportedConstructs`).
 
 import { binding, Environment, evalMovementExpr } from '../expression';
-import { listUnsupportedConstructs } from 'movement-engine/services/movement_engine/interpretable';
+import { listUnsupportedConstructs } from 'movement-engine/public/movement-engine';
 import { CURRENT_LANGUAGE_VERSION, parseMovementExpression } from 'movement-lang';
 import { evaluatePredicate } from 'movement-lang/expression/filter';
 

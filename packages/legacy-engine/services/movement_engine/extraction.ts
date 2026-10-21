@@ -70,8 +70,7 @@ import type {
   PluginSpec,
   ShapeNode,
 } from 'movement-lang';
-import { isPlainRecord } from 'movement-engine/lib/utils/object';
-import { neverAsAny } from 'movement-engine/lib/utils/types';
+import { isPlainRecord, neverAsAny } from 'movement-engine/public/types';
 import { mapConcurrent, settledAll } from './fans';
 import {
   hostless,
@@ -82,14 +81,18 @@ import {
   type ClockAndIds,
   type RunFacts,
 } from './run_context';
-import { matchOption } from 'movement-engine/lib/utils/string';
-import type { LlmCallResult, LlmClient } from 'movement-engine/services/translation_graph/engine/batched_extraction/llm_call';
-import { selectModel } from 'movement-engine/services/translation_graph/engine/batched_extraction/model_choice';
-import { extractionCallSettings, type ExtractionCallSettings, type TierModel } from 'movement-engine/services/movement_engine/ai_tiers';
-import { logger } from 'movement-engine/services/logger';
-import type { FileRef, Resource } from 'movement-engine/services/translation_graph/adapter';
-import { fileHandle, isFileValue } from 'movement-engine/services/translation_graph/adapter';
-import { stampResourceIds } from 'movement-engine/services/translation_graph/engine/files/resources';
+import { matchOption } from 'movement-engine/public/text';
+import type { LlmCallResult, LlmClient } from 'movement-engine/public/models';
+import {
+  selectModel,
+  extractionCallSettings,
+  type ExtractionCallSettings,
+  type TierModel,
+} from 'movement-engine/public/models';
+import { logger } from 'movement-engine/public/log';
+import type { FileRef, Resource } from 'movement-engine/public/adapter';
+import { fileHandle, isFileValue } from 'movement-engine/public/adapter';
+import { stampResourceIds } from 'movement-engine/public/files';
 import {
   bindingOf,
   fieldsValueOf,
@@ -102,17 +105,17 @@ import {
   type MovementTraceEntry,
   type TracedEntity,
 } from './expression';
-import type { ExtractSiteRef, Provenance, ProvenanceOrigin } from 'movement-engine/services/movement_engine/provenance';
-import type { ExtractEmission } from 'movement-engine/services/movement_engine/binding';
-import type { TransformInvocationResult, TransformInvokeInput } from 'movement-engine/services/movement_engine/host';
-import { pluginSpecNamed, type PluginSpecs } from 'movement-engine/services/movement_engine/segment_context';
-import { maxFileChars } from 'movement-engine/services/movement_engine/segment_limits';
+import type { ExtractSiteRef, Provenance, ProvenanceOrigin } from 'movement-engine/public/provenance';
+import type { ExtractEmission } from 'movement-engine/public/binding';
+import type { TransformInvocationResult, TransformInvokeInput } from 'movement-engine/public/host';
+import { pluginSpecNamed, type PluginSpecs } from 'movement-engine/public/segment-context';
+import { maxFileChars } from 'movement-engine/public/limits';
 
-export type { TransformInvocationResult, TransformInvokeInput } from 'movement-engine/services/movement_engine/host';
-export { pluginSpecNamed, type PluginSpecs } from 'movement-engine/services/movement_engine/segment_context';
-export { maxFileChars } from 'movement-engine/services/movement_engine/segment_limits';
+export type { TransformInvocationResult, TransformInvokeInput } from 'movement-engine/public/host';
+export { pluginSpecNamed, type PluginSpecs } from 'movement-engine/public/segment-context';
+export { maxFileChars } from 'movement-engine/public/limits';
 
-export type { ExtractEmission } from 'movement-engine/services/movement_engine/binding';
+export type { ExtractEmission } from 'movement-engine/public/binding';
 
 // ── The result graph ────────────────────────────────────────────────────────
 

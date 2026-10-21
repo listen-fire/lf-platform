@@ -5,7 +5,7 @@
 
 import { coerceToDate, coerceToDatetime, coerceToNumber } from 'movement-lang';
 
-import { MovementEngineError } from 'movement-engine/services/movement_engine/errors';
+import { MovementEngineError } from 'movement-engine/public/errors';
 
 /** Mirrors the frozen engine's `applyFunction` verbatim (minus `coalesce`,
  *  which the caller handles for its branch-selection provenance). */

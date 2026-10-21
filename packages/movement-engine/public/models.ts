@@ -11,7 +11,16 @@ export * from '../lib/models/map';
 export * from '../lib/models/google_account';
 export * from '../lib/run_cost';
 export * from '../lib/run_spend';
-export { aiExpressionSettings, claudeModelId } from '../services/movement_engine/ai_tiers';
+export {
+  aiExpressionSettings,
+  claudeModelId,
+  extractionCallSettings,
+  runChatModels,
+  unreachedModelMessage,
+  type Effort,
+  type ExtractionCallSettings,
+  type TierModel,
+} from '../services/movement_engine/ai_tiers';
 export { metered, refusingPastBudget } from '../services/translation_graph/movement/metered';
 export * from 'engine-contracts/uniqueness';
 export type { FileUnreadable } from '../services/movement_engine/run_types';

@@ -10,18 +10,23 @@ import { EMPTY_CATALOG_SNAPSHOT, fromCatalogSnapshot, mockCatalogSnapshot, type 
 import { tenantIdOf } from 'engine-contracts';
 import { spelledFor } from 'movement-lang/checker/__test__/surface_spelling';
 
-import type { Adapter } from 'movement-engine/services/translation_graph/adapter';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
-import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
+import type { Adapter } from 'movement-engine/public/adapter';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
+import { containerAssociation } from 'movement-engine/public/adapter';
 import { positionData } from 'engine-contracts/catalog';
-import { MovementEngineError } from 'movement-engine/services/movement_engine/errors';
+import { MovementEngineError } from 'movement-engine/public/errors';
 import { resumeMovement, runMovement } from '../../../dispatch';
 import { type ParkSink, type RunMovementInput } from '../run';
-import { assertEngineConfigured } from 'movement-engine/services/movement_engine/rust_engine';
+import {
+  assertEngineConfigured,
+  resetRustRunStats,
+  rustRunStats,
+  setRunEngineRecorder,
+  type RunEngineRecord,
+} from 'movement-engine/public/movement-engine';
 import { engineFor } from '../engine_choice';
-import { resetRustRunStats, rustRunStats, setRunEngineRecorder, type RunEngineRecord } from 'movement-engine/services/movement_engine/rust_stats';
 import type { ParkedScopeState } from '../serialize';
-import { credentialIdsFor, makeTestHost } from 'movement-engine/services/movement_engine/test_host';
+import { credentialIdsFor, makeTestHost } from 'movement-engine/public/testing';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-0000000000e5');
 

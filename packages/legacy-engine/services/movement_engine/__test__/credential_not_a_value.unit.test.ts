@@ -8,8 +8,8 @@
 
 import { binding, Environment, evalMovementExpr } from '../expression';
 import { runMovement } from '../../../dispatch';
-import { MovementEngineError } from 'movement-engine/services/movement_engine/errors';
-import { makeTestHost } from 'movement-engine/services/movement_engine/test_host';
+import { MovementEngineError } from 'movement-engine/public/errors';
+import { makeTestHost } from 'movement-engine/public/testing';
 import { tenantIdOf } from 'engine-contracts';
 import { spelledFor } from 'movement-lang/checker/__test__/surface_spelling';
 import { fromCatalogSnapshot, mockCatalogSnapshot, parseMovementExpression, type LanguageVersion } from 'movement-lang';

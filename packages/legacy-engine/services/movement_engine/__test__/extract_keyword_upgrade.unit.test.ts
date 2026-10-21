@@ -7,9 +7,9 @@
 import { applyFix, checkProgram, fromCatalogSnapshot, mockCatalogSnapshot, parseProgram, type InstanceSchema } from 'movement-lang';
 
 import { tenantIdOf } from 'engine-contracts';
-import { containerAssociation, type Adapter } from 'movement-engine/services/translation_graph/adapter';
+import { containerAssociation, type Adapter } from 'movement-engine/public/adapter';
 import { positionData } from 'engine-contracts/catalog';
-import { credentialIdsFor, makeTestHost } from 'movement-engine/services/movement_engine/test_host';
+import { credentialIdsFor, makeTestHost } from 'movement-engine/public/testing';
 import { runMovement } from '../../../dispatch';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-0000000000b4');

@@ -21,6 +21,10 @@ import * as addresses from '../../../public/addresses';
 import * as bootChecks from '../../../public/boot-checks';
 import * as trace from '../../../public/trace';
 import * as embed from '../../../public/embed';
+import * as binding from '../../../public/binding';
+import * as segmentContext from '../../../public/segment-context';
+import * as provenance from '../../../public/provenance';
+import * as limits from '../../../public/limits';
 import { logger, routeEngineLogsTo, type EngineLogSink } from '../../../public/log';
 
 describe('public entries', () => {
@@ -62,6 +66,10 @@ describe('public entries', () => {
     expect(typeof engine.listUnsupportedConstructs).toBe('function');
     expect(Object.keys(models.embeddingDestinations).length).toBeGreaterThan(0);
     expect(typeof embed.memoryRunHostStore).toBe('function');
+    expect(binding.bindingOf(binding.binding({ kind: 'event' }))).toBeDefined();
+    expect(typeof segmentContext.inRunContext).toBe('function');
+    expect(provenance.NO_PROVENANCE.origins).toEqual([]);
+    expect(limits.maxCallDepth()).toBeGreaterThan(0);
   });
 });
 

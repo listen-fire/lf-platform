@@ -6,7 +6,7 @@
 // descriptor: data, so it parks and comes back as it stands. The rehydration
 // context is mocked.
 
-import type { FileRef, Resource } from 'movement-engine/services/translation_graph/adapter';
+import type { FileRef, Resource } from 'movement-engine/public/adapter';
 import type { SourcePosition } from 'engine-contracts/catalog';
 import type { Binding, DeferredWalk, SourceRead, WriteRecord } from '../expression';
 import { binding, bindingOf, Environment, isDictValue } from '../expression';
@@ -22,7 +22,7 @@ import {
   type BindingDescriptor,
   type RehydrationContext,
 } from '../serialize';
-import { MovementEngineError } from 'movement-engine/services/movement_engine/errors';
+import { MovementEngineError } from 'movement-engine/public/errors';
 
 // ── A fake adapter / source-read the registry "re-resolves" to ──
 const fakeAdapter = { adapterType: 'attio' } as unknown as SourceRead['adapter'];

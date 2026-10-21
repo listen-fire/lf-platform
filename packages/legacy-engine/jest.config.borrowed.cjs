@@ -11,9 +11,9 @@ module.exports = {
   testMatch: ['**/*.unit.test.ts'],
   testEnvironment: 'node',
   maxWorkers: '50%',
-  // The TypeScript engine reaches the engine package's internals, which resolve
-  // only under this condition (as every test runner sets it).
-  testEnvironmentOptions: { customExportConditions: ['node', 'node-addons', 'movement-engine-internals'] },
+  // No `movement-engine-internals` condition: the TypeScript engine and its
+  // tests reach the engine package through its public entries only, as an
+  // installed @listen-fire/engine serves them.
   clearMocks: true,
   // Sources are the truth: resolve `.ts` before any stray compiled `.js`.
   moduleFileExtensions: ['ts', 'tsx', 'js', 'mjs', 'cjs', 'jsx', 'json', 'node'],

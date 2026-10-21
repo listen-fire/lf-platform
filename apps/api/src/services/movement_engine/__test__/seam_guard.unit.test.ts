@@ -316,32 +316,132 @@ function moduleOf(fromFile: string, specifier: string): string {
     .replace(/\/index$/, '');
 }
 
-/** Every specifier the file loads at run time. */
-function valueImports(file: string): string[] {
+/** Every specifier the file loads at run time, with the value names it takes
+ *  from it when it names them (undefined: the whole module). */
+function valueImports(file: string): Array<{ specifier: string; names?: string[] }> {
   const source = ts.createSourceFile(
     file,
     fs.readFileSync(file, 'utf8'),
     ts.ScriptTarget.Latest,
     true,
   );
-  const specifiers: string[] = [];
+  const imports: Array<{ specifier: string; names?: string[] }> = [];
+  const valueNames = (elements: ts.NodeArray<ts.ImportSpecifier | ts.ExportSpecifier>): string[] =>
+    elements.filter((element) => !element.isTypeOnly).map((element) => (element.propertyName ?? element.name).text);
   const visit = (node: ts.Node): void => {
     if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
-      if (!isTypeOnlyImport(node)) specifiers.push(node.moduleSpecifier.text);
+      if (!isTypeOnlyImport(node)) {
+        const clause = node.importClause;
+        const bindings = clause?.namedBindings;
+        const named = clause !== undefined && clause.name === undefined && bindings !== undefined && ts.isNamedImports(bindings);
+        imports.push({ specifier: node.moduleSpecifier.text, ...(named ? { names: valueNames(bindings.elements) } : {}) });
+      }
     } else if (
       ts.isExportDeclaration(node) &&
       node.moduleSpecifier !== undefined &&
       ts.isStringLiteral(node.moduleSpecifier)
     ) {
-      if (!isTypeOnlyExport(node)) specifiers.push(node.moduleSpecifier.text);
+      if (!isTypeOnlyExport(node)) {
+        const clause = node.exportClause;
+        const named = clause !== undefined && ts.isNamedExports(clause);
+        imports.push({ specifier: node.moduleSpecifier.text, ...(named ? { names: valueNames(clause.elements) } : {}) });
+      }
     } else if (ts.isCallExpression(node) && isLoaderCall(node)) {
       const [arg] = node.arguments;
-      if (arg !== undefined && ts.isStringLiteralLike(arg)) specifiers.push(arg.text);
+      if (arg !== undefined && ts.isStringLiteralLike(arg)) imports.push({ specifier: arg.text });
     }
     ts.forEachChild(node, visit);
   };
   visit(source);
-  return specifiers;
+  return imports;
+}
+
+/** The legacy engine reaches the engine package through its public entries
+ *  (`movement-engine/public/<entry>`), which re-export the engine's modules.
+ *  The seam is about those modules, so an import of an entry is judged by the
+ *  module each name it takes comes from (or every module the entry re-exports
+ *  when it takes the whole entry). A name the entry declares itself stays
+ *  `public/<entry>`, which no rule allows. */
+function throughPublicEntry(specifier: string, names: string[] | undefined): string[] {
+  const entry = /^movement-engine\/(public\/[a-z-]+)$/.exec(specifier)?.[1];
+  if (entry === undefined) return [specifier];
+  const sources = exportSources(path.join(PKG_DIR, `${entry}.ts`));
+  if (names === undefined) return [...new Set([...sources.values()].map((module) => `movement-engine/${module}`))];
+  return [...new Set(names.map((name) => `movement-engine/${sources.get(name) ?? entry}`))];
+}
+
+/** Each value name a module exports, with the module (relative to the engine
+ *  package, or bare) it comes from; `export *` is followed. */
+function exportSources(file: string): Map<string, string> {
+  const own = path.relative(PKG_DIR, file).split(path.sep).join('/').replace(/\.ts$/, '');
+  const source = ts.createSourceFile(file, fs.readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
+  const sources = new Map<string, string>();
+  for (const statement of source.statements) {
+    if (ts.isExportDeclaration(statement)) {
+      if (statement.isTypeOnly) continue;
+      const clause = statement.exportClause;
+      if (statement.moduleSpecifier === undefined) {
+        // `export { name }` of the module's own declaration.
+        if (clause !== undefined && ts.isNamedExports(clause)) {
+          for (const element of clause.elements) if (!element.isTypeOnly) sources.set(element.name.text, own);
+        }
+        continue;
+      }
+      if (!ts.isStringLiteral(statement.moduleSpecifier)) continue;
+      const specifier = statement.moduleSpecifier.text;
+      const bare = !specifier.startsWith('.');
+      const target = bare ? undefined : path.resolve(path.dirname(file), specifier);
+      const targetFile = bare
+        ? resolvedFrom(file, specifier)
+        : [`${target}.ts`, path.join(target ?? '', 'index.ts')].find((f) => fs.existsSync(f));
+      // A bare package keeps its own name: the seam's rules speak of packages
+      // by name (`engine-contracts`, `movement-lang`).
+      const module =
+        bare || targetFile === undefined
+          ? specifier
+          : path.relative(PKG_DIR, targetFile).split(path.sep).join('/').replace(/(\/index)?\.ts$/, '');
+      if (clause === undefined) {
+        if (targetFile === undefined) continue;
+        for (const [name, from] of exportSources(targetFile)) sources.set(name, bare || from === targetOwn(targetFile) ? module : from);
+        for (const name of declaredValueExports(targetFile)) sources.set(name, module);
+      } else if (ts.isNamedExports(clause)) {
+        for (const element of clause.elements) if (!element.isTypeOnly) sources.set(element.name.text, module);
+      }
+    }
+  }
+  return sources;
+}
+
+/** A module's own name as `exportSources` labels its declarations. */
+function targetOwn(file: string): string {
+  return path.relative(PKG_DIR, file).split(path.sep).join('/').replace(/\.ts$/, '');
+}
+
+/** The source file a bare specifier names, resolved from `file`'s package. */
+function resolvedFrom(file: string, specifier: string): string | undefined {
+  try {
+    const resolved = require.resolve(specifier, { paths: [path.dirname(file)] });
+    return resolved.endsWith('.ts') ? resolved : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The value names a module declares and exports itself. */
+function declaredValueExports(file: string): string[] {
+  const source = ts.createSourceFile(file, fs.readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
+  const exported = (node: ts.Node): boolean =>
+    ts.canHaveModifiers(node) && (ts.getModifiers(node) ?? []).some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
+  return source.statements.flatMap((statement) => {
+    if (!exported(statement)) return [];
+    if ((ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement) || ts.isEnumDeclaration(statement)) && statement.name) {
+      return [statement.name.text];
+    }
+    if (ts.isVariableStatement(statement)) {
+      return statement.declarationList.declarations.flatMap((d) => (ts.isIdentifier(d.name) ? [d.name.text] : []));
+    }
+    return [];
+  });
 }
 
 function isTypeOnlyImport(node: ts.ImportDeclaration): boolean {
@@ -395,15 +495,18 @@ describe('the engine/host seam', () => {
     const violations: string[] = [];
     for (const file of PURE_FILES) {
       const filePath = engineFile(file);
-      for (const specifier of valueImports(filePath)) {
-        const module = moduleOf(filePath, specifier);
-        const forbidden = FORBIDDEN.find((rule) => rule.matches(module));
-        if (forbidden !== undefined) {
-          violations.push(`${file} imports '${specifier}': ${forbidden.reason}`);
-        } else if (!ALLOWED.some((allowed) => allowed(module))) {
-          violations.push(
-            `${file} imports '${specifier}': not on the seam's allow list (reach it through the host, or allow it here with the reason)`,
-          );
+      for (const { specifier: written, names } of valueImports(filePath)) {
+        for (const specifier of throughPublicEntry(written, names)) {
+          const module = moduleOf(filePath, specifier);
+          const via = specifier === written ? '' : ` (through '${written}')`;
+          const forbidden = FORBIDDEN.find((rule) => rule.matches(module));
+          if (forbidden !== undefined) {
+            violations.push(`${file} imports '${specifier}'${via}: ${forbidden.reason}`);
+          } else if (!ALLOWED.some((allowed) => allowed(module))) {
+            violations.push(
+              `${file} imports '${specifier}'${via}: not on the seam's allow list (reach it through the host, or allow it here with the reason)`,
+            );
+          }
         }
       }
     }

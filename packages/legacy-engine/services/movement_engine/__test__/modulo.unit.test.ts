@@ -5,7 +5,7 @@
 // negate.unit.test.ts (unary minus, 2026-09-28).
 
 import { binding, Environment, evalMovementExpr } from '../expression';
-import { listUnsupportedConstructs } from 'movement-engine/services/movement_engine/interpretable';
+import { listUnsupportedConstructs } from 'movement-engine/public/movement-engine';
 import { CURRENT_LANGUAGE_VERSION, parseMovementExpression } from 'movement-lang';
 
 async function evaluate(text: string, bindings: Record<string, unknown> = {}): Promise<unknown> {

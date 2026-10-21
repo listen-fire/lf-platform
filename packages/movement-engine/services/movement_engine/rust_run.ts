@@ -20,12 +20,11 @@ import {
   type SettleRaceInput,
 } from 'engine-contracts';
 
-import { MovementEngineError, MovementRunFailed } from './errors';
+import { MovementEngineError, MovementRunFailed, PARKED_ON_TYPESCRIPT } from './errors';
 import type { EngineHost } from './host';
-import { isoDates } from './host_adapter';
+import { withIsoEvent } from './host_adapter';
 import { checkPinnedInRust, type CheckInput } from './program_check';
 import {
-  PARKED_ON_TYPESCRIPT,
   checkBeforeRustSegment,
   fireSegmentInRust,
   resumeSegmentInRust,
@@ -33,7 +32,7 @@ import {
   settleSegmentInRust,
 } from './rust_engine';
 import type { MovementRunResult, ResumeMovementInput, RunMovementInput } from './run_types';
-import { closeRunContext, openRunContext, type RunContext, type RunLedger } from './segment_context';
+import { inRunContext } from './segment_context';
 
 /** The first language version this engine runs. */
 const FIRST_ENGINE_LANGUAGE_VERSION: LanguageVersion = 5;
@@ -118,72 +117,11 @@ function refuseEarlierPin(input: RunInput & { parkedOnEngine?: 'ts' | 'rust' }):
   }
 }
 
-/** The run's input with its event read as the engine reads a host's data: a
- *  `Date` in it is its ISO text (`isoDates`). */
-export function withIsoEvent<I extends RunInput>(input: I): I {
-  const event = isoDates(input.event);
-  return event === input.event ? input : { ...input, event };
-}
-
 /** What the check reads of a run's input. */
 export function checkInputOf(input: RunInput): CheckInput {
   return {
     source: input.source,
     catalog: input.catalog,
     ...(input.languageVersion !== undefined ? { languageVersion: input.languageVersion } : {}),
-  };
-}
-
-/**
- * Every way into an engine opens the same door: one segment — its host
- * segment (the adapters' read memo and call ceiling), its cross-run lock
- * holder, the run's spend account — closed however the segment ends. An
- * entry point that skipped it would lose those safeguards silently, so they
- * all go through here.
- *
- * What the segment's adapter calls spent is known only once the host segment
- * closes, so the spend on the result (or on a failure's partial result) is
- * read after the close.
- */
-export async function inRunContext(
-  input: RunMovementInput,
-  run: (context: RunContext) => Promise<MovementRunResult>,
-): Promise<MovementRunResult> {
-  const context = await openRunContext({
-    host: input.host,
-    teamId: input.teamId,
-    ...(input.runId !== undefined ? { runId: input.runId } : {}),
-    languageVersion: input.languageVersion ?? CURRENT_LANGUAGE_VERSION,
-    ...(input.firedAt !== undefined ? { firedAt: input.firedAt } : {}),
-    spend: {
-      priorMicrodollars: input.priorSpentMicrodollars ?? 0,
-      capBaselineMicrodollars: input.capBaselineMicrodollars ?? 0,
-      ...(input.costCapMicrodollars !== undefined ? { capMicrodollars: input.costCapMicrodollars } : {}),
-    },
-  });
-  let result: MovementRunResult;
-  try {
-    try {
-      result = await run(context);
-    } finally {
-      await closeRunContext(context, input.host);
-    }
-  } catch (error) {
-    if (error instanceof MovementRunFailed) Object.assign(error.partial, spendFields(context.ledger));
-    throw error;
-  }
-  return { ...result, ...spendFields(context.ledger) };
-}
-
-/** What a segment spent, as its result carries it. */
-export function spendFields(
-  ledger: RunLedger,
-): Pick<MovementRunResult, 'spentMicrodollars' | 'runSpentMicrodollars' | 'spentBySource'> {
-  const spend = ledger.spend;
-  return {
-    ...(spend.segmentMicrodollars > 0
-      ? { spentMicrodollars: spend.segmentMicrodollars, spentBySource: spend.bySource }
-      : {}),
-    ...(spend.runMicrodollars > 0 ? { runSpentMicrodollars: spend.runMicrodollars } : {}),
   };
 }

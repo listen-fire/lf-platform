@@ -35,14 +35,16 @@ import { createHash } from 'node:crypto';
 import type { ExtractCallFinds } from 'movement-lang';
 import { z } from 'zod';
 
-import { isPlainRecord } from 'movement-engine/lib/utils/object';
-import { neverAsAny } from 'movement-engine/lib/utils/types';
+import { isPlainRecord, neverAsAny } from 'movement-engine/public/types';
 import type {
   ExtractCallBlock,
   ExtractCallLlmClient,
   ExtractCallLlmResult,
   ExtractCallUsage,
-} from 'movement-engine/services/translation_graph/engine/batched_extraction/llm_call';
+  Effort,
+  ExtractionCallSettings,
+  TierModel,
+} from 'movement-engine/public/models';
 
 export type {
   ExtractCallBlock,
@@ -50,10 +52,9 @@ export type {
   ExtractCallLlmInput,
   ExtractCallLlmResult,
   ExtractCallUsage,
-} from 'movement-engine/services/translation_graph/engine/batched_extraction/llm_call';
-import type { FileRef } from 'movement-engine/services/translation_graph/adapter';
-import { fileHandle, isFileValue } from 'movement-engine/services/translation_graph/adapter';
-import type { Effort, ExtractionCallSettings, TierModel } from 'movement-engine/services/movement_engine/ai_tiers';
+} from 'movement-engine/public/models';
+import type { FileRef } from 'movement-engine/public/adapter';
+import { fileHandle, isFileValue } from 'movement-engine/public/adapter';
 import {
   absentIfBlank,
   boundFileText,
@@ -79,7 +80,13 @@ import {
   type LocalLandingShape,
   type MovementTraceEntry,
 } from './expression';
-import { fromOrigin, NO_PROVENANCE, type ExtractSiteRef, type Provenance, type ProvenanceOrigin } from 'movement-engine/services/movement_engine/provenance';
+import {
+  fromOrigin,
+  NO_PROVENANCE,
+  type ExtractSiteRef,
+  type Provenance,
+  type ProvenanceOrigin,
+} from 'movement-engine/public/provenance';
 import { hostless, stopwatch, throwIfCancelled, type ClockAndIds, type RunFacts } from './run_context';
 
 // ── The model seam ──────────────────────────────────────────────────────────

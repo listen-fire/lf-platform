@@ -4,15 +4,25 @@
 
 import { CURRENT_LANGUAGE_VERSION, pluginOutputUnder, type LanguageVersion } from 'movement-lang';
 
-import type { FileRef } from 'movement-engine/services/translation_graph/adapter';
-import type { LlmClient, ExtractCallLlmClient } from 'movement-engine/services/translation_graph/engine/batched_extraction/llm_call';
-import type { ArbitrationAnswer, BudgetRefusal, EngineHost, EntityArbitration, PricedAnswer } from 'movement-engine/services/movement_engine/host';
-import type { FileTextResolution } from 'movement-engine/services/movement_engine/run_types';
+import type { FileRef } from 'movement-engine/public/adapter';
+import type { LlmClient, ExtractCallLlmClient, Budget } from 'movement-engine/public/models';
+import type {
+  ArbitrationAnswer,
+  BudgetRefusal,
+  EngineHost,
+  EntityArbitration,
+  PricedAnswer,
+} from 'movement-engine/public/host';
+import type { FileTextResolution } from 'movement-engine/public/files';
 import type { MovementTransformInvoker } from './extraction';
-import type { Budget } from 'movement-engine/lib/run_cost';
-import { pluginSpecNamed, withDeclaredFiles, type PluginSpecs, type RunLedger } from 'movement-engine/services/movement_engine/segment_context';
+import {
+  pluginSpecNamed,
+  withDeclaredFiles,
+  type PluginSpecs,
+  type RunLedger,
+} from 'movement-engine/public/segment-context';
 
-export * from 'movement-engine/services/movement_engine/segment_context';
+export * from 'movement-engine/public/segment-context';
 
 /**
  * One priced host call: handed the run's budget, its reported cost charged.

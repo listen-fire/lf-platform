@@ -75,8 +75,7 @@ export function assertEngineConfigured(env: Record<string, string | undefined> =
   );
 }
 
-/** Why a version-5 run the TypeScript engine parked fails its resume. */
-export const PARKED_ON_TYPESCRIPT = 'parked_on_typescript';
+export { PARKED_ON_TYPESCRIPT } from './errors';
 
 /** What a segment in the Rust engine runs: the run's input, the segment
  *  the run host opened, and whether the run host checked the program before
@@ -628,7 +627,7 @@ function resultOf(value: unknown, trace: MovementRunResult['trace'], wire: WireO
   const extractionSites = result.extractionSites === undefined ? {} : wire.read(result.extractionSites);
   if (!isSiteTable(extractionSites)) throw new RustShimError('the Rust engine result extractionSites are site summaries');
   // The spend fields are the run host's to add, read off the run's account
-  // once the segment closes (run.ts `inRunContext`).
+  // once the segment closes (segment_context.ts `inRunContext`).
   return {
     movementName: string(result.movementName, 'the Rust engine result movementName'),
     writes,

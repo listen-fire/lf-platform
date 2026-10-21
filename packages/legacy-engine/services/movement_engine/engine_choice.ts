@@ -4,8 +4,7 @@
 
 import { since, type LanguageVersion } from 'movement-lang';
 
-import { MovementEngineError } from 'movement-engine/services/movement_engine/errors';
-import { PARKED_ON_TYPESCRIPT } from 'movement-engine/services/movement_engine/rust_engine';
+import { MovementEngineError, PARKED_ON_TYPESCRIPT } from 'movement-engine/public/errors';
 
 /** An engine: the one a run's segment runs on. */
 export type EngineChoice = 'rust' | 'ts';

@@ -66,9 +66,9 @@ import type {
 } from './expression';
 import { Environment, bindValue, binding, bindingOf, isDictValue } from './expression';
 import { settledAll } from './fans';
-import { fileValueOf, isFileValue } from 'movement-engine/services/translation_graph/adapter';
-import { MovementEngineError } from 'movement-engine/services/movement_engine/errors';
-import { neverAsAny } from 'movement-engine/lib/utils/types';
+import { fileValueOf, isFileValue } from 'movement-engine/public/adapter';
+import { MovementEngineError } from 'movement-engine/public/errors';
+import { neverAsAny } from 'movement-engine/public/types';
 
 // ── The descriptor (plain JSON) ──────────────────────────────────────────────
 //

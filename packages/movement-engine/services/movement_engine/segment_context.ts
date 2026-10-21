@@ -29,7 +29,7 @@ import { CURRENT_LANGUAGE_VERSION, findPlugin, type FileArtifactType, type Langu
 
 import { HOST_FAMILIES_VERSION, filesAtType, guidSequence, missingHostMethods, type ActingPrincipal, type TenantId } from 'engine-contracts';
 import type { FileRef } from '../translation_graph/adapter';
-import type { MovementTraceEntry, CancelGate, ParkSink } from './run_types';
+import type { MovementTraceEntry, CancelGate, MovementRunResult, ParkSink, RunMovementInput } from './run_types';
 import type {
   AwaitWakeRequest,
   AdapterResolution,
@@ -44,7 +44,7 @@ import type {
 import { getErrorMessage } from '../../lib/utils/error';
 import { neverAsAny } from '../../lib/utils/types';
 import { logger } from '../logger';
-import { MovementEngineError, RunCancelledSignal } from './errors';
+import { MovementEngineError, MovementRunFailed, RunCancelledSignal } from './errors';
 import {
   RunCostCapExceeded,
   type Budget,
@@ -512,4 +512,58 @@ async function settled(step: string, context: RunContext, fn: () => Promise<void
       ...runLogFields(context),
     });
   }
+}
+
+/**
+ * Every way into an engine opens the same door: one segment — its host
+ * segment (the adapters' read memo and call ceiling), its cross-run lock
+ * holder, the run's spend account — closed however the segment ends. An
+ * entry point that skipped it would lose those safeguards silently, so they
+ * all go through here.
+ *
+ * What the segment's adapter calls spent is known only once the host segment
+ * closes, so the spend on the result (or on a failure's partial result) is
+ * read after the close.
+ */
+export async function inRunContext(
+  input: RunMovementInput,
+  run: (context: RunContext) => Promise<MovementRunResult>,
+): Promise<MovementRunResult> {
+  const context = await openRunContext({
+    host: input.host,
+    teamId: input.teamId,
+    ...(input.runId !== undefined ? { runId: input.runId } : {}),
+    languageVersion: input.languageVersion ?? CURRENT_LANGUAGE_VERSION,
+    ...(input.firedAt !== undefined ? { firedAt: input.firedAt } : {}),
+    spend: {
+      priorMicrodollars: input.priorSpentMicrodollars ?? 0,
+      capBaselineMicrodollars: input.capBaselineMicrodollars ?? 0,
+      ...(input.costCapMicrodollars !== undefined ? { capMicrodollars: input.costCapMicrodollars } : {}),
+    },
+  });
+  let result: MovementRunResult;
+  try {
+    try {
+      result = await run(context);
+    } finally {
+      await closeRunContext(context, input.host);
+    }
+  } catch (error) {
+    if (error instanceof MovementRunFailed) Object.assign(error.partial, spendFields(context.ledger));
+    throw error;
+  }
+  return { ...result, ...spendFields(context.ledger) };
+}
+
+/** What a segment spent, as its result carries it. */
+export function spendFields(
+  ledger: RunLedger,
+): Pick<MovementRunResult, 'spentMicrodollars' | 'runSpentMicrodollars' | 'spentBySource'> {
+  const spend = ledger.spend;
+  return {
+    ...(spend.segmentMicrodollars > 0
+      ? { spentMicrodollars: spend.segmentMicrodollars, spentBySource: spend.bySource }
+      : {}),
+    ...(spend.runMicrodollars > 0 ? { runSpentMicrodollars: spend.runMicrodollars } : {}),
+  };
 }

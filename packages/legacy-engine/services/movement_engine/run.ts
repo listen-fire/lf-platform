@@ -207,7 +207,7 @@ import {
   leafReadKey,
   pureLeafReads,
 } from 'movement-lang/expression/filter';
-import { neverAsAny } from 'movement-engine/lib/utils/types';
+import { neverAsAny } from 'movement-engine/public/types';
 import type { CallbackBodyInput, ResumeInput, RunInput, SettleRaceInput } from 'engine-contracts';
 import type {
   CancelGate,
@@ -217,7 +217,7 @@ import type {
   ResumeMovementInput,
   RunLimitPause,
   RunMovementInput,
-} from 'movement-engine/services/movement_engine/run_types';
+} from 'movement-engine/public/movement-engine';
 export type {
   CancelGate,
   MovementRunResult,
@@ -226,7 +226,7 @@ export type {
   ResumeMovementInput,
   RunLimitPause,
   RunMovementInput,
-} from 'movement-engine/services/movement_engine/run_types';
+} from 'movement-engine/public/movement-engine';
 import type {
   Adapter,
   ExternalRecordRef,
@@ -236,14 +236,24 @@ import type {
   Resource,
   WriteInput,
   WriteResult,
-} from 'movement-engine/services/translation_graph/adapter';
-import { fileHandle, updateRecordSucceeded } from 'movement-engine/services/translation_graph/adapter';
-import { foldedShape } from 'movement-engine/services/movement_engine/declared_shape';
-import type { AdapterResolution, BindingEndpoint, CallbackSink, EngineHost } from 'movement-engine/services/movement_engine/host';
-import { hostAdapter, isAdapterCallCeilingReached, isoDates } from 'movement-engine/services/movement_engine/host_adapter';
+} from 'movement-engine/public/adapter';
+import { fileHandle, updateRecordSucceeded } from 'movement-engine/public/adapter';
+import { foldedShape } from 'movement-engine/public/catalog';
+import type {
+  AdapterResolution,
+  BindingEndpoint,
+  CallbackSink,
+  EngineHost,
+} from 'movement-engine/public/host';
+import {
+  hostAdapter,
+  isAdapterCallCeilingReached,
+  isoDates,
+  withIsoEvent,
+} from 'movement-engine/public/host';
 import { applicableRequiredFields } from '../translation_graph/required_fields';
 import type { MutationContext } from 'engine-contracts/mutation_context';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import {
   META_RECORD_TYPE,
   makeMetaPosition,
@@ -260,11 +270,8 @@ import {
   mergeUniqueness,
   type UniquenessConstraints,
 } from 'engine-contracts/uniqueness';
-import type { LlmClient } from 'movement-engine/services/translation_graph/engine/batched_extraction/llm_call';
-import {
-  matchesResourceFilter,
-  resolvePositionResources,
-} from 'movement-engine/services/translation_graph/engine/files/resources';
+import type { LlmClient } from 'movement-engine/public/models';
+import { matchesResourceFilter, resolvePositionResources } from 'movement-engine/public/files';
 import {
   Environment,
   MovementEngineError,
@@ -315,7 +322,7 @@ import {
   type ExtractSiteSummary,
   type Provenance,
   type SummarisedOrigin,
-} from 'movement-engine/services/movement_engine/provenance';
+} from 'movement-engine/public/provenance';
 import { surfaceReadAdapter } from './kg';
 import { localEdgeAdapter, localRecordLock } from './local_edge_adapter';
 import {
@@ -324,8 +331,17 @@ import {
   runExtractCall,
   type ExtractCallLlmClient,
 } from './extraction_call';
-import { extractionCallSettings, runChatModels, unreachedModelMessage, type ExtractionCallSettings } from 'movement-engine/services/movement_engine/ai_tiers';
-import { selectModel } from 'movement-engine/services/translation_graph/engine/batched_extraction/model_choice';
+import {
+  extractionCallSettings,
+  runChatModels,
+  unreachedModelMessage,
+  type ExtractionCallSettings,
+  selectModel,
+  formatUsd,
+  isRunCostCapExceeded,
+  RUN_COST_CAP_ENV_VAR,
+  type RunCostCapExceeded,
+} from 'movement-engine/public/models';
 import {
   buildDeclarationSpec,
   buildExtractSpec,
@@ -339,9 +355,14 @@ import {
   type FileTextResolution,
   type TransformInvocationResult,
 } from './extraction';
-import { MovementRunFailed, RunCancelledSignal, RunLeaseLost, runFailureCause } from 'movement-engine/services/movement_engine/errors';
-import { getErrorMessage } from 'movement-engine/lib/utils/error';
-import { logger } from 'movement-engine/services/logger';
+import {
+  MovementRunFailed,
+  RunCancelledSignal,
+  RunLeaseLost,
+  runFailureCause,
+  getErrorMessage,
+} from 'movement-engine/public/errors';
+import { logger } from 'movement-engine/public/log';
 import {
   ROOT_ADDRESS,
   childBranch,
@@ -352,7 +373,7 @@ import {
   parseAddress,
   type Address,
   type AddressStep,
-} from 'movement-engine/services/movement_engine/address';
+} from 'movement-engine/public/addresses';
 import { EffectLocks, bindLock, edgeLock, identityLocks, recordLock, type LockRequest } from './effect_locks';
 import {
   assertParkRead,
@@ -383,9 +404,15 @@ import {
   type CallbackParamSpec,
   type WriteRecord as RecordedWrite,
 } from 'engine-contracts';
-import { checkPinned, checkPinnedInRust, type CheckInput, type CheckedProgram } from 'movement-engine/services/movement_engine/program_check';
-import { noteEngine } from 'movement-engine/services/movement_engine/rust_engine';
-import { checkInputOf, inRunContext, spendFields, withIsoEvent } from 'movement-engine/services/movement_engine/rust_run';
+import {
+  checkPinned,
+  checkPinnedInRust,
+  type CheckInput,
+  type CheckedProgram,
+  recordRunEngine,
+  checkInputOf,
+} from 'movement-engine/public/movement-engine';
+import { inRunContext, spendFields } from 'movement-engine/public/segment-context';
 import { RUST_ENGINE_FROM_VERSION } from './engine_choice';
 import { WriteLedger, forkWriteOrder, rootWriteOrder, type WriteOrder } from './write_ledger';
 import {
@@ -399,13 +426,7 @@ import {
   type RunContext,
   type RunLedger,
 } from './run_context';
-import { CallDepthExceeded, isCallDepthExceeded, maxCallDepth } from 'movement-engine/services/movement_engine/call_depth';
-import {
-  formatUsd,
-  isRunCostCapExceeded,
-  RUN_COST_CAP_ENV_VAR,
-  type RunCostCapExceeded,
-} from 'movement-engine/lib/run_cost';
+import { CallDepthExceeded, isCallDepthExceeded, maxCallDepth } from 'movement-engine/public/limits';
 
 /** The in-memory graph a `Called` landing belongs to. A callback belongs to no
  *  SYSTEM, so this names the construct, never an adapter — it is what an `IS`
@@ -452,7 +473,9 @@ export async function runMovement(given: RunMovementInput): Promise<MovementRunR
  *  (`@listen-fire/engine`); the dispatch never sends one here. */
 function onTheTypeScriptEngine(input: RunMovementInput | ResumeMovementInput): void {
   refuseRustVersion(input.languageVersion ?? CURRENT_LANGUAGE_VERSION);
-  noteEngine(input, 'ts');
+  logger.debug(`movement engine: engine=ts run=${input.runId ?? '-'}`);
+  // A rehearsal has no run row.
+  if (input.runId !== undefined && input.dryRun !== true) recordRunEngine({ runId: input.runId, engine: 'ts' });
 }
 
 /** What every entry point hands its interpreter: the catalog rebuilt from the

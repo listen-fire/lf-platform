@@ -47,8 +47,8 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import type { LanguageVersion } from 'movement-lang';
 
 
-import { MovementEngineError } from 'movement-engine/services/movement_engine/errors';
-import type { CrossRunLocks } from 'movement-engine/services/movement_engine/segment_context';
+import { MovementEngineError } from 'movement-engine/public/errors';
+import type { CrossRunLocks } from 'movement-engine/public/segment-context';
 import { isBlankIdentityValue, type UniquenessConstraints } from 'engine-contracts/uniqueness';
 
 /** How a flow holds a lock: on its own, or alongside every other flow
@@ -119,7 +119,7 @@ class Gate {
   }
 }
 
-export type { CrossRunLocks } from 'movement-engine/services/movement_engine/segment_context';
+export type { CrossRunLocks } from 'movement-engine/public/segment-context';
 
 /**
  * The run's locks. Every effect asks for all of its locks at once; they are

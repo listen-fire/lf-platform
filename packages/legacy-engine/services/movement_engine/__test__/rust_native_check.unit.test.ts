@@ -8,11 +8,11 @@ import { fromCatalogSnapshot, mockCatalogSnapshot, type InstanceSchema, type Lan
 import { spelledFor } from 'movement-lang/checker/__test__/surface_spelling';
 import { tenantIdOf } from 'engine-contracts';
 
-import { containerAssociation, type Adapter } from 'movement-engine/services/translation_graph/adapter';
-import { makeTestHost } from 'movement-engine/services/movement_engine/test_host';
+import { containerAssociation, type Adapter } from 'movement-engine/public/adapter';
+import { makeTestHost } from 'movement-engine/public/testing';
 import { runMovement } from '../../../dispatch';
 import { runFailureCause } from '../run';
-import { MovementEngineError } from 'movement-engine/services/movement_engine/errors';
+import { MovementEngineError } from 'movement-engine/public/errors';
 
 const asked: string[] = [];
 const checkers = { rust: 0, typescript: 0 };

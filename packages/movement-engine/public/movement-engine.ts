@@ -20,7 +20,11 @@ export { assertEngineConfigured } from '../services/movement_engine/rust_engine'
 // What the Rust engine did in this process, counted, and what keeps a
 // program off the TypeScript engine.
 export * from '../services/movement_engine/rust_stats';
-export { listUnsupportedConstructs } from '../services/movement_engine/interpretable';
+export {
+  INTERPRETED_FUNCTIONS,
+  isMovementBuiltinFunction,
+  listUnsupportedConstructs,
+} from '../services/movement_engine/interpretable';
 
 export * as programCheck from '../services/movement_engine/program_check';
 export {
@@ -36,6 +40,7 @@ export {
   type LinkedImportData,
   type Stamp,
 } from '../services/movement_engine/program_check';
+export { checkInputOf } from '../services/movement_engine/rust_run';
 
 /** This release of the engine. `lf` pins a new project to it and refuses a pin
  *  newer than it; lf's copy is held equal to this one by a cargo test. */
