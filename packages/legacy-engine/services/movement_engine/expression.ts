@@ -74,22 +74,8 @@
 // movement-native replacements (read the parent handle / traverse
 // #resources).
 
-import {
-  applyStdlib,
-  chunkText,
-  CHUNKS_FUNCTION_ID,
-  estimateEntities,
-  FILE_FUNCTION_ID,
-  INTERPRETED_FUNCTION_IDS,
-  isWalkProjection,
-  OLD_EDGE,
-  POSITION_SENTINEL,
-  READ_FUNCTION_ID,
-  readChunkSpec,
-  refinementKey,
-  since,
-  stdlibFunctionById,
-} from 'movement-lang';
+import { chunkText, estimateEntities, POSITION_SENTINEL, readChunkSpec, refinementKey } from 'movement-lang';
+import { applyStdlib, CHUNKS_FUNCTION_ID, FILE_FUNCTION_ID, INTERPRETED_FUNCTION_IDS, isWalkProjection, OLD_EDGE, READ_FUNCTION_ID, since, stdlibFunctionById } from 'legacy-lang';
 import type {
   ClosureExpression,
   LanguageVersion,

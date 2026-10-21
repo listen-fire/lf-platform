@@ -6,7 +6,7 @@
 //! may keep a member proves it present. So the filtered list clears
 //! MOV_ABSENT_REQUIRED on `List.sum` and its siblings. Nothing is keyed on a
 //! name. Versions 1–4 keep the members' type as it was. The TypeScript twin is
-//! packages/movement-lang/checker/__test__/v5_filter_narrowing.unit.test.ts,
+//! packages/legacy-lang/checker/__test__/v5_filter_narrowing.unit.test.ts,
 //! same programs, same answers.
 
 use movement_checker::{CheckOptions, check_source};

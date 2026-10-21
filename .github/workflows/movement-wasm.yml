@@ -31,6 +31,7 @@ on:
       - "scripts/build-movement-wasm.sh"
       - "scripts/build-movement-wasm-rustc.sh"
       - "packages/movement-lang/**"
+      - "packages/legacy-lang/**"
       # The TypeScript side of the oracle: the engine and its shim, the
       # corpora, and what runs them.
       - "apps/api/src/services/movement_engine/**"
@@ -57,6 +58,7 @@ on:
       - "scripts/build-movement-wasm.sh"
       - "scripts/build-movement-wasm-rustc.sh"
       - "packages/movement-lang/**"
+      - "packages/legacy-lang/**"
       # The TypeScript side of the oracle: the engine and its shim, the
       # corpora, and what runs them.
       - "apps/api/src/services/movement_engine/**"
@@ -134,9 +136,14 @@ jobs:
       # Full workspace install, as in api-test.yml: movement-lang's tests
       # resolve workspace packages through symlinks a filtered install omits.
       - run: pnpm install --frozen-lockfile
-      - name: Parser pins through the committed artifact
+      - name: Wasm loader and environment services
         working-directory: packages/movement-lang
-        run: pnpm run test --testPathPattern 'programs_regression|trees_regression|rust_entry_points|lowering_regression|lowering_vocabulary|checks_regression|catalog_depth|loader|env_services'
+        run: pnpm run test --testPathPattern 'catalog_depth|loader|env_services'
+      # The pins that read the TypeScript parser's and checker's corpora are
+      # the platform's (packages/legacy-lang): they hold the artifact to them.
+      - name: Parser pins through the committed artifact
+        working-directory: packages/legacy-lang
+        run: pnpm run test --testPathPattern 'programs_regression|trees_regression|rust_entry_points|lowering_regression|lowering_vocabulary|checks_regression'
       # The catalog differential needs the assembled checks corpus
       # (`pnpm checks:corpus`, ~16 min with a test database), so it runs in
       # the ship gate, not CI (Henry 2026-10-17: corpus checks are gate, not CI).

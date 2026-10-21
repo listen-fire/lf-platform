@@ -21,7 +21,8 @@
  *   pnpm listeners:paused --json          # machine-readable
  */
 
-import { parseProgram, type ListenDeclaration } from 'movement-lang';
+import { type ListenDeclaration } from 'movement-lang';
+import { parseProgram } from 'movement-lang';
 
 import type { TeamId } from '../generated/kysely/core/Team';
 import type { MovementId } from '../generated/kysely/automations/Movement';

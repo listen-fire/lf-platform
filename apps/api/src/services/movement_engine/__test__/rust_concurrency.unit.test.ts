@@ -8,7 +8,7 @@
 
 import { spelledForVersion5 } from 'movement-engine/services/movement_engine/__test__/combinator_spelling';
 import { fromCatalogSnapshot, type InstanceSchema } from 'movement-lang';
-import { spelledFor } from 'movement-lang/checker/__test__/surface_spelling';
+import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import { tenantIdOf, type CallbackCall } from 'engine-contracts';
 
 import type { Adapter, RuntimeCapabilities, WriteInput } from 'movement-engine/services/translation_graph/adapter';

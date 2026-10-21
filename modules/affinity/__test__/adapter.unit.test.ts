@@ -12,13 +12,7 @@ jest.mock('movement-engine/public/log', () => ({
   logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
-import {
-  checkProgram,
-  fromCatalogSnapshot,
-  parseProgram,
-  scanInstanceChains,
-  type CatalogSnapshot,
-} from 'movement-lang';
+import { CURRENT_LANGUAGE_VERSION, checkSourceInRust, type CatalogSnapshot } from 'movement-lang';
 
 import type { FileRef } from 'movement-engine/public/adapter';
 import type { ResolveEntityInput } from 'movement-engine/public/adapter';
@@ -2186,7 +2180,7 @@ describe('listScopedFieldDisplayNames', () => {
 // `describe` publishing a writable field is only half the promise: what an
 // author meets is the checker, over the catalog a save builds. So this runs the
 // REAL adapter (listEntryPoints + describe) through the REAL projection and
-// then through `checkProgram` — the same three layers a save walks.
+// then through the Rust checker — the same three layers a save walks.
 //
 // movement-lang's own jest is broken locally, so the language layer is
 // exercised through apps/api's ts-jest (per repo convention).
@@ -2236,7 +2230,7 @@ function sync() {
 ${body}
   }
 }`;
-    return checkProgram(parseProgram(source), fromCatalogSnapshot(await affinitySnapshot()))
+    return checkSourceInRust(source, await affinitySnapshot(), { languageVersion: CURRENT_LANGUAGE_VERSION })
       .filter((d) => (d.severity ?? 'error') === 'error')
       .map((d) => ({ code: d.code, message: d.message }));
   }

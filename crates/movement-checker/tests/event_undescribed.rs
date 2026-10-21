@@ -2,7 +2,7 @@
 //! — or a closure's, or a library function's — whose instance the catalog has
 //! no description of. Refused from version 5 (the upgrade warning on a check
 //! for a move up across 5), unsaid before. The TypeScript twin is
-//! packages/movement-lang/checker/__test__/event_undescribed.unit.test.ts.
+//! packages/legacy-lang/checker/__test__/event_undescribed.unit.test.ts.
 
 use movement_checker::{CheckOptions, Diagnostic, check_source};
 use movement_parser::catalog::types::CatalogSnapshot;

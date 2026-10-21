@@ -66,7 +66,8 @@ import {
 } from '../../services/translation_graph/movement/catalog';
 import { indexManifestsByName, listAdapterManifests } from '../../services/translation_graph/adapters/registry';
 
-import { referencedConstructions, type InstanceSchema } from 'movement-lang';
+import { type InstanceSchema } from 'movement-lang';
+import { referencedConstructions } from 'legacy-lang';
 
 import {
   describableAdapters,

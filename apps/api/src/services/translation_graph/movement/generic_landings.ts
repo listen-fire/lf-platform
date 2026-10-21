@@ -27,15 +27,10 @@
 // already right (`coerceAnswer`). Threading the construction's literals into the
 // ask record would be a second copy of a type nobody would read.
 
-import { genericLandingKey, genericLandingName, literalStringValuesOf } from 'movement-lang';
+import { genericLandingKey, genericLandingName, literalStringValuesOf } from 'legacy-lang';
 
-import type {
-  InstanceChain,
-  InstanceSchema,
-  LanguageVersion,
-  PositionSchema,
-  WritableRootSchema,
-} from 'movement-lang';
+import type { InstanceSchema, LanguageVersion, PositionSchema, WritableRootSchema } from 'movement-lang';
+import type { InstanceChain } from 'legacy-lang';
 import type { SchemaTypeDescriptor } from 'movement-engine/public/catalog';
 
 import { landingSynthesizerFor } from '../adapters/packages';

@@ -42,34 +42,10 @@
 // constrains what reaches the LLM.
 
 import { z } from 'zod';
-import {
-  before,
-  bindStageArgs,
-  BridgeError,
-  borrowedTypeSegments,
-  fileViews,
-  findPlugin,
-  isEnumType,
-  parseFieldTypeName,
-  pluginArgMisfitMessage,
-  pluginPositionalParams,
-  expressionOfSlot,
-  variantOf,
-} from 'movement-lang';
-import type {
-  DeclaredExtractNode,
-  EnumType,
-  ExprSlot,
-  ExtractExpression,
-  ExtractField,
-  ExtractStage,
-  FieldType,
-  LanguageVersion,
-  NamedArg,
-  PluginCall,
-  PluginSpec,
-  ShapeNode,
-} from 'movement-lang';
+import { BridgeError, fileViews, findPlugin, expressionOfSlot } from 'movement-lang';
+import { before, bindStageArgs, borrowedTypeSegments, isEnumType, parseFieldTypeName, pluginArgMisfitMessage, pluginPositionalParams, variantOf } from 'legacy-lang';
+import type { DeclaredExtractNode, ExprSlot, ExtractExpression, ExtractField, ExtractStage, LanguageVersion, NamedArg, PluginCall, PluginSpec, ShapeNode } from 'movement-lang';
+import type { EnumType, FieldType } from 'legacy-lang';
 import { isPlainRecord, neverAsAny } from 'movement-engine/public/types';
 import { mapConcurrent, settledAll } from './fans';
 import {

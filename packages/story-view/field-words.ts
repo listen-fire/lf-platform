@@ -1,4 +1,4 @@
-import type { FieldType } from "movement-lang";
+import type { FieldType } from 'legacy-lang';
 
 /**
  * A field's type, said as a person would say it.

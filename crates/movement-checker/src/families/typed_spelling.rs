@@ -7,7 +7,7 @@
 //! spelling is the one whose tree is the old one's (`Text.length`,
 //! `Text.includes`, `!= null`); here the checker, which can, rewrites that fix
 //! where the operand is a list, and refuses a v5 call given the wrong kind.
-//! The TypeScript twin is packages/movement-lang/checker/typed_spelling.ts.
+//! The TypeScript twin is packages/legacy-lang/checker/typed_spelling.ts.
 
 use movement_parser::ast::{ExprSlot, Span};
 use movement_parser::tree::{At, BinaryOp, MExpr};

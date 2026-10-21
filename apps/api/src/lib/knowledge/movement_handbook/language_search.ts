@@ -17,13 +17,8 @@
 
 import { getMovementHandbook } from './index';
 
-import {
-  CURRENT_LANGUAGE_VERSION,
-  describeFieldType,
-  standardLibrary,
-  type Builtin,
-  type BuiltinParam,
-} from 'movement-lang';
+import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+import { describeFieldType, standardLibrary, type Builtin, type BuiltinParam } from 'legacy-lang';
 import { spellMessage, surfaceTable, type SpellingRow } from 'movement-lang/parser/surface';
 
 import type { Chapter, EngineClaim } from './types';

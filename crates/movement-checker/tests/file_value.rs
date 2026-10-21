@@ -2,7 +2,7 @@
 //! — a call to a function or a plugin (written whole or nested in the value),
 //! a write, a walk, a wait or a node is refused at save, as the engines refuse
 //! it at run time. The TypeScript twin is
-//! packages/movement-lang/checker/__test__/file_value.unit.test.ts.
+//! packages/legacy-lang/checker/__test__/file_value.unit.test.ts.
 
 use movement_checker::{CheckOptions, Diagnostic, check_source};
 use movement_parser::catalog::types::CatalogSnapshot;

@@ -2,7 +2,9 @@
 // declarations reach the checker as the same vocabulary a built-in's do, so a
 // listen config the adapter would never route is refused.
 
-import { checkProgram, fromCatalogSnapshot, parseProgram } from 'movement-lang';
+import { fromCatalogSnapshot } from 'movement-lang';
+import { checkProgram } from 'legacy-lang';
+import { parseProgram } from 'movement-lang';
 import { buildCatalogSnapshot } from 'movement-engine/services/translation_graph/movement/catalog_snapshot';
 
 import { RemoteAdapterManifestFile, remoteAdapterManifest } from '../../adapters/remote/manifest';

@@ -66,6 +66,7 @@
     "packages/embedding-providers",
     "packages/image-providers",
     "packages/legacy-engine",
+    "packages/legacy-lang",
     "packages/principal",
     "packages/story-view",
     "packages/transcription-providers",

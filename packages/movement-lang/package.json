@@ -2,7 +2,7 @@
   "name": "@listen-fire/movement-lang",
   "license": "Apache-2.0",
   "version": "0.12.0-rc.4",
-  "description": "The data-movement language: parser, checker, and lowering for movements",
+  "description": "The data-movement language, version 5: the wasm parser, checker and engine with their loader and bindings, the version table, the expression AST and the types the contracts name",
   "engines": {
     "node": "22.20.0"
   },
@@ -10,16 +10,6 @@
     "build": "tsc --project tsconfig.build.json && cp wasm/*.wasm dist/wasm/",
     "watch": "tsc --project tsconfig.build.json -w",
     "test": "node ../../apps/api/node_modules/jest/bin/jest.js --config jest.config.borrowed.cjs",
-    "language:conformance": "node -r ../../apps/api/node_modules/ts-node/register/transpile-only conformance/language_conformance.ts",
-    "language:upgrade": "node -r ../../apps/api/node_modules/ts-node/register/transpile-only conformance/upgrade_text.ts",
-    "test:conformance:v1": "node ../../apps/api/node_modules/jest/bin/jest.js --config jest.conformance.v1.cjs",
-    "test:conformance:v2": "node ../../apps/api/node_modules/jest/bin/jest.js --config jest.conformance.v2.cjs",
-    "test:conformance:v3": "node ../../apps/api/node_modules/jest/bin/jest.js --config jest.conformance.v3.cjs",
-    "test:conformance:v4": "node ../../apps/api/node_modules/jest/bin/jest.js --config jest.conformance.v4.cjs",
-    "harvest:programs": "T=$(mktemp -d) && for c in v1 v2 v3 current; do HARVEST_CORPUS=$c HARVEST_OUT=$T/$c.jsonl node ../../apps/api/node_modules/jest/bin/jest.js --config parser/harvest/jest.harvest.cjs || exit 1; done && node parser/harvest/build_fixture.cjs v1=$T/v1.jsonl v2=$T/v2.jsonl v3=$T/v3.jsonl current=$T/current.jsonl",
-    "harvest:slots": "T=$(mktemp -d) && for c in v1 v2 v3 current; do HARVEST_CORPUS=$c HARVEST_OUT=$T/$c.jsonl node ../../apps/api/node_modules/jest/bin/jest.js --config parser/expression/harvest/jest.harvest.cjs || exit 1; done && node parser/expression/harvest/build_fixture.cjs v1=$T/v1.jsonl v2=$T/v2.jsonl v3=$T/v3.jsonl current=$T/current.jsonl",
-    "harvest:checks": "checker/harvest/harvest.sh --pin",
-    "checks:corpus": "checker/harvest/harvest.sh",
     "prepack": "node ../../scripts/build-packages.cjs .",
     "postpack": "node ../../scripts/build-packages.cjs --restore ."
   },
@@ -51,14 +41,6 @@
         "types": "./dist/index.d.ts",
         "default": "./dist/index.js"
       },
-      "./cron": {
-        "types": "./dist/cron/index.d.ts",
-        "default": "./dist/cron/index.js"
-      },
-      "./timezone": {
-        "types": "./dist/timezone/index.d.ts",
-        "default": "./dist/timezone/index.js"
-      },
       "./*": {
         "types": "./dist/*.d.ts",
         "default": "./dist/*.js"
@@ -67,12 +49,6 @@
     },
     "typesVersions": {
       "*": {
-        "cron": [
-          "dist/cron/index.d.ts"
-        ],
-        "timezone": [
-          "dist/timezone/index.d.ts"
-        ],
         "*": [
           "dist/*",
           "*"

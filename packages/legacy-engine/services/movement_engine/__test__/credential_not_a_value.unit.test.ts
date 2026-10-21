@@ -11,7 +11,7 @@ import { runMovement } from '../../../dispatch';
 import { MovementEngineError } from 'movement-engine/public/errors';
 import { makeTestHost } from 'movement-engine/public/testing';
 import { tenantIdOf } from 'engine-contracts';
-import { spelledFor } from 'movement-lang/checker/__test__/surface_spelling';
+import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import { fromCatalogSnapshot, mockCatalogSnapshot, parseMovementExpression, type LanguageVersion } from 'movement-lang';
 
 const VERSIONS: LanguageVersion[] = [1, 2, 3, 4, 5];

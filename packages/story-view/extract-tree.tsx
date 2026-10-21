@@ -1,6 +1,6 @@
 "use client";
 
-import type { Step } from "movement-lang";
+import type { Step } from 'legacy-lang';
 
 import { BOX, LIFT } from "./canvas-style";
 import { typeWord } from "./field-words";

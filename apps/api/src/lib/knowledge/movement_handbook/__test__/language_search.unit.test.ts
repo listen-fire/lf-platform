@@ -2,7 +2,7 @@
 // drift, ranked plainly, and every anchor it hands out readable in the lean
 // handbook (where whole chapters are not).
 
-import { standardLibrary } from 'movement-lang';
+import { standardLibrary } from 'legacy-lang';
 
 import { readBook } from '../../library';
 import { exampleText } from '../front_page';

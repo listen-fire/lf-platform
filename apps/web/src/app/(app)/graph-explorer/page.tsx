@@ -8,8 +8,9 @@
 // never nodes; a node carries only its name, properties, and edges.
 
 import { useState } from "react";
-import { neverAsAny, variantOf } from "movement-lang";
-import type { FieldType } from "movement-lang";
+import { neverAsAny } from 'movement-lang';
+import { variantOf } from 'legacy-lang';
+import type { FieldType } from 'legacy-lang';
 import { trpc } from "@/lib/trpc";
 
 type Instance = {

@@ -44,18 +44,8 @@
 //     the signature then resolves to no position, and the checker stays quiet —
 //     never states something wrongly.
 
-import {
-  EVENT_ACTION_FIELD,
-  RECORD_DELETED_ACTION,
-  eventAddressDisplay,
-  eventAddressKey,
-  isEnumType,
-  narrowingPrefixKey,
-  type EdgeSchema,
-  type EventAddressRef,
-  type InstanceSchema,
-  type PositionSchema,
-} from 'movement-lang';
+import { type EdgeSchema, type InstanceSchema, type PositionSchema } from 'movement-lang';
+import { EVENT_ACTION_FIELD, RECORD_DELETED_ACTION, eventAddressDisplay, eventAddressKey, isEnumType, narrowingPrefixKey, type EventAddressRef } from 'legacy-lang';
 
 import type { Expression } from 'movement-lang/expression/types';
 import type { ListenConfigKey } from 'movement-engine/public/adapter';

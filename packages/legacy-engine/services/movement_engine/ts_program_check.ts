@@ -33,23 +33,12 @@
 // `…/value/expr/nested/0-31/value/call/args/1/closure/body/0/value/node/spreads/0`.
 // The Rust engine re-reads the call from the slot to resolve one.
 
-import {
-  checkProgramWithLink,
-  fromCatalogSnapshot,
-  resolveFileFromSnapshot,
-  CURRENT_LANGUAGE_VERSION,
-  nestedCallsReadIn,
-} from 'movement-lang';
+import { fromCatalogSnapshot, resolveFileFromSnapshot, CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+import { checkProgramWithLink } from 'legacy-lang';
+import { nestedCallsReadIn } from 'movement-lang';
 
-import type {
-  Catalog,
-  Diagnostic,
-  ExprSlot,
-  LinkedExport,
-  Program,
-  ProgramLink,
-  ResolveFile,
-} from 'movement-lang';
+import type { Catalog, Diagnostic, ExprSlot, LinkedExport, Program, ResolveFile } from 'movement-lang';
+import type { ProgramLink } from 'legacy-lang';
 
 import { MovementEngineError } from 'movement-engine/public/errors';
 import {

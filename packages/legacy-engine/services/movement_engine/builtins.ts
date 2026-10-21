@@ -3,7 +3,7 @@
 // Rust engine's oracle (crates/movement-engine/tests/oracle/generate.ts) can
 // call them without loading the evaluator's import graph.
 
-import { coerceToDate, coerceToDatetime, coerceToNumber } from 'movement-lang';
+import { coerceToDate, coerceToDatetime, coerceToNumber } from 'legacy-lang';
 
 import { MovementEngineError } from 'movement-engine/public/errors';
 

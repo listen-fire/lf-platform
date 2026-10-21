@@ -42,7 +42,7 @@ import { dispatchTriggerByIdEvent } from '../translation_graph/triggers/router';
 import { registerWorkHandler } from '../work/drain';
 import { enqueueWork, listWorkByKind, removeWork } from '../work/store';
 
-import { CronParseError, nextCronOccurrence, parseCron, type CronSchedule } from 'movement-lang/cron';
+import { CronParseError, nextCronOccurrence, parseCron, type CronSchedule } from 'legacy-lang/cron';
 
 /** One row per cron trigger, due at its next occurrence. */
 export function cronWorkKey(triggerId: string): string {

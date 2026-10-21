@@ -91,7 +91,7 @@ import { resumeMovement, runMovement } from '@listen-fire/legacy-engine/dispatch
 import { type ParkSink } from '@listen-fire/legacy-engine/services/movement_engine/run';
 
 import { fromCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
-import { spelledFor } from 'movement-lang/checker/__test__/surface_spelling';
+import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import {
   containerAssociation,

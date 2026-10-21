@@ -184,7 +184,7 @@ interface FieldCapability {
 }
 ```
 
-`EdgeSchema` is the checker's (`packages/movement-lang/checker/catalog.ts`); `EdgeCapability`, `NaturalOrder` and `FieldCapability` are shared with the expression layer (`packages/movement-lang/expression/types.ts`). A test holds the member names and optional marks of every interface on this page to those sources. A schema's field types are `SchemaFieldType` only: the Rust reader refuses a field typed with what only the checker's typing builds (a record, a union).
+`EdgeSchema` is the checker's (`packages/legacy-lang/checker/catalog.ts`); `EdgeCapability`, `NaturalOrder` and `FieldCapability` are shared with the expression layer (`packages/movement-lang/expression/types.ts`). A test holds the member names and optional marks of every interface on this page to those sources. A schema's field types are `SchemaFieldType` only: the Rust reader refuses a field typed with what only the checker's typing builds (a record, a union).
 
 **The `file` type is the envelope that makes a value a file.** Both engines read a position's property types (`PositionSchema.properties`, the read wrapper's natural type) and a plugin output's field types (`PluginOutput`), and make a file of each value at a `file` position — `file` itself, a list's or a dict's members of that type, a tuple's slots, a maybe-absent one — where the value spells a file's descriptor (`engine-contracts` `fileDescriptorOf`). A value at any other type is data, whatever keys it carries; a value at a `file` type that spells no descriptor stays data too. No reader classifies a value by its keys.
 

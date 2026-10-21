@@ -1,6 +1,6 @@
 //! The extraction keyword under language version 5: MOV_EXTRACT_KEYWORD_RETIRED
 //! with the same rewrite the TypeScript checker writes
-//! (packages/movement-lang/checker/__test__/extract_keyword_retired.unit.test.ts).
+//! (packages/legacy-lang/checker/__test__/extract_keyword_retired.unit.test.ts).
 
 use movement_checker::{CheckOptions, Diagnostic, check_source};
 use movement_parser::catalog::types::CatalogSnapshot;

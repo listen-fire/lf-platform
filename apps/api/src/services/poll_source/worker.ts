@@ -14,7 +14,7 @@
 // keeps exactly one row per poll-source trigger.
 
 import { sql } from 'kysely';
-import { durationToMs, isValidDuration } from 'movement-lang';
+import { durationToMs, isValidDuration } from 'legacy-lang';
 import { z } from 'zod';
 
 import type { TeamId } from '../../generated/kysely/core/Team';

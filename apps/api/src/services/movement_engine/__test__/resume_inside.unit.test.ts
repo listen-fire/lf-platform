@@ -19,7 +19,7 @@
 
 import type { InstanceSchema, LanguageVersion } from 'movement-lang';
 import { CURRENT_LANGUAGE_VERSION, fromCatalogSnapshot } from 'movement-lang';
-import { spelledFor } from 'movement-lang/checker/__test__/surface_spelling';
+import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import type { Adapter, RuntimeCapabilities, WriteInput } from 'movement-engine/services/translation_graph/adapter';
 import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
 import { tenantIdOf } from 'engine-contracts';

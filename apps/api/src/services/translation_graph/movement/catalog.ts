@@ -31,28 +31,8 @@
 //   - construction args beyond `credentials` — manifests don't declare a
 //     construction-config block yet (same TODO as the static catalog).
 
-import {
-  entryPositionKeyOf,
-  instanceSchemaKey,
-  catalogSnapshotOf,
-  parseMovementExpression,
-  parseTraversalPath,
-  referencedConstructions,
-  referencedEventAddresses,
-  scanInstanceChains,
-  surfaceNotEnumerated,
-  CURRENT_LANGUAGE_VERSION,
-  type InstanceChain,
-  type AdapterSpec,
-  type Catalog,
-  type CatalogSnapshot,
-  type CredentialSpec,
-  type SchemaFieldType,
-  type InstanceSchema,
-  type LanguageVersion,
-  type PluginSpec,
-  type ResolveFile,
-} from 'movement-lang';
+import { entryPositionKeyOf, instanceSchemaKey, catalogSnapshotOf, parseMovementExpression, CURRENT_LANGUAGE_VERSION, type AdapterSpec, type Catalog, type CatalogSnapshot, type CredentialSpec, type SchemaFieldType, type InstanceSchema, type LanguageVersion, type PluginSpec, type ResolveFile } from 'movement-lang';
+import { parseTraversalPath, referencedConstructions, referencedEventAddresses, scanInstanceChains, surfaceNotEnumerated, type InstanceChain } from 'legacy-lang';
 
 import type { Expression } from 'movement-lang/expression/types';
 import type { TeamId } from '../../../generated/kysely/core/Team';

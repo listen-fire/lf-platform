@@ -4,7 +4,7 @@
 //! alias read is the field under 5 even where the scope binds its name; and
 //! which fixes are
 //! marked safe to apply automatically. The TypeScript twin is
-//! packages/movement-lang/checker/__test__/v5_integration.unit.test.ts.
+//! packages/legacy-lang/checker/__test__/v5_integration.unit.test.ts.
 
 use movement_checker::{CheckOptions, Diagnostic, check_source};
 use movement_parser::catalog::types::CatalogSnapshot;

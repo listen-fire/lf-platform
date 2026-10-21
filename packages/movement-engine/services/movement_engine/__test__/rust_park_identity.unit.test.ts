@@ -15,11 +15,9 @@
 //     however many a file declares.
 
 import { spelledForVersion5 } from './combinator_spelling';
-import { spelledFor } from 'movement-lang/checker/__test__/surface_spelling';
+import { spelledFor } from './surface_spelling';
 import {
-  fromCatalogSnapshot,
   mockCatalogSnapshot,
-  resolveFileFromSnapshot,
   type CatalogSnapshot,
   type InstanceSchema,
 } from 'movement-lang';
@@ -246,9 +244,7 @@ async function runOn(c: Case) {
   // Written once in the spelling versions 1–4 read; the run reads it as the upgrade tool respells it.
   const withFiles = c.files !== undefined ? { ...catalog, files: c.files } : catalog;
   const spell = (text: string) =>
-    spelledFor(5, text, fromCatalogSnapshot(withFiles), {
-      resolveFile: resolveFileFromSnapshot(withFiles),
-    });
+    spelledFor(5, text, withFiles);
   const files =
     c.files === undefined
       ? undefined

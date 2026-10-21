@@ -81,7 +81,7 @@ jest.mock('../../../lib/prompts/execute', () => ({
 import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 
 import { CURRENT_LANGUAGE_VERSION, fromCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
-import { spelledFor } from 'movement-lang/checker/__test__/surface_spelling';
+import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import {
   containerAssociation,

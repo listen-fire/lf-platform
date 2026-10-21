@@ -1,6 +1,7 @@
 import { CapturedWrite } from 'movement-engine/public/adapter';
 import * as _prisma_client_runtime_library from '@prisma/client/runtime/library';
-import { FieldType, CatalogSnapshot, InstanceSchema, LanguageVersion, Diagnostic, StoryProblem, StoryShapeNode, StoryEdge, Step, Chip, StoryFilter, StoryValidity } from 'movement-lang';
+import { CatalogSnapshot, InstanceSchema, LanguageVersion, Diagnostic } from 'movement-lang';
+import { FieldType, StoryProblem, StoryShapeNode, StoryEdge, Step, Chip, StoryFilter, StoryValidity } from 'legacy-lang';
 import * as _trpc_server_observable from '@trpc/server/observable';
 import { AskState } from '@listen-fire/ask';
 import * as engine_contracts from 'engine-contracts';

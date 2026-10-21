@@ -15,7 +15,8 @@
 //      stops the rest of the WHERE from being read, exactly as the full async
 //      evaluator does.
 
-import { parseTraversalPath, refinementKey, scanInstanceChains } from 'movement-lang';
+import { refinementKey } from 'movement-lang';
+import { parseTraversalPath, scanInstanceChains } from 'legacy-lang';
 import type { InstanceSchema } from 'movement-lang';
 import { refineInstanceSchema } from '../../translation_graph/movement/refinements';
 import { runMovement } from '@listen-fire/legacy-engine/dispatch';

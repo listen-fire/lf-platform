@@ -11,12 +11,11 @@
 //   `getFieldValue` — on every version.
 
 import {
-  fromCatalogSnapshot,
   mockCatalogSnapshot,
   type InstanceSchema,
   type LanguageVersion,
 } from 'movement-lang';
-import { spelledFor } from 'movement-lang/checker/__test__/surface_spelling';
+import { spelledFor } from './surface_spelling';
 import { tenantIdOf } from 'engine-contracts';
 
 import {
@@ -288,7 +287,7 @@ async function runOn(source: string, languageVersion: LanguageVersion): Promise<
   const calls: Call[] = [];
   try {
     const result = await runMovement({
-      source: spelledFor(languageVersion, source, fromCatalogSnapshot(catalog)),
+      source: spelledFor(languageVersion, source, catalog),
       event: webhook(),
       teamId: TEAM_ID,
       catalog,

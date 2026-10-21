@@ -15,12 +15,8 @@
 // can't construct an instance without importing the credential, and a
 // dangling import alone already breaks the movement's next save/run.
 
-import {
-  MovementParseError,
-  parseProgram,
-  type Program,
-  type Statement,
-} from 'movement-lang';
+import { type Program, type Statement } from 'movement-lang';
+import { MovementParseError, parseProgram } from 'movement-lang';
 
 /**
  * The de-duplicated ORIGINAL credential import names the source pulls in

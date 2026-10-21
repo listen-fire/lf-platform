@@ -19,7 +19,8 @@
 // Probes are read under the release's current language version: the handbook
 // teaches the language a movement saved today is pinned to.
 
-import { CURRENT_LANGUAGE_VERSION, parseProgram } from 'movement-lang';
+import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+import { parseProgram } from 'movement-lang';
 
 import type { EngineClaim } from '../types';
 

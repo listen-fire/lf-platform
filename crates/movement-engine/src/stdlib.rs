@@ -1,4 +1,4 @@
-//! The built-in functions (packages/movement-lang/expression/stdlib.ts and
+//! The built-in functions (packages/legacy-lang/expression/stdlib.ts and
 //! the flat set in packages/movement-engine/services/movement_engine/expression.ts's
 //! `applyMovementFunction`), argument for argument and quirk for quirk.
 //!
@@ -752,7 +752,7 @@ fn is_opaque_uri(raw: &str) -> bool {
     b.get(end) == Some(&b':') && !raw[end + 1..].starts_with("//")
 }
 
-// ── DATE.TODAY and DATETIME.AT (packages/movement-lang/timezone) ───────────────────
+// ── DATE.TODAY and DATETIME.AT (packages/legacy-lang/timezone) ───────────────────
 
 /// cron's `cronTimezoneError`: `Intl` refuses the zone.
 fn zone_problem(zone: &str, services: &dyn EnvServices) -> Option<String> {

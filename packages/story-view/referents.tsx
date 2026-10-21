@@ -1,14 +1,7 @@
 "use client";
 
 import { createContext, useContext } from "react";
-import type {
-  Chip,
-  ChipPart,
-  StoryReference,
-  StoryShapeNode,
-  Step,
-  StoryNode,
-} from "movement-lang";
+import type { Chip, ChipPart, StoryReference, StoryShapeNode, Step, StoryNode } from 'legacy-lang';
 import type { StoryView, StoryViewRecord } from "./view";
 
 /**

@@ -18,6 +18,13 @@ jest.mock('movement-lang', () => {
       checkers.rust += 1;
       return actual.checkSourceInRust(...args);
     },
+  };
+});
+
+jest.mock('legacy-lang', () => {
+  const actual = jest.requireActual('legacy-lang');
+  return {
+    ...actual,
     checkProgram: (...args: unknown[]) => {
       checkers.typescript += 1;
       return actual.checkProgram(...args);
@@ -28,7 +35,7 @@ jest.mock('movement-lang', () => {
 jest.mock('../catalog', () => ({ movementCatalogForTeam: jest.fn() }));
 
 import { fromCatalogSnapshot, mockCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
-import { spelledFor } from 'movement-lang/checker/__test__/surface_spelling';
+import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 
 import { diagnoseMovementSource, validateMovementForTeam } from '../authoring';
 import { movementCatalogForTeam } from '../catalog';

@@ -7,7 +7,8 @@
 // checker refuses it under every language version; listens that do have a
 // delivery path without a key stay legal.
 
-import { checkProgram, parseProgram } from 'movement-lang';
+import { checkProgram } from 'legacy-lang';
+import { parseProgram } from 'movement-lang';
 
 import { staticCatalogFromManifests } from '../catalog';
 

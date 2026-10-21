@@ -35,7 +35,7 @@
 // the other is not a conformance question — it typechecks the way passing a
 // value to a same-typed parameter always does.
 
-import { parseProgram, checkProgram, mockCatalog, type Diagnostic } from 'movement-lang';
+import { CURRENT_LANGUAGE_VERSION, checkSourceInRust, mockCatalogSnapshot, type Diagnostic } from 'movement-lang';
 
 import { instanceSchemaFromDescriptors } from 'movement-engine/public/catalog';
 import { gmailEntryPoints, GMAIL_MAILBOX_DESCRIPTOR, describeGmailType } from '../schema';
@@ -56,7 +56,7 @@ const { schema: gmailSchema, notes } = instanceSchemaFromDescriptors({
   supportsInPlaceUpdate: false,
 });
 
-const catalog = mockCatalog({
+const catalog = mockCatalogSnapshot({
   adapters: {
     gmail: {
       constructionArgs: [{ name: 'credentials', kind: 'credential', required: true }],
@@ -72,7 +72,7 @@ mail = connect gmail using gmail_cred
 `;
 
 function errors(source: string): Diagnostic[] {
-  return checkProgram(parseProgram(source), catalog).filter(
+  return checkSourceInRust(source, catalog, { languageVersion: CURRENT_LANGUAGE_VERSION }).filter(
     (d) => (d.severity ?? 'error') === 'error',
   );
 }

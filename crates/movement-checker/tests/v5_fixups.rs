@@ -1,5 +1,5 @@
 //! Version 5 fix-ups the handbook found, through the Rust checker. The
-//! TypeScript twin is packages/movement-lang/checker/__test__/v5_fixups.unit.test.ts.
+//! TypeScript twin is packages/legacy-lang/checker/__test__/v5_fixups.unit.test.ts.
 
 use movement_checker::types::event_address::{EventAddress, event_address_of_hops};
 use movement_checker::{CheckOptions, Diagnostic, check_source};

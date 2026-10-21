@@ -21,7 +21,7 @@
 // swallow a legitimate event on an indeterminate answer. The floor (Phase 1)
 // and the opt-in nature already bound the cost of an un-suppressed echo.
 
-import { SUPPRESS_SELF_KEY } from 'movement-lang';
+import { SUPPRESS_SELF_KEY } from 'legacy-lang';
 
 import type { Adapter } from 'movement-engine/public/adapter';
 import type { TriggerEvent } from 'movement-engine/public/inbound';

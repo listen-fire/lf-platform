@@ -22,21 +22,9 @@
  *
  */
 
-import {
-  BridgeError,
-  MovementParseError,
-  storyOf,
-  type Chip,
-  type ChipPart,
-  type LanguageVersion,
-  type StoryFilter,
-  type StoryIR,
-  type StoryNode,
-  type StoryShapeNode,
-  type StoryTarget,
-  type StoryTraversal,
-  type Step,
-} from 'movement-lang';
+import { BridgeError, type LanguageVersion } from 'movement-lang';
+import { storyOf, type Chip, type ChipPart, type StoryFilter, type StoryIR, type StoryNode, type StoryShapeNode, type StoryTarget, type StoryTraversal, type Step } from 'legacy-lang';
+import { MovementParseError } from 'movement-lang';
 import { LRUCache } from 'lru-cache';
 
 import type { BrandIcon } from 'movement-engine/public/adapter';

@@ -3,14 +3,9 @@
 // the program's traversal paths, iterated because a target only becomes
 // known once its parent is described.
 
-import {
-  checkProgram,
-  fromCatalogSnapshot,
-  parseProgram,
-  scanInstanceChains,
-  type CatalogSnapshot,
-  type InstanceSchema,
-} from 'movement-lang';
+import { fromCatalogSnapshot, type CatalogSnapshot, type InstanceSchema } from 'movement-lang';
+import { checkProgram, scanInstanceChains } from 'legacy-lang';
+import { parseProgram } from 'movement-lang';
 
 import type { SchemaEntryPoint, SchemaTypeDescriptor } from 'engine-contracts/catalog';
 

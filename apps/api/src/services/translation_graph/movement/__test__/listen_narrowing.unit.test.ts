@@ -22,7 +22,8 @@
 //     — so the regression tests below drive TWO addresses and assert that
 //     neither is discarded and neither wins.
 
-import { eventAddressKey, type EventAddressRef, type InstanceSchema } from 'movement-lang';
+import { type InstanceSchema } from 'movement-lang';
+import { eventAddressKey, type EventAddressRef } from 'legacy-lang';
 
 import type { ListenConfigKey } from 'movement-engine/services/translation_graph/adapter';
 import type { SchemaTypeDescriptor } from 'engine-contracts/catalog';

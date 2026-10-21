@@ -346,7 +346,7 @@ mod tests {
     /// holds there.
     #[test]
     fn every_code_node_in_the_corpus_reads_back_by_its_path() {
-        let fixture = concat!(env!("CARGO_MANIFEST_DIR"), "/../../packages/movement-lang/parser/__test__/__fixtures__/programs.json");
+        let fixture = concat!(env!("CARGO_MANIFEST_DIR"), "/../../packages/legacy-lang/parser/__test__/__fixtures__/programs.json");
         let text = std::fs::read_to_string(fixture).unwrap();
         let mut found = std::collections::BTreeMap::<&'static str, usize>::new();
         for line in text.lines().filter(|line| !line.trim().is_empty()) {

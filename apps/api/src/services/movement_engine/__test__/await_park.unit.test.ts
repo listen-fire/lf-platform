@@ -12,7 +12,7 @@ import type { QueuedWake } from 'movement-engine/services/movement_engine/host_k
 import { makeFakeParkSink } from 'movement-engine/services/movement_engine/test_host';
 import { logger } from 'movement-engine/services/logger';
 import { awaitingSource as awaitingSourceV4, makeAwaitingAdapter, runAwaiting } from './awaitable_fixture';
-import { spelledFor } from 'movement-lang/checker/__test__/surface_spelling';
+import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import { tenantOfTeam } from '../../translation_graph/movement/tenant';
 
 // The shared fixture writes the version 4 spelling (other suites read it too); these runs are version 5.

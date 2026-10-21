@@ -1,5 +1,5 @@
 //! Five-field cron schedules as the checker judges them: the validity half
-//! of packages/movement-lang/cron (`cronScheduleError`), which the scheduler shares,
+//! of packages/legacy-lang/cron (`cronScheduleError`), which the scheduler shares,
 //! so a schedule this accepts is one the scheduler can run.
 
 struct Field {

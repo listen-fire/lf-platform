@@ -9,10 +9,10 @@
 import path from "node:path";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { ignoredPaths } = require('../../../../packages/movement-lang/conformance/triage_files.cjs');
+const { ignoredPaths } = require('../../../../packages/legacy-lang/conformance/triage_files.cjs');
 import unitConfig from './jest-unit.config';
 
-const CONFORMANCE = path.resolve(__dirname, '../../../../packages/movement-lang/conformance');
+const CONFORMANCE = path.resolve(__dirname, '../../../../packages/legacy-lang/conformance');
 const HARVEST = 'src/services/movement_engine/conformance/harvest';
 
 // eslint-disable-next-line local-rules/bottom-exports

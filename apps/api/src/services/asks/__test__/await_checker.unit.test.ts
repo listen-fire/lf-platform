@@ -21,13 +21,9 @@
 // (MOV_AWAIT_BARE_WALK). The retirement itself is pinned in movement-lang's
 // checker/__test__/await_first.unit.test.ts; here we use the live spelling.
 
-import {
-  parseProgram,
-  checkProgram,
-  fromCatalogSnapshot,
-  type CatalogSnapshot,
-  type InstanceSchema,
-} from 'movement-lang';
+import { fromCatalogSnapshot, type CatalogSnapshot, type InstanceSchema } from 'movement-lang';
+import { checkProgram } from 'legacy-lang';
+import { parseProgram } from 'movement-lang';
 
 const askSchema: InstanceSchema = {
   positions: {

@@ -5,7 +5,8 @@
 // unrelated shapes with unrelated vocabularies, and one of them declares
 // nothing at all — a join that hardcoded either would fail on the other.
 
-import { mockCatalog, storyOf, type InstanceSchema, type StoryIR } from 'movement-lang';
+import { mockCatalog, type InstanceSchema } from 'movement-lang';
+import { storyOf, type StoryIR } from 'legacy-lang';
 
 import type { TeamMovementCatalog } from '../catalog';
 

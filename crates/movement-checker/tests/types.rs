@@ -1,5 +1,5 @@
 //! The type core against the TypeScript's answers. The expected values were
-//! read off packages/movement-lang/checker/typing.ts run on the same inputs
+//! read off packages/legacy-lang/checker/typing.ts run on the same inputs
 //! (2026-10-15), except where a test says it pins a reading of the source.
 
 use std::collections::HashMap;

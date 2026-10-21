@@ -14,14 +14,8 @@ import { randomUUID } from "node:crypto";
 import { Router, type RequestHandler } from 'express';
 import { z } from 'zod';
 import { currentPrincipal } from 'principal';
-import {
-  before,
-  CURRENT_LANGUAGE_VERSION,
-  getMovementCompletions,
-  languageVersionView,
-  type LanguageVersion,
-  type LanguageVersionView,
-} from 'movement-lang';
+import { CURRENT_LANGUAGE_VERSION, languageVersionView, type LanguageVersion, type LanguageVersionView } from 'movement-lang';
+import { before, getMovementCompletions } from 'legacy-lang';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { UserId } from '../../../generated/kysely/core/User';

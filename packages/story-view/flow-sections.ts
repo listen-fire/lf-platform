@@ -1,4 +1,4 @@
-import type { Step } from "movement-lang";
+import type { Step } from 'legacy-lang';
 import type { StoryView, StoryViewTrigger } from "./view";
 
 /**

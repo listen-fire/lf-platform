@@ -6,16 +6,15 @@
 // so the order of an argument object's keys is held too).
 
 import {
-  fromCatalogSnapshot,
   mockCatalogSnapshot,
-  parseTraversalPath,
+  parseMovementExpression,
   refinementKey,
   type InstanceSchema,
   type LanguageVersion,
 } from 'movement-lang';
 
 import { tenantIdOf } from 'engine-contracts';
-import { spelledFor } from 'movement-lang/checker/__test__/surface_spelling';
+import { spelledFor } from './surface_spelling';
 
 import { evaluatePredicate } from 'movement-lang/expression/filter';
 import type { Expression } from 'movement-lang/expression/types';
@@ -77,6 +76,12 @@ const HANDOVER = 'List Entry — Watchlist';
 const NARROWED = '`listName` == "Portfolio"';
 /** The same WHERE as version 5 spells it: a field is read through the hop's alias. */
 const NARROWED_V5 = 'le.`listName` == "Portfolio"';
+/** The steps of a traversal path, as the editor's selector parses one. */
+function parseTraversalPath(path: string, languageVersion?: LanguageVersion) {
+  const parsed = parseMovementExpression(`__movement_path_root__${path}.\`__movement_path_probe__\``, languageVersion);
+  return parsed.type === 'traverse' ? parsed.steps : undefined;
+}
+
 function selectionKey(where: string, version?: 5): string {
   const steps =
     version === 5
@@ -148,7 +153,7 @@ const programFor = (
   return spelledFor(
     version,
     `${PRELUDE}movement m(msg: <inbox-[:message]->>) {\n${edited}\n}`,
-    fromCatalogSnapshot(catalog),
+    catalog,
   );
 };
 

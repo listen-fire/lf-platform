@@ -55,17 +55,8 @@ import {
   type CompletionResult,
 } from "@codemirror/autocomplete";
 import { getCM, vim } from "@replit/codemirror-vim";
-import {
-  getDefinition,
-  getHoverInfo,
-  getMovementCompletions,
-  getMovementDiagnostics,
-  type CatalogSnapshot,
-  type CompletionKind,
-  type DefinitionTarget,
-  type LanguageVersion,
-  type MovementDiagnostic,
-} from "movement-lang";
+import { type CatalogSnapshot, type LanguageVersion } from 'movement-lang';
+import { getDefinition, getHoverInfo, getMovementCompletions, getMovementDiagnostics, type CompletionKind, type DefinitionTarget, type MovementDiagnostic } from 'legacy-lang';
 
 import { movementSyntax } from "./movement-language";
 

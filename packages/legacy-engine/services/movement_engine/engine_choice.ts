@@ -2,7 +2,8 @@
 // later run on the Rust engine (`@listen-fire/engine`), 1–4 on the TypeScript
 // engine this package keeps. No fallback between them.
 
-import { since, type LanguageVersion } from 'movement-lang';
+import { type LanguageVersion } from 'movement-lang';
+import { since } from 'legacy-lang';
 
 import { MovementEngineError, PARKED_ON_TYPESCRIPT } from 'movement-engine/public/errors';
 

@@ -12,7 +12,7 @@ import ts from 'typescript';
 const REPO = path.resolve(__dirname, '../../..');
 
 const SOURCES = [
-  'packages/movement-lang/checker/catalog.ts',
+  'packages/movement-lang/catalog/types.ts',
   'packages/movement-lang/service/snapshot.ts',
   'packages/movement-lang/expression/types.ts',
   'packages/engine-contracts/park_state.ts',

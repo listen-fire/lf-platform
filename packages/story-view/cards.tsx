@@ -1,6 +1,6 @@
 "use client";
 
-import type { StoryEdge, StoryEndpoint, StoryNode } from "movement-lang";
+import type { StoryEdge, StoryEndpoint, StoryNode } from 'legacy-lang';
 import type { StoryViewRecord, StoryViewTrigger } from "./view";
 
 import { BrandMark } from "./brand-mark";

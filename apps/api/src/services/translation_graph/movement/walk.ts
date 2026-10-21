@@ -16,7 +16,7 @@
 //     the path that walks it, composed onto the path already walked. The string
 //     that explores is the string an author writes in a movement.
 
-import type { FieldType } from 'movement-lang';
+import type { FieldType } from 'legacy-lang';
 import type { EdgesFromResult, EdgeTargetNode } from 'movement-engine/public/adapter';
 import type { SchemaFieldDescriptor, SchemaReferenceDescriptor, SchemaTypeDescriptor } from 'movement-engine/public/catalog';
 import type { UniquenessConstraints } from 'movement-engine/public/adapter-support';

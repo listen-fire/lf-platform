@@ -27,7 +27,7 @@
  *
  */
 
-import { parseTraversalPath } from 'movement-lang';
+import { parseTraversalPath } from 'legacy-lang';
 import { z } from 'zod';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';

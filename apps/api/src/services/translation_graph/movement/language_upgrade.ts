@@ -31,20 +31,8 @@
 //
 // See plans/language-versioning-2026-09-29/1_design.md, "Deploy check".
 
-import {
-  CURRENT_LANGUAGE_VERSION,
-  THIS_RELEASE,
-  before,
-  upgradeSourceAsync,
-  describeLanguageVersion,
-  languageVersionDiagnostic,
-  languageVersionStanding,
-  languageVersionView,
-  type LanguageRelease,
-  type LanguageVersion,
-  type LanguageVersionView,
-  type Diagnostic,
-} from 'movement-lang';
+import { CURRENT_LANGUAGE_VERSION, THIS_RELEASE, describeLanguageVersion, languageVersionDiagnostic, languageVersionStanding, languageVersionView, type LanguageRelease, type LanguageVersion, type LanguageVersionView, type Diagnostic } from 'movement-lang';
+import { before, upgradeSourceAsync } from 'legacy-lang';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 

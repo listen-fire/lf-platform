@@ -13,15 +13,7 @@
  *
  */
 
-import type {
-  Chip,
-  StoryEdge,
-  StoryFilter,
-  StoryProblem,
-  StoryShapeNode,
-  StoryValidity,
-  Step,
-} from 'movement-lang';
+import type { Chip, StoryEdge, StoryFilter, StoryProblem, StoryShapeNode, StoryValidity, Step } from 'legacy-lang';
 
 /**
  * Monochrome brand mark for a system, as the adapter declared it — drawn with

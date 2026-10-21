@@ -29,11 +29,8 @@
 //     they describe it identically; where one didn't look, `undescribed` is the
 //     absence of a claim and must never overwrite a real one.
 
-import {
-  referencedConstructions,
-  type InstanceSchema,
-  type PositionSchema,
-} from 'movement-lang';
+import { type InstanceSchema, type PositionSchema } from 'movement-lang';
+import { referencedConstructions } from 'legacy-lang';
 
 import { getMovementHandbook } from '../../../lib/knowledge/movement_handbook';
 

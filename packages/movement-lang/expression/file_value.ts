@@ -62,3 +62,7 @@ export function fileView(file: object): { name?: string; contentType?: string; s
 export function isMarkedFile(value: unknown): value is FileMark {
   return FileMark.has(value);
 }
+
+/** The artifact types FILE() renders. */
+export const FILE_ARTIFACT_TYPES = ['pdf', 'text'] as const;
+export type FileArtifactType = (typeof FILE_ARTIFACT_TYPES)[number];

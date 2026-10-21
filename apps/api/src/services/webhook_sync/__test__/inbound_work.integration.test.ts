@@ -33,7 +33,8 @@ jest.mock('../../translation_graph/triggers/router', () => {
   return { ...actual, dispatchTriggerByIdEvent: jest.fn(actual.dispatchTriggerByIdEvent) };
 });
 
-import { eventAddressKey, CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+import { eventAddressKey } from 'legacy-lang';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { TriggerId } from '../../../generated/kysely/automations/Trigger';

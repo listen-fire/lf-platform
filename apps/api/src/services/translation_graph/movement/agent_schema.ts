@@ -1,4 +1,4 @@
-import { edgeIsReadable, edgeIsWritable } from 'movement-lang';
+import { edgeIsReadable, edgeIsWritable } from 'legacy-lang';
 
 import type { EdgeSchema, InstanceSchema, WritableRootSchema } from 'movement-lang';
 

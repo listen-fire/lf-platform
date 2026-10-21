@@ -12,7 +12,7 @@
 
 /// The zone database: which time zones the host's runtime recognises.
 pub trait ZoneLookup {
-    /// `isValidTimeZone` (packages/movement-lang/cron): whether `Intl.DateTimeFormat`
+    /// `isValidTimeZone` (packages/legacy-lang/cron): whether `Intl.DateTimeFormat`
     /// accepts `zone` as its `timeZone`.
     fn is_zone(&self, zone: &str) -> bool;
 }

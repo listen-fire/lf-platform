@@ -12,7 +12,7 @@ import { callCheckAnswer, callCheckCompatible, callCheckProgram } from '../wasm/
 import type { Loc, Span } from '../parser/ast';
 import type { LanguageVersion } from '../language_version';
 import type { CatalogSnapshot } from '../service/snapshot';
-import type { Diagnostic } from './check';
+import type { Diagnostic } from './diagnostic';
 import type { DiagnosticFix, SourceEdit } from './fixes';
 
 export interface RustCheckOptions {

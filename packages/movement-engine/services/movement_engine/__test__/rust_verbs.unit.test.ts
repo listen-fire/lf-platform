@@ -7,11 +7,10 @@
 
 import {
   CURRENT_LANGUAGE_VERSION,
-  fromCatalogSnapshot,
   mockCatalogSnapshot,
   type InstanceSchema,
 } from 'movement-lang';
-import { spelledFor } from 'movement-lang/checker/__test__/surface_spelling';
+import { spelledFor } from './surface_spelling';
 
 import { tenantIdOf } from 'engine-contracts';
 
@@ -317,7 +316,7 @@ async function runOn(c: Case): Promise<Outcome> {
       source: spelledFor(
         CURRENT_LANGUAGE_VERSION,
         `${PRELUDE}movement m(msg: <inbox-[:message]->>) {\n${c.body}\n}`,
-        fromCatalogSnapshot(catalog),
+        catalog,
       ),
       event: {
         pipelineInputId: 'pi-rust-verbs',

@@ -42,16 +42,8 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import {
-  constructionKey,
-  mergeInstanceSchema,
-  type CatalogSnapshot,
-  type ConstructionRef,
-  type DefinitionTarget,
-  type InstanceSchema,
-  type LanguageVersion,
-  type MovementDiagnostic,
-} from "movement-lang";
+import { mergeInstanceSchema, type CatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
+import { constructionKey, type ConstructionRef, type DefinitionTarget, type MovementDiagnostic } from 'legacy-lang';
 
 import { trpc, type RouterOutputs } from "@/lib/trpc";
 import {

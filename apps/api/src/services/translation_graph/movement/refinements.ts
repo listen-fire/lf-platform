@@ -39,7 +39,8 @@
 
 import { refinementKey } from 'movement-lang';
 
-import type { InstanceChain, InstanceSchema, PositionSchema } from 'movement-lang';
+import type { InstanceSchema, PositionSchema } from 'movement-lang';
+import type { InstanceChain } from 'legacy-lang';
 import type { Expression } from 'movement-lang/expression/types';
 import type { SchemaTypeDescriptor } from 'movement-engine/public/catalog';
 

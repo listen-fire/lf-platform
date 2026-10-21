@@ -4,7 +4,7 @@
 // and every layer (parser, checker, engine, plugins, adapters) honours that pin
 // by a conditional at the point of difference:
 //
-//     if (before(ctx.languageVersion, 2)) { …the old behaviour… }
+//     if (ctx.languageVersion < 2) { …the old behaviour… }
 //
 // The integer is the identity — code compares it and never parses the name.
 // The name is display only: it is what a person sees.
@@ -14,7 +14,7 @@
 //
 // See plans/language-versioning-2026-09-29/.
 
-import type { Diagnostic } from './checker/check';
+import type { Diagnostic } from './checker/diagnostic';
 import { neverAsAny } from './never';
 
 /** A language version's identity. */
@@ -71,23 +71,6 @@ export const THIS_RELEASE: LanguageRelease = {
   supported: SUPPORTED_LANGUAGE_VERSIONS,
   deprecated: DEPRECATED_LANGUAGE_VERSIONS,
 };
-
-/** `version` has (or postdates) the behaviour version `n` introduced. */
-export function since(version: LanguageVersion, n: LanguageVersion): boolean {
-  return version >= n;
-}
-
-/** `version` predates the behaviour version `n` introduced. */
-export function before(version: LanguageVersion, n: LanguageVersion): boolean {
-  return version < n;
-}
-
-/** Moving a program from version `from` to `to` crosses the behaviour
- *  version `n` introduced — where a warning that a construct changed meaning
- *  belongs. */
-export function changedBetween(from: LanguageVersion, to: LanguageVersion, n: LanguageVersion): boolean {
-  return before(from, n) && since(to, n);
-}
 
 export function languageVersionInfo(version: LanguageVersion): LanguageVersionInfo | undefined {
   return LANGUAGE_VERSIONS.find((info) => info.version === version);
@@ -176,5 +159,5 @@ export const RUN_HOST_UNITS: readonly string[] = ['cron', 'manual'];
 
 /** The units a file pinned to `version` has in scope. */
 export function runHostUnits(version: LanguageVersion): readonly string[] {
-  return since(version, 5) ? RUN_HOST_UNITS : [];
+  return version >= 5 ? RUN_HOST_UNITS : [];
 }

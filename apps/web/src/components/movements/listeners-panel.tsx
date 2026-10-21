@@ -22,7 +22,8 @@
 
 import { useMemo, useState } from "react";
 import { Check, Copy, Pause, Play, Plus } from "lucide-react";
-import { MovementParseError, expressionOfSlot, parseProgram } from "movement-lang";
+import { expressionOfSlot } from 'movement-lang';
+import { MovementParseError, parseProgram } from 'movement-lang';
 import type { ExprSlot, ListenDeclaration, Program } from "movement-lang";
 
 import { ServiceIcon } from "@/components/service-icon";

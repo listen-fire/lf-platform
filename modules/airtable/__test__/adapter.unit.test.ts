@@ -22,7 +22,6 @@ jest.mock('movement-engine/public/log', () => ({
   },
 }));
 
-import { scanInstanceChains } from 'movement-lang';
 
 import type { ResolveEntityInput } from 'movement-engine/public/adapter';
 

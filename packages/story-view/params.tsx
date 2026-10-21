@@ -1,6 +1,6 @@
 "use client";
 
-import type { StoryArg, StoryParam, StoryShapeNode } from "movement-lang";
+import type { StoryArg, StoryParam, StoryShapeNode } from 'legacy-lang';
 
 import { BrandMark } from "./brand-mark";
 import { NodeCard } from "./cards";

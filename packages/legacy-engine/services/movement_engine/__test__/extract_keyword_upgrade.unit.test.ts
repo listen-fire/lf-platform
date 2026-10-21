@@ -4,7 +4,9 @@
 // TypeScript engine against a model that answers each with the same records,
 // write the same things.
 
-import { applyFix, checkProgram, fromCatalogSnapshot, mockCatalogSnapshot, parseProgram, type InstanceSchema } from 'movement-lang';
+import { applyFix, fromCatalogSnapshot, mockCatalogSnapshot, type InstanceSchema } from 'movement-lang';
+import { checkProgram } from 'legacy-lang';
+import { parseProgram } from 'movement-lang';
 
 import { tenantIdOf } from 'engine-contracts';
 import { containerAssociation, type Adapter } from 'movement-engine/public/adapter';

@@ -79,6 +79,7 @@ COPY packages/engine-contracts/package.json packages/engine-contracts/
 COPY packages/module-runtime/package.json packages/module-runtime/
 COPY packages/movement-engine/package.json packages/movement-engine/
 COPY packages/legacy-engine/package.json packages/legacy-engine/
+COPY packages/legacy-lang/package.json packages/legacy-lang/
 COPY packages/movement-lang/package.json packages/movement-lang/
 COPY packages/story-view/package.json packages/story-view/
 

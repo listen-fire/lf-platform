@@ -1,5 +1,8 @@
 # Working on the language
 
+> **Where the TypeScript checker went.** The TypeScript parser, checker, editor service, story, cron, timezone and the conformance corpora (versions 1 to 4) are `packages/legacy-lang` (`@listen-fire/legacy-lang`, platform, private). This package is the wasm, its bindings, the version table, the expression AST and the catalog types the contracts name (`catalog/types.ts`). Anything below that describes the TypeScript checker, its `since`/`before` conditionals or the conformance runs describes the platform's copy; nothing here may import it.
+
+
 Read this before changing the parser, the checker, or the type model.
 
 ## Ask these two questions first. Every time.

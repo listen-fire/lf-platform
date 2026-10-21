@@ -15,12 +15,9 @@
  *
  * Usage: FAKE_BASE=http://localhost:6291/affinity ts-node … verify_affinity_list_entry_names.ts
  */
-import {
-  checkProgram,
-  fromCatalogSnapshot,
-  parseProgram,
-  type CatalogSnapshot,
-} from 'movement-lang';
+import { fromCatalogSnapshot, type CatalogSnapshot } from 'movement-lang';
+import { checkProgram } from 'legacy-lang';
+import { parseProgram } from 'movement-lang';
 
 import type { TeamId } from '../../generated/kysely/core/Team';
 import type { ExternalServiceCredentialsId } from '../../generated/kysely/automations/ExternalServiceCredentials';

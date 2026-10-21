@@ -14,7 +14,7 @@ import {
   Unlink,
   Variable,
 } from "lucide-react";
-import type { Step, StoryArg } from "movement-lang";
+import type { Step, StoryArg } from 'legacy-lang';
 import type { StoryView, StoryViewRecord } from "./view";
 
 import { BOX, LIFT } from "./canvas-style";

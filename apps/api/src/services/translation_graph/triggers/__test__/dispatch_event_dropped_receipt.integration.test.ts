@@ -21,7 +21,7 @@ jest.mock('../../adapters/resolve', () => {
 });
 
 import { sql } from 'kysely';
-import { SUPPRESS_SELF_KEY } from 'movement-lang';
+import { SUPPRESS_SELF_KEY } from 'legacy-lang';
 
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type { TriggerId } from '../../../../generated/kysely/automations/Trigger';

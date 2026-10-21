@@ -5,7 +5,7 @@
 // checker. The engine's requests are read off the artifact's segments.
 
 import { fromCatalogSnapshot, mockCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
-import { spelledFor } from 'movement-lang/checker/__test__/surface_spelling';
+import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import { tenantIdOf } from 'engine-contracts';
 
 import { containerAssociation, type Adapter } from 'movement-engine/public/adapter';
@@ -30,10 +30,6 @@ jest.mock('movement-lang', () => {
       checkers.rust += 1;
       return actual.checkSourceInRust(...args);
     },
-    checkProgramWithLink: (...args: unknown[]) => {
-      checkers.typescript += 1;
-      return actual.checkProgramWithLink(...args);
-    },
     openEngineSegment: () => {
       const segment = actual.openEngineSegment();
       return {
@@ -41,6 +37,17 @@ jest.mock('movement-lang', () => {
         start: (inputJson: string) => note(segment.start(inputJson)),
         answer: (id: number, answerJson: string) => note(segment.answer(id, answerJson)),
       };
+    },
+  };
+});
+
+jest.mock('legacy-lang', () => {
+  const actual = jest.requireActual('legacy-lang');
+  return {
+    ...actual,
+    checkProgramWithLink: (...args: unknown[]) => {
+      checkers.typescript += 1;
+      return actual.checkProgramWithLink(...args);
     },
   };
 });

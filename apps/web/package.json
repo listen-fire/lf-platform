@@ -36,6 +36,7 @@
     "date-fns": "3.6.0",
     "dompurify": "3.1.6",
     "formik": "2.4.6",
+    "legacy-lang": "workspace:@listen-fire/legacy-lang@*",
     "lucide-react": "^0.574.0",
     "movement-lang": "workspace:@listen-fire/movement-lang@*",
     "next": "15.5.12",

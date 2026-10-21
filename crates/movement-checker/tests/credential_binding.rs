@@ -1,6 +1,6 @@
 //! A connection's credential must belong to the module it connects, and fill
 //! one of the credentials that module declares. The TypeScript twin is
-//! packages/movement-lang/checker/__test__/credential_binding.unit.test.ts.
+//! packages/legacy-lang/checker/__test__/credential_binding.unit.test.ts.
 
 use movement_checker::{CheckOptions, check_source};
 use movement_parser::catalog::types::CatalogSnapshot;

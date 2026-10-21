@@ -12,7 +12,7 @@ import {
   type InstanceSchema,
   type LanguageVersion,
 } from 'movement-lang';
-import { spelledFor } from 'movement-lang/checker/__test__/surface_spelling';
+import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 
 import { tenantIdOf, type AnyParkedScopeState } from 'engine-contracts';
 import { hostRecordingSchema, type HostRecording } from 'engine-contracts/conformance';

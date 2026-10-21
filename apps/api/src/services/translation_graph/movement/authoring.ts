@@ -11,17 +11,9 @@
 // per-team catalog the save path uses (referenced-construction scoped)
 // and runs the core against it.
 
-import {
-  BridgeError,
-  CURRENT_LANGUAGE_VERSION,
-  MovementParseError,
-  checkProgram,
-  checkSourceInRust,
-  diagnosticSeverity,
-  languageVersionDiagnostic,
-  parseProgram,
-  since,
-} from 'movement-lang';
+import { BridgeError, CURRENT_LANGUAGE_VERSION, checkSourceInRust, diagnosticSeverity, languageVersionDiagnostic } from 'movement-lang';
+import { checkProgram, since } from 'legacy-lang';
+import { MovementParseError, parseProgram } from 'movement-lang';
 
 import type {
   Catalog,

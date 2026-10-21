@@ -4,7 +4,8 @@
 // walks to the member it selected, and grafts the result as a refined position
 // (copy-on-write) keyed for the checker.
 
-import { parseTraversalPath, refinementKey, scanInstanceChains } from 'movement-lang';
+import { refinementKey } from 'movement-lang';
+import { parseTraversalPath, scanInstanceChains } from 'legacy-lang';
 
 import type { InstanceSchema } from 'movement-lang';
 import type { SchemaTypeDescriptor } from 'engine-contracts/catalog';

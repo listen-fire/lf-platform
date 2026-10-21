@@ -20,6 +20,7 @@
   "type": "commonjs",
   "dependencies": {
     "engine-contracts": "workspace:@listen-fire/engine-contracts@*",
+    "legacy-lang": "workspace:@listen-fire/legacy-lang@*",
     "movement-engine": "workspace:@listen-fire/engine@*",
     "movement-lang": "workspace:@listen-fire/movement-lang@*",
     "zod": "4.1.12"

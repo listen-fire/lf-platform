@@ -18,12 +18,9 @@ jest.mock('../../../../../lib/recording', () => ({
   injectFakeBaseUrl: (p: unknown) => p,
 }));
 
-import {
-  checkProgram,
-  fromCatalogSnapshot,
-  parseProgram,
-  type CatalogSnapshot,
-} from 'movement-lang';
+import { fromCatalogSnapshot, type CatalogSnapshot } from 'movement-lang';
+import { checkProgram } from 'legacy-lang';
+import { parseProgram } from 'movement-lang';
 
 import type { Expression } from 'movement-lang/expression/types';
 import type { TeamId } from '../../../../../generated/kysely/core/Team';

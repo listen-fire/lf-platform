@@ -1,7 +1,7 @@
 //! A plugin package from language version 5 (design §2.10, §4.3), through
 //! the Rust checker: ``import { `@lf/web` as web } from plugins`` binds each
 //! member as `web.fetchUrl`, a call of which is an ordinary plugin call. The
-//! TypeScript twin is packages/movement-lang/checker/__test__/v5_packages.unit.test.ts.
+//! TypeScript twin is packages/legacy-lang/checker/__test__/v5_packages.unit.test.ts.
 
 use movement_checker::{CheckOptions, Diagnostic, check_source};
 use movement_parser::catalog::types::CatalogSnapshot;

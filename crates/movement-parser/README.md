@@ -18,7 +18,7 @@ and whose exports are this crate's ABI plus the engine's.
 
 `lowering/vocabulary/data.rs` (the stdlib families, the FILE/READ and
 options-map contracts, the AI tiers) is generated from the TypeScript
-declarations by `packages/movement-lang/parser/expression/__test__/lowering_vocabulary.unit.test.ts`,
+declarations by `packages/legacy-lang/parser/expression/__test__/lowering_vocabulary.unit.test.ts`,
 which pins it: run that test with `UPDATE_LOWERING_VOCABULARY=1` after
 changing expression/stdlib.ts, then rebuild the WASM.
 

@@ -42,7 +42,7 @@ const nextConfig: NextConfig = {
     // requires `prisma generate` — unnecessary for the web app.
     ignoreBuildErrors: true,
   },
-  transpilePackages: ['movement-lang', 'story-view', '@listen-fire/legacy-engine'],
+  transpilePackages: ['movement-lang', 'legacy-lang', 'story-view', '@listen-fire/legacy-engine'],
   webpack(config) {
     config.resolve.alias['#trpc'] = path.resolve(__dirname, 'node_modules/#trpc/types.ts');
     // The trpc types package's types.ts ends with `export { linkTrpcWsServer, trpcRouter }`

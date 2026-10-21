@@ -165,7 +165,7 @@ fn js_obj(value: serde_json::Value) -> Obj {
     }
 }
 
-/// A cron listen's schedule, read as packages/movement-lang/cron reads it (five
+/// A cron listen's schedule, read as packages/legacy-lang/cron reads it (five
 /// fields, names for months and weekdays, 7 also Sunday; both day fields
 /// restricted means either matches), in the listen's zone or UTC.
 pub struct Schedule {

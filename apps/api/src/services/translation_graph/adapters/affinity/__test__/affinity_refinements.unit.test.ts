@@ -2,13 +2,9 @@
 // cover the adapter; this pass is the host's). The fake Affinity is the
 // module's own test double.
 
-import {
-  checkProgram,
-  fromCatalogSnapshot,
-  parseProgram,
-  scanInstanceChains,
-  type CatalogSnapshot,
-} from 'movement-lang';
+import { fromCatalogSnapshot, type CatalogSnapshot } from 'movement-lang';
+import { checkProgram, scanInstanceChains } from 'legacy-lang';
+import { parseProgram } from 'movement-lang';
 
 import type { SourcePosition } from 'movement-engine/public/catalog';
 

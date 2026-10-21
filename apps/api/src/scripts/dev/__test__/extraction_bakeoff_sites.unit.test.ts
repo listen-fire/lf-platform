@@ -3,7 +3,8 @@
 // as its shape writes no first stage of its own, so the tally must come from
 // the planned spec, where the declaration IS that first stage.
 
-import { parseProgram, type ExtractExpression, type ShapeNode } from 'movement-lang';
+import { type ExtractExpression, type ShapeNode } from 'movement-lang';
+import { parseProgram } from 'movement-lang';
 
 import { fixtureSpec, rootSites } from '../extraction_bakeoff';
 

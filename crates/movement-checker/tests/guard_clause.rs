@@ -8,7 +8,7 @@
 //! always leaves narrows below it: an `if` never prefers one of its arms.
 //! `x != null && …` and `x == null || …` narrow `x` on the right side too.
 //! The TypeScript twin is
-//! packages/movement-lang/checker/__test__/guard_clause.unit.test.ts, same
+//! packages/legacy-lang/checker/__test__/guard_clause.unit.test.ts, same
 //! programs, same answers.
 
 use movement_checker::{CheckOptions, check_source};

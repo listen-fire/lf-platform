@@ -397,6 +397,9 @@ importers:
       kysely:
         specifier: 0.27.4
         version: 0.27.4
+      legacy-lang:
+        specifier: workspace:@listen-fire/legacy-lang@*
+        version: link:../../packages/legacy-lang
       lodash:
         specifier: 4.17.21
         version: 4.17.21
@@ -743,6 +746,9 @@ importers:
       formik:
         specifier: 2.4.6
         version: 2.4.6(react@18.3.1)
+      legacy-lang:
+        specifier: workspace:@listen-fire/legacy-lang@*
+        version: link:../../packages/legacy-lang
       lucide-react:
         specifier: ^0.574.0
         version: 0.574.0(react@18.3.1)
@@ -2081,6 +2087,9 @@ importers:
       engine-contracts:
         specifier: workspace:@listen-fire/engine-contracts@*
         version: link:../engine-contracts
+      legacy-lang:
+        specifier: workspace:@listen-fire/legacy-lang@*
+        version: link:../legacy-lang
       movement-engine:
         specifier: workspace:@listen-fire/engine@*
         version: link:../movement-engine
@@ -2100,6 +2109,25 @@ importers:
       typescript:
         specifier: 5.5.4
         version: 5.5.4
+
+  packages/legacy-lang:
+    dependencies:
+      movement-lang:
+        specifier: workspace:@listen-fire/movement-lang@*
+        version: link:../movement-lang
+      typescript:
+        specifier: 5.5.4
+        version: 5.5.4
+    devDependencies:
+      '@types/jest':
+        specifier: 29.5.14
+        version: 29.5.14
+      jest:
+        specifier: 29.7.0
+        version: 29.7.0(babel-plugin-macros@3.1.0)
+      ts-jest:
+        specifier: 29.2.5
+        version: 29.2.5(@babel/core@7.24.5)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.24.5))(jest@29.7.0(babel-plugin-macros@3.1.0))(typescript@5.5.4)
 
   packages/model-providers:
     dependencies:
@@ -2298,6 +2326,9 @@ importers:
       esbuild:
         specifier: 0.23.1
         version: 0.23.1
+      legacy-lang:
+        specifier: workspace:@listen-fire/legacy-lang@*
+        version: link:../legacy-lang
       lucide-react:
         specifier: ^0.574.0
         version: 0.574.0(react@18.3.1)
@@ -2372,6 +2403,9 @@ importers:
       kysely:
         specifier: 0.27.4
         version: 0.27.4
+      legacy-lang:
+        specifier: workspace:@listen-fire/legacy-lang@*
+        version: link:../legacy-lang
       movement-engine:
         specifier: workspace:@listen-fire/engine@*
         version: link:../movement-engine

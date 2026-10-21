@@ -39,7 +39,9 @@
  * Needs DATABASE_URL: the production host's cross-run write locks are
  * Postgres advisory locks.
  */
-import { checkProgram, fromCatalogSnapshot, parseProgram, type CatalogSnapshot } from 'movement-lang';
+import { fromCatalogSnapshot, type CatalogSnapshot } from 'movement-lang';
+import { checkProgram } from 'legacy-lang';
+import { parseProgram } from 'movement-lang';
 
 import type { WriteRecord } from '@listen-fire/legacy-engine/services/movement_engine/expression';
 import type { TeamId } from '../../generated/kysely/core/Team';

@@ -25,7 +25,8 @@ jest.mock('../../adapters/resolve', () => {
   return { ...actual, resolveAdapter: jest.fn() };
 });
 
-import { eventAddressKey, CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+import { eventAddressKey } from 'legacy-lang';
 
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type { TriggerId } from '../../../../generated/kysely/automations/Trigger';

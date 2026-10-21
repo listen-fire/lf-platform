@@ -15,7 +15,7 @@ import {
   type InstanceSchema,
   type PluginSpec,
 } from 'movement-lang';
-import { spelledFor } from 'movement-lang/checker/__test__/surface_spelling';
+import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 
 import { tenantIdOf } from 'engine-contracts';
 import type { Adapter } from 'movement-engine/services/translation_graph/adapter';

@@ -1,6 +1,6 @@
 //! A slot's text is read again by the checker (the statement parse keeps it
 //! verbatim), so every re-read must be under the program's version. The
-//! TypeScript twin is packages/movement-lang/checker/__test__/v5_leftovers.unit.test.ts.
+//! TypeScript twin is packages/legacy-lang/checker/__test__/v5_leftovers.unit.test.ts.
 
 use movement_checker::{CheckOptions, check_program};
 use movement_parser::ast::Program;

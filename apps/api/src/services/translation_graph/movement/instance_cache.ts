@@ -26,7 +26,7 @@
 // for schema-sensitive writes). Keep run-time policy out of here; expose
 // what it needs instead.
 
-import { parseTraversalPath } from 'movement-lang';
+import { parseTraversalPath } from 'legacy-lang';
 
 import type { Expression } from 'movement-lang/expression/types';
 import type { TeamId } from '../../../generated/kysely/core/Team';

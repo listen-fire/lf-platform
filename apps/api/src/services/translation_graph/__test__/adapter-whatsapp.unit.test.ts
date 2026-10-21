@@ -52,7 +52,9 @@ jest.mock('mime', () => ({
   },
 }));
 
-import { parseProgram, checkProgram, mockCatalog, type Catalog } from 'movement-lang';
+import { mockCatalog, type Catalog } from 'movement-lang';
+import { checkProgram } from 'legacy-lang';
+import { parseProgram } from 'movement-lang';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { SchemaTypeDescriptor, SourcePosition } from 'engine-contracts/catalog';

@@ -28,6 +28,7 @@ COPY apps/web/package.json apps/web/
 COPY apps/admin/package.json apps/admin/
 COPY packages/trpc/package.json packages/trpc/
 COPY packages/legacy-engine/package.json packages/legacy-engine/
+COPY packages/legacy-lang/package.json packages/legacy-lang/
 COPY packages/movement-lang/package.json packages/movement-lang/
 COPY packages/story-view/package.json packages/story-view/
 COPY packages/principal/package.json packages/principal/

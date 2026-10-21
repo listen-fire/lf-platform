@@ -96,7 +96,7 @@ jest.mock('../../translation_graph/adapters/resolve', () => ({
 }));
 
 import type { Catalog, InstanceSchema, PositionSchema } from 'movement-lang';
-import { eventAddressDisplay, eventAddressKey } from 'movement-lang';
+import { eventAddressDisplay, eventAddressKey } from 'legacy-lang';
 import { runMovement } from '../run';
 import { snapshotOverManifests, staticCatalogFromManifests } from '../../translation_graph/movement/catalog';
 import {

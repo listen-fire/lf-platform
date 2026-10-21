@@ -18,6 +18,7 @@
     "@prisma/client": "5.22.0",
     "engine-contracts": "workspace:@listen-fire/engine-contracts@*",
     "kysely": "0.27.4",
+    "legacy-lang": "workspace:@listen-fire/legacy-lang@*",
     "movement-engine": "workspace:@listen-fire/engine@*",
     "movement-lang": "workspace:@listen-fire/movement-lang@*",
     "story-view": "workspace:*",

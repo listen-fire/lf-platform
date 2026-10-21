@@ -15,15 +15,9 @@
 // never seen an `await` at all — so EVERY ask family's base answer read
 // `MOV_UNDESCRIBED_POSITION`.
 
-import {
-  parseProgram,
-  checkProgram,
-  fromCatalogSnapshot,
-  scanInstanceChains,
-  type CatalogSnapshot,
-  type InstanceSchema,
-  CURRENT_LANGUAGE_VERSION,
-} from 'movement-lang';
+import { fromCatalogSnapshot, type CatalogSnapshot, type InstanceSchema, CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+import { checkProgram, scanInstanceChains } from 'legacy-lang';
+import { parseProgram } from 'movement-lang';
 
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type { SchemaTypeDescriptor } from 'engine-contracts/catalog';

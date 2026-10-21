@@ -2,7 +2,7 @@
 // cover the adapter; this pass is the host's). The fake Airtable is the
 // module's own test double.
 
-import { scanInstanceChains } from 'movement-lang';
+import { scanInstanceChains } from 'legacy-lang';
 
 import type { AirtableAdapter } from '@listen-fire/airtable';
 

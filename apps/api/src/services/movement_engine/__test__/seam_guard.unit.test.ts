@@ -53,7 +53,7 @@ import { resumeMovement, runMovement } from '@listen-fire/legacy-engine/dispatch
 import { MovementRunFailed, type ParkSink, type ResumeMovementInput, type RunLimitPause, type RunMovementInput } from '@listen-fire/legacy-engine/services/movement_engine/run';
 import { makeFakeParkSink, makeMemoryParkSources, makeTestHost, type TestHostOverrides } from 'movement-engine/services/movement_engine/test_host';
 import { awaitingSource, makeAwaitingAdapter, runAwaiting } from './awaitable_fixture';
-import { spelledFor } from 'movement-lang/checker/__test__/surface_spelling';
+import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import { methodPaths, notJsonAt, roundTripHost } from './round_trip_host';
 import { HOST_FAMILIES_VERSION, tenantIdOf } from 'engine-contracts';
 import { tenantOfTeam } from '../../translation_graph/movement/tenant';

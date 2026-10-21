@@ -3,7 +3,7 @@
 //! from language version 5: the record it runs on is its one positional
 //! argument, and its call hands back what it declared. Versions 1–4 keep
 //! refusing the call. The TypeScript twin is
-//! packages/movement-lang/checker/__test__/v5_fed_by_extraction.unit.test.ts.
+//! packages/legacy-lang/checker/__test__/v5_fed_by_extraction.unit.test.ts.
 
 use movement_checker::{CheckOptions, Diagnostic, check_source};
 use movement_parser::catalog::plugin_args::PluginCallSite;

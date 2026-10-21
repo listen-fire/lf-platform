@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment } from "react";
-import type { Chip, ChipPart } from "movement-lang";
+import type { Chip, ChipPart } from 'legacy-lang';
 
 import { Referent } from "./referents";
 import { TESTS } from "./tests";

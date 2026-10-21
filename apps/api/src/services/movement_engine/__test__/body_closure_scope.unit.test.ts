@@ -28,7 +28,7 @@ import { resumeMovement, runMovement } from '@listen-fire/legacy-engine/dispatch
 import { type MovementRunResult, type ParkSink } from '@listen-fire/legacy-engine/services/movement_engine/run';
 import { makeTestHost } from 'movement-engine/services/movement_engine/test_host';
 import { teamOfTenant } from '../../translation_graph/movement/tenant';
-import { spelledFor as spelledForSurface } from '../../../../../../packages/movement-lang/checker/__test__/surface_spelling';
+import { spelledFor as spelledForSurface } from '../../../../../../packages/legacy-lang/checker/__test__/surface_spelling';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000079');
 const KG = 'kg';

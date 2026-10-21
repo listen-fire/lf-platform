@@ -24,7 +24,7 @@ import '../../services';
 
 import fs from 'node:fs';
 
-import { getMovementDiagnostics, referencedConstructions } from 'movement-lang';
+import { getMovementDiagnostics, referencedConstructions } from 'legacy-lang';
 
 import { movementCatalogSnapshotForTeam } from '../../services/translation_graph/movement/catalog';
 import { ensureDevLoopTeam } from './_lib';

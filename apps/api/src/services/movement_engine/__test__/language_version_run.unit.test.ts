@@ -16,7 +16,7 @@ import {
   type InstanceSchema,
   type LanguageRelease,
 } from 'movement-lang';
-import { spelledFor } from 'movement-lang/checker/__test__/surface_spelling';
+import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { currentLanguageVersion, hostSegments, segmentScopedCalls } from 'movement-engine/services/translation_graph/segment_scope';
 import { MovementEngineError } from 'movement-engine/services/movement_engine/errors';

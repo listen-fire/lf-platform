@@ -5,7 +5,7 @@
 //! a declared node (MOV_WRITE_SHAPE_UNIQUE). `_resources` reads off an
 //! extraction call's result as off the keyword's. Versions 1–4 are
 //! unchanged. The TypeScript twin is
-//! packages/movement-lang/checker/__test__/v5_refusals.unit.test.ts, same
+//! packages/legacy-lang/checker/__test__/v5_refusals.unit.test.ts, same
 //! programs, same messages.
 
 use movement_checker::{CheckOptions, check_source};

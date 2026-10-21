@@ -9,6 +9,7 @@ on:
       - "packages/engine-contracts/**"
       - "packages/legacy-engine/**"
       - "packages/movement-lang/**"
+      - "packages/legacy-lang/**"
   workflow_dispatch:
 
 jobs:
@@ -76,6 +77,9 @@ jobs:
       # whole here rather than only in part by movement-wasm.
       - name: movement-lang tests
         run: pnpm --filter @listen-fire/movement-lang test
+      # The TypeScript parser, checker and editor service (platform).
+      - name: legacy-lang tests
+        run: pnpm --filter @listen-fire/legacy-lang test
       - name: Smoke tests
         env:
           NODE_OPTIONS: --max-old-space-size=4096

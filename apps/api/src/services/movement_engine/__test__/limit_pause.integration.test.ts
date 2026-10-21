@@ -84,7 +84,8 @@ import { positionData } from 'engine-contracts/catalog';
 import type { Adapter, RuntimeCapabilities } from 'movement-engine/services/translation_graph/adapter';
 import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
 import type { Catalog, CatalogSnapshot, InstanceSchema, PositionSchema } from 'movement-lang';
-import { eventAddressKey, CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+import { eventAddressKey } from 'legacy-lang';
 import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
 import { postgresRunHostStore } from '../run_host_store';
 

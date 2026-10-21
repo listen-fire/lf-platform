@@ -19,7 +19,7 @@ import type {
   ExtractStage,
   Span,
 } from 'movement-lang';
-import type { FieldType } from 'movement-lang';
+import type { FieldType } from 'legacy-lang';
 import type { TransformInvocationResult } from '@listen-fire/legacy-engine/services/movement_engine/extraction';
 
 // ── AST builders ───────────────────────────────────────────────────────────

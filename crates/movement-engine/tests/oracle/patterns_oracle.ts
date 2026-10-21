@@ -27,8 +27,8 @@
 // Written by generate.ts (seed 20261015); deterministic: the scripted host
 // answers from the program alone (a fixed clock, ids in order asked).
 
-import { fromCatalogSnapshot, mockCatalogSnapshot, resolveFileFromSnapshot, type InstanceSchema, type PluginSpec } from '../../../../packages/movement-lang';
-import { spelledFor } from '../../../../packages/movement-lang/checker/__test__/surface_spelling';
+import { mockCatalogSnapshot, type InstanceSchema, type PluginSpec } from '../../../../packages/movement-lang';
+import { spelledFor } from '../../../../packages/movement-engine/services/movement_engine/__test__/surface_spelling';
 import { tenantIdOf } from '../../../../packages/engine-contracts';
 import type { HostRecording } from '../../../../packages/engine-contracts/conformance';
 import { recordEntry, recordedError } from '../../../../apps/api/src/services/movement_engine/conformance/recorder';
@@ -316,8 +316,7 @@ function catalogOf(program: Program): typeof PATTERNS_CATALOG {
  *  library files) in the spelling versions 1–4 read, respelled here by the
  *  upgrade tool's own rewrites (the `MOV_V5_*` fixes, nothing else). */
 function respelled(source: string, catalog: typeof PATTERNS_CATALOG): string {
-  const resolveFile = resolveFileFromSnapshot(catalog);
-  return spelledFor(5, source, fromCatalogSnapshot(catalog), resolveFile !== undefined ? { resolveFile } : {});
+  return spelledFor(5, source, catalog);
 }
 
 /** The program as it runs: its file (after the prelude) and its library

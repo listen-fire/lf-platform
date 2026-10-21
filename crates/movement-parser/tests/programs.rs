@@ -1,4 +1,4 @@
-//! Conformance against packages/movement-lang/parser/__test__/__fixtures__/
+//! Conformance against packages/legacy-lang/parser/__test__/__fixtures__/
 //! programs.json: every program the TypeScript corpora parse, pinned by the
 //! sha256 of its canonical AST or by the error it throws. A gate: any drift
 //! fails, and `--nocapture` prints the first differences.

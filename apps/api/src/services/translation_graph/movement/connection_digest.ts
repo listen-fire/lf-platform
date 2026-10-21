@@ -13,7 +13,8 @@
 // Pure: describe_connection.ts and get_started.ts gather the catalog and the
 // describes, this module turns them into text.
 
-import { spellName, type AdapterSpec, type FieldType, type InstanceSchema } from 'movement-lang';
+import { spellName, type AdapterSpec, type InstanceSchema } from 'movement-lang';
+import { type FieldType } from 'legacy-lang';
 
 import type { WalkedDescribedNode, WalkedEdge, WalkedNode, WalkedProperty } from './walk';
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle } from "lucide-react";
-import type { StoryProblem, StoryValidity } from "movement-lang";
+import type { StoryProblem, StoryValidity } from 'legacy-lang';
 
 /**
  * The honesty banners.

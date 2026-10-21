@@ -25,7 +25,8 @@
 // checker treats as "surface not enumerated", staying silent rather than
 // wrong. Anything the closure might miss degrades to silence.
 
-import type { InstanceChain, InstanceSchema } from 'movement-lang';
+import type { InstanceSchema } from 'movement-lang';
+import type { InstanceChain } from 'legacy-lang';
 
 export interface DemandEntry {
   typeId: string;

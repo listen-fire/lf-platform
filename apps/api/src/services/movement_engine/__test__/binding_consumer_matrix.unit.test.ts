@@ -111,7 +111,7 @@ jest.mock('../../../lib/anthropic', () => ({
 import { writeFileSync } from 'node:fs';
 
 import { CURRENT_LANGUAGE_VERSION, fromCatalogSnapshot, type LanguageVersion } from 'movement-lang';
-import { spelledFor } from 'movement-lang/checker/__test__/surface_spelling';
+import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 
 import type { ExtractCallLlmInput, ExtractCallLlmResult } from '@listen-fire/legacy-engine/services/movement_engine/extraction_call';
 import type { MovementTransformInvoker } from '@listen-fire/legacy-engine/services/movement_engine/extraction';

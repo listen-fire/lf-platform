@@ -22,9 +22,9 @@ import type {
   CredentialSpec,
   InstanceSchema,
   PluginSpec,
-} from '../checker/catalog';
-import { credentialArgOf, entryPositionKeyOf, findPlugin, mockCatalog, modelsMember } from '../checker/catalog';
-import type { ResolveFile } from '../checker/link';
+} from '../catalog/types';
+import { credentialArgOf, entryPositionKeyOf, findPlugin, mockCatalog, modelsMember } from '../catalog/types';
+import type { ResolveFile } from '../checker/linked_types';
 import { unwrapCredentialArg } from '../parser/scan';
 
 export interface AdapterSnapshot extends AdapterSpec {

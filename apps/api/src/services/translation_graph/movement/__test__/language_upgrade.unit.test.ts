@@ -23,15 +23,9 @@ jest.mock('../store', () => ({
 jest.mock('../version_store', () => ({ movementSourceHash: () => 'hash' }));
 jest.mock('../provision', () => ({ saveMovement: jest.fn() }));
 
-import {
-  CURRENT_LANGUAGE_VERSION,
-  checkProgram,
-  mockCatalog,
-  parseProgram,
-  type LanguageRelease,
-  type LanguageVersion,
-  type ResolveFile,
-} from 'movement-lang';
+import { CURRENT_LANGUAGE_VERSION, mockCatalog, type LanguageRelease, type LanguageVersion, type ResolveFile } from 'movement-lang';
+import { checkProgram } from 'legacy-lang';
+import { parseProgram } from 'movement-lang';
 
 import { assessMovementValidity, type AuthoringDiagnostic } from '../authoring';
 

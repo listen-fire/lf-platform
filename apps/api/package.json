@@ -218,6 +218,7 @@
     "kanel": "3.16.0",
     "kanel-kysely": "0.8.0",
     "kysely": "0.27.4",
+    "legacy-lang": "workspace:@listen-fire/legacy-lang@*",
     "lodash": "4.17.21",
     "lru-cache": "10.4.3",
     "mailgun.js": "10.2.3",

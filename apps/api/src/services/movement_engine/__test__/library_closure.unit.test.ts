@@ -21,7 +21,7 @@ import { containerAssociation } from 'movement-engine/services/translation_graph
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import { teamOfTenant } from '../../translation_graph/movement/tenant';
 import { tenantIdOf } from 'engine-contracts';
-import { spelledFor } from 'movement-lang/checker/__test__/surface_spelling';
+import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import { resumeMovement, runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { type MovementRunResult, type ParkSink } from '@listen-fire/legacy-engine/services/movement_engine/run';
 import { makeTestHost } from 'movement-engine/services/movement_engine/test_host';

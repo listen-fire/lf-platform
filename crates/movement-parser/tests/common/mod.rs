@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use serde_json::Value;
 
 pub fn fixture(relative: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../packages/movement-lang").join(relative)
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../packages/legacy-lang").join(relative)
 }
 
 /// The text `canonical` in parser/expression/__test__/lowering_fixture.ts
