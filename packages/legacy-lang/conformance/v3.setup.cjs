@@ -9,7 +9,7 @@ const { assertSourcesResolve } = require('./source_tripwire.cjs');
 
 assertSourcesResolve(require.resolve);
 
-const LANGUAGE_VERSION = path.resolve(__dirname, '../../movement-lang/language_version.ts');
+const LANGUAGE_VERSION = require.resolve('movement-lang/language_version');
 
 jest.mock(LANGUAGE_VERSION, () => ({
   ...jest.requireActual(LANGUAGE_VERSION),

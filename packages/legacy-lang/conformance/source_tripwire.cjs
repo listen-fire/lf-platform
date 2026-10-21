@@ -10,8 +10,12 @@ const CURE =
   'outside node_modules and dist). Compile only through the package\'s own build script, ' +
   'which emits to dist/ — never a bare tsc in the package.';
 
+// An installed package (the platform's movement-lang, from the registry) is
+// one compiled copy with nothing beside it to shadow, so the mocks reach it.
+const INSTALLED = /[\\/]node_modules[\\/]/;
+
 function assertResolvesToSource(label, resolved) {
-  if (!resolved.endsWith('.ts')) {
+  if (!resolved.endsWith('.ts') && !INSTALLED.test(resolved)) {
     throw new Error(
       `movement-lang tripwire: ${label} resolved to ${resolved}, not a .ts source. ` +
         `A compiled copy is shadowing the sources, so version mocks no longer reach the code under test. ${CURE}`,
@@ -23,8 +27,7 @@ function assertResolvesToSource(label, resolved) {
 // answer is the one the module under test would get.
 function assertSourcesResolve(resolve, specifiers) {
   const packageDir = path.resolve(__dirname, '..');
-  const languageDir = path.resolve(packageDir, '../movement-lang');
-  const targets = specifiers ?? [packageDir, languageDir, path.join(languageDir, 'language_version')];
+  const targets = specifiers ?? [packageDir, 'movement-lang', 'movement-lang/language_version'];
   for (const specifier of targets) assertResolvesToSource(specifier, resolve(specifier));
 }
 

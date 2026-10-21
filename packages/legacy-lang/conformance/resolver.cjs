@@ -33,11 +33,9 @@ module.exports = (request, options) => {
     // the path it had when this package was one with it.
     const language = live.replace(/([\\/])packages[\\/]legacy-lang(?=[\\/]|$)/, '$1packages$1movement-lang');
     if (language !== live) {
-      try {
-        return defaultResolver(request, { ...options, basedir: language });
-      } catch {
-        // Not a kept file either — fall through to the engine's old places.
-      }
+      const kept = inLanguagePackage(request, live, options);
+      if (kept !== undefined) return kept;
+      // Not a kept file either — fall through to the engine's old places.
     }
     // The engine moved out of apps/api into packages/movement-engine with its
     // paths kept (apps/api/src/X -> packages/movement-engine/X), so a corpus
@@ -102,6 +100,24 @@ function movedOutOfEngine(request, engineBasedir, options) {
   if (target !== undefined) return options.defaultResolver(path.join(match[1], target), options);
   const platformTarget = LEFT_THE_PLATFORM[inEngine];
   return platformTarget === undefined ? undefined : options.defaultResolver(path.join(match[1], '..', platformTarget), options);
+}
+
+// The language package's file at the position `request` names from `live` (a
+// directory inside legacy-lang): its source beside this package in the
+// language's own tree, or its build where it is installed (the platform).
+function inLanguagePackage(request, live, options) {
+  const ownRoot = live.match(/^(.*[\\/]packages[\\/]legacy-lang)(?=[\\/]|$)/)[1];
+  const inPackage = path.relative(ownRoot, path.resolve(live, request));
+  const manifest = options.defaultResolver('movement-lang/package.json', { ...options, basedir: ownRoot });
+  const languageRoot = path.dirname(manifest);
+  for (const candidate of [path.join(languageRoot, inPackage), path.join(languageRoot, 'dist', inPackage)]) {
+    try {
+      return options.defaultResolver(candidate, options);
+    } catch {
+      // Try the next place.
+    }
+  }
+  return undefined;
 }
 
 function throwError(error) {

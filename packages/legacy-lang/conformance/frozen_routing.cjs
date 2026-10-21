@@ -7,8 +7,8 @@
 // under the corpus's version, as it did when the release served it.
 const path = require('path');
 
-const LANGUAGE_VERSION = path.resolve(__dirname, '../../movement-lang/language_version.ts');
-const RUST_PARSER = path.resolve(__dirname, '../../movement-lang/parser/rust_parser.ts');
+const LANGUAGE_VERSION = require.resolve('movement-lang/language_version');
+const RUST_PARSER = require.resolve('movement-lang/parser/rust_parser');
 const FROZEN = path.resolve(__dirname, '../wasm/frozen_parser.ts');
 
 jest.mock(RUST_PARSER, () => {
