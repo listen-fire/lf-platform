@@ -50,8 +50,6 @@ jobs:
         run: node scripts/check-module-boundary.cjs
       - name: Engine boundary
         run: node scripts/check-engine-boundary.cjs
-      - name: Split boundary
-        run: node scripts/check-split-boundary.cjs
       - name: Typecheck, language side
         run: >-
           corepack pnpm -r
@@ -77,3 +75,5 @@ jobs:
         run: corepack pnpm --filter './modules/slack' test
       - name: affinity tests
         run: corepack pnpm --filter './modules/affinity' test
+      - name: Split boundary
+        run: node scripts/check-split-boundary.cjs
