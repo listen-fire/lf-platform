@@ -1,0 +1,78 @@
+name: language-tests
+# The language side of the repository split, on its own: no Postgres, no
+# Prisma, nothing from the platform. The platform's proofs of the old language
+# versions live in api-test.yml.
+on:
+  pull_request:
+    paths:
+      - "packages/**"
+      - "!packages/legacy-*/**"
+      - "modules/**"
+      - "apps/cli/**"
+      - "crates/**"
+      - "scripts/**"
+      - "jest.config.base.cjs"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/language-tests.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "packages/**"
+      - "!packages/legacy-*/**"
+      - "modules/**"
+      - "apps/cli/**"
+      - "crates/**"
+      - "scripts/**"
+      - "jest.config.base.cjs"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/language-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  language:
+    timeout-minutes: 25
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.20.0
+          cache: "pnpm"
+      - run: corepack pnpm install --frozen-lockfile
+      - name: Typecheck, language side
+        run: >-
+          corepack pnpm -r
+          --filter './packages/**'
+          --filter '!./packages/legacy-lang'
+          --filter '!./packages/legacy-engine'
+          --filter './modules/**'
+          --filter './apps/cli'
+          code:type-check
+      - name: engine-contracts tests
+        run: corepack pnpm --filter @listen-fire/engine-contracts test
+      - name: movement-lang tests
+        run: corepack pnpm --filter @listen-fire/movement-lang test
+      - name: Engine tests
+        run: corepack pnpm --filter @listen-fire/engine test
+      - name: Handbook tests
+        run: corepack pnpm --filter @listen-fire/handbook test
+      - name: module-kit tests
+        run: corepack pnpm --filter @listen-fire/module-kit test
+      - name: Module tests (gmail, slack, affinity)
+        run: |
+          corepack pnpm --filter './modules/gmail' test
+          corepack pnpm --filter './modules/slack' test
+          corepack pnpm --filter './modules/affinity' test
+      - name: Module boundary
+        run: node scripts/check-module-boundary.cjs
+      - name: Engine boundary
+        run: node scripts/check-engine-boundary.cjs
+      - name: Split boundary
+        run: node scripts/check-split-boundary.cjs
