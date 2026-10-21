@@ -72,12 +72,17 @@ jest.mock('../../../../lib/llm_usage', () => ({
   })),
 }));
 
-// The engine module is stubbed (its real import graph needs prisma + the
-// adapter registry). `MovementRunFailed` is re-implemented to the same
-// contract — a transparent carrier for the partial write ledger — so the
-// firing's unwrapping is exercised for real. The class itself is covered in
+// The engine is stubbed (its real import graph needs prisma + the adapter
+// registry): the dispatch the firing runs through, and the run entry's
+// `MovementRunFailed`, re-implemented to the same contract — a transparent
+// carrier for the partial write ledger — so the firing's unwrapping is
+// exercised for real. The class itself is covered in
 // movement_engine/__test__/run.unit.test.ts.
-jest.mock('movement-engine/services/movement_engine/run', () => {
+jest.mock('@listen-fire/legacy-engine/dispatch', () => ({
+  runMovement: jest.fn(),
+  resumeMovement: jest.fn(),
+}));
+jest.mock('movement-engine/public/movement-engine', () => {
   class MovementRunFailed extends Error {
     constructor(
       cause: unknown,
@@ -90,8 +95,6 @@ jest.mock('movement-engine/services/movement_engine/run', () => {
     MovementRunFailed,
     runFailureCause: (error: unknown) =>
       error instanceof MovementRunFailed ? error.cause : error,
-    runMovement: jest.fn(),
-    resumeMovement: jest.fn(),
   };
 });
 
@@ -131,11 +134,11 @@ import type { TeamId } from '../../../../generated/kysely/core/Team';
 import { RunLeaseLost } from '../../../movement_engine/run_lease';
 import { movementForTrigger, resumeMovementFiring, runMovementFiring } from '../execute';
 
-const { runMovement, resumeMovement, MovementRunFailed } = jest.requireMock(
-  'movement-engine/services/movement_engine/run',
-) as {
+const { runMovement, resumeMovement } = jest.requireMock('@listen-fire/legacy-engine/dispatch') as {
   runMovement: jest.Mock;
   resumeMovement: jest.Mock;
+};
+const { MovementRunFailed } = jest.requireMock('movement-engine/public/movement-engine') as {
   MovementRunFailed: new (cause: unknown, partial: unknown) => Error;
 };
 const { runCatalogSnapshotForTeam } = jest.requireMock('../catalog') as {

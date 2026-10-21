@@ -35,7 +35,7 @@ import {
   runMovement,
   type ParkSink,
   type RunMovementInput,
-} from '../run';
+} from '../../../public/movement-engine';
 import {
   resetRustRunStats,
   rustRunStats,

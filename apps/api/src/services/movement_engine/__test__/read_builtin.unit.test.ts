@@ -19,8 +19,8 @@ import {
   evalMovementExpr,
   type FileTextResolution,
   type MovementTraceEntry,
-} from 'movement-engine/services/movement_engine/expression';
-import { buildExtractSpec, materializeExtract, type ExtractRuntime } from 'movement-engine/services/movement_engine/extraction';
+} from '@listen-fire/legacy-engine/services/movement_engine/expression';
+import { buildExtractSpec, materializeExtract, type ExtractRuntime } from '@listen-fire/legacy-engine/services/movement_engine/extraction';
 import { fileValue, type FileRef, type FileValue } from 'movement-engine/services/translation_graph/adapter';
 import type { LlmCallInput, LlmCallResult } from '../../translation_graph/engine/batched_extraction';
 import type { ExtractExpression, ExtractStage } from 'movement-lang';

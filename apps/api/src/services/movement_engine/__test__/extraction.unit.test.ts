@@ -114,7 +114,8 @@ import {
   type InstanceSchema,
   type Span,
 } from 'movement-lang';
-import { MovementRunFailed, runFailureCause, runMovement as runMovementUnder } from 'movement-engine/services/movement_engine/run';
+import { runMovement as runMovementUnder } from '@listen-fire/legacy-engine/dispatch';
+import { MovementRunFailed, runFailureCause } from '@listen-fire/legacy-engine/services/movement_engine/run';
 
 // The extraction keyword's engine suite. The keyword (`extract from […] { … }`,
 // its inline shapes and `through […]` stages) is versions 1–4 only — from 5 it
@@ -123,7 +124,7 @@ import { MovementRunFailed, runFailureCause, runMovement as runMovementUnder } f
 // in the spelling 4 reads, unless a test names its own version.
 const runMovement = (input: Parameters<typeof runMovementUnder>[0]): ReturnType<typeof runMovementUnder> =>
   runMovementUnder({ languageVersion: 4, ...input });
-import { MovementEngineError, type MovementTraceEntry } from 'movement-engine/services/movement_engine/expression';
+import { MovementEngineError, type MovementTraceEntry } from '@listen-fire/legacy-engine/services/movement_engine/expression';
 import { logger } from 'movement-engine/services/logger';
 import {
   ROOT_EXTRACT_DESCRIPTION,
@@ -131,7 +132,7 @@ import {
   buildExtractSpec,
   materializeExtract,
   type MovementTransformInvoker,
-} from 'movement-engine/services/movement_engine/extraction';
+} from '@listen-fire/legacy-engine/services/movement_engine/extraction';
 import { registryTransformInvoker } from '../../translation_graph/movement/transform_invoker';
 import { NO_PROVENANCE } from 'movement-engine/services/movement_engine/provenance';
 import { getTransform } from '../../translation_graph/engine/transforms/registry';

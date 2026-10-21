@@ -36,7 +36,19 @@ module.exports = (request, options) => {
     try {
       return defaultResolver(request, { ...options, basedir: moved });
     } catch (engineError) {
-      return movedOutOfEngine(request, moved, options) ?? throwError(engineError);
+      // The TypeScript engine (versions 1–4) later left the engine package for
+      // the platform's packages/legacy-engine, its paths kept.
+      const legacy = moved.replace(/([\\/])packages[\\/]movement-engine(?=[\\/]|$)/, '$1packages$1legacy-engine');
+      try {
+        const found = defaultResolver(request, { ...options, basedir: legacy });
+        // Its run loop answers for the version a run is pinned to, as the one
+        // the corpora were written against did.
+        return /[\\/]legacy-engine[\\/]services[\\/]movement_engine[\\/]run\.ts$/.test(found)
+          ? found.replace(/services[\\/]movement_engine[\\/]run\.ts$/, 'conformance/run.ts')
+          : found;
+      } catch {
+        return movedOutOfEngine(request, moved, options) ?? throwError(engineError);
+      }
     }
   }
 };

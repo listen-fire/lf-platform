@@ -43,9 +43,8 @@ import { EFFORTS, type Effort, type TierModel } from './ai_tiers';
 import { ADAPTER_METHODS, type AdapterCall, type AdapterMethod, type EngineHost } from './host';
 import { hostCallFailure, isoDates } from './host_adapter';
 import { checkAnswer, checkPinned, type CheckedProgram } from './program_check';
-import type { MovementRunResult } from './run';
-import { publishTrace, runLogFields, withDeclaredFiles, type RunContext } from './run_context';
-import { pluginSpecNamed } from './extraction';
+import type { MovementRunResult } from './run_types';
+import { pluginSpecNamed, publishTrace, runLogFields, withDeclaredFiles, type RunContext } from './segment_context';
 import type { HostAnswer, HostRequest } from './rust_engine';
 import { rustRunStats } from './rust_stats';
 import {

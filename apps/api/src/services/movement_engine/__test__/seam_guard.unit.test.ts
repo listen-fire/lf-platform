@@ -19,8 +19,8 @@ import { CURRENT_LANGUAGE_VERSION, type InstanceSchema } from 'movement-lang';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { CapturedWrite } from 'movement-engine/services/translation_graph/engine/dry_run_adapter';
 import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
-import type { MovementTraceEntry } from 'movement-engine/services/movement_engine/expression';
-import type { ParkedScopeState } from 'movement-engine/services/movement_engine/serialize';
+import type { MovementTraceEntry } from '@listen-fire/legacy-engine/services/movement_engine/expression';
+import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
 
 import {
   iterateRelatedPages,
@@ -49,15 +49,8 @@ import {
   type ResolveFileText,
 } from 'movement-engine/services/movement_engine/host';
 import type { QueuedWake } from 'movement-engine/services/movement_engine/host_kit';
-import {
-  MovementRunFailed,
-  resumeMovement,
-  runMovement,
-  type ParkSink,
-  type ResumeMovementInput,
-  type RunLimitPause,
-  type RunMovementInput,
-} from 'movement-engine/services/movement_engine/run';
+import { resumeMovement, runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { MovementRunFailed, type ParkSink, type ResumeMovementInput, type RunLimitPause, type RunMovementInput } from '@listen-fire/legacy-engine/services/movement_engine/run';
 import { makeFakeParkSink, makeMemoryParkSources, makeTestHost, type TestHostOverrides } from 'movement-engine/services/movement_engine/test_host';
 import { awaitingSource, makeAwaitingAdapter, runAwaiting } from './awaitable_fixture';
 import { spelledFor } from 'movement-lang/checker/__test__/surface_spelling';
@@ -71,21 +64,28 @@ const SRC_DIR = path.resolve(__dirname, '../../..');
  *  (host_kit, test_host), its paths mirroring apps/api/src. */
 const PKG_DIR = path.resolve(SRC_DIR, '../../../packages/movement-engine');
 const PKG_ENGINE_DIR = path.join(PKG_DIR, 'services/movement_engine');
+/** The platform's package for language versions 1–4: the TypeScript engine,
+ *  its paths mirroring the engine package's. */
+const LEGACY_DIR = path.resolve(SRC_DIR, '../../../packages/legacy-engine');
+const LEGACY_ENGINE_DIR = path.join(LEGACY_DIR, 'services/movement_engine');
 
-/** A movement_engine file where it lives: the package, or this app's host side. */
+/** A movement_engine file where it lives: the engine package, the legacy
+ *  engine package, or this app's host side. */
 function engineFile(file: string): string {
-  const inPackage = path.join(PKG_ENGINE_DIR, file);
-  return fs.existsSync(inPackage) ? inPackage : path.join(ENGINE_DIR, file);
+  const inPackage = [PKG_ENGINE_DIR, LEGACY_ENGINE_DIR].map((dir) => path.join(dir, file)).find((f) => fs.existsSync(f));
+  return inPackage ?? path.join(ENGINE_DIR, file);
 }
 
 /** Engine files that must import no host code. */
 const PURE_FILES = [
   'address.ts',
   'ai_tiers.ts',
+  'binding.ts',
   'builtins.ts',
   'call_depth.ts',
   'declared_shape.ts',
   'effect_locks.ts',
+  'engine_choice.ts',
   'errors.ts',
   'expression.ts',
   'extraction.ts',
@@ -100,10 +100,13 @@ const PURE_FILES = [
   'provenance.ts',
   'run.ts',
   'run_context.ts',
+  'run_types.ts',
   'rust_engine.ts',
   'rust_host.ts',
+  'rust_run.ts',
   'rust_stats.ts',
   'rust_wire.ts',
+  'segment_context.ts',
   'segment_limits.ts',
   'serialize.ts',
   'write_ledger.ts',
@@ -304,7 +307,7 @@ function under(prefix: string): (module: string) => boolean {
 function moduleOf(fromFile: string, specifier: string): string {
   if (specifier.startsWith('movement-engine/')) return specifier.slice('movement-engine/'.length);
   if (!specifier.startsWith('.')) return specifier;
-  const root = fromFile.startsWith(PKG_DIR + path.sep) ? PKG_DIR : SRC_DIR;
+  const root = [PKG_DIR, LEGACY_DIR].find((dir) => fromFile.startsWith(dir + path.sep)) ?? SRC_DIR;
   const resolved = path.relative(root, path.resolve(path.dirname(fromFile), specifier));
   return resolved
     .split(path.sep)
@@ -375,7 +378,7 @@ function isLoaderCall(node: ts.CallExpression): boolean {
 
 describe('the engine/host seam', () => {
   it('classifies every movement_engine file as pure or host side, exactly once', () => {
-    const onDisk = [ENGINE_DIR, PKG_ENGINE_DIR]
+    const onDisk = [ENGINE_DIR, PKG_ENGINE_DIR, LEGACY_ENGINE_DIR]
       .flatMap((dir) => fs.readdirSync(dir))
       .filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'))
       .sort();
@@ -384,8 +387,8 @@ describe('the engine/host seam', () => {
     expect(listed).toEqual(onDisk);
   });
 
-  it('keeps every pure engine file in the engine package, so no shell needs this app to run one', () => {
-    expect(PURE_FILES.filter((f) => !fs.existsSync(path.join(PKG_ENGINE_DIR, f)))).toEqual([]);
+  it('keeps every pure engine file in a package (the engine, or the legacy engine for versions 1–4), so no shell needs this app to run one', () => {
+    expect(PURE_FILES.filter((f) => ![PKG_ENGINE_DIR, LEGACY_ENGINE_DIR].some((dir) => fs.existsSync(path.join(dir, f))))).toEqual([]);
   });
 
   it('pure engine files import no host code', () => {

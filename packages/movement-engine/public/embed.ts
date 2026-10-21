@@ -14,5 +14,5 @@ export { collectFileListeners, type FileListener } from '../services/translation
 export { MovementEngineError, isCheckFailure, type MovementEngineErrorCode } from '../services/movement_engine/errors';
 export { pricedModels, type ExtractCallModelClient, type ModelClient } from '../services/embed/models';
 export type { LlmCallInput, LlmCallResult } from '../services/translation_graph/engine/batched_extraction/llm_call';
-export type { ExtractCallLlmInput, ExtractCallLlmResult } from '../services/movement_engine/extraction_call';
+export type { ExtractCallLlmInput, ExtractCallLlmResult } from '../services/translation_graph/engine/batched_extraction/llm_call';
 export type { SegmentLimits } from 'engine-contracts';

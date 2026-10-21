@@ -7,15 +7,14 @@
 // it, in the shapes docs/contracts/host-families.md freezes, and the shim forwards each one
 // to the run's `EngineHost` (rust_host.ts).
 //
-// Which engine runs a segment is the run's pinned language version
-// (`engineFor`): 5 and later the Rust engine, 1–4 the TypeScript engine. There
-// is no fallback between them: whatever the Rust engine refuses or declines
-// fails the run (MOVENG_UNSUPPORTED). The checker is the one gate that keeps a
+// This engine runs language version 5 and later (rust_run.ts refuses an
+// earlier pin at the entry). There is no fallback: whatever the Rust engine
+// refuses or declines fails the run (MOVENG_UNSUPPORTED). The checker is the one gate that keeps a
 // saved program from reaching such a refusal, and a test holds every version-5
 // program in the repository to that (rust_reachability.unit.test.ts). Each
 // segment is logged once (`noteEngine`) and counted (`rustRunStats`).
 
-import { languageVersionDiagnostic, openEngineSegment, since, type LanguageVersion } from 'movement-lang';
+import { languageVersionDiagnostic, openEngineSegment, type LanguageVersion } from 'movement-lang';
 
 import { RunCostCapExceeded } from '../../lib/run_cost';
 import { extractionTierAssignments, runChatModels } from './ai_tiers';
@@ -23,13 +22,12 @@ import { CallDepthExceeded, maxCallDepth } from './call_depth';
 import { logger } from '../logger';
 import { MovementEngineError, MovementRunFailed, isCheckFailure, type MovementEngineErrorCode } from './errors';
 import { servedHostMethods } from './host';
-import { maxFileChars } from './extraction';
-import { deploymentWallClockSeconds, segmentLimitsFor, wallClockExceeded } from './segment_limits';
-import type { MovementRunResult, ResumeMovementInput, RunMovementInput } from './run';
+import { deploymentWallClockSeconds, maxFileChars, segmentLimitsFor, wallClockExceeded } from './segment_limits';
+import type { MovementRunResult, ResumeMovementInput, RunMovementInput } from './run_types';
 import type { CallbackBodyInput, SettleRaceInput } from 'engine-contracts';
-import type { RunContext } from './run_context';
+import type { RunContext } from './segment_context';
 import { checkedKey, serve, type RouteContext } from './rust_host';
-import { recordRunEngine, rustRunStats } from './rust_stats';
+import { recordRunEngine, rustRunStats, type RunEngineRecord } from './rust_stats';
 import { filesInParkState, REFUSED, RustShimError, WireOut, plainJson, record, string } from './rust_wire';
 
 export { RustShimError, plainJson } from './rust_wire';
@@ -62,13 +60,6 @@ export interface EngineProtocol {
   finish(): void;
 }
 
-/** An engine: the one a run's segment runs on. */
-export type EngineChoice = 'rust' | 'ts';
-
-/** The first language version that runs on the Rust engine; every earlier
- *  one runs on the TypeScript engine. */
-export const RUST_ENGINE_FROM_VERSION: LanguageVersion = 5;
-
 /** Settings that once chose an engine, a fallback, an admission dry run or an
  *  emergency switch. Each named a choice that no longer exists. */
 const RETIRED_ENGINE_SETTINGS = ['MOVEMENT_ENGINE', 'MOVEMENT_ENGINE_FALLBACK', 'MOVEMENT_ENGINE_DRY_RUN_EVERY', 'MOVEMENT_ENGINE_V5_ON_TS'] as const;
@@ -82,26 +73,6 @@ export function assertEngineConfigured(env: Record<string, string | undefined> =
   throw new Error(
     `${set.join(', ')} ${set.length === 1 ? 'is' : 'are'} retired: a run's engine follows its pinned language version (5 and later the Rust engine, 1–4 the TypeScript engine), with no fallback between them. Remove ${set.length === 1 ? 'it' : 'them'} from the environment.`,
   );
-}
-
-/**
- * The engine a segment of a run pinned to `languageVersion` runs on.
- * `parkedOn` is, for a resume, the engine the run's row says parked it. A run
- * pinned to 5 or later that the TypeScript engine parked (under the retired
- * MOVEMENT_ENGINE_V5_ON_TS switch) has no engine to resume on and fails
- * loudly. A run pinned below 5 that the Rust engine parked resumes on the
- * TypeScript engine, which reads the one park shape.
- */
-export function engineFor(run: { languageVersion: LanguageVersion; parkedOn?: EngineChoice }): EngineChoice {
-  if (!since(run.languageVersion, RUST_ENGINE_FROM_VERSION)) return 'ts';
-  if (run.parkedOn === 'ts') {
-    throw new MovementEngineError(
-      'MOVENG_UNSUPPORTED',
-      `this run is pinned to language version ${run.languageVersion}, which runs only on the Rust engine, but the TypeScript engine parked it: it cannot resume`,
-      { reason: PARKED_ON_TYPESCRIPT },
-    );
-  }
-  return 'rust';
 }
 
 /** Why a version-5 run the TypeScript engine parked fails its resume. */
@@ -316,7 +287,7 @@ function failedCheckMidRun(input: Pick<RunMovementInput, 'runId' | 'dryRun'>): v
  * ended on the Rust engine (`ran`, or why it did not), and the engine
  * recorded on the run's row. A TypeScript segment logs at debug.
  */
-export function noteEngine(input: Pick<RunMovementInput, 'runId' | 'dryRun'>, engine: EngineChoice, outcome?: string): void {
+export function noteEngine(input: Pick<RunMovementInput, 'runId' | 'dryRun'>, engine: RunEngineRecord['engine'], outcome?: string): void {
   const line = `movement engine: engine=${engine} run=${input.runId ?? '-'}${outcome !== undefined ? ` outcome=${outcome}` : ''}`;
   if (engine === 'ts') logger.debug(line);
   else logger.info(line);

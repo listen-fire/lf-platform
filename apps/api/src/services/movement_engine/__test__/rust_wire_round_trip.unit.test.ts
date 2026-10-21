@@ -23,14 +23,15 @@ import { RecordedConversation, verdictOf, type HostRecording } from 'engine-cont
 import type { Adapter } from 'movement-engine/services/translation_graph/adapter';
 import type { LlmCallResult } from 'movement-engine/services/translation_graph/engine/batched_extraction/llm_call';
 import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
-import type { TransformInvocationResult } from 'movement-engine/services/movement_engine/extraction';
+import type { TransformInvocationResult } from '@listen-fire/legacy-engine/services/movement_engine/extraction';
 
 import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
 import { positionData } from 'engine-contracts/catalog';
 import { startHostDouble, httpHost } from '../conformance/http_host_double';
 import { recordEntry, recordedError } from '../conformance/recorder';
-import { MovementRunFailed, resumeMovement, runFailureCause, runMovement, type RunMovementInput } from 'movement-engine/services/movement_engine/run';
-import type { ParkedScopeState } from 'movement-engine/services/movement_engine/serialize';
+import { resumeMovement, runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { MovementRunFailed, runFailureCause, type RunMovementInput } from '@listen-fire/legacy-engine/services/movement_engine/run';
+import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
 import { credentialIdsFor, endedInRust, makeFakeParkSink, makeTestHost } from 'movement-engine/services/movement_engine/test_host';
 import { resetRustRunStats, rustRunStats } from 'movement-engine/services/movement_engine/rust_stats';
 

@@ -4,7 +4,7 @@
 // via read-only adapters (P12).
 
 import { z } from 'zod';
-import { before, type DeclaredEffectRow, type LanguageVersion } from 'movement-lang';
+import type { DeclaredEffectRow, LanguageVersion } from 'movement-lang';
 
 import type { UniquenessConstraints } from './uniqueness';
 import type { EphemeralOriginRef, Position, PositionIdentity, SourcePosition } from './position';

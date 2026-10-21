@@ -87,9 +87,9 @@ jest.mock('../../translation_graph/adapters/acting_user/resolve', () => ({
   resolveActingUser: jest.fn(async () => null),
 }));
 import type { InstanceSchema } from 'movement-lang';
-import { runMovement } from 'movement-engine/services/movement_engine/run';
-import { MovementEngineError } from 'movement-engine/services/movement_engine/expression';
-import { surfaceReadAdapter } from 'movement-engine/services/movement_engine/kg';
+import { runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { MovementEngineError } from '@listen-fire/legacy-engine/services/movement_engine/expression';
+import { surfaceReadAdapter } from '@listen-fire/legacy-engine/services/movement_engine/kg';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import type {
   Adapter,

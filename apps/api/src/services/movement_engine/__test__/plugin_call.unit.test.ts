@@ -75,9 +75,9 @@ jest.mock('../../../lib/anthropic', () => ({
   MAX_CHAT_CONTINUATIONS: 5,
 }));
 
-import { runMovement } from 'movement-engine/services/movement_engine/run';
-import type { MovementTransformInvoker, TransformInvocationResult } from 'movement-engine/services/movement_engine/extraction';
-import type { MovementTraceEntry } from 'movement-engine/services/movement_engine/expression';
+import { runMovement } from '@listen-fire/legacy-engine/dispatch';
+import type { MovementTransformInvoker, TransformInvocationResult } from '@listen-fire/legacy-engine/services/movement_engine/extraction';
+import type { MovementTraceEntry } from '@listen-fire/legacy-engine/services/movement_engine/expression';
 
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import {

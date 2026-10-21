@@ -20,8 +20,9 @@ jest.mock('movement-engine/services/logger', () => ({
   logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
-import { resumeMovement, runMovement, runFailureCause, type MovementRunResult, type ParkSink } from 'movement-engine/services/movement_engine/run';
-import type { ParkedScopeState } from 'movement-engine/services/movement_engine/serialize';
+import { resumeMovement, runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { runFailureCause, type MovementRunResult, type ParkSink } from '@listen-fire/legacy-engine/services/movement_engine/run';
+import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
 import { CallDepthExceeded, parseMaxCallDepth } from 'movement-engine/services/movement_engine/call_depth';
 import { assertRunBudget, reportRunCost, runCostCapFromEnv, withSpendMeter } from 'movement-engine/lib/run_spend';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';

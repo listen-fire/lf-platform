@@ -76,9 +76,9 @@ jest.mock('../../../lib/anthropic', () => ({
   MAX_CHAT_CONTINUATIONS: 5,
 }));
 
-import { runMovement } from 'movement-engine/services/movement_engine/run';
-import type { MovementTransformInvoker } from 'movement-engine/services/movement_engine/extraction';
-import type { MovementTraceEntry } from 'movement-engine/services/movement_engine/expression';
+import { runMovement } from '@listen-fire/legacy-engine/dispatch';
+import type { MovementTransformInvoker } from '@listen-fire/legacy-engine/services/movement_engine/extraction';
+import type { MovementTraceEntry } from '@listen-fire/legacy-engine/services/movement_engine/expression';
 import {
   EffectLocks,
   bindLock,
@@ -88,7 +88,7 @@ import {
   identityLocks,
   recordLock,
   type CrossRunLocks,
-} from 'movement-engine/services/movement_engine/effect_locks';
+} from '@listen-fire/legacy-engine/services/movement_engine/effect_locks';
 import { InMemoryWriteLocks, type WriteLockHolder } from 'movement-engine/services/write_locks/write_locks';
 
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';

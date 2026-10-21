@@ -26,7 +26,7 @@ import { containerAssociation } from 'movement-engine/services/translation_graph
 import type { CapturedWrite } from 'movement-engine/services/translation_graph/engine/dry_run_adapter';
 import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
 import { staticCatalogFromManifests } from '../../translation_graph/movement/catalog';
-import type { MovementTraceEntry } from 'movement-engine/services/movement_engine/expression';
+import type { MovementTraceEntry } from '@listen-fire/legacy-engine/services/movement_engine/expression';
 import type { SchemaTypeDescriptor } from 'engine-contracts/catalog';
 import { makeStablePosition, positionData } from 'engine-contracts/catalog';
 import {
@@ -38,16 +38,8 @@ import {
   TEST_HOST_NOW,
   type TestHostOverrides,
 } from 'movement-engine/services/movement_engine/test_host';
-import {
-  resumeMovement,
-  runFailureCause,
-  runMovement,
-  type MovementRunResult,
-  type ParkSink,
-  type ResumeMovementInput,
-  type RunLimitPause,
-  type RunMovementInput,
-} from 'movement-engine/services/movement_engine/run';
+import { resumeMovement, runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { runFailureCause, type MovementRunResult, type ParkSink, type ResumeMovementInput, type RunLimitPause, type RunMovementInput } from '@listen-fire/legacy-engine/services/movement_engine/run';
 import {
   MovementEngineError,
   isCheckFailure,
@@ -56,7 +48,7 @@ import {
   resetRustRunStats,
   rustRunStats,
 } from 'movement-engine/services/movement_engine/rust_stats';
-import type { ParkedScopeState } from 'movement-engine/services/movement_engine/serialize';
+import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
 import { recordEntry } from '../conformance/recorder';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-0000000000b2');

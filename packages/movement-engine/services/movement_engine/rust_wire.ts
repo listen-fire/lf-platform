@@ -25,7 +25,7 @@ import {
 } from 'engine-contracts';
 import type { SchemaFieldType } from 'movement-lang';
 import { neverAsAny } from '../../lib/utils/types';
-import { binding, type Binding } from './expression';
+import { binding, type Binding } from './binding';
 import type { Provenance, ProvenanceOrigin } from './provenance';
 
 export class RunAborted extends Error {

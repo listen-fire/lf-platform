@@ -78,10 +78,10 @@ jest.mock('../../../lib/anthropic', () => ({
   MAX_CHAT_CONTINUATIONS: 5,
 }));
 
-import { runMovement, resumeMovement } from 'movement-engine/services/movement_engine/run';
-import type { ParkSink } from 'movement-engine/services/movement_engine/run';
+import { runMovement, resumeMovement } from '@listen-fire/legacy-engine/dispatch';
+import type { ParkSink } from '@listen-fire/legacy-engine/services/movement_engine/run';
 import type { CallbackSink } from 'movement-engine/services/movement_engine/host';
-import type { ParkedScopeState } from 'movement-engine/services/movement_engine/serialize';
+import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
 
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import {

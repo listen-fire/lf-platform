@@ -89,8 +89,8 @@ jest.mock('../../../lib/anthropic', () => ({
   MAX_CHAT_CONTINUATIONS: 5,
 }));
 import { catalogSnapshotOf, type Catalog } from 'movement-lang';
-import { runMovement } from 'movement-engine/services/movement_engine/run';
-import { MovementEngineError } from 'movement-engine/services/movement_engine/expression';
+import { runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { MovementEngineError } from '@listen-fire/legacy-engine/services/movement_engine/expression';
 import type {
   Adapter,
   ParentLink,

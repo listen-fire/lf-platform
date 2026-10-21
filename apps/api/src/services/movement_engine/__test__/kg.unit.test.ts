@@ -97,10 +97,11 @@ jest.mock('../../../lib/anthropic', () => ({
 
 import { mockCatalogSnapshot, type CatalogSnapshot, type InstanceSchema } from 'movement-lang';
 import { anthropicChat } from '../../../lib/anthropic';
-import { runFailureCause, runMovement } from 'movement-engine/services/movement_engine/run';
+import { runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { runFailureCause } from '@listen-fire/legacy-engine/services/movement_engine/run';
 
-import { MovementEngineError } from 'movement-engine/services/movement_engine/expression';
-import type { ExtractCallLlmInput, ExtractCallLlmResult } from 'movement-engine/services/movement_engine/extraction_call';
+import { MovementEngineError } from '@listen-fire/legacy-engine/services/movement_engine/expression';
+import type { ExtractCallLlmInput, ExtractCallLlmResult } from '@listen-fire/legacy-engine/services/movement_engine/extraction_call';
 import type { CapturedWrite } from 'movement-engine/services/translation_graph/engine/dry_run_adapter';
 import type {
   Adapter,

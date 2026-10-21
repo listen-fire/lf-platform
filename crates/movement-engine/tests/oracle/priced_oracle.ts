@@ -8,8 +8,8 @@
 import { writeFileSync } from 'node:fs';
 import path from 'node:path';
 
-import type { PluginSpecs } from '../../../../packages/movement-engine/services/movement_engine/extraction';
-import { pricedCalls, RunLedger } from '../../../../packages/movement-engine/services/movement_engine/run_context';
+import type { PluginSpecs } from '../../../../packages/movement-engine/services/movement_engine/segment_context';
+import { pricedCalls, RunLedger } from '../../../../packages/legacy-engine/services/movement_engine/run_context';
 import type { EngineHost } from '../../../../packages/movement-engine/services/movement_engine/host';
 
 type Rand = () => number;

@@ -39,6 +39,11 @@ import {
   runsAsCall,
   slotOfTree,
   treeOfSlot,
+  CHUNKS_FUNCTION_ID,
+  FILE_FUNCTION_ID,
+  INTERPRETED_FUNCTION_IDS,
+  READ_FUNCTION_ID,
+  stdlibFunctionById,
 } from 'movement-lang';
 import type {
   CallArg,
@@ -64,7 +69,6 @@ import type {
 } from 'movement-lang';
 import type { Expression } from 'movement-lang/expression/types';
 import { listElementExpression, objectMemberExpression } from 'movement-lang/expression/types';
-import { isMovementBuiltinFunction } from './expression';
 
 /** Expression kinds the interpreter's evaluator executes today —
  *  everything else in a slot flags the movement as non-interpretable. */
@@ -791,4 +795,31 @@ class InterpretabilityScan {
         return;
     }
   }
+}
+
+/**
+ * The built-in scalar functions the movement engine evaluates — the frozen
+ * engine's `BUILTIN_FUNCTION_NAMES`, mirrored (its module is frozen and the
+ * set is private). All pure: same args, same value, no reads. Exported for
+ * the static interpretability scan (below), which must agree
+ * with this evaluator construct-for-construct.
+ */
+export const INTERPRETED_FUNCTIONS: ReadonlySet<string> = new Set(INTERPRETED_FUNCTION_IDS);
+
+/**
+ * Every function name this evaluator runs REGARDLESS of context: the
+ * mirrored frozen built-ins, FILE() (the artifact built-in on the
+ * render seam), and the namespaced stdlib (bridge-folded dotted ids).
+ * The static interpretability scan (below) gates on this so
+ * it agrees with the evaluator construct-for-construct; anything
+ * outside it resolves only as a write-field adapter function.
+ */
+export function isMovementBuiltinFunction(fn: string): boolean {
+  return (
+    INTERPRETED_FUNCTIONS.has(fn) ||
+    fn === FILE_FUNCTION_ID ||
+    fn === READ_FUNCTION_ID ||
+    fn === CHUNKS_FUNCTION_ID ||
+    stdlibFunctionById(fn) !== undefined
+  );
 }

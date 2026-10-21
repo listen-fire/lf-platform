@@ -5,7 +5,7 @@
 // so existing import sites are unchanged.
 
 import { getErrorMessage } from '../../lib/utils/error';
-import type { MovementRunResult } from './run';
+import type { MovementRunResult } from './run_types';
 
 export type MovementEngineErrorCode =
   | 'MOVENG_PARSE'

@@ -13,7 +13,7 @@ import type { Adapter, GetRelatedInput } from '../../translation_graph/adapter';
 import type { TriggerEvent } from '../../translation_graph/triggers/types';
 import { containerAssociation } from '../../translation_graph/adapter';
 import { makeStablePosition, positionData } from 'engine-contracts/catalog';
-import { runMovement } from '../run';
+import { runMovement } from '../../../public/movement-engine';
 import {
   resetRustRunStats,
   rustRunStats,

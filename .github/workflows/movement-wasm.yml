@@ -35,6 +35,7 @@ on:
       # corpora, and what runs them.
       - "apps/api/src/services/movement_engine/**"
       - "packages/movement-engine/**"
+      - "packages/legacy-engine/**"
       # Imported by the oracle generator.
       - "apps/api/src/lib/run_cost.ts"
       - "apps/api/src/services/translation_graph/engine/batched_extraction/model_choice.ts"
@@ -60,6 +61,7 @@ on:
       # corpora, and what runs them.
       - "apps/api/src/services/movement_engine/**"
       - "packages/movement-engine/**"
+      - "packages/legacy-engine/**"
       # Imported by the oracle generator.
       - "apps/api/src/lib/run_cost.ts"
       - "apps/api/src/services/translation_graph/engine/batched_extraction/model_choice.ts"
@@ -157,7 +159,9 @@ jobs:
       - name: The Rust engine's oracle is current
         working-directory: apps/api
         run: |
-          TS_NODE_PROJECT=tsconfig.json npx ts-node --transpile-only ../../crates/movement-engine/tests/oracle/generate.ts
+          # The oracle runs the platform's TypeScript engine (packages/legacy-engine),
+          # which reaches the engine package's internals under this condition.
+          NODE_OPTIONS=--conditions=movement-engine-internals TS_NODE_PROJECT=tsconfig.json npx ts-node --transpile-only ../../crates/movement-engine/tests/oracle/generate.ts
           git diff --exit-code -- ../../crates/movement-engine/tests/oracle || {
             echo "::error::crates/movement-engine/tests/oracle is stale: regenerate it (see generate.ts) and commit it, then make the crate tests pass."
             exit 1

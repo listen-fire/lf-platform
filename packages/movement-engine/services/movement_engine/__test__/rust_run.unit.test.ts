@@ -14,15 +14,15 @@ import { mockCatalogSnapshot, type InstanceSchema } from 'movement-lang';
 import { tenantIdOf } from 'engine-contracts';
 import type { Adapter } from '../../translation_graph/adapter';
 import type { TriggerEvent } from '../../translation_graph/triggers/types';
-import type { MovementTraceEntry } from '../expression';
+import type { MovementTraceEntry } from '../run_types';
 
 import { logger } from '../../logger';
 import { containerAssociation } from '../../translation_graph/adapter';
 import { makeStablePosition, positionData } from 'engine-contracts/catalog';
-import { openRunContext } from '../run_context';
+import { openRunContext } from '../segment_context';
 import { credentialIdsFor, makeTestHost, endedInRust, type TestHostOverrides } from '../test_host';
 import { AdapterCallFailed } from '../host_adapter';
-import { MovementRunFailed, runFailureCause, runMovement, type RunMovementInput } from '../run';
+import { MovementRunFailed, runFailureCause, runMovement, type RunMovementInput } from '../../../public/movement-engine';
 import { MovementEngineError, isCheckFailure } from '../errors';
 import { ENDED_AT_CHECK, runSegmentInRust } from '../rust_engine';
 import { resetRustRunStats, rustRunStats, setRunEngineRecorder, type RunEngineRecord } from '../rust_stats';
@@ -604,6 +604,35 @@ describe('a program that fails its check', () => {
     expect(seen).toEqual(['segment.open']);
     expect(rustRunStats).toMatchObject({ segments: 0, endedAtCheck: 1 });
     expect(recorded).toEqual([{ runId: 'run-direct', engine: 'rust' }]);
+  });
+});
+
+describe('a run pinned below version 5', () => {
+  // The engine runs version 5 and later; an earlier pin is the platform's.
+  it('is refused by name, before any host request or count', async () => {
+    resetRustRunStats();
+    const seen: string[] = [];
+    const recorded: RunEngineRecord[] = [];
+    setRunEngineRecorder((record) => recorded.push(record));
+    const host = makeTestHost({ segment: { open: async () => (seen.push('segment.open'), { segmentId: 's1' }) } });
+    const error: unknown = await runMovement({
+      source: PRELUDE + 'function m(msg: <inbox-[:message]->>) {\n  x = 1\n}',
+      languageVersion: 4,
+      event: webhook({}),
+      teamId: TEAM_ID,
+      runId: 'run-v4',
+      catalog,
+      host,
+    }).catch((e: unknown) => e);
+    setRunEngineRecorder(undefined);
+    expect(error).toBeInstanceOf(MovementEngineError);
+    expect(error).toMatchObject({
+      code: 'MOVENG_LANGUAGE_VERSION',
+      message: expect.stringMatching(/language version "[^"]+" \(4\), which this release does not support/),
+    });
+    expect(seen).toEqual([]);
+    expect(recorded).toEqual([]);
+    expect(rustRunStats).toMatchObject({ segments: 0, endedAtCheck: 0, shimFaults: 0 });
   });
 });
 

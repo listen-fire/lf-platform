@@ -27,7 +27,7 @@ import type { Adapter, RuntimeCapabilities } from 'movement-engine/services/tran
 import { positionData } from 'engine-contracts/catalog';
 import { RunCancelledSignal } from 'movement-engine/services/movement_engine/errors';
 import { VOID_HOST_METHODS, hostMethodPaths, type EngineHost } from 'movement-engine/services/movement_engine/host';
-import { runMovement } from 'movement-engine/services/movement_engine/run';
+import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { credentialIdsFor, makeTestHost } from 'movement-engine/services/movement_engine/test_host';
 import { NotJson } from '../../__test__/round_trip_host';
 import { startHostDouble, httpHost, type HostDouble } from '../http_host_double';

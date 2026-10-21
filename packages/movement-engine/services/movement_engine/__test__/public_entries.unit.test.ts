@@ -24,13 +24,11 @@ import * as embed from '../../../public/embed';
 import { logger, routeEngineLogsTo, type EngineLogSink } from '../../../public/log';
 
 describe('public entries', () => {
-  it('the engine entry runs, resumes, checks and routes', () => {
+  it('the engine entry runs, resumes and checks', () => {
     expect(typeof engine.runMovement).toBe('function');
     expect(typeof engine.resumeMovement).toBe('function');
     expect(typeof engine.checkPinned).toBe('function');
     expect(typeof engine.programCheck.checkPinned).toBe('function');
-    expect(engine.engineRoute({ languageVersion: 5 })).toBe('rust');
-    expect(engine.engineRoute({ languageVersion: 4 })).toBe('ts');
     expect(engine.ENGINE_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
   });
 
@@ -62,7 +60,6 @@ describe('public entries', () => {
     expect(typeof inbound.collectFileListeners).toBe('function');
     expect(typeof inbound.answerModels).toBe('function');
     expect(typeof engine.listUnsupportedConstructs).toBe('function');
-    expect(engine.RUST_ENGINE_FROM_VERSION).toBe(5);
     expect(Object.keys(models.embeddingDestinations).length).toBeGreaterThan(0);
     expect(typeof embed.memoryRunHostStore).toBe('function');
   });

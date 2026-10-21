@@ -40,5 +40,13 @@ if (reached.length > 0) {
   console.error(`The embedder compile loaded ${reached.length} files of the run host's database code, among them:`);
   for (const file of shown) console.error(`  ${path.relative(path.join(__dirname, '../../..'), file)}`);
 }
+// The deprecated versions' TypeScript engine is the platform's: an embedder
+// never loads it.
+const legacy = program.getSourceFiles().map((f) => f.fileName).filter((file) => /\/packages\/legacy-engine\//.test(file));
+if (legacy.length > 0) {
+  failed = true;
+  console.error(`The embedder compile loaded ${legacy.length} files of the platform's legacy engine, among them:`);
+  for (const file of legacy.slice(0, 20)) console.error(`  ${path.relative(path.join(__dirname, '../../..'), file)}`);
+}
 if (failed) process.exit(1);
-console.log(`embed smoke: ${program.getSourceFiles().length} files compiled, none of them database code`);
+console.log(`embed smoke: ${program.getSourceFiles().length} files compiled, none of them database code or the legacy engine`);

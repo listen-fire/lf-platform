@@ -41,11 +41,11 @@
  */
 import { checkProgram, fromCatalogSnapshot, parseProgram, type CatalogSnapshot } from 'movement-lang';
 
-import type { WriteRecord } from 'movement-engine/services/movement_engine/expression';
+import type { WriteRecord } from '@listen-fire/legacy-engine/services/movement_engine/expression';
 import type { TeamId } from '../../generated/kysely/core/Team';
 import type { ExternalServiceCredentialsId } from '../../generated/kysely/automations/ExternalServiceCredentials';
 
-import { runMovement } from 'movement-engine/public/movement-engine';
+import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { AffinityAPIClient } from '@listen-fire/affinity/api_client';
 import {
   AffinityAdapter,

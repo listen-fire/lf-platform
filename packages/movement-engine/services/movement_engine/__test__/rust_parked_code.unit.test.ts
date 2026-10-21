@@ -24,7 +24,7 @@ import {
   runFailureCause,
   runMovement,
   type RunMovementInput,
-} from '../run';
+} from '../../../public/movement-engine';
 import {
   resetRustRunStats,
   rustRunStats,

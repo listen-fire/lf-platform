@@ -24,16 +24,8 @@ import type { TriggerEvent } from 'movement-engine/public/inbound';
 
 import { describeError } from 'movement-engine/public/errors';
 import { logger } from 'movement-engine/public/log';
-import {
-  runMovement,
-  resumeMovement,
-  settleRaceFrame,
-  fireCallbackBody,
-  MovementRunFailed,
-  runFailureCause,
-  type CancelGate,
-  type MovementRunResult,
-} from 'movement-engine/public/movement-engine';
+import { runMovement, resumeMovement, settleRaceFrame, fireCallbackBody } from '@listen-fire/legacy-engine/dispatch';
+import { MovementRunFailed, runFailureCause, type CancelGate, type MovementRunResult } from 'movement-engine/public/movement-engine';
 import { makeDbCancelGate } from '../../movement_engine/cancel_gate';
 import { failRunAndCancelRequests } from '../../interaction/run_failure';
 import { LlmUsageContext } from '../../../lib/llm_usage';

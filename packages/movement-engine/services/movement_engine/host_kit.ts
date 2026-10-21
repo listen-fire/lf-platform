@@ -9,10 +9,10 @@ import { refuseUnsupportedHostFamiliesVersion, type ActingPrincipal, type Tenant
 import type { CostLine } from '../../lib/run_cost';
 import type { ActingUser, ActorCandidate } from '../translation_graph/adapter';
 import type { SegmentWriteLocks } from '../write_locks/write_locks';
-import type { MovementTraceEntry } from './expression';
+import type { MovementTraceEntry } from './run_types';
 import type { EngineHost, SegmentOpening } from './host';
-import type { CancelGate } from './run';
-import type { ClockAndIds } from './run_context';
+import type { CancelGate } from './run_types';
+import type { ClockAndIds } from './segment_context';
 
 /** The gate of a run nothing can cancel. */
 export const NEVER_CANCELLED: CancelGate = {

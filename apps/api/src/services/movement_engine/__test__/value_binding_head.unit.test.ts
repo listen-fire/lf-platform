@@ -87,8 +87,8 @@ jest.mock('../../../lib/anthropic', () => ({
 }));
 
 import { mockCatalogSnapshot, type InstanceSchema } from 'movement-lang';
-import { runMovement } from 'movement-engine/services/movement_engine/run';
-import type { ExtractCallLlmInput, ExtractCallLlmResult } from 'movement-engine/services/movement_engine/extraction_call';
+import { runMovement } from '@listen-fire/legacy-engine/dispatch';
+import type { ExtractCallLlmInput, ExtractCallLlmResult } from '@listen-fire/legacy-engine/services/movement_engine/extraction_call';
 import type {
   Adapter,
   RuntimeCapabilities,

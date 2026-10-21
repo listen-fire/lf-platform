@@ -10,7 +10,10 @@ module.exports = {
   rootDir: __dirname,
   testMatch: ['**/*.unit.test.ts'],
   testEnvironment: 'node',
-  maxWorkers: 1,
+  maxWorkers: '50%',
+  // The TypeScript engine reaches the engine package's internals, which resolve
+  // only under this condition (as every test runner sets it).
+  testEnvironmentOptions: { customExportConditions: ['node', 'node-addons', 'movement-engine-internals'] },
   clearMocks: true,
   // Sources are the truth: resolve `.ts` before any stray compiled `.js`.
   moduleFileExtensions: ['ts', 'tsx', 'js', 'mjs', 'cjs', 'jsx', 'json', 'node'],

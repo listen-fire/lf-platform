@@ -94,8 +94,8 @@ import { tenantIdOf } from 'engine-contracts';
 
 import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
 
-import { runMovement } from 'movement-engine/services/movement_engine/run';
-import { MovementEngineError } from 'movement-engine/services/movement_engine/expression';
+import { runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { MovementEngineError } from '@listen-fire/legacy-engine/services/movement_engine/expression';
 import { listUnsupportedConstructs } from 'movement-engine/services/movement_engine/interpretable';
 import { staticCatalogSnapshot } from '../catalog';
 import { diagnoseMovementSource } from '../authoring';

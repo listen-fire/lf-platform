@@ -87,7 +87,8 @@ jest.mock('../../../lib/prompts/execute', () => ({
   flattenMessages: jest.fn(),
 }));
 
-import { resumeMovement, runMovement, type ParkSink } from 'movement-engine/services/movement_engine/run';
+import { resumeMovement, runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { type ParkSink } from '@listen-fire/legacy-engine/services/movement_engine/run';
 
 import { fromCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import { spelledFor } from 'movement-lang/checker/__test__/surface_spelling';
@@ -102,7 +103,7 @@ import type { TriggerEvent } from 'movement-engine/services/translation_graph/tr
 import { makeStablePosition, positionData } from 'engine-contracts/catalog';
 import { tenantIdOf } from 'engine-contracts';
 import { makeFakeParkSink, makeTestHost } from 'movement-engine/services/movement_engine/test_host';
-import type { ParkedScopeState } from 'movement-engine/services/movement_engine/serialize';
+import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
 import { resetRustRunStats, rustRunStats } from 'movement-engine/services/movement_engine/rust_stats';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000022');

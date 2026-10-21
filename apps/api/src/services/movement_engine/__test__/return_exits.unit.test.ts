@@ -19,8 +19,9 @@ jest.mock('movement-engine/services/logger', () => ({
   logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
-import { resumeMovement, runMovement, type ParkSink } from 'movement-engine/services/movement_engine/run';
-import type { ParkedScopeState } from 'movement-engine/services/movement_engine/serialize';
+import { resumeMovement, runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { type ParkSink } from '@listen-fire/legacy-engine/services/movement_engine/run';
+import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import { type Adapter, type RuntimeCapabilities } from 'movement-engine/services/translation_graph/adapter';
 import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';

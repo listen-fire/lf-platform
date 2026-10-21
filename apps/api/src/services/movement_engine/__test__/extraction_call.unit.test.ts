@@ -77,16 +77,16 @@ jest.mock('../../../lib/anthropic', () => ({
 }));
 
 import { mockCatalogSnapshot, type InstanceSchema } from 'movement-lang';
-import { runMovement } from 'movement-engine/services/movement_engine/run';
+import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import {
   EXTRACT_CALL_SYSTEM_PROMPT,
   ExtractCallPrefixes,
   answerOf,
   type ExtractCallLlmInput,
   type ExtractCallLlmResult,
-} from 'movement-engine/services/movement_engine/extraction_call';
-import type { FileTextResolution } from 'movement-engine/services/movement_engine/extraction';
-import { bindingOf, type MovementTraceEntry } from 'movement-engine/services/movement_engine/expression';
+} from '@listen-fire/legacy-engine/services/movement_engine/extraction_call';
+import type { FileTextResolution } from '@listen-fire/legacy-engine/services/movement_engine/extraction';
+import { bindingOf, type MovementTraceEntry } from '@listen-fire/legacy-engine/services/movement_engine/expression';
 import type { CapturedWrite } from 'movement-engine/services/translation_graph/engine/dry_run_adapter';
 import {
   containerAssociation,

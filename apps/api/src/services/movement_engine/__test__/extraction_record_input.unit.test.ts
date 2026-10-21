@@ -23,14 +23,14 @@ jest.mock('../../context', () => ({
 }));
 
 import type { ExtractExpression, Span } from 'movement-lang';
-import { binding, type Binding } from 'movement-engine/services/movement_engine/expression';
-import { buildExtractSpec, materializeExtract } from 'movement-engine/services/movement_engine/extraction';
+import { binding, type Binding } from '@listen-fire/legacy-engine/services/movement_engine/expression';
+import { buildExtractSpec, materializeExtract } from '@listen-fire/legacy-engine/services/movement_engine/extraction';
 import { NO_PROVENANCE } from 'movement-engine/services/movement_engine/provenance';
 import type {
   LlmCallInput,
   LlmCallResult,
 } from '../../translation_graph/engine/batched_extraction';
-import type { WriteRecord } from 'movement-engine/services/movement_engine/expression';
+import type { WriteRecord } from '@listen-fire/legacy-engine/services/movement_engine/expression';
 import { fileValue } from 'movement-engine/services/translation_graph/adapter';
 
 const span: Span = { start: { line: 1, col: 1 }, end: { line: 1, col: 1 } };

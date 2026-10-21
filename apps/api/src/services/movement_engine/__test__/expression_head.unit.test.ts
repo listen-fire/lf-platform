@@ -85,7 +85,7 @@ jest.mock('../../../lib/anthropic', () => ({
 
 import { fromCatalogSnapshot, mockCatalogSnapshot, type InstanceSchema } from 'movement-lang';
 import { spelledFor } from 'movement-lang/checker/__test__/surface_spelling';
-import { runMovement } from 'movement-engine/services/movement_engine/run';
+import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import type {
   LlmCallInput,
   LlmCallResult,

@@ -16,7 +16,8 @@ import { createManualAdapter } from '../../translation_graph/adapters/manual';
 import { snapshotOverManifests, staticCatalogFromManifests } from '../../translation_graph/movement/catalog';
 import { positionData } from 'engine-contracts/catalog';
 import { makeTestHost } from 'movement-engine/services/movement_engine/test_host';
-import { runMovement, type ParkSink } from 'movement-engine/services/movement_engine/run';
+import { runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { type ParkSink } from '@listen-fire/legacy-engine/services/movement_engine/run';
 import { teamOfTenant } from '../../translation_graph/movement/tenant';
 
 const AWAITING = 'ask';

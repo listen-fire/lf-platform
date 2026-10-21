@@ -12,8 +12,8 @@ import { RunCostCapExceeded } from '../../../lib/run_cost';
 import { containerAssociation, type Adapter } from '../../translation_graph/adapter';
 import { hostMethodPaths } from '../host';
 import { AdapterCallFailed } from '../host_adapter';
-import { MovementRunFailed, runFailureCause, runMovement, type RunMovementInput } from '../run';
-import { openRunContext, RunLedger } from '../run_context';
+import { MovementRunFailed, runFailureCause, runMovement, type RunMovementInput } from '../../../public/movement-engine';
+import { openRunContext, RunLedger } from '../segment_context';
 import { ENGINE_OWN_ROUTES, shimRoutePaths } from '../rust_host';
 import { resetRustRunStats, rustRunStats } from '../rust_stats';
 import { REFUSED, WireOut } from '../rust_wire';
@@ -676,7 +676,9 @@ describe('a segment the Rust engine will not run', () => {
 });
 
 describe('a host without the clock and ids', () => {
-  it.each([4, 5])('is refused before any segment opens (version %d)', async (languageVersion) => {
+  // A version-4 run, on the platform's TypeScript engine, is refused the same
+  // way (packages/legacy-engine engine_by_version.unit.test.ts).
+  it.each([5])('is refused before any segment opens (version %d)', async (languageVersion) => {
     resetRustRunStats();
     const { clock: _clock, ids: _ids, ...host } = makeTestHost();
     const run = runMovement({

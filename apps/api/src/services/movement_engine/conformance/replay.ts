@@ -21,7 +21,8 @@ import {
 
 import { neverAsAny } from 'movement-engine/public/types';
 import type { EngineHost } from 'movement-engine/public/host';
-import { fireCallbackBody, resumeMovement, runMovement, settleRaceFrame, type MovementRunResult } from 'movement-engine/public/movement-engine';
+import { fireCallbackBody, resumeMovement, runMovement, settleRaceFrame } from '@listen-fire/legacy-engine/dispatch';
+import { type MovementRunResult } from 'movement-engine/public/movement-engine';
 import { startHostDouble, httpHost } from './http_host_double';
 import { recordedError } from './recorder';
 import { hostServing, settle } from './replay_host';

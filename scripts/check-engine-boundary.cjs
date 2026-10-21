@@ -33,8 +33,15 @@ const CONSUMER_ROOTS = [
   'packages/module-kit',
   'packages/file-text',
   'examples/embed-saas/src',
+  'packages/legacy-engine',
   ...fs.readdirSync(modulesDir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => `modules/${e.name}`),
 ].filter((root) => fs.existsSync(path.join(repoRoot, root)));
+/** Consumers that reach the internals by design, under the
+ *  `movement-engine-internals` condition, as the test runners do: the
+ *  platform's TypeScript engine for language versions 1–4 is built on the
+ *  host, the segment and the record handle the Rust engine's shim shares.
+ *  Their imports are listed, never counted against the baseline. */
+const INTERNALS_ALLOWED = new Set(['packages/legacy-engine']);
 const engineRoot = path.join(repoRoot, 'packages/movement-engine');
 const baselineFile = path.join(__dirname, 'engine-boundary-baseline.json');
 
@@ -106,6 +113,7 @@ function specifiersIn(sourceFile) {
 }
 
 const sites = [];
+const allowedSites = [];
 for (const root of CONSUMER_ROOTS) {
   const rootDir = path.join(repoRoot, root);
   for (const file of sourceFiles(rootDir)) {
@@ -118,7 +126,8 @@ for (const root of CONSUMER_ROOTS) {
       const inside = enginePathOf(specifier, file);
       if (inside === null) continue;
       if (inside === 'public' || inside.startsWith('public/')) continue;
-      sites.push({ module: inside === '' ? '(package root)' : inside, file: `${root}/${relative}`, line });
+      const site = { module: inside === '' ? '(package root)' : inside, file: `${root}/${relative}`, line };
+      (INTERNALS_ALLOWED.has(root) ? allowedSites : sites).push(site);
     }
   }
 }
@@ -148,8 +157,14 @@ for (const [name, count] of Object.entries(sortedModules)) {
 console.log(
   `engine boundary: ${total} production imports of engine internals outside movement-engine/public (baseline ${baseline.total}, ${Object.keys(sortedModules).length} modules)`,
 );
+if (allowedSites.length > 0) {
+  console.log(
+    `engine boundary: ${allowedSites.length} imports of engine internals by ${[...INTERNALS_ALLOWED].join(', ')}, allowed under the movement-engine-internals condition`,
+  );
+}
 if (args.has('--list')) {
   for (const site of sites) console.log(`  ${site.file}:${site.line}  ${site.module}`);
+  for (const site of allowedSites) console.log(`  (allowed) ${site.file}:${site.line}  ${site.module}`);
 }
 if (grown.length > 0) {
   console.error('engine boundary: FAILED, imports of engine internals grew past the baseline:');

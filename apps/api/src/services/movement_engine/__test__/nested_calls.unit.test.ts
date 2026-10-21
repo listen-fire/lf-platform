@@ -6,7 +6,7 @@
 // happens. Every proof is what reaches the adapter, in the order it arrived.
 
 import type { InstanceSchema, LanguageVersion } from 'movement-lang';
-import { runMovement } from 'movement-engine/services/movement_engine/run';
+import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import type { Adapter, RuntimeCapabilities, WriteInput } from 'movement-engine/services/translation_graph/adapter';
 import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';

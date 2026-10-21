@@ -7,7 +7,7 @@
 // fake's `createRecord`.
 
 import type { InstanceSchema } from 'movement-lang';
-import { runMovement } from 'movement-engine/services/movement_engine/run';
+import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import type {
   Adapter,

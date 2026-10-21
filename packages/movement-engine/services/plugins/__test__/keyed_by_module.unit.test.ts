@@ -4,7 +4,7 @@
 import type { PluginSpec } from 'movement-lang';
 
 import { pluginKey } from 'movement-lang';
-import { pluginSpecNamed } from '../../movement_engine/extraction';
+import { pluginSpecNamed } from '../../movement_engine/segment_context';
 import { bundledPluginSpecNamed, bundledPluginSpecs } from '../registry';
 
 const spec = (tag: string): PluginSpec => ({ args: ['text'], priced: false, argTypes: { text: 'text' }, package: tag, name: 'render' });

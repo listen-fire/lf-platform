@@ -387,7 +387,7 @@ import { logger } from 'movement-engine/public/log';
 import { persistKgResources } from '../adapters/knowledge_graph_resources';
 import { RESOURCES_REFERENCE_FIELD_ID, type ResourceFilter } from 'movement-engine/services/translation_graph/adapter';
 import { makeStablePosition } from 'engine-contracts/catalog';
-import { surfaceReadAdapter } from 'movement-engine/services/movement_engine/kg';
+import { surfaceReadAdapter } from '@listen-fire/legacy-engine/services/movement_engine/kg';
 import { instanceSchemaFromDescriptors } from 'movement-engine/services/translation_graph/movement/schema_projection';
 import type { InstanceSchema } from 'movement-lang';
 

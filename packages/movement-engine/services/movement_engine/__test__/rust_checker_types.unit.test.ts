@@ -11,7 +11,7 @@ import type { TriggerEvent } from '../../translation_graph/triggers/types';
 import type {
   ExtractCallLlmInput,
   ExtractCallLlmResult,
-} from '../extraction_call';
+} from '../../translation_graph/engine/batched_extraction/llm_call';
 
 import { containerAssociation } from '../../translation_graph/adapter';
 import { makeStablePosition, positionData } from 'engine-contracts/catalog';
@@ -20,7 +20,7 @@ import {
   runFailureCause,
   runMovement,
   type MovementRunResult,
-} from '../run';
+} from '../../../public/movement-engine';
 import {
   resetRustRunStats,
   rustRunStats,

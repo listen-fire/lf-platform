@@ -81,7 +81,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 import { mockCatalogSnapshot, type InstanceSchema } from 'movement-lang';
-import { runMovement as runMovementUnder } from 'movement-engine/services/movement_engine/run';
+import { runMovement as runMovementUnder } from '@listen-fire/legacy-engine/dispatch';
 
 // The extraction keyword is versions 1–4 only (MOV_EXTRACT_KEYWORD_RETIRED
 // from 5), so its recorded prompts are replayed under version 4, in the
@@ -92,7 +92,7 @@ import type {
   LlmCallInput,
   LlmCallResult,
 } from '../../translation_graph/engine/batched_extraction';
-import type { FileTextResolution } from 'movement-engine/services/movement_engine/extraction';
+import type { FileTextResolution } from '@listen-fire/legacy-engine/services/movement_engine/extraction';
 import type { Adapter, FileRef } from 'movement-engine/services/translation_graph/adapter';
 import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
 import { positionData } from 'engine-contracts/catalog';

@@ -45,12 +45,14 @@ import type { AwaitPoint, AwaitResolution } from 'engine-contracts/awaitable';
 import type { UniquenessConstraints } from 'engine-contracts/uniqueness';
 import type { SourcePosition } from 'engine-contracts/catalog';
 import type { TriggerEvent } from '../translation_graph/triggers/types';
-import type { LlmCallInput, LlmCallResult } from '../translation_graph/engine/batched_extraction/llm_call';
+import type {
+  ExtractCallLlmInput,
+  ExtractCallLlmResult,
+  LlmCallInput,
+  LlmCallResult,
+} from '../translation_graph/engine/batched_extraction/llm_call';
 import type { CallbackCall, CallbackParamSpec } from 'engine-contracts';
-import type { MovementTraceEntry } from './expression';
-import type { FileTextResolution, TransformInvocationResult, TransformInvokeInput } from './extraction';
-import type { ExtractCallLlmInput, ExtractCallLlmResult } from './extraction_call';
-import type { CancelGate, ParkSink } from './run';
+import type { CancelGate, FileTextResolution, MovementTraceEntry, ParkSink } from './run_types';
 import type { AnyParkedScopeState } from 'engine-contracts';
 
 export {
@@ -398,3 +400,36 @@ export type VoidListIsTheHost = Holds<
   Exactly<(typeof VOID_HOST_METHODS)[number], VoidMethodPaths<EngineHost, ''>>
 >;
 
+/** One `through` plugin invocation's contribution back to the context. */
+export interface TransformInvocationResult {
+  text?: string;
+  data?: Record<string, unknown>;
+  /**
+   * Each thing the plugin fetched, as its own record — the link, a name, the
+   * file, the text — in the order it fetched them. A stored document is
+   * already the file value a write can carry (never the storage id it was
+   * emitted as), and a fetch that stored nothing has no `file` at all.
+   *
+   * Two readers: a plain call to a `records`-output plugin binds exactly this
+   * list, and a `through` stage turns every record carrying a file into a FILE
+   * resource on the extracted record's `_resources`.
+   */
+  records?: Array<Record<string, unknown>>;
+  /** What the plugin says became of the invocation, in its own words. Carried
+   *  to the trace and nowhere else — an outcome is not enrichment, so a
+   *  plugin that reports one and attaches nothing still counts as empty. */
+  outcome?: string;
+  /** Things the author should know about this call, each shown as a warning
+   *  on the run (`PLUGIN_WARNING`). A plugin that did what it could, and tells
+   *  you what it could not. */
+  warnings?: string[];
+}
+
+/** One plugin invocation, as the engine asks for it. */
+export interface TransformInvokeInput {
+  plugin: string;
+  /** The author's named arguments, resolved per entity. */
+  config: Record<string, unknown>;
+  /** The entity's extracted fields so far (working fields included). */
+  extractedContext: Record<string, unknown>;
+}

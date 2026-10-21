@@ -25,19 +25,15 @@ import type { TriggerEvent } from 'movement-engine/services/translation_graph/tr
 import { tenantIdOf } from 'engine-contracts';
 import type { CallbackSink } from 'movement-engine/services/movement_engine/host';
 import type { CallbackCall } from 'engine-contracts';
-import type { BindingDescriptor, ParkedScopeState, RehydrationContext } from 'movement-engine/services/movement_engine/serialize';
+import type { BindingDescriptor, ParkedScopeState, RehydrationContext } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
 
 import { createManualAdapter } from '../../translation_graph/adapters/manual';
-import { binding } from 'movement-engine/services/movement_engine/expression';
-import { assertParkRead, newParkReader, rehydrateBinding } from 'movement-engine/services/movement_engine/serialize';
+import { binding } from '@listen-fire/legacy-engine/services/movement_engine/expression';
+import { assertParkRead, newParkReader, rehydrateBinding } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
 import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
-import {
-  resumeMovement,
-  runMovement,
-  type MovementRunResult,
-  type ParkSink,
-} from 'movement-engine/services/movement_engine/run';
+import { resumeMovement, runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { type MovementRunResult, type ParkSink } from '@listen-fire/legacy-engine/services/movement_engine/run';
 import { makeTestHost } from 'movement-engine/services/movement_engine/test_host';
 import { teamOfTenant } from '../../translation_graph/movement/tenant';
 

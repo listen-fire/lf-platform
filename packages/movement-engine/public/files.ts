@@ -6,4 +6,4 @@ export * from '../services/translation_graph/engine/files/file_outside_team';
 export * from '../services/translation_graph/engine/files/file_owners';
 export * from '../services/translation_graph/engine/files/redeem';
 export * from '../services/translation_graph/engine/files/resources';
-export type { FileTextResolution } from '../services/movement_engine/expression';
+export type { FileTextResolution } from '../services/movement_engine/run_types';

@@ -74,8 +74,9 @@ jest.mock('../../../lib/anthropic', () => ({
   MAX_CHAT_CONTINUATIONS: 5,
 }));
 
-import { runFailureCause, runMovement, MovementRunFailed } from 'movement-engine/services/movement_engine/run';
-import type { MovementTraceEntry } from 'movement-engine/services/movement_engine/expression';
+import { runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { runFailureCause, MovementRunFailed } from '@listen-fire/legacy-engine/services/movement_engine/run';
+import type { MovementTraceEntry } from '@listen-fire/legacy-engine/services/movement_engine/expression';
 import { recordLlmUsage } from '../../../lib/llm_usage';
 import { RunCostCapExceeded } from 'movement-engine/lib/run_cost';
 import { assertRunBudget, runCostCapFromEnv, withSpendMeter } from 'movement-engine/lib/run_spend';

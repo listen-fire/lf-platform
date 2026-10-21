@@ -32,7 +32,7 @@ import {
   runFailureCause,
   runMovement,
   type MovementRunResult,
-} from '../run';
+} from '../../../public/movement-engine';
 import {
   resetRustRunStats,
   rustRunStats,

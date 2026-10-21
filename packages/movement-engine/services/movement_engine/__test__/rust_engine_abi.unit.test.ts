@@ -10,7 +10,7 @@ import { EMPTY_CATALOG_SNAPSHOT, openEngineSegment } from 'movement-lang';
 
 import { tenantIdOf } from 'engine-contracts';
 
-import { openRunContext } from '../run_context';
+import { openRunContext } from '../segment_context';
 import { driveEngine, openWasmEngine, RustShimError } from '../rust_engine';
 import { makeTestHost } from '../test_host';
 

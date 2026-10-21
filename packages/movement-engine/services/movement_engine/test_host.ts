@@ -6,10 +6,10 @@ import type { CatalogSnapshot, FileArtifactType } from 'movement-lang';
 import { guidSequence } from 'engine-contracts';
 import type { ActingUser } from '../translation_graph/adapter';
 import type { DryRunWriteSink } from '../translation_graph/engine/dry_run_adapter';
-import type { MovementTraceEntry } from './expression';
+import type { MovementTraceEntry } from './run_types';
 import type { EngineHost, ParkSources, RenderFile } from './host';
 import { parkSources } from '../run_host/rules';
-import type { ParkSink } from './run';
+import type { ParkSink } from './run_types';
 import { isCheckFailure } from './errors';
 
 import type { adapterTable, CredentialOwnership, LiveAdapterResolver } from '../translation_graph/engine/adapter_table';

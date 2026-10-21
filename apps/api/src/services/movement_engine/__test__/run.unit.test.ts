@@ -125,13 +125,9 @@ import type { InstanceSchema, LanguageVersion } from 'movement-lang';
 import { CURRENT_LANGUAGE_VERSION, fromCatalogSnapshot, mockCatalogSnapshot, parseMovementExpression } from 'movement-lang';
 import { spelledFor } from 'movement-lang/checker/__test__/surface_spelling';
 import type { Expression } from 'movement-lang/expression/types';
-import {
-  MovementRunFailed,
-  runFailureCause,
-  runMovement as runAsWritten,
-  resumeMovement as resumeAsWritten,
-} from 'movement-engine/services/movement_engine/run';
-import type { ParkSink, ResumeMovementInput, RunMovementInput } from 'movement-engine/services/movement_engine/run';
+import { runMovement as runAsWritten, resumeMovement as resumeAsWritten } from '@listen-fire/legacy-engine/dispatch';
+import { MovementRunFailed, runFailureCause } from '@listen-fire/legacy-engine/services/movement_engine/run';
+import type { ParkSink, ResumeMovementInput, RunMovementInput } from '@listen-fire/legacy-engine/services/movement_engine/run';
 import type { RunInput } from 'engine-contracts';
 import {
   rehydrateBinding,
@@ -140,10 +136,10 @@ import {
   type InstanceIdentityDescriptor,
   type ParkedScopeState,
   type RehydrationContext,
-} from 'movement-engine/services/movement_engine/serialize';
+} from '@listen-fire/legacy-engine/services/movement_engine/serialize';
 import { createSingleFlight } from '../single_flight';
-import type { Binding, SourceRead } from 'movement-engine/services/movement_engine/expression';
-import { binding, Environment, MovementEngineError, evalMovementExpr } from 'movement-engine/services/movement_engine/expression';
+import type { Binding, SourceRead } from '@listen-fire/legacy-engine/services/movement_engine/expression';
+import { binding, Environment, MovementEngineError, evalMovementExpr } from '@listen-fire/legacy-engine/services/movement_engine/expression';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import type { CapturedWrite } from 'movement-engine/services/translation_graph/engine/dry_run_adapter';
 import type {

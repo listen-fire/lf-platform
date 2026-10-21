@@ -48,7 +48,7 @@ import type { CatalogSnapshot } from 'movement-lang';
 import type { TeamId } from '../../generated/kysely/core/Team';
 import type { ExternalServiceCredentialsId } from '../../generated/kysely/automations/ExternalServiceCredentials';
 
-import { runMovement } from 'movement-engine/public/movement-engine';
+import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { withSegment } from 'movement-engine/services/translation_graph/segment_scope';
 import { AffinityAPIClient } from '@listen-fire/affinity/api_client';
 import { AffinityAdapter, AFFINITY_MANIFEST } from '@listen-fire/affinity';

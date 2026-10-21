@@ -89,7 +89,7 @@ jest.mock('../../translation_graph/adapters/acting_user/resolve', () => ({
   resolveActingUser: jest.fn(async () => null),
 }));
 import type { Catalog, InstanceSchema } from 'movement-lang';
-import { runMovement } from 'movement-engine/services/movement_engine/run';
+import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { snapshotOverManifests, staticCatalogFromManifests } from '../../translation_graph/movement/catalog';
 import { positionData } from 'engine-contracts/catalog';
 import type { Adapter, ParentLink, RuntimeCapabilities } from 'movement-engine/services/translation_graph/adapter';

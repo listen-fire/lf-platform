@@ -113,14 +113,15 @@ import { writeFileSync } from 'node:fs';
 import { CURRENT_LANGUAGE_VERSION, fromCatalogSnapshot, type LanguageVersion } from 'movement-lang';
 import { spelledFor } from 'movement-lang/checker/__test__/surface_spelling';
 
-import type { ExtractCallLlmInput, ExtractCallLlmResult } from 'movement-engine/services/movement_engine/extraction_call';
-import type { MovementTransformInvoker } from 'movement-engine/services/movement_engine/extraction';
+import type { ExtractCallLlmInput, ExtractCallLlmResult } from '@listen-fire/legacy-engine/services/movement_engine/extraction_call';
+import type { MovementTransformInvoker } from '@listen-fire/legacy-engine/services/movement_engine/extraction';
 import type { CapturedWrite } from 'movement-engine/services/translation_graph/engine/dry_run_adapter';
 import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
 import { tenantIdOf } from 'engine-contracts';
 import { makeTestHost } from 'movement-engine/services/movement_engine/test_host';
 
-import { runMovement, runFailureCause, type MovementRunResult } from 'movement-engine/services/movement_engine/run';
+import { runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { runFailureCause, type MovementRunResult } from '@listen-fire/legacy-engine/services/movement_engine/run';
 import { MovementEngineError } from 'movement-engine/services/movement_engine/errors';
 import { containerAssociation, type Adapter } from 'movement-engine/services/translation_graph/adapter';
 import { makeStablePosition, positionData, positionRecordId, META_RECORD_TYPE } from 'engine-contracts/catalog';

@@ -23,7 +23,7 @@ import {
   ROOT_EXTRACT_DESCRIPTION,
   materializeExtract,
   type ExtractNodeSpec,
-} from 'movement-engine/services/movement_engine/extraction';
+} from '@listen-fire/legacy-engine/services/movement_engine/extraction';
 import { NO_PROVENANCE } from 'movement-engine/services/movement_engine/provenance';
 import { bundledPluginSpecs } from 'movement-engine/public/plugins';
 

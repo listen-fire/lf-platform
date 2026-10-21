@@ -2077,10 +2077,26 @@ importers:
         version: 5.5.4
 
   packages/legacy-engine:
-    devDependencies:
+    dependencies:
+      engine-contracts:
+        specifier: workspace:@listen-fire/engine-contracts@*
+        version: link:../engine-contracts
+      movement-engine:
+        specifier: workspace:@listen-fire/engine@*
+        version: link:../movement-engine
       movement-lang:
         specifier: workspace:@listen-fire/movement-lang@*
         version: link:../movement-lang
+      zod:
+        specifier: 4.1.12
+        version: 4.1.12
+    devDependencies:
+      '@types/jest':
+        specifier: 29.5.14
+        version: 29.5.14
+      '@types/node':
+        specifier: 20.16.5
+        version: 20.16.5
       typescript:
         specifier: 5.5.4
         version: 5.5.4
@@ -2199,9 +2215,6 @@ importers:
         specifier: 4.1.12
         version: 4.1.12
     devDependencies:
-      '@listen-fire/legacy-engine':
-        specifier: workspace:*
-        version: link:../legacy-engine
       '@types/jest':
         specifier: 29.5.14
         version: 29.5.14

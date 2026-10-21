@@ -25,7 +25,8 @@ import type { AnyParkedScopeState } from 'engine-contracts';
 import { createManualAdapter } from '../../translation_graph/adapters/manual';
 import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
 import { snapshotOverManifests, staticCatalogFromManifests, staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
-import { runMovement, fireCallbackBody, type ParkSink } from 'movement-engine/services/movement_engine/run';
+import { runMovement, fireCallbackBody } from '@listen-fire/legacy-engine/dispatch';
+import { type ParkSink } from '@listen-fire/legacy-engine/services/movement_engine/run';
 import { makeTestHost, TEST_HOST_NOW } from 'movement-engine/services/movement_engine/test_host';
 import { teamOfTenant } from '../../translation_graph/movement/tenant';
 

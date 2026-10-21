@@ -64,8 +64,8 @@ jest.mock('@listen-fire/kg/manifest', () => ({
 }));
 
 
-import { runMovement } from 'movement-engine/services/movement_engine/run';
-import type { ExtractCallLlmClient } from 'movement-engine/services/movement_engine/extraction_call';
+import { runMovement } from '@listen-fire/legacy-engine/dispatch';
+import type { ExtractCallLlmClient } from '@listen-fire/legacy-engine/services/movement_engine/extraction_call';
 
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import { containerAssociation, type Adapter, type RuntimeCapabilities } from 'movement-engine/services/translation_graph/adapter';

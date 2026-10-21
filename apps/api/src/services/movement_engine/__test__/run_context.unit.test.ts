@@ -15,7 +15,7 @@ import { isRunCostCapExceeded, RunCostCapExceeded, type Budget } from 'movement-
 import { InMemoryWriteLocks, type WriteLockHolder, type WriteLocks } from 'movement-engine/services/write_locks/write_locks';
 import { makeFakeParkSink, makeTestHost } from 'movement-engine/services/movement_engine/test_host';
 import { NEVER_CANCELLED } from 'movement-engine/services/movement_engine/host_kit';
-import { runMovement } from 'movement-engine/services/movement_engine/run';
+import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { RunCancelledSignal } from 'movement-engine/services/movement_engine/errors';
 import {
   closeRunContext,
@@ -24,7 +24,7 @@ import {
   RunLedger,
   runLogFields,
   throwIfCancelled,
-} from 'movement-engine/services/movement_engine/run_context';
+} from '@listen-fire/legacy-engine/services/movement_engine/run_context';
 import { teamOfTenant } from '../../translation_graph/movement/tenant';
 
 const DOLLAR = 1_000_000;

@@ -72,7 +72,7 @@ import {
   type ExtractNodeSpec,
   type ExtractSpecOptions,
   type MovementTransformInvoker,
-} from 'movement-engine/services/movement_engine/extraction';
+} from '@listen-fire/legacy-engine/services/movement_engine/extraction';
 import { NO_PROVENANCE } from 'movement-engine/services/movement_engine/provenance';
 import {
   claudeModelId,

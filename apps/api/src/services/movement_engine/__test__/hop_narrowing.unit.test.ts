@@ -18,7 +18,7 @@
 import { parseTraversalPath, refinementKey, scanInstanceChains } from 'movement-lang';
 import type { InstanceSchema } from 'movement-lang';
 import { refineInstanceSchema } from '../../translation_graph/movement/refinements';
-import { runMovement } from 'movement-engine/services/movement_engine/run';
+import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import type { CapturedWrite } from 'movement-engine/services/translation_graph/engine/dry_run_adapter';
 import type {

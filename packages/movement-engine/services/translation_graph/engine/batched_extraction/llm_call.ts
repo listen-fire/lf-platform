@@ -60,3 +60,38 @@ export interface LlmCallInput {
 export interface LlmClient {
   call(input: LlmCallInput): Promise<LlmCallResult>;
 }
+
+/** One block of the user turn. `cacheBreakpoint` ends the cacheable prefix
+ *  here; a provider without explicit breakpoints keeps the order and drops
+ *  the marker. */
+export interface ExtractCallBlock {
+  text: string;
+  cacheBreakpoint?: true;
+}
+
+export interface ExtractCallLlmInput {
+  system: string;
+  blocks: ExtractCallBlock[];
+  label: string;
+  model: TierModel;
+  effort?: Effort;
+  maxTokens?: number;
+}
+
+/** Tokens one call spent, as the provider counts them. */
+export interface ExtractCallUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+}
+
+export interface ExtractCallLlmResult extends LlmCallResult {
+  usage?: ExtractCallUsage;
+}
+
+/** The extraction call's model client — the keyword's `LlmClient` takes one
+ *  undivided user message, and this layout is blocks. Tests inject a stub. */
+export interface ExtractCallLlmClient {
+  call(input: ExtractCallLlmInput): Promise<ExtractCallLlmResult>;
+}

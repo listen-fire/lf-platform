@@ -77,3 +77,16 @@ export function wallClockExceeded(seconds: number): MovementEngineError {
     { limit: 'wallClock', seconds },
   );
 }
+
+/**
+ * How much of ONE source file's text may reach the extraction prompt. Fifty
+ * thousand characters is the figure `fetch_url` already bounds a fetched page
+ * at, and it takes a twenty-page deck whole; past it a single lookbook crowds
+ * every other source out of the prompt — and is re-sent on EVERY staged call of
+ * the extract, so the cost is per call, not per run. Read per call so a
+ * deployment can raise it without a deploy.
+ */
+export function maxFileChars(): number {
+  const fromEnv = Number(process.env.EXTRACTION_FILE_CHARS);
+  return Number.isFinite(fromEnv) && fromEnv > 0 ? fromEnv : 50_000;
+}

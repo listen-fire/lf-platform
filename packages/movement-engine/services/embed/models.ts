@@ -5,7 +5,7 @@
 // cap; a fake that charges nothing spends nothing.
 
 import type { Costed, EngineHost } from '../movement_engine/host';
-import type { ExtractCallLlmInput, ExtractCallLlmResult } from '../movement_engine/extraction_call';
+import type { ExtractCallLlmInput, ExtractCallLlmResult } from '../translation_graph/engine/batched_extraction/llm_call';
 import type { LlmCallInput, LlmCallResult } from '../translation_graph/engine/batched_extraction/llm_call';
 import { metered } from '../translation_graph/movement/metered';
 

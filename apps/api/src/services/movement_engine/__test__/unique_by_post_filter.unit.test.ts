@@ -79,7 +79,7 @@ jest.mock('../../../lib/prompts/execute', () => ({
 }));
 
 import { execute } from '../../../lib/prompts/execute';
-import { runMovement } from 'movement-engine/services/movement_engine/run';
+import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { meteredArbitration } from '../../translation_graph/engine/entity_match';
 
 import type { InstanceSchema } from 'movement-lang';

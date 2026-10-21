@@ -6,7 +6,7 @@
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { AwaitResolution } from 'engine-contracts/awaitable';
 import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
-import { runFailureCause, type ParkSink } from 'movement-engine/services/movement_engine/run';
+import { runFailureCause, type ParkSink } from '@listen-fire/legacy-engine/services/movement_engine/run';
 import { RunLeaseLost } from '../run_lease';
 import type { QueuedWake } from 'movement-engine/services/movement_engine/host_kit';
 import { makeFakeParkSink } from 'movement-engine/services/movement_engine/test_host';

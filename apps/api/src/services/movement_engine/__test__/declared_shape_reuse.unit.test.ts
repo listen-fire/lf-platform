@@ -88,7 +88,7 @@ jest.mock('../../document', () => ({
 }));
 
 import { mockCatalogSnapshot, type InstanceSchema } from 'movement-lang';
-import { runMovement as runMovementUnder } from 'movement-engine/services/movement_engine/run';
+import { runMovement as runMovementUnder } from '@listen-fire/legacy-engine/dispatch';
 
 // A declared node reused as the extraction keyword's shape: the keyword is
 // versions 1–4 only (MOV_EXTRACT_KEYWORD_RETIRED from 5, where every shape is

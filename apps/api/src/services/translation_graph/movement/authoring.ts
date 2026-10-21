@@ -37,7 +37,7 @@ import type { CatalogGap } from './catalog';
 import type { MovementValidityStatus } from './store';
 
 import { listUnsupportedConstructs } from 'movement-engine/public/movement-engine';
-import { RUST_ENGINE_FROM_VERSION } from 'movement-engine/public/movement-engine';
+import { RUST_ENGINE_FROM_VERSION } from '@listen-fire/legacy-engine/dispatch';
 import { movementCatalogForTeam } from './catalog';
 import { stepTimer, type StepTimer } from './timing';
 

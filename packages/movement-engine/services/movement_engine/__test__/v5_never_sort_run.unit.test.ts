@@ -15,7 +15,7 @@ import {
   runMovement,
   type ParkSink,
   type RunMovementInput,
-} from '../run';
+} from '../../../public/movement-engine';
 import {
   setRunEngineRecorder,
   type RunEngineRecord,

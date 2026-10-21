@@ -15,16 +15,17 @@ import { mockCatalogSnapshot, type InstanceSchema } from 'movement-lang';
 
 import { tenantIdOf } from 'engine-contracts';
 import type { Adapter, FileRef } from 'movement-engine/services/translation_graph/adapter';
-import type { ExtractCallLlmResult } from 'movement-engine/services/movement_engine/extraction_call';
+import type { ExtractCallLlmResult } from '@listen-fire/legacy-engine/services/movement_engine/extraction_call';
 import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
-import type { ParkedScopeState } from 'movement-engine/services/movement_engine/serialize';
-import type { FileTextResolution } from 'movement-engine/services/movement_engine/expression';
+import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
+import type { FileTextResolution } from '@listen-fire/legacy-engine/services/movement_engine/expression';
 
 import { containerAssociation } from 'movement-engine/services/translation_graph/adapter';
 import { makeUnstablePosition, positionData } from 'engine-contracts/catalog';
 import { credentialIdsFor, makeFakeParkSink, makeTestHost, endedInRust } from 'movement-engine/services/movement_engine/test_host';
 import { isCheckFailure } from 'movement-engine/services/movement_engine/errors';
-import { runFailureCause, resumeMovement, runMovement, type RunMovementInput } from 'movement-engine/services/movement_engine/run';
+import { resumeMovement, runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { runFailureCause, type RunMovementInput } from '@listen-fire/legacy-engine/services/movement_engine/run';
 import { filesInBranchExports, filesInParkState } from 'movement-engine/services/movement_engine/rust_wire';
 import { isFileValue } from 'engine-contracts';
 import { resetRustRunStats, rustRunStats } from 'movement-engine/services/movement_engine/rust_stats';

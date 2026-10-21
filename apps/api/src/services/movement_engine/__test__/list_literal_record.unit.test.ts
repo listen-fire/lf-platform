@@ -78,7 +78,7 @@ jest.mock('../../../lib/anthropic', () => ({
 }));
 
 import { CURRENT_LANGUAGE_VERSION, fromCatalogSnapshot, mockCatalogSnapshot, type InstanceSchema } from 'movement-lang';
-import { runMovement } from 'movement-engine/services/movement_engine/run';
+import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { spelledFor } from 'movement-lang/checker/__test__/surface_spelling';
 import type { CapturedWrite } from 'movement-engine/services/translation_graph/engine/dry_run_adapter';
 import { containerAssociation, type Adapter } from 'movement-engine/services/translation_graph/adapter';

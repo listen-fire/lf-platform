@@ -13,7 +13,7 @@ import type { Adapter, ExternalRecordRef } from '../../translation_graph/adapter
 import { containerAssociation } from '../../translation_graph/adapter';
 import { META_RECORD_TYPE, makeStablePosition, positionData, positionRecordId } from 'engine-contracts/catalog';
 import { credentialIdsFor, makeFakeParkSink, makeTestHost, type TestHostOverrides } from '../test_host';
-import { resumeMovement, runFailureCause, runMovement, type RunMovementInput } from '../run';
+import { resumeMovement, runFailureCause, runMovement, type RunMovementInput } from '../../../public/movement-engine';
 import { resetRustRunStats, rustRunStats } from '../rust_stats';
 
 jest.setTimeout(60_000);

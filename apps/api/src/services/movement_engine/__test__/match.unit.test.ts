@@ -78,7 +78,7 @@ jest.mock('../../../lib/prompts/execute', () => ({
   flattenMessages: jest.fn(),
 }));
 
-import { runMovement } from 'movement-engine/services/movement_engine/run';
+import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 
 import { CURRENT_LANGUAGE_VERSION, fromCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import { spelledFor } from 'movement-lang/checker/__test__/surface_spelling';

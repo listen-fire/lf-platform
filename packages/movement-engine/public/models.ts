@@ -14,12 +14,8 @@ export * from '../lib/run_spend';
 export { aiExpressionSettings, claudeModelId } from '../services/movement_engine/ai_tiers';
 export { metered, refusingPastBudget } from '../services/translation_graph/movement/metered';
 export * from 'engine-contracts/uniqueness';
-export type {
-  FileUnreadable,
-  TransformInvocationResult,
-  TransformInvokeInput,
-} from '../services/movement_engine/extraction';
-export type { ExtractCallLlmClient } from '../services/movement_engine/extraction_call';
+export type { FileUnreadable } from '../services/movement_engine/run_types';
+export type { TransformInvocationResult, TransformInvokeInput } from '../services/movement_engine/host';
 export * from '../services/translation_graph/engine/batched_extraction/llm_call';
 export * from '../services/translation_graph/engine/batched_extraction/model_choice';
 export * from '../lib/models/embedding/destinations';

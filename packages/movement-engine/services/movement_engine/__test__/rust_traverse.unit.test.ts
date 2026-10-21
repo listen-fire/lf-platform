@@ -26,7 +26,7 @@ import type {
 } from '../../translation_graph/adapter';
 import { containerAssociation } from '../../translation_graph/adapter';
 import type { CapturedWrite } from '../../translation_graph/engine/dry_run_adapter';
-import type { ParkedScopeState } from '../serialize';
+import type { ParkedScopeState } from 'engine-contracts';
 import type { TriggerEvent } from '../../translation_graph/triggers/types';
 import {
   META_RECORD_TYPE,
@@ -36,14 +36,14 @@ import {
   positionRecordId,
 } from 'engine-contracts/catalog';
 import { MovementEngineError } from '../errors';
-import type { MovementTraceEntry } from '../expression';
+import type { MovementTraceEntry } from '../run_types';
 import {
   MovementRunFailed,
   resumeMovement,
   runFailureCause,
   runMovement,
   type MovementRunResult,
-} from '../run';
+} from '../../../public/movement-engine';
 import {
   resetRustRunStats,
   rustRunStats,

@@ -15,7 +15,8 @@ import {
   type TenantId,
 } from '@listen-fire/engine-contracts';
 
-import { runMovement, type MovementRunResult } from '../../../packages/movement-engine/services/movement_engine/run';
+import { runMovement } from '../../../packages/movement-engine/services/movement_engine/rust_run';
+import type { MovementRunResult } from '../../../packages/movement-engine/services/movement_engine/run_types';
 import { makeFakeParkSink, makeTestHost } from '../../../packages/movement-engine/services/movement_engine/test_host';
 import { createAdapterProtocolHandler } from '../../module-kit/server';
 import type { Adapter } from '../../../packages/movement-engine/services/translation_graph/adapter';

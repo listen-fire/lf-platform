@@ -6,7 +6,7 @@
 
 import { createHash, randomUUID } from 'node:crypto';
 import { isAncestorOrSelf, parseAddress } from '../movement_engine/address';
-import type { ParkSink, RunLimitPause } from '../movement_engine/run';
+import type { ParkSink, RunLimitPause } from '../movement_engine/run_types';
 import type { ParkSources } from '../movement_engine/host';
 import type { AwaitKeeper, RunHostStore, SourceStore } from './store';
 

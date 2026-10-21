@@ -24,7 +24,7 @@ import type { TriggerEvent } from 'movement-engine/services/translation_graph/tr
 import type {
   FileTextResolution,
   TransformInvocationResult,
-} from 'movement-engine/services/movement_engine/extraction';
+} from '@listen-fire/legacy-engine/services/movement_engine/extraction';
 
 import { availableChatModels } from 'movement-engine/lib/models/map';
 import { RunCostCapExceeded } from 'movement-engine/lib/run_cost';
@@ -40,17 +40,13 @@ import {
   makeTestHost,
   endedInRust,
 } from 'movement-engine/services/movement_engine/test_host';
-import {
-  resumeMovement,
-  runFailureCause,
-  runMovement,
-  type RunMovementInput,
-} from 'movement-engine/services/movement_engine/run';
+import { resumeMovement, runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { runFailureCause, type RunMovementInput } from '@listen-fire/legacy-engine/services/movement_engine/run';
 import {
   MovementEngineError,
   isCheckFailure,
 } from 'movement-engine/services/movement_engine/errors';
-import type { ParkedScopeState } from 'movement-engine/services/movement_engine/serialize';
+import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
 import {
   resetRustRunStats,
   rustRunStats,

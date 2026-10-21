@@ -2,7 +2,7 @@
   "name": "@listen-fire/engine",
   "license": "Apache-2.0",
   "version": "0.12.0-rc.4",
-  "description": "The movement engine and its host contract, moved out of apps/api so every shell (the hosted product, the `lf` command line) runs the same engine: the TypeScript engine, the Rust engine's shim, the EngineHost families, and the adapter and model types they reach. Paths mirror apps/api/src so the move stayed mechanical. Its own tests borrow apps/api's jest runner (jest.config.borrowed.cjs); engine tests that need the platform still live in apps/api. Embedders reach it only through public/* (the exports map); the internals resolve only under the `movement-engine-internals` condition, which only test runners set",
+  "description": "The movement engine for language version 5 and later and its host contract: the Rust engine's shim, the EngineHost families, the run host, the embed kit, and the adapter and model types they reach. Every shell (the hosted product, the `lf` command line, an embedder) runs the same engine. A run pinned below version 5 is refused by name. Its own tests borrow apps/api's jest runner (jest.config.borrowed.cjs). Embedders reach it only through public/* (the exports map); the internals resolve only under the `movement-engine-internals` condition, which only test runners and the platform's legacy engine set",
   "engines": {
     "node": "22.20.0"
   },
@@ -37,8 +37,7 @@
     "module-kit": "workspace:@listen-fire/module-kit@*",
     "module-runtime": "workspace:@listen-fire/module-runtime@*",
     "movement-lang": "workspace:@listen-fire/movement-lang@*",
-    "typescript": "5.5.4",
-    "@listen-fire/legacy-engine": "workspace:*"
+    "typescript": "5.5.4"
   },
   "repository": {
     "type": "git",

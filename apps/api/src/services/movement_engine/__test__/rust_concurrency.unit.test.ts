@@ -19,11 +19,12 @@ import { makeStablePosition, makeUnstablePosition, positionData } from 'engine-c
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import { teamOfTenant } from '../../translation_graph/movement/tenant';
 import type { CallbackSink } from 'movement-engine/services/movement_engine/host';
-import type { MovementTraceEntry } from 'movement-engine/services/movement_engine/expression';
+import type { MovementTraceEntry } from '@listen-fire/legacy-engine/services/movement_engine/expression';
 import { makeTestHost } from 'movement-engine/services/movement_engine/test_host';
-import { fireCallbackBody, resumeMovement, runMovement, settleRaceFrame, type MovementRunResult, type ParkSink } from 'movement-engine/services/movement_engine/run';
+import { fireCallbackBody, resumeMovement, runMovement, settleRaceFrame } from '@listen-fire/legacy-engine/dispatch';
+import { type MovementRunResult, type ParkSink } from '@listen-fire/legacy-engine/services/movement_engine/run';
 import { resetRustRunStats, rustRunStats } from 'movement-engine/services/movement_engine/rust_stats';
-import type { ParkedScopeState } from 'movement-engine/services/movement_engine/serialize';
+import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-0000000000c4');
 const KG = 'kg';
