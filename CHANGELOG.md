@@ -8,6 +8,11 @@ Entries are written for two readers: an operator running a self-hosted installat
 
 <!-- add merged PRs here -->
 
+## [v0.11.1] - 2026-10-21
+
+- Set `GEMINI_API_KEY` to call Gemini through the Gemini Developer API instead of the project's Vertex endpoint (which was returning 429s for some projects). The service account then serves only OCR and Claude on Vertex; without the key nothing changes.
+- A rate-limited model call now waits as long as the vendor's retry-after asks, instead of a fixed 30 seconds.
+
 ## [v0.11.0] - 2026-10-12
 
 Language version 4, **Luminous Owl**, arrives. New automations are written in it. The deploy check moves an existing automation up to it when it validates cleanly there. An automation with an error, or with a move-up warning (`MOV_MATCH_MISS_CONTINUES`, `MOV_HANDLE_UPDATED_IN_PLACE`, `MOV_HANDLE_READ_FOUND`: the same text now does something different), stays on its version, shows Review and lists the diagnostics, and behaves exactly as before. Read each warning, edit what assumed the old behaviour, and upgrade with `upgradeAutomation`, acknowledging it.
