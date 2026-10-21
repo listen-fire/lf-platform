@@ -12,7 +12,7 @@
 //   3. The CHECKER walks object values (a name inside one still resolves,
 //      or is reported).
 
-import { objectMemberExpression } from '../../../../expression/types';
+import { objectMemberExpression } from 'movement-lang/expression/types';
 import { parseProgram } from '../../parser/parse';
 import { checkProgram, DiagnosticCodes as C } from '../../checker/check';
 import { mockCatalog } from '../../checker/catalog';

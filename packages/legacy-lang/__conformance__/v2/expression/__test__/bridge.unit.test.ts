@@ -1,6 +1,6 @@
 import { BridgeError, parseMovementCondition, parseMovementExpression, POSITION_SENTINEL, splitUniquenessConjuncts } from '../bridge';
-import type { Expression } from '../../../../expression/types';
-import { serialize } from '../../../../expression/formula';
+import type { Expression } from 'movement-lang/expression/types';
+import { serialize } from 'movement-lang/expression/formula';
 
 describe('splitUniquenessConjuncts', () => {
   const shape = (raw: string) =>
