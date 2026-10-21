@@ -137,6 +137,8 @@ describe('credentials', () => {
     expect(providerCredentialsPresent('vertex', GOOGLE)).toBe(true);
     expect(providerCredentialsPresent('gemini', GOOGLE)).toBe(true);
     expect(providerCredentialsPresent('gemini', { GOOGLE_PROJECT_ID: 'p' })).toBe(false);
+    expect(providerCredentialsPresent('gemini', { GEMINI_API_KEY: 'k' })).toBe(true);
+    expect(providerCredentialsPresent('vertex', { GEMINI_API_KEY: 'k' })).toBe(false);
   });
 });
 

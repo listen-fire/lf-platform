@@ -36,6 +36,7 @@ export async function geminiGenerateImage(
   // The model region, like every other Gemini call: GOOGLE_PROJECT_LOCATION is
   // the OCR location, which can be a multi-region such as `eu` that serves no
   // model at all (proven 2026-09-25 with a 404 on Project A's project).
+  // With GEMINI_API_KEY set there is no location at all: one client serves it.
   const client = geminiClient(env);
   const response = await client.models.generateContent({
     model: wireModel,

@@ -87,6 +87,16 @@ describe('Gemini, where the map sends embeddings', () => {
     });
   });
 
+  it('leaves autoTruncate out on the Developer API, which has no such field', async () => {
+    geminiResponds(3072);
+    await embed(
+      'text-embedding-3-large',
+      { input: ['one'], dimensions: 3072 },
+      host({ ...GEMINI_ENV, GEMINI_API_KEY: 'a-key' }),
+    );
+    expect(embedContent.mock.calls[0][0].config).toEqual({ outputDimensionality: 3072 });
+  });
+
   it('puts a shortened vector back on the unit sphere', async () => {
     geminiResponds(256);
     const { embeddings } = await embed('text-embedding-3-small', { input: ['hello'], dimensions: 256 }, host(GEMINI_ENV));

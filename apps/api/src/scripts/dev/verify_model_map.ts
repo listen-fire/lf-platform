@@ -43,6 +43,10 @@
  *     GOOGLE_PRIVATE_KEY=unused GOOGLE_CLIENT_EMAIL=fake@example.com GOOGLE_PROJECT_ID=fake-project \
  *     GOOGLE_MODEL_REGION=global pnpm dev:verify-model-map
  *
+ * The same with the Gemini Developer API: set GEMINI_API_KEY=anything and
+ * leave the four GOOGLE_* variables unset; the fake then receives
+ * `/v1beta/models/<m>:generateContent` and `:batchEmbedContents`.
+ *
  * Every capability runs one leg: chat (three), transcription of a tiny WAV,
  * embedding for each destination column at its own width, and one image. The
  * route column shows where the map sent each; the fake OpenAI serves all four

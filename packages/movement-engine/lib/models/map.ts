@@ -120,8 +120,10 @@ export function credentialsFor(provider: Provider, env: NodeJS.ProcessEnv): stri
       return 'ANTHROPIC_API_KEY';
     case 'openai':
       return 'OPENAI_API_KEY';
-    case 'vertex':
-    case 'gemini': {
+    case 'gemini':
+      if (env.GEMINI_API_KEY) return 'GEMINI_API_KEY';
+    // falls through: without the key, Gemini is called on Vertex like Claude is
+    case 'vertex': {
       const missing = missingGoogleServiceAccountVars(env);
       return missing.length > 0 ? missing.join(', ') : 'the Google service account';
     }
@@ -139,8 +141,9 @@ export function providerCredentialsPresent(
       return Boolean(env.ANTHROPIC_API_KEY);
     case 'openai':
       return Boolean(env.OPENAI_API_KEY || env.OPENAI_API_KEY_FALLBACK_OR_DEV);
-    case 'vertex':
     case 'gemini':
+      return Boolean(env.GEMINI_API_KEY) || isGoogleServiceAccountConfigured(env);
+    case 'vertex':
       return isGoogleServiceAccountConfigured(env);
     default:
       return neverAsAny(provider);

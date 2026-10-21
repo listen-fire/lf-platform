@@ -118,6 +118,45 @@ describe('the client', () => {
     });
   });
 
+  it('calls the Gemini Developer API with only a key, reading no service account', () => {
+    load({ GEMINI_API_KEY: 'a-key' });
+    expect(genaiCtor).toHaveBeenCalledTimes(1);
+    expect(genaiCtor).toHaveBeenCalledWith({ apiKey: 'a-key' });
+  });
+
+  it('keeps a redirected base URL on the key path', () => {
+    load({ GEMINI_API_KEY: 'a-key', GEMINI_BASE_URL: 'http://localhost:5556/gemini' });
+    expect(genaiCtor).toHaveBeenCalledWith({
+      apiKey: 'a-key',
+      httpOptions: { baseUrl: 'http://localhost:5556/gemini' },
+    });
+  });
+
+  it('builds one client for the key path whatever location is asked for, and returns it again', () => {
+    let mod: typeof import('../gemini') | undefined;
+    jest.isolateModules(() => {
+      mod = require('../gemini');
+    });
+    if (!mod) throw new Error('module did not load');
+    const env = { GEMINI_API_KEY: 'a-key' };
+    const first = mod.geminiClient(env);
+    expect(mod.geminiClient(env, { location: 'europe-west4' })).toBe(first);
+    expect(mod.geminiClient(env)).toBe(first);
+    expect(genaiCtor).toHaveBeenCalledTimes(1);
+  });
+
+  it('caches the Vertex client per location', () => {
+    let mod: typeof import('../gemini') | undefined;
+    jest.isolateModules(() => {
+      mod = require('../gemini');
+    });
+    if (!mod) throw new Error('module did not load');
+    const first = mod.geminiClient(GOOGLE);
+    expect(mod.geminiClient(GOOGLE)).toBe(first);
+    expect(mod.geminiClient(GOOGLE, { location: 'europe-west4' })).not.toBe(first);
+    expect(genaiCtor).toHaveBeenCalledTimes(2);
+  });
+
   it('passes the abort signal through and streams for both entry points', async () => {
     const controller = new AbortController();
     replyWith(DONE);

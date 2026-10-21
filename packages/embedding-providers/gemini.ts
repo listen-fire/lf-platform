@@ -60,7 +60,9 @@ export async function geminiEmbed(
       config: {
         // No `taskType`: the callers do not divide into a document side and a
         // query side, so there is no honest pair to map onto Google's.
-        autoTruncate: false,
+        // Vertex only: the Developer API has no such field and the SDK refuses
+        // it. The length check above already stands in for it.
+        ...(host.env.GEMINI_API_KEY ? {} : { autoTruncate: false }),
         ...(req.dimensions === undefined ? {} : { outputDimensionality: req.dimensions }),
       },
     });
