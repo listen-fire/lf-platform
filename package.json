@@ -18,6 +18,7 @@
     "all:codegen": "cd apps/api && pnpm run codegen",
     "dev": "pnpm -r --parallel dev",
     "docs:build": "node scripts/docs/build.mjs && node scripts/docs/check-links.mjs",
+    "boundary:split": "node scripts/check-split-boundary.cjs",
     "dev:loop": "bash dev/loop.sh",
     "dev:loop:agent": "DEV_LOOP_PROFILE=agent bash dev/loop.sh",
     "dev:loop:agent2": "DEV_LOOP_PROFILE=agent2 bash dev/loop.sh",

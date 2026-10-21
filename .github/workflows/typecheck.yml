@@ -34,3 +34,5 @@ jobs:
           # have 16GB.
           NODE_OPTIONS: --max-old-space-size=8192
         run: pnpm -r code:type-check
+      - name: Split boundary (report only)
+        run: node scripts/check-split-boundary.cjs --report
