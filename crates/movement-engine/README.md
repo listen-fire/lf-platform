@@ -366,8 +366,8 @@ or a host holds at run time. Each names its construct:
 ### Language version 4's changes
 
 Version 4 (Luminous Owl, main's d5bb93f794) changed what four constructs
-mean. Each is a `since(v, 4)` conditional at the point of difference, so
-version 5 runs it as version 4 does:
+mean. The engine runs version 5 only, which keeps each of them as version 4
+made it:
 
 | main's change | sha | on this engine |
 |---|---|---|
@@ -462,7 +462,7 @@ recognises it. The engine never asks whether the lease is lost.
 ### Calls
 
 `call.rs` is run.ts's `executeCall` → `runCall` for a movement the program
-declares (exactly, or from version 3 in any letter case): a statement
+declares, by its exact name: a statement
 (`persist(n: d)`), a bound call (`x = label(t: msg.\`subject\`)`, and the
 construction spelling `x = persist(n: d)`), a returned one, a call among
 another's arguments. The call is its statement's next step (`… .c k`); the
@@ -475,9 +475,8 @@ declaration order; its statements are the run's own (the cancel gate, the
 trace handed over a statement at a time); a match that finds nothing ends
 the callee's scope, and the caller goes on. Its value is what it returned:
 a `return` binds any right-hand side (`return n`, `return node { … }`,
-`return f(x)`), as `declareAssign` does. Before version 3 a movement already
-running is not called again (`recursive movement calls (…)`); from it the
-depth is bounded by the deployment's `MOVEMENT_MAX_CALL_DEPTH`, which the
+`return f(x)`), as `declareAssign` does. The call depth is bounded by the
+deployment's `MOVEMENT_MAX_CALL_DEPTH`, which the
 shim reads into the input (`maxCallDepth`), failing as `CallDepthExceeded`.
 
 ### Writes
@@ -529,8 +528,7 @@ id per mint reproduces exactly (identity, in the TypeScript).
 
 ### Record verbs
 
-`verbs.rs` is run.ts's `executeMatch`, `executeLink` (with version 1's
-`executeCriteriaLink`), `executeUnlinkStatement` and
+`verbs.rs` is run.ts's `executeMatch`, `executeLink`, `executeUnlinkStatement` and
 `executeDeleteStatement`, for records in a system:
 
 - **`match`** is a write's first half — the target (its WHERE included), the
@@ -549,12 +547,8 @@ id per mint reproduces exactly (identity, in the TypeScript).
   <to>`), and a `kind: "link"` / `"unlink"` row with both endpoints' write
   origins as provenance (`created` is what the adapter answered: `created`,
   `removed`). An adapter without the method fails the statement by name.
-- **`link a -[:e]-> { … }`**: from version 2 the body is a match (its row,
-  its quiet end) and the link joins what it found; in version 1 a body with
-  no `unique by` of its own is criteria — `describe`, the criteria as one
-  AND-group over the native rules, `resolveIdentity` with no narrowing — and
-  the link lands as one row (`foundTarget: true`, to-side provenance empty)
-  whose bound handle's origin names that row.
+- **`link a -[:e]-> { … }`**: the body is a match (its row, its quiet end)
+  and the link joins what it found.
 - **`delete x`**: the record a handle or a traversed record stands on (the
   same resolution as `write x { … }`), `deleteRecord {recordType, externalId,
   mutationContext}` under the record's lock, and a `kind: "delete"` row (a
@@ -805,7 +799,7 @@ in) makes each child edge the shape declares, empty where the literal wrote
 none, carrying the child's landing shape; orders its fields as declared;
 reads a spread map's keys as children where the shape says so; and checks
 the value built against the shape where a spread brought keys nobody could
-type, and from version 3 always for presence (`graphValueMisfit`). A
+type, and always for presence (`graphValueMisfit`). A
 record spread copies by the checker's plan, its planned edges walked one
 hop on the node plane (a node's landings, a walked record's through its own
 graph) and each landing copied by the edge's plan (`snapshotRecord`). An
@@ -995,7 +989,7 @@ deployment's `EXTRACTION_FILE_CHARS`, 50,000 when absent); a date-time
 text with no offset is UTC, so the input names no zone; the engine holds no team (the shim names it on the engine's log lines, as the
 host's own fact); `fire` and `settle`
 run a callback body or settle a deferred race against `resume`'s state;
-`maxCallDepth` is how many named calls deep a run may nest from version 3
+`maxCallDepth` is how many named calls deep a run may nest
 (call_depth.ts, the deployment's `MOVEMENT_MAX_CALL_DEPTH`);
 `extractionTiers` is what the deployment buys for each extraction tier
 (ai_tiers.ts, its `EXTRACTION_TIERS` parsed: `{careful: {model?, effort?},
