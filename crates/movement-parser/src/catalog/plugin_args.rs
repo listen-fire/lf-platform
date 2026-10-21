@@ -1,8 +1,8 @@
 //! A plugin's arguments by position (language version 5, design §2.7): its
 //! required inputs in the manifest's declared order, then one optional
 //! settings record `{ name: value }` for the rest. Binding turns that call
-//! into the named arguments versions 1–4 write, so every check and the wire
-//! to the plugin read one form. The TypeScript twin is `bindPluginArgs` in
+//! into the named arguments of the canonical tree, so every check and the
+//! wire to the plugin read one form. The TypeScript twin is `bindPluginArgs` in
 //! packages/legacy-lang/checker/catalog.ts; both checkers and both engines
 //! bind through these two and nothing else.
 
@@ -69,13 +69,12 @@ pub struct PluginArgBinding {
 pub const EXTRACTED_RECORD_PARAM: &str = "record";
 
 impl PluginSpec {
-    /// `pluginSpecUnder`: the plugin as a plain call sees it under
-    /// `language_version`. From version 5 a plugin is a function, so one fed
-    /// only by an extraction is no longer a stage: the record the stage fed it
-    /// becomes its one required input, written by position like any fed
-    /// argument and taking structured data. Versions 1–4 read it as it is.
-    pub fn under(&self, language_version: u32) -> PluginSpec {
-        if self.fed_by_extraction != Some(true) || crate::version::before(language_version, 5) {
+    /// `pluginSpecUnder`: the plugin as a plain call sees it. A plugin is a
+    /// function, so one fed only by an extraction is no longer a stage: the
+    /// record the stage fed it becomes its one required input, written by
+    /// position like any fed argument and taking structured data.
+    pub fn under(&self, _language_version: u32) -> PluginSpec {
+        if self.fed_by_extraction != Some(true) {
             return self.clone();
         }
         let mut callable = self.clone();

@@ -24,7 +24,7 @@ use crate::scan::{
     scan_ident, scan_member_path, scan_name, skip_opaque, skip_string,
 };
 use crate::util::utf16::{Utf16, is_ident_char, is_ident_start, is_js_space, to_string, trim, trim_end, trim_start};
-use crate::version::{before, since};
+use crate::version::CURRENT_LANGUAGE_VERSION;
 
 /// `MovementParseError`: the BASE message (the TypeScript class appends
 /// ` (line N, col M)`) and the point it refers to.
@@ -53,23 +53,13 @@ const FALLBACK_RUNG_REPLACED: &str = "a `fallback` rung has no meaning without a
 
 const SLEEP_STATEMENT_REPLACED: &str = "the `sleep` statement was replaced — await it as an expression: `await sleep(4h)`; as a race arm: `await race([q, () => { await sleep(4h) }])`.";
 
-const PARALLEL_BLOCK_RETIRED: &str = "the `parallel { … }` block was replaced by the parallel combinator, which takes its arms as functions and hands back one slot per arm: `r = await parallel([() => { … }, () => { … }])`. An arm that only acts needs no binding: `await parallel([() => { … }, () => { … }])`.";
-
-const RACE_BRANCHES_RETIRED: &str = "a race takes FUNCTIONS, not brace branches: `r = await race([q, () => { await sleep(4h) }])`. The value is one slot per arm, in the order written — the winner's slot holds what its function returned and every other slot is null, so a timeout is `AT(r, 1) != null`.";
-
-/// Under language version 5 `parallel` is retired too, so the rewrite these
-/// refusals offer is the `all` that replaced it.
+/// `parallel` is retired too, so the rewrite these refusals offer is the
+/// `all` that replaced it.
 const PARALLEL_AS_ALL: &str = "the join is `all`, which takes its functions as arguments (language version 5): `r = all(() => { … }, () => { … })` — no `await`; one slot per function, in order. One that only acts needs no binding: `all(f, g)`.";
 
-/// Language version 5's race: the arms are arguments, and no `await`.
+/// A race's arms are arguments, and no `await`.
 const RACE_BRANCHES_RETIRED_V5: &str = "a race takes FUNCTIONS as its arguments, not brace branches: `r = race(q, () => { await sleep(4h) })`. The value is one slot per arm, in the order written — the winner's slot holds what its function returned and every other slot is null, so a timeout is `AT(r, 1) != null`.";
 
-const ALL_RETIRED: &str =
-    "`all` was replaced by `parallel` — parallel implies all, and all does not imply parallel: `r = await parallel([f, g])`.";
-
-const UNTIL_CADENCE_IS_NAMED: &str = "'until' takes its cadence by name: `await until(<condition>, every: 5m)`. There is no second positional argument — a value to wait FOR is an equality in the condition itself (`await until(a.state == \"done\", every: 5m)`).";
-/// `UNTIL_CADENCE_IS_NAMED` from language version 5, where the cadence is a
-/// setting.
 const UNTIL_CADENCE_IS_A_SETTING: &str = "'until' takes its cadence as a setting: `await until(<condition>, { every: 5m })`. There is no second positional argument — a value to wait FOR is an equality in the condition itself (`await until(a.state == \"done\", { every: 5m })`).";
 
 fn type_values_are_text(name: &str) -> String {
@@ -172,32 +162,6 @@ fn unpinned_hop_name(hop_raw: &str) -> Option<String> {
     (s.get(i..)? == crate::util::form::units_vec("]->").as_slice()).then_some(name)
 }
 
-/// The name of a collection op (or `MEMBERS`) written at the head of an
-/// expression slot — `/^\s*([A-Z]+)\s*\(/` — a form that is a statement,
-/// not a value.
-fn nested_collection_value(raw: &str) -> Option<String> {
-    let units: Vec<u16> = crate::util::form::units_vec(raw);
-    let mut i = 0;
-    while units.get(i).copied().is_some_and(is_js_space) {
-        i += 1;
-    }
-    let head_start = i;
-    while units.get(i).is_some_and(|&u| (unit('A')..=unit('Z')).contains(&u)) {
-        i += 1;
-    }
-    if i == head_start {
-        return None;
-    }
-    let head = to_string(&units[head_start..i]);
-    while units.get(i).copied().is_some_and(is_js_space) {
-        i += 1;
-    }
-    if units.get(i) != Some(&unit('(')) {
-        return None;
-    }
-    (head == "MEMBERS" || CollectionOp::from_spelling(&head).is_some()).then_some(head)
-}
-
 /// The prose `scanBalanced` reports with, and where it stops.
 struct Scan<'s> {
     /// Characters that end the scan at top level (not consumed).
@@ -269,8 +233,6 @@ pub struct Parser {
     src: Utf16,
     pos: usize,
     line_starts: Vec<usize>,
-    /// Read by the `since`/`before` conditionals where the grammar differs.
-    version: u32,
     /// Where `src` starts in the file, when it is a slot's text rather than
     /// the whole file — so every span read from it is the file's.
     origin: Loc,
@@ -293,7 +255,7 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn new(source: &str, version: u32, origin: Loc, eager: bool) -> Self {
+    pub fn new(source: &str, _version: u32, origin: Loc, eager: bool) -> Self {
         let src = Utf16::new(source);
         let mut line_starts = vec![0];
         for (i, &u) in src.units().iter().enumerate() {
@@ -301,16 +263,13 @@ impl Parser {
                 line_starts.push(i + 1);
             }
         }
-        Self { src, pos: 0, line_starts, version, origin, eager, depth: 0, adapters: Vec::new(), plugin_locals: Vec::new(), imports_unseen: false }
+        Self { src, pos: 0, line_starts, origin, eager, depth: 0, adapters: Vec::new(), plugin_locals: Vec::new(), imports_unseen: false }
     }
 
     /// From version 5 `xs[i]` is the call `AT(xs, i)` versions 1–4 write, so
     /// a member read off it (`xs[0].name`) binds it first as it binds
     /// `AT(xs, 0)`: the text is the index, read here as that call.
     fn nested_index_call(&mut self, start: usize) -> Option<CallStatement> {
-        if !since(self.version, 5) {
-            return None;
-        }
         let end = self.src.len();
         let mut close = end;
         while close > start && self.src.at(close - 1).is_some_and(|u| u == unit(' ') || u == unit('\n') || u == unit('\t') || u == unit('\r')) {
@@ -443,18 +402,16 @@ impl Parser {
     }
 
     fn slot(&self, raw: String, span: Span) -> ExprSlot {
-        if since(self.version, 5) {
-            for finding in crate::surface::slot_findings(&raw, span.start) {
-                crate::surface::report(finding);
-            }
+        for finding in crate::surface::slot_findings(&raw, span.start) {
+            crate::surface::report(finding);
         }
         ExprSlot { raw, span, eager: self.eager }
     }
 
-    /// `template` with its one `{}` filled by `code`, spelled as this
-    /// parse's version writes it (crate::surface::phrase::spell_code).
+    /// `template` with its one `{}` filled by `code`, in the v5 spelling
+    /// (crate::surface::phrase::spell_code).
     fn code(&self, code: &str, template: &str) -> String {
-        template.replacen("{}", &crate::surface::phrase::spell_code(code, self.version), 1)
+        template.replacen("{}", &crate::surface::phrase::spell_code(code, CURRENT_LANGUAGE_VERSION), 1)
     }
 
     /// An old spelling under version 5 at `start..end`, and its rewrite as
@@ -475,9 +432,6 @@ impl Parser {
     /// the text inside them, the condition versions 1–4 write bare (so `is`
     /// keeps its narrowing as a top-level test).
     fn condition_in_parens(&self, condition: ExprSlot, start: usize, end: usize) -> ExprSlot {
-        if !since(self.version, 5) {
-            return condition;
-        }
         let whole = |t: &crate::tree::MExpr| t.at().start == 0 && t.at().end == crate::util::form::utf16_len(&condition.raw);
         match crate::expr::parse_expression_raw(&condition.raw) {
             Ok(tree @ crate::tree::MExpr::Paren { .. }) if whole(&tree) => {
@@ -1083,7 +1037,6 @@ impl Parser {
             }
             // From language version 5 `all(f, g)` is the join; before it, the
             // name was retired in favour of `parallel`.
-            "all" if before(self.version, 5) => self.refuse_retired_all(start)?,
             "all" => {
                 if let Some(combinator) = self.try_parse_combinator_statement(CombinatorKind::All, start)? {
                     return Ok(Statement::Combinator(combinator));
@@ -1092,7 +1045,7 @@ impl Parser {
             "if" => return Ok(Statement::If(self.parse_if()?)),
             "ERROR" => return Ok(Statement::Error(self.parse_error_statement("ERROR")?)),
             // From version 5 `fail("…")` is `ERROR("…")`: the same statement.
-            "fail" if since(self.version, 5) && self.followed_by_call("fail") => {
+            "fail" if self.followed_by_call("fail") => {
                 return Ok(Statement::Error(self.parse_error_statement("fail")?));
             }
             "extract" => {
@@ -1106,19 +1059,6 @@ impl Parser {
             }
             "else" => return self.fail_at("'else' without a preceding 'if'", start),
             _ => {}
-        }
-
-        // A collection op run bare, for its function's effects. Before
-        // language version 3 the op is known here by its name; from 3 it is
-        // an ordinary call statement.
-        let collection_op = if before(self.version, 3) { CollectionOp::from_spelling(&word) } else { None };
-        if let Some(op) = collection_op
-            && self.followed_by_call(&word)
-        {
-            self.pos += word.len();
-            let collection = self.parse_collection_op(start, &word, op)?;
-            self.expect_statement_end()?;
-            return Ok(Statement::Collection(CollectionStatement { span: collection.span, collection }));
         }
 
         self.pos += word.len();
@@ -1155,7 +1095,7 @@ impl Parser {
         self.pos = start;
         let head = match self.scan_callee() {
             Some((callee, end))
-                if since(self.version, 5) && callee.split_once('.').is_some_and(|(head, _)| crate::surface::table::NAMESPACES.contains(&head)) =>
+                if callee.split_once('.').is_some_and(|(head, _)| crate::surface::table::NAMESPACES.contains(&head)) =>
             {
                 Some((callee, end))
             }
@@ -1305,16 +1245,14 @@ impl Parser {
             }
             self.pos += ns.len();
             if ns == "adapters" {
-                if since(self.version, 5) {
-                    for imported in &mut names {
-                        if let Some(adapter) = imported.name.strip_prefix(ADAPTER_PACKAGE_PREFIX) {
-                            imported.name = adapter.to_string();
-                        }
+                for imported in &mut names {
+                    if let Some(adapter) = imported.name.strip_prefix(ADAPTER_PACKAGE_PREFIX) {
+                        imported.name = adapter.to_string();
                     }
                 }
                 self.adapters.extend(names.iter().map(|n| n.alias.clone().unwrap_or_else(|| n.name.clone())));
             }
-            if ns == "plugins" && since(self.version, 5) {
+            if ns == "plugins" {
                 for (imported, &(start, end)) in names.iter_mut().zip(&name_spans) {
                     self.read_plugin_import(imported, start, end);
                 }
@@ -1438,9 +1376,6 @@ impl Parser {
             self.pos += "await".len();
             return Ok(RValue::Await { r#await: self.parse_await(start)? });
         }
-        if w == Some("all") && before(self.version, 5) {
-            self.refuse_retired_all(start)?;
-        }
         if let Some(kind) = w.and_then(|w| self.combinator_named(w)) {
             let save = self.pos;
             self.pos += kind.word().len();
@@ -1456,22 +1391,6 @@ impl Parser {
         if w == Some("callback") {
             self.pos += "callback".len();
             return Ok(RValue::Callback { callback: self.parse_callback(start)? });
-        }
-        // The collection ops and `MEMBERS` take a FUNCTION and a TYPE, which no
-        // expression can hold. Before language version 3 they are read here, by
-        // name; from 3 they are calls like any other.
-        let legacy_forms = before(self.version, 3);
-        if let Some(word) = w
-            && legacy_forms
-            && let Some(op) = CollectionOp::from_spelling(word)
-            && self.followed_by_call(word)
-        {
-            self.pos += word.len();
-            return Ok(RValue::Collection { collection: self.parse_collection_op(start, word, op)? });
-        }
-        if legacy_forms && w == Some("MEMBERS") && self.followed_by_call("MEMBERS") {
-            self.pos += "MEMBERS".len();
-            return Ok(RValue::Members { members: self.parse_members(start)? });
         }
         self.refuse_named_node_as_value()?;
         if self.at_node_literal() {
@@ -1497,7 +1416,7 @@ impl Parser {
         if let Some(block) = self.try_parse_traversal_block()? {
             return Ok(RValue::Block { block });
         }
-        if since(self.version, 5) && self.at_word("connect") {
+        if self.at_word("connect") {
             return Ok(RValue::Construct { construct: self.parse_connect()? });
         }
         if let Some(invocation) = self.try_parse_invocation()? {
@@ -1837,8 +1756,7 @@ impl Parser {
             // its, and a rewrite placed from the walk's end lands in it.
             let hops_end = self.pos;
             let explicit_type = self.try_read_explicit_write_type()?;
-            let path_end = if since(self.version, 5) { hops_end } else { self.pos };
-            let path = PathHead { root: Some(root), hops_raw, span: self.span_between(target_start, path_end) };
+            let path = PathHead { root: Some(root), hops_raw, span: self.span_between(target_start, hops_end) };
             return Ok(WriteTarget::Linked { path, explicit_type, span: self.span_from(target_start) });
         }
         // A bare name or member path updates the record it holds in place
@@ -2605,9 +2523,6 @@ impl Parser {
     /// structure and its expression agree.
     fn canonical_call(&self, callee: String, args: &mut [CallArg]) -> String {
         use crate::surface::table::{Shape, by_v5};
-        if !since(self.version, 5) {
-            return callee;
-        }
         let Some(row) = by_v5(&callee) else { return callee };
         match row.shape {
             // Only by a function key (`try_parse_invocation_call`): `SORTBY`.
@@ -2632,8 +2547,7 @@ impl Parser {
     /// expression, never as a call, and only that reading knows the families.
     fn rewritten_whole(&self, callee: &str) -> bool {
         use crate::surface::table::{Shape, by_v5};
-        since(self.version, 5)
-            && by_v5(callee).is_some_and(|row| {
+        by_v5(callee).is_some_and(|row| {
                 row.canonical.contains('.')
                     || matches!(row.shape, Shape::SortKey | Shape::AiTier | Shape::Contains | Shape::ListIncludes | Shape::JsonStringify)
             })
@@ -2644,8 +2558,7 @@ impl Parser {
     /// package's (`web.fetchUrl`), one name.
     fn scan_callee(&self) -> Option<(String, usize)> {
         let (name, end) = scan_name(self.src.units(), self.pos)?;
-        if since(self.version, 5)
-            && !self.is('`')
+        if !self.is('`')
             && self.src.at(end) == Some(unit('.'))
             && let Some((member, member_end)) = scan_ident(self.src.units(), end + 1)
         {
@@ -2721,25 +2634,16 @@ impl Parser {
             let arg_start = self.pos;
             let name = self.read_call_arg_name();
             marks.push((arg_start, name.clone(), self.pos));
-            // Positional arguments arrived with language version 3.
-            if name.is_none() && !since(self.version, 3) {
-                return self.fail_at(
-                    format!(
-                        "Arguments to '{callee}' are named — write each as '<parameter>: <value>', naming '{callee}'s parameters in order (e.g. {callee}(param: value))"
-                    ),
-                    arg_start,
-                );
-            }
             self.refuse_mixed_args(callee, args.first().map(|a| a.name().is_some()), name.as_deref(), arg_start)?;
             // A function written in place and a type: what `MAP` and `MEMBERS`
             // take from version 3, read for every callee.
-            if since(self.version, 3) && self.at_closure() {
+            if self.at_closure() {
                 let closure = self.parse_closure(self.pos, ",)")?;
                 args.push(CallArg::Closure { name, span: closure.span, closure });
                 self.end_call_arg("closure")?;
                 continue;
             }
-            if since(self.version, 3) && self.is('<') {
+            if self.is('<') {
                 let type_start = self.pos;
                 let marker = self.read_type_marker(
                     "for a type argument — a type you declare (<Thesis>) or another field's option set (<crm-[:companies]->.`funding_stage`>)",
@@ -2816,7 +2720,7 @@ impl Parser {
     /// function it can see, and drops the finding otherwise.
     fn named_arguments(&self, callee: &str, marks: &[(usize, Option<String>, usize)], close: usize) {
         // An adapter's construction has its own rewrite (`connect`).
-        if !since(self.version, 5) || !marks.first().is_some_and(|m| m.1.is_some()) || self.adapters.iter().any(|a| a == callee) {
+        if !marks.first().is_some_and(|m| m.1.is_some()) || self.adapters.iter().any(|a| a == callee) {
             return;
         }
         let args = marks
@@ -2936,9 +2840,6 @@ impl Parser {
     /// Is a POSITIONAL invocation next — `f(a, …)`? A reserved word of the
     /// expression grammar is grammar, not a name, unless backtick-quoted.
     fn at_positional_invocation(&mut self) -> bool {
-        if !since(self.version, 3) {
-            return false;
-        }
         let save = self.pos;
         let Some((name, end)) = self.scan_callee() else {
             return false;
@@ -3131,13 +3032,13 @@ impl Parser {
                     self.skip_all_ws();
                     let arg_start = self.pos;
                     // From version 5 the cadence is a setting: `{ every: 1h }`.
-                    let settings = since(self.version, 5) && self.is('{');
+                    let settings = self.is('{');
                     if settings {
                         self.pos += 1;
                         self.skip_all_ws();
                     }
                     if !self.at_word("every") {
-                        return self.fail_at(if since(self.version, 5) { UNTIL_CADENCE_IS_A_SETTING } else { UNTIL_CADENCE_IS_NAMED }, arg_start);
+                        return self.fail_at(UNTIL_CADENCE_IS_A_SETTING, arg_start);
                     }
                     self.pos += "every".len();
                     self.skip_inline_ws();
@@ -3148,7 +3049,7 @@ impl Parser {
                     if settings {
                         self.expect("}", "to close 'await until(<condition>, { every: <duration> })'")?;
                         self.skip_all_ws();
-                    } else if since(self.version, 5) {
+                    } else {
                         let end = self.pos;
                         let written = self.text(arg_start, end).trim_end().to_string();
                         let written_end = arg_start + crate::util::form::utf16_len(&written);
@@ -3160,19 +3061,13 @@ impl Parser {
                         );
                     }
                 }
-                self.expect(
-                    ")",
-                    if since(self.version, 5) { "to close 'await until(<condition>, { every: <duration> })'" } else { "to close 'await until(<condition>, every: <duration>)'" },
-                )?;
+                self.expect(")", "to close 'await until(<condition>, { every: <duration> })'")?;
                 return Ok(AwaitExpression {
                     source: AwaitSource::Until { condition, every, span: self.span_from(source_start) },
                     span: self.span_from(start),
                 });
             }
             self.pos = save;
-        }
-        if self.at_word("all") && before(self.version, 5) {
-            self.refuse_retired_all(source_start)?;
         }
         for kind in [CombinatorKind::Race, CombinatorKind::Parallel, CombinatorKind::All] {
             if self.at_word(kind.word()) {
@@ -3190,7 +3085,7 @@ impl Parser {
             }
         }
         // From version 5 the core word is `first`, as everywhere else.
-        let first = if since(self.version, 5) { "first" } else { "FIRST" };
+        let first = "first";
         if self.at_word("FIRST") || self.at_word(first) {
             let save = self.pos;
             let old = !self.at_word(first);
@@ -3265,35 +3160,19 @@ impl Parser {
         Ok(Some(CombinatorStatement { combinator, span: self.span_from(start) }))
     }
 
-    /// `all` is not a name any more where it leads a call.
-    fn refuse_retired_all(&mut self, start: usize) -> SResult<()> {
-        let save = self.pos;
-        self.pos += "all".len();
-        self.skip_inline_ws();
-        let is_call = self.is('(');
-        self.pos = save;
-        if is_call {
-            return self.fail_at(ALL_RETIRED, start);
-        }
-        Ok(())
-    }
-
     /// The combinator a word leading a value names: `race` and `parallel` on
     /// every version, `all` from language version 5.
     fn combinator_named(&self, word: &str) -> Option<CombinatorKind> {
         match word {
             "race" => Some(CombinatorKind::Race),
             "parallel" => Some(CombinatorKind::Parallel),
-            "all" if since(self.version, 5) => Some(CombinatorKind::All),
+            "all" => Some(CombinatorKind::All),
             _ => None,
         }
     }
 
     fn parallel_block_retired(&self) -> String {
-        if since(self.version, 5) {
-            return format!("the `parallel {{ … }}` block was retired: {PARALLEL_AS_ALL}");
-        }
-        PARALLEL_BLOCK_RETIRED.to_string()
+        format!("the `parallel {{ … }}` block was retired: {PARALLEL_AS_ALL}")
     }
 
     /// `race(<arms>)` / `parallel(<arms>)` / `all(<arms>)`; `pos` is just past
@@ -3307,14 +3186,13 @@ impl Parser {
         self.skip_inline_ws();
         self.expect("(", &format!("to open '{k}(…)'"))?;
         self.skip_all_ws();
-        let v5 = since(self.version, 5);
         if self.is('{') {
-            return self.fail_at(if v5 { RACE_BRANCHES_RETIRED_V5 } else { RACE_BRANCHES_RETIRED }, start);
+            return self.fail_at(RACE_BRANCHES_RETIRED_V5, start);
         }
-        if v5 && !self.is('[') {
+        if !self.is('[') {
             return self.parse_argument_arms(start, kind);
         }
-        let arms = if self.is('[') { self.parse_literal_arms(kind)? } else { self.parse_dynamic_arms(kind)? };
+        let arms = self.parse_literal_arms(kind)?;
         self.skip_all_ws();
         self.expect(")", &format!("to close '{k}([…])'"))?;
         Ok(CombinatorExpression { kind, arms, settings: None, span: self.span_from(start) })
@@ -3467,90 +3345,6 @@ impl Parser {
         Ok(ArmExpression::Ref { name, span: self.span_from(start) })
     }
 
-    // ── the collection ops ──
-
-    /// `MAP(xs, f)` and its siblings; `REDUCE(xs, init, f)`; `MAP(xs, { … }, f)`.
-    fn parse_collection_op(&mut self, start: usize, spelling: &str, op: CollectionOp) -> SResult<CollectionOpExpression> {
-        self.skip_inline_ws();
-        self.expect("(", &format!("to open '{spelling}(…)'"))?;
-        let configurable = matches!(op, CollectionOp::Map | CollectionOp::Filter);
-        let shape = if op == CollectionOp::Reduce {
-            format!("{spelling}(<collection>, <starting value>, <function>)")
-        } else if configurable {
-            format!("{spelling}(<collection>, <function>) or {spelling}(<collection>, {{ <settings> }}, <function>)")
-        } else {
-            format!("{spelling}(<collection>, <function>)")
-        };
-        let source = self.read_collection_arg(spelling, &format!("the collection '{spelling}' reads"), &shape)?;
-        let init = if op == CollectionOp::Reduce {
-            Some(self.read_collection_arg(spelling, &format!("the value '{spelling}' starts from"), &shape)?)
-        } else {
-            None
-        };
-        self.skip_all_ws();
-        let config = if configurable && self.is('{') {
-            Some(self.read_collection_arg(spelling, &format!("the settings '{spelling}' runs with"), &shape)?)
-        } else {
-            None
-        };
-        self.skip_all_ws();
-        let fn_start = self.pos;
-        let r#fn = self.parse_arm(spelling, "The function for")?;
-        self.skip_all_ws();
-        if configurable && config.is_none() && self.is(',') {
-            return self.fail_at(
-                format!(
-                    "'{spelling}' takes its settings as a record written in place, between the collection and the function — `{spelling}(xs, {{ onError: \"warn\", concurrency: 4 }}, f)`"
-                ),
-                fn_start,
-            );
-        }
-        self.expect(")", &format!("to close '{spelling}(…)'"))?;
-        Ok(CollectionOpExpression { op, source, init, config, r#fn, span: self.span_from(start) })
-    }
-
-    /// One value argument of a collection op, up to the comma that ends it.
-    fn read_collection_arg(&mut self, spelling: &str, what: &str, shape: &str) -> SResult<ExprSlot> {
-        let start = self.pos;
-        let (slot, stop) = self.read_expr_slot(Scan::new(",)", format!("for {what}")))?;
-        if stop != Some(unit(',')) {
-            return self.fail(format!("'{spelling}' takes {shape} — the function is missing"));
-        }
-        self.pos += 1;
-        if let Some(nested) = nested_collection_value(&slot.raw) {
-            return self.fail_at(
-                format!(
-                    "'{nested}' is read on its own line, not inside '{spelling}(…)' — bind it first, then pass the name: `answer = {nested}(…)` then `{spelling}(answer, …)`"
-                ),
-                start,
-            );
-        }
-        Ok(slot)
-    }
-
-    /// `MEMBERS(<Thesis>)` — the argument is a TYPE.
-    fn parse_members(&mut self, start: usize) -> SResult<MembersExpression> {
-        self.skip_inline_ws();
-        self.expect("(", "to open 'MEMBERS(<…>)'")?;
-        self.skip_all_ws();
-        let type_start = self.pos;
-        let marker = self.read_type_marker(
-            "for 'MEMBERS' — a type you declare (<Thesis>) or another field's option set (<crm-[:companies]->.`funding_stage`>)",
-            FIELD_TAIL,
-        )?;
-        let type_span = self.span_from(type_start);
-        self.skip_all_ws();
-        self.expect(")", "to close 'MEMBERS(<…>)'")?;
-        Ok(MembersExpression { type_: marker.text, span: self.span_from(start), type_span })
-    }
-
-    /// Arms built at run time — an ordinary expression.
-    fn parse_dynamic_arms(&mut self, kind: CombinatorKind) -> SResult<CombinatorArms> {
-        let start = self.pos;
-        let (slot, _) = self.read_expr_slot(Scan::new(")", format!("for the arms of '{}(…)'", kind.word())))?;
-        Ok(CombinatorArms::Dynamic { expr: slot, span: self.span_from(start) })
-    }
-
     // ── callback ──
 
     /// `callback(<subject>)` / `callback(<subject>, { …config… })`.
@@ -3613,7 +3407,7 @@ impl Parser {
             // closure's one statement: `callback((d: <date>) => f(x, d))` is
             // the closure `callback((d: <date>) => { f(x, d) })` versions 1–4
             // write, so the call is checked against what `d` is declared as.
-            if since(self.version, 5) && !self.is('{') {
+            if !self.is('{') {
                 if params.is_empty() {
                     return self.parse_named_callback(start);
                 }
@@ -3638,7 +3432,7 @@ impl Parser {
         let name_start = self.pos;
         let subject = self.parse_named_callback(start)?;
         // A call written in place (`f(x)`), not a movement's bare name.
-        if since(self.version, 5) && self.src.at(self.pos - 1) == Some(unit(')')) {
+        if self.src.at(self.pos - 1) == Some(unit(')')) {
             let call = self.text(name_start, self.pos);
             self.spelling(
                 "`callback(f(x))` is written `callback(() => f(x))` from language version 5",
@@ -3667,7 +3461,7 @@ impl Parser {
     /// the vocabulary.
     fn parse_callback_config(&mut self) -> SResult<Vec<NamedArg>> {
         let brace_offset = self.pos;
-        self.expect("{", if since(self.version, 5) { "to open a callback's config (e.g. { once: false, ttl: 2d })" } else { "to open a callback's config (e.g. { once: FALSE, ttl: 2d })" })?;
+        self.expect("{", "to open a callback's config (e.g. { once: false, ttl: 2d })")?;
         let mut config = Vec::new();
         loop {
             self.skip_all_ws();
@@ -3762,14 +3556,14 @@ impl Parser {
         self.skip_all_ws();
         // `(x) => x * 2` is `(x) => { return x * 2 }` with the ceremony elided
         // (language version 3).
-        if !self.is('{') && since(self.version, 3) {
+        if !self.is('{') {
             // `(f) => f()` is `(f) => { return f() }` (language version 5): a body
             // that is one call returns the call, so a callee that waits parks the
             // run as a returned call does — inside an expression it could not.
             // `() => await sleep(1h)` is `() => { return await sleep(1h) }`
             // (language version 5), as TypeScript's `async () => await x` is — and
             // a retired `await race(…)` there is refused with its rewrite.
-            if since(self.version, 5) && self.peek_ident().as_deref() == Some("await") {
+            if self.peek_ident().as_deref() == Some("await") {
                 let await_start = self.pos;
                 self.pos += "await".len();
                 let awaited = self.parse_await(await_start)?;
@@ -3782,8 +3576,7 @@ impl Parser {
             }
             // `() => all(f, g)` / `() => race(f, g)` (language version 5) returns
             // the combinator's answer, as a returned call does.
-            if since(self.version, 5)
-                && let Some(word) = self.peek_ident()
+            if let Some(word) = self.peek_ident()
                 && let Some(kind) = self.combinator_named(&word)
             {
                 let word_start = self.pos;
@@ -3800,8 +3593,7 @@ impl Parser {
                 }
                 self.pos = word_start;
             }
-            if since(self.version, 5)
-                && let Some((value, span)) = self.concise_body_call(stops)?
+            if let Some((value, span)) = self.concise_body_call(stops)?
             {
                 let body = vec![Statement::Return(ReturnStatement { value, span, concise: true })];
                 return Ok(ClosureExpression { params, return_type, body, span: self.span_from(start) });
@@ -3939,7 +3731,7 @@ impl Parser {
     fn parse_error_call(&mut self, word: &str) -> SResult<ExprSlot> {
         let start = self.pos;
         self.expect_word(word, &format!("a '{word}(…)' call"))?;
-        if word == "ERROR" && since(self.version, 5) {
+        if word == "ERROR" {
             self.spelling("`ERROR` is written `fail` from language version 5", start, self.pos, vec![(start, self.pos, "fail".into())]);
         }
         self.skip_inline_ws();
@@ -4146,7 +3938,7 @@ impl Parser {
     /// declaration, two spellings; `keyword` is echoed by the diagnostics.
     fn parse_movement(&mut self, keyword: &str) -> SResult<MovementDeclaration> {
         let start = self.pos;
-        if since(self.version, 5) && keyword == "movement" {
+        if keyword == "movement" {
             self.spelling("from language version 5 a declaration is a `function`", start, start + keyword.len(), vec![(start, start + keyword.len(), "function".into())]);
         }
         self.pos += keyword.len();
@@ -4213,9 +4005,6 @@ impl Parser {
 
     /// `): <number>` — the type a function declares it returns (version 3).
     fn parse_return_annotation(&mut self) -> SResult<Option<ParamTypeRef>> {
-        if !since(self.version, 3) {
-            return Ok(None);
-        }
         let save = self.pos;
         self.skip_inline_ws();
         if !self.is(':') {
@@ -4238,7 +4027,7 @@ impl Parser {
             let closure = self.read_closure_type(param_name)?;
             return Ok(Some(self.read_list_suffix(closure, start)?));
         }
-        if !self.is('<') || !since(self.version, 3) {
+        if !self.is('<') {
             return Ok(None);
         }
         self.pos += 1;
@@ -4293,15 +4082,6 @@ impl Parser {
     /// no list of them.
     fn read_closure_type(&mut self, param_name: &str) -> SResult<ValueType> {
         let start = self.pos;
-        if before(self.version, 5) {
-            return self.fail_at(
-                format!(
-                    "A closure type ('<(c: <Company>) => <text>>') is written from language version 5 (Dancing Wren); this movement is pinned to version {}, where a closure is not a value — move the movement up to version 5 to type '{param_name}' as a closure",
-                    self.version
-                ),
-                start,
-            );
-        }
         self.pos += 1;
         self.skip_inline_ws();
         self.expect("(", "to open a closure type's parameter list")?;
@@ -4503,7 +4283,7 @@ impl Parser {
                 self.skip_inline_ws();
                 // From version 5 a listen's own poll interval is the setting
                 // `every: <duration>`, as `until`'s cadence is.
-                if name == "every" && since(self.version, 5) {
+                if name == "every" {
                     let duration = self.parse_duration()?;
                     config.push(NamedArg { name, value: self.slot(duration.raw, duration.span), is_type: None });
                     self.skip_inline_ws();
@@ -4512,7 +4292,7 @@ impl Parser {
                     }
                     continue;
                 }
-                if name == "pollIntervalSeconds" && since(self.version, 5) {
+                if name == "pollIntervalSeconds" {
                     let value_start = self.pos;
                     let (slot, stop) = self.read_expr_slot(Scan::new(",\n}", format!("for the config key '{name}'")))?;
                     let value_end = value_start + crate::util::form::utf16_len(slot.raw.trim_end());
@@ -4564,9 +4344,6 @@ impl Parser {
     /// The extraction call next, if one is — from language version 3, in any
     /// letter case.
     fn extract_call_ahead(&mut self) -> Option<(String, ExtractCallFinds)> {
-        if before(self.version, 3) {
-            return None;
-        }
         let word = self.peek_ident()?;
         if !self.followed_by_call(&word) {
             return None;
@@ -4730,8 +4507,7 @@ impl Parser {
             let plugin_start = self.pos;
             let mut plugin = self.read_ident("a plugin name in 'through […]'")?;
             // From version 5 a stage names a package's member (`web.linkedinEnrichment`).
-            if since(self.version, 5)
-                && self.is('.')
+            if self.is('.')
                 && let Some((member, end)) = scan_ident(self.src.units(), self.pos + 1)
             {
                 plugin = format!("{plugin}.{member}");
@@ -4754,16 +4530,8 @@ impl Parser {
                     let arg_start = self.pos;
                     // From version 5 a stage's arguments are by position, as a
                     // call's are (crate::catalog::plugin_args binds them).
-                    let arg_name = if since(self.version, 5) {
-                        let name = self.read_call_arg_name();
-                        self.refuse_mixed_args(&plugin, marks.first().map(|m| m.1.is_some()), name.as_deref(), arg_start)?;
-                        name
-                    } else {
-                        let name = self.read_ident(&format!("an argument name for the plugin '{plugin}'"))?;
-                        self.skip_inline_ws();
-                        self.expect(":", &format!("after the argument '{name}'"))?;
-                        Some(name)
-                    };
+                    let arg_name = self.read_call_arg_name();
+                    self.refuse_mixed_args(&plugin, marks.first().map(|m| m.1.is_some()), arg_name.as_deref(), arg_start)?;
                     marks.push((arg_start, arg_name.clone(), self.pos));
                     let what = arg_name.as_ref().map_or_else(|| format!("for an argument to the plugin '{plugin}'"), |n| format!("for the argument '{n}'"));
                     let (slot, stop) = self.read_expr_slot(Scan::new(",)", what))?;
@@ -4912,9 +4680,13 @@ fn type_ref_from_marker(marker: Marker) -> TypeRef {
 }
 
 /// The whole-file entry: a program, or the one error that stopped the parse.
+/// A version this release does not read is refused before the text is.
 pub fn parse_program(source: &str, version: u32, eager: bool) -> SResult<Program> {
+    if let Some(message) = crate::version::unsupported_message(version) {
+        return Err(ParseError { message, loc: Loc { line: 1, col: 1 } });
+    }
     let (program, spelling) =
-        crate::surface::collecting(version, || Parser::new(source, version, Loc { line: 1, col: 1 }, eager).parse_program());
+        crate::surface::collecting(|| Parser::new(source, version, Loc { line: 1, col: 1 }, eager).parse_program());
     let mut program = program?;
     program.spelling = spelling;
     Ok(program)
@@ -4925,7 +4697,7 @@ pub fn parse_program(source: &str, version: u32, eager: bool) -> SResult<Program
 /// gathering scope (crate::surface::slot_findings). A text that does not parse
 /// reports nothing here: the call it sits in reports why when it is read.
 pub(crate) fn read_block_for_findings(text: &str, origin: Loc) {
-    let mut parser = Parser::new(text, crate::surface::version(), origin, false);
+    let mut parser = Parser::new(text, CURRENT_LANGUAGE_VERSION, origin, false);
     let _ = parser.parse_block_body("the closure's body");
 }
 
@@ -4986,13 +4758,13 @@ impl Parser {
     /// From version 5 an adapter is set up with `connect`; its construction
     /// is refused with the rewrite.
     fn refuse_adapter_construction(&self, construct: &ConstructionCall, start: usize) {
-        if !since(self.version, 5) || !self.adapters.contains(&construct.callee) {
+        if !self.adapters.contains(&construct.callee) {
             return;
         }
         let args: Vec<(&str, &str)> = construct.args.iter().map(|a| (a.name.as_str(), a.value.raw.trim())).collect();
         let text = crate::surface::phrase::connection(
             &crate::surface::phrase::Connection { adapter: &construct.callee, args: &args, credential: Some("credentials") },
-            self.version,
+            CURRENT_LANGUAGE_VERSION,
         );
         let end = self.pos;
         let message = format!("from language version 5 an adapter is set up with `{text}`");
@@ -5081,11 +4853,11 @@ mod tests {
     use serde_json::{Value, json};
 
     fn program(source: &str) -> Value {
-        crate::parse_program(source, 3).unwrap_or_else(|e| panic!("{source:?}: {e}"))
+        crate::parse_program(source, 5).unwrap_or_else(|e| panic!("{source:?}: {e}"))
     }
 
     fn error(source: &str) -> Value {
-        match crate::parse_program(source, 3) {
+        match crate::parse_program(source, 5) {
             Ok(ast) => panic!("{source:?} parsed: {ast}"),
             Err(e) => e,
         }
@@ -5119,19 +4891,16 @@ mod tests {
     }
 
     #[test]
-    fn an_unknown_version_reads_as_the_current_one() {
-        let source = "f(x)\ny = MAP(xs, (x) => x)";
-        assert_eq!(crate::parse_program(source, 99), crate::parse_program(source, 5));
-        assert_eq!(crate::parse_program(source, 4), crate::parse_program(source, 3));
-        assert!(crate::parse_program(source, 2).is_err(), "positional calls arrived in version 3");
-    }
-
-    #[test]
-    fn the_legacy_collection_forms_are_read_before_version_3() {
-        let ast = crate::parse_program("y = MAP(xs, f)", 2).unwrap();
-        assert_eq!(ast.pointer("/statements/0/value/kind"), Some(&json!("collection")));
-        let ast = crate::parse_program("y = MAP(xs, f)", 3).unwrap();
-        assert_eq!(ast.pointer("/statements/0/value/kind"), Some(&json!("call")));
+    fn a_version_this_release_does_not_read_is_refused_by_name() {
+        let refused = |version: u32| json!({ "message": crate::version::unsupported_message(version).unwrap(), "loc": { "line": 1, "col": 1 } });
+        assert_eq!(crate::parse_program("x = 1", 4), Err(refused(4)));
+        assert_eq!(crate::parse_program_eager("x = 1", 99), Err(refused(99)));
+        assert!(refused(4)["message"].as_str().unwrap().contains("language version \"Luminous Owl\" (4)"));
+        let expression = crate::parse_expression("x", 0).unwrap_err();
+        assert_eq!(expression, json!({ "message": crate::version::unsupported_message(0).unwrap(), "pos": 0 }));
+        let call = crate::NestedCall { at_start: 0, at_end: 4, origin_line: 1, origin_col: 1, version: 3 };
+        assert_eq!(crate::parse_nested_call("f(x)", &call), Err(refused(3)));
+        assert_eq!(crate::version::unsupported_message(5), None);
     }
 
     #[test]
@@ -5199,21 +4968,5 @@ mod tests {
         assert_eq!(unpinned_hop_name("-[:company WHERE x]->"), None);
         assert_eq!(unpinned_hop_name("-[:``]->"), None);
         assert_eq!(unpinned_hop_name("-[c company]->"), None);
-    }
-
-    #[test]
-    fn a_nested_collection_head_is_found_as_the_regex_finds_it() {
-        assert_eq!(nested_collection_value("  MAP (xs, f)").as_deref(), Some("MAP"));
-        assert_eq!(nested_collection_value("MEMBERS(<T>)").as_deref(), Some("MEMBERS"));
-        assert_eq!(nested_collection_value("UPPER(x)"), None);
-        assert_eq!(nested_collection_value("Map(x)"), None);
-    }
-
-    #[test]
-    fn a_backtick_arm_name_takes_the_typescript_double_step() {
-        // TypeScript advances by the name's length again after reading a
-        // backticked arm name, so the span runs past the token.
-        let ast = crate::parse_program("x = MAP(xs, `ab`  )", 2).unwrap();
-        assert_eq!(ast.pointer("/statements/0/value/collection/fn/span/end/col"), Some(&json!(19)));
     }
 }

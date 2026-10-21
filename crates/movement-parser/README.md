@@ -100,7 +100,7 @@ cargo would otherwise reuse dependencies built without the wrapper.
 | `dealloc` | `(ptr, len)` | frees an input or an output buffer |
 | `parse_program` | `(src_ptr, src_len, version, out_ptr_ptr, out_len_ptr) -> status` | the `Program` as ast.ts types it; slots are `{raw, span}` |
 | `parse_program_eager` | as `parse_program` | the same `Program`, each slot also carrying `tree` (its `MExpr`) or `error` (`{message, pos}`) |
-| `parse_expression` | `(src_ptr, src_len, version, out_ptr_ptr, out_len_ptr) -> status` | from 5 the v5 surface, read into the canonical tree; 0 reads as versions 1–4 do |
+| `parse_expression` | `(src_ptr, src_len, version, out_ptr_ptr, out_len_ptr) -> status` | the v5 surface, read into the canonical tree; a version other than 5 is refused |
 | `spell_message` | as `parse_expression`, the message in | the message (a JSON string) naming built-ins as `version` spells them |
 | `spell_code` | as `parse_expression`, the code in | the program text (a JSON string) a diagnostic suggests, as `version` spells it |
 | `surface_table` | as `parse_expression`, input ignored | the spelling table (`surface::table::TABLE`) |

@@ -41,9 +41,7 @@ use crate::util::utf16::{
 /// tree's drop does not recurse either.
 pub fn parse_expression(text: &str) -> Result<MExpr, SyntaxError> {
     let mut tree = parse_expression_raw(text)?;
-    if crate::surface::is_v5() {
-        crate::surface::canonicalize(&mut tree, &Utf16::new(text));
-    }
+    crate::surface::canonicalize(&mut tree, &Utf16::new(text));
     Ok(tree)
 }
 
@@ -97,7 +95,7 @@ fn unit(c: char) -> u16 {
 impl<'a> ExpressionParser<'a> {
     fn new(src: &'a Utf16, start: usize, limit: usize, depth: usize) -> Self {
         Self {
-            sc: Scanner { src, origin: start, limit, v5: crate::surface::is_v5() },
+            sc: Scanner { src, origin: start, limit },
             pos: start,
             previous: Previous::Start,
             stop_at_newline: false,
@@ -303,9 +301,6 @@ impl<'a> ExpressionParser<'a> {
     /// Version 5's `c ? a : b`, loosest of all: the `IF c THEN a ELSE b END`
     /// tree, so nothing downstream reads a second conditional.
     fn try_conditional(&mut self, start: usize, condition: MExpr) -> PResult<MExpr> {
-        if !self.sc.v5 {
-            return Ok(condition);
-        }
         let tok = self.peek()?;
         if !tok.is_punct("?") || !self.can_continue(&tok) {
             return Ok(condition);
@@ -358,7 +353,7 @@ impl<'a> ExpressionParser<'a> {
         let tok = self.peek()?;
         // From version 5 `!` is TypeScript's unary operator (`parse_unary`):
         // `!a == b` is `(!a) == b`. `NOT` keeps its reach in every version.
-        if tok.is_keyword("NOT") && !(self.sc.v5 && is_bang(&tok)) {
+        if tok.is_keyword("NOT") && !is_bang(&tok) {
             self.advance()?;
             let operand = self.nested(Self::parse_not)?;
             return Ok(MExpr::Unary { op: UnaryOp::Not, operand: Box::new(operand), at: self.span(tok.start) });
@@ -493,7 +488,7 @@ impl<'a> ExpressionParser<'a> {
 
     fn parse_unary(&mut self) -> PResult<MExpr> {
         let tok = self.peek()?;
-        if self.sc.v5 && is_bang(&tok) {
+        if is_bang(&tok) {
             return self.parse_bang(tok.start);
         }
         if tok.is_op("-") {
@@ -1583,8 +1578,10 @@ mod tests {
 
     #[test]
     fn an_index_reads_a_negative_literal_as_a_call_argument_does() {
-        assert_eq!(tree("t[-1]")["index"], json!({ "kind": "literal", "value": -1, "at": at(2, 4) }));
-        assert_eq!(tree("t[a-1]")["index"]["op"], "-");
+        // As written: the canonical tree reads an index as the call `AT`.
+        let raw = |text: &str| serde_json::to_value(parse_expression_raw(text).unwrap()).unwrap();
+        assert_eq!(raw("t[-1]")["index"], json!({ "kind": "literal", "value": -1, "at": at(2, 4) }));
+        assert_eq!(raw("t[a-1]")["index"]["op"], "-");
     }
 
     #[test]
@@ -1758,11 +1755,6 @@ mod tests {
     #[test]
     fn stray_punctuation_is_refused_with_a_hint() {
         assert_eq!(error("a | b"), ("Unrecognised character '|' — write OR (not | or ||)".into(), 2));
-        assert_eq!(
-            error("a ? b : c"),
-            ("Unrecognised character '?' — write IF … THEN … ELSE … END (there is no ? : conditional)".into(), 2)
-        );
-        assert_eq!(error("a &&b"), ("Unrecognised character '&' — write AND (not & or &&)".into(), 2));
     }
 
     #[test]

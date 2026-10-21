@@ -1,16 +1,15 @@
 //! Program text a diagnostic suggests (`'if EXISTS(x)'`, `AT(r, 0)`,
-//! `IF … THEN "Yes" ELSE "No" END`), in the spelling of the program's own
-//! language version. A message writes its suggestion once, in the canonical
-//! spelling, and passes it through `spell_code`: under versions 1–4 the text
-//! is returned as it is; from version 5 it is rewritten by the very fixes the
-//! parser attaches to an old spelling, so a suggestion can never drift from
-//! what the upgrade writes. `…` in a suggestion stands for any expression.
+//! `IF … THEN "Yes" ELSE "No" END`), in the v5 spelling. A message writes its
+//! suggestion once, in the canonical spelling, and passes it through
+//! `spell_code`, which rewrites it by the very fixes the parser attaches to
+//! an old spelling, so a suggestion can never drift from what the upgrade
+//! writes. `…` in a suggestion stands for any expression.
 
 use crate::ast::Loc;
 use crate::util::utf16::Utf16;
 
 use super::table::OPERATORS;
-use super::{Edit, canonicalize, with_version};
+use super::{Edit, canonicalize};
 
 /// What `…` reads as while the suggestion is parsed: a name no program
 /// writes, and in a statement a call of it (a statement is never a bare name).
@@ -22,15 +21,11 @@ const ELLIPSIS_STATEMENT: &str = "__ellipsis__()";
 const BODY_OPEN: &str = "function __phrase__() {\n";
 const BODY_CLOSE: &str = "\n}\n";
 
-/// `text` (program text in the canonical, version 1–4 spelling) as
-/// `version` spells it. A word the operators row holds (`AND`, `TRUE`) is
+/// `text` (program text in the canonical spelling) in the v5 spelling. A word the operators row holds (`AND`, `TRUE`) is
 /// that row's spelling; an expression or a statement is rewritten by its
 /// spelling fixes until none is left. A text neither grammar reads is
 /// returned as it is.
-pub fn spell_code(text: &str, version: u32) -> String {
-    if !crate::version::since(version, 5) {
-        return text.to_string();
-    }
+pub fn spell_code(text: &str, _version: u32) -> String {
     if let Some((_, v5)) = OPERATORS.iter().find(|(old, _)| *old == text) {
         return (*v5).to_string();
     }
@@ -40,18 +35,17 @@ pub fn spell_code(text: &str, version: u32) -> String {
         .unwrap_or_else(|| text.to_string())
 }
 
-/// A word of code in prose (`negated by NOT`, `narrow with an IS test`):
-/// bare up to version 4, where it is a CAPS word; quoted from 5, where it is
-/// a symbol or lower case (`negated by '!'`).
+/// A word of code in prose (`negated by NOT`, `narrow with an IS test`),
+/// quoted, as a symbol or lower case (`negated by '!'`).
 pub fn spell_word(word: &str, version: u32) -> String {
-    if crate::version::since(version, 5) { format!("'{}'", spell_code(word, version)) } else { word.to_string() }
+    format!("'{}'", spell_code(word, version))
 }
 
-/// The head of an `if` a diagnostic suggests (`if EXISTS(x)`): from version 5
-/// its condition is parenthesised and respelled (`if (x != null)`). For a
-/// suggestion whose body is not code.
+/// The head of an `if` a diagnostic suggests (`if EXISTS(x)`): its condition
+/// parenthesised and respelled (`if (x != null)`). For a suggestion whose
+/// body is not code.
 pub fn spell_if(condition: &str, version: u32) -> String {
-    if crate::version::since(version, 5) { format!("if ({})", spell_code(condition, version)) } else { format!("if {condition}") }
+    format!("if ({})", spell_code(condition, version))
 }
 
 /// An adapter set up with `args` (name, value), the credential among them
@@ -62,15 +56,10 @@ pub struct Connection<'a> {
     pub credential: Option<&'a str>,
 }
 
-/// The connection as `version` writes it: `attio(credentials: …)` up to 4,
-/// `connect attio using … { dryRun: true }` from 5 (the credential after
-/// `using`, every other argument a setting). The parser's refusal of an old
-/// construction writes its fix with it.
-pub fn connection(c: &Connection, version: u32) -> String {
-    if !crate::version::since(version, 5) {
-        let args: Vec<String> = c.args.iter().map(|(name, value)| format!("{name}: {value}")).collect();
-        return format!("{}({})", c.adapter, args.join(", "));
-    }
+/// The connection as it is written: `connect attio using … { dryRun: true }`
+/// (the credential after `using`, every other argument a setting). The
+/// parser's refusal of an old construction writes its fix with it.
+pub fn connection(c: &Connection, _version: u32) -> String {
     let mut text = format!("connect {}", name_source(c.adapter));
     if let Some((_, value)) = c.args.iter().find(|(name, _)| Some(*name) == c.credential) {
         text.push_str(&format!(" using {value}"));
@@ -118,10 +107,7 @@ const ROUNDS: usize = 8;
 fn expression(text: &str) -> Option<String> {
     let mut text = text.to_string();
     for _ in 0..ROUNDS {
-        let found = with_version(5, || {
-            crate::expr::parse_expression_raw(&text).map(|mut tree| canonicalize(&mut tree, &Utf16::new(&text)))
-        })
-        .ok()?;
+        let found = crate::expr::parse_expression_raw(&text).map(|mut tree| canonicalize(&mut tree, &Utf16::new(&text))).ok()?;
         let edits: Vec<Edit> = found.into_iter().flat_map(|f| f.edits.unwrap_or_default()).collect();
         if edits.is_empty() {
             return Some(text);
@@ -196,20 +182,11 @@ mod tests {
     use super::spell_code;
 
     #[test]
-    fn version_4_is_untouched() {
-        for text in ["EXISTS(x)", "AT(r, 0)", "IF … THEN \"Yes\" ELSE \"No\" END", "AND", "if ISNULL(x) { ERROR(\"…\") }"] {
-            assert_eq!(spell_code(text, 4), text);
-        }
-    }
-
-    #[test]
     fn connections() {
         use super::{Connection, connection};
         let attio = Connection { adapter: "attio", args: &[("credentials", "acme"), ("dry_run", "true")], credential: Some("credentials") };
-        assert_eq!(connection(&attio, 4), "attio(credentials: acme, dry_run: true)");
         assert_eq!(connection(&attio, 5), "connect attio using acme { dryRun: true }");
         assert_eq!(connection(&Connection { adapter: "kg", args: &[], credential: None }, 5), "connect kg");
-        assert_eq!(super::spell_word("NOT", 4), "NOT");
         assert_eq!(super::spell_word("NOT", 5), "'!'");
         assert_eq!(super::spell_if("EXISTS(co)", 5), "if (co != null)");
     }

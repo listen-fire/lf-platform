@@ -1,23 +1,21 @@
-//! Every construct of the design's §2: under version 5 the new spelling reads
-//! as the old one does under 4 (the same lowering), and the old spelling is
-//! refused with a fix whose result reads the same again.
+//! Every construct of the design's §2: the new spelling reads as the old,
+//! canonical one does (the same lowering), and the old spelling is refused
+//! with a fix whose result reads the same again.
 
 use serde_json::Value;
 
-use super::{Edit, canonicalize, with_version};
+use super::{Edit, canonicalize};
 use crate::util::utf16::Utf16;
 
-fn lowered(text: &str, version: u32) -> Value {
-    with_version(version, || {
-        let tree = crate::expr::parse_expression(text).unwrap_or_else(|e| panic!("{text}: {e:?}"));
-        match crate::lowering::lower_expression(&tree, text) {
-            Ok(e) => serde_json::to_value(e).unwrap(),
-            Err(r) => serde_json::json!({ "refused": r.message }),
-        }
-    })
+fn lowered(text: &str) -> Value {
+    let tree = crate::expr::parse_expression(text).unwrap_or_else(|e| panic!("{text}: {e:?}"));
+    match crate::lowering::lower_expression(&tree, text) {
+        Ok(e) => serde_json::to_value(e).unwrap(),
+        Err(r) => serde_json::json!({ "refused": r.message }),
+    }
 }
 
-/// `lowered` as versions 1–4 read it: an alias read's `fieldOnly` mark gone.
+/// `lowered` with an alias read's `fieldOnly` mark gone: the bare field.
 fn without_field_only(mut value: Value) -> Value {
     fn strip(value: &mut Value) {
         match value {
@@ -34,10 +32,8 @@ fn without_field_only(mut value: Value) -> Value {
 }
 
 fn findings(text: &str) -> Vec<super::Finding> {
-    with_version(5, || {
-        let mut tree = crate::expr::parse_expression_raw(text).unwrap_or_else(|e| panic!("{text}: {e:?}"));
-        canonicalize(&mut tree, &Utf16::new(text))
-    })
+    let mut tree = crate::expr::parse_expression_raw(text).unwrap_or_else(|e| panic!("{text}: {e:?}"));
+    canonicalize(&mut tree, &Utf16::new(text))
 }
 
 fn apply(text: &str, edits: &[Edit]) -> String {
@@ -73,15 +69,15 @@ fn upgraded(text: &str) -> String {
     panic!("{text}: fixes did not settle")
 }
 
-/// `new` under 5 reads as `old` under 4; `old` under 5 is refused, and its
-/// fixes give a text that reads as `new` does.
+/// `new` reads as `old`, its canonical spelling, does; `old` is refused, and
+/// its fixes give a text that reads as `new` does.
 fn same(new: &str, old: &str) {
     assert!(findings(new).is_empty(), "{new}: {:?}", findings(new));
-    let want = lowered(old, 4);
-    assert_eq!(lowered(new, 5), want, "{new} vs {old}");
-    assert!(!findings(old).is_empty(), "{old} is refused under 5");
+    let want = lowered(old);
+    assert_eq!(lowered(new), want, "{new} vs {old}");
+    assert!(!findings(old).is_empty(), "{old} is refused");
     let fixed = upgraded(old);
-    assert_eq!(lowered(&fixed, 5), want, "{old} upgraded to {fixed}");
+    assert_eq!(lowered(&fixed), want, "{old} upgraded to {fixed}");
 }
 
 #[test]
@@ -97,14 +93,14 @@ fn core_words() {
     same("ai(prompt, { tier: \"careful\" })", "AI(prompt, \"careful\")");
     same("callback(() => `Chase`(company))", "callback(`Chase`(company))");
     // Inside an expression `fail` is the call `ERROR(…)`, a value that never
-    // arrives (the checkers type it; versions 1–4 never read it as one).
+    // arrives (the checkers type it).
     assert!(findings("coalesce(only(xs), fail(\"no #ops\"))").is_empty());
-    assert_eq!(lowered("coalesce(only(xs), fail(\"no #ops\"))", 5), lowered("COALESCE(ONLY(xs), ERROR(\"no #ops\"))", 4));
+    assert_eq!(lowered("coalesce(only(xs), fail(\"no #ops\"))"), lowered("COALESCE(ONLY(xs), ERROR(\"no #ops\"))"));
     // `sort` with no key, by its order alone, or keyed by the member itself.
     same("sort(xs)", "SORT(xs)");
     same("sort(xs, { order: \"desc\" })", "SORT(xs, DESC)");
     same("sort(xs, { order: \"asc\" })", "SORT(xs, asc)");
-    assert_eq!(lowered("sort(xs, (x) => x, { order: \"desc\" })", 5), lowered("SORT(xs, DESC)", 4));
+    assert_eq!(lowered("sort(xs, (x) => x, { order: \"desc\" })"), lowered("SORT(xs, DESC)"));
 }
 
 /// `sort` by a function key reads as the collection op `SORTBY`, its
@@ -119,7 +115,7 @@ fn sort_by_a_function_key() {
         ("first(sort(rows, (r) => r.score))", "FIRST(SORTBY(rows, (r) => r.score))"),
     ] {
         assert!(findings(new).is_empty(), "{new}: {:?}", findings(new));
-        assert_eq!(lowered(new, 5), lowered(canonical, 4), "{new}");
+        assert_eq!(lowered(new), lowered(canonical), "{new}");
     }
     // The tree's name is no spelling: under 5 it is refused as `sort`'s.
     assert_eq!(upgraded("SORTBY(rows, { order: \"desc\" }, (r) => r.score)"), "sort(rows, (r) => r.score, { order: \"desc\" })");
@@ -223,17 +219,17 @@ fn hop_filter(lowered: &Value) -> Option<Value> {
 #[test]
 fn a_narrowing_key_does_not_depend_on_how_the_field_read_is_spelled() {
     use crate::catalog::helpers::refinement_key;
-    let key = |text: &str, version: u32| refinement_key("Record Change", &hop_filter(&lowered(text, version)).expect("a hop WHERE"));
-    let alias = key("at-[e:`Record Change` WHERE e.action == \"record.created\" AND e.`table` == \"tblDeals\"]->", 5);
-    let bare = key("at-[:`Record Change` WHERE action == \"record.created\" AND `table` == \"tblDeals\"]->", 4);
-    assert!(lowered("at-[e:`Record Change` WHERE e.action == \"x\"]->", 5).to_string().contains("fieldOnly"));
+    let key = |text: &str| refinement_key("Record Change", &hop_filter(&lowered(text)).expect("a hop WHERE"));
+    let alias = key("at-[e:`Record Change` WHERE e.action == \"record.created\" AND e.`table` == \"tblDeals\"]->");
+    let bare = key("at-[:`Record Change` WHERE action == \"record.created\" AND `table` == \"tblDeals\"]->");
+    assert!(lowered("at-[e:`Record Change` WHERE e.action == \"x\"]->").to_string().contains("fieldOnly"));
     assert_eq!(alias, bare);
     // What a host registers: its own filter, no spelling marks.
     let host = serde_json::json!({ "type": "logical", "op": "and", "operands": [
         { "type": "compare", "op": "eq", "left": { "type": "edge_property", "propertyTypeId": "action" }, "right": { "type": "static", "value": "record.created" } },
         { "type": "compare", "op": "eq", "left": { "type": "edge_property", "propertyTypeId": "table" }, "right": { "type": "static", "value": "tblDeals" } },
     ] });
-    let bare_filter = hop_filter(&lowered("at-[:`Record Change` WHERE action == \"record.created\" AND `table` == \"tblDeals\"]->", 4)).unwrap();
+    let bare_filter = hop_filter(&lowered("at-[:`Record Change` WHERE action == \"record.created\" AND `table` == \"tblDeals\"]->")).unwrap();
     assert_eq!(bare_filter, host);
     assert_eq!(alias, refinement_key("Record Change", &host));
 }
@@ -245,19 +241,19 @@ fn presence_and_walks() {
     // Inside walk brackets nothing is respelled: CAPS words, AND, any case.
     let walk = "crm-[c:Companies WHERE c.Categories == \"Customer\" AND LOWER(c.Name) CONTAINS \"x\" ORDER BY c.`Created At` DESC LIMIT 10]->";
     assert!(findings(walk).is_empty(), "{:?}", findings(walk));
-    // A field read through the hop's alias is the bare field versions 1–4
-    // wrote (the gates and the pushdown see the field they always saw),
-    // marked as only ever the field: never a variable of the same name.
+    // A field read through the hop's alias is the bare field (the gates and
+    // the pushdown see the field they always saw), marked as only ever the
+    // field: never a variable of the same name.
     let bare = "crm-[c:Companies WHERE Categories == \"Customer\" AND LOWER(Name) CONTAINS \"x\" ORDER BY `Created At` DESC LIMIT 10]->";
-    let read = lowered(walk, 5);
+    let read = lowered(walk);
     assert_eq!(read.to_string().matches(r#""fieldOnly":true"#).count(), 3, "{read}");
-    assert_eq!(without_field_only(read), lowered(bare, 4));
+    assert_eq!(without_field_only(read), lowered(bare));
     // Another hop's alias, and a walk nested in the WHERE, keep their reads.
     let nested = "crm-[c:Companies]->-[t:Team WHERE c.Name == t.Name AND EXISTS(t-[p:Posts WHERE t.Name == Title]->)]->";
     let nested_bare = "crm-[c:Companies]->-[t:Team WHERE c.Name == Name AND EXISTS(t-[p:Posts WHERE t.Name == Title]->)]->";
-    let read = lowered(nested, 5);
+    let read = lowered(nested);
     assert_eq!(read.to_string().matches(r#""fieldOnly":true"#).count(), 1, "{read}");
-    assert_eq!(without_field_only(read), lowered(nested_bare, 4));
+    assert_eq!(without_field_only(read), lowered(nested_bare));
     assert!(findings("ch-[m:Messages WHERE lower(m.Text) CONTAINS \"urgent\"]->").is_empty());
     let everyday = findings("ch-[m:Messages WHERE Text.lower(m.Text) CONTAINS \"urgent\"]->");
     assert_eq!(everyday.len(), 1);
@@ -265,8 +261,8 @@ fn presence_and_walks() {
     // The refused spelling reads as the walk word it means: the one finding,
     // and no lowering refusal beside it.
     assert_eq!(
-        lowered("ch-[m:Messages WHERE Text.lower(m.Text) CONTAINS \"urgent\"]->", 5),
-        lowered("ch-[m:Messages WHERE LOWER(m.Text) CONTAINS \"urgent\"]->", 5)
+        lowered("ch-[m:Messages WHERE Text.lower(m.Text) CONTAINS \"urgent\"]->"),
+        lowered("ch-[m:Messages WHERE LOWER(m.Text) CONTAINS \"urgent\"]->")
     );
 }
 
@@ -280,20 +276,6 @@ fn wrong_case_and_unknown_members() {
     assert_eq!((f[0].code, f[0].message.as_str()), (super::UNKNOWN_MEMBER_CODE, "`Text` has no member `uper`"));
     let f = findings("Text.Upper(x)");
     assert_eq!(f[0].message, "`Text` has no member `Upper` — did you mean `Text.upper`?");
-}
-
-#[test]
-fn version_4_reads_as_before() {
-    // `&&` and `? :` are not version 4's: refused exactly as before.
-    for text in ["a && b", "a ? b : c"] {
-        let v4 = with_version(4, || crate::expr::parse_expression(text).map(|_| ()).map_err(|e| e.message));
-        let none = crate::expr::parse_expression(text).map(|_| ()).map_err(|e| e.message);
-        assert!(v4.is_err(), "{text}");
-        assert_eq!(v4, none);
-    }
-    // `Text.upper(x)` keeps version 4's reading (a call on the value `Text`).
-    assert_eq!(lowered("Text.upper(x)", 4), lowered("Text.upper(x)", 0));
-    assert_ne!(lowered("Text.upper(x)", 4), lowered("Text.upper(x)", 5));
 }
 
 fn program(source: &str, version: u32) -> crate::ast::Program {
@@ -314,7 +296,7 @@ fn adapter_setup_is_connect() {
     let new = "import { `@lf/attio` as attio } from adapters\nimport { acme_main as acme } from credentials\ncrm = connect attio using acme { dryRun: true }\ninbox = connect email\n";
     let old = "import { attio } from adapters\nimport { acme_main as acme } from credentials\ncrm = attio(credentials: acme, dry_run: true)\ninbox = email()\n";
     assert!(program(new, 5).spelling.is_empty(), "{:?}", program(new, 5).spelling);
-    let (n, o) = (statements(new, 5), statements(old, 4));
+    let (n, o) = (statements(new, 5), statements(old, 5));
     assert_eq!(n.pointer("/0/names/0/name"), o.pointer("/0/names/0/name"));
     assert_eq!(n.pointer("/2/value/construct/callee"), o.pointer("/2/value/construct/callee"));
     let args = |v: &Value| v.pointer("/2/value/construct/args").unwrap().as_array().unwrap().iter().map(|a| (a["name"].clone(), a["value"]["raw"].clone())).collect::<Vec<_>>();
@@ -334,8 +316,6 @@ fn declarations_conditions_and_errors() {
         ]
     );
     assert!(spelling("function f() {\n  if (x != null && y) {\n    fail(\"no\")\n  } else if (z) {\n  }\n}\n").is_empty());
-    // Under 4 nothing is refused, and the old surface parses as before.
-    assert!(program("movement f() {\n  if x {\n    ERROR(\"no\")\n  }\n}\n", 4).spelling.is_empty());
 }
 
 #[test]
@@ -349,19 +329,18 @@ fn until_takes_its_cadence_as_a_setting() {
 
 #[test]
 fn bang_binds_as_typescript_s_unary_operator() {
-    // Under 4 `!` reaches over the comparison; under 5 it takes the operand beside it.
-    assert_eq!(lowered("!a == b", 4), lowered("NOT (a == b)", 4));
-    assert_eq!(lowered("!a == b", 5), lowered("(NOT a) == b", 4));
-    assert_eq!(lowered("!a && b", 5), lowered("NOT a AND b", 4));
-    assert_eq!(lowered("!x.done", 5), lowered("NOT x.done", 4));
+    // `!` takes the operand beside it; `NOT` reaches over the comparison.
+    assert_eq!(lowered("!a == b"), lowered("(NOT a) == b"));
+    assert_eq!(lowered("!a && b"), lowered("NOT a AND b"));
+    assert_eq!(lowered("!x.done"), lowered("NOT x.done"));
     // The text whose reading changed is refused; the fix writes out the old reading.
     let f = findings("!a == b");
     assert_eq!(f.len(), 1, "{f:?}");
     assert_eq!(f[0].edits.as_ref().unwrap()[0].text, "!(a == b)");
-    assert_eq!(lowered(&upgraded("!a == b"), 5), lowered("!a == b", 4));
+    assert_eq!(lowered(&upgraded("!a == b")), lowered("NOT a == b"));
     assert_eq!(upgraded("!a + 1 > b && c"), "!(a + 1 > b) && c");
-    assert_eq!(lowered(&upgraded("!!a == b"), 5), lowered("!!a == b", 4));
-    assert_eq!(lowered(&upgraded("!a IS <crm-[:People]->>"), 5), lowered("NOT a IS <crm-[:People]->>", 4));
+    assert_eq!(lowered(&upgraded("!!a == b")), lowered("NOT NOT a == b"));
+    assert_eq!(lowered(&upgraded("!a IS <crm-[:People]->>")), lowered("NOT a IS <crm-[:People]->>"));
     // Written with the parentheses either way, or with nothing for `!` to reach: clean.
     for clean in ["(!a) == b", "!(a == b)", "!a && b", "f(!a, b == c)", "Text.includes(x, \"y\") == !b"] {
         assert!(findings(clean).is_empty(), "{clean}: {:?}", findings(clean));
@@ -374,12 +353,10 @@ fn bang_binds_as_typescript_s_unary_operator() {
 fn fail_is_the_error_statement() {
     let new = program("function f() {\n  fail(\"no\")\n}\n", 5);
     assert!(new.spelling.is_empty(), "{:?}", new.spelling);
-    let (n, o) = (serde_json::to_value(&new.statements).unwrap(), statements("movement f() {\n  ERROR(\"no\")\n}\n", 4));
+    let (n, o) = (serde_json::to_value(&new.statements).unwrap(), statements("movement f() {\n  ERROR(\"no\")\n}\n", 5));
     assert!(n.pointer("/0/body/0").is_some(), "{n}");
     assert_eq!(n.pointer("/0/body/0").map(|s| s.as_object().unwrap().keys().cloned().collect::<Vec<_>>()), o.pointer("/0/body/0").map(|s| s.as_object().unwrap().keys().cloned().collect::<Vec<_>>()));
     assert_eq!(spelling("function f() {\n  ERROR(\"no\")\n}\n"), vec![("`ERROR` is written `fail` from language version 5".to_string(), "fail".to_string())]);
-    // Under 4 `fail` is no statement word.
-    assert!(crate::stmt::parse_program("movement f() {\n  ERROR(\"no\")\n}\n", 4, false).unwrap().spelling.is_empty());
 }
 
 #[test]
@@ -400,9 +377,6 @@ fn a_block_closure_inside_an_expression_is_read_for_old_spellings() {
     // as a statement) is reported once, not again through its slot.
     let statement = "function go(xs) {\n  ys = map(xs, (r) => {\n    return UPPER(r)\n  })\n}\n";
     assert_eq!(program(statement, 5).spelling.len(), 1);
-    // Under 4 nothing is read for spellings.
-    let v4 = "movement go(xs) {\n  if count(FILTER(xs, (r) => {\n    return LENGTH(r) > 0\n  })) > 0 {\n    y = 1\n  }\n}\n";
-    assert!(program(v4, 4).spelling.is_empty());
 }
 
 #[test]

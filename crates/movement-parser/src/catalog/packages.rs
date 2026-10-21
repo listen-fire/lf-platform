@@ -8,7 +8,6 @@
 use crate::ast::{ImportSource, ImportedName, Program, Statement};
 use crate::catalog::types::{JsMap, PluginSpec};
 use crate::surface::table::plugin_name;
-use crate::version::since;
 
 /// The catalog key of a package's plugin: module and name together, so two
 /// packages can each serve a plugin of the same name. Compared, never parsed
@@ -93,10 +92,7 @@ pub fn member_local(package_local: &str, member: &str) -> String {
 /// an engine binds. An import that names no package is left as written. The
 /// checkers do not read this: they bind the same names themselves, keeping
 /// the package to name in a diagnostic.
-pub fn expand_package_imports(program: &mut Program, plugins: &JsMap<PluginSpec>, language_version: u32) {
-    if !since(language_version, 5) {
-        return;
-    }
+pub fn expand_package_imports(program: &mut Program, plugins: &JsMap<PluginSpec>, _language_version: u32) {
     for statement in &mut program.statements {
         let Statement::Import(import) = statement else { continue };
         if !matches!(&import.source, ImportSource::Builtin { namespace } if namespace == "plugins") {

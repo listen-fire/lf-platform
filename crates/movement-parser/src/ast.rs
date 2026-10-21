@@ -76,9 +76,9 @@ pub struct PathHead {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Program {
     pub statements: Vec<Statement>,
-    /// Every old spelling a version 5 program is written in, with its
-    /// rewrite (crate::surface). Empty — and absent from the JSON — under
-    /// versions 1–4 and for a program in the v5 surface.
+    /// Every old spelling the program is written in, with its rewrite
+    /// (crate::surface). Empty — and absent from the JSON — for a program in
+    /// the v5 surface.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub spelling: Vec<crate::surface::SpellingFinding>,
 }
@@ -654,21 +654,6 @@ pub enum CollectionOp {
     /// ordered by what the function answers for each. The tree calls it
     /// `SORTBY`, a name no version reads as written (crate::surface::table).
     Sort,
-}
-
-impl CollectionOp {
-    /// The surface spelling of each op. Uppercase, like every other function
-    /// the language ships.
-    pub fn from_spelling(word: &str) -> Option<Self> {
-        match word {
-            "MAP" => Some(CollectionOp::Map),
-            "FILTER" => Some(CollectionOp::Filter),
-            "REDUCE" => Some(CollectionOp::Reduce),
-            "GROUPBY" => Some(CollectionOp::Groupby),
-            "KEYBY" => Some(CollectionOp::Keyby),
-            _ => None,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]

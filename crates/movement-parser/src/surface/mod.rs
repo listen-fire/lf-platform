@@ -1,15 +1,10 @@
 //! The language surface of version 5 (plans/naming-rethink-2026-10-14/
 //! 5_design.md): the everyday spelling outside walk brackets, read into the
-//! tree versions 1–4 already parse. `table` is the spelling table,
-//! `canonical` the rewrite of a v5 expression into the canonical tree.
+//! canonical tree. `table` is the spelling table, `canonical` the rewrite of
+//! a v5 expression into the canonical tree.
 //!
-//! The version an expression is read under is AMBIENT for the length of one
-//! parse, check or run (`with_version`): slot text is re-read at many places
-//! in both checkers and the engine, and every one of them must read it under
-//! the program's own version. Threading the version through each reader, or
-//! stamping it on every slot, were the alternatives; the ambient scope makes
-//! every reader agree by construction. Outside a scope the grammar is the
-//! one versions 1–4 read.
+//! The findings a parse gathers are AMBIENT for its length (`collecting`):
+//! slot text is read at many places, and each reports into the one scope.
 
 pub mod canonical;
 pub mod phrase;
@@ -115,40 +110,27 @@ pub struct SourceEdit {
     pub text: String,
 }
 
-struct Scope {
-    version: u32,
-    findings: Option<Vec<SpellingFinding>>,
-}
-
 thread_local! {
-    static SCOPE: RefCell<Vec<Scope>> = const { RefCell::new(Vec::new()) };
+    static SCOPE: RefCell<Vec<Vec<SpellingFinding>>> = const { RefCell::new(Vec::new()) };
 }
 
-/// Runs `f` with expressions read under `version`.
-pub fn with_version<T>(version: u32, f: impl FnOnce() -> T) -> T {
-    SCOPE.with(|s| s.borrow_mut().push(Scope { version, findings: None }));
-    let out = f();
-    SCOPE.with(|s| s.borrow_mut().pop());
-    out
+/// Runs `f`; every expression is read in the v5 surface.
+pub fn with_version<T>(_version: u32, f: impl FnOnce() -> T) -> T {
+    f()
 }
 
-/// Runs `f` with expressions read under `version`, gathering the findings
-/// every slot read in it reports (the statement parser's `parse_program`).
-pub fn collecting<T>(version: u32, f: impl FnOnce() -> T) -> (T, Vec<SpellingFinding>) {
-    SCOPE.with(|s| s.borrow_mut().push(Scope { version, findings: Some(Vec::new()) }));
+/// Runs `f`, gathering the findings every slot read in it reports (the
+/// statement parser's `parse_program`).
+pub fn collecting<T>(f: impl FnOnce() -> T) -> (T, Vec<SpellingFinding>) {
+    SCOPE.with(|s| s.borrow_mut().push(Vec::new()));
     let out = f();
-    let findings = SCOPE.with(|s| s.borrow_mut().pop()).and_then(|s| s.findings).unwrap_or_default();
+    let findings = SCOPE.with(|s| s.borrow_mut().pop()).unwrap_or_default();
     (out, findings)
-}
-
-/// The version expressions are read under; 0 outside every scope.
-pub fn version() -> u32 {
-    SCOPE.with(|s| s.borrow().last().map_or(0, |s| s.version))
 }
 
 /// The v5 surface is read.
 pub fn is_v5() -> bool {
-    crate::version::since(version(), 5)
+    true
 }
 
 /// Records a finding in the innermost collecting scope, if there is one.
@@ -158,7 +140,7 @@ pub fn is_v5() -> bool {
 /// statement) and through the slot that call's expression is.
 pub fn report(finding: SpellingFinding) {
     SCOPE.with(|s| {
-        if let Some(findings) = s.borrow_mut().iter_mut().rev().find_map(|s| s.findings.as_mut())
+        if let Some(findings) = s.borrow_mut().last_mut()
             && !findings.contains(&finding)
         {
             findings.push(finding);

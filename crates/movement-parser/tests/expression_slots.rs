@@ -5,8 +5,6 @@
 //!
 //!   cargo test -p movement-parser --test expression_slots -- --ignored --nocapture
 
-// Each test binary compiles its own copy and uses only part of it.
-#[allow(dead_code)]
 mod common;
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -29,9 +27,7 @@ fn every_expression_text_parses_without_panicking() {
     let (mut trees, mut errors) = (0usize, 0usize);
     let mut panicked = Vec::new();
     for slot in &slots {
-        // The ABI's version argument; the TypeScript expression grammar reads
-        // no version, so any supported one must give the same tree.
-        match catch_unwind(AssertUnwindSafe(|| movement_parser::parse_expression(&slot.raw, 3))) {
+        match catch_unwind(AssertUnwindSafe(|| movement_parser::parse_expression(&slot.raw, 5))) {
             Ok(Ok(_)) => trees += 1,
             Ok(Err(_)) => errors += 1,
             Err(_) => panicked.push(serde_json::to_string(&slot.raw).unwrap()),

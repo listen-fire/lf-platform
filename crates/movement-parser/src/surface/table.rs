@@ -249,12 +249,11 @@ pub fn by_canonical(name: &str) -> Option<&'static Spelling> {
     SPELLINGS.iter().find(|s| !s.new_only && s.canonical.eq_ignore_ascii_case(name))
 }
 
-/// The name a diagnostic gives the built-in the tree calls `canonical`, in
-/// the spelling of the program's own language version: `UPPER` under 4,
-/// `Text.upper` under 5. A name the table does not hold is its own spelling.
-pub fn spell(canonical: &str, version: u32) -> String {
-    if crate::version::since(version, 5)
-        && let Some(s) = by_canonical(canonical)
+/// The name a diagnostic gives the built-in the tree calls `canonical`:
+/// `Text.upper` for `UPPER`. A name the table does not hold is its own
+/// spelling.
+pub fn spell(canonical: &str, _version: u32) -> String {
+    if let Some(s) = by_canonical(canonical)
         && !s.old_only
     {
         return s.v5.to_string();
@@ -262,9 +261,9 @@ pub fn spell(canonical: &str, version: u32) -> String {
     canonical.to_string()
 }
 
-/// What a message calls a declaration, in the wording versions 1–4 use,
-/// and from 5, where it is declared `function`: the wording a sentence needs
-/// first, then the plain noun.
+/// What a message calls a declaration, in the canonical wording and where it
+/// is declared `function`: the wording a sentence needs first, then the
+/// plain noun.
 const DECLARATION_PHRASES: &[(&str, &str)] = &[
     ("a movement or function declared or imported here", "a function declared or imported here"),
     ("only movements are called", "only functions are called"),
@@ -273,10 +272,10 @@ const DECLARATION_PHRASES: &[(&str, &str)] = &[
 ];
 
 /// "movement" where it names a program, a file or the engine — the
-/// product — not the declared thing: kept from 5 as it was.
+/// product — not the declared thing: kept as it is.
 const PRODUCT_AFTER: &[&str] = &[" run", " file", " engine", " librar"];
 
-/// A message's "a movement" (the declared thing) as "a function" from 5.
+/// A message's "a movement" (the declared thing) as "a function".
 fn spell_declarations(message: &str) -> String {
     let mut out = message.to_string();
     for (old, new) in DECLARATION_PHRASES {
@@ -301,21 +300,18 @@ fn spell_declarations(message: &str) -> String {
 }
 
 /// Rewrites every built-in a message names (`UPPER`, `UPPER(text)`,
-/// `DATE.TODAY`: a word in capitals the table holds) into the program's
-/// spelling, and calls a declaration a function: the one place both
+/// `DATE.TODAY`: a word in capitals the table holds) into the v5 spelling,
+/// and calls a declaration a function: the one place both
 /// checkers route a message through, so a message's wording never carries
 /// its own copy of a spelling.
-pub fn spell_message(message: &str, version: u32) -> String {
-    if !crate::version::since(version, 5) {
-        return message.to_string();
-    }
+pub fn spell_message(message: &str, _version: u32) -> String {
     let message = &spell_declarations(message);
     let is_word = |c: char| c.is_ascii_alphanumeric() || c == '_';
     let mut out = String::with_capacity(message.len());
     let mut chars = message.char_indices().peekable();
     let mut previous: Option<char> = None;
     // Inside walk brackets (`-[c:Companies WHERE LOWER(c.Name) …]->`) a
-    // built-in keeps its CAPS walk word in every version (§2.5).
+    // built-in keeps its CAPS walk word (§2.5).
     let mut walk_depth = 0usize;
     while let Some((i, c)) = chars.next() {
         let next = chars.peek().map(|&(_, d)| d);
@@ -414,13 +410,11 @@ mod tests {
     }
 
     #[test]
-    fn spelling_follows_the_version() {
-        assert_eq!(spell("UPPER", 4), "UPPER");
+    fn spelling_is_the_v5_one() {
         assert_eq!(spell("UPPER", 5), "Text.upper");
         assert_eq!(spell("date.today", 5), "Date.today");
         assert_eq!(spell("my_function", 5), "my_function");
         assert_eq!(spell_message("`UPPER(x)` expects text; `MAP` too", 5), "`Text.upper(x)` expects text; `map` too");
-        assert_eq!(spell_message("`UPPER(x)` expects text", 4), "`UPPER(x)` expects text");
         assert_eq!(spell_message("`Name` is not `AT`", 5), "`Name` is not `AT`");
         assert_eq!(spell_message("UPPER's 'text' takes text — UPPER(text)", 5), "Text.upper's 'text' takes text — Text.upper(text)");
         assert_eq!(spell_message("DATE.TODAY needs a zone. MAPPED UPPERCASE COUNT.", 5), "Date.today needs a zone. MAPPED UPPERCASE count.");
@@ -430,7 +424,6 @@ mod tests {
         );
         let product = "a movement run does not have it; No movement file named \"x\"; the movement engine";
         assert_eq!(spell_message(product, 5), product);
-        assert_eq!(spell_message("'go' is a movement", 4), "'go' is a movement");
         assert_eq!(
             spell_message("`COUNT(crm-[c:Companies WHERE LOWER(c.Name) == \"x\"]->)` and LOWER", 5),
             "`count(crm-[c:Companies WHERE LOWER(c.Name) == \"x\"]->)` and Text.lower"

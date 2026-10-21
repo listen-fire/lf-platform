@@ -396,7 +396,7 @@ mod tests {
         let src = alloc(len);
         unsafe { std::ptr::copy_nonoverlapping(source.as_ptr(), src, source.len()) };
         let (mut out_ptr, mut out_len) = (0usize, 0usize);
-        let status = unsafe { parse_expression(src, len, 3, &mut out_ptr, &mut out_len) };
+        let status = unsafe { parse_expression(src, len, 5, &mut out_ptr, &mut out_len) };
         unsafe { dealloc(src, len) };
         let out = unsafe { std::slice::from_raw_parts(out_ptr as *const u8, out_len) }.to_vec();
         unsafe { dealloc(out_ptr as *mut u8, u32::try_from(out_len).unwrap()) };
@@ -450,11 +450,6 @@ mod tests {
 
     #[test]
     fn a_refusal_comes_back_as_an_error_envelope() {
-        let (_, tree) = call_expression("x[0]");
-        assert_eq!(
-            call_lowering(Mode::Expression, &tree, "x[0]"),
-            (ERROR, r#"{"error":{"message":"an index read `x[i]` is written AT(x, i)"}}"#.to_string())
-        );
         let (_, tree) = call_expression("FILE(x)");
         assert_eq!(
             call_lowering(Mode::Expression, &tree, "FILE(x)"),
@@ -527,7 +522,7 @@ mod tests {
         let src = alloc(3);
         unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), src, 3) };
         let (mut out_ptr, mut out_len) = (0usize, 0usize);
-        let status = unsafe { parse_program(src, 3, 3, &mut out_ptr, &mut out_len) };
+        let status = unsafe { parse_program(src, 3, 5, &mut out_ptr, &mut out_len) };
         let out = unsafe { std::slice::from_raw_parts(out_ptr as *const u8, out_len) }.to_vec();
         unsafe {
             dealloc(src, 3);

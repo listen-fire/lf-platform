@@ -151,7 +151,9 @@ fn an_if_without_else_is_empty_text() {
 
 #[test]
 fn what_is_not_a_value_is_refused() {
-    assert_eq!(refused("x[0]"), "an index read `x[i]` is written AT(x, i)");
+    // As written: the canonical tree reads an index as the call `AT`.
+    let index = crate::expr::parse_expression_raw("x[0]").unwrap();
+    assert_eq!(lower_expression(&index, "x[0]").unwrap_err().message, "an index read `x[i]` is written AT(x, i)");
     assert_eq!(refused("EXISTS(x WHERE y) AND (x WHERE y)"), "WHERE filters a walk inside EXISTS(…) or a hop — it is not a value on its own");
     assert_eq!(refused("r IS <crm>"), "IS type tests are only recognised as top-level conjuncts of a condition");
     let closure = refusal("(x) => x");
@@ -512,7 +514,7 @@ fn a_tree_and_its_json_lower_alike() {
     assert_eq!(lower_expression_json(&json, text).unwrap(), value(text));
     assert_eq!(lower_condition_json(&json, text).unwrap(), condition(text));
     assert_eq!(
-        lower_expression_json(&serde_json::to_value(tree("x[0]")).unwrap(), "x[0]").unwrap_err(),
+        lower_expression_json(&serde_json::to_value(crate::expr::parse_expression_raw("x[0]").unwrap()).unwrap(), "x[0]").unwrap_err(),
         json!({ "message": "an index read `x[i]` is written AT(x, i)" })
     );
 }
