@@ -2072,9 +2072,6 @@ importers:
       engine-contracts:
         specifier: workspace:@listen-fire/engine-contracts@*
         version: link:../engine-contracts
-      legacy-lang:
-        specifier: workspace:@listen-fire/legacy-lang@*
-        version: link:../legacy-lang
       movement-engine:
         specifier: workspace:@listen-fire/engine@*
         version: link:../movement-engine

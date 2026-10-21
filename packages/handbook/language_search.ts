@@ -2,8 +2,9 @@
 // beyond the front page: built-in functions, the ideas the front page
 // introduces, recipes, and what each connected system and plugin documents.
 //
-// Nothing here is a second copy. A built-in's signature is GENERATED from the
-// standard-library registry the checker resolves calls against, so a function
+// Nothing here is a second copy. A built-in's signature and purpose line are
+// GENERATED from the standard-library table the Rust checker resolves calls
+// against (`standardLibraryTable`, read through the wasm), so a function
 // added there is searchable the moment it exists; its worked example, where
 // one is written, is read from that function's section of the builtins
 // chapter. Recipes and system sections are read from their chapters at call
@@ -15,9 +16,12 @@
 // entry's name, purpose and body, weighted in that order. Deterministic, and
 // explainable from the entry itself.
 
-import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
-// TODO(split 4b): the built-in table comes from the wasm; this import crosses the boundary until then
-import { describeFieldType, standardLibrary, type Builtin, type BuiltinParam } from 'legacy-lang';
+import {
+  CURRENT_LANGUAGE_VERSION,
+  standardLibraryTable,
+  type StandardBuiltin,
+  type StandardBuiltinParam,
+} from 'movement-lang';
 import { spellMessage, surfaceTable, type SpellingRow } from 'movement-lang/parser/surface';
 
 import type { Chapter, EngineClaim } from './types';
@@ -120,13 +124,13 @@ export function controlFormClaims(): EngineClaim[] {
 
 // ── Building the index ──────────────────────────────────────────────────────
 
-function describeParam(param: BuiltinParam): string {
+function describeParam(param: StandardBuiltinParam): string {
   return `${param.rest ? '…' : ''}${param.name}${param.optional ? '?' : ''}: ${param.type}`;
 }
 
 /** The registry names built-ins canonically (`JOIN`); the language a saved
  *  automation is written in today spells them as the surface table says. */
-function spelling(entry: Builtin): SpellingRow | undefined {
+function spelling(entry: StandardBuiltin): SpellingRow | undefined {
   return surfaceTable().spellings.find((row) => row.canonical === entry.name && !row.newOnly);
 }
 
@@ -134,14 +138,14 @@ function spelling(entry: Builtin): SpellingRow | undefined {
 const CORE_SPELLING: Record<string, string> = { EXTRACT: 'extract', EXTRACTONE: 'extractOne' };
 
 /** `Text.join` for `JOIN` — the name an author writes. */
-export function builtinName(entry: Builtin): string {
+export function builtinName(entry: StandardBuiltin): string {
   return spelling(entry)?.v5 ?? CORE_SPELLING[entry.name] ?? entry.name;
 }
 
-const settingsParam = (keys: string): BuiltinParam => ({ name: `settings { ${keys} }`, type: 'options', optional: true });
+const settingsParam = (keys: string): StandardBuiltinParam => ({ name: `settings { ${keys} }`, type: 'options', optional: true });
 
 /** The registry's parameters in the order the author writes them. */
-function writtenParams(entry: Builtin): readonly BuiltinParam[] {
+function writtenParams(entry: StandardBuiltin): readonly StandardBuiltinParam[] {
   const [first, second, third] = entry.params;
   const shape = spelling(entry)?.shape;
   switch (shape) {
@@ -160,20 +164,20 @@ function writtenParams(entry: Builtin): readonly BuiltinParam[] {
 }
 
 /** A summary names built-ins as the author writes them. */
-export function builtinSummary(entry: Builtin): string {
+export function builtinSummary(entry: StandardBuiltin): string {
   return spellMessage(entry.summary, CURRENT_LANGUAGE_VERSION);
 }
 
 /** `Text.join(collection: any, separator?: text) → text` — generated, never written. */
-export function builtinSignature(entry: Builtin): string {
-  const returns = entry.returns === 'derived' ? 'follows from its arguments' : describeFieldType(entry.returns);
+export function builtinSignature(entry: StandardBuiltin): string {
+  const returns = entry.returns === 'derived' ? 'follows from its arguments' : entry.returns;
   return `${builtinName(entry)}(${writtenParams(entry).map(describeParam).join(', ')}) → ${returns}`;
 }
 
 /** A built-in kept only so old automations still read — never offered. A
  *  call the surface writes as an operator (`x == null`, `xs[i]`) is not a
  *  function an author calls. */
-function isRetired(entry: Builtin): boolean {
+function isRetired(entry: StandardBuiltin): boolean {
   return entry.summary.startsWith('RETIRED') || spelling(entry)?.oldOnly === true;
 }
 
@@ -190,13 +194,13 @@ function registryAliases(): Map<string, string> {
 }
 
 /** The documented built-ins: every registry entry except the retired ones. */
-export function searchableBuiltins(): Builtin[] {
-  return standardLibrary().filter((entry) => !isRetired(entry));
+export function searchableBuiltins(): StandardBuiltin[] {
+  return standardLibraryTable().filter((entry) => !isRetired(entry));
 }
 
 /** The registry entries the search leaves out: the retired ones. */
-export function retiredBuiltins(): Builtin[] {
-  return standardLibrary().filter(isRetired);
+export function retiredBuiltins(): StandardBuiltin[] {
+  return standardLibraryTable().filter(isRetired);
 }
 
 /** Where a built-in that has no section of its own is explained. */
