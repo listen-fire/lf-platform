@@ -27,7 +27,7 @@ import {
   materializeExtract,
   type ExtractNodeSpec,
 } from '@listen-fire/legacy-engine/services/movement_engine/extraction';
-import { NO_PROVENANCE } from 'movement-engine/services/movement_engine/provenance';
+import { NO_PROVENANCE } from 'movement-engine/public/provenance';
 import { bundledPluginSpecs } from 'movement-engine/public/plugins';
 
 const span: Span = { start: { line: 1, col: 1 }, end: { line: 1, col: 1 } };

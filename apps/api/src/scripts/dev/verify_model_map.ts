@@ -68,10 +68,13 @@ import { z } from 'zod';
 
 import { anthropicChat, anthropicChatStructured, anthropicToolLoop } from '../../lib/anthropic';
 import { embed } from '../../lib/models/embedding';
-import { embeddingDestinations } from 'movement-engine/lib/models/embedding/destinations';
 import { generateImage } from '../../lib/models/image';
-import { assertModelMapConfigured, resolveModel } from 'movement-engine/lib/models/map';
-import { parseChatModelName } from 'movement-engine/public/models';
+import {
+  assertModelMapConfigured,
+  embeddingDestinations,
+  parseChatModelName,
+  resolveModel,
+} from 'movement-engine/public/models';
 
 import type {
   ChatModelName,

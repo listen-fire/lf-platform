@@ -15,10 +15,12 @@ export {
   aiExpressionSettings,
   claudeModelId,
   extractionCallSettings,
+  extractionSettings,
   runChatModels,
   unreachedModelMessage,
   type Effort,
   type ExtractionCallSettings,
+  type TierCallSettings,
   type TierModel,
 } from '../services/movement_engine/ai_tiers';
 export { metered, refusingPastBudget } from '../services/translation_graph/movement/metered';
