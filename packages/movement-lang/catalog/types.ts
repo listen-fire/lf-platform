@@ -6,7 +6,7 @@
 // `SchemaFieldType` spells the bare field names out. The TypeScript checker's
 // own `FieldType` (checker/catalog.ts on the platform) is the same union plus
 // the record that carries a checker position; every `SchemaFieldType` is a
-// `FieldType`, and legacy-lang asserts it at compile time.
+// `FieldType`, and the platform's checker asserts it at compile time.
 
 import type { LanguageVersion } from '../language_version';
 import type { EdgeCapability, EdgeSequencing, Expression, FieldCapability } from '../expression/types';
