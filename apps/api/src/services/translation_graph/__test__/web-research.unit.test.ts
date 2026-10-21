@@ -16,13 +16,9 @@
 const mockAnthropicChatStructured = jest.fn();
 const mockSearch = jest.fn();
 const mockFetchWithTimeout = jest.fn();
-const mockLogInfo = jest.fn();
 
 jest.mock('../../../lib/anthropic', () => ({
   anthropicChatStructured: (...args: unknown[]) => mockAnthropicChatStructured(...args),
-}));
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: (...args: unknown[]) => mockLogInfo(...args), warn: jest.fn() },
 }));
 jest.mock('../../web_search', () => ({
   WebSearchService: {
@@ -46,6 +42,9 @@ import type { SourcePosition } from 'engine-contracts/catalog';
 
 import { webResearchImpl, WEB_RESEARCH_PLUGIN_MANIFEST } from '../engine/transforms/web-research';
 import { makeStablePosition } from 'engine-contracts/catalog';
+import { captureEngineLogs } from '../../../test/engine_logs';
+
+const logs = captureEngineLogs();
 
 // ── Fixtures ──────────────────────────────────────────────────────────────
 
@@ -428,17 +427,15 @@ describe('the log trail', () => {
 
     await invoke({ name: 'Hollowbrook', context: 'AI agents for insurance claims, Copenhagen' });
 
-    const outcomeLine = mockLogInfo.mock.calls.find(([message]) =>
-      String(message).includes('resolved'),
-    );
-    expect(outcomeLine[1]).toMatchObject({
+    const outcomeLine = logs.info().find(({ message }) => message.includes('resolved'));
+    expect(outcomeLine?.meta).toMatchObject({
       name: 'Hollowbrook',
       outcome: 'resolved',
       url: 'https://hollowbrook.example',
       // The name goes to the index as an exact phrase, whatever the planner wrote.
       queries: ['"Hollowbrook" insurance claims'],
     });
-    expect(JSON.stringify(mockLogInfo.mock.calls)).not.toContain('SECRET PAGE TEXT');
+    expect(JSON.stringify(logs.info())).not.toContain('SECRET PAGE TEXT');
   });
 });
 

@@ -18,7 +18,6 @@ const mockSearch = jest.fn();
 const mockFetchWithTimeout = jest.fn();
 const mockGetProfileTextByUrl = jest.fn();
 const mockIsSupportedUrl = jest.fn();
-const mockLogInfo = jest.fn();
 
 jest.mock('../../../lib/anthropic', () => ({
   anthropicChat: (...args: unknown[]) => mockAnthropicChat(...args),
@@ -26,9 +25,6 @@ jest.mock('../../../lib/anthropic', () => ({
 }));
 jest.mock('../../../lib/prompts/execute', () => ({
   parseJson: (raw: string) => JSON.parse(raw),
-}));
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: (...args: unknown[]) => mockLogInfo(...args), warn: jest.fn() },
 }));
 // The document store reaches Playwright, the crawler and the prompt library;
 // all the plugin asks it is whether an address is a document.
@@ -61,6 +57,7 @@ import {
 } from '../engine/transforms/linkedin-research';
 import { services } from '../../../adapters/registry';
 import { makeStablePosition } from 'engine-contracts/catalog';
+import { captureEngineLogs } from '../../../test/engine_logs';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────
 
@@ -146,6 +143,8 @@ function replies({ plan, synthesis }: { plan?: string; synthesis?: unknown }) {
   mockAnthropicChatStructured.mockResolvedValue(synthesis ?? NOTHING_CONSISTENT);
 }
 
+const logs = captureEngineLogs();
+
 beforeEach(() => {
   mockAnthropicChat.mockReset();
   mockAnthropicChatStructured.mockReset();
@@ -153,7 +152,6 @@ beforeEach(() => {
   mockFetchWithTimeout.mockReset();
   mockGetProfileTextByUrl.mockReset();
   mockIsSupportedUrl.mockReset();
-  mockLogInfo.mockReset();
   mockIsSupportedUrl.mockReturnValue(false);
   services.linkedin = undefined;
   mockFetchWithTimeout.mockResolvedValue(null);
@@ -606,11 +604,13 @@ describe('what the plugin will open', () => {
     expect(mockFetchWithTimeout.mock.calls.map((c) => c[0])).toEqual([
       'https://a.example.com/one',
     ]);
-    expect(mockLogInfo).toHaveBeenCalledWith(
-      expect.stringContaining('Skipped a result that is not a page'),
+    expect(logs.info()).toContainEqual(
       expect.objectContaining({
-        url: 'https://example.org/reports/annual-2025.pdf',
-        reason: 'an address that names a file',
+        message: expect.stringContaining('Skipped a result that is not a page'),
+        meta: expect.objectContaining({
+          url: 'https://example.org/reports/annual-2025.pdf',
+          reason: 'an address that names a file',
+        }),
       }),
     );
   });
@@ -628,11 +628,13 @@ describe('what the plugin will open', () => {
     await invoke({ url: PROFILE_URL });
 
     expect(mockFetchWithTimeout).not.toHaveBeenCalled();
-    expect(mockLogInfo).toHaveBeenCalledWith(
-      expect.stringContaining('Skipped a result that is not a page'),
+    expect(logs.info()).toContainEqual(
       expect.objectContaining({
-        url: 'https://docsend.com/view/abcdef',
-        reason: 'a document source, not a page',
+        message: expect.stringContaining('Skipped a result that is not a page'),
+        meta: expect.objectContaining({
+          url: 'https://docsend.com/view/abcdef',
+          reason: 'a document source, not a page',
+        }),
       }),
     );
   });

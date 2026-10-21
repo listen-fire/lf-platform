@@ -19,6 +19,8 @@ export default {
   // Inert env defaults so the suite loads env-reading modules (prisma, adapters)
   // without a real .env and without touching real systems. See the file header.
   setupFiles: ['<rootDir>/src/test/test-env-defaults.ts'],
+  // Engine log lines go nowhere unless a test captures them.
+  setupFilesAfterEnv: ['<rootDir>/src/test/engine_logs.setup.ts'],
   testMatch: [
     // Entity dedup/merge arbiter — runs on every write; wrong call = dup/merge.
     '**/engine/__test__/entity_match.unit.test.ts',

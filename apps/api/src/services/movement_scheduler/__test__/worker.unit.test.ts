@@ -76,12 +76,9 @@ jest.mock('../../work/drain', () => ({
   registerWorkHandler: jest.fn(),
 }));
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
-
 import type { WorkRow } from '../../work/kinds';
 
+import { captureEngineLogs } from '../../../test/engine_logs';
 import { testWorkContext } from '../../../test/harness/work';
 import { cronReconcileHandler, cronWorkKey, fireCronHandler, registerCronWork } from '../worker';
 
@@ -99,7 +96,8 @@ const { enqueueWork, removeWork, listWorkByKind } = jest.requireMock('../../work
 const { registerWorkHandler } = jest.requireMock('../../work/drain') as {
   registerWorkHandler: jest.Mock;
 };
-const { logger } = jest.requireMock('movement-engine/services/logger') as { logger: { warn: jest.Mock } };
+
+const logs = captureEngineLogs();
 
 const T1 = '11111111-1111-4111-8111-111111111111';
 const T2 = '22222222-2222-4222-8222-222222222222';
@@ -270,9 +268,11 @@ describe('fireCronHandler', () => {
     await expect(fire(T1, MONDAY_TEN)).resolves.toBeUndefined();
     expect(dispatchTriggerByIdEvent).not.toHaveBeenCalled();
     expect(enqueueWork).not.toHaveBeenCalled();
-    expect(logger.warn).toHaveBeenCalledWith(
-      '[MovementScheduler] invalid schedule on cron trigger',
-      expect.objectContaining({ triggerId: T1 }),
+    expect(logs.warn()).toContainEqual(
+      expect.objectContaining({
+        message: '[MovementScheduler] invalid schedule on cron trigger',
+        meta: expect.objectContaining({ triggerId: T1 }),
+      }),
     );
   });
 

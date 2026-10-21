@@ -1,6 +1,6 @@
 import type { WorkKind, WorkRow } from '../kinds';
 
-import { logger } from 'movement-engine/services/logger';
+import { captureEngineLogs } from '../../../test/engine_logs';
 import {
   deferredDueMs,
   drainPassFailing,
@@ -22,10 +22,6 @@ jest.mock('../store', () => ({
   deferWork: jest.fn(),
   heartbeatWork: jest.fn(),
   releaseWork: jest.fn(),
-}));
-
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn(), debug: jest.fn() },
 }));
 
 const claim = jest.mocked(claimDueWork);
@@ -56,6 +52,7 @@ function row(input: { kind?: WorkKind; attempts?: number; deferrals?: number; ke
 
 // The in-memory queue: each claim takes everything pending.
 let pending: WorkRow[] = [];
+const logs = captureEngineLogs();
 
 beforeEach(() => {
   resetWorkHandlersForTests();
@@ -121,9 +118,11 @@ describe('drainWork', () => {
       expect.objectContaining({ id: 'id-a', leaseToken: 'token-a' }),
     );
     expect(complete).not.toHaveBeenCalled();
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({ kind: 'resume_timer', key: 'a', attempts: 1 }),
+    expect(logs.warn()).toContainEqual(
+      expect.objectContaining({
+        message: expect.any(String),
+        meta: expect.objectContaining({ kind: 'resume_timer', key: 'a', attempts: 1 }),
+      }),
     );
     expect(result).toEqual({ claimed: 1, ran: 0, recovered: 0, failed: 1, deferred: 0, claimFailed: false });
   });
@@ -149,7 +148,7 @@ describe('drainWork', () => {
       claimedUpdatedAt: UPDATED_AT,
       dueAt: new Date(now.getTime() + 6_000),
     });
-    expect(logger.warn).not.toHaveBeenCalled();
+    expect(logs.warn()).toEqual([]);
     expect(result).toEqual({ claimed: 1, ran: 0, recovered: 0, failed: 0, deferred: 1, claimFailed: false });
     expect(drainPassFailing(result)).toBe(false);
   });
@@ -169,9 +168,11 @@ describe('drainWork', () => {
       expect.objectContaining({ id: 'id-a', leaseToken: 'token-a' }),
     );
     expect(complete).not.toHaveBeenCalled();
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({ kind: 'poll_source' }),
+    expect(logs.warn()).toContainEqual(
+      expect.objectContaining({
+        message: expect.any(String),
+        meta: expect.objectContaining({ kind: 'poll_source' }),
+      }),
     );
     expect(result.failed).toBe(1);
   });
@@ -252,7 +253,7 @@ describe('drainWork', () => {
     await drained;
 
     expect(heartbeat).toHaveBeenCalledTimes(1);
-    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(logs.warn()).toHaveLength(1);
   });
 
   it('a claim failure resolves with nothing done, and says the claim failed', async () => {

@@ -16,10 +16,6 @@
 // with Telegram, and the adapter's own credential resolution is tested with the
 // adapter (adapters/telegram/__test__/telegram.unit.test.ts).
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
-
 const answerAskByToken = jest.fn();
 jest.mock('../../asks/doors', () => ({
   answerAskByToken: (...args: unknown[]) => answerAskByToken(...args),
@@ -35,7 +31,7 @@ jest.mock('../../movement_engine/callback_fire', () => ({
 
 import type { CallbackRecord } from '../../movement_engine/callback_store';
 
-import { logger } from 'movement-engine/services/logger';
+import { captureEngineLogs } from '../../../test/engine_logs';
 import {
   callbackQueryOf,
   handleTelegramCallbackQuery,
@@ -86,6 +82,8 @@ function tapUpdate(data: string, opts?: { withoutMessage?: boolean }) {
     },
   };
 }
+
+const logs = captureEngineLogs();
 
 beforeEach(() => {
   answerAskByToken.mockReset();
@@ -230,7 +228,7 @@ describe('a tap that fires a callback', () => {
       callbackQueryId: 'cbq_1',
       text: 'Something went wrong recording that.',
     });
-    expect(logger.error).toHaveBeenCalled();
+    expect(logs.error()).not.toHaveLength(0);
   });
 });
 
@@ -292,10 +290,7 @@ describe('a tap that answers', () => {
       responder: r,
     });
     expect(result).toEqual({ handled: true, outcome: 'answered' });
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining('retiring the keyboard failed'),
-      expect.anything(),
-    );
+    expect(logs.messages('warn')).toContainEqual(expect.stringContaining('retiring the keyboard failed'));
   });
 });
 
@@ -350,10 +345,7 @@ describe('loud, never silent', () => {
 
     expect(answerAskByToken).not.toHaveBeenCalled();
     expect(result).toEqual({ handled: true, outcome: 'malformed' });
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining('no answer'),
-      expect.anything(),
-    );
+    expect(logs.messages('warn')).toContainEqual(expect.stringContaining('no answer'));
     expect(r.answerCallbackQuery).toHaveBeenCalledWith({
       callbackQueryId: 'cbq_1',
       text: 'That button could not be read.',
@@ -367,7 +359,7 @@ describe('loud, never silent', () => {
     const result = await handleTelegramCallbackQuery({ raw: tapUpdate('ask_abc?answer=true'), responder: r });
 
     expect(result.handled).toBe(true);
-    expect(logger.error).toHaveBeenCalled();
+    expect(logs.error()).not.toHaveLength(0);
     expect(r.answerCallbackQuery).toHaveBeenCalledWith({
       callbackQueryId: 'cbq_1',
       text: 'Something went wrong recording that answer.',
@@ -383,10 +375,7 @@ describe('loud, never silent', () => {
     await expect(
       handleTelegramCallbackQuery({ raw: tapUpdate('ask_abc?answer=true'), responder: r }),
     ).resolves.toEqual({ handled: true, outcome: 'answered' });
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining('answerCallbackQuery failed'),
-      expect.anything(),
-    );
+    expect(logs.messages('warn')).toContainEqual(expect.stringContaining('answerCallbackQuery failed'));
   });
 });
 

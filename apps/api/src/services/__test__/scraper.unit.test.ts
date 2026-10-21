@@ -3,10 +3,6 @@
 // JS-render retry. These tests exercise that retry decision and the shell
 // detection it's built on; ScraperAPI always renders and is untouched by it.
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
-
 jest.mock('../../lib/utils/environment', () => ({
   getEnvVar: () => 'test-value',
 }));
@@ -22,9 +18,11 @@ const sendSlackNotification = jest.fn().mockResolvedValue(undefined);
 jest.mock('../../lib/slack', () => ({ sendSlackNotification }));
 
 import { ScraperService, looksLikeSpaShell } from '../scraper';
-import { BudgetExhausted, NO_BUDGET_LIMIT } from 'movement-engine/lib/run_cost';
-import { withSpendMeter } from 'movement-engine/lib/run_spend';
-import { logger } from 'movement-engine/services/logger';
+import { BudgetExhausted, NO_BUDGET_LIMIT } from 'movement-engine/public/models';
+import { withSpendMeter } from 'movement-engine/public/models';
+import { captureEngineLogs } from '../../test/engine_logs';
+
+const logs = captureEngineLogs();
 
 const fetchMock = jest.fn();
 global.fetch = fetchMock as never;
@@ -39,8 +37,6 @@ function bodyOf(callIndex: number): Record<string, unknown> {
 beforeEach(() => {
   fetchMock.mockReset();
   sendSlackNotification.mockClear();
-  (logger.info as jest.Mock).mockClear();
-  (logger.warn as jest.Mock).mockClear();
 });
 
 describe('ScraperService.getWebsite — brightdata JS-render fallback', () => {
@@ -65,9 +61,11 @@ describe('ScraperService.getWebsite — brightdata JS-render fallback', () => {
     expect(bodyOf(0).render).toBeUndefined();
     expect(bodyOf(1).render).toBe(true);
     expect(text).toContain('Rendered content once JS ran.');
-    expect(logger.info).toHaveBeenCalledWith(
-      'Retrying with JavaScript rendering',
-      expect.objectContaining({ url: 'https://example.com', reason: 'thin content' }),
+    expect(logs.info()).toContainEqual(
+      expect.objectContaining({
+        message: 'Retrying with JavaScript rendering',
+        meta: expect.objectContaining({ url: 'https://example.com', reason: 'thin content' }),
+      }),
     );
   });
 
@@ -84,9 +82,11 @@ describe('ScraperService.getWebsite — brightdata JS-render fallback', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(bodyOf(1).render).toBe(true);
     expect(text).toContain('Dashboard data.');
-    expect(logger.info).toHaveBeenCalledWith(
-      'Retrying with JavaScript rendering',
-      expect.objectContaining({ reason: 'SPA shell' }),
+    expect(logs.info()).toContainEqual(
+      expect.objectContaining({
+        message: 'Retrying with JavaScript rendering',
+        meta: expect.objectContaining({ reason: 'SPA shell' }),
+      }),
     );
   });
 
@@ -98,9 +98,12 @@ describe('ScraperService.getWebsite — brightdata JS-render fallback', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(text.trim().length).toBeLessThan(50);
-    expect(logger.warn).toHaveBeenCalledWith('Scrape returned no meaningful content', {
-      url: 'https://example.com',
-    });
+    expect(logs.warn()).toContainEqual(
+      expect.objectContaining({
+        message: 'Scrape returned no meaningful content',
+        meta: { url: 'https://example.com' },
+      }),
+    );
     expect(sendSlackNotification).toHaveBeenCalledTimes(1);
   });
 
@@ -135,14 +138,13 @@ describe('ScraperService.getWebsite — bodies that are not pages', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(text).toBe('');
-    expect(logger.info).toHaveBeenCalledWith('Scrape returned a body that is not a page', {
-      url: 'https://example.com/report',
-      reason: 'a PDF',
-    });
-    expect(logger.info).not.toHaveBeenCalledWith(
-      'Retrying with JavaScript rendering',
-      expect.anything(),
+    expect(logs.info()).toContainEqual(
+      expect.objectContaining({
+        message: 'Scrape returned a body that is not a page',
+        meta: { url: 'https://example.com/report', reason: 'a PDF' },
+      }),
     );
+    expect(logs.messages('info')).not.toContain('Retrying with JavaScript rendering');
   });
 
   it('returns nothing when the response declares a binary content type', async () => {
@@ -158,9 +160,11 @@ describe('ScraperService.getWebsite — bodies that are not pages', () => {
     });
 
     expect(text).toBe('');
-    expect(logger.info).toHaveBeenCalledWith(
-      'Scrape returned a body that is not a page',
-      expect.objectContaining({ reason: 'content-type application/pdf' }),
+    expect(logs.info()).toContainEqual(
+      expect.objectContaining({
+        message: 'Scrape returned a body that is not a page',
+        meta: expect.objectContaining({ reason: 'content-type application/pdf' }),
+      }),
     );
   });
 
@@ -175,9 +179,11 @@ describe('ScraperService.getWebsite — bodies that are not pages', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(text.length).toBeLessThanOrEqual(50_000);
-    expect(logger.info).toHaveBeenCalledWith(
-      'Not retrying with JavaScript rendering',
-      expect.objectContaining({ reason: expect.stringContaining('size cap') }),
+    expect(logs.info()).toContainEqual(
+      expect.objectContaining({
+        message: 'Not retrying with JavaScript rendering',
+        meta: expect.objectContaining({ reason: expect.stringContaining('size cap') }),
+      }),
     );
   });
 

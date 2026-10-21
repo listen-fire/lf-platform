@@ -31,6 +31,7 @@ export default {
     path.join(CONFORMANCE, 'v1.setup.cjs'),
     path.join(CONFORMANCE, 'triage.setup.cjs'),
     '<rootDir>/src/test/movement_lang_source.setup.ts',
+    '<rootDir>/src/test/engine_logs.setup.ts',
     // Hands the corpus's version to every evaluation its context omits.
     '<rootDir>/src/test/conformance_pin.setup.ts',
     // Under UPDATE_ENGINE_RUNS=1: record every entry into the engine as a

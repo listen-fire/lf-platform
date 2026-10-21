@@ -52,9 +52,6 @@ jest.mock('../../../lib/kysely', () => ({
   getCoreQb: jest.fn(() => mockChainable()),
 }));
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 jest.mock('../../context', () => ({
   unsafeCurrentContext: () => undefined,
   currentContext: () => ({
@@ -125,7 +122,9 @@ import { MovementRunFailed, runFailureCause } from '@listen-fire/legacy-engine/s
 const runMovement = (input: Parameters<typeof runMovementUnder>[0]): ReturnType<typeof runMovementUnder> =>
   runMovementUnder({ languageVersion: 4, ...input });
 import { MovementEngineError, type MovementTraceEntry } from '@listen-fire/legacy-engine/services/movement_engine/expression';
-import { logger } from 'movement-engine/services/logger';
+import { captureEngineLogs } from '../../../test/engine_logs';
+
+const logs = captureEngineLogs();
 import {
   ROOT_EXTRACT_DESCRIPTION,
   STAGE_FAN_OUT,
@@ -134,7 +133,7 @@ import {
   type MovementTransformInvoker,
 } from '@listen-fire/legacy-engine/services/movement_engine/extraction';
 import { registryTransformInvoker } from '../../translation_graph/movement/transform_invoker';
-import { NO_PROVENANCE } from 'movement-engine/services/movement_engine/provenance';
+import { NO_PROVENANCE } from 'movement-engine/public/provenance';
 import { getTransform } from '../../translation_graph/engine/transforms/registry';
 import { registerBundledTransforms } from '../../translation_graph/engine/transforms/register-bundled';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
@@ -142,19 +141,19 @@ import type {
   LlmCallInput,
   LlmCallResult,
 } from '../../translation_graph/engine/batched_extraction';
-import type { CapturedWrite } from 'movement-engine/services/translation_graph/engine/dry_run_adapter';
+import type { CapturedWrite } from 'movement-engine/public/adapter';
 import type {
   Adapter,
   RuntimeCapabilities,
   ExternalRecordRef,
-} from 'movement-engine/services/translation_graph/adapter';
-import { containerAssociation, isFileValue } from 'movement-engine/services/translation_graph/adapter';
-import type { TriggerEvent } from 'movement-engine/services/translation_graph/triggers/types';
+} from 'movement-engine/public/adapter';
+import { containerAssociation, isFileValue } from 'movement-engine/public/adapter';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import type { MutationContext } from 'engine-contracts/mutation_context';
 import { positionData } from 'engine-contracts/catalog';
 import { candidateIsAllExact } from 'engine-contracts/uniqueness';
 import { tenantIdOf } from 'engine-contracts';
-import { makeTestHost } from 'movement-engine/services/movement_engine/test_host';
+import { makeTestHost } from 'movement-engine/public/testing';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000010');
 
@@ -2521,8 +2520,8 @@ const carryFileSchema = (): { catalog: CatalogSnapshot } => {
 };
 
 /** An attio fake that captures the FULL WriteInput (fields + resources). */
-function makeCapturingAttio(): { adapter: Adapter; creates: import('movement-engine/services/translation_graph/adapter').WriteInput[] } {
-  const creates: import('movement-engine/services/translation_graph/adapter').WriteInput[] = [];
+function makeCapturingAttio(): { adapter: Adapter; creates: import('movement-engine/public/adapter').WriteInput[] } {
+  const creates: import('movement-engine/public/adapter').WriteInput[] = [];
   const base = makeFakeAdapter('attio');
   const adapter: Adapter = {
     ...base.adapter,
@@ -3772,7 +3771,6 @@ describe('an extraction call describes itself on the run', () => {
   // last fifteen records of a transcript are gone with nothing anywhere saying
   // so. The entry is the only thing that can say it.
   it('records that an answer was continued past its output ceiling', async () => {
-    (logger.warn as jest.Mock).mockClear();
     const { trace } = await intake(
       ONE_STAGE_FETCH_MOVEMENT,
       [{ 'x:extract_result#1': [{ company: [{ name: wrap('Gondor') }] }] }],
@@ -3780,12 +3778,14 @@ describe('an extraction call describes itself on the run', () => {
     );
 
     expect(extractions(trace)[0]).toMatchObject({ continued: true, continuations: 2 });
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining('ran past its output ceiling'),
+    expect(logs.warn()).toContainEqual(
       expect.objectContaining({
-        node: 'extract result',
-        continuations: 2,
-        inputChars: expect.any(Number),
+        message: expect.stringContaining('ran past its output ceiling'),
+        meta: expect.objectContaining({
+          node: 'extract result',
+          continuations: 2,
+          inputChars: expect.any(Number),
+        }),
       }),
     );
   });
@@ -4047,7 +4047,6 @@ describe('an extraction call describes itself on the run', () => {
   });
 
   it('a plugin log line names the run it belongs to', async () => {
-    (logger.info as jest.Mock).mockClear();
     await intake(
       PER_ENTITY_FETCH_MOVEMENT,
       [
@@ -4059,14 +4058,15 @@ describe('an extraction call describes itself on the run', () => {
       { runId: 'run-0001' },
     );
 
-    expect(logger.info as jest.Mock).toHaveBeenCalledWith(
-      expect.stringContaining('[movement:transform]'),
-      expect.objectContaining({ plugin: 'fetch_url', runId: 'run-0001' }),
+    expect(logs.info()).toContainEqual(
+      expect.objectContaining({
+        message: expect.stringContaining('[movement:transform]'),
+        meta: expect.objectContaining({ plugin: 'fetch_url', runId: 'run-0001' }),
+      }),
     );
   });
 
   it('the same line carries no run id outside a firing — it does not invent one', async () => {
-    (logger.info as jest.Mock).mockClear();
     await intake(PER_ENTITY_FETCH_MOVEMENT, [
       {
         'x:extract_result#1': [{ company: [{ name: wrap('Rohan'), website: wrap(null) }] }],
@@ -4074,10 +4074,8 @@ describe('an extraction call describes itself on the run', () => {
       { 'x:company#3': [{ summary: wrap('a realm') }] },
     ]);
 
-    const call = (logger.info as jest.Mock).mock.calls.find(
-      (c: unknown[]) => typeof c[0] === 'string' && c[0].includes('[movement:transform]'),
-    );
-    expect(call?.[1]).not.toHaveProperty('runId');
+    const line = logs.info().find((l) => l.message.includes('[movement:transform]'));
+    expect(line?.meta).not.toHaveProperty('runId');
   });
 });
 
@@ -4820,9 +4818,11 @@ describe('a per-entity refinement that is never answered keeps the entity, not t
   it('warns, naming the entity and the enrichment that went with the refinement', async () => {
     await intake([GONDOR, {}, {}]);
 
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining('keeping the entity as its previous stage left it'),
-      expect.objectContaining({ node: 'company', droppedEnrichments: ['fetch_url'] }),
+    expect(logs.warn()).toContainEqual(
+      expect.objectContaining({
+        message: expect.stringContaining('keeping the entity as its previous stage left it'),
+        meta: expect.objectContaining({ node: 'company', droppedEnrichments: ['fetch_url'] }),
+      }),
     );
   });
 

@@ -18,10 +18,6 @@ const rawText = { getOrCreateId: (content: string) => getOrCreateRawTextIdMock(c
 /** The team the file's bytes are redeemed for (the byte reader is mocked). */
 const FILE_BYTES = { teamId: 'team-1' as TeamId };
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
-
 // unpdf's PDF.js bundle is ESM, and jest's CJS vm cannot load it without
 // --experimental-vm-modules — so the PARSER is mocked here (it still receives
 // the real PDF bytes) and the real parse is exercised end-to-end in the dev
@@ -36,13 +32,15 @@ import { Readable } from 'node:stream';
 import { jsPDF } from 'jspdf';
 
 import type { TeamId } from '../../../../generated/kysely/core/Team';
-import type { FileRef } from 'movement-engine/services/translation_graph/adapter';
+import type { FileRef } from 'movement-engine/public/adapter';
 
-import { FileOutsideTeamError } from 'movement-engine/services/translation_graph/engine/files/file_outside_team';
+import { FileOutsideTeamError } from 'movement-engine/public/files';
 import { makeFileTextResolver } from '../file_text';
 import { services } from '../../../../adapters/registry';
 import { LlmUsageContext } from '../../../../lib/llm_usage';
-import { logger } from 'movement-engine/services/logger';
+import { captureEngineLogs } from '../../../../test/engine_logs';
+
+const logs = captureEngineLogs();
 
 const ocrMock = jest.fn();
 
@@ -117,9 +115,11 @@ describe('the size guard — no silent truncation', () => {
     const result = await resolve({ file: audioRef({ size: 25 * 1024 * 1024 }) });
     expect(result).toMatchObject({ unreadable: 'extraction_failed' });
     expect(transcribeMock).not.toHaveBeenCalled();
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining('audio too large'),
-      expect.objectContaining({ name: 'voice.ogg' }),
+    expect(logs.warn()).toContainEqual(
+      expect.objectContaining({
+        message: expect.stringContaining('audio too large'),
+        meta: expect.objectContaining({ name: 'voice.ogg' }),
+      }),
     );
   });
 
@@ -132,9 +132,11 @@ describe('the size guard — no silent truncation', () => {
     const result = await resolve({ file: audioRef({ size: undefined }) });
     expect(result).toMatchObject({ unreadable: 'extraction_failed' });
     expect(transcribeMock).not.toHaveBeenCalled();
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining('audio too large'),
-      expect.objectContaining({ name: 'voice.ogg' }),
+    expect(logs.warn()).toContainEqual(
+      expect.objectContaining({
+        message: expect.stringContaining('audio too large'),
+        meta: expect.objectContaining({ name: 'voice.ogg' }),
+      }),
     );
   });
 });
@@ -261,9 +263,11 @@ describe('the existing kinds are untouched', () => {
       unreadable: 'extraction_failed',
       detail: 'no text layer; OCR is not configured, so text cannot be extracted.',
     });
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining('text extraction failed'),
-      expect.objectContaining({ name: 'deck.pdf' }),
+    expect(logs.warn()).toContainEqual(
+      expect.objectContaining({
+        message: expect.stringContaining('text extraction failed'),
+        meta: expect.objectContaining({ name: 'deck.pdf' }),
+      }),
     );
   });
 
@@ -342,9 +346,11 @@ describe('NUL bytes in a font map with missing glyphs', () => {
     const result = await makeFileTextResolver(rawText, FILE_BYTES)({ file: pdfRef() });
 
     expect(result).toEqual({ text });
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining('could not store raw text provenance'),
-      expect.objectContaining({ name: 'onepager.pdf', message: expect.stringContaining('0x00') }),
+    expect(logs.warn()).toContainEqual(
+      expect.objectContaining({
+        message: expect.stringContaining('could not store raw text provenance'),
+        meta: expect.objectContaining({ name: 'onepager.pdf', message: expect.stringContaining('0x00') }),
+      }),
     );
   });
 });

@@ -25,11 +25,8 @@ class FakeClient extends EventEmitter {
 }
 
 jest.mock('pg', () => ({ Client: FakeClient, DatabaseError: class DatabaseError extends Error {} }));
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 
-import { logger } from 'movement-engine/services/logger';
+import { captureEngineLogs } from '../../../test/engine_logs';
 import { PostgresWriteLocks } from '../postgres';
 
 /** What pg does with `query_timeout` when no reply ever comes. */
@@ -39,10 +36,11 @@ function hangingUntilTimeout(client: FakeClient): Promise<unknown> {
   });
 }
 
+const logs = captureEngineLogs();
+
 beforeEach(() => {
   clients.length = 0;
   script = async () => ({ rows: [{ granted: true }] });
-  jest.mocked(logger.warn).mockClear();
 });
 
 describe('PostgresWriteLocks session', () => {
@@ -65,7 +63,12 @@ describe('PostgresWriteLocks session', () => {
     // 'a' was held when the session went, so the holder refuses from here on.
     await expect(holder.acquire(['c'])).rejects.toThrow('write lock session lost');
     await holder.release();
-    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('may have run unprotected'), { names: ['a'] });
+    expect(logs.warn()).toContainEqual(
+      expect.objectContaining({
+        message: expect.stringContaining('may have run unprotected'),
+        meta: { names: ['a'] },
+      }),
+    );
   });
 
   it('a grant read in the same socket read as the drop is not recorded', async () => {
@@ -82,6 +85,6 @@ describe('PostgresWriteLocks session', () => {
     await holder.acquire(['b']);
     expect(clients).toHaveLength(2);
     await holder.release();
-    expect(logger.warn).not.toHaveBeenCalledWith(expect.stringContaining('may have run unprotected'), expect.anything());
+    expect(logs.messages('warn')).not.toContainEqual(expect.stringContaining('may have run unprotected'));
   });
 });

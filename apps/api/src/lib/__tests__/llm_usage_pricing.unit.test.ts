@@ -1,4 +1,5 @@
 import type { RecordUsageOptions } from '../llm_usage';
+import type { EngineLogLine } from 'movement-engine/public/log';
 
 // Pricing a call, and saying so when we cannot.
 //
@@ -6,8 +7,10 @@ import type { RecordUsageOptions } from '../llm_usage';
 // as free rather than as missing. Nothing distinguishes the two except somebody
 // being told, which is what the warning is for.
 
-const warn = jest.fn();
-jest.mock('movement-engine/services/logger', () => ({ logger: { info: jest.fn(), warn, error: jest.fn() } }));
+// The module loads in an isolated registry, whose logger is its own, so the
+// sink is installed there rather than through the shared capture helper.
+let logged: EngineLogLine[] = [];
+const warnings = () => logged.filter((line) => line.level === 'warn');
 
 const insertInto = jest.fn();
 jest.mock('../kysely', () => ({ getQb: () => ({ insertInto }) }));
@@ -15,6 +18,10 @@ jest.mock('../kysely', () => ({ getQb: () => ({ insertInto }) }));
 function load() {
   let mod: typeof import('../llm_usage') | undefined;
   jest.isolateModules(() => {
+    const log: typeof import('movement-engine/public/log') = require('movement-engine/public/log');
+    log.routeEngineLogsTo((line) => {
+      logged.push(line);
+    });
     mod = require('../llm_usage');
   });
   if (!mod) throw new Error('module did not load');
@@ -22,7 +29,7 @@ function load() {
 }
 
 beforeEach(() => {
-  warn.mockClear();
+  logged = [];
   insertInto.mockReset();
 });
 
@@ -79,7 +86,7 @@ describe('a call the model map resolved', () => {
       const row = await record(mod, resolved);
       expect(row.cost_microdollars).toBeGreaterThan(0);
     }
-    expect(warn).not.toHaveBeenCalled();
+    expect(warnings()).toEqual([]);
   });
 
   it('prices every Claude name the registry holds, on both Claude doors', async () => {
@@ -100,7 +107,7 @@ describe('a call the model map resolved', () => {
         expect(row.cost_microdollars).toBeGreaterThan(0);
       }
     }
-    expect(warn).not.toHaveBeenCalled();
+    expect(warnings()).toEqual([]);
   });
 
   it('prices Fable 5.1 and the undated Haiku from the published table', async () => {
@@ -138,8 +145,8 @@ describe('a key nobody priced', () => {
     const row = await record(mod, { preferred: 'claude-sonnet-5', provider: 'gemini', wireModel: 'gemini-99-imaginary' });
     expect(row.cost_microdollars).toBe(0);
     expect(row.input_tokens).toBe(1_000_000);
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn.mock.calls[0][0]).toMatch(
+    expect(warnings()).toHaveLength(1);
+    expect(warnings()[0]?.message).toMatch(
       /no price for "gemini\/gemini-99-imaginary" \(from the MODEL_MAP line "claude-sonnet-5": "gemini\/gemini-99-imaginary"\)/,
     );
   });
@@ -147,7 +154,7 @@ describe('a key nobody priced', () => {
   it('names the map’s silence when the name went to its home vendor', async () => {
     const mod = load();
     await record(mod, { preferred: 'whisper-1', provider: 'openai', wireModel: 'whisper-1' });
-    expect(warn.mock.calls[0][0]).toMatch(/"whisper-1", which MODEL_MAP does not mention/);
+    expect(warnings()[0]?.message).toMatch(/"whisper-1", which MODEL_MAP does not mention/);
   });
 
   it('says so once per KEY, not once per call', async () => {
@@ -155,6 +162,6 @@ describe('a key nobody priced', () => {
     await record(mod, { preferred: 'claude-sonnet-5', provider: 'gemini', wireModel: 'gemini-99-imaginary' });
     await record(mod, { preferred: 'claude-opus-5', provider: 'gemini', wireModel: 'gemini-99-imaginary' });
     await record(mod, { preferred: 'claude-sonnet-5', provider: 'openai', wireModel: 'gemini-99-imaginary' });
-    expect(warn).toHaveBeenCalledTimes(2);
+    expect(warnings()).toHaveLength(2);
   });
 });

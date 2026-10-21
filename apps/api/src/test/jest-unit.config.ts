@@ -38,5 +38,5 @@ export default {
   // first, so a compiled copy beside a source (a package compiled in place)
   // would shadow it and any `jest.mock` of the source path would miss.
   moduleFileExtensions: ['ts', 'tsx', 'js', 'mjs', 'cjs', 'jsx', 'json', 'node'],
-  setupFilesAfterEnv: ['<rootDir>/src/test/movement_lang_source.setup.ts'],
+  setupFilesAfterEnv: ['<rootDir>/src/test/movement_lang_source.setup.ts', '<rootDir>/src/test/engine_logs.setup.ts'],
 };

@@ -1,6 +1,6 @@
 import http from 'node:http';
 
-import { logger } from 'movement-engine/services/logger';
+import { captureEngineLogs } from '../../../test/engine_logs';
 import { HttpTickNotifier, NoopNotifier } from '../drain';
 
 jest.mock('../store', () => ({
@@ -9,10 +9,6 @@ jest.mock('../store', () => ({
   deferWork: jest.fn(),
   heartbeatWork: jest.fn(),
   releaseWork: jest.fn(),
-}));
-
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn(), debug: jest.fn() },
 }));
 
 interface Tick {
@@ -83,7 +79,7 @@ async function heldDrain(): Promise<{ url: string; count(): number; arrived(n: n
   };
 }
 
-const warn = jest.mocked(logger.warn);
+const logs = captureEngineLogs();
 
 describe('HttpTickNotifier', () => {
   it('a notify POSTs an empty body once to each URL, with the bearer key', async () => {
@@ -104,7 +100,7 @@ describe('HttpTickNotifier', () => {
       await new Promise((resolve) => setTimeout(resolve, 50));
       expect(a.ticks).toHaveLength(1);
       expect(b.ticks).toHaveLength(1);
-      expect(warn).not.toHaveBeenCalled();
+      expect(logs.warn()).toEqual([]);
     } finally {
       await Promise.all([a.close(), b.close()]);
     }
@@ -121,11 +117,13 @@ describe('HttpTickNotifier', () => {
       }
       await new Promise((resolve) => setTimeout(resolve, 50));
       expect(drain.ticks).toHaveLength(3);
-      expect(warn).toHaveBeenCalledTimes(1);
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('drain tick failed'), {
-        url: drain.url,
-        reason: 'HTTP 500',
-      });
+      expect(logs.warn()).toHaveLength(1);
+      expect(logs.warn()).toContainEqual(
+        expect.objectContaining({
+          message: expect.stringContaining('drain tick failed'),
+          meta: { url: drain.url, reason: 'HTTP 500' },
+        }),
+      );
     } finally {
       await drain.close();
     }
@@ -136,7 +134,12 @@ describe('HttpTickNotifier', () => {
     await drain.close();
     new HttpTickNotifier({ urls: [drain.url], apiKey: 'lf_key' }).notify();
     await new Promise((resolve) => setTimeout(resolve, 200));
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('drain tick failed'), expect.objectContaining({ url: drain.url }));
+    expect(logs.warn()).toContainEqual(
+      expect.objectContaining({
+        message: expect.stringContaining('drain tick failed'),
+        meta: expect.objectContaining({ url: drain.url }),
+      }),
+    );
   });
 });
 
@@ -156,7 +159,7 @@ describe('HttpTickNotifier\'s latch and timeout', () => {
       drain.answerAll();
       await new Promise((resolve) => setTimeout(resolve, 50));
       expect(drain.count()).toBe(2);
-      expect(warn).not.toHaveBeenCalled();
+      expect(logs.warn()).toEqual([]);
     } finally {
       await drain.close();
     }
@@ -172,11 +175,13 @@ describe('HttpTickNotifier\'s latch and timeout', () => {
       // The first times out, then the owed one is sent, and times out too.
       await drain.arrived(2);
       await new Promise((resolve) => setTimeout(resolve, 150));
-      expect(warn).toHaveBeenCalledTimes(1);
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('drain tick failed'), {
-        url: drain.url,
-        reason: expect.stringContaining('no answer within 50 ms'),
-      });
+      expect(logs.warn()).toHaveLength(1);
+      expect(logs.warn()).toContainEqual(
+        expect.objectContaining({
+          message: expect.stringContaining('drain tick failed'),
+          meta: { url: drain.url, reason: expect.stringContaining('no answer within 50 ms') },
+        }),
+      );
     } finally {
       await drain.close();
     }

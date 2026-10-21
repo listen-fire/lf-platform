@@ -28,13 +28,10 @@ jest.mock('../../llm_usage', () => ({
   runFields: jest.fn().mockReturnValue({}),
 }));
 
-const warn = jest.fn();
-const info = jest.fn();
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { info, warn, error: jest.fn() },
-}));
-
+import { captureEngineLogs } from '../../../test/engine_logs';
 import { anthropicWebChat, meterAnthropicUsage } from '../index';
+
+const logs = captureEngineLogs();
 
 // The tool result blocks postdate the pinned SDK's types, so the fixtures are
 // the wire shapes rather than SDK values — which is the point: the wrapper has
@@ -308,10 +305,7 @@ describe('a paused turn', () => {
     expect(result.stopReason).toBe('pause_turn');
     expect(result.resumes).toBe(3);
     expect(stream).toHaveBeenCalledTimes(4);
-    expect(warn).toHaveBeenCalledWith(
-      '[anthropic] web chat still paused at the resume ceiling',
-      expect.anything(),
-    );
+    expect(logs.messages('warn')).toContain('[anthropic] web chat still paused at the resume ceiling');
   });
 });
 
@@ -580,9 +574,11 @@ describe('a page read by our own fetcher', () => {
     expect(result.turns).toBe(3);
     expect(result.stopReason).toBe('tool_use');
     expect(result.text).toBe('xxx');
-    expect(warn).toHaveBeenCalledWith(
-      '[anthropic] web chat hit its turn ceiling',
-      expect.objectContaining({ maxTurns: 3 }),
+    expect(logs.warn()).toContainEqual(
+      expect.objectContaining({
+        message: '[anthropic] web chat hit its turn ceiling',
+        meta: expect.objectContaining({ maxTurns: 3 }),
+      }),
     );
   });
 

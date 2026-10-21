@@ -18,12 +18,10 @@ jest.mock('../../llm_usage', () => ({
   runFields: jest.fn().mockReturnValue({}),
 }));
 
-const warn = jest.fn();
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { info: jest.fn(), warn, error: jest.fn() },
-}));
-
+import { captureEngineLogs } from '../../../test/engine_logs';
 import { anthropicChat, anthropicChatDetailed } from '../index';
+
+const logs = captureEngineLogs();
 
 function reply(options: {
   content: Anthropic.Message['content'];
@@ -51,7 +49,6 @@ const text = (value: string) => ({ type: 'text' as const, text: value, citations
 beforeEach(() => {
   stream.mockClear();
   finalMessage.mockReset();
-  warn.mockReset();
 });
 
 /**
@@ -73,9 +70,11 @@ describe('anthropicChat with a text-free reply', () => {
 
     await anthropicChat({ system: 's', userMessage: 'u', label: 'affinity.findMatchingPerson' });
 
-    expect(warn).toHaveBeenCalledWith(
-      '[anthropic] chat returned no text',
-      expect.objectContaining({ stopReason: 'refusal', label: 'affinity.findMatchingPerson' }),
+    expect(logs.warn()).toContainEqual(
+      expect.objectContaining({
+        message: '[anthropic] chat returned no text',
+        meta: expect.objectContaining({ stopReason: 'refusal', label: 'affinity.findMatchingPerson' }),
+      }),
     );
   });
 
@@ -199,14 +198,16 @@ describe('a turn that spends the whole ceiling thinking', () => {
       maxTokens: 64_000,
     });
 
-    expect(warn).toHaveBeenCalledWith(
-      '[anthropic] thought past the ceiling — retrying one effort lower',
+    expect(logs.warn()).toContainEqual(
       expect.objectContaining({
-        label: 'movement_extraction',
-        model: 'claude-sonnet-5',
-        from: 'xhigh',
-        to: 'high',
-        maxTokens: 64_000,
+        message: '[anthropic] thought past the ceiling — retrying one effort lower',
+        meta: expect.objectContaining({
+          label: 'movement_extraction',
+          model: 'claude-sonnet-5',
+          from: 'xhigh',
+          to: 'high',
+          maxTokens: 64_000,
+        }),
       }),
     );
   });
@@ -255,10 +256,7 @@ describe('a turn that spends the whole ceiling thinking', () => {
     expect(stream).toHaveBeenCalledTimes(1);
     expect(result.thinkingOnly).toBe(true);
     expect(result.effort).toBe('low');
-    expect(warn).not.toHaveBeenCalledWith(
-      '[anthropic] thought past the ceiling — retrying one effort lower',
-      expect.anything(),
-    );
+    expect(logs.messages('warn')).not.toContain('[anthropic] thought past the ceiling — retrying one effort lower');
   });
 
   // The regression guard: a truncation WITH text is a half-written answer, and

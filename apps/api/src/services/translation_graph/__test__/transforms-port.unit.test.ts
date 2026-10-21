@@ -32,9 +32,6 @@ jest.mock('../../../lib/anthropic', () => ({
 jest.mock('../../../lib/prompts/execute', () => ({
   parseJson: (raw: string) => JSON.parse(raw),
 }));
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn() },
-}));
 jest.mock('../../web_search', () => ({
   WebSearchService: {
     findLinkedIn: (...args: unknown[]) => mockFindLinkedIn(...args),
@@ -87,7 +84,9 @@ import type { SourcePosition } from 'engine-contracts/catalog';
 
 import { makeStablePosition } from 'engine-contracts/catalog';
 import { services } from '../../../adapters/registry';
-import { logger } from 'movement-engine/services/logger';
+import { captureEngineLogs } from '../../../test/engine_logs';
+
+const logs = captureEngineLogs();
 
 // ── Fixtures ──────────────────────────────────────────────────────────────
 
@@ -329,11 +328,13 @@ describe('vc-url-retrieval.run — behavioural parity', () => {
     ]);
     expect(mockResourceUpdate).toHaveBeenCalledWith('res-s', { rawTextId: null });
     expect(mockGetById).not.toHaveBeenCalled();
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining('no readable text'),
+    expect(logs.warn()).toContainEqual(
       expect.objectContaining({
-        documentId: 'doc-scan',
-        reason: expect.stringContaining('OCR is not configured'),
+        message: expect.stringContaining('no readable text'),
+        meta: expect.objectContaining({
+          documentId: 'doc-scan',
+          reason: expect.stringContaining('OCR is not configured'),
+        }),
       }),
     );
   });

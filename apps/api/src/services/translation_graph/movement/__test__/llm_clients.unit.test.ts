@@ -1,17 +1,16 @@
 // The production model clients (`llm_clients.ts`): the output ceiling, the
 // truncation rule, and what a reply hands back.
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 jest.mock('../../../../lib/anthropic', () => ({
   anthropicChatDetailed: jest.fn(),
   MAX_CHAT_CONTINUATIONS: 5,
 }));
 
 import { anthropicChatDetailed } from '../../../../lib/anthropic';
-import { logger } from 'movement-engine/services/logger';
+import { captureEngineLogs } from '../../../../test/engine_logs';
 import { makeAnthropicLlmClient } from '../llm_clients';
+
+const logs = captureEngineLogs();
 
 // ── Truncated LLM output must fail the call, not salvage into null fields ────
 
@@ -30,7 +29,6 @@ describe('the Anthropic-backed extraction client', () => {
 
   beforeEach(() => {
     detailed.mockReset();
-    (logger.warn as jest.Mock).mockClear();
     delete process.env.EXTRACTION_OUTPUT_BUDGET;
   });
   afterEach(() => {
@@ -62,14 +60,16 @@ describe('the Anthropic-backed extraction client', () => {
 
     await expect(makeAnthropicLlmClient().call(callInput)).rejects.toThrow();
 
-    expect(logger.warn).toHaveBeenCalledWith(
-      '[extraction] truncated',
+    expect(logs.warn()).toContainEqual(
       expect.objectContaining({
-        label: 'extract_companies',
-        estimatedOutputTokens: expect.any(Number),
-        // The repaired partial still has the one entity it got through.
-        entitiesParsed: 1,
-        tail: expect.stringContaining('Acme'),
+        message: '[extraction] truncated',
+        meta: expect.objectContaining({
+          label: 'extract_companies',
+          estimatedOutputTokens: expect.any(Number),
+          // The repaired partial still has the one entity it got through.
+          entitiesParsed: 1,
+          tail: expect.stringContaining('Acme'),
+        }),
       }),
     );
   });

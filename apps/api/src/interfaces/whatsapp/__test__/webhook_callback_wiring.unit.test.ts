@@ -11,9 +11,6 @@
 // file only pins that `interfaces/whatsapp/webhook.ts` actually calls it, with
 // the real door logic (only the router and the Meta send client are mocked).
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
 jest.mock('../../../lib/slack', () => ({ sendSlackNotification: jest.fn(async () => {}) }));
 jest.mock('../../../services/whatsapp/utils', () => ({
   resolveWhatsappSender: jest.fn(async () => ({ teamId: 'team-1', displayName: 'Ada' })),
@@ -58,6 +55,7 @@ jest.mock('../../../services/work/drain', () => ({
 
 import { receiveWebhook } from '../webhook';
 import { whatsappMessageHandler } from '../../../services/whatsapp/inbound_message';
+import { captureEngineLogs } from '../../../test/engine_logs';
 
 function fakeRes() {
   return {
@@ -318,9 +316,7 @@ describe('a signature that does not verify', () => {
   }
 
   const { verifyWithScheme } = jest.requireMock('movement-engine/public/inbound') as { verifyWithScheme: jest.Mock };
-  const { logger } = jest.requireMock('movement-engine/services/logger') as {
-    logger: { warn: jest.Mock };
-  };
+  const logs = captureEngineLogs();
 
   it('logs a warn naming the second-app/rotated-secret cause and 401s on a mismatch', async () => {
     verifyWithScheme.mockReturnValueOnce(false);
@@ -338,11 +334,14 @@ describe('a signature that does not verify', () => {
     await promise;
 
     expect(res.sendStatus).toHaveBeenCalledWith(401);
-    expect(logger.warn).toHaveBeenCalledTimes(1);
-    expect(logger.warn).toHaveBeenCalledWith(
-      "[whatsapp/webhook] REJECTING inbound: signature did not verify against WHATSAPP_WEBHOOK_SECRET — the sending Meta app's secret differs (a second app subscribed to this WhatsApp Business Account, or the secret was reset in Meta)",
-      { hasSignature: true, businessAccountId: 'waba-123', phoneNumberId: 'PNID_1' },
-    );
+    expect(logs.warn()).toEqual([
+      {
+        level: 'warn',
+        message:
+          "[whatsapp/webhook] REJECTING inbound: signature did not verify against WHATSAPP_WEBHOOK_SECRET — the sending Meta app's secret differs (a second app subscribed to this WhatsApp Business Account, or the secret was reset in Meta)",
+        meta: { hasSignature: true, businessAccountId: 'waba-123', phoneNumberId: 'PNID_1' },
+      },
+    ]);
   });
 
   it('logs a warn naming the absent header and 401s when no signature header arrives', async () => {
@@ -352,11 +351,14 @@ describe('a signature that does not verify', () => {
     await promise;
 
     expect(res.sendStatus).toHaveBeenCalledWith(401);
-    expect(logger.warn).toHaveBeenCalledTimes(1);
-    expect(logger.warn).toHaveBeenCalledWith(
-      "[whatsapp/webhook] REJECTING inbound: X-Hub-Signature-256 header was absent — the sending Meta app's secret differs (a second app subscribed to this WhatsApp Business Account, or the secret was reset in Meta)",
-      { hasSignature: false, businessAccountId: 'waba-456', phoneNumberId: null },
-    );
+    expect(logs.warn()).toEqual([
+      {
+        level: 'warn',
+        message:
+          "[whatsapp/webhook] REJECTING inbound: X-Hub-Signature-256 header was absent — the sending Meta app's secret differs (a second app subscribed to this WhatsApp Business Account, or the secret was reset in Meta)",
+        meta: { hasSignature: false, businessAccountId: 'waba-456', phoneNumberId: null },
+      },
+    ]);
     // verifySignature is never reached without a header — nothing to verify.
     expect(verifyWithScheme).not.toHaveBeenCalled();
   });
@@ -374,7 +376,7 @@ describe('a signature that does not verify', () => {
     await flush();
 
     expect(res.status).toHaveBeenCalledWith(200);
-    expect(logger.warn).not.toHaveBeenCalled();
+    expect(logs.warn()).toEqual([]);
     expect(dispatchWhatsappMessage).toHaveBeenCalledTimes(1);
   });
 });

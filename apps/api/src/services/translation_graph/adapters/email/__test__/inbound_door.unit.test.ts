@@ -29,14 +29,12 @@ const state: {
   access: Record<string, boolean>;
   triggers: Record<string, { id: string; kind: string }>;
   slack: { text: string }[];
-  warnings: string[];
 } = {
   routes: [],
   associations: {},
   access: {},
   triggers: {},
   slack: [],
-  warnings: [],
 };
 
 function matches(row: RouteRow, column: string, op: string, value: unknown): boolean {
@@ -96,17 +94,12 @@ jest.mock('../../../../../lib/slack', () => ({
   },
 }));
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: {
-    warn: (message: string) => state.warnings.push(message),
-    error: (message: string) => state.warnings.push(message),
-    info: () => undefined,
-  },
-}));
-
 import type { InboundEmailDecision } from '@listen-fire/email';
 
+import { captureEngineLogs } from '../../../../../test/engine_logs';
 import { verifyInboundEmailRequest } from '../inbound_door';
+
+const logs = captureEngineLogs();
 
 const API_KEY = 'test-harness-dummy-key';
 const TEAM = 'team-1';
@@ -142,7 +135,6 @@ beforeEach(() => {
   state.access = {};
   state.triggers = {};
   state.slack = [];
-  state.warnings = [];
   process.env.TEST_HARNESS_TEAM_ID = 'harness';
   // The routing address is the deployment's, not a constant — these fixtures
   // are written against one fixed address.
@@ -311,7 +303,7 @@ describe('which team, when the sender belongs to several', () => {
         request(signed({ sender: 'ada@example.com', To: 'inbox+deals@example.com' })),
       ),
     ).resolves.toEqual({ outcome: 'refused', status: 201 });
-    expect(state.warnings.join(' ')).toMatch(/ambiguous/);
+    expect([...logs.messages('warn'), ...logs.messages('error')].join(' ')).toMatch(/ambiguous/);
   });
 
   it('still names a team of record when nothing listens for the address', async () => {

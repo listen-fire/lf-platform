@@ -2,18 +2,23 @@
 // be "reject in production, allow everywhere else", which left every staging box
 // and review app with an unauthenticated ingress that fires real automations.
 
-const warn = jest.fn();
+import type { EngineLogLine } from 'movement-engine/public/log';
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: (...args: unknown[]) => warn(...args), error: jest.fn() },
-}));
+// Each case runs in a fresh module registry, whose logger is its own, so the
+// sink is installed there rather than through the shared capture helper.
+let logged: EngineLogLine[] = [];
+const warnings = () => logged.filter((line) => line.level === 'warn');
 
 const ORIGINAL_ENV = { ...process.env };
 
-beforeEach(() => {
+beforeEach(async () => {
   process.env = { ...ORIGINAL_ENV };
-  warn.mockReset();
   jest.resetModules();
+  logged = [];
+  const { routeEngineLogsTo } = await import('movement-engine/public/log');
+  routeEngineLogsTo((line) => {
+    logged.push(line);
+  });
 });
 
 afterAll(() => {
@@ -38,7 +43,7 @@ it('refuses in production even with the bypass set — the bypass is not a produ
   process.env.ALLOW_UNSIGNED_WEBHOOKS = 'true';
 
   expect(await authorize()).toEqual({ authorized: false, reason: 'no_secret' });
-  expect(warn).not.toHaveBeenCalled();
+  expect(warnings()).toEqual([]);
 });
 
 it('allows outside production when the bypass is explicitly set', async () => {
@@ -57,10 +62,11 @@ it('warns loudly, naming itself and the door, and only once per door', async () 
   authorizeUnsignedWebhook('slack/events');
   authorizeUnsignedWebhook('telegram/builtin');
 
-  expect(warn).toHaveBeenCalledTimes(2);
-  expect(warn.mock.calls[0][0]).toContain('ALLOW_UNSIGNED_WEBHOOKS');
-  expect(warn.mock.calls[0][0]).toContain('slack/events');
-  expect(warn.mock.calls[1][0]).toContain('telegram/builtin');
+  const messages = warnings().map((line) => line.message);
+  expect(messages).toHaveLength(2);
+  expect(messages[0]).toContain('ALLOW_UNSIGNED_WEBHOOKS');
+  expect(messages[0]).toContain('slack/events');
+  expect(messages[1]).toContain('telegram/builtin');
 });
 
 it('takes only the literal `true` — a truthy-looking value is not consent', async () => {

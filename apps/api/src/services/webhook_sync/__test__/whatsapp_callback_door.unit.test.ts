@@ -11,10 +11,6 @@
 //     nor show a toast) — on every outcome, never conditionally, and there is
 //     no keyboard-equivalent to retire.
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
-
 const fireCallback = jest.fn();
 jest.mock('../../movement_engine/callback_fire', () => ({
   ...jest.requireActual('../../movement_engine/callback_fire'),
@@ -23,7 +19,7 @@ jest.mock('../../movement_engine/callback_fire', () => ({
 
 import type { CallbackRecord } from '../../movement_engine/callback_store';
 
-import { logger } from 'movement-engine/services/logger';
+import { captureEngineLogs } from '../../../test/engine_logs';
 import {
   handleWhatsappInteractiveReplies,
   interactiveRepliesOf,
@@ -93,6 +89,8 @@ function listTap(id: string, replyId: string, from = '15551234567') {
     interactive: { type: 'list_reply', list_reply: { id: replyId, title: 'Pick' } },
   };
 }
+
+const logs = captureEngineLogs();
 
 beforeEach(() => {
   fireCallback.mockReset();
@@ -209,7 +207,7 @@ describe('a callback-id tap', () => {
     expect(r.sendReply).toHaveBeenCalledWith(
       expect.objectContaining({ text: 'Something went wrong recording that.' }),
     );
-    expect(logger.error).toHaveBeenCalled();
+    expect(logs.error()).not.toHaveLength(0);
   });
 
   it('a failed ack is warned about, not thrown', async () => {
@@ -220,10 +218,7 @@ describe('a callback-id tap', () => {
     await expect(
       handleWhatsappInteractiveReplies({ raw: metaBody([tap('wamid.TAP', 'cb_abc')]), responder: r }),
     ).resolves.toEqual([{ replyId: 'cb_abc', outcome: 'recorded' }]);
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining('ack reply send failed'),
-      expect.anything(),
-    );
+    expect(logs.messages('warn')).toContainEqual(expect.stringContaining('ack reply send failed'));
   });
 });
 

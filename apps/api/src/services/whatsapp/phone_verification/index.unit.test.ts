@@ -42,12 +42,10 @@ jest.mock('../metaApi', () => ({
   sendVerificationCode: (input: unknown) => sendVerificationCode(input as { to: string; code: string }),
 }));
 
-const loggerInfo = jest.fn();
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { info: (...args: unknown[]) => loggerInfo(...args) },
-}));
-
+import { captureEngineLogs } from '../../../test/engine_logs';
 import { confirmPhoneVerification, startPhoneVerification } from './index';
+
+const logs = captureEngineLogs();
 
 const ME = 'user-1';
 const NUMBER = '+44 7700 900123';
@@ -67,7 +65,6 @@ beforeEach(() => {
   recorded.length = 0;
   reads = [];
   sendVerificationCode.mockClear();
-  loggerInfo.mockClear();
   delete process.env.WHATSAPP_LINK_VERIFICATION;
 });
 
@@ -102,11 +99,12 @@ describe('startPhoneVerification under trust', () => {
 
     await startPhoneVerification({ userId: ME, phoneNumber: NUMBER });
 
-    expect(loggerInfo).toHaveBeenCalledWith(
-      '[whatsapp/link] number linked without a code (WHATSAPP_LINK_VERIFICATION=trust)',
-      { userId: ME, phoneNumber: '+*********123' },
-    );
-    expect(JSON.stringify(loggerInfo.mock.calls)).not.toContain('447700900123');
+    expect(logs.info()).toContainEqual({
+      level: 'info',
+      message: '[whatsapp/link] number linked without a code (WHATSAPP_LINK_VERIFICATION=trust)',
+      meta: { userId: ME, phoneNumber: '+*********123' },
+    });
+    expect(JSON.stringify(logs.info())).not.toContain('447700900123');
   });
 
   it('refuses a number verified to another account, as under otp', async () => {
@@ -132,7 +130,7 @@ describe('startPhoneVerification under otp', () => {
     );
     expect(writesTo('phone_verification')).toHaveLength(1);
     expect(writesTo('phone_number')).toHaveLength(0);
-    expect(loggerInfo).not.toHaveBeenCalled();
+    expect(logs.info()).toEqual([]);
   });
 
   it('refuses a number verified to another account', async () => {

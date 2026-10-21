@@ -31,6 +31,8 @@ export default {
   // the production Kysely's module-level pool from the dev-loop DB
   // to the test DB.
   setupFiles: ['./src/test/harness/env.ts'],
+  // Engine log lines go nowhere unless a test captures them.
+  setupFilesAfterEnv: ['<rootDir>/src/test/engine_logs.setup.ts'],
   // ts-jest required for Prisma >= 5.10.x. Transpile only: types are owned
   // by `pnpm code:type-check`.
   preset: 'ts-jest',

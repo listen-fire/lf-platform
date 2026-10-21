@@ -14,13 +14,10 @@ jest.mock('@anthropic-ai/sdk', () => {
 
 jest.mock('../../llm_usage', () => ({ recordLlmUsage: jest.fn().mockResolvedValue(undefined) }));
 
-const warn = jest.fn();
-const error = jest.fn();
-jest.mock('movement-engine/services/logger', () => ({
-  logger: { info: jest.fn(), warn, error },
-}));
-
+import { captureEngineLogs } from '../../../test/engine_logs';
 import { anthropicToolLoop } from '../index';
+
+const logs = captureEngineLogs();
 
 function reply(options: {
   content: Anthropic.Message['content'];
@@ -77,8 +74,6 @@ function lastMessageText(call: number): string {
 
 beforeEach(() => {
   create.mockReset();
-  warn.mockReset();
-  error.mockReset();
 });
 
 /**
@@ -107,9 +102,11 @@ describe('a tool call truncated at max_tokens', () => {
     await anthropicToolLoop({ ...params, onTurn });
 
     expect(onTurn).toHaveBeenNthCalledWith(1, expect.objectContaining({ truncated: 'no_output' }));
-    expect(warn).toHaveBeenCalledWith(
-      '[anthropic] tool loop truncated mid-tool-call, asking for a smaller step',
-      expect.objectContaining({ recovery: 1 }),
+    expect(logs.warn()).toContainEqual(
+      expect.objectContaining({
+        message: '[anthropic] tool loop truncated mid-tool-call, asking for a smaller step',
+        meta: expect.objectContaining({ recovery: 1 }),
+      }),
     );
   });
 
@@ -144,9 +141,11 @@ describe('the maxTurns bound', () => {
     ).rejects.toThrow(/maxTurns=3/);
 
     expect(create).toHaveBeenCalledTimes(3);
-    expect(error).toHaveBeenCalledWith(
-      '[anthropic] tool loop hit maxTurns',
-      expect.objectContaining({ maxTurns: 3 }),
+    expect(logs.error()).toContainEqual(
+      expect.objectContaining({
+        message: '[anthropic] tool loop hit maxTurns',
+        meta: expect.objectContaining({ maxTurns: 3 }),
+      }),
     );
   });
 

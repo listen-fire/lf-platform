@@ -21,7 +21,6 @@ const loadResolvableAskAwaitsMock = jest.fn();
 const resumeMovementFiringMock = jest.fn();
 const loadTriggerByIdMock = jest.fn();
 const runHasPendingJoinsMock = jest.fn();
-const loggerErrorMock = jest.fn();
 
 // ── The parked_run substrate, in memory ─────────────────────────────────────
 // `livePark` is the set of addresses with a live `parked` row for the run — what
@@ -105,7 +104,6 @@ jest.mock('../../../lib/kysely', () => ({
   getAutomationsQb: () => makeQb()(),
 }));
 jest.mock('../../../lib/worker', () => ({ worker: jest.fn() }));
-jest.mock('movement-engine/services/logger', () => ({ logger: { error: (...a: unknown[]) => loggerErrorMock(...a), info: jest.fn(), warn: jest.fn() } }));
 jest.mock('../../translation_graph/adapters/packages', () => ({
   awaitKeepers: () => [
     {
@@ -126,7 +124,8 @@ jest.mock('../../translation_graph/movement/execute', () => ({
 jest.mock('../../translation_graph/storage/tg_table', () => ({
   loadTriggerById: (...a: unknown[]) => loadTriggerByIdMock(...a),
 }));
-jest.mock('movement-engine/services/translation_graph/triggers/types', () => ({
+jest.mock('movement-engine/public/inbound', () => ({
+  ...jest.requireActual('movement-engine/public/inbound'),
   triggerEventSchema: { parse: (x: unknown) => x },
 }));
 
@@ -181,6 +180,7 @@ jest.mock('../../work/store', () => ({
 
 import { registerAwaitWork, resumeAwaitsForCorrelation } from '../await_resume';
 import { drainWork, resetWorkHandlersForTests } from '../../work/drain';
+import { captureEngineLogs } from '../../../test/engine_logs';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
 
@@ -202,6 +202,8 @@ function fireCandidate() {
     correlationKey: 'C123:1700000000.000100',
   });
 }
+
+const logs = captureEngineLogs();
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -225,7 +227,7 @@ describe('await-resume driver — a WHERE-narrowed await re-arming at the SAME a
 
     await fireCandidate();
 
-    expect(loggerErrorMock).not.toHaveBeenCalled();
+    expect(logs.error()).toEqual([]);
     // The park the interpreter re-committed is untouched: no correlation dropped,
     // no parked_run deleted, no run-wide sweep. The run is STILL awaitable.
     expect(dropAwaitCorrelationMock).not.toHaveBeenCalled();
@@ -245,7 +247,7 @@ describe('await-resume driver — a WHERE-narrowed await re-arming at the SAME a
     resumeMovementFiringMock.mockResolvedValueOnce(completed());
     await fireCandidate();
 
-    expect(loggerErrorMock).not.toHaveBeenCalled();
+    expect(logs.error()).toEqual([]);
     // NOW the leaf resolves: its correlation + parked_run are dropped.
     expect(dropAwaitCorrelationMock).toHaveBeenCalledWith({ runId: RUN, address: LEAF });
     expect(deletedAddresses).toContain(LEAF);
@@ -265,7 +267,7 @@ describe('await-resume driver — resolved-then-parked-DEEPER (the case the code
 
     await fireCandidate();
 
-    expect(loggerErrorMock).not.toHaveBeenCalled();
+    expect(logs.error()).toEqual([]);
     // The old (resolved) leaf is cleaned up…
     expect(dropAwaitCorrelationMock).toHaveBeenCalledWith({ runId: RUN, address: LEAF });
     expect(deletedAddresses).toContain(LEAF);
@@ -283,7 +285,7 @@ describe('await-resume driver — a WHERE-narrowed branch inside a race (deferRa
 
     await fireCandidate();
 
-    expect(loggerErrorMock).not.toHaveBeenCalled();
+    expect(logs.error()).toEqual([]);
     // The branch stays armed (no correlation/parked_run touched)…
     expect(dropAwaitCorrelationMock).not.toHaveBeenCalled();
     expect(deletedAddresses).toEqual([]);
@@ -333,7 +335,7 @@ describe('await-resume driver — a failing resume is retried by the work table'
 
     const result = await drainWork({ owner: 'me', heartbeatMs: false });
 
-    expect(loggerErrorMock).toHaveBeenCalledWith('[AwaitResume] run resume failed', expect.anything());
+    expect(logs.messages('error')).toContain('[AwaitResume] run resume failed');
     expect(result).toMatchObject({ claimed: 1, failed: 1 });
     expect(completeWorkMock).not.toHaveBeenCalled();
     expect(releaseWorkMock).toHaveBeenCalledWith(expect.objectContaining({ id: 'w-1', leaseToken: 'token-1' }));

@@ -9,30 +9,17 @@
 
 import { z } from 'zod';
 
+import { captureEngineLogs } from '../../test/engine_logs';
 import { safeParseConfig } from '../safe-config-parse';
 
-jest.mock('movement-engine/services/logger', () => ({
-  logger: {
-    warn: jest.fn(),
-    error: jest.fn(),
-    info: jest.fn(),
-    debug: jest.fn(),
-  },
-}));
-
-import { logger } from 'movement-engine/services/logger';
-const mockLogger = logger as unknown as { warn: jest.Mock };
-
 describe('safeParseConfig', () => {
-  beforeEach(() => {
-    mockLogger.warn.mockReset();
-  });
+  const logs = captureEngineLogs();
 
   it('returns ok: true with the parsed config on valid input', () => {
     const schema = z.object({ key: z.string() });
     const result = safeParseConfig(schema, { key: 'pi-abc' }, 'test:valid');
     expect(result).toEqual({ ok: true, config: { key: 'pi-abc' } });
-    expect(mockLogger.warn).not.toHaveBeenCalled();
+    expect(logs.warn()).toEqual([]);
   });
 
   it('returns ok: false with a flattened error message on invalid input', () => {
@@ -47,8 +34,8 @@ describe('safeParseConfig', () => {
   it('logs at warn level with the context tag on invalid input', () => {
     const schema = z.object({ key: z.string() });
     safeParseConfig(schema, {}, 'getInboundAdapter:CUSTOM_EMAIL:pi-abc');
-    expect(mockLogger.warn).toHaveBeenCalledTimes(1);
-    const message = mockLogger.warn.mock.calls[0][0] as string;
+    expect(logs.warn()).toHaveLength(1);
+    const [{ message }] = logs.warn();
     expect(message).toContain('getInboundAdapter:CUSTOM_EMAIL:pi-abc');
     expect(message).toContain('re-configure');
   });
