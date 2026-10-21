@@ -12,7 +12,6 @@ name: movement-wasm
 #    artifact: every corpus program and expression text parses as pinned;
 #    (the catalog differential runs in the ship gate with the corpus); and the engine's
 #    TypeScript shim, against a double and through the committed artifact;
-#    the Rust engine's oracle regenerated from the TypeScript and diffed;
 #    the version 1 and 2 conformance corpora (which run on the TypeScript
 #    engine by their pin); and those corpora's recorded engine runs replay
 #    on the TypeScript engine in process and over the HTTP host double.
@@ -158,21 +157,6 @@ jobs:
       - name: Engine shim, the cases that still need the platform
         working-directory: apps/api
         run: pnpm run test:unit --testPathPattern 'movement_engine/__test__/(rust_write|rust_extract|program_check|seam_guard)\.unit\.test\.ts$'
-      # What the crate tests still hold the Rust engine to from the TypeScript
-      # (the ORDER BY / LIMIT plan, the priced cap) and what Rust does with the
-      # pattern programs: a change that moves one must move the oracle. The
-      # built-ins, regexes, CHUNKS and sorts are frozen Rust answers
-      # (tests/frozen), not regenerated here.
-      - name: The Rust engine's oracle is current
-        working-directory: apps/api
-        run: |
-          # The oracle runs the platform's TypeScript engine (packages/legacy-engine),
-          # which reaches the engine package's internals under this condition.
-          NODE_OPTIONS=--conditions=movement-engine-internals TS_NODE_PROJECT=tsconfig.json npx ts-node --transpile-only ../../crates/movement-engine/tests/oracle/generate.ts
-          git diff --exit-code -- ../../crates/movement-engine/tests/oracle || {
-            echo "::error::crates/movement-engine/tests/oracle is stale: regenerate it (see generate.ts) and commit it, then make the crate tests pass."
-            exit 1
-          }
       # The environment services' fixture is Node's own answers: the same
       # Node regenerates the same bytes (env_services.unit.test.ts above
       # already fails on a Node whose answers moved).

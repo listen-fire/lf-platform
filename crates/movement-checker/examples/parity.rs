@@ -1,4 +1,4 @@
-//! The Rust side of the parity harness (parity/run.sh): replays every check
+//! The Rust side of the parity harness (packages/legacy-lang/parity/run.sh): replays every check
 //! the TypeScript side wrote (`reference.jsonl`) through this crate and
 //! compares, code by code.
 //!

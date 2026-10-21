@@ -1,4 +1,4 @@
-//! The Rust side of the check-answer parity (parity/answers.sh): replays
+//! The Rust side of the check-answer parity (packages/legacy-lang/parity/answers.sh): replays
 //! every record of the checker parity's corpus (`reference.jsonl`) through
 //! `answer::check_answer` and compares its stamps and import link with the
 //! TypeScript's (`answers.jsonl`, from answer_reference.ts). Stamps compare
