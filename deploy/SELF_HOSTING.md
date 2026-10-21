@@ -179,7 +179,7 @@ Three maps cover most deployments. Each is written on one line in `deploy/.env`;
 }
 ```
 
-**3. Everything on Gemini, through the Google service account.** Set the four Google service account variables (`GOOGLE_PRIVATE_KEY`, `GOOGLE_CLIENT_EMAIL`, `GOOGLE_PROJECT_ID`, `GOOGLE_PROJECT_LOCATION`) and no vendor key. Every capability moves: chat, transcription, embeddings and image generation.
+**3. Everything on Gemini, through the Google service account.** Set the four Google service account variables (`GOOGLE_PRIVATE_KEY`, `GOOGLE_CLIENT_EMAIL`, `GOOGLE_PROJECT_ID`, `GOOGLE_PROJECT_LOCATION`) and no vendor key. Every capability moves: chat, transcription, embeddings and image generation. Alternatively set `GEMINI_API_KEY` to call Gemini through the Gemini Developer API instead of the project's Vertex endpoint; the service account then serves only OCR and Claude on Vertex, and a deployment with only the key needs no Google service account for Gemini.
 
 ```json
 {
@@ -642,6 +642,7 @@ Everything here is set by you, in `deploy/.env`. Nothing in this table is genera
 | `MOVEMENT_MAX_RUN_COST_USD` | no, but encouraged | no cap — an automation run may spend any amount on model calls and paid services. A positive number of US dollars (e.g. `5`) pauses a run at its next priced call once it has spent that much, across every wait, until someone resumes it; see "Automations". Boot refuses anything that is not a positive number |
 | `MOVEMENT_MAX_CALL_DEPTH` | no | 32 — how many calls deep one automation run may nest (each level of a recursion is one). A run that would go deeper fails, naming the chain of calls; see "Automations". Boot refuses anything that is not a positive whole number |
 | `GOOGLE_MODEL_REGION` | no | `global` — where models are addressed on Google Cloud, for both the `vertex` (Claude) and `gemini` providers. `GOOGLE_PROJECT_LOCATION` is separate and stays the location OCR uses |
+| `GEMINI_API_KEY` | no | unset — Gemini calls go to the project's Vertex endpoint with the service account. Set it to call Gemini through the Gemini Developer API instead; the service account then serves only OCR and Claude on Vertex |
 | `GEMINI_BASE_URL` | no | unset — every call the map sends to `gemini` (chat, transcription, embeddings, images) goes to Google Cloud, signed with the service account. Set it only to point those calls at a stand-in such as the dev loop's fake Gemini (`http://localhost:<fake channels port>/gemini`); a redirected client sends a placeholder key instead of a Google token |
 | `GOOGLE_PRIVATE_KEY` / `GOOGLE_CLIENT_EMAIL` / `GOOGLE_PROJECT_ID` | when the map names `vertex` or `gemini`, or for OCR | the deployment's one Google service account. `GOOGLE_PROJECT_LOCATION` (default `europe-west1`) joins these for OCR |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_OCR_PROCESSOR_ID` / `GOOGLE_STORAGE_BUCKET_NAME` | only for OCR | OCR boots unconfigured, so a PDF past its own text layer fails naming what it wanted |

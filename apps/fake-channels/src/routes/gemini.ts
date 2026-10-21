@@ -11,6 +11,11 @@ import { z } from 'zod';
 // location set: `/v1/projects/:p/locations/:l/publishers/google/models/:m`
 // followed by `:generateContent` or `:streamGenerateContent` (`?alt=sse`).
 //
+// The Gemini Developer API (a client built with `GEMINI_API_KEY`) is served
+// from the same handlers: `/v1beta/models/:m:generateContent` and
+// `:streamGenerateContent`, and `:batchEmbedContents` for embeddings. The key
+// arrives as a header or query parameter, which this fake does not check.
+//
 // The reply is canned, chosen by the `X-Fake-Scenario` header, else by a
 // wire model named `fake-<scenario>`. The model name is there because the
 // API's provider sends no per-call headers: a verify run can pick a scenario
@@ -287,8 +292,9 @@ function responseChunk(parts: WirePart[], final: { finishReason: Reply['finishRe
   };
 }
 
+// Groups: 1 version, 2 project (Vertex only), 3 location (Vertex only), 4 model, 5 method.
 const MODEL_PATH =
-  /^\/(v1|v1beta1)\/projects\/([^/]+)\/locations\/([^/]+)\/publishers\/google\/models\/([^/:]+):(generateContent|streamGenerateContent)$/;
+  /^\/(v1|v1beta1|v1beta)\/(?:projects\/([^/]+)\/locations\/([^/]+)\/publishers\/google\/)?models\/([^/:]+):(generateContent|streamGenerateContent)$/;
 
 // Embeddings. `@google/genai` sends `gemini-embedding-001` on Vertex to the
 // model's `:predict` method with one instance per text; the model page allows
@@ -296,6 +302,27 @@ const MODEL_PATH =
 // https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/embeddings/get-text-embeddings
 const PREDICT_PATH =
   /^\/(v1|v1beta1)\/projects\/([^/]+)\/locations\/([^/]+)\/publishers\/google\/models\/([^/:]+):predict$/;
+
+// The Developer API's embedding method: a batch of requests, one text each.
+const BATCH_EMBED_PATH = /^\/(v1|v1beta)\/models\/([^/:]+):batchEmbedContents$/;
+
+const BatchEmbedRequest = z
+  .object({
+    requests: z
+      .array(
+        z
+          .object({
+            model: z.string().optional(),
+            content: z.object({ parts: z.array(z.object({ text: z.string().min(1) }).strict()).min(1), role: z.string().optional() }).strict(),
+            taskType: z.string().optional(),
+            title: z.string().optional(),
+            outputDimensionality: z.number().int().positive().optional(),
+          })
+          .strict(),
+      )
+      .min(1),
+  })
+  .strict();
 
 const EMBEDDING_MODELS: Record<string, { min: number; max: number; textsPerRequest: number }> = {
   'gemini-embedding-001': { min: 128, max: 3072, textsPerRequest: 1 },
@@ -393,6 +420,30 @@ export function geminiRoutes(): Router {
       })),
       metadata: { billableCharacterCount: instances.reduce((sum, i) => sum + i.content.length, 0) },
     });
+  });
+
+  r.post(BATCH_EMBED_PATH, (req, res) => {
+    const match = BATCH_EMBED_PATH.exec(req.path);
+    if (!match) return googleError(res, 404, 'unknown path');
+    const model = EMBEDDING_MODELS[match[2]];
+    if (!model) return googleError(res, 404, `models/${match[2]} is not an embedding model this fake serves.`);
+
+    const parsed = BatchEmbedRequest.safeParse(req.body);
+    if (!parsed.success) return googleError(res, 400, `Invalid batchEmbedContents request: ${parsed.error.message}`);
+    const { requests } = parsed.data;
+    if (requests.length > model.textsPerRequest) {
+      return googleError(res, 400, `${match[2]} takes ${model.textsPerRequest} request per batch, got ${requests.length}.`);
+    }
+    const embeddings = [];
+    for (const { content, outputDimensionality } of requests) {
+      const width = outputDimensionality ?? model.max;
+      if (width < model.min || width > model.max) {
+        return googleError(res, 400, `outputDimensionality must be between ${model.min} and ${model.max}, got ${width}.`);
+      }
+      const text = content.parts.map((p) => p.text).join('');
+      embeddings.push({ values: fakeEmbedding(text, model.max).slice(0, width) });
+    }
+    res.json({ embeddings });
   });
 
   return r;

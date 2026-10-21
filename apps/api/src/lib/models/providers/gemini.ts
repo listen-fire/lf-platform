@@ -67,6 +67,10 @@ const clients = new Map<string, GoogleGenAI>();
 /**
  * The `@google/genai` client every Gemini capability shares, one per location.
  *
+ * With `GEMINI_API_KEY` set the client calls the Gemini Developer API instead
+ * of the project's Vertex endpoint: there is no project or location in that
+ * address, so `options.location` is ignored and one client serves everything.
+ *
  * Models are addressed where Claude on Vertex is (`GOOGLE_MODEL_REGION`,
  * default the global endpoint): new Gemini models often launch there first,
  * and it carries no regional premium. A capability that needs a real region
@@ -76,16 +80,24 @@ export function geminiClient(
   env: NodeJS.ProcessEnv = process.env,
   options: { location?: string } = {},
 ): GoogleGenAI {
-  const location = options.location ?? googleModelRegion(env);
-  let client = clients.get(location);
+  const cacheKey = env.GEMINI_API_KEY ? 'api-key' : (options.location ?? googleModelRegion(env));
+  let client = clients.get(cacheKey);
   if (!client) {
-    client = buildClient(env, location);
-    clients.set(location, client);
+    client = buildClient(env, options.location ?? googleModelRegion(env));
+    clients.set(cacheKey, client);
   }
   return client;
 }
 
 function buildClient(env: NodeJS.ProcessEnv, location: string): GoogleGenAI {
+  if (env.GEMINI_API_KEY) {
+    // The SDK's own `v1beta` default is kept: the Developer API serves its
+    // current models there, and the fake mirrors that path.
+    return new GoogleGenAI({
+      apiKey: env.GEMINI_API_KEY,
+      ...(env.GEMINI_BASE_URL ? { httpOptions: { baseUrl: env.GEMINI_BASE_URL } } : {}),
+    });
+  }
   const { projectId, privateKey, clientEmail } = googleServiceAccount(env);
   const baseUrl = env.GEMINI_BASE_URL;
   return new GoogleGenAI({
