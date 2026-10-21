@@ -97,12 +97,12 @@ RUN apt-get update \
 RUN corepack enable && corepack prepare pnpm@9.5.0 --activate
 WORKDIR /srv/listen-fire
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY apps/fake-channels/package.json apps/fake-channels/
-RUN pnpm install --frozen-lockfile --filter fake-channels...
-COPY apps/fake-channels apps/fake-channels
+COPY packages/fake-channels/package.json packages/fake-channels/
+RUN pnpm install --frozen-lockfile --filter @listen-fire/fake-channels...
+COPY packages/fake-channels packages/fake-channels
 ENV NODE_ENV=development
 ENV TZ=UTC
 ENV FAKE_CHANNELS_PORT=5556
 EXPOSE 5556
-WORKDIR /srv/listen-fire/apps/fake-channels
+WORKDIR /srv/listen-fire/packages/fake-channels
 CMD ["pnpm", "start"]

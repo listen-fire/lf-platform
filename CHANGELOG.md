@@ -13,6 +13,7 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 
 ## [Unreleased]
 
+- The fake third-party services (Slack, Attio, Affinity, email, WhatsApp, the OAuth provider and the rest) are the package `@listen-fire/fake-channels`, with a `fake-channels` command (port from `FAKE_CHANNELS_PORT`). The dev loop, the demo `fake-channels` image, lf's test harness and the examples all start it from there; nothing changes for the demo's image name or port.
 - Set `GEMINI_API_KEY` to call Gemini through the Gemini Developer API instead of the project's Vertex endpoint (which was returning 429s for some projects). The service account then serves only OCR and Claude on Vertex; without the key nothing changes.
 - A rate-limited model call now waits as long as the vendor's retry-after asks, instead of a fixed 30 seconds.
 - The movement artifact (`movement.wasm`) exports two more Rust checker answers, `check_answer` (the engine's `check.program` request as data: diagnostics, stamps, import link) and `check_compatible` (an `IS <Decl>` test of a system's record), so the JavaScript host answers both without the TypeScript checker. The artifact grows by about 4.5 KB gzipped; the parser artifact is unchanged.

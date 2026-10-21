@@ -1,6 +1,6 @@
 // The "local Attio sync with lf" walkthrough (examples/lf-attio/README.md),
 // every step as a person types it, against the fake Attio in
-// apps/fake-channels: its Attio API, its OAuth provider, and its control door
+// packages/fake-channels: its Attio API, its OAuth provider, and its control door
 // that delivers Attio's signed webhooks to whatever lf serve registered.
 //
 //   lf init → lf connect @lf/attio (pointed at the fake) → lf credential add
@@ -25,7 +25,6 @@ import { lf, ok } from './interactive';
 
 const REPO = resolve(__dirname, '../../../..');
 const EXAMPLE = join(REPO, 'examples/lf-attio');
-const FAKE = join(REPO, 'apps/fake-channels');
 
 interface Fake {
   url: string;
@@ -33,10 +32,10 @@ interface Fake {
   stop(): Promise<void>;
 }
 
-/** apps/fake-channels on a free port, its state in a folder of its own. */
+/** The `@listen-fire/fake-channels` package on a free port, its state in a folder of its own. */
 async function fakeChannels(): Promise<Fake> {
   const cwd = mkdtempSync(join(tmpdir(), 'lf-attio-fake-'));
-  const child: ChildProcess = spawn(process.execPath, [join(FAKE, 'node_modules/tsx/dist/cli.mjs'), join(FAKE, 'src/index.ts')], {
+  const child: ChildProcess = spawn(process.execPath, [require.resolve('@listen-fire/fake-channels/bin/fake-channels.cjs')], {
     cwd,
     env: { ...process.env, FAKE_CHANNELS_PORT: '0' },
     stdio: ['ignore', 'pipe', 'inherit'],

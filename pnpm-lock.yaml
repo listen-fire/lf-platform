@@ -624,6 +624,9 @@ importers:
 
   apps/cli:
     dependencies:
+      '@listen-fire/fake-channels':
+        specifier: workspace:^
+        version: link:../../packages/fake-channels
       engine-contracts:
         specifier: workspace:@listen-fire/engine-contracts@*
         version: link:../../packages/engine-contracts
@@ -654,31 +657,6 @@ importers:
         version: 8.12.0
       typescript:
         specifier: 5.5.4
-        version: 5.5.4
-
-  apps/fake-channels:
-    dependencies:
-      better-sqlite3:
-        specifier: ^11.7.0
-        version: 11.10.0
-      express:
-        specifier: ^4.21.0
-        version: 4.22.1
-      zod:
-        specifier: 4.1.12
-        version: 4.1.12
-    devDependencies:
-      '@types/better-sqlite3':
-        specifier: ^7.6.12
-        version: 7.6.13
-      '@types/express':
-        specifier: ^4.17.21
-        version: 4.17.21
-      tsx:
-        specifier: ^4.19.0
-        version: 4.21.0
-      typescript:
-        specifier: ^5.5.4
         version: 5.5.4
 
   apps/web:
@@ -1991,6 +1969,34 @@ importers:
       movement-lang:
         specifier: workspace:@listen-fire/movement-lang@*
         version: link:../movement-lang
+      typescript:
+        specifier: 5.5.4
+        version: 5.5.4
+
+  packages/fake-channels:
+    dependencies:
+      better-sqlite3:
+        specifier: ^11.7.0
+        version: 11.10.0
+      express:
+        specifier: ^4.21.0
+        version: 4.22.1
+      tsx:
+        specifier: 4.21.0
+        version: 4.21.0
+      zod:
+        specifier: 4.1.12
+        version: 4.1.12
+    devDependencies:
+      '@types/better-sqlite3':
+        specifier: ^7.6.12
+        version: 7.6.13
+      '@types/express':
+        specifier: ^4.17.21
+        version: 4.17.21
+      '@types/node':
+        specifier: 22.19.15
+        version: 22.19.15
       typescript:
         specifier: 5.5.4
         version: 5.5.4
@@ -16552,7 +16558,7 @@ snapshots:
 
   '@types/better-sqlite3@7.6.13':
     dependencies:
-      '@types/node': 20.16.5
+      '@types/node': 22.19.15
 
   '@types/body-parser@1.19.5':
     dependencies:
@@ -18953,7 +18959,7 @@ snapshots:
       qs: 6.14.2
       range-parser: 1.2.1
       safe-buffer: 5.2.1
-      send: 0.19.0
+      send: 0.19.2
       serve-static: 1.16.3
       setprototypeof: 1.2.0
       statuses: 2.0.2

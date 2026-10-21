@@ -2,7 +2,7 @@
 // translation table: an Anthropic request in and the exact `generateContent`
 // request out; canned streamed chunks in and the exact Anthropic message out.
 // The SDK client is mocked at its constructor, so nothing reaches a network;
-// the wire itself is proven against the fake Gemini in apps/fake-channels.
+// the wire itself is proven against the fake Gemini in packages/fake-channels.
 
 import {
   FinishReason,

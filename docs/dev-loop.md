@@ -54,7 +54,7 @@ tail -F .dev-loop/loop.log            # API logs (loop.sh tees them here)
 | Postgres, Redis | **real** | docker compose, ports 9432 / 6379 (agent profile: its own project, 9434 / 6381) |
 | S3 | **real (local SeaweedFS)** | the stack's own `objectstore` container (SeaweedFS `weed mini`, S3 API only), bucket `listenfire-dev`, credentials `listenfire` / `localdevpassword`; the loop exports `AWS_S3_ENDPOINT`/`AWS_DOCUMENT_S3_BUCKET`/`AWS_*` for it unless you already set them. Browse it with any S3 client, e.g. `AWS_ACCESS_KEY_ID=listenfire AWS_SECRET_ACCESS_KEY=localdevpassword aws --endpoint-url http://localhost:9010 s3 ls s3://listenfire-dev --recursive` (agent: port 9012) |
 | Anthropic, OpenAI (incl. whisper transcription), Google DocumentAI | **real** | hits live APIs; spends real tokens (a voice-note e2e costs well under 1p) |
-| Slack, Attio, Email (Mailgun), WhatsApp (Meta Cloud API — send + inbound media), Telegram (Bot API — send + getFile/media), Affinity, Airtable, Sheets, Granola (meeting-notes poll API), Evertrace (signal poll API), Dealroom (Premium search API), Gmail (users.messages / history / send, plus a Google sign-in to connect a mailbox against) | **fake** | persistent SQLite-backed via `apps/fake-channels` (port 5556 default; 6056 / 6156 / 6256 under agent / agent2 / agent3) |
+| Slack, Attio, Email (Mailgun), WhatsApp (Meta Cloud API — send + inbound media), Telegram (Bot API — send + getFile/media), Affinity, Airtable, Sheets, Granola (meeting-notes poll API), Evertrace (signal poll API), Dealroom (Premium search API), Gmail (users.messages / history / send, plus a Google sign-in to connect a mailbox against) | **fake** | persistent SQLite-backed via `packages/fake-channels` (port 5556 default; 6056 / 6156 / 6256 under agent / agent2 / agent3) |
 | Valuations | **in-process** | Same monorepo — the local API IS the Valuations service (`/api/v1/valuations/...`). Not faked, just self-hosted. |
 | Acme CRM (`acme_crm`) | **fake** | The loop's one REMOTE adapter — a homespun CRM served behind the remote-adapter wire protocol (`pnpm dev:fake-crm`, port 5557 default; 6057 / 6157 / 6257 under agent / agent2 / agent3). `pnpm dev:seed` installs the `remote_adapter` row pointing at it. Writes are in-memory, so they reset with the loop. See `apps/api/src/scripts/dev/REMOTE_ADAPTER_VERIFY.md`. |
 
@@ -451,7 +451,7 @@ that phone's team, so wire `pnpm dev:whatsapp setup` first (it creates a
 `phone_number` row → the dev-loop user + a whatsapp movement trigger).
 `--media` is the interesting path: Meta delivers media by *id*, which the
 dispatcher downloads out-of-band. The wrapper first seeds the bytes (a 1×1
-PNG for `image`, a one-page PDF with a text layer for `document` — `apps/fake-channels/assets/dev-document.pdf`, so extraction reads real text) into the **fake Meta media
+PNG for `image`, a one-page PDF with a text layer for `document` — `packages/fake-channels/assets/dev-document.pdf`, so extraction reads real text) into the **fake Meta media
 endpoint** (`POST /whatsapp/media`), then fires the webhook. The dispatcher
 resolves them through the real path because the dev loop points
 `WHATSAPP_GRAPH_BASE_URL` at `${FAKE_CHANNELS_URL}/whatsapp/graph` (two
@@ -588,7 +588,7 @@ its walks for an explicit `ORDER BY`.
 
 ### Fake OAuth provider
 
-`apps/fake-channels` serves a generic OAuth2 provider under `/oauth`, so a
+`packages/fake-channels` serves a generic OAuth2 provider under `/oauth`, so a
 token refresh that writes back through the secrets store can be exercised end
 to end. It implements `GET /oauth/authorize` (redirects back with a code),
 `POST /oauth/token` (`authorization_code` and `refresh_token` grants; refresh
@@ -612,7 +612,7 @@ n token calls fail without spending the refresh token. Control routes:
 `POST /oauth/control/{config,mint,expire}`, `GET /oauth/control/state`.
 
 The provider's tokens live in the fake-channels store (a file under
-`apps/fake-channels/test-harness-data/`), so they survive a stack restart. The
+`packages/fake-channels/test-harness-data/`), so they survive a stack restart. The
 credential lives in the dev database, which outlives any one store (a new
 worktree, `dev:inspect --reset`); `pnpm dev:oauth setup` therefore signs an
 existing credential in again, in place, when the provider no longer knows its
@@ -779,7 +779,7 @@ Base URL: `http://localhost:5556`
 | Admin | DELETE | `/admin/:service/:entityType/state` | clear ONE entity type without reseeding the service |
 | Admin | DELETE | `/admin/all` | wipe + reseed everything |
 
-See `apps/fake-channels/src/routes/` for the full surface.
+See `packages/fake-channels/src/routes/` for the full surface.
 
 **Attio value shape note:** real Attio returns each field value as an array
 of typed objects, e.g. `{"name": [{"value": "Acme"}], "domains": [{"domain":
@@ -902,7 +902,7 @@ pnpm dev:telegram setup
 # → listeners[0].kind: "telegram"
 
 # 2. Fire a voice note. Seeds the committed OGG/OPUS speech sample
-#    (apps/fake-channels/assets/voice-sample.ogg — "the quarterly numbers look
+#    (packages/fake-channels/assets/voice-sample.ogg — "the quarterly numbers look
 #    strong, revenue up twelve percent") into the fake Telegram media store,
 #    then POSTs a `voice`-carrying Update at the webhook-sync door.
 pnpm dev:inject telegram --voice

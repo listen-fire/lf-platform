@@ -44,11 +44,11 @@ listen and start it again, and the webhook is removed.
 
 ## Against the fake Attio (no account, no tunnel)
 
-The repo's fake third-party server (`apps/fake-channels`) has an Attio API, an
+The repo's fake third-party server (the package `@listen-fire/fake-channels`) has an Attio API, an
 OAuth provider, and a control door that delivers Attio's signed webhooks.
 
 ```
-cd apps/fake-channels && FAKE_CHANNELS_PORT=5556 pnpm start     # in its own terminal
+FAKE_CHANNELS_PORT=5556 pnpm --filter @listen-fire/fake-channels start     # in its own terminal (the package's `fake-channels` bin does the same)
 F=http://127.0.0.1:5556
 ```
 

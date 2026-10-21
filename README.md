@@ -90,7 +90,7 @@ Applications:
 - [`apps/api`](apps/api): the API. One long-running process, with the background workers, schedulers and the movement engine inside it.
 - [`apps/web`](apps/web): the web UI (Next.js), including the automation authoring surface.
 - [`apps/admin`](apps/admin): the operator console, served only on a `core` installation.
-- [`apps/fake-channels`](apps/fake-channels): stand-in implementations of the third-party services, used by the dev loop and by `--demo`.
+- [`packages/fake-channels`](packages/fake-channels): stand-in implementations of the third-party services, used by the dev loop and by `--demo`.
 
 Packages:
 

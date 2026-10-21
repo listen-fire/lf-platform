@@ -33,7 +33,7 @@
  * two model calls; the address keeps this script deterministic.)
  *
  * Usage:
- *   FAKE_CHANNELS_PORT=6377 npx tsx apps/fake-channels/src/index.ts   # or the dev loop
+ *   FAKE_CHANNELS_PORT=6377 npx tsx packages/fake-channels/src/index.ts   # or the dev loop
  *   FAKE_BASE=http://localhost:6377/affinity npx tsx apps/api/src/scripts/dev/verify_affinity_people_attach.ts
  *
  * Needs DATABASE_URL: the production host's cross-run write locks are

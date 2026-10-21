@@ -13,6 +13,7 @@
   },
   "type": "commonjs",
   "dependencies": {
+    "@listen-fire/fake-channels": "workspace:^",
     "engine-contracts": "workspace:@listen-fire/engine-contracts@*",
     "module-kit": "workspace:@listen-fire/module-kit@*",
     "movement-engine": "workspace:@listen-fire/engine@*",

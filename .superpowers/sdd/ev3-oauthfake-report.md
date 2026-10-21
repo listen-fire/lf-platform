@@ -3,7 +3,7 @@
 Done. A fake OAuth2 provider in fake-channels, the Dropbox auth client pointed at it in the dev loop, and a proven refresh round trip.
 
 ## What landed
-- `apps/fake-channels/src/routes/oauth.ts` mounted at `/oauth`: authorize (redirect with code), token (authorization_code and refresh_token grants; rotating refresh tokens, replay gives invalid_grant, configurable expiry, rotation on/off, injected failures), protected endpoint, control routes (config, mint, expire, state). `admin` knows service `oauth`.
+- `packages/fake-channels/src/routes/oauth.ts` mounted at `/oauth`: authorize (redirect with code), token (authorization_code and refresh_token grants; rotating refresh tokens, replay gives invalid_grant, configurable expiry, rotation on/off, injected failures), protected endpoint, control routes (config, mint, expire, state). `admin` knows service `oauth`.
 - Fake Dropbox refuses access tokens the provider has expired (tokens it never issued still pass).
 - `DropboxAuthClient` takes `fakeBaseUrl` (authorize and token URLs). `services.ts` supplies it, and a dev client id/secret when none is set, only under `MOCK_OUTPUT_ADAPTERS=true` (the switch Gmail already uses).
 - Dev tooling: `pnpm dev:oauth setup`, `pnpm dev:inject oauth-expire | oauth-config`, `pnpm dev:inspect oauth` (helpers in `scripts/dev/lib/dev_oauth.ts`). `dev/loop.sh` now puts `MOCK_OUTPUT_ADAPTERS` in the profile marker so CLI processes see it.
