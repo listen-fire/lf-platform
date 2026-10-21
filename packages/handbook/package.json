@@ -1,0 +1,62 @@
+{
+  "name": "@listen-fire/handbook",
+  "license": "Apache-2.0",
+  "version": "0.12.0-rc.4",
+  "description": "The movement language's handbook: the hand-written chapters, the front page, the routes into them and the language search over them. A host adds its own systems' and plugins' sections on top (the platform assembles system:* and plugin:* chapters). `testing` is the catalog every shown example is checked against, for a host's tests of its own sections. While private, its tests borrow apps/api's jest runner (jest.config.borrowed.cjs)",
+  "engines": {
+    "node": "22.20.0"
+  },
+  "scripts": {
+    "code:type-check": "tsc --pretty --noEmit",
+    "test": "node ../../apps/api/node_modules/jest/bin/jest.js --config jest.config.borrowed.cjs",
+    "prepack": "node ../../scripts/build-packages.cjs .",
+    "postpack": "node ../../scripts/build-packages.cjs --restore ."
+  },
+  "main": "index.ts",
+  "types": "index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./testing": "./testing.ts",
+    "./package.json": "./package.json"
+  },
+  "type": "commonjs",
+  "dependencies": {
+    "@listen-fire/engine": "workspace:^",
+    "@listen-fire/engine-contracts": "workspace:^",
+    "@listen-fire/movement-lang": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/jest": "29.5.14",
+    "@types/node": "20.16.5",
+    "engine-contracts": "workspace:@listen-fire/engine-contracts@*",
+    "legacy-lang": "workspace:@listen-fire/legacy-lang@*",
+    "movement-engine": "workspace:@listen-fire/engine@*",
+    "movement-lang": "workspace:@listen-fire/movement-lang@*",
+    "typescript": "5.5.4"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/listen-fire/listen-fire.git",
+    "directory": "packages/handbook"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./testing": {
+        "types": "./dist/testing.d.ts",
+        "default": "./dist/testing.js"
+      },
+      "./package.json": "./package.json"
+    },
+    "tag": "next"
+  }
+}

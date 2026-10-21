@@ -16,7 +16,7 @@ import type { AdapterManifest } from 'movement-engine/services/translation_graph
 import * as registry from '../../../../services/translation_graph/adapters/registry';
 import { readBook } from '../../library';
 import { adapterSectionChapters, getMovementHandbook } from '../index';
-import { proseViolations } from './prose_rules';
+import { proseViolations } from '@listen-fire/handbook';
 
 const SECTION_MANIFEST: AdapterManifest = {
   adapterType: 'orderly',

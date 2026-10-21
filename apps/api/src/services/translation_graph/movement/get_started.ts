@@ -7,7 +7,7 @@
 import type { TeamRef } from 'principal';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 
-import { renderFrontPage } from '../../../lib/knowledge/movement_handbook/front_page';
+import { renderFrontPage } from '../../../lib/knowledge/movement_handbook';
 import { describeMovementInstance, movementCatalogSnapshotForTeam } from './catalog';
 import { renderConnectionsDigest, type SystemDigestInput } from './connection_digest';
 import { connectionsFor, resolveStubLandings, within } from './describe_connection';

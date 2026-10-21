@@ -1,12 +1,15 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { Chapter } from '../types';
 
 // The built-ins reference travels with the language: the language service's
-// hover reads the same file when it is compiled, so the two cannot drift. The
-// path holds from src/ and from the compiled build/ alike (the same depth).
-const BUILTINS_REFERENCE = join(__dirname, '../../../../../../../crates/movement-language/src/builtins.md');
+// hover reads the same file when it is compiled, so the two cannot drift. In
+// the repo it is read where the language keeps it; a build of this package
+// carries a copy beside its own output (scripts/build-packages.cjs, and the
+// api's build when it vendors the package), one level above this chapter.
+const IN_THE_REPO = join(__dirname, '../../../crates/movement-language/src/builtins.md');
+const BUILTINS_REFERENCE = existsSync(IN_THE_REPO) ? IN_THE_REPO : join(__dirname, '../builtins.md');
 
 export const builtins: Chapter = {
   id: 'builtins',

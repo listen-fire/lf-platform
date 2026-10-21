@@ -4,7 +4,7 @@
 // and callable, so a section that breaks the contract can be shown to be
 // caught rather than assumed to be.
 
-import type { Chapter } from '../types';
+import type { Chapter } from './types';
 
 /** Names of the authoring affordances — mechanics of one consumer's loop, so
  *  never in prose two consumers read. */

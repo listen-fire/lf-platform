@@ -12,7 +12,7 @@ import type { PluginManifest } from '../../../../services/translation_graph/engi
 
 import { readBook } from '../../library';
 import { pluginSectionChapters, getMovementHandbook } from '../index';
-import { proseViolations } from './prose_rules';
+import { proseViolations } from '@listen-fire/handbook';
 
 const SECTION_MANIFEST: PluginManifest = {
   pluginName: 'tidy-up',

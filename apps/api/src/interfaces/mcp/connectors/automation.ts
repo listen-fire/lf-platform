@@ -12,7 +12,7 @@ import {
   whatsappLinkVerification,
   type WhatsappLinkVerification,
 } from '../../../services/whatsapp/phone_verification/link_verification';
-import { LANGUAGE_SEARCH_KINDS } from '../../../lib/knowledge/movement_handbook/language_search';
+import { LANGUAGE_SEARCH_KINDS } from '../../../lib/knowledge/movement_handbook';
 
 // The two WhatsApp linking tools describe the flow THIS deployment runs, so an
 // agent on a trusting deployment is never told to ask the user for a code.

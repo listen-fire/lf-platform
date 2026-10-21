@@ -80,6 +80,7 @@ COPY packages/module-runtime/package.json packages/module-runtime/
 COPY packages/movement-engine/package.json packages/movement-engine/
 COPY packages/legacy-engine/package.json packages/legacy-engine/
 COPY packages/legacy-lang/package.json packages/legacy-lang/
+COPY packages/handbook/package.json packages/handbook/
 COPY packages/movement-lang/package.json packages/movement-lang/
 COPY packages/story-view/package.json packages/story-view/
 
@@ -121,9 +122,6 @@ COPY --from=deploy /deploy/ ./
 COPY apps/api ./
 COPY --from=build /srv/listen-fire/apps/api/build ./build
 COPY --from=build /srv/listen-fire/apps/api/public ./public
-# The handbook's built-ins chapter is the language's own reference, read where
-# the language keeps it (the language service compiles the same file in).
-COPY crates/movement-language/src/builtins.md /srv/listen-fire/crates/movement-language/src/builtins.md
 
 # Secrets live in the `listen-fire-config` volume, not in the image and not in an
 # env_file the docker CLI would have to read off the host. Every service sources

@@ -15,15 +15,14 @@
 // entry's name, purpose and body, weighted in that order. Deterministic, and
 // explainable from the entry itself.
 
-import { getMovementHandbook } from './index';
-
 import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+// TODO(split 4b): the built-in table comes from the wasm; this import crosses the boundary until then
 import { describeFieldType, standardLibrary, type Builtin, type BuiltinParam } from 'legacy-lang';
 import { spellMessage, surfaceTable, type SpellingRow } from 'movement-lang/parser/surface';
 
 import type { Chapter, EngineClaim } from './types';
 
-import { listChapterSections, sliceChapterSection } from 'movement-engine/public/handbook';
+import { listChapterSections, sliceChapterSection } from 'engine-contracts/handbook_section';
 import { exampleProgram, exampleText, frontEntries, type FrontExample } from './front_page';
 
 export const LANGUAGE_SEARCH_KINDS = ['function', 'concept', 'recipe'] as const;
@@ -195,6 +194,11 @@ export function searchableBuiltins(): Builtin[] {
   return standardLibrary().filter((entry) => !isRetired(entry));
 }
 
+/** The registry entries the search leaves out: the retired ones. */
+export function retiredBuiltins(): Builtin[] {
+  return standardLibrary().filter(isRetired);
+}
+
 /** Where a built-in that has no section of its own is explained. */
 const BUILTIN_HOME: Record<string, string> = {
   EXTRACT: 'front#extraction',
@@ -305,10 +309,12 @@ function sectionEntries(chapter: Chapter, kind: LanguageSearchKind): LanguageEnt
 /** The chapters whose sections are whole worked recipes. */
 const RECIPE_CHAPTERS = ['patterns', 'use-cases', 'reviews'] as const;
 
-/** The whole index, built from its sources on every call — the manifests are
- *  registered at run time, and a search is cheap next to what it saves. */
-export function languageIndex(): LanguageEntry[] {
-  const chapters = getMovementHandbook().chapters as Record<string, Chapter | undefined>;
+/** The whole index over `chapters` — the book as its host assembles it (a
+ *  host's system and plugin sections are searched beside the core chapters),
+ *  built from its sources on every call: the manifests are registered at run
+ *  time, and a search is cheap next to what it saves. */
+export function languageIndex(book: Readonly<Record<string, Chapter>>): LanguageEntry[] {
+  const chapters: Readonly<Record<string, Chapter | undefined>> = book;
   const recipes = RECIPE_CHAPTERS.flatMap((id) => {
     const chapter = chapters[id];
     return chapter ? sectionEntries(chapter, 'recipe') : [];
@@ -380,10 +386,13 @@ export interface LanguageSearchResult {
   note: string;
 }
 
-/** The best few entries for `query`, optionally of one kind. */
-export function searchLanguage(input: { query: string; kind?: LanguageSearchKind }): LanguageSearchResult {
+/** The best few entries for `query` over `chapters`, optionally of one kind. */
+export function searchLanguage(
+  input: { query: string; kind?: LanguageSearchKind },
+  chapters: Readonly<Record<string, Chapter>>,
+): LanguageSearchResult {
   const aliases = registryAliases();
-  const scored = languageIndex()
+  const scored = languageIndex(chapters)
     .filter((entry) => input.kind === undefined || entry.kind === input.kind)
     .map((entry, order) => ({ entry, order, score: scoreEntry(entry, input.query, aliases) }))
     .filter((s) => s.score > 0)

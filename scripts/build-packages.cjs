@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Builds the publishable packages (the engine, its contracts, the language,
-// the module kit, file text, the model providers and
+// its handbook, the module kit, file text, the model providers and
 // every module) into each one's dist/: JavaScript and declarations. They are
 // SOURCE packages while you work (`main` names index.ts); the published
 // tarball is this build, which `publishConfig` points at.
@@ -28,12 +28,16 @@ const { execFileSync } = require('node:child_process');
 
 const ROOT = path.resolve(__dirname, '..');
 
-/** Each package, in dependency order; `assets` are copied beside its build. */
+/** Each package, in dependency order; `assets` are copied beside its build,
+ *  and `copies` (repo-relative files outside the package) into it. */
 const PACKAGES = [
   { dir: 'packages/movement-lang', assets: [/^wasm\/[^/]+\.wasm$/] },
   { dir: 'packages/engine-contracts' },
   { dir: 'packages/module-runtime' },
   { dir: 'packages/movement-engine' },
+  // The builtins chapter reads the language's reference where the repo keeps
+  // it, and a build from beside its own output (chapters/builtins.ts).
+  { dir: 'packages/handbook', copies: [{ from: 'crates/movement-language/src/builtins.md', to: 'builtins.md' }] },
   { dir: 'packages/file-text' },
   { dir: 'modules/anthropic' },
   { dir: 'packages/model-providers' },
@@ -117,7 +121,7 @@ function assertPublishedEntriesExist(dir) {
   if (missing.length > 0) throw new Error(`${dir} publishes ${missing.join(', ')}, which its build did not produce`);
 }
 
-function build({ dir, assets = [] }) {
+function build({ dir, assets = [], copies = [] }) {
   const at = path.join(ROOT, dir);
   const dist = path.join(at, 'dist');
   fs.rmSync(dist, { recursive: true, force: true });
@@ -169,6 +173,11 @@ function build({ dir, assets = [] }) {
     if (!assets.some((pattern) => pattern.test(relative))) continue;
     fs.mkdirSync(path.dirname(path.join(dist, relative)), { recursive: true });
     fs.copyFileSync(file, path.join(dist, relative));
+  }
+
+  for (const { from, to } of copies) {
+    fs.mkdirSync(path.dirname(path.join(dist, to)), { recursive: true });
+    fs.copyFileSync(path.join(ROOT, from), path.join(dist, to));
   }
 
   // A bin runs the build; it still registers tsx, so a module named by path

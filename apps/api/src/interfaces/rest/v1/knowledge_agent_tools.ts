@@ -34,7 +34,7 @@ import { readBook } from '../../../lib/knowledge/library';
 import {
   LANGUAGE_SEARCH_KINDS,
   searchLanguage,
-} from '../../../lib/knowledge/movement_handbook/language_search';
+} from '../../../lib/knowledge/movement_handbook';
 import { getNodeDetail } from '../../../lib/knowledge/knowledge_query';
 import {
   createEntity,
