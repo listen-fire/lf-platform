@@ -6,5 +6,3 @@ export * from '../services/translation_graph/movement/schema_projection';
 export * from '../services/translation_graph/movement/binding_endpoint';
 export * from 'engine-contracts/catalog';
 export * from '../services/translation_graph/row_body';
-// A declared shape as the whole tree it stands for, every `extends` folded in.
-export { foldedShape, type ChainLink } from '../services/movement_engine/declared_shape';

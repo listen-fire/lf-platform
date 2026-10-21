@@ -26,8 +26,8 @@ import { deploymentWallClockSeconds, maxFileChars, segmentLimitsFor, wallClockEx
 import type { MovementRunResult, ResumeMovementInput, RunMovementInput } from './run_types';
 import type { CallbackBodyInput, SettleRaceInput } from 'engine-contracts';
 import type { RunContext } from './segment_context';
-import { checkedKey, serve, type RouteContext } from './rust_host';
-import { recordRunEngine, rustRunStats, type RunEngineRecord } from './rust_stats';
+import { serve, type RouteContext } from './rust_host';
+import { recordRunEngine, rustRunStats } from './rust_stats';
 import { filesInParkState, REFUSED, RustShimError, WireOut, plainJson, record, string } from './rust_wire';
 
 export { RustShimError, plainJson } from './rust_wire';
@@ -186,16 +186,16 @@ async function segmentInRust(
     rustRunStats.segments += 1;
     if (error instanceof RustShimError) {
       rustRunStats.shimFaults += 1;
-      noteEngine(input, 'rust', SHIM_FAULT);
+      noteEngine(input, SHIM_FAULT);
     } else {
-      noteEngine(input, 'rust', RAN);
+      noteEngine(input, RAN);
     }
     throw error;
   }
   rustRunStats.segments += 1;
   if ('refused' in outcome) throw unsupportedInRust(input, outcome.refused);
   if ('declined' in outcome) throw unsupportedInRust(input, outcome.declined);
-  noteEngine(input, 'rust', RAN);
+  noteEngine(input, RAN);
   return outcome.ran;
 }
 
@@ -205,7 +205,7 @@ async function segmentInRust(
  *  is a checker or engine bug. */
 function unsupportedInRust(input: Pick<RunMovementInput, 'runId' | 'dryRun'>, reason: string): MovementEngineError {
   rustRunStats.unsupported[reason] = (rustRunStats.unsupported[reason] ?? 0) + 1;
-  noteEngine(input, 'rust', reason);
+  noteEngine(input, reason);
   return new MovementEngineError('MOVENG_UNSUPPORTED', `the Rust engine does not run this movement (${reason})`, { reason });
 }
 
@@ -259,7 +259,7 @@ export function checkBeforeRustSegment<T>(input: Pick<RunMovementInput, 'runId' 
     if (isCheckFailure(error)) endedAtItsCheck(input);
     else {
       rustRunStats.shimFaults += 1;
-      noteEngine(input, 'rust', SHIM_FAULT);
+      noteEngine(input, SHIM_FAULT);
     }
     throw error;
   }
@@ -268,7 +268,7 @@ export function checkBeforeRustSegment<T>(input: Pick<RunMovementInput, 'runId' 
 /** A Rust run that ended at its check: counted apart, never a segment. */
 function endedAtItsCheck(input: Pick<RunMovementInput, 'runId' | 'dryRun'>): void {
   rustRunStats.endedAtCheck += 1;
-  noteEngine(input, 'rust', ENDED_AT_CHECK);
+  noteEngine(input, ENDED_AT_CHECK);
 }
 
 /** A run the check had already passed that then failed a check mid-run
@@ -278,20 +278,17 @@ function endedAtItsCheck(input: Pick<RunMovementInput, 'runId' | 'dryRun'>): voi
 function failedCheckMidRun(input: Pick<RunMovementInput, 'runId' | 'dryRun'>): void {
   rustRunStats.segments += 1;
   rustRunStats.failedCheckMidRun += 1;
-  noteEngine(input, 'rust', FAILED_CHECK_MID_RUN);
+  noteEngine(input, FAILED_CHECK_MID_RUN);
 }
 
 /**
- * The one log line per segment that says which engine ran it and how it
- * ended on the Rust engine (`ran`, or why it did not), and the engine
- * recorded on the run's row. A TypeScript segment logs at debug.
+ * The one log line per segment that says how it ended on the Rust engine
+ * (`ran`, or why it did not), and the engine recorded on the run's row.
  */
-export function noteEngine(input: Pick<RunMovementInput, 'runId' | 'dryRun'>, engine: RunEngineRecord['engine'], outcome?: string): void {
-  const line = `movement engine: engine=${engine} run=${input.runId ?? '-'}${outcome !== undefined ? ` outcome=${outcome}` : ''}`;
-  if (engine === 'ts') logger.debug(line);
-  else logger.info(line);
+export function noteEngine(input: Pick<RunMovementInput, 'runId' | 'dryRun'>, outcome: string): void {
+  logger.info(`movement engine: engine=rust run=${input.runId ?? '-'} outcome=${outcome}`);
   // A rehearsal has no run row.
-  if (input.runId !== undefined && input.dryRun !== true) recordRunEngine({ runId: input.runId, engine });
+  if (input.runId !== undefined && input.dryRun !== true) recordRunEngine({ runId: input.runId, engine: 'rust' });
 }
 
 /**
@@ -322,13 +319,7 @@ export async function driveEngine(
     hostErrors: input.hostErrors ?? [],
     positions: new Map(),
     wire: input.wire ?? new WireOut(),
-    // The run's own check, made before the segment opened, is the program
-    // `check.compatible` asks about too.
-    checked: new Map(
-      input.prechecked !== undefined
-        ? [[checkedKey(input.prechecked.source, input.prechecked.languageVersion), input.prechecked.checked.program]]
-        : [],
-    ),
+    checked: new Map(),
   };
   // A settle queue: each request in flight, as it settles, joins the queue
   // and wakes the one waiter. An answer costs O(1) however many requests are

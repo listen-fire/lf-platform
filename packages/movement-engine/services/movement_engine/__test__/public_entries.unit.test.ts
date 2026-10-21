@@ -31,8 +31,8 @@ describe('public entries', () => {
   it('the engine entry runs, resumes and checks', () => {
     expect(typeof engine.runMovement).toBe('function');
     expect(typeof engine.resumeMovement).toBe('function');
-    expect(typeof engine.checkPinned).toBe('function');
-    expect(typeof engine.programCheck.checkPinned).toBe('function');
+    expect(typeof engine.checkPinnedInRust).toBe('function');
+    expect(typeof engine.programCheck.checkAnswerInRust).toBe('function');
     expect(engine.ENGINE_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
   });
 
@@ -63,7 +63,6 @@ describe('public entries', () => {
     expect(typeof host.segmentScopedCalls.around).toBe('function');
     expect(typeof inbound.collectFileListeners).toBe('function');
     expect(typeof inbound.answerModels).toBe('function');
-    expect(typeof engine.listUnsupportedConstructs).toBe('function');
     expect(Object.keys(models.embeddingDestinations).length).toBeGreaterThan(0);
     expect(typeof embed.memoryRunHostStore).toBe('function');
     expect(binding.bindingOf(binding.binding({ kind: 'event' }))).toBeDefined();

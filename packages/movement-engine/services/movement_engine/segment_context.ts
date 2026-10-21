@@ -55,6 +55,14 @@ import {
 /** The plugins a run's catalog snapshot describes, by name. */
 export type PluginSpecs = Readonly<Record<string, PluginSpec>>;
 
+/** What a plain call to `spec`'s plugin hands back to a program pinned to
+ *  `languageVersion`: its current output, or an older shape it kept for
+ *  programs pinned before the change (`PluginSpec.earlierOutputs`). */
+export function pluginOutputUnder(spec: PluginSpec, languageVersion: LanguageVersion): PluginOutput | undefined {
+  const earlier = spec.earlierOutputs?.find((entry) => languageVersion < entry.before);
+  return earlier !== undefined ? earlier.output : spec.output;
+}
+
 /** A plugin by either spelling: movement identifiers can't carry dashes, so a
  *  program writes `vc_url_retrieval` for a plugin registered as
  *  `vc-url-retrieval`; the snapshot keys the underscore spelling. */

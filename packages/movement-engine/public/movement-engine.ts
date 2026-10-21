@@ -17,24 +17,16 @@ export type {
 // A process's boot refuses the retired engine settings.
 export { assertEngineConfigured } from '../services/movement_engine/rust_engine';
 
-// What the Rust engine did in this process, counted, and what keeps a
-// program off the TypeScript engine.
+// What the Rust engine did in this process, counted.
 export * from '../services/movement_engine/rust_stats';
-export {
-  INTERPRETED_FUNCTIONS,
-  isMovementBuiltinFunction,
-  listUnsupportedConstructs,
-} from '../services/movement_engine/interpretable';
 
 export * as programCheck from '../services/movement_engine/program_check';
 export {
-  checkAnswer,
-  checkPinned,
+  checkAnswerInRust,
   checkPinnedInRust,
-  fileResolverOf,
   parsePinned,
+  throwIfBlocking,
   type CheckAnswer,
-  type CheckedProgram,
   type CheckInput,
   type LinkData,
   type LinkedImportData,

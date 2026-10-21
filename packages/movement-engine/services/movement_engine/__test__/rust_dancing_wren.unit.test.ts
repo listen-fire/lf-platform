@@ -51,13 +51,13 @@ jest.mock('movement-lang', () => {
     diagnostics.filter((d) => !mockCheckerMisses.has(d.code));
   return {
     ...actual,
-    checkProgramWithLink: (...args: unknown[]) => {
-      const checked = actual.checkProgramWithLink(...args);
-      return { ...checked, diagnostics: missing(checked.diagnostics) };
+    // The Rust checker's three answers: the run host's check before the
+    // segment opens, the engine's own, which a missed code turns off, so the
+    // engine asks its host for the check (`check.program`), and that answer.
+    checkAnswerInRust: (...args: unknown[]) => {
+      const answer = actual.checkAnswerInRust(...args);
+      return { ...answer, diagnostics: missing(answer.diagnostics) };
     },
-    // The Rust route's checks: the run host's, before the segment opens, and
-    // the engine's own, which a missed code turns off, so the engine asks
-    // its host for the check (`check.program`), the TypeScript's above.
     checkSourceInRust: (...args: unknown[]) => missing(actual.checkSourceInRust(...args)),
     openEngineSegment: () => {
       const segment = actual.openEngineSegment();

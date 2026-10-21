@@ -8,7 +8,7 @@
 import { parseProgram } from '../../../packages/movement-lang/parser/parse';
 import { checkProgramWithLink } from '../../../packages/movement-lang/checker/check';
 import { fromCatalogSnapshot, resolveFileFromSnapshot, type CatalogSnapshot } from '../../../packages/movement-lang/service/snapshot';
-import { checkAnswer } from '../../../packages/movement-engine/services/movement_engine/program_check';
+import { checkAnswer } from '../../../packages/legacy-engine/services/movement_engine/ts_program_check';
 
 declare function require(id: string): any;
 declare const process: { argv: string[] };

@@ -4,8 +4,9 @@
 
 import { mockCatalogSnapshot, parseNestedCall, parseProgram, type InstanceSchema, type Program } from 'movement-lang';
 
-import { MovementEngineError } from '../errors';
-import { checkAnswer, checkPinned, type Stamp } from '../program_check';
+import { MovementEngineError } from 'movement-engine/public/errors';
+import type { Stamp } from 'movement-engine/public/movement-engine';
+import { checkAnswer, checkPinned } from '../ts_program_check';
 
 const emailSchema: InstanceSchema = {
   positions: {

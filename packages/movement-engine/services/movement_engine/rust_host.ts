@@ -8,8 +8,8 @@
 // (`HOST_FAMILIES`) is that method's request, in the contract's shape, and is
 // forwarded as it is: the engine names the segment the run host opened. Two
 // families are the engine's own and never reach an `EngineHost`
-// (`ENGINE_OWN_ROUTES`): `check`, the TypeScript checker until the checker is
-// Rust, and `log`, the platform's log.
+// (`ENGINE_OWN_ROUTES`): `check`, the Rust checker's answers in the movement
+// artifact, and `log`, the platform's log.
 //
 // One encoding is this shim's own: a request marked `wire: true` carries its
 // values on the eval wire (rust_wire.ts), not as plain JSON, so the host is
@@ -17,15 +17,12 @@
 // engine hands it in process, and an adapter's result comes back the same way.
 
 import {
-  declaredTypesIn,
+  compatibleInRust,
   languageVersionDiagnostic,
-  pluginOutputUnder,
-  schemaSurface,
-  surfaceMisfit,
+  RustCheckRefused,
   type CatalogSnapshot,
   type InstanceSchema,
   type Program,
-  type ShapeDeclaration,
 } from 'movement-lang';
 import { filesAtType, fileValueOf, isFileValue, PARK_STATE_VERSION, type CodeByPlace, type ParkedScopeState } from 'engine-contracts';
 import type { Resource } from '../translation_graph/adapter';
@@ -38,13 +35,12 @@ import { logger } from '../logger';
 import type { TriggerEvent } from '../translation_graph/triggers/types';
 import type { UniquenessConstraints } from 'engine-contracts/uniqueness';
 import { hasCapability, isModelName } from 'engine-contracts/model_names';
-import { foldedShape } from './declared_shape';
 import { EFFORTS, type Effort, type TierModel } from './ai_tiers';
 import { ADAPTER_METHODS, type AdapterCall, type AdapterMethod, type EngineHost } from './host';
 import { hostCallFailure, isoDates } from './host_adapter';
-import { checkAnswer, checkPinned, type CheckedProgram } from './program_check';
+import { checkAnswerInRust, checkPinnedInRust, parsePinned } from './program_check';
 import type { MovementRunResult } from './run_types';
-import { pluginSpecNamed, publishTrace, runLogFields, withDeclaredFiles, type RunContext } from './segment_context';
+import { pluginOutputUnder, pluginSpecNamed, publishTrace, runLogFields, withDeclaredFiles, type RunContext } from './segment_context';
 import type { HostAnswer, HostRequest } from './rust_engine';
 import { rustRunStats } from './rust_stats';
 import {
@@ -83,9 +79,6 @@ export interface RouteContext {
    *  pin: the segment's own catalog is what they were checked against, so
    *  nothing a check settled reaches another run, or another tenant. */
   checked: Map<string, Program>;
-  /** The run's own check, made before its segment opened (run.ts): it
-   *  answers `check.program` for the run's source under its pin. */
-  prechecked?: { source: string; languageVersion: number; checked: CheckedProgram };
 }
 
 type Route = (args: Record<string, unknown>, context: RouteContext) => Promise<unknown>;
@@ -93,7 +86,7 @@ type Route = (args: Record<string, unknown>, context: RouteContext) => Promise<u
 /** The routes that are the Rust engine's own, not `EngineHost` methods, and
  *  why each is not on the host boundary. */
 export const ENGINE_OWN_ROUTES: Readonly<Record<string, string>> = {
-  'check.program': 'the TypeScript checker, asked only by a segment started without the native check (the admission dry run, whose start is never answered)',
+  'check.program': 'the Rust checker as data, asked only by a segment started without the native check (the admission dry run, whose start is never answered)',
   'check.compatible': "the checker's assignability, which an `IS <Decl>` test of a system's record asks of its record type's schema",
   'log.write': "the platform's log, for the lines the TypeScript engine writes (sent as a statement ends)",
 };
@@ -105,11 +98,11 @@ export const ENGINE_OWN_ROUTES: Readonly<Record<string, string>> = {
  * data.
  */
 const ROUTES: Record<string, Route> = {
-  /** The TypeScript checker over the pinned source (program_check.ts):
-   *  every diagnostic, the import link and the checker's AST stamps as
-   *  data, and the run's version warning for a deprecated pin. A program
-   *  that fails its check ends the run with the check's error, exactly as
-   *  parseAndCheck throws it. */
+  /** The Rust checker over the pinned source (program_check.ts
+   *  `checkAnswerInRust`): every diagnostic, the import link and the
+   *  checker's AST stamps as data, and the run's version warning for a
+   *  deprecated pin. A program that fails its check ends the run with the
+   *  check's error, as the run's own check throws it. */
   async 'check.program'(request, context) {
     const languageVersion = request.languageVersion;
     if (typeof languageVersion !== 'number') throw new RustShimError('check.program languageVersion must be a number');
@@ -118,28 +111,23 @@ const ROUTES: Record<string, Route> = {
       throw new RustShimError('check.program upgradingFrom must be a number');
     }
     const source = string(request.source, 'check.program source');
-    const prechecked = context.prechecked;
-    let checked;
-    if (prechecked !== undefined && upgradingFrom === undefined && prechecked.source === source && prechecked.languageVersion === languageVersion) {
-      checked = prechecked.checked;
-    } else {
-      try {
-        checked = checkPinned({
-          source,
-          catalog: context.catalog,
-          languageVersion,
-          ...(upgradingFrom !== undefined ? { upgradingFrom } : {}),
-        });
-      } catch (error) {
-        throw new RunAborted(error);
-      }
+    let answer;
+    try {
+      answer = checkAnswerInRust({
+        source,
+        catalog: context.catalog,
+        languageVersion,
+        ...(upgradingFrom !== undefined ? { upgradingFrom } : {}),
+      });
+    } catch (error) {
+      throw new RunAborted(error);
     }
     // The run's own version warning, read as the TypeScript engine reads it
     // (run.ts, before the body): the release the engine runs under, not the
     // checker's own view of it, which a host may hold apart.
     const versionWarning = languageVersionDiagnostic(languageVersion);
     return {
-      ...checkAnswer(checked),
+      ...answer,
       ...(versionWarning !== undefined ? { versionWarning: { code: versionWarning.code, message: versionWarning.message } } : {}),
     };
   },
@@ -159,17 +147,18 @@ const ROUTES: Record<string, Route> = {
     const file = optionalString(request.file, 'check.compatible file');
     const source = file === undefined ? string(request.source, 'check.compatible source') : context.catalog.files?.[file]?.source;
     if (source === undefined) throw new RustShimError(`check.compatible: the snapshot holds no file '${file ?? ''}'`);
-    const program = checkedProgram(context, source, languageVersion);
+    checkedProgram(context, source, languageVersion);
     const declaration = string(request.declaration, 'check.compatible declaration');
     const recordType = string(request.recordType, 'check.compatible recordType');
     const schema = request.schema;
     if (!isInstanceSchemaShaped(schema)) throw new RustShimError('check.compatible schema is an instance schema');
-    const supplied = schemaSurface(schema, recordType);
-    if (supplied === undefined) return { undescribed: true };
-    const required = declaredSchema(program, declaration);
-    const at = declaredPositionAt(required.schema, required.declaration.name, optionalStringList(request.path, 'check.compatible path'));
-    if (at === undefined) return { fits: true };
-    return { fits: surfaceMisfit(supplied, { schema: required.schema, position: at.position }, { languageVersion, seen: at.seen }) === undefined };
+    const path = optionalStringList(request.path, 'check.compatible path');
+    try {
+      return compatibleInRust({ source, languageVersion, declaration, schema, recordType, ...(path !== undefined ? { path } : {}) });
+    } catch (error) {
+      if (error instanceof RustCheckRefused) throw new RustShimError(error.message);
+      throw error;
+    }
   },
   async 'adapters.resolve'(request, { host }) {
     const role = request.role;
@@ -658,27 +647,11 @@ export function checkedProgram(context: Pick<RouteContext, 'catalog' | 'checked'
   const key = checkedKey(source, languageVersion);
   let program = context.checked.get(key);
   if (program === undefined) {
-    program = checkPinned({ source, catalog: context.catalog, languageVersion }).program;
+    checkPinnedInRust({ source, catalog: context.catalog, languageVersion });
+    program = parsePinned({ source, languageVersion });
     context.checked.set(key, program);
   }
   return program;
-}
-
-/** The declared position `path`'s edges reach from `root`, and the positions
- *  `surfaceMisfit` has seen on its way there (each edge's target); undefined
- *  where it would not have compared that far (an edge to a position it has
- *  seen), which fits. */
-function declaredPositionAt(schema: InstanceSchema, root: string, path: readonly string[]): { position: string; seen: Set<string> } | undefined {
-  let position = root;
-  const seen = new Set<string>();
-  for (const name of path) {
-    const edge = schema.positions[position]?.edges[name];
-    if (edge === undefined) throw new RustShimError(`check.compatible: '${position}' declares no node '${name}'`);
-    if (seen.has(edge.target)) return undefined;
-    seen.add(edge.target);
-    position = edge.target;
-  }
-  return { position, seen };
 }
 
 /** An instance schema as the engine hands one back. It is the schema the
@@ -689,21 +662,6 @@ function isInstanceSchemaShaped(value: unknown): value is InstanceSchema {
   if (typeof value !== 'object' || value === null) return false;
   const isMap = (member: unknown) => typeof member === 'object' && member !== null && !Array.isArray(member);
   return isMap(Reflect.get(value, 'positions')) && isMap(Reflect.get(value, 'collections'));
-}
-
-/** A file's node declaration as the tree it stands for, every `extends`
- *  folded in (run.ts `resolvedShape` over its `shapeChain`, the file's own
- *  declarations: an imported one never reaches here). */
-function declaredSchema(program: Program, name: string): { declaration: ShapeDeclaration; schema: InstanceSchema } {
-  const declarations = new Map(program.statements.flatMap((s) => (s.kind === 'shape' ? [[s.name, s] as const] : [])));
-  const chain: ShapeDeclaration[] = [];
-  for (let at = declarations.get(name); at !== undefined; at = at.extends === undefined ? undefined : declarations.get(at.extends.name)) {
-    if (chain.includes(at)) throw new RustShimError(`'${name}' extends itself`);
-    chain.push(at);
-  }
-  if (chain.length === 0) throw new RustShimError(`check.compatible: '${name}' is not a node declaration of the file`);
-  const types = declaredTypesIn(program);
-  return foldedShape(chain.map((declaration) => ({ declaration, types: (type: string) => types.get(type) })));
 }
 
 /** `getRelated`'s answer over the resources reference with each resource's

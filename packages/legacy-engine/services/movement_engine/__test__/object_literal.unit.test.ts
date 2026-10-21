@@ -7,7 +7,7 @@
 // may stringify or comma-join it.
 
 import { binding, Environment, evalMovementExpr } from '../expression';
-import { listUnsupportedConstructs } from 'movement-engine/public/movement-engine';
+import { listUnsupportedConstructs } from '../interpretable';
 import { CURRENT_LANGUAGE_VERSION, parseMovementExpression } from 'movement-lang';
 
 async function evaluate(text: string, bindings: Record<string, unknown> = {}): Promise<unknown> {

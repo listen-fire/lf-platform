@@ -238,7 +238,7 @@ import type {
   WriteResult,
 } from 'movement-engine/public/adapter';
 import { fileHandle, updateRecordSucceeded } from 'movement-engine/public/adapter';
-import { foldedShape } from 'movement-engine/public/catalog';
+import { foldedShape } from './declared_shape';
 import type {
   AdapterResolution,
   BindingEndpoint,
@@ -404,14 +404,8 @@ import {
   type CallbackParamSpec,
   type WriteRecord as RecordedWrite,
 } from 'engine-contracts';
-import {
-  checkPinned,
-  checkPinnedInRust,
-  type CheckInput,
-  type CheckedProgram,
-  recordRunEngine,
-  checkInputOf,
-} from 'movement-engine/public/movement-engine';
+import { checkPinnedInRust, type CheckInput, recordRunEngine, checkInputOf } from 'movement-engine/public/movement-engine';
+import { checkPinned, type CheckedProgram } from './ts_program_check';
 import { inRunContext, spendFields } from 'movement-engine/public/segment-context';
 import { RUST_ENGINE_FROM_VERSION } from './engine_choice';
 import { WriteLedger, forkWriteOrder, rootWriteOrder, type WriteOrder } from './write_ledger';

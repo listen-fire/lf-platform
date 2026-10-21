@@ -160,9 +160,9 @@ import {
 } from 'movement-engine/public/provenance';
 import { MovementEngineError, type MovementEngineErrorCode } from 'movement-engine/public/errors';
 import { applyMovementFunction } from './builtins';
-import { INTERPRETED_FUNCTIONS, isMovementBuiltinFunction } from 'movement-engine/public/movement-engine';
+import { INTERPRETED_FUNCTIONS, isMovementBuiltinFunction } from './interpretable';
 
-export { INTERPRETED_FUNCTIONS, isMovementBuiltinFunction } from 'movement-engine/public/movement-engine';
+export { INTERPRETED_FUNCTIONS, isMovementBuiltinFunction } from './interpretable';
 import { neverAsAny } from 'movement-engine/public/types';
 import type { LocalLandingShape, WriteRecord as RecordedWrite } from 'engine-contracts';
 import {

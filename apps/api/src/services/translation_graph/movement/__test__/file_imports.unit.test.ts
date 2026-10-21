@@ -96,7 +96,7 @@ import type { TriggerEvent } from 'movement-engine/services/translation_graph/tr
 
 import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { MovementEngineError } from '@listen-fire/legacy-engine/services/movement_engine/expression';
-import { listUnsupportedConstructs } from 'movement-engine/services/movement_engine/interpretable';
+import { listUnsupportedConstructs } from '@listen-fire/legacy-engine/services/movement_engine/interpretable';
 import { staticCatalogSnapshot } from '../catalog';
 import { diagnoseMovementSource } from '../authoring';
 import { assembleMovementFileSources, resolverOverSources } from '../files';

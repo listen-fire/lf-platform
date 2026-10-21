@@ -23,7 +23,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { listUnsupportedConstructs } from 'movement-engine/services/movement_engine/interpretable';
+import { listUnsupportedConstructs } from '@listen-fire/legacy-engine/services/movement_engine/interpretable';
 
 type Cover =
   | { by: 'checker'; codes: string[] }

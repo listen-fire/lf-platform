@@ -36,7 +36,7 @@ import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { CatalogGap } from './catalog';
 import type { MovementValidityStatus } from './store';
 
-import { listUnsupportedConstructs } from 'movement-engine/public/movement-engine';
+import { listUnsupportedConstructs } from '@listen-fire/legacy-engine/services/movement_engine/interpretable';
 import { RUST_ENGINE_FROM_VERSION } from '@listen-fire/legacy-engine/dispatch';
 import { movementCatalogForTeam } from './catalog';
 import { stepTimer, type StepTimer } from './timing';
