@@ -41,6 +41,7 @@
         "types": "./dist/index.d.ts",
         "default": "./dist/index.js"
       },
+      "./wasm/*.wasm": "./dist/wasm/*.wasm",
       "./*": {
         "types": "./dist/*.d.ts",
         "default": "./dist/*.js"
