@@ -1,14 +1,14 @@
 // The TypeScript side of the check-answer parity (answers.sh): for every
 // record the checker parity wrote (reference.ts → reference.jsonl), what the
 // TypeScript's check answers the engine besides its diagnostics — the stamps
-// it settles on nodes and the import link (program_check.ts `checkAnswer`) —
-// written as JSON lines for the Rust side (examples/answer_parity.rs).
+// it settles on nodes and the import link (legacy-engine's ts_program_check
+// `checkAnswer`) — written as JSON lines for the wasm side (answer_compare.ts).
 //
-// Usage (answers.sh does this): node -r <ts-node>/register/transpile-only answer_reference.ts <work-dir>
-import { parseProgram } from '../../../packages/movement-lang/parser/parse';
-import { checkProgramWithLink } from '../../../packages/movement-lang/checker/check';
-import { fromCatalogSnapshot, resolveFileFromSnapshot, type CatalogSnapshot } from '../../../packages/movement-lang/service/snapshot';
-import { checkAnswer } from '../../../packages/legacy-engine/services/movement_engine/ts_program_check';
+// Usage (answers.sh does this): node -r <ts-node>/register/transpile-only parity/answer_reference.ts <work-dir>
+import { parseProgram } from '../parser/parse';
+import { checkProgramWithLink } from '../checker/check';
+import { fromCatalogSnapshot, resolveFileFromSnapshot, type CatalogSnapshot } from 'movement-lang/service/snapshot';
+import { checkAnswer } from '../../legacy-engine/services/movement_engine/ts_program_check';
 
 declare function require(id: string): any;
 declare const process: { argv: string[] };
@@ -26,11 +26,11 @@ const out: string[] = [];
 let failed = 0;
 for (const line of fs.readFileSync(path.join(work, 'reference.jsonl'), 'utf8').split('\n')) {
   if (line === '') continue;
-  const { source, snapshot: key, version, parseVersion, upgradingFrom } = JSON.parse(line);
+  const { source, snapshot: key, version, upgradingFrom } = JSON.parse(line);
   const snapshot = table.get(key);
   if (snapshot === undefined) throw new Error(`no snapshot ${key}`);
   try {
-    const program = parseProgram(source, { languageVersion: parseVersion ?? version });
+    const program = parseProgram(source, { languageVersion: version });
     const catalog = fromCatalogSnapshot(snapshot);
     const resolveFile = resolveFileFromSnapshot(snapshot);
     const { diagnostics, link } = checkProgramWithLink(program, catalog, {

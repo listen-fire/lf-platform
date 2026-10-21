@@ -1,6 +1,6 @@
 # Checker parity: Rust against TypeScript
 
-Written by `crates/movement-checker/parity/run.sh`. Do not edit by hand.
+Written by the parity harness when it compared this crate natively with the TypeScript checker on every version. Do not edit by hand. The harness is now the platform's (`packages/legacy-lang/parity/run.sh`): it compares the TypeScript checker with the committed wasm on version 5 programs, and writes its own PARITY.md there.
 
 - Codes at parity: **263 of 263** codes the TypeScript checker reports on this corpus.
 - Diagnostics matched: 164054 of 164054; 0 extra in Rust.

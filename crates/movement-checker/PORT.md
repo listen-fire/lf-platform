@@ -2,7 +2,7 @@
 
 The TypeScript checker (`packages/movement-lang/checker`) is the reference.
 It stays the reference until this crate reports the same diagnostics for
-every program in the parity harness (`PARITY.md`, `parity/run.sh`).
+every program in the parity harness (`PARITY.md`; the harness is now `packages/legacy-lang/parity/run.sh`).
 
 ## What the TypeScript checker is
 

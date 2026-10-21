@@ -10,5 +10,5 @@
     // would write .js beside every .ts, and jest then resolves those instead of the sources.
     "noEmit": true
   },
-  "exclude": ["node_modules", "dist", "jest.config.ts", "**/__test__/**", "__conformance__", "conformance"]
+  "exclude": ["node_modules", "dist", "jest.config.ts", "**/__test__/**", "__conformance__", "conformance", "parity"]
 }

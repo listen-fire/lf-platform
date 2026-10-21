@@ -27,7 +27,7 @@ serde_json = { version = "1", features = ["float_roundtrip", "raw_value", "unbou
 
 [features]
 # A native zone database (src/host.rs, `native::NativeZones`) for this
-# crate's tests and the parity harness. Inert on wasm32, where the host
+# crate's tests and examples. Inert on wasm32, where the host
 # answers zones and no zone data is linked.
 default = ["native-zones"]
 native-zones = ["dep:jiff", "dep:jiff-tzdb"]
