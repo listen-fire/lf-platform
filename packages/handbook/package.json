@@ -56,6 +56,13 @@
       },
       "./package.json": "./package.json"
     },
-    "tag": "next"
+    "tag": "next",
+    "typesVersions": {
+      "*": {
+        "testing": [
+          "dist/testing.d.ts"
+        ]
+      }
+    }
   }
 }

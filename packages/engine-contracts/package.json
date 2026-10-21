@@ -64,6 +64,12 @@
     },
     "typesVersions": {
       "*": {
+        "conformance": [
+          "dist/conformance/index.d.ts"
+        ],
+        "slots": [
+          "dist/slots/index.d.ts"
+        ],
         "*": [
           "dist/*",
           "*"

@@ -55,6 +55,10 @@
         "types": "./dist/index.d.ts",
         "default": "./dist/index.js"
       },
+      "./research": {
+        "types": "./dist/research/index.d.ts",
+        "default": "./dist/research/index.js"
+      },
       "./*": {
         "types": "./dist/*.d.ts",
         "default": "./dist/*.js"
@@ -63,6 +67,9 @@
     },
     "typesVersions": {
       "*": {
+        "research": [
+          "dist/research/index.d.ts"
+        ],
         "*": [
           "dist/*",
           "*"

@@ -41,6 +41,8 @@
       },
       "./package.json": "./package.json"
     },
-    "tag": "next"
+    "tag": "next",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts"
   }
 }
