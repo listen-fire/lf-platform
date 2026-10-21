@@ -13,6 +13,7 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 
 ## [Unreleased]
 
+- A rate-limited model call now waits as long as the vendor's retry-after asks, instead of a fixed 30 seconds.
 - The movement artifact (`movement.wasm`) exports two more Rust checker answers, `check_answer` (the engine's `check.program` request as data: diagnostics, stamps, import link) and `check_compatible` (an `IS <Decl>` test of a system's record), so the JavaScript host answers both without the TypeScript checker. The artifact grows by about 4.5 KB gzipped; the parser artifact is unchanged.
 - Identity matching treats blank text as no key at every language version. A run pinned to version 1 (Quiet Heron) used to match an empty identity field against another empty one; it now decides as version 5 does, so a blank never matches and never selects a record on its own.
 
