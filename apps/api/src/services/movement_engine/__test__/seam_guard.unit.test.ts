@@ -185,6 +185,8 @@ const FORBIDDEN: Array<{ matches: (module: string) => boolean; reason: string }>
 
 const ALLOWED: Array<(module: string) => boolean> = [
   (m) => m === 'movement-lang' || m.startsWith('movement-lang/'),
+  // The TypeScript checker and catalog the legacy engine runs pins 1-4 against.
+  (m) => m === 'legacy-lang' || m.startsWith('legacy-lang/'),
   // The contracts the engine speaks: data shapes and the protocol schema.
   (m) => m === 'engine-contracts' || m.startsWith('engine-contracts/'),
   (m) => m === 'zod',
