@@ -254,7 +254,7 @@ fn items_for(service: &Service, source: &str, pos: Pos, context: Context) -> Vec
                 .and_then(|s| s.trigger_config.clone())
                 .unwrap_or_default()
                 .into_iter()
-                .map(|k| if version >= 5 && k == "pollIntervalSeconds" { "every".to_string() } else { k })
+                .map(|k| if k == "pollIntervalSeconds" { "every".to_string() } else { k })
                 .collect();
             keys.push("suppress_self".into());
             let required = spec.and_then(|s| s.trigger_config_required.clone()).unwrap_or_default();

@@ -351,11 +351,11 @@ mod tests {
         let mut found = std::collections::BTreeMap::<&'static str, usize>::new();
         for line in text.lines().filter(|line| !line.trim().is_empty()) {
             let record: Json = serde_json::from_str(line).unwrap();
-            let (Some(source), Some(version)) = (record["source"].as_str(), record["version"].as_u64()) else { continue };
-            let version = version as u32;
-            let Ok(program) = movement_parser::stmt::parse_program(source, version, false) else { continue };
+            // The corpus is pinned to versions 1–4; each source is read as version 5 text.
+            let Some(source) = record["source"].as_str() else { continue };
+            let Ok(program) = movement_parser::stmt::parse_program(source, 5, false) else { continue };
             let tree = serde_json::to_value(&program).unwrap();
-            check(&program, &tree, "", version, 0, &mut found);
+            check(&program, &tree, "", 5, 0, &mut found);
         }
         for kind in ["closure", "movement", "head", "literal", "shape", "nested"] {
             assert!(found.get(kind).copied().unwrap_or(0) > 0, "the corpus reaches no {kind}: {found:?}");

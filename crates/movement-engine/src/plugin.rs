@@ -41,13 +41,6 @@ pub fn spec_named<'p>(plugins: &'p JsMap<PluginSpec>, plugin: &str) -> Option<&'
     }
 }
 
-/// `pluginOutputUnder`: the output a movement pinned at `language_version`
-/// gets — an earlier one for a pin before the change, else the current.
-pub fn output_under(spec: &PluginSpec, language_version: u32) -> Option<&PluginOutput> {
-    let earlier = spec.earlier_outputs.iter().flatten().find(|entry| language_version < entry.before);
-    earlier.map(|entry| &entry.output).or(spec.output.as_ref())
-}
-
 impl Run<'_> {
     /// `executeCall` for a plugin: the statement's next call opened (so it is
     /// numbered, a `suspendAt` before it suspends, and a statement re-run
@@ -67,7 +60,7 @@ impl Run<'_> {
     /// order written.
     pub(crate) async fn invoke_plugin(&self, written: &str, args: &[CallArg], scope: &Rc<Scope>, at: &Address, path: &str) -> Result<Binding, Stop> {
         let registered = self.registered_plugin(written, scope);
-        let declared = self.plugin_spec(&registered).and_then(|spec| output_under(spec, self.version())).cloned();
+        let declared = self.plugin_spec(&registered).and_then(|spec| spec.output.clone());
         // A plugin that declares no output runs as a statement,
         // for its effects, and binds nothing; the checker refuses its value.
         let for_effects = declared.is_none() && self.plugin_spec(&registered).is_some();

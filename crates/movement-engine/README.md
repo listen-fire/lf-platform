@@ -749,7 +749,7 @@ run that meets one fails with MOVENG_UNSUPPORTED naming `legacy_extraction`
 Version 5 refuses it at the check (`MOV_EXTRACT_KEYWORD_RETIRED`, with the
 upgrade to a declared shape and `extract(…)` where that is mechanical), and a
 version 1–4 program holding one runs on the TypeScript engine, which keeps
-the keyword as those versions' reference. `lf` refuses such a project, saying to run `lf upgrade`. The
+the keyword as those versions' reference. `lf` refuses such a project, saying to upgrade it to version 5 on the platform. The
 extraction call (`extract(content, Shape, { … })`, `extractOne(…)`) runs
 whole (crate::extract::call).
 
