@@ -218,7 +218,7 @@ impl Run<'_> {
     /// `buildGraph`: a graph built as a value; with a shape, each child edge
     /// it declares made (empty where the literal wrote none) and the value
     /// checked against it where the keys came from a map nobody could type,
-    /// and from version 3 always for presence.
+    /// and always for presence.
     async fn build_graph(&self, literal: &NodeLiteral, shape_name: Option<&str>, scope: &Rc<Scope>, path: &str) -> Result<Rc<RefCell<Node>>, Stop> {
         let Some(name) = shape_name else { return self.build_graph_body(literal, scope, path, None).await };
         let Some(Binding::Shape(declared)) = scope.resolve(name) else {

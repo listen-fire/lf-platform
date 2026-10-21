@@ -1,8 +1,8 @@
 //! Calls of the movements a program declares: run.ts's `executeCall` →
 //! `runCall`, for `persist(n: node { … })`, `x = summarise(d)` and the
-//! construction spelling `x = persist(n: d)` of the same; from version 3 a
-//! closure bound to a name is called the same way (`executeClosureCall`),
-//! its body run in the scope it captured.
+//! construction spelling `x = persist(n: d)` of the same; a closure bound
+//! to a name is called the same way (`executeClosureCall`), its body run in
+//! the scope it captured.
 //!
 //! A call is one of its statement's steps (`… .c k`, address.ts): what runs
 //! inside the k-th call a statement makes is addressed under that step. The
@@ -15,8 +15,7 @@
 //! run's own: the cancel gate, the trace handed over a statement at a time,
 //! the writes on the one firing record. Its value is what it returned.
 //!
-//! Before version 3 a call to a movement already running fails; from it
-//! recursion is bounded by the call depth (`call_depth.ts`), the limit the
+//! Recursion is bounded by the call depth (`call_depth.ts`), the limit the
 //! shim reads from the deployment. Admission refuses a park or a suspension
 //! inside a callee (`call_park`, `cost_cap_inside_call`), so a call never
 //! has to be resumed into: no call frame is ever written.
@@ -176,7 +175,7 @@ impl Run<'_> {
     ) -> Called<'s> {
         Box::pin(async move {
             let params = &closure.code.ast.params;
-            // From version 5 a closure stands where a closure type is
+            // A closure stands where a closure type is
             // expected when it takes FEWER parameters than the type supplies
             // (TypeScript's rule), so a call through the type may hand it
             // more arguments than it declares: they are evaluated, in order,
@@ -200,7 +199,7 @@ impl Run<'_> {
                         format!("'{}' has no parameter {which} — the checker should have caught this", call.callee),
                     )));
                 };
-                // A parameter with no written type (language version 5) is
+                // A parameter with no written type is
                 // typed by where the closure is handed — a closure type's
                 // parameter — and takes whatever the argument evaluates to,
                 // a record included.
@@ -368,7 +367,7 @@ impl Run<'_> {
                         self.call_value(&call.callee, value)
                     }
                 },
-                // A closure is a value (language version 5): written in
+                // A closure is a value: written in
                 // place as an argument it is (AST, scope), holding the scope
                 // it is written in by reference, as a closure bound to a
                 // name does.

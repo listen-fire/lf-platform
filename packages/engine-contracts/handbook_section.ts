@@ -1,24 +1,22 @@
 // The conceptual-documentation contract shared by the two layers that meet
 // over it: an adapter declares a section on its manifest
-// (adapter.ts), and the handbook registry
-// (lib/knowledge/movement_handbook) assembles the declared sections into the
-// automation book. It lives below both so the manifest never has to import
+// (adapter.ts), and the host assembles the declared sections onto the
+// language's handbook (@listen-fire/handbook) into the automation book. It lives below both so the manifest never has to import
 // the handbook, nor the handbook own anything adapter-specific.
 
 /**
  * A machine-checkable claim a chapter's prose makes about what the
  * engine runs. The lockstep test
- * (knowledge/movement_handbook/__test__/engine_claims.unit.test.ts) runs
- * the engine's own static interpretability scan
- * (services/movement_engine/interpretable.ts — the same gate every save
- * uses) over `probe`:
+ * (@listen-fire/handbook's __test__/engine_claims.unit.test.ts) hands
+ * `probe` to the check a run on the Rust engine passes before it executes
+ * (the pin, the parse, the Rust checker):
  *
- *   - 'runs'    — the scan must pass the probe clean; the test fails if
- *                 the construct returns to the unsupported list while
- *                 the chapter still says it works;
- *   - 'pending' — the scan must flag the probe with `flag`; the test
- *                 fails the moment an engine lift stops flagging it —
- *                 gap-closure cannot forget the docs.
+ *   - 'runs'    — the check must admit the probe; the test fails if the
+ *                 construct stops checking while the chapter still says
+ *                 it works;
+ *   - 'pending' — the check must refuse the probe; the test fails the
+ *                 moment an engine lift admits it — gap-closure cannot
+ *                 forget the docs.
  */
 export type EngineClaim =
   | {
@@ -33,7 +31,8 @@ export type EngineClaim =
       construct: string;
       status: 'pending';
       probe: string;
-      /** Substring of the construct label `listUnsupportedConstructs` reports. */
+      /** The construct's name as the chapter's reader knows it; the lockstep
+       *  test asserts the refusal, not this text. */
       flag: string;
     };
 

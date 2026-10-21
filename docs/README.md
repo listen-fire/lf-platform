@@ -5,7 +5,7 @@
 - [`contracts/`](contracts/README.md): the versioned contracts the movement core speaks, with an index of the versions each release supports and deprecates. The catalog snapshot, the parked run state, the host families (the boundary between the engine and the code that runs it, and the entry points), the adapter protocol a remote adapter serves, and the language versions.
 - [`language/dancing-wren-migration.md`](language/dancing-wren-migration.md): migrating an automation to language version 5, Dancing Wren. This repository serves version 5 only; upgrading an older automation is the platform's.
 
-The reference for the movement language itself is the handbook the authoring agents read, under [`apps/api/src/lib/knowledge/movement_handbook/chapters`](../apps/api/src/lib/knowledge/movement_handbook/chapters) (it moves to `packages/handbook/chapters` with the handbook package).
+The reference for the movement language itself is the handbook the authoring agents read, in [`packages/handbook`](../packages/handbook), its chapters under [`chapters`](../packages/handbook/chapters).
 
 ## The platform, lf-platform
 
