@@ -141,10 +141,10 @@ describe('historyWindowFromWhere', () => {
 // backticked field as `edge_property`, not `property` — hand-built ASTs above
 // would keep passing while every real movement pushed nothing.
 describe('the window a real hop WHERE yields', () => {
-  function hopFilter(where: string): Expression | undefined {
-    const traverse = parseMovementExpression(`ch-[m:Messages WHERE ${where}]->.\`Message\``);
+  function hopFilter(where: string, walk = (filter: string) => `ch-[m:Messages WHERE ${filter}]->`): Expression | undefined {
+    const traverse = parseMovementExpression(`${walk(where)}.\`Message\``);
     if (traverse.type !== 'traverse') return undefined;
-    const [step] = traverse.steps;
+    const step = traverse.steps.at(-1);
     return step?.type === 'edge' ? step.expressionFilter : undefined;
   }
 
@@ -162,7 +162,15 @@ describe('the window a real hop WHERE yields', () => {
     ).toEqual({ oldest: '1786622399.999000' });
   });
 
-  it('an alias-qualified read is left to the engine — the alias may not be this hop', () => {
-    expect(windowOf(hopFilter('m.`Timestamp` > @current_date'))).toEqual({});
+  // Version 5 lowers a read through the hop's OWN alias to that hop's field
+  // (marked field-only), so it is the landing record's timestamp and bounds
+  // the window like the bare read does.
+  it('a read through the hop\'s own alias bounds the window like the bare field', () => {
+    expect(windowOf(hopFilter('m.`Timestamp` > @current_date'))).toEqual({ oldest: '1787184000.000000' });
+  });
+
+  it('a read through another hop\'s alias is left to the engine — it is not this hop\'s record', () => {
+    const outer = (filter: string) => `ws-[c:Channels]->-[m:Messages WHERE ${filter}]->`;
+    expect(windowOf(hopFilter('c.`Timestamp` > @current_date', outer))).toEqual({});
   });
 });

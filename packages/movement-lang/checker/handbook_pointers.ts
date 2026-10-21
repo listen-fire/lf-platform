@@ -3,7 +3,7 @@
 // The commonest diagnostics end with a pointer an authoring agent can read
 // straight back (`readHandbook` serves every anchor here), so a refusal names
 // both what is wrong and where the right form is shown. The anchors are the
-// handbook's, held in the API; its tests fail if one stops resolving.
+// handbook's (@listen-fire/handbook); its tests fail if one stops resolving.
 
 export const HANDBOOK_POINTERS = {
   /** A value that may be absent, used where one is required. */

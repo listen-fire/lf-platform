@@ -73,12 +73,12 @@ import {
   type ExtractSpecOptions,
   type MovementTransformInvoker,
 } from '@listen-fire/legacy-engine/services/movement_engine/extraction';
-import { NO_PROVENANCE } from 'movement-engine/services/movement_engine/provenance';
+import { NO_PROVENANCE } from 'movement-engine/public/provenance';
 import {
   claudeModelId,
   extractionSettings,
   type TierCallSettings,
-} from 'movement-engine/services/movement_engine/ai_tiers';
+} from 'movement-engine/public/models';
 import {
   FIXTURES,
   resolveDeclaredType,

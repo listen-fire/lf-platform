@@ -1,20 +1,15 @@
-//! The record verbs beside `write`: run.ts's `executeMatch`, `executeLink`
-//! (and version 1's `executeCriteriaLink`), `executeUnlinkStatement` and
-//! `executeDeleteStatement`, for records in a system (a match among a node
-//! this run built is admission's to refuse):
+//! The record verbs beside `write`: run.ts's `executeMatch`, `executeLink`,
+//! `executeUnlinkStatement` and `executeDeleteStatement`, for records in a
+//! system (a match among a node this run built is admission's to refuse):
 //!
 //! - `x = match crm-[c:companies WHERE …]-> { unique by (…) … }`: the first
 //!   half of a write — the target, the fields, the identity, the shortlist
 //!   narrowed by the target's WHERE, the rules and the judge — binding what
 //!   it found (its data read whole where the adapter can), never writing. A
-//!   miss binds absent and the block carries on from version 4; before it
-//!   ends the enclosing scope quietly (`ScopeEndedQuietly`: a fan-out's
-//!   iteration skips, the movement's body stops, nothing fails);
-//! - `link a -[:e]-> b`, `link a -[:e]-> { match body }` (from version 2 the
-//!   match then the link; in version 1 a body without its own `unique by` is
-//!   criteria, found and linked as one row) and `unlink a -[:e]-> b`: two
-//!   handles in one graph, the edge checked against the from side's type,
-//!   then `linkRecords` / `unlinkRecords` under the edge's lock;
+//!   miss binds absent and the block carries on;
+//! - `link a -[:e]-> b` and `unlink a -[:e]-> b`: two handles in one graph,
+//!   the edge checked against the from side's type, then `linkRecords` /
+//!   `unlinkRecords` under the edge's lock;
 //! - `delete x`: the record a handle or a traversed record stands on,
 //!   through `deleteRecord` under the record's lock.
 //!
@@ -79,10 +74,11 @@ struct Edge {
 /// `MatchMissPolicy`: what a match that found nothing does.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum OnMiss {
-    /// Version 4 on: the name binds absent and the block carries on.
+    /// The name binds absent and the block carries on.
     Absent,
-    /// Before version 4 (and a link's body, which version 4 refuses): the
-    /// enclosing scope ends quietly.
+    /// A link's body (`link a -[:e]-> { match body }`, which the checker
+    /// refuses): the enclosing scope ends quietly (`ScopeEndedQuietly`: a
+    /// fan-out's iteration skips, the movement's body stops, nothing fails).
     EndScope,
 }
 
@@ -347,7 +343,7 @@ impl Run<'_> {
         }
         let (to_name, to) = match &link.to {
             LinkTarget::Match { r#match, .. } => {
-                // Version 4 refuses this form, so a miss here always ends
+                // The checker refuses this form, so a miss here always ends
                 // the scope.
                 let found = self.match_record(r#match, binding_name, scope, OnMiss::EndScope).await?;
                 (binding_name.unwrap_or("{ … }").to_string(), Some(found))

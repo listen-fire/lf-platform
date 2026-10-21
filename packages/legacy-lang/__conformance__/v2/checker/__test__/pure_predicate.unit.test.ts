@@ -13,8 +13,8 @@ import {
   isPurePredicate,
   leafReadKey,
   pureLeafReads,
-} from '../../../../expression/filter';
-import type { Expression } from '../../../../expression/types';
+} from 'movement-lang/expression/filter';
+import type { Expression } from 'movement-lang/expression/types';
 
 // `t.firedAt` — the exact AST the formula parser emits for a bare alias
 // followed by `.field`: an alias-rooted traverse with EMPTY steps wrapping the

@@ -25,7 +25,7 @@ listen to inbox { key: "intake" } fire `Inbound Intake`
 
 The event that arrives is a *position*: a point in the graph of the system it came from. From there the program traverses to related records, fans out across them, and writes into other systems along their own edges. `unique by` makes a repeat update an existing record instead of duplicating it.
 
-The language lives in [`packages/movement-lang`](packages/movement-lang). The reference the authoring agents read is the handbook under [`apps/api/src/lib/knowledge/movement_handbook/chapters`](apps/api/src/lib/knowledge/movement_handbook/chapters); `foundations.ts` and `anatomy.ts` are the two to start with.
+The language lives in [`packages/movement-lang`](packages/movement-lang). The reference the authoring agents read is the handbook in [`packages/handbook`](packages/handbook), its chapters under [`chapters`](packages/handbook/chapters); `foundations.ts` and `anatomy.ts` are the two to start with.
 
 ## What you can connect
 
