@@ -13,8 +13,8 @@ import {
   isPurePredicate,
   leafReadKey,
   pureLeafReads,
-} from '@listen-fire/shared/expression/filter';
-import type { Expression } from '@listen-fire/shared/expression/types';
+} from '../../../../expression/filter';
+import type { Expression } from '../../../../expression/types';
 
 // `t.firedAt` — the exact AST the formula parser emits for a bare alias
 // followed by `.field`: an alias-rooted traverse with EMPTY steps wrapping the

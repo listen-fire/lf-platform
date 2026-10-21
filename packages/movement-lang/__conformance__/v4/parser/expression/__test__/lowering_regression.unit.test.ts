@@ -7,7 +7,7 @@
 // Set UPDATE_LOWERED_FIXTURE=1 to rewrite the pins from the current lowering
 // (after a re-harvest, or a ruling) — then read the diff: every changed entry
 // must be one a ruling explains.
-import type { Expression } from '@listen-fire/shared/expression/types';
+import type { Expression } from '../../../../../expression/types';
 import { POSITION_SENTINEL, type MovementCondition } from '../lower';
 import { parseMovementCondition, parseMovementExpression } from '../../../expression/bridge';
 import { BridgeError } from '../../../expression/error';

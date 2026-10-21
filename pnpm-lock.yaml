@@ -27,9 +27,6 @@ importers:
       '#trpc':
         specifier: workspace:@listen-fire/trpc@*
         version: link:../../packages/trpc
-      '@listen-fire/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
       '@react-oauth/google':
         specifier: 0.12.1
         version: 0.12.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -97,9 +94,6 @@ importers:
 
   apps/api:
     dependencies:
-      '#shared':
-        specifier: workspace:@listen-fire/shared@*
-        version: link:../../packages/shared
       '@anthropic-ai/sdk':
         specifier: ^0.126.0
         version: 0.126.0(zod@4.1.12)
@@ -154,6 +148,9 @@ importers:
       '@listen-fire/kg':
         specifier: workspace:*
         version: link:../../modules/kg
+      '@listen-fire/legacy-engine':
+        specifier: workspace:*
+        version: link:../../packages/legacy-engine
       '@listen-fire/native-valuations':
         specifier: workspace:*
         version: link:../../modules/native-valuations
@@ -698,9 +695,9 @@ importers:
       '@lezer/highlight':
         specifier: ^1.2.3
         version: 1.2.3
-      '@listen-fire/shared':
+      '@listen-fire/legacy-engine':
         specifier: workspace:*
-        version: link:../../packages/shared
+        version: link:../../packages/legacy-engine
       '@react-oauth/google':
         specifier: 0.12.1
         version: 0.12.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -877,9 +874,6 @@ importers:
       '@listen-fire/movement-lang':
         specifier: workspace:^
         version: link:../../packages/movement-lang
-      '@listen-fire/shared':
-        specifier: workspace:^
-        version: link:../../packages/shared
       date-fns:
         specifier: 3.6.0
         version: 3.6.0
@@ -896,9 +890,6 @@ importers:
         specifier: 4.1.12
         version: 4.1.12
     devDependencies:
-      '#shared':
-        specifier: workspace:@listen-fire/shared@*
-        version: link:../../packages/shared
       '@types/jest':
         specifier: 29.5.14
         version: 29.5.14
@@ -938,9 +929,6 @@ importers:
       '@listen-fire/movement-lang':
         specifier: workspace:^
         version: link:../../packages/movement-lang
-      '@listen-fire/shared':
-        specifier: workspace:^
-        version: link:../../packages/shared
       exponential-backoff:
         specifier: 3.1.1
         version: 3.1.1
@@ -951,9 +939,6 @@ importers:
         specifier: 4.1.12
         version: 4.1.12
     devDependencies:
-      '#shared':
-        specifier: workspace:@listen-fire/shared@*
-        version: link:../../packages/shared
       '@types/jest':
         specifier: 29.5.14
         version: 29.5.14
@@ -1055,9 +1040,6 @@ importers:
       '@listen-fire/movement-lang':
         specifier: workspace:^
         version: link:../../packages/movement-lang
-      '@listen-fire/shared':
-        specifier: workspace:^
-        version: link:../../packages/shared
       exponential-backoff:
         specifier: 3.1.1
         version: 3.1.1
@@ -1068,9 +1050,6 @@ importers:
         specifier: 4.1.12
         version: 4.1.12
     devDependencies:
-      '#shared':
-        specifier: workspace:@listen-fire/shared@*
-        version: link:../../packages/shared
       '@types/jest':
         specifier: 29.5.14
         version: 29.5.14
@@ -1107,16 +1086,10 @@ importers:
       '@listen-fire/movement-lang':
         specifier: workspace:^
         version: link:../../packages/movement-lang
-      '@listen-fire/shared':
-        specifier: workspace:^
-        version: link:../../packages/shared
       zod:
         specifier: 4.1.12
         version: 4.1.12
     devDependencies:
-      '#shared':
-        specifier: workspace:@listen-fire/shared@*
-        version: link:../../packages/shared
       '@types/jest':
         specifier: 29.5.14
         version: 29.5.14
@@ -1187,16 +1160,10 @@ importers:
       '@listen-fire/movement-lang':
         specifier: workspace:^
         version: link:../../packages/movement-lang
-      '@listen-fire/shared':
-        specifier: workspace:^
-        version: link:../../packages/shared
       zod:
         specifier: 4.1.12
         version: 4.1.12
     devDependencies:
-      '#shared':
-        specifier: workspace:@listen-fire/shared@*
-        version: link:../../packages/shared
       '@types/jest':
         specifier: 29.5.14
         version: 29.5.14
@@ -1279,16 +1246,10 @@ importers:
       '@listen-fire/movement-lang':
         specifier: workspace:^
         version: link:../../packages/movement-lang
-      '@listen-fire/shared':
-        specifier: workspace:^
-        version: link:../../packages/shared
       zod:
         specifier: 4.1.12
         version: 4.1.12
     devDependencies:
-      '#shared':
-        specifier: workspace:@listen-fire/shared@*
-        version: link:../../packages/shared
       '@types/jest':
         specifier: 29.5.14
         version: 29.5.14
@@ -1328,9 +1289,6 @@ importers:
       '@listen-fire/movement-lang':
         specifier: workspace:^
         version: link:../../packages/movement-lang
-      '@listen-fire/shared':
-        specifier: workspace:^
-        version: link:../../packages/shared
       googleapis:
         specifier: 164.1.0
         version: 164.1.0
@@ -1341,9 +1299,6 @@ importers:
         specifier: 4.1.12
         version: 4.1.12
     devDependencies:
-      '#shared':
-        specifier: workspace:@listen-fire/shared@*
-        version: link:../../packages/shared
       '@types/html-to-text':
         specifier: 9.0.4
         version: 9.0.4
@@ -1417,9 +1372,6 @@ importers:
       '@listen-fire/movement-lang':
         specifier: workspace:^
         version: link:../../packages/movement-lang
-      '@listen-fire/shared':
-        specifier: workspace:^
-        version: link:../../packages/shared
       exponential-backoff:
         specifier: 3.1.1
         version: 3.1.1
@@ -1427,9 +1379,6 @@ importers:
         specifier: 4.1.12
         version: 4.1.12
     devDependencies:
-      '#shared':
-        specifier: workspace:@listen-fire/shared@*
-        version: link:../../packages/shared
       '@types/jest':
         specifier: 29.5.14
         version: 29.5.14
@@ -1466,16 +1415,10 @@ importers:
       '@listen-fire/movement-lang':
         specifier: workspace:^
         version: link:../../packages/movement-lang
-      '@listen-fire/shared':
-        specifier: workspace:^
-        version: link:../../packages/shared
       zod:
         specifier: 4.1.12
         version: 4.1.12
     devDependencies:
-      '#shared':
-        specifier: workspace:@listen-fire/shared@*
-        version: link:../../packages/shared
       '@types/jest':
         specifier: 29.5.14
         version: 29.5.14
@@ -1552,16 +1495,10 @@ importers:
       '@listen-fire/movement-lang':
         specifier: workspace:^
         version: link:../../packages/movement-lang
-      '@listen-fire/shared':
-        specifier: workspace:^
-        version: link:../../packages/shared
       zod:
         specifier: 4.1.12
         version: 4.1.12
     devDependencies:
-      '#shared':
-        specifier: workspace:@listen-fire/shared@*
-        version: link:../../packages/shared
       '@types/jest':
         specifier: 29.5.14
         version: 29.5.14
@@ -1656,16 +1593,10 @@ importers:
       '@listen-fire/movement-lang':
         specifier: workspace:^
         version: link:../../packages/movement-lang
-      '@listen-fire/shared':
-        specifier: workspace:^
-        version: link:../../packages/shared
       zod:
         specifier: 4.1.12
         version: 4.1.12
     devDependencies:
-      '#shared':
-        specifier: workspace:@listen-fire/shared@*
-        version: link:../../packages/shared
       '@types/jest':
         specifier: 29.5.14
         version: 29.5.14
@@ -1795,9 +1726,6 @@ importers:
       '@listen-fire/movement-lang':
         specifier: workspace:^
         version: link:../../packages/movement-lang
-      '@listen-fire/shared':
-        specifier: workspace:^
-        version: link:../../packages/shared
       '@slack/web-api':
         specifier: 7.11.0
         version: 7.11.0
@@ -1805,9 +1733,6 @@ importers:
         specifier: 4.1.12
         version: 4.1.12
     devDependencies:
-      '#shared':
-        specifier: workspace:@listen-fire/shared@*
-        version: link:../../packages/shared
       '@types/jest':
         specifier: 29.5.14
         version: 29.5.14
@@ -1869,16 +1794,10 @@ importers:
       '@listen-fire/movement-lang':
         specifier: workspace:^
         version: link:../../packages/movement-lang
-      '@listen-fire/shared':
-        specifier: workspace:^
-        version: link:../../packages/shared
       zod:
         specifier: 4.1.12
         version: 4.1.12
     devDependencies:
-      '#shared':
-        specifier: workspace:@listen-fire/shared@*
-        version: link:../../packages/shared
       '@types/jest':
         specifier: 29.5.14
         version: 29.5.14
@@ -1921,9 +1840,6 @@ importers:
       '@listen-fire/movement-lang':
         specifier: workspace:^
         version: link:../../packages/movement-lang
-      '@listen-fire/shared':
-        specifier: workspace:^
-        version: link:../../packages/shared
       html-to-text:
         specifier: 9.0.5
         version: 9.0.5
@@ -1934,9 +1850,6 @@ importers:
         specifier: 4.1.12
         version: 4.1.12
     devDependencies:
-      '#shared':
-        specifier: workspace:@listen-fire/shared@*
-        version: link:../../packages/shared
       '@types/html-to-text':
         specifier: 9.0.4
         version: 9.0.4
@@ -1979,9 +1892,6 @@ importers:
       '@listen-fire/movement-lang':
         specifier: workspace:^
         version: link:../../packages/movement-lang
-      '@listen-fire/shared':
-        specifier: workspace:^
-        version: link:../../packages/shared
       mime:
         specifier: 4.0.3
         version: 4.0.3
@@ -1989,9 +1899,6 @@ importers:
         specifier: 4.1.12
         version: 4.1.12
     devDependencies:
-      '#shared':
-        specifier: workspace:@listen-fire/shared@*
-        version: link:../../packages/shared
       '@types/jest':
         specifier: 29.5.14
         version: 29.5.14
@@ -2053,16 +1960,10 @@ importers:
       '@listen-fire/movement-lang':
         specifier: workspace:^
         version: link:../movement-lang
-      '@listen-fire/shared':
-        specifier: workspace:^
-        version: link:../shared
       zod:
         specifier: 4.1.12
         version: 4.1.12
     devDependencies:
-      '#shared':
-        specifier: workspace:@listen-fire/shared@*
-        version: link:../shared
       '@types/node':
         specifier: 20.16.5
         version: 20.16.5
@@ -2175,6 +2076,15 @@ importers:
         specifier: 5.5.4
         version: 5.5.4
 
+  packages/legacy-engine:
+    devDependencies:
+      movement-lang:
+        specifier: workspace:@listen-fire/movement-lang@*
+        version: link:../movement-lang
+      typescript:
+        specifier: 5.5.4
+        version: 5.5.4
+
   packages/model-providers:
     dependencies:
       '@listen-fire/anthropic':
@@ -2226,16 +2136,10 @@ importers:
       '@listen-fire/movement-lang':
         specifier: workspace:^
         version: link:../movement-lang
-      '@listen-fire/shared':
-        specifier: workspace:^
-        version: link:../shared
       zod:
         specifier: 4.1.12
         version: 4.1.12
     devDependencies:
-      '#shared':
-        specifier: workspace:@listen-fire/shared@*
-        version: link:../shared
       '@types/jest':
         specifier: 29.5.14
         version: 29.5.14
@@ -2288,9 +2192,6 @@ importers:
       '@listen-fire/movement-lang':
         specifier: workspace:^
         version: link:../movement-lang
-      '@listen-fire/shared':
-        specifier: workspace:^
-        version: link:../shared
       safe-stable-stringify:
         specifier: 2.5.0
         version: 2.5.0
@@ -2298,9 +2199,9 @@ importers:
         specifier: 4.1.12
         version: 4.1.12
     devDependencies:
-      '#shared':
-        specifier: workspace:@listen-fire/shared@*
-        version: link:../shared
+      '@listen-fire/legacy-engine':
+        specifier: workspace:*
+        version: link:../legacy-engine
       '@types/jest':
         specifier: 29.5.14
         version: 29.5.14
@@ -2325,9 +2226,6 @@ importers:
 
   packages/movement-lang:
     dependencies:
-      '@listen-fire/shared':
-        specifier: workspace:^
-        version: link:../shared
       typescript:
         specifier: 5.5.4
         version: 5.5.4
@@ -2382,17 +2280,8 @@ importers:
         specifier: 5.5.4
         version: 5.5.4
 
-  packages/shared:
-    dependencies:
-      typescript:
-        specifier: 5.5.4
-        version: 5.5.4
-
   packages/story-view:
     dependencies:
-      '@listen-fire/shared':
-        specifier: workspace:*
-        version: link:../shared
       esbuild:
         specifier: 0.23.1
         version: 0.23.1
@@ -2461,9 +2350,6 @@ importers:
       '@listen-fire/ask':
         specifier: workspace:*
         version: link:../../modules/ask
-      '@listen-fire/shared':
-        specifier: workspace:*
-        version: link:../shared
       '@prisma/client':
         specifier: 5.22.0
         version: 5.22.0(prisma@5.22.0)

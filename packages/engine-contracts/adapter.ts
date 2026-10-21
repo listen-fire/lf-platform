@@ -19,7 +19,7 @@ import type {
   SchemaTypeDescriptor,
   SourcePosition,
 } from './catalog';
-import type { Expression } from '#shared/expression/types';
+import type { Expression } from 'movement-lang/expression/types';
 
 export type { ConfigBlock, TriggerConfigField } from './trigger_config';
 
@@ -317,7 +317,7 @@ export interface AdapterManifest {
    * the derived ones (the inbound routing `key` from `triggerConfigSchema`,
    * the subscribable `events`). Each entry names the key, whether a listen MUST carry it,
    * and an optional value format the checker validates statically
-   * (`'cron'` — a five-field cron expression, see @listen-fire/shared/cron).
+   * (`'cron'` — a five-field cron expression, see movement-lang/cron).
    * The cron adapter's `schedule` is the motivating case:
    * `listen to timer { schedule: "0 9 * * 1" } fire digest`.
    */

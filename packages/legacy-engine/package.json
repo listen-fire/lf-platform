@@ -1,0 +1,25 @@
+{
+  "name": "@listen-fire/legacy-engine",
+  "private": true,
+  "license": "Apache-2.0",
+  "version": "0.12.0-rc.4",
+  "description": "The deprecated language versions' (1–4) formula text parser: the CAPS grammar, its validation and type inference. Platform-only; the language package never imports it. Its tests borrow apps/api's jest runner (jest.config.borrowed.cjs)",
+  "engines": {
+    "node": "22.20.0"
+  },
+  "scripts": {
+    "code:type-check": "tsc --pretty --noEmit",
+    "test": "node ../../apps/api/node_modules/jest/bin/jest.js --config jest.config.borrowed.cjs"
+  },
+  "main": "formula/parser.ts",
+  "types": "formula/parser.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    "./*": "./*.ts"
+  },
+  "type": "commonjs",
+  "devDependencies": {
+    "movement-lang": "workspace:@listen-fire/movement-lang@*",
+    "typescript": "5.5.4"
+  }
+}

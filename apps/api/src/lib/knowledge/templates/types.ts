@@ -1,4 +1,4 @@
-import type { Expression } from '#shared/expression/types';
+import type { Expression } from 'movement-lang/expression/types';
 
 import PropertyValueType from '../../../generated/kysely/knowledge/PropertyValueType';
 import EvaluationStrategy from '../../../generated/kysely/knowledge/EvaluationStrategy';

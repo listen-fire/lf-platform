@@ -10,7 +10,7 @@
 // Everything here is STATIC — no credential, no network — so `describe` is free
 // and the walk hydrates every target rather than stubbing.
 
-import type { EdgeCapability } from '#shared/expression/types';
+import type { EdgeCapability } from 'engine-contracts/expression/expression';
 import type { SchemaEntryPoint, SchemaTypeDescriptor } from 'movement-engine/public/catalog';
 
 import { META_RECORD_TYPE } from 'movement-engine/public/catalog';

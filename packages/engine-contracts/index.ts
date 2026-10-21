@@ -19,6 +19,10 @@ export * from './cost';
 export * from './event';
 export * from './expression/expression';
 export * from './expression/schemas';
+// The adapter-facing vocabulary (`expression/expression`) re-exports the language's
+// `TraversalStep` and `FilterOperator`; the barrel keeps meaning the schemas' own
+// (zod-inferred) types, as it did before, so the two stars do not collide.
+export type { FilterOperator, TraversalStep } from './expression/schemas';
 export * from './file_ref';
 export * from './guids';
 export * from './handbook_section';

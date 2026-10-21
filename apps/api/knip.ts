@@ -27,7 +27,6 @@ const config: KnipConfig = {
   ignoreBinaries: ['diff', 'make', 'sed'],
   ignoreDependencies: [
     'prisma-kysely', // vestigial (schema.prisma retired); pending dep removal
-    '#shared', // shared is a monorepo package, doesn't show up as used for some reason
     '@types/redis-info', // is needed in prod build step, will fall over otherwise
     '@swc-node/register', // used in dev to compile faster
     'ts-jest', // used in jest configs

@@ -2,7 +2,7 @@
 // The split boundary check. The repo is allocated to two future repos
 // (scripts/split-allocation.json): the language and the platform. A violation
 // is a file on the language side that imports a file on the platform side, by
-// workspace package name, by a package.json alias (`#shared`, `movement-engine`)
+// workspace package name, by a package.json alias (`movement-lang`, `movement-engine`)
 // or by relative path. Test files count.
 //
 //   node scripts/check-split-boundary.cjs            exit 1 on any violation

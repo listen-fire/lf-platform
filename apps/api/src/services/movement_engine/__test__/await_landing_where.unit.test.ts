@@ -5,7 +5,7 @@
 // it may not have — the adapter would rightly refuse it as drift.
 
 import { parseTraversalPath } from 'movement-lang';
-import type { Expression } from '#shared/expression/types';
+import type { Expression } from 'movement-lang/expression/types';
 import { awaitLandingMatches } from 'movement-engine/services/movement_engine/run';
 import type { Adapter, RuntimeCapabilities } from 'movement-engine/services/translation_graph/adapter';
 import { AdapterNameDriftError } from 'module-kit/adapter/name_resolution';

@@ -42,7 +42,7 @@ import type { Expression } from 'movement-engine/public/catalog';
 import type { TraversalStep } from 'movement-engine/public/output-v3';
 import type { FieldShape } from './schema_synthesis';
 
-import { listElementExpression, type ListElement } from '#shared/expression/types';
+import { listElementExpression, type ListElement } from 'movement-lang/expression/types';
 
 /**
  * Synthetic binding key for an `#extract` step the author left unaliased.

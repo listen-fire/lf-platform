@@ -45,7 +45,7 @@ export type NormalForm = 'NFC' | 'NFD' | 'NFKC' | 'NFKD';
 
 const FORMATTERS = new Map<string, Intl.DateTimeFormat | null>();
 
-/** As packages/shared/timezone's `formatterFor`, and null for a zone `Intl`
+/** As packages/movement-lang/timezone's `formatterFor`, and null for a zone `Intl`
  *  refuses (cron's `isValidTimeZone`). */
 function formatterFor(zone: string): Intl.DateTimeFormat | null {
   let formatter = FORMATTERS.get(zone);
@@ -72,7 +72,7 @@ function formatterFor(zone: string): Intl.DateTimeFormat | null {
   return formatter;
 }
 
-/** packages/shared/timezone's `localFields`, with the instant's milliseconds
+/** packages/movement-lang/timezone's `localFields`, with the instant's milliseconds
  *  and its offset beside. */
 export function tzConvert(instantIso: string, zone: string): ZonedFields | null {
   const formatter = formatterFor(zone);

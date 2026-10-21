@@ -1,4 +1,4 @@
-import type { Expression } from '#shared/expression/types';
+import type { Expression } from 'movement-lang/expression/types';
 
 import { getKnowledgeQb } from '../kysely';
 import { NodeId } from '../../generated/kysely/knowledge/Node';

@@ -1,6 +1,6 @@
 // order_limit.json: what one hop asks its adapter for and what the engine
 // keeps of the answer, written by the TypeScript's own helpers
-// (packages/shared/expression/order_limit.ts `hopPushdown` and
+// (packages/movement-lang/expression/order_limit.ts `hopPushdown` and
 // `applyHopOrderLimit`, filter.ts `pureLeafReads` / `replacePureLeaves`), which
 // tests/order_limit_pin.rs holds crates/movement-engine/src/order_limit.rs to.
 //
@@ -16,9 +16,9 @@ import { writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { parseMovementExpression } from '../../../../packages/movement-lang/expression/bridge';
-import { pureLeafReads, replacePureLeaves } from '../../../../packages/shared/expression/filter';
-import { applyHopOrderLimit, hopPushdown } from '../../../../packages/shared/expression/order_limit';
-import type { EdgeStep, Expression } from '../../../../packages/shared/expression/types';
+import { pureLeafReads, replacePureLeaves } from '../../../../packages/movement-lang/expression/filter';
+import { applyHopOrderLimit, hopPushdown } from '../../../../packages/movement-lang/expression/order_limit';
+import type { EdgeStep, Expression } from '../../../../packages/movement-lang/expression/types';
 
 const FILTERS = [
   '',

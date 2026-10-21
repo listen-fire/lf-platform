@@ -7,7 +7,7 @@
 // requests they made are identical.
 
 import type { TriggerEvent } from 'engine-contracts';
-import type { Expression } from '#shared/expression/types';
+import type { Expression } from 'movement-lang/expression/types';
 import type { Adapter, DiscriminableEvent } from 'movement-engine/public/adapter';
 
 import { makeMetaPosition } from 'movement-engine/public/catalog';

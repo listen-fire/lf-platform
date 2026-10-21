@@ -38,7 +38,7 @@ import type {
   SchemaTypeDescriptor,
   SourcePosition,
 } from 'movement-engine/public/catalog';
-import type { Expression } from '#shared/expression/types';
+import type { Expression } from 'engine-contracts/expression/expression';
 
 import { logger } from 'movement-engine/public/log';
 import { isAdapterCallCeilingExceeded } from 'movement-engine/public/adapter-support';
@@ -93,7 +93,7 @@ import {
   AFFINITY_EMPLOYER_EDGE_IDS,
 } from './schema_catalog';
 
-import { flattenAndConjuncts } from '#shared/expression/filter';
+import { flattenAndConjuncts } from 'engine-contracts/expression/expression';
 
 
 /** Whether an edge name is one of the two the built-in person↔organization

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Builds the publishable packages (the engine, its contracts, the language,
-// the module kit, file text, the model providers, the shared library and
+// the module kit, file text, the model providers and
 // every module) into each one's dist/: JavaScript and declarations. They are
 // SOURCE packages while you work (`main` names index.ts); the published
 // tarball is this build, which `publishConfig` points at.
@@ -8,7 +8,7 @@
 // Each package is compiled against the dist/ of the packages it depends on,
 // so a compile never re-emits a neighbour's sources; the order below is the
 // dependency order. The sources import a neighbour by its workspace spelling
-// (`movement-engine/public/host`, `#shared/…`); the emitted files are
+// (`movement-engine/public/host`, `movement-lang/…`); the emitted files are
 // rewritten to the published name (`@listen-fire/engine/public/host`), so an installed
 // package finds its neighbour by the name npm installed it under.
 //
@@ -18,9 +18,9 @@
 //
 // `pnpm pack` in a package runs it for that package (its `prepack`), and
 // `--restore` after (its `postpack`). While packing, the manifest loses its
-// workspace aliases (`#shared`, `movement-engine`, ...): they are devDependencies
-// that only make the monorepo's source imports resolve, and `#shared` is not a
-// package name a registry should be handed.
+// workspace aliases (`movement-engine`, `movement-lang`, ...): they are devDependencies
+// that only make the monorepo's source imports resolve, and are not
+// package names a registry should be handed.
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -30,7 +30,6 @@ const ROOT = path.resolve(__dirname, '..');
 
 /** Each package, in dependency order; `assets` are copied beside its build. */
 const PACKAGES = [
-  { dir: 'packages/shared' },
   { dir: 'packages/movement-lang', assets: [/^wasm\/[^/]+\.wasm$/] },
   { dir: 'packages/engine-contracts' },
   { dir: 'packages/module-runtime' },
@@ -69,8 +68,6 @@ const SPELLINGS = {
   'files-s3': '@listen-fire/files-s3',
   'ocr-google': '@listen-fire/ocr-google',
   'movement-lang': '@listen-fire/movement-lang',
-  '@listen-fire/shared': '@listen-fire/shared',
-  '#shared': '@listen-fire/shared',
 };
 
 const manifestOf = (dir) => JSON.parse(fs.readFileSync(path.join(ROOT, dir, 'package.json'), 'utf8'));
@@ -161,7 +158,7 @@ function build({ dir, assets = [] }) {
     if (!/\.(js|d\.ts)$/.test(file)) continue;
     const text = fs.readFileSync(file, 'utf8');
     const renamed = text.replace(
-      /(require\(|from |import\()(["'])(#shared|@listen-fire\/shared|movement-engine|engine-contracts|module-kit|module-runtime|file-text|model-providers|embedding-providers|image-providers|transcription-providers|files-s3|ocr-google|movement-lang)(\/[^"']*)?\2/g,
+      /(require\(|from |import\()(["'])(movement-engine|engine-contracts|module-kit|module-runtime|file-text|model-providers|embedding-providers|image-providers|transcription-providers|files-s3|ocr-google|movement-lang)(\/[^"']*)?\2/g,
       (_match, call, quote, spelling, rest = '') => `${call}${quote}${SPELLINGS[spelling]}${rest}${quote}`,
     );
     if (renamed !== text) fs.writeFileSync(file, renamed);

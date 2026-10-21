@@ -20,7 +20,7 @@ import type {
   EdgeSequencing,
   Expression,
   FieldCapability,
-} from '@listen-fire/shared/expression/types';
+} from '../expression/types';
 import { neverAsAny } from '../never';
 import { before, since, type LanguageVersion } from '../language_version';
 import type { CallArg, ExprSlot, Loc, NamedArg, PluginCall, Program, Span, TypeDeclaration } from '../parser/ast';
@@ -131,7 +131,7 @@ export interface AdapterSpec {
   /**
    * Per-key value FORMATS the checker validates statically. `'cron'`
    * validates the value as a five-field cron expression; `'timezone'`
-   * validates it as an IANA time-zone id (@listen-fire/shared/cron — the same
+   * validates it as an IANA time-zone id (movement-lang/cron — the same
    * parser the platform scheduler runs, so check time and fire time can
    * never disagree).
    *

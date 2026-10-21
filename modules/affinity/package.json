@@ -21,7 +21,6 @@
     "@listen-fire/engine-contracts": "workspace:^",
     "@listen-fire/module-kit": "workspace:^",
     "@listen-fire/movement-lang": "workspace:^",
-    "@listen-fire/shared": "workspace:^",
     "date-fns": "3.6.0",
     "exponential-backoff": "3.1.1",
     "lodash": "4.17.21",
@@ -29,7 +28,6 @@
     "zod": "4.1.12"
   },
   "devDependencies": {
-    "#shared": "workspace:@listen-fire/shared@*",
     "@types/jest": "29.5.14",
     "@types/lodash": "4.17.7",
     "@types/node": "20.16.5",

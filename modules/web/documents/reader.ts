@@ -33,7 +33,7 @@ import {
   TOME_REGEX,
   NOTION_REGEX,
   PAPERMARK_REGEX,
-} from '#shared/constants/document_sources';
+} from 'engine-contracts/document_sources';
 
 const TEXT_REGEXES = [NOTION_REGEX];
 

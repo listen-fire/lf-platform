@@ -1,5 +1,5 @@
 // The movement scheduler's cron semantics — the REAL cron math
-// (@listen-fire/shared/cron) over a faked trigger table, work store and
+// (movement-lang/cron) over a faked trigger table, work store and
 // dispatch seam:
 //
 // fire_cron (one trigger's row):

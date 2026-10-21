@@ -78,7 +78,7 @@ COPY modules/s3-files/package.json modules/s3-files/
 COPY packages/engine-contracts/package.json packages/engine-contracts/
 COPY packages/module-runtime/package.json packages/module-runtime/
 COPY packages/movement-engine/package.json packages/movement-engine/
-COPY packages/shared/package.json packages/shared/
+COPY packages/legacy-engine/package.json packages/legacy-engine/
 COPY packages/movement-lang/package.json packages/movement-lang/
 COPY packages/story-view/package.json packages/story-view/
 
@@ -99,12 +99,6 @@ RUN pnpm prisma generate
 # `node build/server.js` resolvable.
 ARG BUILD_HEAP_MB=6144
 RUN NODE_OPTIONS=--max-old-space-size=${BUILD_HEAP_MB} pnpm build
-
-# `#shared/...` is imported by path and resolves to packages/shared, whose
-# build emits its .js beside the .ts, in place. That emitted tree is runtime
-# code; its node_modules is not (the deploy stage resolves its own).
-RUN mkdir /runtime-shared \
-  && find /srv/listen-fire/packages/shared -mindepth 1 -maxdepth 1 ! -name node_modules -exec cp -a {} /runtime-shared/ \;
 
 # ---- deploy: the api's production dependency tree, and nothing else. ----
 # `pnpm install --prod` is not enough here: the root manifest depends on the web
@@ -129,12 +123,6 @@ COPY --from=build /srv/listen-fire/apps/api/public ./public
 # The handbook's built-ins chapter is the language's own reference, read where
 # the language keeps it (the language service compiles the same file in).
 COPY crates/movement-language/src/builtins.md /srv/listen-fire/crates/movement-language/src/builtins.md
-
-# `deploy` copies a workspace package as `npm pack` would (shared's "files" is
-# just dist/), but `#shared/...` is imported by path and needs the .js its build
-# emitted beside the .ts. Put that tree over the copy.
-COPY --from=build /runtime-shared /tmp/runtime-shared
-RUN cp -a /tmp/runtime-shared/. "$(readlink -f node_modules/#shared)/" && rm -rf /tmp/runtime-shared
 
 # Secrets live in the `listen-fire-config` volume, not in the image and not in an
 # env_file the docker CLI would have to read off the host. Every service sources

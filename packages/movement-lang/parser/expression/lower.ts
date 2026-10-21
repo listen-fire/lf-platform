@@ -1,5 +1,5 @@
 // Lowering: the movement expression tree (./tree.ts) → the shared `Expression`
-// (packages/shared/expression/types.ts) that the checker, the engine, the web
+// (packages/movement-lang/expression/types.ts) that the checker, the engine, the web
 // app's formula input and every adapter's filter pushdown read. This is where
 // a NAME first means something: `COUNT` becomes an aggregate, `AI` an llm
 // node, `EXISTS` a quantifier, `CURRENCY.PARSE` a stdlib function.
@@ -15,7 +15,7 @@
 // objects, and calling across the boundary for each would cost more than the
 // walk.
 
-import type { Expression } from '@listen-fire/shared/expression/types';
+import type { Expression } from '../../expression/types';
 import { BridgeError } from '../../expression/error';
 import { neverAsAny } from '../../never';
 import { callLowering } from '../../wasm/loader';

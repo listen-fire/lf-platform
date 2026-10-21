@@ -87,7 +87,7 @@ version is the deletion of its conditionals and fixtures. Repo CLAUDE.md,
 **Search first.** Three times in one day the answer was already in the tree and
 we nearly rebuilt it:
 
-- `@listen-fire/shared/expression/filter.ts` — the shared predicate evaluator
+- `movement-lang/expression/filter.ts` — the shared predicate evaluator
   (`evaluatePredicate` / `isPurePredicate`) already handled conjunctions;
 - `MOV_ENUM_UNKNOWN_VALUE` already did typo-with-did-you-mean, and simply never
   reached the event node;

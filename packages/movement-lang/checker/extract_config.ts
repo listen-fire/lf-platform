@@ -8,8 +8,8 @@
 // misspelt one, and a computed value would move that refusal into the middle
 // of a run. Unknown keys are refused, TypeScript's excess-property check.
 
-import { isObjectSpread, type Expression } from '@listen-fire/shared/expression/types';
-import { AI_EFFORTS, AI_TIERS, aiTier, type AiEffort, type AiTier } from '@listen-fire/shared/expression/types';
+import { isObjectSpread, type Expression } from '../expression/types';
+import { AI_EFFORTS, AI_TIERS, aiTier, type AiEffort, type AiTier } from '../expression/types';
 
 import { didYouMean } from './meta';
 

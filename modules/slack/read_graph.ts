@@ -15,7 +15,7 @@
 // here is the pure half — type ids, descriptors, entry points, and payload
 // normalizers; the client-backed reads live on the adapter.
 
-import type { EdgeCapability } from '#shared/expression/types';
+import type { EdgeCapability } from 'engine-contracts/expression/expression';
 import type { SchemaEntryPoint, SchemaTypeDescriptor } from 'movement-engine/public/catalog';
 
 export const SLACK_CHANNEL_TYPE_ID = 'slack:channel';

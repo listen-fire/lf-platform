@@ -7,7 +7,7 @@
 //   listen to timer { schedule: "0 9 * * 1" } fire digest
 //
 // The schedule is ordinary listen routing config (validated like any
-// adapter's — five-field cron, see @listen-fire/shared/cron); the fired
+// adapter's — five-field cron, see movement-lang/cron); the fired
 // movement's parameter is the Tick position (`t: <timer-[:Tick]->>`). An
 // optional `timezone` (IANA id, e.g. `Europe/London`) interprets the
 // schedule as local wall-clock time with DST handled automatically —

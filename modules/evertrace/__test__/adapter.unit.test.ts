@@ -4,7 +4,7 @@
 // faked.
 
 import type { MutationContext } from 'movement-engine/public/adapter';
-import type { Expression } from '#shared/expression/types';
+import type { Expression } from 'engine-contracts/expression/expression';
 
 import { updateRecordSucceeded } from 'movement-engine/public/adapter';
 import {

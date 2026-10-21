@@ -10,14 +10,7 @@
 // No DOM, no CodeMirror, no network: the editor adapts these to its
 // extension points; tests drive them directly.
 
-import {
-  getCompletions as formulaCompletions,
-  type Completion,
-  type CompletionKind,
-  type EdgeInfo,
-  type FormulaCapabilities,
-  type PropertyInfo,
-} from '@listen-fire/shared/expression/formula';
+import { getCompletions as formulaCompletions, type Completion, type CompletionKind, type EdgeInfo, type FormulaCapabilities, type PropertyInfo } from '../expression/formula';
 import type { Loc, Span } from '../parser/ast';
 import { spellParamType } from '../parser/ast';
 import { MovementParseError, parseProgram } from '../parser/parse';
@@ -79,7 +72,7 @@ import {
   type CatalogSnapshot,
 } from './snapshot';
 
-export type { Completion, CompletionKind } from '@listen-fire/shared/expression/formula';
+export type { Completion, CompletionKind } from '../expression/formula';
 
 // ── Diagnostics ──
 

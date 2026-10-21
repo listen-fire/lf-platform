@@ -185,7 +185,6 @@ const ALLOWED: Array<(module: string) => boolean> = [
   (m) => m === 'engine-contracts' || m.startsWith('engine-contracts/'),
   (m) => m === 'zod',
   (m) => m.startsWith('node:') || builtinModules.includes(m),
-  (m) => m.startsWith('#shared/'),
   under('lib/utils'),
   // The spend vocabulary both sides speak: budgets, cost lines, the cap.
   under('lib/run_cost'),

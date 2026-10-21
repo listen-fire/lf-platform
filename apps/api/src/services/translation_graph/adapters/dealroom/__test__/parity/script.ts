@@ -5,7 +5,7 @@
 // every answer, as JSON; two implementations agree when their transcripts and
 // the requests they made are identical.
 
-import type { Expression } from '#shared/expression/types';
+import type { Expression } from 'movement-lang/expression/types';
 import type { Adapter, DiscriminableEvent, RelatedResult } from 'movement-engine/public/adapter';
 import type { SourcePosition } from 'movement-engine/public/catalog';
 

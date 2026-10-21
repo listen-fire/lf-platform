@@ -10,7 +10,7 @@
 
 import { binding, Environment, evalMovementExpr } from '../expression';
 import { CURRENT_LANGUAGE_VERSION, parseMovementCondition, parseMovementExpression } from 'movement-lang';
-import { evaluatePredicate } from '#shared/expression/filter';
+import { evaluatePredicate } from 'movement-lang/expression/filter';
 
 async function evaluate(raw: string, bindings: Record<string, unknown>): Promise<unknown> {
   const env = new Environment();

@@ -1,7 +1,7 @@
 // Display lexer for formula / source-traversal syntax highlighting.
 //
 // This is a *display* lexer, deliberately separate from the parser's
-// `tokenize()` in `@listen-fire/shared/expression/formula`. The parser collapses
+// `tokenize()` in `movement-lang/expression/formula`. The parser collapses
 // an entire `-[ … #extract { … } … ]->` traversal into one opaque token
 // (storing the config as trimmed text with its offsets discarded), so it
 // can't drive coloring *inside* a config — exactly where authors edit.
@@ -11,7 +11,7 @@
 // `ident(` = function, backtick properties, `#meta-edges`, `@globals`) but
 // makes no parsing/resolution claims — coloring only.
 
-import { KEYWORDS } from '@listen-fire/shared/expression/formula';
+import { KEYWORDS } from '@listen-fire/legacy-engine/formula/parser';
 
 export type HighlightClass =
   | 'keyword'

@@ -29,7 +29,6 @@ run "lint"          bash -c "NODE_OPTIONS=$BIG_HEAP pnpm code:lint"
 run "unused (knip)" bash -c "pnpm code:unused"
 run "unit tests"    bash -c "NODE_OPTIONS=$BIG_HEAP pnpm test:unit"
 run "contract docs" bash -c "pnpm --filter @listen-fire/engine-contracts test"
-run "shared"        bash -c "pnpm --filter @listen-fire/shared test"
 run "movement-lang" bash -c "pnpm --filter @listen-fire/movement-lang test"
 
 echo ""

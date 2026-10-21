@@ -44,7 +44,6 @@
     "packages/movement-engine",
     "packages/movement-lang",
     "packages/ocr-google",
-    "packages/shared",
     "scripts"
   ],
   "platform": [

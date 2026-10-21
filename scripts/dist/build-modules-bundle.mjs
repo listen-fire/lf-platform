@@ -38,8 +38,6 @@ const WORKSPACE = {
   '@listen-fire/ocr-google': 'packages/ocr-google',
   // gmail and google-drive reuse google-sheets' OAuth code by its package name.
   '@listen-fire/google-sheets': 'modules/google-sheets',
-  '#shared': 'packages/shared',
-  '@listen-fire/shared': 'packages/shared',
 };
 // A private module is platform-supplied (`@lf/system`, `@lf/native-valuations`):
 // only the platform hosts it, so lf never ships it.

@@ -124,7 +124,7 @@ const resourceStepSchema = z.object({
  */
 // `config.description`, `config.data`, `config.plugin`, and `config.extra`
 // carry Expression-typed values per F3's MetaEdgeStep shape in
-// `packages/shared/expression/types.ts`. They're wired in via
+// `packages/movement-lang/expression/types.ts`. They're wired in via
 // `z.lazy(() => expressionSchema)` to break the schemas ⇄ expression import
 // cycle (expression.ts imports traversalStepSchema; metaEdgeStepSchema lives
 // here and needs expressionSchema). The lazy ref resolves at parse time.

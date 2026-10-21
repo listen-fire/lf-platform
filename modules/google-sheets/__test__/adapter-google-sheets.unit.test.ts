@@ -12,7 +12,7 @@
 // The API client is mocked by overriding the adapter's private getApiClient,
 // and the grants are a kv the test holds; fake-channels is never hit.
 
-import type { Expression } from '#shared/expression/types';
+import type { Expression } from 'engine-contracts/expression/expression';
 import type { ModuleKv } from 'module-kit';
 import type {
   ResolveEntityInput,

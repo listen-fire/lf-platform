@@ -1,5 +1,5 @@
 //! Lowering: the movement expression tree (`crate::tree`) → the shared
-//! `Expression` (packages/shared/expression/types.ts) that the checker, the
+//! `Expression` (packages/movement-lang/expression/types.ts) that the checker, the
 //! engine, the web app's formula input and every adapter's filter pushdown
 //! read. This is where a NAME first means something: `COUNT` becomes an
 //! aggregate, `AI` an llm node, `EXISTS` a quantifier, `CURRENCY.PARSE` a

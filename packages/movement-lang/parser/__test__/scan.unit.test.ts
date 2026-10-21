@@ -8,7 +8,7 @@ import { MovementParseError, parseProgram } from '../parse';
 import { scanName, unwrapCredentialArg, type ScannedName } from '../scan';
 import { parseExpression } from '../expression/parse_expression';
 import { extractHopAliases } from '../../checker/check';
-import { quoteName } from '@listen-fire/shared/expression/formula';
+import { quoteName } from '../../expression/formula';
 
 describe('scanName — the one name grammar', () => {
   it('accepts a bare identifier, reporting the index just past it', () => {

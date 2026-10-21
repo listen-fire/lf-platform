@@ -55,13 +55,13 @@
 // `entities` mode cuts by in ./density.ts) — only the trace entry belongs
 // to the engine.
 
-import { cronTimezoneError } from '@listen-fire/shared/cron';
+import { cronTimezoneError } from '../cron';
 import {
   instantAtZonedWallTime,
   readWallClockTime,
   wallClockTimeError,
   zonedDateString,
-} from '@listen-fire/shared/timezone';
+} from '../timezone';
 
 import { fileView, isMarkedFile } from './file_value';
 

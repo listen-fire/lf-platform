@@ -101,9 +101,9 @@ import type {
   ShapeDeclaration,
   Span,
 } from 'movement-lang';
-import type { EdgeStep, Expression, FilterOperator } from '#shared/expression/types';
-import { isObjectSpread, objectMemberExpression } from '#shared/expression/types';
-import { serialize as serializeExpression } from '#shared/expression/formula';
+import type { EdgeStep, Expression, FilterOperator } from 'movement-lang/expression/types';
+import { isObjectSpread, objectMemberExpression } from 'movement-lang/expression/types';
+import { serialize as serializeExpression } from 'movement-lang/expression/formula';
 import { settledAll } from './fans';
 import { aiExpressionSettings } from './ai_tiers';
 import {
@@ -114,7 +114,7 @@ import {
   hopPushdown,
   sortByOrderKey,
   type HopCardinality,
-} from '#shared/expression/order_limit';
+} from 'movement-lang/expression/order_limit';
 import {
   compareToNull,
   compareValues,
@@ -127,7 +127,7 @@ import {
   replacePureLeaves,
   type FilterScope,
   type LeafRead,
-} from '#shared/expression/filter';
+} from 'movement-lang/expression/filter';
 import type { ActingPrincipal, TenantId } from 'engine-contracts';
 import type {
   ActorIdentity,
@@ -3513,7 +3513,7 @@ export async function decidePurePredicate(
 /** Order-key comparison: nulls last, numbers numerically, everything
  *  else as strings (ISO timestamps compare correctly as strings). */
 // ORDER BY / LIMIT evaluation now lives in the shared, low-dependency filter
-// unit (`#shared/expression/order_limit`); re-exported here for the engine's
+// unit (`movement-lang/expression/order_limit`); re-exported here for the engine's
 // existing consumers.
 export { applyHopOrderLimit, compareOrderValues, hopOrderProperty, hopPushdown, type HopCardinality };
 
@@ -4417,6 +4417,6 @@ export function isMovementBuiltinFunction(fn: string): boolean {
 }
 
 // Scalar comparison semantics (`compareValues`) and set equality now live in
-// the shared, low-dependency filter unit (`#shared/expression/filter`) — one
+// the shared, low-dependency filter unit (`movement-lang/expression/filter`) — one
 // source of truth shared by the engine, the pure predicate evaluator, and
 // adapters. Imported at the top of this module.

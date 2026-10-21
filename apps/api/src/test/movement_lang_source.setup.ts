@@ -4,4 +4,4 @@
 const { assertResolvesToSource } = require('../../../../packages/movement-lang/conformance/source_tripwire.cjs');
 
 assertResolvesToSource('movement-lang', require.resolve('movement-lang'));
-assertResolvesToSource('#shared/cron', require.resolve('#shared/cron'));
+assertResolvesToSource('movement-lang/cron', require.resolve('movement-lang/cron'));

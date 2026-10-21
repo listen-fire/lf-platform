@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { promptDef } from '../definition';
 import { notNull } from '../../utils/nullability';
 
-import { THEMES } from '#shared/constants/themes';
+import { THEMES } from 'story-view/constants/themes';
 
 const aggregateThemesDef = promptDef({
   description: 'Aggregate a list of themes into a single list.',

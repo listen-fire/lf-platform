@@ -2,7 +2,7 @@ import { getTemplate } from './index';
 
 import { Kysely } from 'kysely';
 
-import type { Expression } from '#shared/expression/types';
+import type { Expression } from 'movement-lang/expression/types';
 
 import KnowledgeSchema from '../../../generated/kysely/knowledge/KnowledgeSchema';
 import { NodeTypeId } from '../../../generated/kysely/knowledge/NodeType';

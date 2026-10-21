@@ -1,6 +1,6 @@
 import { createRoot } from "react-dom/client";
 
-import { STORY_RESULT_META_KEY } from "@listen-fire/shared/constants/story_app";
+import { STORY_RESULT_META_KEY } from "../constants/story_app";
 import { connectToHost, type HostContext, type ToolResult } from "./app-host";
 import { StoryPage } from "./page";
 import type { StoryView } from "../view";

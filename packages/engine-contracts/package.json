@@ -24,11 +24,9 @@
   "type": "commonjs",
   "dependencies": {
     "@listen-fire/movement-lang": "workspace:^",
-    "@listen-fire/shared": "workspace:^",
     "zod": "4.1.12"
   },
   "devDependencies": {
-    "#shared": "workspace:@listen-fire/shared@*",
     "@types/node": "20.16.5",
     "movement-lang": "workspace:@listen-fire/movement-lang@*",
     "typescript": "5.5.4"

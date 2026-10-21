@@ -15,7 +15,7 @@ export type {
   FilterOperator,
   Selection,
   Aggregation,
-} from "@listen-fire/shared/expression/types";
+} from "movement-lang/expression/types";
 
 /**
  * Static type of a value flowing through an expression. Mirrors F2's

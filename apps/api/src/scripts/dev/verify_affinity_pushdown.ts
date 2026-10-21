@@ -10,7 +10,7 @@
  */
 import type { TeamId } from '../../generated/kysely/core/Team';
 import type { ExternalServiceCredentialsId } from '../../generated/kysely/automations/ExternalServiceCredentials';
-import type { Expression } from '#shared/expression/types';
+import type { Expression } from 'movement-lang/expression/types';
 
 import { AffinityAPIClient } from '@listen-fire/affinity/api_client';
 import { AffinityAdapter } from '@listen-fire/affinity';

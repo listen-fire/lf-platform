@@ -19,8 +19,8 @@
 
 import { z } from 'zod';
 
-import { AI_EFFORTS, AI_TIERS, aiTier } from '#shared/expression/types';
-import type { AiTier } from '#shared/expression/types';
+import { AI_EFFORTS, AI_TIERS, aiTier } from 'movement-lang/expression/types';
+import type { AiTier } from 'movement-lang/expression/types';
 
 import { availableChatModels, chatModelAvailability } from '../../lib/models/map';
 import { hasCapability, isModelName, parseChatModelName } from 'engine-contracts/model_names';

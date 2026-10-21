@@ -29,10 +29,10 @@ import {
   type FilterOperator,
   type ListElement,
   type TraversalStep,
-} from '@listen-fire/shared/expression/types';
-import { isNullLiteral, isPurePredicate } from '@listen-fire/shared/expression/filter';
-import { isNaturalOrder, orderKeyProperty } from '@listen-fire/shared/expression/order_limit';
-import { quoteName } from '@listen-fire/shared/expression/formula';
+} from '../expression/types';
+import { isNullLiteral, isPurePredicate } from '../expression/filter';
+import { isNaturalOrder, orderKeyProperty } from '../expression/order_limit';
+import { quoteName } from '../expression/formula';
 import { POSITION_SENTINEL } from '../expression/bridge';
 import {
   builtinOptionsFor,

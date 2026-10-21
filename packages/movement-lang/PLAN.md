@@ -9,7 +9,7 @@ Engine-side attrition increments (write-handles, multi-target — plan OQ15) com
 
 - **M1 — parse.** Package scaffold; AST; line-oriented lexer; recursive-descent statement
   parser; expression slots captured as raw spans + bridged to the existing formula grammar
-  (`packages/shared/expression/formula.ts`). Golden tests: every example in
+  (`packages/movement-lang/expression/formula.ts`). Golden tests: every example in
   `3_syntax_sketch.md` parses; representative error cases.
 - **M2 — check.** Scopes & binding (bound-before-read, parallel sibling isolation, block
   meta-node edges), import resolution against an injected catalog interface (adapters /
@@ -229,7 +229,7 @@ orchestration or the M4 per-write-adapter engine increment. The compiler lives i
 - **Cron + manual intrinsic adapters** (apps/api `adapters/cron`, `adapters/manual`):
   credential-free, source-only. `timer = cron()` + `listen to timer { schedule:
   "0 9 * * 1" } fire digest` (five-field cron, UTC, validated at check time by
-  `@listen-fire/shared/cron` — the SAME parser the scheduler runs); `listen to manual()
+  `movement-lang/cron` — the SAME parser the scheduler runs); `listen to manual()
   {} fire backfill` (Run-now injects an invocation event carrying the actor,
   through normal dispatch → uniform trigger_run).
 - **Inline listen constructions**: `listen to <adapter>(…)` parses into

@@ -123,7 +123,7 @@ export interface SlackSources extends SlackWriteHost {
   compose(args: { instructions: string; data: unknown[] }): Promise<string>;
 }
 
-import { isNaturalOrder } from '#shared/expression/order_limit';
+import { isNaturalOrder } from 'engine-contracts/expression/expression';
 export { SLACK_ADAPTER_TYPE } from './types';
 
 /** Single source entry-point type id — a Slack message in a channel. */

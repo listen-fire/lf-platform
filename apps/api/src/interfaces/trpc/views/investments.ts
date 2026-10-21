@@ -32,7 +32,7 @@ import EventType from '../../../generated/kysely/valuations/EventType';
 import AssetType from '../../../generated/kysely/valuations/AssetType';
 import LegalEntityType from '../../../generated/kysely/valuations/LegalEntityType';
 
-import { getCountryByCode } from '#shared/constants/countries';
+import { getCountryByCode } from 'story-view/constants/countries';
 
 // The export's company link points at the AUTHENTICATED portfolio page (D47(b)
 // — the public `/c/<slug>` profile did not survive the carve). A login-walled

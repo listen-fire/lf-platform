@@ -1,7 +1,7 @@
 // Function signatures for the formula / source-traversal DSL, plus the
 // caret-position detector that drives the editor's argument hints. The
 // signature set mirrors the functions the grammar's parser recognises
-// (@listen-fire/shared/expression/formula `parseFunctionCall`); the prose is
+// (movement-lang/expression/formula `parseFunctionCall`); the prose is
 // authoring help. Pure — no React — so it unit-tests in isolation.
 
 export interface FnParam {

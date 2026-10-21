@@ -1,6 +1,6 @@
 // Object literals in movement expression slots.
 //
-// The literal is the shared formula grammar's (@listen-fire/shared/expression), so
+// The literal is the shared formula grammar's (movement-lang/expression), so
 // what this file pins is the movement side of it:
 //
 //   1. The BRIDGE's text-level rewrites — interpolated strings, prefix

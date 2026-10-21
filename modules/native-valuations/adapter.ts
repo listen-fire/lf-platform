@@ -29,7 +29,7 @@ import type {
   ExternalRecordRef,
 } from 'movement-engine/public/adapter';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
-import type { EdgeSequencing, Expression } from '#shared/expression/types';
+import type { EdgeSequencing, Expression } from 'engine-contracts/expression/expression';
 import type { ModuleLog } from 'module-kit';
 
 import { BaseAdapter } from 'module-kit/adapter/base';

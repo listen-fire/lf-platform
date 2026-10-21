@@ -11,7 +11,7 @@ jest.mock('movement-engine/services/logger', () => ({
 }));
 
 import type { TeamId } from '../../../../../generated/kysely/core/Team';
-import type { Expression } from '#shared/expression/types';
+import type { Expression } from 'movement-lang/expression/types';
 import type { GmailApiClient } from '@listen-fire/gmail';
 
 import {
@@ -52,7 +52,7 @@ import {
   decodeAttachmentId,
 } from '@listen-fire/gmail';
 
-import { applyHopOrderLimit, hopPushdown } from '#shared/expression/order_limit';
+import { applyHopOrderLimit, hopPushdown } from 'movement-lang/expression/order_limit';
 
 const TEAM = 'team-1' as TeamId;
 

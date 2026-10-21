@@ -9,7 +9,7 @@
 // movement, listen (the one invoker), write (root + linked + tuple),
 // traversal-headed block, link, if, parallel, call.
 
-import type { EdgeSequencing } from '@listen-fire/shared/expression/types';
+import type { EdgeSequencing } from '../expression/types';
 
 import { neverAsAny } from '../never';
 import { scanMemberPath } from './scan';

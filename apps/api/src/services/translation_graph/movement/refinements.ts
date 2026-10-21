@@ -40,7 +40,7 @@
 import { refinementKey } from 'movement-lang';
 
 import type { InstanceChain, InstanceSchema, PositionSchema } from 'movement-lang';
-import type { Expression } from '#shared/expression/types';
+import type { Expression } from 'movement-lang/expression/types';
 import type { SchemaTypeDescriptor } from 'movement-engine/public/catalog';
 
 import { decidableConjuncts, narrowByOf, selectMember } from './narrowing';

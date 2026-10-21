@@ -1,4 +1,4 @@
-//! packages/shared/expression/order_limit.ts: what one hop pushes to the
+//! packages/movement-lang/expression/order_limit.ts: what one hop pushes to the
 //! adapter for its fetch (`hopPushdown`, closed over the hop's scope as
 //! expression.ts `closedHopPushdown` closes it), and the hop's ORDER BY /
 //! LIMIT applied to what came back (`applyHopOrderLimit`).

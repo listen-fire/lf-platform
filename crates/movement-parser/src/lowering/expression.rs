@@ -1,4 +1,4 @@
-//! The shared `Expression` (packages/shared/expression/types.ts): its 28
+//! The shared `Expression` (packages/movement-lang/expression/types.ts): its 28
 //! kinds, the four traversal steps and the list spread — 33 shapes, field
 //! names and `type` literals exactly as types.ts spells them.
 //!

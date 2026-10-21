@@ -1,6 +1,6 @@
 // Object literals in movement expression slots.
 //
-// The literal is the shared formula grammar's (@listen-fire/shared/expression), so
+// The literal is the shared formula grammar's (movement-lang/expression), so
 // what this file pins is the movement side of it:
 //
 //   1. The BRIDGE's text-level rewrites — interpolated strings, prefix
@@ -12,7 +12,7 @@
 //   3. The CHECKER walks object values (a name inside one still resolves,
 //      or is reported).
 
-import { objectMemberExpression } from '@listen-fire/shared/expression/types';
+import { objectMemberExpression } from '../../../../expression/types';
 import { parseProgram } from '../../parser/parse';
 import { checkProgram, DiagnosticCodes as C } from '../../checker/check';
 import { mockCatalog } from '../../checker/catalog';

@@ -54,7 +54,7 @@ import {
   type ResolveFile,
 } from 'movement-lang';
 
-import type { Expression } from '#shared/expression/types';
+import type { Expression } from 'movement-lang/expression/types';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { AdapterManifest } from 'movement-engine/public/adapter';
 

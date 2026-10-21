@@ -17,8 +17,8 @@ import {
 import { tenantIdOf } from 'engine-contracts';
 import { spelledFor } from 'movement-lang/checker/__test__/surface_spelling';
 
-import { evaluatePredicate } from '#shared/expression/filter';
-import type { Expression } from '#shared/expression/types';
+import { evaluatePredicate } from 'movement-lang/expression/filter';
+import type { Expression } from 'movement-lang/expression/types';
 import type {
   Adapter,
   GetRelatedInput,

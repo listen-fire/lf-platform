@@ -27,7 +27,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/web/package.json apps/web/
 COPY apps/admin/package.json apps/admin/
 COPY packages/trpc/package.json packages/trpc/
-COPY packages/shared/package.json packages/shared/
+COPY packages/legacy-engine/package.json packages/legacy-engine/
 COPY packages/movement-lang/package.json packages/movement-lang/
 COPY packages/story-view/package.json packages/story-view/
 COPY packages/principal/package.json packages/principal/

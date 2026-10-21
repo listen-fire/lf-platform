@@ -16,7 +16,7 @@
 // against LOCAL wall-clock time in that zone — `"0 9 * * 1"` fires 09:00
 // local every Monday regardless of DST (08:00Z in BST summer, 09:00Z in GMT
 // winter). The conversion uses `Intl.DateTimeFormat` (ICU tz data), so
-// @listen-fire/shared stays dependency-free and the checker + scheduler share one
+// This module stays dependency-free and the checker + scheduler share one
 // implementation. DST edge behaviour (both documented + tested):
 //   - spring-forward — a wall-clock time that never happens (e.g. 01:30 on the
 //     UK March transition) is SKIPPED: no instant produces it, so it never
@@ -211,7 +211,7 @@ export function cronScheduleError(expression: string): string | null {
 // ── Timezone conversion ───────────────────────────────────────────────────
 //
 // The clock-conversion point — given a real UTC instant, what is the local
-// wall-clock in the configured zone? — lives in `@listen-fire/shared/timezone`, which
+// wall-clock in the configured zone? — lives in `movement-lang/timezone`, which
 // the movement stdlib's `DATE.TODAY` / `DATETIME.AT` read too, so a schedule
 // and an expression can never disagree about what 09:00 in a zone means.
 

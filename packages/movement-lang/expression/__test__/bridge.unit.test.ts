@@ -1,6 +1,6 @@
 import { BridgeError, parseMovementCondition, parseMovementExpression, POSITION_SENTINEL, splitUniquenessConjuncts } from '../bridge';
-import type { Expression } from '@listen-fire/shared/expression/types';
-import { serialize } from '@listen-fire/shared/expression/formula';
+import type { Expression } from '../types';
+import { serialize } from '../formula';
 
 describe('splitUniquenessConjuncts', () => {
   const shape = (raw: string) =>

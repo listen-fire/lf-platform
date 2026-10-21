@@ -195,7 +195,7 @@ impl FieldType {
     }
 }
 
-// ── Capabilities (packages/shared/expression/types.ts) ──
+// ── Capabilities (packages/movement-lang/expression/types.ts) ──
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]

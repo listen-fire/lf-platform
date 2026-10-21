@@ -2,7 +2,7 @@
 // walks, the WHERE/ORDER BY pushdown and the poll's checkpoint behaviour.
 // No network: the API client is faked.
 
-import type { Expression } from '#shared/expression/types';
+import type { Expression } from 'engine-contracts/expression/expression';
 
 import {
   ADAPTER_META_TYPE_ID,

@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { promptDef } from '../definition';
 
-import { THEMES } from '#shared/constants/themes';
+import { THEMES } from 'story-view/constants/themes';
 
 const extractCompanyDetailsDef = promptDef({
   // Ideally the concerns of this prompt would be split into multiple prompts

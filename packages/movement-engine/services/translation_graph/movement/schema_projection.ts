@@ -40,7 +40,7 @@ import type {
   SchemaReferenceDescriptor,
   SchemaTypeDescriptor,
 } from 'engine-contracts/catalog';
-import type { FieldCapability } from '#shared/expression/types';
+import type { FieldCapability } from 'movement-lang/expression/types';
 import type { UniquenessConstraints } from 'engine-contracts/uniqueness';
 
 import { referenceTargetTypeIds } from 'engine-contracts/catalog';

@@ -3,13 +3,19 @@
 
 import { z } from 'zod';
 
-import type { Selection, Aggregation, TraversalStep } from '#shared/expression/types';
+import type { Selection, Aggregation, TraversalStep } from 'movement-lang/expression/types';
 
 import { traversalStepSchema, fieldRefSchema } from './schemas';
 
-// Re-export the shared Expression type as the single source of truth
-export type { Expression } from '#shared/expression/types';
-import type { Expression } from '#shared/expression/types';
+// Re-export the Expression type as the single source of truth, plus the rest of
+// the vocabulary an adapter reads off a hop's `where` and capabilities, so an
+// adapter author imports it from the contract package only. The definitions
+// stay in movement-lang (this package already depends on it; the reverse
+// would be a cycle).
+export type { Expression, TraversalStep, EdgeCapability, EdgeSequencing, FieldCapability, FilterOperator } from 'movement-lang/expression/types';
+export { isNaturalOrder } from 'movement-lang/expression/order_limit';
+export { flattenAndConjuncts } from 'movement-lang/expression/filter';
+import type { Expression } from 'movement-lang/expression/types';
 
 // ── Zod schema (recursive via z.lazy) ──
 

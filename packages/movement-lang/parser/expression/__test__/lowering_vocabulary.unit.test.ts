@@ -7,7 +7,7 @@
 //
 // Set UPDATE_LOWERING_VOCABULARY=1 to rewrite the copy (then rebuild the
 // WASM: scripts/build-movement-wasm.sh).
-import { AI_TIERS } from '@listen-fire/shared/expression/types';
+import { AI_TIERS } from '../../../expression/types';
 import {
   BUILTIN_OPTIONS,
   FILE_ARTIFACT_TYPES,

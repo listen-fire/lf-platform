@@ -1,4 +1,4 @@
-import type { FilterOperator } from "@listen-fire/shared/expression/types";
+import type { FilterOperator } from "movement-lang/expression/types";
 
 /**
  * How each test the language has reads out loud.

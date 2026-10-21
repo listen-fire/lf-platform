@@ -62,8 +62,8 @@ import type {
   Statement,
   WriteExpression,
 } from 'movement-lang';
-import type { Expression } from '#shared/expression/types';
-import { listElementExpression, objectMemberExpression } from '#shared/expression/types';
+import type { Expression } from 'movement-lang/expression/types';
+import { listElementExpression, objectMemberExpression } from 'movement-lang/expression/types';
 import { isMovementBuiltinFunction } from './expression';
 
 /** Expression kinds the interpreter's evaluator executes today —

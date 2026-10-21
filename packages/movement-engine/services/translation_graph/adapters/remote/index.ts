@@ -86,7 +86,7 @@ import type {
   SourcePosition,
 } from 'engine-contracts/catalog';
 import type { TriggerEvent, TriggerType } from '../../triggers/types';
-import type { Expression } from '#shared/expression/types';
+import type { Expression } from 'movement-lang/expression/types';
 import type { AuthStrategy } from '../../protocol/client';
 import type { MethodName, WireCredentialDeclarationShape, WireCredentialShape, WireCredentialUpdateShape, WireDeclaredLimitShape, WirePluginResultShape } from 'engine-contracts';
 

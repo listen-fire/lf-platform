@@ -21,11 +21,9 @@
     "@listen-fire/engine-contracts": "workspace:^",
     "@listen-fire/module-kit": "workspace:^",
     "@listen-fire/movement-lang": "workspace:^",
-    "@listen-fire/shared": "workspace:^",
     "zod": "4.1.12"
   },
   "devDependencies": {
-    "#shared": "workspace:@listen-fire/shared@*",
     "@types/jest": "29.5.14",
     "@types/node": "20.16.5",
     "engine-contracts": "workspace:@listen-fire/engine-contracts@*",

@@ -1,0 +1,11 @@
+// The compiled artifact: the api's build emits this package into its OWN output
+// tree (`build/node_modules/@listen-fire/legacy-engine`), the same arrangement as
+// the other source packages, so a compiled `node build/...` boot resolves it.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": false,
+    "sourceMap": true
+  }
+}

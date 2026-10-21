@@ -34,20 +34,20 @@
 // NOT scope references and are deliberately not resolved here; ambient
 // property validity is M2b's schema work.
 
-import type { Expression, ListElement, TraversalStep } from '@listen-fire/shared/expression/types';
+import type { Expression, ListElement, TraversalStep } from '../expression/types';
 import {
   isObjectSpread,
   listElementExpression,
   objectMemberExpression,
   type ObjectEntry,
-} from '@listen-fire/shared/expression/types';
-import { quoteName } from '@listen-fire/shared/expression/formula';
+} from '../expression/types';
+import { quoteName } from '../expression/formula';
 import {
   flattenAndConjuncts,
   isPurePredicate,
   leafReadKey,
   pureLeafReads,
-} from '@listen-fire/shared/expression/filter';
+} from '../expression/filter';
 import {
   constructionAsCall,
   EXPRESSION_ROOT_PROBE,
@@ -131,7 +131,7 @@ export type { ReturnShape } from './typing';
  *  than once a minute is refused. */
 const UNTIL_CADENCE_FLOOR_MS = 60_000;
 import { scanName, unwrapCredentialArg } from '../parser/scan';
-import { cronScheduleError, cronTimezoneError } from '@listen-fire/shared/cron';
+import { cronScheduleError, cronTimezoneError } from '../cron';
 import {
   BridgeError,
   splitUniquenessConjuncts,

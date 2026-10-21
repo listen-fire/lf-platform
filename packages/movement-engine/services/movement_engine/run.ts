@@ -200,13 +200,13 @@ import type {
   FieldWriteMode,
   SuppliedSurface,
 } from 'movement-lang';
-import type { Expression, TraversalStep } from '#shared/expression/types';
-import { compareOrderValues } from '#shared/expression/order_limit';
+import type { Expression, TraversalStep } from 'movement-lang/expression/types';
+import { compareOrderValues } from 'movement-lang/expression/order_limit';
 import {
   isPurePredicate,
   leafReadKey,
   pureLeafReads,
-} from '#shared/expression/filter';
+} from 'movement-lang/expression/filter';
 import { neverAsAny } from '../../lib/utils/types';
 import type { CallbackBodyInput, ResumeInput, RunInput, SettleRaceInput } from 'engine-contracts';
 import type {

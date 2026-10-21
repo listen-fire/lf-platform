@@ -3,7 +3,7 @@
 
 import { parseMovementExpression } from 'movement-lang';
 
-import type { Expression } from '#shared/expression/types';
+import type { Expression } from 'engine-contracts/expression/expression';
 
 import { historyWindowFromWhere } from '../history_window';
 

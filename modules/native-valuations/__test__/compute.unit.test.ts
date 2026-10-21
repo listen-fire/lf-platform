@@ -4,7 +4,7 @@
 // math, the empty-set-without-a-complete-filter rule, and the full getRelated
 // round-trip with a mocked compute response.
 
-import type { Expression } from '#shared/expression/types';
+import type { Expression } from 'engine-contracts/expression/expression';
 
 import { makeStablePosition } from 'movement-engine/public/catalog';
 

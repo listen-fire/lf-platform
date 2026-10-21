@@ -69,7 +69,7 @@ import {
 } from './types';
 import { replyTargetFromParent, sendGmailMessage } from './write';
 
-import { isNaturalOrder } from '#shared/expression/order_limit';
+import { isNaturalOrder } from 'engine-contracts/expression/expression';
 
 /** The client the host's credential reaches the mailbox with, asked for per
  *  call: a credential refreshed between calls is read by the next one. */

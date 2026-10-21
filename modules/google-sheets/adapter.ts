@@ -36,7 +36,7 @@ import type {
   WriteResult,
 } from 'movement-engine/public/adapter';
 import type { SchemaEntryPoint, SchemaTypeDescriptor, SourcePosition } from 'movement-engine/public/catalog';
-import type { Expression } from '#shared/expression/types';
+import type { Expression } from 'engine-contracts/expression/expression';
 import type { GoogleSheetsApiClient } from './api_client';
 
 import { writeParentLinks, unsupportedAssociation } from 'movement-engine/public/adapter';

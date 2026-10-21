@@ -10,7 +10,7 @@
 // loses messages the author asked for. Every judgement call below resolves in
 // favour of fetching more.
 
-import type { Expression } from '#shared/expression/types';
+import type { Expression } from 'engine-contracts/expression/expression';
 
 /** Slack's history window. Both bounds are EXCLUSIVE (Slack's default —
  *  `inclusive` is not sent, so a message exactly on a bound is dropped). */
@@ -166,7 +166,7 @@ function literalValue(expr: Expression, now: number): unknown {
 }
 
 // `durationToMs` / `toEpochMs` mirror the shared filter unit's own private
-// helpers (`#shared/expression/filter`) so a bound we push and the predicate
+// helpers (`movement-lang/expression/filter`) so a bound we push and the predicate
 // the engine re-applies read the same literal the same way.
 
 const DURATION_UNIT_MS: Record<string, number> = {

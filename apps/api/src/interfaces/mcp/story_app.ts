@@ -32,7 +32,7 @@ import type { McpToolResult, ToolApp } from './server';
 import { lookupStoryToken } from '../../services/translation_graph/movement/story_token';
 import { servedStoryView } from '../../services/translation_graph/movement/story_view';
 
-import { STORY_APP_RESOURCE_URI, STORY_RESULT_META_KEY } from '#shared/constants/story_app';
+import { STORY_APP_RESOURCE_URI, STORY_RESULT_META_KEY } from 'story-view/constants/story_app';
 
 
 

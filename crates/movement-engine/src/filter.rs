@@ -1,4 +1,4 @@
-//! The shared predicate unit (packages/shared/expression/filter.ts):
+//! The shared predicate unit (packages/movement-lang/expression/filter.ts):
 //! `compareValues`, `compareToNull` and `evaluatePredicate`, the scalar
 //! comparison semantics the engine and adapters decide filters by.
 

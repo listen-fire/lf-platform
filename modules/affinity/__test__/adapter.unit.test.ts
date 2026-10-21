@@ -22,7 +22,7 @@ import {
 
 import type { FileRef } from 'movement-engine/public/adapter';
 import type { ResolveEntityInput } from 'movement-engine/public/adapter';
-import type { Expression } from '#shared/expression/types';
+import type { Expression } from 'engine-contracts/expression/expression';
 import type { SourcePosition } from 'movement-engine/public/catalog';
 
 import { AFFINITY_MANIFEST } from '../index';

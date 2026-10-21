@@ -9,7 +9,7 @@
 // since only where a ruling changed what a text means; the regression test
 // names each such ruling.
 
-import type { Expression } from '@listen-fire/shared/expression/types';
+import type { Expression } from '../../../expression/types';
 import { lowerMovementCondition, lowerMovementExpression, type MovementCondition } from '../lower';
 import { ExpressionSyntaxError, parseExpression } from '../parse_expression';
 

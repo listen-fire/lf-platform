@@ -15,8 +15,8 @@
 
 import { z } from 'zod';
 
-import type { Expression } from '#shared/expression/types';
-import type { MetaEdgeStep } from '#shared/expression/types';
+import type { Expression } from 'movement-lang/expression/types';
+import type { MetaEdgeStep } from 'movement-lang/expression/types';
 import type { EphemeralNode, SourcePosition } from 'movement-engine/public/catalog';
 import type { Batcher, ExtractScope, EnrichmentBinding } from './batcher';
 import type { FieldShape } from '../batched_extraction/schema_synthesis';

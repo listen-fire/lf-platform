@@ -19,7 +19,7 @@
 // spelling the language documents (upper case).
 
 import type { CollectionOp } from '../parser/ast';
-import { FORMULA_SPECIAL_FUNCTIONS } from '@listen-fire/shared/expression/formula';
+import { FORMULA_SPECIAL_FUNCTIONS } from '../expression/formula';
 import {
   INTERPRETED_FUNCTION_IDS,
   STDLIB_FAMILIES,

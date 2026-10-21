@@ -96,7 +96,7 @@ Packages:
 
 - [`packages/movement-lang`](packages/movement-lang): the movement language: parser, checker and type model.
 - [`packages/principal`](packages/principal): the identity contracts (Principal and Directory) that `core` and the single-tenant stub both satisfy.
-- [`@listen-fire/shared`](packages/shared): types and helpers shared between the API and the web app.
+- [`@listen-fire/legacy-engine`](packages/legacy-engine): the deprecated language versions' (1-4) formula text parser, platform-only.
 - [`@listen-fire/trpc`](packages/trpc): the generated tRPC types the web app builds against.
 - [`packages/story-view`](packages/story-view): the shareable picture of an automation's structure.
 

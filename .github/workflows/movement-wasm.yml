@@ -31,9 +31,6 @@ on:
       - "scripts/build-movement-wasm.sh"
       - "scripts/build-movement-wasm-rustc.sh"
       - "packages/movement-lang/**"
-      - "packages/shared/expression/**"
-      - "packages/shared/timezone/**"
-      - "packages/shared/cron/**"
       # The TypeScript side of the oracle: the engine and its shim, the
       # corpora, and what runs them.
       - "apps/api/src/services/movement_engine/**"
@@ -59,9 +56,6 @@ on:
       - "scripts/build-movement-wasm.sh"
       - "scripts/build-movement-wasm-rustc.sh"
       - "packages/movement-lang/**"
-      - "packages/shared/expression/**"
-      - "packages/shared/timezone/**"
-      - "packages/shared/cron/**"
       # The TypeScript side of the oracle: the engine and its shim, the
       # corpora, and what runs them.
       - "apps/api/src/services/movement_engine/**"

@@ -6,7 +6,7 @@
 // field and edge of the first record found — so a script only has to add
 // the writes and the inbound its adapter has.
 
-import type { Expression } from '#shared/expression/types';
+import type { Expression } from 'movement-lang/expression/types';
 import type { Adapter, RelatedResult } from 'movement-engine/public/adapter';
 import type { SchemaTypeDescriptor, SourcePosition } from 'movement-engine/public/catalog';
 

@@ -54,7 +54,7 @@ the checker. The conformance corpora run on this engine for version 5.
 | `verbs` | `match`, `link`, `unlink`, `delete`: the identity half of a write on its own, edges between two handles, a record removed |
 | `traverse` | traversal blocks over adapter edges: the head's graph, the hop's fetch, the member gate, the WHERE per landed record, ORDER BY / LIMIT, the body per landing; the walks an expression reads, `EXISTS` and a pick |
 | `is_test` | a condition's `IS <type>`: the event, a handle, a landing, a node declaration's structure |
-| `order_limit` | packages/shared/expression/order_limit.ts: a hop's pushdown (closed over its scope) and its ORDER BY / LIMIT over what came back, sorted as V8 sorts |
+| `order_limit` | packages/movement-lang/expression/order_limit.ts: a hop's pushdown (closed over its scope) and its ORDER BY / LIMIT over what came back, sorted as V8 sorts |
 | `address` | address.ts's lexical addresses: `s`, `b`, fan-out `i` and call `c` steps |
 | `unique` | `unique by`: the clauses split into keys and narrowings, the search record, the rules that decide without a judge, the identity lock |
 | `node` | node and graph literals: value entries, nested nodes, declared edges with their landing shapes, traversal entries, reference entries and record copies (the checker's stamps) |
@@ -72,7 +72,7 @@ the checker. The conformance corpora run on this engine for version 5.
 | `extract` | the extraction call (`extract(content, Shape, { … })`, `extractOne(…)`, `call`): a declaration's spec resolved per firing (`spec`), a reply read as zod reads it (`validate`), files read and resources stamped (`resources`), the record an ask's correction answers (`emission`), and what the call and the `AI()` expression share: tier settings, priced calls, plugin invocation (`run`) |
 | `plugin` | a plugin called plainly (`page = fetch_url(url: …)`): its arguments, the invocation timed and priced, what it binds by its declared output |
 | `env_services` | `EnvServices`: zones, WHATWG URLs, locale numbers and Unicode normalisation, from the JavaScript runtime (WASM) or natively (below); never a clock |
-| `filter` | packages/shared/expression/filter.ts: `compareValues`, `compareToNull`, `evaluatePredicate` |
+| `filter` | packages/movement-lang/expression/filter.ts: `compareValues`, `compareToNull`, `evaluatePredicate` |
 | `env` | value bindings in scopes with a parent chain; the wire values and trails cross on, and a segment's one wire with its host |
 | `file` | a file the engine holds (`Js::File`, never a `Js::Object` with a key): an opaque handle onto a file the HOST keeps — the segment's id for it, its identity `handle`, and its opaque view (`name`, `contentType`, `size`, `handle`: what a read or a print of it gives, on both engines; any other member reads as absent). The host makes every file, where an envelope declares one: a field the catalog types `file` (the engine names the declared type on the read, `filesAt`, and the shim applies `filesAtType`), a plugin output's declared file, `files.render`'s answer, a parked `file` (the shim's `filesInParkState`). The descriptor — source, credential, construction args, store, URL — never reaches the engine. The handle is an OPAQUE identity string: the engine compares and carries it (a FILE resource's `externalId`, a `file` origin's `handle`, the dedupe key) and never parses it. `fileFields` for a park (PLAN-07A Task 4d) |
 | `js`, `js_date`, `js_regex` | the JavaScript semantics the TypeScript leans on, written out (below) |

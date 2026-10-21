@@ -7,7 +7,7 @@ import { NOTION_PAGE_ID_REGEX, getNotionPageContent } from '../../../lib/notion'
 import { NotionTokenService } from '../../../services/notion_token';
 import { notionToMarkdown } from '../../../lib/notion/parser';
 
-import { NOTION_REGEX } from '#shared/constants/document_sources';
+import { NOTION_REGEX } from 'engine-contracts/document_sources';
 
 const noteRouter = (procedure: typeof trpc.procedure) => {
   const userProcedure = sharedUserProcedure(procedure);

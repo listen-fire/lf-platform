@@ -15,7 +15,7 @@ import type {
   RelatedResult,
 } from 'movement-engine/public/adapter';
 import type { SchemaEntryPoint, SchemaTypeDescriptor, SourcePosition } from 'movement-engine/public/catalog';
-import type { Expression } from '#shared/expression/types';
+import type { Expression } from 'engine-contracts/expression/expression';
 import type { TriggerEvent } from 'engine-contracts';
 
 import {

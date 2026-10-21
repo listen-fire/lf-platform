@@ -11,7 +11,7 @@
 // display name, because a hop's WHERE may carry either; a miss just widens the
 // fetch.
 
-import type { Expression } from '#shared/expression/types';
+import type { Expression } from 'engine-contracts/expression/expression';
 
 import {
   dealroomDateTime,

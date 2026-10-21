@@ -1,5 +1,5 @@
 // Borrows apps/api's ts-jest install rather than carrying a jest install of its
-// own — the same arrangement movement-lang, principal and engine-contracts use. Transpile only:
+// own — the same arrangement movement-lang and principal use. Transpile only:
 // types are owned by `pnpm code:type-check`. Run via `pnpm test` in this
 // package.
 const path = require('path');

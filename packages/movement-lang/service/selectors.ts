@@ -19,8 +19,8 @@
 // a constructed instance are skipped — an unresolved chain only means no
 // STATIC narrowing there, never a wrong result.
 
-import type { Expression, TraversalStep } from '@listen-fire/shared/expression/types';
-import { listElementExpression, objectMemberExpression } from '@listen-fire/shared/expression/types';
+import type { Expression, TraversalStep } from '../expression/types';
+import { listElementExpression, objectMemberExpression } from '../expression/types';
 import type {
   AwaitExpression,
   CallArg,

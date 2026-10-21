@@ -51,7 +51,7 @@ import type {
 } from 'movement-engine/public/adapter';
 import type { UniquenessConstraints } from 'movement-engine/public/adapter-support';
 
-import type { Expression } from '#shared/expression/types';
+import type { Expression } from 'engine-contracts/expression/expression';
 import { logger } from 'movement-engine/public/log';
 
 import {
@@ -86,7 +86,7 @@ import {
   type SourcePosition,
 } from 'movement-engine/public/catalog';
 
-import type { EdgeCapability, FieldCapability } from '#shared/expression/types';
+import type { EdgeCapability, FieldCapability } from 'engine-contracts/expression/expression';
 
 // ── Inbound webhook envelope (consumed by `preprocessInbound`) ──────────────
 // Attio represents actors as `{ id, type }` (workspace-member | api-token |

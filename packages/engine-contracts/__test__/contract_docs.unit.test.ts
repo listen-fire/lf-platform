@@ -14,7 +14,7 @@ const REPO = path.resolve(__dirname, '../../..');
 const SOURCES = [
   'packages/movement-lang/checker/catalog.ts',
   'packages/movement-lang/service/snapshot.ts',
-  'packages/shared/expression/types.ts',
+  'packages/movement-lang/expression/types.ts',
   'packages/engine-contracts/park_state.ts',
 ];
 

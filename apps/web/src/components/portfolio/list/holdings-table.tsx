@@ -9,7 +9,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { getCountryByCode } from "@listen-fire/shared/constants/countries";
+import { getCountryByCode } from "story-view/constants/countries";
 
 import { Badge } from "@/components/ui";
 import { formatDate, formatMoney, formatTvpi } from "@/components/portfolio";

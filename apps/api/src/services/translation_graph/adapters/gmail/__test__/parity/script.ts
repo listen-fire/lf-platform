@@ -19,7 +19,7 @@
 // built afresh per request. A file's owner, when a write redeems one, is a
 // fresh adapter of the same subject, found the way a run finds it.
 
-import type { Expression } from '#shared/expression/types';
+import type { Expression } from 'movement-lang/expression/types';
 import type { Adapter, DiscriminableEvent, FileRef, MutationContext, ParentLink, RelatedResult } from 'movement-engine/public/adapter';
 import type { SourcePosition } from 'movement-engine/public/catalog';
 

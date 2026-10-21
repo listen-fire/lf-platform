@@ -22,13 +22,11 @@
     "@listen-fire/google-sheets": "workspace:^",
     "@listen-fire/module-kit": "workspace:^",
     "@listen-fire/movement-lang": "workspace:^",
-    "@listen-fire/shared": "workspace:^",
     "googleapis": "164.1.0",
     "html-to-text": "9.0.5",
     "zod": "4.1.12"
   },
   "devDependencies": {
-    "#shared": "workspace:@listen-fire/shared@*",
     "@types/html-to-text": "9.0.4",
     "@types/jest": "29.5.14",
     "@types/node": "20.16.5",

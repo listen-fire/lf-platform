@@ -2,7 +2,7 @@
 // (an OR of AND-joined terms over its properties and edges), and the text
 // form the ontology agent reads and writes them in.
 
-import type { Expression, EdgeStep } from '#shared/expression/types';
+import type { Expression, EdgeStep } from 'movement-lang/expression/types';
 
 // ── Types ──
 

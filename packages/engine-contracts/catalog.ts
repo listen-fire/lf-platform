@@ -11,7 +11,7 @@ import type { EphemeralOriginRef, Position, PositionIdentity, SourcePosition } f
 import type { FieldEvidence, Resource } from './records';
 import type { FilterExpression, TraversalStep } from './expression/schemas';
 import type { Expression } from './expression/expression';
-import type { EdgeCapability, EdgeSequencing, FieldCapability } from '#shared/expression/types';
+import type { EdgeCapability, EdgeSequencing, FieldCapability } from 'movement-lang/expression/types';
 
 import { uniquenessConstraintsSchema } from './uniqueness';
 import {
@@ -705,7 +705,7 @@ const fieldFunctionDescriptorSchema = z.object({
 export type FieldFunctionDescriptor = z.infer<typeof fieldFunctionDescriptorSchema>;
 
 /** The FilterOperator universe, incl. WITHIN (recency). Mirrors
- *  `#shared/expression/types`' `FilterOperator` at the runtime boundary. */
+ *  `movement-lang/expression/types`' `FilterOperator` at the runtime boundary. */
 const filterOperatorSchema = z.enum([
   'eq', 'neq', 'contains', 'gt', 'gte', 'lt', 'lte', 'exists', 'in', 'within',
 ]);
@@ -713,7 +713,7 @@ const filterOperatorSchema = z.enum([
 /**
  * A field's own filter/order capability in the source system (chunk 4 of the
  * adapter-capability-contract plan). Rides the field descriptor `describe()`
- * already returns. See `#shared/expression/types`' `FieldCapability`.
+ * already returns. See `movement-lang/expression/types`' `FieldCapability`.
  */
 const fieldCapabilitySchema = z.object({
   filterOperators: z.array(filterOperatorSchema).optional(),
@@ -725,7 +725,7 @@ const edgePushModeSchema = z.enum(['bounded', 'native']);
 /**
  * Whether — and how — filter/order/limit push across one relationship (chunk 4).
  * Combined by the checker with the target type's per-field `fieldCapability`.
- * See `#shared/expression/types`' `EdgeCapability`.
+ * See `movement-lang/expression/types`' `EdgeCapability`.
  */
 const edgeCapabilitySchema = z.object({
   filter: edgePushModeSchema.optional(),
@@ -739,7 +739,7 @@ const edgeCapabilitySchema = z.object({
 /**
  * What an edge's members are inherently ordered BY. A DIFFERENT fact from
  * `edgeCapabilitySchema.order`, which says only that an authored ORDER BY can
- * be pushed to the source. See `#shared/expression/types`' `EdgeSequencing`
+ * be pushed to the source. See `movement-lang/expression/types`' `EdgeSequencing`
  * for the distinction and the declaration rule.
  */
 const edgeSequencingSchema = z.enum([

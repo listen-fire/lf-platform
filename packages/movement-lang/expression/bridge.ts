@@ -1,5 +1,5 @@
 // The expression bridge — from the movement language's expression grammar to
-// the shared formula `Expression` (packages/shared/expression/types.ts) that
+// the shared formula `Expression` (packages/movement-lang/expression/types.ts) that
 // the checker, the engine, the web app and adapter pushdown read.
 //
 // One grammar reads every expression slot (parser/expression/parse_expression.ts)
@@ -12,7 +12,7 @@
 // slot. `parseMovementExpression` / `parseMovementCondition` read a text that is
 // not a slot (a probe a consumer builds, a narrowing's stored WHERE).
 
-import type { Expression } from '@listen-fire/shared/expression/types';
+import type { Expression } from './types';
 import type { ExprSlot } from '../parser/ast';
 import {
   lowerCondition,

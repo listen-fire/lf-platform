@@ -14,7 +14,6 @@
   "main": "index.ts",
   "type": "commonjs",
   "dependencies": {
-    "@listen-fire/shared": "workspace:*",
     "esbuild": "0.23.1",
     "lucide-react": "^0.574.0",
     "movement-lang": "workspace:@listen-fire/movement-lang@*",

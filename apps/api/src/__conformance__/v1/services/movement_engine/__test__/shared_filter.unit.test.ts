@@ -10,9 +10,10 @@ import {
   isPurePredicate,
   leafReadKey,
   pureLeafReads,
-} from '#shared/expression/filter';
-import type { Expression, FilterOperator } from '#shared/expression/types';
-import { parse, serialize } from '#shared/expression/formula';
+} from 'movement-lang/expression/filter';
+import type { Expression, FilterOperator } from 'movement-lang/expression/types';
+import { serialize } from 'movement-lang/expression/formula';
+import { parse } from '@listen-fire/legacy-engine/formula/parser';
 
 const scopeOf = (fields: Record<string, unknown>) => ({
   read: (name: string) => fields[name],

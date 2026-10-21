@@ -11,7 +11,7 @@
 // display name, because a hop's WHERE may carry either; a miss just widens the
 // fetch.
 
-import type { Expression } from '#shared/expression/types';
+import type { Expression } from 'engine-contracts/expression/expression';
 import type { EvertraceSignalFilter } from './api_client';
 
 import { EVERTRACE_PROFILE_TAGS, EVERTRACE_SIGNAL_KINDS } from './types';

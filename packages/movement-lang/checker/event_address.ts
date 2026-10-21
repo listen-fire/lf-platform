@@ -43,8 +43,8 @@
 // the hop — and why `describeRecordChange` publishes `base`/`table` as real
 // event-node properties: the same values narrow both.
 
-import type { Expression } from '@listen-fire/shared/expression/types';
-import { isPurePredicate, leafReadKey, pureLeafReads } from '@listen-fire/shared/expression/filter';
+import type { Expression } from '../expression/types';
+import { isPurePredicate, leafReadKey, pureLeafReads } from '../expression/filter';
 import { since, type LanguageVersion } from '../language_version';
 import { parseTraversalPath } from '../service/selectors';
 

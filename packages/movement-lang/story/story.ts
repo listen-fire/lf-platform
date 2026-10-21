@@ -18,8 +18,8 @@
 // It reads the recording for what the CHECKER resolved and the AST for what the
 // AUTHOR wrote — order, nesting, and the verbatim text of every expression.
 
-import type { Expression, FilterOperator, TraversalStep } from '@listen-fire/shared/expression/types';
-import { serialize } from '@listen-fire/shared/expression/formula';
+import type { Expression, FilterOperator, TraversalStep } from '../expression/types';
+import { serialize } from '../expression/formula';
 import {
   type AwaitSource,
   type CallArg,

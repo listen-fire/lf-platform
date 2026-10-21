@@ -3,7 +3,7 @@
 // routes call these; internal ids never appear in their arguments or results.
 
 import type { StoredUniquenessConstraints, ConstraintEntry } from './uniqueness_constraints';
-import type { Expression, EdgeStep } from '#shared/expression/types';
+import type { Expression, EdgeStep } from 'movement-lang/expression/types';
 
 import { getKnowledgeQb } from '../kysely';
 import { TeamId } from '../../generated/kysely/core/Team';

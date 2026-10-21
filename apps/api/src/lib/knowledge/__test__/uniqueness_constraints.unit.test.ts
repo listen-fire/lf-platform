@@ -1,6 +1,6 @@
 import type { EdgeTypeId } from '../../../generated/kysely/knowledge/EdgeType';
 import type { PropertyTypeId } from '../../../generated/kysely/knowledge/PropertyType';
-import type { Expression } from '#shared/expression/types';
+import type { Expression } from 'movement-lang/expression/types';
 import type { ConstraintEntry } from '../uniqueness_constraints';
 
 import {

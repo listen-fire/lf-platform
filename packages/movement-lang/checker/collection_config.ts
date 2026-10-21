@@ -13,7 +13,7 @@
 // line TypeScript draws: an options object written in place is checked key by
 // key (excess-property checking), which is exactly what this does.
 
-import { isObjectSpread, type Expression } from '@listen-fire/shared/expression/types';
+import { isObjectSpread, type Expression } from '../expression/types';
 
 import { didYouMean } from './meta';
 

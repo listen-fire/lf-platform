@@ -4,7 +4,7 @@
 // Does NOT support: llm, edge_property, linked_object, resource,
 //                   resource_traverse, parent_result, aggregate.
 
-import type { Expression, TraversalStep } from '#shared/expression/types';
+import type { Expression, TraversalStep } from 'movement-lang/expression/types';
 
 import { getKnowledgeQb } from '../kysely';
 import { NodeId } from '../../generated/kysely/knowledge/Node';

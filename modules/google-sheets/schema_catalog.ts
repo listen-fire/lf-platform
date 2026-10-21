@@ -16,7 +16,7 @@
 
 import type { ModuleLog } from 'module-kit';
 import type { GoogleSheetsApiClient } from './api_client';
-import type { Expression } from '#shared/expression/types';
+import type { Expression } from 'engine-contracts/expression/expression';
 import type {
   SchemaEntryPoint,
   SchemaFieldDescriptor,

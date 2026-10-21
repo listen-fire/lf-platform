@@ -57,7 +57,7 @@ import {
   type PositionSchema,
 } from 'movement-lang';
 
-import type { Expression } from '#shared/expression/types';
+import type { Expression } from 'movement-lang/expression/types';
 import type { ListenConfigKey } from 'movement-engine/public/adapter';
 import type { SchemaTypeDescriptor } from 'movement-engine/public/catalog';
 import type { CachedAdapterInstance } from './instance_cache';

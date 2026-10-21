@@ -11,7 +11,7 @@
 // catalog) outlives a call there; making every subject do the same keeps the
 // requests comparable across the three.
 
-import type { Expression } from '#shared/expression/types';
+import type { Expression } from 'movement-lang/expression/types';
 import type { Adapter, MutationContext, ParentLink, RelatedResult } from 'movement-engine/public/adapter';
 import type { SourcePosition } from 'movement-engine/public/catalog';
 

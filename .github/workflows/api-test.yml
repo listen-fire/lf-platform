@@ -7,7 +7,7 @@ on:
       # contracts' drift guards (the step below).
       - "docs/contracts/**"
       - "packages/engine-contracts/**"
-      - "packages/shared/**"
+      - "packages/legacy-engine/**"
       - "packages/movement-lang/**"
   workflow_dispatch:
 
@@ -45,7 +45,7 @@ jobs:
           node-version: 22.20.0
           cache: "pnpm"
       # Full workspace install — apps/api typechecks against workspace packages
-      # (@listen-fire/shared, movement-lang) that are consumed as raw TS source via
+      # (movement-lang, engine-contracts) that are consumed as raw TS source via
       # symlinks. A filtered install omits those symlinks → TS2307. (Was
       # `--filter api --filter prisma-generator-casl`.)
       - run: pnpm install --frozen-lockfile
@@ -71,8 +71,6 @@ jobs:
       # and the index table against packages/engine-contracts. Seconds, no DB.
       - name: Contract docs drift guards
         run: pnpm --filter @listen-fire/engine-contracts test
-      - name: Shared package tests
-        run: pnpm --filter @listen-fire/shared test
       # movement-lang's own suite (parser, checker, engine-facing units): the
       # language is what every saved movement is pinned to, so it is gated
       # whole here rather than only in part by movement-wasm.

@@ -11,7 +11,7 @@ and whose exports are this crate's ABI plus the engine's.
 |---|---|
 | `lexer`, `expr`, `stmt`, `tree`, `ast`, `scan` | the parser: statement and expression grammars, their JSON shapes |
 | `surface` | language version 5's surface: the spelling table, and the rewrite of a v5 expression into the canonical tree with a finding (and its fix) for every old spelling |
-| `lowering` | the expression tree → the shared `Expression` (packages/shared/expression/types.ts); the only lowering since `parser/expression/lower.ts` became its wrapper |
+| `lowering` | the expression tree → the shared `Expression` (packages/movement-lang/expression/types.ts); the only lowering since `parser/expression/lower.ts` became its wrapper |
 | `catalog` | the checker's catalog: the schema types (checker/catalog.ts), a snapshot's lookups (service/snapshot.ts `fromCatalogSnapshot`) and the pure catalog helpers; proven by checker/__test__/catalog_differential |
 | `util` | UTF-16 text, the JavaScript semantics both lean on, bounded JSON reads |
 | `abi` | the C ABI over all three |

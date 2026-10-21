@@ -1,9 +1,7 @@
 // Post-processes the tRPC declaration bundle tsup emits into the shared
 // `@listen-fire/trpc` package: tsup writes each top-level declaration
-// module-private, so every one is re-exported for consumers, and the
-// workspace-internal `#shared` subpath is rewritten to the published
-// specifier. Node rather than `sed -i`, whose in-place flag is spelled
-// differently on BSD and GNU. Substitutions are per line, first match only,
+// module-private, so every one is re-exported for consumers. Node rather than
+// `sed -i`, whose in-place flag is spelled differently on BSD and GNU. Substitutions are per line, first match only,
 // matching what the sed pipeline they replace did.
 
 const fs = require('fs');
@@ -22,8 +20,7 @@ const processed = fs
       .replace(/^type /, 'export type ')
       .replace(' type TRPCRouter, ', ' ')
       .replace(/^declare enum /, 'export const enum ')
-      .replace(/^interface /, 'export interface ')
-      .replace(/#shared\/expression\/types/g, '@listen-fire/shared/expression/types'),
+      .replace(/^interface /, 'export interface '),
   )
   .join('\n');
 

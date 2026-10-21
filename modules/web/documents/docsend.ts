@@ -4,7 +4,7 @@ import { alert, readerHost, reportError } from './host';
 import { MINUTE, SECOND, pipeThroughTmpFile, retryUntilResolves, setJitteredTimeout } from './waits';
 import { Crawler, Screenshot, waitFor } from './crawler';
 
-import { DOCSEND_REGEX } from '#shared/constants/document_sources';
+import { DOCSEND_REGEX } from 'engine-contracts/document_sources';
 
 const DOWNLOAD_TIMEOUT = 2 * MINUTE;
 const READY_TIMEOUT = 15 * SECOND;

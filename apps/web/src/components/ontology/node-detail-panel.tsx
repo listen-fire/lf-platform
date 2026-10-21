@@ -6,16 +6,9 @@ import { trpc } from "@/lib/trpc";
 import { PropertyValueType, EvaluationStrategy } from "#trpc";
 import type { EvidenceType } from "#trpc";
 import { Select } from "@/components/select";
-import type { Expression } from "@listen-fire/shared/expression/types";
-import {
-  serialize as formulaSerialize,
-  validate as formulaValidate,
-  getCompletions as formulaCompletions,
-  type PropertyInfo,
-  type EdgeInfo,
-  type ValidationResult as FormulaValidation,
-  type Completion as FormulaCompletion,
-} from "@listen-fire/shared/expression/formula";
+import type { Expression } from "movement-lang/expression/types";
+import { serialize as formulaSerialize, getCompletions as formulaCompletions, type PropertyInfo, type EdgeInfo, type Completion as FormulaCompletion } from "movement-lang/expression/formula";
+import { validate as formulaValidate, type ValidationResult as FormulaValidation } from "@listen-fire/legacy-engine/formula/parser";
 import type {
   SummaryNodeType,
   SummaryEdgeType,

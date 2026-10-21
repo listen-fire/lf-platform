@@ -124,7 +124,7 @@ jest.mock('../../../lib/anthropic', () => ({
 import type { InstanceSchema, LanguageVersion } from 'movement-lang';
 import { CURRENT_LANGUAGE_VERSION, fromCatalogSnapshot, mockCatalogSnapshot, parseMovementExpression } from 'movement-lang';
 import { spelledFor } from 'movement-lang/checker/__test__/surface_spelling';
-import type { Expression } from '#shared/expression/types';
+import type { Expression } from 'movement-lang/expression/types';
 import {
   MovementRunFailed,
   runFailureCause,

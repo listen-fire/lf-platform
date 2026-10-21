@@ -19,7 +19,7 @@
 // ONCE (missed occurrences collapse into one tick — a scheduler that was
 // down for three Mondays does not fire three digests) and the mark
 // advances. Schedules are five-field cron, UTC, validated at check time
-// by the SAME parser (@listen-fire/shared/cron).
+// by the SAME parser (movement-lang/cron).
 //
 // Process safety: a work row is held by one lease at a time, and the due
 // time is always recomputed from the checkpoint, never trusted from the row,
@@ -42,7 +42,7 @@ import { dispatchTriggerByIdEvent } from '../translation_graph/triggers/router';
 import { registerWorkHandler } from '../work/drain';
 import { enqueueWork, listWorkByKind, removeWork } from '../work/store';
 
-import { CronParseError, nextCronOccurrence, parseCron, type CronSchedule } from '#shared/cron';
+import { CronParseError, nextCronOccurrence, parseCron, type CronSchedule } from 'movement-lang/cron';
 
 /** One row per cron trigger, due at its next occurrence. */
 export function cronWorkKey(triggerId: string): string {

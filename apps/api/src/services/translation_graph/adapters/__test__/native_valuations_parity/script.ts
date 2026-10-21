@@ -8,7 +8,7 @@
 // (the snapshot underneath it), and the webhook subscription lifecycle. A
 // second, shorter pass runs with no credential at all.
 
-import type { Expression } from '#shared/expression/types';
+import type { Expression } from 'movement-lang/expression/types';
 import type { Adapter } from 'movement-engine/public/adapter';
 
 import { makeMetaPosition, makeStablePosition } from 'movement-engine/public/catalog';

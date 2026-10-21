@@ -752,7 +752,7 @@ fn is_opaque_uri(raw: &str) -> bool {
     b.get(end) == Some(&b':') && !raw[end + 1..].starts_with("//")
 }
 
-// ── DATE.TODAY and DATETIME.AT (packages/shared/timezone) ───────────────────
+// ── DATE.TODAY and DATETIME.AT (packages/movement-lang/timezone) ───────────────────
 
 /// cron's `cronTimezoneError`: `Intl` refuses the zone.
 fn zone_problem(zone: &str, services: &dyn EnvServices) -> Option<String> {

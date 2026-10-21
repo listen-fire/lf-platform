@@ -2,7 +2,7 @@ import { documentReader } from '../../documents/reader';
 import { readerHost } from './reader_host';
 import { GoogleDocsService, parsePageBoxLabel } from '../../documents/google_docs';
 
-import { NOTION_REGEX } from '#shared/constants/document_sources';
+import { NOTION_REGEX } from 'engine-contracts/document_sources';
 
 const DocumentSourceService = documentReader(readerHost());
 
