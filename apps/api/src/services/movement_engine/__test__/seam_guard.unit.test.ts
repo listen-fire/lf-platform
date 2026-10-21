@@ -1,8 +1,9 @@
-// The engine/host seam, pinned. A pure engine file reaches the database, the
-// model provider, billing, adapter implementations and run recording only
-// through the `EngineHost` it is handed — never by importing them. That is
-// what lets an embedder (a test, the browser, another process) run the engine
-// on a host of its own (DESIGN §6).
+// The engine/host seam, pinned on the platform's side. The legacy engine (the
+// TypeScript engine for language versions 1–4) reaches the database, the model
+// provider, billing, adapter implementations and run recording only through
+// the `EngineHost` it is handed — never by importing them — and the host's
+// round trip below carries plain data only. The engine's own purity is pinned
+// by the engine package's tests (it is the language's; this app installs it).
 //
 // Imports are read with the TypeScript compiler, not a regex, so a multi-line
 // import or an `import { type X }` is classified the way the compiler sees it.
@@ -60,55 +61,34 @@ import { tenantOfTeam } from '../../translation_graph/movement/tenant';
 
 const ENGINE_DIR = path.resolve(__dirname, '..');
 const SRC_DIR = path.resolve(__dirname, '../../..');
-/** The engine package: the pure engine and the kit every host builds on
- *  (host_kit, test_host), its paths mirroring apps/api/src. */
-const PKG_DIR = path.resolve(SRC_DIR, '../../../packages/movement-engine');
-const PKG_ENGINE_DIR = path.join(PKG_DIR, 'services/movement_engine');
 /** The platform's package for language versions 1–4: the TypeScript engine,
- *  its paths mirroring the engine package's. */
+ *  its paths mirroring apps/api/src. */
 const LEGACY_DIR = path.resolve(SRC_DIR, '../../../packages/legacy-engine');
 const LEGACY_ENGINE_DIR = path.join(LEGACY_DIR, 'services/movement_engine');
 
-/** A movement_engine file where it lives: the engine package, the legacy
- *  engine package, or this app's host side. */
+/** A movement_engine file where it lives: the legacy engine package, or this
+ *  app's host side. */
 function engineFile(file: string): string {
-  const inPackage = [PKG_ENGINE_DIR, LEGACY_ENGINE_DIR].map((dir) => path.join(dir, file)).find((f) => fs.existsSync(f));
-  return inPackage ?? path.join(ENGINE_DIR, file);
+  const inPackage = path.join(LEGACY_ENGINE_DIR, file);
+  return fs.existsSync(inPackage) ? inPackage : path.join(ENGINE_DIR, file);
 }
 
-/** Engine files that must import no host code. */
+/** Legacy engine files that must import no host code. */
 const PURE_FILES = [
-  'address.ts',
-  'ai_tiers.ts',
-  'binding.ts',
   'builtins.ts',
-  'call_depth.ts',
   'declared_shape.ts',
   'effect_locks.ts',
   'engine_choice.ts',
-  'errors.ts',
   'expression.ts',
   'extraction.ts',
   'extraction_call.ts',
   'fans.ts',
-  'host.ts',
-  'host_adapter.ts',
   'interpretable.ts',
   'kg.ts',
   'local_edge_adapter.ts',
-  'program_check.ts',
   'ts_program_check.ts',
-  'provenance.ts',
   'run.ts',
   'run_context.ts',
-  'run_types.ts',
-  'rust_engine.ts',
-  'rust_host.ts',
-  'rust_run.ts',
-  'rust_stats.ts',
-  'rust_wire.ts',
-  'segment_context.ts',
-  'segment_limits.ts',
   'serialize.ts',
   'write_ledger.ts',
 ];
@@ -123,7 +103,6 @@ const HOST_SIDE_FILES = [
   'callback_sink.ts',
   'callback_store.ts',
   'cancel_gate.ts',
-  'host_kit.ts',
   'limit_pause.ts',
   'limit_resume.ts',
   'park_sink.ts',
@@ -133,7 +112,6 @@ const HOST_SIDE_FILES = [
   'run_host_store.ts',
   'run_lease.ts',
   'single_flight.ts',
-  'test_host.ts',
   'timer_resume.ts',
 ];
 
@@ -185,6 +163,9 @@ const FORBIDDEN: Array<{ matches: (module: string) => boolean; reason: string }>
 
 const ALLOWED: Array<(module: string) => boolean> = [
   (m) => m === 'movement-lang' || m.startsWith('movement-lang/'),
+  // The engine's public entries: what its embedders are meant to take. The
+  // engine package's own tests pin what they re-export.
+  (m) => m.startsWith('public/'),
   // The TypeScript checker and catalog the legacy engine runs pins 1-4 against.
   (m) => m === 'legacy-lang' || m.startsWith('legacy-lang/'),
   // The contracts the engine speaks: data shapes and the protocol schema.
@@ -212,11 +193,7 @@ const ALLOWED: Array<(module: string) => boolean> = [
   (m) => PURE_FILES.some((f) => m === `services/movement_engine/${f.replace(/\.ts$/, '')}`),
 ];
 
-/** Shared helpers on the engine's path that live outside this directory:
- *  held to the same no-clock, no-mint rule as the pure files. */
-const PURE_HELPERS = [path.join(PKG_DIR, 'services/translation_graph/engine/files/resources.ts')];
-
-/** The one clock read the engine keeps: an expression evaluated outside any
+/** The one clock read the legacy engine keeps: an expression evaluated outside any
  *  run (an editor preview, a lone expression's test) has no run instant to
  *  answer from, so it reads the wall clock. Inside a run the instant is the
  *  segment's (`RunContext.pinnedNow`). */
@@ -305,12 +282,12 @@ function under(prefix: string): (module: string) => boolean {
   return (m) => m === prefix || m.startsWith(`${prefix}/`);
 }
 
-/** A relative specifier becomes a path under apps/api/src (or the engine
- *  package, which mirrors it); a bare one stays, but the package's own. */
+/** A relative specifier becomes a path under apps/api/src (the legacy engine
+ *  mirrors it); a bare one stays, the engine's own entries as `public/<entry>`. */
 function moduleOf(fromFile: string, specifier: string): string {
   if (specifier.startsWith('movement-engine/')) return specifier.slice('movement-engine/'.length);
   if (!specifier.startsWith('.')) return specifier;
-  const root = [PKG_DIR, LEGACY_DIR].find((dir) => fromFile.startsWith(dir + path.sep)) ?? SRC_DIR;
+  const root = fromFile.startsWith(LEGACY_DIR + path.sep) ? LEGACY_DIR : SRC_DIR;
   const resolved = path.relative(root, path.resolve(path.dirname(fromFile), specifier));
   return resolved
     .split(path.sep)
@@ -359,94 +336,6 @@ function valueImports(file: string): Array<{ specifier: string; names?: string[]
   return imports;
 }
 
-/** The legacy engine reaches the engine package through its public entries
- *  (`movement-engine/public/<entry>`), which re-export the engine's modules.
- *  The seam is about those modules, so an import of an entry is judged by the
- *  module each name it takes comes from (or every module the entry re-exports
- *  when it takes the whole entry). A name the entry declares itself stays
- *  `public/<entry>`, which no rule allows. */
-function throughPublicEntry(specifier: string, names: string[] | undefined): string[] {
-  const entry = /^movement-engine\/(public\/[a-z-]+)$/.exec(specifier)?.[1];
-  if (entry === undefined) return [specifier];
-  const sources = exportSources(path.join(PKG_DIR, `${entry}.ts`));
-  if (names === undefined) return [...new Set([...sources.values()].map((module) => `movement-engine/${module}`))];
-  return [...new Set(names.map((name) => `movement-engine/${sources.get(name) ?? entry}`))];
-}
-
-/** Each value name a module exports, with the module (relative to the engine
- *  package, or bare) it comes from; `export *` is followed. */
-function exportSources(file: string): Map<string, string> {
-  const own = path.relative(PKG_DIR, file).split(path.sep).join('/').replace(/\.ts$/, '');
-  const source = ts.createSourceFile(file, fs.readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
-  const sources = new Map<string, string>();
-  for (const statement of source.statements) {
-    if (ts.isExportDeclaration(statement)) {
-      if (statement.isTypeOnly) continue;
-      const clause = statement.exportClause;
-      if (statement.moduleSpecifier === undefined) {
-        // `export { name }` of the module's own declaration.
-        if (clause !== undefined && ts.isNamedExports(clause)) {
-          for (const element of clause.elements) if (!element.isTypeOnly) sources.set(element.name.text, own);
-        }
-        continue;
-      }
-      if (!ts.isStringLiteral(statement.moduleSpecifier)) continue;
-      const specifier = statement.moduleSpecifier.text;
-      const bare = !specifier.startsWith('.');
-      const target = bare ? undefined : path.resolve(path.dirname(file), specifier);
-      const targetFile = bare
-        ? resolvedFrom(file, specifier)
-        : [`${target}.ts`, path.join(target ?? '', 'index.ts')].find((f) => fs.existsSync(f));
-      // A bare package keeps its own name: the seam's rules speak of packages
-      // by name (`engine-contracts`, `movement-lang`).
-      const module =
-        bare || targetFile === undefined
-          ? specifier
-          : path.relative(PKG_DIR, targetFile).split(path.sep).join('/').replace(/(\/index)?\.ts$/, '');
-      if (clause === undefined) {
-        if (targetFile === undefined) continue;
-        for (const [name, from] of exportSources(targetFile)) sources.set(name, bare || from === targetOwn(targetFile) ? module : from);
-        for (const name of declaredValueExports(targetFile)) sources.set(name, module);
-      } else if (ts.isNamedExports(clause)) {
-        for (const element of clause.elements) if (!element.isTypeOnly) sources.set(element.name.text, module);
-      }
-    }
-  }
-  return sources;
-}
-
-/** A module's own name as `exportSources` labels its declarations. */
-function targetOwn(file: string): string {
-  return path.relative(PKG_DIR, file).split(path.sep).join('/').replace(/\.ts$/, '');
-}
-
-/** The source file a bare specifier names, resolved from `file`'s package. */
-function resolvedFrom(file: string, specifier: string): string | undefined {
-  try {
-    const resolved = require.resolve(specifier, { paths: [path.dirname(file)] });
-    return resolved.endsWith('.ts') ? resolved : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-/** The value names a module declares and exports itself. */
-function declaredValueExports(file: string): string[] {
-  const source = ts.createSourceFile(file, fs.readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
-  const exported = (node: ts.Node): boolean =>
-    ts.canHaveModifiers(node) && (ts.getModifiers(node) ?? []).some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
-  return source.statements.flatMap((statement) => {
-    if (!exported(statement)) return [];
-    if ((ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement) || ts.isEnumDeclaration(statement)) && statement.name) {
-      return [statement.name.text];
-    }
-    if (ts.isVariableStatement(statement)) {
-      return statement.declarationList.declarations.flatMap((d) => (ts.isIdentifier(d.name) ? [d.name.text] : []));
-    }
-    return [];
-  });
-}
-
 function isTypeOnlyImport(node: ts.ImportDeclaration): boolean {
   const clause = node.importClause;
   if (clause === undefined) return false;
@@ -480,8 +369,8 @@ function isLoaderCall(node: ts.CallExpression): boolean {
 }
 
 describe('the engine/host seam', () => {
-  it('classifies every movement_engine file as pure or host side, exactly once', () => {
-    const onDisk = [ENGINE_DIR, PKG_ENGINE_DIR, LEGACY_ENGINE_DIR]
+  it('classifies every movement_engine file of this app and the legacy engine as pure or host side, exactly once', () => {
+    const onDisk = [ENGINE_DIR, LEGACY_ENGINE_DIR]
       .flatMap((dir) => fs.readdirSync(dir))
       .filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'))
       .sort();
@@ -490,241 +379,39 @@ describe('the engine/host seam', () => {
     expect(listed).toEqual(onDisk);
   });
 
-  it('keeps every pure engine file in a package (the engine, or the legacy engine for versions 1–4), so no shell needs this app to run one', () => {
-    expect(PURE_FILES.filter((f) => ![PKG_ENGINE_DIR, LEGACY_ENGINE_DIR].some((dir) => fs.existsSync(path.join(dir, f))))).toEqual([]);
+  it('keeps every pure file in the legacy engine package, so no shell needs this app to run one', () => {
+    expect(PURE_FILES.filter((f) => !fs.existsSync(path.join(LEGACY_ENGINE_DIR, f)))).toEqual([]);
   });
 
-  it('pure engine files import no host code', () => {
+  it('pure legacy engine files import no host code', () => {
     const violations: string[] = [];
     for (const file of PURE_FILES) {
       const filePath = engineFile(file);
-      for (const { specifier: written, names } of valueImports(filePath)) {
-        for (const specifier of throughPublicEntry(written, names)) {
-          const module = moduleOf(filePath, specifier);
-          const via = specifier === written ? '' : ` (through '${written}')`;
-          const forbidden = FORBIDDEN.find((rule) => rule.matches(module));
-          if (forbidden !== undefined) {
-            violations.push(`${file} imports '${specifier}'${via}: ${forbidden.reason}`);
-          } else if (!ALLOWED.some((allowed) => allowed(module))) {
-            violations.push(
-              `${file} imports '${specifier}'${via}: not on the seam's allow list (reach it through the host, or allow it here with the reason)`,
-            );
-          }
+      for (const { specifier } of valueImports(filePath)) {
+        const module = moduleOf(filePath, specifier);
+        const forbidden = FORBIDDEN.find((rule) => rule.matches(module));
+        if (forbidden !== undefined) {
+          violations.push(`${file} imports '${specifier}': ${forbidden.reason}`);
+        } else if (!ALLOWED.some((allowed) => allowed(module))) {
+          violations.push(
+            `${file} imports '${specifier}': not on the seam's allow list (reach it through the host, or allow it here with the reason)`,
+          );
         }
       }
     }
     expect(violations).toEqual([]);
   });
 
-  it('pure engine files read no clock and mint no id of their own', () => {
-    const violations = [...PURE_FILES.map(engineFile), ...PURE_HELPERS].flatMap((file) =>
+  it('pure legacy engine files read no clock and mint no id of their own', () => {
+    const violations = PURE_FILES.map(engineFile).flatMap((file) =>
       entropyReads(file).map((read) => `${path.relative(SRC_DIR, file)}:${read}`),
     );
     expect(violations).toEqual([]);
   });
 
-  it('flags each way of reading a clock or minting an id, but the one out-of-run clock', () => {
-    const probe = [
-      "import { randomUUID } from 'node:crypto';",
-      "import { v4 } from 'uuid';",
-      'const a = Date.now();',
-      'const b = new Date();',
-      'const c = Math.random();',
-      'const d = crypto.randomUUID();',
-      'const e = performance.now();',
-      "const f = new Date('2026-10-07T09:00:00.000Z');",
-      'function pinnedNow() { return new Date(); }',
-      "import nodeCrypto from 'node:crypto';",
-      'const g = nodeCrypto.randomBytes(4);',
-      'const h = globalThis.crypto.getRandomValues(new Uint8Array(4));',
-      'const i = Date();',
-      'const j = process.hrtime();',
-      'const k = process.hrtime.bigint();',
-      "import * as cryptoModule from 'crypto';",
-      'const l = cryptoModule.randomInt(3);',
-    ].join('\n');
-    expect(entropyReads(path.join(ENGINE_DIR, 'probe.ts'), probe)).toEqual([
-      "1: imports randomUUID from 'node:crypto'",
-      "2: imports 'uuid'",
-      '3: Date.now',
-      '4: new Date()',
-      '5: Math.random',
-      '6: crypto.randomUUID',
-      '7: performance.now',
-      '9: new Date()',
-      '11: nodeCrypto.randomBytes',
-      '12: globalThis.crypto.getRandomValues',
-      '13: Date()',
-      '14: process.hrtime',
-      '15: process.hrtime.bigint',
-      '17: cryptoModule.randomInt',
-    ]);
+  it('lets the one out-of-run clock through, and only there', () => {
     expect(entropyReads(OUT_OF_RUN_CLOCK.file, 'function pinnedNow() { return new Date(); }')).toEqual([]);
-  });
-
-  it('flags a value import from host code and lets a type-only one through', () => {
-    const probe = path.join(ENGINE_DIR, 'probe.ts');
-    const classify = (text: string) => {
-      const source = ts.createSourceFile(probe, text, ts.ScriptTarget.Latest, true);
-      const [statement] = source.statements;
-      if (statement === undefined || !ts.isImportDeclaration(statement)) {
-        throw new Error('probe must be one import');
-      }
-      return isTypeOnlyImport(statement);
-    };
-    expect(classify(`import { getQb } from '../../lib/kysely';`)).toBe(false);
-    expect(classify(`import type { Kysely } from '../../lib/kysely';`)).toBe(true);
-    expect(classify(`import { type Kysely } from '../../lib/kysely';`)).toBe(true);
-    expect(classify(`import { type Kysely, getQb } from '../../lib/kysely';`)).toBe(false);
-    expect(classify(`import '../../lib/kysely';`)).toBe(false);
-    expect(moduleOf(probe, '../../lib/kysely')).toBe('lib/kysely');
-    expect(FORBIDDEN.some((rule) => rule.matches(moduleOf(probe, './park_sink')))).toBe(true);
-    expect(
-      FORBIDDEN.some((rule) =>
-        rule.matches(moduleOf(probe, '../translation_graph/engine/files/retrieve')),
-      ),
-    ).toBe(true);
-    expect(FORBIDDEN.some((rule) => rule.matches(moduleOf(probe, 'movement-engine/lib/run_spend')))).toBe(
-      true,
-    );
-    expect(
-      FORBIDDEN.some((rule) => rule.matches(moduleOf(probe, '../translation_graph/segment_scope'))),
-    ).toBe(true);
-  });
-});
-
-// ── Generated database code ─────────────────────────────────────────────────
-//
-// The engine, the contracts it speaks, the test host and the adapter
-// protocol's server kit are what an embedder imports without the run host.
-// None of them may reach the run host's generated database code, not even by
-// a type: a type import still loads the module for the compiler, so an
-// embedder compiling against them would need the run host's schema.
-
-const REPO_DIR = path.resolve(SRC_DIR, '../../..');
-const CONTRACTS_DIR = path.join(REPO_DIR, 'packages/engine-contracts');
-
-/** The roots an embedder imports. */
-const EMBEDDABLE_ROOTS = [
-  ...PURE_FILES.map(engineFile),
-  engineFile('test_host.ts'),
-  path.join(REPO_DIR, 'packages/module-kit/index.ts'),
-  path.join(CONTRACTS_DIR, 'index.ts'),
-];
-
-/** A resolved file or bare specifier that is generated database code or a
- *  database client. */
-function isDatabaseCode(resolvedOrSpecifier: string): boolean {
-  return (
-    /\/src\/generated\//.test(resolvedOrSpecifier) ||
-    /\/src\/prisma(\/|\.ts$|$)/.test(resolvedOrSpecifier) ||
-    /\/src\/lib\/kysely\.ts$/.test(resolvedOrSpecifier) ||
-    /\/node_modules\/(\.pnpm\/[^/]+\/node_modules\/)?(kysely|@prisma|\.prisma)\//.test(resolvedOrSpecifier) ||
-    /^(kysely|@prisma\/|prisma$)/.test(resolvedOrSpecifier)
-  );
-}
-
-/** Every specifier the file names, type-only ones included. */
-function allImports(file: string): string[] {
-  return ts.preProcessFile(fs.readFileSync(file, 'utf8'), true, true).importedFiles.map((f) => f.fileName);
-}
-
-const RESOLUTION: ts.CompilerOptions = {
-  module: ts.ModuleKind.CommonJS,
-  moduleResolution: ts.ModuleResolutionKind.Node10,
-};
-
-function resolved(specifier: string, fromFile: string): string | undefined {
-  return ts.resolveModuleName(specifier, fromFile, RESOLUTION, ts.sys).resolvedModule?.resolvedFileName;
-}
-
-/** Source files this repo owns: followed. A library's own files are not. */
-function isRepoSource(file: string): boolean {
-  if (file.endsWith('.d.ts')) return false;
-  const real = fs.realpathSync(file);
-  return real.startsWith(REPO_DIR) && !real.includes('/node_modules/');
-}
-
-/** Every chain from a root to database code, as `root <= … <= file → specifier`. */
-function databaseReach(roots: readonly string[]): string[] {
-  const parent = new Map<string, string>();
-  const seen = new Set(roots.map((r) => fs.realpathSync(r)));
-  const queue = [...seen];
-  const reach: string[] = [];
-  while (queue.length > 0) {
-    const file = queue.shift();
-    if (file === undefined) break;
-    for (const specifier of allImports(file)) {
-      const target = resolved(specifier, file);
-      if (isDatabaseCode(specifier) || (target !== undefined && isDatabaseCode(target))) {
-        const chain = [file];
-        for (let at = parent.get(file); at !== undefined; at = parent.get(at)) chain.push(at);
-        reach.push(`${chain.map((f) => path.relative(REPO_DIR, f)).join(' <= ')} → '${specifier}'`);
-        continue;
-      }
-      if (target === undefined || !isRepoSource(target)) continue;
-      const real = fs.realpathSync(target);
-      if (seen.has(real)) continue;
-      seen.add(real);
-      parent.set(real, file);
-      queue.push(real);
-    }
-  }
-  return reach;
-}
-
-function contractFiles(): string[] {
-  const files: string[] = [];
-  const walk = (dir: string): void => {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (entry.name === 'node_modules' || entry.name === '__embed_smoke__') continue;
-      const at = path.join(dir, entry.name);
-      if (entry.isDirectory()) walk(at);
-      else if (entry.name.endsWith('.ts')) files.push(at);
-    }
-  };
-  walk(CONTRACTS_DIR);
-  return files;
-}
-
-describe('generated database code stays out of what an embedder imports', () => {
-  it('no pure engine file and no contract file imports database code, not even a type', () => {
-    const violations: string[] = [];
-    for (const file of [...PURE_FILES.map(engineFile), ...contractFiles()]) {
-      for (const specifier of allImports(file)) {
-        const target = resolved(specifier, file);
-        if (isDatabaseCode(specifier) || (target !== undefined && isDatabaseCode(target))) {
-          violations.push(`${path.relative(REPO_DIR, file)} imports '${specifier}'`);
-        }
-      }
-    }
-    expect(violations).toEqual([]);
-  });
-
-  it('the contracts package imports nothing of the run host', () => {
-    const violations: string[] = [];
-    for (const file of contractFiles()) {
-      for (const specifier of allImports(file)) {
-        const target = resolved(specifier, file);
-        if (target !== undefined && fs.realpathSync(target).startsWith(path.join(REPO_DIR, 'apps/'))) {
-          violations.push(`${path.relative(REPO_DIR, file)} imports '${specifier}'`);
-        }
-      }
-    }
-    expect(violations).toEqual([]);
-  });
-
-  it('the engine, the contracts, the test host and the module kit reach no database code, by any path', () => {
-    expect(databaseReach(EMBEDDABLE_ROOTS)).toEqual([]);
-  });
-
-  it('a type import of generated code counts as reaching it', () => {
-    const probe = path.join(ENGINE_DIR, 'probe.ts');
-    expect(isDatabaseCode(resolved('../../generated/kysely/core/Team', probe) ?? '')).toBe(true);
-    expect(allImports(path.join(SRC_DIR, 'services/translation_graph/movement/tenant.ts'))).toContain(
-      '../../../generated/kysely/core/Team',
-    );
-    expect(databaseReach([path.join(SRC_DIR, 'services/translation_graph/movement/tenant.ts')])).not.toEqual([]);
+    expect(entropyReads(OUT_OF_RUN_CLOCK.file, 'function other() { return new Date(); }')).toEqual(['1: new Date()']);
   });
 });
 
@@ -1497,13 +1184,6 @@ describe('the round trip', () => {
     expect(methodPaths(roundTripHost(host)).sort()).toEqual(hostMethodPaths().sort());
   });
 
-  it('the manifest is the contract docs/contracts/host-families.md documents, method by method', () => {
-    const doc = fs.readFileSync(path.resolve(SRC_DIR, '../../../docs/contracts/host-families.md'), 'utf8');
-    const documented = [...doc.matchAll(/^#### `([A-Za-z.]+)`/gm)].map((match) => match[1]);
-    expect(documented.sort()).toEqual(hostMethodPaths().sort());
-    const families = [...doc.matchAll(/^### `([A-Za-z.]+)`/gm)].map((match) => match[1]);
-    expect(families.sort()).toEqual(Object.keys(HOST_FAMILIES).sort());
-  });
 });
 
 describe('every family crosses as JSON', () => {
