@@ -99,11 +99,10 @@ we nearly rebuilt it:
 
 ## Local gotchas
 
-- **movement-lang's own jest is broken locally** (stale pnpm symlinks under
-  `node_modules/jest` and `node_modules/ts-jest` point at `.pnpm` hashes that
-  no longer exist). Run tests with `pnpm --filter @listen-fire/movement-lang test` — the
-  `test` script and the checked-in `jest.config.borrowed.cjs` borrow `apps/api`'s
-  ts-jest install and jest binary instead of requiring a local reinstall.
+- **Jest is the root install's.** Run tests with
+  `pnpm --filter @listen-fire/movement-lang test` — the `test` script and the
+  checked-in `jest.config.cjs` (a few overrides over the root's
+  `jest.config.base.cjs`) use the root's jest and ts-jest, not a copy of their own.
   Expect ~60 suites / ~1770 tests green.
 - **Never `pnpm build` this package in place** — the `.js` emit shadows the `.ts`
   and everything gets weird. Delete artifacts if it happens.

@@ -13,7 +13,7 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 
 const PACKAGE = path.resolve(__dirname, '../../..');
-const JEST = path.resolve(PACKAGE, '../../apps/api/node_modules/jest/bin/jest.js');
+const JEST = path.resolve(PACKAGE, '../../node_modules/jest/bin/jest.js');
 
 const ZONES = ['UTC', 'Europe/London', 'America/New_York', 'Asia/Kolkata', 'Pacific/Apia', 'GMT+3'];
 
@@ -24,7 +24,7 @@ describe("the date tests, in each process's zone", () => {
   it.each(ZONES)('TZ=%j', (zone) => {
     const run = spawnSync(
       process.execPath,
-      [JEST, '--config', 'jest.config.borrowed.cjs', '--runInBand', '--testPathPattern', 'rust_run\\.unit', '-t', 'in any process zone'],
+      [JEST, '--config', 'jest.config.cjs', '--runInBand', '--testPathPattern', 'rust_run\\.unit', '-t', 'in any process zone'],
       { cwd: PACKAGE, env: { ...process.env, TZ: zone }, encoding: 'utf8' },
     );
     const summary = /Tests: +(?:(\d+) failed, )?.*?(\d+) passed/.exec(run.stderr);

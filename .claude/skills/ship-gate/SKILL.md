@@ -8,6 +8,32 @@ description: Run the batched shippability gate — full monorepo typecheck + the
 The only place expensive verification runs (see CLAUDE.md "Done vs shippable").
 Gates everything accumulated on local main since the last gate.
 
+## Language-side gate (the language repository after the split)
+
+The language packages gate on their own, with no apps/api leg. Run in
+parallel, in the background:
+
+- Filtered typecheck: `NODE_OPTIONS=--max-old-space-size=8192 pnpm --filter
+  @listen-fire/engine-contracts --filter @listen-fire/movement-engine --filter
+  @listen-fire/handbook --filter @listen-fire/module-kit code:type-check`
+  (movement-lang defines no type-check script; its sources are checked
+  through the packages that import it).
+- The test sets, each through its own `pnpm --filter <package> test`
+  (jest and ts-jest are the root install's): `@listen-fire/movement-lang`,
+  `@listen-fire/movement-engine`, `@listen-fire/engine-contracts`,
+  `@listen-fire/handbook`, `@listen-fire/module-kit`.
+- `cargo test` over the workspace (the crates' own suites and corpora).
+- The wasm rebuild check: `./scripts/build-movement-wasm.sh`, then
+  `sha256sum` of `packages/movement-lang/wasm/movement.wasm` and
+  `movement_parser.wasm` before and after must match (the
+  `rebuild-matches-committed` job in movement-wasm.yml).
+- `node scripts/check-split-boundary.cjs`: no language package reaches into
+  the platform.
+
+## Platform-side gate
+
+The Procedure below is the platform side's gate and keeps its text.
+
 ## Procedure
 
 1. Run both, in parallel, in the background (independent processes):

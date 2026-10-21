@@ -2,13 +2,13 @@
   "name": "@listen-fire/whatsapp",
   "license": "Apache-2.0",
   "version": "0.12.0-rc.4",
-  "description": "WhatsApp (the Meta Cloud API: the messages a number receives, the replies, reactions and typing it sends, the media on them) as a module. Loaded in process by the platform, served by serve-module everywhere else. Its tests borrow apps/api's jest runner (jest.config.borrowed.cjs)",
+  "description": "WhatsApp (the Meta Cloud API: the messages a number receives, the replies, reactions and typing it sends, the media on them) as a module. Loaded in process by the platform, served by serve-module everywhere else.",
   "engines": {
     "node": "22.20.0"
   },
   "scripts": {
     "code:type-check": "tsc --pretty --noEmit && node ../../scripts/check-module-boundary.cjs",
-    "test": "node ../../apps/api/node_modules/jest/bin/jest.js --config jest.config.borrowed.cjs",
+    "test": "jest --config jest.config.cjs",
     "prepack": "node ../../scripts/build-packages.cjs .",
     "postpack": "node ../../scripts/build-packages.cjs --restore ."
   },

@@ -163,7 +163,7 @@ jobs:
       - name: The environment services' fixture is current
         working-directory: apps/api
         run: |
-          TS_NODE_PROJECT=tsconfig.json npx ts-node --transpile-only ../../crates/movement-engine/tests/env/generate.ts
+          TS_NODE_PROJECT=tsconfig.json ../../node_modules/.bin/ts-node --transpile-only ../../crates/movement-engine/tests/env/generate.ts
           git diff --exit-code -- ../../crates/movement-engine/tests/env || {
             echo "::error::crates/movement-engine/tests/env is stale: regenerate it (see generate.ts) and commit it, then make the crate tests pass."
             exit 1

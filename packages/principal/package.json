@@ -9,7 +9,7 @@
   },
   "scripts": {
     "code:type-check": "tsc --pretty --noEmit",
-    "test": "node ../../apps/api/node_modules/jest/bin/jest.js --config jest.config.borrowed.cjs"
+    "test": "jest --config jest.config.cjs"
   },
   "main": "index.ts",
   "types": "index.ts",

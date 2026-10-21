@@ -6,7 +6,7 @@
 // lowering regression's fixture (then UPDATE_LOWERED_FIXTURE=1 pins the new texts). From packages/movement-lang:
 //
 //   HARVEST_CORPUS=v1 HARVEST_OUT=/tmp/slots.jsonl \
-//     node ../../apps/api/node_modules/jest/bin/jest.js \
+//     node ../../node_modules/jest/bin/jest.js \
 //     --config parser/expression/harvest/jest.harvest.cjs
 const path = require('path');
 
@@ -15,7 +15,7 @@ const CONFIGS = {
   v1: 'jest.conformance.v1.cjs',
   v2: 'jest.conformance.v2.cjs',
   v3: 'jest.conformance.v3.cjs',
-  current: 'jest.config.borrowed.cjs',
+  current: 'jest.config.cjs',
 };
 
 const corpus = process.env.HARVEST_CORPUS;

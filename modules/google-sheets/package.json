@@ -2,13 +2,13 @@
   "name": "@listen-fire/google-sheets",
   "license": "Apache-2.0",
   "version": "0.12.0-rc.4",
-  "description": "Google Sheets (granted spreadsheets: their tables, tabs, named cells and cells) as a module: read, append, unique-by overwrite, create and share. Loaded in process by the platform, served by serve-module everywhere else. Also the Google OAuth constants every Google module shares (google_oauth.ts). Its tests borrow apps/api's jest runner (jest.config.borrowed.cjs)",
+  "description": "Google Sheets (granted spreadsheets: their tables, tabs, named cells and cells) as a module: read, append, unique-by overwrite, create and share. Loaded in process by the platform, served by serve-module everywhere else. Also the Google OAuth constants every Google module shares (google_oauth.ts).",
   "engines": {
     "node": "22.20.0"
   },
   "scripts": {
     "code:type-check": "tsc --pretty --noEmit && node ../../scripts/check-module-boundary.cjs",
-    "test": "node ../../apps/api/node_modules/jest/bin/jest.js --config jest.config.borrowed.cjs",
+    "test": "jest --config jest.config.cjs",
     "bench": "node --require ../../packages/module-kit/node_modules/tsx/dist/cjs/index.cjs bench/hosted_bench.ts",
     "prepack": "node ../../scripts/build-packages.cjs .",
     "postpack": "node ../../scripts/build-packages.cjs --restore ."

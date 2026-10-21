@@ -8,7 +8,7 @@
   },
   "scripts": {
     "code:type-check": "tsc --pretty --noEmit",
-    "test": "node ../../apps/api/node_modules/jest/bin/jest.js --config jest.config.borrowed.cjs",
+    "test": "jest --config jest.config.cjs",
     "prepack": "node ../../scripts/build-packages.cjs .",
     "postpack": "node ../../scripts/build-packages.cjs --restore ."
   },

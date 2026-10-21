@@ -2,7 +2,7 @@
   "name": "@listen-fire/module-kit",
   "license": "Apache-2.0",
   "version": "0.12.0-rc.4",
-  "description": "How an integration is built once and loaded everywhere: `defineModule` (an adapter or a set of plugins, its declarations and its methods over a host context), the in-process transport the platform loads a module with, the adapter protocol's server kit, and `serve-module`, which serves any module as a protocol-2 process for lf, the Rust host, the cloud and embedders. A module may not reach the hosted product, a database or the recording layer (scripts/check-module-boundary.cjs). Its tests borrow apps/api's jest runner (jest.config.borrowed.cjs)",
+  "description": "How an integration is built once and loaded everywhere: `defineModule` (an adapter or a set of plugins, its declarations and its methods over a host context), the in-process transport the platform loads a module with, the adapter protocol's server kit, and `serve-module`, which serves any module as a protocol-2 process for lf, the Rust host, the cloud and embedders. A module may not reach the hosted product, a database or the recording layer (scripts/check-module-boundary.cjs).",
   "engines": {
     "node": "22.20.0"
   },
@@ -11,7 +11,7 @@
   },
   "scripts": {
     "code:type-check": "tsc --pretty --noEmit && node ../../scripts/check-module-boundary.cjs",
-    "test": "node ../../apps/api/node_modules/jest/bin/jest.js --config jest.config.borrowed.cjs",
+    "test": "jest --config jest.config.cjs",
     "prepack": "node ../../scripts/build-packages.cjs .",
     "postpack": "node ../../scripts/build-packages.cjs --restore ."
   },

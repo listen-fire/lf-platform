@@ -10,6 +10,17 @@ const input = JSON.parse(await new Promise((resolve) => {
 
 const command = input?.tool_input?.command ?? '';
 
+// A `jest` run from the repo root (bare, `npx`, `pnpm exec`) with nothing to
+// scope it runs every package's suites. Packages run theirs via `pnpm test`.
+const unscopedRootJest = (c) =>
+  c.split(/&&|\|\||[;|\n]/).some((segment) => {
+    const match = segment.match(/(?:^|\s)(?:npx\s+|pnpm\s+(?:exec\s+)?)?jest(?:\s+(.*))?$/);
+    if (!match) return false;
+    const args = match[1] ?? '';
+    return !/--config|\s-c\s|--testPathPattern|--findRelatedTests|--testNamePattern|--projects|\s-t\s/.test(` ${args}`) &&
+      !args.split(/\s+/).some((a) => a && !a.startsWith('-'));
+  });
+
 const rules = [
   {
     test: (c) =>
@@ -21,10 +32,17 @@ const rules = [
       'The full suite runs only via the ship gate (see CLAUDE.md "Done vs shippable").',
   },
   {
+    test: unscopedRootJest,
+    message:
+      'Blocked: a bare root `jest` runs every package\'s suites. ' +
+      'Run a package\'s set with `pnpm --filter <package> test`, or scope jest with ' +
+      '--config <package>/jest.config.cjs, --testPathPattern or a file path.',
+  },
+  {
     test: (c) => /packages\/movement-lang/.test(c) && /\b(pnpm|npm|yarn)\b.*\bbuild\b/.test(c),
     message:
       'Blocked: never build packages/movement-lang in place — emitted .js files shadow the .ts ' +
-      'sources and break jest resolution. Test it via apps/api instead.',
+      'sources and break jest resolution. Test it with `pnpm --filter @listen-fire/movement-lang test`.',
   },
   {
     test: (c) => /\bgit\s+clean\b.*-[a-zA-Z]*[xX]/.test(c),

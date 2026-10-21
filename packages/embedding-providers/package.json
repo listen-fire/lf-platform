@@ -2,13 +2,13 @@
   "name": "@listen-fire/embedding-providers",
   "license": "Apache-2.0",
   "version": "0.12.0-rc.4",
-  "description": "Embeddings behind the model map: the caller names a registry model and a width, and the vendor (OpenAI, Gemini) computes the vectors. The vendor SDKs are optional peers loaded on first use; the environment and the host answers (usage recording, token counting) are passed in as @listen-fire/model-providers' ModelHost. Its tests borrow apps/api's jest runner (jest.config.borrowed.cjs)",
+  "description": "Embeddings behind the model map: the caller names a registry model and a width, and the vendor (OpenAI, Gemini) computes the vectors. The vendor SDKs are optional peers loaded on first use; the environment and the host answers (usage recording, token counting) are passed in as @listen-fire/model-providers' ModelHost.",
   "engines": {
     "node": "22.20.0"
   },
   "scripts": {
     "code:type-check": "tsc --pretty --noEmit",
-    "test": "node ../../apps/api/node_modules/jest/bin/jest.js --config jest.config.borrowed.cjs",
+    "test": "jest --config jest.config.cjs",
     "prepack": "node ../../scripts/build-packages.cjs .",
     "postpack": "node ../../scripts/build-packages.cjs --restore ."
   },

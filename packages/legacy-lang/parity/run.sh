@@ -16,7 +16,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 PACKAGE="$(cd "$HERE/.." && pwd)"
 ROOT="$(cd "$PACKAGE/../.." && pwd)"
 WORK="${PARITY_WORK:-$ROOT/target/parity}"
-TS_NODE=(node -r "$ROOT/apps/api/node_modules/ts-node/register/transpile-only")
+TS_NODE=(node -r "$ROOT/node_modules/ts-node/register/transpile-only")
 PATTERNS="$ROOT/crates/movement-engine/tests/oracle/patterns.json"
 case "${1:-}" in "" | --corpus | --patterns | --wasm) ;; *) echo "usage: $0 [--corpus | --patterns | --wasm]" >&2; exit 1 ;; esac
 mkdir -p "$WORK"
