@@ -1,15 +1,18 @@
 // The fake-channels Granola, booted on its own throwaway database with a fixed
 // set of notes, for RECORDING the parity fixture only (replay needs no
-// provider). A child process under fake-channels' own tsx, because that app is
-// not a dependency of this one and its store needs better-sqlite3.
+// provider). A child process under fake-channels' own tsx, because its store
+// needs better-sqlite3, which this app does not load.
 
 import { spawn } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 
-const FAKE_CHANNELS = resolve(__dirname, '../../../../../../../../fake-channels');
+// The fakes are a package; their tsx is resolved from it, as the package's
+// own bin runs it (an installed package has no node_modules/.bin of its own).
+const FAKE_CHANNELS = dirname(require.resolve('@listen-fire/fake-channels/package.json'));
+const TSX = require.resolve('tsx/cli', { paths: [FAKE_CHANNELS] });
 
 /** Four notes that walk the adapter's branches: a full note (calendar event,
  *  folder, markdown summary, transcript, a nameless attendee), a note with no
@@ -111,7 +114,7 @@ const server = app.listen(0, '127.0.0.1', () => console.log('listening ' + serve
 
 export async function bootFakeGranola(): Promise<{ baseUrl: string; stop(): void }> {
   const db = join(mkdtempSync(join(tmpdir(), 'granola-parity-')), 'fake-channels.db');
-  const child = spawn(join(FAKE_CHANNELS, 'node_modules/.bin/tsx'), ['--eval', BOOT], {
+  const child = spawn(process.execPath, [TSX, '--eval', BOOT], {
     cwd: FAKE_CHANNELS,
     env: { ...process.env, PARITY_DB: db, PARITY_NOTES: JSON.stringify(NOTES) },
     stdio: ['ignore', 'pipe', 'inherit'],

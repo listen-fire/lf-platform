@@ -1,16 +1,19 @@
 // The fake-channels Evertrace, booted on its own throwaway database with the
 // dev loop's seed (signals, searches, lists, lookup entities), for RECORDING
 // the parity fixture only (replay needs no provider). A child process under
-// fake-channels' own tsx, because that app is not a dependency of this one
-// and its store needs better-sqlite3.
+// fake-channels' own tsx, because its store needs better-sqlite3, which this
+// app does not load.
 
 import { spawn } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 
-const FAKE_CHANNELS = resolve(__dirname, '../../../../../../../../fake-channels');
+// The fakes are a package; their tsx is resolved from it, as the package's
+// own bin runs it (an installed package has no node_modules/.bin of its own).
+const FAKE_CHANNELS = dirname(require.resolve('@listen-fire/fake-channels/package.json'));
+const TSX = require.resolve('tsx/cli', { paths: [FAKE_CHANNELS] });
 
 const BOOT = `
 const express = require('express');
@@ -27,7 +30,7 @@ const server = app.listen(0, '127.0.0.1', () => console.log('listening ' + serve
 
 export async function bootFakeEvertrace(): Promise<{ baseUrl: string; stop(): void }> {
   const db = join(mkdtempSync(join(tmpdir(), 'evertrace-parity-')), 'fake-channels.db');
-  const child = spawn(join(FAKE_CHANNELS, 'node_modules/.bin/tsx'), ['--eval', BOOT], {
+  const child = spawn(process.execPath, [TSX, '--eval', BOOT], {
     cwd: FAKE_CHANNELS,
     env: { ...process.env, PARITY_DB: db },
     stdio: ['ignore', 'pipe', 'inherit'],

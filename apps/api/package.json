@@ -98,6 +98,7 @@
     "@babel/preset-env": "7.24.5",
     "@babel/preset-typescript": "7.24.1",
     "@eslint/js": "9.2.0",
+    "@listen-fire/fake-channels": "workspace:^",
     "@swc-node/register": "1.9.1",
     "@types/hot-formula-parser": "^4.0.4",
     "@types/jest": "29.5.14",
