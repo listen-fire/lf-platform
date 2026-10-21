@@ -1,7 +1,7 @@
 {
   "name": "@listen-fire/models",
   "license": "Apache-2.0",
-  "version": "0.12.0-rc.4",
+  "version": "0.12.0-rc.5",
   "description": "The models slot's module for any vendor the platform speaks (`@lf/models`): Gemini (on Google Cloud or with a Gemini API key), OpenAI, Claude on Anthropic's API or on Vertex. Movement model names map to the vendor's models through the platform's model map, every answer is priced from the shared price table, and the module publishes its prices (`models.prices`). Served as a process lf starts (kind: core, slot: models).",
   "engines": {
     "node": "22.20.0"

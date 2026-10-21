@@ -13,6 +13,15 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 
 ## [Unreleased]
 
+<!-- add merged PRs here -->
+
+## [0.12.0-rc.5] - 2026-10-21
+
+This pre-release is the last one built from the combined repository. The language now serves
+version 5 only, and a pin below 5 is refused by name (upgrading automations from versions 1-4 is the
+platform's). The next release splits into `listen-fire` (the language) and `lf-platform` (the hosted
+product), which installs the language from these packages.
+
 - The fake third-party services (Slack, Attio, Affinity, email, WhatsApp, the OAuth provider and the rest) are the package `@listen-fire/fake-channels`, with a `fake-channels` command (port from `FAKE_CHANNELS_PORT`). The dev loop, the demo `fake-channels` image, lf's test harness and the examples all start it from there; nothing changes for the demo's image name or port.
 - Set `GEMINI_API_KEY` to call Gemini through the Gemini Developer API instead of the project's Vertex endpoint (which was returning 429s for some projects). The service account then serves only OCR and Claude on Vertex; without the key nothing changes.
 - A rate-limited model call now waits as long as the vendor's retry-after asks, instead of a fixed 30 seconds.
@@ -2143,7 +2152,8 @@ Releases before v0.11 are kept one file per minor line, newest first:
 - [v0.2.x](docs/changelog/v0.2.md) (v0.2.0)
 - [v0.1.x](docs/changelog/v0.1.md) (v0.1.0 to v0.1.2)
 
-[Unreleased]: https://github.com/listen-fire/listen-fire/compare/v0.12.0-rc.4...HEAD
+[Unreleased]: https://github.com/listen-fire/listen-fire/compare/v0.12.0-rc.5...HEAD
+[0.12.0-rc.5]: https://github.com/listen-fire/listen-fire/compare/v0.12.0-rc.4...v0.12.0-rc.5
 [0.12.0-rc.4]: https://github.com/listen-fire/listen-fire/compare/v0.12.0-rc.3...v0.12.0-rc.4
 [0.12.0-rc.3]: https://github.com/listen-fire/listen-fire/compare/v0.12.0-rc.2...v0.12.0-rc.3
 [0.12.0-rc.2]: https://github.com/listen-fire/listen-fire/compare/v0.11.0...v0.12.0-rc.2

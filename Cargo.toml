@@ -5,7 +5,7 @@ members = ["crates/lf", "crates/module-kit", "crates/module-wire", "crates/movem
 # One release version for the toolchain: the three library crates and the
 # `listen-fire` facade (crates/lf, which installs `lf`) publish together.
 [workspace.package]
-version = "0.12.0-rc.4"
+version = "0.12.0-rc.5"
 edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/listen-fire/listen-fire"

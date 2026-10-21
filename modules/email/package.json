@@ -1,7 +1,7 @@
 {
   "name": "@listen-fire/email",
   "license": "Apache-2.0",
-  "version": "0.12.0-rc.4",
+  "version": "0.12.0-rc.5",
   "description": "Inbound email (Mailgun or Resend: the message, its fields and attachments, the doors' signature checks) and the outbound senders, as a module. Loaded in process by the platform, served by serve-module everywhere else.",
   "engines": {
     "node": "22.20.0"

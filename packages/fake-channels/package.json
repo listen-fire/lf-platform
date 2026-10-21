@@ -1,7 +1,7 @@
 {
   "name": "@listen-fire/fake-channels",
   "license": "Apache-2.0",
-  "version": "0.12.0-rc.4",
+  "version": "0.12.0-rc.5",
   "description": "Stand-in implementations of the third-party services (Slack, Attio, Affinity, Airtable, Sheets, email, WhatsApp, Telegram, Gmail, Drive, Dropbox, an OAuth2 provider, the model vendors and more) with a control door to seed and inspect them. The dev loop, the demo image, lf's test harness and the examples all run these instead of real accounts. Start it with `fake-channels` (port from FAKE_CHANNELS_PORT, 0 for a free one).",
   "engines": {
     "node": "22.20.0"

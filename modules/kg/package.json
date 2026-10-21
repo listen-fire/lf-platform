@@ -2,7 +2,7 @@
   "name": "@listen-fire/kg",
   "private": true,
   "license": "Apache-2.0",
-  "version": "0.12.0-rc.4",
+  "version": "0.12.0-rc.5",
   "description": "The platform's knowledge graph as a module (`@lf/kg`): its record types read from the team's own model, reads and writes through a store the host supplies, and its change events delivered through the host's inbound path like any adapter's. Loaded in process by the platform.",
   "engines": {
     "node": "22.20.0"

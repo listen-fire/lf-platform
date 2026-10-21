@@ -1,7 +1,7 @@
 {
   "name": "@listen-fire/movement-lang",
   "license": "Apache-2.0",
-  "version": "0.12.0-rc.4",
+  "version": "0.12.0-rc.5",
   "description": "The data-movement language, version 5: the wasm parser, checker and engine with their loader and bindings, the version table, the expression AST and the types the contracts name",
   "engines": {
     "node": "22.20.0"

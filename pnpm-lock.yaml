@@ -19024,7 +19024,7 @@ snapshots:
   extract-pg-schema@5.8.0(@electric-sql/pglite@0.3.14)(better-sqlite3@11.10.0):
     dependencies:
       knex: 3.1.0(better-sqlite3@11.10.0)(pg@8.16.3)
-      knex-pglite: 0.12.1(@electric-sql/pglite@0.3.14)(knex@3.1.0(better-sqlite3@11.10.0)(pg@8.12.0))
+      knex-pglite: 0.12.1(@electric-sql/pglite@0.3.14)(knex@3.1.0(better-sqlite3@11.10.0)(pg@8.16.3))
       pg: 8.16.3
       pg-query-emscripten: 5.1.0
       ramda: 0.31.3
@@ -20706,7 +20706,7 @@ snapshots:
 
   kleur@4.1.5: {}
 
-  knex-pglite@0.12.1(@electric-sql/pglite@0.3.14)(knex@3.1.0(better-sqlite3@11.10.0)(pg@8.12.0)):
+  knex-pglite@0.12.1(@electric-sql/pglite@0.3.14)(knex@3.1.0(better-sqlite3@11.10.0)(pg@8.16.3)):
     dependencies:
       '@electric-sql/pglite': 0.3.14
       knex: 3.1.0(better-sqlite3@11.10.0)(pg@8.16.3)
