@@ -650,7 +650,7 @@ describe('manifest ↔ event-node vocabulary pin', () => {
 
   it('the deleted spelling is the one the checker drops live-record edges on', () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { RECORD_DELETED_ACTION } = require('movement-lang');
+    const { RECORD_DELETED_ACTION } = require('legacy-lang');
     expect(real.KG_SUBSCRIBABLE_EVENTS).toContain(RECORD_DELETED_ACTION);
   });
 });
