@@ -38,9 +38,9 @@ import { RemoteAdapterManifestInput } from '../manifest';
 import { dispatchTriggerByIdEvent } from '../../../triggers/router';
 import { mintMovementVersionIfChanged } from '../../../movement/version_store';
 import { SERVE_MODULE } from '../../__test__/parity/serve_module';
-import { startFakeHubSpot, type FakeHubSpot } from '../../../../../../../cli/src/__test__/hubspot/fake_hubspot';
+import { HUBSPOT_MODULE, startFakeHubSpot, type FakeHubSpot } from '@listen-fire/fake-channels/testing';
 
-const MODULE = resolve(__dirname, '../../../../../../../cli/src/__test__/hubspot/module.ts');
+const MODULE = HUBSPOT_MODULE;
 const SERVER_SECRET = `install-${randomUUID()}`;
 const CLIENT = { clientId: 'listen-fire-app', clientSecret: 'listen-fire-app-secret' };
 

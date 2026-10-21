@@ -1978,6 +1978,12 @@ importers:
 
   packages/fake-channels:
     dependencies:
+      '@listen-fire/engine':
+        specifier: workspace:^
+        version: link:../movement-engine
+      '@listen-fire/module-kit':
+        specifier: workspace:^
+        version: link:../module-kit
       better-sqlite3:
         specifier: ^11.7.0
         version: 11.10.0
@@ -2000,6 +2006,12 @@ importers:
       '@types/node':
         specifier: 22.19.15
         version: 22.19.15
+      module-kit:
+        specifier: workspace:@listen-fire/module-kit@*
+        version: link:../module-kit
+      movement-engine:
+        specifier: workspace:@listen-fire/engine@*
+        version: link:../movement-engine
       typescript:
         specifier: 5.5.4
         version: 5.5.4

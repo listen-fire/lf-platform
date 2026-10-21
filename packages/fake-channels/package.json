@@ -9,6 +9,10 @@
   "bin": {
     "fake-channels": "bin/fake-channels.cjs"
   },
+  "exports": {
+    "./testing": "./testing.ts",
+    "./package.json": "./package.json"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
@@ -20,12 +24,16 @@
     "better-sqlite3": "^11.7.0",
     "express": "^4.21.0",
     "tsx": "4.21.0",
-    "zod": "4.1.12"
+    "zod": "4.1.12",
+    "@listen-fire/engine": "workspace:^",
+    "@listen-fire/module-kit": "workspace:^"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",
     "@types/express": "^4.17.21",
     "@types/node": "22.19.15",
+    "module-kit": "workspace:@listen-fire/module-kit@*",
+    "movement-engine": "workspace:@listen-fire/engine@*",
     "typescript": "5.5.4"
   },
   "repository": {
@@ -37,6 +45,7 @@
     "bin",
     "src",
     "assets",
+    "testing.ts",
     "!src/**/__test__"
   ],
   "publishConfig": {

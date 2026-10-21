@@ -15,10 +15,9 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parse, stringify } from 'yaml';
 import { lfCommand } from './example';
-import { startFakeHubSpot, type FakeHubSpot } from './hubspot/fake_hubspot';
-import { dealCreatedEvent } from './hubspot/module';
+import { dealCreatedEvent, HUBSPOT_MODULE, startFakeHubSpot, type FakeHubSpot } from '@listen-fire/fake-channels/testing';
 
-const MODULE = resolve(__dirname, 'hubspot/module.ts');
+const MODULE = HUBSPOT_MODULE;
 const SERVER_SECRET = 'install-server-secret';
 const CLIENT = { clientId: 'listen-fire-app', clientSecret: 'listen-fire-app-secret' };
 
