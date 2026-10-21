@@ -238,7 +238,7 @@ impl RunFacts {
             Some(Js::Num(n)) => n.as_u64().ok_or_else(|| format!("run {run_id}: languageVersion is a whole number"))? as u32,
             _ => return Err(format!("run {run_id}: its facts have no languageVersion")),
         };
-        refuse_below_lf(language_version, &format!("run {run_id}"), "it cannot resume; run `lf upgrade` and fire it again")?;
+        refuse_below_lf(language_version, &format!("run {run_id}"), "it cannot resume; upgrade its movement to language version 5 on the platform and fire it again")?;
         Ok(RunFacts {
             source: text("source")?,
             language_version,

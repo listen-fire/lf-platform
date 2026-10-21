@@ -211,7 +211,7 @@ pub fn load_project(from: &Path) -> Result<Project, String> {
     };
     let core = crate::core::CoreChoice::of(&file.core, &installed, &path.display().to_string())?;
     let language_version = language_version_of_engine(&file.engine)?;
-    refuse_below_lf(language_version, &path.display().to_string(), "run `lf upgrade`")?;
+    refuse_below_lf(language_version, &path.display().to_string(), "upgrade it to language version 5 on the platform (`lf upgrade` reads version 5 files only)")?;
     let lf_dir = dir.join(".lf");
     fs::create_dir_all(&lf_dir).map_err(|e| format!("{}: {e}", lf_dir.display()))?;
     Ok(Project {
@@ -254,8 +254,10 @@ mod tests {
     fn a_pin_below_version_5_is_refused_saying_what_to_do() {
         for version in 1..=4 {
             assert_eq!(
-                refuse_below_lf(version, "lf.yaml", "run `lf upgrade`"),
-                Err(format!("lf.yaml is pinned to language version {version}, which lf does not run (lf runs language version 5 and later): run `lf upgrade`"))
+                refuse_below_lf(version, "lf.yaml", "upgrade it to language version 5 on the platform (`lf upgrade` reads version 5 files only)"),
+                Err(format!(
+                    "lf.yaml is pinned to language version {version}, which lf does not run (lf runs language version 5 and later): upgrade it to language version 5 on the platform (`lf upgrade` reads version 5 files only)"
+                ))
             );
         }
         assert_eq!(FIRST_LF_LANGUAGE_VERSION, 5);
