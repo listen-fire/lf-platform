@@ -1,6 +1,6 @@
 //! Language version 5: `fail(…)` inside an expression (a value that never
 //! arrives, TypeScript's `never`) and `sort` by a function key, through the
-//! Rust checker. Versions 1–4 are unchanged.
+//! Rust checker.
 
 use movement_checker::{CheckOptions, Diagnostic, check_source};
 use movement_parser::catalog::types::CatalogSnapshot;
@@ -52,13 +52,13 @@ fn upgraded(source: &str) -> String {
 }
 
 const HEAD_V5: &str = "import { `@lf/attio` as attio } from adapters\nimport { `Acme CRM` } from credentials\ncrm = connect attio using `Acme CRM`\n";
-const HEAD_V4: &str = "import { attio } from adapters\nimport { `Acme CRM` } from credentials\ncrm = attio(credentials: `Acme CRM`)\n";
+const HEAD_OLD: &str = "import { attio } from adapters\nimport { `Acme CRM` } from credentials\ncrm = attio(credentials: `Acme CRM`)\n";
 
 fn v5(body: &str) -> String {
     format!("{HEAD_V5}function need(s: <text>) {{\n  return s\n}}\nfunction go(t: <text>, xs: <text[]>, co: <crm-[:company]->>) {{\n{body}\n}}\n")
 }
-fn v4(body: &str) -> String {
-    format!("{HEAD_V4}movement go(t: <text>, xs: <text[]>, co: <crm-[:company]->>) {{\n{body}\n}}\n")
+fn old_form(body: &str) -> String {
+    format!("{HEAD_OLD}movement go(t: <text>, xs: <text[]>, co: <crm-[:company]->>) {{\n{body}\n}}\n")
 }
 
 
@@ -104,10 +104,7 @@ fn code_after_an_arm_that_only_fails_knows_the_condition() {
 }
 
 #[test]
-fn versions_1_to_4_read_error_as_no_value() {
-    let source = v4("  x = COALESCE(t, ERROR(\"no\"))");
-    assert_eq!(codes(&source, 4), vec!["MOV_FUNCTION_UNKNOWN".to_string()]);
-    // Under 5 the old word is respelled, and `fail` is no longer refused as not yet read.
+fn fail_inside_an_expression_is_not_refused_as_not_yet_read() {
     let refused = codes(&v5("  x = coalesce(t, fail(\"no\"))"), 5);
     assert!(refused.is_empty(), "{refused:?}");
 }
@@ -144,24 +141,21 @@ fn sort_refuses_a_key_with_no_order() {
     refused("  x = sort(xs, (s) => Text.length(s), { order: \"down\" })", "MOV_COLLECTION_OP_CONFIG");
     refused("  x = sort(xs, (s) => Text.length(s), { by: \"desc\" })", "MOV_COLLECTION_OP_CONFIG");
     refused("  x = sort(xs, (s) => Text.length(s), 3)", "MOV_BUILTIN_ARGS");
-    // No version before 5 has the tree's name.
-    assert!(codes(&v4("  x = SORTBY(xs, (s) => s)"), 4).contains(&"MOV_FUNCTION_UNKNOWN".to_string()));
-    // Under 5 the tree's name is an old spelling of `sort`.
+    // The tree's name is an old spelling of `sort`.
     refused("  x = SORTBY(xs, (s) => Text.length(s))", "MOV_V5_SPELLING");
 }
 
 #[test]
 fn the_old_field_key_upgrades_to_a_function_safe_only_where_no_variable_hides_the_field() {
-    let old = v4("  rows = COLLECT(crm-[:companies]->)\n  x = SORT(rows, `score`, DESC)");
-    let want = codes(&old, 4);
+    let old = old_form("  rows = COLLECT(crm-[:companies]->)\n  x = SORT(rows, `score`, DESC)");
     let fixed = upgraded(&old);
     assert!(fixed.contains("sort(rows, (r) => r.score, { order: \"desc\" })"), "{fixed}");
-    assert_eq!(codes(&fixed, 5), want, "{fixed}");
+    assert_eq!(codes(&fixed, 5), Vec::<String>::new(), "{fixed}");
     assert!(fix_safe(&old));
     // An outer `score` was what the old key read: the rewrite reads the field.
-    assert!(!fix_safe(&v4("  score = 3\n  rows = COLLECT(crm-[:companies]->)\n  x = SORT(rows, `score`, DESC)")));
+    assert!(!fix_safe(&old_form("  score = 3\n  rows = COLLECT(crm-[:companies]->)\n  x = SORT(rows, `score`, DESC)")));
     // So was an outer `r`, which the rewrite's parameter would hide.
-    assert!(!fix_safe(&v4("  r = 3\n  rows = COLLECT(crm-[:companies]->)\n  x = SORT(rows, `score`)")));
+    assert!(!fix_safe(&old_form("  r = 3\n  rows = COLLECT(crm-[:companies]->)\n  x = SORT(rows, `score`)")));
     // A name bound elsewhere, out of scope at the sort, changes nothing.
-    assert!(fix_safe(&v4("  rows = COLLECT(crm-[:companies]->)\n  x = SORT(rows, `score`)\n  if t == \"a\" {\n    score = 1\n  }")));
+    assert!(fix_safe(&old_form("  rows = COLLECT(crm-[:companies]->)\n  x = SORT(rows, `score`)\n  if t == \"a\" {\n    score = 1\n  }")));
 }

@@ -2,12 +2,9 @@
 //! union: an IF, a COALESCE, a function's returns and a list's members of
 //! records of one type are that type, keeping only what every member vouches
 //! for; of different types, a union that reads, walks and writes only what
-//! every member offers. A read, a walk, a call's value and a list's member ran
-//! under 3 and 4, so what the rule refuses there is an upgrade warning; a
-//! write in place to such a value never ran, and its checks hold on every
-//! version. The TypeScript checker's `record_unions.unit.test.ts` and
-//! `maybe_record_write_target.unit.test.ts`, case for case, under 3, 4 and 5:
-//! each expectation is the TypeScript checker's own answer on the same
+//! every member offers. The TypeScript checker's `record_unions.unit.test.ts`
+//! and `maybe_record_write_target.unit.test.ts`, case for case, under 5: each
+//! expectation is the TypeScript checker's own answer on the same
 //! program (every diagnostic, in order, with its span and severity), read off
 //! it on 2026-10-16 into `record_unions.fixtures.json`.
 

@@ -35,12 +35,10 @@ fn the_keyword_is_refused_with_the_typescripts_rewrite() {
 }
 
 #[test]
-fn a_through_stage_has_no_rewrite_and_versions_one_to_four_are_unchanged() {
+fn a_through_stage_has_no_rewrite() {
     let source = format!("import {{ fetchUrl }} from plugins\n{PRELUDE}function go(m: <chat-[:message]->>) {{\n  found = extract from [m.Text] through [fetchUrl(m.Text)] {{ summary: \"s\" }}\n}}\n");
     let found = check(&source, 5);
     assert_eq!(found.len(), 1);
     assert!(found[0].fix.is_none());
     assert!(found[0].message.contains("No rewrite keeps a 'through […]' stage's meaning"));
-    let v4 = "import { slack } from adapters\nchat = slack()\n\nmovement go(m: <chat-[:message]->>) {\n  found = extract from [m.Text] { node co: \"each\" { name: <text> \"n\" } }\n}\n";
-    assert!(check(v4, 4).is_empty());
 }

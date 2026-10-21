@@ -1,8 +1,7 @@
 //! Spine gaps of language version 5's surface (plans/naming-rethink-2026-10-14/
-//! 5_design.md), each through the Rust checker: the v5 form checks as the old
-//! form does under 4, the old form under 5 is MOV_V5_SPELLING with a fix, and
-//! applying the fixes gives text that checks under 5 as the old form did
-//! under 4. Versions 1–4 are unchanged.
+//! 5_design.md), each through the Rust checker: the old form is
+//! MOV_V5_SPELLING with a fix, and applying the fixes gives text that checks
+//! as the v5 form does.
 
 use movement_checker::{CheckOptions, Diagnostic, check_source};
 use movement_parser::catalog::types::CatalogSnapshot;
@@ -54,22 +53,21 @@ fn upgraded(source: &str) -> String {
 }
 
 const HEAD_V5: &str = "import { `@lf/attio` as attio } from adapters\nimport { `Acme CRM` } from credentials\ncrm = connect attio using `Acme CRM`\n";
-const HEAD_V4: &str = "import { attio } from adapters\nimport { `Acme CRM` } from credentials\ncrm = attio(credentials: `Acme CRM`)\n";
+const HEAD_OLD: &str = "import { attio } from adapters\nimport { `Acme CRM` } from credentials\ncrm = attio(credentials: `Acme CRM`)\n";
 
 fn v5(body: &str) -> String {
     format!("{HEAD_V5}function go(t: <text>, xs: <text[]>, co: <crm-[:company]->>) {{\n{body}\n}}\n")
 }
-fn v4(body: &str) -> String {
-    format!("{HEAD_V4}movement go(t: <text>, xs: <text[]>, co: <crm-[:company]->>) {{\n{body}\n}}\n")
+fn old_form(body: &str) -> String {
+    format!("{HEAD_OLD}movement go(t: <text>, xs: <text[]>, co: <crm-[:company]->>) {{\n{body}\n}}\n")
 }
 
-/// The v5 form under 5 checks as the old form under 4; the old form under 5
-/// is refused with fixes, and the fixed text checks under 5 as the old did.
+/// The old form is refused with fixes, and the fixed text checks as the v5
+/// form does.
 fn same(new: &str, old: &str) {
-    let (new, old) = (v5(new), v4(old));
-    let want = codes(&old, 4);
-    assert!(want.iter().all(|c| !c.starts_with("MOV_UNKNOWN")), "{old}: {want:?}");
-    assert_eq!(codes(&new, 5), want, "{new}\n{:#?}", check(&new, 5));
+    let (new, old) = (v5(new), old_form(old));
+    let want = codes(&new, 5);
+    assert!(want.iter().all(|c| !c.starts_with("MOV_UNKNOWN")), "{new}: {want:?}");
     let refused = check(&old, 5);
     assert!(refused.iter().any(|d| d.code == "MOV_V5_SPELLING"), "{old}");
     let fixed = upgraded(&old);
@@ -81,11 +79,9 @@ fn fail_is_the_error_statement() {
     same("  if (t == null) {\n    fail(\"no text\")\n  }\n  y = Text.upper(t)", "  if t == NULL {\n    ERROR(\"no text\")\n  }\n  y = UPPER(t)");
     same("  fail(\"always\")", "  ERROR(\"always\")");
     same("  if (t == null) { fail(\"no text\") }", "  if t == NULL { ERROR(\"no text\") }");
-    let refused = check(&v4("  ERROR(\"x\")"), 5);
+    let refused = check(&old_form("  ERROR(\"x\")"), 5);
     let error = refused.iter().find(|d| d.message.contains("`ERROR`")).unwrap();
     assert_eq!(error.fix.as_ref().unwrap()["edits"][0]["text"], "fail");
-    // Under 4 `fail` is a name like any other.
-    assert!(codes(&v4("  fail(\"x\")"), 4).contains(&"MOV_FUNCTION_UNKNOWN".to_string()));
     // Inside an expression it is a value that never arrives (v5_never_sort).
     assert!(!codes(&v5("  x = coalesce(t, fail(\"no\"))"), 5).contains(&"MOV_V5_NOT_YET".to_string()));
 }

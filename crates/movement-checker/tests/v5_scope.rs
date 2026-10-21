@@ -1,7 +1,7 @@
 //! Language version 5's semantics the spelling rewrite alone cannot carry
 //! (plans/naming-rethink-2026-10-14/5_design.md): old spellings in imported
 //! libraries reported at the import; a name that hides a built-in; plugins
-//! by their exact-case names and package tags. Each under 4 as before.
+//! by their exact-case names and package tags.
 
 use movement_checker::{CheckOptions, Diagnostic, check_source};
 use movement_parser::catalog::types::CatalogSnapshot;
@@ -37,14 +37,6 @@ fn a_library_s_old_spellings_are_reported_at_its_import() {
     assert_eq!(spelling, vec!["\"lib/a\" line 1: \"lib/b\" line 2: `LOWER` is written `Text.lower` from language version 5"]);
 }
 
-#[test]
-fn under_4_a_library_has_no_spelling_findings() {
-    let files = with_files(r#"{"lib/a":{"source":"export movement helper(t: <text>) {\n  return UPPER(t)\n}"}}"#);
-    let root = "import { helper } from \"lib/a\"\nmovement go(t: <text>) {\n  x = helper(t)\n}";
-    let found = check_with(root, 4, &files);
-    assert!(found.iter().all(|d| d.code != "MOV_V5_SPELLING"), "{found:#?}");
-}
-
 const PLUGINS: &str = r#"{"adapters":{},"credentials":{},"plugins":{"fetch_url":{"args":["url"],"requiredArgs":["url"]}}}"#;
 
 fn codes_of(found: &[Diagnostic]) -> Vec<&str> {
@@ -54,12 +46,9 @@ fn codes_of(found: &[Diagnostic]) -> Vec<&str> {
 #[test]
 fn a_plugin_is_imported_by_its_exact_camel_case_name_under_5() {
     let new = "import { fetchUrl } from plugins\nfunction go(u: <text>) {\n  fetchUrl(u)\n}";
-    let old = "import { fetch_url } from plugins\nmovement go(u: <text>) {\n  p = fetch_url(url: u)\n}";
-    // What 4 says, less its refusal of a plugin that declares no row: from 5
-    // that is an ordinary call (22c3e889), run as a statement, since it
-    // declares no output.
-    let under_4 = check_with(old, 4, PLUGINS);
-    let expected: Vec<&str> = codes_of(&under_4).into_iter().filter(|c| *c != "MOV_PLUGIN_ROW_UNDECLARED").collect();
+    // A plugin that declares no row is an ordinary call (22c3e889), run as
+    // a statement, since it declares no output.
+    let expected = Vec::<&str>::new();
     assert_eq!(codes_of(&check_with(new, 5, PLUGINS)), expected);
     // Under its own name as an alias, too.
     let aliased = "import { fetchUrl as get } from plugins\nfunction go(u: <text>) {\n  get(u)\n}";
@@ -84,13 +73,6 @@ fn a_plugin_name_in_another_letter_case_is_unknown_under_5_named_as_written() {
     let found = check_with("import { fetchURL } from plugins\n", 5, PLUGINS);
     let unknown: Vec<_> = found.iter().filter(|d| d.code == "MOV_IMPORT_UNKNOWN").map(|d| d.message.as_str()).collect();
     assert_eq!(unknown, vec!["Unknown plugin 'fetchURL' in 'plugins'"]);
-}
-
-#[test]
-fn under_4_a_plugin_is_imported_by_the_catalog_s_key() {
-    assert!(check_with("import { fetch_url } from plugins\n", 4, PLUGINS).iter().all(|d| d.code != "MOV_V5_SPELLING" && d.code != "MOV_IMPORT_UNKNOWN"));
-    let found = check_with("import { fetchUrl } from plugins\n", 4, PLUGINS);
-    assert!(found.iter().any(|d| d.message == "Unknown plugin 'fetchUrl' in 'plugins'"), "{found:#?}");
 }
 
 const NONE: &str = r#"{"adapters":{},"credentials":{},"plugins":{}}"#;
@@ -134,11 +116,4 @@ fn a_name_that_hides_a_core_word_or_a_namespace_is_refused_under_5_for_now() {
     // A function by a core word's name: reported once, as hiding it.
     let found = check_with("function first(s: <text>) {\n  return 1\n}", 5, NONE);
     assert_eq!(codes_of(&found).iter().filter(|c| c.starts_with("MOV_V5_HIDES") || c.starts_with("MOV_FUNCTION_NAME")).count(), 1, "{found:#?}");
-}
-
-#[test]
-fn under_4_a_built_in_s_name_in_any_case_is_refused_as_before() {
-    let found = check_with("movement go(t: <text>) {\n  upper = (s: <text>) => s\n  map = 3\n}", 4, NONE);
-    assert_eq!(of_code(&found, "MOV_FUNCTION_NAME_COLLISION").len(), 1, "{found:#?}");
-    assert!(of_code(&found, "MOV_V5_HIDES_BUILTIN").is_empty());
 }

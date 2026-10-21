@@ -1,7 +1,6 @@
 //! The v5 surface integration's own rules, through the Rust checker: letter
-//! case counts in a call's name from 5; a WHERE's bare name is typed as the
-//! engine reads it (a value binding before a field) on every version; an
-//! alias read is the field under 5 even where the scope binds its name; and
+//! case counts in a call's name; an alias read is the field even where the
+//! scope binds its name; and
 //! which fixes are
 //! marked safe to apply automatically. The TypeScript twin is
 //! packages/legacy-lang/checker/__test__/v5_integration.unit.test.ts.
@@ -14,7 +13,6 @@ const CATALOG: &str = r#"{"adapters":{"slack":{"constructionArgs":[],"schemas":{
   "message":{"properties":{"Body":"text","Score":"number"},"edges":{}}},
   "collections":{"Channels":{"target":"channel"}},"writableRoots":{}}}}},"credentials":{},"plugins":{}}"#;
 
-const HEAD4: &str = "import { slack } from adapters\nchat = slack()\n\n";
 const HEAD5: &str = "import { `@lf/slack` as slack } from adapters\nchat = connect slack\n\n";
 
 fn check(source: &str, version: u32) -> Vec<Diagnostic> {
@@ -29,20 +27,9 @@ fn errors(source: &str, version: u32) -> Vec<String> {
 
 #[test]
 fn a_function_call_matches_its_name_in_letter_case_from_version_5() {
-    let v4 = format!("{HEAD4}movement helper(x: <text>) {{\n  return x\n}}\n\nmovement go() {{\n  y = Helper(\"a\")\n}}\n");
-    assert_eq!(errors(&v4, 4), Vec::<String>::new());
     let v5 = format!("{HEAD5}function helper(x: <text>) {{\n  return x\n}}\n\nfunction go() {{\n  y = Helper(\"a\")\n}}\n");
     assert!(errors(&v5, 5).contains(&"MOV_FUNCTION_UNKNOWN".to_string()), "{:?}", check(&v5, 5));
     assert_eq!(errors(&v5.replace("Helper(", "helper("), 5), Vec::<String>::new());
-}
-
-#[test]
-fn a_where_name_that_is_a_variable_and_a_field_is_typed_as_the_variable_the_engine_reads() {
-    // `Score` is a number field and a text parameter: the engine compares the parameter.
-    let v4 = format!("{HEAD4}movement go(c: <chat-[:channel]->>, Score: <text>) {{\n  ms = c-[m:Messages WHERE Score == \"high\"]->\n}}\n");
-    assert_eq!(errors(&v4, 4), Vec::<String>::new());
-    let v4_field = format!("{HEAD4}movement go(c: <chat-[:channel]->>) {{\n  ms = c-[m:Messages WHERE Score == \"high\"]->\n}}\n");
-    assert!(errors(&v4_field, 4).contains(&"MOV_COMPARE_TYPE_MISMATCH".to_string()), "{:?}", check(&v4_field, 4));
 }
 
 #[test]
@@ -84,10 +71,6 @@ fn a_field_read_off_text_and_a_map_s_settings_say_what_version_5_writes() {
     let text_read = |found: Vec<Diagnostic>| found.into_iter().filter(|d| d.code == "MOV_TEXT_HAS_NO_FIELDS").map(|d| d.is_error()).collect::<Vec<_>>();
     let v5 = format!("{HEAD5}function go(t: <text>) {{\n  d = t.Name\n}}\n");
     assert_eq!(text_read(check(&v5, 5)), vec![true]);
-    let v4 = format!("{HEAD4}movement go(t: <text>) {{\n  d = t.Name\n}}\n");
-    assert_eq!(text_read(check(&v4, 4)), vec![false]);
-    assert_eq!(text_read(check(&v4, 3)), vec![false]);
-    assert_eq!(text_read(check(&v4, 2)), Vec::<bool>::new());
 
     let map = format!("{HEAD5}function go() {{\n  a = map([1, 2], (x) => x, 5)\n}}\n");
     let found = check(&map, 5);

@@ -1,9 +1,8 @@
 //! A null test on a <text> field of a record the extraction call hands back
 //! (`extract` / `extractOne`): a text the model did not find is "", never
-//! absent, so the test can only ever answer one way. From version 5 it is
-//! refused (MOV_PRESENCE_TEST_ON_TEXT), as the keyword's result has been
-//! since 2; versions 3 and 4 let it through, so a move up across 5 is warned
-//! of. The TypeScript twin is
+//! absent, so the test can only ever answer one way. It is refused
+//! (MOV_PRESENCE_TEST_ON_TEXT), as the keyword's result is. The TypeScript
+//! twin is
 //! checker/__test__/v5_text_presence.unit.test.ts, same programs, same
 //! messages.
 
@@ -60,21 +59,4 @@ fn under_5_a_nullable_text_field_and_a_typed_one_may_still_be_tested() {
 #[test]
 fn a_test_on_a_record_that_may_not_be_there_says_something_and_is_let_through() {
     assert_eq!(check("  if (r.title != null) { }", 5, None), vec![]);
-}
-
-#[test]
-fn under_4_the_test_is_let_through_as_it_always_was() {
-    assert_eq!(check("  if (r != null) {\n    if (r.title != null) { }\n    r-[i:item]-> { if (i.label == null) { } }\n  }", 4, None), vec![]);
-}
-
-#[test]
-fn on_a_move_up_from_4_to_5_the_test_is_an_upgrade_warning() {
-    assert_eq!(
-        check("  if (r != null) {\n    if (r.title != null) { }\n  }", 5, Some(4)),
-        vec![(
-            "MOV_PRESENCE_TEST_ON_TEXT".to_string(),
-            "warning",
-            "since \"Dancing Wren\" (5) a null test on 'r.title' is refused: it is extracted text, and a text the model did not find is \"\" — never absent — so the test was always true. Annotate it `<text | null>` to keep the null test, or test whether it is empty instead: `r.title != \"\"` (or `Text.length(r.title) > 0`), then upgrade.".to_string()
-        )]
-    );
 }

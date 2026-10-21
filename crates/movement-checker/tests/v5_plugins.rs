@@ -1,7 +1,7 @@
 //! A plugin's arguments by position from language version 5 (design §2.7),
 //! through the Rust checker: its required inputs in the manifest's order,
-//! then one settings record; the named form versions 1–4 write is refused
-//! with the positional rewrite. The TypeScript twin is
+//! then one settings record; the named form is refused with the positional
+//! rewrite. The TypeScript twin is
 //! packages/legacy-lang/checker/__test__/v5_plugins.unit.test.ts.
 
 use movement_checker::{CheckOptions, Diagnostic, check_source};
@@ -14,7 +14,6 @@ const CATALOG: &str = r#"{"adapters":{},"credentials":{},"plugins":{
   "linkedin_enrichment":{"args":["depth"],"priced":false,"fedArgs":[{"name":"text","required":true}],"requiredArgs":["depth"],"argTypes":{"depth":"number"}}
 }}"#;
 
-const HEAD4: &str = "import { fetch_url, research, vc_url_retrieval } from plugins\n\n";
 const HEAD5: &str = "import { fetchUrl, research, vcUrlRetrieval } from plugins\n\n";
 
 fn check(source: &str, version: u32) -> Vec<Diagnostic> {
@@ -25,10 +24,6 @@ fn check(source: &str, version: u32) -> Vec<Diagnostic> {
 
 fn codes(source: &str, version: u32) -> Vec<String> {
     check(source, version).into_iter().map(|d| d.code).collect()
-}
-
-fn v4(body: &str) -> String {
-    format!("{HEAD4}movement go(u: <text>, n: <text>, s: <text>, t: <text>) {{\n{body}\n}}\n")
 }
 
 fn v5(body: &str) -> String {
@@ -54,12 +49,6 @@ fn apply_fixes(source: &str, diagnostics: &[Diagnostic]) -> String {
         out.replace_range(start..end, &text);
     }
     out
-}
-
-#[test]
-fn versions_1_to_4_keep_named_plugin_arguments() {
-    assert_eq!(codes(&v4("  p = fetch_url(url: u)\n  r = research(name: n, context: s)\n  v = vc_url_retrieval(text: t, email: u)"), 4), Vec::<String>::new());
-    assert_eq!(codes(&v4("  p = fetch_url(u)"), 4), vec!["MOV_PLUGIN_ARGS_NAMED".to_string()]);
 }
 
 #[test]
@@ -178,7 +167,7 @@ fn all(source: &str, version: u32) -> Vec<(String, bool, String)> {
 }
 
 #[test]
-fn a_record_value_handed_to_a_text_input_is_refused_from_5_and_warned_before() {
+fn a_record_value_handed_to_a_text_input_is_refused() {
     let refused = all(&v5("  r = research({ context: s })"), 5);
     assert_eq!(
         refused,
@@ -190,8 +179,5 @@ fn a_record_value_handed_to_a_text_input_is_refused_from_5_and_warned_before() {
     );
     let may = codes(&v5("  r = research(n, { context: s == \"\" ? { a: 1 } : s })"), 5);
     assert_eq!(may, vec!["MOV_CALL_ARG_MAYBE_RECORD".to_string()]);
-    let warned = all(&v4("  r = research(name: { context: s })"), 4);
-    assert_eq!(warned.iter().map(|(c, e, _)| (c.as_str(), *e)).collect::<Vec<_>>(), vec![("MOV_CALL_ARG_MAYBE_RECORD", false)]);
-    assert!(warned[0].2.ends_with("; from it, this is refused"), "{}", warned[0].2);
     assert_eq!(codes(&v5("  r = research(n, { context: s })"), 5), Vec::<String>::new());
 }

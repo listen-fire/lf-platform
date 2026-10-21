@@ -1,5 +1,5 @@
-//! Rules the parity corpus never exercises (most are language version 4 and
-//! 5 rules, which the corpus has not been re-harvested under yet). Each
+//! Rules the parity corpus never exercises (language version 5 rules, which
+//! the corpus has not been re-harvested under yet). Each
 //! expectation is the TypeScript checker's own answer on the same program,
 //! read off it on 2026-10-15 and 2026-10-16: every diagnostic, in order, with
 //! its span.
@@ -16,12 +16,8 @@ fn check(source: &str, version: u32) -> Vec<String> {
 const BOX: &str = r#"{"adapters":{"box":{"canFire":false,"constructionArgs":[],"schemas":{"":{"positions":{"Doc":{"properties":{"name":"text","attachment":"file"},"edges":{}}},"collections":{"docs":{"target":"Doc"}},"writableRoots":{"Doc":{"fields":{"name":"text","attachment":"file"},"requiredFields":[],"resultShape":{"externalId":"text"}}}}}}},"credentials":{},"plugins":{}}"#;
 
 fn check_with(source: &str, version: u32, snapshot: &str) -> Vec<String> {
-    check_upgrading(source, version, None, snapshot)
-}
-
-fn check_upgrading(source: &str, version: u32, upgrading_from: Option<u32>, snapshot: &str) -> Vec<String> {
     let catalog = CatalogSnapshot::load(snapshot).unwrap();
-    let options = CheckOptions { language_version: version, upgrading_from, parse_version: None, zones: &movement_checker::host::native::NativeZones };
+    let options = CheckOptions { language_version: version, upgrading_from: None, parse_version: None, zones: &movement_checker::host::native::NativeZones };
     check_source(source, &catalog, options)
         .unwrap()
         .into_iter()
@@ -40,8 +36,6 @@ fn a_file_combined_into_text_is_refused_from_version_5() {
             "MOV_FILE_IN_TEXT 5:7-5:19 this may be a file, and a file is not text, so it can't be combined into text — its text is File.read(f) ('${coalesce(File.read(f), \"\")}'), or write the file into a field that holds files",
         ]
     );
-    let before_5 = "movement m(f: <file>, g: <file[]>, n: <text>) {\n  a = \"see ${f}\"\n  b = \"all ${g}\"\n  c = IF n == \"x\" THEN f ELSE n END\n  d = \"maybe ${c}\"\n  return a\n}\n";
-    assert!(check(before_5, 4).iter().all(|d| !d.starts_with("MOV_FILE_IN_TEXT")));
 }
 
 #[test]
@@ -69,20 +63,6 @@ fn a_file_the_write_did_not_send_is_not_read_off_its_handle_from_version_5() {
             "MOV_HANDLE_FILE_NOT_SENT 5:7-5:19 'attachment' is a file this write did not send, so the write's handle holds the system's description of it, not the file — read the record back through its edge to get the file, as a walk read does (`h-[:Files]->`), or send the file in this write",
         ]
     );
-    let before_5 = "import { box } from adapters\nb = box()\nmovement m(f: <file>) {\n  h = write b-[:docs]-> { name: \"x\" }\n  a = h.attachment\n  k = write b-[:docs]-> { name: \"y\", attachment: f }\n  c = k.attachment\n  return a\n}\n";
-    assert!(check_with(before_5, 4, BOX).is_empty());
-}
-
-#[test]
-fn a_field_the_write_did_not_set_reads_the_found_record_when_moving_up_across_4() {
-    let source = "import { box } from adapters\nb = box()\nmovement m(f: <file>) {\n  h = write b-[:docs]-> { name: \"x\" }\n  a = h.attachment\n  n = h.name\n  e = h.externalId\n  return n\n}\n";
-    assert_eq!(
-        check_upgrading(source, 4, Some(3), BOX),
-        [
-            "MOV_HANDLE_READ_FOUND 5:7-5:19 since \"Luminous Owl\" (4) 'attachment' on 'h' reads the record as the write found it; before, it read what the system handed back from the write (often nothing). If the program assumed the old reading, change it, then upgrade. (see handbook: writes#what-the-write-did)",
-        ]
-    );
-    assert!(check_with(source, 4, BOX).is_empty());
 }
 
 #[test]
@@ -136,11 +116,10 @@ fn the_fixture_programs_get_the_typescripts_answers() {
     for case in &fixtures.cases {
         let snapshot = fixtures.snapshots[case["snapshot"].as_str().unwrap()].get();
         let version = case["version"].as_u64().unwrap() as u32;
-        let upgrading_from = case["upgradingFrom"].as_u64().map(|v| v as u32);
-        let found = check_upgrading(case["source"].as_str().unwrap(), version, upgrading_from, snapshot);
+        let found = check_with(case["source"].as_str().unwrap(), version, snapshot);
         let expected: Vec<String> = case["expected"].as_array().unwrap().iter().map(|d| d.as_str().unwrap().to_string()).collect();
         if found != expected {
-            failures.push(format!("{} (v{version}{}):\n  expected {expected:#?}\n  found {found:#?}", case["name"], upgrading_from.map_or(String::new(), |f| format!(" from {f}"))));
+            failures.push(format!("{} (v{version}):\n  expected {expected:#?}\n  found {found:#?}", case["name"]));
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));

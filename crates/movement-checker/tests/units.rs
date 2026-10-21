@@ -47,11 +47,3 @@ fn connecting_a_unit_is_told_to_listen_to_it_by_name() {
     assert_eq!(codes(&found), ["MOV_CONSTRUCT_NOT_ADAPTER"]);
     assert!(found[0].message.contains("one of the run host's units"), "{}", found[0].message);
 }
-
-#[test]
-fn before_version_5_a_unit_is_imported_and_constructed() {
-    let found = check("movement hello(run: <manual-[:Invocation]->>) {\n  x = 1\n}\nlisten to manual {} fire hello\n", 4);
-    assert!(!found.is_empty());
-    let source = "import { manual } from adapters\nruns = manual()\nmovement hello(run: <runs-[:Invocation]->>) {\n  x = run.`Text`\n}\nlisten to runs {} fire hello\n";
-    assert_eq!(codes(&check(source, 4)), Vec::<&str>::new());
-}

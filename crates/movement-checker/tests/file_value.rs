@@ -1,4 +1,4 @@
-//! MOV_FILE_VALUE_RUNS: a file-level value from version 5 holds a value only
+//! MOV_FILE_VALUE_RUNS: a file-level value holds a value only
 //! — a call to a function or a plugin (written whole or nested in the value),
 //! a write, a walk, a wait or a node is refused at save, as the engines refuse
 //! it at run time. The TypeScript twin is
@@ -10,7 +10,7 @@ use movement_parser::catalog::types::CatalogSnapshot;
 const SNAPSHOT: &str = r#"{"adapters":{"kg":{"constructionArgs":[],"schemas":{"":{"positions":{"note":{"properties":{"text":"text"},"edges":{}}},"collections":{"notes":{"target":"note"}},"writableRoots":{"note":{"fields":{"text":"text"},"resultShape":{"externalId":"text"}}}}}}},"credentials":{},"plugins":{"echo":{"args":["q"],"requiredArgs":["q"],"output":{"kind":"value","type":"text"}}},"files":FILES}"#;
 
 fn check(lines: &[&str], version: u32, library: Option<&str>) -> Vec<Diagnostic> {
-    let head = if version >= 5 { "import { kg } from adapters\nimport { echo } from plugins\ngraph = connect kg" } else { "import { kg } from adapters\nimport { echo } from plugins\ngraph = kg()" };
+    let head = "import { kg } from adapters\nimport { echo } from plugins\ngraph = connect kg";
     let source = format!("{head}\n{}", lines.join("\n"));
     let files = match library {
         Some(library) => serde_json::json!({ "lib/vals": { "source": library } }).to_string(),
@@ -62,9 +62,4 @@ fn refuses_one_in_a_library_at_the_import() {
     let found: Vec<(String, String)> =
         check(&["import { f } from \"lib/vals\""], 5, Some(library)).into_iter().map(|d| (d.code, d.message.chars().take(18).collect())).collect();
     assert_eq!(found, [("MOV_FILE_VALUE_RUNS".to_string(), "\"lib/vals\" line 2:".to_string())]);
-}
-
-#[test]
-fn says_nothing_under_version_4() {
-    assert!(!check(&["p = echo(q: \"x\")"], 4, None).iter().any(|d| d.code == "MOV_FILE_VALUE_RUNS"));
 }

@@ -1,8 +1,7 @@
 //! A plugin fed only by an extraction (`linkedin_enrichment`: no inputs of
 //! its own, it reads the record a `through […]` stage enriched) is a function
 //! from language version 5: the record it runs on is its one positional
-//! argument, and its call hands back what it declared. Versions 1–4 keep
-//! refusing the call. The TypeScript twin is
+//! argument, and its call hands back what it declared. The TypeScript twin is
 //! packages/legacy-lang/checker/__test__/v5_fed_by_extraction.unit.test.ts.
 
 use movement_checker::{CheckOptions, Diagnostic, check_source};
@@ -79,25 +78,13 @@ fn the_extraction_keywords_hand_rewrite_points_at_the_call() {
     );
 }
 
-#[test]
-fn versions_1_to_4_keep_it_a_stage() {
-    let program = "import { linkedin_enrichment } from plugins\n\nmovement go(n: <text>) {\n  found = linkedin_enrichment()\n}\n";
-    let refused = errors(program, 4);
-    assert_eq!(refused.iter().map(|d| d.code.as_str()).collect::<Vec<_>>(), vec!["MOV_PLUGIN_FED_BY_EXTRACTION"]);
-    assert!(refused[0].message.contains("runs on what an extraction gives it and takes nothing of its own"));
-}
-
-/// Two plugins that never said what they do or hand back: a stage was their
-/// only way in before 5, and from 5, with no stage, they are ordinary calls,
-/// run as statements for their effects (they declare no output, so their
-/// value is refused).
+/// Two plugins that never said what they do or hand back: with no stage,
+/// they are ordinary calls, run as statements for their effects (they declare
+/// no output, so their value is refused).
 #[test]
 fn a_plugin_that_has_not_declared_its_row_or_output_is_an_ordinary_call_from_5() {
     let v5 = "import { hiddenRow, noOutput } from plugins\n\nfunction go(n: <text>) {\n  hiddenRow(n)\n  noOutput(n)\n}\n";
     assert_eq!(codes(v5, 5), Vec::<String>::new());
     let bound = "import { hiddenRow, noOutput } from plugins\n\nfunction go(n: <text>) {\n  a = hiddenRow(n)\n  b = noOutput(n)\n}\n";
     assert_eq!(codes(bound, 5), vec!["MOV_PLUGIN_OUTPUT_UNDECLARED", "MOV_PLUGIN_OUTPUT_UNDECLARED"]);
-    let v4 = "import { hidden_row, no_output } from plugins\n\nmovement go(n: <text>) {\n  a = hidden_row(text: n)\n  b = no_output(text: n)\n}\n";
-    assert_eq!(codes(v4, 4), vec!["MOV_PLUGIN_ROW_UNDECLARED", "MOV_PLUGIN_OUTPUT_UNDECLARED"]);
-    assert!(errors(v4, 4).iter().all(|d| d.message.contains("through [")));
 }

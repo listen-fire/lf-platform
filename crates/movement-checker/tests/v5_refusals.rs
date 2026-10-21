@@ -3,8 +3,7 @@
 //! target walks more than one hop (MOV_WRITE_MULTI_HOP), a walk with no root
 //! outside a hop's WHERE (MOV_WALK_ROOTLESS), and a `unique by` on a write to
 //! a declared node (MOV_WRITE_SHAPE_UNIQUE). `_resources` reads off an
-//! extraction call's result as off the keyword's. Versions 1–4 are
-//! unchanged. The TypeScript twin is
+//! extraction call's result as off the keyword's. The TypeScript twin is
 //! packages/legacy-lang/checker/__test__/v5_refusals.unit.test.ts, same
 //! programs, same messages.
 
@@ -16,9 +15,8 @@ const CATALOG: &str = r#"{"contractVersion":1,"adapters":{"attio":{"canFire":tru
 const CODES: &[&str] = &["MOV_WRITE_MULTI_HOP", "MOV_WALK_ROOTLESS", "MOV_WRITE_SHAPE_UNIQUE", "MOV_RESOURCES_NOT_EXTRACTED", "MOV_KG_QUERY_RETIRED", "MOV_AWAIT_ON_LIST", "MOV_WRITE_LINK_FIELD", "MOV_WRITE_LINK_FIELD_NUDGE", "MOV_JSON_HAS_NO_EDGES"];
 
 fn found(body: &str, version: u32) -> Vec<(String, usize, String)> {
-    let (setup, declaration) = if version < 5 { ("crm = attio(credentials: crm_cred)", "movement") } else { ("crm = connect attio using crm_cred", "function") };
     let source = format!(
-        "import {{ attio }} from adapters\nimport {{ crm_cred }} from credentials\n{setup}\nnode Note {{\n  title: <text>\n}}\n{declaration} go(t: <text>, j: <json>) {{\n{body}\n}}\n"
+        "import {{ attio }} from adapters\nimport {{ crm_cred }} from credentials\ncrm = connect attio using crm_cred\nnode Note {{\n  title: <text>\n}}\nfunction go(t: <text>, j: <json>) {{\n{body}\n}}\n"
     );
     let catalog = CatalogSnapshot::load(CATALOG).unwrap();
     let options = CheckOptions { language_version: version, upgrading_from: None, parse_version: None, zones: &movement_checker::host::native::NativeZones };
@@ -44,7 +42,6 @@ fn a_linked_write_or_match_walks_one_hop() {
     // The spelling it names runs, and so does one hop.
     assert!(codes("  crm-[c:companies]-> {\n    write c-[:notes]-> { body: t }\n  }", 5).is_empty());
     assert!(codes("  write crm-[:notes]-> { body: t }", 5).is_empty());
-    assert!(codes("  write crm-[:companies]->-[:notes]-> { body: t }", 4).is_empty());
 }
 
 #[test]
@@ -71,9 +68,6 @@ fn a_walk_starts_at_a_record_it_names() {
     // Inside a hop's WHERE a rootless EXISTS walks off the record the hop lands on.
     assert!(codes("  crm-[c:companies WHERE exists(-[:deals]->)]-> {\n    write crm-[:notes]-> { body: c.name }\n  }", 5).is_empty());
     assert!(codes("  x = exists(crm-[c:companies WHERE exists(-[:deals]->)]->)", 5).is_empty());
-    // Versions 1–4 keep their own reading.
-    assert!(codes("  -[c:companies]-> {\n    x = 1\n  }", 4).is_empty());
-    assert!(codes("  x = EXISTS(-[:notes]->)", 4).is_empty());
 }
 
 #[test]
@@ -87,7 +81,6 @@ fn a_write_to_a_declared_node_finds_nothing_by_unique_by() {
             "'unique by' has no meaning on a write to the declared node 'Note' — the record it makes lands in memory, so there is no store to find an existing one in. Drop the 'unique by' clause (or synthesise the record, 'node { title: … }')".to_string()
         )]
     );
-    assert!(codes("  n = write Note-[:item]-> { unique by (`title`), title: t }", 4).is_empty());
 }
 
 #[test]
@@ -119,7 +112,6 @@ fn a_knowledge_graph_query_text_is_retired() {
         )]
     );
     assert_eq!(codes("  if (KG_EXISTS(\"MATCH (n) RETURN n\")) {\n    x = 1\n  }", 5), ["MOV_KG_QUERY_RETIRED"]);
-    assert!(codes("  x = KG_VALUE(\"MATCH (n) RETURN n\")", 4).is_empty());
 }
 
 #[test]
@@ -146,7 +138,6 @@ fn a_record_is_not_a_relationships_value() {
             "'deals' is a relationship of crm.company, and a record is not written into it as a value — connect 'd' structurally: write off it ('write d-[:…]-> { … }'), or link the two after the write ('link … -[:deals]-> d')".to_string()
         )]
     );
-    assert_eq!(codes(body, 4), ["MOV_WRITE_LINK_FIELD_NUDGE"]);
 }
 
 #[test]
@@ -160,5 +151,4 @@ fn a_json_value_has_no_relationships() {
         )]
     );
     assert_eq!(codes("  j-[s:subs]-> {\n    x = 1\n  }", 5), ["MOV_JSON_HAS_NO_EDGES"]);
-    assert!(codes("  n = count(j-[:subs]->)", 4).is_empty());
 }

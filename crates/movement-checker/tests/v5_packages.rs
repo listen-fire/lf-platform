@@ -81,12 +81,6 @@ fn an_unknown_tag_is_an_unknown_plugin() {
 }
 
 #[test]
-fn versions_1_to_4_read_a_tag_as_an_unknown_plugin() {
-    let source = "import { `@lf/web` as web } from plugins\n\nmovement go(u: <text>) {\n  p = 1\n}\n";
-    assert_eq!(codes(source, 4), vec!["MOV_IMPORT_UNKNOWN".to_string()]);
-}
-
-#[test]
 fn a_local_binding_is_never_a_package() {
     // A dot on a record reads a field; it is never a member call of a package.
     let found = codes(&v5("  box = { n: 1 }\n  v = box.fetchUrl()"), 5);

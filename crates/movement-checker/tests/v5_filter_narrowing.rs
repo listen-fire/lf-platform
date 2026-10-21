@@ -5,7 +5,7 @@
 //! returns `false` above a `return true`, a conjunction — every `return` that
 //! may keep a member proves it present. So the filtered list clears
 //! MOV_ABSENT_REQUIRED on `List.sum` and its siblings. Nothing is keyed on a
-//! name. Versions 1–4 keep the members' type as it was. The TypeScript twin is
+//! name. The TypeScript twin is
 //! packages/legacy-lang/checker/__test__/v5_filter_narrowing.unit.test.ts,
 //! same programs, same answers.
 
@@ -16,8 +16,7 @@ const CATALOG: &str = r#"{"contractVersion":1,"adapters":{},"credentials":{},"pl
 
 /// Each error `body` draws under `version`, as (code, message).
 fn diagnostics(body: &str, version: u32) -> Vec<(String, String)> {
-    let declaration = if version >= 5 { "function" } else { "movement" };
-    let source = format!("{declaration} go(t: <text>, xs: <number[]>) {{\n{body}\n}}");
+    let source = format!("function go(t: <text>, xs: <number[]>) {{\n{body}\n}}");
     let catalog = CatalogSnapshot::load(CATALOG).unwrap();
     let options = CheckOptions { language_version: version, upgrading_from: None, parse_version: None, zones: &movement_checker::host::native::NativeZones };
     let diagnostics = check_source(&source, &catalog, options).unwrap_or_else(|e| panic!("{source}: {e:?}"));
@@ -68,19 +67,6 @@ fn under_5_a_test_that_may_keep_an_absent_member_does_not() {
 #[test]
 fn under_5_the_folds_remedy_offers_the_filter_form() {
     assert!(summed("(n) => true")[0].contains("'List.sum(filter(ys, (x) => x != null))'"));
-}
-
-#[test]
-fn under_1_to_4_a_filter_keeps_its_members_type_as_it_was() {
-    // A text built-in names the list it is handed, members' absence and all.
-    for version in [3, 4] {
-        let named: Vec<String> = diagnostics("  ns = MAP(xs, (x) => FIRST(xs))\n  ys = FILTER(ns, (n) => NOT ISNULL(n))\n  u = UPPER(ys)", version)
-            .into_iter()
-            .filter(|(code, _)| code == "MOV_BUILTIN_ARG_TYPE")
-            .map(|(_, message)| message)
-            .collect();
-        assert!(named.join(",").contains("number (or absent)"), "{version}: {named:?}");
-    }
 }
 
 #[test]

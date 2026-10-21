@@ -32,10 +32,9 @@ fn a_union_is_canonical() {
 }
 
 #[test]
-fn a_tuple_widens_by_version() {
+fn a_tuple_widens_to_the_union_of_its_members() {
     let pair = tuple(vec![Ty::Text, Ty::Number]);
-    assert_eq!(describe_field_type(&widen_tuples(Some(pair.clone()), 3).unwrap()), "list of (number | text)");
-    assert!(widen_tuples(Some(pair), 2).is_none(), "before version 3 a disagreeing tuple widens to nothing");
+    assert_eq!(describe_field_type(&widen_tuples(Some(pair)).unwrap()), "list of (number | text)");
     assert_eq!(describe_field_type(&collection_element_of(&tuple(vec![Ty::Text, Ty::Text])).unwrap()), "text");
 }
 
@@ -69,7 +68,7 @@ fn fit() {
 
 #[test]
 fn a_mixed_tuple_is_named() {
-    let message = mixed_tuple_message(Some(&tuple(vec![Ty::Record(None), Ty::Text])), 4).unwrap();
+    let message = mixed_tuple_message(Some(&tuple(vec![Ty::Record(None), Ty::Text])), 5).unwrap();
     assert!(message.starts_with("a list holds one kind of thing, and this one holds both: a record is a record, and another member is text."));
 }
 
@@ -201,7 +200,6 @@ fn literals_and_operators() {
     assert_eq!(spelled("COALESCE(NULL, \"x\")", &EmptyEnv, 5), "text");
     assert_eq!(spelled("IF TRUE THEN 1 ELSE 2 END", &EmptyEnv, 5), "number");
     assert_eq!(spelled("IF TRUE THEN 1 ELSE \"x\" END", &EmptyEnv, 5), "number | text");
-    assert_eq!(spelled("IF TRUE THEN 1 ELSE \"x\" END", &EmptyEnv, 4), "?");
     assert_eq!(spelled("[1, \"a\"]", &EmptyEnv, 5), "list of (number | text)");
     assert_eq!(spelled("{ a: 1, b: 2 }", &EmptyEnv, 5), "{ a: number, b: number }");
     assert_eq!(spelled("SPLIT(\"a,b\")", &EmptyEnv, 5), "list of text");
@@ -239,7 +237,6 @@ fn names_walks_and_narrowing() {
     assert_eq!(spelled("FIRST(co-[:people]->)", &env, 5), "crm.Person (or absent)");
     assert_eq!(spelled("IF n != NULL THEN n ELSE 0 END", &env, 5), "number", "the guard narrows the then arm");
     assert_eq!(spelled("IF co.Size != NULL THEN co.Size ELSE 0 END", &env, 5), "number");
-    assert_eq!(spelled("IF co.Size != NULL THEN co.Size ELSE 0 END", &env, 2), "number (or absent)", "before version 3 a field is not narrowed; the arms agree, absence aside");
     assert_eq!(spelled("co", &env, 5), "crm.company");
 }
 
