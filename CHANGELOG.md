@@ -13,6 +13,8 @@ Changelog](https://keepachangelog.com/en/1.1.0/); versions are the git tags desc
 
 ## [Unreleased]
 
+- Identity matching treats blank text as no key at every language version. A run pinned to version 1 (Quiet Heron) used to match an empty identity field against another empty one; it now decides as version 5 does, so a blank never matches and never selects a record on its own.
+
 ## [0.12.0-rc.4] - 2026-10-20 (pre-release)
 
 A third pre-release of the 0.12 line, published the same way as rc.2 and rc.3.

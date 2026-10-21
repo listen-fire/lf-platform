@@ -15,7 +15,7 @@
 // apps/api/src/lib/knowledge/uniqueness_constraints.ts) — a separate shape.
 
 import { z } from 'zod';
-import { since, type LanguageVersion } from 'movement-lang';
+import type { LanguageVersion } from 'movement-lang';
 
 /** One AND-tupled entry: a target field name, optionally fuzzy-matched. */
 const uniquenessEntrySchema = z.object({
@@ -46,13 +46,13 @@ export function mergeUniqueness(
  * An identity key component that says nothing: absent, or text with nothing
  * in it. An empty key is no key — two records that both lack a name are not
  * thereby the same record — so such a component never matches and is never
- * matched on. Blank text is no key since language version 2: a version-1 run
- * matches "" like any other value. Outside a run (the knowledge pipeline's own
- * matcher) the caller passes the current version.
+ * matched on. Blank text is no key at every pin: version 1's matching of ""
+ * like any other value is retired. The pin is still taken so the rules keep
+ * one signature with the rest of this file.
  */
-export function isBlankIdentityValue(value: unknown, languageVersion: LanguageVersion): boolean {
+export function isBlankIdentityValue(value: unknown, _languageVersion: LanguageVersion): boolean {
   if (value == null) return true;
-  return since(languageVersion, 2) && typeof value === 'string' && value.trim() === '';
+  return typeof value === 'string' && value.trim() === '';
 }
 
 /** Case-insensitive equality that treats a multi-value field as a match when
