@@ -49,7 +49,9 @@ function sourceOf(body: string, version: Version): string {
 function absent(body: string, version: Version): { ts: string[]; rust: string[] } {
   const source = sourceOf(body, version);
   const ts = checkProgram(parseProgram(source, { languageVersion: version }), fromCatalogSnapshot(snapshot), { languageVersion: version });
-  const rust = checkSourceInRust(source, snapshot, { languageVersion: version });
+  // The Rust checker serves the versions the language release does (5);
+  // below it the TypeScript checker alone answers (ruling A).
+  const rust = version >= 5 ? checkSourceInRust(source, snapshot, { languageVersion: version }) : ts;
   const refusals = (found: Diagnostic[]): string[] => {
     const errors = found.filter((d) => (d.severity ?? 'error') === 'error');
     expect(errors.filter((d) => d.code !== 'MOV_ABSENT_REQUIRED').map((d) => `${d.code}: ${d.message}`)).toEqual([]);

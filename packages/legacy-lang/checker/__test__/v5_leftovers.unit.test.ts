@@ -10,6 +10,7 @@ import { checkProgram, diagnosticSeverity, type Diagnostic } from '../check';
 import { parseProgram } from '../../parser/parse';
 import { mockCatalogSnapshot } from 'movement-lang/service/snapshot';
 import { checkSourceInRust } from 'movement-lang/checker/rust_checker';
+import { rustCheck } from '../upgrade';
 import type { LanguageVersion } from 'movement-lang/language_version';
 
 const spec: Parameters<typeof mockCatalog>[0] = {
@@ -48,7 +49,9 @@ const said = (found: Diagnostic[]): Said[] =>
 /** What both checkers say of `source` under `version` — the same, or the test fails. */
 function check(source: string, version: LanguageVersion): Said[] {
   const ts = said(checkProgram(parseProgram(source, { languageVersion: version }), catalog, { languageVersion: version }));
-  const rust = said(checkSourceInRust(source, snapshot, { languageVersion: version }));
+  // The Rust checker serves the versions the language release does (5);
+  // below it the TypeScript checker alone answers (ruling A).
+  const rust = version >= 5 ? said(checkSourceInRust(source, snapshot, { languageVersion: version })) : ts;
   expect(rust).toEqual(ts);
   return ts;
 }
@@ -171,7 +174,10 @@ describe('a version 5 slot read again is read under 5', () => {
 describe('an in-memory hop with ORDER BY or LIMIT, on a move up across 5', () => {
   const upgrade = (body: string, options: { languageVersion: LanguageVersion; upgradingFrom?: LanguageVersion }): Said[] => {
     const ts = said(checkProgram(parseProgram(V4(body), { languageVersion: options.languageVersion }), catalog, options));
-    const rust = said(checkSourceInRust(V4(body), snapshot, options));
+    // Below 5 the TypeScript checker alone answers; a move up from 4 is the
+    // Rust check of 5 joined with the TypeScript checker's upgrade warnings
+    // (rustCheck, ruling B).
+    const rust = options.languageVersion >= 5 ? said(rustCheck({ snapshot, ...options })(V4(body))) : ts;
     expect(rust).toEqual(ts);
     return ts.filter((d) => d.code === 'MOV_IN_MEMORY_HOP_ORDER');
   };

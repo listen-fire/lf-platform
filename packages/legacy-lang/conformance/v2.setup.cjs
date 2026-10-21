@@ -14,3 +14,5 @@ jest.mock(LANGUAGE_VERSION, () => ({
   ...jest.requireActual(LANGUAGE_VERSION),
   CURRENT_LANGUAGE_VERSION: 2,
 }));
+
+require('./frozen_routing.cjs');

@@ -160,7 +160,9 @@ describe('both checkers agree', () => {
       if (seen.has(key)) continue;
       seen.add(key);
       const ts = checkProgram(parseProgram(source, { languageVersion }), fromCatalogSnapshot(SNAPSHOT), { languageVersion });
-      const rust = checkSourceInRust(source, SNAPSHOT, { languageVersion });
+      // The Rust checker serves the versions the language release does (5);
+      // below it the TypeScript checker alone answers (ruling A).
+      const rust = languageVersion >= 5 ? checkSourceInRust(source, SNAPSHOT, { languageVersion }) : ts;
       expect({ source, diagnostics: rust }).toEqual({ source, diagnostics: ts });
     }
   });

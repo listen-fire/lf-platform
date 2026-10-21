@@ -139,7 +139,10 @@ ${body}
     diagnostics.filter((d) => diagnosticSeverity(d) === 'error').map((d) => d.code);
   const underTs = (source: string, version: 4 | 5): string[] =>
     errorCodes(checkProgram(parseProgram(source, { languageVersion: version }), catalog, { languageVersion: version }));
-  const underRust = (source: string, version: 4 | 5): string[] => errorCodes(checkSourceInRust(source, snapshot, { languageVersion: version }));
+  // The Rust checker serves version 5 only; below it the TypeScript checker
+  // alone answers (ruling A).
+  const underRust = (source: string, version: 4 | 5): string[] =>
+    version >= 5 ? errorCodes(checkSourceInRust(source, snapshot, { languageVersion: version })) : underTs(source, version);
 
   /** The upgrade in both checkers: one text, its refusals unchanged. */
   const roundTrip = (body: string): string => {
