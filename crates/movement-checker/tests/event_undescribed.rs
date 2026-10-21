@@ -18,7 +18,7 @@ fn check(source: &str, version: u32, manual: &str) -> Vec<Diagnostic> {
 fn check_with(source: &str, version: u32, manual: &str, upgrading_from: Option<u32>, files: &str) -> Vec<Diagnostic> {
     let snapshot = format!(r#"{{"adapters":{{{manual}}},"credentials":{{}},"plugins":{{}},"files":{files}}}"#);
     let catalog = CatalogSnapshot::load(&snapshot).unwrap();
-    let options = CheckOptions { language_version: version, upgrading_from, parse_version: None, zones: &movement_checker::host::native::NativeZones };
+    let options = CheckOptions { language_version: version, upgrading_from, zones: &movement_checker::host::native::NativeZones };
     check_source(source, &catalog, options).unwrap()
 }
 

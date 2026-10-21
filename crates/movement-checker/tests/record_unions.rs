@@ -23,7 +23,7 @@ struct Case {
 
 fn diagnostics(case: &Case) -> Vec<String> {
     let catalog = CatalogSnapshot::load(&case.catalog).unwrap();
-    let options = CheckOptions { language_version: case.version, upgrading_from: None, parse_version: None, zones: &movement_checker::host::native::NativeZones };
+    let options = CheckOptions { language_version: case.version, upgrading_from: None, zones: &movement_checker::host::native::NativeZones };
     check_source(&case.source, &catalog, options)
         .unwrap()
         .into_iter()

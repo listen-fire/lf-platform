@@ -5,6 +5,7 @@
 import type { Span } from './ast';
 import type { DiagnosticFix } from '../checker/fixes';
 import { callParser } from '../wasm/loader';
+import { CURRENT_LANGUAGE_VERSION } from '../language_version';
 
 /** An old spelling in a version 5 program: refused, its rewrite as the fix.
  *  `Program.spelling` carries them; both checkers report each as a diagnostic. */
@@ -46,7 +47,7 @@ export function spellMessage(message: string, version: number): string {
 /** A plugin's name from version 5: its registry name or catalog key in
  *  camelCase (`fetch_url` → `fetchUrl`), one spelling, matched exactly. */
 export function pluginName(key: string): string {
-  const { ok, json } = callParser('plugin_name', key, [0]);
+  const { ok, json } = callParser('plugin_name', key, [CURRENT_LANGUAGE_VERSION]);
   if (!ok || typeof json !== 'string') throw new Error(`plugin_name: ${JSON.stringify(json)}`);
   return json;
 }
@@ -99,7 +100,7 @@ let table: SurfaceTable | undefined;
 /** The spelling table, read once from the WASM. */
 export function surfaceTable(): SurfaceTable {
   if (table === undefined) {
-    const { ok, json } = callParser('surface_table', '', [0]);
+    const { ok, json } = callParser('surface_table', '', [CURRENT_LANGUAGE_VERSION]);
     if (!ok || !isTable(json)) throw new Error(`surface_table: ${JSON.stringify(json)}`);
     table = json;
   }

@@ -235,7 +235,7 @@ impl<'c> Checker<'c> {
 
     /// Program text a message suggests, in this program's spelling.
     pub fn code(&self, text: &str) -> String {
-        movement_parser::surface::phrase::spell_code(text, self.version)
+        movement_parser::surface::phrase::spell_code(text)
     }
 
     pub fn new(catalog: &'c CatalogSnapshot, options: &crate::CheckOptions<'c>, resolves_files: bool) -> Self {
@@ -663,7 +663,7 @@ impl<'c> Checker<'c> {
     /// `readHeldValue`: a bare name's value read — a tuple as the list it
     /// widens to, refused where it holds records and values both.
     fn read_held_value(&mut self, ty: Option<Ty>, span: Span) -> Option<Ty> {
-        if let Some(mixed) = mixed_tuple_message(ty.as_ref(), self.version) {
+        if let Some(mixed) = mixed_tuple_message(ty.as_ref()) {
             self.report(crate::codes::LIST_MIXED, mixed, span);
         }
         crate::types::field::widen_tuples_joining(ty)

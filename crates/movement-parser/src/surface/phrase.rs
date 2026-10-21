@@ -25,7 +25,7 @@ const BODY_CLOSE: &str = "\n}\n";
 /// that row's spelling; an expression or a statement is rewritten by its
 /// spelling fixes until none is left. A text neither grammar reads is
 /// returned as it is.
-pub fn spell_code(text: &str, _version: u32) -> String {
+pub fn spell_code(text: &str) -> String {
     if let Some((_, v5)) = OPERATORS.iter().find(|(old, _)| *old == text) {
         return (*v5).to_string();
     }
@@ -37,15 +37,15 @@ pub fn spell_code(text: &str, _version: u32) -> String {
 
 /// A word of code in prose (`negated by NOT`, `narrow with an IS test`),
 /// quoted, as a symbol or lower case (`negated by '!'`).
-pub fn spell_word(word: &str, version: u32) -> String {
-    format!("'{}'", spell_code(word, version))
+pub fn spell_word(word: &str) -> String {
+    format!("'{}'", spell_code(word))
 }
 
 /// The head of an `if` a diagnostic suggests (`if EXISTS(x)`): its condition
 /// parenthesised and respelled (`if (x != null)`). For a suggestion whose
 /// body is not code.
-pub fn spell_if(condition: &str, version: u32) -> String {
-    format!("if ({})", spell_code(condition, version))
+pub fn spell_if(condition: &str) -> String {
+    format!("if ({})", spell_code(condition))
 }
 
 /// An adapter set up with `args` (name, value), the credential among them
@@ -59,7 +59,7 @@ pub struct Connection<'a> {
 /// The connection as it is written: `connect attio using … { dryRun: true }`
 /// (the credential after `using`, every other argument a setting). The
 /// parser's refusal of an old construction writes its fix with it.
-pub fn connection(c: &Connection, _version: u32) -> String {
+pub fn connection(c: &Connection) -> String {
     let mut text = format!("connect {}", name_source(c.adapter));
     if let Some((_, value)) = c.args.iter().find(|(name, _)| Some(*name) == c.credential) {
         text.push_str(&format!(" using {value}"));
@@ -185,10 +185,10 @@ mod tests {
     fn connections() {
         use super::{Connection, connection};
         let attio = Connection { adapter: "attio", args: &[("credentials", "acme"), ("dry_run", "true")], credential: Some("credentials") };
-        assert_eq!(connection(&attio, 5), "connect attio using acme { dryRun: true }");
-        assert_eq!(connection(&Connection { adapter: "kg", args: &[], credential: None }, 5), "connect kg");
-        assert_eq!(super::spell_word("NOT", 5), "'!'");
-        assert_eq!(super::spell_if("EXISTS(co)", 5), "if (co != null)");
+        assert_eq!(connection(&attio), "connect attio using acme { dryRun: true }");
+        assert_eq!(connection(&Connection { adapter: "kg", args: &[], credential: None }), "connect kg");
+        assert_eq!(super::spell_word("NOT"), "'!'");
+        assert_eq!(super::spell_if("EXISTS(co)"), "if (co != null)");
     }
 
     #[test]
@@ -216,7 +216,7 @@ mod tests {
             ("if to != null { link a -[:e]-> to }", "if (to != null) { link a -[:e]-> to }"),
             ("COALESCE(x.`Name`, \"unknown\")", "coalesce(x.`Name`, \"unknown\")"),
         ] {
-            assert_eq!(spell_code(old, 5), new, "{old}");
+            assert_eq!(spell_code(old), new, "{old}");
         }
     }
 }

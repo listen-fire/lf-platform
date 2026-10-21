@@ -6,6 +6,11 @@
 //!
 //! Out pointers are `usize` rather than `u32` so the native test build can
 //! exercise the same functions; on wasm32 the two are the same width.
+//!
+//! Every text entry takes `(text, version)`, the one shape the loader calls.
+//! The parse entries refuse a version this release does not read; the
+//! spelling entries (`spell_message`, `plugin_name`, `spell_code`,
+//! `surface_table`) read only the version 5 surface and ignore it.
 
 use std::alloc::Layout;
 use std::fmt::Write;
@@ -98,8 +103,8 @@ pub unsafe extern "C" fn parse_expression(
     unsafe { emit(parsed, out_ptr_ptr, out_len_ptr) }
 }
 
-/// A diagnostic's message with every built-in it quotes in the spelling of
-/// `version` (crate::surface::table::spell_message), as a JSON string.
+/// A diagnostic's message with every built-in it quotes in the version 5
+/// spelling (crate::surface::table::spell_message), as a JSON string.
 ///
 /// # Safety
 /// As `parse_program`.
@@ -107,13 +112,13 @@ pub unsafe extern "C" fn parse_expression(
 pub unsafe extern "C" fn spell_message(
     src_ptr: *const u8,
     src_len: u32,
-    version: u32,
+    _version: u32,
     out_ptr_ptr: *mut usize,
     out_len_ptr: *mut usize,
 ) -> u32 {
     install_panic_hook();
     let spelled = unsafe { utf8(src_ptr, src_len, "message") }
-        .map(|m| serde_json::Value::String(crate::surface::table::spell_message(m, version)));
+        .map(|m| serde_json::Value::String(crate::surface::table::spell_message(m)));
     unsafe { emit(spelled, out_ptr_ptr, out_len_ptr) }
 }
 
@@ -136,7 +141,7 @@ pub unsafe extern "C" fn plugin_name(
     unsafe { emit(spelled, out_ptr_ptr, out_len_ptr) }
 }
 
-/// Program text a diagnostic suggests, in the spelling of `version`
+/// Program text a diagnostic suggests, in the version 5 spelling
 /// (crate::surface::phrase::spell_code), as a JSON string.
 ///
 /// # Safety
@@ -145,13 +150,13 @@ pub unsafe extern "C" fn plugin_name(
 pub unsafe extern "C" fn spell_code(
     src_ptr: *const u8,
     src_len: u32,
-    version: u32,
+    _version: u32,
     out_ptr_ptr: *mut usize,
     out_len_ptr: *mut usize,
 ) -> u32 {
     install_panic_hook();
     let spelled =
-        unsafe { utf8(src_ptr, src_len, "code") }.map(|c| serde_json::Value::String(crate::surface::phrase::spell_code(c, version)));
+        unsafe { utf8(src_ptr, src_len, "code") }.map(|c| serde_json::Value::String(crate::surface::phrase::spell_code(c)));
     unsafe { emit(spelled, out_ptr_ptr, out_len_ptr) }
 }
 

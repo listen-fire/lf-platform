@@ -45,7 +45,7 @@ impl Checker<'_> {
     /// program's pin (`PluginSpec::under`); a stage reads the catalog's spec
     /// as it is.
     pub fn plain_plugin_spec(&self, name: &str) -> Option<PluginSpec> {
-        self.catalog.plugin(name).map(|spec| spec.under(self.version))
+        self.catalog.plugin(name).map(|spec| spec.as_called())
     }
 
     /// `checkPluginApplication`: a plugin's call, and the value it hands back.

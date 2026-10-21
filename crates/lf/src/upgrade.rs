@@ -126,7 +126,7 @@ fn check_text(source: &str, catalog: &CatalogSnapshot, language_version: u32) ->
     if let Err(refused) = parse(source, language_version) {
         return parse_refusal(refused.message, refused.line, refused.column);
     }
-    let options = CheckOptions { language_version, upgrading_from: None, parse_version: None, zones: &NativeZones };
+    let options = CheckOptions { language_version, upgrading_from: None, zones: &NativeZones };
     match movement_checker::check_source(source, catalog, options) {
         Ok(diagnostics) => diagnostics,
         Err(refusal) => parse_refusal(refusal.message, 1, 1),

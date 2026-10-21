@@ -271,7 +271,7 @@ fn misfit_at(supplied: Option<&Surface>, schema: &InstanceSchema, position: &str
         let Some(have) = have else { continue };
         let want = Ty::from_schema(want);
         if !field_assignable(have, &want) {
-            return Some(format!("its {path}`{name}` is {}, not {}{}", describe_field_type(have), describe_field_type(&want), text_repair(have, &want, options.version)));
+            return Some(format!("its {path}`{name}` is {}, not {}{}", describe_field_type(have), describe_field_type(&want), text_repair(have, &want)));
         }
     }
     for (name, edge) in required.edges.iter() {
@@ -291,7 +291,7 @@ fn misfit_at(supplied: Option<&Surface>, schema: &InstanceSchema, position: &str
 }
 
 /// `textRepair`: how to write the text a number or a yes/no should be.
-pub fn text_repair(have: &Ty, want: &Ty, version: u32) -> String {
+pub fn text_repair(have: &Ty, want: &Ty) -> String {
     if !matches!(strip_absent(want), Ty::Text) {
         return String::new();
     }
@@ -299,7 +299,7 @@ pub fn text_repair(have: &Ty, want: &Ty, version: u32) -> String {
         Ty::Number => " — write the text it should be: `TOSTRING(…)`".to_string(),
         Ty::Boolean => format!(
             " — write the text it should be: `{}`",
-            movement_parser::surface::phrase::spell_code("IF … THEN \"Yes\" ELSE \"No\" END", version)
+            movement_parser::surface::phrase::spell_code("IF … THEN \"Yes\" ELSE \"No\" END")
         ),
         _ => String::new(),
     }

@@ -36,7 +36,7 @@ fn a_source_in_the_engines_text_form_is_not_formed_twice() {
     use movement_parser::catalog::types::CatalogSnapshot;
     use movement_parser::util::form::{external_text, form_of_text};
     let catalog = CatalogSnapshot::load(r#"{"adapters":{},"credentials":{},"plugins":{}}"#).unwrap();
-    let options = || CheckOptions { language_version: 5, upgrading_from: None, parse_version: None, zones: &movement_checker::host::native::NativeZones };
+    let options = || CheckOptions { language_version: 5, upgrading_from: None, zones: &movement_checker::host::native::NativeZones };
     let source = "movement m(nope: <text>) {\n  y = \"\u{FDD0}\" + nope\n}";
     let hint = |diagnostics: Vec<movement_checker::Diagnostic>| {
         diagnostics.into_iter().find(|d| d.code == "MOV_ARITH_NON_NUMERIC").map(|d| external_text(&d.message).into_owned()).unwrap()
@@ -50,7 +50,7 @@ fn codes_of(source: &str, version: u32) -> Vec<(String, String)> {
     use movement_checker::{CheckOptions, check_source};
     use movement_parser::catalog::types::CatalogSnapshot;
     let catalog = CatalogSnapshot::load(r#"{"adapters":{},"credentials":{},"plugins":{}}"#).unwrap();
-    let options = CheckOptions { language_version: version, upgrading_from: None, parse_version: None, zones: &movement_checker::host::native::NativeZones };
+    let options = CheckOptions { language_version: version, upgrading_from: None, zones: &movement_checker::host::native::NativeZones };
     check_source(source, &catalog, options).unwrap().into_iter().map(|d| (d.code, d.message)).collect()
 }
 

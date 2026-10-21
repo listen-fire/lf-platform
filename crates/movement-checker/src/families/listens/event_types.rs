@@ -335,7 +335,7 @@ pub fn record_signature_rewrite(
 /// `eventTraversalExample`: reaching the record, from this instance's own
 /// event surface.
 /// `version` spells the `if` it suggests.
-pub fn event_traversal_example(schema: &InstanceSchema, param_name: &str, instance: &str, version: u32) -> Option<String> {
+pub fn event_traversal_example(schema: &InstanceSchema, param_name: &str, instance: &str) -> Option<String> {
     for event_position in schema.event_positions.iter().flatten() {
         let event = &event_position.position;
         let Some(position) = schema.positions.get(event) else { continue };
@@ -349,9 +349,7 @@ pub fn event_traversal_example(schema: &InstanceSchema, param_name: &str, instan
         let field = schema.positions.get(&edge_schema.target).and_then(|p| p.properties.keys().next());
         let read = field.map_or("…".to_string(), |f| format!("… r.`{f}`"));
         let test = movement_parser::surface::phrase::spell_if(
-            &format!("{param_name} IS {}", address_source(instance, event, &[(EVENT_ACTION_FIELD.to_string(), action.clone())])),
-            version,
-        );
+            &format!("{param_name} IS {}", address_source(instance, event, &[(EVENT_ACTION_FIELD.to_string(), action.clone())])));
         return Some(format!("{test} {{ {param_name}-[r:{edge}]-> {{ {read} }} }}"));
     }
     None

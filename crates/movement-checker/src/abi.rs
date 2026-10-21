@@ -35,7 +35,7 @@ pub unsafe fn check_program_with(
         Ok((source, catalog)) => crate::check_json(
             source,
             catalog,
-            CheckOptions { language_version: version, upgrading_from: (upgrading_from != 0).then_some(upgrading_from), parse_version: None, zones },
+            CheckOptions { language_version: version, upgrading_from: (upgrading_from != 0).then_some(upgrading_from), zones },
         ),
         Err(error) => serde_json::json!({ "error": error }),
     };
@@ -72,7 +72,7 @@ pub unsafe fn check_answer_with(
         Ok((source, catalog)) => crate::check_answer_json(
             source,
             catalog,
-            CheckOptions { language_version: version, upgrading_from: (upgrading_from != 0).then_some(upgrading_from), parse_version: None, zones },
+            CheckOptions { language_version: version, upgrading_from: (upgrading_from != 0).then_some(upgrading_from), zones },
         ),
         Err(error) => serde_json::json!({ "error": error }),
     };

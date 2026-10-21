@@ -74,7 +74,7 @@ impl Run<'_> {
         // parameters as the checker bound them.
         let bound = match self.plugin_spec(&registered) {
             Some(spec) if args.iter().any(|arg| arg.name().is_none()) => {
-                let callable = spec.under(self.version());
+                let callable = spec.as_called();
                 let bound = callable.bind_args(PluginCallSite::Plain, args);
                 if !bound.misfits.is_empty() {
                     let positional = callable.positional_params(PluginCallSite::Plain);

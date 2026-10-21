@@ -153,7 +153,7 @@ fn report_step(typing: &mut Typing, from: &Position, edge: &str, filter: Option<
                     format!(
                         "'{edge}' is an edge of {} only — narrow with an {} test (e.g. `{example}`) before traversing it",
                         shown.join(" / "),
-                        spell_word("IS", typing.version)
+                        spell_word("IS")
                     ),
                 );
                 return;
@@ -446,7 +446,7 @@ fn report_read(typing: &mut Typing, position: &Position, property: &str) {
                     format!(
                         "'{property}' is a field of {} only — narrow with an {} test (e.g. `{}`) before reading it",
                         shown.join(" / "),
-                        spell_word("IS", typing.version),
+                        spell_word("IS"),
                         typing.code(&format!("x IS <{}-[:`{}`]->>", u.instance.name, carrying[0]))
                     ),
                 );

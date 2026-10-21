@@ -192,7 +192,7 @@ fn refuse_maybe_record_for_builtin(typing: &mut Typing, builtin: &Builtin, param
         if file {
             "Pass its text ('READ(f)')".to_string()
         } else {
-            format!("Narrow it to the record with {} and pass a field off it ('r.`Name`')", movement_parser::surface::phrase::spell_word("IS", typing.version))
+            format!("Narrow it to the record with {} and pass a field off it ('r.`Name`')", movement_parser::surface::phrase::spell_word("IS"))
         }
     );
     typing.report(codes::CALL_ARG_MAYBE_RECORD, message);
@@ -590,7 +590,7 @@ impl Checker<'_> {
             }
             let head = String::from_utf16_lossy(&units[..at.end]);
             let mut bound = crate::checker::Bound::default();
-            let parsed = movement_parser::stmt::Parser::new(&head, self.version, slot.span.start, true).parse_nested_call_value(at.start);
+            let parsed = movement_parser::stmt::Parser::new(&head, slot.span.start, true).parse_nested_call_value(at.start);
             match &parsed {
                 Ok(value) => {
                     self.open_effect_frame();
@@ -1372,7 +1372,7 @@ impl Checker<'_> {
                     let spelled = if to.chars().any(char::is_whitespace) {
                         format!("`{to}`")
                     } else {
-                        movement_parser::surface::table::spell_message(&to, self.version)
+                        movement_parser::surface::table::spell_message(&to)
                     };
                     let units: Vec<u16> = self.written_text(slot).encode_utf16().collect();
                     let c = callee.at();
@@ -1777,8 +1777,8 @@ impl Checker<'_> {
         self.report(
             codes::RETURN_NOT_A_VALUE,
             format!(
-                "'{}' constructs an instance, and an instance is not a value to hand back — its schema belongs to the credential it was built with. Construct it in the movement that uses it.",
-                format!("connect {}", construct.callee)
+                "'connect {}' constructs an instance, and an instance is not a value to hand back — its schema belongs to the credential it was built with. Construct it in the movement that uses it.",
+                construct.callee
             ),
             span,
         );

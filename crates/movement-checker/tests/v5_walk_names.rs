@@ -17,7 +17,7 @@ fn check(body: &str) -> Vec<(String, String)> {
         "import {{ `@lf/attio` as attio }} from adapters\nimport {{ `Acme CRM` }} from credentials\ncrm = connect attio using `Acme CRM`\nfunction go(cutoff: <number>) {{\n{body}\n}}\n"
     );
     let catalog = CatalogSnapshot::load(CATALOG).unwrap();
-    let options = CheckOptions { language_version: 5, upgrading_from: None, parse_version: None, zones: &movement_checker::host::native::NativeZones };
+    let options = CheckOptions { language_version: 5, upgrading_from: None, zones: &movement_checker::host::native::NativeZones };
     let diagnostics: Vec<Diagnostic> = check_source(&source, &catalog, options).unwrap_or_else(|e| panic!("{source}: {e:?}"));
     diagnostics.into_iter().filter(|d| d.severity.is_none()).map(|d| (d.code, d.message)).collect()
 }

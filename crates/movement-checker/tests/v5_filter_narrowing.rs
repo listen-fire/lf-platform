@@ -18,7 +18,7 @@ const CATALOG: &str = r#"{"contractVersion":1,"adapters":{},"credentials":{},"pl
 fn diagnostics(body: &str, version: u32) -> Vec<(String, String)> {
     let source = format!("function go(t: <text>, xs: <number[]>) {{\n{body}\n}}");
     let catalog = CatalogSnapshot::load(CATALOG).unwrap();
-    let options = CheckOptions { language_version: version, upgrading_from: None, parse_version: None, zones: &movement_checker::host::native::NativeZones };
+    let options = CheckOptions { language_version: version, upgrading_from: None, zones: &movement_checker::host::native::NativeZones };
     let diagnostics = check_source(&source, &catalog, options).unwrap_or_else(|e| panic!("{source}: {e:?}"));
     diagnostics.into_iter().filter(|d| d.severity.is_none()).map(|d| (d.code, d.message)).collect()
 }

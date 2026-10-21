@@ -8,7 +8,7 @@ use movement_parser::catalog::types::CatalogSnapshot;
 
 fn check_with(source: &str, version: u32, catalog: &str) -> Vec<Diagnostic> {
     let catalog = CatalogSnapshot::load(catalog).unwrap();
-    let options = CheckOptions { language_version: version, upgrading_from: None, parse_version: None, zones: &movement_checker::host::native::NativeZones };
+    let options = CheckOptions { language_version: version, upgrading_from: None, zones: &movement_checker::host::native::NativeZones };
     check_source(source, &catalog, options).unwrap()
 }
 

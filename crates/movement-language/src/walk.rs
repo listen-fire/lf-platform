@@ -11,11 +11,11 @@ use movement_parser::ast::Loc;
 use crate::text::trailing_word;
 
 /// The record `text` (ending where the receiver ends) holds at `at`.
-pub fn receiver(analysis: &Analysis, text: &str, at: Loc, version: u32) -> Option<Position> {
-    receiver_within(analysis, text, at, version, 0)
+pub fn receiver(analysis: &Analysis, text: &str, at: Loc) -> Option<Position> {
+    receiver_within(analysis, text, at, 0)
 }
 
-fn receiver_within(analysis: &Analysis, text: &str, at: Loc, version: u32, depth: usize) -> Option<Position> {
+fn receiver_within(analysis: &Analysis, text: &str, at: Loc, depth: usize) -> Option<Position> {
     if depth > 16 {
         return None;
     }
@@ -23,8 +23,8 @@ fn receiver_within(analysis: &Analysis, text: &str, at: Loc, version: u32, depth
     if let Some(head) = trimmed.strip_suffix("]->") {
         let open = hop_open(head)?;
         let edge = hop_edge(&head[open + 2..])?;
-        let from = receiver_within(analysis, &head[..open], at, version, depth + 1)?;
-        return land(&from, &edge, version);
+        let from = receiver_within(analysis, &head[..open], at, depth + 1)?;
+        return land(&from, &edge);
     }
     let name = trailing_name(trimmed)?;
     if let Some(position) = analysis.resolve(at, &name).and_then(|id| analysis.position_of(id)) {
@@ -33,8 +33,8 @@ fn receiver_within(analysis: &Analysis, text: &str, at: Loc, version: u32, depth
     // An alias a hop earlier in the text binds.
     let bound = text.rfind(&format!("-[{name}:"))?;
     let edge = hop_edge(&text[bound + 2..])?;
-    let from = receiver_within(analysis, &text[..bound], at, version, depth + 1)?;
-    land(&from, &edge, version)
+    let from = receiver_within(analysis, &text[..bound], at, depth + 1)?;
+    land(&from, &edge)
 }
 
 /// Where `-[` opens the hop `head` (the text before its `]->`) closes.
@@ -78,8 +78,8 @@ pub fn trailing_name(text: &str) -> Option<String> {
     (!word.is_empty()).then(|| word.to_string())
 }
 
-fn land(from: &Position, edge: &str, version: u32) -> Option<Position> {
-    match edge_landing(strip(from), edge, version) {
+fn land(from: &Position, edge: &str) -> Option<Position> {
+    match edge_landing(strip(from), edge) {
         EdgeLanding::Landed { landing, .. } => Some(landing),
         _ => None,
     }
@@ -101,13 +101,13 @@ pub fn fields(position: &Position) -> Vec<(String, Option<String>)> {
 }
 
 /// The edges a walk can take next off a record, each with where it lands.
-pub fn edges(position: &Position, version: u32) -> Vec<(String, String)> {
+pub fn edges(position: &Position) -> Vec<(String, String)> {
     let Some(schema) = position_schema_of_ref(strip(position)) else { return Vec::new() };
     schema
         .edges
         .iter()
         .map(|(name, edge)| {
-            let landing = land(position, name, version).map_or_else(|| edge.target.clone(), |p| describe_position(&p));
+            let landing = land(position, name).map_or_else(|| edge.target.clone(), |p| describe_position(&p));
             (name.clone(), landing)
         })
         .collect()
@@ -121,9 +121,9 @@ pub struct Edge {
 }
 
 /// The edges a walk can take next off a record, each with its schema and landing.
-pub fn edge_schemas(position: &Position, version: u32) -> Vec<Edge> {
+pub fn edge_schemas(position: &Position) -> Vec<Edge> {
     let Some(schema) = position_schema_of_ref(strip(position)) else { return Vec::new() };
-    schema.edges.iter().map(|(name, edge)| Edge { name: name.clone(), schema: edge.clone(), landing: land(position, name, version) }).collect()
+    schema.edges.iter().map(|(name, edge)| Edge { name: name.clone(), schema: edge.clone(), landing: land(position, name) }).collect()
 }
 
 /// A field's type off a record, as the author reads it.

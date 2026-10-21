@@ -268,7 +268,7 @@ impl Checker<'_> {
                     "'{}' is {} — 'listen to' names a constructed adapter instance (e.g. inbox = {})",
                     statement.instance,
                     symbol.kind.describe(),
-                    connection(&Connection { adapter: "email", args: &[("credentials", "…")], credential: Some("credentials") }, self.version)
+                    connection(&Connection { adapter: "email", args: &[("credentials", "…")], credential: Some("credentials") })
                 );
                 self.report(codes::LISTEN_NOT_INSTANCE, message, statement.span);
             }
@@ -475,7 +475,7 @@ impl Checker<'_> {
             );
             return;
         }
-        let example = event_types::event_traversal_example(schema, &param.name, instance, self.version);
+        let example = event_types::event_traversal_example(schema, &param.name, instance);
         let tail = match example {
             None => ".".to_string(),
             Some(example) => format!(" — e.g. `{example}` (a delete event has no record to read)."),

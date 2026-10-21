@@ -789,7 +789,7 @@ pub fn is_artificial_edge(edge: &str) -> bool {
 
 /// `stepEdge`, the typing half: the landing of `edge` off `from`.
 /// `_version` stays for the callers in other crates until they drop it.
-pub fn edge_landing(from: &Position, edge: &str, _version: u32) -> EdgeLanding {
+pub fn edge_landing(from: &Position, edge: &str) -> EdgeLanding {
     landing_of(from, edge)
 }
 

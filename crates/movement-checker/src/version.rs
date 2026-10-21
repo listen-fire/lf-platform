@@ -3,38 +3,23 @@
 //! fixed set of codes append (checker/handbook_pointers.ts).
 
 use movement_parser::ast::{Loc, Span};
-use movement_parser::version::{CURRENT_LANGUAGE_VERSION, SUPPORTED_LANGUAGE_VERSIONS};
+use movement_parser::version::{CURRENT_LANGUAGE_VERSION, unsupported_message};
 
 use crate::codes;
 use crate::diagnostic::Diagnostic;
 
-const NAMES: &[(u32, &str)] = &[(1, "Quiet Heron"), (2, "Bright Otter"), (3, "Steady Lynx"), (4, "Luminous Owl"), (5, "Dancing Wren")];
-
 /// Versions this release still runs but will remove: none today.
 const DEPRECATED: &[u32] = &[];
 
-/// `"Bright Otter" (2)`, or `version 99` for a version the table lacks.
-pub fn describe(version: u32) -> String {
-    match NAMES.iter().find(|(v, _)| *v == version) {
-        Some((v, name)) => format!("\"{name}\" ({v})"),
-        None => format!("version {version}"),
-    }
-}
+pub use movement_parser::version::describe;
 
 /// What a movement pinned to `version` is told before anything else.
 pub fn standing_diagnostic(version: u32) -> Option<Diagnostic> {
     let at = Loc { line: 1, col: 1 };
     let span = Span { start: at, end: at };
     let current = describe(CURRENT_LANGUAGE_VERSION);
-    if !SUPPORTED_LANGUAGE_VERSIONS.contains(&version) {
-        return Some(Diagnostic::error(
-            codes::LANGUAGE_VERSION_UNSUPPORTED,
-            format!(
-                "this automation is written in language version {}, which this release does not support, so it will not validate or run. To fix: validate it under {current}, repair what that reports, and upgrade it to {current}.",
-                describe(version)
-            ),
-            span,
-        ));
+    if let Some(message) = unsupported_message(version) {
+        return Some(Diagnostic::error(codes::LANGUAGE_VERSION_UNSUPPORTED, message, span));
     }
     if DEPRECATED.contains(&version) {
         let mut warning = Diagnostic::error(

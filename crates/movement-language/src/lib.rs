@@ -83,7 +83,7 @@ impl Service {
     }
 
     fn options(&self) -> CheckOptions<'static> {
-        CheckOptions { language_version: self.language_version, upgrading_from: None, parse_version: None, zones: &movement_checker::host::native::NativeZones }
+        CheckOptions { language_version: self.language_version, upgrading_from: None, zones: &movement_checker::host::native::NativeZones }
     }
 
     /// The file checked, repaired around `cursor` (a 0-based line) when it

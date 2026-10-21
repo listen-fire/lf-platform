@@ -440,7 +440,7 @@ impl Checker<'_> {
                 describe_arg_place(fit),
                 describe_field_type(mixed),
                 others.join(" or "),
-                spell_word("IS", self.version)
+                spell_word("IS")
             ),
             span,
         );
@@ -467,7 +467,7 @@ impl Checker<'_> {
         let repair = if file {
             "Pass its text ('READ(f)')".to_string()
         } else {
-            format!("Narrow it to the record with {} and pass a field off it ('r.`Name`')", spell_word("IS", self.version))
+            format!("Narrow it to the record with {} and pass a field off it ('r.`Name`')", spell_word("IS"))
         };
         let argument = fit.caller.as_ref().map_or_else(|| format!("'{written}'"), |caller| caller.argument.clone());
         let param_words = describe_field_type(param);

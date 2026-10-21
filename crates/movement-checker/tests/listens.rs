@@ -14,7 +14,7 @@ const FEED: &str = r#""feed":{"constructionArgs":[],"canFire":true,"triggerConfi
 fn check_feed(listen: &str) -> Vec<Diagnostic> {
     let snapshot = format!(r#"{{"adapters":{{{FEED}}},"credentials":{{}},"plugins":{{}}}}"#);
     let catalog = CatalogSnapshot::load(&snapshot).unwrap();
-    let options = CheckOptions { language_version: 5, upgrading_from: None, parse_version: None, zones: &movement_checker::host::native::NativeZones };
+    let options = CheckOptions { language_version: 5, upgrading_from: None, zones: &movement_checker::host::native::NativeZones };
     let source = format!("import {{ feed }} from adapters\nf = connect feed\nfunction seen(n: <f-[:Note]->>) {{}}\n{listen}");
     check_source(&source, &catalog, options).unwrap()
 }

@@ -20,7 +20,7 @@ const CATALOG: &str = r#"{"adapters":{"chat":{"canFire":true,"constructionArgs":
 fn absent(body: &str) -> Vec<String> {
     let source = format!("import {{ `@lf/chat` as chat }} from adapters\nc = connect chat\n\nfunction go() {{\n  x = only(c-[h:Channels WHERE h.Name == \"alerts\"]->)\n{body}\n}}\n");
     let catalog = CatalogSnapshot::load(CATALOG).unwrap();
-    let options = CheckOptions { language_version: 5, upgrading_from: None, parse_version: None, zones: &movement_checker::host::native::NativeZones };
+    let options = CheckOptions { language_version: 5, upgrading_from: None, zones: &movement_checker::host::native::NativeZones };
     let diagnostics = check_source(&source, &catalog, options).unwrap_or_else(|e| panic!("{source}: {e:?}"));
     let errors: Vec<_> = diagnostics.into_iter().filter(|d| d.is_error()).collect();
     let other: Vec<_> = errors.iter().filter(|d| d.code != "MOV_ABSENT_REQUIRED").map(|d| format!("{}: {}", d.code, d.message)).collect();

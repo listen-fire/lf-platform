@@ -6,7 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use movement_parser::version::{CURRENT_LANGUAGE_VERSION, since};
+use movement_parser::version::CURRENT_LANGUAGE_VERSION;
 use serde::Deserialize;
 
 pub const PROJECT_FILE: &str = "lf.yaml";
@@ -132,7 +132,7 @@ pub fn language_version_of_engine(engine: &str) -> Result<u32, String> {
 
 /// Refuses a pin lf does not run, before any engine sees it.
 pub fn refuse_below_lf(language_version: u32, pinned: &str, remedy: &str) -> Result<(), String> {
-    if since(language_version, FIRST_LF_LANGUAGE_VERSION) {
+    if language_version >= FIRST_LF_LANGUAGE_VERSION {
         return Ok(());
     }
     Err(format!(

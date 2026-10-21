@@ -1197,7 +1197,7 @@ impl Checker<'_> {
                     "{shape} declares `{name}` as {}, and this is {}{}",
                     describe_field_type(&want),
                     describe_field_type(have),
-                    crate::types::declared::text_repair(have, &want, self.version)
+                    crate::types::declared::text_repair(have, &want)
                 ),
                 span,
             );

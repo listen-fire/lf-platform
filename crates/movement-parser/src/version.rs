@@ -12,16 +12,6 @@ pub const SUPPORTED_LANGUAGE_VERSIONS: &[u32] = &[5];
 pub const LANGUAGE_VERSION_NAMES: &[(u32, &str)] =
     &[(1, "Quiet Heron"), (2, "Bright Otter"), (3, "Steady Lynx"), (4, "Luminous Owl"), (5, "Dancing Wren")];
 
-/// `version` has the behaviour version `n` introduced.
-pub fn since(version: u32, n: u32) -> bool {
-    version >= n
-}
-
-/// `version` predates the behaviour version `n` introduced.
-pub fn before(version: u32, n: u32) -> bool {
-    version < n
-}
-
 /// `"Bright Otter" (2)`, or `version 99` for a version the table lacks.
 pub fn describe(version: u32) -> String {
     match LANGUAGE_VERSION_NAMES.iter().find(|(v, _)| *v == version) {
@@ -31,7 +21,7 @@ pub fn describe(version: u32) -> String {
 }
 
 /// Why a movement pinned to `version` is not read, or `None` when it is;
-/// word for word the checker's standing diagnostic.
+/// the text of the checker's standing diagnostic.
 pub fn unsupported_message(version: u32) -> Option<String> {
     if SUPPORTED_LANGUAGE_VERSIONS.contains(&version) {
         return None;
@@ -48,8 +38,3 @@ pub fn unsupported_message(version: u32) -> Option<String> {
 /// `listen to cron { schedule: "0 9 * * 1" } fire digest` — with no import
 /// and no `connect`. A file's own binding of the name replaces it.
 pub const RUN_HOST_UNITS: &[&str] = &["cron", "manual"];
-
-/// The units a file pinned to `version` has in scope.
-pub fn run_host_units(_version: u32) -> &'static [&'static str] {
-    RUN_HOST_UNITS
-}

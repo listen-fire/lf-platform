@@ -114,11 +114,6 @@ thread_local! {
     static SCOPE: RefCell<Vec<Vec<SpellingFinding>>> = const { RefCell::new(Vec::new()) };
 }
 
-/// Runs `f`; every expression is read in the v5 surface.
-pub fn with_version<T>(_version: u32, f: impl FnOnce() -> T) -> T {
-    f()
-}
-
 /// Runs `f`, gathering the findings every slot read in it reports (the
 /// statement parser's `parse_program`).
 pub fn collecting<T>(f: impl FnOnce() -> T) -> (T, Vec<SpellingFinding>) {
@@ -126,11 +121,6 @@ pub fn collecting<T>(f: impl FnOnce() -> T) -> (T, Vec<SpellingFinding>) {
     let out = f();
     let findings = SCOPE.with(|s| s.borrow_mut().pop()).unwrap_or_default();
     (out, findings)
-}
-
-/// The v5 surface is read.
-pub fn is_v5() -> bool {
-    true
 }
 
 /// Records a finding in the innermost collecting scope, if there is one.

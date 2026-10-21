@@ -31,5 +31,3 @@ serde = { version = "1", features = ["derive"] }
 # reads data maps straight from the text, since a `Value`'s map is sorted.
 serde_json = { version = "1", features = ["float_roundtrip", "raw_value", "unbounded_depth"] }
 
-[dev-dependencies]
-sha2 = "0.11.0"

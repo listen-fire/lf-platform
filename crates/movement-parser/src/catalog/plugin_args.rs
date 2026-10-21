@@ -73,7 +73,7 @@ impl PluginSpec {
     /// function, so one fed only by an extraction is no longer a stage: the
     /// record the stage fed it becomes its one required input, written by
     /// position like any fed argument and taking structured data.
-    pub fn under(&self, _language_version: u32) -> PluginSpec {
+    pub fn as_called(&self) -> PluginSpec {
         if self.fed_by_extraction != Some(true) {
             return self.clone();
         }

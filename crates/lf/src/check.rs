@@ -68,7 +68,7 @@ pub fn check_file(file: &MovementFile, catalog: &CatalogSnapshot, language_versi
             fix: None,
         }]);
     }
-    let options = CheckOptions { language_version, upgrading_from: None, parse_version: None, zones: &NativeZones };
+    let options = CheckOptions { language_version, upgrading_from: None, zones: &NativeZones };
     let diagnostics = movement_checker::check_source(&file.source, catalog, options)
         .map_err(|refusal| format!("the Rust checker refused {}: {}", file.path.display(), refusal.message))?;
     Ok(diagnostics

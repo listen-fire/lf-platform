@@ -203,7 +203,7 @@ impl<'a> Typing<'a> {
 
     /// `stepEdge`: one edge step off `from`, reported.
     fn step_edge(&mut self, from: Option<&Position>, edge: &EdgeStep) -> (Option<Position>, Option<EdgeSchema>) {
-        let landing = from.map(|f| edge_landing(f, &edge.edge_type_id, self.version));
+        let landing = from.map(|f| edge_landing(f, &edge.edge_type_id));
         let stepped = match &landing {
             // A record reached through a function's parameter is the
             // caller's record's child: what the body needs of it is the
@@ -290,12 +290,6 @@ impl<'a> Typing<'a> {
         let mut diagnostic = Diagnostic::error(code, message, self.span);
         diagnostic.severity = Some(severity);
         self.diagnostics.push(diagnostic);
-    }
-
-    /// `upgradeCrosses`: this check is for a move up across version `n`.
-    #[allow(dead_code)] // the mechanism for a move up from 5; the 4→5 data is the platform's TypeScript checker's
-    pub fn upgrade_crosses(&self, n: u32) -> bool {
-        self.env.upgrading_from().is_some_and(|from| from < n && self.version >= n)
     }
 
     /// `reportWalkOffMaybeAbsent`: a walk inside an expression
@@ -418,11 +412,11 @@ impl<'a> Typing<'a> {
 
     /// Program text this walk's messages suggest, in the program's spelling.
     pub fn code(&self, text: &str) -> String {
-        movement_parser::surface::phrase::spell_code(text, self.version)
+        movement_parser::surface::phrase::spell_code(text)
     }
 
     fn widen(&mut self, ty: Option<Ty>) -> Option<Ty> {
-        if let Some(mixed) = mixed_tuple_message(ty.as_ref(), self.version) {
+        if let Some(mixed) = mixed_tuple_message(ty.as_ref()) {
             self.report(codes::LIST_MIXED, mixed);
         }
         widen_tuples_joining(ty)
@@ -856,7 +850,7 @@ impl<'a> Typing<'a> {
                 let else_ty = self.with_presence(&else_proofs, position, |t, narrowed| t.infer_at(else_, narrowed));
                 // A closure is not data: IF chooses
                 // between values, never between closures.
-                if self.refuse_closure_operands(&[(then, then_ty.as_ref()), (else_, else_ty.as_ref())], expr, &format!("chosen by {}", spell_word("IF … THEN … ELSE … END", self.version))) {
+                if self.refuse_closure_operands(&[(then, then_ty.as_ref()), (else_, else_ty.as_ref())], expr, &format!("chosen by {}", spell_word("IF … THEN … ELSE … END"))) {
                     return (None, vec![condition_ty, then_ty, else_ty]);
                 }
                 let ty = match (&then_ty, &else_ty) {

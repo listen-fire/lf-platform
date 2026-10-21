@@ -177,7 +177,7 @@ pub enum Severity {
 /// version `language_version`. A run checks again before it runs anything.
 pub fn check(source: &str, catalog: &Catalog, language_version: u32) -> Vec<Problem> {
     use movement_checker::host::native::NativeZones;
-    let options = movement_checker::CheckOptions { language_version, upgrading_from: None, parse_version: None, zones: &NativeZones };
+    let options = movement_checker::CheckOptions { language_version, upgrading_from: None, zones: &NativeZones };
     let external = |text: &str| movement_parser::util::form::external_text(text).into_owned();
     match movement_checker::check_source(source, &catalog.snapshot, options) {
         Err(refusal) => vec![Problem { code: "MOV_PARSE".into(), message: external(&refusal.message), line: 0, column: 0, severity: Severity::Error }],

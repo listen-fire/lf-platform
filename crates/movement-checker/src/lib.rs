@@ -32,9 +32,6 @@ pub struct CheckOptions<'a> {
     pub language_version: u32,
     /// Checking for a move up from this version (`upgradingFrom`).
     pub upgrading_from: Option<u32>,
-    /// Ignored: every supported version parses as it checks. (Its callers
-    /// go with it after the language side keeps version 5 alone.)
-    pub parse_version: Option<u32>,
     /// The host's zone database (`host`): a cron listen's `timezone`, a
     /// standard-library zone argument.
     pub zones: &'a dyn host::ZoneLookup,
@@ -54,9 +51,7 @@ pub(crate) fn run_check<'c>(program: &Program, catalog: &'c CatalogSnapshot, opt
         let checker = checker::Checker::new(catalog, &options, catalog.files.is_some());
         return (version::standing_diagnostic(options.language_version).into_iter().collect(), checker);
     }
-    // Every slot is re-read under the version the program is checked under
-    // (movement_parser::surface).
-    movement_parser::surface::with_version(options.language_version, || run_check_here(program, catalog, options))
+    run_check_here(program, catalog, options)
 }
 
 fn run_check_here<'c>(program: &Program, catalog: &'c CatalogSnapshot, options: CheckOptions<'c>) -> (Vec<Diagnostic>, checker::Checker<'c>) {
@@ -88,7 +83,7 @@ fn run_check_here<'c>(program: &Program, catalog: &'c CatalogSnapshot, options: 
         .chain(spelling)
         .chain(std::mem::take(&mut checker.imports.spelling))
         .chain(problems)
-        .chain(found.into_iter().map(version::with_handbook_pointer).map(|d| diagnostic::in_spelling_of(d, options.language_version)))
+        .chain(found.into_iter().map(version::with_handbook_pointer).map(diagnostic::in_spelling_of))
         .collect();
     (diagnostics, checker)
 }

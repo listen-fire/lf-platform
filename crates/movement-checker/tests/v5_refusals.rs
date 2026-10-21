@@ -19,7 +19,7 @@ fn found(body: &str, version: u32) -> Vec<(String, usize, String)> {
         "import {{ attio }} from adapters\nimport {{ crm_cred }} from credentials\ncrm = connect attio using crm_cred\nnode Note {{\n  title: <text>\n}}\nfunction go(t: <text>, j: <json>) {{\n{body}\n}}\n"
     );
     let catalog = CatalogSnapshot::load(CATALOG).unwrap();
-    let options = CheckOptions { language_version: version, upgrading_from: None, parse_version: None, zones: &movement_checker::host::native::NativeZones };
+    let options = CheckOptions { language_version: version, upgrading_from: None, zones: &movement_checker::host::native::NativeZones };
     let diagnostics = check_source(&source, &catalog, options).unwrap_or_else(|e| panic!("{source}: {e:?}"));
     diagnostics.into_iter().filter(|d| CODES.contains(&d.code.as_str())).map(|d| (d.code, d.span.start.line, d.message)).collect()
 }
@@ -96,7 +96,7 @@ fn resources_read_off_an_extraction_calls_result() {
 #[test]
 fn a_built_in_call_on_a_line_by_itself_parses_and_is_reported_as_a_value_nothing_reads() {
     let catalog = CatalogSnapshot::load(CATALOG).unwrap();
-    let options = CheckOptions { language_version: 5, upgrading_from: None, parse_version: None, zones: &movement_checker::host::native::NativeZones };
+    let options = CheckOptions { language_version: 5, upgrading_from: None, zones: &movement_checker::host::native::NativeZones };
     let diagnostics = check_source("function go(t: <text>) {\n  Text.upper(t)\n}\n", &catalog, options).unwrap();
     assert_eq!(diagnostics.iter().map(|d| (d.code.as_str(), d.span.start.line)).collect::<Vec<_>>(), [("MOV_BUILTIN_UNUSED", 2)]);
 }

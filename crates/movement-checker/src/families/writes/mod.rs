@@ -120,12 +120,6 @@ impl<'a> Field<'a> {
 }
 
 impl Checker<'_> {
-    /// `upgradeCrosses`: this check is for a move up across version `n`.
-    #[allow(dead_code)] // the mechanism for a move up from 5; the 4→5 data is the platform's TypeScript checker's
-    pub fn upgrade_crosses(&self, n: u32) -> bool {
-        self.upgrading_from.is_some_and(|from| from < n && self.version >= n)
-    }
-
     pub fn report_with(&mut self, code: &str, message: impl Into<String>, span: Span, severity: Severity) {
         let mut diagnostic = Diagnostic::error(code, message, span);
         diagnostic.severity = Some(severity);
@@ -523,7 +517,7 @@ impl Checker<'_> {
                     describe_position(of),
                     purpose.word(),
                     self.code(&format!("if {root_name} == null {{ ERROR(\"…\") }}")),
-                    movement_parser::surface::phrase::spell_if(&format!("EXISTS({root_name})"), self.version),
+                    movement_parser::surface::phrase::spell_if(&format!("EXISTS({root_name})")),
                 ),
                 span,
             );
@@ -1273,7 +1267,7 @@ impl Checker<'_> {
             }
             self.report(
                 codes::WRITE_FIELD_TYPE,
-                format!("'{field_name}' on {subject} is {}, and this is {}{}", describe_field_type(target), describe_field_type(value), crate::types::declared::text_repair(value, target, self.version)),
+                format!("'{field_name}' on {subject} is {}, and this is {}{}", describe_field_type(target), describe_field_type(value), crate::types::declared::text_repair(value, target)),
                 span,
             );
             return;

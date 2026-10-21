@@ -252,7 +252,7 @@ pub fn by_canonical(name: &str) -> Option<&'static Spelling> {
 /// The name a diagnostic gives the built-in the tree calls `canonical`:
 /// `Text.upper` for `UPPER`. A name the table does not hold is its own
 /// spelling.
-pub fn spell(canonical: &str, _version: u32) -> String {
+pub fn spell(canonical: &str) -> String {
     if let Some(s) = by_canonical(canonical)
         && !s.old_only
     {
@@ -304,7 +304,7 @@ fn spell_declarations(message: &str) -> String {
 /// and calls a declaration a function: the one place both
 /// checkers route a message through, so a message's wording never carries
 /// its own copy of a spelling.
-pub fn spell_message(message: &str, _version: u32) -> String {
+pub fn spell_message(message: &str) -> String {
     let message = &spell_declarations(message);
     let is_word = |c: char| c.is_ascii_alphanumeric() || c == '_';
     let mut out = String::with_capacity(message.len());
@@ -411,21 +411,21 @@ mod tests {
 
     #[test]
     fn spelling_is_the_v5_one() {
-        assert_eq!(spell("UPPER", 5), "Text.upper");
-        assert_eq!(spell("date.today", 5), "Date.today");
-        assert_eq!(spell("my_function", 5), "my_function");
-        assert_eq!(spell_message("`UPPER(x)` expects text; `MAP` too", 5), "`Text.upper(x)` expects text; `map` too");
-        assert_eq!(spell_message("`Name` is not `AT`", 5), "`Name` is not `AT`");
-        assert_eq!(spell_message("UPPER's 'text' takes text — UPPER(text)", 5), "Text.upper's 'text' takes text — Text.upper(text)");
-        assert_eq!(spell_message("DATE.TODAY needs a zone. MAPPED UPPERCASE COUNT.", 5), "Date.today needs a zone. MAPPED UPPERCASE count.");
+        assert_eq!(spell("UPPER"), "Text.upper");
+        assert_eq!(spell("date.today"), "Date.today");
+        assert_eq!(spell("my_function"), "my_function");
+        assert_eq!(spell_message("`UPPER(x)` expects text; `MAP` too"), "`Text.upper(x)` expects text; `map` too");
+        assert_eq!(spell_message("`Name` is not `AT`"), "`Name` is not `AT`");
+        assert_eq!(spell_message("UPPER's 'text' takes text — UPPER(text)"), "Text.upper's 'text' takes text — Text.upper(text)");
+        assert_eq!(spell_message("DATE.TODAY needs a zone. MAPPED UPPERCASE COUNT."), "Date.today needs a zone. MAPPED UPPERCASE count.");
         assert_eq!(
-            spell_message("'go' is a movement, not a credential — a call names a movement or function declared or imported here; only movements are called", 5),
+            spell_message("'go' is a movement, not a credential — a call names a movement or function declared or imported here; only movements are called"),
             "'go' is a function, not a credential — a call names a function declared or imported here; only functions are called"
         );
         let product = "a movement run does not have it; No movement file named \"x\"; the movement engine";
-        assert_eq!(spell_message(product, 5), product);
+        assert_eq!(spell_message(product), product);
         assert_eq!(
-            spell_message("`COUNT(crm-[c:Companies WHERE LOWER(c.Name) == \"x\"]->)` and LOWER", 5),
+            spell_message("`COUNT(crm-[c:Companies WHERE LOWER(c.Name) == \"x\"]->)` and LOWER"),
             "`count(crm-[c:Companies WHERE LOWER(c.Name) == \"x\"]->)` and Text.lower"
         );
     }

@@ -107,7 +107,7 @@ pub fn collect_listens(files: &[MovementFile], language_version: u32) -> Vec<Lis
         }
         for listen in declared {
             // A unit the file does not bind itself is the host's own.
-            let unit = movement_parser::version::run_host_units(language_version).iter().find(|u| **u == listen.instance).map(|u| u.to_string());
+            let unit = movement_parser::version::RUN_HOST_UNITS.iter().find(|u| **u == listen.instance).map(|u| u.to_string());
             let Some(adapter) = constructions.get(&listen.instance).cloned().or(unit) else { continue };
             let mut config = Obj::new();
             for arg in &listen.config {

@@ -92,7 +92,7 @@ pub fn member_local(package_local: &str, member: &str) -> String {
 /// an engine binds. An import that names no package is left as written. The
 /// checkers do not read this: they bind the same names themselves, keeping
 /// the package to name in a diagnostic.
-pub fn expand_package_imports(program: &mut Program, plugins: &JsMap<PluginSpec>, _language_version: u32) {
+pub fn expand_package_imports(program: &mut Program, plugins: &JsMap<PluginSpec>) {
     for statement in &mut program.statements {
         let Statement::Import(import) = statement else { continue };
         if !matches!(&import.source, ImportSource::Builtin { namespace } if namespace == "plugins") {

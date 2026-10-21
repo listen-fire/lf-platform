@@ -9,7 +9,7 @@ const CATALOG: &str = r#"{"adapters":{},"credentials":{},"plugins":{}}"#;
 
 fn check(source: &str, version: u32) -> Vec<Diagnostic> {
     let catalog = CatalogSnapshot::load(CATALOG).unwrap();
-    let options = CheckOptions { language_version: version, upgrading_from: None, parse_version: None, zones: &movement_checker::host::native::NativeZones };
+    let options = CheckOptions { language_version: version, upgrading_from: None, zones: &movement_checker::host::native::NativeZones };
     check_source(source, &catalog, options).unwrap()
 }
 
@@ -38,7 +38,7 @@ fn a_namespace_member_bound_whole_reads_as_its_old_spelling_did() {
 fn an_address_reads_the_event_through_the_hops_alias_from_5() {
     let aliased = "-[e:`Webhook Event` WHERE e.action == \"record.created\"]->";
     let address = EventAddress { event: "Webhook Event".into(), narrowing: vec![("action".into(), "record.created".into())] };
-    assert_eq!(movement_parser::surface::with_version(5, || event_address_of_hops(aliased)), Some(address));
+    assert_eq!(event_address_of_hops(aliased), Some(address));
 }
 
 #[test]
@@ -127,7 +127,7 @@ fn a_targets_bare_field_is_respelled_through_the_alias_at_its_own_place() {
             "import {{ registry }} from adapters\nimport {{ public_registry }} from credentials\nreg = registry(credentials: public_registry)\nmovement main() {{\n{line}\n}}"
         );
         let catalog = CatalogSnapshot::load(REGISTRY).unwrap();
-        let options = CheckOptions { language_version: 5, upgrading_from: None, parse_version: None, zones: &movement_checker::host::native::NativeZones };
+        let options = CheckOptions { language_version: 5, upgrading_from: None, zones: &movement_checker::host::native::NativeZones };
         let found = check_source(&source, &catalog, options).unwrap();
         let d = found.into_iter().find(|d| d.code == "MOV_V5_SPELLING" && d.message.contains("hop's alias")).expect("a walk field respelling");
         d.fix.expect("a fix")["edits"]
@@ -154,7 +154,7 @@ fn sort_by_a_function_key_is_refused_where_sort_with_a_key_was() {
     let codes = |body: &str| -> Vec<String> {
         let source = format!("import {{ `@lf/slack` as slack }} from adapters\nchat = connect slack\n\nfunction m(c: <chat-[:channel]->>) {{\n{body}\n  return t\n}}");
         let catalog = CatalogSnapshot::load(MEMBERS).unwrap();
-        let options = CheckOptions { language_version: 5, upgrading_from: None, parse_version: None, zones: &movement_checker::host::native::NativeZones };
+        let options = CheckOptions { language_version: 5, upgrading_from: None, zones: &movement_checker::host::native::NativeZones };
         check_source(&source, &catalog, options).unwrap().into_iter().filter(|d| d.is_error()).map(|d| d.code).collect()
     };
     let names = "  names = c-[p:Members]-> { return p.Name }\n";
@@ -171,7 +171,7 @@ const EVENTS: &str = r#"{"contractVersion":1,"adapters":{"kg":{"canFire":true,"c
 fn a_listens_pasteable_signature_joins_its_pins_with_the_v5_conjunction() {
     let source = "import { kg } from adapters\ngraph = connect kg\nfunction m(t: <graph-[:Ticket]->>) {\n}\nlisten to graph { type: \"Ticket\", events: [\"record.created\"] } fire m";
     let catalog = CatalogSnapshot::load(EVENTS).unwrap();
-    let options = CheckOptions { language_version: 5, upgrading_from: None, parse_version: None, zones: &movement_checker::host::native::NativeZones };
+    let options = CheckOptions { language_version: 5, upgrading_from: None, zones: &movement_checker::host::native::NativeZones };
     let found = check_source(source, &catalog, options).unwrap();
     let d = found.iter().find(|d| d.code == "MOV_LISTEN_PARAM_MISMATCH").expect("a mismatch");
     assert!(d.message.contains("'m(event: <graph-[e:`Change` WHERE e.action == \"record.created\" && e.type == \"Ticket\"]->>)'"), "{}", d.message);
@@ -182,7 +182,7 @@ fn includes_inside_walk_brackets_reads_as_the_contains_or_in_written_there() {
     let walk = |where_: &str| -> Vec<String> {
         let source = format!("import {{ registry }} from adapters\nimport {{ public_registry }} from credentials\nreg = connect registry using public_registry\n\nfunction f() {{\n  rows = reg-[e:entities WHERE {where_}]-> {{ return e }}\n  return rows\n}}");
         let catalog = CatalogSnapshot::load(REGISTRY).unwrap();
-        let options = CheckOptions { language_version: 5, upgrading_from: None, parse_version: None, zones: &movement_checker::host::native::NativeZones };
+        let options = CheckOptions { language_version: 5, upgrading_from: None, zones: &movement_checker::host::native::NativeZones };
         check_source(&source, &catalog, options).unwrap().into_iter().filter(|d| d.is_error()).map(|d| d.code).collect()
     };
     for (everyday, caps) in [("Text.includes(e.City, \"a\")", "e.City CONTAINS \"a\""), ("List.includes([\"a\", \"b\"], e.City)", "e.City IN [\"a\", \"b\"]")] {

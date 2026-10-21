@@ -95,7 +95,7 @@ pub fn parse_nested_call(raw: &str, call: &NestedCall) -> Parsed {
         return Err(to_value(&stmt::ParseError { message, loc: ast::Loc { line: 1, col: 1 } }));
     }
     let origin = ast::Loc { line: call.origin_line as usize, col: call.origin_col as usize };
-    let value = stmt::Parser::new(&head, call.version, origin, true).parse_nested_call_value(call.at_start as usize).map_err(|e| to_value(&e))?;
+    let value = stmt::Parser::new(&head, origin, true).parse_nested_call_value(call.at_start as usize).map_err(|e| to_value(&e))?;
     let mut value = to_value(&value);
     attach_slot_trees(&mut value);
     Ok(value)

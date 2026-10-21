@@ -18,7 +18,7 @@ const HEAD5: &str = "import { fetchUrl, research, vcUrlRetrieval } from plugins\
 
 fn check(source: &str, version: u32) -> Vec<Diagnostic> {
     let catalog = CatalogSnapshot::load(CATALOG).unwrap();
-    let options = CheckOptions { language_version: version, upgrading_from: None, parse_version: None, zones: &movement_checker::host::native::NativeZones };
+    let options = CheckOptions { language_version: version, upgrading_from: None, zones: &movement_checker::host::native::NativeZones };
     check_source(source, &catalog, options).unwrap().into_iter().filter(|d| d.is_error()).collect()
 }
 
@@ -162,7 +162,7 @@ fn a_through_stage_s_named_arguments_under_5_are_rewritten_by_position() {
 
 fn all(source: &str, version: u32) -> Vec<(String, bool, String)> {
     let catalog = CatalogSnapshot::load(CATALOG).unwrap();
-    let options = CheckOptions { language_version: version, upgrading_from: None, parse_version: None, zones: &movement_checker::host::native::NativeZones };
+    let options = CheckOptions { language_version: version, upgrading_from: None, zones: &movement_checker::host::native::NativeZones };
     check_source(source, &catalog, options).unwrap().into_iter().map(|d| (d.code.clone(), d.is_error(), d.message)).collect()
 }
 

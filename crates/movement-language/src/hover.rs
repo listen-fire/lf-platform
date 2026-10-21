@@ -129,8 +129,8 @@ fn landing_name(position: &Position) -> String {
 }
 
 /// "Walk on: Comments → Comment".
-fn walk_on_line(position: &Position, version: u32) -> Option<String> {
-    let edges = walk::edge_schemas(position, version).into_iter().map(|edge| match &edge.landing {
+fn walk_on_line(position: &Position) -> Option<String> {
+    let edges = walk::edge_schemas(position).into_iter().map(|edge| match &edge.landing {
         Some(landing) => format!("{} → {}", written_name(&edge.name), landing_name(landing)),
         None => written_name(&edge.name),
     });
@@ -296,7 +296,6 @@ fn parameter_of<'a>(analysis: &'a Analysis, symbol: &Symbol) -> Option<(&'a Symb
 }
 
 fn symbol_card(service: &Service, analysis: &Analysis, text: &Text<'_>, id: movement_checker::scope::SymbolId) -> String {
-    let version = service.language_version;
     let symbol = analysis.symbol(id);
     let position = analysis.position_of(id);
     let ty = analysis.type_text(id);
@@ -307,7 +306,7 @@ fn symbol_card(service: &Service, analysis: &Analysis, text: &Text<'_>, id: move
     };
     let record_lines = |position: Option<&Position>| -> Vec<String> {
         let Some(position) = position else { return Vec::new() };
-        [fields_line(position), walk_on_line(position, version)].into_iter().flatten().collect()
+        [fields_line(position), walk_on_line(position)].into_iter().flatten().collect()
     };
     let docs = page_of(symbol.kind);
     match symbol.kind {
@@ -437,7 +436,6 @@ pub fn hover(service: &Service, source: &str, pos: Pos) -> Option<Hover> {
     }
     let word = word_at(&text, pos)?;
     let at = loc_of(pos);
-    let version = service.language_version;
     let finish = |contents: String| Some(Hover { contents, range: word.range });
     if word.after_dot {
         let receiver_name = walk::trailing_name(word.receiver.trim_end()).unwrap_or_default();
@@ -447,7 +445,7 @@ pub fn hover(service: &Service, source: &str, pos: Pos) -> Option<Hover> {
             return finish(builtin_card(&format!("{receiver_name}.{}", word.name))?);
         }
         let analysis = &analyzed?.analysis;
-        if let Some(position) = walk::receiver(analysis, &word.receiver, at, version) {
+        if let Some(position) = walk::receiver(analysis, &word.receiver, at) {
             return finish(field_card(&position, &word.name, &receiver_name));
         }
         // A package's member, bound as `web.fetchUrl`.
@@ -457,9 +455,9 @@ pub fn hover(service: &Service, source: &str, pos: Pos) -> Option<Hover> {
     let analyzed = service.analyze(source, Some(pos.line));
     if word.in_hop {
         let analysis = &analyzed?.analysis;
-        let position = walk::receiver(analysis, &word.receiver, at, version)?;
+        let position = walk::receiver(analysis, &word.receiver, at)?;
         let receiver_name = walk::trailing_name(word.receiver.trim_end()).unwrap_or_default();
-        return finish(edge_card(&position, &word.name, &receiver_name, version)?);
+        return finish(edge_card(&position, &word.name, &receiver_name)?);
     }
     if let Some(analyzed) = &analyzed {
         let analysis = &analyzed.analysis;
@@ -489,8 +487,8 @@ fn field_card(position: &Position, field: &str, receiver_name: &str) -> String {
 }
 
 /// `crm-[:Company]->`: where the edge lands, the adapter's words for it, and what is there.
-fn edge_card(position: &Position, edge: &str, receiver_name: &str, version: u32) -> Option<String> {
-    let found = walk::edge_schemas(position, version).into_iter().find(|e| e.name == edge)?;
+fn edge_card(position: &Position, edge: &str, receiver_name: &str) -> Option<String> {
+    let found = walk::edge_schemas(position).into_iter().find(|e| e.name == edge)?;
     let hop = format!("{receiver_name}-[:{}]->", written_name(edge));
     let Some(landing) = &found.landing else {
         return Some(card(&hop, &["Where it lands is not described, so what is read there is not checked.".to_string()], WALK));
@@ -502,6 +500,6 @@ fn edge_card(position: &Position, edge: &str, receiver_name: &str, version: u32)
         None => format!("Lands on {}.{writable}", describe_position(landing)),
     });
     lines.extend(fields_line(landing));
-    lines.extend(walk_on_line(landing, version));
+    lines.extend(walk_on_line(landing));
     Some(card(&format!("{hop} {}", landing_name(landing)), &lines, WALK))
 }

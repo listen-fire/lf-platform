@@ -68,7 +68,7 @@ fn fit() {
 
 #[test]
 fn a_mixed_tuple_is_named() {
-    let message = mixed_tuple_message(Some(&tuple(vec![Ty::Record(None), Ty::Text])), 5).unwrap();
+    let message = mixed_tuple_message(Some(&tuple(vec![Ty::Record(None), Ty::Text]))).unwrap();
     assert!(message.starts_with("a list holds one kind of thing, and this one holds both: a record is a record, and another member is text."));
 }
 
@@ -106,12 +106,12 @@ fn crm() -> InstanceRef {
 fn positions_and_their_reads() {
     let crm = crm();
     let meta = Position::Meta { instance: crm.clone() };
-    let EdgeLanding::Landed { landing: company, .. } = edge_landing(&meta, "companies", 5) else { panic!("a collection lands") };
+    let EdgeLanding::Landed { landing: company, .. } = edge_landing(&meta, "companies") else { panic!("a collection lands") };
     assert_eq!(describe_position(&company), "crm.company");
-    assert!(matches!(edge_landing(&meta, "nope", 5), EdgeLanding::Unknown { available } if available == vec!["companies".to_string()]));
-    assert!(matches!(edge_landing(&company, "notes", 5), EdgeLanding::Untyped { .. }), "a write-only edge reads nothing");
+    assert!(matches!(edge_landing(&meta, "nope"), EdgeLanding::Unknown { available } if available == vec!["companies".to_string()]));
+    assert!(matches!(edge_landing(&company, "notes"), EdgeLanding::Untyped { .. }), "a write-only edge reads nothing");
     let party = position_ref_in(&crm, "Party").unwrap();
-    assert!(matches!(edge_landing(&party, "people", 5), EdgeLanding::Landed { .. }), "every variant carries it, to one target");
+    assert!(matches!(edge_landing(&party, "people"), EdgeLanding::Landed { .. }), "every variant carries it, to one target");
     assert_eq!(describe_field_type(&lookup_property_type(Some(&party), "Name").unwrap()), "text");
     assert!(lookup_property_type(Some(&party), "Size").is_none(), "not every variant has it");
     let size = lookup_property_type(Some(&company), "Size").unwrap();

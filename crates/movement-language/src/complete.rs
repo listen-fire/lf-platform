@@ -3,7 +3,7 @@
 
 use movement_checker::scope::SymbolKind;
 use movement_parser::surface::table::plugin_name;
-use movement_parser::version::run_host_units;
+use movement_parser::version::RUN_HOST_UNITS;
 
 use crate::recover::open_brackets_at;
 use crate::text::{Pos, Range, Text, inside_backticks, loc_of, trailing_word, utf16_len, written_name};
@@ -151,7 +151,6 @@ pub fn complete(service: &Service, source: &str, pos: Pos) -> Vec<Item> {
 
 fn items_for(service: &Service, source: &str, pos: Pos, context: Context) -> Vec<Item> {
     let at = loc_of(pos);
-    let version = service.language_version;
     let catalog = &service.catalog;
     match context {
         Context::Member { namespace } => {
@@ -164,7 +163,7 @@ fn items_for(service: &Service, source: &str, pos: Pos, context: Context) -> Vec
         Context::Field { receiver, backtick } => {
             let Some(analyzed) = service.analyze(source, Some(pos.line)) else { return Vec::new() };
             let analysis = &analyzed.analysis;
-            if let Some(position) = walk::receiver(analysis, &receiver, at, version) {
+            if let Some(position) = walk::receiver(analysis, &receiver, at) {
                 return walk::fields(&position)
                     .into_iter()
                     .map(|(name, ty)| {
@@ -183,8 +182,8 @@ fn items_for(service: &Service, source: &str, pos: Pos, context: Context) -> Vec
         }
         Context::Edge { receiver, backtick } => {
             let Some(analyzed) = service.analyze(source, Some(pos.line)) else { return Vec::new() };
-            let Some(position) = walk::receiver(&analyzed.analysis, &receiver, at, version) else { return Vec::new() };
-            walk::edges(&position, version)
+            let Some(position) = walk::receiver(&analyzed.analysis, &receiver, at) else { return Vec::new() };
+            walk::edges(&position)
                 .into_iter()
                 .map(|(name, landing)| {
                     let insert = if backtick { None } else { Some(written_name(&name)).filter(|w| *w != name) };
@@ -302,7 +301,7 @@ fn items_for(service: &Service, source: &str, pos: Pos, context: Context) -> Vec
 /// What an import's braces may name, by where it imports from.
 fn import_items(service: &Service, from: Option<&str>) -> Vec<Item> {
     let catalog = &service.catalog;
-    let units = run_host_units(service.language_version);
+    let units = RUN_HOST_UNITS;
     let adapters = || {
         catalog
             .adapters

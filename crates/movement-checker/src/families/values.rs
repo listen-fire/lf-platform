@@ -104,10 +104,10 @@ pub fn observe(typing: &mut Typing, expr: &Expression, position: Option<&Positio
                 LogicalOp::And => "AND",
                 LogicalOp::Or => "OR",
             };
-            typing.refuse_closure_operands(&pairs, expr, &format!("joined by {}", spell_word(spelled, typing.version)));
+            typing.refuse_closure_operands(&pairs, expr, &format!("joined by {}", spell_word(spelled)));
         }
         Expression::Not { expression } => {
-            typing.refuse_closure_operands(&[(expression, operands[0].as_ref())], expr, &format!("negated by {}", spell_word("NOT", typing.version)));
+            typing.refuse_closure_operands(&[(expression, operands[0].as_ref())], expr, &format!("negated by {}", spell_word("NOT")));
         }
         Expression::Traverse { .. } => {
             if let Some(name) = crate::types::narrowing::exists_subject(expr) {
@@ -1441,7 +1441,7 @@ pub fn write_field_absence(input: WriteFieldAbsence) -> Option<crate::diagnostic
             codes::ABSENT_REQUIRED,
             format!(
                 "{lead}, and it identifies the record, so a fallback would merge every record written without it into one — write only when it is there: put the write inside '{}'",
-                spell_code(&format!("if {raw} != null {{ … }}"), input.version)
+                spell_code(&format!("if {raw} != null {{ … }}"))
             ),
             span,
         ));
@@ -1458,7 +1458,7 @@ pub fn write_field_absence(input: WriteFieldAbsence) -> Option<crate::diagnostic
             span,
         ));
     };
-    let coalesced = spell_code(&format!("COALESCE({raw}, {fallback})"), input.version);
+    let coalesced = spell_code(&format!("COALESCE({raw}, {fallback})"));
     let mut diagnostic = crate::diagnostic::Diagnostic::error(
         codes::ABSENT_REQUIRED,
         format!(

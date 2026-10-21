@@ -104,7 +104,7 @@ impl Checker<'_> {
         if self.scopes.symbol(symbol).kind != SymbolKind::Credential {
             return Some(symbol);
         }
-        let connect = connection(&Connection { adapter: "…", args: &[("credentials", name)], credential: Some("credentials") }, self.version);
+        let connect = connection(&Connection { adapter: "…", args: &[("credentials", name)], credential: Some("credentials") });
         self.report(
             codes::CREDENTIAL_NOT_A_VALUE,
             format!(
@@ -198,7 +198,7 @@ impl Checker<'_> {
             .map(|spec| spec.construction_args.iter().filter(|a| a.required).map(|a| (a.name.as_str(), "…")).collect())
             .unwrap_or_default();
         let credential = spec.and_then(credential_arg_of).map(|a| a.name.as_str());
-        connection(&Connection { adapter, args: &required, credential }, self.version)
+        connection(&Connection { adapter, args: &required, credential })
     }
 
     /// `importAndConstructLines`.
@@ -227,7 +227,7 @@ impl Checker<'_> {
         format!(
             "{general} — with the one {adapter} connection here: '{}' and '<name> = {}'",
             import_line(credential, "credentials"),
-            connection(&Connection { adapter, args: &call, credential: Some(&credential_arg.name) }, self.version)
+            connection(&Connection { adapter, args: &call, credential: Some(&credential_arg.name) })
         )
     }
 

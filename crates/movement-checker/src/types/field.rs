@@ -619,7 +619,7 @@ fn without_shape(ty: &Ty) -> Ty {
 }
 
 /// `mixedTupleMessage`: a tuple of records and values read as a list.
-pub fn mixed_tuple_message(ty: Option<&Ty>, version: u32) -> Option<String> {
+pub fn mixed_tuple_message(ty: Option<&Ty>) -> Option<String> {
     let Ty::Tuple { of, rest } = strip_absent(ty?) else { return None };
     let members: Vec<Ty> = tuple_members(of, rest.as_ref()).into_iter().flatten().collect();
     let record = members.iter().find(|m| is_record(Some(m)));
@@ -630,10 +630,10 @@ pub fn mixed_tuple_message(ty: Option<&Ty>, version: u32) -> Option<String> {
             "a list holds one kind of thing, and this one holds both: {} is a record, and another member is {}. A tuple may hold both — read one slot with '{}' — but read as a list it may not. Build a list of records and walk it ('both = [one, two]' … 'both-[c:company]-> {{ … }}'), or read the records' fields first and build a list of the values.",
             describe_field_type(strip_absent(record)),
             describe_field_type(&shown),
-            movement_parser::surface::phrase::spell_code("AT(t, 0)", version)
+            movement_parser::surface::phrase::spell_code("AT(t, 0)")
         ));
     }
-    members.iter().find_map(|m| mixed_tuple_message(Some(m), version))
+    members.iter().find_map(|m| mixed_tuple_message(Some(m)))
 }
 
 /// `collectionElementOf`: what one member of a collection is.

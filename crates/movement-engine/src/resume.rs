@@ -480,7 +480,7 @@ impl Run<'_> {
             let Ok(tree) = movement_parser::expr::parse_expression(&slot.raw) else { continue };
             let calls = crate::nested::staged_calls(&tree, &|call| self.runs_as_call(call, scope));
             for at in calls {
-                let Ok(value) = crate::nested::nested_call(&slot, at, self.version()) else { continue };
+                let Ok(value) = crate::nested::nested_call(&slot, at) else { continue };
                 let RValue::Call { call } = &value else { continue };
                 if let Some(op) = self.op_of_call(call, scope)?
                     && Some(op.span) == span

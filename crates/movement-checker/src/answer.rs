@@ -128,7 +128,6 @@ impl Checker<'_> {
 /// find (never sent).
 pub fn check_answer(program: &Program, catalog: &CatalogSnapshot, options: CheckOptions) -> Answer {
     let (diagnostics, checker) = crate::run_check(program, catalog, options);
-    let version = options.language_version;
     let link = checker.imports.link();
     let root = serde_json::to_value(program).expect("an AST is always JSON");
     let mut library_trees: std::collections::HashMap<&str, Json> = std::collections::HashMap::new();
@@ -144,7 +143,7 @@ pub fn check_answer(program: &Program, catalog: &CatalogSnapshot, options: Check
             None => Some(&root),
             Some(path) => library_trees.get(path.as_str()),
         };
-        match tree.and_then(|tree| place(tree, &recorded.nested, &recorded.span, &recorded.kind, version)) {
+        match tree.and_then(|tree| place(tree, &recorded.nested, &recorded.span, &recorded.kind)) {
             Some(path) => stamps.push(stamp_json(recorded, path)),
             None => unplaced.push(format!("{:?} at {:?} in {:?} (nested {:?})", recorded.kind, recorded.span, recorded.file, recorded.nested)),
         }
@@ -187,13 +186,13 @@ fn stamp_json(recorded: &Recorded, path: String) -> Json {
 
 /// The path of the node `kind` stamps at `span`, inside the nested calls
 /// `nested` reads, in `tree`.
-fn place(tree: &Json, nested: &[(Span, At)], span: &Span, kind: &StampKind, version: u32) -> Option<String> {
+fn place(tree: &Json, nested: &[(Span, At)], span: &Span, kind: &StampKind) -> Option<String> {
     let mut prefix = String::new();
     let mut read: std::borrow::Cow<'_, Json> = std::borrow::Cow::Borrowed(tree);
     for (slot_span, at) in nested {
         let slot_span = serde_json::to_value(slot_span).expect("a span is JSON");
         let (slot_path, slot) = find(&read, "", &|node, _| is_slot(node) && node.get("span") == Some(&slot_span))?;
-        let value = nested_call(slot, *at, version)?;
+        let value = nested_call(slot, *at)?;
         prefix = format!("{prefix}{slot_path}/nested/{}-{}/value", at.start, at.end);
         read = std::borrow::Cow::Owned(value);
     }
@@ -248,12 +247,12 @@ fn is_value_entry(node: &Json) -> bool {
 
 /// The nested call at `at` in the slot `slot` (its JSON), read as the
 /// check read it (`hoist_nested_calls`), as JSON.
-fn nested_call(slot: &Json, at: At, version: u32) -> Option<Json> {
+fn nested_call(slot: &Json, at: At) -> Option<Json> {
     let raw = slot.get("raw")?.as_str()?;
     let start: movement_parser::ast::Loc = loc(slot.get("span")?.get("start")?)?;
     let units: Vec<u16> = raw.encode_utf16().collect();
     let head = String::from_utf16_lossy(units.get(..at.end)?);
-    let value = movement_parser::stmt::Parser::new(&head, version, start, true).parse_nested_call_value(at.start).ok()?;
+    let value = movement_parser::stmt::Parser::new(&head, start, true).parse_nested_call_value(at.start).ok()?;
     Some(serde_json::to_value(&value).expect("an AST is always JSON"))
 }
 

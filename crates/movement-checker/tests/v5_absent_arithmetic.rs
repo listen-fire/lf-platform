@@ -21,7 +21,7 @@ const MAYBE: &str = "number (or absent)";
 fn absent(body: &str) -> Vec<(&'static str, String)> {
     let source = format!("import {{ crm }} from adapters\nimport {{ crm_cred }} from credentials\nc = connect crm using crm_cred\nfunction go(t: <text>, xs: <number[]>) {{\n{body}\n}}");
     let catalog = CatalogSnapshot::load(CATALOG).unwrap();
-    let options = CheckOptions { language_version: 5, upgrading_from: None, parse_version: None, zones: &movement_checker::host::native::NativeZones };
+    let options = CheckOptions { language_version: 5, upgrading_from: None, zones: &movement_checker::host::native::NativeZones };
     let diagnostics = check_source(&source, &catalog, options).unwrap_or_else(|e| panic!("{source}: {e:?}"));
     diagnostics
         .into_iter()

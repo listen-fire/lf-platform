@@ -13,7 +13,7 @@ const CATALOG: &str = r#"{"contractVersion":1,"adapters":{"crm":{"canFire":true,
 fn absent(body: &str, version: u32) -> Vec<String> {
     let source = format!("import {{ crm }} from adapters\nimport {{ crm_cred }} from credentials\nc = connect crm using crm_cred\nfunction go(t: <text>) {{\n{body}\n}}\n");
     let catalog = CatalogSnapshot::load(CATALOG).unwrap();
-    let options = CheckOptions { language_version: version, upgrading_from: None, parse_version: None, zones: &movement_checker::host::native::NativeZones };
+    let options = CheckOptions { language_version: version, upgrading_from: None, zones: &movement_checker::host::native::NativeZones };
     let diagnostics = check_source(&source, &catalog, options).unwrap_or_else(|e| panic!("{source}: {e:?}"));
     diagnostics.into_iter().filter(|d| d.code == "MOV_ABSENT_REQUIRED").map(|d| d.message).collect()
 }

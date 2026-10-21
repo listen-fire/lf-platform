@@ -17,7 +17,7 @@ const BOX: &str = r#"{"adapters":{"box":{"canFire":false,"constructionArgs":[],"
 
 fn check_with(source: &str, version: u32, snapshot: &str) -> Vec<String> {
     let catalog = CatalogSnapshot::load(snapshot).unwrap();
-    let options = CheckOptions { language_version: version, upgrading_from: None, parse_version: None, zones: &movement_checker::host::native::NativeZones };
+    let options = CheckOptions { language_version: version, upgrading_from: None, zones: &movement_checker::host::native::NativeZones };
     check_source(source, &catalog, options)
         .unwrap()
         .into_iter()
@@ -143,7 +143,7 @@ fn a_key_the_dict_was_not_written_with_is_refused_once_in_a_write_field() {
 fn a_fix_over_a_nested_call_quotes_the_call_as_written() {
     let source = "function m() {\n  inc = (v: <number>) => v + 1\n  e = AT([inc(1), 2], 0)\n  return e\n}\n";
     let catalog = CatalogSnapshot::load(r#"{"adapters":{},"credentials":{},"plugins":{}}"#).unwrap();
-    let options = CheckOptions { language_version: 5, upgrading_from: None, parse_version: None, zones: &movement_checker::host::native::NativeZones };
+    let options = CheckOptions { language_version: 5, upgrading_from: None, zones: &movement_checker::host::native::NativeZones };
     let found = check_source(source, &catalog, options).unwrap();
     let at = found.iter().find(|d| d.code == "MOV_V5_SPELLING").expect("the AT respelling");
     assert_eq!(

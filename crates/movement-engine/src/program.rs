@@ -40,7 +40,7 @@ pub fn node_at(file: &File, path: &str) -> Option<Json> {
         if step == "nested" && let Some(slot) = slot_of(&node) {
             let (start, end) = tokens.next()?.split_once('-')?;
             let at = movement_parser::tree::At { start: start.parse().ok()?, end: end.parse().ok()? };
-            let value = crate::nested::nested_call(&slot, at, file.version).ok()?;
+            let value = crate::nested::nested_call(&slot, at).ok()?;
             node = std::borrow::Cow::Owned(json!({ "value": serde_json::to_value(&value).expect("an AST is always JSON") }));
             continue;
         }
@@ -152,7 +152,7 @@ impl Checked {
     pub(crate) fn code(&self, path: &str) -> Option<crate::code::CodeAt> {
         let (file, rest) = file_of_path(path);
         let file = self.file(&file)?;
-        crate::code::code_at(&file.program, rest, file.version)
+        crate::code::code_at(&file.program, rest)
     }
 }
 

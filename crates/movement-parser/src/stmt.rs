@@ -24,7 +24,6 @@ use crate::scan::{
     scan_ident, scan_member_path, scan_name, skip_opaque, skip_string,
 };
 use crate::util::utf16::{Utf16, is_ident_char, is_ident_start, is_js_space, to_string, trim, trim_end, trim_start};
-use crate::version::CURRENT_LANGUAGE_VERSION;
 
 /// `MovementParseError`: the BASE message (the TypeScript class appends
 /// ` (line N, col M)`) and the point it refers to.
@@ -255,7 +254,7 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn new(source: &str, _version: u32, origin: Loc, eager: bool) -> Self {
+    pub fn new(source: &str, origin: Loc, eager: bool) -> Self {
         let src = Utf16::new(source);
         let mut line_starts = vec![0];
         for (i, &u) in src.units().iter().enumerate() {
@@ -411,7 +410,7 @@ impl Parser {
     /// `template` with its one `{}` filled by `code`, in the v5 spelling
     /// (crate::surface::phrase::spell_code).
     fn code(&self, code: &str, template: &str) -> String {
-        template.replacen("{}", &crate::surface::phrase::spell_code(code, CURRENT_LANGUAGE_VERSION), 1)
+        template.replacen("{}", &crate::surface::phrase::spell_code(code), 1)
     }
 
     /// An old spelling under version 5 at `start..end`, and its rewrite as
@@ -4686,7 +4685,7 @@ pub fn parse_program(source: &str, version: u32, eager: bool) -> SResult<Program
         return Err(ParseError { message, loc: Loc { line: 1, col: 1 } });
     }
     let (program, spelling) =
-        crate::surface::collecting(|| Parser::new(source, version, Loc { line: 1, col: 1 }, eager).parse_program());
+        crate::surface::collecting(|| Parser::new(source, Loc { line: 1, col: 1 }, eager).parse_program());
     let mut program = program?;
     program.spelling = spelling;
     Ok(program)
@@ -4697,7 +4696,7 @@ pub fn parse_program(source: &str, version: u32, eager: bool) -> SResult<Program
 /// gathering scope (crate::surface::slot_findings). A text that does not parse
 /// reports nothing here: the call it sits in reports why when it is read.
 pub(crate) fn read_block_for_findings(text: &str, origin: Loc) {
-    let mut parser = Parser::new(text, CURRENT_LANGUAGE_VERSION, origin, false);
+    let mut parser = Parser::new(text, origin, false);
     let _ = parser.parse_block_body("the closure's body");
 }
 
@@ -4763,9 +4762,7 @@ impl Parser {
         }
         let args: Vec<(&str, &str)> = construct.args.iter().map(|a| (a.name.as_str(), a.value.raw.trim())).collect();
         let text = crate::surface::phrase::connection(
-            &crate::surface::phrase::Connection { adapter: &construct.callee, args: &args, credential: Some("credentials") },
-            CURRENT_LANGUAGE_VERSION,
-        );
+            &crate::surface::phrase::Connection { adapter: &construct.callee, args: &args, credential: Some("credentials") });
         let end = self.pos;
         let message = format!("from language version 5 an adapter is set up with `{text}`");
         self.spelling(message, start, end, vec![(start, end, text)]);

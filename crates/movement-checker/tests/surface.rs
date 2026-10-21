@@ -8,7 +8,7 @@ use movement_parser::catalog::types::CatalogSnapshot;
 
 fn check(source: &str, version: u32) -> Vec<movement_checker::Diagnostic> {
     let catalog = CatalogSnapshot::load(r#"{"adapters":{},"credentials":{},"plugins":{}}"#).unwrap();
-    let options = CheckOptions { language_version: version, upgrading_from: None, parse_version: None, zones: &movement_checker::host::native::NativeZones };
+    let options = CheckOptions { language_version: version, upgrading_from: None, zones: &movement_checker::host::native::NativeZones };
     check_source(source, &catalog, options).unwrap()
 }
 
@@ -73,7 +73,7 @@ const PDF_CATALOG: &str = r#"{"adapters":{},"credentials":{},"plugins":{"render"
 #[test]
 fn the_pdf_package_used_with_no_import_offers_its_import_line() {
     let catalog = CatalogSnapshot::load(PDF_CATALOG).unwrap();
-    let options = CheckOptions { language_version: 5, upgrading_from: None, parse_version: None, zones: &movement_checker::host::native::NativeZones };
+    let options = CheckOptions { language_version: 5, upgrading_from: None, zones: &movement_checker::host::native::NativeZones };
     let found = check_source("function go(t: <text>) {\n  f = pdf.render(t)\n}", &catalog, options).unwrap();
     let unresolved: Vec<_> = found.iter().filter(|d| d.code == "MOV_NAME_UNRESOLVED").collect();
     assert_eq!(unresolved.len(), 1, "{found:#?}");

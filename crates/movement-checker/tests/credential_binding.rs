@@ -9,7 +9,7 @@ const SNAPSHOT: &str = r#"{"adapters":{"hubspot":{"canFire":true,"declaredCreden
 
 fn found(using: &str, adapter: &str) -> Vec<(String, String)> {
     let catalog = CatalogSnapshot::load(SNAPSHOT).unwrap();
-    let options = CheckOptions { language_version: 5, upgrading_from: None, parse_version: None, zones: &movement_checker::host::native::NativeZones };
+    let options = CheckOptions { language_version: 5, upgrading_from: None, zones: &movement_checker::host::native::NativeZones };
     let source = format!("import {{ `@lf/{adapter}` as {adapter} }} from adapters\nimport {{ {using} }} from credentials\nhs = connect {adapter} using {using}\n");
     check_source(&source, &catalog, options).unwrap().into_iter().map(|d| (d.code, d.message)).collect()
 }

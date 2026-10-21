@@ -59,19 +59,17 @@ impl CodeAt {
 
 /// The code at `path` (within one file) in `program`, parsed under
 /// `version`.
-pub(crate) fn code_at(program: &ast::Program, path: &str, version: u32) -> Option<CodeAt> {
+pub(crate) fn code_at(program: &ast::Program, path: &str) -> Option<CodeAt> {
     let steps: Vec<String> = path.strip_prefix('/')?.split('/').map(|t| t.replace("~1", "/").replace("~0", "~")).collect();
     let steps: Vec<&str> = steps.iter().map(String::as_str).collect();
-    let walk = Walk { version };
+    let walk = Walk;
     match steps.as_slice() {
         ["statements", rest @ ..] => walk.statements(&program.statements, rest),
         _ => None,
     }
 }
 
-struct Walk {
-    version: u32,
-}
+struct Walk;
 
 impl Walk {
     fn statements(&self, list: &[Statement], steps: &[&str]) -> Option<CodeAt> {
@@ -332,7 +330,7 @@ impl Walk {
         let ["nested", extent, "value", rest @ ..] = steps else { return None };
         let (start, end) = extent.split_once('-')?;
         let at = movement_parser::tree::At { start: start.parse().ok()?, end: end.parse().ok()? };
-        let value = crate::nested::nested_call(slot, at, self.version).ok()?;
+        let value = crate::nested::nested_call(slot, at).ok()?;
         self.rvalue(&value, rest)
     }
 }
@@ -341,22 +339,38 @@ impl Walk {
 mod tests {
     use super::*;
 
-    /// Every piece of code a park can name, at every place the corpus
-    /// writes one (nested calls read too), reads back as the node the tree
-    /// holds there.
+    /// Every piece of code a park can name, at every place the language's
+    /// version 5 corpus (the engine's pattern programs, their library files
+    /// too) writes one, nested calls read too, reads back as the node the
+    /// tree holds there.
     #[test]
     fn every_code_node_in_the_corpus_reads_back_by_its_path() {
-        let fixture = concat!(env!("CARGO_MANIFEST_DIR"), "/../../packages/legacy-lang/parser/__test__/__fixtures__/programs.json");
-        let text = std::fs::read_to_string(fixture).unwrap();
+        let fixture = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/oracle/patterns.json");
+        let corpus: Json = serde_json::from_str(&std::fs::read_to_string(fixture).unwrap()).unwrap();
+        let prelude = corpus["prelude"].as_str().unwrap();
         let mut found = std::collections::BTreeMap::<&'static str, usize>::new();
-        for line in text.lines().filter(|line| !line.trim().is_empty()) {
-            let record: Json = serde_json::from_str(line).unwrap();
-            // The corpus is pinned to versions 1–4; each source is read as version 5 text.
-            let Some(source) = record["source"].as_str() else { continue };
-            let Ok(program) = movement_parser::stmt::parse_program(source, 5, false) else { continue };
-            let tree = serde_json::to_value(&program).unwrap();
-            check(&program, &tree, "", 5, 0, &mut found);
+        let mut read = 0;
+        for case in corpus["cases"].as_array().unwrap() {
+            let program = &case["program"];
+            if program["version"] != 5 {
+                continue;
+            }
+            // A case the parser refuses ends in MOVENG_PARSE; it has no tree to read.
+            let refused = case["ending"]["failure"]["code"] == "MOVENG_PARSE";
+            let file = format!("{prelude}{}", program["file"].as_str().unwrap());
+            let libraries = program["files"].as_object().into_iter().flatten().map(|(_, f)| f["source"].as_str().unwrap().to_string());
+            for source in std::iter::once(file).chain(libraries) {
+                let parsed = movement_parser::stmt::parse_program(&source, 5, false);
+                if refused && parsed.is_err() {
+                    continue;
+                }
+                let program = parsed.unwrap_or_else(|e| panic!("{}: {e:?}", case["pattern"]));
+                let tree = serde_json::to_value(&program).unwrap();
+                check(&program, &tree, "", 0, &mut found);
+                read += 1;
+            }
         }
+        assert!(read >= 390, "the corpus holds its version 5 programs: {read}");
         for kind in ["closure", "movement", "head", "literal", "shape", "nested"] {
             assert!(found.get(kind).copied().unwrap_or(0) > 0, "the corpus reaches no {kind}: {found:?}");
         }
@@ -385,9 +399,9 @@ mod tests {
     /// `depth`: the nested calls read so far. A call's own `expression` slot
     /// holds its whole text, which reads as the same call again, so the walk
     /// stops two reads deep.
-    fn check(program: &ast::Program, node: &Json, path: &str, version: u32, depth: usize, found: &mut std::collections::BTreeMap<&'static str, usize>) {
+    fn check(program: &ast::Program, node: &Json, path: &str, depth: usize, found: &mut std::collections::BTreeMap<&'static str, usize>) {
         if let Some(kind) = kind_of(node, path) {
-            let code = code_at(program, path, version).unwrap_or_else(|| panic!("no {kind} at {path}"));
+            let code = code_at(program, path).unwrap_or_else(|| panic!("no {kind} at {path}"));
             let written = match code {
                 CodeAt::Closure(c) => serde_json::to_value(c),
                 CodeAt::Movement(m) => serde_json::to_value(m),
@@ -405,22 +419,22 @@ mod tests {
             }
             let Ok(tree) = movement_parser::expr::parse_expression(&slot.raw) else { return };
             for at in crate::nested::staged_calls(&tree, &|_| true) {
-                let Ok(value) = crate::nested::nested_call(&slot, at, version) else { continue };
+                let Ok(value) = crate::nested::nested_call(&slot, at) else { continue };
                 *found.entry("nested").or_default() += 1;
                 let value = serde_json::to_value(&value).unwrap();
-                check(program, &value, &format!("{path}/nested/{}-{}/value", at.start, at.end), version, depth + 1, found);
+                check(program, &value, &format!("{path}/nested/{}-{}/value", at.start, at.end), depth + 1, found);
             }
             return;
         }
         match node {
             Json::Object(object) => {
                 for (key, child) in object {
-                    check(program, child, &format!("{path}/{}", key.replace('~', "~0").replace('/', "~1")), version, depth, found);
+                    check(program, child, &format!("{path}/{}", key.replace('~', "~0").replace('/', "~1")), depth, found);
                 }
             }
             Json::Array(items) => {
                 for (index, child) in items.iter().enumerate() {
-                    check(program, child, &format!("{path}/{index}"), version, depth, found);
+                    check(program, child, &format!("{path}/{index}"), depth, found);
                 }
             }
             _ => {}

@@ -19,7 +19,7 @@ fn catalog() -> CatalogSnapshot {
 }
 
 fn check(source: &str, version: u32) -> Vec<Diagnostic> {
-    let options = CheckOptions { language_version: version, upgrading_from: None, parse_version: None, zones: &movement_checker::host::native::NativeZones };
+    let options = CheckOptions { language_version: version, upgrading_from: None, zones: &movement_checker::host::native::NativeZones };
     check_source(source, &catalog(), options).unwrap()
 }
 
@@ -39,8 +39,7 @@ fn v5(body: &str) -> String {
 fn the_record_a_stage_fed_is_the_one_positional_parameter_from_5() {
     let catalog = catalog();
     let spec = catalog.plugin("linkedin_enrichment").unwrap();
-    assert_eq!(spec.under(5).positional_params(PluginCallSite::Plain), vec!["record"]);
-    assert_eq!(&spec.under(4), spec);
+    assert_eq!(spec.as_called().positional_params(PluginCallSite::Plain), vec!["record"]);
 }
 
 #[test]

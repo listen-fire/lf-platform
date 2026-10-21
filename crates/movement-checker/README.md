@@ -6,7 +6,7 @@ diagnostics the language defines, in the TypeScript checker's shape.
 
 ```rust,ignore
 use movement_checker::{check_source, CheckOptions, host::native::NativeZones};
-let options = CheckOptions { language_version: 5, upgrading_from: None, parse_version: None, zones: &NativeZones };
+let options = CheckOptions { language_version: 5, upgrading_from: None, zones: &NativeZones };
 let diagnostics = check_source(source, &catalog, options)?;
 ```
 

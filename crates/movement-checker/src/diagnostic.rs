@@ -49,7 +49,7 @@ pub fn of_spelling(finding: &movement_parser::surface::SpellingFinding) -> Diagn
 /// The diagnostic's message naming built-ins as the program's own version
 /// spells them (`UPPER` under 4, `Text.upper` under 5): the one place the
 /// spelling table reaches every message.
-pub fn in_spelling_of(mut d: Diagnostic, version: u32) -> Diagnostic {
-    d.message = movement_parser::surface::table::spell_message(&d.message, version);
+pub fn in_spelling_of(mut d: Diagnostic) -> Diagnostic {
+    d.message = movement_parser::surface::table::spell_message(&d.message);
     d
 }

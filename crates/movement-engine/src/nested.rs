@@ -236,9 +236,9 @@ pub(crate) fn spelled(name: &str) -> String {
 
 /// The call written at `at` in `slot` read by the statement grammar as the
 /// right-hand side of a binding (`parseNestedCall`), its spans the file's.
-pub(crate) fn nested_call(slot: &ExprSlot, at: At, version: u32) -> Result<RValue, String> {
+pub(crate) fn nested_call(slot: &ExprSlot, at: At) -> Result<RValue, String> {
     let head = Utf16::new(&slot.raw).text(0, at.end);
-    movement_parser::stmt::Parser::new(&head, version, slot.span.start, true).parse_nested_call_value(at.start).map_err(|e| e.message)
+    movement_parser::stmt::Parser::new(&head, slot.span.start, true).parse_nested_call_value(at.start).map_err(|e| e.message)
 }
 
 /// Where each expression slot is written in the program (crate::program
@@ -376,7 +376,7 @@ impl Run<'_> {
     /// binding, under the running statement's step.
     async fn settle_nested_call(&self, call: &MExpr, staging: &Staging<'_>) -> Result<String, Stop> {
         let extent = At { start: call.at().start + staging.offset, end: call.at().end + staging.offset };
-        let value = nested_call(staging.origin, extent, self.version())
+        let value = nested_call(staging.origin, extent)
             .map_err(|message| Stop::Thrown(Failure::engine("MOVENG_RUNTIME", format!("invalid nested call (the checker should have caught this): {message}"))))?;
         let at = self.call_sites.borrow().last().map(|site| site.address.clone()).unwrap_or_default();
         let name = self.nested_name(staging);

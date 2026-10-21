@@ -562,10 +562,10 @@ async fn run(host: &Host, input: &SegmentInput, ledger: &crate::ledger::Ledger) 
     // A package import binds its members (`web.fetchUrl`) as the imports of
     // the plugins they are; the check above read it as written.
     let mut root = root;
-    movement_parser::catalog::packages::expand_package_imports(&mut root.program, &catalog.plugins, version);
+    movement_parser::catalog::packages::expand_package_imports(&mut root.program, &catalog.plugins);
     let mut checked = program::join_check(root, &answer, version).map_err(|_| Stop::Declined("check_answer_malformed".into()))?;
     for (file, _) in checked.files.values_mut() {
-        movement_parser::catalog::packages::expand_package_imports(&mut file.program, &catalog.plugins, version);
+        movement_parser::catalog::packages::expand_package_imports(&mut file.program, &catalog.plugins);
     }
     // The state's code is read against the program it pinned: a reference
     // that resolves to nothing there is a state of another program, refused
@@ -672,7 +672,7 @@ async fn pin_libraries(host: &Host, input: &SegmentInput, state: &Json, catalog:
 fn native_check(program: &ast::Program, catalog: &CatalogSnapshot, version: u32, release_warning: Option<&VersionWarning>) -> Result<Json, Stop> {
     // An error pin never gets here (the run's entry refused it).
     let pin = movement_checker::language_version_diagnostic(version);
-    let options = movement_checker::CheckOptions { language_version: version, upgrading_from: None, parse_version: None, zones: &crate::env_services::EnvZones };
+    let options = movement_checker::CheckOptions { language_version: version, upgrading_from: None, zones: &crate::env_services::EnvZones };
     let answer = movement_checker::answer::check_answer(program, catalog, options);
     let blocking: Vec<String> = answer
         .diagnostics
@@ -1022,7 +1022,7 @@ impl Run<'_> {
             };
             // The run host's units, connected before any statement; a file's
             // own binding of the name replaces one (`declareUnits`).
-            for unit in movement_parser::version::run_host_units(self.version()) {
+            for unit in movement_parser::version::RUN_HOST_UNITS {
                 let schema = self.catalog.instantiate(unit, &Args::default()).cloned();
                 let instance = InstanceBinding { name: unit.to_string(), adapter_slug: unit.to_string(), credential_name: None, construction_config: Vec::new(), schema };
                 file.declare(unit.to_string(), Binding::Instance(Rc::new(instance)));

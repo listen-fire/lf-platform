@@ -105,8 +105,7 @@ pub fn begin(input_text: &str) -> Result<Segment, ProtocolError> {
         Some("segment") => {
             let segment: run::SegmentInput =
                 serde_json::from_str(input_text).map_err(|e| ProtocolError(format!("a segment's input does not read: {e}")))?;
-            let version = segment.language_version;
-            Ok(Segment::new(|host| run::segment(host, segment)).written_in(version))
+            Ok(Segment::new(|host| run::segment(host, segment)))
         }
         #[cfg(test)]
         Some("panic") => {
