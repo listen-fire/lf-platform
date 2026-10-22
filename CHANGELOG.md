@@ -18,6 +18,7 @@ versions are the git tags described in [`deploy/UPGRADING.md`](deploy/UPGRADING.
 <!-- add merged PRs here -->
 
 - The language is installed from the `@listen-fire/*` packages on npm, version 0.12.0-rc.5; this repository no longer builds it.
+- The api image starts again: rc.6's `api` and `api-slim` images exited at startup (`Cannot find module 'story-view/constants/themes'`); the platform's constants are now their own package, built into the api.
 
 ## [0.12.0-rc.5] - 2026-10-21
 

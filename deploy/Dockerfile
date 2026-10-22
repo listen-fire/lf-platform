@@ -53,6 +53,7 @@ COPY modules/system/package.json modules/system/
 COPY modules/native-valuations/package.json modules/native-valuations/
 COPY packages/legacy-engine/package.json packages/legacy-engine/
 COPY packages/legacy-lang/package.json packages/legacy-lang/
+COPY packages/platform-constants/package.json packages/platform-constants/
 COPY packages/story-view/package.json packages/story-view/
 
 # ---- build: every dependency, the compiler, the source. Never shipped. ----

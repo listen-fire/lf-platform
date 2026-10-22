@@ -1,0 +1,12 @@
+// The compiled artifact: the api's build emits this source package into its
+// OWN output tree (`build/node_modules/platform-constants`, the alias its
+// importers spell), so a compiled `node build/...` boot resolves it.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": false,
+    "sourceMap": true
+  },
+  "exclude": ["node_modules"]
+}

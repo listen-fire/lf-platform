@@ -12,7 +12,7 @@
 import Link from "next/link";
 import { Globe, MapPin, Pencil } from "lucide-react";
 
-import { getCountryByCode } from "story-view/constants/countries";
+import { getCountryByCode } from "platform-constants/countries";
 import { Badge } from "@/components/ui";
 import { useDisclosure } from "@/components/portfolio";
 

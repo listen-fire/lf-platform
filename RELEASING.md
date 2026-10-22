@@ -13,6 +13,7 @@ A suffixed tag never moves `:latest`.
    git push origin main
    ```
 2. Push the tag. The `release` workflow builds and pushes the five images to `ghcr.io/listen-fire/`: `api`, `api-slim`, `web`, `admin` and `fake-channels`.
+   The release proof boots the `api` image (`docker run` it with the required environment and read its startup lines); building it is not proof, because a build can succeed while the image cannot resolve a module.
    ```sh
    git tag v0.12.0-rc.4
    git push origin v0.12.0-rc.4

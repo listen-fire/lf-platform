@@ -15,7 +15,7 @@ import { MapPin } from "lucide-react";
 import {
   getCountryByCode,
   COUNTRIES,
-} from "story-view/constants/countries";
+} from "platform-constants/countries";
 import { CompanyLegalStatus } from "#trpc";
 import {
   Field,

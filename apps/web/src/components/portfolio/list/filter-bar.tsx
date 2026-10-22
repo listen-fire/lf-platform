@@ -13,7 +13,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Calendar, Search } from "lucide-react";
-import { getCountryByCode } from "story-view/constants/countries";
+import { getCountryByCode } from "platform-constants/countries";
 
 import { trpc } from "@/lib/trpc";
 import { toApiFilter, toApiConfig } from "./api-params";

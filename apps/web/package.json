@@ -48,6 +48,7 @@
     "react-select": "5.8.0",
     "remark-gfm": "^4.0.1",
     "story-view": "workspace:*",
+    "platform-constants": "workspace:@listen-fire/platform-constants@*",
     "yup": "0.32.11",
     "zod": "3.23.8",
     "zundo": "^2.3.0",
