@@ -2,7 +2,7 @@
   "name": "@listen-fire/ask",
   "private": true,
   "license": "Apache-2.0",
-  "version": "0.12.0-rc.7",
+  "version": "0.12.0-rc.8",
   "description": "Asking a person mid-run (the ask families, their answers, the Response edge a run awaits) as a module. Loaded in process by the platform, whose asks table is its kv.",
   "engines": {
     "node": "22.20.0"
@@ -15,17 +15,17 @@
   "types": "index.ts",
   "type": "commonjs",
   "dependencies": {
-    "@listen-fire/engine": "0.12.0-rc.7",
-    "@listen-fire/engine-contracts": "0.12.0-rc.7",
-    "@listen-fire/module-kit": "0.12.0-rc.7",
+    "@listen-fire/engine": "0.12.0-rc.8",
+    "@listen-fire/engine-contracts": "0.12.0-rc.8",
+    "@listen-fire/module-kit": "0.12.0-rc.8",
     "zod": "4.1.12"
   },
   "devDependencies": {
     "@types/jest": "29.5.14",
     "@types/node": "20.16.5",
-    "engine-contracts": "npm:@listen-fire/engine-contracts@0.12.0-rc.7",
-    "module-kit": "npm:@listen-fire/module-kit@0.12.0-rc.7",
-    "movement-engine": "npm:@listen-fire/engine@0.12.0-rc.7",
+    "engine-contracts": "npm:@listen-fire/engine-contracts@0.12.0-rc.8",
+    "module-kit": "npm:@listen-fire/module-kit@0.12.0-rc.8",
+    "movement-engine": "npm:@listen-fire/engine@0.12.0-rc.8",
     "typescript": "5.5.4"
   },
   "repository": {
