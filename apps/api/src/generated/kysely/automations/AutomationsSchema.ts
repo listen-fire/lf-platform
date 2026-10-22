@@ -28,6 +28,7 @@ import type { default as TriggerEventTable } from './TriggerEvent';
 import type { default as CacheEntryTable } from './CacheEntry';
 import type { default as RecordBindingTable } from './RecordBinding';
 import type { default as ParkedRunTable } from './ParkedRun';
+import type { default as LfSecretsLeaseTable } from './LfSecretsLease';
 import type { default as ModuleProcessesTable } from './ModuleProcesses';
 import type { default as PlatformOwnedTokenTable } from './PlatformOwnedToken';
 import type { default as ParkLibrarySourceTable } from './ParkLibrarySource';
@@ -93,6 +94,8 @@ export default interface AutomationsSchema {
   record_binding: RecordBindingTable;
 
   parked_run: ParkedRunTable;
+
+  lf_secrets_lease: LfSecretsLeaseTable;
 
   module_processes: ModuleProcessesTable;
 

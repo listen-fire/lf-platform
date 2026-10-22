@@ -218,6 +218,7 @@ model ExposedFile {
   @@schema("automations")
 }
 
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model ExternalServiceCredentials {
   id                   String                           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                 String
@@ -231,6 +232,7 @@ model ExternalServiceCredentials {
   identifier           String?
   appId                String?                          @map("app_id")
   declaredCredential   String?                          @map("declared_credential")
+  wireBinding          String?                          @map("wire_binding")
   connectTokens        ConnectToken[]
   googleGrantedItems   GoogleGrantedItem[]
   remoteAdapters       RemoteAdapter[]
@@ -310,6 +312,17 @@ model JoinPending {
 
   @@id([runId, frameAddress])
   @@map("join_pending")
+  @@schema("automations")
+}
+
+model LfSecretsLease {
+  teamId    String   @map("team_id") @db.Uuid
+  ref       String
+  token     String
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+
+  @@id([teamId, ref])
+  @@map("lf_secrets_lease")
   @@schema("automations")
 }
 
