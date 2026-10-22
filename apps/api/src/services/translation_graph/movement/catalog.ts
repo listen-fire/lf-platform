@@ -31,9 +31,9 @@
 //   - construction args beyond `credentials` — manifests don't declare a
 //     construction-config block yet (same TODO as the static catalog).
 
-import { LANGUAGE_VERSION, entryPositionKeyOf, instanceSchemaKey, catalogSnapshotOf, type AdapterSpec, type Catalog, type CatalogSnapshot, type CredentialSpec, type SchemaFieldType, type InstanceSchema, type LanguageVersion, type PluginSpec, type ResolveFile } from 'movement-lang';
-import { parseMovementExpression } from 'legacy-lang';
-import { parseTraversalPath, referencedConstructions, referencedEventAddresses, scanInstanceChains, surfaceNotEnumerated, type InstanceChain } from 'legacy-lang';
+import { LANGUAGE_VERSION, RUN_HOST_UNITS, entryPositionKeyOf, instanceSchemaKey, catalogSnapshotOf, type AdapterSpec, type Catalog, type CatalogSnapshot, type CredentialSpec, type SchemaFieldType, type InstanceSchema, type LanguageVersion, type PluginSpec, type ResolveFile } from 'movement-lang';
+import { isLegacyLanguageVersion, parseMovementExpression } from 'legacy-lang';
+import { parseTraversalPath, referencedConstructions, referencedEventAddresses, scanInstanceChains, surfaceNotEnumerated, type ConstructionRef, type InstanceChain } from 'legacy-lang';
 
 import type { Expression } from 'movement-lang/expression/types';
 import type { TeamId } from '../../../generated/kysely/core/Team';
@@ -401,18 +401,17 @@ interface IntrospectionPair {
 /**
  * The pairs the compile/catalog assembly should introspect.
  *
- * With `sources` (the program plus its imported library files), only the
- * (adapter, credential) pairs those programs actually CONSTRUCT
- * (referencedConstructions — the same detection the editor streams
- * schemas with); without them, every credential of every manifest (the
- * full-workspace sweep, kept for the dev CLI's `catalog` dump).
+ * With `instances` (what the program and its imported library files name:
+ * `namedInstances`), only those (adapter, credential) pairs; without them,
+ * every credential of every manifest (the full-workspace sweep, kept for the
+ * dev CLI's `catalog` dump).
  *
  * A referenced construction whose credential does NOT resolve records a
  * `gap` as well as a note: its instance is untyped, and an untyped instance
  * silences every schema-typed check downstream of it. See the gap push below.
  */
 function introspectionPairs(input: {
-  sources?: string[];
+  instances?: ConstructionRef[];
   gaps: CatalogGap[];
   manifests: ReturnType<typeof listAdapterManifests>;
   credentialRows: CredentialRow[];
@@ -422,7 +421,7 @@ function introspectionPairs(input: {
   const { manifests, credentialRows, credentialsByName, notes, gaps } = input;
   const manifestBySlug = indexManifestsByName(manifests);
 
-  if (input.sources === undefined) {
+  if (input.instances === undefined) {
     const pairs: IntrospectionPair[] = [];
     for (const manifest of manifests) {
       const slug = manifest.adapterType;
@@ -445,7 +444,7 @@ function introspectionPairs(input: {
   const pairs: IntrospectionPair[] = [];
   const seen = new Set<string>();
   const configurationGapsSeen = new Set<string>();
-  for (const ref of input.sources.flatMap((source) => referencedConstructions(source))) {
+  for (const ref of input.instances) {
     const manifest = manifestBySlug.get(ref.adapter);
     if (!manifest) continue; // not an adapter — the checker reports it
     // Something the DEPLOYMENT owes this adapter and hasn't supplied (email's
@@ -498,6 +497,29 @@ function introspectionPairs(input: {
     }
   }
   return pairs;
+}
+
+/**
+ * The instances `sources` name: what they construct (`referencedConstructions`,
+ * the same detection the editor streams schemas with) and, when one is read
+ * under a release pin, the run host's units (`manual`, `cron`). A unit is
+ * connected in every such file with no construction to detect, so `listen to
+ * manual fire go` reads `go.Text` off an instance only this adds; a legacy id
+ * has no units. A file binding the unit's name constructs its own instance,
+ * found by the scan as any other.
+ */
+function namedInstances(input: {
+  sources: string[];
+  unitsInScope: boolean;
+  manifestBySlug: ReturnType<typeof indexManifestsByName>;
+}): ConstructionRef[] {
+  const constructed = input.sources.flatMap((source) => referencedConstructions(source));
+  if (!input.unitsInScope) return constructed;
+  const units = RUN_HOST_UNITS.filter((unit) => {
+    const manifest = input.manifestBySlug.get(unit);
+    return manifest !== undefined && !needsCredential(manifest);
+  }).map((unit): ConstructionRef => ({ adapter: unit }));
+  return [...constructed, ...units];
 }
 
 /**
@@ -647,10 +669,20 @@ async function assembleTeamCatalog(
   const schemaKey = (slug: string, credentialsId?: string, posKey = '') =>
     `${slug}::${credentialsId ?? ''}::${posKey}`;
 
+  const scanSources =
+    options.source !== undefined ? [options.source, ...fileSources.values()] : [...fileSources.values()];
+  const instances = namedInstances({
+    sources: scanSources,
+    unitsInScope:
+      options.source !== undefined &&
+      [options.languageVersion ?? LANGUAGE_VERSION, ...filePins.values()].some(
+        (pin) => !isLegacyLanguageVersion(pin),
+      ),
+    manifestBySlug,
+  });
+
   const pairs = introspectionPairs({
-    ...(options.source !== undefined
-      ? { sources: [options.source, ...fileSources.values()] }
-      : {}),
+    ...(options.source !== undefined ? { instances } : {}),
     manifests,
     credentialRows,
     credentialsByName,
@@ -672,8 +704,6 @@ async function assembleTeamCatalog(
   // The pre-scan feeding both halves of position-aware compilation: the
   // demand set (which types to describe) and the selectors (which positions
   // to refine).
-  const scanSources =
-    options.source !== undefined ? [options.source, ...fileSources.values()] : [...fileSources.values()];
   const pinnedOf = (languageVersion: LanguageVersion | undefined) =>
     languageVersion !== undefined ? { languageVersion } : undefined;
   // Each chain's pin, so a write body is read under its own program's version.
@@ -1186,7 +1216,7 @@ async function assembleTeamCatalog(
   // node has leaves it does not have.
   const instanceSchemas: InstanceSchemaEntry[] = [];
   const seenInstances = new Set<string>();
-  for (const ref of scanSources.flatMap((source) => referencedConstructions(source))) {
+  for (const ref of instances) {
     const manifest = manifestBySlug.get(ref.adapter);
     if (!manifest) continue;
     const positionKey = positionKeyForManifest(manifest, ref.constructionArgs);
