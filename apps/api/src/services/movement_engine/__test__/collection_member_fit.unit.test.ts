@@ -7,7 +7,7 @@
 // before it — the frozen behaviour is pinned here, and version 5 is refused
 // at check.
 
-import type { InstanceSchema } from 'movement-lang';
+import { LANGUAGE_VERSION, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import type { Adapter, RuntimeCapabilities, WriteInput } from 'movement-engine/public/adapter';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { tenantIdOf } from 'engine-contracts';
@@ -122,7 +122,7 @@ const CASES: Record<string, string> = {
 }`,
 };
 
-async function runUnder(source: string, languageVersion: 3 | 4 | 5) {
+async function runUnder(source: string, languageVersion: LanguageVersion) {
   const kg = makeKgFake();
   const result = await runMovement({
     source: `${PRE}${source}\nlisten to runs {} fire recap\n`,
@@ -148,22 +148,22 @@ async function runUnder(source: string, languageVersion: 3 | 4 | 5) {
 const payloads = (kg: ReturnType<typeof makeKgFake>) => kg.creates.filter(c => c.fields.payload !== undefined).map(c => c.fields.payload);
 
 describe('a collection op\'s typed function, handed members of another type', () => {
-  it.each([3, 4] as const)('ran under %i: text or a record reached a number parameter, and the sum came out NaN', async version => {
+  it.each(['3', '4'] as const)('ran under %s: text or a record reached a number parameter, and the sum came out NaN', async version => {
     expect(payloads((await runUnder(CASES.textMember!, version)).kg)).toEqual([{ x: [Number.NaN] }]);
     expect(payloads((await runUnder(CASES.recordMember!, version)).kg)).toEqual([{ x: [Number.NaN] }]);
   });
 
-  it.each([3, 4] as const)('ran under %i: REDUCE\'s text starting value reached a number accumulator', async version => {
+  it.each(['3', '4'] as const)('ran under %s: REDUCE\'s text starting value reached a number accumulator', async version => {
     expect(payloads((await runUnder(CASES.textStart!, version)).kg)).toEqual([{ x: Number.NaN }]);
   });
 
-  it.each([3, 4] as const)('ran under %i: a record reached a text parameter, and was read as "[object Object]"', async version => {
+  it.each(['3', '4'] as const)('ran under %s: a record reached a text parameter, and was read as "[object Object]"', async version => {
     expect(payloads((await runUnder(CASES.recordMemberToText!, version)).kg)).toEqual([{ x: ['[OBJECT OBJECT]'] }]);
     expect(payloads((await runUnder(CASES.recordStart!, version)).kg)).toEqual([{ x: '[object Object]a' }]);
     expect(payloads((await runUnder(CASES.filterRecordsAsText!, version)).kg)).toEqual([{ n: 1 }]);
   });
 
   it.each(Object.keys(CASES))('%s is refused at check under Dancing Wren (5)', async name => {
-    await expect(runUnder(CASES[name]!, 5)).rejects.toThrow(/MOV_CALL_ARG_(TYPE|MAYBE_RECORD)/);
+    await expect(runUnder(CASES[name]!, LANGUAGE_VERSION)).rejects.toThrow(/MOV_CALL_ARG_(TYPE|MAYBE_RECORD)/);
   });
 });

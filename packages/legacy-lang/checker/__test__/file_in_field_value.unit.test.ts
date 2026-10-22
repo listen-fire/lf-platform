@@ -18,8 +18,8 @@ import { checkProgram, Diagnostic } from '../check';
 import { InstanceSchema, mockCatalog, type FieldType } from '../catalog';
 import { fieldAssignable, fieldTypeCompatible, handleWithin } from '../typing';
 import { spelledFor } from './surface_spelling';
-import { type LanguageVersion } from 'movement-lang/language_version';
-import { PLATFORM_SUPPORTED_LANGUAGE_VERSIONS } from '../../language_version';
+import { LANGUAGE_VERSION, type LanguageVersion } from 'movement-lang/language_version';
+import { PLATFORM_SUPPORTED_LANGUAGE_VERSIONS, before, since } from '../../language_version';
 
 const crmSchema: InstanceSchema = {
   positions: {
@@ -113,13 +113,14 @@ const note = (company: string): string[] => [`  write crm-[:notes]-> { title: "h
 const FILE_NOT_A_VALUE = 'a file, not a value';
 const GOES_TO_A_FILE_FIELD = 'A file goes only into a field that holds files';
 
-const VERSIONS = [...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS];
+// The legacy ids, and the installed language (this copy's version 5).
+const VERSIONS: LanguageVersion[] = [...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS, LANGUAGE_VERSION];
 
 // A message quotes the fix in the spelling its version reads.
 const quotedFor = (version: LanguageVersion, message: string): string =>
-  version < 5 ? message : message.replace(/COALESCE\(READ\(f\), /g, 'coalesce(File.read(f), ').replace(/READ\(f\)/g, 'File.read(f)');
+  before(version, 5) ? message : message.replace(/COALESCE\(READ\(f\), /g, 'coalesce(File.read(f), ').replace(/READ\(f\)/g, 'File.read(f)');
 
-describe.each(VERSIONS)('under language version %i, a file inside a field\'s value is refused', version => {
+describe.each(VERSIONS)('under language version %s, a file inside a field\'s value is refused', version => {
   const refused = (body: string[], where: string): void => {
     const errors = errorsUnder(version, body);
     expect(errors.map(d => d.code)).toEqual(['MOV_WRITE_FIELD_TYPE']);
@@ -173,7 +174,7 @@ describe.each(VERSIONS)('under language version %i, a file inside a field\'s val
   it('held by a name the map was bound to', () => {
     // Version 1 types a map literal by its values alone, so its keys are not
     // known past the name — the file is under some key.
-    refused(['  held = { a: f }', ...note('held')], version === 1 ? "and 'company[…]' is file" : "and 'company.a' is file");
+    refused(['  held = { a: f }', ...note('held')], version === "1" ? "and 'company[…]' is file" : "and 'company.a' is file");
   });
 
   it('into the second shape: a ledger entry\'s json properties bag', () => {
@@ -204,7 +205,7 @@ describe.each(VERSIONS)('under language version %i, a file inside a field\'s val
   });
 });
 
-describe.each(VERSIONS)('under language version %i, a file field takes a file and never a record', version => {
+describe.each(VERSIONS)('under language version %s, a file field takes a file and never a record', version => {
   // A target takes its own kind of engine object only: a file in one arm must
   // not hide a record in the other.
   const ORG = '  org = write crm-[:companies]-> { name: "Acme Inc." }';
@@ -234,7 +235,7 @@ describe.each(VERSIONS)('under language version %i, a file field takes a file an
   it('spreads of a list of files and a list of records', () => {
     // From version 3 the mixed list is refused in its own right as well.
     const errors = errorsUnder(version, [ORG, '  fl = [f]', '  ol = [org]', '  write crm-[:notes]-> { title: "hello", uploads: [...fl, ...ol] }']);
-    expect(errors.map(d => d.code)).toEqual(version >= 3 ? ['MOV_LIST_MIXED', 'MOV_WRITE_FIELD_TYPE'] : ['MOV_WRITE_FIELD_TYPE']);
+    expect(errors.map(d => d.code)).toEqual(since(version, 3) ? ['MOV_LIST_MIXED', 'MOV_WRITE_FIELD_TYPE'] : ['MOV_WRITE_FIELD_TYPE']);
     const field = errors.find(d => d.code === 'MOV_WRITE_FIELD_TYPE')!;
     expect(field.message).toContain("and 'uploads[…]' is ");
     expect(field.message).toContain('a record, not a value');
@@ -246,12 +247,12 @@ describe.each(VERSIONS)('under language version %i, a file field takes a file an
 });
 
 describe('a spread of a file is refused once, for what it is', () => {
-  it.each(VERSIONS.filter(v => v >= 2))('under language version %i', version => {
+  it.each(VERSIONS.filter(v => since(v, 2)))('under language version %s', version => {
     expect(errorsUnder(version, note('{ ...f }')).map(d => d.code)).toEqual(['MOV_MAP_SPREAD_NOT_KEYED']);
   });
 });
 
-describe.each(VERSIONS)('under language version %i, a plugin argument of a declared value type takes no file it does not hold (B5)', version => {
+describe.each(VERSIONS)('under language version %s, a plugin argument of a declared value type takes no file it does not hold (B5)', version => {
   // A text argument takes no file, and a file argument a file only as the
   // whole value: each used to validate, and the plugin was handed the
   // engine's description of the file. A bug fix, on every version, as the
@@ -285,26 +286,26 @@ describe.each(VERSIONS)('under language version %i, a plugin argument of a decla
   });
 });
 
-describe.each(VERSIONS)('under language version %i, a file joined into a text', version => {
+describe.each(VERSIONS)('under language version %s, a file joined into a text', version => {
   // It joined as "[object Object]". Refusing it changes what a saved program
   // means, so it lands with Dancing Wren (5): versions 1 to 4 keep it, and
   // the error under 5 keeps such a program on its version.
-  it(version >= 5 ? 'is refused (MOV_FILE_IN_TEXT)' : 'is accepted, as it always was', () => {
+  it(since(version, 5) ? 'is refused (MOV_FILE_IN_TEXT)' : 'is accepted, as it always was', () => {
     const errors = errorsUnder(version, ['  write crm-[:notes]-> { title: "x${f}" }']);
-    expect(errors.map(d => d.code)).toEqual(version >= 5 ? ['MOV_FILE_IN_TEXT'] : []);
-    if (version >= 5) expect(errors[0]!.message).toContain("this is a file, and a file is not text, so it can't be combined into text");
+    expect(errors.map(d => d.code)).toEqual(since(version, 5) ? ['MOV_FILE_IN_TEXT'] : []);
+    if (since(version, 5)) expect(errors[0]!.message).toContain("this is a file, and a file is not text, so it can't be combined into text");
   });
 
   it('its text joins on every version', () => {
     expect(errorsUnder(version, ['  write crm-[:notes]-> { title: "x${COALESCE(READ(f), \"\")}" }'])).toEqual([]);
   });
 
-  it(version >= 5 ? 'one that may be a file is refused' : 'one that may be a file is accepted', () => {
-    expect(errorsUnder(version, ['  t = "x${COALESCE(f, \"y\")}"']).map(d => d.code)).toEqual(version >= 5 ? ['MOV_FILE_IN_TEXT'] : []);
+  it(since(version, 5) ? 'one that may be a file is refused' : 'one that may be a file is accepted', () => {
+    expect(errorsUnder(version, ['  t = "x${COALESCE(f, \"y\")}"']).map(d => d.code)).toEqual(since(version, 5) ? ['MOV_FILE_IN_TEXT'] : []);
   });
 });
 
-describe.each(VERSIONS)('under language version %i, a name bound to a conditional carries its arms (B5)', version => {
+describe.each(VERSIONS)('under language version %s, a name bound to a conditional carries its arms (B5)', version => {
   // Closed: a name bound to a conditional carries its arms
   // (record_through_operators.unit.test.ts), so the record in one reaches no
   // file field through it.
@@ -320,7 +321,7 @@ describe.each(VERSIONS)('under language version %i, a name bound to a conditiona
   });
 });
 
-describe.each(VERSIONS.filter(v => v <= 3))('under language version %i, a file inside a link\'s body is refused', version => {
+describe.each(VERSIONS.filter(v => before(v, 4)))('under language version %s, a file inside a link\'s body is refused', version => {
   // A link with a body is a match along the edge (the body form is retired
   // from version 4), and its fields are held to the same rule.
   it('under a map key', () => {
@@ -333,20 +334,20 @@ describe.each(VERSIONS.filter(v => v <= 3))('under language version %i, a file i
 });
 
 describe('a spread of a map holding a file copies the file', () => {
-  it.each(VERSIONS.filter(v => v >= 2))('under language version %i', version => {
+  it.each(VERSIONS.filter(v => since(v, 2)))('under language version %s', version => {
     const errors = errorsUnder(version, ['  held = { a: f }', ...note('{ ...held }')]);
     expect(errors.map(d => d.code)).toEqual(['MOV_WRITE_FIELD_TYPE']);
     expect(errors[0]!.message).toContain("and 'company.a' is file — a file, not a value");
   });
 
-  it.each(VERSIONS.filter(v => v >= 2))('under language version %i, a record\'s file field, spread', version => {
+  it.each(VERSIONS.filter(v => since(v, 2)))('under language version %s, a record\'s file field, spread', version => {
     const errors = errorsUnder(version, ['  co = write crm-[:companies]-> { name: "Acme Inc.", logo: f }', ...note('{ ...co }')]);
     expect(errors.map(d => d.code)).toEqual(['MOV_WRITE_FIELD_TYPE']);
     expect(errors[0]!.message).toContain("and 'company.logo' is file — a file, not a value");
   });
 });
 
-describe.each(VERSIONS)('under language version %i, a file in a plugin\'s structured argument is refused', version => {
+describe.each(VERSIONS)('under language version %s, a file in a plugin\'s structured argument is refused', version => {
   const refused = (body: string[], where: string): void => {
     const errors = errorsUnder(version, body);
     expect(errors.map(d => d.code)).toEqual(['MOV_CALL_ARG_TYPE']);
@@ -383,7 +384,7 @@ describe.each(VERSIONS)('under language version %i, a file in a plugin\'s struct
   });
 });
 
-describe.each([3, 4])('under language version %i, a file a closure returns is refused', version => {
+describe.each([3, 4])('under language version %s, a file a closure returns is refused', version => {
   const refusedAs = (code: string, body: string[], where: string): void => {
     const errors = errorsUnder(version, body);
     expect(errors.map(d => d.code)).toEqual([code]);
@@ -404,7 +405,7 @@ describe.each([3, 4])('under language version %i, a file a closure returns is re
   });
 });
 
-describe.each([1, 2])('KNOWN GAP: under language version %i, a call inside an expression is untyped', version => {
+describe.each([1, 2])('KNOWN GAP: under language version %s, a call inside an expression is untyped', version => {
   // As for a record (record_in_field_value.unit.test.ts): versions 1 and 2
   // type a call written inside an expression as nothing anyone can see, so a
   // file a closure returns is not seen there. Accepted TODAY.

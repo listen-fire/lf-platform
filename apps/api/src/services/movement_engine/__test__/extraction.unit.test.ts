@@ -104,7 +104,8 @@ jest.mock('../../document', () => ({
 }));
 
 import {
-  CURRENT_LANGUAGE_VERSION,
+  LANGUAGE_VERSION,
+  type LanguageVersion,
   mockCatalogSnapshot,
   type CatalogSnapshot,
   type ExtractExpression,
@@ -120,7 +121,7 @@ import { MovementRunFailed, runFailureCause } from '@listen-fire/legacy-engine/s
 // Shape)` (extract_call's suites) — so every run here is pinned to version 4
 // in the spelling 4 reads, unless a test names its own version.
 const runMovement = (input: Parameters<typeof runMovementUnder>[0]): ReturnType<typeof runMovementUnder> =>
-  runMovementUnder({ languageVersion: 4, ...input });
+  runMovementUnder({ languageVersion: '4', ...input });
 import { MovementEngineError, type MovementTraceEntry } from '@listen-fire/legacy-engine/services/movement_engine/expression';
 import { captureEngineLogs } from '../../../test/engine_logs';
 
@@ -2857,7 +2858,7 @@ describe('Layer 5 — files a `through` plugin fetched join `_resources`', () =>
   });
   afterEach(() => run.mockRestore());
 
-  async function runFetched(emissions: Array<Record<string, unknown>>, languageVersion?: number) {
+  async function runFetched(emissions: Array<Record<string, unknown>>, languageVersion?: LanguageVersion) {
     run.mockResolvedValue({ edges: { vcUrl: emissions.map((data) => ({ data })) } });
     const email = makeFakeAdapter('email');
     const attio = makeCapturingAttio();
@@ -2912,7 +2913,7 @@ describe('Layer 5 — files a `through` plugin fetched join `_resources`', () =>
   it('under language version 1, a fetched file stays off `_resources` — they held the sources alone', async () => {
     const { creates, llm } = await runFetched(
       [{ name: 'Acme deck.pdf', url: 'https://docsend.example/acme', file: 'doc-1', text: 'Acme builds rockets.' }],
-      1,
+      '1',
     );
 
     expect(llm.calls[0].userMessage).toContain('Acme builds rockets.');
@@ -3632,9 +3633,9 @@ describe('a unique-by key that came back empty matches nothing', () => {
 
   it('a candidate whose key is empty is never an exact match for an empty asserted key', () => {
     const constraints = { any: [{ all: [{ field: 'name' }] }] };
-    expect(candidateIsAllExact(constraints, { asserted: { name: '' }, candidate: { name: '' }, languageVersion: CURRENT_LANGUAGE_VERSION })).toBe(false);
-    expect(candidateIsAllExact(constraints, { asserted: { name: null }, candidate: { name: null }, languageVersion: CURRENT_LANGUAGE_VERSION })).toBe(false);
-    expect(candidateIsAllExact(constraints, { asserted: { name: 'Acme' }, candidate: { name: 'acme' }, languageVersion: CURRENT_LANGUAGE_VERSION })).toBe(true);
+    expect(candidateIsAllExact(constraints, { asserted: { name: '' }, candidate: { name: '' }, languageVersion: LANGUAGE_VERSION })).toBe(false);
+    expect(candidateIsAllExact(constraints, { asserted: { name: null }, candidate: { name: null }, languageVersion: LANGUAGE_VERSION })).toBe(false);
+    expect(candidateIsAllExact(constraints, { asserted: { name: 'Acme' }, candidate: { name: 'acme' }, languageVersion: LANGUAGE_VERSION })).toBe(true);
   });
 });
 

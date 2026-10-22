@@ -1,6 +1,7 @@
-// The TypeScript parser, checker, editor service and story (language versions
-// 1 to 5). The names the language package keeps (the catalog and schema types,
-// the diagnostic, the snapshot, the wasm bindings) are imported from
+// The TypeScript parser, checker, editor service and story (the legacy ids 1
+// to 4, and the 0.12 line as this copy's version 5). The names the language
+// package keeps (the catalog and schema types, the diagnostic, the snapshot,
+// the wasm bindings) are imported from
 // `movement-lang`, not from here.
 // The parse entry points, each routed to the parser for its version (the
 // language release's own, or the one frozen for the versions it dropped).
@@ -39,9 +40,11 @@ export * from './service/selectors';
 export * from './service/service';
 export * from './version_conditionals';
 export {
+  CURRENT_LANGUAGE_VERSION,
   PLATFORM_DEPRECATED_LANGUAGE_VERSIONS,
-  PLATFORM_RELEASE,
   PLATFORM_SUPPORTED_LANGUAGE_VERSIONS,
+  isLegacyLanguageVersion,
   languageVersionDiagnostic,
   languageVersionStanding,
+  runHostUnits,
 } from './language_version';

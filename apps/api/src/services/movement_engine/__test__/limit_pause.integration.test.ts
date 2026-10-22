@@ -84,7 +84,7 @@ import { positionData } from 'engine-contracts/catalog';
 import type { Adapter, RuntimeCapabilities } from 'movement-engine/public/adapter';
 import { containerAssociation } from 'movement-engine/public/adapter';
 import type { Catalog, CatalogSnapshot, InstanceSchema, PositionSchema } from 'movement-lang';
-import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+import { LANGUAGE_VERSION } from 'movement-lang';
 import { eventAddressKey } from 'legacy-lang';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { postgresRunHostStore } from '../run_host_store';
@@ -257,11 +257,11 @@ async function seedMovement(
   await getAutomationsQb(['movement'])
     .insertInto('movement')
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .values({ id: movementId, team_id: teamId, name: opts.name, source: opts.source, language_version: CURRENT_LANGUAGE_VERSION } as any)
+    .values({ id: movementId, team_id: teamId, name: opts.name, source: opts.source, language_version: LANGUAGE_VERSION } as any)
     .execute();
 
   // Pin a runnable version + set current_version_id (the resume re-parses THIS).
-  await mintMovementVersionIfChanged({ teamId, movementId, source: opts.source, languageVersion: CURRENT_LANGUAGE_VERSION });
+  await mintMovementVersionIfChanged({ teamId, movementId, source: opts.source, languageVersion: LANGUAGE_VERSION });
 
   const triggerId = randomUUID() as TriggerId;
   await getAutomationsQb(['trigger'])

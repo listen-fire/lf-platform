@@ -6,12 +6,13 @@
 // resumes on the engine that wrote it.
 
 import {
-  CURRENT_LANGUAGE_VERSION,
+  LANGUAGE_VERSION,
   fromCatalogSnapshot,
   mockCatalogSnapshot,
   type InstanceSchema,
   type LanguageVersion,
 } from 'movement-lang';
+import { since } from 'legacy-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 
 import { tenantIdOf, type AnyParkedScopeState } from 'engine-contracts';
@@ -238,7 +239,7 @@ interface Case {
   /** The first language version whose checker refuses the program, so the
    *  run ends at its check and never reaches the engine (absent: no
    *  version's does). A case says so, or fails. */
-  endsAtCheckFrom?: LanguageVersion;
+  endsAtCheckFrom?: number;
   /** Which of the sink's suspension methods it has: both by default. */
   suspends?: 'both' | 'suspension_only' | 'neither';
   /** Run through the conformance kit's recorder, handed each recording. */
@@ -299,7 +300,7 @@ async function runOn(c: Case): Promise<Outcome> {
   };
   const input: RunMovementInput = {
     source: spelledFor(
-      CURRENT_LANGUAGE_VERSION,
+      LANGUAGE_VERSION,
       PRELUDE + c.source,
       fromCatalogSnapshot(catalog),
     ),
@@ -371,10 +372,11 @@ const daysBeforeHostNow = (days: number) =>
   new Date(Date.parse(TEST_HOST_NOW) - days * 86_400_000).toISOString();
 
 /** A rehearsal mints random ids: each run's, in the order they appear, read
- *  as the same placeholders. */
+ *  as the same placeholders. The installed language's pin is the integer 5 the
+ *  snapshots were recorded under, so a release bump does not rewrite them. */
 function sameIds<T>(value: T): T {
   const ids = new Map<string, string>();
-  const text = JSON.stringify(value);
+  const text = JSON.stringify(value).replaceAll(`"languageVersion":${JSON.stringify(LANGUAGE_VERSION)}`, '"languageVersion":5');
   const normal = text.replace(
     /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g,
     (id) => {
@@ -391,7 +393,7 @@ function sameIds<T>(value: T): T {
 async function onRust(c: Case) {
   resetRustRunStats();
   const rust = await runOn(c);
-  const atCheck = c.endsAtCheckFrom !== undefined && CURRENT_LANGUAGE_VERSION >= c.endsAtCheckFrom;
+  const atCheck = c.endsAtCheckFrom !== undefined && since(LANGUAGE_VERSION, c.endsAtCheckFrom);
   expect(isCheckFailure(rust.error) ? String(rust.error) : 'reached the engine').toEqual(
     atCheck ? expect.stringContaining('MOVENG_CHECK') : 'reached the engine',
   );

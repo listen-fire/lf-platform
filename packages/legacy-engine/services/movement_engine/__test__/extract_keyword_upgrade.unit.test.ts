@@ -4,7 +4,7 @@
 // TypeScript engine against a model that answers each with the same records,
 // write the same things.
 
-import { applyFix, fromCatalogSnapshot, mockCatalogSnapshot, type InstanceSchema } from 'movement-lang';
+import { LANGUAGE_VERSION, applyFix, fromCatalogSnapshot, mockCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import { checkProgram } from 'legacy-lang';
 import { parseProgram } from 'legacy-lang';
 
@@ -109,7 +109,7 @@ function emailAdapter(): Adapter {
   };
 }
 
-async function writesOf(source: string, languageVersion: 4 | 5): Promise<unknown[]> {
+async function writesOf(source: string, languageVersion: LanguageVersion): Promise<unknown[]> {
   const created: unknown[] = [];
   const crm: Adapter = {
     ...emailAdapter(),
@@ -139,13 +139,13 @@ async function writesOf(source: string, languageVersion: 4 | 5): Promise<unknown
 
 describe("the extraction keyword's upgrade to extractOne over a declared shape", () => {
   it('writes what the keyword wrote, when the model answers each with the same records', async () => {
-    const retired = checkProgram(parseProgram(V5, { languageVersion: 5 }), fromCatalogSnapshot(catalog), { languageVersion: 5 }).find(
+    const retired = checkProgram(parseProgram(V5, { languageVersion: LANGUAGE_VERSION }), fromCatalogSnapshot(catalog), { languageVersion: LANGUAGE_VERSION }).find(
       (d) => d.code === 'MOV_EXTRACT_KEYWORD_RETIRED',
     );
     expect(retired?.fix).toBeDefined();
     const upgraded = applyFix(V5, retired!.fix!);
     expect(upgraded).toContain('found = extractOne([msg.`text`], FoundShape, { tier: "careful" })');
-    const errors = checkProgram(parseProgram(upgraded, { languageVersion: 5 }), fromCatalogSnapshot(catalog), { languageVersion: 5 }).filter(
+    const errors = checkProgram(parseProgram(upgraded, { languageVersion: LANGUAGE_VERSION }), fromCatalogSnapshot(catalog), { languageVersion: LANGUAGE_VERSION }).filter(
       (d) => (d.severity ?? 'error') === 'error',
     );
     // The call's record may be absent, which the keyword's result never was:
@@ -154,8 +154,8 @@ describe("the extraction keyword's upgrade to extractOne over a declared shape",
     const guarded = upgraded.replace(/\n  found-\[c:company\]-> \{\n([\s\S]*?)\n  \}\n\}/, (_, body: string) => `\n  if (found != null) {\n  found-[c:company]-> {\n${body}\n  }\n  }\n}`);
     expect(guarded).not.toEqual(upgraded);
 
-    const before = await writesOf(V4, 4);
+    const before = await writesOf(V4, '4');
     expect(before).toEqual([{ name: 'Acme' }, { name: 'Acme: Ada' }, { name: 'Acme: Grace' }, { name: 'Initech' }]);
-    expect(await writesOf(guarded, 5)).toEqual(before);
+    expect(await writesOf(guarded, LANGUAGE_VERSION)).toEqual(before);
   });
 });

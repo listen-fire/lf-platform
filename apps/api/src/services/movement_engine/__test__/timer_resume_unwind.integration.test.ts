@@ -51,7 +51,7 @@ import { makeStablePosition, positionData } from 'engine-contracts/catalog';
 import type { Adapter, RuntimeCapabilities } from 'movement-engine/public/adapter';
 import { containerAssociation } from 'movement-engine/public/adapter';
 import type { Catalog, CatalogSnapshot, InstanceSchema, LanguageVersion, PositionSchema } from 'movement-lang';
-import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+import { LANGUAGE_VERSION } from 'movement-lang';
 import { eventAddressKey } from 'legacy-lang';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { resumeTimerHandler } from '../timer_resume';
@@ -390,10 +390,10 @@ async function seedMovement(
   await getAutomationsQb(['movement'])
     .insertInto('movement')
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .values({ id: movementId, team_id: teamId, name: opts.name, source: opts.source, language_version: opts.languageVersion ?? CURRENT_LANGUAGE_VERSION } as any)
+    .values({ id: movementId, team_id: teamId, name: opts.name, source: opts.source, language_version: opts.languageVersion ?? LANGUAGE_VERSION } as any)
     .execute();
 
-  await mintMovementVersionIfChanged({ teamId, movementId, source: opts.source, languageVersion: opts.languageVersion ?? CURRENT_LANGUAGE_VERSION });
+  await mintMovementVersionIfChanged({ teamId, movementId, source: opts.source, languageVersion: opts.languageVersion ?? LANGUAGE_VERSION });
 
   const triggerId = randomUUID() as TriggerId;
   await getAutomationsQb(['trigger'])
@@ -577,7 +577,7 @@ describe('timer_resume — unwind-and-continue matrix (real DB)', () => {
   it('parallel([…]) combinator + trailing (version 3): both arms park; the closer runs the trailing write exactly once', async () => {
     const { triggerId } = await seedMovement(teamId, {
       source: PARALLEL_TAIL_V3,
-      languageVersion: 3,
+      languageVersion: '3',
       firedName: 'parallel_tail_v3',
       name: 'Parallel combinator tail',
     });
@@ -668,7 +668,7 @@ describe('timer_resume — unwind-and-continue matrix (real DB)', () => {
   it('three levels deep (if > parallel([…]) > fan-out, version 3): joins close bottom-up, trailing runs exactly once', async () => {
     const { triggerId } = await seedMovement(teamId, {
       source: DEEP_NEST_V3,
-      languageVersion: 3,
+      languageVersion: '3',
       firedName: 'deep_nest_v3',
       name: 'Deep nest (combinator)',
     });

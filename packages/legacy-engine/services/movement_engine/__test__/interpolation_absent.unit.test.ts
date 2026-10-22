@@ -5,13 +5,13 @@
 // pins the runtime half of that promise, so the two cannot drift apart.
 
 import { binding, Environment, evalMovementExpr } from '../expression';
-import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+import { LANGUAGE_VERSION } from 'movement-lang';
 import { parseMovementExpression } from 'legacy-lang';
 
 async function render(raw: string, bindings: Record<string, unknown>): Promise<unknown> {
   const env = new Environment();
   for (const [name, value] of Object.entries(bindings)) env.declare(name, binding({ kind: 'value', value }));
-  return (await evalMovementExpr(parseMovementExpression(raw), { env, languageVersion: CURRENT_LANGUAGE_VERSION })).value;
+  return (await evalMovementExpr(parseMovementExpression(raw), { env, languageVersion: LANGUAGE_VERSION })).value;
 }
 
 describe('interpolating an absent value', () => {

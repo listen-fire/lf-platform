@@ -25,7 +25,7 @@ jest.mock('../../adapters/resolve', () => {
   return { ...actual, resolveAdapter: jest.fn() };
 });
 
-import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+import { LANGUAGE_VERSION } from 'movement-lang';
 import { eventAddressKey } from 'legacy-lang';
 
 import type { TeamId } from '../../../../generated/kysely/core/Team';
@@ -225,7 +225,7 @@ async function seedMovementWithAttioTrigger(teamId: TeamId): Promise<{
   await getAutomationsQb(['movement'])
     .insertInto('movement')
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .values({ id: movementId, team_id: teamId, name: 'Notify new company', source: NOTIFY_NEW_COMPANY, language_version: CURRENT_LANGUAGE_VERSION } as any)
+    .values({ id: movementId, team_id: teamId, name: 'Notify new company', source: NOTIFY_NEW_COMPANY, language_version: LANGUAGE_VERSION } as any)
     .execute();
 
   const triggerId = randomUUID() as TriggerId;

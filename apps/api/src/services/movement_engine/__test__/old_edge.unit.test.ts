@@ -86,7 +86,7 @@ jest.mock('../../../lib/prompts/execute', () => ({
 import { resumeMovement, runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { type ParkSink } from '@listen-fire/legacy-engine/services/movement_engine/run';
 
-import { fromCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
+import { LANGUAGE_VERSION, fromCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import {
@@ -255,7 +255,7 @@ function runOn(
 ) {
   // Written once, in the spelling versions 1–4 read; a version 5 run reads it as the upgrade tool respells it.
   const source = spelledFor(
-    options.languageVersion ?? 5,
+    options.languageVersion ?? LANGUAGE_VERSION,
     PRELUDE +
     [
       'movement intake(msg: <inbox-[:message]->>) {',
@@ -313,9 +313,9 @@ const WRITE_ACME = (domain: string) =>
 describe('-[:@old]-> off a write handle', () => {
   it('the result\'s write record has no old member (version 4), though -[:@old]-> read it during the run', async () => {
     const body = [WRITE_ACME('new.example'), note('IF EXISTS(org-[:@old]->) THEN "matched" ELSE "created" END')];
-    const crm = await run(body, () => makeCrm([ACME]), { languageVersion: 4 });
+    const crm = await run(body, () => makeCrm([ACME]), { languageVersion: '4' });
     expect(notes(crm)).toEqual(['matched']);
-    const result = await runOn(body, makeCrm([ACME]).adapter, { languageVersion: 4 });
+    const result = await runOn(body, makeCrm([ACME]).adapter, { languageVersion: '4' });
     expect(result.writes.length).toBeGreaterThan(0);
     for (const w of result.writes) expect(Object.hasOwn(w, 'old')).toBe(false);
   });
@@ -453,7 +453,7 @@ describe('a chained write updates the handle in place (version 4)', () => {
     const crm = await run(
       [WRITE_ACME('second.example'), '  write org { domain: "third.example" }', note('org.`domain`')],
       () => makeCrm([ACME]),
-      { languageVersion: 3 },
+      { languageVersion: '3' },
     );
     expect(notes(crm)).toEqual(['second.example']);
   });
@@ -546,11 +546,11 @@ describe('a handle on a record the adapter matched by its own rule', () => {
   }
 
   it('under version 4 reads the record as found', async () => {
-    expect(await on(4)).toEqual(['old.example']);
+    expect(await on('4')).toEqual(['old.example']);
   });
 
   it('under version 3 reads only what the write said', async () => {
-    expect(await on(3)).toEqual([null]);
+    expect(await on('3')).toEqual([null]);
   });
 
   it('parks with the record as found and its @old, and resumes (version 5, on the Rust engine)', async () => {

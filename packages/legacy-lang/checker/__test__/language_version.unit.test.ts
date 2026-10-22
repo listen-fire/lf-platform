@@ -6,15 +6,15 @@ import { checkProgram, checkProgramWithLink } from '../check';
 import { mockCatalog } from '../catalog';
 import type { ResolveFile } from '../link';
 import { storyOf } from '../../story/story';
-import { CURRENT_LANGUAGE_VERSION, DEPRECATED_LANGUAGE_VERSIONS, LANGUAGE_VERSIONS, LanguageVersionDiagnosticCodes as V, SUPPORTED_LANGUAGE_VERSIONS, THIS_RELEASE, describeLanguageVersion, type LanguageRelease } from 'movement-lang/language_version';
-import { PLATFORM_DEPRECATED_LANGUAGE_VERSIONS, PLATFORM_RELEASE, PLATFORM_SUPPORTED_LANGUAGE_VERSIONS, languageVersionDiagnostic, languageVersionStanding } from '../../language_version';
+import { LANGUAGE_VERSION } from 'movement-lang/language_version';
+import { CURRENT_LANGUAGE_VERSION, DEPRECATED_LANGUAGE_VERSIONS, LANGUAGE_VERSIONS, LanguageVersionDiagnosticCodes as V, PLATFORM_DEPRECATED_LANGUAGE_VERSIONS, PLATFORM_SUPPORTED_LANGUAGE_VERSIONS, SUPPORTED_LANGUAGE_VERSIONS, THIS_RELEASE, describeLanguageVersion, languageVersionDiagnostic, languageVersionStanding, type LanguageRelease } from '../../language_version';
 import { before, since } from '../../version_conditionals';
 
 const catalog = mockCatalog({ adapters: {} });
 const SOURCE = 'movement noop() {\n}\n';
 
 describe('the versions table', () => {
-  it('names each integer once; the current version is the newest and the only one the language supports', () => {
+  it("names each of this copy's integers once; the newest is the installed language's line", () => {
     expect(LANGUAGE_VERSIONS.map((v) => [v.version, v.name])).toEqual([
       [1, 'Quiet Heron'],
       [2, 'Bright Otter'],
@@ -22,24 +22,23 @@ describe('the versions table', () => {
       [4, 'Luminous Owl'],
       [5, 'Dancing Wren'],
     ]);
-    expect(CURRENT_LANGUAGE_VERSION).toBe(5);
-    expect([...SUPPORTED_LANGUAGE_VERSIONS]).toEqual([5]);
+    expect(CURRENT_LANGUAGE_VERSION).toBe(LANGUAGE_VERSION);
+    expect([...SUPPORTED_LANGUAGE_VERSIONS]).toEqual([1, 2, 3, 4, 5]);
     expect([...DEPRECATED_LANGUAGE_VERSIONS]).toEqual([]);
-    expect(SUPPORTED_LANGUAGE_VERSIONS.has(CURRENT_LANGUAGE_VERSION)).toBe(true);
-    expect(Math.max(...LANGUAGE_VERSIONS.map((v) => v.version))).toBe(CURRENT_LANGUAGE_VERSION);
+    expect(Math.max(...LANGUAGE_VERSIONS.map((v) => v.version))).toBe(THIS_RELEASE.current);
   });
 
-  it('the platform supports every version a saved movement may still be pinned to', () => {
-    expect([...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS]).toEqual([1, 2, 3, 4, 5]);
+  it('the platform reads the legacy ids 1 to 4 with this package; the installed language reads its own release', () => {
+    expect([...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS]).toEqual(['1', '2', '3', '4']);
     expect([...PLATFORM_DEPRECATED_LANGUAGE_VERSIONS]).toEqual([]);
-    for (const v of SUPPORTED_LANGUAGE_VERSIONS) expect(PLATFORM_SUPPORTED_LANGUAGE_VERSIONS.has(v)).toBe(true);
   });
 
   it('since/before split at the version that introduced a behaviour', () => {
-    expect(since(2, 2)).toBe(true);
-    expect(since(1, 2)).toBe(false);
-    expect(before(1, 2)).toBe(true);
-    expect(before(2, 2)).toBe(false);
+    expect(since('2', 2)).toBe(true);
+    expect(since('1', 2)).toBe(false);
+    expect(before('1', 2)).toBe(true);
+    expect(before('2', 2)).toBe(false);
+    expect(since(LANGUAGE_VERSION, 5)).toBe(true);
   });
 
   it('describes a known version by name and an unknown one by its integer', () => {
@@ -55,15 +54,18 @@ describe('standing against a release', () => {
     deprecated: new Set([2]),
   };
 
-  it('every version the platform supports is clean', () => {
+  it('every version the platform supports, and the installed language, is clean', () => {
     for (const v of PLATFORM_SUPPORTED_LANGUAGE_VERSIONS) {
       expect(languageVersionStanding(v)).toBe('supported');
       expect(languageVersionDiagnostic(v)).toBeUndefined();
     }
+    // The installed language's own pin is answered by the language's rule.
+    expect(languageVersionStanding(LANGUAGE_VERSION)).toBe('compatible');
+    expect(languageVersionDiagnostic(LANGUAGE_VERSION)).toBeUndefined();
   });
 
   it('a version outside the supported set is an error naming it and the fix', () => {
-    const d = languageVersionDiagnostic(1, next);
+    const d = languageVersionDiagnostic('1', next);
     expect(d?.code).toBe(V.UNSUPPORTED);
     expect(d?.severity).toBeUndefined(); // absent ⇒ error
     expect(d?.message).toContain('"Quiet Heron" (1)');
@@ -71,17 +73,17 @@ describe('standing against a release', () => {
   });
 
   it('a deprecated version is a warning naming it and that it will be removed', () => {
-    expect(languageVersionStanding(2, next)).toBe('deprecated');
-    const d = languageVersionDiagnostic(2, next);
+    expect(languageVersionStanding('2', next)).toBe('deprecated');
+    const d = languageVersionDiagnostic('2', next);
     expect(d?.code).toBe(V.DEPRECATED);
     expect(d?.severity).toBe('warning');
     expect(d?.message).toContain('"Bright Otter" (2)');
     expect(d?.message).toContain('will be removed');
   });
 
-  it('the default release is the platform\'s, current where the language is', () => {
-    expect(THIS_RELEASE.current).toBe(CURRENT_LANGUAGE_VERSION);
-    expect(PLATFORM_RELEASE.current).toBe(CURRENT_LANGUAGE_VERSION);
+  it("the default release is this copy's: current is its integer 5, the installed language's line", () => {
+    expect(THIS_RELEASE.current).toBe(5);
+    expect(languageVersionStanding(String(THIS_RELEASE.current))).toBe('supported');
   });
 });
 
@@ -95,7 +97,7 @@ describe('the compile context', () => {
   });
 
   it('checks a supported older pin without a version diagnostic', () => {
-    const codes = checkProgram(parseProgram(SOURCE, { languageVersion: 1 }), catalog, {
+    const codes = checkProgram(parseProgram(SOURCE, { languageVersion: '1' }), catalog, {
       languageVersion: 1,
     }).map((d) => d.code);
     expect(codes).not.toContain(V.UNSUPPORTED);
@@ -103,7 +105,7 @@ describe('the compile context', () => {
   });
 
   it('refuses an unsupported pin rather than checking it as the current version', () => {
-    const diagnostics = checkProgram(parseProgram(SOURCE), catalog, { languageVersion: 99 });
+    const diagnostics = checkProgram(parseProgram(SOURCE), catalog, { languageVersion: '99' });
     expect(diagnostics[0].code).toBe(V.UNSUPPORTED);
     expect(diagnostics[0].message).toContain('version 99');
   });
@@ -112,13 +114,13 @@ describe('the compile context', () => {
     const resolveFile: ResolveFile = () => undefined;
     const { diagnostics } = checkProgramWithLink(parseProgram(SOURCE), catalog, {
       resolveFile,
-      languageVersion: 99,
+      languageVersion: '99',
     });
     expect(diagnostics.map((d) => d.code)).toContain(V.UNSUPPORTED);
   });
 
   it('the story carries the refusal', () => {
-    const result = storyOf({ source: SOURCE, catalog, languageVersion: 99 });
+    const result = storyOf({ source: SOURCE, catalog, languageVersion: '99' });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(JSON.stringify(result.story)).toContain(V.UNSUPPORTED);

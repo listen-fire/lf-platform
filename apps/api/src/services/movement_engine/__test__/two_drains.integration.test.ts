@@ -20,7 +20,7 @@ jest.mock('../../translation_graph/movement/execute', () => ({
   resumeMovementFiring: (input: unknown) => resumeMovementFiringMock(input),
 }));
 
-import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+import { LANGUAGE_VERSION } from 'movement-lang';
 
 import { getAutomationsQb, getCoreQb } from '../../../lib/kysely';
 import { cleanupTeam } from '../../../test/harness/cleanup';
@@ -87,7 +87,7 @@ beforeAll(async () => {
       version_number: 1,
       source: SOURCE,
       content_hash: 'two-drains-fixture',
-      language_version: CURRENT_LANGUAGE_VERSION,
+      language_version: LANGUAGE_VERSION,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any)
     .execute();

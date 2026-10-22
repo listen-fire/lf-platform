@@ -11,11 +11,12 @@
 //      engine's dry interpretability scan included.
 
 import {
-  CURRENT_LANGUAGE_VERSION,
+  LANGUAGE_VERSION,
   fromCatalogSnapshot,
   type InstanceSchema,
-  type LanguageRelease,
+  type LanguageVersion,
 } from 'movement-lang';
+import type { LanguageRelease } from 'legacy-lang/language_version';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { currentLanguageVersion } from 'movement-engine/public/adapter-support';
@@ -40,8 +41,8 @@ jest.mock('legacy-lang', () => {
   const actual = jest.requireActual('legacy-lang');
   return {
     ...actual,
-    languageVersionDiagnostic: (version: number) =>
-      actual.languageVersionDiagnostic(version, mockRelease ?? actual.PLATFORM_RELEASE),
+    languageVersionDiagnostic: (version: LanguageVersion) =>
+      actual.languageVersionDiagnostic(version, mockRelease ?? jest.requireActual('legacy-lang/language_version').THIS_RELEASE),
   };
 });
 
@@ -55,7 +56,7 @@ function permissiveCaps(): RuntimeCapabilities {
 
 /** A KG fake that records the language version each write ran under. */
 function makeKgFake() {
-  const seenVersions: number[] = [];
+  const seenVersions: string[] = [];
   const updates: UpdateInput[] = [];
   const adapter: Adapter = {
     adapterType: KG,
@@ -133,9 +134,10 @@ function manualEvent(): TriggerEvent {
   };
 }
 
-function run(kg: ReturnType<typeof makeKgFake>, languageVersion?: number) {
+// A pin no release reads has no surface spelling to put the source in.
+function run(kg: ReturnType<typeof makeKgFake>, languageVersion?: LanguageVersion, spell = true) {
   return runMovement({
-    source: spelledFor(languageVersion ?? CURRENT_LANGUAGE_VERSION, SOURCE, fromCatalogSnapshot(catalog)),
+    source: spell ? spelledFor(languageVersion ?? LANGUAGE_VERSION, SOURCE, fromCatalogSnapshot(catalog)) : SOURCE,
     ...(languageVersion !== undefined ? { languageVersion } : {}),
     event: manualEvent(),
     teamId: TEAM_ID,
@@ -163,41 +165,41 @@ afterEach(() => {
 describe('a run honours its language version pin', () => {
   it('runs under the pin, and every adapter call sees it', async () => {
     const kg = makeKgFake();
-    const result = await run(kg, 1);
+    const result = await run(kg, '1');
     expect(kg.updates).toHaveLength(1);
-    expect(kg.seenVersions).toEqual([1]);
+    expect(kg.seenVersions).toEqual(['1']);
     expect(result.trace.some((e) => e.kind === 'warning')).toBe(false);
   });
 
   it('runs under the current version when given none (unchanged for every existing caller)', async () => {
     const kg = makeKgFake();
     await run(kg);
-    expect(kg.seenVersions).toEqual([CURRENT_LANGUAGE_VERSION]);
+    expect(kg.seenVersions).toEqual([LANGUAGE_VERSION]);
   });
 
   it('outside a run there is no pin: the current version', () => {
-    expect(currentLanguageVersion()).toBe(CURRENT_LANGUAGE_VERSION);
+    expect(currentLanguageVersion()).toBe(LANGUAGE_VERSION);
   });
 
   it('refuses a pin this release does not support, naming it and the fix, before writing anything', async () => {
     const kg = makeKgFake();
-    const promise = run(kg, 99);
+    const promise = run(kg, '99.0.0', false);
     await expect(promise).rejects.toBeInstanceOf(MovementEngineError);
-    await expect(promise).rejects.toThrow(/MOVENG_LANGUAGE_VERSION: .*version 99.*To fix:/);
+    await expect(promise).rejects.toThrow(/MOVENG_LANGUAGE_VERSION: .*99\.0\.0.*upgrade the engine/);
     expect(kg.updates).toEqual([]);
   });
 
   it('refuses a removed version BY NAME', async () => {
     mockRelease = { current: 3, supported: new Set([2, 3]), deprecated: new Set() };
     const kg = makeKgFake();
-    await expect(run(kg, 1)).rejects.toThrow(/"Quiet Heron" \(1\)/);
+    await expect(run(kg, '1')).rejects.toThrow(/"Quiet Heron" \(1\)/);
     expect(kg.updates).toEqual([]);
   });
 
   it('runs a deprecated pin, with a warning on the run trace naming it', async () => {
     mockRelease = { current: 3, supported: new Set([1, 2, 3]), deprecated: new Set([1]) };
     const kg = makeKgFake();
-    const result = await run(kg, 1);
+    const result = await run(kg, '1');
     expect(kg.updates).toHaveLength(1);
     const warning = result.trace.find((e) => e.kind === 'warning');
     expect(warning).toMatchObject({ code: 'MOV_LANGUAGE_VERSION_DEPRECATED' });
@@ -209,7 +211,7 @@ describe('a run honours its language version pin', () => {
 
 describe('validation honours the pin', () => {
   it('a supported pin validates the text as usual', () => {
-    const validation = diagnoseMovementSource(SOURCE, { catalog: fromCatalogSnapshot(catalog), languageVersion: 1 });
+    const validation = diagnoseMovementSource(SOURCE, { catalog: fromCatalogSnapshot(catalog), languageVersion: '1' });
     expect(validation.ok).toBe(true);
     expect(validation.firedMovements).toEqual(['reopen']);
   });
@@ -217,7 +219,7 @@ describe('validation honours the pin', () => {
   it('an unsupported pin is the whole verdict — not a parse of the text under another version', () => {
     const validation = diagnoseMovementSource('this is not a movement {', {
       catalog: fromCatalogSnapshot(catalog),
-      languageVersion: 99,
+      languageVersion: '99',
     });
     expect(validation.ok).toBe(false);
     expect(validation.diagnostics.map((d) => d.code)).toEqual(['MOV_LANGUAGE_VERSION_UNSUPPORTED']);
@@ -242,14 +244,14 @@ movement reopen(go: <runs-[:Invocation]->>) {
 }
 listen to runs {} fire reopen
 `;
-    const engineGate = (languageVersion: number) => {
+    const engineGate = (languageVersion: LanguageVersion) => {
       const { diagnostics } = diagnoseMovementSource(source, { catalog: fromCatalogSnapshot(catalog), languageVersion });
       // An unparsed source scans clean; this one parses under both.
       expect(diagnostics.map((d) => d.code)).not.toContain('MOV_PARSE');
       return diagnostics.filter((d) => d.code === 'MOV_ENGINE_UNSUPPORTED').map((d) => d.message);
     };
-    expect(engineGate(3)).toEqual([]);
-    expect(engineGate(1)).toEqual([
+    expect(engineGate('3')).toEqual([]);
+    expect(engineGate('1')).toEqual([
       'the engine does not support non-built-in function calls (LABEL()) yet — remove it to save this file live',
     ]);
   });

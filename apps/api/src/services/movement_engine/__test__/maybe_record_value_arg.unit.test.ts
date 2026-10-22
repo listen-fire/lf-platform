@@ -5,7 +5,7 @@
 // Dancing Wren (5) only, with an upgrade warning before it — the frozen
 // behaviour is pinned here, and version 5 is refused at check.
 
-import type { InstanceSchema } from 'movement-lang';
+import { LANGUAGE_VERSION, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import type { Adapter, RuntimeCapabilities, WriteInput } from 'movement-engine/public/adapter';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { tenantIdOf } from 'engine-contracts';
@@ -96,7 +96,7 @@ movement recap(go: <runs-[:Invocation]->>) {
 listen to runs {} fire recap
 `;
 
-async function runUnder(languageVersion: 4 | 5) {
+async function runUnder(languageVersion: LanguageVersion) {
   const kg = makeKgFake();
   const result = await runMovement({
     source: SOURCE,
@@ -121,11 +121,11 @@ async function runUnder(languageVersion: 4 | 5) {
 
 describe('a value that may be a record, handed to a <number> parameter', () => {
   it('ran under Luminous Owl (4): the record arrived as the number, and the sum over it is NaN', async () => {
-    const { kg } = await runUnder(4);
+    const { kg } = await runUnder('4');
     expect(kg.creates.find((c) => c.fields.payload !== undefined)?.fields.payload).toEqual({ y: Number.NaN });
   });
 
   it('is refused at check under Dancing Wren (5)', async () => {
-    await expect(runUnder(5)).rejects.toThrow(/MOV_CALL_ARG_MAYBE_RECORD/);
+    await expect(runUnder(LANGUAGE_VERSION)).rejects.toThrow(/MOV_CALL_ARG_MAYBE_RECORD/);
   });
 });

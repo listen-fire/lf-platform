@@ -359,18 +359,6 @@
           }
         }
       },
-      "earlierOutputs": [
-        {
-          "before": 2,
-          "output": {
-            "kind": "value",
-            "type": {
-              "kind": "maybeAbsent",
-              "of": "text"
-            }
-          }
-        }
-      ],
       "description": "Discover, classify, and fetch URLs in a message. Emits one ephemeral Url record per fetched resource.",
       "package": "@lf/web",
       "name": "vc_url_retrieval"

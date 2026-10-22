@@ -29,7 +29,7 @@ describe("a library's old spellings", () => {
     expect(found).toEqual([
       {
         code: 'MOV_V5_SPELLING',
-        message: '"lib/a" line 2: `UPPER` is written `Text.upper` from language version 5',
+        message: '"lib/a" line 2: the retired spelling `UPPER` is written `Text.upper`',
         span: { start: { line: 1, col: 1 }, end: { line: 1, col: 31 } },
       },
     ]);
@@ -42,7 +42,7 @@ describe("a library's old spellings", () => {
     };
     const found = spellings(check(root, 5, (path) => (files[path] !== undefined ? { source: files[path] } : undefined)));
     expect(found.map((d) => d.message)).toEqual([
-      '"lib/a" line 1: "lib/b" line 2: `LOWER` is written `Text.lower` from language version 5',
+      '"lib/a" line 1: "lib/b" line 2: the retired spelling `LOWER` is written `Text.lower`',
     ]);
   });
 
@@ -59,7 +59,7 @@ describe('a block closure nested in an expression', () => {
       'function go(xs) {\n  if (count(filter(xs, (r) => {\n    return LENGTH(r) > 0\n  })) > 0) {\n    y = 1\n  }\n}';
     const found = spellings(check(source, 5));
     expect(found.map((d) => [d.message, d.span.start])).toEqual([
-      ['`LENGTH` is written `Text.length` from language version 5', { line: 3, col: 12 }],
+      ['the retired spelling `LENGTH` is written `Text.length`', { line: 3, col: 12 }],
     ]);
   });
 
@@ -91,7 +91,7 @@ describe('a plugin', () => {
   it("is refused under 5 by the catalog's key, the local name kept by the fix", () => {
     const found = spellings(checkWith('import { fetch_url } from plugins\n', 5));
     expect(found.map((d) => [d.message, d.fix?.edits[0]?.text])).toEqual([
-      ['from language version 5 the plugin `fetch_url` is imported as `fetchUrl`', 'fetchUrl as fetch_url'],
+      ['the plugin `fetch_url` is imported as `fetchUrl`', 'fetchUrl as fetch_url'],
     ]);
     expect(spellings(checkWith('import { fetch_url as get } from plugins\n', 5))[0]?.fix?.edits[0]?.text).toBe('fetchUrl');
   });
@@ -124,7 +124,7 @@ describe('a name the program binds', () => {
 
   it('only where it is bound: an unbound old name is still refused under 5', () => {
     expect(ofCode(check('function go(t: <text>) {\n  a = upper(t)\n}', 5), 'MOV_V5_SPELLING')).toEqual([
-      '`upper` is written `Text.upper` from language version 5',
+      'the retired spelling `upper` is written `Text.upper`',
     ]);
     const inner = 'function go(t: <text>) {\n  if (t == "a") {\n    upper = (s: <text>) => s\n  }\n  n = upper(t)\n}';
     expect(ofCode(check(inner, 5), 'MOV_V5_SPELLING')).toHaveLength(1);

@@ -31,8 +31,8 @@
 //   - construction args beyond `credentials` — manifests don't declare a
 //     construction-config block yet (same TODO as the static catalog).
 
-import { entryPositionKeyOf, instanceSchemaKey, catalogSnapshotOf, CURRENT_LANGUAGE_VERSION, type AdapterSpec, type Catalog, type CatalogSnapshot, type CredentialSpec, type SchemaFieldType, type InstanceSchema, type LanguageVersion, type PluginSpec, type ResolveFile } from 'movement-lang';
-import { parseMovementExpression } from 'legacy-lang';
+import { entryPositionKeyOf, instanceSchemaKey, catalogSnapshotOf, type AdapterSpec, type Catalog, type CatalogSnapshot, type CredentialSpec, type SchemaFieldType, type InstanceSchema, type LanguageVersion, type PluginSpec, type ResolveFile } from 'movement-lang';
+import { CURRENT_LANGUAGE_VERSION, parseMovementExpression } from 'legacy-lang';
 import { parseTraversalPath, referencedConstructions, referencedEventAddresses, scanInstanceChains, surfaceNotEnumerated, type InstanceChain } from 'legacy-lang';
 
 import type { Expression } from 'movement-lang/expression/types';
@@ -54,7 +54,7 @@ import { isCredentialType } from '../adapters/credential_type';
 import { indexManifestsByName, listAdapterManifests } from '../adapters/registry';
 import { listRemoteAdapters } from '../adapters/remote/store';
 import { teamAdapterManifests } from '../adapters/team_manifests';
-import { bundledPluginSpecNamed, bundledPluginSpecs } from 'movement-engine/public/plugins';
+import { platformPluginSpecNamed, platformPluginSpecs, snapshotPluginSpecs } from './plugin_specs';
 import { assembleMovementFileSources, resolverOverSources } from './files';
 import {
   adapterInstanceIsWarm,
@@ -247,9 +247,9 @@ export function staticCatalogFromManifests(
       return Object.keys(options.credentials ?? {});
     },
     plugin(name): PluginSpec | undefined {
-      return bundledPluginSpecNamed(name);
+      return platformPluginSpecNamed(name);
     },
-    pluginNames: () => Object.keys(bundledPluginSpecs()),
+    pluginNames: () => Object.keys(platformPluginSpecs()),
     instantiate(adapterName): InstanceSchema | undefined {
       // STUB — construction arguments are ignored; see module header for
       // the real per-credential seam.
@@ -272,10 +272,11 @@ export function staticCatalogFromManifests(
  * credentials come along via its `credentialNames()`.
  */
 export function snapshotOverManifests(catalog: Catalog): CatalogSnapshot {
-  return catalogSnapshotOf(catalog, {
+  const snapshot = catalogSnapshotOf(catalog, {
     adapters: listAdapterManifests().map((m) => m.adapterType),
-    plugins: Object.keys(bundledPluginSpecs()),
+    plugins: Object.keys(platformPluginSpecs()),
   });
+  return { ...snapshot, plugins: snapshotPluginSpecs(snapshot.plugins) };
 }
 
 /** `staticCatalogFromManifests`, as the snapshot the engine takes. */
@@ -573,7 +574,7 @@ export async function movementCatalogForTeam(
   options: TeamCatalogOptions = {},
 ): Promise<TeamMovementCatalog> {
   const assembled = await assembleTeamCatalog(teamId, options);
-  return { ...assembled.catalog, runSnapshot: () => runSnapshotOf(assembled).snapshot };
+  return { ...assembled.catalog, runSnapshot: () => runSnapshotOf(assembled, options).snapshot };
 }
 
 interface TeamCatalogOptions {
@@ -1117,9 +1118,9 @@ async function assembleTeamCatalog(
       return Object.keys(credentialsByName);
     },
     plugin(name): PluginSpec | undefined {
-      return bundledPluginSpecNamed(name);
+      return platformPluginSpecNamed(name);
     },
-    pluginNames: () => Object.keys(bundledPluginSpecs()),
+    pluginNames: () => Object.keys(platformPluginSpecs()),
     instantiate(adapterName, args): InstanceSchema | undefined {
       const manifest = manifestBySlug.get(adapterName);
       if (!manifest) return undefined;
@@ -1466,10 +1467,13 @@ export async function runCatalogSnapshotForTeam(
   teamId: TeamId,
   options: { source: string; languageVersion?: LanguageVersion },
 ): Promise<RunCatalogSnapshot> {
-  return runSnapshotOf(await assembleTeamCatalog(teamId, options));
+  return runSnapshotOf(await assembleTeamCatalog(teamId, options), options);
 }
 
-function runSnapshotOf({ catalog: live, manifests, credentialRows, fileSources }: AssembledTeamCatalog): RunCatalogSnapshot {
+function runSnapshotOf(
+  { catalog: live, manifests, credentialRows, fileSources }: AssembledTeamCatalog,
+  { languageVersion }: { languageVersion?: LanguageVersion },
+): RunCatalogSnapshot {
   const notes = [...live.notes];
   const adapters = skeletonAdapters({ manifests, credentialRows, notes });
   fillCompiledSchemas(adapters, live);
@@ -1478,7 +1482,7 @@ function runSnapshotOf({ catalog: live, manifests, credentialRows, fileSources }
     snapshot: buildCatalogSnapshot({
       adapters: [...adapters.values()],
       credentials,
-      plugins: bundledPluginSpecs(),
+      plugins: snapshotPluginSpecs(platformPluginSpecs(), { languageVersion }),
       files: Object.fromEntries([...fileSources].map(([name, source]) => [name, { source }])),
       models: availableChatModels(),
     }),
@@ -1542,7 +1546,7 @@ export async function movementCatalogSnapshotForTeam(
 
   const { credentials } = credentialsOf(credentialsByName);
 
-  const plugins = bundledPluginSpecs();
+  const plugins = snapshotPluginSpecs(platformPluginSpecs());
 
   // Saved movement files — the import-path namespace. Carrying the
   // sources keeps the editor full-fidelity offline: imports resolve,

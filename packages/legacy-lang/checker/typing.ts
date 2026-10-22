@@ -53,10 +53,10 @@ import { builtinParamAt, builtinUnder, describeBuiltin, lookupBuiltin, type Buil
 import { extractCallNestedMessage } from './calls';
 import { isNestedCallName } from './nested_calls';
 import { neverAsAny } from 'movement-lang/never';
-import { describeLanguageVersion, type LanguageVersion } from 'movement-lang/language_version';
+import { describeLanguageVersion, type LanguageVersion } from '../language_version';
 import { before, changedBetween, since } from '../version_conditionals';
 import { Span } from 'movement-lang/parser/ast';
-import { spellCode, spellWord } from 'movement-lang/parser/surface';
+import { spellCode, spellWord } from '../parser/surface';
 import {
   describeFieldType,
   EdgeSchema,
@@ -5118,7 +5118,7 @@ export class ExpressionTyping {
   }
 
   /** This walk is for a move up across the change version `n` made. */
-  private upgradeCrosses(n: LanguageVersion): boolean {
+  private upgradeCrosses(n: number): boolean {
     const from = this.options.upgradingFrom;
     return from !== undefined && changedBetween(from, this.options.languageVersion, n);
   }

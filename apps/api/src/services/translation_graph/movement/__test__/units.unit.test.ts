@@ -3,8 +3,9 @@
 // listen still derives its trigger row (kind = the unit) and, for manual, its
 // "Run now" target. Before 5 a listen names a construction, as it always has.
 
+import { LANGUAGE_VERSION } from 'movement-lang';
 import { parseProgram } from 'legacy-lang';
-import { collectFileListeners } from 'movement-engine/public/inbound';
+import { collectFileListeners } from '@listen-fire/legacy-engine/services/translation_graph/file_listeners';
 import { manualListenerMovements } from '../files';
 
 const V5 = [
@@ -21,19 +22,19 @@ const V5 = [
 
 describe('run host units', () => {
   it('derive a listener per unit listen from version 5', () => {
-    const listeners = collectFileListeners(parseProgram(V5, { languageVersion: 5 }), { languageVersion: 5 });
+    const listeners = collectFileListeners(parseProgram(V5, { languageVersion: LANGUAGE_VERSION }), { languageVersion: LANGUAGE_VERSION });
     expect(listeners.map((l) => [l.adapter, l.movementName, l.credentialName, l.config])).toEqual([
       ['manual', 'backfill', undefined, {}],
       ['cron', 'digest', undefined, { schedule: '0 9 * * 1', timezone: 'Europe/London' }],
     ]);
-    expect(manualListenerMovements(parseProgram(V5, { languageVersion: 5 }), { languageVersion: 5 })).toEqual(['backfill']);
+    expect(manualListenerMovements(parseProgram(V5, { languageVersion: LANGUAGE_VERSION }), { languageVersion: LANGUAGE_VERSION })).toEqual(['backfill']);
   });
 
   it("yield to a file's own construction, and are no unit before version 5", () => {
     const own = 'import { manual } from adapters\nruns = connect manual\nfunction go(run: <runs-[:Invocation]->>) {\n  return 1\n}\nlisten to runs fire go\n';
-    expect(collectFileListeners(parseProgram(own, { languageVersion: 5 }), { languageVersion: 5 }).map((l) => [l.instanceName, l.adapter])).toEqual([['runs', 'manual']]);
+    expect(collectFileListeners(parseProgram(own, { languageVersion: LANGUAGE_VERSION }), { languageVersion: LANGUAGE_VERSION }).map((l) => [l.instanceName, l.adapter])).toEqual([['runs', 'manual']]);
     const v4 = 'movement go(run: <manual-[:Invocation]->>) {\n  x = 1\n}\nlisten to manual {} fire go\n';
-    expect(collectFileListeners(parseProgram(v4, { languageVersion: 4 }), { languageVersion: 4 })).toEqual([]);
-    expect(manualListenerMovements(parseProgram(v4, { languageVersion: 4 }), { languageVersion: 4 })).toEqual([]);
+    expect(collectFileListeners(parseProgram(v4, { languageVersion: '4' }), { languageVersion: '4' })).toEqual([]);
+    expect(manualListenerMovements(parseProgram(v4, { languageVersion: '4' }), { languageVersion: '4' })).toEqual([]);
   });
 });

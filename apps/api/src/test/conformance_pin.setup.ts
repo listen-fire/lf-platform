@@ -5,7 +5,7 @@
 // here, as a saved movement's run would carry its pin. The injection sits at
 // the evaluator's entry, which both engines share; nested evaluation reuses
 // the context it was given.
-import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+import { CURRENT_LANGUAGE_VERSION } from 'legacy-lang';
 
 jest.mock('@listen-fire/legacy-engine/services/movement_engine/expression', () => {
   const actual = jest.requireActual('@listen-fire/legacy-engine/services/movement_engine/expression');

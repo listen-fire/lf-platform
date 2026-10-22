@@ -117,7 +117,7 @@ jest.mock('../../../lib/anthropic', () => ({
 }));
 
 import type { InstanceSchema, LanguageVersion } from 'movement-lang';
-import { CURRENT_LANGUAGE_VERSION, fromCatalogSnapshot, mockCatalogSnapshot } from 'movement-lang';
+import { LANGUAGE_VERSION, fromCatalogSnapshot, mockCatalogSnapshot } from 'movement-lang';
 import { parseMovementExpression } from 'legacy-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import type { Expression } from 'movement-lang/expression/types';
@@ -294,7 +294,7 @@ const kgSchema: InstanceSchema = {
 // Each program here is written once, in the spelling versions 1–4 read; a
 // version-5 run reads it as the upgrade tool rewrites it.
 function respelled<I extends RunInput>(input: I): I {
-  const version = input.languageVersion ?? CURRENT_LANGUAGE_VERSION;
+  const version = input.languageVersion ?? LANGUAGE_VERSION;
   return { ...input, source: spelledFor(version, input.source, fromCatalogSnapshot(input.catalog)) };
 }
 const runMovement = (input: RunMovementInput) => runAsWritten(respelled(input));
@@ -816,7 +816,7 @@ describe('value bindings — field reads', () => {
       source: SRC,
       // The catalog types `subject` text, and from 5 a text has no fields
       // (MOV_TEXT_HAS_NO_FIELDS), so the read is pinned to 4.
-      languageVersion: 4,
+      languageVersion: '4',
       // The event field holds an object — the binding's value.
       event: webhookEvent('email', {
         subject: { label: 'Follow up with ACME' },
@@ -1889,7 +1889,7 @@ describe('array indexing — the `at` expression node, frozen semantics mirrored
       expression: { type: 'alias_ref', name: 'xs' },
       index: { type: 'static', value: index },
     };
-    return (await evalMovementExpr(expr, { env, languageVersion: CURRENT_LANGUAGE_VERSION })).value;
+    return (await evalMovementExpr(expr, { env, languageVersion: LANGUAGE_VERSION })).value;
   }
 
   it('indexes forward and backward, nulls out of range and non-integer indexes, scalar acts as a one-element list', async () => {
@@ -1914,7 +1914,7 @@ describe('array indexing — the `at` expression node, frozen semantics mirrored
 describe('bare coercers — DATE() / DATETIME() / NUMBER() built-ins', () => {
   async function evalCoercer(text: string): Promise<unknown> {
     const expr = parseMovementExpression(text);
-    return (await evalMovementExpr(expr, { env: new Environment(), languageVersion: CURRENT_LANGUAGE_VERSION })).value;
+    return (await evalMovementExpr(expr, { env: new Environment(), languageVersion: LANGUAGE_VERSION })).value;
   }
 
   it('DATE() truncates a readable instant to a midnight-UTC calendar day', async () => {
@@ -1941,7 +1941,7 @@ describe('bare coercers — DATE() / DATETIME() / NUMBER() built-ins', () => {
   it('the bare coercers carry transformed provenance (a pure transform)', async () => {
     const result = await evalMovementExpr(parseMovementExpression('NUMBER("42")'), {
       env: new Environment(),
-      languageVersion: CURRENT_LANGUAGE_VERSION,
+      languageVersion: LANGUAGE_VERSION,
     });
     expect(result.value).toBe(42);
     expect(result.provenance).toBeDefined();
@@ -2059,7 +2059,7 @@ describe('parallel — env fork + join', () => {
       event: webhookEvent('slack', { user: 'U123', text: 'hello' }),
       teamId: TEAM_ID,
       catalog,
-      languageVersion: 4,
+      languageVersion: '4',
       credentialIds: CREDENTIAL_IDS,
       host: makeTestHost({
         adapters: {
@@ -2164,7 +2164,7 @@ describe('parallel — env fork + join', () => {
       event: webhookEvent('slack', { user: 'U9' }),
       teamId: TEAM_ID,
       catalog,
-      languageVersion: 4,
+      languageVersion: '4',
       credentialIds: CREDENTIAL_IDS,
       host: makeTestHost({
         adapters: {
@@ -3773,7 +3773,7 @@ describe('match — find, arbitrate, bind the FOUND handle; link it with link', 
       return { created: true };
     };
     const slack = makeFakeAdapter('slack');
-    const result = await runFind({ attio: fake.adapter, slack: slack.adapter }, { languageVersion: 3 });
+    const result = await runFind({ attio: fake.adapter, slack: slack.adapter }, { languageVersion: '3' });
 
     // The company write stands; the match found nothing, so the rest of
     // the body — the link and the message — never ran. Nothing threw, and
@@ -3806,7 +3806,7 @@ describe('match — find, arbitrate, bind the FOUND handle; link it with link', 
           return resolve(input);
         };
         const slack = makeFakeAdapter('slack');
-        const result = await runFind({ attio: fake.adapter, slack: slack.adapter }, { source, languageVersion: 3 });
+        const result = await runFind({ attio: fake.adapter, slack: slack.adapter }, { source, languageVersion: '3' });
         return { result, resolveCalls, linkCalls, constraints, messages: slack.creates };
       };
       return { twoStatements: await run(FIND_AND_LINK), sugar: await run(sugared(statement)) };
@@ -3857,7 +3857,7 @@ describe('match — find, arbitrate, bind the FOUND handle; link it with link', 
       const slack = makeFakeAdapter('slack');
       const result = await runFind(
         { attio: fake.adapter, slack: slack.adapter },
-        { source: sugared('  fund = link co -[:portfolio]-> { name: "Fund III" }'), languageVersion: 3 },
+        { source: sugared('  fund = link co -[:portfolio]-> { name: "Fund III" }'), languageVersion: '3' },
       );
       expect(result.writes.map((w) => [w.recordType, w.kind ?? 'write'])).toEqual([['company', 'write']]);
       expect(fake.creates.map((c) => c.recordType)).toEqual(['company']);
@@ -3913,7 +3913,7 @@ describe('match — find, arbitrate, bind the FOUND handle; link it with link', 
 
     const result = await runMovement({
       source: FILES_FIND,
-      languageVersion: 3,
+      languageVersion: '3',
       event: webhookEvent('slack', {
         files: [
           { name: 'deck.pdf', url: 'Fund III' },

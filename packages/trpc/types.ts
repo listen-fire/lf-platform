@@ -1,10 +1,12 @@
 import { CapturedWrite } from 'movement-engine/public/adapter';
+import * as engine_contracts_trigger_config from 'engine-contracts/trigger_config';
 import * as _prisma_client_runtime_library from '@prisma/client/runtime/library';
-import { CatalogSnapshot, InstanceSchema, LanguageVersion, Diagnostic } from 'movement-lang';
 import { FieldType, StoryProblem, StoryShapeNode, StoryEdge, Step, Chip, StoryFilter, StoryValidity } from 'legacy-lang';
+import { CatalogSnapshot, InstanceSchema, LanguageVersion, Diagnostic } from 'movement-lang';
 import * as _trpc_server_observable from '@trpc/server/observable';
 import { AskState } from '@listen-fire/ask';
-import * as engine_contracts from 'engine-contracts';
+import * as engine_contracts_adapter from 'engine-contracts/adapter';
+import * as engine_contracts_catalog from 'engine-contracts/catalog';
 import * as _prisma_client from '@prisma/client';
 import * as _trpc_server from '@trpc/server';
 import * as _trpc_server_dist_error_formatter from '@trpc/server/dist/error/formatter';
@@ -4321,9 +4323,9 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     } | {
                         kind: "generic";
                         shape: {
-                            properties: Record<string, engine_contracts.ExpressionType>;
+                            properties: Record<string, engine_contracts_catalog.ExpressionType>;
                             edges: Record<string, {
-                                target: engine_contracts.ExpressionType;
+                                target: engine_contracts_catalog.ExpressionType;
                             }>;
                         };
                     } | {
@@ -4364,7 +4366,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     fires?: boolean | undefined;
                     firesOn?: string[] | undefined;
                 }[];
-                runtimeCapabilities: engine_contracts.RuntimeCapabilities;
+                runtimeCapabilities: engine_contracts_adapter.RuntimeCapabilities;
                 supportedTriggers: readonly ("mutation" | "extraction" | "snapshot" | "poll" | "changes-feed" | "webhook")[];
             }>;
             describeTypes: _trpc_server.BuildProcedure<"query", {
@@ -4426,9 +4428,9 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     } | {
                         kind: "generic";
                         shape: {
-                            properties: Record<string, engine_contracts.ExpressionType>;
+                            properties: Record<string, engine_contracts_catalog.ExpressionType>;
                             edges: Record<string, {
-                                target: engine_contracts.ExpressionType;
+                                target: engine_contracts_catalog.ExpressionType;
                             }>;
                         };
                     } | {
@@ -4561,8 +4563,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     backingFields?: string[] | undefined;
                     capability?: {
                         supportsLimit: boolean;
-                        filter?: "bounded" | "native" | undefined;
-                        order?: "bounded" | "native" | undefined;
+                        filter?: "native" | "bounded" | undefined;
+                        order?: "native" | "bounded" | undefined;
                         naturalOrder?: {
                             field: string;
                             direction: "asc" | "desc";
@@ -11327,7 +11329,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 supportedTriggers: string[];
                 webhookEventTypeId?: string | undefined;
                 kind?: "core" | "adapter" | "plugin" | undefined;
-                slot?: "models" | "files" | "judge" | "store" | "limiter" | "loopGuard" | "browser" | "wake" | undefined;
+                slot?: "models" | "files" | "store" | "judge" | "limiter" | "loopGuard" | "browser" | "wake" | "ocr" | undefined;
                 settings?: {
                     name: string;
                     label?: string | undefined;
@@ -11397,10 +11399,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                             }[] | undefined;
                             fedByExtraction?: true | undefined;
                             output?: Record<string, unknown> | undefined;
-                            earlierOutputs?: {
-                                before: number;
-                                output: Record<string, unknown>;
-                            }[] | undefined;
+                            description?: string | undefined;
                         };
                     }[];
                 } | undefined;
@@ -11482,7 +11481,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     supportedTriggers: string[];
                     webhookEventTypeId?: string | undefined;
                     kind?: "core" | "adapter" | "plugin" | undefined;
-                    slot?: "models" | "files" | "judge" | "store" | "limiter" | "loopGuard" | "browser" | "wake" | undefined;
+                    slot?: "models" | "files" | "store" | "judge" | "limiter" | "loopGuard" | "browser" | "wake" | "ocr" | undefined;
                     settings?: {
                         name: string;
                         label?: string | undefined;
@@ -11552,10 +11551,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                                 }[] | undefined;
                                 fedByExtraction?: true | undefined;
                                 output?: Record<string, unknown> | undefined;
-                                earlierOutputs?: {
-                                    before: number;
-                                    output: Record<string, unknown>;
-                                }[] | undefined;
+                                description?: string | undefined;
                             };
                         }[];
                     } | undefined;
@@ -11622,7 +11618,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     supportedTriggers: string[];
                     webhookEventTypeId?: string | undefined;
                     kind?: "core" | "adapter" | "plugin" | undefined;
-                    slot?: "models" | "files" | "judge" | "store" | "limiter" | "loopGuard" | "browser" | "wake" | undefined;
+                    slot?: "models" | "files" | "store" | "judge" | "limiter" | "loopGuard" | "browser" | "wake" | "ocr" | undefined;
                     settings?: {
                         name: string;
                         label?: string | undefined;
@@ -11692,10 +11688,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                                 }[] | undefined;
                                 fedByExtraction?: true | undefined;
                                 output?: Record<string, unknown> | undefined;
-                                earlierOutputs?: {
-                                    before: number;
-                                    output: Record<string, unknown>;
-                                }[] | undefined;
+                                description?: string | undefined;
                             };
                         }[];
                     } | undefined;
@@ -12160,7 +12153,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
             }, {
-                blocks: engine_contracts.ConfigBlock[];
+                blocks: engine_contracts_trigger_config.ConfigBlock[];
                 values: Record<string, string>;
             }>;
             updateTriggerConfig: _trpc_server.BuildProcedure<"mutation", {

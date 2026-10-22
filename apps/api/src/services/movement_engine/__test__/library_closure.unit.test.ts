@@ -12,6 +12,7 @@
 // Both always failed, so neither is a version conditional.
 
 import type { InstanceSchema } from 'movement-lang';
+import { pinOf } from './pin_of';
 import type { Adapter, RuntimeCapabilities, WriteInput } from 'movement-engine/public/adapter';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
@@ -421,19 +422,19 @@ describe.each([4, 5] as const)('a resume against a program that no longer links 
   };
   it.each(Object.keys(libraries))('refuses: %s', async (name) => {
     const h: Harness = {
-      library: spelledFor(version, libraries[name]!),
+      library: spelledFor(pinOf(version), libraries[name]!),
       source: root('import { twice } from "lib/leads"', version === 5 ? '  x = twice(4)\n  write graph-[:note]-> { payload: { x: x } }' : '  x = twice(n: 4)\n  write graph-[:note]-> { payload: { x: x } }', version),
       parks: makeParkSink(),
     };
     const kg0 = makeKgFake();
-    const first = await runMovement({ ...runInput(h, kg0), languageVersion: version as never });
+    const first = await runMovement({ ...runInput(h, kg0), languageVersion: pinOf(version) });
     expect(first.parked).toBe(true);
     const [address, park] = [...h.parks.parks.entries()][0]!;
     h.parks.parks.delete(address);
     await expect(
       resumeMovement({
         ...runInput(unlinked(h), makeKgFake()),
-        languageVersion: version as never,
+        languageVersion: pinOf(version),
         state: park.state,
         reenter: park.kind !== 'timer',
       }),

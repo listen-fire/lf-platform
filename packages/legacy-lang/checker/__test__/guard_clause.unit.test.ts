@@ -11,6 +11,7 @@
 // Both checkers answer every case, the TypeScript one and the Rust one; the
 // Rust twin is listen-fire's crates/movement-checker/tests/guard_clause.rs.
 
+import { LANGUAGE_VERSION } from 'movement-lang/language_version';
 import { parseProgram } from '../../parser/parse';
 import { checkProgram, type Diagnostic } from '../check';
 import { fromCatalogSnapshot, type CatalogSnapshot } from 'movement-lang/service/snapshot';
@@ -51,7 +52,7 @@ function absent(body: string, version: Version): { ts: string[]; rust: string[] 
   const ts = checkProgram(parseProgram(source, { languageVersion: version }), fromCatalogSnapshot(snapshot), { languageVersion: version });
   // The Rust checker serves the versions the language release does (5);
   // below it the TypeScript checker alone answers (ruling A).
-  const rust = version >= 5 ? checkSourceInRust(source, snapshot, { languageVersion: version }) : ts;
+  const rust = version >= 5 ? checkSourceInRust(source, snapshot, { languageVersion: LANGUAGE_VERSION }) : ts;
   const refusals = (found: Diagnostic[]): string[] => {
     const errors = found.filter((d) => (d.severity ?? 'error') === 'error');
     expect(errors.filter((d) => d.code !== 'MOV_ABSENT_REQUIRED').map((d) => `${d.code}: ${d.message}`)).toEqual([]);

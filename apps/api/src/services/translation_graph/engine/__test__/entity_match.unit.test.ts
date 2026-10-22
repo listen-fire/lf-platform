@@ -7,7 +7,7 @@
 // exercised. This drives every branch by mocking only the LLM `execute` call
 // and using the REAL exactness arbitration (`candidateIsAllExact`).
 
-import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+import { LANGUAGE_VERSION } from 'movement-lang';
 
 import type { ExternalRecordRef } from 'movement-engine/public/adapter';
 import type { UniquenessConstraints } from 'engine-contracts/uniqueness';
@@ -191,7 +191,7 @@ describe('arbitrateEntityCandidates — exactness before the LLM', () => {
 
   it('returns null for 0 candidates (create) without the LLM', async () => {
     const out = await arbitrateEntityCandidates({
-      languageVersion: CURRENT_LANGUAGE_VERSION,
+      languageVersion: LANGUAGE_VERSION,
       asserted: { domain: 'acme.com' },
       candidates: [],
       recordType: 'co',
@@ -203,7 +203,7 @@ describe('arbitrateEntityCandidates — exactness before the LLM', () => {
 
   it('returns 0 for a single ALL-EXACT candidate without the LLM', async () => {
     const out = await arbitrateEntityCandidates({
-      languageVersion: CURRENT_LANGUAGE_VERSION,
+      languageVersion: LANGUAGE_VERSION,
       asserted: { domain: 'acme.com' },
       candidates: [ref({ domain: 'acme.com' })],
       recordType: 'co',
@@ -220,7 +220,7 @@ describe('arbitrateEntityCandidates — exactness before the LLM', () => {
     // exactness. A decline here is the safe outcome — a create, not a merge.
     mockExecute.mockResolvedValue(judged(null, 0.99));
     const out = await arbitrateEntityCandidates({
-      languageVersion: CURRENT_LANGUAGE_VERSION,
+      languageVersion: LANGUAGE_VERSION,
       asserted: { domain: 'acme.com' },
       candidates: [ref({ domain: 'other.com' }, 'a')],
       recordType: 'co',
@@ -238,7 +238,7 @@ describe('arbitrateEntityCandidates — exactness before the LLM', () => {
     // before the May-2026 split ever added a judge call here.
     mockExecute.mockRejectedValue(new Error('LLM must not be called'));
     const out = await arbitrateEntityCandidates({
-      languageVersion: CURRENT_LANGUAGE_VERSION,
+      languageVersion: LANGUAGE_VERSION,
       asserted: { domain: 'acme.com' },
       candidates: [ref({ domain: 'acme.com' }, 'a')],
       recordType: 'co',
@@ -259,7 +259,7 @@ describe('arbitrateEntityCandidates — exactness before the LLM', () => {
     // parent) and risks a declined judge minting a duplicate.
     mockExecute.mockRejectedValue(new Error('LLM must not be called'));
     const out = await arbitrateEntityCandidates({
-      languageVersion: CURRENT_LANGUAGE_VERSION,
+      languageVersion: LANGUAGE_VERSION,
       asserted: { name: 'U123' },
       candidates: [ref({ company: { id: 'ext-attio-1' } }, 'a')],
       recordType: 'co',
@@ -276,7 +276,7 @@ describe('arbitrateEntityCandidates — exactness before the LLM', () => {
     // applies and the lone candidate still reaches the judge.
     mockExecute.mockResolvedValue(judged(null, 0.99));
     const out = await arbitrateEntityCandidates({
-      languageVersion: CURRENT_LANGUAGE_VERSION,
+      languageVersion: LANGUAGE_VERSION,
       asserted: { domain: 'acme.com' },
       candidates: [ref({ domain: 'other.com' }, 'a')],
       recordType: 'co',
@@ -289,7 +289,7 @@ describe('arbitrateEntityCandidates — exactness before the LLM', () => {
   it('auto-matches the single all-exact candidate WITHOUT calling the LLM', async () => {
     mockExecute.mockRejectedValue(new Error('LLM must not be called'));
     const out = await arbitrateEntityCandidates({
-      languageVersion: CURRENT_LANGUAGE_VERSION,
+      languageVersion: LANGUAGE_VERSION,
       asserted: { domain: 'acme.com' },
       candidates: [ref({ domain: 'other.com' }, 'a'), ref({ domain: 'acme.com' }, 'b')],
       recordType: 'co',
@@ -302,7 +302,7 @@ describe('arbitrateEntityCandidates — exactness before the LLM', () => {
   it('falls through to the LLM judge when MORE THAN ONE candidate is all-exact (ambiguous)', async () => {
     mockExecute.mockResolvedValue(judged(0, 0.8));
     const out = await arbitrateEntityCandidates({
-      languageVersion: CURRENT_LANGUAGE_VERSION,
+      languageVersion: LANGUAGE_VERSION,
       asserted: { domain: 'acme.com' },
       candidates: [ref({ domain: 'acme.com' }, 'a'), ref({ domain: 'acme.com' }, 'b')],
       recordType: 'co',
@@ -315,7 +315,7 @@ describe('arbitrateEntityCandidates — exactness before the LLM', () => {
   it('falls through to the LLM judge when NO candidate is all-exact', async () => {
     mockExecute.mockResolvedValue(judged(1, 0.7));
     const out = await arbitrateEntityCandidates({
-      languageVersion: CURRENT_LANGUAGE_VERSION,
+      languageVersion: LANGUAGE_VERSION,
       asserted: { domain: 'acme.com' },
       candidates: [ref({ domain: 'x.com' }, 'a'), ref({ domain: 'y.com' }, 'b')],
       recordType: 'co',
@@ -327,7 +327,7 @@ describe('arbitrateEntityCandidates — exactness before the LLM', () => {
 
   it('a FUZZY field whose values are equal outright is exact — the one exact candidate wins without the judge', async () => {
     const out = await arbitrateEntityCandidates({
-      languageVersion: CURRENT_LANGUAGE_VERSION,
+      languageVersion: LANGUAGE_VERSION,
       asserted: { name: 'Pavo AI' },
       candidates: [ref({ name: 'pavo ai' }, 'a'), ref({ name: 'Pavo AI Labs' }, 'b')],
       recordType: 'co',
@@ -339,7 +339,7 @@ describe('arbitrateEntityCandidates — exactness before the LLM', () => {
 
   it('a lone FUZZY candidate with the identical name matches without the judge', async () => {
     const out = await arbitrateEntityCandidates({
-      languageVersion: CURRENT_LANGUAGE_VERSION,
+      languageVersion: LANGUAGE_VERSION,
       asserted: { name: 'Pavo AI' },
       candidates: [ref({ name: 'Pavo AI' }, 'a')],
       recordType: 'co',
@@ -352,7 +352,7 @@ describe('arbitrateEntityCandidates — exactness before the LLM', () => {
   it('two FUZZY candidates both equal outright are ambiguous — the judge decides', async () => {
     mockExecute.mockResolvedValue(judged(null, 0.9));
     const out = await arbitrateEntityCandidates({
-      languageVersion: CURRENT_LANGUAGE_VERSION,
+      languageVersion: LANGUAGE_VERSION,
       asserted: { name: 'Pavo AI' },
       candidates: [ref({ name: 'Pavo AI' }, 'a'), ref({ name: 'PAVO AI' }, 'b')],
       recordType: 'co',
@@ -366,7 +366,7 @@ describe('arbitrateEntityCandidates — exactness before the LLM', () => {
     mockExecute.mockRejectedValue(new Error('anthropic 529'));
     const onJudgeUnavailable = jest.fn();
     const out = await arbitrateEntityCandidates({
-      languageVersion: CURRENT_LANGUAGE_VERSION,
+      languageVersion: LANGUAGE_VERSION,
       asserted: { domain: 'acme.com' },
       candidates: [ref({ domain: 'x.com' }, 'a'), ref({ domain: 'y.com' }, 'b')],
       recordType: 'co',

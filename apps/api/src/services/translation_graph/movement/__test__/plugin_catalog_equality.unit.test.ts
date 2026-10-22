@@ -12,11 +12,12 @@ require('engine-contracts/expression/schemas');
 import * as fs from 'fs';
 import * as path from 'path';
 
-import type { LanguageVersion, PluginSpec } from 'movement-lang';
+import { LANGUAGE_VERSION, type PluginSpec } from 'movement-lang';
+import { pinOf } from '../../../movement_engine/__test__/pin_of';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 
 import { diagnoseMovementSource } from '../authoring';
-import { bundledPluginSpecs } from 'movement-engine/public/plugins';
+import { platformPluginSpecs } from '../plugin_specs';
 import { staticCatalogFromManifests, staticCatalogSnapshot } from '../catalog';
 
 const FIXTURE = path.join(__dirname, '__fixtures__', 'plugin_catalog.json');
@@ -35,7 +36,7 @@ movement m() {
 function observe(): unknown {
   const catalog = staticCatalogFromManifests();
   const snapshot = staticCatalogSnapshot();
-  const specs = bundledPluginSpecs();
+  const specs = platformPluginSpecs();
   const names = Object.keys(specs).sort();
 
   const written = (key: string): string => specs[key]?.name ?? key;
@@ -53,7 +54,7 @@ function observe(): unknown {
     }),
   );
 
-  const versions: LanguageVersion[] = [4, 5];
+  const versions = [4, 5] as const;
   const diagnostics: Record<string, unknown> = {};
   for (const key of names) {
     const spec = specs[key]!;
@@ -61,11 +62,12 @@ function observe(): unknown {
     if (ambiguous(key)) continue;
     for (const withArgs of [false, true]) {
       const source = callingProgram(name, spec, withArgs);
-      for (const languageVersion of versions) {
+      for (const behaviour of versions) {
+        const languageVersion = pinOf(behaviour);
         const spelled = spelledFor(languageVersion, source, catalog);
-        const key = `${name} ${withArgs ? 'every argument' : 'no argument'} v${languageVersion}`;
+        const key = `${name} ${withArgs ? 'every argument' : 'no argument'} v${behaviour}`;
         diagnostics[`${key} typescript`] = diagnoseMovementSource(spelled, { catalog, languageVersion }).diagnostics;
-        if (languageVersion >= 5) {
+        if (behaviour >= 5) {
           diagnostics[`${key} rust`] = diagnoseMovementSource(spelled, { catalog, languageVersion, snapshot }).diagnostics;
         }
       }
@@ -105,8 +107,8 @@ function m(t: <text>) {
   ])('checks %s render clean in both checkers', (tag, as) => {
     const catalog = staticCatalogFromManifests();
     const snapshot = staticCatalogSnapshot();
-    expect(diagnoseMovementSource(imports(tag, as), { catalog, languageVersion: 5 }).diagnostics).toEqual([]);
-    expect(diagnoseMovementSource(imports(tag, as), { catalog, languageVersion: 5, snapshot }).diagnostics).toEqual([]);
+    expect(diagnoseMovementSource(imports(tag, as), { catalog, languageVersion: LANGUAGE_VERSION }).diagnostics).toEqual([]);
+    expect(diagnoseMovementSource(imports(tag, as), { catalog, languageVersion: LANGUAGE_VERSION, snapshot }).diagnostics).toEqual([]);
   });
 
   it('refuses a bare import of render, naming both packages, in both checkers', () => {
@@ -118,7 +120,7 @@ function m(t: <text>) {
 `;
     const catalog = staticCatalogFromManifests();
     const snapshot = staticCatalogSnapshot();
-    for (const options of [{ catalog, languageVersion: 5 as const }, { catalog, languageVersion: 5 as const, snapshot }]) {
+    for (const options of [{ catalog, languageVersion: LANGUAGE_VERSION }, { catalog, languageVersion: LANGUAGE_VERSION, snapshot }]) {
       const messages = diagnoseMovementSource(source, options).diagnostics.map((d) => d.message).join('\n');
       expect(messages).toContain('served by more than one package (@lf/web, @lf/pdf)');
     }
@@ -139,13 +141,13 @@ function m(u: <text>) {
   ])('checks clean %s, in both checkers', (_how, source) => {
     const catalog = staticCatalogFromManifests();
     const snapshot = staticCatalogSnapshot();
-    expect(diagnoseMovementSource(source, { catalog, languageVersion: 5 }).diagnostics).toEqual([]);
-    expect(diagnoseMovementSource(source, { catalog, languageVersion: 5, snapshot }).diagnostics).toEqual([]);
+    expect(diagnoseMovementSource(source, { catalog, languageVersion: LANGUAGE_VERSION }).diagnostics).toEqual([]);
+    expect(diagnoseMovementSource(source, { catalog, languageVersion: LANGUAGE_VERSION, snapshot }).diagnostics).toEqual([]);
   });
 
   it('names its members when one is missing', () => {
     const source = program('import { `@lf/web` as web } from plugins', 'web.whisper(u)');
-    const messages = diagnoseMovementSource(source, { catalog: staticCatalogFromManifests(), languageVersion: 5 }).diagnostics.map((d) => d.message);
+    const messages = diagnoseMovementSource(source, { catalog: staticCatalogFromManifests(), languageVersion: LANGUAGE_VERSION }).diagnostics.map((d) => d.message);
     expect(messages.join('\n')).toMatch(/has no member `whisper`.*fetchUrl/);
   });
 });

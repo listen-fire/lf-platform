@@ -5,7 +5,7 @@
 // only, with an upgrade warning before it — the frozen behaviour is pinned
 // here, and version 5 is refused at check.
 
-import type { InstanceSchema } from 'movement-lang';
+import { LANGUAGE_VERSION, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import type { Adapter, RuntimeCapabilities, WriteInput } from 'movement-engine/public/adapter';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { tenantIdOf } from 'engine-contracts';
@@ -98,7 +98,7 @@ const CASES: Record<string, string> = {
   write graph-[:note]-> { payload: { x: x } }
 }`,
 };
-async function runUnder(source: string, languageVersion: 3 | 4 | 5) {
+async function runUnder(source: string, languageVersion: LanguageVersion) {
   const kg = makeKgFake();
   const result = await runMovement({
     source: `${PRE}${source}\nlisten to runs {} fire recap\n`,
@@ -124,12 +124,12 @@ async function runUnder(source: string, languageVersion: 3 | 4 | 5) {
 const payloads = (kg: ReturnType<typeof makeKgFake>) => kg.creates.filter(c => c.fields.payload !== undefined).map(c => c.fields.payload);
 
 describe('a value that may be a record, handed to a built-in that takes a value', () => {
-  it.each([3, 4] as const)('ran under %i: the built-in read the record as it was', async version => {
+  it.each(['3', '4'] as const)('ran under %s: the built-in read the record as it was', async version => {
     expect(payloads((await runUnder(CASES.round!, version)).kg)).toEqual([{ x: Number.NaN }]);
     expect(payloads((await runUnder(CASES.upper!, version)).kg)).toEqual([{ x: '[OBJECT OBJECT]' }]);
   });
 
   it.each(Object.keys(CASES))('%s is refused at check under Dancing Wren (5)', async name => {
-    await expect(runUnder(CASES[name]!, 5)).rejects.toThrow(/MOV_CALL_ARG_MAYBE_RECORD/);
+    await expect(runUnder(CASES[name]!, LANGUAGE_VERSION)).rejects.toThrow(/MOV_CALL_ARG_MAYBE_RECORD/);
   });
 });

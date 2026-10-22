@@ -5,7 +5,8 @@
 // operand they do not need — so a write in an arm that is not taken never
 // happens. Every proof is what reaches the adapter, in the order it arrived.
 
-import type { InstanceSchema, LanguageVersion } from 'movement-lang';
+import { before } from 'legacy-lang';
+import { LANGUAGE_VERSION, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import type { Adapter, RuntimeCapabilities, WriteInput } from 'movement-engine/public/adapter';
@@ -118,7 +119,7 @@ function double(n: <number>) {
 
 async function runBody(body: string, options: { languageVersion?: LanguageVersion; fileLevel?: string } = {}) {
   const kg = makeKgFake();
-  const v4 = options.languageVersion !== undefined && options.languageVersion < 5;
+  const v4 = options.languageVersion !== undefined && before(options.languageVersion, 5);
   const source = `${v4 ? PRELUDE_V4 : PRELUDE}${options.fileLevel ?? (v4 ? MARK_V4 : MARK)}${v4 ? 'movement' : 'function'} recap(go: <runs-[:Invocation]->>) {
 ${body}
 }
@@ -271,7 +272,7 @@ listen to runs {} fire recap
           },
         }),
         dryRun: false,
-        languageVersion: 2,
+        languageVersion: '2',
       }),
     ).rejects.toThrow(/exactly one/);
     expect(kg.creates).toEqual([]);
@@ -299,7 +300,7 @@ listen to runs {} fire RECAP
       }),
       dryRun: false,
       // Version 5 reads names exactly; letter-case folding is a version 1–4 rule.
-      languageVersion: 4,
+      languageVersion: '4',
     });
     expect(bodies(kg.creates)).toEqual(['ran']);
   });
@@ -316,7 +317,7 @@ describe('a closure bound to a name is called like any function', () => {
         '  write graph-[:note]-> { payload: { a: a, b: b, c: c } }',
       ].join('\n'),
       // Version 5 reads names exactly; letter-case folding is a version 1–4 rule.
-      { languageVersion: 4 },
+      { languageVersion: '4' },
     );
     expect(payload(creates)).toEqual({ a: 3, b: 30, c: 6 });
   });
@@ -376,7 +377,7 @@ listen to runs {} fire recap
           },
         }),
         dryRun: false,
-        languageVersion: 2,
+        languageVersion: '2',
       }),
     ).rejects.toThrow(/MOV_CALL_NOT_MOVEMENT/);
   });
@@ -387,8 +388,8 @@ describe('a field read off a nested call that hands back a record', () => {
   // a field off it in a write field, in a call's argument, and in a call
   // whose value is bound. Each version on its own engine (4: TypeScript, 5:
   // Rust).
-  for (const version of [4, 5] as LanguageVersion[]) {
-    const v4 = version < 5;
+  for (const version of ['4', LANGUAGE_VERSION] as LanguageVersion[]) {
+    const v4 = before(version, 5);
     const fileLevel = `${v4 ? MARK_V4 : MARK}${v4 ? 'movement' : 'function'} pick(t: <text>) {\n  co = write graph-[:note]-> { body: t }\n  return co\n}\n`;
     const pick = v4 ? 'pick(t: "Beta")' : 'pick("Beta")';
     const mark = (arg: string): string => (v4 ? `mark(t: ${arg})` : `mark(${arg})`);

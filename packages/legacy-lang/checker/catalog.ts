@@ -397,11 +397,31 @@ export function callArgSpan(arg: CallArg): Span {
   }
 }
 
+/** An older shape of a plugin's output, kept for programs pinned before the
+ *  version that changed it. */
+export interface EarlierOutput {
+  before: number;
+  output: PluginOutput;
+}
+
+/** A plugin's spec as the platform's catalog serves it: the language's spec,
+ *  plus the older output shapes a program pinned to a legacy id reads. The
+ *  language dropped the field with the integer versions; the platform, which
+ *  keeps those versions, declares it (apps/api's plugin_specs.ts). */
+export interface LegacyPluginSpec extends PluginSpec {
+  readonly earlierOutputs?: readonly EarlierOutput[];
+}
+
+/** `spec`'s older output shapes, earliest first. */
+export function earlierOutputsOf(spec: LegacyPluginSpec): readonly EarlierOutput[] {
+  return spec.earlierOutputs ?? [];
+}
+
 /** What a plain call to `spec`'s plugin hands back to a program pinned to
  *  `languageVersion` — its current output, or an older shape it kept for
- *  programs pinned before the change (`PluginSpec.earlierOutputs`). */
-export function pluginOutputUnder(spec: PluginSpec, languageVersion: LanguageVersion): PluginOutput | undefined {
-  const earlier = spec.earlierOutputs?.find((entry) => before(languageVersion, entry.before));
+ *  programs pinned before the change (`earlierOutputsOf`). */
+export function pluginOutputUnder(spec: LegacyPluginSpec, languageVersion: LanguageVersion): PluginOutput | undefined {
+  const earlier = earlierOutputsOf(spec).find((entry) => before(languageVersion, entry.before));
   return earlier !== undefined ? earlier.output : spec.output;
 }
 

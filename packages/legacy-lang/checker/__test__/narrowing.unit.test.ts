@@ -11,6 +11,7 @@
 // members' data). So these tests register refinements the way the host does and
 // assert the checker agrees on the key.
 
+import { LANGUAGE_VERSION } from 'movement-lang/language_version';
 import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { InstanceSchema, mockCatalog, refinementKey } from '../catalog';
@@ -342,7 +343,7 @@ describe('a narrowing key does not depend on how the field read is spelled', () 
     const errors = (found: Diagnostic[]): Diagnostic[] => found.filter(d => (d.severity ?? 'error') === 'error');
     for (const diagnostics of [
       errors(checkProgram(parseProgram(source), mockCatalog(hostSpec))),
-      errors(checkSourceInRust(source, mockCatalogSnapshot(hostSpec), { languageVersion: 5 })),
+      errors(checkSourceInRust(source, mockCatalogSnapshot(hostSpec), { languageVersion: LANGUAGE_VERSION })),
     ]) {
       expect(diagnostics.map(d => d.code)).toEqual(['MOV_LINKED_UNKNOWN_EDGE']);
       expect(diagnostics[0]!.message).toContain(REFINED);

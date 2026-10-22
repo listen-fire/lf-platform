@@ -7,7 +7,7 @@
 // and the assertions beside each case say what it is for.
 
 import { spelledForVersion5 } from './combinator_spelling';
-import { fromCatalogSnapshot, type InstanceSchema } from 'movement-lang';
+import { LANGUAGE_VERSION, fromCatalogSnapshot, type InstanceSchema } from 'movement-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import { tenantIdOf, type CallbackCall } from 'engine-contracts';
 
@@ -268,7 +268,7 @@ async function runOn(c: Case): Promise<Outcome> {
   const wakes: unknown[] = [];
   const input = {
     // Written in the spelling versions 1–4 read; the run reads it as the upgrade tool respells it.
-    source: spelledFor(5, spelledForVersion5(c.source), fromCatalogSnapshot(catalog)),
+    source: spelledFor(LANGUAGE_VERSION, spelledForVersion5(c.source), fromCatalogSnapshot(catalog)),
     event: manualEvent(),
     teamId: TEAM_ID,
     catalog,

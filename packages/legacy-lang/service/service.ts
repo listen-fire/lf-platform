@@ -14,7 +14,7 @@ import { getCompletions as formulaCompletions, type Completion, type CompletionK
 import type { Loc, Span } from 'movement-lang/parser/ast';
 import { spellParamType } from 'movement-lang/parser/ast';
 import { MovementParseError, parseProgram } from '../parser/parse';
-import { CURRENT_LANGUAGE_VERSION, type LanguageVersion } from 'movement-lang/language_version';
+import { CURRENT_LANGUAGE_VERSION, type LanguageVersion } from '../language_version';
 import { since } from '../version_conditionals';
 import { CLOSER, opensHop, scanName, skipOpaque } from 'movement-lang/parser/scan';
 import {

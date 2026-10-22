@@ -34,7 +34,8 @@
 // `…/value/expr/nested/0-31/value/call/args/1/closure/body/0/value/node/spreads/0`.
 // The Rust engine re-reads the call from the slot to resolve one.
 
-import { fromCatalogSnapshot, resolveFileFromSnapshot, CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+import { fromCatalogSnapshot, resolveFileFromSnapshot } from 'movement-lang';
+import { CURRENT_LANGUAGE_VERSION } from 'legacy-lang';
 import { checkProgramWithLink, languageVersionDiagnostic } from 'legacy-lang';
 import { nestedCallsReadIn } from 'movement-lang';
 import { rustParseProgram } from 'legacy-lang/parser/rust_parser';

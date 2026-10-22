@@ -248,7 +248,7 @@ const FILES = new Map([['lib/file-routines', FILES_LIB]]);
 // The consumers walk the email's files with `-[f:#resources]->`, which Dancing
 // Wren (5) retires. This file is about imports, so they stay pinned to Luminous
 // Owl (4), where that walk is what it always was.
-const PINNED = { languageVersion: 4 } as const;
+const PINNED = { languageVersion: '4' } as const;
 const resolveFile = resolverOverSources(FILES);
 /** The same library as the run's catalog snapshot carries it. */
 const SNAPSHOT_FILES = Object.fromEntries([...FILES].map(([path, source]) => [path, { source }]));

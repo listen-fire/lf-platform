@@ -23,8 +23,8 @@
 // re-checks every firing through this same resolver, so a broken import
 // always fails loud, never silently).
 
-import { CURRENT_LANGUAGE_VERSION, runHostUnits, type LanguageVersion, type Program, type ResolveFile } from 'movement-lang';
-import { fileExports, referencedFileImports } from 'legacy-lang';
+import { RUN_HOST_UNITS, type LanguageVersion, type Program, type ResolveFile } from 'movement-lang';
+import { CURRENT_LANGUAGE_VERSION, fileExports, isLegacyLanguageVersion, referencedFileImports } from 'legacy-lang';
 import { MovementParseError } from 'movement-lang';
 import { parseProgram } from 'legacy-lang';
 
@@ -141,12 +141,13 @@ interface FacetScan {
  * A listener is manual when it listens to a NAMED construction of the manual
  * adapter (`go = manual()` then `listen to go {}`), import aliases honored.
  */
-export function manualListenerMovements(program: Program, options: { languageVersion?: number } = {}): string[] {
+export function manualListenerMovements(program: Program, options: { languageVersion?: LanguageVersion } = {}): string[] {
   const importOriginals = new Map<string, string>();
   const constructionAdapters = new Map<string, string>();
-  // From version 5 `manual` is the run host's own unit: `listen to manual fire
-  // backfill` needs no construction, unless the file binds the name itself.
-  for (const unit of runHostUnits(options.languageVersion ?? CURRENT_LANGUAGE_VERSION)) constructionAdapters.set(unit, unit);
+  // Past the legacy ids `manual` is the run host's own unit: `listen to manual
+  // fire backfill` needs no construction, unless the file binds the name itself.
+  const hostUnits = isLegacyLanguageVersion(options.languageVersion ?? CURRENT_LANGUAGE_VERSION) ? [] : RUN_HOST_UNITS;
+  for (const unit of hostUnits) constructionAdapters.set(unit, unit);
   for (const statement of program.statements) {
     if (statement.kind === 'import') {
       for (const { name, alias } of statement.names) {

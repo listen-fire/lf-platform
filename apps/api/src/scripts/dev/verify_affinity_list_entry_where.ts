@@ -19,8 +19,8 @@
  *
  * Usage: FAKE_BASE=http://localhost:6291/affinity ts-node … verify_affinity_list_entry_where.ts
  */
-import { CURRENT_LANGUAGE_VERSION, fromCatalogSnapshot, type CatalogSnapshot, type InstanceSchema } from 'movement-lang';
-import { checkProgram, scanInstanceChains } from 'legacy-lang';
+import { fromCatalogSnapshot, type CatalogSnapshot, type InstanceSchema } from 'movement-lang';
+import { CURRENT_LANGUAGE_VERSION, checkProgram, scanInstanceChains } from 'legacy-lang';
 import { parseProgram } from 'legacy-lang';
 
 import type { SourcePosition } from 'movement-engine/public/catalog';

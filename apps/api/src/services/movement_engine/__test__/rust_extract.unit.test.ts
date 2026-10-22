@@ -14,6 +14,7 @@ import {
   mockCatalogSnapshot,
   type InstanceSchema,
   type PluginSpec,
+  LANGUAGE_VERSION,
 } from 'movement-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 
@@ -193,7 +194,7 @@ const USAGE = { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheCreati
 
 /** The program as version 5 spells it (the shapes and calls are written so). */
 const spelled = (source: string): string =>
-  spelledFor(5, source, fromCatalogSnapshot(catalog));
+  spelledFor(LANGUAGE_VERSION, source, fromCatalogSnapshot(catalog));
 
 /** One run on the Rust engine: what it returned or threw, and what the model
  *  client and the plugin invoker were asked. */

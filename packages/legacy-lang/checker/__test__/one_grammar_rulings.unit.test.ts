@@ -8,7 +8,7 @@
 
 import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
-import { CURRENT_LANGUAGE_VERSION } from 'movement-lang/language_version';
+import { LANGUAGE_VERSION, type LanguageVersion } from 'movement-lang/language_version';
 import { PLATFORM_SUPPORTED_LANGUAGE_VERSIONS } from '../../language_version';
 import { mockCatalog, type InstanceSchema } from '../catalog';
 import { spelledFor } from './surface_spelling';
@@ -53,25 +53,25 @@ const SHAPES = [
 ] as const;
 type Shape = (typeof SHAPES)[number];
 
-function errors(shape: Shape, body: string, languageVersion?: number): Diagnostic[] {
+function errors(shape: Shape, body: string, languageVersion?: LanguageVersion): Diagnostic[] {
   const source = `import { slack, drive } from adapters
 chat = slack()
 docs = drive()
 movement m(${shape.param}) {
 ${body}
 }`;
-  const spelled = spelledFor(languageVersion ?? CURRENT_LANGUAGE_VERSION, source, catalog);
+  const spelled = spelledFor(languageVersion ?? LANGUAGE_VERSION, source, catalog);
   return checkProgram(parseProgram(spelled, languageVersion !== undefined ? { languageVersion } : {}), catalog).filter(
     d => (d.severity ?? 'error') === 'error',
   );
 }
-const codes = (shape: Shape, body: string, languageVersion?: number) =>
+const codes = (shape: Shape, body: string, languageVersion?: LanguageVersion) =>
   errors(shape, body, languageVersion).map(d => d.code);
 
 describe.each(SHAPES.map(s => [s.edge, s] as const))('over %s', (_edge, s) => {
   const walk = `${s.root}-[x:${s.edge}]->`;
 
-  it.each([...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS].map(v => [v]))('a bare walk is its landings in any value position (version %d)', v => {
+  it.each([...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS, LANGUAGE_VERSION].map(v => [v]))('a bare walk is its landings in any value position (version %s)', v => {
     // Each of these was a parse refusal under the bridge.
     expect(codes(s, `  n = count(${walk})`, v)).toEqual([]);
     expect(codes(s, `  xs = COALESCE(${walk}, [])`, v)).toEqual([]);

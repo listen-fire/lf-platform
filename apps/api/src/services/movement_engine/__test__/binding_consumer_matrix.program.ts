@@ -4,6 +4,7 @@
 // program. String building and data only, so a test that reads the matrix's
 // programs without running the matrix can build them too.
 
+import { since } from 'legacy-lang';
 import { mockCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 
 import type { Cell } from './binding_consumer_matrix.cells';
@@ -59,7 +60,7 @@ export const catalog = mockCatalogSnapshot({
 /** The shape every record path binds. Descriptions are an extraction's
  *  prompt; version 1 had no described declarations. */
 export function prelude(version: LanguageVersion): string {
-  const described = version >= 2;
+  const described = since(version, 2);
   const d = (text: string) => (described ? ` "${text}"` : '');
   const shape = (name: string, header: string) => [
     `node ${name}${described ? `: "${header}"` : ''} {`,
@@ -94,14 +95,14 @@ export function prelude(version: LanguageVersion): string {
     'movement use_entry(e: <Entry>) {',
     '  write sink-[:rows]-> { v: e.name }',
     '}',
-    ...(version >= 2 ? ['movement pairs_entry(e: <Entry>) {', '  write sink-[:rows]-> { v: TEXT.PAIRS(e) }', '}'] : []),
-    ...(version >= 3 ? ['movement serialise_entry(e: <Entry>) {', '  write sink-[:rows]-> { v: TEXT.SERIALISE(e, "JSON") }', '}'] : []),
+    ...(since(version, 2) ? ['movement pairs_entry(e: <Entry>) {', '  write sink-[:rows]-> { v: TEXT.PAIRS(e) }', '}'] : []),
+    ...(since(version, 3) ? ['movement serialise_entry(e: <Entry>) {', '  write sink-[:rows]-> { v: TEXT.SERIALISE(e, "JSON") }', '}'] : []),
     'movement child_entry(e: <Entry>) {',
     '  e-[k:child]-> {',
     '    write sink-[:rows]-> { v: k.first }',
     '  }',
     '}',
-    ...(version >= 3
+    ...(since(version, 3)
       ? ['movement serialise_child(e: <Entry>) {', '  e-[k:child]-> {', '    write sink-[:rows]-> { v: TEXT.SERIALISE(k, "JSON") }', '  }', '}']
       : []),
     'movement summarise_entry(e: <Entry>) {',

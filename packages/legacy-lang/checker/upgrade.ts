@@ -19,7 +19,7 @@
 
 import { parseProgram, MovementParseError } from '../parser/parse';
 import type { Loc, Span } from 'movement-lang/parser/ast';
-import { CURRENT_LANGUAGE_VERSION, SUPPORTED_LANGUAGE_VERSIONS, type LanguageVersion } from 'movement-lang/language_version';
+import { CURRENT_LANGUAGE_VERSION, type LanguageVersion } from '../language_version';
 import type { Program } from 'movement-lang/parser/ast';
 import { fromCatalogSnapshot, resolveFileFromSnapshot, type CatalogSnapshot } from 'movement-lang/service/snapshot';
 import { checkProgram, diagnosticSeverity, type Diagnostic } from './check';
@@ -233,9 +233,11 @@ export function rustCheck(input: {
 }
 
 /** Whether a check for a move up from `upgradingFrom` is one the language
- *  release cannot word: a move from a version it no longer serves. */
+ *  release cannot word: a move from one of this copy's integer versions,
+ *  which no release reads (a move from an older release's semver is the
+ *  release's own `upgradingFrom`). */
 export function movesFromDroppedVersion(upgradingFrom: LanguageVersion | undefined): upgradingFrom is LanguageVersion {
-  return upgradingFrom !== undefined && !SUPPORTED_LANGUAGE_VERSIONS.has(upgradingFrom);
+  return upgradingFrom !== undefined && /^\d+$/.test(String(upgradingFrom));
 }
 
 /** The TypeScript checker's warnings for what changed meaning on a move from

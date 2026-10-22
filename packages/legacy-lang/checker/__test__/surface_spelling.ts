@@ -10,6 +10,7 @@ import { checkProgram, type CheckOptions, type Diagnostic } from '../check';
 import type { Catalog } from '../catalog';
 import { spellingCheck, upgradeSource } from '../upgrade';
 import type { LanguageVersion } from 'movement-lang/language_version';
+import { before } from '../../version_conditionals';
 
 const isRespelling = (d: Diagnostic): boolean => d.code.startsWith('MOV_V5_');
 
@@ -22,7 +23,7 @@ export function spelledFor(
   catalog?: Catalog,
   options: Omit<CheckOptions, 'languageVersion'> = {},
 ): string {
-  if (version < 5) return source;
+  if (before(version, 5)) return source;
   const check =
     catalog === undefined
       ? spellingCheck(version)

@@ -8,7 +8,7 @@
 
 import { binding, Environment, evalMovementExpr } from '../expression';
 import { listUnsupportedConstructs } from '../interpretable';
-import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+import { LANGUAGE_VERSION } from 'movement-lang';
 import { parseMovementExpression } from 'legacy-lang';
 
 async function evaluate(text: string, bindings: Record<string, unknown> = {}): Promise<unknown> {
@@ -16,7 +16,7 @@ async function evaluate(text: string, bindings: Record<string, unknown> = {}): P
   for (const [name, value] of Object.entries(bindings)) {
     env.declare(name, binding({ kind: 'value', value }));
   }
-  return (await evalMovementExpr(parseMovementExpression(text), { env, languageVersion: CURRENT_LANGUAGE_VERSION })).value;
+  return (await evalMovementExpr(parseMovementExpression(text), { env, languageVersion: LANGUAGE_VERSION })).value;
 }
 
 describe('object literal evaluation', () => {
@@ -60,7 +60,7 @@ describe('object literal evaluation', () => {
   it('carries the provenance of every value read', async () => {
     const env = new Environment();
     env.declare('subject', binding({ kind: 'value', value: 'Acme' }));
-    const result = await evalMovementExpr(parseMovementExpression('{ text: subject }'), { env, languageVersion: CURRENT_LANGUAGE_VERSION });
+    const result = await evalMovementExpr(parseMovementExpression('{ text: subject }'), { env, languageVersion: LANGUAGE_VERSION });
     expect(result.value).toEqual({ text: 'Acme' });
     expect(result.provenance).toBeDefined();
   });

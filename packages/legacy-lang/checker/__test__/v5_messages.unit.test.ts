@@ -4,7 +4,8 @@
 // rewrite is the parser's own spelling fixes (spellCode, through the WASM).
 
 import { parseProgram } from '../../parser/parse';
-import { spellCode, spellIf, spellWord } from 'movement-lang/parser/surface';
+import { LANGUAGE_VERSION } from 'movement-lang/language_version';
+import { spellCode, spellIf, spellWord } from '../../parser/surface';
 import { checkProgram, type Diagnostic } from '../check';
 import { mockCatalog, type InstanceSchema } from '../catalog';
 
@@ -94,10 +95,10 @@ describe('a message suggests the surface of its program\'s version', () => {
       ['await until(() => { return EXISTS(t-[:Shipment]->) }, every: 15m)', 'await until(() => { return exists(t-[:Shipment]->) }, { every: 15m })'],
       ['crm-[c:Companies WHERE LOWER(c.Name) CONTAINS "x"]->', 'crm-[c:Companies WHERE LOWER(c.Name) CONTAINS "x"]->'],
     ]) {
-      expect(spellCode(old!, 4)).toBe(old);
-      expect(spellCode(old!, 5)).toBe(v5);
+      expect(spellCode(old!, '4')).toBe(old);
+      expect(spellCode(old!, LANGUAGE_VERSION)).toBe(v5);
     }
-    expect([spellWord('NOT', 4), spellWord('NOT', 5)]).toEqual(['NOT', "'!'"]);
-    expect([spellIf('EXISTS(co)', 4), spellIf('EXISTS(co)', 5)]).toEqual(['if EXISTS(co)', 'if (co != null)']);
+    expect([spellWord('NOT', '4'), spellWord('NOT', LANGUAGE_VERSION)]).toEqual(['NOT', "'!'"]);
+    expect([spellIf('EXISTS(co)', '4'), spellIf('EXISTS(co)', LANGUAGE_VERSION)]).toEqual(['if EXISTS(co)', 'if (co != null)']);
   });
 });

@@ -70,6 +70,7 @@ jest.mock('../../../lib/anthropic', () => ({
   MAX_CHAT_CONTINUATIONS: 5,
 }));
 
+import { LANGUAGE_VERSION } from 'movement-lang';
 import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import {
   setRunEngineRecorder,
@@ -214,7 +215,7 @@ async function run(
       ...body,
       '}',
     ].join('\n'),
-    languageVersion: 5,
+    languageVersion: LANGUAGE_VERSION,
     runId: `run-v5-plugin-${++runs}`,
     movementName: 'intake',
     event: {

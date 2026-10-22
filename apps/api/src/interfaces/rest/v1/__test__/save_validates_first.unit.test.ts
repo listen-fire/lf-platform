@@ -154,10 +154,10 @@ describe('saveAutomation validates first', () => {
   });
 
   it('checks a re-save under the saved automation\'s language version', async () => {
-    getMovementRowMock.mockResolvedValue({ id: 'm1', languageVersion: 1 });
+    getMovementRowMock.mockResolvedValue({ id: 'm1', languageVersion: '1' });
     validateMock.mockResolvedValue(validation({}));
     await call(saveMovementHandler, { body: { source: 'clean', id: 'm1' } });
-    expect(validateMock).toHaveBeenCalledWith(expect.objectContaining({ source: 'clean', languageVersion: 1 }));
+    expect(validateMock).toHaveBeenCalledWith(expect.objectContaining({ source: 'clean', languageVersion: '1' }));
   });
 
   it('ships text with errors when the user consented, without the refusal', async () => {
@@ -172,7 +172,7 @@ describe('saveAutomation validates first', () => {
 describe('editAutomation is a save, and validates first too', () => {
   beforeEach(() => {
     getMovementMock.mockResolvedValue({ id: 'm1', source: 'write { Name: m.From }' });
-    getMovementRowMock.mockResolvedValue({ id: 'm1', languageVersion: 2 });
+    getMovementRowMock.mockResolvedValue({ id: 'm1', languageVersion: '2' });
   });
 
   it('saves nothing when the spliced text has errors', async () => {
@@ -183,7 +183,7 @@ describe('editAutomation is a save, and validates first too', () => {
     });
 
     expect(validateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ source: 'write { Nmae: m.From }', languageVersion: 2 }),
+      expect.objectContaining({ source: 'write { Nmae: m.From }', languageVersion: '2' }),
     );
     expect(saveMovementMock).not.toHaveBeenCalled();
     expect(res.body).toMatchObject({ ok: false, saved: false, diagnostics: [diagnostic('error')] });

@@ -1,12 +1,8 @@
-// The language version an automation is written in, as a person sees it: its
-// name, and — when the automation is on an older version than the current one
+// The language version an automation is written in, as a person sees it: the
+// release it pins, and — when the installed language does not read that pin
 // and something keeps it there — what that something is.
 
-import {
-  CURRENT_LANGUAGE_VERSION,
-  languageVersionView,
-  type LanguageVersion,
-} from "movement-lang";
+import { LANGUAGE_VERSION, compatible, type LanguageVersion } from "movement-lang";
 
 import { Badge } from "@/components/ui";
 
@@ -18,8 +14,10 @@ export interface UpgradeDiagnostic {
   col: number;
 }
 
+// A legacy id ('1'..'4') is a version from before the language was versioned
+// by its release.
 function versionName(version: LanguageVersion): string {
-  return languageVersionView(version).name;
+  return /^[1-4]$/.test(version) ? `legacy ${version}` : version;
 }
 
 function issuesText(count: number): string {
@@ -69,7 +67,8 @@ export function LanguageVersionNotice({
   upgradeDiagnostics: UpgradeDiagnostic[] | null;
 }) {
   const name = versionName(languageVersion);
-  const current = versionName(CURRENT_LANGUAGE_VERSION);
+  const current = versionName(LANGUAGE_VERSION);
+  const isCurrent = compatible(languageVersion, LANGUAGE_VERSION);
   const issues = upgradeDiagnostics ?? [];
   return (
     <section data-testid="language-version-notice">
@@ -78,7 +77,7 @@ export function LanguageVersionNotice({
       </h2>
       <p className="text-[12.5px] leading-relaxed text-gray-600">
         Written in <VersionTag name={name} />
-        {languageVersion === CURRENT_LANGUAGE_VERSION
+        {isCurrent
           ? ", the current version."
           : (
             <>
@@ -86,7 +85,7 @@ export function LanguageVersionNotice({
             </>
           )}
       </p>
-      {languageVersion !== CURRENT_LANGUAGE_VERSION && issues.length === 0 && (
+      {!isCurrent && issues.length === 0 && (
         <p className="mt-2 text-[12.5px] leading-relaxed text-gray-600">
           It keeps running as <VersionTag name={name} /> until you upgrade it:
           ask your own agent to, through the MCP connector.

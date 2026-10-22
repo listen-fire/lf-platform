@@ -99,7 +99,7 @@ import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { positionData, type SchemaTypeDescriptor } from 'engine-contracts/catalog';
 import type { UniquenessConstraints } from 'engine-contracts/uniqueness';
 import { tenantIdOf } from 'engine-contracts';
-import { CURRENT_LANGUAGE_VERSION, type InstanceSchema } from 'movement-lang';
+import { LANGUAGE_VERSION, type InstanceSchema } from 'movement-lang';
 import { credentialIdsFor, makeTestHost } from 'movement-engine/public/testing';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000052');
@@ -576,7 +576,7 @@ describe('the lock table', () => {
       constraints: { any: [{ all: [{ field: 'tags' }] }] },
       resolveRecord: { tags: ['a'] },
       fields: { tags: ['a'] },
-      languageVersion: CURRENT_LANGUAGE_VERSION,
+      languageVersion: LANGUAGE_VERSION,
     });
     expect(locks).toEqual([{ name: expect.stringMatching(/^identity /), mode: { kind: 'exclusive' } }]);
   });
@@ -590,7 +590,7 @@ describe('the cross-run locks beneath the lock table', () => {
     constraints: { any: [{ all: [{ field: 'domain' }] }] },
     resolveRecord: { domain: 'acme.com' },
     fields: { domain: 'acme.com' },
-    languageVersion: CURRENT_LANGUAGE_VERSION,
+    languageVersion: LANGUAGE_VERSION,
   });
   const typeLockName = companyIdentity[0]!.name;
 
@@ -627,7 +627,7 @@ describe('the cross-run locks beneath the lock table', () => {
         constraints: { any: [{ all: [{ field: 'name', fuzzy: true }] }] },
         resolveRecord: { name: 'Acme' },
         fields: { name: 'Acme' },
-        languageVersion: CURRENT_LANGUAGE_VERSION,
+        languageVersion: LANGUAGE_VERSION,
       }),
       [typeLockName],
     ],
@@ -692,7 +692,7 @@ describe('the cross-run locks beneath the lock table', () => {
         constraints: { any: [{ all: [{ field: 'domain' }] }] },
         resolveRecord: { domain },
         fields: { domain },
-        languageVersion: CURRENT_LANGUAGE_VERSION,
+        languageVersion: LANGUAGE_VERSION,
       });
     let releaseSecond: () => void = () => {};
     const secondRunning = new Promise<void>((resolve) => (releaseSecond = resolve));

@@ -15,7 +15,7 @@
 // never seen an `await` at all — so EVERY ask family's base answer read
 // `MOV_UNDESCRIBED_POSITION`.
 
-import { fromCatalogSnapshot, type CatalogSnapshot, type InstanceSchema, CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+import { fromCatalogSnapshot, type CatalogSnapshot, type InstanceSchema, LANGUAGE_VERSION } from 'movement-lang';
 import { checkProgram, scanInstanceChains } from 'legacy-lang';
 import { parseProgram } from 'legacy-lang';
 
@@ -78,7 +78,7 @@ async function demandScopedSchema(body: string): Promise<InstanceSchema> {
   return graftGenericLandings({
     instance: { adapterType: 'ask', schema: projection.schema, entryPoints: entries },
     chains,
-    languageVersion: CURRENT_LANGUAGE_VERSION,
+    languageVersion: LANGUAGE_VERSION,
   }).schema;
 }
 

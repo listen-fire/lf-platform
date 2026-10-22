@@ -7,6 +7,7 @@
 // checker refuses it under every language version; listens that do have a
 // delivery path without a key stay legal.
 
+import type { LanguageVersion } from 'movement-lang';
 import { checkProgram } from 'legacy-lang';
 import { parseProgram } from 'legacy-lang';
 
@@ -18,7 +19,7 @@ const catalog = staticCatalogFromManifests({
 
 /** The listen-config refusals only: the static catalog's thin email schema
  *  is not what this test is about. */
-function listenErrorsOf(source: string, languageVersion?: number) {
+function listenErrorsOf(source: string, languageVersion?: LanguageVersion) {
   const options = languageVersion !== undefined ? { languageVersion } : {};
   return checkProgram(parseProgram(source, options), catalog, options).filter(
     (d) => (d.severity ?? 'error') === 'error' && d.code === 'MOV_LISTEN_BAD_CONFIG',
@@ -43,7 +44,7 @@ describe('an email listen needs a key', () => {
     expect(spec?.triggerConfigRequiredWhy?.key).toMatch(/address/);
   });
 
-  it.each([1, 2, 3])('refuses a keyless listen under language version %s, with the fix', (version) => {
+  it.each(['1', '2', '3'])('refuses a keyless listen under language version %s, with the fix', (version) => {
     const errors = listenErrorsOf(EMAIL_PROGRAM('listen to inbox {} fire `Log Intro`'), version);
     expect(errors).toHaveLength(1);
     expect(errors[0].message).toContain("requires a 'key'");

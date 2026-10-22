@@ -14,7 +14,7 @@ jest.mock('movement-engine/public/log', () => ({
   logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
-import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+import { LANGUAGE_VERSION } from 'movement-lang';
 import { parseMovementExpression } from 'legacy-lang';
 import {
   binding,
@@ -57,7 +57,7 @@ async function evaluate(
   env.declare('attachment', binding({ kind: 'value', value: opts.attachment ?? null }));
   return evalMovementExpr(parseMovementExpression(text), {
     env,
-    languageVersion: CURRENT_LANGUAGE_VERSION,
+    languageVersion: LANGUAGE_VERSION,
     ...(opts.resolveFileText ? { resolveFileText: opts.resolveFileText } : {}),
     ...(opts.trace ? { trace: opts.trace } : {}),
   });

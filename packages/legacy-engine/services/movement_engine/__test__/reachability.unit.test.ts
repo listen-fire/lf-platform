@@ -26,7 +26,7 @@
 import path from 'node:path';
 import { readFileSync, writeFileSync } from 'node:fs';
 
-import { fromCatalogSnapshot, resolveFileFromSnapshot, typeNameOf, type CatalogSnapshot } from 'movement-lang';
+import { LANGUAGE_VERSION, fromCatalogSnapshot, resolveFileFromSnapshot, typeNameOf, type CatalogSnapshot } from 'movement-lang';
 import { parseProgram } from 'legacy-lang';
 import { loadChecks, loadSnapshots } from 'legacy-lang/conformance/checks_corpus';
 import { corpusFile, overCorpus, SNAPSHOT_TABLE_FILE } from 'legacy-lang/conformance/checks_pin';
@@ -103,7 +103,7 @@ function plainHost() {
 function entriesOf(source: string): string[] {
   let program;
   try {
-    program = parseProgram(source, { languageVersion: 5 });
+    program = parseProgram(source, { languageVersion: LANGUAGE_VERSION });
   } catch {
     return [];
   }
@@ -143,11 +143,11 @@ function respelled(source: string, catalog: CatalogSnapshot): { source: string; 
       catalog.files === undefined
         ? undefined
         : Object.fromEntries(
-            Object.entries(catalog.files).map(([name, file]) => [name, { ...file, source: spelledFor(5, file.source, fromCatalogSnapshot({ ...catalog, files: undefined })) }]),
+            Object.entries(catalog.files).map(([name, file]) => [name, { ...file, source: spelledFor(LANGUAGE_VERSION, file.source, fromCatalogSnapshot({ ...catalog, files: undefined })) }]),
           );
     const spelledCatalog = files === undefined ? catalog : { ...catalog, files };
     const resolveFile = resolveFileFromSnapshot(spelledCatalog);
-    return { source: spelledFor(5, source, fromCatalogSnapshot(spelledCatalog), resolveFile !== undefined ? { resolveFile } : {}), catalog: spelledCatalog };
+    return { source: spelledFor(LANGUAGE_VERSION, source, fromCatalogSnapshot(spelledCatalog), resolveFile !== undefined ? { resolveFile } : {}), catalog: spelledCatalog };
   } catch {
     return undefined;
   }
@@ -187,7 +187,7 @@ async function gapOf(candidate: Candidate, movementName: string): Promise<string
   try {
     await runMovement({
       source: candidate.source,
-      languageVersion: 5,
+      languageVersion: LANGUAGE_VERSION,
       movementName,
       event: { pipelineInputId: 'pi-reach', adapterType: 'email', triggerType: 'webhook', payload: { subject: 'Acme', text: 'hello' } },
       catalog: candidate.catalog,

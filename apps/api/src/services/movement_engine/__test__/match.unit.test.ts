@@ -76,7 +76,7 @@ jest.mock('../../../lib/prompts/execute', () => ({
 
 import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 
-import { CURRENT_LANGUAGE_VERSION, fromCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
+import { LANGUAGE_VERSION, fromCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import {
@@ -229,7 +229,7 @@ function run(
       '}',
     ].join('\n');
   return runMovement({
-    source: spelledFor(options.languageVersion ?? CURRENT_LANGUAGE_VERSION, source, fromCatalogSnapshot(catalog)),
+    source: spelledFor(options.languageVersion ?? LANGUAGE_VERSION, source, fromCatalogSnapshot(catalog)),
     movementName: 'intake',
     ...options,
     event: webhookEvent({}),
@@ -287,7 +287,7 @@ describe('a match against a system', () => {
     arbitrateEntities.mockResolvedValue({ index: null });
     const email = makeFakeAdapter('email');
     const attio = makeFakeAdapter('attio', { company: [ACME] });
-    const result = await run(FUZZY_MATCH, { email: email.adapter, attio: attio.adapter }, { languageVersion: 3 });
+    const result = await run(FUZZY_MATCH, { email: email.adapter, attio: attio.adapter }, { languageVersion: '3' });
 
     expect(arbitrateEntities).toHaveBeenCalledTimes(1);
     expect(attio.creates).toEqual([]);
@@ -314,11 +314,11 @@ describe('a match against a system', () => {
       '  write crm-[:notes]-> { title: "known company" }',
     ];
     const hit = makeFakeAdapter('attio', { company: [ACME] });
-    await run(gate, { email: makeFakeAdapter('email').adapter, attio: hit.adapter }, { languageVersion: 3 });
+    await run(gate, { email: makeFakeAdapter('email').adapter, attio: hit.adapter }, { languageVersion: '3' });
     expect(hit.creates.map((c) => c.fields.title)).toEqual(['known company']);
 
     const miss = makeFakeAdapter('attio');
-    const result = await run(gate, { email: makeFakeAdapter('email').adapter, attio: miss.adapter }, { languageVersion: 3 });
+    const result = await run(gate, { email: makeFakeAdapter('email').adapter, attio: miss.adapter }, { languageVersion: '3' });
     expect(miss.creates).toEqual([]);
     expect(result.writes).toEqual([]);
   });
@@ -376,7 +376,7 @@ describe('a match against a node this run built', () => {
         '  write crm-[:notes]-> { title: "never" }',
       ],
       { email: email.adapter, attio: attio.adapter },
-      { languageVersion: 3 },
+      { languageVersion: '3' },
     );
     expect(attio.creates).toEqual([]);
   });
@@ -431,7 +431,7 @@ describe('a miss under language version 4', () => {
     const result = await run(
       NAMED_MISS,
       { email: makeFakeAdapter('email').adapter, attio: attio.adapter },
-      { languageVersion: 3 },
+      { languageVersion: '3' },
     );
     expect(attio.creates).toEqual([]);
     expect(result.writes).toEqual([]);

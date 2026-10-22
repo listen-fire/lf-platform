@@ -17,7 +17,8 @@
 // checker diagnostic, or a named gap), is registered in
 // __test__/interpretable_unsupported_sites.unit.test.ts.
 
-import { BridgeError, pathRootName, typeNameOf, CURRENT_LANGUAGE_VERSION, slotOfTree } from 'movement-lang';
+import { BridgeError, pathRootName, typeNameOf, slotOfTree } from 'movement-lang';
+import { CURRENT_LANGUAGE_VERSION } from 'legacy-lang';
 import { conditionOfSlot, expressionOfSlot, parseMovementExpression, treeOfSlot } from 'legacy-lang';
 import { linkImports, parseFieldTypeName, programCallScope, readCall, resolveCallee, hoistingMemberReads, nestedCalls, readingBoundNames, runsAsCall, CHUNKS_FUNCTION_ID, FILE_FUNCTION_ID, INTERPRETED_FUNCTION_IDS, READ_FUNCTION_ID, stdlibFunctionById } from 'legacy-lang';
 import { MovementParseError } from 'movement-lang';

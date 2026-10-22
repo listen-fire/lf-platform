@@ -87,7 +87,7 @@ import { runFailureCause } from '@listen-fire/legacy-engine/services/movement_en
 
 import type { CapturedWrite } from 'movement-engine/public/adapter';
 import { MovementEngineError } from '@listen-fire/legacy-engine/services/movement_engine/expression';
-import { fromCatalogSnapshot } from 'movement-lang';
+import { LANGUAGE_VERSION, fromCatalogSnapshot } from 'movement-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import {
@@ -272,7 +272,7 @@ describe('§G — _resources block → call with a synthesised node arg → drop
       source: INTAKE_G,
       // `_resources` off an adapter's record is a version 1–4 read (the
       // test after this one is version 5's refusal).
-      languageVersion: 4,
+      languageVersion: '4',
       movementName: 'intake',
       event: webhookEvent('email', { subject: 'Acme deck' }),
       teamId: TEAM_ID,
@@ -338,8 +338,8 @@ describe('§G under Dancing Wren (5) — `_resources` off an adapter record is n
     });
     const dropbox = makeFakeAdapter('dropbox');
     const run = runMovement({
-      source: spelledFor(5, INTAKE_G, fromCatalogSnapshot(catalog)),
-      languageVersion: 5,
+      source: spelledFor(LANGUAGE_VERSION, INTAKE_G, fromCatalogSnapshot(catalog)),
+      languageVersion: LANGUAGE_VERSION,
       movementName: 'intake',
       event: webhookEvent('email', { subject: 'Acme deck' }),
       teamId: TEAM_ID,
@@ -504,7 +504,7 @@ describe('multi-parameter callees — any arity by call (entries stay arity-1)',
 
     await runMovement({
       source: PAIRED_OUT_OF_ORDER,
-      languageVersion: 4,
+      languageVersion: '4',
       movementName: 'intake',
       event: webhookEvent('email', { subject: 'Acme Corp', text: 'warm intro' }),
       teamId: TEAM_ID,

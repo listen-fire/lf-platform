@@ -183,7 +183,8 @@ import { builtinArity, describeBuiltin, flatBuiltinNames, lookupBuiltin } from '
 import { HANDBOOK_POINTERS, seeHandbook, withHandbookPointer } from 'movement-lang/checker/handbook_pointers';
 import { importLine, insertLineAtTop, type DiagnosticFix, type SourceEdit } from 'movement-lang/checker/fixes';
 import { extractKeywordRetirement } from './extract_keyword_retired';
-import { hiddenBy, isRespelled, pluginName, spellCode, spellIf, spellMessage, spellWord, type NamedCall, type SpellingFinding } from 'movement-lang/parser/surface';
+import { hiddenBy, isRespelled, pluginName, type NamedCall, type SpellingFinding } from 'movement-lang/parser/surface';
+import { spellCode, spellIf, spellMessage, spellWord } from '../parser/surface';
 import {
   borrowableFieldsOf,
   borrowedTypeSegments,
@@ -201,6 +202,7 @@ import {
   parseFieldTypeName,
   type PluginOutput,
   type PluginSpec,
+  earlierOutputsOf,
   pluginOutputUnder,
   pluginSpecUnder,
   bindPluginArgs,
@@ -2327,7 +2329,7 @@ function spanWithin(slot: ExprSlot, pos: number | undefined): Span {
 /** The distinct names a `unique by` clause predicate references (fields and/or
  *  bound handles), for the native-uniqueness comparison. Undefined when the
  *  predicate doesn't parse (the expression check reports that separately). */
-function uniqueClauseRefs(clause: UniqueClause, languageVersion: number): string[] | undefined {
+function uniqueClauseRefs(clause: UniqueClause, languageVersion: LanguageVersion): string[] | undefined {
   try {
     const refs = new Set<string>();
     // Split first so a FUZZY modifier is lifted off each component — it isn't an
@@ -2344,7 +2346,7 @@ function uniqueClauseRefs(clause: UniqueClause, languageVersion: number): string
   }
 }
 
-function staticStringValues(slot: ExprSlot, languageVersion: number): string[] | undefined {
+function staticStringValues(slot: ExprSlot, languageVersion: LanguageVersion): string[] | undefined {
   let parsed: Expression;
   try {
     parsed = expressionOfSlot(slot, languageVersion);
@@ -2372,7 +2374,7 @@ function staticStringValues(slot: ExprSlot, languageVersion: number): string[] |
  * an array — a bare scalar (`events: "…"`) is rejected with a wrap-in-brackets
  * fix-it. Non-parsing slots are handled by the caller's value check.
  */
-function isListSlot(slot: ExprSlot, languageVersion: number): boolean {
+function isListSlot(slot: ExprSlot, languageVersion: LanguageVersion): boolean {
   try {
     return expressionOfSlot(slot, languageVersion).type === 'list';
   } catch (e) {
@@ -2387,7 +2389,7 @@ function isListSlot(slot: ExprSlot, languageVersion: number): boolean {
  * `property` node, so a clean list of those yields the names. Undefined
  * for anything else.
  */
-function bareNameValues(slot: ExprSlot, languageVersion: number): string[] | undefined {
+function bareNameValues(slot: ExprSlot, languageVersion: LanguageVersion): string[] | undefined {
   const trimmed = slot.raw.trim();
   if (BARE_IDENT.test(trimmed)) return [trimmed];
   let parsed: Expression;
@@ -2410,7 +2412,7 @@ function bareNameValues(slot: ExprSlot, languageVersion: number): string[] | und
  * enum-literal membership check reads this: only a literal carries a value
  * known at author time.
  */
-function staticStringLiteralOf(slot: ExprSlot, languageVersion: number): string | undefined {
+function staticStringLiteralOf(slot: ExprSlot, languageVersion: LanguageVersion): string | undefined {
   let parsed: Expression;
   try {
     parsed = expressionOfSlot(slot, languageVersion);
@@ -2634,7 +2636,7 @@ function isInstanceSymbol(token: object): token is ScopeSymbol {
 
 /** The value of a slot that is a bare LITERAL (`"X"`, `'X'`, `true`, `3`),
  *  undefined for anything else — so two spellings of one value are one value. */
-function staticLiteralOf(slot: ExprSlot, languageVersion: number): { value: unknown } | undefined {
+function staticLiteralOf(slot: ExprSlot, languageVersion: LanguageVersion): { value: unknown } | undefined {
   let parsed: Expression;
   try {
     parsed = expressionOfSlot(slot, languageVersion);
@@ -4268,7 +4270,7 @@ class Checker {
 
   /** This check is for a move up across the change version `n` made — see
    *  `CheckOptions.upgradingFrom`. */
-  private upgradeCrosses(n: LanguageVersion): boolean {
+  private upgradeCrosses(n: number): boolean {
     const from = this.options.upgradingFrom;
     return from !== undefined && changedBetween(from, this.languageVersion, n);
   }
@@ -16240,7 +16242,7 @@ class Checker {
    * string, say, where there is now a list of records). Said once per call.
    */
   private reportPluginOutputChanged(statement: CallStatement, spec: PluginSpec): void {
-    const changed = spec.earlierOutputs?.find(entry => this.upgradeCrosses(entry.before));
+    const changed = earlierOutputsOf(spec).find(entry => this.upgradeCrosses(entry.before));
     const now = pluginOutputUnder(spec, this.languageVersion);
     if (changed === undefined || now === undefined) return;
     this.reportUpgradeWarning(

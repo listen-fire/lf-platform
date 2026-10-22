@@ -79,7 +79,8 @@ import { execute } from '../../../lib/prompts/execute';
 import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { meteredArbitration } from '../../translation_graph/engine/entity_match';
 
-import type { InstanceSchema, LanguageVersion } from 'movement-lang';
+import { since } from 'legacy-lang';
+import { LANGUAGE_VERSION, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import {
   containerAssociation,
@@ -227,7 +228,7 @@ function run(
   adapters: { email: Adapter; attio: Adapter },
   options: { languageVersion?: LanguageVersion } = {},
 ) {
-  const v5 = (options.languageVersion ?? 5) >= 5;
+  const v5 = since(options.languageVersion ?? LANGUAGE_VERSION, 5);
   const source =
     (v5 ? PRELUDE : PRELUDE.replace('connect email', 'email()')) +
     [
@@ -316,7 +317,7 @@ describe('a match whose target carries a WHERE', () => {
 
   it('under version 3, when every candidate fails, the match is a miss: the scope ends and nothing is written', async () => {
     const attio = makeFakeAdapter('attio', { company: [WITHOUT_DEALS] });
-    const result = await run(MATCH_WITH_DEALS_V3, { email: email(), attio: attio.adapter }, { languageVersion: 3 });
+    const result = await run(MATCH_WITH_DEALS_V3, { email: email(), attio: attio.adapter }, { languageVersion: '3' });
 
     expect(mockExecute).not.toHaveBeenCalled();
     expect(attio.creates).toEqual([]);
@@ -348,7 +349,7 @@ describe('a match whose target carries a WHERE', () => {
       ],
       { email: email(), attio: attio.adapter },
       // Version 5 refuses a bare name here (a variable from outside the walk); the bare reading is version 4's.
-      { languageVersion: 4 },
+      { languageVersion: '4' },
     );
     expect(result.writes[0]).toMatchObject({ kind: 'match', externalId: 'co-active' });
   });

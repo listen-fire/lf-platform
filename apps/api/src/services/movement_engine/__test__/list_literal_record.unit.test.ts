@@ -74,7 +74,7 @@ jest.mock('../../../lib/anthropic', () => ({
   MAX_CHAT_CONTINUATIONS: 5,
 }));
 
-import { CURRENT_LANGUAGE_VERSION, fromCatalogSnapshot, mockCatalogSnapshot, type InstanceSchema } from 'movement-lang';
+import { LANGUAGE_VERSION, fromCatalogSnapshot, mockCatalogSnapshot, type InstanceSchema } from 'movement-lang';
 import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import type { CapturedWrite } from 'movement-engine/public/adapter';
@@ -184,7 +184,7 @@ async function run(body: string[]) {
     // Written in the spelling versions 1–4 read; the run (under the current
     // version) reads it as the upgrade tool rewrites it.
     source: spelledFor(
-      CURRENT_LANGUAGE_VERSION,
+      LANGUAGE_VERSION,
       [PRELUDE, 'movement m(msg: <inbox-[:message]->>) {', ...body, '}'].join('\n'),
       fromCatalogSnapshot(catalog),
     ),

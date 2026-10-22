@@ -26,7 +26,7 @@ jest.mock('../../../services/translation_graph/movement/execute', () => {
   return { ...actual, resumeMovementFiring: jest.fn() };
 });
 
-import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+import { LANGUAGE_VERSION } from 'movement-lang';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
@@ -104,7 +104,7 @@ async function seedListen(team: TeamId): Promise<{ triggerId: TriggerId; version
     teamId: team,
     movementId,
     source: SOURCE,
-    languageVersion: CURRENT_LANGUAGE_VERSION,
+    languageVersion: LANGUAGE_VERSION,
   });
   const id = randomUUID() as TriggerId;
   await getAutomationsQb(['trigger'])

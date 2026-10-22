@@ -54,8 +54,8 @@ jest.mock('../store', () => {
   const library = (name: string) =>
     [`export movement ${name}(f: <Files>) {`, '  return node { label: f.`name` }', '}'].join('\n');
   const rows = [
-    { name: 'helpers', source: library('tidy'), languageVersion: 2 },
-    { name: 'unrelated', source: library('other'), languageVersion: 2 },
+    { name: 'helpers', source: library('tidy'), languageVersion: '2' },
+    { name: 'unrelated', source: library('other'), languageVersion: '2' },
   ];
   return {
     rows,

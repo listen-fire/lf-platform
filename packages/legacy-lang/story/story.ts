@@ -59,7 +59,7 @@ import { parseFieldTypeName, type Catalog, type SchemaFieldType } from '../check
 import { EMPTY_ROW, instanceNames, type EffectRow } from '../checker/effects';
 import { bodyExits, terminates, type Exits } from '../checker/flow';
 import type { ResolveFile } from '../checker/link';
-import { CURRENT_LANGUAGE_VERSION, type LanguageVersion } from 'movement-lang/language_version';
+import { CURRENT_LANGUAGE_VERSION, type LanguageVersion } from '../language_version';
 import {
   EXTRACT_ROOT_NAME,
   maybeAbsent,

@@ -265,7 +265,7 @@ jest.mock('../../../../services/context', () => ({
   unsafeCurrentContext: jest.fn(() => undefined),
 }));
 
-import { CURRENT_LANGUAGE_VERSION, mockCatalog } from 'movement-lang';
+import { LANGUAGE_VERSION, mockCatalog } from 'movement-lang';
 
 import type { DerivedTriggerRow } from '../store';
 
@@ -1351,18 +1351,18 @@ describe('the language version pin', () => {
     const saved = await saveMovement({ teamId: TEAM, source: SOURCE_V1 });
     expect(saved.ok).toBe(true);
     const [row] = db.__tables.movement;
-    expect(row.language_version).toBe(CURRENT_LANGUAGE_VERSION);
-    expect(row.validity_checked_against).toBe(CURRENT_LANGUAGE_VERSION);
+    expect(row.language_version).toBe(LANGUAGE_VERSION);
+    expect(row.validity_checked_against).toBe(LANGUAGE_VERSION);
 
     const [item] = await listMovements(TEAM);
-    expect(item).toMatchObject({ languageVersion: CURRENT_LANGUAGE_VERSION, validityCheckedAgainst: CURRENT_LANGUAGE_VERSION });
+    expect(item).toMatchObject({ languageVersion: LANGUAGE_VERSION, validityCheckedAgainst: LANGUAGE_VERSION });
   });
 
   it('a re-save keeps an older pin and validates under it', async () => {
     const first = await saveMovement({ teamId: TEAM, source: SOURCE_V1 });
     if (!first.ok) throw new Error('first save failed');
     // A movement saved before the current version existed.
-    db.__tables.movement[0].language_version = 1;
+    db.__tables.movement[0].language_version = '1';
 
     // The edit is written as version 1 reads it (the old spelling).
     const sourceV1Spelling = SOURCE_V2.replace('inbox = connect email', 'inbox = email()').replace('function intake', 'movement intake');
@@ -1370,22 +1370,22 @@ describe('the language version pin', () => {
     expect(again.ok).toBe(true);
     const [row] = db.__tables.movement;
     expect(row.source).toBe(sourceV1Spelling);
-    expect(row.language_version).toBe(1);
-    expect(row.validity_checked_against).toBe(1);
+    expect(row.language_version).toBe('1');
+    expect(row.validity_checked_against).toBe('1');
 
     const detail = await getMovement({ teamId: TEAM, id: first.movementId });
-    expect(detail).toMatchObject({ languageVersion: 1, validityCheckedAgainst: 1 });
+    expect(detail).toMatchObject({ languageVersion: '1', validityCheckedAgainst: '1' });
   });
 
   it('a movement pinned to a version this release does not support is refused, not saved as current', async () => {
     const first = await saveMovement({ teamId: TEAM, source: SOURCE_V1 });
     if (!first.ok) throw new Error('first save failed');
-    db.__tables.movement[0].language_version = 99;
+    db.__tables.movement[0].language_version = '99';
 
     const again = await saveMovement({ teamId: TEAM, id: first.movementId, source: SOURCE_V2 });
     expect(again.ok).toBe(false);
     const [row] = db.__tables.movement;
-    expect(row.language_version).toBe(99);
+    expect(row.language_version).toBe('99');
     expect(row.validity_status).toBe('invalid');
     expect(JSON.stringify(row.validity_reason)).toContain('MOV_LANGUAGE_VERSION_UNSUPPORTED');
   });
@@ -1432,8 +1432,8 @@ listen to inbox { key: "deals" } fire intake
     const first = await saveMovement({ teamId: TEAM, source: NEW });
     if (!first.ok) throw new Error(`first save failed: ${(first.errors ?? []).join('; ')}`);
     const [row] = db.__tables.movement;
-    Object.assign(row, { source: OLD, language_version: 4 });
-    Object.assign(db.__tables.movement_version[0], { source: OLD, language_version: 4 });
+    Object.assign(row, { source: OLD, language_version: '4' });
+    Object.assign(db.__tables.movement_version[0], { source: OLD, language_version: '4' });
     return first.movementId;
   }
 
@@ -1443,13 +1443,13 @@ listen to inbox { key: "deals" } fire intake
 
     const shown = await upgradeMovement({ teamId: TEAM, id, acknowledge: false });
     expect(shown).toMatchObject({ status: 'needs_acknowledgement', upgradedSource: NEW, diagnostics: [] });
-    expect(db.__tables.movement[0]).toMatchObject({ source: OLD, language_version: 4 });
+    expect(db.__tables.movement[0]).toMatchObject({ source: OLD, language_version: '4' });
 
     const done = await upgradeMovement({ teamId: TEAM, id, acknowledge: true });
     expect(done).toMatchObject({ status: 'upgraded', upgradedSource: NEW });
-    expect(db.__tables.movement[0]).toMatchObject({ source: NEW, language_version: 5, upgrade_diagnostics: null });
+    expect(db.__tables.movement[0]).toMatchObject({ source: NEW, language_version: LANGUAGE_VERSION, upgrade_diagnostics: null });
     const current = db.__tables.movement_version.find((v) => v.id === db.__tables.movement[0].current_version_id);
-    expect(current).toMatchObject({ source: NEW, language_version: 5 });
+    expect(current).toMatchObject({ source: NEW, language_version: LANGUAGE_VERSION });
 
     const again = await upgradeMovement({ teamId: TEAM, id, acknowledge: true });
     expect(again.status).toBe('already_current');
@@ -1466,6 +1466,6 @@ listen to inbox { key: "deals" } fire intake
     expect(result).toMatchObject({ upgradedSource: broken(NEW, 'Text.upper') });
     if (result.status === 'not_found') return;
     expect(result.diagnostics.map((d) => [d.severity, d.line])).toEqual([['error', 5]]);
-    expect(db.__tables.movement[0]).toMatchObject({ source: broken(OLD, 'UPPER'), language_version: 4 });
+    expect(db.__tables.movement[0]).toMatchObject({ source: broken(OLD, 'UPPER'), language_version: '4' });
   });
 });

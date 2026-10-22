@@ -2,7 +2,7 @@
 // interpolation — the Project A composer-row case from the handbook.
 
 import { binding, Environment, evalMovementExpr } from '../expression';
-import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+import { LANGUAGE_VERSION } from 'movement-lang';
 import { parseMovementExpression } from 'legacy-lang';
 
 async function evaluate(text: string, bindings: Record<string, unknown> = {}): Promise<unknown> {
@@ -10,7 +10,7 @@ async function evaluate(text: string, bindings: Record<string, unknown> = {}): P
   for (const [name, value] of Object.entries(bindings)) {
     env.declare(name, binding({ kind: 'value', value }));
   }
-  return (await evalMovementExpr(parseMovementExpression(text), { env, languageVersion: CURRENT_LANGUAGE_VERSION })).value;
+  return (await evalMovementExpr(parseMovementExpression(text), { env, languageVersion: LANGUAGE_VERSION })).value;
 }
 
 describe('TEXT.PAIRS evaluation', () => {

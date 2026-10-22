@@ -220,7 +220,7 @@ function harness(source: string) {
     }),
     dryRun: false,
     // `parallel` is retired under 5; a program that joins with it runs under 4.
-    ...(source.includes('await parallel') ? { languageVersion: 4 as const } : {}),
+    ...(source.includes('await parallel') ? { languageVersion: '4' } : {}),
   });
   const record = (result: MovementRunResult): MovementRunResult => {
     spent = result.runSpentMicrodollars ?? spent;

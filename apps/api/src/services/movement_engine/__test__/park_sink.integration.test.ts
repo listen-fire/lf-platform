@@ -5,6 +5,7 @@
 // its correlation row, after which the engine re-checks once and, through the
 // host's `park.wake`, queues the wake for an answer that landed while it parked.
 
+import { LANGUAGE_VERSION } from 'movement-lang';
 import { randomUUID } from 'node:crypto';
 import { getAutomationsQb, getCoreQb } from '../../../lib/kysely';
 import type { TeamId } from '../../../generated/kysely/core/Team';
@@ -188,7 +189,7 @@ describe('commitAwaitPark', () => {
 
     const result = await runAwaiting({
       teamId: tenantOfTeam(teamId),
-      source: spelledFor(5, awaitingSource()),
+      source: spelledFor(LANGUAGE_VERSION, awaitingSource()),
       adapter: awaiting.adapter,
       parkSink: makeRecorderParkSink(makeStubRecorder({ teamId, runId })),
       // The production host's wake: a `wake_await` work row.

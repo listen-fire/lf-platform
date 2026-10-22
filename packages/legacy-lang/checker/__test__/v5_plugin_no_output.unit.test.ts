@@ -4,6 +4,7 @@
 // declare an output. Both checkers, on the same catalog (the Rust one through
 // the wasm build); the engines' half is apps/api's v5_plugin_call test.
 
+import { LANGUAGE_VERSION } from 'movement-lang/language_version';
 import { mockCatalog } from '../catalog';
 import { checkProgram, type Diagnostic } from '../check';
 import { parseProgram } from '../../parser/parse';
@@ -29,9 +30,9 @@ const errors = (found: Diagnostic[]): string[] =>
   found.filter((d) => (d.severity ?? 'error') === 'error' && d.code !== 'MOV_LISTEN_MISSING').map((d) => `${d.code}: ${d.message}`);
 
 /** What both checkers refuse in `source` under `version` — the same, or the test fails. */
-function check(source: string, version: LanguageVersion = 5): string[] {
+function check(source: string, version: LanguageVersion = LANGUAGE_VERSION): string[] {
   const ts = errors(checkProgram(parseProgram(source, { languageVersion: version }), catalog, { languageVersion: version }));
-  const rust = errors(checkSourceInRust(source, snapshot, { languageVersion: version }));
+  const rust = errors(checkSourceInRust(source, snapshot, { languageVersion: LANGUAGE_VERSION }));
   expect(rust).toEqual(ts);
   return ts;
 }

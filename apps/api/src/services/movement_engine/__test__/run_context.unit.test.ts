@@ -213,7 +213,7 @@ describe('priced host calls under the run budget', () => {
       candidates: [],
       recordType: 'company',
       constraints: { any: [] },
-      languageVersion: 2,
+      languageVersion: '2',
     });
     expect(answer).toEqual({ index: 1 });
     expect(ledger.spend.bySource).toEqual({ 'model:judge': 300 });
@@ -226,7 +226,7 @@ describe('priced host calls under the run budget', () => {
       candidates: [],
       recordType: 'company',
       constraints: { any: [] },
-      languageVersion: 2,
+      languageVersion: '2',
     });
     expect(declined).toEqual({ index: null, judgeUnavailable: 'anthropic 529' });
   });
@@ -249,7 +249,7 @@ describe("a segment's opening and closing", () => {
       // would refuse it, so it is handed over as an embedder's would be.
       host: older as unknown as typeof host,
       teamId: TEAM_ID,
-      languageVersion: 2,
+      languageVersion: '2',
       spend: {},
     }).catch((error: unknown) => error);
     expect(refusal).toMatchObject({
@@ -261,7 +261,7 @@ describe("a segment's opening and closing", () => {
     expect(opened).toEqual([]);
     const { ids: _onlyIds, ...withoutIds } = host;
     await expect(
-      openRunContext({ host: withoutIds as unknown as typeof host, teamId: TEAM_ID, languageVersion: 2, spend: {} }),
+      openRunContext({ host: withoutIds as unknown as typeof host, teamId: TEAM_ID, languageVersion: '2', spend: {} }),
     ).rejects.toThrow('the host does not serve ids.mint, which host families version 1 requires (the ids family)');
     expect(opened).toEqual([]);
   });
@@ -281,9 +281,9 @@ describe("a segment's opening and closing", () => {
         },
       },
     });
-    const context = await openRunContext({ host, teamId: TEAM_ID, runId: 'run-1', languageVersion: 1, spend: {} });
+    const context = await openRunContext({ host, teamId: TEAM_ID, runId: 'run-1', languageVersion: '1', spend: {} });
     // The engine names the host families version it speaks on every open.
-    expect(opened).toEqual([{ teamId: TEAM_ID, runId: 'run-1', languageVersion: 1, hostFamiliesVersion: HOST_FAMILIES_VERSION }]);
+    expect(opened).toEqual([{ teamId: TEAM_ID, runId: 'run-1', languageVersion: '1', hostFamiliesVersion: HOST_FAMILIES_VERSION }]);
     expect(context.segmentId).toBe('seg-1');
     await closeRunContext(context, host);
     expect(closed).toEqual(['seg-1']);
@@ -302,7 +302,7 @@ describe("a segment's opening and closing", () => {
       },
     });
     await expect(
-      host.segment.open({ teamId: TEAM_ID, languageVersion: 1, hostFamiliesVersion: HOST_FAMILIES_VERSION + 1 }),
+      host.segment.open({ teamId: TEAM_ID, languageVersion: '1', hostFamiliesVersion: HOST_FAMILIES_VERSION + 1 }),
     ).rejects.toThrow(
       `segment.open carries host families version ${HOST_FAMILIES_VERSION + 1}, which this host does not serve (supported: 1)`,
     );
@@ -312,11 +312,11 @@ describe("a segment's opening and closing", () => {
   it("a segment's locks are taken by token, and whatever it still holds is let go when it ends", async () => {
     const locks = new InMemoryWriteLocks({ timeoutMs: 100 });
     const host = makeTestHost({ locks });
-    const first = await openRunContext({ host, teamId: TEAM_ID, languageVersion: 2, spend: {} });
+    const first = await openRunContext({ host, teamId: TEAM_ID, languageVersion: '2', spend: {} });
     await first.locks.acquire(['record attio 1']);
     await closeRunContext(first, host);
 
-    const second = await openRunContext({ host, teamId: TEAM_ID, languageVersion: 2, spend: {} });
+    const second = await openRunContext({ host, teamId: TEAM_ID, languageVersion: '2', spend: {} });
     const token = await second.locks.acquire(['record attio 1']);
     await second.locks.release(token);
     await expect(second.locks.release(token)).rejects.toThrow(/is not held/);
@@ -467,7 +467,7 @@ describe("a run's segment ends exactly once, however the run ends", () => {
         },
       },
     });
-    await expect(openRunContext({ host, teamId: TEAM_ID, languageVersion: 2, spend: {} })).rejects.toThrow(
+    await expect(openRunContext({ host, teamId: TEAM_ID, languageVersion: '2', spend: {} })).rejects.toThrow(
       'no segment today',
     );
     // The host opens a segment's lock session at its first acquire.
@@ -482,7 +482,7 @@ describe("a run's segment ends exactly once, however the run ends", () => {
         },
       },
     });
-    const context = await openRunContext({ host, teamId: TEAM_ID, languageVersion: 2, spend: {} });
+    const context = await openRunContext({ host, teamId: TEAM_ID, languageVersion: '2', spend: {} });
     await expect(closeRunContext(context, host)).resolves.toBeUndefined();
   });
 });

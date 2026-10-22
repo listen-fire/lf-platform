@@ -1,6 +1,6 @@
 // Version 5's surface run on the Rust engine; the harness is engine_by_version's.
 
-import { mockCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
+import { LANGUAGE_VERSION, mockCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import { tenantIdOf } from 'engine-contracts';
 
 import type { Adapter } from 'movement-engine/public/adapter';
@@ -159,7 +159,7 @@ afterEach(() => setRunEngineRecorder(undefined));
 
 describe('the v5 surface on the Rust engine', () => {
   it('runs a program in the everyday spelling whole', async () => {
-    const result = await runMovement(inputOf(EVERYDAY, 5, 'run-v5-surface'));
+    const result = await runMovement(inputOf(EVERYDAY, LANGUAGE_VERSION, 'run-v5-surface'));
     expect(result.movementName).toBe('m');
     expect(rustRunStats).toMatchObject({ segments: 1, unsupported: {}, shimFaults: 0 });
     expect(recorded).toEqual([{ runId: 'run-v5-surface', engine: 'rust' }]);
@@ -167,12 +167,12 @@ describe('the v5 surface on the Rust engine', () => {
 
   it('parks and resumes a program in the everyday spelling on Rust', async () => {
     const parks = timerSink();
-    const parked = await runMovement(inputOf(SLEEPS_V5, 5, 'run-v5-park', parks.sink));
+    const parked = await runMovement(inputOf(SLEEPS_V5, LANGUAGE_VERSION, 'run-v5-park', parks.sink));
     expect(parked.parked).toBe(true);
     const [state] = parks.timers;
     if (state === undefined) throw new Error('test: the run parked no timer');
     const resumed = await resumeMovement({
-      ...inputOf(SLEEPS_V5, 5, 'run-v5-park', parks.sink),
+      ...inputOf(SLEEPS_V5, LANGUAGE_VERSION, 'run-v5-park', parks.sink),
       state,
       parkedOnEngine: 'rust',
     });
@@ -236,9 +236,9 @@ describe('a presence test on the Rust engine from version 5', () => {
   );
 
   it('none returned is absent, as EXISTS answered', async () => {
-    const old = await outcome(v4, 4);
+    const old = await outcome(v4, '4');
     expect(old).toContain('absent');
-    expect(await outcome(v5, 5)).toBe(old);
+    expect(await outcome(v5, LANGUAGE_VERSION)).toBe(old);
   });
 });
 
@@ -265,8 +265,8 @@ describe('count from version 5', () => {
   const v5 = V5('  xs = [msg.subject, null, "b"]', '  fail("counted ${count(xs)}")');
 
   it('counts the empty item under 5, and skips it under 4', async () => {
-    expect(await outcome(v4, 4)).toContain('counted 2');
-    expect(await outcome(v5, 5)).toContain('counted 3');
+    expect(await outcome(v4, '4')).toContain('counted 2');
+    expect(await outcome(v5, LANGUAGE_VERSION)).toContain('counted 3');
     expect(recorded.at(-1)).toMatchObject({ engine: 'rust' });
   });
 });
@@ -289,7 +289,7 @@ describe('a number read from an empty text from version 5', () => {
   );
 
   it('reads null end to end on the Rust engine', async () => {
-    expect(await outcome(v5, 5)).toContain('read true true 12');
+    expect(await outcome(v5, LANGUAGE_VERSION)).toContain('read true true 12');
     expect(recorded.at(-1)).toMatchObject({ engine: 'rust' });
   });
 });

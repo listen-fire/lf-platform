@@ -133,10 +133,11 @@ export function checkNow(
   const { source, version, parseVersion, upgradingFrom } = record;
   const snapshot = snapshotOf(record, table);
   const resolveFile = resolveFileFromSnapshot(snapshot);
-  const program = parseProgram(source, { languageVersion: parseVersion ?? version });
+  // The recorded corpus keeps integer pins: legacy ids, read as their text.
+  const program = parseProgram(source, { languageVersion: String(parseVersion ?? version) });
   const diagnostics = checkProgram(program, wrap(fromCatalogSnapshot(snapshot)), {
-    languageVersion: version,
-    ...(upgradingFrom !== undefined ? { upgradingFrom } : {}),
+    languageVersion: String(version),
+    ...(upgradingFrom !== undefined ? { upgradingFrom: String(upgradingFrom) } : {}),
     ...(resolveFile ? { resolveFile } : {}),
   });
   const plain: unknown = JSON.parse(canonical(diagnostics));

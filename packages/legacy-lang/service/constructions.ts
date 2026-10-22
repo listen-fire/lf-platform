@@ -23,7 +23,7 @@ import { typeNameOf } from 'movement-lang/parser/ast';
 import { MovementParseError, parseProgram } from '../parser/parse';
 import { unwrapCredentialArg } from 'movement-lang/parser/scan';
 import { eventAddressOfHops } from '../checker/event_address';
-import { CURRENT_LANGUAGE_VERSION, type LanguageVersion } from 'movement-lang/language_version';
+import { CURRENT_LANGUAGE_VERSION, type LanguageVersion } from '../language_version';
 
 export interface ConstructionRef {
   /**

@@ -27,7 +27,7 @@
 //
 // Versions: this file runs under the current language version in the unit
 // suite, and under versions 1 and 2 through the engine conformance configs
-// (`pnpm test:conformance:v1|v2`), whose setup makes CURRENT_LANGUAGE_VERSION
+// (`pnpm test:conformance:v1|v2`), whose setup makes LANGUAGE_VERSION
 // that version. A cell whose syntax that version does not have (`since`) is
 // skipped there, by name.
 //
@@ -107,7 +107,7 @@ jest.mock('../../../lib/anthropic', () => ({
 
 import { writeFileSync } from 'node:fs';
 
-import { CURRENT_LANGUAGE_VERSION, fromCatalogSnapshot, type LanguageVersion } from 'movement-lang';
+import { LANGUAGE_VERSION, fromCatalogSnapshot, type LanguageVersion } from 'movement-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 
 import type { ExtractCallLlmInput, ExtractCallLlmResult } from '@listen-fire/legacy-engine/services/movement_engine/extraction_call';
@@ -117,6 +117,7 @@ import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { tenantIdOf } from 'engine-contracts';
 import { makeTestHost } from 'movement-engine/public/testing';
 
+import { legacyVersionNumber } from 'legacy-lang';
 import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { runFailureCause, type MovementRunResult } from '@listen-fire/legacy-engine/services/movement_engine/run';
 import { MovementEngineError } from 'movement-engine/public/errors';
@@ -126,7 +127,7 @@ import { ACME, BETA, GAMMA, cellId, cells, expectationAt, row, type Cell, type R
 import { RELAY, SUMMARISE, catalog, programFor } from './binding_consumer_matrix.program';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000088');
-const VERSION: LanguageVersion = CURRENT_LANGUAGE_VERSION;
+const VERSION: LanguageVersion = LANGUAGE_VERSION;
 
 // ── Triage: cells whose right answer nobody has decided ─────────────────────
 
@@ -361,7 +362,7 @@ describe(`binding × consumer matrix under language version ${VERSION}`, () => {
 
   for (const cell of ALL) {
     const id = cellId(cell);
-    if (cell.since > VERSION) {
+    if (cell.since > legacyVersionNumber(VERSION)) {
       it.skip(`${id} (syntax since version ${cell.since})`, () => undefined);
       report.push({ cell: id, path: cell.path.id, consumer: cell.consumer.id, expected: expectedLabel(cell), verdict: 'skipped', detail: `since ${cell.since}`, triage: false });
       continue;

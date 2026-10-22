@@ -17,7 +17,7 @@
 
 import { randomUUID } from 'node:crypto';
 
-import { CURRENT_LANGUAGE_VERSION, type LanguageVersion } from 'movement-lang';
+import { LANGUAGE_VERSION, compatible, type LanguageVersion } from 'movement-lang';
 
 import type { UserId } from '../../../generated/kysely/core/User';
 import type { MovementId } from '../../../generated/kysely/automations/Movement';
@@ -100,10 +100,10 @@ function toMovementRow(row: {
   validity_source_hash: string | null;
   validity_checked_at: Date | null;
   validity_consented_at: Date | null;
-  validity_checked_against: number | null;
-  language_version: number;
+  validity_checked_against: string | null;
+  language_version: string;
   upgrade_diagnostics: unknown;
-  upgrade_checked_against: number | null;
+  upgrade_checked_against: string | null;
   created_at: Date;
   updated_at: Date;
 }): MovementRow {
@@ -163,8 +163,8 @@ export async function getMovementRowByName(input: {
 export function pendingUpgradeDiagnostics(
   row: Pick<MovementRow, 'languageVersion' | 'upgradeDiagnostics' | 'upgradeCheckedAgainst'>,
 ): AuthoringDiagnostic[] | null {
-  if (row.languageVersion === CURRENT_LANGUAGE_VERSION) return null;
-  if (row.upgradeCheckedAgainst !== CURRENT_LANGUAGE_VERSION) return null;
+  if (compatible(row.languageVersion, LANGUAGE_VERSION)) return null;
+  if (row.upgradeCheckedAgainst === null || !compatible(row.upgradeCheckedAgainst, LANGUAGE_VERSION)) return null;
   return row.upgradeDiagnostics;
 }
 
@@ -241,7 +241,7 @@ export async function upsertMovementRow(input: {
       name: input.name,
       source: input.source,
       description: input.description ?? '',
-      language_version: CURRENT_LANGUAGE_VERSION,
+      language_version: LANGUAGE_VERSION,
       created_by_user_id: (input.userId ?? null) as UserId | null,
     })
     .execute();

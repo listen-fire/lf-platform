@@ -24,7 +24,7 @@ import {
 } from './catalog';
 import { fieldAssignable, maybeAbsent, stripAbsent } from './typing';
 import type { LanguageVersion } from 'movement-lang/language_version';
-import { spellCode } from 'movement-lang/parser/surface';
+import { spellCode } from '../parser/surface';
 
 /**
  * Derives the same schema shape adapters publish for an in-file node declaration.

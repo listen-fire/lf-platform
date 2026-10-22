@@ -80,7 +80,7 @@ jest.mock('../../../lib/anthropic', () => ({
   MAX_CHAT_CONTINUATIONS: 5,
 }));
 
-import { fromCatalogSnapshot, mockCatalogSnapshot, type InstanceSchema } from 'movement-lang';
+import { LANGUAGE_VERSION, fromCatalogSnapshot, mockCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import type {
@@ -256,12 +256,12 @@ function run(
     text?: string;
     llm?: { call(input: LlmCallInput): Promise<LlmCallResult> };
     attio: Adapter;
-    languageVersion?: number;
+    languageVersion?: LanguageVersion;
   },
 ): Promise<Awaited<ReturnType<typeof runMovement>>> {
   return runMovement({
     ...(opts.languageVersion !== undefined ? { languageVersion: opts.languageVersion } : {}),
-    source: spelledFor(opts.languageVersion ?? 5, PRELUDE + source, fromCatalogSnapshot(catalog)),
+    source: spelledFor(opts.languageVersion ?? LANGUAGE_VERSION, PRELUDE + source, fromCatalogSnapshot(catalog)),
     movementName: 'intake',
     event: webhookEvent({ subject: 'Deals', text: opts.text ?? '' }),
     teamId: TEAM_ID,
@@ -363,7 +363,7 @@ describe('a block head rooted at an expression', () => {
 
     await run(TWO_NODES + ['  AT(both, 1)-[t:missing]-> {', WRITE_TAG].join('\n'), {
       attio: attio.adapter,
-      languageVersion: 2,
+      languageVersion: '2',
     });
 
     expect(attio.creates).toEqual([]);

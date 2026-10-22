@@ -9,14 +9,14 @@
 // still compare strictly — `shared_filter`'s "undefined is NOT null there".)
 
 import { binding, Environment, evalMovementExpr } from '../expression';
-import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+import { LANGUAGE_VERSION } from 'movement-lang';
 import { parseMovementCondition, parseMovementExpression } from 'legacy-lang';
 import { evaluatePredicate } from 'movement-lang/expression/filter';
 
 async function evaluate(raw: string, bindings: Record<string, unknown>): Promise<unknown> {
   const env = new Environment();
   for (const [name, value] of Object.entries(bindings)) env.declare(name, binding({ kind: 'value', value }));
-  return (await evalMovementExpr(parseMovementExpression(raw), { env, languageVersion: CURRENT_LANGUAGE_VERSION })).value;
+  return (await evalMovementExpr(parseMovementExpression(raw), { env, languageVersion: LANGUAGE_VERSION })).value;
 }
 
 const ABSENT: ReadonlyArray<[string, unknown]> = [
@@ -52,7 +52,7 @@ describe.each(ABSENT)('an absent value (%s) in the engine', (_label, absent) => 
     if (condition.kind !== 'expr') throw new Error(`expected an expression condition, got ${condition.kind}`);
     const env = new Environment();
     env.declare('x', binding({ kind: 'value', value: absent }));
-    expect(Boolean((await evalMovementExpr(condition.expr, { env, languageVersion: CURRENT_LANGUAGE_VERSION })).value)).toBe(false);
+    expect(Boolean((await evalMovementExpr(condition.expr, { env, languageVersion: LANGUAGE_VERSION })).value)).toBe(false);
   });
 
   it('IF absent THEN … ELSE … END takes the ELSE', async () => {
@@ -97,7 +97,7 @@ describe.each(ABSENT)('AND / OR short-circuit past a guard on an absent value (%
   async function evaluateV3(raw: string, bindings: Record<string, unknown>): Promise<unknown> {
     const env = new Environment();
     for (const [name, value] of Object.entries(bindings)) env.declare(name, binding({ kind: 'value', value }));
-    return (await evalMovementExpr(parseMovementExpression(raw), { env, languageVersion: 3 })).value;
+    return (await evalMovementExpr(parseMovementExpression(raw), { env, languageVersion: '3' })).value;
   }
 
   const UNREACHABLE = 'AI("never asked") == "yes"';

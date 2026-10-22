@@ -10,7 +10,7 @@ process.env.DATABASE_URL_TEST ??= 'postgresql://unit:unit@localhost:5432/unit-te
 process.env.DATABASE_URL_TEST_READONLY ??= 'postgresql://unit:unit@localhost:5432/unit-test-unused';
 
 import { fileValue, tenantIdOf } from 'engine-contracts';
-import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+import { LANGUAGE_VERSION } from 'movement-lang';
 import {
   RecordedConversation,
   hostRecordingSchema,
@@ -126,7 +126,7 @@ describe('the recorder', () => {
     expect(hostRecordingSchema.safeParse(JSON.parse(JSON.stringify(recording))).success).toBe(true);
     expect(recording.entry).toBe('run');
     expect(recording.input).not.toHaveProperty('host');
-    expect(recording.input.languageVersion).toBe(CURRENT_LANGUAGE_VERSION);
+    expect(recording.input.languageVersion).toBe(LANGUAGE_VERSION);
     expect(paths(recording)[0]).toBe('segment.open');
     expect(paths(recording).at(-1)).toBe('segment.close');
     const creates = recording.requests.filter(

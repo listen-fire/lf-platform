@@ -287,7 +287,7 @@ describe('describeMovementInstance — the default connection', () => {
     const narrow = { type: 'thing', where: '`kind` == "a" && `kind` != "b"' };
     const current = await describeMovementInstance({ teamId: TEAM, adapter: 'slack', narrow });
     expect(current.notes.join('\n')).not.toContain('could not parse');
-    const pinned = await describeMovementInstance({ teamId: TEAM, adapter: 'slack', narrow, languageVersion: 4 });
+    const pinned = await describeMovementInstance({ teamId: TEAM, adapter: 'slack', narrow, languageVersion: '4' });
     expect(pinned.notes.join('\n')).toContain('could not parse');
   });
 

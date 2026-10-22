@@ -41,7 +41,7 @@ import { pathRootName, probePathHead, typeNameOf } from 'movement-lang/parser/as
 import { parseProgram } from '../parser/parse';
 import { unwrapCredentialArg } from 'movement-lang/parser/scan';
 import { expressionOfSlot, parseMovementExpression } from '../expression/bridge';
-import { CURRENT_LANGUAGE_VERSION, type LanguageVersion } from 'movement-lang/language_version';
+import { CURRENT_LANGUAGE_VERSION, type LanguageVersion } from '../language_version';
 import { since } from '../version_conditionals';
 
 export interface InstanceChain {

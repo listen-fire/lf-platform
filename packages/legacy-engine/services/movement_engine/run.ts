@@ -68,7 +68,8 @@
 
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-import { BridgeError, writtenArms, type PluginOutput, type CombinatorKind, CURRENT_LANGUAGE_VERSION, credentialArgOf, mapTargetRoots, memberPathBindingName, pathRootName, probePathHead, spellPathHead, spellPathRoot, splitUniquenessConjuncts, identityKeyOf, unwrapCredentialArg, constructionAsCall, argumentBindings, isPositionalCall, isValueTypeRef, spellParamType, typeNameOf, expandWriteSpreads, slotOfTree } from 'movement-lang';
+import { BridgeError, writtenArms, type PluginOutput, type CombinatorKind, credentialArgOf, mapTargetRoots, memberPathBindingName, pathRootName, probePathHead, spellPathHead, spellPathRoot, splitUniquenessConjuncts, identityKeyOf, unwrapCredentialArg, constructionAsCall, argumentBindings, isPositionalCall, isValueTypeRef, spellParamType, typeNameOf, expandWriteSpreads, slotOfTree } from 'movement-lang';
+import { CURRENT_LANGUAGE_VERSION } from 'legacy-lang';
 import { conditionOfSlot, expressionOfSlot, languageVersionDiagnostic, parseMovementExpression, treeOfSlot } from 'legacy-lang';
 import { DiagnosticCodes, readCollectionConfig, readSortSettings, ALL_SETTING_KEYS, SEQUENTIAL_COLLECTION_SETTINGS, type CollectionRunSettings, pluginOutputUnder, before, aggregatedBarePath, bareName, isWalkProjection, EVENT_ACTION_FIELD, eventAddressKey, eventAddressOfHops, isEnumType, readExtractCallConfig, resolveBorrowedField, borrowedTypeSegments, durationToMs, CALLBACK_CALLED_EDGE, CALLBACK_CALL_AT, parseFieldTypeName, schemaSurface, declaredTypesIn, surfaceMisfit, readCall, resolveCallee, since, conjunctsOf, hoistingMemberReads, holdsNestedCall, nameNode, runsAsCall, shortCircuitOf, valueChildren, withValueChildren, bindPluginArgs, memberLocal, packageMembers, pluginArgMisfitMessage, pluginPositionalParams, pluginSpecUnder, EXTRACTED_RECORD_PARAM } from 'legacy-lang';
 import { MovementParseError } from 'movement-lang';
@@ -282,7 +283,6 @@ import {
 import { checkPinnedInRust, type CheckInput, recordRunEngine, checkInputOf } from 'movement-engine/public/movement-engine';
 import { checkPinned, type CheckedProgram } from './ts_program_check';
 import { inRunContext, spendFields } from 'movement-engine/public/segment-context';
-import { RUST_ENGINE_FROM_VERSION } from './engine_choice';
 import { WriteLedger, forkWriteOrder, rootWriteOrder, type WriteOrder } from './write_ledger';
 import {
   closeRunContext,
@@ -364,14 +364,14 @@ function parseAndCheck(input: RunMovementInput): { program: Program; prepared: P
   return preparedOf(checkPinned(checkInputOf(input)));
 }
 
-/** The TypeScript engine runs language versions 1–4 only: a later pin runs
- *  on the Rust engine, which is its reference. `engineFor` never sends one
- *  here; this holds the engine itself to it. */
+/** The TypeScript engine runs the legacy ids only: a release's pin runs on
+ *  the Rust engine, which is its reference. `engineFor` never sends one here;
+ *  this holds the engine itself to it. */
 function refuseRustVersion(languageVersion: LanguageVersion): void {
-  if (!since(languageVersion, RUST_ENGINE_FROM_VERSION)) return;
+  if (/^[1-4]$/.test(String(languageVersion))) return;
   throw new MovementEngineError(
     'MOVENG_LANGUAGE_VERSION',
-    `the TypeScript engine runs language versions 1–${RUST_ENGINE_FROM_VERSION - 1}; this run is pinned to ${languageVersion}, which runs only on the Rust engine`,
+    `the TypeScript engine runs the legacy language versions 1–4; this run is pinned to ${languageVersion}, which runs only on the Rust engine`,
   );
 }
 

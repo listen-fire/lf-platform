@@ -260,7 +260,7 @@ interface RunAdapters {
   parkSink?: ParkSink;
   /** The run's language version, where a test pins one (`parallel` is
    *  retired under 5, so its own rules run under 4). */
-  languageVersion?: 4;
+  languageVersion?: '4';
 }
 
 /** The syntax-tree node a version 2 park names by its place in the pinned
@@ -282,7 +282,7 @@ function codeAt(source: string, place: unknown): Record<string, unknown> {
 function run(source: string, payload: Record<string, unknown>, adapters: RunAdapters):
   Promise<Awaited<ReturnType<typeof runMovement>>> {
   return runMovement({
-    source: (adapters.languageVersion === 4 ? PRELUDE_V4 : PRELUDE) + source,
+    source: (adapters.languageVersion === '4' ? PRELUDE_V4 : PRELUDE) + source,
     movementName: 'intake',
     event: webhookEvent('email', payload),
     teamId: TEAM_ID,
@@ -1831,7 +1831,7 @@ describe('the combinators — arms, ties and slots (sync paths)', () => {
   });
 
   it.each([
-    ['parallel (version 4)', 'movement', 'crm = attio(credentials: acme_main)', '  r = await parallel([', '  ])', 'COALESCE(AT(r, 1), "empty")', '[AT(r, 0)]', 4 as const],
+    ['parallel (version 4)', 'movement', 'crm = attio(credentials: acme_main)', '  r = await parallel([', '  ])', 'COALESCE(AT(r, 1), "empty")', '[AT(r, 0)]', '4' as const],
     ['all, which replaces it (version 5)', 'function', 'crm = connect attio using acme_main', '  r = all(', '  )', 'coalesce(r[1], "empty")', '[r[0]]', undefined],
   ])('an arm that hands nothing back is a null slot: %s', async (_label, keyword, crm, open, close, summary, domains, languageVersion) => {
     const email = makeFakeAdapter('email');
@@ -1873,7 +1873,7 @@ describe('the combinators — arms, ties and slots (sync paths)', () => {
         {},
         // Under 5 the checker refuses arms it cannot see are closures, so
         // the run-time refusal is pinned where it can still be reached.
-        { email: email.adapter, attio: attio.adapter, languageVersion: 4 },
+        { email: email.adapter, attio: attio.adapter, languageVersion: '4' },
       ),
     ).rejects.toThrow(/can never settle/);
   });
@@ -1891,7 +1891,7 @@ describe('the combinators — arms, ties and slots (sync paths)', () => {
         '}',
       ].join('\n'),
       {},
-      { email: email.adapter, attio: attio.adapter, languageVersion: 4 },
+      { email: email.adapter, attio: attio.adapter, languageVersion: '4' },
     );
     expect(attio.creates.map((w) => w.fields.name)).toEqual(['after']);
   });

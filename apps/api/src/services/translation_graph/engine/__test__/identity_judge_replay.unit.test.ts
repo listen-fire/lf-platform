@@ -9,7 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+import { LANGUAGE_VERSION } from 'movement-lang';
 
 import { BudgetExhausted } from 'movement-engine/public/models';
 import type { ExternalRecordRef } from 'movement-engine/public/adapter';
@@ -123,7 +123,7 @@ async function observe(replayCase: ReplayCase): Promise<Observed> {
           candidates,
           recordType,
           constraints,
-          languageVersion: CURRENT_LANGUAGE_VERSION,
+          languageVersion: LANGUAGE_VERSION,
           onJudgeUnavailable,
         });
         break;
@@ -133,7 +133,7 @@ async function observe(replayCase: ReplayCase): Promise<Observed> {
           candidates,
           recordType,
           constraints,
-          languageVersion: CURRENT_LANGUAGE_VERSION,
+          languageVersion: LANGUAGE_VERSION,
           budget: { remainingMicrodollars: null },
         });
         break;

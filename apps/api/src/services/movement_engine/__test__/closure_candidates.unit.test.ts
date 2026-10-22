@@ -7,7 +7,7 @@
 // Dancing Wren (5) only, with upgrade warnings before it — the frozen
 // behaviour is pinned here, and version 5 is refused at check.
 
-import type { InstanceSchema } from 'movement-lang';
+import { LANGUAGE_VERSION, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import type { Adapter, RuntimeCapabilities, WriteInput } from 'movement-engine/public/adapter';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { tenantIdOf } from 'engine-contracts';
@@ -130,7 +130,7 @@ const CASES: Record<string, string> = {
 }`,
 };
 
-async function runUnder(source: string, languageVersion: 3 | 4 | 5) {
+async function runUnder(source: string, languageVersion: LanguageVersion) {
   const kg = makeKgFake();
   const result = await runMovement({
     source: `${PRE}${source}\nlisten to runs {} fire recap\n`,
@@ -154,23 +154,23 @@ async function runUnder(source: string, languageVersion: 3 | 4 | 5) {
 }
 
 describe('a call of one of several closures, under versions 3 and 4', () => {
-  it.each([3, 4] as const)('under %i a record a later closure returns is written into a text field', async version => {
+  it.each(['3', '4'] as const)('under %s a record a later closure returns is written into a text field', async version => {
     const { kg } = await runUnder(CASES.recordAsText!, version);
     const written = kg.creates.map(c => c.fields.name);
     expect(written[0]).toBe('a');
     expect(written[1]).toMatchObject({ kind: 'handle' });
   });
 
-  it.each([3, 4] as const)('under %i a number reaches a later closure\'s text parameter', async version => {
+  it.each(['3', '4'] as const)('under %s a number reaches a later closure\'s text parameter', async version => {
     const { kg } = await runUnder(CASES.params!, version);
     expect(kg.creates.map(c => c.fields.payload)).toEqual([{ x: '1!' }]);
   });
 
-  it.each([3, 4] as const)('under %i a later closure\'s arity fails at run time, on the path that reaches it', async version => {
+  it.each(['3', '4'] as const)('under %s a later closure\'s arity fails at run time, on the path that reaches it', async version => {
     await expect(runUnder(CASES.arity!, version)).rejects.toThrow(/takes 1 argument\(s\), got 0/);
   });
 
   it.each(Object.keys(CASES))('%s is refused at check under Dancing Wren (5)', async name => {
-    await expect(runUnder(CASES[name]!, 5)).rejects.toThrow(/MOVENG_CHECK/);
+    await expect(runUnder(CASES[name]!, LANGUAGE_VERSION)).rejects.toThrow(/MOVENG_CHECK/);
   });
 });

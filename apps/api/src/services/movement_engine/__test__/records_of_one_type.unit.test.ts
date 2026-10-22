@@ -6,7 +6,7 @@
 // those reads are refused at check — and only from 5, with an upgrade warning
 // before. The frozen behaviour is pinned here.
 
-import type { InstanceSchema } from 'movement-lang';
+import { LANGUAGE_VERSION, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import type { Adapter, RuntimeCapabilities, WriteInput } from 'movement-engine/public/adapter';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { tenantIdOf } from 'engine-contracts';
@@ -97,7 +97,7 @@ movement recap(go: <runs-[:Invocation]->>) {
 listen to runs {} fire recap
 `;
 
-async function runUnder(languageVersion: 4 | 5) {
+async function runUnder(languageVersion: LanguageVersion) {
   const kg = makeKgFake();
   const result = await runMovement({
     source: SOURCE,
@@ -122,11 +122,11 @@ async function runUnder(languageVersion: 4 | 5) {
 
 describe('a read off one of two records of one type', () => {
   it('ran under Luminous Owl (4): a field it has read its value, one it has not read null, and text plus one is NaN', async () => {
-    const { kg } = await runUnder(4);
+    const { kg } = await runUnder('4');
     expect(kg.creates.find((c) => c.fields.payload !== undefined)?.fields.payload).toEqual({ name: 'b', nope: null, sum: Number.NaN });
   });
 
   it('is refused at check under Dancing Wren (5)', async () => {
-    await expect(runUnder(5)).rejects.toThrow(/MOV_UNKNOWN_PROPERTY/);
+    await expect(runUnder(LANGUAGE_VERSION)).rejects.toThrow(/MOV_UNKNOWN_PROPERTY/);
   });
 });

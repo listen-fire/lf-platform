@@ -12,7 +12,7 @@
 // movement-lang's own jest is broken locally, so the language layer runs through
 // apps/api's ts-jest (per repo convention).
 
-import { fromCatalogSnapshot, type CatalogSnapshot, type InstanceSchema, CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+import { fromCatalogSnapshot, type CatalogSnapshot, type InstanceSchema, LANGUAGE_VERSION } from 'movement-lang';
 import { checkProgram, genericLandingKey, scanInstanceChains } from 'legacy-lang';
 import { parseProgram } from 'legacy-lang';
 
@@ -54,7 +54,7 @@ async function grafted(body: string): Promise<InstanceSchema> {
   return graftGenericLandings({
     instance: { adapterType: 'ask', schema, entryPoints },
     chains: scanInstanceChains(source),
-    languageVersion: CURRENT_LANGUAGE_VERSION,
+    languageVersion: LANGUAGE_VERSION,
   }).schema;
 }
 

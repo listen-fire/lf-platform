@@ -453,18 +453,18 @@ describe('a firing runs under the movement\'s language version pin', () => {
       teamId: TEAM,
       triggerId: 't-1',
       triggerName: 'movement/intake_file/intake',
-      movementRow: movementRow({ languageVersion: 1 }) as never,
+      movementRow: movementRow({ languageVersion: '1' }) as never,
       event,
       recordingTriggerType: 'webhook',
     });
-    expect(runMovement).toHaveBeenCalledWith(expect.objectContaining({ languageVersion: 1 }));
+    expect(runMovement).toHaveBeenCalledWith(expect.objectContaining({ languageVersion: '1' }));
   });
 });
 
 describe('resumeMovementFiring', () => {
   // The movement row's pin has since advanced to 2; the run started under 1.
   beforeEach(() => {
-    getMovementRow.mockResolvedValue(movementRow({ languageVersion: 2 }));
+    getMovementRow.mockResolvedValue(movementRow({ languageVersion: '2' }));
   });
 
   const resumeInput = {
@@ -472,7 +472,7 @@ describe('resumeMovementFiring', () => {
     triggerId: 't-1',
     triggerName: 'movement/intake_file/intake',
     pinnedSource: CLEAN_SOURCE,
-    pinnedLanguageVersion: 1,
+    pinnedLanguageVersion: '1',
     movementVersionId: 'mv-1',
     runId: 'run-1' as never,
     movementId: 'mov-1',
@@ -484,7 +484,7 @@ describe('resumeMovementFiring', () => {
   it('resumes under the version the run started with, not the movement\'s pin now', async () => {
     resumeMovement.mockResolvedValue({ movementName: 'intake', writes: [], extractionSites: {}, trace: [] });
     await resumeMovementFiring({ ...resumeInput, answer: true });
-    expect(resumeMovement).toHaveBeenCalledWith(expect.objectContaining({ languageVersion: 1 }));
+    expect(resumeMovement).toHaveBeenCalledWith(expect.objectContaining({ languageVersion: '1' }));
   });
 
   it('resumes on the engine the run row says parked it', async () => {
@@ -520,7 +520,7 @@ describe('resumeMovementFiring', () => {
       triggerId: 't-1',
       triggerName: 'movement/intake_file/intake',
       pinnedSource: CLEAN_SOURCE,
-      pinnedLanguageVersion: 2,
+      pinnedLanguageVersion: '2',
       movementVersionId: 'mv-1',
       runId: 'run-1' as never,
       movementId: 'mov-1',
@@ -549,7 +549,7 @@ describe('resumeMovementFiring', () => {
       triggerId: 't-1',
       triggerName: 'movement/intake_file/intake',
       pinnedSource: CLEAN_SOURCE,
-      pinnedLanguageVersion: 2,
+      pinnedLanguageVersion: '2',
       movementVersionId: 'mv-1',
       runId: 'run-1' as never,
       movementId: 'mov-1',

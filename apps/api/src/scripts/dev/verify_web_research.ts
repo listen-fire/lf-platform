@@ -207,7 +207,7 @@ function findExtract(node: unknown): ExtractExpression | undefined {
 }
 
 async function runEndToEnd(userId: string | null): Promise<void> {
-  const extract = findExtract(parseProgram(PROGRAM, { languageVersion: 4 }));
+  const extract = findExtract(parseProgram(PROGRAM, { languageVersion: '4' }));
   if (!extract) throw new Error('no extract in the program');
 
   const trace: MovementTraceEntry[] = [];

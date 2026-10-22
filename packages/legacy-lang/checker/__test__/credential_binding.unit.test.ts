@@ -4,6 +4,7 @@
 // listen-fire's crates/movement-checker/tests/credential_binding.rs; here both checkers are
 // also held to each other's exact diagnostics.
 
+import { LANGUAGE_VERSION } from 'movement-lang/language_version';
 import { parseProgram } from '../../parser/parse';
 import { checkProgram, type Diagnostic } from '../check';
 import { checkSourceInRust } from 'movement-lang/checker/rust_checker';
@@ -29,8 +30,8 @@ const sourceOf = (using: string, adapter: string): string =>
   `import { \`@lf/${adapter}\` as ${adapter} } from adapters\nimport { ${using} } from credentials\nhs = connect ${adapter} using ${using}\n`;
 
 function both(source: string): Diagnostic[] {
-  const ts = checkProgram(parseProgram(source, { languageVersion: 5 }), fromCatalogSnapshot(SNAPSHOT), { languageVersion: 5 });
-  const rust = checkSourceInRust(source, SNAPSHOT, { languageVersion: 5 });
+  const ts = checkProgram(parseProgram(source, { languageVersion: LANGUAGE_VERSION }), fromCatalogSnapshot(SNAPSHOT), { languageVersion: 5 });
+  const rust = checkSourceInRust(source, SNAPSHOT, { languageVersion: LANGUAGE_VERSION });
   expect({ source, diagnostics: rust }).toEqual({ source, diagnostics: ts });
   return ts.filter((d) => d.code === 'MOV_CRED_WRONG_ADAPTER');
 }

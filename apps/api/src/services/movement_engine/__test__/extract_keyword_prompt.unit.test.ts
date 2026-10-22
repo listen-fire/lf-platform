@@ -84,7 +84,7 @@ import { runMovement as runMovementUnder } from '@listen-fire/legacy-engine/disp
 // from 5), so its recorded prompts are replayed under version 4, in the
 // spelling 4 reads.
 const runMovement = (input: Parameters<typeof runMovementUnder>[0]): ReturnType<typeof runMovementUnder> =>
-  runMovementUnder({ languageVersion: 4, ...input });
+  runMovementUnder({ languageVersion: '4', ...input });
 import type {
   LlmCallInput,
   LlmCallResult,

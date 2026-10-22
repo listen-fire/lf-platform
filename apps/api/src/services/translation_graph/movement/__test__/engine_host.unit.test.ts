@@ -38,6 +38,7 @@ jest.mock('../../../credentials/credential_ownership', () => ({
   },
 }));
 
+import { LANGUAGE_VERSION } from 'movement-lang';
 import { HOST_FAMILIES_VERSION, tenantIdOf } from 'engine-contracts';
 
 import type { Adapter } from 'movement-engine/public/adapter';
@@ -116,7 +117,7 @@ describe('productionEngineHost — adapter instances', () => {
   it('resolves an instance to data, and answers each call by method', async () => {
     const live = liveAdapter([]);
     const host = productionEngineHost({ teamId: teamOfTenant(TEAM_ID), resolveLive: () => live });
-    const { segmentId } = await host.segment.open({ teamId: TEAM_ID, languageVersion: 2, hostFamiliesVersion: HOST_FAMILIES_VERSION });
+    const { segmentId } = await host.segment.open({ teamId: TEAM_ID, languageVersion: '2', hostFamiliesVersion: HOST_FAMILIES_VERSION });
     const resolved = await host.adapters.resolve({ adapterType: 'attio', role: 'target', segmentId });
     expect(resolved).toMatchObject({
       adapterType: 'attio',
@@ -153,7 +154,7 @@ describe('productionEngineHost — adapter instances', () => {
 
   it('refuses a segment open whose host families version it does not serve, and opens nothing', async () => {
     const host = productionEngineHost({ teamId: teamOfTenant(TEAM_ID), resolveLive: () => liveAdapter([]) });
-    await expect(host.segment.open({ teamId: TEAM_ID, languageVersion: 2, hostFamiliesVersion: 2 })).rejects.toThrow(
+    await expect(host.segment.open({ teamId: TEAM_ID, languageVersion: '2', hostFamiliesVersion: 2 })).rejects.toThrow(
       'segment.open carries host families version 2, which this host does not serve (supported: 1)',
     );
   });
@@ -166,7 +167,7 @@ describe('productionEngineHost — adapter instances', () => {
       resolveLive: () => liveAdapter(writes),
       writeSink: (write) => captured.push(write),
     });
-    const { segmentId } = await host.segment.open({ teamId: TEAM_ID, languageVersion: 2, hostFamiliesVersion: HOST_FAMILIES_VERSION });
+    const { segmentId } = await host.segment.open({ teamId: TEAM_ID, languageVersion: '2', hostFamiliesVersion: HOST_FAMILIES_VERSION });
     const live = await host.adapters.resolve({ adapterType: 'attio', role: 'target', segmentId });
     const rehearsed = await host.adapters.resolve({
       adapterType: 'attio',
@@ -197,7 +198,7 @@ describe('productionEngineHost — adapter instances', () => {
         return liveAdapter([]);
       },
     });
-    const { segmentId } = await host.segment.open({ teamId: TEAM_ID, languageVersion: 2, hostFamiliesVersion: HOST_FAMILIES_VERSION });
+    const { segmentId } = await host.segment.open({ teamId: TEAM_ID, languageVersion: '2', hostFamiliesVersion: HOST_FAMILIES_VERSION });
     await expect(host.adapters.resolve({ adapterType: 'attio', credentialsId: 'cred-other', role: 'target', segmentId })).rejects.toThrow(
       `credential 'cred-other' does not belong to tenant '${TEAM_ID}'`,
     );
@@ -220,7 +221,7 @@ describe('productionEngineHost — adapter instances', () => {
         return liveAdapter([]);
       },
     });
-    const { segmentId } = await host.segment.open({ teamId: TEAM_ID, languageVersion: 2, hostFamiliesVersion: HOST_FAMILIES_VERSION });
+    const { segmentId } = await host.segment.open({ teamId: TEAM_ID, languageVersion: '2', hostFamiliesVersion: HOST_FAMILIES_VERSION });
     const first = await host.adapters.resolve({
       adapterType: 'attio',
       credentialsId: 'cred-a',
@@ -312,7 +313,7 @@ describe('productionEngineHost — what a module spends', () => {
         },
       });
       const host = productionEngineHost({ teamId: teamOfTenant(TEAM_ID), resolveLive: () => remote });
-      const { segmentId } = await host.segment.open({ teamId: TEAM_ID, languageVersion: 5, hostFamiliesVersion: HOST_FAMILIES_VERSION });
+      const { segmentId } = await host.segment.open({ teamId: TEAM_ID, languageVersion: LANGUAGE_VERSION, hostFamiliesVersion: HOST_FAMILIES_VERSION });
       const { instance } = await host.adapters.resolve({ adapterType: 'enrich', role: 'target', segmentId });
       const create = (name: string) =>
         host.adapters.call({ segmentId, instance, method: 'createRecord', args: { recordType: 'Company', fields: { name }, mutationContext: MUTATION_CONTEXT } });

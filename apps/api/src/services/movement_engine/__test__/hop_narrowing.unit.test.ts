@@ -15,7 +15,7 @@
 //      stops the rest of the WHERE from being read, exactly as the full async
 //      evaluator does.
 
-import { refinementKey } from 'movement-lang';
+import { LANGUAGE_VERSION, refinementKey } from 'movement-lang';
 import { parseTraversalPath, scanInstanceChains } from 'legacy-lang';
 import type { InstanceSchema } from 'movement-lang';
 import { refineInstanceSchema } from '../../translation_graph/movement/refinements';
@@ -65,7 +65,7 @@ const LIST_ENTRIES = 'list_entries';
  *  WHERE is an `edge_property`, so the same text written outside one keys
  *  differently. */
 function keyFor(where: string): string {
-  const steps = parseTraversalPath(`-[le:${LIST_ENTRIES} WHERE ${where}]->`, 5);
+  const steps = parseTraversalPath(`-[le:${LIST_ENTRIES} WHERE ${where}]->`, LANGUAGE_VERSION);
   const filter = steps?.[0]?.type === 'edge' ? steps[0].expressionFilter : undefined;
   if (!filter) throw new Error(`test setup: no filter parsed out of \`${where}\``);
   return refinementKey({ type: LIST_ENTRY, filter });

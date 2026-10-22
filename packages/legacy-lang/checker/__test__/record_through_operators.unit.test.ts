@@ -25,8 +25,8 @@ import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
 import { spelledFor } from './surface_spelling';
-import { type LanguageVersion } from 'movement-lang/language_version';
-import { PLATFORM_SUPPORTED_LANGUAGE_VERSIONS } from '../../language_version';
+import { LANGUAGE_VERSION, type LanguageVersion } from 'movement-lang/language_version';
+import { PLATFORM_SUPPORTED_LANGUAGE_VERSIONS, before, since } from '../../language_version';
 import { notKeywordRetirement } from './keyword_retirement';
 
 const crmSchema: InstanceSchema = {
@@ -118,9 +118,11 @@ const extract = (input: string, through = ''): string[] => [
 const RECORD_NOT_A_VALUE = 'a record, not a value';
 const FILE_NOT_A_VALUE = 'a file, not a value';
 
-const VERSIONS: LanguageVersion[] = [1, 3, 4];
+const VERSIONS: LanguageVersion[] = ['1', '3', '4'];
+// Every pin the platform reads with this package, and the installed language (this copy's version 5).
+const ALL_VERSIONS: LanguageVersion[] = [...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS, LANGUAGE_VERSION];
 
-describe.each(VERSIONS)('under language version %i, an operator holds what its operands hold', version => {
+describe.each(VERSIONS)('under language version %s, an operator holds what its operands hold', version => {
   const refused = (code: string, body: string[], where: string, what: string): void => {
     const errors = errorsUnder(version, body);
     expect(errors.map(d => d.code)).toEqual([code]);
@@ -186,7 +188,7 @@ describe.each(VERSIONS)('under language version %i, an operator holds what its o
   });
 });
 
-describe.each(VERSIONS)('under language version %i, a name bound to an operator carries its arms', version => {
+describe.each(VERSIONS)('under language version %s, a name bound to an operator carries its arms', version => {
   const refused = (body: string[], where: string, what: string): void => {
     const errors = errorsUnder(version, body);
     expect(errors.map(d => d.code)).toEqual(['MOV_WRITE_FIELD_TYPE']);
@@ -229,7 +231,7 @@ describe.each(VERSIONS)('under language version %i, a name bound to an operator 
   });
 });
 
-describe.each(VERSIONS)('under language version %i, a through stage\'s argument is held to what the plugin takes', version => {
+describe.each(VERSIONS)('under language version %s, a through stage\'s argument is held to what the plugin takes', version => {
   const refused = (through: string, where: string, what: string): void => {
     const errors = errorsUnder(version, extract('"a document"', ` through [${through}]`));
     expect(errors.map(d => d.code)).toEqual(['MOV_CALL_ARG_TYPE']);
@@ -264,7 +266,7 @@ describe.each(VERSIONS)('under language version %i, a through stage\'s argument 
   });
 });
 
-describe.each(VERSIONS)('under language version %i, an extraction input is text, a file, a record\'s fields, or a map of those', version => {
+describe.each(VERSIONS)('under language version %s, an extraction input is text, a file, a record\'s fields, or a map of those', version => {
   const refused = (body: string[], where: string): void => {
     const errors = errorsUnder(version, body);
     expect(errors.map(d => d.code)).toEqual(['MOV_EXTRACT_CONTENT']);
@@ -310,7 +312,7 @@ describe.each(VERSIONS)('under language version %i, an extraction input is text,
   });
 });
 
-describe.each(VERSIONS)('under language version %i, AT over a record takes an index only', version => {
+describe.each(VERSIONS)('under language version %s, AT over a record takes an index only', version => {
   const refused = (body: string[], said: string): void => {
     const errors = errorsUnder(version, body);
     expect(errors.map(d => d.code)).toEqual(['MOV_AT_RECORD_KEY']);
@@ -347,7 +349,7 @@ describe.each(VERSIONS)('under language version %i, AT over a record takes an in
   });
 });
 
-describe.each(VERSIONS)('PINNED: under language version %i, AND and OR answer a boolean', version => {
+describe.each(VERSIONS)('PINNED: under language version %s, AND and OR answer a boolean', version => {
   // Both engines evaluate `a AND b` / `a OR b` to true or false, never to an
   // operand, so a record among the operands is read for its truth and goes
   // nowhere.
@@ -359,7 +361,7 @@ describe.each(VERSIONS)('PINNED: under language version %i, AND and OR answer a 
   });
 });
 
-describe.each(VERSIONS)('under language version %i, the walk never passes over a record handed over as its fields', version => {
+describe.each(VERSIONS)('under language version %s, the walk never passes over a record handed over as its fields', version => {
   // An extraction input and a plugin argument taking structured data render
   // a record as its fields. Every record the walk meets — at any depth, in any
   // arm — is held to that: its fields in hand, none of them a file.
@@ -382,7 +384,7 @@ describe.each(VERSIONS)('under language version %i, the walk never passes over a
 
   it('a system record under a key of a bound map', () => {
     expect(codesOf(SYS(['  y = { a: c }', ...extract('y')]), 'MOV_EXTRACT_CONTENT')).toEqual([
-      expect.stringContaining(`and '${version === 1 ? 'y[…]' : 'y.a'}' is crm.company, whose fields are read from its system one at a time`),
+      expect.stringContaining(`and '${version === '1' ? 'y[…]' : 'y.a'}' is crm.company, whose fields are read from its system one at a time`),
     ]);
   });
 
@@ -428,7 +430,7 @@ describe.each(VERSIONS)('under language version %i, the walk never passes over a
   });
 });
 
-describe.each(VERSIONS)('under language version %i, MULTI\'s list is one of its members\' kind', version => {
+describe.each(VERSIONS)('under language version %s, MULTI\'s list is one of its members\' kind', version => {
   const refused = (body: string[], code: string, said: string): void => {
     const errors = errorsUnder(version, body);
     expect(errors.map(d => d.code)).toEqual([code]);
@@ -458,7 +460,7 @@ describe.each(VERSIONS)('under language version %i, MULTI\'s list is one of its 
   });
 });
 
-describe.each(VERSIONS)('under language version %i, AT sees a record through an operator', version => {
+describe.each(VERSIONS)('under language version %s, AT sees a record through an operator', version => {
   const refused = (body: string[], said: string): void => {
     const errors = errorsUnder(version, body);
     expect(errors.map(d => d.code)).toEqual(['MOV_AT_RECORD_KEY']);
@@ -478,7 +480,7 @@ describe.each(VERSIONS)('under language version %i, AT sees a record through an 
   });
 });
 
-describe.each(VERSIONS)('under language version %i, FIRST and LAST pick a member the list\'s type does not show', version => {
+describe.each(VERSIONS)('under language version %s, FIRST and LAST pick a member the list\'s type does not show', version => {
   const SYS = (inner: string[]): string[] => ['  crm-[c:companies]-> {', ...inner.map(line => `  ${line}`), '  }'];
   const refused = (body: string[], code: string, said: string): void => {
     const errors = errorsUnder(version, body).filter(d => d.code === code);
@@ -514,7 +516,7 @@ describe.each(VERSIONS)('under language version %i, FIRST and LAST pick a member
   });
 });
 
-describe.each(VERSIONS)('under language version %i, an adapter instance is no value for a field', version => {
+describe.each(VERSIONS)('under language version %s, an adapter instance is no value for a field', version => {
   const refused = (body: string[], where: string): void => {
     const errors = errorsUnder(version, body);
     expect(errors.map(d => d.code)).toEqual(['MOV_WRITE_FIELD_TYPE']);
@@ -548,7 +550,7 @@ describe.each(VERSIONS)('under language version %i, an adapter instance is no va
   });
 });
 
-describe.each([...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS])('B2: under language version %i, a record through COALESCE or MULTI reaches no field or json argument', version => {
+describe.each(ALL_VERSIONS)('B2: under language version %s, a record through COALESCE or MULTI reaches no field or json argument', version => {
   // Closed by the operator typing above (COALESCE, IF and MULTI hold what
   // their operands hold), on every supported version; pinned here per version
   // so the engine never again meets the record mid-run.
@@ -564,7 +566,7 @@ describe.each([...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS])('B2: under language ver
   });
 });
 
-describe.each([...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS])('B3: under language version %i, a map spread into a graph holds no record', version => {
+describe.each(ALL_VERSIONS)('B3: under language version %s, a map spread into a graph holds no record', version => {
   // A map spread into a graph copies values and maps; the engine refuses a
   // record under any key when the graph is built (`spreadIntoGraph`, "a graph
   // field cannot hold a record"), on every run that reaches it. Refused where
@@ -579,7 +581,7 @@ describe.each([...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS])('B3: under language ver
   };
   const refusedAt = (body: string[], said: string, shaped = false): void => {
     const all = errorsOf(body, shaped);
-    if (version === 1 && !shaped) {
+    if (version === '1' && !shaped) {
       // Version 1 names no key of a map literal, so the unshaped spread is
       // refused as untyped alone — the record's refusal comes with the shape
       // it asks for, not stacked with a path that could only be a guess.
@@ -594,14 +596,14 @@ describe.each([...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS])('B3: under language ver
 
   // Version 1 types a map of one kind of value by that kind, its keys
   // unnamed; version 2 a list literal as a list, its slots unnumbered.
-  const atK = version === 1 ? "'held[…]' is " : "'held.k' is ";
+  const atK = version === '1' ? "'held[…]' is " : "'held.k' is ";
 
   it('a record under a key', () => {
     refusedAt(['  held = { k: org }', '  g = graph { ...held }'], `'...held' copies a map's values and maps into the graph, and ${atK}`);
   });
 
   it('a record deep in a list under a key: the repair writes the list\'s key', () => {
-    refusedAt(['  held = { a: "x", deep: { list: [org] } }', '  g = graph { ...held }'], version === 2 ? "'held.deep.list[…]' is " : "'held.deep.list[0]' is ");
+    refusedAt(['  held = { a: "x", deep: { list: [org] } }', '  g = graph { ...held }'], version === '2' ? "'held.deep.list[…]' is " : "'held.deep.list[0]' is ");
     refusedAt(['  held = { a: "x", deep: { list: [org] } }', '  g = graph { ...held }'], "as an entry of its own ('list: [r, …]')");
   });
 
@@ -624,7 +626,7 @@ describe.each([...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS])('B3: under language ver
   });
 });
 
-describe.each([...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS])('B3: under language version %i, a graph entry that is not a reference holds no record', version => {
+describe.each(ALL_VERSIONS)('B3: under language version %s, a graph entry that is not a reference holds no record', version => {
   // An entry that is ONE record (or a list of them) is a reference — an edge
   // holding the records. Any other entry is a field, and a field holds values:
   // a record in an operator's arm would be stored as a field when the graph is
@@ -640,11 +642,11 @@ describe.each([...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS])('B3: under language ver
   };
 
   it('a record in one arm of a COALESCE', () => {
-    refusedAs(['  g = graph { a: COALESCE(org, "x") }'], `'a' is a field, and '${version >= 5 ? 'coalesce' : 'COALESCE'}(org, "x")' may be `);
+    refusedAs(['  g = graph { a: COALESCE(org, "x") }'], `'a' is a field, and '${since(version, 5) ? 'coalesce' : 'COALESCE'}(org, "x")' may be `);
   });
 
   it('a record in one arm of an IF', () => {
-    refusedAs(['  g = graph { a: IF 1 > 0 THEN org ELSE "x" END }'], `'${version >= 5 ? '1 > 0 ? org : "x"' : 'IF 1 > 0 THEN org ELSE "x" END'}' may be `);
+    refusedAs(['  g = graph { a: IF 1 > 0 THEN org ELSE "x" END }'], `'${since(version, 5) ? '1 > 0 ? org : "x"' : 'IF 1 > 0 THEN org ELSE "x" END'}' may be `);
   });
 
   it('a record deep in an arm, with the path', () => {
@@ -659,7 +661,7 @@ describe.each([...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS])('B3: under language ver
 
   it('a connection (an adapter instance) is no field: bare, or in an arm', () => {
     refusedAs(['  g = graph { a: crm }'], `'a' is a field, and 'crm' is 'crm' (the instance itself) — a connection, not a value a field holds`);
-    refusedAs(['  g = graph { a: COALESCE(crm, "x") }'], `'${version >= 5 ? 'coalesce' : 'COALESCE'}(crm, "x")' may be `);
+    refusedAs(['  g = graph { a: COALESCE(crm, "x") }'], `'${since(version, 5) ? 'coalesce' : 'COALESCE'}(crm, "x")' may be `);
     refusedAs(['  g = graph { a: COALESCE(crm, "x") }'], 'a connection, not a value a field holds');
   });
 
@@ -669,7 +671,7 @@ describe.each([...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS])('B3: under language ver
   });
 });
 
-describe.each([...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS])('B5: under language version %i, a record inside a plugin argument of a declared value type is refused', version => {
+describe.each(ALL_VERSIONS)('B5: under language version %s, a record inside a plugin argument of a declared value type is refused', version => {
   // A text argument used to refuse a record handed whole, and take one under
   // a key or in an arm, which reached the plugin as the engine's own object.
   it.each([
@@ -687,7 +689,7 @@ describe.each([...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS])('B5: under language ver
     // (TypeScript's `{a: string}` is no `string`); before it, the record
     // handle inside was the only thing refused, and a field is no handle.
     const refused = errorsUnder(version, ['  s = tag(label: { a: org.name })']).map(d => d.code);
-    expect(refused).toEqual(version >= 5 ? ['MOV_CALL_ARG_MAYBE_RECORD'] : []);
+    expect(refused).toEqual(since(version, 5) ? ['MOV_CALL_ARG_MAYBE_RECORD'] : []);
     expect(errorsUnder(version, ['  s = tag(label: org.name)'])).toEqual([]);
   });
 });
@@ -723,7 +725,7 @@ const refusedAs = (errors: Diagnostic[], code: string, said: string): void => {
   expect(errors[0]!.message).toContain(said);
 };
 
-describe.each([1, 4, 5] as LanguageVersion[])('B14: under language version %i, a named function\'s bound call holds what its returns hold', version => {
+describe.each(['1', '4', LANGUAGE_VERSION])('B14: under language version %s, a named function\'s bound call holds what its returns hold', version => {
   const refused = (body: string[], code: string, said: string): void => refusedAs(errorsWithFunctions(version, body), code, said);
 
   it('a graph entry', () => {
@@ -734,7 +736,7 @@ describe.each([1, 4, 5] as LanguageVersion[])('B14: under language version %i, a
     const body = ['  v = pick()', '  held = { k: v }', '  g = graph { ...held }'];
     // Version 1 names no key of a map literal: the spread is refused as untyped
     // alone, as B3's is (the record's refusal comes with the shape it asks for).
-    if (version === 1) refused(body, 'MOV_GRAPH_SPREAD_UNTYPED', "nothing says which keys 'held' holds");
+    if (version === '1') refused(body, 'MOV_GRAPH_SPREAD_UNTYPED', "nothing says which keys 'held' holds");
     else refused(body, 'MOV_GRAPH_SPREAD_RECORD', "'held.k' may be a crm.company handle");
   });
 
@@ -751,7 +753,7 @@ describe.each([1, 4, 5] as LanguageVersion[])('B14: under language version %i, a
   });
 });
 
-describe.each([4, 5] as LanguageVersion[])('B14: under language version %i, a closure\'s call holds what its returns hold', version => {
+describe.each(['4', LANGUAGE_VERSION])('B14: under language version %s, a closure\'s call holds what its returns hold', version => {
   const refused = (body: string[], code: string, said: string): void => refusedAs(errorsUnder(version, body), code, said);
   const c = '  c = () => COALESCE(org, "x")';
 
@@ -809,7 +811,7 @@ describe.each([4, 5] as LanguageVersion[])('B14: under language version %i, a cl
   it('a declared return type that does not take what a return may hold: refused where it is declared from version 5, at the use before', () => {
     const declaredText = '  c = (): <text> => COALESCE(org, "x")';
     const declaredJson = '  c = (): <json> => { return { a: COALESCE(f, "x") } }';
-    if (version >= 5) {
+    if (since(version, 5)) {
       refused([declaredText, '  g = graph { name: c() }'], 'MOV_RETURN_TYPE', "declares it returns <text>, but this may be a crm.company handle");
       refused([declaredJson], 'MOV_RETURN_TYPE', "may hold file at '.a'");
       refused([declaredText, '  s = c() = "x"'], 'MOV_RETURN_TYPE', 'but this may be a crm.company handle');
@@ -849,7 +851,7 @@ describe.each([4, 5] as LanguageVersion[])('B14: under language version %i, a cl
 // out, bound, or handed back by a call. A union that mixes a record with a
 // value is still refused. L1: the union of a call's returns is flattened and
 // deduplicated, so a chain or a fan of calls checks in linear time.
-describe.each([...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS])('B14 review: under language version %i, records only are one record', version => {
+describe.each(ALL_VERSIONS)('B14 review: under language version %s, records only are one record', version => {
   const two = [
     '  o2 = write crm-[:companies]-> { name: "Other" }',
   ];
@@ -886,7 +888,7 @@ describe.each([...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS])('B14 review: under lang
     refusedAs(withTwo(['  r = mixed()', '  g = graph { a: r }']), 'MOV_GRAPH_ENTRY_RECORD', "'r' may be a crm.company handle");
   });
 
-  if (version >= 3) {
+  if (since(version, 3)) {
     it('a closure returning one of two records: an edge; with a value among them, refused', () => {
       expect(withTwo(['  c = () => COALESCE(org, o2)', '  r = c()', '  g = graph { a: r }'])).toEqual([]);
       expect(withTwo(['  c = () => COALESCE(org, o2)', '  g = graph { a: c() }'])).toEqual([]);
@@ -895,7 +897,7 @@ describe.each([...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS])('B14 review: under lang
     });
   }
 
-  if (version >= 4) {
+  if (since(version, 4)) {
     it('the unions of a call chain and a call fan are linear to check', () => {
       const chain = ['  f0 = () => COALESCE(org, "x")'];
       for (let i = 1; i <= 20; i++) chain.push(`  f${i} = () => { if 1 > 0 { return f${i - 1}() } return f${i - 1}() }`);

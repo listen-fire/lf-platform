@@ -12,10 +12,10 @@ import { MovementEngineError } from 'movement-engine/public/errors';
 import { makeTestHost } from 'movement-engine/public/testing';
 import { tenantIdOf } from 'engine-contracts';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
-import { fromCatalogSnapshot, mockCatalogSnapshot, type LanguageVersion } from 'movement-lang';
+import { LANGUAGE_VERSION, fromCatalogSnapshot, mockCatalogSnapshot, type LanguageVersion } from 'movement-lang';
 import { parseMovementExpression } from 'legacy-lang';
 
-const VERSIONS: LanguageVersion[] = [1, 2, 3, 4, 5];
+const VERSIONS: LanguageVersion[] = ['1', '2', '3', '4', LANGUAGE_VERSION];
 
 async function evaluate(raw: string, languageVersion: LanguageVersion): Promise<unknown> {
   const env = new Environment();

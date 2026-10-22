@@ -3,7 +3,7 @@
 // the program's traversal paths, iterated because a target only becomes
 // known once its parent is described.
 
-import { fromCatalogSnapshot, type CatalogSnapshot, type InstanceSchema } from 'movement-lang';
+import { fromCatalogSnapshot, type CatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import { checkProgram, scanInstanceChains } from 'legacy-lang';
 import { parseProgram } from 'legacy-lang';
 
@@ -327,7 +327,7 @@ c = connect crm using crm_cred
   const outsideMap = (listBody: string) =>
     `${PRELUDE}function m() {\n  n = "Acme"\n${writes(listBody)}\n}`;
 
-  const walkedPaths = (source: string, languageVersion?: number): string[] =>
+  const walkedPaths = (source: string, languageVersion?: LanguageVersion): string[] =>
     scanInstanceChains(source, languageVersion !== undefined ? { languageVersion } : undefined)
       .map((chain) =>
         chain.steps.map((step) => (step.type === 'edge' ? step.edgeTypeId : '?')).join(' → '),
@@ -404,7 +404,7 @@ c = connect crm using crm_cred
   });
 
   it('a movement pinned to version 1 or 2 keeps the scan it was saved under', () => {
-    for (const languageVersion of [1, 2]) {
+    for (const languageVersion of ['1', '2']) {
       expect(walkedPaths(insideMap('Stage: "Seed"'), languageVersion)).toEqual([]);
     }
   });

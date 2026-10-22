@@ -17,8 +17,10 @@
 // leaf leaves the others parked. A state written before these steps existed
 // still resumes.
 
-import type { InstanceSchema, LanguageVersion } from 'movement-lang';
-import { CURRENT_LANGUAGE_VERSION, fromCatalogSnapshot } from 'movement-lang';
+import { LANGUAGE_VERSION, type InstanceSchema, type LanguageVersion } from 'movement-lang';
+import { pinOf } from './pin_of';
+import { fromCatalogSnapshot } from 'movement-lang';
+import { since } from 'legacy-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import type { Adapter, RuntimeCapabilities, WriteInput } from 'movement-engine/public/adapter';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
@@ -213,7 +215,7 @@ interface Harness {
 
 function runInput(h: Harness, kg: ReturnType<typeof makeKgFake>, suspendAt?: string[]) {
   return {
-    source: spelledFor(h.languageVersion ?? CURRENT_LANGUAGE_VERSION, h.source, fromCatalogSnapshot(catalog)),
+    source: spelledFor(h.languageVersion ?? LANGUAGE_VERSION, h.source, fromCatalogSnapshot(catalog)),
     event: manualEvent(),
     teamId: TEAM_ID,
     catalog,
@@ -491,7 +493,7 @@ describe('an engine suspension inside parallel / race arms', () => {
       ),
       parks: makeParkSink(),
       // `parallel`'s own arm frames; it is retired under 5.
-      languageVersion: 4,
+      languageVersion: '4',
     };
     const first = await start(h, ['s0.b1.s0']);
     expect(bodies(first.kg.creates)).toEqual(['arm 0']);
@@ -517,7 +519,7 @@ describe('an engine suspension inside parallel / race arms', () => {
         ].join('\n'),
       ),
       parks: makeParkSink(),
-      languageVersion: 4,
+      languageVersion: '4',
     };
     const first = await start(h, ['s1.b1.s0']);
     expect(bodies(first.kg.creates)).toEqual(['arm 1']);
@@ -547,7 +549,7 @@ describe('an engine suspension inside parallel / race arms', () => {
         ].join('\n'),
       ),
       parks: makeParkSink(),
-      languageVersion: 5,
+      languageVersion: LANGUAGE_VERSION,
     };
     const first = await start(h, ['s0.b1.s0']);
     expect(bodies(first.kg.creates)).toEqual(['arm 0']);
@@ -732,7 +734,7 @@ describe('a state written before body steps existed', () => {
         ].join('\n'),
       ),
       parks: makeParkSink(),
-      languageVersion: 4,
+      languageVersion: '4',
     };
     h.parks.parks.set('s1', { kind: 'timer', state: OLD_STATE });
     const { result, kg } = await resumeAt(h, 's1');
@@ -760,7 +762,7 @@ describe('two names for one write handle across a park', () => {
       ].join('\n'),
     );
 
-  for (const languageVersion of [4, 5] as LanguageVersion[]) {
+  for (const languageVersion of ['4', LANGUAGE_VERSION] as LanguageVersion[]) {
     for (const [how, alias] of [
       ['b = a', '  b = a'],
       ['b = write a { … }', '  b = write a { body: "one" }'],
@@ -841,7 +843,7 @@ describe('two names for one handle or node in a completed branch’s export', ()
       ),
       parks: makeParkSink(),
       // A `parallel` join's branch exports; `parallel` is retired under 5.
-      languageVersion: 4,
+      languageVersion: '4',
     };
     // Arm 0 parks before its return; arm 1 completes. Arm 0 completing on
     // the resume writes its whole scope as its export.
@@ -901,7 +903,7 @@ describe('a handle in the movement scope, parked inside a body closure call', ()
     return { address: address!, state };
   }
 
-  for (const languageVersion of [4, 5] as LanguageVersion[]) {
+  for (const languageVersion of ['4', LANGUAGE_VERSION] as LanguageVersion[]) {
     it(`version ${languageVersion}: resumes with the handle the movement scope held`, async () => {
       const h: Harness = { source: handleProgram(['  y = f("q")']), parks: makeParkSink(), languageVersion };
       const { address, state } = await parkAndResume(h);
@@ -953,7 +955,7 @@ describe('a handle in the movement scope, parked inside a body closure call', ()
         ].join('\n'),
       ),
       parks: makeParkSink(),
-      languageVersion: 5,
+      languageVersion: LANGUAGE_VERSION,
     };
     const { address } = await parkAndResume(h);
     const { result, kg } = await resumeAt(h, address);
@@ -973,7 +975,7 @@ describe('a handle in the movement scope, parked inside a body closure call', ()
         ].join('\n'),
       ),
       parks: makeParkSink(),
-      languageVersion: 5,
+      languageVersion: LANGUAGE_VERSION,
     };
     const { address, state } = await parkAndResume(h);
     expect(JSON.stringify(state.frames)).toContain('"kind":"nodeRef"');
@@ -983,7 +985,7 @@ describe('a handle in the movement scope, parked inside a body closure call', ()
   });
 
   it('a park written before handles were numbered (each copy in full) still resumes', async () => {
-    const h: Harness = { source: handleProgram(['  y = f("q")']), parks: makeParkSink(), languageVersion: 4 };
+    const h: Harness = { source: handleProgram(['  y = f("q")']), parks: makeParkSink(), languageVersion: '4' };
     const { address, state } = await parkAndResume(h);
     // What the writer wrote before B7: every sighting of the handle in full,
     // no `id`, no `handleRef`.
@@ -1051,13 +1053,13 @@ describe("a combinator receipt's record slot", () => {
 
   for (const languageVersion of [4, 5] as const) {
     it(`version ${languageVersion}, no park`, async () => {
-      const { result, kg } = await start({ source: sources[languageVersion], parks: makeParkSink(), languageVersion });
+      const { result, kg } = await start({ source: sources[languageVersion], parks: makeParkSink(), languageVersion: pinOf(languageVersion) });
       expect(result.parked).toBeUndefined();
       expect(payloadOf(kg.creates)).toEqual(expected[languageVersion]);
     });
 
     it(`version ${languageVersion}, the arm parked before its return`, async () => {
-      const h: Harness = { source: sources[languageVersion], parks: makeParkSink(), languageVersion };
+      const h: Harness = { source: sources[languageVersion], parks: makeParkSink(), languageVersion: pinOf(languageVersion) };
       const first = await start(h, [beforeReturn[languageVersion]]);
       expect(first.result.parked).toBe(true);
       const { result, kg } = await resumeAt(h, beforeReturn[languageVersion]);
@@ -1075,7 +1077,7 @@ describe('a handle or node whose variable is named like a descriptor member', ()
   const names = ['op', 'body', 'closure', 'head', 'mapping', 'fields', 'fieldProvenance', 'position', 'declaration'];
   const closure = ['  f = (x: <text>) => {', '    await sleep(1h)', '    return x', '  }'];
 
-  for (const languageVersion of [4, 5] as LanguageVersion[]) {
+  for (const languageVersion of ['4', LANGUAGE_VERSION] as LanguageVersion[]) {
     for (const name of names) {
       it(`version ${languageVersion}: a handle named '${name}' resumes`, async () => {
         const h: Harness = {
@@ -1161,12 +1163,12 @@ describe('a parallel / race arm that names a body closure parks and resumes (B18
   // — the same arm frames, the arms passed as arguments — and `race` takes its
   // arms as arguments too, without `await`.
   const join = (version: LanguageVersion, arms: string[]): string =>
-    version >= 5 ? `all(${arms.join(', ')})` : `await parallel([${arms.join(', ')}])`;
+    since(version, 5) ? `all(${arms.join(', ')})` : `await parallel([${arms.join(', ')}])`;
   const race = (version: LanguageVersion, arms: string[]): string =>
-    version >= 5 ? `race(${arms.join(', ')})` : `await race([${arms.join(', ')}])`;
+    since(version, 5) ? `race(${arms.join(', ')})` : `await race([${arms.join(', ')}])`;
   const at = (_version: LanguageVersion, statement: number, arm: number): string => `s${statement}.b${arm}.s0`;
 
-  for (const languageVersion of [4, 5] as LanguageVersion[]) {
+  for (const languageVersion of ['4', LANGUAGE_VERSION] as LanguageVersion[]) {
     it(`version ${languageVersion}: one closure arm, beside a written-in-place one`, async () => {
       const h: Harness = {
         source: program(

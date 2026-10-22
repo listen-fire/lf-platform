@@ -11,8 +11,8 @@
 // per-team catalog the save path uses (referenced-construction scoped)
 // and runs the core against it.
 
-import { BridgeError, CURRENT_LANGUAGE_VERSION, checkSourceInRust, diagnosticSeverity } from 'movement-lang';
-import { checkProgram, languageVersionDiagnostic, movesFromDroppedVersion, since, upgradeWarnings, withUpgradeWarnings } from 'legacy-lang';
+import { BridgeError, checkSourceInRust, diagnosticSeverity } from 'movement-lang';
+import { CURRENT_LANGUAGE_VERSION, checkProgram, isLegacyLanguageVersion, languageVersionDiagnostic, movesFromDroppedVersion, upgradeWarnings, withUpgradeWarnings } from 'legacy-lang';
 import { MovementParseError } from 'movement-lang';
 import { parseProgram } from 'legacy-lang';
 
@@ -30,7 +30,6 @@ import type { CatalogGap } from './catalog';
 import type { MovementValidityStatus } from './store';
 
 import { listUnsupportedConstructs } from '@listen-fire/legacy-engine/services/movement_engine/interpretable';
-import { RUST_ENGINE_FROM_VERSION } from '@listen-fire/legacy-engine/dispatch';
 import { movementCatalogForTeam } from './catalog';
 import { stepTimer, type StepTimer } from './timing';
 
@@ -188,7 +187,7 @@ export function diagnoseMovementSource(
   }
 
   const { snapshot, upgradingFrom } = options;
-  const checkedInRust = snapshot !== undefined && since(languageVersion, RUST_ENGINE_FROM_VERSION);
+  const checkedInRust = snapshot !== undefined && !isLegacyLanguageVersion(languageVersion);
   const upgrading = upgradingFrom !== undefined ? { upgradingFrom } : {};
   const resolving = options.resolveFile !== undefined ? { resolveFile: options.resolveFile } : {};
   const collected: Diagnostic[] = [];

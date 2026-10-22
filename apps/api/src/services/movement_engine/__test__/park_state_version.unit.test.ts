@@ -5,6 +5,7 @@
 // writes and reads 2. A version neither reads, or the other engine's, is
 // refused loudly.
 
+import { pinOf } from './pin_of';
 import { tenantIdOf, type AnyParkedScopeState } from 'engine-contracts';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 
@@ -54,7 +55,7 @@ function runInput(languageVersion: Pin) {
   const park = makeFakeParkSink();
   const input = {
     source: SOURCES[languageVersion],
-    languageVersion,
+    languageVersion: pinOf(languageVersion),
     event: manualEvent(),
     teamId: TEAM_ID,
     catalog: staticCatalogSnapshot({}),

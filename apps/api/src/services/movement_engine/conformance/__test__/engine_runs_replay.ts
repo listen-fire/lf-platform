@@ -168,17 +168,17 @@ const ENCODED_A_FIXED_BUG: Array<{
   },
   {
     // Not a bug: a fact about the release. A run pinned to a version no
-    // release supports (99) is refused by name, and the refusal's fix names
-    // the CURRENT version ("validate it under …"), which was Luminous Owl (4)
-    // when the recording was made and is Dancing Wren (5) since the merge
-    // that brought it. The refusal itself (MOVENG_LANGUAGE_VERSION, before
-    // any request) is unchanged; matched on exactly that.
-    reason: 'an unsupported version\'s refusal names the current version, 5 since Dancing Wren',
+    // release supports (99) is refused by name, and the refusal's wording
+    // belongs to the release that refuses it: it named the current version
+    // when the recording was made, and now says the pin is not a version and
+    // names the installed release. The refusal itself (MOVENG_LANGUAGE_VERSION,
+    // before any request) is unchanged; matched on exactly that.
+    reason: 'an unsupported version\'s refusal is worded by the release that refuses it',
     is: (recording) => pinnedUnsupported(recording),
     matches: (recording, divergence) =>
       pinnedUnsupported(recording) &&
       recording.requests.length === 0 &&
-      sameRefusalButForTheVersionName(divergence),
+      bothRefuseTheVersion(divergence),
     count: { v1: 0, v2: 1 },
   },
   {
@@ -349,16 +349,13 @@ function maskHandleNumbering(root: unknown): unknown {
 const RECORDED_PREFIX = 'recorded the failure ';
 const REPLAY_JOINT = '; the replay failed ';
 
-/** Both sides are the MOVENG_LANGUAGE_VERSION refusal and are EQUAL once the
- *  current version's name and number ("Luminous Owl" (4)) is masked in each. */
-function sameRefusalButForTheVersionName(divergence: string): boolean {
+/** Both sides are the MOVENG_LANGUAGE_VERSION refusal, whatever each words. */
+function bothRefuseTheVersion(divergence: string): boolean {
   if (!divergence.startsWith(RECORDED_PREFIX)) return false;
   const joint = divergence.indexOf(REPLAY_JOINT);
   if (joint < 0) return false;
-  const mask = (side: string) => side.replace(/\\?"[A-Z][a-z]+ [A-Z][a-z]+\\?" \(\d+\)/g, '<current version>');
-  const recorded = mask(divergence.slice(RECORDED_PREFIX.length, joint));
-  const replayed = mask(divergence.slice(joint + REPLAY_JOINT.length));
-  return recorded.includes('"code":"MOVENG_LANGUAGE_VERSION"') && recorded === replayed;
+  const refusal = '"code":"MOVENG_LANGUAGE_VERSION"';
+  return divergence.slice(RECORDED_PREFIX.length, joint).includes(refusal) && divergence.slice(joint + REPLAY_JOINT.length).includes(refusal);
 }
 
 /** The recording is pinned to a version this release does not support. */

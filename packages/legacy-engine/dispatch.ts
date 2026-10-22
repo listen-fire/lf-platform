@@ -1,10 +1,11 @@
-// A saved movement runs on the engine its pinned language version names
-// (`engineFor`): 5 and later on the Rust engine (`@listen-fire/engine`), 1–4 on
-// the TypeScript engine this package keeps. A parked run resumes by the same
-// rule; a version-5 run the TypeScript engine parked has no engine to resume
-// on and fails loudly. There is no fallback between the two.
+// A saved movement runs on the engine its pin names (`engineFor`): a legacy id
+// ('1'..'4') on the TypeScript engine this package keeps, a release's semver on
+// the Rust engine (`@listen-fire/engine`) when the installed language reads it.
+// A parked run resumes by the same rule; a release-pinned run the TypeScript
+// engine parked has no engine to resume on and fails loudly. There is no
+// fallback between the two.
 
-import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+import { LANGUAGE_VERSION } from 'movement-lang';
 import { refuseUnsupportedParkStateVersion, type CallbackBodyInput, type SettleRaceInput } from 'engine-contracts';
 import * as rust from 'movement-engine/public/movement-engine';
 import type { EngineHost } from 'movement-engine/public/host';
@@ -12,7 +13,7 @@ import type { EngineHost } from 'movement-engine/public/host';
 import * as typescript from './public/movement-engine';
 import { engineFor } from './services/movement_engine/engine_choice';
 
-export { RUST_ENGINE_FROM_VERSION, engineFor, type EngineChoice } from './services/movement_engine/engine_choice';
+export { engineFor, type EngineChoice } from './services/movement_engine/engine_choice';
 
 type MovementRunResult = rust.MovementRunResult;
 
@@ -39,7 +40,7 @@ export async function fireCallbackBody(input: CallbackBodyInput & { host: Engine
  *  resume, the engine its row says parked it. */
 function engineOf(input: { languageVersion?: rust.RunMovementInput['languageVersion']; parkedOnEngine?: 'ts' | 'rust' }) {
   return engineFor({
-    languageVersion: input.languageVersion ?? CURRENT_LANGUAGE_VERSION,
+    languageVersion: input.languageVersion ?? LANGUAGE_VERSION,
     ...(input.parkedOnEngine !== undefined ? { parkedOn: input.parkedOnEngine } : {}),
   });
 }

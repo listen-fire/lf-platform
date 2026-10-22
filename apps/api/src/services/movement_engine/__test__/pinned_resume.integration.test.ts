@@ -36,7 +36,7 @@ import { positionData } from 'engine-contracts/catalog';
 import type { Adapter, RuntimeCapabilities } from 'movement-engine/public/adapter';
 import { containerAssociation } from 'movement-engine/public/adapter';
 import type { Catalog, CatalogSnapshot, InstanceSchema, PositionSchema } from 'movement-lang';
-import { CURRENT_LANGUAGE_VERSION, fromCatalogSnapshot, resolveFileFromSnapshot } from 'movement-lang';
+import { LANGUAGE_VERSION, fromCatalogSnapshot, resolveFileFromSnapshot } from 'movement-lang';
 import { eventAddressKey } from 'legacy-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
@@ -209,8 +209,8 @@ function webhookEvent(): TriggerEvent {
 }
 
 function spelled(text: string): string {
-  const catalog = { ...buildCatalog(), files: { 'lib/words': { source: spelledFor(5, LIBRARY('ORIGINAL'), fromCatalogSnapshot(buildCatalog())) } } };
-  return spelledFor(5, text, fromCatalogSnapshot(catalog), { resolveFile: resolveFileFromSnapshot(catalog) });
+  const catalog = { ...buildCatalog(), files: { 'lib/words': { source: spelledFor(LANGUAGE_VERSION, LIBRARY('ORIGINAL'), fromCatalogSnapshot(buildCatalog())) } } };
+  return spelledFor(LANGUAGE_VERSION, text, fromCatalogSnapshot(catalog), { resolveFile: resolveFileFromSnapshot(catalog) });
 }
 
 /** The library-source store keys its rows by its own team id type. */
@@ -260,9 +260,9 @@ describe('a paused run resumes on the text it was pinned to (real DB, Rust engin
     await getAutomationsQb(['movement'])
       .insertInto('movement')
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .values({ id: movementId, team_id: teamId, name: 'Pinned', source: spelled(ROOT('ORIGINAL')), language_version: CURRENT_LANGUAGE_VERSION } as any)
+      .values({ id: movementId, team_id: teamId, name: 'Pinned', source: spelled(ROOT('ORIGINAL')), language_version: LANGUAGE_VERSION } as any)
       .execute();
-    await mintMovementVersionIfChanged({ teamId, movementId, source: spelled(ROOT('ORIGINAL')), languageVersion: CURRENT_LANGUAGE_VERSION });
+    await mintMovementVersionIfChanged({ teamId, movementId, source: spelled(ROOT('ORIGINAL')), languageVersion: LANGUAGE_VERSION });
     const triggerId = randomUUID() as TriggerId;
     await getAutomationsQb(['trigger'])
       .insertInto('trigger')
@@ -295,7 +295,7 @@ describe('a paused run resumes on the text it was pinned to (real DB, Rust engin
     // While it waits: the movement is edited and redeployed, and the library
     // edited.
     await getAutomationsQb(['movement']).updateTable('movement').set({ source: spelled(ROOT('EDITED')) }).where('id', '=', movementId).execute();
-    const redeployed = await mintMovementVersionIfChanged({ teamId, movementId, source: spelled(ROOT('EDITED')), languageVersion: CURRENT_LANGUAGE_VERSION });
+    const redeployed = await mintMovementVersionIfChanged({ teamId, movementId, source: spelled(ROOT('EDITED')), languageVersion: LANGUAGE_VERSION });
     expect(redeployed.minted).toBe(true);
     serveLibrary('EDITED');
 

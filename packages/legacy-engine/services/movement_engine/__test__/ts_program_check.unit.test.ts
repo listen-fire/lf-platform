@@ -2,7 +2,7 @@
 // diagnostics, the import link with declarations as AST paths, and the
 // checker's stamps keyed by AST path (program_check.ts says the scheme).
 
-import { mockCatalogSnapshot, type InstanceSchema, type Program } from 'movement-lang';
+import { LANGUAGE_VERSION, mockCatalogSnapshot, type InstanceSchema, type Program } from 'movement-lang';
 import { parseNestedCall, parseProgram } from 'legacy-lang';
 
 import { MovementEngineError } from 'movement-engine/public/errors';
@@ -108,13 +108,13 @@ describe('the program check', () => {
   const withFiles = { ...catalog, files: { deals: { source: LIBRARY } } };
 
   it("answers the checker's stamps by AST path, and the link with declarations as paths", () => {
-    const checked = checkPinned({ source: SPREADING, catalog: withFiles, languageVersion: 3 });
+    const checked = checkPinned({ source: SPREADING, catalog: withFiles, languageVersion: '3' });
     const answer = checkAnswer(checked);
     expect(answer.stamps).toEqual([{ path: '/statements/5/body/0/write/spreads/0', spreadFields: ['name', 'stage'] }]);
     // The path names the very spread the checker stamped, and a fresh parse
     // has the node there, unstamped.
     expect(at(checked.program, answer.stamps[0].path)).toMatchObject({ source: 'd', fields: ['name', 'stage'] });
-    const fresh = parseProgram(SPREADING, { languageVersion: 3 });
+    const fresh = parseProgram(SPREADING, { languageVersion: '3' });
     expect(at(fresh, answer.stamps[0].path)).toMatchObject({ source: 'd' });
     expect(at(fresh, answer.stamps[0].path)).not.toHaveProperty('fields');
     expect(answer.link).toEqual({
@@ -126,7 +126,7 @@ describe('the program check', () => {
 
   it('carries every stamp the checker writes: a fresh parse with them applied IS the checked program', () => {
     const files = { ...catalog, files: { deals: { source: DEALS_LIBRARY } } };
-    const checked = checkPinned({ source: EVERY_STAMP, catalog: files, languageVersion: 3 });
+    const checked = checkPinned({ source: EVERY_STAMP, catalog: files, languageVersion: '3' });
     const answer = checkAnswer(checked);
     const kinds = answer.stamps.map((s) => [s.file ?? '', s.path, Object.keys(s).filter((k) => k !== 'file' && k !== 'path')[0]]);
     expect(kinds).toEqual([
@@ -137,17 +137,17 @@ describe('the program check', () => {
     // Exhaustive: any other mutation the checker makes to the AST it hands the
     // engine shows up here as a difference, and must become a stamp.
     const json = (value: unknown): unknown => JSON.parse(JSON.stringify(value));
-    expect(stamped(parseProgram(EVERY_STAMP, { languageVersion: 3 }), answer.stamps.filter((s) => s.file === undefined))).toEqual(
+    expect(stamped(parseProgram(EVERY_STAMP, { languageVersion: '3' }), answer.stamps.filter((s) => s.file === undefined))).toEqual(
       json(checked.program),
     );
     const library = checked.link?.files.get('deals');
     expect(library).toBeDefined();
-    expect(stamped(parseProgram(DEALS_LIBRARY, { languageVersion: 3 }), answer.stamps.filter((s) => s.file === 'deals'))).toEqual(
+    expect(stamped(parseProgram(DEALS_LIBRARY, { languageVersion: '3' }), answer.stamps.filter((s) => s.file === 'deals'))).toEqual(
       json(library?.program),
     );
     // The stamps of the first program too, where the spread is the root's.
-    const spreading = checkPinned({ source: SPREADING, catalog: { ...catalog, files: { deals: { source: LIBRARY } } }, languageVersion: 3 });
-    expect(stamped(parseProgram(SPREADING, { languageVersion: 3 }), checkAnswer(spreading).stamps)).toEqual(json(spreading.program));
+    const spreading = checkPinned({ source: SPREADING, catalog: { ...catalog, files: { deals: { source: LIBRARY } } }, languageVersion: '3' });
+    expect(stamped(parseProgram(SPREADING, { languageVersion: '3' }), checkAnswer(spreading).stamps)).toEqual(json(spreading.program));
   });
 
   it("carries the stamps on a call nested in an expression, at the call's place in its slot", () => {
@@ -160,7 +160,7 @@ describe('the program check', () => {
       '  }))',
       '}',
     ].join('\n');
-    const checked = checkPinned({ source, catalog, languageVersion: 3 });
+    const checked = checkPinned({ source, catalog, languageVersion: '3' });
     const movement = checked.program.statements[4];
     const assign = movement?.kind === 'movement' ? movement.body[0] : undefined;
     const slot = assign?.kind === 'assign' && assign.value.kind === 'call' ? assign.value.call.expression : undefined;
@@ -170,18 +170,18 @@ describe('the program check', () => {
     const { stamps } = checkAnswer(checked);
     expect(stamps.map((s) => [s.path, 'copy' in s])).toEqual([[`${nested}/call/args/1/closure/body/0/value/node/spreads/0`, true]]);
     // The call as the checker read it is the one stamped.
-    const read = parseNestedCall(slot, extent, 3);
+    const read = parseNestedCall(slot, extent, '3');
     expect(at({ value: read }, '/value/call/args/1/closure/body/0/value/node/spreads/0')).toHaveProperty('copy');
   });
 
   it('throws MOVENG_CHECK for an error diagnostic, as every run does', () => {
     const broken = SPREADING.replace('msg.`subject`', 'msg.`nope`');
-    expect(() => checkPinned({ source: broken, catalog: withFiles, languageVersion: 3 })).toThrow(MovementEngineError);
-    expect(() => checkPinned({ source: broken, catalog: withFiles, languageVersion: 3 })).toThrow(/MOVENG_CHECK: the movement program failed checking/);
+    expect(() => checkPinned({ source: broken, catalog: withFiles, languageVersion: '3' })).toThrow(MovementEngineError);
+    expect(() => checkPinned({ source: broken, catalog: withFiles, languageVersion: '3' })).toThrow(/MOVENG_CHECK: the movement program failed checking/);
   });
 
   it('throws MOVENG_PARSE and MOVENG_LANGUAGE_VERSION before it checks', () => {
-    expect(() => checkPinned({ source: 'movement {', catalog, languageVersion: 3 })).toThrow(/^MOVENG_PARSE/);
-    expect(() => checkPinned({ source: SPREADING, catalog, languageVersion: 999 })).toThrow(/^MOVENG_LANGUAGE_VERSION/);
+    expect(() => checkPinned({ source: 'movement {', catalog, languageVersion: '3' })).toThrow(/^MOVENG_PARSE/);
+    expect(() => checkPinned({ source: SPREADING, catalog, languageVersion: '999' })).toThrow(/^MOVENG_LANGUAGE_VERSION/);
   });
 });

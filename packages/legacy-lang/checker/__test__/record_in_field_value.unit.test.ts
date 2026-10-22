@@ -16,8 +16,8 @@ import { combinatorsSpelledFor } from './combinator_spelling';
 import { spelledFor } from './surface_spelling';
 import { InstanceSchema, mockCatalog, type FieldType } from '../catalog';
 import { fieldAssignable, fieldTypeCompatible, handleWithin, spellHeldSteps } from '../typing';
-import { type LanguageVersion } from 'movement-lang/language_version';
-import { PLATFORM_SUPPORTED_LANGUAGE_VERSIONS } from '../../language_version';
+import { LANGUAGE_VERSION, type LanguageVersion } from 'movement-lang/language_version';
+import { PLATFORM_SUPPORTED_LANGUAGE_VERSIONS, before, since } from '../../language_version';
 
 const crmSchema: InstanceSchema = {
   positions: {
@@ -92,9 +92,10 @@ const note = (company: string): string[] => [`  write crm-[:notes]-> { title: "h
 
 const RECORD_NOT_A_VALUE = 'a record, not a value';
 
-const VERSIONS = [...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS];
+// The legacy ids, and the installed language (this copy's version 5).
+const VERSIONS: LanguageVersion[] = [...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS, LANGUAGE_VERSION];
 
-describe.each(VERSIONS)('under language version %i, a record inside a field\'s value is refused', version => {
+describe.each(VERSIONS)('under language version %s, a record inside a field\'s value is refused', version => {
   const refused = (body: string[], where: string): void => {
     const errors = errorsUnder(version, body);
     expect(errors.map(d => d.code)).toEqual(['MOV_WRITE_FIELD_TYPE']);
@@ -137,7 +138,7 @@ describe.each(VERSIONS)('under language version %i, a record inside a field\'s v
   it('held by a name the map was bound to', () => {
     // Version 1 types a map literal by its values alone, so its keys are not
     // known past the name — the record is under some key.
-    refused(['  held = { a: org }', ...note('held')], version === 1 ? "and 'company[…]' is " : "and 'company.a' is ");
+    refused(['  held = { a: org }', ...note('held')], version === "1" ? "and 'company[…]' is " : "and 'company.a' is ");
   });
 
   it('into the second shape: a ledger entry\'s json properties bag', () => {
@@ -158,7 +159,7 @@ describe.each(VERSIONS)('under language version %i, a record inside a field\'s v
 });
 
 describe('a spread of a record copies its fields, which are values', () => {
-  it.each(VERSIONS.filter(v => v >= 2))('under language version %i', version => {
+  it.each(VERSIONS.filter(v => since(v, 2)))('under language version %s', version => {
     expect(errorsUnder(version, note('{ ...org }'))).toEqual([]);
   });
 });
@@ -199,7 +200,7 @@ describe('a receipt nobody can type is not a record', () => {
   // is untyped — a value, as the un-awaited combinator binds it, never "a
   // record nobody can name", which the field rule above would refuse. From 5
   // there are no arms built at run time: a closure is not data.
-  it.each(VERSIONS.filter(v => v >= 3 && v < 5))('under language version %i, an awaited one writes under a key', version => {
+  it.each(VERSIONS.filter(v => since(v, 3) && before(v, 5)))('under language version %s, an awaited one writes under a key', version => {
     expect(
       errorsUnder(version, [
         '  arms = MAP([1, 2], (n) => { return () => { return n * 5 } })',
@@ -210,7 +211,7 @@ describe('a receipt nobody can type is not a record', () => {
   });
 });
 
-describe.each(VERSIONS)('under language version %i, a record inside a plugin argument\'s value is refused', version => {
+describe.each(VERSIONS)('under language version %s, a record inside a plugin argument\'s value is refused', version => {
   const refused = (body: string[], where: string): void => {
     const errors = errorsUnder(version, body);
     expect(errors.map(d => d.code)).toEqual(['MOV_CALL_ARG_TYPE']);
@@ -244,7 +245,7 @@ describe.each(VERSIONS)('under language version %i, a record inside a plugin arg
 });
 
 describe('a spread that may be a record copies its fields either way', () => {
-  it.each(VERSIONS.filter(v => v >= 3))('under language version %i, a conditional of a record and a map', version => {
+  it.each(VERSIONS.filter(v => since(v, 3)))('under language version %s, a conditional of a record and a map', version => {
     expect(errorsUnder(version, note('{ ...(IF 1 > 0 THEN org ELSE { name: "x" } END) }'))).toEqual([]);
   });
 });
@@ -257,7 +258,7 @@ describe('KNOWN GAP: a combinator receipt over arms only known at run time is no
   // functions filtered or joined at run time has no function type to read its
   // returns through, so the receipt is untyped — accepted TODAY.
   // A collection of functions exists only before 5: from 5 a closure is not data.
-  it.each(VERSIONS.filter(v => v >= 3 && v < 5))('under language version %i, a MAP of closures is refused', version => {
+  it.each(VERSIONS.filter(v => since(v, 3) && before(v, 5)))('under language version %s, a MAP of closures is refused', version => {
     const errors = errorsUnder(version, [
       '  arms = MAP([1, 2], (n) => { return () => { return org } })',
       '  r = await parallel(arms)',
@@ -266,7 +267,7 @@ describe('KNOWN GAP: a combinator receipt over arms only known at run time is no
     expect(errors.map(d => d.code)).toEqual(['MOV_WRITE_FIELD_TYPE']);
   });
 
-  it.each(VERSIONS.filter(v => v >= 3 && v < 5))('under language version %i, filtered arms: accepted today', version => {
+  it.each(VERSIONS.filter(v => since(v, 3) && before(v, 5)))('under language version %s, filtered arms: accepted today', version => {
     expect(
       errorsUnder(version, [
         '  c = () => { return org }',
@@ -278,7 +279,7 @@ describe('KNOWN GAP: a combinator receipt over arms only known at run time is no
   });
 
   // From 5 there is no collection of functions to build: a closure is not data.
-  it.each(VERSIONS.filter(v => v >= 5))('under language version %i, the collection is refused where it is built', version => {
+  it.each(VERSIONS.filter(v => since(v, 5)))('under language version %s, the collection is refused where it is built', version => {
     const errors = errorsUnder(version, [
       '  c = () => { return org }',
       '  arms = FILTER([c], (a) => { return true })',
@@ -286,14 +287,14 @@ describe('KNOWN GAP: a combinator receipt over arms only known at run time is no
     expect(errors.map(d => d.code)).toEqual(['MOV_CLOSURE_NOT_DATA']);
   });
 
-  it.each(VERSIONS.filter(v => v >= 3))('under language version %i, a literal arm returning a record is refused', version => {
+  it.each(VERSIONS.filter(v => since(v, 3)))('under language version %s, a literal arm returning a record is refused', version => {
     const errors = errorsUnder(version, ['  r = await parallel([() => { return org }])', ...note('r')]);
     expect(errors.map(d => d.code)).toEqual(['MOV_WRITE_FIELD_TYPE']);
     expect(errors[0]!.message).toContain(RECORD_NOT_A_VALUE);
   });
 });
 
-describe.each([3, 4])('under language version %i, a record a closure returns inside a plugin argument is refused', version => {
+describe.each([3, 4])('under language version %s, a record a closure returns inside a plugin argument is refused', version => {
   // The argument is typed by the walk a write field's value is, nested calls
   // included — so what a closure hands back is seen inside the value.
   const refused = (body: string[], where: string): void => {
@@ -316,7 +317,7 @@ describe.each([3, 4])('under language version %i, a record a closure returns ins
   });
 });
 
-describe.each([1, 2])('KNOWN GAP: under language version %i, a call inside an expression is untyped', version => {
+describe.each([1, 2])('KNOWN GAP: under language version %s, a call inside an expression is untyped', version => {
   // Versions 1 and 2 type a call written inside an expression as nothing
   // anyone can see (the nested-call hoisting that types it is version 3's),
   // so a record a closure returns is not seen there — in a write field, even

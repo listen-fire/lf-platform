@@ -7,18 +7,16 @@ import { lookupBuiltin, describeBuiltin } from '../checker/standard_library';
 import { spellMessage, surfaceTable, type SpellingRow } from 'movement-lang/parser/surface';
 import type { MovementCompletionItem, MovementHover } from './service';
 
-const V5 = 5;
-
 /** A row the v5 surface writes as a call: neither an operator form (`== null`,
  *  `[]`) nor a second old name for a function another row already spells. */
 function isCall(row: SpellingRow): boolean {
-  return !row.oldOnly && /^[A-Za-z][\w.]*$/.test(row.v5);
+  return !row.oldOnly && /^[A-Za-z][\w.]*$/.test(row.current);
 }
 
 function detailOf(row: SpellingRow): string {
   const builtin = lookupBuiltin(row.canonical);
-  if (builtin === undefined) return row.v5;
-  return spellMessage(`${describeBuiltin(builtin)} — ${builtin.summary}`, V5);
+  if (builtin === undefined) return row.current;
+  return spellMessage(`${describeBuiltin(builtin)} — ${builtin.summary}`);
 }
 
 /** The core words (`map(…)`) and the namespaces (`Text.`) an expression
@@ -26,26 +24,26 @@ function detailOf(row: SpellingRow): string {
 export function v5StandardCompletions(): MovementCompletionItem[] {
   const { spellings, namespaces } = surfaceTable();
   const core = spellings
-    .filter((row) => isCall(row) && !row.v5.includes('.'))
-    .map((row): MovementCompletionItem => ({ label: `${row.v5}(…)`, insert: `${row.v5}(`, kind: 'function', detail: detailOf(row) }));
+    .filter((row) => isCall(row) && !row.current.includes('.'))
+    .map((row): MovementCompletionItem => ({ label: `${row.current}(…)`, insert: `${row.current}(`, kind: 'function', detail: detailOf(row) }));
   const gateways = namespaces.map((namespace): MovementCompletionItem => ({
     label: `${namespace}.`,
     insert: `${namespace}.`,
     kind: 'function',
-    detail: `${namespace}: ${membersOf(namespace).map((row) => row.v5.slice(namespace.length + 1)).join(', ')}`,
+    detail: `${namespace}: ${membersOf(namespace).map((row) => row.current.slice(namespace.length + 1)).join(', ')}`,
   }));
   return [...core, ...gateways];
 }
 
 function membersOf(namespace: string): SpellingRow[] {
-  return surfaceTable().spellings.filter((row) => isCall(row) && row.v5.startsWith(`${namespace}.`));
+  return surfaceTable().spellings.filter((row) => isCall(row) && row.current.startsWith(`${namespace}.`));
 }
 
 /** `Text.` → the namespace's members; undefined when `namespace` is none. */
 export function v5MemberCompletions(namespace: string): MovementCompletionItem[] | undefined {
   if (!surfaceTable().namespaces.includes(namespace)) return undefined;
   return membersOf(namespace).map((row) => {
-    const member = row.v5.slice(namespace.length + 1);
+    const member = row.current.slice(namespace.length + 1);
     return { label: member, insert: member, kind: 'function', detail: detailOf(row) };
   });
 }
@@ -94,14 +92,14 @@ export function v5StandardHover(source: string, word: { text: string; from: numb
   const from = dotted !== null ? word.from - dotted[0].length : word.from;
   // A core word only where it is called: a binding may share its name.
   const called = dotted !== null || source[word.to] === '(';
-  const row = called ? surfaceTable().spellings.find((s) => isCall(s) && s.v5 === written) : undefined;
+  const row = called ? surfaceTable().spellings.find((s) => isCall(s) && s.current === written) : undefined;
   if (row !== undefined) return { from, to: word.to, contents: [detailOf(row)] };
   if (dotted === null && source[word.to] === '.' && surfaceTable().namespaces.includes(word.text)) {
     const members = membersOf(word.text);
     return {
       from: word.from,
       to: word.to,
-      contents: [`${word.text} — always present: ${members.map((m) => m.v5.slice(word.text.length + 1)).join(', ')}`, ...members.map(detailOf)],
+      contents: [`${word.text} — always present: ${members.map((m) => m.current.slice(word.text.length + 1)).join(', ')}`, ...members.map(detailOf)],
     };
   }
   return undefined;

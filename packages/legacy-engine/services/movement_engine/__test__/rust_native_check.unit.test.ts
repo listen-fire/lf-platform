@@ -4,7 +4,7 @@
 // (`check.program`). A run on the TypeScript engine keeps the TypeScript
 // checker. The engine's requests are read off the artifact's segments.
 
-import { fromCatalogSnapshot, mockCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
+import { LANGUAGE_VERSION, fromCatalogSnapshot, mockCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import { tenantIdOf } from 'engine-contracts';
 
@@ -103,14 +103,14 @@ async function run(languageVersion: LanguageVersion, body: string) {
 
 describe('the check a run is held to', () => {
   it('is the Rust checker for a version 5 run: the engine checks natively and never asks its host', async () => {
-    const outcome = await run(5, '  x = 1\n  return x');
+    const outcome = await run(LANGUAGE_VERSION, '  x = 1\n  return x');
     expect(outcome).toEqual({ result: expect.objectContaining({ movementName: 'm', writes: [] }) });
     expect(asked).not.toContain('check.program');
     expect(checkers).toEqual({ rust: 1, typescript: 0 });
   });
 
   it('is the TypeScript checker for a version 4 run, which runs on the TypeScript engine', async () => {
-    const outcome = await run(4, '  x = 1\n  return x');
+    const outcome = await run('4', '  x = 1\n  return x');
     expect(outcome).toEqual({ result: expect.objectContaining({ movementName: 'm', writes: [] }) });
     expect(checkers).toEqual({ rust: 0, typescript: 1 });
     // No Rust segment at all.
@@ -118,7 +118,7 @@ describe('the check a run is held to', () => {
   });
 
   it('refuses a version 5 program by the Rust checker before the engine starts', async () => {
-    const outcome = await run(5, '  return nowhere');
+    const outcome = await run(LANGUAGE_VERSION, '  return nowhere');
     const cause = runFailureCause(outcome.error);
     expect(cause).toBeInstanceOf(MovementEngineError);
     expect(cause).toMatchObject({ code: 'MOVENG_CHECK', message: expect.stringContaining('MOV_NAME_UNRESOLVED') });

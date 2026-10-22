@@ -1,6 +1,7 @@
 // The upgrade loop (checker/upgrade.ts): a program's text moved to version 5
 // by its own fixes, with nothing outside the rewritten spans touched.
 
+import { LANGUAGE_VERSION } from 'movement-lang/language_version';
 import { mockCatalog, type InstanceSchema } from '../catalog';
 import { checkProgram, diagnosticSeverity, type Diagnostic } from '../check';
 import { parseProgram } from '../../parser/parse';
@@ -142,13 +143,13 @@ ${body}
   // The Rust checker serves version 5 only; below it the TypeScript checker
   // alone answers (ruling A).
   const underRust = (source: string, version: 4 | 5): string[] =>
-    version >= 5 ? errorCodes(checkSourceInRust(source, snapshot, { languageVersion: version })) : underTs(source, version);
+    version >= 5 ? errorCodes(checkSourceInRust(source, snapshot, { languageVersion: LANGUAGE_VERSION })) : underTs(source, version);
 
   /** The upgrade in both checkers: one text, its refusals unchanged. */
   const roundTrip = (body: string): string => {
     const source = program(body);
     const ts = upgradeSource(source, typescriptCheck({ catalog, upgradingFrom: 4 }));
-    const rust = upgradeSource(source, rustCheck({ snapshot, upgradingFrom: 4 }));
+    const rust = upgradeSource(source, rustCheck({ snapshot, upgradingFrom: '4' }));
     expect(rust.source).toBe(ts.source);
     expect(ts.held).toEqual([]);
     expect(underTs(ts.source, 5)).toEqual(underTs(source, 4));
@@ -167,7 +168,7 @@ ${body}
     round: "the round"
   } through [lookup(q: x)] { detail: "more" }`);
     const ts = upgradeSource(source, typescriptCheck({ catalog, upgradingFrom: 4 }));
-    const rust = upgradeSource(source, rustCheck({ snapshot, upgradingFrom: 4 }));
+    const rust = upgradeSource(source, rustCheck({ snapshot, upgradingFrom: '4' }));
     expect(rust.source).toBe(ts.source);
     expect(underTs(source, 4)).toEqual([]);
     expect(underTs(ts.source, 5)).toEqual(['MOV_EXTRACT_KEYWORD_RETIRED']);

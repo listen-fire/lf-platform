@@ -4,6 +4,7 @@
 // frozen artifact that parsed it, so an old pin's reading never depends on
 // the live lowering.
 
+import type { LanguageVersion } from 'movement-lang/language_version';
 import type { Expression } from 'movement-lang/expression/types';
 import {
   lowerCondition as liveLowerCondition,
@@ -23,24 +24,24 @@ const live: Lowering = { expression: liveLowerExpression, condition: liveLowerCo
 // Called through, not captured, so a test's spy on the loader sees each call.
 const frozen = loweringOver((fn, treeJson, source) => callFrozenLowering(fn, treeJson, source));
 
-function loweringFor(languageVersion: number | undefined): Lowering {
-  return readByLanguage(languageVersion ?? 0) ? live : frozen;
+function loweringFor(languageVersion: LanguageVersion | undefined): Lowering {
+  return readByLanguage(languageVersion ?? '0') ? live : frozen;
 }
 
 /** `lowerExpression` by the artifact that reads `languageVersion`. */
-export function lowerExpressionAt(tree: MExpr, source: string, languageVersion?: number): Expression {
+export function lowerExpressionAt(tree: MExpr, source: string, languageVersion?: LanguageVersion): Expression {
   return loweringFor(languageVersion).expression(tree, source);
 }
 
 /** `lowerCondition` by the artifact that reads `languageVersion`. */
-export function lowerConditionAt(tree: MExpr, source: string, languageVersion?: number): MovementCondition {
+export function lowerConditionAt(tree: MExpr, source: string, languageVersion?: LanguageVersion): MovementCondition {
   return loweringFor(languageVersion).condition(tree, source);
 }
 
-export function lowerMovementExpression(raw: string, languageVersion?: number): Expression {
+export function lowerMovementExpression(raw: string, languageVersion?: LanguageVersion): Expression {
   return lowerExpressionAt(parseExpression(raw, languageVersion), raw, languageVersion);
 }
 
-export function lowerMovementCondition(raw: string, languageVersion?: number): MovementCondition {
+export function lowerMovementCondition(raw: string, languageVersion?: LanguageVersion): MovementCondition {
   return lowerConditionAt(parseExpression(raw, languageVersion), raw, languageVersion);
 }

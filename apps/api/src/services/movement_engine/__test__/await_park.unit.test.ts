@@ -3,6 +3,7 @@
 // then re-checks the await's whole question itself (WHERE included) and asks
 // the host's `park.wake` when it already resolved. Nothing but data crosses.
 
+import { LANGUAGE_VERSION } from 'movement-lang';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { AwaitResolution } from 'engine-contracts/awaitable';
 import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
@@ -16,7 +17,7 @@ import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import { tenantOfTeam } from '../../translation_graph/movement/tenant';
 
 // The shared fixture writes the version 4 spelling (other suites read it too); these runs are version 5.
-const awaitingSource = (where?: string) => spelledFor(5, awaitingSourceV4(where));
+const awaitingSource = (where?: string) => spelledFor(LANGUAGE_VERSION, awaitingSourceV4(where));
 
 const TEAM_ID = '00000000-0000-0000-0000-000000000042' as TeamId;
 

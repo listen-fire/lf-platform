@@ -28,6 +28,7 @@ import { resumeMovement, runMovement } from '@listen-fire/legacy-engine/dispatch
 import { type MovementRunResult, type ParkSink } from '@listen-fire/legacy-engine/services/movement_engine/run';
 import { makeTestHost } from 'movement-engine/public/testing';
 import { teamOfTenant } from '../../translation_graph/movement/tenant';
+import { pinOf } from './pin_of';
 import { spelledFor as spelledForSurface } from '../../../../../../packages/legacy-lang/checker/__test__/surface_spelling';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000079');
@@ -180,7 +181,7 @@ function runInput(source: string, parks: Sink, kg: ReturnType<typeof makeKgFake>
   // where it still does (the version loops below pass their own).
   const version = pinned ?? (source.includes('await parallel') ? 4 : 5);
   return {
-    source: spelledForSurface(version as never, source, fromCatalogSnapshot(catalog)),
+    source: spelledForSurface(pinOf(version), source, fromCatalogSnapshot(catalog)),
     event: manualEvent(),
     teamId: TEAM_ID,
     catalog,
@@ -196,7 +197,7 @@ function runInput(source: string, parks: Sink, kg: ReturnType<typeof makeKgFake>
       park: { sink: parks.sink },
     }),
     dryRun: false,
-    ...(version !== 5 ? { languageVersion: version as never } : {}),
+    ...(version !== 5 ? { languageVersion: pinOf(version) } : {}),
   };
 }
 
@@ -520,7 +521,7 @@ function inputOn(source: string, parks: Sink, kg: ReturnType<typeof makeKgFake>,
     pin.files === undefined
       ? undefined
       : Object.fromEntries(
-          Object.entries(pin.files).map(([name, file]) => [name, { source: spelledForSurface((pin.version ?? 5) as never, file.source, fromCatalogSnapshot(catalog)) }]),
+          Object.entries(pin.files).map(([name, file]) => [name, { source: spelledForSurface(pinOf(pin.version ?? 5), file.source, fromCatalogSnapshot(catalog)) }]),
         );
   return {
     ...runInput(source, parks, kg, pin.version),

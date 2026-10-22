@@ -14,8 +14,8 @@ import { parseProgram } from '../../parser/parse';
 import { checkProgram, type Diagnostic } from '../check';
 import { mockCatalog, type InstanceSchema } from '../catalog';
 import { spelledFor } from './surface_spelling';
-import { type LanguageVersion } from 'movement-lang/language_version';
-import { PLATFORM_SUPPORTED_LANGUAGE_VERSIONS } from '../../language_version';
+import { LANGUAGE_VERSION, type LanguageVersion } from 'movement-lang/language_version';
+import { PLATFORM_SUPPORTED_LANGUAGE_VERSIONS, before, since } from '../../language_version';
 import { notKeywordRetirement } from './keyword_retirement';
 
 const chatSchema: InstanceSchema = {
@@ -64,7 +64,8 @@ ${EXTRACT}${body}
     { languageVersion },
   ).filter(notKeywordRetirement).filter((d) => (d.severity ?? 'error') === 'error');
 
-const VERSIONS = [...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS];
+// The legacy ids, and the installed language (this copy's version 5).
+const VERSIONS: LanguageVersion[] = [...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS, LANGUAGE_VERSION];
 
 describe.each(VERSIONS)('under language version %s', (version) => {
   const codes = (body: string): string[] => errorsUnder(body, version).map((d) => d.code);

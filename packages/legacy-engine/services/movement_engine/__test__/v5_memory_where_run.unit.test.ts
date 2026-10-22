@@ -6,7 +6,7 @@
 // beside a variable of the same name are all covered. Versions 1–4 spelled these WHERE
 // clauses with bare fields; version 5 has only the alias form.
 
-import { mockCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
+import { LANGUAGE_VERSION, mockCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import { tenantIdOf } from 'engine-contracts';
 
 import type { Adapter } from 'movement-engine/public/adapter';
@@ -139,7 +139,7 @@ const EXTRACT = [
 
 /** The notes the program writes, on the engine its pin chooses (5 and later
  *  the Rust engine, the version-5 reference; 1–4 the TypeScript engine). */
-async function runOn(source: string, languageVersion: LanguageVersion = 5): Promise<unknown[]> {
+async function runOn(source: string, languageVersion: LanguageVersion = LANGUAGE_VERSION): Promise<unknown[]> {
   const notes: unknown[] = [];
   await runMovement({
     source,
@@ -307,7 +307,7 @@ describe("a graph literal's entries: a hop's alias read is the entry's field", (
       '  }',
       '}',
     ].join('\n');
-    expect(await runOn(source, 4)).toEqual(['two', 'three']);
+    expect(await runOn(source, '4')).toEqual(['two', 'three']);
   });
 });
 

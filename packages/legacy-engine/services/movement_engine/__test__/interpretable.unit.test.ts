@@ -3,6 +3,7 @@
 // lacks is refused at save time with the constructs NAMED, instead of
 // failing firings later. Pure AST scan; no DB, no adapter registry.
 
+import { LANGUAGE_VERSION } from 'movement-lang';
 import { parseProgram } from 'legacy-lang';
 import { listUnsupportedConstructs } from '../interpretable';
 
@@ -318,11 +319,11 @@ movement intake(m: <inbox-[:message]->>) {
   }
 }
 `;
-    expect(listUnsupportedConstructs(inner, { languageVersion: 3 })).toEqual(['non-built-in function calls (DOMAIN_OF())']);
+    expect(listUnsupportedConstructs(inner, { languageVersion: '3' })).toEqual(['non-built-in function calls (DOMAIN_OF())']);
     // From 5 a concise body that is one call is that call (`(v) => f(v)`), so
     // the scan reads a call — whose unknown callee the checker refuses
     // (MOV_FUNCTION_UNKNOWN), as it refuses one on every version.
-    expect(listUnsupportedConstructs(inner, { languageVersion: 5 })).toEqual([]);
+    expect(listUnsupportedConstructs(inner, { languageVersion: LANGUAGE_VERSION })).toEqual([]);
   });
 
   it('a dotted call on a value is no call the engine runs, under version 5 as before it (there are no methods)', () => {
@@ -334,8 +335,8 @@ movement intake(m: <inbox-[:message]->>) {
   write crm-[:companies]-> { name: v }
 }
 `;
-    expect(listUnsupportedConstructs(source, { languageVersion: 5 })).toEqual(['non-built-in function calls (G())']);
-    expect(listUnsupportedConstructs(source, { languageVersion: 4 })).toEqual(['non-built-in function calls (G())']);
+    expect(listUnsupportedConstructs(source, { languageVersion: LANGUAGE_VERSION })).toEqual(['non-built-in function calls (G())']);
+    expect(listUnsupportedConstructs(source, { languageVersion: '4' })).toEqual(['non-built-in function calls (G())']);
   });
 
   it('a closure bound to a name is a function: its call nested in an expression runs (version 3)', () => {
@@ -533,12 +534,12 @@ movement intake(m: <inbox-[:message]->>) {
 
   it('under version 3 the call runs: nothing to flag', () => {
     // A source that does not parse also scans clean; this one parses.
-    expect(() => parseProgram(source, { languageVersion: 3 })).not.toThrow();
-    expect(listUnsupportedConstructs(source, { languageVersion: 3 })).toEqual([]);
+    expect(() => parseProgram(source, { languageVersion: '3' })).not.toThrow();
+    expect(listUnsupportedConstructs(source, { languageVersion: '3' })).toEqual([]);
   });
 
   it('under version 1 the same text calls a function the engine does not know', () => {
-    expect(listUnsupportedConstructs(source, { languageVersion: 1 })).toEqual([
+    expect(listUnsupportedConstructs(source, { languageVersion: '1' })).toEqual([
       'non-built-in function calls (HELPER())',
     ]);
   });

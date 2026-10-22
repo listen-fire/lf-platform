@@ -20,7 +20,7 @@ jest.mock('../../../../credentials/credential_lifecycle', () => ({
   credentialLifecycle: () => undefined,
 }));
 
-import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+import { LANGUAGE_VERSION } from 'movement-lang';
 import { postRpc } from 'movement-engine/public/adapter';
 import { triggerEventOf } from 'movement-engine/public/inbound';
 
@@ -112,9 +112,9 @@ async function seedMirror(): Promise<{ triggerId: TriggerId; movementId: Movemen
   await getAutomationsQb(['movement'])
     .insertInto('movement')
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .values({ id: movementId, team_id: teamId, name: 'Mirror deals', source: MIRROR, language_version: CURRENT_LANGUAGE_VERSION } as any)
+    .values({ id: movementId, team_id: teamId, name: 'Mirror deals', source: MIRROR, language_version: LANGUAGE_VERSION } as any)
     .execute();
-  await mintMovementVersionIfChanged({ teamId, movementId, source: MIRROR, languageVersion: CURRENT_LANGUAGE_VERSION });
+  await mintMovementVersionIfChanged({ teamId, movementId, source: MIRROR, languageVersion: LANGUAGE_VERSION });
   const triggerId = randomUUID() as TriggerId;
   await getAutomationsQb(['trigger'])
     .insertInto('trigger')

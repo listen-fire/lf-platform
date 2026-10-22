@@ -44,7 +44,7 @@ function makeQb() {
           return async () => {
             // The run's snapshot was minted under version 1; the movement's pin may
             // have moved since — the snapshot's is the one a resume honours.
-            if (ctx.table === 'movement_version') return { source: 'PINNED SOURCE', language_version: 1 };
+            if (ctx.table === 'movement_version') return { source: 'PINNED SOURCE', language_version: '1' };
             if (ctx.table === 'trigger_run') {
               return {
                 trigger_id: 't-1',
@@ -303,7 +303,7 @@ describe('await-resume driver — the language version a resume runs under', () 
     await fireCandidate();
 
     expect(resumeMovementFiringMock).toHaveBeenCalledWith(
-      expect.objectContaining({ pinnedSource: 'PINNED SOURCE', pinnedLanguageVersion: 1 }),
+      expect.objectContaining({ pinnedSource: 'PINNED SOURCE', pinnedLanguageVersion: '1' }),
     );
   });
 });

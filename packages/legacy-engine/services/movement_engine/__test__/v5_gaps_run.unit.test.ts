@@ -3,7 +3,7 @@
 // harness is engine_by_version's; the checkers' twins are
 // listen-fire's crates/movement-checker/tests/v5_gaps.rs and checker/__test__/v5_gaps.unit.test.ts.
 
-import { mockCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
+import { LANGUAGE_VERSION, mockCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import { tenantIdOf } from 'engine-contracts';
 
 import type { Adapter } from 'movement-engine/public/adapter';
@@ -118,8 +118,8 @@ const bodies = (writes: unknown[]): unknown => JSON.parse(JSON.stringify(writes,
 
 describe('the v5 spine gaps run as their v4 spelling does', () => {
   it.each(PAIRS)('%s', async (_what, v5, v4) => {
-    const old = await runMovement(inputOf(V4(...v4), 4, 'run-v4'));
-    const next = await runMovement(inputOf(V5(...v5), 5, 'run-v5'));
+    const old = await runMovement(inputOf(V4(...v4), '4', 'run-v4'));
+    const next = await runMovement(inputOf(V5(...v5), LANGUAGE_VERSION, 'run-v5'));
     expect(recorded.map((r) => r.engine)).toEqual(['ts', 'rust']);
     expect(old.writes.length).toBeGreaterThan(0);
     expect(bodies(next.writes)).toEqual(bodies(old.writes));
@@ -128,16 +128,16 @@ describe('the v5 spine gaps run as their v4 spelling does', () => {
   // The event names no record kind, so `is` stops both runs alike: the v5
   // condition reached the `is` test, not a parse refusal.
   it('is inside the if parentheses reaches the type test', async () => {
-    const old = runMovement(inputOf(V4('  if msg IS <inbox-[:message]->> {', '    write inbox-[:note]-> { body: msg.`subject` }', '  }'), 4, 'run-v4'));
-    const next = runMovement(inputOf(V5('  if (msg is <inbox-[:message]->>) {', '    write inbox-[:note]-> { body: msg.`subject` }', '  }'), 5, 'run-v5'));
+    const old = runMovement(inputOf(V4('  if msg IS <inbox-[:message]->> {', '    write inbox-[:note]-> { body: msg.`subject` }', '  }'), '4', 'run-v4'));
+    const next = runMovement(inputOf(V5('  if (msg is <inbox-[:message]->>) {', '    write inbox-[:note]-> { body: msg.`subject` }', '  }'), LANGUAGE_VERSION, 'run-v5'));
     await expect(old).rejects.toThrow("can't tell what kind of record 'msg' is");
     await expect(next).rejects.toThrow("can't tell what kind of record 'msg' is");
     expect(recorded.map((r) => r.engine)).toEqual(['ts', 'rust']);
   });
 
   it('fail stops the run with its message, as ERROR does', async () => {
-    const old = runMovement(inputOf(V4('  if msg.`subject` != NULL {', '    ERROR("no ${msg.`subject`}")', '  }'), 4, 'run-v4'));
-    const next = runMovement(inputOf(V5('  if (msg.`subject` != null) {', '    fail("no ${msg.`subject`}")', '  }'), 5, 'run-v5'));
+    const old = runMovement(inputOf(V4('  if msg.`subject` != NULL {', '    ERROR("no ${msg.`subject`}")', '  }'), '4', 'run-v4'));
+    const next = runMovement(inputOf(V5('  if (msg.`subject` != null) {', '    fail("no ${msg.`subject`}")', '  }'), LANGUAGE_VERSION, 'run-v5'));
     await expect(old).rejects.toThrow('no Acme');
     await expect(next).rejects.toThrow('no Acme');
     expect(recorded.map((r) => r.engine)).toEqual(['ts', 'rust']);

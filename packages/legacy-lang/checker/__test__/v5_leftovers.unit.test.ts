@@ -5,6 +5,7 @@
 // off text, a number or a true/false value is refused from 5 and warned
 // before (both engines read null).
 
+import { LANGUAGE_VERSION } from 'movement-lang/language_version';
 import { mockCatalog } from '../catalog';
 import { checkProgram, diagnosticSeverity, type Diagnostic } from '../check';
 import { parseProgram } from '../../parser/parse';
@@ -37,6 +38,9 @@ const spec: Parameters<typeof mockCatalog>[0] = {
 const catalog = mockCatalog(spec);
 const snapshot = mockCatalogSnapshot(spec);
 
+/** The pin the Rust checker is handed for one of the integers this file is written in. */
+const pin = (version: number): LanguageVersion => (version === 5 ? LANGUAGE_VERSION : String(version));
+
 const V5 = (body: string): string =>
   `import { attio } from adapters\nimport { crm_cred } from credentials\nimport { lookup } from plugins\ncrm = connect attio using crm_cred\nfunction m(t: <text>, c: <crm-[:company]->>) {\n${body}\n}\n`;
 const V4 = (body: string): string =>
@@ -51,7 +55,7 @@ function check(source: string, version: LanguageVersion): Said[] {
   const ts = said(checkProgram(parseProgram(source, { languageVersion: version }), catalog, { languageVersion: version }));
   // The Rust checker serves the versions the language release does (5);
   // below it the TypeScript checker alone answers (ruling A).
-  const rust = version >= 5 ? said(checkSourceInRust(source, snapshot, { languageVersion: version })) : ts;
+  const rust = version >= 5 ? said(checkSourceInRust(source, snapshot, { languageVersion: LANGUAGE_VERSION })) : ts;
   expect(rust).toEqual(ts);
   return ts;
 }
@@ -172,12 +176,12 @@ describe('a version 5 slot read again is read under 5', () => {
 // ORDER BY and LIMIT on a hop over records the run already holds were ignored
 // by both engines before 5 and are read from 5, so a move up says so.
 describe('an in-memory hop with ORDER BY or LIMIT, on a move up across 5', () => {
-  const upgrade = (body: string, options: { languageVersion: LanguageVersion; upgradingFrom?: LanguageVersion }): Said[] => {
+  const upgrade = (body: string, options: { languageVersion: number; upgradingFrom?: number }): Said[] => {
     const ts = said(checkProgram(parseProgram(V4(body), { languageVersion: options.languageVersion }), catalog, options));
     // Below 5 the TypeScript checker alone answers; a move up from 4 is the
     // Rust check of 5 joined with the TypeScript checker's upgrade warnings
     // (rustCheck, ruling B).
-    const rust = options.languageVersion >= 5 ? said(rustCheck({ snapshot, ...options })(V4(body))) : ts;
+    const rust = options.languageVersion >= 5 ? said(rustCheck({ snapshot, languageVersion: pin(options.languageVersion), ...(options.upgradingFrom !== undefined ? { upgradingFrom: pin(options.upgradingFrom) } : {}) })(V4(body))) : ts;
     expect(rust).toEqual(ts);
     return ts.filter((d) => d.code === 'MOV_IN_MEMORY_HOP_ORDER');
   };

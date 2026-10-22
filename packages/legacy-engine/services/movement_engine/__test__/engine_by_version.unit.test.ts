@@ -6,7 +6,7 @@
 // TypeScript engine. The engine settings that once chose otherwise are
 // refused at boot.
 
-import { EMPTY_CATALOG_SNAPSHOT, fromCatalogSnapshot, mockCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
+import { LANGUAGE_VERSION, EMPTY_CATALOG_SNAPSHOT, fromCatalogSnapshot, mockCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import { tenantIdOf } from 'engine-contracts';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 
@@ -129,19 +129,30 @@ beforeEach(() => {
 afterEach(() => setRunEngineRecorder(undefined));
 
 describe('the engine a segment runs on', () => {
-  it('follows the pin: 5 and later Rust, 1–4 TypeScript', () => {
-    for (const languageVersion of [1, 2, 3, 4]) expect(engineFor({ languageVersion })).toBe('ts');
-    expect(engineFor({ languageVersion: 5 })).toBe('rust');
-    expect(engineFor({ languageVersion: 5, parkedOn: 'rust' })).toBe('rust');
+  it('follows the pin: a compatible release Rust, a legacy id (1–4) TypeScript', () => {
+    for (const languageVersion of ['1', '2', '3', '4']) expect(engineFor({ languageVersion })).toBe('ts');
+    expect(engineFor({ languageVersion: LANGUAGE_VERSION })).toBe('rust');
+    expect(engineFor({ languageVersion: LANGUAGE_VERSION, parkedOn: 'rust' })).toBe('rust');
+  });
+
+  it('runs a patch release of the installed language on Rust', () => {
+    expect(engineFor({ languageVersion: '0.12.3' })).toBe('rust');
+  });
+
+  it('refuses a release the installed language does not read, on either side of it', () => {
+    for (const languageVersion of ['0.11.0', '0.13.0']) {
+      expect(() => engineFor({ languageVersion })).toThrow(MovementEngineError);
+      expect(() => engineFor({ languageVersion })).toThrow(/^MOVENG_LANGUAGE_VERSION/);
+    }
   });
 
   it('resumes a version 1–4 run on TypeScript even when a forced-Rust past wrote a Rust park', () => {
-    expect(engineFor({ languageVersion: 4, parkedOn: 'rust' })).toBe('ts');
+    expect(engineFor({ languageVersion: '4', parkedOn: 'rust' })).toBe('ts');
   });
 
-  it('refuses a version-5 run the TypeScript engine parked: no engine may resume it', () => {
-    expect(() => engineFor({ languageVersion: 5, parkedOn: 'ts' })).toThrow(
-      'MOVENG_UNSUPPORTED: this run is pinned to language version 5, which runs only on the Rust engine, but the TypeScript engine parked it: it cannot resume',
+  it('refuses a release-pinned run the TypeScript engine parked: no engine may resume it', () => {
+    expect(() => engineFor({ languageVersion: LANGUAGE_VERSION, parkedOn: 'ts' })).toThrow(
+      `MOVENG_UNSUPPORTED: this run is pinned to language ${LANGUAGE_VERSION}, which runs only on the Rust engine, but the TypeScript engine parked it: it cannot resume`,
     );
   });
 });
@@ -164,21 +175,21 @@ describe('the engine settings, checked at boot', () => {
 
 describe('a run', () => {
   it('runs version 4 on TypeScript, recorded so', async () => {
-    const result = await runMovement(inputOf(ADMITTED, 4, 'run-v4'));
+    const result = await runMovement(inputOf(ADMITTED, '4', 'run-v4'));
     expect(result.movementName).toBe('m');
     expect(rustRunStats.segments).toBe(0);
     expect(recorded).toEqual([{ runId: 'run-v4', engine: 'ts' }]);
   });
 
   it('runs version 5 on Rust, recorded so', async () => {
-    const result = await runMovement(inputOf(ADMITTED, 5, 'run-v5'));
+    const result = await runMovement(inputOf(ADMITTED, LANGUAGE_VERSION, 'run-v5'));
     expect(result.movementName).toBe('m');
     expect(rustRunStats).toMatchObject({ segments: 1, unsupported: {} });
     expect(recorded).toEqual([{ runId: 'run-v5', engine: 'rust' }]);
   });
 
   it('fails a version-5 run the Rust engine refuses, loudly, with the reason, running nothing on TypeScript', async () => {
-    const failure = await runMovement(declined(ADMITTED, 5, 'run-refused')).catch((error: unknown) => error);
+    const failure = await runMovement(declined(ADMITTED, LANGUAGE_VERSION, 'run-refused')).catch((error: unknown) => error);
     expect(failure).toBeInstanceOf(MovementEngineError);
     expect(failure).toMatchObject({ code: 'MOVENG_UNSUPPORTED', details: { reason: 'event_does_not_cross' } });
     expect(String(failure)).toBe('MovementEngineError: MOVENG_UNSUPPORTED: the Rust engine does not run this movement (event_does_not_cross)');
@@ -187,7 +198,7 @@ describe('a run', () => {
   });
 
   it('runs a version-4 program Rust would refuse on TypeScript, as it always ran', async () => {
-    const result = await runMovement(declined(ADMITTED, 4, 'run-v4-refused'));
+    const result = await runMovement(declined(ADMITTED, '4', 'run-v4-refused'));
     expect(result.movementName).toBe('m');
     expect(rustRunStats.segments).toBe(0);
   });
@@ -196,11 +207,11 @@ describe('a run', () => {
 describe('a parked run', () => {
   it('parked on Rust, resumes on Rust', async () => {
     const parks = timerSink();
-    const parked = await runMovement(inputOf(SLEEPS, 5, 'run-rust-park', parks.sink));
+    const parked = await runMovement(inputOf(SLEEPS, LANGUAGE_VERSION, 'run-rust-park', parks.sink));
     expect(parked.parked).toBe(true);
     const [state] = parks.timers;
     if (state === undefined) throw new Error('test: the run parked no timer');
-    const resumed = await resumeMovement({ ...inputOf(SLEEPS, 5, 'run-rust-park', parks.sink), state, parkedOnEngine: 'rust' });
+    const resumed = await resumeMovement({ ...inputOf(SLEEPS, LANGUAGE_VERSION, 'run-rust-park', parks.sink), state, parkedOnEngine: 'rust' });
     expect(resumed.parked).toBeUndefined();
     expect(rustRunStats.segments).toBe(2);
     expect(recorded.at(-1)).toEqual({ runId: 'run-rust-park', engine: 'rust' });
@@ -208,12 +219,12 @@ describe('a parked run', () => {
 
   it('pinned to 5 and recorded as parked by TypeScript, fails its resume before any segment opens', async () => {
     const parks = timerSink();
-    await runMovement(inputOf(SLEEPS, 5, 'run-ts-park', parks.sink));
+    await runMovement(inputOf(SLEEPS, LANGUAGE_VERSION, 'run-ts-park', parks.sink));
     const [state] = parks.timers;
     if (state === undefined) throw new Error('test: the run parked no timer');
     resetRustRunStats();
     recorded.length = 0;
-    const failure = await resumeMovement({ ...inputOf(SLEEPS, 5, 'run-ts-park', parks.sink), state, parkedOnEngine: 'ts' }).catch((error: unknown) => error);
+    const failure = await resumeMovement({ ...inputOf(SLEEPS, LANGUAGE_VERSION, 'run-ts-park', parks.sink), state, parkedOnEngine: 'ts' }).catch((error: unknown) => error);
     expect(failure).toMatchObject({ code: 'MOVENG_UNSUPPORTED', details: { reason: 'parked_on_typescript' } });
     expect(rustRunStats.segments).toBe(0);
     expect(recorded).toEqual([]);
@@ -221,10 +232,10 @@ describe('a parked run', () => {
 
   it('pinned to 4 and recorded as parked by Rust, resumes on TypeScript', async () => {
     const parks = timerSink();
-    await runMovement(inputOf(SLEEPS, 4, 'run-v4-park', parks.sink));
+    await runMovement(inputOf(SLEEPS, '4', 'run-v4-park', parks.sink));
     const [state] = parks.timers;
     if (state === undefined) throw new Error('test: the run parked no timer');
-    const resumed = await resumeMovement({ ...inputOf(SLEEPS, 4, 'run-v4-park', parks.sink), state, parkedOnEngine: 'rust' });
+    const resumed = await resumeMovement({ ...inputOf(SLEEPS, '4', 'run-v4-park', parks.sink), state, parkedOnEngine: 'rust' });
     expect(resumed.parked).toBeUndefined();
     expect(rustRunStats.segments).toBe(0);
     expect(recorded.at(-1)).toEqual({ runId: 'run-v4-park', engine: 'ts' });
@@ -232,10 +243,10 @@ describe('a parked run', () => {
 
   it('with no engine recorded, resumes by the pin', async () => {
     const parks = timerSink();
-    await runMovement(inputOf(SLEEPS, 5, 'run-unrecorded', parks.sink));
+    await runMovement(inputOf(SLEEPS, LANGUAGE_VERSION, 'run-unrecorded', parks.sink));
     const [state] = parks.timers;
     if (state === undefined) throw new Error('test: the run parked no timer');
-    await resumeMovement({ ...inputOf(SLEEPS, 5, 'run-unrecorded', parks.sink), state });
+    await resumeMovement({ ...inputOf(SLEEPS, LANGUAGE_VERSION, 'run-unrecorded', parks.sink), state });
     expect(rustRunStats.segments).toBe(2);
     expect(recorded.at(-1)).toEqual({ runId: 'run-unrecorded', engine: 'rust' });
   });
@@ -249,7 +260,7 @@ describe('a host without the clock and ids', () => {
     const { clock: _clock, ids: _ids, ...host } = makeTestHost();
     const run = runMovement({
       source: 'function m() {\n  x = 1\n}',
-      languageVersion: 4,
+      languageVersion: '4',
       event: { pipelineInputId: 'p', adapterType: 'manual', triggerType: 'webhook', payload: {} },
       teamId: TEAM_ID,
       catalog: EMPTY_CATALOG_SNAPSHOT,

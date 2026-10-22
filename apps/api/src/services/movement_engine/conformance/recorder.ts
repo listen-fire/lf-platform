@@ -10,7 +10,7 @@
 // answer is JSON (the seam guard's round trip proves it), so such a throw is a
 // bug report against the boundary, not a case to record around.
 
-import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+import { CURRENT_LANGUAGE_VERSION } from 'legacy-lang';
 import {
   HOST_RECORDING_VERSION,
   familyAndMethod,

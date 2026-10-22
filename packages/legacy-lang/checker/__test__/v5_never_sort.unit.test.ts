@@ -3,6 +3,7 @@
 // TypeScript checker. The Rust checker's twin is
 // listen-fire's crates/movement-checker/tests/v5_never_sort.rs.
 
+import { LANGUAGE_VERSION } from 'movement-lang/language_version';
 import { parseProgram } from '../../parser/parse';
 import { checkProgram, type Diagnostic } from '../check';
 import { mockCatalog, type InstanceSchema } from '../catalog';
@@ -162,7 +163,7 @@ describe('both checkers agree', () => {
       const ts = checkProgram(parseProgram(source, { languageVersion }), fromCatalogSnapshot(SNAPSHOT), { languageVersion });
       // The Rust checker serves the versions the language release does (5);
       // below it the TypeScript checker alone answers (ruling A).
-      const rust = languageVersion >= 5 ? checkSourceInRust(source, SNAPSHOT, { languageVersion }) : ts;
+      const rust = languageVersion >= 5 ? checkSourceInRust(source, SNAPSHOT, { languageVersion: LANGUAGE_VERSION }) : ts;
       expect({ source, diagnostics: rust }).toEqual({ source, diagnostics: ts });
     }
   });

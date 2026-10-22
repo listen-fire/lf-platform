@@ -15,7 +15,7 @@
 // Usage (run.sh does this): node -r <ts-node>/register/transpile-only parity/reference.ts <out-dir> [--checks <checks.json>] [--patterns <patterns.json>]
 import { checkNow, loadChecks, loadSnapshots, type CheckRecord } from '../conformance/checks_corpus';
 import { SNAPSHOT_TABLE_FILE } from '../conformance/checks_pin';
-import { CURRENT_LANGUAGE_VERSION } from 'movement-lang/language_version';
+import { CURRENT_LANGUAGE_VERSION } from '../language_version';
 import type { CatalogSnapshot } from 'movement-lang/service/snapshot';
 
 declare function require(id: string): any;

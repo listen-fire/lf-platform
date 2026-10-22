@@ -3,6 +3,7 @@
 // judged). Pure data and string building — no engine, no jest — so the test
 // file holds only the harness and the verdicts.
 
+import { before } from 'legacy-lang';
 import type { LanguageVersion } from 'movement-lang';
 
 // ── The records every program starts from ──────────────────────────────────
@@ -76,13 +77,13 @@ interface PathFacts {
   /** The record is held under a map key, and before this version every key of
    *  a map literal may miss (version 1 typed a literal by its values alone):
    *  the record is maybe-empty, which a write updating it in place refuses. */
-  keysMayMissBefore?: LanguageVersion;
+  keysMayMissBefore?: number;
 }
 
 export interface OnePath extends PathFacts {
   arity: 'one';
   id: string;
-  since: LanguageVersion;
+  since: number;
   emit: Emit;
   /** The records the binding holds, in the order the body sees them. */
   instances: Rec[];
@@ -97,7 +98,7 @@ export interface OnePath extends PathFacts {
 export interface ManyPath extends PathFacts {
   arity: 'many';
   id: string;
-  since: LanguageVersion;
+  since: number;
   instances: Rec[];
   /** The program: `body(xs)` is the consumer's lines with `xs` the expression
    *  naming the list. */
@@ -430,7 +431,7 @@ const serialised = (rec: Rec) => ({
 
 interface ConsumerBase {
   id: string;
-  since: LanguageVersion;
+  since: number;
   /** Needs every field of the record: refused, with this code, over a
    *  record whose field list the program does not hold (`opaque`). */
   fieldList?: string;
@@ -688,7 +689,7 @@ function pluginArgForms(): OneStatementConsumer[] {
   const form = (
     id: string,
     o: {
-      since: LanguageVersion;
+      since: number;
       arg: (x: string) => string;
       pre?: (x: string) => string[];
       rows: (rec: Rec) => string[];
@@ -729,7 +730,7 @@ function pluginArgForms(): OneStatementConsumer[] {
 function manyConsumers(): ManyConsumer[] {
   const value = (
     id: string,
-    since: LanguageVersion,
+    since: number,
     lines: (xs: string, recs: Rec[]) => { pre?: string[]; expr: string },
     out: (recs: Rec[]) => string,
   ): ManyConsumer => ({
@@ -796,17 +797,17 @@ export interface Cell {
   consumer: Consumer;
   /** The movement body, one line per element, indented for the movement. */
   body: string[];
-  since: LanguageVersion;
+  since: number;
   /** What the cell must do. A cell whose right answer nobody has decided is
    *  pinned to today's outcome by the test's TRIAGE table. */
   expect: Expectation;
   /** What it must do instead under the versions before `version`. */
-  expectBefore?: { version: LanguageVersion; expect: Expectation };
+  expectBefore?: { version: number; expect: Expectation };
 }
 
 /** What a cell must do under `version`. */
 export const expectationAt = (cell: Cell, version: LanguageVersion): Expectation =>
-  cell.expectBefore !== undefined && version < cell.expectBefore.version ? cell.expectBefore.expect : cell.expect;
+  cell.expectBefore !== undefined && before(version, cell.expectBefore.version) ? cell.expectBefore.expect : cell.expect;
 
 /** A version rule that changes a pairing's answer, where one does. */
 function expectationBefore(path: PathFacts, consumer: Consumer): Cell['expectBefore'] {

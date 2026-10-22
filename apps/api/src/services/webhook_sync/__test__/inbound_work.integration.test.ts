@@ -33,7 +33,7 @@ jest.mock('../../translation_graph/triggers/router', () => {
   return { ...actual, dispatchTriggerByIdEvent: jest.fn(actual.dispatchTriggerByIdEvent) };
 });
 
-import { CURRENT_LANGUAGE_VERSION } from 'movement-lang';
+import { LANGUAGE_VERSION } from 'movement-lang';
 import { eventAddressKey } from 'legacy-lang';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
@@ -187,13 +187,13 @@ async function seedMovementTrigger(teamId: TeamId): Promise<TriggerId> {
   await getAutomationsQb(['movement'])
     .insertInto('movement')
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .values({ id: movementId, team_id: teamId, name: `Sleep then notify ${movementId.slice(0, 8)}`, source: SLEEP_THEN_NOTIFY, language_version: CURRENT_LANGUAGE_VERSION } as any)
+    .values({ id: movementId, team_id: teamId, name: `Sleep then notify ${movementId.slice(0, 8)}`, source: SLEEP_THEN_NOTIFY, language_version: LANGUAGE_VERSION } as any)
     .execute();
   await mintMovementVersionIfChanged({
     teamId,
     movementId,
     source: SLEEP_THEN_NOTIFY,
-    languageVersion: CURRENT_LANGUAGE_VERSION,
+    languageVersion: LANGUAGE_VERSION,
   });
   const triggerId = randomUUID() as TriggerId;
   await getAutomationsQb(['trigger'])

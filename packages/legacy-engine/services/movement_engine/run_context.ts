@@ -2,7 +2,8 @@
 // (segment_context.ts, shared with the Rust engine's shim), and the host's
 // priced families as the interpreter calls them.
 
-import { CURRENT_LANGUAGE_VERSION, type LanguageVersion } from 'movement-lang';
+import { type LanguageVersion } from 'movement-lang';
+import { CURRENT_LANGUAGE_VERSION } from 'legacy-lang';
 import { pluginOutputUnder } from 'legacy-lang';
 
 import type { FileRef } from 'movement-engine/public/adapter';

@@ -15,7 +15,7 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 
 import ts from 'typescript';
-import { CURRENT_LANGUAGE_VERSION, type InstanceSchema } from 'movement-lang';
+import { LANGUAGE_VERSION, type InstanceSchema } from 'movement-lang';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { CapturedWrite } from 'movement-engine/public/adapter';
@@ -439,7 +439,7 @@ describe('the engine/host seam carries data', () => {
 
     await runAwaiting({
       teamId: tenantIdOf('00000000-0000-0000-0000-000000000042'),
-      source: spelledFor(5, awaitingSource()),
+      source: spelledFor(LANGUAGE_VERSION, awaitingSource()),
       adapter: awaiting.adapter,
       parkSink: recording,
       wake: async (request: Scoped<AwaitWakeRequest>) => {
@@ -531,7 +531,7 @@ describe('the engine/host seam carries data', () => {
       'resolveFileText',
       'segment.close',
     ]);
-    expect(made[0]?.input).toEqual({ teamId, languageVersion: CURRENT_LANGUAGE_VERSION, hostFamiliesVersion: HOST_FAMILIES_VERSION });
+    expect(made[0]?.input).toEqual({ teamId, languageVersion: LANGUAGE_VERSION, hostFamiliesVersion: HOST_FAMILIES_VERSION });
     // Every call names the segment the run opened.
     expect(made[1]?.input).toEqual({ segmentId: 'seg-1', content: 'the digest', type: 'text' });
     // A priced call: the run's budget in (no cap here), what it spent out —
@@ -1284,7 +1284,7 @@ describe('every family crosses as JSON', () => {
     );
     // `write … bind` is a version 1–4 construct (retired under 5 by the
     // checker, MOV_WRITE_BIND_RETIRED).
-    await h.run({ languageVersion: 4 });
+    await h.run({ languageVersion: '4' });
     expect(h.crm.creates).toHaveLength(1);
     expect(recorded).toHaveLength(1);
   });
@@ -1392,7 +1392,7 @@ describe('every family crosses as JSON', () => {
     const wakes: QueuedWake[] = [];
     const result = await runAwaiting({
       teamId: tenantOfTeam(ROUND_TRIP_TEAM),
-      source: spelledFor(5, awaitingSource()),
+      source: spelledFor(LANGUAGE_VERSION, awaitingSource()),
       adapter: makeAwaitingAdapter([
         { status: 'pending', correlationKey: 'req-1' },
         {
@@ -1521,7 +1521,7 @@ describe('every family crosses as JSON', () => {
       { version4: true },
     );
     // The source is a resource before the model is asked anything.
-    await expect(h.run({ firedAt: undefined, languageVersion: 4 })).rejects.toThrow('test: no model');
+    await expect(h.run({ firedAt: undefined, languageVersion: '4' })).rejects.toThrow('test: no model');
     expect(minted).toEqual([1]);
   });
 
