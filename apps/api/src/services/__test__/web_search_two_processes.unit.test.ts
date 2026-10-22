@@ -68,6 +68,7 @@ async function startApiProcess(name: string, fakeUrl: string): Promise<ApiProces
   child.stderr.on('data', (chunk: Buffer) => {
     stderr += chunk.toString();
   });
+  let stopping = false;
   const waiting: Array<() => void> = [];
   createInterface({ input: child.stdout }).on('line', (line) => {
     if (line.startsWith(REPLY)) waiting.shift()?.();
@@ -75,7 +76,12 @@ async function startApiProcess(name: string, fakeUrl: string): Promise<ApiProces
   const next = () =>
     new Promise<void>((resolve, reject) => {
       waiting.push(resolve);
-      child.once('exit', (code) => reject(new Error(`process ${name} exited (${code}): ${stderr}`)));
+      // Searches the limiter is still holding leave a reply pending when the test ends and
+      // the child is killed; that exit is the teardown, not a failure.
+      child.once('exit', (code) => {
+        if (stopping) resolve();
+        else reject(new Error(`process ${name} exited (${code}): ${stderr}`));
+      });
     });
   await next();
   return {
@@ -85,6 +91,7 @@ async function startApiProcess(name: string, fakeUrl: string): Promise<ApiProces
       await answer;
     },
     stop: () => {
+      stopping = true;
       child.kill();
     },
   };
@@ -118,6 +125,11 @@ it('sends 14 SERP requests a minute across both processes, the rest held waiting
   void a.fire(PER_MINUTE);
   void b.fire(PER_MINUTE);
   await new Promise((resolve) => setTimeout(resolve, 4_000));
+
+  const split = Object.fromEntries(
+    ['a', 'b'].map((name) => [name, fake.arrivals.filter((arrival) => arrival.process === name).length]),
+  );
+  console.log(`SERP arrivals after 4s: ${fake.arrivals.length}; per process ${JSON.stringify(split)}`);
 
   // The bucket refills one call every 4.3 seconds, so at most one more has
   // been let through by now.
