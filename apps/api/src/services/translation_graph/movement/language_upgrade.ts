@@ -6,7 +6,9 @@
 // A pin is a legacy id ('1'..'4': the platform's TypeScript copy of the
 // language reads it) or the semver of the language release it was written
 // against, which the installed language reads when its rule says the two are
-// compatible (movement-lang `compatible`).
+// compatible (movement-lang `compatible`). A current pin is judged by the
+// wasm checker alone, against the run snapshot; legacy-lang judges only the
+// legacy ids (./language_route.ts).
 //
 // THE DEPLOY CHECK, once per release over every team's movements
 // (`runDeployCheck`), only reports. A release pin the installed language reads

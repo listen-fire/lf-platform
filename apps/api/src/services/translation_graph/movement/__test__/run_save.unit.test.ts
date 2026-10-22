@@ -127,18 +127,21 @@ jest.mock('../../../../lib/kysely', () => {
 
 jest.mock('../catalog', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { mockCatalog } = require('movement-lang');
+  const { mockCatalog, mockCatalogSnapshot } = require('movement-lang');
+  const spec = {
+    adapters: {
+      email: { constructionArgs: [{ name: 'credentials', kind: 'position', required: false }], triggerConfig: ['key'] },
+      manual: { constructionArgs: [{ name: 'credentials', kind: 'position', required: false }] },
+    },
+  };
   return {
     movementCatalogForTeam: jest.fn(async () => ({
-      catalog: mockCatalog({
-        adapters: {
-          email: { constructionArgs: [{ name: 'credentials', kind: 'position', required: false }], triggerConfig: ['key'] },
-          manual: { constructionArgs: [{ name: 'credentials', kind: 'position', required: false }] },
-        },
-      }),
+      catalog: mockCatalog(spec),
       resolveCredentialId: () => undefined,
       credentialsByName: {},
       translation: {},
+      // The same world as the run sees it: a current pin is checked against it.
+      runSnapshot: () => mockCatalogSnapshot(spec),
       notes: [],
       gaps: [],
     })),

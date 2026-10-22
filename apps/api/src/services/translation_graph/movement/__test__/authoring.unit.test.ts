@@ -4,14 +4,14 @@
 //
 //   1. parse errors surface as MOV_PARSE with a line/col + source line;
 //   2. check diagnostics surface with codes, severities, spans;
-//   3. valid-language-but-ahead-of-the-engine constructs (a nested
-//      movement declaration) surface as MOV_ENGINE_UNSUPPORTED before
-//      any save — the dry interpretability scan, mirrored;
+//   3. on a current pin the wasm checker's verdict is the whole verdict:
+//      no engine scan (a nested movement declaration is its refusal);
 //   4. a clean file reports ok with its listener inventory;
 //   5. unknown credentials/fields produce the named diagnostics the
 //      repair loop keys on.
 //
-// The catalog is a hand-built `Catalog` object — no registry, no DB.
+// The catalog is a hand-built `Catalog` object — no registry, no DB — and its
+// run snapshot, which a current pin is checked against (by the wasm alone).
 
 // Order-sensitive cycle guard (mirrors save.unit.test.ts): pre-require
 // schemas.ts so `expressionSchema` resolves before any ES import pulls it
@@ -27,7 +27,7 @@ jest.mock('../catalog', () => ({
   }),
 }));
 
-import { BridgeError } from 'movement-lang';
+import { BridgeError, catalogSnapshotOf } from 'movement-lang';
 
 import type { Catalog, InstanceSchema } from 'movement-lang';
 import type { AuthoringDiagnostic } from '../authoring';
@@ -103,6 +103,9 @@ const catalog: Catalog = {
   },
 };
 
+// The run snapshot of the same catalog: a current pin is checked against it.
+const snapshot = catalogSnapshotOf(catalog, { adapters: ['email', 'attio', 'slack'], credentials: ['main_crm', 'team_chat'] });
+
 const CLEAN_SOURCE = `import { email, attio, slack } from adapters
 import { main_crm, team_chat } from credentials
 
@@ -127,7 +130,7 @@ listen to inbox { key: "intake" } fire intake
 
 describe('diagnoseMovementSource', () => {
   it('a clean file validates ok with its listener inventory', () => {
-    const result = diagnoseMovementSource(CLEAN_SOURCE, { catalog });
+    const result = diagnoseMovementSource(CLEAN_SOURCE, { catalog, snapshot });
     expect(result.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
     expect(result.ok).toBe(true);
     expect(result.listenerCount).toBe(1);
@@ -136,7 +139,7 @@ describe('diagnoseMovementSource', () => {
 
   it('a parse error surfaces as MOV_PARSE with position and source line', () => {
     const source = 'movement broken( {\n';
-    const result = diagnoseMovementSource(source, { catalog });
+    const result = diagnoseMovementSource(source, { catalog, snapshot });
     expect(result.ok).toBe(false);
     expect(result.diagnostics).toHaveLength(1);
     const d = result.diagnostics[0];
@@ -150,7 +153,7 @@ describe('diagnoseMovementSource', () => {
       'import { main_crm, team_chat } from credentials',
       'import { not_a_credential, team_chat } from credentials',
     ).replace('credentials: main_crm', 'credentials: not_a_credential');
-    const result = diagnoseMovementSource(source, { catalog });
+    const result = diagnoseMovementSource(source, { catalog, snapshot });
     expect(result.ok).toBe(false);
     const codes = result.diagnostics.map((d) => d.code);
     expect(codes).toContain('MOV_IMPORT_UNKNOWN');
@@ -162,7 +165,7 @@ describe('diagnoseMovementSource', () => {
 
   it('a write into an unknown field is reported by the typed check', () => {
     const source = CLEAN_SOURCE.replace('name:        m.`subject`', 'nam:         m.`subject`');
-    const result = diagnoseMovementSource(source, { catalog });
+    const result = diagnoseMovementSource(source, { catalog, snapshot });
     expect(result.ok).toBe(false);
     const hit = result.diagnostics.find((d) => d.message.includes("'nam'"));
     expect(hit).toBeDefined();
@@ -170,21 +173,22 @@ describe('diagnoseMovementSource', () => {
     expect(hit?.sourceLine).toContain('nam:');
   });
 
-  it('a checker-clean construct the engine cannot run yet surfaces as an engine diagnostic', () => {
+  it('a nested movement declaration is the wasm checker\'s refusal, with no engine scan on a current pin', () => {
     const source = CLEAN_SOURCE.replace(
       'co = write crm-[:companies]-> {',
       'movement nested(x: <inbox-[:message]->>) {\n    y = x.`subject`\n  }\n  co = write crm-[:companies]-> {',
     );
-    const result = diagnoseMovementSource(source, { catalog });
+    const result = diagnoseMovementSource(source, { catalog, snapshot });
     expect(result.ok).toBe(false);
-    const unsupported = result.diagnostics.find((d) => d.code === 'MOV_ENGINE_UNSUPPORTED');
-    expect(unsupported).toBeDefined();
-    expect(unsupported?.message).toMatch(/nested movement declarations/i);
+    expect(result.diagnostics.map((d) => d.code)).not.toContain('MOV_ENGINE_UNSUPPORTED');
+    const refusal = result.diagnostics.find((d) => d.severity === 'error');
+    expect(refusal?.message).toContain('a declaration is a `function`');
+    expect(refusal?.sourceLine).toContain('movement nested(');
   });
 
   it('a diagnostic with an exact rewrite carries it as 1-based edits, and says it in the message', () => {
     const source = CLEAN_SOURCE.replace('import { email, attio, slack } from adapters', 'import { email, slack } from adapters');
-    const result = diagnoseMovementSource(source, { catalog });
+    const result = diagnoseMovementSource(source, { catalog, snapshot });
     const unresolved = result.diagnostics.filter((d) => d.code === 'MOV_NAME_UNRESOLVED');
     expect(unresolved).toHaveLength(1);
     expect(unresolved[0].message).toBe(
@@ -194,12 +198,12 @@ describe('diagnoseMovementSource', () => {
       edits: [{ line: 1, col: 1, endLine: 1, endCol: 1, text: 'import { attio } from adapters\n' }],
     });
     const repaired = `import { attio } from adapters\n${source}`;
-    expect(diagnoseMovementSource(repaired, { catalog }).ok).toBe(true);
+    expect(diagnoseMovementSource(repaired, { catalog, snapshot }).ok).toBe(true);
   });
 
   it('a library file (no listens) reports zero listeners and validates ok', () => {
     const source = CLEAN_SOURCE.replace(/listen to inbox.*\n/, '');
-    const result = diagnoseMovementSource(source, { catalog });
+    const result = diagnoseMovementSource(source, { catalog, snapshot });
     expect(result.listenerCount).toBe(0);
     expect(result.firedMovements).toEqual([]);
     // The MOV_LISTEN_MISSING info may appear; nothing error-severity should.
@@ -216,6 +220,7 @@ describe('validateMovementForTeam catalog-assembly guard', () => {
     resolveFile: () => undefined,
     notes: [] as string[],
     gaps: [],
+    runSnapshot: () => snapshot,
   };
   afterEach(() => mock.mockClear());
 

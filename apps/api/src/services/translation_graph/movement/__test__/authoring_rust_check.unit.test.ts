@@ -1,9 +1,8 @@
-// Validation of a movement pinned to a version that runs on the Rust engine
-// (5 on) is the Rust checker's, against the snapshot its run checks against:
-// the diagnostics an author sees are the ones the run enforces. Versions 1–4
-// keep the TypeScript checker. The two report the same diagnostics (the
-// parity corpus, listen-fire's crates/movement-checker/PARITY.md); here a few programs,
-// clean and refused, are compared through the authoring surface itself.
+// Validation of a movement pinned to a release the installed language reads
+// is the Rust checker's alone, against the snapshot its run checks against:
+// the diagnostics an author sees are the ones the run enforces, and without
+// that snapshot there is no verdict to give. Versions 1–4 keep the TypeScript
+// checker. A few programs, clean and refused, through the authoring surface.
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 require('engine-contracts/expression/schemas');
@@ -96,15 +95,18 @@ function diagnose(source: string, languageVersion: LanguageVersion, withSnapshot
 
 describe('validation by the checker the run is held to', () => {
   for (const [name, source] of Object.entries(programs)) {
-    it(`reports the TypeScript checker's diagnostics from the Rust checker on version 5: ${name}`, () => {
+    it(`checks with the Rust checker alone on the installed language: ${name}`, () => {
       const rust = diagnose(spelledFor(LANGUAGE_VERSION, source, catalog), LANGUAGE_VERSION, true);
-      const ts = diagnose(spelledFor(LANGUAGE_VERSION, source, catalog), LANGUAGE_VERSION, false);
       expect(rust.checkers).toEqual({ rust: 1, typescript: 0 });
-      expect(ts.checkers).toEqual({ rust: 0, typescript: 1 });
-      expect(rust.validation).toEqual(ts.validation);
       expect(rust.validation.ok).toBe(name === 'clean');
     });
   }
+
+  it('throws on the installed language without the run snapshot', () => {
+    expect(() => diagnose(spelledFor(LANGUAGE_VERSION, programs.clean ?? '', catalog), LANGUAGE_VERSION, false)).toThrow(
+      'a release pin is checked against its run snapshot',
+    );
+  });
 
   it('refuses a file-level call once, as MOV_FILE_VALUE_RUNS, from version 5; version 4 keeps the engine note', () => {
     const source = 'import { fetch_url } from plugins\npage = fetch_url(url: "https://example.com")\n';

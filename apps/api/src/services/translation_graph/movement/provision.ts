@@ -57,7 +57,7 @@
 
 import { randomUUID } from 'node:crypto';
 
-import { scanName } from 'movement-lang';
+import { parseProgram as parseInstalled, scanName } from 'movement-lang';
 import { checkProgram } from 'legacy-lang';
 import { MovementParseError } from 'movement-lang';
 import { parseProgram } from 'legacy-lang';
@@ -117,6 +117,7 @@ import {
   type AuthoringDiagnostic,
   type MovementValidityAssessment,
 } from './authoring';
+import { checkInstalled, routeOf } from './language_route';
 
 /** Resource-change hint for a movement save/delete — fired from the
  *  shared service so UI and agent callers both propagate. The actor isn't
@@ -519,9 +520,16 @@ async function provisionListeners(input: {
   const within = <T>(name: string, run: () => Promise<T>): Promise<T> =>
     input.timer ? input.timer.within(name, run) : run();
 
+  const route = routeOf(input.movementRow.languageVersion);
+  if (route.kind === 'refused') {
+    return { ok: false, diagnostics: [route.diagnostic], catalogNotes: teamCatalog.notes };
+  }
   let program: Program;
   try {
-    program = parseProgram(input.source, { languageVersion: input.movementRow.languageVersion });
+    program =
+      route.kind === 'installed'
+        ? parseInstalled(input.source, { languageVersion: route.pin })
+        : parseProgram(input.source, { languageVersion: input.movementRow.languageVersion });
   } catch (e) {
     if (!(e instanceof MovementParseError)) throw e;
     return {
@@ -533,12 +541,17 @@ async function provisionListeners(input: {
     };
   }
 
-  const checkDiagnostics = await within('listenCheck', async () =>
-    checkProgram(program, teamCatalog.catalog, {
-      resolveFile: teamCatalog.resolveFile,
-      languageVersion: input.movementRow.languageVersion,
-    }),
-  );
+  const checkDiagnostics = await within('listenCheck', async () => {
+    if (route.kind !== 'installed') {
+      return checkProgram(program, teamCatalog.catalog, {
+        resolveFile: teamCatalog.resolveFile,
+        languageVersion: input.movementRow.languageVersion,
+      });
+    }
+    const snapshot = teamCatalog.runSnapshot?.();
+    if (snapshot === undefined) throw new Error('a release pin is checked against its run snapshot');
+    return checkInstalled({ source: input.source, snapshot, pin: route.pin });
+  });
   const errors = checkDiagnostics.filter((d) => (d.severity ?? 'error') === 'error');
   const infos = checkDiagnostics.filter((d) => (d.severity ?? 'error') !== 'error');
   if (errors.length > 0 && input.provisionDespiteErrors !== true) {
@@ -955,6 +968,7 @@ async function runSave(
       resolveCredentialId: teamCatalog.resolveCredentialId,
       resolveFile: teamCatalog.resolveFile,
       languageVersion: row.languageVersion,
+      ...(teamCatalog.runSnapshot !== undefined ? { snapshot: teamCatalog.runSnapshot() } : {}),
     });
     return {
       validation: diagnosed,

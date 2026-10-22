@@ -6,8 +6,9 @@
 // (`../../storage/tg_table`), and the DB (`lib/kysely`) are mocked; the
 // REAL `saveMovement` / `getMovement` / `listMovements` /
 // `deleteMovement`, the REAL reconciliation (`planListenerReconciliation`
-// + reconcile walk), the REAL movement-lang parse/check + the REAL dry
-// interpretability scan, and the REAL `store.ts` row logic run against an
+// + reconcile walk), the REAL check by the pin's route (the wasm checker
+// against the run snapshot for a current pin; legacy-lang and the dry
+// interpretability scan for a legacy id), and the REAL `store.ts` row logic run against an
 // in-memory table fake. Covered:
 //
 //   1.  clean save → canonical row + one derived trigger per listen,
@@ -24,7 +25,7 @@
 //       ships broken (decision 3b)
 //   9.  run_mode is NEVER touched by reconciliation after creation
 //   10. clean check, provisioning failure → save fails honestly
-//   11. unsupported constructs → consent gate, constructs NAMED
+//   11. a construct the checker refuses → consent gate, reason NAMED
 //   12. durable name: declaration edit keeps the stored name (only the fire
 //       target follows); an explicit name renames in place and persists
 //   13. list projection + delete cleans every derived row
@@ -147,7 +148,7 @@ jest.mock('../../../../lib/kysely', () => {
 // a file resolver for the library-import save case.
 jest.mock('../catalog', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { mockCatalog } = require('movement-lang');
+  const { mockCatalog, mockCatalogSnapshot } = require('movement-lang');
   const LIB_SOURCE = [
     'export node Lead {',
     '  name: <text>',
@@ -157,33 +158,36 @@ jest.mock('../catalog', () => {
     '  x = l.`name`',
     '}',
   ].join('\n');
+  const spec = {
+    adapters: {
+      email: {
+        constructionArgs: [{ name: 'credentials', kind: 'position', required: false }],
+        triggerConfig: ['key'],
+        // From 5 a read off an event the catalog does not describe is
+        // refused (MOV_EVENT_UNDESCRIBED), so the inbox's message is
+        // described with the fields the fixtures read.
+        schema: {
+          positions: { message: { properties: { subject: 'text', Subject: 'text', text: 'text' }, edges: {} } },
+          collections: {},
+          writableRoots: {},
+          eventPosition: 'message',
+        },
+      },
+    },
+    plugins: {
+      fetch_pages: { args: ['urls'], output: { kind: 'value', type: 'text' } },
+    },
+  };
   return {
     movementCatalogForTeam: jest.fn(async () => ({
-      catalog: mockCatalog({
-        adapters: {
-          email: {
-            constructionArgs: [{ name: 'credentials', kind: 'position', required: false }],
-            triggerConfig: ['key'],
-            // From 5 a read off an event the catalog does not describe is
-            // refused (MOV_EVENT_UNDESCRIBED), so the inbox's message is
-            // described with the fields the fixtures read.
-            schema: {
-              positions: { message: { properties: { subject: 'text', Subject: 'text', text: 'text' }, edges: {} } },
-              collections: {},
-              writableRoots: {},
-              eventPosition: 'message',
-            },
-          },
-        },
-        plugins: {
-          fetch_pages: { args: ['urls'], output: { kind: 'value', type: 'text' } },
-        },
-      }),
+      catalog: mockCatalog(spec),
       resolveCredentialId: () => undefined,
       credentialsByName: {},
       translation: {},
       resolveFile: (path: string) =>
         path === 'lib/leads' ? { source: LIB_SOURCE } : undefined,
+      // The same world as the run sees it: a current pin is checked against it.
+      runSnapshot: () => ({ ...mockCatalogSnapshot(spec), files: { 'lib/leads': { source: LIB_SOURCE } } }),
       notes: [],
       gaps: [],
     })),
@@ -265,7 +269,7 @@ jest.mock('../../../../services/context', () => ({
   unsafeCurrentContext: jest.fn(() => undefined),
 }));
 
-import { LANGUAGE_VERSION, mockCatalog } from 'movement-lang';
+import { LANGUAGE_VERSION, mockCatalog, mockCatalogSnapshot } from 'movement-lang';
 
 import type { DerivedTriggerRow } from '../store';
 
@@ -672,9 +676,9 @@ describe('saveMovement — listener derivation', () => {
     expect(second.listeners[0].runMode).toBe('off');
   });
 
-  it('an engine-unsupported construct refuses the save with the construct named (consent gate)', async () => {
-    // (Edge statements run since E7, file imports since E8 — a nested
-    // movement declaration is the gate fixture now.)
+  it('a nested movement declaration refuses the save with the wasm checker\'s reason (consent gate)', async () => {
+    // On a current pin the wasm checker refuses the nested declaration (its
+    // spelling is `function`); the engine scan serves legacy ids only.
     const first = await saveMovement({ teamId: TEAM, source: SOURCE_V1 });
     if (!first.ok) throw new Error('first save should be live');
     const withNested = SOURCE_V1.replace(
@@ -687,10 +691,22 @@ describe('saveMovement — listener derivation', () => {
     if (result.ok) throw new Error('expected failure');
     expect(result.needsConfirmation).toBe(true);
     expect(result.validity?.status).toBe('invalid');
-    expect((result.errors ?? []).join(' ')).toContain('nested movement declarations');
+    expect((result.errors ?? []).join(' ')).toContain('a declaration is a `function`');
     // Text saved; the previously-derived listener row is untouched.
     expect(db.__tables.movement[0].source).toBe(withNested);
     expect(triggerRows()).toHaveLength(1);
+  });
+
+  it('a bare manual listen on the installed language ships and derives one manual listener', async () => {
+    const source = 'function echo(run: <manual-[:Invocation]->>) {\n  return 1\n}\nlisten to manual fire echo\n';
+    const result = await saveMovement({ teamId: TEAM, source });
+    if (!result.ok) throw new Error(`save failed: ${(result.errors ?? []).join('; ')}`);
+    expect(result.validity.status).toBe('valid');
+    expect(result.listeners).toHaveLength(1);
+    expect(result.listeners[0]).toMatchObject({ kind: 'manual', movementName: 'echo' });
+    expect(db.__tables.movement[0]).toMatchObject({ language_version: LANGUAGE_VERSION, validity_status: 'valid' });
+    expect(triggerRows()).toHaveLength(1);
+    expect(triggerRows()[0]).toMatchObject({ kind: 'manual', fired_movement_name: 'echo' });
   });
 
   it('listen alias: trigger name equals the lane alias when present', async () => {
@@ -1254,20 +1270,22 @@ describe('saveMovement — expectedRevision (agent-facing optimistic concurrency
 // 'Dev-loop Attio' (a name that MUST be backtick-quoted in source because it
 // contains a hyphen).
 function makeAttioTeamCatalog() {
+  const spec = {
+    adapters: {
+      attio: { constructionArgs: [{ name: 'credentials', kind: 'credential' as const, required: true }]},
+    },
+    credentials: {
+      'Dev-loop Attio': { adapter: 'attio' },
+    },
+  };
   return {
-    catalog: mockCatalog({
-      adapters: {
-        attio: { constructionArgs: [{ name: 'credentials', kind: 'credential', required: true }]},
-      },
-      credentials: {
-        'Dev-loop Attio': { adapter: 'attio' },
-      },
-    }),
+    catalog: mockCatalog(spec),
     resolveCredentialId: (name: string) => (name === 'Dev-loop Attio' ? 'cred-attio-123' : undefined),
     credentialsByName: {
       'Dev-loop Attio': { id: 'cred-attio-123', rowName: 'Dev-loop Attio', adapters: ['attio'] },
     },
     resolveFile: () => undefined,
+    runSnapshot: () => mockCatalogSnapshot(spec),
     notes: [],
     gaps: [],
   };

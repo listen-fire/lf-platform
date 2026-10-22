@@ -283,7 +283,7 @@ jest.mock('../../storage/tg_table', () => ({
 // resolveAdapter mock below publishes it).
 jest.mock('../catalog', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { mockCatalog } = require('movement-lang');
+  const { mockCatalog, mockCatalogSnapshot } = require('movement-lang');
   const kgSchema = {
     positions: {
       company: {
@@ -299,43 +299,46 @@ jest.mock('../catalog', () => {
     collections: {},
     writableRoots: {},
   };
+  const spec = {
+    adapters: {
+      attio: {
+        constructionArgs: [{ name: 'credentials', kind: 'credential', required: true }],
+        triggerConfig: ['events'],
+        triggerConfigOptions: {
+          events: ['record.created', 'record.updated', 'record.deleted'],
+        },
+        schema: attioSchema,
+      },
+      email: { constructionArgs: [{ name: 'credentials', kind: 'position', required: false }], triggerConfig: ['key'] },
+      // A write-only target (the real Google Sheets / Drive / Dropbox
+      // shape): its manifest names no trigger type, so nothing that
+      // happens there can ever reach us.
+      sheets: {
+        constructionArgs: [{ name: 'credentials', kind: 'credential', required: true }],
+        canFire: false,
+        schema: attioSchema,
+      },
+      kg: {
+        constructionArgs: [],
+        triggerConfig: ['events', 'type', 'fields'],
+        triggerConfigRequired: ['type'],
+        triggerConfigOptions: {
+          events: ['record.created', 'record.updated', 'record.deleted'],
+        },
+        triggerConfigFormats: { fields: 'fields' },
+        schema: kgSchema,
+      },
+    },
+    credentials: { acme: { adapter: 'attio' }, sheet_cred: { adapter: 'sheets' } },
+  };
   return {
     // The address resolver reads an instance's entry-position args off the
     // catalog; nothing here declares any, so it is the identity.
     positionArgValues: () => ({}),
     movementCatalogForTeam: jest.fn(async () => ({
-      catalog: mockCatalog({
-        adapters: {
-          attio: {
-            constructionArgs: [{ name: 'credentials', kind: 'credential', required: true }],
-            triggerConfig: ['events'],
-            triggerConfigOptions: {
-              events: ['record.created', 'record.updated', 'record.deleted'],
-            },
-            schema: attioSchema,
-          },
-          email: { constructionArgs: [{ name: 'credentials', kind: 'position', required: false }], triggerConfig: ['key'] },
-          // A write-only target (the real Google Sheets / Drive / Dropbox
-          // shape): its manifest names no trigger type, so nothing that
-          // happens there can ever reach us.
-          sheets: {
-            constructionArgs: [{ name: 'credentials', kind: 'credential', required: true }],
-            canFire: false,
-            schema: attioSchema,
-          },
-          kg: {
-            constructionArgs: [],
-            triggerConfig: ['events', 'type', 'fields'],
-            triggerConfigRequired: ['type'],
-            triggerConfigOptions: {
-              events: ['record.created', 'record.updated', 'record.deleted'],
-            },
-            triggerConfigFormats: { fields: 'fields' },
-            schema: kgSchema,
-          },
-        },
-        credentials: { acme: { adapter: 'attio' }, sheet_cred: { adapter: 'sheets' } },
-      }),
+      catalog: mockCatalog(spec),
+      // The same world as the run sees it: a current pin is checked against it.
+      runSnapshot: () => mockCatalogSnapshot(spec),
       resolveCredentialId: (name: string) =>
         name === 'acme' ? 'cred-attio-1' : name === 'sheet_cred' ? 'cred-sheets-1' : undefined,
       credentialsByName: {},

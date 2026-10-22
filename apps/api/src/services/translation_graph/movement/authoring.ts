@@ -1,8 +1,9 @@
 // The authoring loop's validation surface: propose → typecheck → repair.
 //
 // `diagnoseMovementSource` is the pure core — it mirrors EXACTLY the gate
-// `saveMovement` applies (parse → check → the engine's dry
-// interpretability scan), so a clean validation predicts a live save.
+// `saveMovement` applies, by the pin's route (./language_route.ts): the wasm
+// checker for an installed pin; parse → TypeScript check → the engine's dry
+// interpretability scan for a legacy id. A clean validation predicts a live save.
 // Diagnostics are returned as plain data with 1-based line/col spans,
 // codes, severities, and the offending source line, ready to hand to an
 // authoring agent (or any other consumer) for the repair half of the loop.
@@ -11,8 +12,8 @@
 // per-team catalog the save path uses (referenced-construction scoped)
 // and runs the core against it.
 
-import { BridgeError, checkSourceInRust, diagnosticSeverity } from 'movement-lang';
-import { CURRENT_LANGUAGE_VERSION, checkProgram, isLegacyLanguageVersion, languageVersionDiagnostic, movesFromDroppedVersion, upgradeWarnings, withUpgradeWarnings } from 'legacy-lang';
+import { BridgeError, diagnosticSeverity, neverAsAny, parseProgram as parseInstalled } from 'movement-lang';
+import { CURRENT_LANGUAGE_VERSION, checkProgram } from 'legacy-lang';
 import { MovementParseError } from 'movement-lang';
 import { parseProgram } from 'legacy-lang';
 
@@ -31,6 +32,7 @@ import type { MovementValidityStatus } from './store';
 
 import { listUnsupportedConstructs } from '@listen-fire/legacy-engine/services/movement_engine/interpretable';
 import { movementCatalogForTeam } from './catalog';
+import { checkInstalled, routeOf } from './language_route';
 import { stepTimer, type StepTimer } from './timing';
 
 
@@ -125,9 +127,11 @@ function dedupe(diagnostics: Diagnostic[]): Diagnostic[] {
 }
 
 /**
- * Parse + check + the engine's dry interpretability scan, against an
- * injected catalog — the exact gate `saveMovement` applies, minus the
- * persistence. Pure given the catalog; unit-testable without I/O.
+ * The exact gate `saveMovement` applies, minus the persistence, against an
+ * injected catalog — pure given it; unit-testable without I/O. Which checker
+ * judges is the pin's (`routeOf`): an installed pin is the wasm checker's
+ * against the run snapshot, a legacy id is parse + TypeScript check + the
+ * engine's dry interpretability scan, and any other pin is refused.
  */
 export function diagnoseMovementSource(
   source: string,
@@ -135,7 +139,7 @@ export function diagnoseMovementSource(
     catalog: Catalog;
     resolveCredentialId?: (credentialName: string) => string | undefined;
     /** File-import resolution (movement libraries) — same resolver the
-     *  save path threads through checkProgram and compileMovement. */
+     *  save path threads through the check and compileMovement. */
     resolveFile?: ResolveFile;
     /** The language version to validate under — a saved movement's pin.
      *  Absent ⇒ the current version. */
@@ -145,91 +149,51 @@ export function diagnoseMovementSource(
      *  meaning changed between the two (`CheckOptions.upgradingFrom`). */
     upgradingFrom?: LanguageVersion;
     /** The snapshot a run of the source checks and runs against, from the
-     *  same assembly as `catalog`. With it, a version that runs on the Rust
-     *  engine is checked by the Rust checker against it — the check its run
-     *  enforces. Without it (a caller holding only a catalog object, as unit
-     *  tests do) the TypeScript checker answers; `validateMovementForTeam`
-     *  always passes it. */
+     *  same assembly as `catalog`. An installed pin is checked against it and
+     *  nothing else, so it is required there. */
     snapshot?: CatalogSnapshot;
   },
 ): MovementValidation {
   const lines = source.split('\n');
-  const languageVersion = options.languageVersion ?? CURRENT_LANGUAGE_VERSION;
-
-  // A pin this release cannot honour is the whole verdict: reading the text
-  // under some other version's grammar would report problems that aren't.
-  const versionDiagnostic = languageVersionDiagnostic(languageVersion);
-  if (versionDiagnostic !== undefined && diagnosticSeverity(versionDiagnostic) === 'error') {
-    return {
-      ok: false,
-      diagnostics: [toAuthoringDiagnostic(versionDiagnostic, lines)],
-      listenerCount: 0,
-      firedMovements: [],
-    };
+  const route = routeOf(options.languageVersion ?? CURRENT_LANGUAGE_VERSION);
+  switch (route.kind) {
+    // A pin this release cannot honour is the whole verdict: reading the text
+    // under some other version's grammar would report problems that aren't.
+    case 'refused':
+      return {
+        ok: false,
+        diagnostics: [toAuthoringDiagnostic(route.diagnostic, lines)],
+        listenerCount: 0,
+        firedMovements: [],
+      };
+    case 'installed':
+      return diagnoseInstalled(source, route.pin, options);
+    case 'legacy':
+      return diagnoseLegacy(source, route.pin, options);
+    default:
+      return neverAsAny(route);
   }
+}
 
-  let program: Program;
-  try {
-    program = parseProgram(source, { languageVersion });
-  } catch (e) {
-    if (!(e instanceof MovementParseError)) throw e;
-    const parseDiagnostic: Diagnostic = {
-      code: 'MOV_PARSE',
-      message: e.message,
-      span: { start: e.loc, end: e.loc },
-    };
-    return {
-      ok: false,
-      diagnostics: [toAuthoringDiagnostic(parseDiagnostic, lines)],
-      listenerCount: 0,
-      firedMovements: [],
-    };
-  }
+function parseRefusal(e: MovementParseError, lines: string[]): MovementValidation {
+  const parseDiagnostic: Diagnostic = {
+    code: 'MOV_PARSE',
+    message: e.message,
+    span: { start: e.loc, end: e.loc },
+  };
+  return {
+    ok: false,
+    diagnostics: [toAuthoringDiagnostic(parseDiagnostic, lines)],
+    listenerCount: 0,
+    firedMovements: [],
+  };
+}
 
-  const { snapshot, upgradingFrom } = options;
-  const checkedInRust = snapshot !== undefined && !isLegacyLanguageVersion(languageVersion);
-  const upgrading = upgradingFrom !== undefined ? { upgradingFrom } : {};
-  const resolving = options.resolveFile !== undefined ? { resolveFile: options.resolveFile } : {};
-  const collected: Diagnostic[] = [];
-  if (!checkedInRust) {
-    collected.push(...checkProgram(program, options.catalog, { languageVersion, ...upgrading, ...resolving }));
-  } else if (!movesFromDroppedVersion(upgradingFrom)) {
-    collected.push(...checkSourceInRust(source, snapshot, { languageVersion, ...upgrading }));
-  } else {
-    // A move from a version the language release no longer serves: only the
-    // platform's TypeScript checker knows what changed meaning on the way, so
-    // its upgrade warnings join the Rust check of the version moved to.
-    collected.push(
-      ...withUpgradeWarnings(
-        checkSourceInRust(source, snapshot, { languageVersion }),
-        upgradeWarnings(program, options.catalog, { languageVersion, upgradingFrom, ...resolving }),
-      ),
-    );
-  }
+function validationOf(program: Program, collected: Diagnostic[], lines: string[]): MovementValidation {
   const firedMovements: string[] = [];
   for (const statement of program.statements) {
     if (statement.kind === 'listen') firedMovements.push(statement.movement);
   }
-
-  // The engine gate, mirrored from the save path: the dry
-  // interpretability scan names any constructs the movement engine does
-  // not support yet — error severity, since the save would refuse with
-  // status 'error'. Spans aren't statically available from the scan;
-  // the construct names carry the repair signal.
-  for (const construct of listUnsupportedConstructs(source, {
-    languageVersion,
-    ...(options.resolveFile !== undefined ? { resolveFile: options.resolveFile } : {}),
-  })) {
-    // From v5 the Rust checker refuses a file-level call as MOV_FILE_VALUE_RUNS,
-    // which says why and what to do; the scan's note would only repeat it.
-    if (checkedInRust && construct === 'file-level calls') continue;
-    collected.push({
-      code: 'MOV_ENGINE_UNSUPPORTED',
-      message: `the engine does not support ${construct} yet — remove it to save this file live`,
-      span: { start: { line: 1, col: 1 }, end: { line: 1, col: 1 } },
-    });
-  }
-
   const diagnostics = dedupe(collected).map((d) => toAuthoringDiagnostic(d, lines));
   return {
     ok: diagnostics.every((d) => d.severity !== 'error'),
@@ -237,6 +201,74 @@ export function diagnoseMovementSource(
     listenerCount: firedMovements.length,
     firedMovements,
   };
+}
+
+/** The wasm's verdict, against the snapshot the run is held to. */
+function diagnoseInstalled(
+  source: string,
+  pin: LanguageVersion,
+  options: Parameters<typeof diagnoseMovementSource>[1],
+): MovementValidation {
+  const lines = source.split('\n');
+  const { snapshot } = options;
+  if (snapshot === undefined) throw new Error('a release pin is checked against its run snapshot');
+  let program: Program;
+  try {
+    program = parseInstalled(source, { languageVersion: pin });
+  } catch (e) {
+    if (!(e instanceof MovementParseError)) throw e;
+    return parseRefusal(e, lines);
+  }
+  const diagnostics = checkInstalled({
+    source,
+    snapshot,
+    pin,
+    program,
+    catalog: options.catalog,
+    ...(options.upgradingFrom !== undefined ? { upgradingFrom: options.upgradingFrom } : {}),
+    ...(options.resolveFile !== undefined ? { resolveFile: options.resolveFile } : {}),
+  });
+  return validationOf(program, diagnostics, lines);
+}
+
+/** legacy-lang's verdict: its parse and TypeScript check, then the engine's
+ *  dry interpretability scan the save path applies. */
+function diagnoseLegacy(
+  source: string,
+  languageVersion: LanguageVersion,
+  options: Parameters<typeof diagnoseMovementSource>[1],
+): MovementValidation {
+  const lines = source.split('\n');
+  let program: Program;
+  try {
+    program = parseProgram(source, { languageVersion });
+  } catch (e) {
+    if (!(e instanceof MovementParseError)) throw e;
+    return parseRefusal(e, lines);
+  }
+
+  const resolving = options.resolveFile !== undefined ? { resolveFile: options.resolveFile } : {};
+  const collected: Diagnostic[] = [
+    ...checkProgram(program, options.catalog, {
+      languageVersion,
+      ...(options.upgradingFrom !== undefined ? { upgradingFrom: options.upgradingFrom } : {}),
+      ...resolving,
+    }),
+  ];
+
+  // The engine gate, mirrored from the save path: the dry
+  // interpretability scan names any constructs the TypeScript engine does
+  // not support — error severity, since the save would refuse with
+  // status 'error'. Spans aren't statically available from the scan;
+  // the construct names carry the repair signal.
+  for (const construct of listUnsupportedConstructs(source, { languageVersion, ...resolving })) {
+    collected.push({
+      code: 'MOV_ENGINE_UNSUPPORTED',
+      message: `the engine does not support ${construct} yet — remove it to save this file live`,
+      span: { start: { line: 1, col: 1 }, end: { line: 1, col: 1 } },
+    });
+  }
+  return validationOf(program, collected, lines);
 }
 
 export interface TeamMovementValidation extends MovementValidation {

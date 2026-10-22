@@ -29,8 +29,11 @@ jest.mock('../store', () => ({
 }));
 jest.mock('../version_store', () => ({ movementSourceHash: () => 'hash' }));
 jest.mock('../provision', () => ({ saveMovement: jest.fn() }));
+// The real authoring core is loaded by one case below; its team wrapper's
+// catalog assembly is never reached.
+jest.mock('../catalog', () => ({ movementCatalogForTeam: jest.fn() }));
 
-import { LANGUAGE_VERSION, mockCatalog, type LanguageVersion, type PluginOutput, type PluginSpec, type ResolveFile } from 'movement-lang';
+import { LANGUAGE_VERSION, fromCatalogSnapshot, mockCatalog, mockCatalogSnapshot, type LanguageVersion, type PluginOutput, type PluginSpec, type ResolveFile } from 'movement-lang';
 import { checkProgram } from 'legacy-lang';
 import { parseProgram } from 'legacy-lang';
 
@@ -713,5 +716,64 @@ describe('a meaning-changed construct inside an imported library', () => {
         message: expect.stringContaining('"lib/scan" line'),
       }),
     );
+  });
+});
+
+describe('the deploy check over the real authoring core', () => {
+  // The validation seam is the real `diagnoseMovementSource` against a run
+  // snapshot: a legacy id by legacy-lang, a current pin by the wasm alone.
+  const snapshot = mockCatalogSnapshot({
+    adapters: {
+      email: {
+        constructionArgs: [{ name: 'credentials', kind: 'position', required: false }],
+        triggerConfig: ['key'],
+        schema: {
+          positions: { message: { properties: { Subject: 'text' }, edges: {} } },
+          collections: {},
+          writableRoots: {},
+          eventPosition: 'message',
+        },
+      },
+    },
+  });
+  const catalog = fromCatalogSnapshot(snapshot);
+  const { diagnoseMovementSource } = jest.requireActual<typeof import('../authoring')>('../authoring');
+  const realValidate: ValidateUnder = async ({ movement: m, languageVersion, upgradingFrom, source }) => ({
+    diagnostics: diagnoseMovementSource(source ?? m.source, {
+      catalog,
+      snapshot,
+      languageVersion,
+      ...(upgradingFrom !== undefined ? { upgradingFrom } : {}),
+    }).diagnostics,
+    gaps: [],
+  });
+
+  it('a legacy id is warned, a bare manual listen on the installed language is current, a newer line is refused', async () => {
+    const store = fakeStore({
+      movements: [
+        movement({
+          id: 'v4',
+          languageVersion: '4',
+          source: 'import { email } from adapters\ninbox = email()\nmovement intake(m: <inbox-[:message]->>) {\n  x = 1\n}\nlisten to inbox { key: "deals" } fire intake\n',
+        }),
+        movement({
+          id: 'manual',
+          languageVersion: CUR,
+          source: 'function echo(run: <manual-[:Invocation]->>) {\n  return 1\n}\nlisten to manual fire echo\n',
+        }),
+        movement({ id: 'newer', languageVersion: '0.13.0', source: 'listen to manual fire echo\n' }),
+      ],
+      verdicts: {},
+    });
+    store.deps.validate = realValidate;
+
+    const summary = await runDeployCheck(store.deps);
+
+    expectNoPinMoved();
+    expect(summary?.automations.map((a) => [a.name, a.outcome])).toEqual([
+      ['v4', 'warned'],
+      ['manual', 'current'],
+      ['newer', 'refused'],
+    ]);
   });
 });

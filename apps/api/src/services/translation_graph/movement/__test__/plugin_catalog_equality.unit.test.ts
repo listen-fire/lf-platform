@@ -2,8 +2,9 @@
 // code before plugin specs moved into the engine package as data (Plan 22 #3
 // C3). Three views, because each is read by a different consumer: the snapshot
 // a run checks against (the Rust checker's input), the live catalog's answers
-// by either spelling (the TypeScript checker's input), and what both checkers
-// say about a call to each plugin. Re-record only on a deliberate change to a
+// by either spelling (the TypeScript checker's input), and what the checker of
+// each pin says about a call to each plugin (the TypeScript checker for a
+// legacy id, the Rust checker for a current pin). Re-record only on a deliberate change to a
 // plugin's surface: PLUGIN_CATALOG_RECORD=1.
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -66,9 +67,11 @@ function observe(): unknown {
         const languageVersion = pinOf(behaviour);
         const spelled = spelledFor(languageVersion, source, catalog);
         const key = `${name} ${withArgs ? 'every argument' : 'no argument'} v${behaviour}`;
-        diagnostics[`${key} typescript`] = diagnoseMovementSource(spelled, { catalog, languageVersion }).diagnostics;
+        // A current pin is the Rust checker's alone; a legacy id the TypeScript checker's.
         if (behaviour >= 5) {
           diagnostics[`${key} rust`] = diagnoseMovementSource(spelled, { catalog, languageVersion, snapshot }).diagnostics;
+        } else {
+          diagnostics[`${key} typescript`] = diagnoseMovementSource(spelled, { catalog, languageVersion }).diagnostics;
         }
       }
     }
@@ -92,7 +95,8 @@ describe('the plugin catalog the checkers see', () => {
 
 // The bundled plugins are one module, `@lf/web` (modules/web): a movement
 // imports them one by one, as it always has, or as the package, and both
-// checkers read the same members off the hosted catalog.
+// checkers read the same members off the hosted catalog; a current pin is
+// checked by the Rust checker against the snapshot.
 describe('two packages that each serve a render', () => {
   const imports = (tag: string, as: string) => `import { \`${tag}\` as ${as} } from plugins
 function m(t: <text>) {
@@ -104,14 +108,13 @@ function m(t: <text>) {
   it.each([
     ['@lf/pdf', 'pdf'],
     ['@lf/web', 'web'],
-  ])('checks %s render clean in both checkers', (tag, as) => {
+  ])('checks %s render clean', (tag, as) => {
     const catalog = staticCatalogFromManifests();
     const snapshot = staticCatalogSnapshot();
-    expect(diagnoseMovementSource(imports(tag, as), { catalog, languageVersion: LANGUAGE_VERSION }).diagnostics).toEqual([]);
     expect(diagnoseMovementSource(imports(tag, as), { catalog, languageVersion: LANGUAGE_VERSION, snapshot }).diagnostics).toEqual([]);
   });
 
-  it('refuses a bare import of render, naming both packages, in both checkers', () => {
+  it('refuses a bare import of render, naming both packages', () => {
     const source = `import { render } from plugins
 function m(t: <text>) {
   r = render(t)
@@ -120,10 +123,8 @@ function m(t: <text>) {
 `;
     const catalog = staticCatalogFromManifests();
     const snapshot = staticCatalogSnapshot();
-    for (const options of [{ catalog, languageVersion: LANGUAGE_VERSION }, { catalog, languageVersion: LANGUAGE_VERSION, snapshot }]) {
-      const messages = diagnoseMovementSource(source, options).diagnostics.map((d) => d.message).join('\n');
-      expect(messages).toContain('served by more than one package (@lf/web, @lf/pdf)');
-    }
+    const messages = diagnoseMovementSource(source, { catalog, languageVersion: LANGUAGE_VERSION, snapshot }).diagnostics.map((d) => d.message).join('\n');
+    expect(messages).toContain('served by more than one package (@lf/web, @lf/pdf)');
   });
 });
 
@@ -138,16 +139,19 @@ function m(u: <text>) {
   it.each([
     ['one by one', program('import { fetchUrl } from plugins', 'fetchUrl(u)')],
     ['as the package', program('import { `@lf/web` as web } from plugins', 'web.fetchUrl(u)')],
-  ])('checks clean %s, in both checkers', (_how, source) => {
+  ])('checks clean %s', (_how, source) => {
     const catalog = staticCatalogFromManifests();
     const snapshot = staticCatalogSnapshot();
-    expect(diagnoseMovementSource(source, { catalog, languageVersion: LANGUAGE_VERSION }).diagnostics).toEqual([]);
     expect(diagnoseMovementSource(source, { catalog, languageVersion: LANGUAGE_VERSION, snapshot }).diagnostics).toEqual([]);
   });
 
   it('names its members when one is missing', () => {
     const source = program('import { `@lf/web` as web } from plugins', 'web.whisper(u)');
-    const messages = diagnoseMovementSource(source, { catalog: staticCatalogFromManifests(), languageVersion: LANGUAGE_VERSION }).diagnostics.map((d) => d.message);
+    const messages = diagnoseMovementSource(source, {
+      catalog: staticCatalogFromManifests(),
+      languageVersion: LANGUAGE_VERSION,
+      snapshot: staticCatalogSnapshot(),
+    }).diagnostics.map((d) => d.message);
     expect(messages.join('\n')).toMatch(/has no member `whisper`.*fetchUrl/);
   });
 });
