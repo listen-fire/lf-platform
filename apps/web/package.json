@@ -34,7 +34,7 @@
     "arcsecond": "^5.0.0",
     "d3-force": "^3.0.0",
     "date-fns": "3.6.0",
-    "dompurify": "3.1.6",
+    "dompurify": "3.4.17",
     "formik": "2.4.6",
     "legacy-lang": "workspace:@listen-fire/legacy-lang@*",
     "lucide-react": "^0.574.0",
