@@ -40,13 +40,13 @@ export default interface MovementTable {
 
   updated_at: ColumnType<Date, Date | string | undefined, Date | string>;
 
-  validity_checked_against: ColumnType<number | null, number | null, number | null>;
+  validity_checked_against: ColumnType<string | null, string | null, string | null>;
 
-  language_version: ColumnType<number, number | undefined, number>;
+  language_version: ColumnType<string, string | undefined, string>;
 
   upgrade_diagnostics: ColumnType<unknown | null, unknown | null, unknown | null>;
 
-  upgrade_checked_against: ColumnType<number | null, number | null, number | null>;
+  upgrade_checked_against: ColumnType<string | null, string | null, string | null>;
 }
 
 export type Movement = Selectable<MovementTable>;

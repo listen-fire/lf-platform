@@ -23,7 +23,7 @@ export default interface MovementVersionTable {
 
   created_at: ColumnType<Date, Date | string | undefined, Date | string>;
 
-  language_version: ColumnType<number, number, number>;
+  language_version: ColumnType<string, string, string>;
 }
 
 export type MovementVersion = Selectable<MovementVersionTable>;

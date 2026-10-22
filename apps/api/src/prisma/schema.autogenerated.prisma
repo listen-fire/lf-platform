@@ -291,10 +291,10 @@ model Movement {
   validityConsentedAt                                      DateTime?            @map("validity_consented_at") @db.Timestamptz(6)
   createdAt                                                DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                                                DateTime             @default(now()) @map("updated_at") @db.Timestamptz(6)
-  validityCheckedAgainst                                   Int?                 @map("validity_checked_against")
-  languageVersion                                          Int                  @default(1) @map("language_version")
+  validityCheckedAgainst                                   String?              @map("validity_checked_against")
+  languageVersion                                          String               @default("1") @map("language_version")
   upgradeDiagnostics                                       Json?                @map("upgrade_diagnostics")
-  upgradeCheckedAgainst                                    Int?                 @map("upgrade_checked_against")
+  upgradeCheckedAgainst                                    String?              @map("upgrade_checked_against")
   movementVersionMovementCurrentVersionIdTomovementVersion MovementVersion?     @relation("movement_current_version_idTomovement_version", fields: [currentVersionId], references: [id])
   triggerMovementTriggerIdTotrigger                        Trigger?             @relation("movement_trigger_idTotrigger", fields: [triggerId], references: [id])
   movementIssues                                           MovementIssue[]
@@ -356,7 +356,7 @@ model MovementVersion {
   source                                             String
   contentHash                                        String       @map("content_hash")
   createdAt                                          DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  languageVersion                                    Int          @map("language_version")
+  languageVersion                                    String       @map("language_version")
   movementMovementCurrentVersionIdTomovementVersions Movement[]   @relation("movement_current_version_idTomovement_version")
   movementMovementVersionMovementIdTomovement        Movement     @relation("movement_version_movement_idTomovement", fields: [movementId], references: [id], onDelete: Cascade)
   triggerRuns                                        TriggerRun[]

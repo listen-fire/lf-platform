@@ -3044,18 +3044,19 @@ CREATE TABLE automations.movement (
     validity_source_hash text,                    -- content hash of the source the status was computed against (version-match rule)
     validity_checked_at timestamptz,
     validity_consented_at timestamptz,            -- set when a non-valid save was shipped on explicit consent
-    validity_checked_against integer,             -- the language version the last validation ran under (NULL = never checked)
-    -- The language version this movement is written against (the movement-lang
-    -- package's language_version). Stamped explicitly at FIRST save with the release's
-    -- current version and never moved by an edit or re-save. The default is the
-    -- backfill: a row nobody stamped predates versioning, so it is version 1.
-    language_version integer DEFAULT 1 NOT NULL,
+    validity_checked_against text,                -- the language version the last validation ran under (NULL = never checked)
+    -- The language version this movement is written against: a legacy id '1'..'4'
+    -- (the legacy packages) or the semver of the language release it was written
+    -- against. Stamped explicitly at FIRST save with the installed language's
+    -- version and never moved by an edit or re-save. The default is the backfill:
+    -- a row nobody stamped predates versioning, so it is legacy id '1'.
+    language_version text DEFAULT '1' NOT NULL,
     -- What stands between this movement and the release's current language
     -- version: the diagnostics (errors AND warnings) the deploy check or an
     -- upgrade attempt found validating it under `upgrade_checked_against`.
     -- NULL = nothing recorded (never checked, or the pin is already current).
     upgrade_diagnostics jsonb,
-    upgrade_checked_against integer,
+    upgrade_checked_against text,
     created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
     CONSTRAINT movement_validity_status_check CHECK (validity_status IN ('valid', 'invalid', 'unverified'))
@@ -3100,7 +3101,7 @@ CREATE TABLE automations.movement_version (
     -- The movement's language version when this snapshot was minted. A run pins
     -- the snapshot, so a parked run resumes under the version it STARTED with,
     -- even after an upgrade moves the movement's pin.
-    language_version integer NOT NULL,
+    language_version text NOT NULL,
     created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
