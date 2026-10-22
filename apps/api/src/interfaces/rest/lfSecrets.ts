@@ -24,10 +24,10 @@ import { PROTOCOL_VERSION } from 'engine-contracts/protocol';
 import { SlotRefusal } from 'movement-engine/public/module-wire';
 import { logger } from 'movement-engine/public/log';
 
+import type { TeamId } from '../../generated/kysely/core/Team';
 import type { UserId } from '../../generated/kysely/core/User';
 import { MB } from '../../constants';
 import { contextInjector } from '../../lib/middleware/context';
-import { teamIdSchema } from '../../lib/team_id';
 import { ApiKeyService } from '../../services/api_key';
 import { authenticateRequest, completeDoorAuthentication, principalProvider } from '../../services/principal';
 import { principalMode } from '../../services/principal/mode';
@@ -43,7 +43,9 @@ const MANIFEST: WireSlotManifestShape = {
   methods: [...SECRETS_METHODS],
 };
 
-const userIdSchema = z.custom<UserId>((value) => z.uuid().safeParse(value).success);
+// guid, not uuid: the dev loop's pinned team and user ids are not RFC 4122 variants.
+const userIdSchema = z.custom<UserId>((value) => z.guid().safeParse(value).success);
+const teamIdOf = z.custom<TeamId>((value) => z.guid().safeParse(value).success);
 
 function isSecretsMethod(method: string): method is SecretsMethod {
   return (SECRETS_METHODS as readonly string[]).includes(method);
@@ -105,7 +107,7 @@ async function teamOf(principal: Principal, settings: Record<string, unknown>) {
   if (typeof requested !== 'string' || requested === '') throw new SlotRefusal('settings', 'the `team` setting is missing');
   try {
     const team = await principalProvider().resolveTeam(principal, requested);
-    return teamIdSchema.parse(team.teamId);
+    return teamIdOf.parse(team.teamId);
   } catch (error) {
     if (error instanceof TeamScopeError) throw new SlotRefusal('settings', 'the `team` setting names a team this key cannot act in');
     throw error;
