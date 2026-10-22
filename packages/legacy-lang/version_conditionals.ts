@@ -3,26 +3,36 @@
 // are how a construct asks which one it is under. The language's own package
 // has none.
 //
-// A pin reaches them as text: a legacy id ('1'..'4'), or the semver of the
-// language release a movement was written against. The integer 5 of this copy
-// is the 0.12 line (the migration that made pins text turned 5 into '0.12.0'),
-// so a pin of that line reads as 5 here. No other release's pin has a meaning
-// in this copy: one that reaches it is a routing bug, and refused loudly.
+// A pin reaches them as an integer: a legacy id ('1'..'4'), or '5', this copy's
+// dialect of the 0.12 surface, which the platform hands in for presentation and
+// as the target of upgrade warnings, never as a stored pin. A release's semver
+// has no meaning here: the platform routes it to the installed language, and
+// one that reaches this copy is a routing bug, refused loudly.
 
-import { compatibilityKey, type LanguageVersion } from 'movement-lang/language_version';
+import type { LanguageVersion } from 'movement-lang/language_version';
 
-/** The language line this copy's integer 5 is. */
-const VERSION_5_LINE = '0.12';
+/** A release pin handed to the legacy packages, which read the integer pins only. */
+export class LegacyPinRefused extends Error {
+  constructor(readonly pin: string) {
+    super(
+      `the legacy packages read the integer pins; route ${pin} through apps/api/src/services/translation_graph/movement/language_route.ts`,
+    );
+    this.name = 'LegacyPinRefused';
+  }
+}
 
 /** The integer this copy of the language reads `pin` as. The corpora, written
  *  when a pin was an integer, still hand one in at run time. */
 export function legacyVersionNumber(pin: LanguageVersion | number): number {
   if (typeof pin === 'number') return pin;
   if (/^\d+$/.test(pin)) return Number(pin);
-  if (compatibilityKey(pin) === VERSION_5_LINE) return 5;
-  throw new Error(
-    `the legacy language packages read versions 1 to 5 (5 is the ${VERSION_5_LINE} line); the pin ${pin} must be routed to the installed language instead`,
-  );
+  throw new LegacyPinRefused(pin);
+}
+
+/** The entry guard of the legacy checker, service, story and scan: a pin this
+ *  copy cannot read is refused before any work, not midway through it. */
+export function assertLegacyDialect(pin: LanguageVersion | number): void {
+  legacyVersionNumber(pin);
 }
 
 /** `version` has (or postdates) the behaviour version `n` introduced. */

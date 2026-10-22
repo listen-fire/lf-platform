@@ -393,7 +393,7 @@ function sameIds<T>(value: T): T {
 async function onRust(c: Case) {
   resetRustRunStats();
   const rust = await runOn(c);
-  const atCheck = c.endsAtCheckFrom !== undefined && since(LANGUAGE_VERSION, c.endsAtCheckFrom);
+  const atCheck = c.endsAtCheckFrom !== undefined && since('5', c.endsAtCheckFrom);
   expect(isCheckFailure(rust.error) ? String(rust.error) : 'reached the engine').toEqual(
     atCheck ? expect.stringContaining('MOVENG_CHECK') : 'reached the engine',
   );

@@ -128,6 +128,10 @@ import { RELAY, SUMMARISE, catalog, programFor } from './binding_consumer_matrix
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000088');
 const VERSION: LanguageVersion = LANGUAGE_VERSION;
+/** The legacy integer a cell's program, syntax and expectation are read in: a
+ *  conformance config's own, or the 0.12 surface's dialect '5' for the
+ *  release pin (which the run itself keeps). */
+const SYNTAX_VERSION: LanguageVersion = /^\d+$/.test(String(VERSION)) ? VERSION : '5';
 
 // ── Triage: cells whose right answer nobody has decided ─────────────────────
 
@@ -281,7 +285,7 @@ async function runCell(cell: Cell): Promise<Outcome> {
   const sink: CapturedWrite[] = [];
   try {
     const result = await runMovement({
-      source: spelledFor(VERSION, programFor(cell, VERSION), fromCatalogSnapshot(catalog)),
+      source: spelledFor(VERSION, programFor(cell, SYNTAX_VERSION), fromCatalogSnapshot(catalog)),
       movementName: 'run_cell',
       event: event(),
       teamId: TEAM_ID,
@@ -314,7 +318,7 @@ function verdictOf(cell: Cell, outcome: Outcome): Verdict {
       return 'FAIL';
     case 'ran':
     {
-      const expected = expectationAt(cell, VERSION);
+      const expected = expectationAt(cell, SYNTAX_VERSION);
       return expected.kind === 'value' && JSON.stringify(outcome.rows) === JSON.stringify(expected.observed) ? 'ok' : 'wrong';
     }
   }
@@ -334,7 +338,7 @@ function describeOutcome(outcome: Outcome): string {
 const report: Array<{ cell: string; path: string; consumer: string; expected: string; verdict: Verdict | 'skipped'; detail: string; triage: boolean }> = [];
 
 function expectedLabel(cell: Cell): string {
-  const expected = expectationAt(cell, VERSION);
+  const expected = expectationAt(cell, SYNTAX_VERSION);
   switch (expected.kind) {
     case 'value':
       return 'ok';
@@ -362,7 +366,7 @@ describe(`binding × consumer matrix under language version ${VERSION}`, () => {
 
   for (const cell of ALL) {
     const id = cellId(cell);
-    if (cell.since > legacyVersionNumber(VERSION)) {
+    if (cell.since > legacyVersionNumber(SYNTAX_VERSION)) {
       it.skip(`${id} (syntax since version ${cell.since})`, () => undefined);
       report.push({ cell: id, path: cell.path.id, consumer: cell.consumer.id, expected: expectedLabel(cell), verdict: 'skipped', detail: `since ${cell.since}`, triage: false });
       continue;
@@ -378,7 +382,7 @@ describe(`binding × consumer matrix under language version ${VERSION}`, () => {
         expect({ cell: id, verdict, detail: describeOutcome(outcome) }).toMatchObject({ verdict: triaged.observed });
         return;
       }
-      const expected = expectationAt(cell, VERSION);
+      const expected = expectationAt(cell, SYNTAX_VERSION);
       switch (expected.kind) {
         case 'refused':
           expect({ cell: id, outcome: describeOutcome(outcome) }).toEqual({

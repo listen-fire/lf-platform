@@ -59,7 +59,7 @@ import { parseFieldTypeName, type Catalog, type SchemaFieldType } from '../check
 import { EMPTY_ROW, instanceNames, type EffectRow } from '../checker/effects';
 import { bodyExits, terminates, type Exits } from '../checker/flow';
 import type { ResolveFile } from '../checker/link';
-import { CURRENT_LANGUAGE_VERSION, type LanguageVersion } from '../language_version';
+import { CURRENT_LANGUAGE_VERSION, assertLegacyDialect, type LanguageVersion } from '../language_version';
 import {
   EXTRACT_ROOT_NAME,
   maybeAbsent,
@@ -695,6 +695,7 @@ export interface StoryInput {
  * function of the source and the catalog.
  */
 export function storyOf(input: StoryInput): StoryResult {
+  assertLegacyDialect(input.languageVersion ?? CURRENT_LANGUAGE_VERSION);
   let program: Program;
   try {
     program = parseProgram(

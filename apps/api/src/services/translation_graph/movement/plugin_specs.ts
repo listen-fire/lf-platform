@@ -9,8 +9,8 @@
 // Rust checker's and engine's input too, and the installed language refuses a
 // plugin spec with a field it does not know.
 
-import { pluginKey, type LanguageVersion, type PluginSpec } from 'movement-lang';
-import { CURRENT_LANGUAGE_VERSION, isLegacyLanguageVersion, type EarlierOutput, type LegacyPluginSpec } from 'legacy-lang';
+import { LANGUAGE_VERSION, pluginKey, type LanguageVersion, type PluginSpec } from 'movement-lang';
+import { isLegacyLanguageVersion, type EarlierOutput, type LegacyPluginSpec } from 'legacy-lang';
 import { bundledPluginSpecNamed, bundledPluginSpecs } from 'movement-engine/public/plugins';
 
 /** Keyed as the catalog keys a plugin (`@lf/web/vc_url_retrieval`). */
@@ -43,12 +43,12 @@ export function platformPluginSpecNamed(name: string): LegacyPluginSpec | undefi
 }
 
 /** `plugins` as a snapshot built for `languageVersion` carries them (by
- *  default the version an entry given none reads under). */
+ *  default the installed release, which carries none). */
 export function snapshotPluginSpecs(
   plugins: Readonly<Record<string, LegacyPluginSpec>>,
   options: { languageVersion?: LanguageVersion } = {},
 ): Record<string, PluginSpec> {
-  if (isLegacyLanguageVersion(options.languageVersion ?? CURRENT_LANGUAGE_VERSION)) return { ...plugins };
+  if (isLegacyLanguageVersion(options.languageVersion ?? LANGUAGE_VERSION)) return { ...plugins };
   return Object.fromEntries(
     Object.entries(plugins).map(([key, { earlierOutputs: _dropped, ...spec }]) => [key, spec]),
   );

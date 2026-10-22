@@ -4,6 +4,10 @@
 // so a version-5 check always reads the version-5 surface, and the two
 // spellings must answer the same. Only the respellings are applied (the
 // `MOV_V5_*` fixes): a fix for the error a test is about never is.
+//
+// A suite hands in its run's pin. The respelling is the TypeScript checker's,
+// which reads integer pins only: a release pin is respelled under this copy's
+// dialect '5' of the 0.12 surface.
 
 import { parseProgram, MovementParseError } from '../../parser/parse';
 import { checkProgram, type CheckOptions, type Diagnostic } from '../check';
@@ -18,11 +22,12 @@ const isRespelling = (d: Diagnostic): boolean => d.code.startsWith('MOV_V5_');
  *  check can decide (a built-in read by its argument's type, a call's named
  *  arguments put in order) are applied too. */
 export function spelledFor(
-  version: LanguageVersion,
+  pin: LanguageVersion,
   source: string,
   catalog?: Catalog,
   options: Omit<CheckOptions, 'languageVersion'> = {},
 ): string {
+  const version: LanguageVersion = /^\d+$/.test(String(pin)) ? pin : '5';
   if (before(version, 5)) return source;
   const check =
     catalog === undefined

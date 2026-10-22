@@ -35,9 +35,9 @@ function frozen(version: number): RustParser {
 }
 
 /** The integer the frozen parser reads `languageVersion` under; none when the
- *  language release's own parser reads it. Every integer but this copy's 5
- *  (the installed language) is the frozen parser's, which answers for one it
- *  never knew as it always did. */
+ *  language release's own parser reads it. Every integer but '5' (this copy's
+ *  dialect of the 0.12 surface, which the installed language parses) is the
+ *  frozen parser's, which answers for one it never knew as it always did. */
 function frozenVersion(languageVersion: LanguageVersion | number): number | undefined {
   const pin = String(languageVersion);
   return /^\d+$/.test(pin) && pin !== '5' ? legacyVersionNumber(pin) : undefined;
@@ -48,8 +48,8 @@ export function readByLanguage(languageVersion: LanguageVersion): boolean {
   return frozenVersion(languageVersion) === undefined;
 }
 
-/** The pin the language release's parser is asked under: this copy's integer
- *  5 is the installed language. */
+/** The pin the language release's parser is asked under: the dialect '5' is
+ *  the installed language's surface. */
 function livePin(languageVersion: LanguageVersion | number): LanguageVersion {
   return String(languageVersion) === '5' ? LANGUAGE_VERSION : String(languageVersion);
 }

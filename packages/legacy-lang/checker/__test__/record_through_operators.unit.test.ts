@@ -25,7 +25,7 @@ import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
 import { spelledFor } from './surface_spelling';
-import { LANGUAGE_VERSION, type LanguageVersion } from 'movement-lang/language_version';
+import { type LanguageVersion } from 'movement-lang/language_version';
 import { PLATFORM_SUPPORTED_LANGUAGE_VERSIONS, before, since } from '../../language_version';
 import { notKeywordRetirement } from './keyword_retirement';
 
@@ -120,7 +120,7 @@ const FILE_NOT_A_VALUE = 'a file, not a value';
 
 const VERSIONS: LanguageVersion[] = ['1', '3', '4'];
 // Every pin the platform reads with this package, and the installed language (this copy's version 5).
-const ALL_VERSIONS: LanguageVersion[] = [...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS, LANGUAGE_VERSION];
+const ALL_VERSIONS: LanguageVersion[] = [...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS, '5'];
 
 describe.each(VERSIONS)('under language version %s, an operator holds what its operands hold', version => {
   const refused = (code: string, body: string[], where: string, what: string): void => {
@@ -725,7 +725,7 @@ const refusedAs = (errors: Diagnostic[], code: string, said: string): void => {
   expect(errors[0]!.message).toContain(said);
 };
 
-describe.each(['1', '4', LANGUAGE_VERSION])('B14: under language version %s, a named function\'s bound call holds what its returns hold', version => {
+describe.each(['1', '4', '5'])('B14: under language version %s, a named function\'s bound call holds what its returns hold', version => {
   const refused = (body: string[], code: string, said: string): void => refusedAs(errorsWithFunctions(version, body), code, said);
 
   it('a graph entry', () => {
@@ -753,7 +753,7 @@ describe.each(['1', '4', LANGUAGE_VERSION])('B14: under language version %s, a n
   });
 });
 
-describe.each(['4', LANGUAGE_VERSION])('B14: under language version %s, a closure\'s call holds what its returns hold', version => {
+describe.each(['4', '5'])('B14: under language version %s, a closure\'s call holds what its returns hold', version => {
   const refused = (body: string[], code: string, said: string): void => refusedAs(errorsUnder(version, body), code, said);
   const c = '  c = () => COALESCE(org, "x")';
 

@@ -34,7 +34,7 @@ jest.mock('../provision', () => ({ saveMovement: jest.fn() }));
 jest.mock('../catalog', () => ({ movementCatalogForTeam: jest.fn() }));
 
 import { LANGUAGE_VERSION, fromCatalogSnapshot, mockCatalog, mockCatalogSnapshot, type LanguageVersion, type PluginOutput, type PluginSpec, type ResolveFile } from 'movement-lang';
-import { checkProgram } from 'legacy-lang';
+import { checkProgram, isLegacyLanguageVersion } from 'legacy-lang';
 import { parseProgram } from 'legacy-lang';
 
 import { assessMovementValidity, type AuthoringDiagnostic } from '../authoring';
@@ -676,9 +676,12 @@ describe('a meaning-changed construct inside an imported library', () => {
   ].join('\n');
   const resolveFile: ResolveFile = (path) => (path === 'lib/scan' ? { source: LIBRARY } : undefined);
 
+  // The TypeScript checker stands in for the installed one here, reading the
+  // installed release as its dialect '5'.
+  const dialectOf = (pin: LanguageVersion): LanguageVersion => (isLegacyLanguageVersion(pin) ? pin : '5');
   const checkWithLibrary: ValidateUnder = async ({ movement: m, languageVersion, upgradingFrom }) => ({
-    diagnostics: checkProgram(parseProgram(m.source, { languageVersion }), catalog, {
-      languageVersion,
+    diagnostics: checkProgram(parseProgram(m.source, { languageVersion: dialectOf(languageVersion) }), catalog, {
+      languageVersion: dialectOf(languageVersion),
       resolveFile,
       ...(upgradingFrom !== undefined ? { upgradingFrom } : {}),
     }).map((d) => ({

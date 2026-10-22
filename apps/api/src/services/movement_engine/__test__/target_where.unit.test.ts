@@ -80,7 +80,7 @@ import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { meteredArbitration } from '../../translation_graph/engine/entity_match';
 
 import { since } from 'legacy-lang';
-import { LANGUAGE_VERSION, type InstanceSchema, type LanguageVersion } from 'movement-lang';
+import { type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import {
   containerAssociation,
@@ -228,7 +228,7 @@ function run(
   adapters: { email: Adapter; attio: Adapter },
   options: { languageVersion?: LanguageVersion } = {},
 ) {
-  const v5 = since(options.languageVersion ?? LANGUAGE_VERSION, 5);
+  const v5 = since(options.languageVersion ?? '5', 5);
   const source =
     (v5 ? PRELUDE : PRELUDE.replace('connect email', 'email()')) +
     [

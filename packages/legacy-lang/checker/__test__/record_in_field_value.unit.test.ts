@@ -16,7 +16,7 @@ import { combinatorsSpelledFor } from './combinator_spelling';
 import { spelledFor } from './surface_spelling';
 import { InstanceSchema, mockCatalog, type FieldType } from '../catalog';
 import { fieldAssignable, fieldTypeCompatible, handleWithin, spellHeldSteps } from '../typing';
-import { LANGUAGE_VERSION, type LanguageVersion } from 'movement-lang/language_version';
+import { type LanguageVersion } from 'movement-lang/language_version';
 import { PLATFORM_SUPPORTED_LANGUAGE_VERSIONS, before, since } from '../../language_version';
 
 const crmSchema: InstanceSchema = {
@@ -93,7 +93,7 @@ const note = (company: string): string[] => [`  write crm-[:notes]-> { title: "h
 const RECORD_NOT_A_VALUE = 'a record, not a value';
 
 // The legacy ids, and the installed language (this copy's version 5).
-const VERSIONS: LanguageVersion[] = [...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS, LANGUAGE_VERSION];
+const VERSIONS: LanguageVersion[] = [...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS, '5'];
 
 describe.each(VERSIONS)('under language version %s, a record inside a field\'s value is refused', version => {
   const refused = (body: string[], where: string): void => {

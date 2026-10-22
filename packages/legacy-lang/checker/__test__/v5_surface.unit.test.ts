@@ -8,7 +8,6 @@
 
 import { parseProgram } from '../../parser/parse';
 import { surfaceTable } from 'movement-lang/parser/surface';
-import { LANGUAGE_VERSION } from 'movement-lang/language_version';
 import { spellMessage } from '../../parser/surface';
 import { checkProgram, type Diagnostic } from '../check';
 import { mockCatalog, type InstanceSchema } from '../catalog';
@@ -91,7 +90,7 @@ describe('language version 5 surface', () => {
         `import { slack } from adapters\nchat = slack()\n\n${version >= 5 ? 'function' : 'movement'} m(c: <chat-[:channel]->>) {\n  x = ${call}\n}`,
         version,
       ).map((d) => d.message);
-    expect(spellMessage('`UPPER` expects text', LANGUAGE_VERSION)).toBe('`Text.upper` expects text');
+    expect(spellMessage('`UPPER` expects text', '5')).toBe('`Text.upper` expects text');
     expect(spellMessage('`UPPER` expects text', '4')).toBe('`UPPER` expects text');
     expect(wrong('UPPER(1, 2)', 4).join('\n')).not.toContain('Text.upper');
     expect(surfaceTable().spellings.find((s) => s.canonical === 'UPPER')?.current).toBe('Text.upper');

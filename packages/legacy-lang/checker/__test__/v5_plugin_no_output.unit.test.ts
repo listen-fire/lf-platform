@@ -30,7 +30,7 @@ const errors = (found: Diagnostic[]): string[] =>
   found.filter((d) => (d.severity ?? 'error') === 'error' && d.code !== 'MOV_LISTEN_MISSING').map((d) => `${d.code}: ${d.message}`);
 
 /** What both checkers refuse in `source` under `version` — the same, or the test fails. */
-function check(source: string, version: LanguageVersion = LANGUAGE_VERSION): string[] {
+function check(source: string, version: LanguageVersion = '5'): string[] {
   const ts = errors(checkProgram(parseProgram(source, { languageVersion: version }), catalog, { languageVersion: version }));
   const rust = errors(checkSourceInRust(source, snapshot, { languageVersion: LANGUAGE_VERSION }));
   expect(rust).toEqual(ts);

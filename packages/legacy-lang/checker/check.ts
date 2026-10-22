@@ -264,7 +264,7 @@ import {
 import { InferenceStack } from './call_cycles';
 import { neverAsAny } from 'movement-lang/never';
 import { runHostUnits, CURRENT_LANGUAGE_VERSION, describeLanguageVersion, languageVersionDiagnostic, type LanguageVersion } from '../language_version';
-import { before, since, changedBetween } from '../version_conditionals';
+import { assertLegacyDialect, before, since, changedBetween } from '../version_conditionals';
 import { bodyExits, terminates } from './flow';
 import { closestByEditDistance, didYouMean } from './meta';
 import { ALL_SETTING_KEYS, readCollectionConfig, readSortSettings } from './collection_config';
@@ -1421,6 +1421,7 @@ export function checkProgramWithLink(
   options?: CheckOptions,
 ): { diagnostics: Diagnostic[]; link?: ProgramLink; recording?: CheckRecording } {
   const languageVersion = options?.languageVersion ?? CURRENT_LANGUAGE_VERSION;
+  assertLegacyDialect(languageVersion);
   const link = options?.resolveFile
     ? linkImports(program, options.resolveFile, { languageVersion })
     : undefined;

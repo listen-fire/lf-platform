@@ -1,23 +1,19 @@
-// A pin is text: a legacy id '1'..'4', or the semver of the language release a
-// movement was written against (movement-lang/language_version: the rule that
-// says which release reads which pin). The legacy ids are this package's: the
-// frozen parser reads them, this package's checker checks them and the
-// TypeScript engine runs them, until those movements are upgraded.
+// A stored pin is text: a legacy id '1'..'4', or the semver of the language
+// release a movement was written against. The legacy ids are this package's:
+// the frozen parser reads them, this package's checker checks them and the
+// TypeScript engine runs them, until those movements are upgraded. A semver is
+// the installed language's, and the platform routes it there
+// (apps/api/.../movement/language_route.ts); this package refuses one.
 //
 // Inside, this copy of the language still speaks the integers 1 to 5 it was
-// written in (version_conditionals.ts maps a pin to one), and keeps the table
-// of them below: the checker's texts name a version by it, and the conformance
-// corpora, written when one table served both the language and the platform,
-// read it at this path by the language's old names.
+// written in, and keeps the table of them below: 1 to 4 are the legacy ids,
+// and 5 is this copy's dialect of the 0.12 surface, never a stored pin (the
+// platform reads a 0.12 movement by it for presentation, and aims upgrade
+// warnings at it). The checker's texts name a version by the table, and the
+// conformance corpora, written when one table served both the language and
+// the platform, read it at this path by the language's old names.
 
-import {
-  LANGUAGE_VERSION,
-  languageVersionDiagnostic as languageVersionDiagnosticOf,
-  languageVersionStanding as languageVersionStandingOf,
-  RUN_HOST_UNITS,
-  type LanguageVersion,
-  type LanguageVersionStanding as LanguageStanding,
-} from 'movement-lang/language_version';
+import { RUN_HOST_UNITS, type LanguageVersion } from 'movement-lang/language_version';
 import type { Diagnostic } from 'movement-lang/checker/diagnostic';
 import { neverAsAny } from 'movement-lang/never';
 
@@ -38,9 +34,9 @@ export const PLATFORM_SUPPORTED_LANGUAGE_VERSIONS: ReadonlySet<LanguageVersion> 
 /** Legacy ids that will be removed: they still run, with a warning. */
 export const PLATFORM_DEPRECATED_LANGUAGE_VERSIONS: ReadonlySet<LanguageVersion> = new Set<LanguageVersion>();
 
-/** What an entry point given no version reads under: the installed language.
- *  A conformance setup makes it the corpus's integer. */
-export const CURRENT_LANGUAGE_VERSION: LanguageVersion = LANGUAGE_VERSION;
+/** What an entry point given no version reads under: this copy's dialect of
+ *  the 0.12 surface. A conformance setup makes it the corpus's integer. */
+export const CURRENT_LANGUAGE_VERSION: LanguageVersion = '5';
 
 /** The units a file pinned to `pin` has in scope: none before version 5. */
 export function runHostUnits(pin: LanguageVersion): readonly string[] {
@@ -101,28 +97,18 @@ export const THIS_RELEASE: LanguageRelease = {
   deprecated: DEPRECATED_LANGUAGE_VERSIONS,
 };
 
-/** A legacy pin's standing in this copy's release, or a release pin's by the
- *  installed language's rule. */
-export type LanguageVersionStanding = 'supported' | 'deprecated' | 'unsupported' | LanguageStanding;
+/** A version's standing in this copy's release. */
+export type LanguageVersionStanding = 'supported' | 'deprecated' | 'unsupported';
 
 export const LanguageVersionDiagnosticCodes = {
   UNSUPPORTED: 'MOV_LANGUAGE_VERSION_UNSUPPORTED',
   DEPRECATED: 'MOV_LANGUAGE_VERSION_DEPRECATED',
 } as const;
 
-/** A pin that is not an integer is a release's version, and the installed
- *  language's rule answers for it; an integer is read in this copy's own
- *  versions, against `release`. */
-function releasePin(pin: LanguageVersion | number): LanguageVersion | undefined {
-  return typeof pin === 'string' && !/^\d+$/.test(pin) ? pin : undefined;
-}
-
 export function languageVersionStanding(
   pin: LanguageVersion | number,
   release: LanguageRelease = THIS_RELEASE,
 ): LanguageVersionStanding {
-  const semver = releasePin(pin);
-  if (semver !== undefined) return languageVersionStandingOf(semver);
   const version = legacyVersionNumber(pin);
   if (!release.supported.has(version)) return 'unsupported';
   if (release.deprecated.has(version)) return 'deprecated';
@@ -138,19 +124,13 @@ export function languageVersionDiagnostic(
   pin: LanguageVersion | number,
   release: LanguageRelease = THIS_RELEASE,
 ): Diagnostic | undefined {
-  const semver = releasePin(pin);
-  if (semver !== undefined) return languageVersionDiagnosticOf(semver);
   const span = { start: { line: 1, col: 1 }, end: { line: 1, col: 1 } };
   const current = describeLanguageVersion(release.current);
   const standing = languageVersionStanding(pin, release);
   switch (standing) {
     case 'supported':
-    case 'compatible':
       return undefined;
     case 'unsupported':
-    case 'newer':
-    case 'olderKey':
-    case 'malformed':
       return {
         code: LanguageVersionDiagnosticCodes.UNSUPPORTED,
         message:

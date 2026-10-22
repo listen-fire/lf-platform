@@ -767,10 +767,11 @@ function recordAutomationSavedMilestones(input: {
 
 /** The source's own movement declarations — or NULL when the source cannot be
  *  read at all (an unparseable draft declares nothing we can trust, which is a
- *  different fact from declaring none). */
+ *  different fact from declaring none). A name reader, not a verdict: the
+ *  installed parser reads the declarations of any pin's text. */
 function declaredMovementNames(source: string): string[] | null {
   try {
-    return parseProgram(source)
+    return parseInstalled(source)
       .statements.filter((s): s is MovementDeclaration => s.kind === 'movement')
       .map((s) => s.name);
   } catch (e) {
@@ -1227,11 +1228,14 @@ export interface MovementListItem {
  *  in the SOURCE — execution injects an invocation event on its derived
  *  trigger row (uniform dispatch). */
 function isRunnable(row: MovementRow): boolean {
+  const route = routeOf(row.languageVersion);
+  if (route.kind === 'refused') return false;
   try {
-    return (
-      manualListenerMovements(parseProgram(row.source, { languageVersion: row.languageVersion }), { languageVersion: row.languageVersion })
-        .length > 0
-    );
+    const program =
+      route.kind === 'installed'
+        ? parseInstalled(row.source, { languageVersion: route.pin })
+        : parseProgram(row.source, { languageVersion: route.pin });
+    return manualListenerMovements(program, { languageVersion: route.pin }).length > 0;
   } catch (e) {
     if (e instanceof MovementParseError) return false;
     throw e;
@@ -1355,13 +1359,14 @@ async function revokeCallbacksOfTriggers(triggerIds: string[]): Promise<void> {
   await revokeCallbacksForRuns(runs.map((r) => r.id));
 }
 
-/** The first movement declaration's name. Uses the real parser — the AST name
+/** The first movement declaration's name. Uses the real parser (the installed
+ *  one, whatever the pin: a name reader, not a verdict) — the AST name
  *  is grammar-correct by construction (backtick or bare). Only an *unparseable*
  *  draft falls back to a best-effort scan, which reads the name with the
  *  parser's own `scanName`, so the name grammar lives in exactly one place. */
 export function movementNameFromSource(source: string): string | undefined {
   try {
-    return parseProgram(source).statements.find(
+    return parseInstalled(source).statements.find(
       (s): s is MovementDeclaration => s.kind === 'movement',
     )?.name;
   } catch {

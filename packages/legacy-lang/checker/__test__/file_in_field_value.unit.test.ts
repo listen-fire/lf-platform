@@ -18,7 +18,7 @@ import { checkProgram, Diagnostic } from '../check';
 import { InstanceSchema, mockCatalog, type FieldType } from '../catalog';
 import { fieldAssignable, fieldTypeCompatible, handleWithin } from '../typing';
 import { spelledFor } from './surface_spelling';
-import { LANGUAGE_VERSION, type LanguageVersion } from 'movement-lang/language_version';
+import { type LanguageVersion } from 'movement-lang/language_version';
 import { PLATFORM_SUPPORTED_LANGUAGE_VERSIONS, before, since } from '../../language_version';
 
 const crmSchema: InstanceSchema = {
@@ -114,7 +114,7 @@ const FILE_NOT_A_VALUE = 'a file, not a value';
 const GOES_TO_A_FILE_FIELD = 'A file goes only into a field that holds files';
 
 // The legacy ids, and the installed language (this copy's version 5).
-const VERSIONS: LanguageVersion[] = [...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS, LANGUAGE_VERSION];
+const VERSIONS: LanguageVersion[] = [...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS, '5'];
 
 // A message quotes the fix in the spelling its version reads.
 const quotedFor = (version: LanguageVersion, message: string): string =>

@@ -139,13 +139,13 @@ async function writesOf(source: string, languageVersion: LanguageVersion): Promi
 
 describe("the extraction keyword's upgrade to extractOne over a declared shape", () => {
   it('writes what the keyword wrote, when the model answers each with the same records', async () => {
-    const retired = checkProgram(parseProgram(V5, { languageVersion: LANGUAGE_VERSION }), fromCatalogSnapshot(catalog), { languageVersion: LANGUAGE_VERSION }).find(
+    const retired = checkProgram(parseProgram(V5, { languageVersion: '5' }), fromCatalogSnapshot(catalog), { languageVersion: '5' }).find(
       (d) => d.code === 'MOV_EXTRACT_KEYWORD_RETIRED',
     );
     expect(retired?.fix).toBeDefined();
     const upgraded = applyFix(V5, retired!.fix!);
     expect(upgraded).toContain('found = extractOne([msg.`text`], FoundShape, { tier: "careful" })');
-    const errors = checkProgram(parseProgram(upgraded, { languageVersion: LANGUAGE_VERSION }), fromCatalogSnapshot(catalog), { languageVersion: LANGUAGE_VERSION }).filter(
+    const errors = checkProgram(parseProgram(upgraded, { languageVersion: '5' }), fromCatalogSnapshot(catalog), { languageVersion: '5' }).filter(
       (d) => (d.severity ?? 'error') === 'error',
     );
     // The call's record may be absent, which the keyword's result never was:

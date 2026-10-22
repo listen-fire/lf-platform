@@ -20,7 +20,7 @@
 import { LANGUAGE_VERSION, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import { pinOf } from './pin_of';
 import { fromCatalogSnapshot } from 'movement-lang';
-import { since } from 'legacy-lang';
+import { isLegacyLanguageVersion } from 'legacy-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import type { Adapter, RuntimeCapabilities, WriteInput } from 'movement-engine/public/adapter';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
@@ -1163,9 +1163,9 @@ describe('a parallel / race arm that names a body closure parks and resumes (B18
   // — the same arm frames, the arms passed as arguments — and `race` takes its
   // arms as arguments too, without `await`.
   const join = (version: LanguageVersion, arms: string[]): string =>
-    since(version, 5) ? `all(${arms.join(', ')})` : `await parallel([${arms.join(', ')}])`;
+    !isLegacyLanguageVersion(version) ? `all(${arms.join(', ')})` : `await parallel([${arms.join(', ')}])`;
   const race = (version: LanguageVersion, arms: string[]): string =>
-    since(version, 5) ? `race(${arms.join(', ')})` : `await race([${arms.join(', ')}])`;
+    !isLegacyLanguageVersion(version) ? `race(${arms.join(', ')})` : `await race([${arms.join(', ')}])`;
   const at = (_version: LanguageVersion, statement: number, arm: number): string => `s${statement}.b${arm}.s0`;
 
   for (const languageVersion of ['4', LANGUAGE_VERSION] as LanguageVersion[]) {

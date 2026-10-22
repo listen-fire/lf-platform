@@ -15,7 +15,7 @@ import type { Loc, Span } from 'movement-lang/parser/ast';
 import { spellParamType } from 'movement-lang/parser/ast';
 import { MovementParseError, parseProgram } from '../parser/parse';
 import { CURRENT_LANGUAGE_VERSION, type LanguageVersion } from '../language_version';
-import { since } from '../version_conditionals';
+import { assertLegacyDialect, since } from '../version_conditionals';
 import { CLOSER, opensHop, scanName, skipOpaque } from 'movement-lang/parser/scan';
 import {
   checkProgram,
@@ -95,6 +95,7 @@ export function getMovementDiagnostics(
     upgradingFrom?: LanguageVersion;
   },
 ): MovementDiagnostic[] {
+  assertLegacyDialect(options?.languageVersion ?? CURRENT_LANGUAGE_VERSION);
   const lineStarts = lineStartsOf(source);
   const toRange = (span: Span): { from: number; to: number } => {
     const from = Math.min(offsetOfLoc(lineStarts, span.start), source.length);
@@ -331,6 +332,7 @@ export function getMovementCompletions(
   options?: { languageVersion?: LanguageVersion },
 ): MovementCompletions {
   const languageVersion = options?.languageVersion ?? CURRENT_LANGUAGE_VERSION;
+  assertLegacyDialect(languageVersion);
   const clamped = Math.max(0, Math.min(offset, source.length));
   const before = source.slice(0, clamped);
   const lineStart = before.lastIndexOf('\n') + 1;
@@ -1313,6 +1315,7 @@ export function getHoverInfo(
   options?: { languageVersion?: LanguageVersion },
 ): MovementHover | undefined {
   const languageVersion = options?.languageVersion ?? CURRENT_LANGUAGE_VERSION;
+  assertLegacyDialect(languageVersion);
   const v5 = since(languageVersion, 5);
   // A backtick-quoted name (`\`Sender Name\``) is one token even with spaces —
   // prefer it so multi-word fields resolve.

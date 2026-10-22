@@ -5,7 +5,7 @@
 // operand they do not need — so a write in an arm that is not taken never
 // happens. Every proof is what reaches the adapter, in the order it arrived.
 
-import { before } from 'legacy-lang';
+import { isLegacyLanguageVersion } from 'legacy-lang';
 import { LANGUAGE_VERSION, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
@@ -119,7 +119,7 @@ function double(n: <number>) {
 
 async function runBody(body: string, options: { languageVersion?: LanguageVersion; fileLevel?: string } = {}) {
   const kg = makeKgFake();
-  const v4 = options.languageVersion !== undefined && before(options.languageVersion, 5);
+  const v4 = options.languageVersion !== undefined && isLegacyLanguageVersion(options.languageVersion);
   const source = `${v4 ? PRELUDE_V4 : PRELUDE}${options.fileLevel ?? (v4 ? MARK_V4 : MARK)}${v4 ? 'movement' : 'function'} recap(go: <runs-[:Invocation]->>) {
 ${body}
 }
@@ -389,7 +389,7 @@ describe('a field read off a nested call that hands back a record', () => {
   // whose value is bound. Each version on its own engine (4: TypeScript, 5:
   // Rust).
   for (const version of ['4', LANGUAGE_VERSION] as LanguageVersion[]) {
-    const v4 = before(version, 5);
+    const v4 = isLegacyLanguageVersion(version);
     const fileLevel = `${v4 ? MARK_V4 : MARK}${v4 ? 'movement' : 'function'} pick(t: <text>) {\n  co = write graph-[:note]-> { body: t }\n  return co\n}\n`;
     const pick = v4 ? 'pick(t: "Beta")' : 'pick("Beta")';
     const mark = (arg: string): string => (v4 ? `mark(t: ${arg})` : `mark(${arg})`);

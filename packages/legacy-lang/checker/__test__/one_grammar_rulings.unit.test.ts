@@ -8,7 +8,7 @@
 
 import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
-import { LANGUAGE_VERSION, type LanguageVersion } from 'movement-lang/language_version';
+import { type LanguageVersion } from 'movement-lang/language_version';
 import { PLATFORM_SUPPORTED_LANGUAGE_VERSIONS } from '../../language_version';
 import { mockCatalog, type InstanceSchema } from '../catalog';
 import { spelledFor } from './surface_spelling';
@@ -60,7 +60,7 @@ docs = drive()
 movement m(${shape.param}) {
 ${body}
 }`;
-  const spelled = spelledFor(languageVersion ?? LANGUAGE_VERSION, source, catalog);
+  const spelled = spelledFor(languageVersion ?? '5', source, catalog);
   return checkProgram(parseProgram(spelled, languageVersion !== undefined ? { languageVersion } : {}), catalog).filter(
     d => (d.severity ?? 'error') === 'error',
   );
@@ -71,7 +71,7 @@ const codes = (shape: Shape, body: string, languageVersion?: LanguageVersion) =>
 describe.each(SHAPES.map(s => [s.edge, s] as const))('over %s', (_edge, s) => {
   const walk = `${s.root}-[x:${s.edge}]->`;
 
-  it.each([...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS, LANGUAGE_VERSION].map(v => [v]))('a bare walk is its landings in any value position (version %s)', v => {
+  it.each([...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS, '5'].map(v => [v]))('a bare walk is its landings in any value position (version %s)', v => {
     // Each of these was a parse refusal under the bridge.
     expect(codes(s, `  n = count(${walk})`, v)).toEqual([]);
     expect(codes(s, `  xs = COALESCE(${walk}, [])`, v)).toEqual([]);

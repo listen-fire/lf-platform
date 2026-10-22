@@ -44,14 +44,13 @@
 import { z } from 'zod';
 import { BridgeError, fileViews, findPlugin } from 'movement-lang';
 import { expressionOfSlot } from 'legacy-lang';
-import { before, bindStageArgs, borrowedTypeSegments, isEnumType, parseFieldTypeName, pluginArgMisfitMessage, pluginPositionalParams, variantOf } from 'legacy-lang';
+import { CURRENT_LANGUAGE_VERSION, before, bindStageArgs, borrowedTypeSegments, isEnumType, parseFieldTypeName, pluginArgMisfitMessage, pluginPositionalParams, variantOf } from 'legacy-lang';
 import type { DeclaredExtractNode, ExprSlot, ExtractExpression, ExtractField, ExtractStage, LanguageVersion, NamedArg, PluginCall, PluginSpec, ShapeNode } from 'movement-lang';
 import type { EnumType, FieldType } from 'legacy-lang';
 import { isPlainRecord, neverAsAny } from 'movement-engine/public/types';
 import { mapConcurrent, settledAll } from './fans';
 import {
   hostless,
-  languageVersionOf,
   runLogFields,
   stopwatch,
   throwIfCancelled,
@@ -894,8 +893,10 @@ class Materializer {
     this.world = runtime.run ?? runtime.world ?? hostless();
   }
 
+  /** The run's pin; with no run (a direct call), this copy's own default —
+   *  not the engine package's, which is a release pin this copy refuses. */
   private get languageVersion(): LanguageVersion {
-    return languageVersionOf(this.runtime.run);
+    return this.runtime.run?.languageVersion ?? CURRENT_LANGUAGE_VERSION;
   }
 
   /** Each resource with no id, given one: in a run, by the host

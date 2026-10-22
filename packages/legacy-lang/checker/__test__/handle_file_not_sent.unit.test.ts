@@ -8,7 +8,7 @@
 import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic } from '../check';
 import { InstanceSchema, mockCatalog } from '../catalog';
-import { LANGUAGE_VERSION, type LanguageVersion } from 'movement-lang/language_version';
+import { type LanguageVersion } from 'movement-lang/language_version';
 import { PLATFORM_SUPPORTED_LANGUAGE_VERSIONS } from '../../language_version';
 import { spelledFor } from './surface_spelling';
 
@@ -63,16 +63,16 @@ describe('a write handle\'s unsent file field', () => {
   });
 
   it('is refused under version 5, saying to read the record back through its edge', () => {
-    const errors = errorsUnder(LANGUAGE_VERSION, UNSENT);
+    const errors = errorsUnder('5', UNSENT);
     expect(errors.map(d => d.code)).toEqual(['MOV_HANDLE_FILE_NOT_SENT']);
     expect(errors[0]!.message).toContain('read the record back through its edge');
   });
 
   it('is refused under version 5 where a file is expected', () => {
-    expect(errorsUnder(LANGUAGE_VERSION, PASSED_ON).map(d => d.code)).toEqual(['MOV_HANDLE_FILE_NOT_SENT']);
+    expect(errorsUnder('5', PASSED_ON).map(d => d.code)).toEqual(['MOV_HANDLE_FILE_NOT_SENT']);
   });
 
   it('stays usable when the write sent it', () => {
-    for (const version of [...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS, LANGUAGE_VERSION]) expect(errorsUnder(version, SENT)).toEqual([]);
+    for (const version of [...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS, '5']) expect(errorsUnder(version, SENT)).toEqual([]);
   });
 });

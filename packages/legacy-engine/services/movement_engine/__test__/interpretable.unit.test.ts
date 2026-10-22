@@ -3,7 +3,6 @@
 // lacks is refused at save time with the constructs NAMED, instead of
 // failing firings later. Pure AST scan; no DB, no adapter registry.
 
-import { LANGUAGE_VERSION } from 'movement-lang';
 import { parseProgram } from 'legacy-lang';
 import { listUnsupportedConstructs } from '../interpretable';
 
@@ -323,7 +322,7 @@ movement intake(m: <inbox-[:message]->>) {
     // From 5 a concise body that is one call is that call (`(v) => f(v)`), so
     // the scan reads a call — whose unknown callee the checker refuses
     // (MOV_FUNCTION_UNKNOWN), as it refuses one on every version.
-    expect(listUnsupportedConstructs(inner, { languageVersion: LANGUAGE_VERSION })).toEqual([]);
+    expect(listUnsupportedConstructs(inner, { languageVersion: '5' })).toEqual([]);
   });
 
   it('a dotted call on a value is no call the engine runs, under version 5 as before it (there are no methods)', () => {
@@ -335,7 +334,7 @@ movement intake(m: <inbox-[:message]->>) {
   write crm-[:companies]-> { name: v }
 }
 `;
-    expect(listUnsupportedConstructs(source, { languageVersion: LANGUAGE_VERSION })).toEqual(['non-built-in function calls (G())']);
+    expect(listUnsupportedConstructs(source, { languageVersion: '5' })).toEqual(['non-built-in function calls (G())']);
     expect(listUnsupportedConstructs(source, { languageVersion: '4' })).toEqual(['non-built-in function calls (G())']);
   });
 

@@ -8,13 +8,13 @@ import type { ResolveFile } from '../link';
 import { storyOf } from '../../story/story';
 import { LANGUAGE_VERSION } from 'movement-lang/language_version';
 import { CURRENT_LANGUAGE_VERSION, DEPRECATED_LANGUAGE_VERSIONS, LANGUAGE_VERSIONS, LanguageVersionDiagnosticCodes as V, PLATFORM_DEPRECATED_LANGUAGE_VERSIONS, PLATFORM_SUPPORTED_LANGUAGE_VERSIONS, SUPPORTED_LANGUAGE_VERSIONS, THIS_RELEASE, describeLanguageVersion, languageVersionDiagnostic, languageVersionStanding, type LanguageRelease } from '../../language_version';
-import { before, since } from '../../version_conditionals';
+import { LegacyPinRefused, before, since } from '../../version_conditionals';
 
 const catalog = mockCatalog({ adapters: {} });
 const SOURCE = 'movement noop() {\n}\n';
 
 describe('the versions table', () => {
-  it("names each of this copy's integers once; the newest is the installed language's line", () => {
+  it("names each of this copy's integers once; the newest is its dialect of the 0.12 surface", () => {
     expect(LANGUAGE_VERSIONS.map((v) => [v.version, v.name])).toEqual([
       [1, 'Quiet Heron'],
       [2, 'Bright Otter'],
@@ -22,7 +22,7 @@ describe('the versions table', () => {
       [4, 'Luminous Owl'],
       [5, 'Dancing Wren'],
     ]);
-    expect(CURRENT_LANGUAGE_VERSION).toBe(LANGUAGE_VERSION);
+    expect(CURRENT_LANGUAGE_VERSION).toBe('5');
     expect([...SUPPORTED_LANGUAGE_VERSIONS]).toEqual([1, 2, 3, 4, 5]);
     expect([...DEPRECATED_LANGUAGE_VERSIONS]).toEqual([]);
     expect(Math.max(...LANGUAGE_VERSIONS.map((v) => v.version))).toBe(THIS_RELEASE.current);
@@ -38,7 +38,8 @@ describe('the versions table', () => {
     expect(since('1', 2)).toBe(false);
     expect(before('1', 2)).toBe(true);
     expect(before('2', 2)).toBe(false);
-    expect(since(LANGUAGE_VERSION, 5)).toBe(true);
+    expect(since('5', 5)).toBe(true);
+    expect(() => since(LANGUAGE_VERSION, 5)).toThrow(LegacyPinRefused);
   });
 
   it('describes a known version by name and an unknown one by its integer', () => {
@@ -54,14 +55,14 @@ describe('standing against a release', () => {
     deprecated: new Set([2]),
   };
 
-  it('every version the platform supports, and the installed language, is clean', () => {
+  it('every version the platform supports is clean; a release pin is refused, not answered', () => {
     for (const v of PLATFORM_SUPPORTED_LANGUAGE_VERSIONS) {
       expect(languageVersionStanding(v)).toBe('supported');
       expect(languageVersionDiagnostic(v)).toBeUndefined();
     }
-    // The installed language's own pin is answered by the language's rule.
-    expect(languageVersionStanding(LANGUAGE_VERSION)).toBe('compatible');
-    expect(languageVersionDiagnostic(LANGUAGE_VERSION)).toBeUndefined();
+    // The installed language's own pin is the platform's route to answer, not this copy's.
+    expect(() => languageVersionStanding(LANGUAGE_VERSION)).toThrow(LegacyPinRefused);
+    expect(() => languageVersionDiagnostic(LANGUAGE_VERSION)).toThrow(LegacyPinRefused);
   });
 
   it('a version outside the supported set is an error naming it and the fix', () => {
@@ -81,7 +82,7 @@ describe('standing against a release', () => {
     expect(d?.message).toContain('will be removed');
   });
 
-  it("the default release is this copy's: current is its integer 5, the installed language's line", () => {
+  it("the default release is this copy's: current is its integer 5, its dialect of the 0.12 surface", () => {
     expect(THIS_RELEASE.current).toBe(5);
     expect(languageVersionStanding(String(THIS_RELEASE.current))).toBe('supported');
   });

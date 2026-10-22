@@ -13,7 +13,7 @@
 // and runs the core against it.
 
 import { BridgeError, LANGUAGE_VERSION, diagnosticSeverity, neverAsAny, parseProgram as parseInstalled } from 'movement-lang';
-import { CURRENT_LANGUAGE_VERSION, checkProgram } from 'legacy-lang';
+import { checkProgram } from 'legacy-lang';
 import { MovementParseError } from 'movement-lang';
 import { parseProgram } from 'legacy-lang';
 
@@ -155,7 +155,7 @@ export function diagnoseMovementSource(
   },
 ): MovementValidation {
   const lines = source.split('\n');
-  const route = routeOf(options.languageVersion ?? CURRENT_LANGUAGE_VERSION);
+  const route = routeOf(options.languageVersion ?? LANGUAGE_VERSION);
   switch (route.kind) {
     // A pin this release cannot honour is the whole verdict: reading the text
     // under some other version's grammar would report problems that aren't.

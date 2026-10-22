@@ -26,6 +26,7 @@ import { checkProgram, diagnosticSeverity, type Diagnostic } from './check';
 import type { Catalog } from './catalog';
 import type { ResolveFile } from './link';
 import { checkSourceInRust, RustCheckRefused } from 'movement-lang/checker/rust_checker';
+import { LANGUAGE_VERSION } from 'movement-lang/language_version';
 import { applyFix, type DiagnosticFix, type SourceEdit } from 'movement-lang/checker/fixes';
 
 /** Every diagnostic a check of `source` under the target version reports. */
@@ -189,15 +190,17 @@ export function spellingCheck(languageVersion: LanguageVersion = CURRENT_LANGUAG
 }
 
 /** The Rust checker against a run's snapshot — the checker a version 5
- *  program is held to (the CLI's, the API's and the corpus test's). A move
- *  from a version the language release no longer serves hears what changed
- *  meaning from the TypeScript checker (`upgradeWarnings`). */
+ *  program is held to (the CLI's and the corpus test's). `languageVersion` is
+ *  the release pin the wasm checks under (absent ⇒ the installed release). A
+ *  move from a version the language release no longer serves hears what
+ *  changed meaning from the TypeScript checker (`upgradeWarnings`), aimed at
+ *  this copy's dialect of the 0.12 surface, never at the release pin. */
 export function rustCheck(input: {
   snapshot: CatalogSnapshot;
   languageVersion?: LanguageVersion;
   upgradingFrom?: LanguageVersion;
 }): UpgradeCheck {
-  const languageVersion = input.languageVersion ?? CURRENT_LANGUAGE_VERSION;
+  const languageVersion = input.languageVersion ?? LANGUAGE_VERSION;
   const { upgradingFrom } = input;
   return (source) => {
     // The parse first, for its error's place, which the checker's refusal
@@ -224,7 +227,7 @@ export function rustCheck(input: {
     return withUpgradeWarnings(
       checked,
       upgradeWarnings(program, fromCatalogSnapshot(input.snapshot), {
-        languageVersion,
+        languageVersion: CURRENT_LANGUAGE_VERSION,
         upgradingFrom,
         ...(resolveFile !== undefined ? { resolveFile } : {}),
       }),

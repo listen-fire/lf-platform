@@ -18,7 +18,7 @@
 // __test__/interpretable_unsupported_sites.unit.test.ts.
 
 import { BridgeError, pathRootName, typeNameOf, slotOfTree } from 'movement-lang';
-import { CURRENT_LANGUAGE_VERSION } from 'legacy-lang';
+import { CURRENT_LANGUAGE_VERSION, assertLegacyDialect } from 'legacy-lang';
 import { conditionOfSlot, expressionOfSlot, parseMovementExpression, treeOfSlot } from 'legacy-lang';
 import { linkImports, parseFieldTypeName, programCallScope, readCall, resolveCallee, hoistingMemberReads, nestedCalls, readingBoundNames, runsAsCall, CHUNKS_FUNCTION_ID, FILE_FUNCTION_ID, INTERPRETED_FUNCTION_IDS, READ_FUNCTION_ID, stdlibFunctionById } from 'legacy-lang';
 import { MovementParseError } from 'movement-lang';
@@ -97,17 +97,21 @@ const EXPRESSION_KIND_LABEL: Partial<Record<Expression['type'], string>> = {
  * diagnostics (every gate caller runs both).
  *
  * The scan reads the program as the engine will run it — under its pin, which
- * a saved movement's caller must pass. Absent ⇒ the current version: text no
- * movement is pinned to yet.
+ * a saved movement's caller must pass: a legacy id. Absent ⇒ this copy's
+ * dialect '5' of the 0.12 surface (`CURRENT_LANGUAGE_VERSION`). A release's
+ * semver is refused: the Rust engine runs those, and checks them itself.
  */
 export function listUnsupportedConstructs(
   source: string,
-  options: { resolveFile?: ResolveFile; languageVersion?: LanguageVersion } = {},
+  {
+    resolveFile,
+    languageVersion = CURRENT_LANGUAGE_VERSION,
+  }: { resolveFile?: ResolveFile; languageVersion?: LanguageVersion } = {},
 ): string[] {
+  assertLegacyDialect(languageVersion);
   // The program is read as the version it is pinned to says — a form a later
   // version reads differently (`(v) => f(v)`, a concise call from 5) is
   // scanned as what it means under the pin.
-  const languageVersion = options.languageVersion ?? CURRENT_LANGUAGE_VERSION;
   let program: Program;
   try {
     program = parseProgram(source, { languageVersion });
@@ -116,9 +120,9 @@ export function listUnsupportedConstructs(
     throw e;
   }
   const found = new InterpretabilityScan(languageVersion).scan(program);
-  if (options.resolveFile) {
+  if (resolveFile) {
     // A library is read under the version of the program that imports it.
-    const link = linkImports(program, options.resolveFile, { languageVersion });
+    const link = linkImports(program, resolveFile, { languageVersion });
     for (const [path, file] of link.files) {
       for (const construct of new InterpretabilityScan(languageVersion).scan(file.program)) {
         const labelled = `${construct} (in "${path}")`;
