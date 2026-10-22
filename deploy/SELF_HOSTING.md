@@ -661,6 +661,64 @@ then name it in `lf.yaml` with `oauth: { redirectUri: <that URI> }`. The platfor
 
 **A single-tenant installation** has no teams or accounts, and its generated key carries `*`, so that key also opens this door. Prefer a `core` installation and a key scoped to `secrets` alone.
 
+### A cloud `lf` running this installation's movements
+
+A cloud `lf` whose store and secrets are already on this installation can also take the movements it runs from here. The platform serves `lf`'s movements slot over adapter protocol 2, read-only: `lf` lists a team's saved movements, reads them by name, and runs them. A movement is authored, checked and upgraded here, and `lf` only runs what was shipped.
+
+**The route.** `POST /api/v1/system/slots/movements`, on the system router, mounted whenever automations is. It takes the `movements_slot` action, so the caller is an API key holding the `system` scope (the key the store slot uses serves). **The tenant is the key owner's team**: `lf` sees that team's movements only. An OIDC caller cannot use it, because the route acts in a tenant. A request with no credential is refused with `403`, an unknown key with `401`.
+
+**Naming the module in the `lf` project.** Add `externals/platform_movements/lf-external.yaml`:
+
+```yaml
+name: platform_movements
+kind: core
+slot: movements
+url: <API_BASE_URL>/api/v1/system/slots/movements
+auth: { kind: bearer, field: key }
+```
+
+and in `lf.yaml`:
+
+```yaml
+engine: 0.12.0
+core: { movements: platform_movements }
+```
+
+`engine:` is this installation's language line (0.12.0). The key is never written into the project: give `lf` `LF_SECRET__PLATFORM_MOVEMENTS__EXTERNAL=platform_movements` and `LF_SECRET__PLATFORM_MOVEMENTS__KEY=<the system scope key>`. The module identifies itself as `lf-platform-movements`.
+
+**What is listed.** A movement of the key's team is listed when all of these hold:
+
+- It is shipped. A save that never passed the checks (or that stopped for confirmation) is a draft and is absent. A shipped movement with a later unshipped edit is listed at its shipped text.
+- Its shipped version is pinned to the installed language line. Movements on the legacy pins 1 to 4 stay on the platform's own engine and are absent.
+- None of its listeners is paused. `lf` has no per-listener pause, and serving a movement the loop guard stopped would silently resume it.
+- Its name is a valid path. A name with a `\`, an empty or `..` segment, or a leading `/` could not be named by `lf`; it is left out and the api logs its name.
+
+The path is `<name>.mvt`, the text is the shipped text, and the version is the text's content hash, so the same text keeps its version across a re-pin. Imports resolve by name as they do here: `import { greet } from "lib/greet"` finds the movement named `lib/greet`, listed as `lib/greet.mvt`.
+
+**Read-only.** `lf upgrade` and `lf init` are refused with the platform's reason. Author and upgrade here.
+
+**What the cloud project must hold.** An external for every adapter the listed movements import, under the platform's adapter name. A listed movement that names a credential the secrets module does not list makes `lf` refuse to open ("What is not listed" above). A listed file that does not parse does not stop `lf` opening: `lf check` reports it and the other movements run.
+
+**When `lf` sees an edit.** At its next start. `lf serve` keeps the files it opened with. A rename is a new file to `lf`, so its listens start fresh.
+
+**`LF_ENGINE_TEAMS`.** A comma-separated list of team ids whose movements run in `lf`. It is the one switch that keeps the platform and `lf` from both running a team's listeners.
+
+- A team not on the list is not served: every method but `manifest` is refused with the code `settings`, naming the variable.
+- For a team on the list the platform drops every live firing (cron, inbound webhooks and polls, Run-now) as `engine_lf`. The received event is kept, marked suppressed, and can be replayed. The editor's test runs still work. A run parked before the switch finishes here.
+- Vendor webhooks and polls for the team are still received and then dropped.
+- A malformed value (an entry that is not a team id) fails boot naming the variable. Unset means no team is switched.
+
+Switching order: set it on every api and drain process first, then start the cloud `lf`. To switch back, stop `lf` first, then remove the team from the list.
+
+**Checking the wiring.** The module's conformance suite drives `lf`'s own client against the route:
+
+```
+LF_BIN=<path to lf> LF_MOVEMENTS_SLOT_URL=<API_BASE_URL>/api/v1/system/slots/movements LF_MOVEMENTS_SLOT_KEY=<system scope key> \
+  corepack pnpm --filter api test:integration --testPathPattern lf_movements/__test__/movements_contract
+```
+
+`LF_BIN` is an `lf` of 0.12.0-rc.10 or later. Without it the bridge through `lf`'s client and the import check are skipped; without the URL and key, the bridge against the running route is. On the dev loop, `corepack pnpm dev:lf-movements-verify` writes the movements and a scratch `lf` project, and `--contract` runs the suite against the loop's route.
+
 ## Core
 
 Accounts, teams, invitations, login, and the OAuth server that lets an agent connect to this installation on a person's behalf. You run it as soon as more than one human needs an account of their own; that is the whole decision.
@@ -915,6 +973,7 @@ Everything here is set by you, in `deploy/.env`. Nothing in this table is genera
 | `LISTEN_FIRE_PRINCIPAL` | only without `up.sh` | `core`. Must agree with whether `core` is in the unit list, checked in both directions |
 | `LISTEN_FIRE_SCOPES` | no | `*` — the API key grants everything. Narrow it to what a key actually needs. The `secrets` scope (the door a cloud `lf` keeps its credentials behind) is granted only when named, or by `*`; see "A cloud `lf` keeping its credentials here" |
 | `LF_OAUTH_RELAY_TARGETS` | only to relay a cloud `lf`'s OAuth sign-ins | empty — the relay at `/api/public/lf-secrets/oauth/callback/<team id>` refuses every team. A JSON object from team id to that team's `lf serve` URL; `https` only in production. Boot refuses a malformed value naming the variable. See "A cloud `lf` keeping its credentials here" |
+| `LF_ENGINE_TEAMS` | only to run a team's movements in a cloud `lf` | empty — no team is switched. Comma-separated team ids; for each, the movements slot serves the team and the platform drops its live firings as `engine_lf`. Boot refuses an entry that is not a team id, naming the variable. See "A cloud `lf` running this installation's movements" |
 | `LISTEN_FIRE_ACCESS` | no | `write`; `read` makes the key read-only |
 | `LISTEN_FIRE_ALLOW_ANONYMOUS` | no | `false`. `true` removes the key requirement entirely — only on an API nothing else can reach |
 | `DATABASE_URL` | only with your own database | the bundled Postgres, whose URL is generated on first boot. Setting it also takes that service out of the composition |
