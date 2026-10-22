@@ -36,6 +36,9 @@
           }
         }
       },
+      "description": "Discover, classify, and fetch URLs in a message. Emits one ephemeral Url record per fetched resource.",
+      "package": "@lf/web",
+      "name": "vc_url_retrieval",
       "earlierOutputs": [
         {
           "before": 2,
@@ -47,10 +50,7 @@
             }
           }
         }
-      ],
-      "description": "Discover, classify, and fetch URLs in a message. Emits one ephemeral Url record per fetched resource.",
-      "package": "@lf/web",
-      "name": "vc_url_retrieval"
+      ]
     },
     "@lf/web/fetch_url": {
       "args": [
@@ -295,7 +295,8 @@
       "args": [
         "text",
         "pageSize",
-        "margin"
+        "margin",
+        "name"
       ],
       "priced": false,
       "argTypes": {
@@ -307,7 +308,8 @@
             "letter"
           ]
         },
-        "margin": "number"
+        "margin": "number",
+        "name": "text"
       },
       "requiredArgs": [
         "text"
@@ -606,7 +608,8 @@
       "args": [
         "text",
         "pageSize",
-        "margin"
+        "margin",
+        "name"
       ],
       "priced": false,
       "argTypes": {
@@ -618,7 +621,8 @@
             "letter"
           ]
         },
-        "margin": "number"
+        "margin": "number",
+        "name": "text"
       },
       "requiredArgs": [
         "text"
@@ -638,7 +642,8 @@
       "args": [
         "text",
         "pageSize",
-        "margin"
+        "margin",
+        "name"
       ],
       "priced": false,
       "argTypes": {
@@ -650,7 +655,8 @@
             "letter"
           ]
         },
-        "margin": "number"
+        "margin": "number",
+        "name": "text"
       },
       "requiredArgs": [
         "text"
@@ -1064,6 +1070,9 @@
           }
         }
       },
+      "description": "Discover, classify, and fetch URLs in a message. Emits one ephemeral Url record per fetched resource.",
+      "package": "@lf/web",
+      "name": "vc_url_retrieval",
       "earlierOutputs": [
         {
           "before": 2,
@@ -1075,10 +1084,7 @@
             }
           }
         }
-      ],
-      "description": "Discover, classify, and fetch URLs in a message. Emits one ephemeral Url record per fetched resource.",
-      "package": "@lf/web",
-      "name": "vc_url_retrieval"
+      ]
     },
     "vc-url-retrieval": {
       "args": [
@@ -1116,6 +1122,9 @@
           }
         }
       },
+      "description": "Discover, classify, and fetch URLs in a message. Emits one ephemeral Url record per fetched resource.",
+      "package": "@lf/web",
+      "name": "vc_url_retrieval",
       "earlierOutputs": [
         {
           "before": 2,
@@ -1127,10 +1136,7 @@
             }
           }
         }
-      ],
-      "description": "Discover, classify, and fetch URLs in a message. Emits one ephemeral Url record per fetched resource.",
-      "package": "@lf/web",
-      "name": "vc_url_retrieval"
+      ]
     },
     "@lf/web/web_research": {
       "args": [
