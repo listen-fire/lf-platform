@@ -8,6 +8,7 @@ This is the hosted platform's documentation: the API, the web app, the admin app
 - [`engine-host.md`](engine-host.md): how the platform's hosts serve the host families: spend metering, the cross-run write locks, the production and test hosts, and what stays outside the contract.
 - [`language/steady-lynx-migration.md`](language/steady-lynx-migration.md) and [`language/luminous-owl-migration.md`](language/luminous-owl-migration.md): history of the moves between the legacy integer versions 1 to 4. Upgrading automations pinned to the legacy ids 1 to 4 is this repository's.
 - [`../deploy/`](../deploy/): the self-hosting runbook ([`SELF_HOSTING.md`](../deploy/SELF_HOSTING.md), start here), the upgrade notes and the guides for Render, AWS, Vercel and bringing your own identity provider.
+- [`../deploy/SELF_HOSTING.md`](../deploy/SELF_HOSTING.md), "A cloud `lf` keeping its credentials here": the platform as the secrets module of a cloud `lf`, its door, key and OAuth relay.
 
 ## The language, listen-fire
 

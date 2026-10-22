@@ -22,3 +22,11 @@ Three things are true on every platform, and each of them has cost somebody a da
 One more thing changes off compose: the compose stack generates its own secrets into a Docker volume on first boot, and nothing does that for you elsewhere. Mint them once, keep them where you keep secrets, and never rotate the two encryption keys — see [`SELF_HOSTING.md`](../SELF_HOSTING.md), "What the installation generates for itself".
 
 Registering your own Slack app, Google OAuth client, WhatsApp number and the rest is platform-independent and is the longest-lead work in any real deployment. It lives in [`SELF_HOSTING.md`](../SELF_HOSTING.md), "Registering your own third-party apps", and it belongs at the start of a project rather than the end.
+
+## A cloud `lf` beside the platform
+
+A cloud `lf` that keeps its credentials here ([`SELF_HOSTING.md`](../SELF_HOSTING.md), "A cloud `lf` keeping its credentials here") needs one API key, and nothing else to keep running.
+
+- **Minting the key.** In production, create it on the API keys settings page of the team it is for, ticking the `secrets` scope and no other. Locally, `pnpm dev:lf-secrets-key` mints one for the dev loop's team and prints it on the last line. The plaintext is shown once; put it in the `lf` project's environment as `LF_SECRET__PLATFORM_SECRETS__TOKEN`.
+- **Rotating it.** Mint a new key, set it in the `lf` project's environment and restart `lf`, then revoke the old key. A revoked key is refused at once, so revoke after `lf` is running on the new one. `pnpm dev:lf-secrets-key` does the same locally: it revokes the previous dev key as it mints the next.
+- **Maintenance.** None. The table that makes a platform refresh wait for `lf` holds one short lease per credential, which lapses by itself if `lf` stops mid-refresh.

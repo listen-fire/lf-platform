@@ -17,7 +17,8 @@ versions are the git tags described in [`deploy/UPGRADING.md`](deploy/UPGRADING.
 
 <!-- add merged PRs here -->
 
-- A cloud `lf` can keep its runs, parks, work rows and delivery receipts in this installation's own tables: the platform serves lf's store slot at `POST /api/v1/system/slots/store` (an API key with the `system` scope; the tenant is the key owner's team). The migration adds a `host` column to `trigger_run` and `work` (existing rows read `platform`), makes `work` unique on `(host, key)`, and adds four tables. `/runs` lists lf's runs by their movement; Resume is refused for them. See "Running lf against this installation" in `deploy/SELF_HOSTING.md`.
+
+
 - A saved movement's pin is now the language release it was written for, shown as a version such as 0.12.0; the legacy ids 1 to 4 are unchanged, and a movement saved at 5 reads 0.12.0.
 - The agent tools' `languageVersion` takes the version string (for example `"0.12.0"`) and, this release only, the old integer (5 means the installed language, 1 to 4 the legacy ids); the `name` beside a `version` in their answers repeats it and goes away after this release.
 

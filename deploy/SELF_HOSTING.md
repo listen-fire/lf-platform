@@ -603,6 +603,64 @@ LF_BIN=<path to lf> LF_STORE_SLOT_URL=<API_BASE_URL>/api/v1/system/slots/store L
 
 `LF_BIN` is an `lf` of 0.12.0-rc.9 or later. Without it the bridge through `lf`'s client is skipped; without the URL and key, the bridge against the running route is.
 
+### A cloud `lf` keeping its credentials here
+
+A cloud `lf` (the language's own runtime, run beside this installation) can keep its credentials in this installation's encrypted store instead of in files of its own. The accounts people connect on the connect pages are then the accounts `lf` runs with, and a token `lf` refreshes is written back here. It needs `core` in the unit list and an API key; the door is `POST <API_BASE_URL>/api/public/lf-secrets`.
+
+In the cloud `lf` project, add the platform as a module in the project's externals folder (an `lf-external.yaml`), and point `lf.yaml` at it:
+
+```yaml
+# externals/platform_secrets/lf-external.yaml
+name: platform_secrets
+kind: core
+slot: secrets
+url: https://<API_BASE_URL host>/api/public/lf-secrets
+settings:
+  - { name: token, label: an API key holding the secrets scope, secret: true }
+  - { name: team, label: the team id the key belongs to, secret: false }
+```
+
+```yaml
+# lf.yaml
+core: { secrets: platform_secrets }
+```
+
+The module's settings come from the environment only, never from a file that is committed:
+
+```
+LF_SECRET__PLATFORM_SECRETS__EXTERNAL=platform_secrets
+LF_SECRET__PLATFORM_SECRETS__TOKEN=<an API key holding the secrets scope>
+LF_SECRET__PLATFORM_SECRETS__TEAM=<the team id>
+```
+
+- The key must hold the `secrets` scope. It is grantable but never in a key's default scopes, so tick it deliberately when you mint the key.
+- The team is required. The door refuses a request whose team is not the key's team, and a key can only be used for the one team it belongs to.
+- Behind Cloud Run IAM (or any proxy that wants its own identity token), add `LF_SECRET__PLATFORM_SECRETS__OUTGOING_AUTH=google-identity`. `lf` then signs each request to the door as the service account it runs as.
+
+**What `lf` sees.** Each credential's fields, never its ciphertext. A refreshed token is written back to the same row, and while `lf` is refreshing one the platform's own refresh waits for it, so the two never race for a single-use refresh token.
+
+**What is not listed.**
+- Credential shells (a connection that was started and never finished).
+- The Gmail rows that use delegation, and retired Gmail rows.
+- Rows of a type `lf` has no module for.
+- The two keys the platform supplies to itself, `NATIVE_VALUATIONS` and `NATIVE_KNOWLEDGE`.
+
+A Google credential serves Sheets and Drive both, and is listed as `google_sheets`. Name that external for both in the cloud project.
+
+**Renames.** `lf` identifies a credential by its name. Renaming one in the platform's UI looks to `lf` like the old name being deleted and a new one added, so rename only when you mean the project to follow.
+
+**Connecting accounts.** `lf connect` and `lf credential add` create ordinary rows here, which the connect pages show and understand, and an account connected on the connect pages is one `lf` can use. Both belong to the team the key names. On a core installation, a row `lf` creates has no owning person until someone attaches one.
+
+**OAuth apps stay here.** The apps you registered under "Registering your own third-party apps" are configured in this installation's environment, and their secrets never go to `lf`'s files. Give `lf` the client through `LF_SECRET__<EXTERNAL>__CLIENT_ID` and `LF_SECRET__<EXTERNAL>__CLIENT_SECRET` (the external's name, upper-cased, as in the settings above). Register this redirect URI on that OAuth app:
+
+```
+<API_BASE_URL>/api/public/lf-secrets/oauth/callback/<team id>
+```
+
+then name it in `lf.yaml` with `oauth: { redirectUri: <that URI> }`. The platform does not process the callback: it forwards the query to the `lf serve` of that team, which finishes the sign-in. Tell it where `lf serve` is with `LF_OAUTH_RELAY_TARGETS` in `deploy/.env`, a JSON object from team id to the `lf serve` URL (`{"<team id>":"https://lf.example.com"}`). In production the target must be `https`, and a malformed value fails boot naming the variable. A team with no entry gets no relay, and the callback is refused. Callback URLs with `code` or `state` in them are written to the request log without their query.
+
+**A single-tenant installation** has no teams or accounts, and its generated key carries `*`, so that key also opens this door. Prefer a `core` installation and a key scoped to `secrets` alone.
+
 ## Core
 
 Accounts, teams, invitations, login, and the OAuth server that lets an agent connect to this installation on a person's behalf. You run it as soon as more than one human needs an account of their own; that is the whole decision.
@@ -855,7 +913,8 @@ Everything here is set by you, in `deploy/.env`. Nothing in this table is genera
 | `COMPOSE_PROFILES` | only without `up.sh` | nothing optional runs, INCLUDING the bundled datastores. `postgres,redis,objectstore` is the shipped line (`minio` still works as the object store's profile); add `admin` for the operator console and `demo` for the stand-ins. Read by `docker compose` itself, from `deploy/.env` |
 | `LISTEN_FIRE_PRODUCTS` | only without `up.sh` | every unit. An unknown name fails the boot |
 | `LISTEN_FIRE_PRINCIPAL` | only without `up.sh` | `core`. Must agree with whether `core` is in the unit list, checked in both directions |
-| `LISTEN_FIRE_SCOPES` | no | `*` — the API key grants everything. Narrow it to what a key actually needs |
+| `LISTEN_FIRE_SCOPES` | no | `*` — the API key grants everything. Narrow it to what a key actually needs. The `secrets` scope (the door a cloud `lf` keeps its credentials behind) is granted only when named, or by `*`; see "A cloud `lf` keeping its credentials here" |
+| `LF_OAUTH_RELAY_TARGETS` | only to relay a cloud `lf`'s OAuth sign-ins | empty — the relay at `/api/public/lf-secrets/oauth/callback/<team id>` refuses every team. A JSON object from team id to that team's `lf serve` URL; `https` only in production. Boot refuses a malformed value naming the variable. See "A cloud `lf` keeping its credentials here" |
 | `LISTEN_FIRE_ACCESS` | no | `write`; `read` makes the key read-only |
 | `LISTEN_FIRE_ALLOW_ANONYMOUS` | no | `false`. `true` removes the key requirement entirely — only on an API nothing else can reach |
 | `DATABASE_URL` | only with your own database | the bundled Postgres, whose URL is generated on first boot. Setting it also takes that service out of the composition |
