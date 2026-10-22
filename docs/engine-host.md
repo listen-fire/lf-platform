@@ -36,6 +36,10 @@ The engine keeps two writes from colliding at two levels.
   - **Is absent, so the run takes its no-substrate path:** `park.sink`, `park.callbacks`.
 - **Another embedder** supplies its own object of the same shape, serving the JSON in [`contracts/host-families.md`](contracts/host-families.md).
 
+## A second host over the same tables
+
+A cloud `lf` is a second engine host. It steps its own movements and keeps their runs in this repository's `automations` tables through the store module (`services/lf_store/`), served at `POST /api/v1/system/slots/store`. Each `trigger_run` and `work` row carries a `host` (`platform` or `lf`), and every platform scan that claims, sweeps, wakes or prunes asks for `host = 'platform'`, so the two hosts share tables and never each other's rows. Reads that are only per team (the runs views, the movement and triggers pages) list both. The operator's resume is refused for an `lf` run, which `lf` steps itself; abort is honoured. The operator-facing side is "Running lf against this installation" in [`deploy/SELF_HOSTING.md`](../deploy/SELF_HOSTING.md).
+
 ## Remaining non-JSON
 
 Nothing on the request/answer path. Four things stay outside it, by design:

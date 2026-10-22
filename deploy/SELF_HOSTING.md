@@ -558,6 +558,51 @@ Four things bind to a **person** rather than to a credential, and refuse a machi
 
 The consequence, bluntly: **a single-tenant installation can register the third-party apps but cannot attach anybody's account to them.** Connecting accounts needs `core` in the unit list.
 
+### Running lf against this installation
+
+The platform can keep a cloud `lf`'s runs, parks, joins, callbacks, work rows and delivery receipts in its own `automations` tables, so one Postgres holds both. `lf` steps its own movements; the platform serves `lf`'s store slot over adapter protocol 2, and `lf` reads and writes the run tables through it.
+
+**The route.** `POST /api/v1/system/slots/store`, on the system router, mounted whenever automations is. It takes the `store_slot` action, so the caller is an API key holding the `system` scope, sent as `Authorization: Bearer lf_…` (see "Who may call the system endpoints"; an OIDC caller cannot use it, because the route acts in a tenant). **The tenant is the key owner's team**: every row `lf` writes belongs to that team, and the key never reaches another team's rows. A request with no credential is refused with `403`, an unknown key with `401`.
+
+**Naming the module in the `lf` project.** Add `externals/platform_store/lf-external.yaml`:
+
+```yaml
+name: platform_store
+kind: core
+slot: store
+url: <API_BASE_URL>/api/v1/system/slots/store
+auth: { kind: bearer, field: key }
+```
+
+and in `lf.yaml`:
+
+```yaml
+core: { store: platform_store }
+```
+
+`lf serve --doors-only` and the `lf drain` workers then share the platform's tables. The module identifies itself as `lf-platform-store`.
+
+**Settings come from the environment only.** The key is never written into the project: give `lf` `LF_SECRET__PLATFORM_STORE__EXTERNAL=platform_store` and `LF_SECRET__PLATFORM_STORE__KEY=<the system scope key>`. Where `lf` keeps its other credentials is a separate choice; "A cloud `lf` keeping its credentials here" describes keeping them in this installation.
+
+**The `host` marker.** Every `trigger_run` and `work` row says which host owns it, `platform` or `lf`; existing rows read `platform`. It keeps three things apart:
+
+- *Claims.* A platform worker never claims an `lf` work row and `lf` never claims a platform one, even for the same key. `lf`'s keys are stored as `lf:<team>:<key>`, so `corepack pnpm dev:inspect work` shows that prefix.
+- *Sweeps and wakes.* The platform's orphan sweep, timer and ask wakes, stamped-run settling and lease returns act on `platform` rows only. When an `lf` container dies its leases lapse and `lf` fails those runs by its own rule.
+- *The callback door.* A callback `lf` minted reads as unknown at the platform's callback door.
+
+**What `/runs` shows.** `lf` runs are listed beside the platform's, each named by its movement. **Resume is refused for an `lf` run**, with a message saying to resume it in `lf`. **Cancel works**: it ends the run as the platform ends any run.
+
+**Retention.** `lf` prunes its own deliveries through the module. The platform's run prune removes only *settled* `lf` runs; a running or parked `lf` run is never pruned.
+
+**Checking the wiring.** The module's conformance suite drives `lf`'s own client against the route:
+
+```
+LF_BIN=<path to lf> LF_STORE_SLOT_URL=<API_BASE_URL>/api/v1/system/slots/store LF_STORE_SLOT_KEY=<system scope key> \
+  corepack pnpm --filter api test:integration --testPathPattern lf_store/__test__/store_contract
+```
+
+`LF_BIN` is an `lf` of 0.12.0-rc.9 or later. Without it the bridge through `lf`'s client is skipped; without the URL and key, the bridge against the running route is.
+
 ## Core
 
 Accounts, teams, invitations, login, and the OAuth server that lets an agent connect to this installation on a person's behalf. You run it as soon as more than one human needs an account of their own; that is the whole decision.
