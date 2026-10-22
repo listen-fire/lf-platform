@@ -26,6 +26,23 @@ const LEASE_OWNER = `lf-store:${hostname()}:${process.pid}:${randomUUID().slice(
 const NEXT_VERSION_OF_WORK = sql`greatest(date_trunc('milliseconds', clock_timestamp()), date_trunc('milliseconds', work.updated_at) + interval '1 millisecond')`;
 const NEXT_VERSION_OF_W = sql`greatest(date_trunc('milliseconds', clock_timestamp()), date_trunc('milliseconds', w.updated_at) + interval '1 millisecond')`;
 
+/**
+ * A work key as it is stored: under its tenant's namespace. The table's keys
+ * are unique per host, not per team, and not every key lf derives names
+ * something only one tenant has (`poll_listen:<subscription>`), so two
+ * tenants' rows would otherwise be one. lf never sees the prefix: every key
+ * this module answers is stripped of it.
+ */
+function storedKey(teamId: string, key: string): string {
+  return `lf:${teamId}:${key}`;
+}
+
+function lfKey(scope: LfTenant, stored: string): string {
+  const prefix = storedKey(scope.tenant, '');
+  if (!stored.startsWith(prefix)) throw new Error(`work key ${stored} is not under this tenant's namespace`);
+  return stored.slice(prefix.length);
+}
+
 /** The rows of this tenant's that are lf's. */
 function lfWorkOf(scope: LfTenant, alias: string) {
   return sql`(${sql.raw(alias)}.host = 'lf' and ${sql.raw(alias)}.team_id = ${scope.tenant}::uuid)`;
@@ -44,14 +61,13 @@ export interface NewWorkRow {
  * Queues a row, or re-arms the row of its key: against a held row the new due
  * time wins (its holder's completion leaves the row for the re-arm), and a
  * dead row queued again is new work, its attempts from nought. The key is
- * unique per host, not per team, so a key another tenant's row holds is
- * refused rather than taken over.
+ * kept under its tenant's namespace (`storedKey`).
  */
 export async function enqueueRow(exec: Exec, row: NewWorkRow): Promise<void> {
   if (!isLfWorkKind(row.kind)) throw new Error(`not a work kind: ${row.kind}`);
-  const { rows } = await sql<{ id: string }>`
+  await sql`
     insert into automations.work as work (host, kind, key, team_id, payload, due_at, updated_at)
-    values ('lf', ${row.kind}::text, ${row.key}::text, ${row.teamId}::uuid, ${JSON.stringify(row.payload ?? null)}::text::jsonb,
+    values ('lf', ${row.kind}::text, ${storedKey(row.teamId, row.key)}::text, ${row.teamId}::uuid, ${JSON.stringify(row.payload ?? null)}::text::jsonb,
             coalesce(${row.dueAt}::timestamptz, now()), date_trunc('milliseconds', clock_timestamp()))
     on conflict (host, key) do update set
       due_at = case when work.dead_at is not null then excluded.due_at
@@ -60,10 +76,7 @@ export async function enqueueRow(exec: Exec, row: NewWorkRow): Promise<void> {
       attempts = case when work.dead_at is null then work.attempts else 0 end,
       dead_at = null,
       dead_reason = null,
-      updated_at = ${NEXT_VERSION_OF_WORK}
-    where work.team_id = excluded.team_id
-    returning work.id::text as id`.execute(exec);
-  if (rows.length === 0) throw new Error(`work key ${row.key} is held by another tenant's row`);
+      updated_at = ${NEXT_VERSION_OF_WORK}`.execute(exec);
 }
 
 /** `work.enqueue`: an absent team is the tenant's; another team's is refused. */
@@ -105,7 +118,7 @@ export async function claimDue(
   return rows.map((r) => ({
     id: r.id,
     kind: r.kind,
-    key: r.key,
+    key: lfKey(scope, r.key),
     payload: r.payload,
     claim: JSON.stringify({ leaseToken: r.lease_token, claimedUpdatedAt: r.version }),
     attempts: r.attempts,

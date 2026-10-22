@@ -94,6 +94,22 @@ describe('the lf store module', () => {
     expect(platformRows.some((row) => row.id === claimed[0]?.id)).toBe(false);
   });
 
+  it("keeps two tenants' rows under one work key apart, and hands each its key as it gave it", async () => {
+    const [a, b] = [store(teamA), store(teamB)];
+    const key = `poll_listen:acme_crm-${randomUUID()}`;
+    await a('work.enqueue', { kind: 'poll_listen', key, payload: { tenant: 'a' }, dueAt: past(1_000) });
+    await b('work.enqueue', { kind: 'poll_listen', key, payload: { tenant: 'b' }, dueAt: past(1_000) });
+
+    const stored = await getAutomationsQb(['work']).selectFrom('work').select(['key', 'team_id']).where('host', '=', 'lf').where('key', 'like', `%${key}`).orderBy('key').execute();
+    expect(stored).toHaveLength(2);
+    expect(new Set(stored.map((row) => row.key))).toEqual(new Set([`lf:${teamA}:${key}`, `lf:${teamB}:${key}`]));
+
+    for (const [tenant, name] of [[a, 'a'], [b, 'b']] as const) {
+      const claimed = (await tenant('work.claimDue', { limit: 10, leaseMs: 60_000 })) as { key: string; payload: unknown }[];
+      expect(claimed).toEqual([expect.objectContaining({ key, payload: { tenant: name } })]);
+    }
+  });
+
   it("a lapsed lf lease is lf's to fail", async () => {
     const lf = store(teamA);
     const runId = await newRun(teamA, { startedAt: past(10 * 60_000) });
@@ -202,7 +218,7 @@ describe('the lf store module', () => {
     // The same park, uncorrupted, commits whole; a lost fence writes nothing.
     await lf('parks.commit', { runId, address: 's0', state: {}, fence: lease.token, park: { kind: 'timer', wakeAt: future(60_000) } });
     expect((await runRow(runId)).status).toBe('parked');
-    const timer = await getAutomationsQb(['work']).selectFrom('work').selectAll().where('host', '=', 'lf').where('key', '=', `resume_timer:${runId}`).executeTakeFirst();
+    const timer = await getAutomationsQb(['work']).selectFrom('work').selectAll().where('host', '=', 'lf').where('key', '=', `lf:${teamA}:resume_timer:${runId}`).executeTakeFirst();
     expect(timer).toMatchObject({ team_id: teamA, kind: 'resume_timer', payload: { runId } });
     const lost = await refusal(lf('parks.commit', { runId, address: 's1', state: {}, fence: randomUUID(), park: { kind: 'limit' } }));
     expect({ code: lost.code, data: lost.data }).toEqual({ code: 'run_lease_lost', data: { runId } });
@@ -221,7 +237,7 @@ describe('the lf store module', () => {
 
     expect(await lf('inbound.checkpoint', { subscriptionId: 'acme_crm' })).toEqual({ checkpoint: 'c1' });
     const keys = (await getAutomationsQb(['work']).selectFrom('work').select('key').where('team_id', '=', teamA).execute()).map((row) => row.key);
-    expect(keys).toEqual([first.key]);
+    expect(keys).toEqual([`lf:${teamA}:${first.key}`]);
     expect(await lf('inbound.delivery', { id: again.id })).toBeNull();
     // An absent cursor is left as it is; a null one is saved.
     await lf('inbound.keepDelivery', { subscriptionId: 'acme_crm', delivery: delivery(null), work: [] });
