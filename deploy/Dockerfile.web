@@ -89,7 +89,7 @@ CMD ["node", "apps/admin/server.js"]
 # the TypeScript under its own `tsx`. better-sqlite3 needs a toolchain when no
 # prebuild matches.
 FROM node:22.20.0-slim AS fake-channels
-ARG FAKE_CHANNELS_VERSION=0.12.0-rc.5
+ARG FAKE_CHANNELS_VERSION=0.12.0-rc.6
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ ca-certificates \
   && rm -rf /var/lib/apt/lists/*
