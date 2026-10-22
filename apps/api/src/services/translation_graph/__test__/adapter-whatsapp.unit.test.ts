@@ -843,8 +843,10 @@ describe('File duality — movement compile against the real projected schema', 
 describe('WhatsappAdapter.resolveFileRef reads only a handle it issued', () => {
   const realFetch = global.fetch;
   const fetched: unknown[] = [];
+  const realExposedBase = process.env.EXPOSED_FILE_PUBLIC_BASE_URL;
   beforeEach(() => {
     fetched.length = 0;
+    process.env.EXPOSED_FILE_PUBLIC_BASE_URL = 'http://localhost:3003';
     global.fetch = (async (url: unknown) => {
       fetched.push(url);
       return new Response('MEDIA', { status: 200 });
@@ -853,6 +855,8 @@ describe('WhatsappAdapter.resolveFileRef reads only a handle it issued', () => {
   afterEach(() => {
     global.fetch = realFetch;
     delete process.env.TWILIO_ACCOUNT_SID;
+    if (realExposedBase === undefined) delete process.env.EXPOSED_FILE_PUBLIC_BASE_URL;
+    else process.env.EXPOSED_FILE_PUBLIC_BASE_URL = realExposedBase;
   });
   const ref = (handle: string) => ({ ref: { __brand: 'FileRef' as const, source: { adapterType: 'whatsapp', handle } } });
 
