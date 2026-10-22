@@ -12,6 +12,10 @@ import {
   whatsappLinkVerification,
   type WhatsappLinkVerification,
 } from '../../../services/whatsapp/phone_verification/link_verification';
+import {
+  LANGUAGE_VERSION_INPUT_DESCRIPTION,
+  languageVersionInput,
+} from '../../../services/translation_graph/movement/language_pin_input';
 import { LANGUAGE_SEARCH_KINDS } from '../../../lib/knowledge/movement_handbook';
 
 // The two WhatsApp linking tools describe the flow THIS deployment runs, so an
@@ -279,7 +283,7 @@ function automationConnectorOptions(): McpRouterOptions {
       },
       validateAutomation: {
         description:
-          'Typecheck an automation program against the live connected systems WITHOUT saving: parse, check, and compile. Returns diagnostics (code, message, severity, line/col, offending line) and `validatedUnder` — the language version it was checked against. A clean validation predicts a live save. saveAutomation runs this same check first and saves nothing on errors, so you need not call this before saving — use it to explore. When changing a saved automation, pass its id as `automation` so the text is checked under the language version that automation is written in; new text is checked under the current version.',
+          'Typecheck an automation program against the live connected systems WITHOUT saving: parse, check, and compile. Returns diagnostics (code, message, severity, line/col, offending line) and `validatedUnder` — `{ version }`, the language version it was checked against (`name` repeats it this release only). A clean validation predicts a live save. saveAutomation runs this same check first and saves nothing on errors, so you need not call this before saving — use it to explore. When changing a saved automation, pass its id as `automation` so the text is checked under the language version that automation is written in; new text is checked under the current version.',
         inputSchema: {
           source: z.string().describe('The automation program text (.mvt).'),
           team: z.string().optional().describe('Team id (see instructions).'),
@@ -289,13 +293,7 @@ function automationConnectorOptions(): McpRouterOptions {
             .describe(
               'The saved automation this text belongs to (id from listAutomations) — it is then checked under that automation\'s language version.',
             ),
-          languageVersion: z
-            .number()
-            .int()
-            .optional()
-            .describe(
-              'Check under this language version (the integer from listAutomations\' `languageVersion`) instead — e.g. to see what an older automation would need to move to the current version.',
-            ),
+          languageVersion: languageVersionInput.optional().describe(LANGUAGE_VERSION_INPUT_DESCRIPTION),
         },
         title: 'Validate an automation',
         annotations: { readOnlyHint: true },
@@ -303,7 +301,7 @@ function automationConnectorOptions(): McpRouterOptions {
       },
       upgradeAutomation: {
         description:
-          "Move a saved automation onto the current version of the automation language. Every automation is written in a language version (listAutomations' `languageVersion`); an older one keeps running exactly as it always has, and `upgradeDiagnostics` in listAutomations lists what stands between it and the current version. This rewrites the old spellings into the current version's by the rewrites proved to keep the meaning (applyAllFixes: true applies the others too), validates the rewritten text under it, and returns `status`, `from`, `to`, `diagnostics`, `upgradedSource` (the rewritten text, when the rewrite changed it; the diagnostics' lines are its lines) and a `message`: `blocked` — repair what the diagnostics name in the saved text (in either spelling: the rewrite runs again on every call), save, and call again; `needs_acknowledgement` — it has no errors, and a second call with acknowledge: true saves the rewritten text and moves it (any diagnostics listed are constructs whose meaning changes under the new version: read them and edit what assumed the old behaviour first); `upgraded`; `already_current`; `unverified` — a connected system could not be read. Nothing changes without acknowledge: true. An error blocks. A diagnostic marking a construct whose meaning changed between versions is shown, and the caller acknowledges it to move up. Any other warning (a cost note, say) reads the same under both and never blocks, so it is not listed.",
+          "Move a saved automation onto the current version of the automation language. Every automation is written in a language version (listAutomations' `languageVersion`); an older one keeps running exactly as it always has, and `upgradeDiagnostics` in listAutomations lists what stands between it and the current version. This rewrites the old spellings into the current version's by the rewrites proved to keep the meaning (applyAllFixes: true applies the others too), validates the rewritten text under it, and returns `status`, `from`, `to` (each `{ version }`; `name` repeats it this release only), `diagnostics`, `upgradedSource` (the rewritten text, when the rewrite changed it; the diagnostics' lines are its lines) and a `message`: `blocked` — repair what the diagnostics name in the saved text (in either spelling: the rewrite runs again on every call), save, and call again; `needs_acknowledgement` — it has no errors, and a second call with acknowledge: true saves the rewritten text and moves it (any diagnostics listed are constructs whose meaning changes under the new version: read them and edit what assumed the old behaviour first); `upgraded`; `already_current`; `unverified` — a connected system could not be read. Nothing changes without acknowledge: true. An error blocks. A diagnostic marking a construct whose meaning changed between versions is shown, and the caller acknowledges it to move up. Any other warning (a cost note, say) reads the same under both and never blocks, so it is not listed.",
         inputSchema: {
           automation: z.string().describe('The automation id (from listAutomations).'),
           acknowledge: z
@@ -369,7 +367,7 @@ function automationConnectorOptions(): McpRouterOptions {
       },
       listAutomations: {
         description:
-          "List the saved automations across every team this connection covers: each one's id, name, status, listeners, storyUrl, the team it lives in (teamId, teamName), its `languageVersion` (the version of the automation language it is written in, as { version, name }), `checkedAgainst` (the version its last check ran under), and `upgradeDiagnostics` — when it is on an older language version, what stands between it and the current one (null when nothing does or nothing is recorded; see upgradeAutomation). Use the id with getAutomation, saveAutomation, or runAutomation. storyUrl is a link to a picture of what an automation does, for a person to look at — you can't open it yourself, so hand it out as a labelled link when they want to see one. Anyone holding a link can view it with no login, until that automation is deleted.",
+          "List the saved automations across every team this connection covers: each one's id, name, status, listeners, storyUrl, the team it lives in (teamId, teamName), its `languageVersion` (the version of the automation language it is written in, as a version string such as 0.12.0; 1 to 4 are the legacy ids), `checkedAgainst` (the version its last check ran under), and `upgradeDiagnostics` — when it is on an older language version, what stands between it and the current one (null when nothing does or nothing is recorded; see upgradeAutomation). Use the id with getAutomation, saveAutomation, or runAutomation. storyUrl is a link to a picture of what an automation does, for a person to look at — you can't open it yourself, so hand it out as a labelled link when they want to see one. Anyone holding a link can view it with no login, until that automation is deleted.",
         annotations: { readOnlyHint: true },
         inputSchema: {},
         title: 'List automations',

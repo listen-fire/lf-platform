@@ -263,8 +263,8 @@ export const DEPLOY_CHECK_OUTCOMES: readonly DeployCheckOutcome[] = [
 ];
 
 /** A version as the deploy check and the upgrade report it: the pin itself.
- *  `name` repeats it for one release, for readers of the old
- *  `{ version, name }` shape. */
+ *  `name` repeats it for one release (0.13 drops it), for readers of
+ *  the old `{ version, name }` shape. */
 export interface VersionView {
   version: LanguageVersion;
   name: string;

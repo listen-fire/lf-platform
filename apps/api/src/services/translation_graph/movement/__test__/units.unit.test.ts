@@ -1,4 +1,4 @@
-// The run host's units on the platform: from language version 5 a file
+// The run host's units on the platform: from language 0.12 a file
 // listens to `cron` and `manual` with no import and no construction, and the
 // listen still derives its trigger row (kind = the unit) and, for manual, its
 // "Run now" target. Before 5 a listen names a construction, as it always has.

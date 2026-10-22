@@ -82,6 +82,7 @@ import {
   type UpgradeMovementResult,
   type VersionView,
 } from '../../../services/translation_graph/movement/language_upgrade';
+import { languageVersionInput, pinFromInput } from '../../../services/translation_graph/movement/language_pin_input';
 import { neverAsAny } from 'movement-engine/public/types';
 import { movementSourceHash } from '../../../services/translation_graph/movement/version_store';
 import { applyContentEdit } from '../../../services/translation_graph/movement/edit';
@@ -783,7 +784,7 @@ const listMovementsHandler: RequestHandler = async (_req, res) => {
 
 const getMovementSchema = z.object({ idOrName: z.string() });
 
-const getMovementHandler: RequestHandler = jsonHandler(getMovementSchema, 'params', async (input) => {
+export const getMovementHandler: RequestHandler = jsonHandler(getMovementSchema, 'params', async (input) => {
   // Look across every team the connection spans, so an id/name from any of the
   // user's teams resolves.
   const teams = await teamSetForReads();
@@ -817,39 +818,25 @@ async function withStoryUrl<
 
 /**
  * An automation's language version as an agent reads it: the pin and the
- * version its last validation ran under.
+ * version its last validation ran under, each the version string itself.
  */
 function withLanguageVersionView<
   T extends { languageVersion: LanguageVersion; validityCheckedAgainst: LanguageVersion | null },
 >(
   movement: T,
-): Omit<T, 'languageVersion' | 'validityCheckedAgainst'> & {
-  languageVersion: VersionView;
-  checkedAgainst: VersionView | null;
-} {
-  const { languageVersion, validityCheckedAgainst, ...rest } = movement;
-  return {
-    ...rest,
-    languageVersion: versionView(languageVersion),
-    checkedAgainst: validityCheckedAgainst === null ? null : versionView(validityCheckedAgainst),
-  };
+): Omit<T, 'validityCheckedAgainst'> & { checkedAgainst: LanguageVersion | null } {
+  const { validityCheckedAgainst, ...rest } = movement;
+  return { ...rest, checkedAgainst: validityCheckedAgainst };
 }
 
 const validateMovementSchema = z.object({
   source: z.string(),
   team: z.string().optional(),
   automation: z.string().optional(),
-  languageVersion: z.number().int().optional(),
+  languageVersion: languageVersionInput.optional(),
 });
 
 type AutomationValidation = TeamMovementValidation & { validatedUnder: VersionView };
-
-/** A pin as the tools still take it, an integer, read as the text pins are
- *  now: 5 was the 0.12 line, which the installed language reads; 1 to 4 are
- *  the legacy ids. Any other integer stays itself, for the rule to refuse. */
-function pinFromToolInput(version: number): LanguageVersion {
-  return version === 5 ? LANGUAGE_VERSION : String(version);
-}
 
 /**
  * Check text the way a save would: an explicit version wins; else a saved
@@ -924,13 +911,16 @@ const remainingDiagnostics = (diagnostics: AuthoringDiagnostic[]) =>
 const validateMovementHandler: RequestHandler = jsonHandler(
   validateMovementSchema,
   'body',
-  async (input) =>
-    validateAutomationText({
+  async (input) => {
+    const pin = input.languageVersion !== undefined ? pinFromInput(input.languageVersion) : undefined;
+    if (pin !== undefined && 'error' in pin) return pin;
+    return validateAutomationText({
       teamId: await resolveToolTeam(input.team),
       source: input.source,
       ...(input.automation !== undefined ? { automation: input.automation } : {}),
-      ...(input.languageVersion !== undefined ? { languageVersion: pinFromToolInput(input.languageVersion) } : {}),
-    }),
+      ...(pin !== undefined ? { languageVersion: pin.pin } : {}),
+    });
+  },
 );
 
 const upgradeMovementSchema = z.object({
@@ -990,7 +980,7 @@ const completionsAtSchema = z.object({
   source: z.string(),
   team: z.string().optional(),
   automation: z.string().optional(),
-  languageVersion: z.number().int().optional(),
+  languageVersion: languageVersionInput.optional(),
 });
 
 const completionsAtHandler: RequestHandler = jsonHandler(
@@ -1007,7 +997,9 @@ const completionsAtHandler: RequestHandler = jsonHandler(
     const teamId = (await resolveToolTeam(input.team)) as TeamId;
     const { snapshot } = await movementCatalogSnapshotForTeam(teamId);
     // Same version rule as validateAutomationText: explicit, else the saved automation's pin, else current.
-    let languageVersion = input.languageVersion !== undefined ? pinFromToolInput(input.languageVersion) : undefined;
+    const pin = input.languageVersion !== undefined ? pinFromInput(input.languageVersion) : undefined;
+    if (pin !== undefined && 'error' in pin) return pin;
+    let languageVersion = pin?.pin;
     if (languageVersion === undefined && input.automation !== undefined) {
       const row = await getMovementRow({ teamId, id: input.automation }).catch(() => null);
       if (!row) return { error: `No automation '${input.automation}' in this team.` };

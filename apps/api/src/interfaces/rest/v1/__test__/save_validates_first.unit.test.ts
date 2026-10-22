@@ -53,7 +53,7 @@ import type { RequestHandler } from 'express';
 
 import { runWithPrincipal, type Principal } from 'principal';
 
-import { editAutomationHandler, saveMovementHandler } from '../knowledge_agent_tools';
+import { editAutomationHandler, getMovementHandler, saveMovementHandler, validateMovementHandler } from '../knowledge_agent_tools';
 
 const ACTING: Principal = { teamId: 'home', userId: 'u1', access: 'write', scopes: ['*'], pinnedTeamId: null };
 
@@ -197,5 +197,44 @@ describe('editAutomation is a save, and validates first too', () => {
     });
     expect(saveMovementMock).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1', source: 'write { Title: m.From }' }));
     expect(res.body?.ok).toBe(true);
+  });
+});
+
+describe('validateAutomation takes the version as a string or, this release, an integer', () => {
+  beforeEach(() => {
+    validateMock.mockResolvedValue(validation({}));
+  });
+
+  it('gives the same answer for 5 and for the installed release string', async () => {
+    const { LANGUAGE_VERSION } = jest.requireActual('movement-lang');
+    const asString = await call(validateMovementHandler, { body: { source: 'x', languageVersion: LANGUAGE_VERSION } });
+    const asInteger = await call(validateMovementHandler, { body: { source: 'x', languageVersion: 5 } });
+    expect(asInteger.statusCode).toBe(200);
+    expect(asInteger.body).toEqual(asString.body);
+    expect(asInteger.body?.validatedUnder).toEqual({ version: LANGUAGE_VERSION, name: LANGUAGE_VERSION });
+    expect(validateMock).toHaveBeenLastCalledWith(expect.objectContaining({ languageVersion: LANGUAGE_VERSION }));
+  });
+
+  it('reads 4 and "4" as the same legacy id', async () => {
+    const asString = await call(validateMovementHandler, { body: { source: 'x', languageVersion: '4' } });
+    const asInteger = await call(validateMovementHandler, { body: { source: 'x', languageVersion: 4 } });
+    expect(asInteger.body).toEqual(asString.body);
+    expect(asInteger.body?.validatedUnder).toEqual({ version: '4', name: '4' });
+  });
+
+  it('refuses another integer with a 400 naming the accepted forms', async () => {
+    const res = await call(validateMovementHandler, { body: { source: 'x', languageVersion: 7 } });
+    expect(res.statusCode).toBe(400);
+    expect(String(res.body?.error)).toMatch(/string such as/);
+    expect(validateMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('listAutomations / getAutomation views carry the pin as a string', () => {
+  it('getAutomation answers languageVersion and checkedAgainst as strings', async () => {
+    getMovementMock.mockResolvedValue({ id: 'm1', languageVersion: '0.12.0', validityCheckedAgainst: '4' });
+    const res = await call(getMovementHandler, { body: {}, params: { idOrName: 'm1' } });
+    expect(res.body).toMatchObject({ languageVersion: '0.12.0', checkedAgainst: '4' });
+    expect(res.body).not.toHaveProperty('validityCheckedAgainst');
   });
 });

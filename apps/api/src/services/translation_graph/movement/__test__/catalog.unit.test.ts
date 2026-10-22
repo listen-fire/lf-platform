@@ -1419,7 +1419,7 @@ describe('bundledPluginSpecs — declared output', () => {
 
   it('the one plugin the extraction alone feeds hands back the fields it adds', () => {
     // No parameters and a body that reads the enclosing extract's fields:
-    // before language version 5 it is a stage and nothing else; from 5 a call
+    // before language 0.12 it is a stage and nothing else; from 5 a call
     // hands it that record and gets back what it found.
     expect(specs['@lf/web/linkedin_enrichment']?.fedByExtraction).toBe(true);
     expect(specs['@lf/web/linkedin_enrichment']?.output).toEqual({

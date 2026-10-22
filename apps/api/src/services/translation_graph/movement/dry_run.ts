@@ -171,7 +171,7 @@ export function movementWriteRunMode(
           for (const arg of statement.args) {
             if (arg.kind === 'write') recordWrite(arg.write);
           }
-          // Function names are case-insensitive from language version 3, and
+          // Function names are case-insensitive from legacy version 3, and
           // two that differ only by case are refused, so folding finds the one.
           const callee = byName.get(statement.callee)
             ?? movements.find((m) => m.name.toLowerCase() === statement.callee.toLowerCase());

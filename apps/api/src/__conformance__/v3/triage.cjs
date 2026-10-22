@@ -36,6 +36,12 @@ const RUN_HOST_CORE =
 const PLATFORM_TABLE =
   "mocks movement-lang's `languageVersionDiagnostic` as the engine's view of a pin's standing; the language release now names only the versions it serves, and the engine reads the platform's table (legacy-lang, which still serves versions 1 to 5), so the mock no longer reaches it. The same behaviour is held by today's language_version_run test, which mocks the platform's table; no movement observes the difference";
 
+const PIN_AS_TEXT =
+  "a pin is text (PLAN-05 Task 2): a run given no pin runs under the corpus's legacy id as the string '3', where the corpus asserts the integer 3. The version a run honours is unchanged (the run beside it, pinned to 1, still runs under 1), and an author never sees the pin's type";
+
+const RULE_REFUSAL =
+  "an integer pin outside 1 to 4 is no legacy id (PLAN-05 Task 2), so the installed language's compatibility rule refuses it with its own text, before writing anything, as before; the corpus asserts the old integer table's wording. No saved movement carries such a pin: the column holds a legacy id or a release's semver";
+
 exports.triage = [
   { file: UNSUPPORTED_SITES, test: 'only the registered files throw it', reason: SOURCE_SCAN },
   { file: UNSUPPORTED_SITES, test: 'expression.ts: the registry lists exactly the call sites in the file', reason: SOURCE_SCAN },
@@ -81,4 +87,7 @@ exports.triage = [
   { file: 'services/movement_engine/__test__/await_resume.unit.test.ts', wholeFile: true, reason: RUN_HOST_CORE },
   { file: 'services/movement_engine/__test__/language_version_run.unit.test.ts', test: 'refuses a removed version BY NAME', reason: PLATFORM_TABLE },
   { file: 'services/movement_engine/__test__/language_version_run.unit.test.ts', test: 'runs a deprecated pin, with a warning on the run trace naming it', reason: PLATFORM_TABLE },
+  { file: 'services/movement_engine/__test__/language_version_run.unit.test.ts', test: 'runs under the current version when given none (unchanged for every existing caller)', reason: PIN_AS_TEXT },
+  { file: 'services/movement_engine/__test__/language_version_run.unit.test.ts', test: 'outside a run there is no pin: the current version', reason: PIN_AS_TEXT },
+  { file: 'services/movement_engine/__test__/language_version_run.unit.test.ts', test: 'refuses a pin this release does not support, naming it and the fix, before writing anything', reason: RULE_REFUSAL },
 ];
