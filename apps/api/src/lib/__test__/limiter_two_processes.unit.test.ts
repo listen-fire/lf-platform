@@ -130,6 +130,21 @@ async function startApiProcess(name: string, fakeUrl: string): Promise<ApiProces
   };
 }
 
+async function throttleExists(): Promise<void> {
+  const client = new Pg.Client({ connectionString: databaseUrl });
+  await client.connect();
+  try {
+    for (let attempt = 0; attempt < 500; attempt += 1) {
+      const { rowCount } = await client.query(`select 1 from "${schema}".throttles`);
+      if (rowCount) return;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    throw new Error('no throttle was written after the vendor refused a request');
+  } finally {
+    await client.end();
+  }
+}
+
 const fake = fakeMessagesServer();
 const processes: ApiProcess[] = [];
 let a: ApiProcess;
@@ -176,6 +191,9 @@ it("holds the other process's next request until a vendor's Retry-After has pass
       }
     }, 10);
   });
+  // The fake server logs the 429 before `a`'s client has parsed it and written
+  // the throttle, so `b` fires only once the throttle is in the database.
+  await throttleExists();
   const fromB = await b.fire(1);
   expect((await fromA).answered).toBe(1);
   expect(fromB.answered).toBe(1);
