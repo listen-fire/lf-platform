@@ -15,6 +15,8 @@ jest.mock('node:timers/promises', () => ({
   },
 }));
 
+import { installLimiter, MemoryLimiter } from 'movement-engine/public/limiter';
+
 import { BrightDataAdapter } from '../brightData';
 
 const PROFILE_URL = 'https://www.linkedin.com/in/ada-lovelace';
@@ -54,6 +56,8 @@ describe('the profile service’s wait', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date('2026-09-01T00:00:00Z'));
+    // The slot's in-process limiter, fresh for each test so no count carries over.
+    installLimiter(new MemoryLimiter());
   });
 
   afterEach(() => {
@@ -109,5 +113,64 @@ describe('the profile service’s wait', () => {
     );
 
     expect(polls.count).toBe(6);
+  });
+});
+
+describe('the dataset API’s limits', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-09-01T00:00:00Z'));
+    installLimiter(new MemoryLimiter());
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    jest.useRealTimers();
+  });
+
+  it('holds four profile fetches at once, and starts the fifth when one is done', async () => {
+    const triggers: Array<() => void> = [];
+    jest.spyOn(global, 'fetch').mockImplementation((input) => {
+      const url = String(input);
+      if (url.includes('/datasets/v3/trigger')) {
+        return new Promise<Response>((resolve) => {
+          triggers.push(() => resolve(new Response(JSON.stringify({ error: 'declined' }), { status: 200 })));
+        });
+      }
+      throw new Error(`unexpected ${url}`);
+    });
+    const adapter = new BrightDataAdapter({ accessToken: 'k' });
+
+    const fetches = Array.from({ length: 5 }, () => adapter.getProfileTextByUrl(PROFILE_URL));
+    await jest.advanceTimersByTimeAsync(0);
+    expect(triggers).toHaveLength(4);
+
+    triggers[0]();
+    await jest.advanceTimersByTimeAsync(0);
+    expect(triggers).toHaveLength(5);
+
+    for (const answer of triggers) answer();
+    await Promise.all(fetches);
+  });
+
+  it('after a 429 holds the next fetch until the wait Bright Data named has passed', async () => {
+    const sentAt: number[] = [];
+    const start = Date.now();
+    jest.spyOn(global, 'fetch').mockImplementation(async () => {
+      sentAt.push(Date.now() - start);
+      return sentAt.length === 1
+        ? new Response('slow down', { status: 429, statusText: 'Too Many Requests', headers: { 'retry-after': '7' } })
+        : new Response(JSON.stringify({ error: 'declined' }), { status: 200 });
+    });
+    const adapter = new BrightDataAdapter({ accessToken: 'k' });
+
+    await expect(adapter.getProfileTextByUrl(PROFILE_URL)).rejects.toThrow(/BrightData Error: 429/);
+    const next = adapter.getProfileTextByUrl(PROFILE_URL);
+
+    await jest.advanceTimersByTimeAsync(6_999);
+    expect(sentAt).toHaveLength(1);
+    await jest.advanceTimersByTimeAsync(1);
+    await next;
+    expect(sentAt).toEqual([0, 7_000]);
   });
 });

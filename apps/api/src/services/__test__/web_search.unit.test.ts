@@ -13,11 +13,9 @@ jest.mock('../../lib/web_search', () => ({
   isAvailable: () => false,
 }));
 
-import {
-  parseBrightDataSerpPerMinute,
-  RollingMinuteLimiter,
-  WebSearchService,
-} from '../web_search';
+import { installLimiter, MemoryLimiter } from 'movement-engine/public/limiter';
+
+import { parseBrightDataSerpPerMinute, WebSearchService } from '../web_search';
 
 const fetchMock = jest.fn();
 global.fetch = fetchMock as never;
@@ -25,9 +23,11 @@ global.fetch = fetchMock as never;
 const ORIGINAL_ENV = process.env;
 
 beforeEach(() => {
-  // Only the retry wait's `setTimeout` is faked; `Date` stays real so the
-  // per-attempt duration is still wall-clock time.
-  jest.useFakeTimers({ doNotFake: ['Date'] });
+  // `Date` is faked with the timers: the limiter measures its minute and its
+  // throttles with it, and a wait it asks for is a timer.
+  jest.useFakeTimers();
+  // The slot's in-process limiter, fresh for each test so no count carries over.
+  installLimiter(new MemoryLimiter());
   fetchMock.mockReset();
   process.env = { ...ORIGINAL_ENV };
   delete process.env.WEB_SEARCH_PROVIDER;
@@ -35,9 +35,9 @@ beforeEach(() => {
   process.env.GOOGLE_CX = 'google-cx';
   delete process.env.BRIGHT_DATA_ACCESS_TOKEN;
   delete process.env.BRIGHT_DATA_SERP_ZONE;
-  // Every Bright Data request in this process shares one pacing queue, and
-  // these tests make more than a default minute's worth between them; the
-  // pacing itself is under test below.
+  // Every Bright Data request shares the zone's limit, and these tests make
+  // more than a default minute's worth between them; the limit itself is
+  // under test below.
   process.env.BRIGHT_DATA_SERP_PER_MINUTE = '1000';
 });
 
@@ -366,6 +366,52 @@ describe('WebSearchService.search — brightdata retries', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("waits the wait Bright Data's Retry-After names, not the default", async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response('', { status: 200, headers: { 'x-brd-status-code': '429', 'retry-after': '7' } }),
+    );
+    fetchMock.mockResolvedValueOnce(jsonResponse({ organic: [] }));
+
+    const promise = WebSearchService.search('acme');
+
+    await jest.advanceTimersByTimeAsync(6_999);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await jest.advanceTimersByTimeAsync(1);
+    expect((await promise).items).toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('an HTTP 429 throttles the zone too', async () => {
+    fetchMock.mockResolvedValueOnce(new Response('slow down', { status: 429 }));
+    fetchMock.mockResolvedValueOnce(jsonResponse({ organic: [] }));
+
+    const promise = WebSearchService.search('acme');
+    await jest.advanceTimersByTimeAsync(RATE_LIMIT_RETRY_DELAY_MS - 1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await jest.advanceTimersByTimeAsync(1);
+    expect((await promise).items).toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("a 429 holds another search's request until the wait is over", async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response('', { status: 200, headers: { 'x-brd-status-code': '429', 'retry-after': '20' } }),
+    );
+    fetchMock.mockImplementation(async () => jsonResponse({ organic: [] }));
+
+    const first = WebSearchService.search('first');
+    await jest.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const second = WebSearchService.search('second');
+    await jest.advanceTimersByTimeAsync(19_999);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await jest.advanceTimersByTimeAsync(1);
+    await Promise.all([first, second]);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
   it('a Bright Data 403 fails at once, without retrying', async () => {
     fetchMock.mockResolvedValueOnce(
       new Response('', { status: 200, headers: { 'x-brd-status-code': '403' } }),
@@ -412,64 +458,82 @@ describe('BRIGHT_DATA_SERP_PER_MINUTE', () => {
 
 // Measured in production: thirty-odd searches demanded at once, and Bright
 // Data refusing most of them with "Please decrease your request rate to
-// 14/min". Requests now wait their turn instead.
+// 14/min". Requests now wait for the limiter instead of being sent and refused.
 describe('Bright Data SERP pacing', () => {
   const MINUTE_MS = 60_000;
 
   beforeEach(() => {
-    // `Date` is faked too here: the limiter measures its minute with it.
-    jest.useFakeTimers();
+    process.env.WEB_SEARCH_PROVIDER = 'brightdata';
+    process.env.BRIGHT_DATA_ACCESS_TOKEN = 'token-123';
+    process.env.BRIGHT_DATA_SERP_ZONE = 'serp_zone';
+    process.env.BRIGHT_DATA_SERP_PER_MINUTE = '14';
+    fetchMock.mockImplementation(async () => jsonResponse({ organic: [] }));
   });
 
-  it('N requests at once take at least (N - 14) / 14 minutes, and no longer', async () => {
-    const limiter = new RollingMinuteLimiter(() => 14);
+  it('refuses the request past the limit with a retryAt, and the search waits rather than sending', async () => {
+    const limiter = new MemoryLimiter();
+    installLimiter(limiter);
+    const grants: Array<Awaited<ReturnType<MemoryLimiter['acquire']>>> = [];
+    const acquire = limiter.acquire.bind(limiter);
+    jest.spyOn(limiter, 'acquire').mockImplementation(async (request) => {
+      const grant = await acquire(request);
+      grants.push(grant);
+      return grant;
+    });
     const start = Date.now();
-    const grantedAt: number[] = [];
-    const turns = Array.from({ length: 42 }, () =>
-      limiter.take().then(() => grantedAt.push(Date.now() - start)),
-    );
+
+    const searches = Array.from({ length: 15 }, (_, i) => WebSearchService.search(`q${i}`));
+    await jest.advanceTimersByTimeAsync(0);
+
+    expect(fetchMock).toHaveBeenCalledTimes(14);
+    const refusal = grants.find((grant) => !grant.granted);
+    if (refusal === undefined || refusal.granted) throw new Error('the fifteenth request was not refused');
+    // One call is back in the bucket after a fourteenth of the minute.
+    const retryAt = Date.parse(refusal.retryAt);
+    expect(retryAt - start).toBe(Math.ceil(MINUTE_MS / 14));
+
+    await jest.advanceTimersByTimeAsync(retryAt - start - 1);
+    expect(fetchMock).toHaveBeenCalledTimes(14);
+    await jest.advanceTimersByTimeAsync(1);
+    await Promise.all(searches);
+    expect(fetchMock).toHaveBeenCalledTimes(15);
+  });
+
+  it('N requests at once take about (N - 14) / 14 minutes, and no longer', async () => {
+    const start = Date.now();
+    const sentAt: number[] = [];
+    fetchMock.mockImplementation(async () => {
+      sentAt.push(Date.now() - start);
+      return jsonResponse({ organic: [] });
+    });
+    const searches = Array.from({ length: 42 }, (_, i) => WebSearchService.search(`q${i}`));
 
     await jest.advanceTimersByTimeAsync(0);
-    expect(grantedAt).toHaveLength(14);
-
-    await jest.advanceTimersByTimeAsync(MINUTE_MS - 1);
-    expect(grantedAt).toHaveLength(14);
-    await jest.advanceTimersByTimeAsync(1);
-    expect(grantedAt).toHaveLength(28);
-
-    await jest.advanceTimersByTimeAsync(MINUTE_MS);
-    await Promise.all(turns);
-    expect(grantedAt).toHaveLength(42);
-    // (42 - 14) / 14 = two minutes for the last turn.
-    expect(Math.max(...grantedAt)).toBe(2 * MINUTE_MS);
-  });
-
-  it('serves callers in the order they arrived', async () => {
-    const limiter = new RollingMinuteLimiter(() => 1);
-    const order: number[] = [];
-    const turns = [1, 2, 3].map((n) => limiter.take().then(() => order.push(n)));
+    expect(sentAt).toHaveLength(14);
 
     await jest.advanceTimersByTimeAsync(2 * MINUTE_MS);
-    await Promise.all(turns);
-    expect(order).toEqual([1, 2, 3]);
+    await Promise.all(searches);
+    expect(sentAt).toHaveLength(42);
+    // The limiter is a token bucket: a burst of 14, then one a fourteenth of
+    // a minute. (So a rolling minute can hold up to 14 + 13, not only 14.)
+    for (const [i, at] of sentAt.entries()) {
+      if (i >= 15) expect(at - sentAt[i - 1]).toBeGreaterThanOrEqual(Math.floor(MINUTE_MS / 14));
+    }
+    // (42 - 14) / 14 = two minutes for the last one, give or take rounding.
+    expect(Math.max(...sentAt)).toBeGreaterThan(2 * MINUTE_MS - 100);
+    expect(Math.max(...sentAt)).toBeLessThanOrEqual(2 * MINUTE_MS + 100);
   });
 
-  it('every search, retries included, goes through the shared queue', async () => {
-    await jest.isolateModulesAsync(async () => {
-      const { WebSearchService: isolated } = await import('../web_search');
-      process.env.WEB_SEARCH_PROVIDER = 'brightdata';
-      process.env.BRIGHT_DATA_ACCESS_TOKEN = 'token-123';
-      process.env.BRIGHT_DATA_SERP_ZONE = 'serp_zone';
-      process.env.BRIGHT_DATA_SERP_PER_MINUTE = '2';
-      fetchMock.mockImplementation(async () => jsonResponse({ organic: [] }));
+  it('every search, retries included, asks the limiter', async () => {
+    process.env.BRIGHT_DATA_SERP_PER_MINUTE = '2';
 
-      const searches = ['a', 'b', 'c'].map((q) => isolated.search(q));
-      await jest.advanceTimersByTimeAsync(0);
-      expect(fetchMock).toHaveBeenCalledTimes(2);
+    const searches = ['a', 'b', 'c'].map((q) => WebSearchService.search(q));
+    await jest.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
 
-      await jest.advanceTimersByTimeAsync(MINUTE_MS);
-      await Promise.all(searches);
-      expect(fetchMock).toHaveBeenCalledTimes(3);
-    });
+    // Two a minute is one every thirty seconds.
+    await jest.advanceTimersByTimeAsync(MINUTE_MS / 2);
+    await Promise.all(searches);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });

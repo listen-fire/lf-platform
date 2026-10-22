@@ -17,6 +17,8 @@ jest.mock('../../lib/llm_usage', () => ({
 const sendSlackNotification = jest.fn().mockResolvedValue(undefined);
 jest.mock('../../lib/slack', () => ({ sendSlackNotification }));
 
+import { installLimiter, MemoryLimiter } from 'movement-engine/public/limiter';
+
 import { ScraperService, looksLikeSpaShell } from '../scraper';
 import { BudgetExhausted, NO_BUDGET_LIMIT } from 'movement-engine/public/models';
 import { withSpendMeter } from 'movement-engine/public/models';
@@ -35,6 +37,8 @@ function bodyOf(callIndex: number): Record<string, unknown> {
 }
 
 beforeEach(() => {
+  // The slot's in-process limiter, fresh for each test so no count carries over.
+  installLimiter(new MemoryLimiter());
   fetchMock.mockReset();
   sendSlackNotification.mockClear();
 });
@@ -253,5 +257,82 @@ describe('ScraperService.getWebsite — what a run is charged', () => {
       ),
     ).rejects.toThrow(BudgetExhausted);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+const RICH_HTML = `<html><body><p>${'Real page content. '.repeat(20)}</p></body></html>`;
+
+describe('ScraperService.getWebsite — Web Unlocker limits', () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('holds ten requests in flight and sends the eleventh when one is answered', async () => {
+    const answers: Array<() => void> = [];
+    let inFlight = 0;
+    let maxInFlight = 0;
+    fetchMock.mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          inFlight += 1;
+          maxInFlight = Math.max(maxInFlight, inFlight);
+          answers.push(() => {
+            inFlight -= 1;
+            resolve(okResponse(RICH_HTML));
+          });
+        }),
+    );
+
+    const scrapes = Array.from({ length: 12 }, (_, i) =>
+      ScraperService.getWebsite(`https://example.com/${i}`, { provider: 'brightdata' }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(fetchMock).toHaveBeenCalledTimes(10);
+
+    answers[0]();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(fetchMock).toHaveBeenCalledTimes(11);
+
+    const done = Promise.all(scrapes);
+    let answered = 1;
+    while (answered < 12) {
+      if (answers.length > answered) answers[answered++]();
+      else await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    await done;
+    expect(maxInFlight).toBe(10);
+  });
+
+  it('after a 429 waits the wait Bright Data named, then asks again', async () => {
+    jest.useFakeTimers();
+    fetchMock.mockResolvedValueOnce(
+      new Response('slow down', { status: 429, statusText: 'Too Many Requests', headers: { 'retry-after': '7' } }),
+    );
+    fetchMock.mockResolvedValueOnce(okResponse(RICH_HTML));
+
+    const scrape = ScraperService.getWebsite('https://example.com', { provider: 'brightdata' });
+    await jest.advanceTimersByTimeAsync(6_999);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await jest.advanceTimersByTimeAsync(1);
+    expect((await scrape).trim().length).toBeGreaterThan(50);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('after a 429 with no named wait closes the zone for thirty seconds, for every scrape', async () => {
+    jest.useFakeTimers();
+    fetchMock.mockResolvedValueOnce(new Response('slow down', { status: 429, statusText: 'Too Many Requests' }));
+    fetchMock.mockImplementation(async () => okResponse(RICH_HTML));
+
+    const first = ScraperService.getWebsite('https://example.com/a', { provider: 'brightdata' });
+    await jest.advanceTimersByTimeAsync(0);
+    const second = ScraperService.getWebsite('https://example.com/b', { provider: 'brightdata' });
+
+    await jest.advanceTimersByTimeAsync(29_999);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await jest.advanceTimersByTimeAsync(1);
+    await Promise.all([first, second]);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });

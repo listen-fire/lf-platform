@@ -11,10 +11,23 @@ import { safeToUrl } from '../../lib/utils/url';
 import { neverAsAny } from 'movement-engine/public/types';
 import { notNull, notUndefined } from '../../lib/utils/nullability';
 import { sendSlackNotification } from '../../lib/slack';
-import { Queue } from 'movement-engine/public/queue';
+import {
+  limitRequest,
+  limited,
+  limiterSlot,
+  throttleAfter,
+  vendorWaitMs,
+  type Caller,
+} from 'movement-engine/public/limiter';
 
-// BrightData long-polls (up to 5min per request) — limit concurrent requests
-const brightDataQueue = new Queue<unknown>({ concurrency: 4 });
+const DATASET_ID = 'gd_l1viktl72bvl7bjuj0';
+
+// BrightData long-polls (up to 5min per request) — limit concurrent requests.
+// Held by the limiter slot, so every process on a shared limiter shares the four.
+const DATASET_CALLER: Caller = { module: 'bright-data/dataset', install: DATASET_ID, team: '' };
+const DATASET_REQUEST = limitRequest(DATASET_CALLER, [{ scope: 'install', concurrent: 4 }]);
+// How long a 429 closes the dataset API when Bright Data names no wait of its own.
+const RATE_LIMIT_WAIT_MS = 30 * SECOND;
 
 const triggerCollectionBody = z.array(z.object({ url: z.string() }));
 type TriggerCollectionBody = z.infer<typeof triggerCollectionBody>;
@@ -100,7 +113,7 @@ class BrightDataAdapter implements LinkedinAdapter {
     url: string,
     budget?: ProfileFetchBudget,
   ): Promise<{ text?: string | null; avatar?: string | null } | null> {
-    return brightDataQueue.enqueue(() => this.getProfileTextByUrlInner(url, budget)) as Promise<{ text?: string | null; avatar?: string | null } | null>;
+    return limited(limiterSlot(), DATASET_REQUEST, () => this.getProfileTextByUrlInner(url, budget));
   }
 
   private async getProfileTextByUrlInner(
@@ -233,7 +246,7 @@ class BrightDataAdapter implements LinkedinAdapter {
 
   private async triggerCollection(body: TriggerCollectionBody): Promise<TriggerCollectionResponse> {
     return this.fetch({
-      route: `/datasets/v3/trigger?dataset_id=gd_l1viktl72bvl7bjuj0&include_errors=true`,
+      route: `/datasets/v3/trigger?dataset_id=${DATASET_ID}&include_errors=true`,
       method: 'POST',
       body,
       responseValidator: triggerCollectionResponse,
@@ -304,6 +317,9 @@ class BrightDataAdapter implements LinkedinAdapter {
     });
 
     if (!response.ok) {
+      if (response.status === 429) {
+        await throttleAfter(limiterSlot(), DATASET_CALLER, vendorWaitMs(response) ?? RATE_LIMIT_WAIT_MS);
+      }
       let text;
       try {
         text = await response.text();

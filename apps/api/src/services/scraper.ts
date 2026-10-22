@@ -6,7 +6,14 @@ import type { CostSource } from 'movement-engine/public/models';
 import { SECOND } from '../constants';
 import { logger } from 'movement-engine/public/log';
 import { sendSlackNotification } from '../lib/slack';
-import { Queue } from 'movement-engine/public/queue';
+import {
+  limitRequest,
+  limited,
+  limiterSlot,
+  throttleAfter,
+  vendorWaitMs,
+  type Caller,
+} from 'movement-engine/public/limiter';
 import { getEnvVar } from '../lib/utils/environment';
 import { looksLikeNonHtmlAddress } from '../lib/utils/url';
 import { assertRunBudget, reportRunCost } from 'movement-engine/public/models';
@@ -18,14 +25,15 @@ import { assertRunBudget, reportRunCost } from 'movement-engine/public/models';
 
 // Web Unlocker is synchronous and returns rendered HTML; concurrency can be higher
 // than the Dataset API (which is async long-poll). Start at 10 and tune based on limits.
-const rateLimitQueue = new Queue<string>({
-  concurrency: 10,
-});
+// Held by the limiter slot, so every process on a shared limiter shares the ten.
+const WEB_UNLOCKER_CALLER = 'bright-data/unlocker';
+const WEB_UNLOCKER_CONCURRENT = 10;
 
 const RETRY_LIMIT = 2;
 const INITIAL_DELAY = 1 * SECOND;
 const TIME_MULTIPLE = 4;
-const RATE_LIMIT_DELAY = 60 * SECOND;
+// How long a 429 closes the zone when Bright Data names no wait of its own.
+const RATE_LIMIT_DELAY = 30 * SECOND;
 const FETCH_TIMEOUT = 90 * SECOND;
 const MIN_CONTENT_LENGTH = 50;
 // A client-rendered SPA's shell text is short even once fully loaded (nav +
@@ -119,30 +127,44 @@ async function fetchHtmlBrightData(
   // loadable. A scrape only fails if the zone is genuinely missing at call time.
   const BRIGHT_DATA_ACCESS_TOKEN = getEnvVar('BRIGHT_DATA_ACCESS_TOKEN');
   const BRIGHT_DATA_UNLOCKER_ZONE = getEnvVar('BRIGHT_DATA_UNLOCKER_ZONE');
-  const response = await fetch('https://api.brightdata.com/request', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${BRIGHT_DATA_ACCESS_TOKEN}`,
-      'Content-Type': 'application/json',
-    },
-    // render is omitted (not sent as false) so the common, non-rendered path's
-    // wire payload is unchanged from before this fallback existed.
-    body: JSON.stringify({
-      zone: BRIGHT_DATA_UNLOCKER_ZONE,
-      url,
-      format: 'raw',
-      ...(render ? { render: true } : {}),
-    }),
-    signal: AbortSignal.timeout(FETCH_TIMEOUT),
+  const caller: Caller = {
+    module: WEB_UNLOCKER_CALLER,
+    install: BRIGHT_DATA_UNLOCKER_ZONE,
+    team: '',
+  };
+  const request = limitRequest(caller, [{ scope: 'install', concurrent: WEB_UNLOCKER_CONCURRENT }]);
+  // The permit is held until the body is read, as the queue's slot was.
+  return limited(limiterSlot(), request, async () => {
+    const response = await fetch('https://api.brightdata.com/request', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${BRIGHT_DATA_ACCESS_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      // render is omitted (not sent as false) so the common, non-rendered path's
+      // wire payload is unchanged from before this fallback existed.
+      body: JSON.stringify({
+        zone: BRIGHT_DATA_UNLOCKER_ZONE,
+        url,
+        format: 'raw',
+        ...(render ? { render: true } : {}),
+      }),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT),
+    });
+
+    if (!response.ok) {
+      // A 429 closes the zone for every process sharing the limiter; the retry
+      // in `retryingQuery` asks again and waits the throttle out.
+      if (response.status === 429) {
+        await throttleAfter(limiterSlot(), caller, vendorWaitMs(response) ?? RATE_LIMIT_DELAY);
+      }
+      const text = await response.text().catch(() => '');
+      throw new Error(`${response.status} ${response.statusText}: ${text.slice(0, 200)}`);
+    }
+
+    billed.count += 1;
+    return readCappedBody(response);
   });
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    throw new Error(`${response.status} ${response.statusText}: ${text.slice(0, 200)}`);
-  }
-
-  billed.count += 1;
-  return readCappedBody(response);
 }
 
 /**
@@ -227,38 +249,28 @@ function nonHtmlSignature(bytes: Buffer): string | null {
   return control / head.length > MAX_CONTROL_BYTE_RATIO ? 'binary' : null;
 }
 
-async function enqueueQuery(fn: () => Promise<string>) {
-  return rateLimitQueue.enqueue(async () => {
-    return backOff(fn, {
-      jitter: 'full',
-      numOfAttempts: RETRY_LIMIT,
-      startingDelay: INITIAL_DELAY,
-      timeMultiple: TIME_MULTIPLE,
-      retry: async (e, attempt) => {
-        if (e instanceof Error && e.message.includes('429')) {
-          // Rate limit
-          logger.info(`Hit rate limit, waiting an additional ${RATE_LIMIT_DELAY / SECOND} seconds`);
-          const jitterWidth = RATE_LIMIT_DELAY * 0.2;
-          const jitter = (Math.random() - 0.5) * jitterWidth;
-          await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_DELAY + jitter));
-        } else if (e instanceof Error && e.message.includes('401')) {
-          // Invalid API key
-          return false;
-        }
+async function retryingQuery(fn: () => Promise<string>) {
+  return backOff(fn, {
+    jitter: 'full',
+    numOfAttempts: RETRY_LIMIT,
+    startingDelay: INITIAL_DELAY,
+    timeMultiple: TIME_MULTIPLE,
+    retry: async (e, attempt) => {
+      if (e instanceof Error && e.message.includes('401')) {
+        // Invalid API key
+        return false;
+      }
 
-        if (attempt < RETRY_LIMIT) {
-          logger.info(
-            `Retrying query in ${
-              (INITIAL_DELAY / SECOND) * TIME_MULTIPLE ** (attempt - 1)
-            } seconds`,
-            {
-              error: e,
-            },
-          );
-        }
-        return true;
-      },
-    });
+      if (attempt < RETRY_LIMIT) {
+        logger.info(
+          `Retrying query in ${(INITIAL_DELAY / SECOND) * TIME_MULTIPLE ** (attempt - 1)} seconds`,
+          {
+            error: e,
+          },
+        );
+      }
+      return true;
+    },
   });
 }
 
@@ -397,7 +409,7 @@ class Scraper {
   }
 
   private scrape(url: string, provider: ScrapeProvider, billed: BilledRequests): Promise<string> {
-    return enqueueQuery(async () => {
+    return retryingQuery(async () => {
       const body = await fetchHtml(url, provider, billed);
       if (body.nonHtml) {
         logger.info('Scrape returned a body that is not a page', { url, reason: body.nonHtml });
@@ -415,7 +427,11 @@ class Scraper {
       // second billable call), so a client-rendered page's empty shell needs a
       // deliberate retry. ScraperAPI already renders on every call.
       if (provider === 'brightdata') {
-        const decision = jsRenderDecision({ text, html: scrapeResponse, truncated: body.truncated });
+        const decision = jsRenderDecision({
+          text,
+          html: scrapeResponse,
+          truncated: body.truncated,
+        });
         if (decision.retry) {
           logger.info('Retrying with JavaScript rendering', { url, reason: decision.reason });
           const rendered = await fetchHtmlBrightData(url, { render: true, billed });
