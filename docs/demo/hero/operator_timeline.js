@@ -29,10 +29,13 @@ function need(m, what) {
 const cap = (s) => s[0].toUpperCase() + s.slice(1);
 const list = (xs) => (xs.length < 2 ? xs.join('') : xs.slice(0, -1).join(', ') + ' and ' + xs[xs.length - 1]);
 const PROG = D.v2;
-const SYSTEMS = need(PROG.match(/^import \{([^}]+)\} from adapters/m), 'adapter import').split(',').map((s) => cap(s.trim()));
+// `import { `@lf/gmail` as gmail, … } from adapters`: the alias is the name a person knows.
+const SYSTEMS = need(PROG.match(/^import \{([^}]+)\} from adapters/m), 'adapter import')
+  .split(',')
+  .map((s) => cap(s.replace(/^.*\bas\s+/, '').replace(/`/g, '').trim()));
 const AUTOMATION = need(PROG.match(/function `([^`]+)`/), 'automation name');
 const PROG_LINES = PROG.split('\n').length;
-const CHANNEL = need(PROG.match(/Channels WHERE `Name` == "([^"]+)"/), 'Slack channel');
+const CHANNEL = need(PROG.match(/Channels WHERE \w+\.Name == "([^"]+)"/), 'Slack channel');
 const LABEL = D.saved.listeners[0].config.labels[0];
 
 const ERR = D.diagnostics.find((d) => d.severity === 'error');
