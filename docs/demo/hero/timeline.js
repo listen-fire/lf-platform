@@ -128,12 +128,12 @@ const RUN_CAPTION = D.run.modelCalls === 0
   ? 'Five writes in under a second. <em>No model calls, no tokens.</em>'
   : `${D.run.committed} writes and ${D.run.modelCalls === 1 ? 'one small model call' : D.run.modelCalls + ' model calls'}, for <em>${fmtCost(D.run.costUsd)}</em>.`;
 const CAPTIONS = [
-  [5.8, 9.9, 'Ask your agent for an automation, in plain words.'],
-  [10.2, 13.5, 'It reads the <em>real schemas</em> of your connected systems…'],
-  [13.8, 19.9, '…and writes a short program. Adapters handle auth, rate limits and pagination.'],
+  [5.8, 9.9, 'Tell your agent what should happen, in plain words.'],
+  [10.2, 13.5, 'It reads the <em>real fields and stages</em> of your tools…'],
+  [13.8, 19.9, '…and writes a short program. Modules handle sign-in, rate limits and paging.'],
   [20.9, 27.3, 'Checked against your <em>live Attio</em> before it’s saved: “Sourcing” isn’t a stage there.'],
   [27.6, 31.4, 'One small edit, and it goes live.'],
-  [31.6, 35.3, 'From now on it runs on every email, <em>without the agent</em>.'],
+  [31.6, 35.3, 'From now on every such email is handled the same way, <em>with no agent in the loop</em>.'],
   [38.2, 42.4, 'A founder emails in. You label it Dealflow.'],
   [42.6, 47.3, RUN_CAPTION],
 ];
