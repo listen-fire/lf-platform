@@ -288,6 +288,12 @@ export const MANIFEST: Record<Product, TableSpec[]> = {
     { table: 'callback', tenancy: { kind: 'team_column' } },
     { table: 'record_binding', tenancy: { kind: 'team_column' } },
     {
+      table: 'lf_secrets_lease',
+      tenancy: { kind: 'team_column' },
+      exportExcludedBecause:
+        'a runtime row of seconds’ life, keyed by team and ref, naming rows the source’s tenant held; it is deleted with the team and is not carried',
+    },
+    {
       // SHELL ROWS. The id survives because `trigger.credentials_id` and
       // `webhook_subscription.credentials_id` point at it; the ciphertext does
       // not, because it is AAD-bound to a master key this deployment does not
