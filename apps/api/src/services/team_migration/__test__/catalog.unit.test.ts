@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import {
   TEAM_PARAM,
   assertManifestCovers,
@@ -111,6 +114,15 @@ describe('the manifest itself', () => {
       const names = MANIFEST[product].map((spec) => qualified(product, spec));
       expect(names).toHaveLength(new Set(names).size);
     }
+  });
+
+  it('rules on every table the five unit schemas declare, so an export never refuses for want of one', () => {
+    const schema = readFileSync(join(__dirname, '../../../db/schema.sql'), 'utf8');
+    const present = PRODUCTS.flatMap((product) =>
+      [...schema.matchAll(new RegExp(`^CREATE TABLE ${product}\\."?([a-z_]+)"? \\(`, 'gm'))].map((match) => `${product}.${match[1]}`),
+    );
+    expect(present).toEqual(expect.arrayContaining(['automations.work', 'automations.delivery', 'core.team']));
+    expect(() => assertManifestCovers([...PRODUCTS], present)).not.toThrow();
   });
 
   it('gives every declined table a reason — a refusal without one is indistinguishable from an oversight', () => {

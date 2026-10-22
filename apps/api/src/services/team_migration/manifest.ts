@@ -251,6 +251,30 @@ export const MANIFEST: Record<Product, TableSpec[]> = {
       tenancy: { kind: 'via', column: 'run_id', parent: 'automations.trigger_run' },
     },
     { table: 'adapter_await', tenancy: { kind: 'team_column' } },
+    // The library texts parked runs name by hash: carried with the parks that read them.
+    { table: 'park_library_source', tenancy: { kind: 'team_column' } },
+    {
+      table: 'work',
+      tenancy: { kind: 'team_column' },
+      exportExcludedBecause:
+        'queued work leased and due on the source’s workers; importing it would run the source’s pending wakes and firings on the target, whose own sweeps re-arm what its runs need',
+    },
+    {
+      table: 'system_event',
+      tenancy: { kind: 'team_column' },
+      exportExcludedBecause:
+        'the platform’s own events about the source deployment (a release applied there, a run paused there); the target emits its own',
+    },
+    {
+      table: 'deploy_check',
+      tenancy: { kind: 'global' },
+      outOfScopeBecause: 'which releases this deployment’s deploy check has swept: a fact about the deployment, not a tenant',
+    },
+    {
+      table: 'cache_entry',
+      tenancy: { kind: 'global' },
+      outOfScopeBecause: 'the deployment’s expiring cache and loop-guard buckets, kept when no Redis is configured; machine churn, not tenant data',
+    },
     // What the lf store module keeps beside lf's runs (services/lf_store).
     { table: 'inbound_checkpoint', tenancy: { kind: 'team_column' } },
     { table: 'event_receipt', tenancy: { kind: 'team_column' }, history: true },
