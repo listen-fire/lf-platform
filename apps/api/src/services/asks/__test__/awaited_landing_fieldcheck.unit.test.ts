@@ -66,26 +66,27 @@ async function errorsFor(body: string): Promise<string[]> {
 const AWAIT = `  a = write qa-[:Check]-> { Prompt: "Ship it?" }\n  r = await first(a-[:Response]->)`;
 
 describe('the awaited ask landing is checked like any position', () => {
+  // Language 0.12 (rc.8 catalog) adds description and fieldDocs to a projected position; these assert the properties and edges only.
   it("projects the Check ask's own Response node CLOSED, Answer typed boolean (not the old shared string)", async () => {
     const { schema } = await askSnapshot();
-    expect(schema.positions['Check Response']).toEqual({ properties: { Answer: 'boolean' }, edges: {} });
+    expect(schema.positions['Check Response']).toMatchObject({ properties: { Answer: 'boolean' }, edges: {} });
     // The old shared type no longer exists.
     expect(schema.positions.Response).toBeUndefined();
   });
 
   it('projects every family\'s OWN Response node with its own honest Answer type', async () => {
     const { schema } = await askSnapshot();
-    expect(schema.positions['Check Response']).toEqual({ properties: { Answer: 'boolean' }, edges: {} });
-    expect(schema.positions['Choose Response']).toEqual({ properties: { Answer: 'text' }, edges: {} });
-    expect(schema.positions['Select Response']).toEqual({
+    expect(schema.positions['Check Response']).toMatchObject({ properties: { Answer: 'boolean' }, edges: {} });
+    expect(schema.positions['Choose Response']).toMatchObject({ properties: { Answer: 'text' }, edges: {} });
+    expect(schema.positions['Select Response']).toMatchObject({
       properties: { Answer: { kind: 'list', of: 'text' } },
       edges: {},
     });
-    expect(schema.positions['Review Response']).toEqual({ properties: { Answer: 'text' }, edges: {} });
-    expect(schema.positions['Provide Response']).toEqual({ properties: { Answer: 'text' }, edges: {} });
-    expect(schema.positions['Correct Response']).toEqual({ properties: { Answer: 'json' }, edges: {} });
-    expect(schema.positions['Draft Response']).toEqual({ properties: { Answer: 'json' }, edges: {} });
-    expect(schema.positions['Form Response']).toEqual({ properties: { Answer: 'json' }, edges: {} });
+    expect(schema.positions['Review Response']).toMatchObject({ properties: { Answer: 'text' }, edges: {} });
+    expect(schema.positions['Provide Response']).toMatchObject({ properties: { Answer: 'text' }, edges: {} });
+    expect(schema.positions['Correct Response']).toMatchObject({ properties: { Answer: 'json' }, edges: {} });
+    expect(schema.positions['Draft Response']).toMatchObject({ properties: { Answer: 'json' }, edges: {} });
+    expect(schema.positions['Form Response']).toMatchObject({ properties: { Answer: 'json' }, edges: {} });
   });
 
   it('reading the DECLARED name is clean', async () => {

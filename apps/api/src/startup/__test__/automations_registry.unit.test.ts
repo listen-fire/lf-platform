@@ -52,7 +52,9 @@ const PERIODIC_KINDS = [
 /** The kinds the units bring: the adapter packages' (asks, Airtable), file
  *  exposure's, inbound sync's, and the knowledge graph's change events (a
  *  composed process, the default delivery). */
-const UNIT_KINDS = ['ask_closed_sweep', 'airtable_webhook_refresh', 'exposed_file_sweep', 'linked_object_refresh', 'knowledge_changes'];
+const UNIT_KINDS = ['ask_closed_sweep', 'airtable_webhook_refresh', 'exposed_file_sweep', 'linked_object_refresh', 'knowledge_changes',
+  // The Slack and WhatsApp doors each register a durable-row kind in the drain.
+  'slack_event', 'slack_response', 'whatsapp_message'];
 
 const PASS = { claimed: 0, ran: 0, recovered: 0, failed: 0, deferred: 0, claimFailed: false };
 
