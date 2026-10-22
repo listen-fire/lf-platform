@@ -18,7 +18,7 @@ import type { MovementId } from '../../generated/kysely/automations/Movement';
 import { getAutomationsQb } from '../../lib/kysely';
 import { enclosingJoinAddress, encodeAddress, parseAddress } from 'movement-engine/public/addresses';
 import { describeRunAwaits } from '../movement_engine/await_description';
-import { resolveAutomationName } from '../../lib/automation/naming';
+import { lfListenMovement, resolveAutomationName } from '../../lib/automation/naming';
 
 export interface ParkedRunSummary {
   runId: string;
@@ -201,11 +201,6 @@ export function countPendingJoinGroups(addresses: string[]): number {
   let groups = 0;
   for (const count of counts.values()) if (count > 1) groups += 1;
   return groups;
-}
-/** The movement an lf run's trigger id names. lf has no trigger rows: it
- *  writes `listen:<file>:<movement>` as the trigger id of a run it starts. */
-function lfListenMovement(triggerId: string): string | null {
-  return /^listen:.+:([^:]+)$/.exec(triggerId)?.[1] ?? null;
 }
 
 /** Map trigger id → its user-facing automation name. A movement-derived

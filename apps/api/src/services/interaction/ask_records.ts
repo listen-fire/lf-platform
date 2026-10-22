@@ -28,7 +28,7 @@ import {
   type AskViewCorrect,
 } from '../asks/surface_view';
 import { answerAskById } from '../asks/doors';
-import { resolveAutomationName } from '../../lib/automation/naming';
+import { lfListenMovement, resolveAutomationName } from '../../lib/automation/naming';
 
 /** One new-store question, projected for the "your asks" surface. Field names
  *  mirror the legacy `OpenAskSummary` (question / detail / interactionType /
@@ -134,8 +134,14 @@ async function awaitingAutomationNames(askIds: AskId[]): Promise<Map<string, str
   const triggerByRun = new Map<string, string>();
   for (const r of runs) triggerByRun.set(r.id as unknown as string, r.trigger_id);
 
-  const triggerIds = [...new Set([...triggerByRun.values()])];
   const names = new Map<string, string>();
+  // An lf run is named by its movement; its trigger id is no trigger row's.
+  const triggerIds: string[] = [];
+  for (const id of new Set(triggerByRun.values())) {
+    const movement = lfListenMovement(id);
+    if (movement === null) triggerIds.push(id);
+    else names.set(id, movement);
+  }
   if (triggerIds.length > 0) {
     const trows = await getAutomationsQb(['trigger'])
       .selectFrom('trigger')

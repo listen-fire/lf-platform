@@ -251,6 +251,16 @@ export const MANIFEST: Record<Product, TableSpec[]> = {
       tenancy: { kind: 'via', column: 'run_id', parent: 'automations.trigger_run' },
     },
     { table: 'adapter_await', tenancy: { kind: 'team_column' } },
+    // What the lf store module keeps beside lf's runs (services/lf_store).
+    { table: 'inbound_checkpoint', tenancy: { kind: 'team_column' } },
+    { table: 'event_receipt', tenancy: { kind: 'team_column' }, history: true },
+    { table: 'delivery', tenancy: { kind: 'team_column' }, history: true },
+    {
+      table: 'module_processes',
+      tenancy: { kind: 'team_column' },
+      exportExcludedBecause:
+        'the pids and machines of module processes lf hosts started for the source; they name nothing on the target',
+    },
     { table: 'callback', tenancy: { kind: 'team_column' } },
     { table: 'record_binding', tenancy: { kind: 'team_column' } },
     {

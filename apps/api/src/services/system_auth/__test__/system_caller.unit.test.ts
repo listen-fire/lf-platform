@@ -88,7 +88,7 @@ describe('the system caller gate', () => {
 
     expect(await tick('lf_system')).toEqual({
       status: 200,
-      body: { caller: { verifier: 'api_key', principal: { id: 'api_key:key-1' }, actions: ['drain'] } },
+      body: { caller: { verifier: 'api_key', principal: { id: 'api_key:key-1' }, actions: ['drain', 'store_slot'] } },
     });
     expect(await tick('lf_automation')).toEqual({ status: 403, body: { error: 'API key missing required scope: system' } });
     expect((await tick(token())).status).toBe(403);
@@ -103,7 +103,7 @@ describe('the system caller gate', () => {
     installSystemCallerVerifiers(oidcEnv('oidc'));
     expect(await tick(token())).toEqual({
       status: 200,
-      body: { caller: { verifier: 'oidc', principal: { id: SUBJECT }, actions: ['drain'] } },
+      body: { caller: { verifier: 'oidc', principal: { id: SUBJECT }, actions: ['drain', 'store_slot'] } },
     });
     expect(await tick('lf_system')).toEqual({ status: 403, body: { error: 'the bearer is not a JWT' } });
   });

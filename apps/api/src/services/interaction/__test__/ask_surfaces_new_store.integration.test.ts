@@ -114,6 +114,23 @@ describe('chunk F — new-store ask surfaces (real DB)', () => {
       expect(park?.status).toBe('parked');
     });
 
+    it('names an lf run waiting on a question by its movement, its trigger id being no trigger row\'s', async () => {
+      const ask = await createAsk({ teamId, family: 'Check', prompt: 'Ship it?' });
+      const runId = randomUUID() as TriggerRunId;
+      await getAutomationsQb(['trigger_run'])
+        .insertInto('trigger_run')
+        .values({ id: runId, team_id: teamId, host: 'lf', trigger_id: 'listen:welcome.lf:greet', trigger_type: 'webhook', status: 'parked' })
+        .execute();
+      await getAutomationsQb(['adapter_await'])
+        .insertInto('adapter_await')
+        .values({ adapter_type: 'ask', correlation_key: ask.id as unknown as string, run_id: runId, team_id: teamId, address: 's0' })
+        .execute();
+
+      const listed = await listAskRecordsForTeam(teamId);
+
+      expect(listed.map((a) => a.awaitingAutomationName)).toEqual(['greet']);
+    });
+
     it('refuses a question owned by another team, and a bad answer', async () => {
       const other = await makeTeam();
       try {

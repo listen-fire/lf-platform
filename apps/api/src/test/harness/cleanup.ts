@@ -78,6 +78,12 @@ const TABLES_TEAM_SCOPED: readonly (readonly [
   ['automations', 'trigger_run'],
   // Work rows carry the team only as a tag (no FK), so nothing else reaps them.
   ['automations', 'work'],
+  // What the lf store module keeps beside lf's runs, team-keyed with no FK.
+  ['automations', 'delivery'],
+  ['automations', 'inbound_checkpoint'],
+  ['automations', 'event_receipt'],
+  ['automations', 'module_processes'],
+  ['automations', 'park_library_source'],
   // Remote-adapter installs (the credentials_id FK is SET NULL in-schema).
   ['automations', 'remote_adapter'],
   ['automations', 'external_service_credentials'],

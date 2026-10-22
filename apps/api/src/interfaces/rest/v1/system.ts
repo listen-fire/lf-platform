@@ -12,6 +12,8 @@ import { listTgRuns, getTgRun } from '../../../services/system_debug';
 import { drainUntilIdle, recordExternalDrainPass } from '../../../services/work/drain';
 import { mounts } from '../../../products';
 import { rustRunStats } from 'movement-engine/public/movement-engine';
+import { LF_STORE_MANIFEST, answerFor as storeAnswerFor } from '../../../services/lf_store/answer';
+import { slotHandler } from './slots';
 import {
   requireSystemAction,
   requireSystemCaller,
@@ -124,6 +126,10 @@ const engineStatsHandler: RequestHandler = (_req, res) => {
   });
 };
 
+/** lf's store slot over the platform's run tables (services/lf_store), in the
+ *  tenant of the key's owner: never a setting, never a param. */
+const storeSlotHandler = slotHandler(LF_STORE_MANIFEST, () => storeAnswerFor({ tenant: actingTeamId() }));
+
 const systemRouter: ReturnType<typeof Router> = Router();
 
 // Who may call these routes is the system caller verifiers' question
@@ -140,6 +146,7 @@ systemRouter.get('/engine-stats', route(engineStatsHandler));
 // index.ts gates the automations routers: absent, not refused, without the unit.
 if (mounts('automations')) {
   systemRouter.post('/automations/drain', requireSystemAction('drain'), route(drainAutomationsHandler));
+  systemRouter.post('/slots/store', tenant, requireSystemAction('store_slot'), route(storeSlotHandler));
 }
 
 export { systemRouter };

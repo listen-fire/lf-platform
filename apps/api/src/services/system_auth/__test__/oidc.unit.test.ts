@@ -33,7 +33,7 @@ describe('the oidc verifier', () => {
     await expect(withBearer(issuer.mint({ sub: SUBJECT, aud: AUDIENCE }))).resolves.toEqual({
       ok: true,
       principal: { id: SUBJECT },
-      actions: ['drain'],
+      actions: ['drain', 'store_slot'],
     });
   });
 
@@ -41,7 +41,7 @@ describe('the oidc verifier', () => {
     await expect(withBearer(issuer.mint({ sub: '1234567890', email: SUBJECT, aud: AUDIENCE }))).resolves.toEqual({
       ok: true,
       principal: { id: '1234567890', display: SUBJECT },
-      actions: ['drain'],
+      actions: ['drain', 'store_slot'],
     });
   });
 

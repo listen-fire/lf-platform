@@ -51,7 +51,8 @@ import { enqueueWork } from '../work/store';
 // Every door's one recognition test, and the id's shape, are the core's.
 export { CALLBACK_ID_PREFIX, isCallbackId } from 'movement-engine/public/run-host';
 
-function mintCallbackId(): CallbackId {
+/** The platform's `cb_` minting: the lf store module mints lf's callbacks with it too. */
+export function mintCallbackId(): CallbackId {
   return newCallbackId() as CallbackId;
 }
 

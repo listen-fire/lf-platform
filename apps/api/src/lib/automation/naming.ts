@@ -57,3 +57,10 @@ export function resolveAutomationName(
   }
   return parseTriggerName(trigger.name).automation;
 }
+
+/** The movement an lf run's trigger id names. lf has no trigger rows: it
+ *  writes `listen:<file>:<movement>` as the trigger id of a run it starts, and
+ *  a lookup of that id among the trigger rows (uuid ids) would fail the query. */
+export function lfListenMovement(triggerId: string): string | null {
+  return /^listen:.+:([^:]+)$/.exec(triggerId)?.[1] ?? null;
+}
