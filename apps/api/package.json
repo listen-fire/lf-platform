@@ -59,6 +59,7 @@
     "dev:system-key": "TZ=utc ts-node --project tsconfig.dev.json --transpile-only -r dotenv/config -r tsconfig-paths/register src/scripts/dev/system_key.ts",
     "dev:lf-secrets-key": "TZ=utc ts-node --project tsconfig.dev.json --transpile-only -r dotenv/config -r tsconfig-paths/register src/scripts/dev/lf_secrets_key.ts",
     "dev:lf-secrets-verify": "TZ=utc ts-node --project tsconfig.dev.json --transpile-only -r dotenv/config -r tsconfig-paths/register src/scripts/dev/lf_secrets_verify.ts",
+    "dev:lf-movements-verify": "TZ=utc ts-node --project tsconfig.dev.json --transpile-only -r dotenv/config -r tsconfig-paths/register src/scripts/dev/lf_movements_verify.ts",
     "drain:once": "TZ=utc ts-node --project tsconfig.dev.json --transpile-only -r dotenv/config -r tsconfig-paths/register src/scripts/dev/drain_once.ts",
     "tg:prune": "TZ=utc ts-node --project tsconfig.dev.json --transpile-only -r dotenv/config -r tsconfig-paths/register src/scripts/dev/tg_prune.ts",
     "parseExcel": "TZ=utc ts-node --project tsconfig.dev.json --transpile-only -r dotenv/config -r tsconfig-paths/register src/scripts/parseExcel.ts",

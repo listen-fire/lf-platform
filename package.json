@@ -29,6 +29,7 @@
     "dev:system-key": "cd apps/api && pnpm run dev:system-key",
     "dev:lf-secrets-key": "cd apps/api && pnpm run dev:lf-secrets-key",
     "dev:lf-secrets-verify": "cd apps/api && pnpm run dev:lf-secrets-verify",
+    "dev:lf-movements-verify": "cd apps/api && pnpm run dev:lf-movements-verify",
     "drain:once": "cd apps/api && pnpm run drain:once",
     "dev:seed": "cd apps/api && pnpm run dev:seed",
     "dev:inspect": "cd apps/api && pnpm run dev:inspect",
