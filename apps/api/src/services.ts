@@ -44,6 +44,12 @@ import { askSettleDelivery } from './services/asks/delivery_mode';
 import { notifyEngineOfSettledAsks } from './services/asks/in_process_notifier';
 import { mounts } from './products';
 
+// The shared limiter's install is async (it creates its schema), and this
+// module compiles to CommonJS, so it cannot await at import: each entry that
+// drains or serves awaits it first. Scripts that only import this module keep
+// the engine's in-process limiter.
+export { installSharedLimiter } from './lib/limiter';
+
 // The S3 files module and the Google OCR module are optionalDependencies: a
 // light install (pnpm install --no-optional) leaves them, with their cloud SDKs,
 // out. Absent, the slot is filled by its "unconfigured" stand-in naming the

@@ -14,7 +14,7 @@
  *   pnpm drain:once [...]                  # the same, against the dev loop
  */
 
-import '../services';
+import { installSharedLimiter } from '../services';
 
 import { randomUUID } from 'node:crypto';
 
@@ -77,10 +77,12 @@ export async function drainOnceMain(argv: readonly string[] = process.argv.slice
 
 /** Run once, close the pools, and exit with the run's code. */
 export async function drainOnceAndExit(): Promise<never> {
-  const code = await drainOnceMain().catch((err: unknown) => {
-    console.error('[drain:once] failed', err);
-    return 1;
-  });
+  const code = await installSharedLimiter()
+    .then(() => drainOnceMain())
+    .catch((err: unknown) => {
+      console.error('[drain:once] failed', err);
+      return 1;
+    });
   await Promise.allSettled([prismaClient.$disconnect(), globalQb.destroy()]);
   process.exit(code);
 }

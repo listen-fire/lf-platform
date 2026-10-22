@@ -22,6 +22,7 @@ versions are the git tags described in [`deploy/UPGRADING.md`](deploy/UPGRADING.
 
 - The language is installed from the `@listen-fire/*` packages on npm, version 0.12.0-rc.5; this repository no longer builds it.
 - The api image starts again: rc.6's `api` and `api-slim` images exited at startup (`Cannot find module 'story-view/constants/themes'`); the platform's constants are now their own package, built into the api.
+- API instances and drain passes share the model providers' limits: at boot the api (and the drain-once job) installs the language's Postgres limiter in the platform's own database (schema `lf_postgres_limiter`, `LIMITER_SCHEMA` to change it, a pool of at most 8 connections), so @lf/anthropic's 8 requests in flight are 8 across every instance, and a provider's `Retry-After` met by one instance holds the others until then. The `DATABASE_URL` role must be able to create that schema. The language is installed at 0.12.0-rc.8.
 
 ## [0.12.0-rc.5] - 2026-10-21
 

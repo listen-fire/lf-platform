@@ -158,9 +158,11 @@ services:
       - key: PORT
         value: 9000
 
-  # The API and its six background loops — the only always-on process. Do NOT
-  # add a second service running this image as a "worker": the loops live
-  # inside this process and a copy would only contend for the same locks
+  # The API and its six background loops — the only always-on process. A
+  # second service running this image as a "worker" gains nothing: the loops
+  # live inside this process and a copy would only contend for the same locks.
+  # More instances are safe (they share the model providers' limits through the
+  # limiter kept in the database), but one keeps /healthz/workers unambiguous
   # (deploy/guides/render.md, "One instance").
   - type: web
     name: listen-fire-api

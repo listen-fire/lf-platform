@@ -74,7 +74,7 @@ Whichever you choose, the ordering is the point: the schema must be current befo
 
 Keep the instance count at **one**.
 
-Running two is safe — each product's workers take a per-product advisory lock, so every background loop runs on exactly one instance — but you lose the unambiguous reading of `startedHere: false` on `/healthz/workers`. On a single instance that flag means "wedged, page me". On two it could also mean "the other instance holds the lock", and only the workers that keep a heartbeat can tell those apart.
+Running two is safe — each product's workers take a per-product advisory lock, so every background loop runs on exactly one instance, and model requests are counted in one limiter kept in the database, so two instances share the providers' limits rather than each allowing them in full — but you lose the unambiguous reading of `startedHere: false` on `/healthz/workers`. On a single instance that flag means "wedged, page me". On two it could also mean "the other instance holds the lock", and only the workers that keep a heartbeat can tell those apart.
 
 Do not add a second service running the same image as a "worker". The workers are in the API process; a second copy would contend for the same locks and give you nothing.
 
