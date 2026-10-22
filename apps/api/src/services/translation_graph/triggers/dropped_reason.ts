@@ -31,7 +31,11 @@ export type DroppedReason =
   // The trigger carries no movementId — a legacy TG-orchestration binding.
   // The TG execution engine has been retired (plans/2026-06-14-kill-tg), so
   // only movement-derived triggers execute; there is nothing to dispatch.
-  | 'no_movement';
+  | 'no_movement'
+  // The team is lf-engined (LF_ENGINE_TEAMS): lf runs its listeners, so the
+  // platform's dispatch runs none. The receipt is RECORDED as suppressed
+  // (replayable), so switching the team back can replay what lf did not see.
+  | 'engine_lf';
 
 /**
  * Every dispatch-gate drop, named for the person who started the run. A queued
@@ -55,6 +59,8 @@ export function describeDroppedReason(reason: DroppedReason): string {
       return "dropped as this workspace's own echo — the inbound change was made by its automations";
     case 'trigger_not_found':
       return 'the listener row was not found — re-save the automation, then run it again';
+    case 'engine_lf':
+      return "this team's automations run in lf, not on the platform (LF_ENGINE_TEAMS)";
     case 'no_bound_tgs':
     case 'no_movement':
       return 'this listener has no automation bound to it — re-save the automation, then run it again';

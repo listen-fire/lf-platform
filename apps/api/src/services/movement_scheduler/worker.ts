@@ -211,6 +211,13 @@ export const fireCronHandler: WorkHandler = {
         name: trigger.name,
         errors: outcome.errors.map((e) => e.message),
       });
+    } else if (outcome.droppedReason !== undefined) {
+      logger.info('[MovementScheduler] cron listener dropped', {
+        triggerId: trigger.id,
+        name: trigger.name,
+        due: due.toISOString(),
+        droppedReason: outcome.droppedReason,
+      });
     } else {
       logger.info('[MovementScheduler] cron listener fired', {
         triggerId: trigger.id,

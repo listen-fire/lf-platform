@@ -75,6 +75,7 @@ import { linkTrpcWsServer, trpcRouter } from './interfaces/trpc';
 import { webhookSyncRouter } from './interfaces/rest/webhookSync';
 import { adapterDoorsRouter } from './interfaces/rest/adapterDoors';
 import { assertLfOAuthRelayConfigured, createLfOAuthRelayRouter, createLfSecretsRouter } from './interfaces/rest/lfSecrets';
+import { assertLfEngineTeamsConfigured } from './services/lf_engine/teams';
 import { telegramBuiltinRouter } from './interfaces/rest/telegramBuiltin';
 import { slackEventsRouter } from './interfaces/rest/slackEvents';
 import { slackInteractivityRouter } from './interfaces/rest/slackInteractivity';
@@ -143,6 +144,10 @@ assertSystemAuthConfigured();
 // A relay target for lf's OAuth sign-ins that is not a URL (or not https in
 // production) is a deployment whose sign-ins go nowhere.
 assertLfOAuthRelayConfigured();
+
+// A list of lf-engined teams that is not a list of team ids is a deployment
+// that believes it handed a team to lf while the platform still runs it.
+assertLfEngineTeamsConfigured();
 
 // A search rate set to something that is not a positive whole number is a
 // deployment that believes its Bright Data searches are paced when they are not.

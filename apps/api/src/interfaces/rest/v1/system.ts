@@ -13,6 +13,7 @@ import { drainUntilIdle, recordExternalDrainPass } from '../../../services/work/
 import { mounts } from '../../../products';
 import { rustRunStats } from 'movement-engine/public/movement-engine';
 import { LF_STORE_MANIFEST, answerFor as storeAnswerFor } from '../../../services/lf_store/answer';
+import { LF_MOVEMENTS_MANIFEST, answerFor as movementsAnswerFor } from '../../../services/lf_movements/answer';
 import { slotHandler } from './slots';
 import {
   requireSystemAction,
@@ -130,6 +131,10 @@ const engineStatsHandler: RequestHandler = (_req, res) => {
  *  tenant of the key's owner: never a setting, never a param. */
 const storeSlotHandler = slotHandler(LF_STORE_MANIFEST, () => storeAnswerFor({ tenant: actingTeamId() }));
 
+/** lf's movements slot over the team's shipped movements, read-only
+ *  (services/lf_movements), in the tenant of the key's owner. */
+const movementsSlotHandler = slotHandler(LF_MOVEMENTS_MANIFEST, () => movementsAnswerFor({ tenant: actingTeamId() }));
+
 const systemRouter: ReturnType<typeof Router> = Router();
 
 // Who may call these routes is the system caller verifiers' question
@@ -147,6 +152,7 @@ systemRouter.get('/engine-stats', route(engineStatsHandler));
 if (mounts('automations')) {
   systemRouter.post('/automations/drain', requireSystemAction('drain'), route(drainAutomationsHandler));
   systemRouter.post('/slots/store', tenant, requireSystemAction('store_slot'), route(storeSlotHandler));
+  systemRouter.post('/slots/movements', tenant, requireSystemAction('movements_slot'), route(movementsSlotHandler));
 }
 
 export { systemRouter };

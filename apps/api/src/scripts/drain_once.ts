@@ -23,6 +23,7 @@ import { prismaClient } from '../prisma';
 import { mounts } from '../products';
 import { drainUntilIdle, type DrainStop } from '../services/work/drain';
 import { registerAutomationsWork } from '../startup/automations';
+import { assertLfEngineTeamsConfigured } from '../services/lf_engine/teams';
 
 // The tick endpoint's bounds, so a job and a tick are the same pass.
 const FLAG_MAX = { '--limit': 100, '--max-passes': 50 } as const;
@@ -64,6 +65,8 @@ export async function drainOnceMain(argv: readonly string[] = process.argv.slice
     throw new Error('drain:once runs automations work, and LISTEN_FIRE_PRODUCTS does not mount automations.');
   }
   const { '--limit': limit, '--max-passes': maxPasses } = parseFlags(argv);
+  // The drain dispatches firings, so it must know which teams lf runs.
+  assertLfEngineTeamsConfigured();
 
   await registerAutomationsWork();
   const result = await drainUntilIdle({

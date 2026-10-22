@@ -34,7 +34,8 @@ import { isWriteEffect } from 'movement-engine/public/trace';
 import { notifyBreach } from '../../loop_guard/notify';
 import { resolveThresholds } from '../../loop_guard/thresholds';
 import { neverAsAny } from 'movement-engine/public/types';
-import type { DroppedReason } from './dropped_reason';
+import { describeDroppedReason, type DroppedReason } from './dropped_reason';
+import { isLfEngineTeam } from '../../lf_engine/teams';
 import {
   movementForTrigger,
   runMovementFiring,
@@ -118,6 +119,19 @@ export interface TriggerIdDispatchResult {
 export async function dispatchTriggerByIdEvent(
   input: TriggerIdDispatchInput,
 ): Promise<TriggerIdDispatchResult> {
+  // The engine switch, before anything else (and with no query): an
+  // lf-engined team's listeners are lf's to run, so a live firing here is
+  // dropped and its receipt kept replayable. Every door passes here (inbound,
+  // poll, cron, Run-now); an explicit dry run is the editor's test run, which
+  // runs nothing for real, so it still dispatches.
+  if (!input.dryRun && isLfEngineTeam(input.teamId)) {
+    if (input.storedEventId !== undefined) {
+      await markTriggerEventSuppressed(input.storedEventId, describeDroppedReason('engine_lf'));
+    }
+    logger.info('[TGRouter] dropped: the team\'s engine is lf', { triggerId: input.triggerId });
+    return { evaluations: [], droppedReason: 'engine_lf' };
+  }
+
   // 1. Layer 14.4 echo-drop at entry (matches `routeTrigger`).
   if (input.platformTokenRegistry && input.event.actor) {
     const drop = await shouldDropAsNativeEcho({
