@@ -23,10 +23,8 @@
 // re-checks every firing through this same resolver, so a broken import
 // always fails loud, never silently).
 
-import { LANGUAGE_VERSION, RUN_HOST_UNITS, type LanguageVersion, type Program, type ResolveFile } from 'movement-lang';
+import { LANGUAGE_VERSION, MovementParseError, RUN_HOST_UNITS, parseProgram, type LanguageVersion, type Program, type ResolveFile } from 'movement-lang';
 import { fileExports, referencedFileImports } from 'legacy-lang';
-import { MovementParseError } from 'movement-lang';
-import { parseProgram } from 'legacy-lang';
 
 import { routeOf } from './language_route';
 import { getMovementRowByName, listMovementRows, type MovementValidityStatus } from './store';

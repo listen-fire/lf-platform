@@ -30,8 +30,7 @@
 import { Readable } from 'node:stream';
 import { randomUUID } from 'node:crypto';
 
-import { MovementParseError } from 'movement-lang';
-import { parseProgram } from 'legacy-lang';
+import { MovementParseError, parseProgram } from 'movement-lang';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';

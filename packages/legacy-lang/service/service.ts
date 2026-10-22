@@ -91,8 +91,6 @@ export function getMovementDiagnostics(
   options?: {
     /** The saved movement's pin. Absent ⇒ the current version. */
     languageVersion?: LanguageVersion;
-    /** See `CheckOptions.upgradingFrom`. */
-    upgradingFrom?: LanguageVersion;
   },
 ): MovementDiagnostic[] {
   assertLegacyDialect(options?.languageVersion ?? CURRENT_LANGUAGE_VERSION);
@@ -122,7 +120,6 @@ export function getMovementDiagnostics(
     diagnostics = checkProgram(program, catalog, {
       ...(resolveFile ? { resolveFile } : {}),
       ...(languageVersion !== undefined ? { languageVersion } : {}),
-      ...(options?.upgradingFrom !== undefined ? { upgradingFrom: options.upgradingFrom } : {}),
     });
   } catch (e) {
     if (!(e instanceof MovementParseError)) throw e;

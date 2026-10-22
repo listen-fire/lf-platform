@@ -117,7 +117,6 @@ import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { tenantIdOf } from 'engine-contracts';
 import { makeTestHost } from 'movement-engine/public/testing';
 
-import { legacyVersionNumber } from 'legacy-lang';
 import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { runFailureCause, type MovementRunResult } from '@listen-fire/legacy-engine/services/movement_engine/run';
 import { MovementEngineError } from 'movement-engine/public/errors';
@@ -366,7 +365,7 @@ describe(`binding × consumer matrix under language version ${VERSION}`, () => {
 
   for (const cell of ALL) {
     const id = cellId(cell);
-    if (cell.since > legacyVersionNumber(SYNTAX_VERSION)) {
+    if (cell.since > Number(SYNTAX_VERSION)) {
       it.skip(`${id} (syntax since version ${cell.since})`, () => undefined);
       report.push({ cell: id, path: cell.path.id, consumer: cell.consumer.id, expected: expectedLabel(cell), verdict: 'skipped', detail: `since ${cell.since}`, triage: false });
       continue;

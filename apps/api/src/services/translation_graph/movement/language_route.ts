@@ -43,7 +43,7 @@ export function routeOf(pin: LanguageVersion): PinRoute {
 }
 
 /** legacy-lang's own integer for the 0.12 surface: the target of a legacy → installed move's upgrade warnings. */
-export const LEGACY_UPGRADE_DIALECT = '5';
+const LEGACY_UPGRADE_DIALECT = '5';
 
 /**
  * The wasm checker's diagnostics for `source` under an installed pin, against
