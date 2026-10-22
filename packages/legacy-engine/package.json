@@ -5,7 +5,7 @@
   "version": "0.12.0-rc.8",
   "description": "The deprecated language versions (1–4): the TypeScript movement engine, the legacy formula parser, the full 1–5 forms of the contract functions a version changed, and the dispatch that runs a saved movement on the engine its pin names (1–4 here, 5 and later on @listen-fire/engine's Rust engine). Platform-only; the language packages never import it.",
   "engines": {
-    "node": "22.20.0"
+    "node": "22.23.4"
   },
   "scripts": {
     "code:type-check": "tsc --pretty --noEmit",

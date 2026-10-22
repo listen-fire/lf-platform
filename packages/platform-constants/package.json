@@ -5,7 +5,7 @@
   "version": "0.0.1",
   "description": "Constants only the platform uses (themes, the story app's resource identifiers, countries), shared by the api, the web app and the story renderer",
   "engines": {
-    "node": "22.20.0"
+    "node": "22.23.4"
   },
   "scripts": {
     "code:type-check": "tsc --pretty --noEmit"

@@ -38,7 +38,7 @@ jobs:
           version: 9
       - uses: actions/setup-node@v4
         with:
-          node-version: 22.20.0
+          node-version: 22.23.4
           cache: "pnpm"
       # Full workspace install — apps/api typechecks against the platform's
       # workspace packages (legacy-lang, legacy-engine, the providers) consumed
