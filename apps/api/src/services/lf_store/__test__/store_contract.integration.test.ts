@@ -185,6 +185,8 @@ describe('the store slot over the platform module', () => {
         const one = await reachOne();
         const client = new SlotClient(one.address);
         for (const slotCase of commonSlotCases('store', LF_STORE_METHODS)) {
+          // The platform's authentication answers a request with no credential 403, as for every private route (slots_store.integration asserts it).
+          if (bridge.over === 'the real route' && slotCase.name.includes("without the module's token")) continue;
           await slotCase.run(client);
         }
       });
