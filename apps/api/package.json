@@ -74,6 +74,7 @@
     "test": "pnpm test:unit && pnpm test:integration",
     "test:integration": "NODE_OPTIONS=--max-old-space-size=8192 jest --config src/test/jest-integration.config.ts",
     "test:unit": "jest --config src/test/jest-unit.config.ts",
+    "test:conformance:current": "jest --config src/test/jest-unit.config.ts --testPathPattern current_pin_conformance",
     "test:conformance:v1": "jest --config src/test/jest-conformance-v1.config.ts",
     "test:conformance:v2": "jest --config src/test/jest-conformance-v2.config.ts",
     "test:conformance:v3": "jest --config src/test/jest-conformance-v3.config.ts",
