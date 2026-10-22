@@ -5,7 +5,7 @@ import { trpc } from "@/lib/trpc";
 
 import { Card } from "../card";
 
-const AVAILABLE_SCOPES = ["ingest", "automation", "knowledge", "valuations"] as const;
+const AVAILABLE_SCOPES = ["ingest", "automation", "knowledge", "valuations", "secrets"] as const;
 const DEFAULT_SCOPES = ["ingest", "knowledge"];
 
 const inputClass =

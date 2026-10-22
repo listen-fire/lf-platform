@@ -11,14 +11,10 @@ import { userProcedure as sharedUserProcedure } from '../procedures';
 import { services } from '../../../adapters/registry';
 import { decryptToken, encryptToken } from '../../../lib/credentials';
 import { claimPendingCredentials } from '../../../lib/pendingCredentials';
-import { logger } from 'movement-engine/public/log';
 import { bindFlowToUser, extractStateFromUrl } from '../../../lib/oauthFlows';
 import { slackCredsParser } from '../../../adapters/slack/webApi/apiClient';
 import { affinityCredsParser } from '@listen-fire/affinity/api_client';
-import {
-  airtableCredsParser,
-  clearClientByCredentialsId,
-} from '../../../adapters/airtable/apiClient';
+import { airtableCredsParser } from '../../../adapters/airtable/apiClient';
 import { attioCredsParser, getAttioClient } from '../../../adapters/attio/apiClient';
 import { googleCredsParser } from '../../../adapters/google/authClient';
 import {
@@ -28,7 +24,6 @@ import {
   gmailRefreshTokenCredsParser,
   validateGmailMailbox,
 } from '../../../adapters/gmail/apiClient';
-import { forgetGmailTokenClient } from '../../../adapters/gmail/authClient';
 import { gmailConnectMethod } from '../../../adapters/gmail/connect_method';
 import { dropboxCredsParser } from '../../../adapters/dropbox/authClient';
 import { nativeValuationsCredsParser } from '../../../services/translation_graph/adapters/native_valuations';
@@ -37,12 +32,12 @@ import { evertraceCredsParser } from '@listen-fire/evertrace/api_client';
 import { dealroomCredsParser } from '@listen-fire/dealroom/api_client';
 import { credentialLifecycle } from '../../../services/credentials/credential_lifecycle';
 import { persistCredential } from '../../../services/credentials/persist_credential';
+import { deleteCredential, forgetCachedClients } from '../../../services/credentials/delete_credential';
 import { intrinsicProvisionerForType } from '../../../services/credentials/intrinsic_provision';
 import { connectMethodForType } from '../../../services/credentials/connect_link';
 import { isTestHarnessTeam, injectFakeBaseUrl } from '../../../lib/recording';
 import { resolveAdapter } from '../../../services/translation_graph/adapters/resolve';
 import { hasAdapter } from '../../../services/translation_graph/adapters/registry';
-import { buildWebhookTargetUrl } from '../../../services/webhook_sync/urls';
 import { describeExecutedVersion } from '../../../services/translation_graph/movement/version_store';
 import { flattenTriggerRunPlans } from '../../../services/translation_graph/runs/trigger_run_read';
 import { runCostSummaries } from '../../../lib/llm_usage';
@@ -366,103 +361,17 @@ const credentialsRouter = (procedure: typeof trpc.procedure) => {
           .where('id', '=', input.id as ExternalServiceCredentialsId)
           .executeTakeFirst();
 
-        if (input.type === 'AIRTABLE') {
-          clearClientByCredentialsId(input.id);
-        }
-        if (input.type === 'GOOGLE') {
-          services.google?.authClient.removeClient(input.id);
-        }
-        if (input.type === ExternalServiceType.GOOGLE_GMAIL) {
-          forgetGmailTokenClient(input.id);
-        }
+        forgetCachedClients(input.type, input.id);
       }),
 
     deleteCredential: userProcedure
       .input(z.object({ id: z.string() }))
       .mutation(async ({ input }) => {
         const ctx = currentContext();
-
-        const credential = await getAutomationsQb(['external_service_credentials'])
-          .selectFrom('external_service_credentials')
-          .where('id', '=', input.id as ExternalServiceCredentialsId)
-          .where('team_id', '=', ctx.user.teamId as TeamId)
-          .select(['id', 'type', 'credentials'])
-          .executeTakeFirstOrThrow();
-
-        if (credential.type === ExternalServiceType.GOOGLE) {
-          services.google?.authClient.removeClient(credential.id);
-        } else if (credential.type === ExternalServiceType.GOOGLE_GMAIL) {
-          // Nothing is revoked at Google: under delegation there is no token at
-          // all, and a sign-in's grant belongs to the account that made it, not
-          // to a team's delete. What must go is the cached token client, or the
-          // next connect under a reused id would reach for a dead token.
-          forgetGmailTokenClient(credential.id);
-        } else if (credential.type === ExternalServiceType.AIRTABLE) {
-          clearClientByCredentialsId(credential.id);
-        }
-
-        // Best-effort source-side webhook deregistration. The
-        // `webhook_subscription` rows themselves go away with the
-        // credential (FK ON DELETE CASCADE), but the provider keeps
-        // posting at a dead URL unless its external registration is
-        // removed — and that removal needs the credential to still
-        // authenticate, so it has to happen before the row is deleted.
-        // Mirrors the listen-reconciliation teardown: failures never
-        // block the delete (a dangling source-side webhook posts at a
-        // row that no longer verifies, and is removable by hand).
-        const webhookSubscriptions = await getAutomationsQb(['webhook_subscription'])
-          .selectFrom('webhook_subscription')
-          .where('credentials_id', '=', credential.id)
-          .where('deleted_at', 'is', null)
-          .select(['id', 'provider', 'external_webhook_id'])
-          .execute();
-        for (const subscription of webhookSubscriptions) {
-          try {
-            const adapter = await resolveAdapter({
-              adapterType: subscription.provider,
-              teamId: ctx.user.teamId as TeamId,
-              credentialsId: credential.id as unknown as string,
-            });
-            if (typeof adapter.removeEventSubscription === 'function') {
-              await adapter.removeEventSubscription({
-                callbackUrl: buildWebhookTargetUrl(
-                  subscription.provider,
-                  subscription.id as unknown as string,
-                ),
-                ...(subscription.external_webhook_id !== null
-                  ? { externalId: subscription.external_webhook_id }
-                  : {}),
-              });
-            }
-          } catch (err) {
-            logger.warn('[credentials] webhook deregistration failed on delete', {
-              subscriptionId: subscription.id,
-              provider: subscription.provider,
-              err,
-            });
-          }
-        }
-
-        // Owned-token teardown (Attio / Listen-Fire Valuations) — release any
-        // external token tied to this credential before the row goes away.
-        const deleteLifecycle = credentialLifecycle(credential.type);
-        if (deleteLifecycle?.onDelete) {
-          try {
-            const decrypted = await decryptToken(credential.credentials as Buffer, credential.id);
-            await deleteLifecycle.onDelete({
-              credentials: JSON.parse(decrypted),
-              teamId: ctx.user.teamId as TeamId,
-            });
-          } catch (err) {
-            logger.warn('[credentials] owned-token teardown failed on delete', { err });
-          }
-        }
-
-        await getAutomationsQb(['external_service_credentials'])
-          .deleteFrom('external_service_credentials')
-          .where('id', '=', input.id as ExternalServiceCredentialsId)
-          .where('team_id', '=', ctx.user.teamId as TeamId)
-          .execute();
+        await deleteCredential({
+          teamId: ctx.user.teamId as TeamId,
+          id: input.id as ExternalServiceCredentialsId,
+        });
       }),
 
     /**

@@ -151,6 +151,9 @@ audit_triggers=`psql -v ON_ERROR_STOP=ON "$DATABASE_URL" <<-EOSQL
       'automations.connect_token', 'automations.google_granted_item',
       'automations.platform_owned_token', 'automations.telegram_identity', 'automations.telegram_token',
       'automations.outbound_email',
+      -- the secrets module's lease on a credential lf is refreshing: a
+      -- runtime row that lives for one refresh.
+      'automations.lf_secrets_lease',
       -- knowledge: everything is audited except the change log itself, and
       -- audit_log, which IS the trail. The mutation outbox is a transient
       -- delivery queue and the heartbeat is a worker's pulse -- both machine

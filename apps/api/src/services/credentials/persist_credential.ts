@@ -35,7 +35,9 @@ function isUniqueViolation(err: unknown): boolean {
 
 interface PersistCredentialInput {
   teamId: TeamId;
-  userId: UserId;
+  /** Who connected it; null for a machine (a system flow, lf through the
+   *  secrets module on a key no user holds). */
+  userId: UserId | null;
   /** Human-readable name to store the credential under. */
   name: string;
   type: ExternalServiceType;
@@ -64,6 +66,12 @@ interface PersistCredentialInput {
    * then the module's slug). Omitted → null, as on every other row.
    */
   declaredCredential?: string;
+  /**
+   * The binding lf named for this entry when it is an install's or a legacy
+   * one (the `wire_binding` column). Set only by the secrets module; omitted
+   * → null, and the binding derives from the row.
+   */
+  wireBinding?: 'install' | 'legacy';
 }
 
 /**
@@ -121,6 +129,7 @@ export async function persistCredential(input: PersistCredentialInput): Promise<
         // modern app). Pre-existing legacy rows keep their null (read as legacy).
         app_id: input.appId ?? defaultAppIdForType(input.type) ?? null,
         declared_credential: input.declaredCredential ?? null,
+        wire_binding: input.wireBinding ?? null,
         team_id: input.teamId,
         user_id: input.userId,
       })

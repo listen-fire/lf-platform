@@ -3878,7 +3878,11 @@ CREATE TABLE automations.external_service_credentials (
     -- it fills among those the module's manifest declares. `app_id` is then
     -- the module's slug. NULL on every other row, including the install's own
     -- server secret (a REMOTE row the install's credentials_id points at).
-    declared_credential text
+    declared_credential text,
+    -- Set only by the secrets module (`/api/public/lf-secrets`) when lf names
+    -- an entry's binding `install` or `legacy`; NULL derives the binding from
+    -- the row (its declared credential, its type's module).
+    wire_binding text CHECK (wire_binding IN ('install', 'legacy'))
 );
 
 
@@ -3890,6 +3894,20 @@ ALTER TABLE ONLY automations.external_service_credentials
     ADD CONSTRAINT external_service_credentials_team_name_key UNIQUE (team_id, name);
 
 CREATE TRIGGER external_service_credentials_audit AFTER INSERT OR DELETE OR UPDATE ON automations.external_service_credentials FOR EACH ROW EXECUTE FUNCTION automations.audit();
+
+-- The secrets module's lease: an lf process refreshing a credential holds it
+-- across the two HTTP requests a refresh spans (`secrets.lock` …
+-- `secrets.unlock`), which a transaction-scoped advisory lock cannot. One row
+-- per (team, ref) while held; a lapsed row is taken over and swept within the
+-- hour. No foreign key: a lease may name a ref that has no row yet. A runtime
+-- table with no audit trigger: machine churn nobody edits.
+CREATE TABLE automations.lf_secrets_lease (
+    team_id uuid NOT NULL, -- opaque tenant id; no foreign key (D3)
+    ref text NOT NULL,
+    token text NOT NULL,
+    expires_at timestamptz NOT NULL,
+    PRIMARY KEY (team_id, ref)
+);
 
 
 -- ### Connect Token ----------------------------------------------------------

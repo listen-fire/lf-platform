@@ -1,4 +1,4 @@
-import { PRODUCTS, compose, scopesFor } from '../products';
+import { PRODUCTS, compose, defaultScopesFor, scopesFor } from '../products';
 
 const CORE_ENV = { LISTEN_FIRE_PRINCIPAL: 'core' };
 const STATIC_ENV = { LISTEN_FIRE_PRINCIPAL: 'static' };
@@ -71,7 +71,14 @@ describe('scopesFor — what an api-key can be granted on an installation', () =
     scopesFor(compose({ LISTEN_FIRE_PRINCIPAL: principal, LISTEN_FIRE_PRODUCTS: raw }).products);
 
   it('names every product surface the composed deployment mounts', () => {
-    expect(scopesOf('all')).toEqual(['valuations', 'automation', 'knowledge', 'asks', 'system']);
+    expect(scopesOf('all')).toEqual(['valuations', 'automation', 'knowledge', 'asks', 'secrets', 'system']);
+  });
+
+  it('offers `secrets` wherever automations mounts, and never in a default mint', () => {
+    expect(scopesOf('core,automations')).toContain('secrets');
+    expect(scopesOf('core,valuations')).not.toContain('secrets');
+    const composed = compose({ LISTEN_FIRE_PRINCIPAL: 'core', LISTEN_FIRE_PRODUCTS: 'all' }).products;
+    expect(defaultScopesFor(composed)).toEqual(['valuations', 'automation', 'knowledge', 'asks', 'system']);
   });
 
   it('withholds the scope of a product this installation does not run', () => {

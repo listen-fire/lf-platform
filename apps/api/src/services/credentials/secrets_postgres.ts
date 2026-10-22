@@ -9,7 +9,10 @@
 // compare-and-swap needs no new column. A refresh holds a transaction-scoped
 // advisory lock on the credential, so two processes refreshing one credential
 // make one token call: the second finds the version moved and takes the
-// first's answer.
+// first's answer. An lf process refreshing the same row through the secrets
+// module holds a lease instead (`lf_secrets_lease`, services/lf_secrets/lease.ts),
+// which outlives a transaction: a refresh here waits until no live lease names
+// the row before it runs, and lf's lock is refused while one runs here.
 
 import { createHash } from 'node:crypto';
 
@@ -117,8 +120,33 @@ function versionOf(ciphertext: Buffer): string {
   return createHash('sha256').update(ciphertext).digest('hex');
 }
 
-function lockKey(ref: string): string {
-  return `secrets:external_service_credentials:${ref}`;
+/** The advisory lock a refresh of credential `id` holds (the secrets
+ *  module's lease takes it too, to refuse while a refresh runs). */
+export function credentialLockKey(id: string): string {
+  return `secrets:external_service_credentials:${id}`;
+}
+
+const LEASE_POLL_MS = 20;
+
+/** Wait, holding the advisory lock, until no live lf lease (lf_secrets/lease.ts)
+ *  names credential `id`: released, or lapsed at its `expires_at`. */
+async function waitOutLease(trx: CredentialsDb, id: string): Promise<void> {
+  const row = await trx
+    .selectFrom('external_service_credentials')
+    .where('id', '=', id as ExternalServiceCredentialsId)
+    .select(['team_id', 'name'])
+    .executeTakeFirst();
+  if (row === undefined) return;
+  for (;;) {
+    const { rows } = await sql<{ held: boolean }>`
+      SELECT EXISTS (
+        SELECT 1 FROM automations.lf_secrets_lease
+        WHERE team_id = ${row.team_id} AND ref = ${row.name} AND expires_at > clock_timestamp()
+      ) AS held
+    `.execute(trx);
+    if (rows[0]?.held !== true) return;
+    await new Promise((done) => setTimeout(done, LEASE_POLL_MS));
+  }
 }
 
 export function postgresSecrets(options: {
@@ -174,7 +202,8 @@ export function postgresSecrets(options: {
       backend.exclusive = async (ref, body) => {
         const outer = db();
         const run = async (trx: CredentialsDb) => {
-          await sql`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey(ref)}, 0))`.execute(trx);
+          await sql`SELECT pg_advisory_xact_lock(hashtextextended(${credentialLockKey(ref)}, 0))`.execute(trx);
+          await waitOutLease(trx, ref);
           return body(over(() => trx, true));
         };
         // Inside an open transaction the lock is held until that one ends.

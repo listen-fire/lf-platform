@@ -74,6 +74,7 @@ import { startEventLoopWatchdogIfEnabled } from './services/event_loop_watchdog'
 import { linkTrpcWsServer, trpcRouter } from './interfaces/trpc';
 import { webhookSyncRouter } from './interfaces/rest/webhookSync';
 import { adapterDoorsRouter } from './interfaces/rest/adapterDoors';
+import { assertLfOAuthRelayConfigured, createLfOAuthRelayRouter, createLfSecretsRouter } from './interfaces/rest/lfSecrets';
 import { telegramBuiltinRouter } from './interfaces/rest/telegramBuiltin';
 import { slackEventsRouter } from './interfaces/rest/slackEvents';
 import { slackInteractivityRouter } from './interfaces/rest/slackInteractivity';
@@ -139,6 +140,10 @@ assertAutomationsDrainConfigured();
 // every tick is refused.
 assertSystemAuthConfigured();
 
+// A relay target for lf's OAuth sign-ins that is not a URL (or not https in
+// production) is a deployment whose sign-ins go nowhere.
+assertLfOAuthRelayConfigured();
+
 // A search rate set to something that is not a positive whole number is a
 // deployment that believes its Bright Data searches are paced when they are not.
 assertBrightDataSerpRateConfigured();
@@ -167,6 +172,11 @@ async function main() {
   // in the order they're used
   app.get('/', rootHandler);
   app.use(express.static('public'));
+  // lf's OAuth redirect relay carries the sign-in's code and state in its
+  // query, which the request logger would write: it mounts before the logger.
+  if (mounts('automations')) {
+    app.use('/api/public/lf-secrets', createLfOAuthRelayRouter());
+  }
   app.use(expressLogger);
   app.use(cookieParser());
   app.use(customHeadersExtractor);
@@ -178,6 +188,9 @@ async function main() {
     // A remote adapter's push doors (emit / wake) — the presented credential
     // names the team, so they sit with the other self-authorising doors.
     app.use('/api/public/adapter', adapterDoorsRouter);
+    // lf's secrets slot over the team's credentials — an api key with the
+    // `secrets` scope is the auth; the door parses its own body.
+    app.use('/api/public/lf-secrets', createLfSecretsRouter());
     // Shared built-in Telegram bot — single global inbound entry, no per-team
     // subscription URL; routes by sender identity (raw body, no signature).
     app.use('/api/public/telegram', express.raw({ type: 'application/json' }), telegramBuiltinRouter);

@@ -87,6 +87,8 @@ const TABLES_TEAM_SCOPED: readonly (readonly [
   // Remote-adapter installs (the credentials_id FK is SET NULL in-schema).
   ['automations', 'remote_adapter'],
   ['automations', 'external_service_credentials'],
+  // The secrets module's leases name a team and a ref, never a row.
+  ['automations', 'lf_secrets_lease'],
   // Usage and journey rows: these used to disappear with the team.
   ['public', 'llm_usage'],
   ['public', 'team_usage_config'],

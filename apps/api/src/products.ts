@@ -101,18 +101,43 @@ const SCOPE_BY_PRODUCT: Record<Product, string | null> = {
   asks: 'asks',
 };
 
+/**
+ * Scopes a product's surfaces gate on that a key carries only when its minter
+ * asks for them by name. `secrets` opens lf's secrets door
+ * (`/api/public/lf-secrets`), which decrypts the team's credentials: a key
+ * minted for "this installation" must not do that by default.
+ */
+const OPT_IN_SCOPES_BY_PRODUCT: Record<Product, readonly string[]> = {
+  core: [],
+  valuations: [],
+  automations: ['secrets'],
+  knowledge: [],
+  asks: [],
+};
+
 /** Scopes that exist on EVERY installation. `/v1/system` is unclaimed by any
  *  unit, so it mounts whatever the product list says. */
 const UBIQUITOUS_SCOPES = ['system'] as const;
+
+/** The scope of each mounted product that gates one. */
+function productScopes(products: ReadonlySet<Product>): string[] {
+  return PRODUCTS.filter((product) => products.has(product))
+    .map((product) => SCOPE_BY_PRODUCT[product])
+    .filter((scope): scope is string => scope !== null);
+}
+
+/** The scopes a key minted with no scope list of its own carries on an
+ *  installation running `products`: every product scope, no opt-in one. */
+function defaultScopesFor(products: ReadonlySet<Product>): string[] {
+  return [...productScopes(products), ...UBIQUITOUS_SCOPES];
+}
 
 /** The scopes a key CAN be granted on an installation running `products` —
  *  every scope its surfaces gate on, and nothing that would name a surface
  *  this install does not mount. */
 function scopesFor(products: ReadonlySet<Product>): string[] {
-  const fromProducts = PRODUCTS.filter((product) => products.has(product))
-    .map((product) => SCOPE_BY_PRODUCT[product])
-    .filter((scope): scope is string => scope !== null);
-  return [...fromProducts, ...UBIQUITOUS_SCOPES];
+  const optIn = PRODUCTS.filter((product) => products.has(product)).flatMap((product) => OPT_IN_SCOPES_BY_PRODUCT[product]);
+  return [...productScopes(products), ...optIn, ...UBIQUITOUS_SCOPES];
 }
 
 interface Composition {
@@ -147,10 +172,10 @@ function mountedProducts(env: Env = process.env): Product[] {
   return PRODUCTS.filter((product) => products.has(product));
 }
 
-/** Every scope THIS installation has a surface for — what a key minted with no
- *  scope list of its own is granted. */
+/** What a key minted with no scope list of its own is granted on THIS
+ *  installation: every product's scope, never an opt-in one. */
 function installedScopes(env: Env = process.env): string[] {
-  return scopesFor(currentComposition(env).products);
+  return defaultScopesFor(currentComposition(env).products);
 }
 
 export {
@@ -162,5 +187,6 @@ export {
   mounts,
   mountedProducts,
   scopesFor,
+  defaultScopesFor,
   installedScopes,
 };

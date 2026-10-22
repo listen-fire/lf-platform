@@ -52,7 +52,7 @@ export async function mintRemoteCredential(
   };
   const credentialsId = await persistCredential({
     teamId: input.teamId,
-    userId: (input.userId ?? null) as UserId,
+    userId: input.userId ?? null,
     type: ExternalServiceType.REMOTE,
     name: input.displayName,
     appId: input.adapterType,
@@ -90,7 +90,7 @@ export async function mintRemoteModuleCredential(
 ): Promise<{ credentialsId: string }> {
   const credentialsId = await persistCredential({
     teamId: input.teamId,
-    userId: (input.userId ?? null) as UserId,
+    userId: input.userId ?? null,
     type: ExternalServiceType.REMOTE,
     name: input.name,
     appId: input.adapterType,
