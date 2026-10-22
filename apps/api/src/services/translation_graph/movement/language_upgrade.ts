@@ -3,11 +3,18 @@
 // the caller first; the pin moves only when the caller acknowledges a clean
 // result. Nothing moves a pin automatically (Henry, 2026-10-20).
 //
+// A pin is a legacy id ('1'..'4': the platform's TypeScript copy of the
+// language reads it) or the semver of the language release it was written
+// against, which the installed language reads when its rule says the two are
+// compatible (movement-lang `compatible`).
+//
 // THE DEPLOY CHECK, once per release over every team's movements
-// (`runDeployCheck`), only reports. Each movement is validated under its own
-// pin, which must pass (the release preserves every supported version's
-// behaviour, so a failure there is a bug in that preservation), then under the
-// release's current version. Clean there — no errors, and no diagnostic the
+// (`runDeployCheck`), only reports. A release pin the installed language reads
+// is `current`; one it does not read (an older line, or a newer release) is
+// `refused` with the rule's text, and `upgradeMovement` is how an older one
+// moves. A legacy id is validated under its own pin, which must pass (the
+// release preserves every legacy version's behaviour, so a failure there is a
+// bug in that preservation), then under the installed language. Clean there — no errors, and no diagnostic the
 // checker raised because the check is a move up (one marking a construct whose
 // meaning changed) — makes the movement `upgradable`: offered the upgrade,
 // pin untouched. Any other warning (a cost note, say) reads the same under
@@ -31,8 +38,20 @@
 //
 // See plans/language-versioning-2026-09-29/1_design.md, "Deploy check".
 
-import { CURRENT_LANGUAGE_VERSION, describeLanguageVersion, languageVersionView, type LanguageRelease, type LanguageVersion, type LanguageVersionView, type Diagnostic } from 'movement-lang';
-import { PLATFORM_RELEASE, before, languageVersionDiagnostic, languageVersionStanding, upgradeSourceAsync } from 'legacy-lang';
+import {
+  LANGUAGE_VERSION,
+  compatible,
+  languageVersionDiagnostic as releaseVersionDiagnostic,
+  languageVersionStanding as releaseVersionStanding,
+  type LanguageVersion,
+  type Diagnostic,
+} from 'movement-lang';
+import {
+  PLATFORM_DEPRECATED_LANGUAGE_VERSIONS,
+  PLATFORM_SUPPORTED_LANGUAGE_VERSIONS,
+  isLegacyLanguageVersion,
+  upgradeSourceAsync,
+} from 'legacy-lang';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 
@@ -52,6 +71,7 @@ import {
 } from '@listen-fire/system';
 import {
   assessMovementValidity,
+  toAuthoringDiagnostic,
   validateMovementForTeam,
   type AuthoringDiagnostic,
   type TeamMovementValidation,
@@ -178,16 +198,24 @@ export async function rewriteForUpgrade(input: {
   return { source: result.source, changed: result.changed, validation };
 }
 
-/** A validation of `movement` under `languageVersion`. A version newer than
- *  the movement's pin makes it an UPGRADE check: the checker is told the pin
- *  and then also warns on the constructs whose meaning changed between the
- *  two — which is what keeps an unsafe pin from advancing. A check under the
- *  pin itself is an ordinary one. */
+/** Whether checking a movement pinned to `pin` under `target` is a check for
+ *  a move up: a legacy id moving to a later legacy id or to any release, or a
+ *  release pin moving to a release of a later line. */
+export function movesUp(pin: LanguageVersion, target: LanguageVersion): boolean {
+  if (isLegacyLanguageVersion(pin)) return !isLegacyLanguageVersion(target) || Number(pin) < Number(target);
+  return !isLegacyLanguageVersion(target) && releaseVersionStanding(pin, target) === 'olderKey';
+}
+
+/** A validation of `movement` under `languageVersion`. A move up from the
+ *  movement's pin (`movesUp`) makes it an UPGRADE check: the checker is told
+ *  the pin and then also warns on the constructs whose meaning changed between
+ *  the two — which is what keeps an unsafe pin from advancing. A check under
+ *  the pin itself is an ordinary one. */
 export function validationUnder(
   movement: MovementRow,
   languageVersion: LanguageVersion,
 ): Parameters<ValidateUnder>[0] {
-  return before(movement.languageVersion, languageVersion)
+  return movesUp(movement.languageVersion, languageVersion)
     ? { movement, languageVersion, upgradingFrom: movement.languageVersion }
     : { movement, languageVersion };
 }
@@ -209,16 +237,18 @@ function diagnosticsText(diagnostics: AuthoringDiagnostic[]): string {
 
 /** What the check found for one movement. It never moves a pin. */
 export type DeployCheckOutcome =
-  /** Clean under the current version as written: offered the upgrade, the pin
-   *  stays until someone asks for it. */
+  /** A legacy id clean under the installed language as written: offered the
+   *  upgrade, the pin stays until someone asks for it. */
   | 'upgradable'
-  /** Already on the current version, and validates under it. */
+  /** A release pin the installed language reads, and validates under it. */
   | 'current'
-  /** Validates under its pin but not cleanly under the current version: the
-   *  pin stays, the diagnostics are stored, a `Validation Issue` is emitted. */
+  /** A legacy id that validates under its pin but not cleanly under the
+   *  installed language: the pin stays, the diagnostics are stored, a
+   *  `Validation Issue` is emitted. */
   | 'warned'
-  /** Does not validate under its own pin — the release failed to preserve that
-   *  version's behaviour. Logged loudly; the pin stays. */
+  /** A release pin the installed language does not read (an older line, or a
+   *  newer release), or a legacy id that does not validate under its own pin
+   *  (the release failed to preserve that version's behaviour). The pin stays. */
   | 'refused'
   /** Could not be checked (a connected system could not be read, or the check
    *  itself failed): the pin stays and nothing is claimed. */
@@ -232,16 +262,28 @@ export const DEPLOY_CHECK_OUTCOMES: readonly DeployCheckOutcome[] = [
   'unverified',
 ];
 
+/** A version as the deploy check and the upgrade report it: the pin itself.
+ *  `name` repeats it for one release, for readers of the old
+ *  `{ version, name }` shape. */
+export interface VersionView {
+  version: LanguageVersion;
+  name: string;
+}
+
+export function versionView(version: LanguageVersion): VersionView {
+  return { version, name: version };
+}
+
 export interface DeployCheckEntry {
   id: string;
   teamId: string;
   name: string;
   outcome: DeployCheckOutcome;
   /** The movement's pin, which the check leaves where it is. */
-  from: LanguageVersionView;
-  /** The version an upgrade would move it to: the current one when
+  from: VersionView;
+  /** The version an upgrade would move it to: the installed one when
    *  `upgradable`, otherwise the pin. */
-  to: LanguageVersionView;
+  to: VersionView;
   /** Whether the pin is one the release deprecates. */
   deprecated: boolean;
   /** What stands in the way of an upgrade: the blocking diagnostics, or what
@@ -255,23 +297,34 @@ export interface DeployCheckEntry {
 export interface DeployCheckSummary {
   release: string;
   languageRelease: string;
-  current: LanguageVersionView;
+  current: VersionView;
   ranAt: string;
   counts: Record<DeployCheckOutcome, number>;
   automations: DeployCheckEntry[];
 }
 
-/** The release a check ran for: the release tag AND the language versions it
- *  declares, so an untagged build (`dev`) that changes the language is swept
- *  again rather than taken for one already done. */
-export interface DeployCheckRelease {
-  tag: string;
-  language: LanguageRelease;
+/** The languages a platform release reads: the installed language's
+ *  version, the legacy ids it still runs, and those of them it deprecates. */
+export interface PlatformLanguageRelease {
+  current: LanguageVersion;
+  legacy: ReadonlySet<LanguageVersion>;
+  deprecated: ReadonlySet<LanguageVersion>;
 }
 
-export function languageReleaseKey(release: LanguageRelease): string {
-  const list = (set: ReadonlySet<LanguageVersion>) => [...set].sort((a, b) => a - b).join(',');
-  return `current=${release.current};supported=${list(release.supported)};deprecated=${list(release.deprecated)}`;
+/** The release a check ran for: the release tag AND the languages it reads,
+ *  so an untagged build (`dev`) that changes the language is swept again
+ *  rather than taken for one already done. */
+export interface DeployCheckRelease {
+  tag: string;
+  language: PlatformLanguageRelease;
+}
+
+export function languageReleaseKey(release: PlatformLanguageRelease): string {
+  const list = (set: ReadonlySet<LanguageVersion>) => [...set].sort().join(',');
+  // Deprecating a legacy id changes what the sweep tells a team, so it changes
+  // the key; with none deprecated the key leaves the part out.
+  const deprecated = release.deprecated.size > 0 ? `;deprecated=${list(release.deprecated)}` : '';
+  return `current=${release.current};legacy=${list(release.legacy)}${deprecated}`;
 }
 
 export interface DeployCheckDeps {
@@ -332,7 +385,7 @@ export async function runDeployCheck(deps: DeployCheckDeps): Promise<DeployCheck
   const summary: DeployCheckSummary = {
     release: release.tag,
     languageRelease,
-    current: languageVersionView(current),
+    current: versionView(current),
     ranAt: at,
     counts: countOutcomes(entries),
     automations: entries,
@@ -371,6 +424,8 @@ async function checkOne(input: {
   const releaseLanguage = deps.release.language;
   const pin = movement.languageVersion;
 
+  if (!isLegacyLanguageVersion(pin)) return checkReleasePin({ deps, movement, current, at });
+
   // (a) Under its own pin — what it runs as today. It must pass.
   const underPin = await deps.validate(validationUnder(movement, pin));
   await deps.recordValidity({ movement, validation: underPin, checkedAgainst: pin });
@@ -405,19 +460,12 @@ async function checkOne(input: {
       kind: VALIDATION_ISSUE,
       payload: payloadFor(movement, pin, at, {
         reason:
-          `Does not validate under its own language version ${describeLanguageVersion(pin)} ` +
+          `Does not validate under its own language version ${describeVersion(pin)} ` +
           `after release ${deps.release.tag}: ${detail}`,
       }),
     }));
     await emitDeprecation(deps, movement, pin, at);
     return entryFor(movement, 'refused', pin, releaseLanguage, detail);
-  }
-
-  if (pin === current) {
-    if (underPin.gaps.length > 0) {
-      return entryFor(movement, 'unverified', pin, releaseLanguage, gapsText(underPin.gaps));
-    }
-    return entryFor(movement, 'current', pin, releaseLanguage, '');
   }
 
   // (b) Under the current version, as written — whether an upgrade is on
@@ -439,7 +487,7 @@ async function checkOne(input: {
       kind: VALIDATION_ISSUE,
       payload: payloadFor(movement, pin, at, {
         reason:
-          `Stays on ${describeLanguageVersion(pin)}: under ${describeLanguageVersion(current)} ` +
+          `Stays on ${describeVersion(pin)}: under ${describeVersion(current)} ` +
           `it reports ${detail}` +
           (upgradable ? '. Upgrading the automation rewrites what the checker can fix, for you to review' : ''),
       }),
@@ -458,20 +506,82 @@ async function checkOne(input: {
   return withNotes(entryFor(movement, 'upgradable', current, releaseLanguage, ''));
 }
 
-/** A movement left on a deprecated version is told so, once per release. */
+/** A release pin: what the installed language's rule says of it. The
+ *  installed language reads it — validated under it, `current` when clean of
+ *  errors — or it does not, and it is `refused` with the rule's text (an older
+ *  line moves by an explicit upgrade). */
+async function checkReleasePin(input: {
+  deps: DeployCheckDeps;
+  movement: MovementRow;
+  current: LanguageVersion;
+  at: string;
+}): Promise<DeployCheckEntry> {
+  const { deps, movement, current, at } = input;
+  const releaseLanguage = deps.release.language;
+  const pin = movement.languageVersion;
+
+  if (!compatible(pin, current)) {
+    const detail =
+      releaseVersionDiagnostic(pin, current)?.message ??
+      `this automation pins language ${pin}, which the installed language ${current} does not read`;
+    logger.warn('[DeployCheck] an automation pins a language the installed one does not read', {
+      movementId: movement.id,
+      teamId: movement.teamId,
+      languageVersion: pin,
+      current,
+    });
+    await emitSafely(deps, () => ({
+      teamId: movement.teamId,
+      kind: VALIDATION_ISSUE,
+      payload: payloadFor(movement, pin, at, { reason: `After release ${deps.release.tag}: ${detail}` }),
+    }));
+    return entryFor(movement, 'refused', pin, releaseLanguage, detail);
+  }
+
+  const underPin = await deps.validate(validationUnder(movement, pin));
+  await deps.recordValidity({ movement, validation: underPin, checkedAgainst: pin });
+  const pinErrors = errorsOf(underPin.diagnostics);
+  if (pinErrors.length > 0) {
+    const detail = diagnosticsText(pinErrors);
+    logger.warn('[DeployCheck] an automation on the installed language does not validate', {
+      movementId: movement.id,
+      teamId: movement.teamId,
+      languageVersion: pin,
+      diagnostics: pinErrors,
+    });
+    await emitSafely(deps, () => ({
+      teamId: movement.teamId,
+      kind: VALIDATION_ISSUE,
+      payload: payloadFor(movement, pin, at, {
+        reason: `Does not validate under language ${pin} after release ${deps.release.tag}: ${detail}`,
+      }),
+    }));
+    return entryFor(movement, 'refused', pin, releaseLanguage, detail);
+  }
+  if (underPin.gaps.length > 0) {
+    return entryFor(movement, 'unverified', pin, releaseLanguage, gapsText(underPin.gaps));
+  }
+  return entryFor(movement, 'current', pin, releaseLanguage, '');
+}
+
+/** How a version is named in an event's text. */
+function describeVersion(version: LanguageVersion): string {
+  return isLegacyLanguageVersion(version) ? `legacy ${version}` : version;
+}
+
+/** A movement left on a deprecated legacy id is told so, once per release. */
 async function emitDeprecation(
   deps: DeployCheckDeps,
   movement: MovementRow,
   version: LanguageVersion,
   at: string,
 ): Promise<void> {
-  if (languageVersionStanding(version, deps.release.language) !== 'deprecated') return;
-  const diagnostic = languageVersionDiagnostic(version, deps.release.language);
+  if (!deps.release.language.deprecated.has(version)) return;
   await emitSafely(deps, () => ({
     teamId: movement.teamId,
     kind: DEPRECATED_VERSION,
     payload: payloadFor(movement, version, at, {
-      reason: diagnostic?.message ?? `${describeLanguageVersion(version)} is deprecated.`,
+      reason: `${describeVersion(version)} is deprecated: upgrade it to ${deps.release.language.current} before a release stops running it.`,
     }),
   }));
 }
@@ -502,7 +612,7 @@ function payloadFor(
     automation: movement.name,
     automationId: movement.id,
     runId: '',
-    version: languageVersionView(version).name,
+    version,
     reason: input.reason,
     url: automationUrl(movement.id),
     at,
@@ -513,7 +623,7 @@ function entryFor(
   movement: MovementRow,
   outcome: DeployCheckOutcome,
   to: LanguageVersion,
-  release: LanguageRelease,
+  release: PlatformLanguageRelease,
   detail: string,
 ): DeployCheckEntry {
   return {
@@ -521,9 +631,9 @@ function entryFor(
     teamId: movement.teamId,
     name: movement.name,
     outcome,
-    from: languageVersionView(movement.languageVersion),
-    to: languageVersionView(to),
-    deprecated: languageVersionStanding(movement.languageVersion, release) === 'deprecated',
+    from: versionView(movement.languageVersion),
+    to: versionView(to),
+    deprecated: release.deprecated.has(movement.languageVersion),
     detail,
   };
 }
@@ -550,9 +660,9 @@ function releaseAppliedReason(
   counts: Record<DeployCheckOutcome, number>,
 ): string {
   return (
-    `Release ${tag} applied. Clean under ${describeLanguageVersion(current)}, upgraded when you ask: ${counts.upgradable}. ` +
+    `Release ${tag} applied. Clean under ${describeVersion(current)}, upgraded when you ask: ${counts.upgradable}. ` +
     `Already on it: ${counts.current}. Not clean under it: ${counts.warned}. ` +
-    `Not validating: ${counts.refused}. Could not be checked: ${counts.unverified}.`
+    `Not validating or not read: ${counts.refused}. Could not be checked: ${counts.unverified}.`
   );
 }
 
@@ -650,8 +760,8 @@ export type UpgradeMovementResult =
   | {
       status: 'already_current' | 'upgraded' | 'needs_acknowledgement' | 'blocked' | 'unverified';
       automation: { id: string; name: string };
-      from: LanguageVersionView;
-      to: LanguageVersionView;
+      from: VersionView;
+      to: VersionView;
       /** The blocking diagnostics under the target version — empty when clean.
        *  Their places are in `upgradedSource` when it is present. */
       diagnostics: AuthoringDiagnostic[];
@@ -663,9 +773,15 @@ export type UpgradeMovementResult =
     };
 
 /**
- * Validate one movement under the current version and report what that finds.
- * The pin moves only when the result is clean AND the caller acknowledged it —
- * so the first call shows the diagnostics, and a second, acknowledged one acts.
+ * Validate one movement under the installed language and report what that
+ * finds. The pin moves only when the result is clean AND the caller
+ * acknowledged it — so the first call shows the diagnostics, and a second,
+ * acknowledged one acts.
+ *
+ * A pin the installed language reads is already current. A legacy id has its
+ * old spellings rewritten (`rewriteForUpgrade`). A release pin of an older
+ * line is validated as written, as a move up from its pin. A newer release's
+ * pin has nothing to move to: blocked, with the rule's text.
  */
 export async function upgradeMovement(input: {
   teamId: string;
@@ -679,22 +795,30 @@ export async function upgradeMovement(input: {
 }): Promise<UpgradeMovementResult> {
   const movement = await getMovementRow({ teamId: input.teamId, id: input.id });
   if (!movement) return { status: 'not_found' };
-  const to = CURRENT_LANGUAGE_VERSION;
+  const to = LANGUAGE_VERSION;
+  const pin = movement.languageVersion;
   const base = {
     automation: { id: movement.id, name: movement.name },
-    from: languageVersionView(movement.languageVersion),
-    to: languageVersionView(to),
+    from: versionView(pin),
+    to: versionView(to),
   };
-  if (movement.languageVersion === to) {
+  if (!isLegacyLanguageVersion(pin) && compatible(pin, to)) {
     return { status: 'already_current', ...base, diagnostics: [] };
   }
+  const validate = input.validate ?? validateUnderLiveCatalog;
+  if (!isLegacyLanguageVersion(pin) && !movesUp(pin, to)) {
+    const refusal = releaseVersionDiagnostic(pin, to);
+    const lines = movement.source.split('\n');
+    return {
+      status: 'blocked',
+      ...base,
+      diagnostics: refusal === undefined ? [] : [toAuthoringDiagnostic(refusal, lines)],
+    };
+  }
 
-  const rewrite = await rewriteForUpgrade({
-    movement,
-    to,
-    validate: input.validate ?? validateUnderLiveCatalog,
-    all: input.applyAllFixes === true,
-  });
+  const rewrite: UpgradeRewrite = isLegacyLanguageVersion(pin)
+    ? await rewriteForUpgrade({ movement, to, validate, all: input.applyAllFixes === true })
+    : { source: movement.source, changed: false, validation: await validate(validationUnder(movement, to)) };
   const { validation } = rewrite;
   const diagnostics = blockingDiagnostics(validation.diagnostics);
   const shown = { ...base, ...(rewrite.changed ? { upgradedSource: rewrite.source } : {}) };
@@ -720,8 +844,15 @@ export async function upgradeMovement(input: {
   return { status: 'upgraded', ...shown, diagnostics };
 }
 
-/** The standing release, for the entry points: the platform's, which still
- *  serves the versions the language release has dropped. */
+/** The standing release, for the entry points: the installed language, and
+ *  the legacy ids the platform still runs. */
 export function thisDeployCheckRelease(tag: string): DeployCheckRelease {
-  return { tag, language: PLATFORM_RELEASE };
+  return {
+    tag,
+    language: {
+      current: LANGUAGE_VERSION,
+      legacy: PLATFORM_SUPPORTED_LANGUAGE_VERSIONS,
+      deprecated: PLATFORM_DEPRECATED_LANGUAGE_VERSIONS,
+    },
+  };
 }

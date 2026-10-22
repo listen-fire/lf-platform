@@ -14,8 +14,8 @@ import { randomUUID } from "node:crypto";
 import { Router, type RequestHandler } from 'express';
 import { z } from 'zod';
 import { currentPrincipal } from 'principal';
-import { CURRENT_LANGUAGE_VERSION, languageVersionView, type LanguageVersion, type LanguageVersionView } from 'movement-lang';
-import { before, getMovementCompletions } from 'legacy-lang';
+import { LANGUAGE_VERSION, type LanguageVersion } from 'movement-lang';
+import { getMovementCompletions } from 'legacy-lang';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { UserId } from '../../../generated/kysely/core/User';
@@ -76,8 +76,11 @@ import {
   listMovementRows,
 } from '../../../services/translation_graph/movement/store';
 import {
+  movesUp,
   upgradeMovement,
+  versionView,
   type UpgradeMovementResult,
+  type VersionView,
 } from '../../../services/translation_graph/movement/language_upgrade';
 import { neverAsAny } from 'movement-engine/public/types';
 import { movementSourceHash } from '../../../services/translation_graph/movement/version_store';
@@ -814,22 +817,21 @@ async function withStoryUrl<
 
 /**
  * An automation's language version as an agent reads it: the pin and the
- * version its last validation ran under, each by integer and name.
+ * version its last validation ran under.
  */
 function withLanguageVersionView<
   T extends { languageVersion: LanguageVersion; validityCheckedAgainst: LanguageVersion | null },
 >(
   movement: T,
 ): Omit<T, 'languageVersion' | 'validityCheckedAgainst'> & {
-  languageVersion: LanguageVersionView;
-  checkedAgainst: LanguageVersionView | null;
+  languageVersion: VersionView;
+  checkedAgainst: VersionView | null;
 } {
   const { languageVersion, validityCheckedAgainst, ...rest } = movement;
   return {
     ...rest,
-    languageVersion: languageVersionView(languageVersion),
-    checkedAgainst:
-      validityCheckedAgainst === null ? null : languageVersionView(validityCheckedAgainst),
+    languageVersion: versionView(languageVersion),
+    checkedAgainst: validityCheckedAgainst === null ? null : versionView(validityCheckedAgainst),
   };
 }
 
@@ -840,7 +842,14 @@ const validateMovementSchema = z.object({
   languageVersion: z.number().int().optional(),
 });
 
-type AutomationValidation = TeamMovementValidation & { validatedUnder: LanguageVersionView };
+type AutomationValidation = TeamMovementValidation & { validatedUnder: VersionView };
+
+/** A pin as the tools still take it, an integer, read as the text pins are
+ *  now: 5 was the 0.12 line, which the installed language reads; 1 to 4 are
+ *  the legacy ids. Any other integer stays itself, for the rule to refuse. */
+function pinFromToolInput(version: number): LanguageVersion {
+  return version === 5 ? LANGUAGE_VERSION : String(version);
+}
 
 /**
  * Check text the way a save would: an explicit version wins; else a saved
@@ -860,7 +869,7 @@ async function validateAutomationText(input: {
     const row = await getMovementRow({ teamId: input.teamId, id: input.automation }).catch(() => null);
     if (!row) return { error: `No automation '${input.automation}' in this team.` };
     if (languageVersion === undefined) languageVersion = row.languageVersion;
-    else if (before(row.languageVersion, languageVersion)) upgradingFrom = row.languageVersion;
+    else if (movesUp(row.languageVersion, languageVersion)) upgradingFrom = row.languageVersion;
   }
   const validation = await validateMovementForTeam({
     teamId: input.teamId,
@@ -870,7 +879,7 @@ async function validateAutomationText(input: {
   });
   return {
     ...validation,
-    validatedUnder: languageVersionView(languageVersion ?? CURRENT_LANGUAGE_VERSION),
+    validatedUnder: versionView(languageVersion ?? LANGUAGE_VERSION),
   };
 }
 
@@ -920,7 +929,7 @@ const validateMovementHandler: RequestHandler = jsonHandler(
       teamId: await resolveToolTeam(input.team),
       source: input.source,
       ...(input.automation !== undefined ? { automation: input.automation } : {}),
-      ...(input.languageVersion !== undefined ? { languageVersion: input.languageVersion } : {}),
+      ...(input.languageVersion !== undefined ? { languageVersion: pinFromToolInput(input.languageVersion) } : {}),
     }),
 );
 
@@ -933,11 +942,11 @@ const upgradeMovementSchema = z.object({
 
 /** What an agent is told for each upgrade outcome, in the user's terms. */
 function upgradeMessage(result: Exclude<UpgradeMovementResult, { status: 'not_found' }>): string {
-  const to = `"${result.to.name}" (${result.to.version})`;
+  const to = result.to.version;
   const rewritten = result.upgradedSource !== undefined;
   switch (result.status) {
     case 'already_current':
-      return `Already written in ${to}, the current language version. Nothing to do.`;
+      return `Already written for ${result.from.version}, which the installed language ${to} reads. Nothing to do.`;
     case 'blocked':
       return rewritten
         ? `Not upgraded: its old spellings rewrite into ${to} automatically (upgradedSource), and the rewritten text still reports the diagnostics listed — their lines are upgradedSource's, each with its source line. A diagnostic that carries a fix has a rewrite not proved to keep the meaning: read it, and call again with applyAllFixes: true to apply those too. Repair the others in the saved text (either spelling), save, and call this again.`
@@ -998,14 +1007,14 @@ const completionsAtHandler: RequestHandler = jsonHandler(
     const teamId = (await resolveToolTeam(input.team)) as TeamId;
     const { snapshot } = await movementCatalogSnapshotForTeam(teamId);
     // Same version rule as validateAutomationText: explicit, else the saved automation's pin, else current.
-    let languageVersion = input.languageVersion;
+    let languageVersion = input.languageVersion !== undefined ? pinFromToolInput(input.languageVersion) : undefined;
     if (languageVersion === undefined && input.automation !== undefined) {
       const row = await getMovementRow({ teamId, id: input.automation }).catch(() => null);
       if (!row) return { error: `No automation '${input.automation}' in this team.` };
       languageVersion = row.languageVersion;
     }
     const result = getMovementCompletions(fullSource, offset, snapshot, {
-      languageVersion: languageVersion ?? CURRENT_LANGUAGE_VERSION,
+      languageVersion: languageVersion ?? LANGUAGE_VERSION,
     });
     return {
       completions: result.items.map((i) => ({

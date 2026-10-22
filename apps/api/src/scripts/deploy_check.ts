@@ -37,13 +37,13 @@ import { neverAsAny } from 'movement-engine/public/types';
 function outcomeHeading(outcome: DeployCheckOutcome): string {
   switch (outcome) {
     case 'upgradable':
-      return 'Clean under the current language version — offered the upgrade, pin unchanged';
+      return 'Legacy versions clean under the installed language — offered the upgrade, pin unchanged';
     case 'current':
-      return 'Already on the current language version';
+      return 'On the installed language';
     case 'warned':
-      return 'Kept on an older version — not clean under the current one';
+      return 'Kept on a legacy version — not clean under the installed language';
     case 'refused':
-      return 'NOT VALIDATING under their own version (unless marked already failing, a bug — report it)';
+      return 'NOT VALIDATING under their own version, or pinned to a language this release does not read (a legacy version failing, unless marked already failing, is a bug — report it)';
     case 'unverified':
       return 'Could not be checked — kept where they were';
     default:
@@ -55,7 +55,7 @@ function outcomeHeading(outcome: DeployCheckOutcome): string {
 export function renderSummary(summary: DeployCheckSummary): string {
   const lines = [
     `Deploy check for release ${summary.release} (${summary.ranAt}), ` +
-      `current language version "${summary.current.name}" (${summary.current.version}):`,
+      `installed language ${summary.current.version}:`,
   ];
   for (const outcome of DEPLOY_CHECK_OUTCOMES) {
     const entries = summary.automations.filter((a) => a.outcome === outcome);
@@ -66,8 +66,8 @@ export function renderSummary(summary: DeployCheckSummary): string {
     for (const entry of entries) {
       const move =
         entry.from.version === entry.to.version
-          ? `"${entry.from.name}"`
-          : `"${entry.from.name}" -> "${entry.to.name}"`;
+          ? `${entry.from.version}`
+          : `${entry.from.version} -> ${entry.to.version}`;
       const detail = entry.detail === '' ? '' : ` — ${entry.detail}`;
       lines.push(`    - ${entry.name} (${move}${entry.deprecated ? ', deprecated' : ''})${detail}`);
       if (entry.notes !== undefined) lines.push(`      note (does not block): ${entry.notes}`);

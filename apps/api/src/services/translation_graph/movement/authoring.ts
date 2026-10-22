@@ -72,7 +72,7 @@ export interface MovementValidation {
   firedMovements: string[];
 }
 
-function toAuthoringDiagnostic(
+export function toAuthoringDiagnostic(
   diagnostic: Diagnostic,
   lines: string[],
 ): AuthoringDiagnostic {
