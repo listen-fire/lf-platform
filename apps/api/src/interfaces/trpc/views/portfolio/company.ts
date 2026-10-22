@@ -233,7 +233,11 @@ const companyRouter = (procedure: typeof trpc.procedure) =>
             fxDate: config?.valuationDate ? new Date(config.valuationDate) : new Date(),
           }),
           getInvestmentsValuation({
-            investments: company.investments,
+            // jsonArrayFrom hands timestamps back as the ISO strings JSON carries.
+            investments: company.investments.map(({ id, date }) => ({
+              id,
+              date: date === null ? null : new Date(date),
+            })),
             targetCurrency: (config?.currency as CurrencyIsoCode) ?? CurrencyIsoCode.USD,
             asOfDate: config?.valuationDate ? new Date(config.valuationDate) : new Date(),
             fxDate: config?.valuationDate ? new Date(config.valuationDate) : new Date(),
