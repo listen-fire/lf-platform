@@ -1,6 +1,8 @@
 import expressWinston from 'express-winston';
 import winston from 'winston';
 
+import type { RequestHandler } from 'express';
+
 import { formatEngineLogLine, jsonLogsEnabled, type EngineLogLevel } from 'movement-engine/public/log';
 import { HEALTH_CHECK_ENDPOINT } from '../../constants';
 
@@ -25,18 +27,40 @@ const serverLogger = winston.createLogger({
   }),
 });
 
+/** Query parameters that carry an OAuth sign-in in flight: a provider's
+ *  redirect to a callback route (the platform's connect flows, lf's relay). */
+const SIGN_IN_PARAMETERS = ['code', 'state'];
+
+/** A request's URL as the log writes it: one carrying a sign-in's `code` or
+ *  `state` loses its whole query, so the log never holds an authorization
+ *  code or the state that would redeem it. */
+function loggedUrl(url: string): string {
+  const at = url.indexOf('?');
+  if (at === -1) return url;
+  const query = new URLSearchParams(url.slice(at + 1));
+  return SIGN_IN_PARAMETERS.some((name) => query.has(name)) ? `${url.slice(0, at)}?[redacted]` : url;
+}
+
 /**
  * Logs request informat
  *
  * NOTE: the CF-Connecting-IP will list the real client IP since Render is behind Cloudflare
  */
-const expressLogger = expressWinston.logger({
+const requestLogger = expressWinston.logger({
   transports: [serverLogger],
   meta: true,
   colorize: !jsonLogsEnabled,
-  msg: '{{req.get("CF-Connecting-IP")}} {{req.method}} {{res.statusCode}} {{req.url}} {{req.body.query?.split(" ")[0]}} {{req.body.operationName}}  {{res.responseTime}}ms',
+  // The URL comes from `res.locals.loggedUrl`, never `req.url`. A `msg` function
+  // is no way round it: express-winston compiles a function's output as a
+  // template again whenever it contains `{{`, which a URL can.
+  msg: '{{req.get("CF-Connecting-IP")}} {{req.method}} {{res.statusCode}} {{res.locals.loggedUrl}} {{req.body.query?.split(" ")[0]}} {{req.body.operationName}}  {{res.responseTime}}ms',
   requestWhitelist: ['ip'],
   ignoredRoutes: [HEALTH_CHECK_ENDPOINT],
 });
 
-export { expressLogger };
+const expressLogger: RequestHandler = (req, res, next) => {
+  res.locals.loggedUrl = loggedUrl(req.originalUrl);
+  requestLogger(req, res, next);
+};
+
+export { expressLogger, loggedUrl };
