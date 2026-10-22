@@ -261,7 +261,8 @@
       "args": [
         "text",
         "pageSize",
-        "margin"
+        "margin",
+        "name"
       ],
       "priced": false,
       "argTypes": {
@@ -273,7 +274,8 @@
             "letter"
           ]
         },
-        "margin": "number"
+        "margin": "number",
+        "name": "text"
       },
       "requiredArgs": [
         "text"
@@ -574,7 +576,8 @@
       "args": [
         "text",
         "pageSize",
-        "margin"
+        "margin",
+        "name"
       ],
       "priced": false,
       "argTypes": {
@@ -586,7 +589,8 @@
             "letter"
           ]
         },
-        "margin": "number"
+        "margin": "number",
+        "name": "text"
       },
       "requiredArgs": [
         "text"
@@ -884,7 +888,8 @@
       "args": [
         "text",
         "pageSize",
-        "margin"
+        "margin",
+        "name"
       ],
       "priced": false,
       "argTypes": {
@@ -896,7 +901,8 @@
             "letter"
           ]
         },
-        "margin": "number"
+        "margin": "number",
+        "name": "text"
       },
       "requiredArgs": [
         "text"

@@ -38,7 +38,7 @@
     "formik": "2.4.6",
     "legacy-lang": "workspace:@listen-fire/legacy-lang@*",
     "lucide-react": "^0.574.0",
-    "movement-lang": "npm:@listen-fire/movement-lang@0.12.0-rc.8",
+    "movement-lang": "npm:@listen-fire/movement-lang@0.12.0-rc.10",
     "next": "15.5.28",
     "qrcode.react": "^4.2.0",
     "react": "18.3.1",

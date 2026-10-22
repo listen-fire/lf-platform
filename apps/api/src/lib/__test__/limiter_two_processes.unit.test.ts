@@ -33,7 +33,7 @@ function fakeMessagesServer() {
   let inFlight = 0;
   let maxInFlight = 0;
   const server = http.createServer((req, res) => {
-    const name = String(req.headers['x-api-key'] ?? '');
+    const name = (req.url ?? '').split('/')[1] ?? '';
     req.resume();
     req.on('end', () => {
       if (rateLimitNext.delete(name)) {

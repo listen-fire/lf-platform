@@ -488,9 +488,9 @@ describe('Bright Data SERP pacing', () => {
     expect(fetchMock).toHaveBeenCalledTimes(14);
     const refusal = grants.find((grant) => !grant.granted);
     if (refusal === undefined || refusal.granted) throw new Error('the fifteenth request was not refused');
-    // One call is back in the bucket after a fourteenth of the minute.
+    // The window is rolling: the first call leaves it a whole minute after it was made.
     const retryAt = Date.parse(refusal.retryAt);
-    expect(retryAt - start).toBe(Math.ceil(MINUTE_MS / 14));
+    expect(retryAt - start).toBe(MINUTE_MS);
 
     await jest.advanceTimersByTimeAsync(retryAt - start - 1);
     expect(fetchMock).toHaveBeenCalledTimes(14);
@@ -514,10 +514,10 @@ describe('Bright Data SERP pacing', () => {
     await jest.advanceTimersByTimeAsync(2 * MINUTE_MS);
     await Promise.all(searches);
     expect(sentAt).toHaveLength(42);
-    // The limiter is a token bucket: a burst of 14, then one a fourteenth of
-    // a minute. (So a rolling minute can hold up to 14 + 13, not only 14.)
+    // The limiter is a rolling window: no minute holds more than 14, so a
+    // request goes no sooner than a minute after the one 14 places before it.
     for (const [i, at] of sentAt.entries()) {
-      if (i >= 15) expect(at - sentAt[i - 1]).toBeGreaterThanOrEqual(Math.floor(MINUTE_MS / 14));
+      if (i >= 14) expect(at - sentAt[i - 14]).toBeGreaterThanOrEqual(MINUTE_MS);
     }
     // (42 - 14) / 14 = two minutes for the last one, give or take rounding.
     expect(Math.max(...sentAt)).toBeGreaterThan(2 * MINUTE_MS - 100);
@@ -531,8 +531,8 @@ describe('Bright Data SERP pacing', () => {
     await jest.advanceTimersByTimeAsync(0);
     expect(fetchMock).toHaveBeenCalledTimes(2);
 
-    // Two a minute is one every thirty seconds.
-    await jest.advanceTimersByTimeAsync(MINUTE_MS / 2);
+    // The third waits until the first has left the minute's window.
+    await jest.advanceTimersByTimeAsync(MINUTE_MS);
     await Promise.all(searches);
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });

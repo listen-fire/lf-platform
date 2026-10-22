@@ -13,9 +13,10 @@ import { installSharedLimiter } from '../limiter';
 
 const REPLY = '@limiter-process ';
 
-const baseUrl = process.env.FAKE_ANTHROPIC_URL;
-// The key the fake server tells the two processes apart by.
-const apiKey = process.env.PROCESS_NAME ?? '';
+// One key for both processes, since the limit is per key; the fake server tells
+// the processes apart by the first path segment instead.
+const baseUrl = `${process.env.FAKE_ANTHROPIC_URL}/${process.env.PROCESS_NAME ?? ''}`;
+const apiKey = 'the-shared-key';
 
 const client = anthropicClient({
   chatCallFor: (name) => ({
