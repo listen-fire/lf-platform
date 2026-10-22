@@ -22,8 +22,8 @@
  *
  */
 
-import { BridgeError, type LanguageVersion } from 'movement-lang';
-import { storyOf, type Chip, type ChipPart, type StoryFilter, type StoryIR, type StoryNode, type StoryShapeNode, type StoryTarget, type StoryTraversal, type Step } from 'legacy-lang';
+import { BridgeError, LANGUAGE_VERSION, diagnosticSeverity, type Diagnostic, type LanguageVersion } from 'movement-lang';
+import { storyOf, type Chip, type ChipPart, type StoryFilter, type StoryIR, type StoryNode, type StoryProblem, type StoryShapeNode, type StoryTarget, type StoryTraversal, type Step } from 'legacy-lang';
 import { MovementParseError } from 'movement-lang';
 import { LRUCache } from 'lru-cache';
 
@@ -44,6 +44,7 @@ import type {
 import { getAdapterManifest, inboundAddressFor } from '../adapters/registry';
 import { resolveEventPhrase } from '../vocabulary';
 import { movementCatalogForTeam, type TeamMovementCatalog } from './catalog';
+import { checkInstalled, presentationDialect, routeOf } from './language_route';
 import {
   getMovementRow,
   listDerivedTriggerRows,
@@ -628,6 +629,13 @@ export async function projectStoryView(row: {
   /** The movement's pin; absent (an unsaved preview) ⇒ the current version. */
   languageVersion?: LanguageVersion;
 }): Promise<StoryViewResult> {
+  const movement = { id: row.id, name: row.name };
+  const route = routeOf(row.languageVersion ?? LANGUAGE_VERSION);
+  if (route.kind === 'refused') {
+    return { ok: false, reason: 'unreadable', movement, problems: [storyProblemOf(route.diagnostic)] };
+  }
+  const dialect = presentationDialect(route.pin);
+
   // Same fallback the authoring path takes: assembling a source-scoped catalog
   // needs the source to parse, and the whole point of the unreadable branch is
   // that it may not. `types: []` describes nothing, so reporting a missing
@@ -643,32 +651,60 @@ export async function projectStoryView(row: {
     teamCatalog = await movementCatalogForTeam(row.teamId as TeamId, { types: [] });
   }
 
+  // A release pin's problems and validity are the wasm's, against the run
+  // snapshot, as on every other surface. legacy-lang's analysis under the
+  // pin's dialect only draws the picture.
+  const installed =
+    route.kind === 'installed'
+      ? checkInstalled({ source: row.source, snapshot: runSnapshotOf(teamCatalog), pin: route.pin })
+      : undefined;
+  // An installed line no legacy-lang dialect spells has a verdict but no
+  // analysis to draw it from.
+  if (dialect === null) {
+    return { ok: false, reason: 'unreadable', movement, problems: (installed ?? []).map(storyProblemOf) };
+  }
+
   const result = storyOf({
     source: row.source,
     catalog: teamCatalog.catalog,
     name: row.name,
     resolveFile: teamCatalog.resolveFile,
     ...(row.validityStatus !== null ? { validityStatus: row.validityStatus } : {}),
-    ...(row.languageVersion !== undefined ? { languageVersion: row.languageVersion } : {}),
+    languageVersion: dialect,
+    ...(installed !== undefined ? { diagnostics: installed } : {}),
   });
 
   if (!result.ok) {
     return {
       ok: false,
       reason: 'unreadable',
-      movement: { id: row.id, name: row.name },
-      problems: result.problems,
+      movement,
+      problems: installed !== undefined && installed.length > 0 ? installed.map(storyProblemOf) : result.problems,
     };
   }
 
   return {
     ok: true,
     view: joinStoryView({
-      movement: { id: row.id, name: row.name, validity: result.story.movement.validity },
+      movement: { ...movement, validity: result.story.movement.validity },
       story: result.story,
       vocabulary: storyVocabularyOf(teamCatalog),
       listeners: await provisionedListeners(row.id),
     }),
+  };
+}
+
+function runSnapshotOf(teamCatalog: TeamMovementCatalog) {
+  if (teamCatalog.runSnapshot === undefined) throw new Error('a release pin is checked against its run snapshot');
+  return teamCatalog.runSnapshot();
+}
+
+function storyProblemOf(diagnostic: Diagnostic): StoryProblem {
+  return {
+    code: diagnostic.code,
+    message: diagnostic.message,
+    severity: diagnosticSeverity(diagnostic),
+    span: diagnostic.span,
   };
 }
 

@@ -12,7 +12,7 @@
 // per-team catalog the save path uses (referenced-construction scoped)
 // and runs the core against it.
 
-import { BridgeError, diagnosticSeverity, neverAsAny, parseProgram as parseInstalled } from 'movement-lang';
+import { BridgeError, LANGUAGE_VERSION, diagnosticSeverity, neverAsAny, parseProgram as parseInstalled } from 'movement-lang';
 import { CURRENT_LANGUAGE_VERSION, checkProgram } from 'legacy-lang';
 import { MovementParseError } from 'movement-lang';
 import { parseProgram } from 'legacy-lang';
@@ -28,7 +28,7 @@ import type {
 } from 'movement-lang';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { CatalogGap } from './catalog';
-import type { MovementValidityStatus } from './store';
+import { getMovementRow, type MovementValidityStatus } from './store';
 
 import { listUnsupportedConstructs } from '@listen-fire/legacy-engine/services/movement_engine/interpretable';
 import { movementCatalogForTeam } from './catalog';
@@ -334,6 +334,32 @@ export async function validateMovementForTeam(input: {
   } finally {
     timer.done();
   }
+}
+
+/**
+ * The editor's lint for a pin whose checker is not in the browser: the
+ * validation `validateMovementForTeam` gives, under the pin of the movement
+ * being edited (`id`), else an explicit pin, else the installed release.
+ * Null when `id` names no movement of this team.
+ */
+export async function checkMovementSource(input: {
+  teamId: string;
+  source: string;
+  id?: string;
+  languageVersion?: LanguageVersion;
+}): Promise<{ diagnostics: AuthoringDiagnostic[] } | null> {
+  let pin = input.languageVersion ?? LANGUAGE_VERSION;
+  if (input.id !== undefined) {
+    const row = await getMovementRow({ teamId: input.teamId, id: input.id });
+    if (row === null) return null;
+    pin = row.languageVersion;
+  }
+  const validation = await validateMovementForTeam({
+    teamId: input.teamId,
+    source: input.source,
+    languageVersion: pin,
+  });
+  return { diagnostics: validation.diagnostics };
 }
 
 async function runValidate(

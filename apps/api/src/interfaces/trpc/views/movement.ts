@@ -8,8 +8,10 @@
  *
  *   - `catalog` — the team's `CatalogSnapshot` SKELETON (movement-lang):
  *     adapters, credentials, plugins and kg from DB + manifests only — no
- *     external introspection, so it returns fast. The browser checks and
- *     autocompletes OFFLINE against it; no per-keystroke round-trips.
+ *     external introspection, so it returns fast. The browser autocompletes
+ *     OFFLINE against it, and checks a legacy pin against it too.
+ *   - `check` — the lint for a release pin, whose checker (the wasm) is not
+ *     in the browser: the same validation `save` gates on.
  *   - `describeInstance` — one (adapter, credential) pair's instance
  *     schema, introspected on demand (TTL-cached server-side). The editor
  *     requests these for the constructions the source references and
@@ -31,6 +33,8 @@
  *   - `delete` — remove the movement and every derived trigger.
  */
 
+import { TRPCError } from '@trpc/server';
+import { LANGUAGE_VERSION, type LanguageVersion } from 'movement-lang';
 import { z } from 'zod';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
@@ -47,6 +51,7 @@ import {
   describeMovementInstance,
   movementCatalogSnapshotForTeam,
   type DescribedInstance,
+  type TeamCatalogSnapshot,
 } from '../../../services/translation_graph/movement/catalog';
 import {
   deleteMovement,
@@ -73,7 +78,16 @@ import {
   type MovementDependent,
   type MovementFileFacets,
 } from '../../../services/translation_graph/movement/files';
-import { validateMovementForTeam } from '../../../services/translation_graph/movement/authoring';
+import {
+  checkMovementSource,
+  validateMovementForTeam,
+  type AuthoringDiagnostic,
+} from '../../../services/translation_graph/movement/authoring';
+import {
+  presentationDialect,
+  routeOf,
+  type PinRoute,
+} from '../../../services/translation_graph/movement/language_route';
 import {
   storyViewForMovement,
   type StoryViewResult,
@@ -330,10 +344,31 @@ type MovementListItemResponse = Omit<MovementListItem, 'listeners'> & {
   listeners: MovementListenerWithRun[];
 };
 
+/**
+ * How the editor treats a pin. `kind`: whose checker lints it (`legacy`: the
+ * browser's; `installed`: the server's `check`; `refused`: nothing reads it).
+ * `dialect`: what completions, hover and definition read it as; null ⇒ none.
+ */
+export interface MovementLanguageRoute {
+  kind: PinRoute['kind'];
+  dialect: LanguageVersion | null;
+}
+
+function languageRouteOf(pin: LanguageVersion): MovementLanguageRoute {
+  return { kind: routeOf(pin).kind, dialect: presentationDialect(pin) };
+}
+
+/** The skeleton, with the release a new movement is pinned to and the
+ *  dialect the editor's language service reads it under. */
+export type MovementCatalogResponse = TeamCatalogSnapshot & {
+  installed: { pin: LanguageVersion; dialect: LanguageVersion | null };
+};
+
 type MovementDetailResponse = MovementDetail & {
   facets: MovementFileFacets;
   /** The files importing this one (direct importers). */
   dependents: MovementDependent[];
+  languageRoute: MovementLanguageRoute;
 };
 
 type SaveMovementResponse = SaveMovementResult & {
@@ -347,11 +382,40 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
   const userProcedure = sharedUserProcedure(procedure);
 
   return trpc.router({
-    catalog: userProcedure.query(async () => {
+    catalog: userProcedure.query(async (): Promise<MovementCatalogResponse> => {
       const ctx = currentContext();
       const teamId = ctx.user.teamId as TeamId;
-      return movementCatalogSnapshotForTeam(teamId);
+      const skeleton = await movementCatalogSnapshotForTeam(teamId);
+      // What a new movement is pinned to, and how the editor reads it.
+      return { ...skeleton, installed: { pin: LANGUAGE_VERSION, dialect: presentationDialect(LANGUAGE_VERSION) } };
     }),
+
+    /**
+     * The server's lint for a pin the browser cannot check (an installed
+     * release: its checker is the wasm, against the run snapshot). The pin is
+     * the movement's when `id` is given, else `languageVersion`, else the
+     * installed release. A MUTATION for the same reason as `catalogForSource`:
+     * the program is the input.
+     */
+    check: userProcedure
+      .input(
+        z.object({
+          source: z.string(),
+          id: z.string().uuid().optional(),
+          languageVersion: z.string().optional(),
+        }),
+      )
+      .mutation(async ({ input }): Promise<{ diagnostics: AuthoringDiagnostic[] }> => {
+        const ctx = currentContext();
+        const checked = await checkMovementSource({
+          teamId: ctx.user.teamId,
+          source: input.source,
+          ...(input.id !== undefined ? { id: input.id } : {}),
+          ...(input.languageVersion !== undefined ? { languageVersion: input.languageVersion } : {}),
+        });
+        if (checked === null) throw new TRPCError({ code: 'NOT_FOUND', message: `no movement ${input.id}` });
+        return checked;
+      }),
 
     /**
      * The same snapshot, TYPED FOR ONE PROGRAM: instance schemas filled by the
@@ -483,7 +547,12 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
         const detail = await getMovement({ teamId, id: input.id });
         if (!detail) return null;
         const dependents = await movementDependents({ teamId, name: detail.name });
-        return { ...detail, facets: movementFileFacets(detail.source), dependents };
+        return {
+          ...detail,
+          facets: movementFileFacets(detail.source),
+          dependents,
+          languageRoute: languageRouteOf(detail.languageVersion),
+        };
       }),
 
     /**

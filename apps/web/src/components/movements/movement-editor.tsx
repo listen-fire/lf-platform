@@ -3,13 +3,15 @@
 /**
  * CodeMirror 6 editor for `.mvt` movement scripts.
  *
- * Everything language-aware comes from the movement-lang language service,
- * driven by the team's catalog snapshot:
- *   - linting:    getMovementDiagnostics (debounced by @codemirror/lint);
- *   - completion: getMovementCompletions;
- *   - hover:      getHoverInfo.
- * The component is a thin adapter from those pure functions to CodeMirror
- * extension points — no network calls in here.
+ * Everything language-aware comes from the legacy-lang language service,
+ * driven by the team's catalog snapshot, or from the server:
+ *   - linting:    getMovementDiagnostics for a legacy pin; the server's
+ *                 `check` (the wasm checker) for a release pin, through
+ *                 `checkRemote` (debounced by @codemirror/lint either way);
+ *   - completion: getMovementCompletions, under the pin's dialect;
+ *   - hover:      getHoverInfo, under the pin's dialect.
+ * A pin with no dialect gets no completion, hover or definition
+ * (./editor-lint.ts). The component makes no network call of its own.
  *
  * The snapshot STREAMS: the page fetches a fast skeleton (no instance
  * schemas), then merges per-(adapter, credential) schemas as the source
@@ -58,6 +60,13 @@ import { getCM, vim } from "@replit/codemirror-vim";
 import { type CatalogSnapshot, type LanguageVersion } from 'movement-lang';
 import { getDefinition, getHoverInfo, getMovementCompletions, getMovementDiagnostics, type CompletionKind, type DefinitionTarget, type MovementDiagnostic } from 'legacy-lang';
 
+import {
+  lintsInBrowser,
+  presentationOptions,
+  remoteToEditorDiagnostics,
+  type CheckRemote,
+  type EditorLanguageRoute,
+} from "./editor-lint";
 import { movementSyntax } from "./movement-language";
 
 export interface MovementEditorHandle {
@@ -79,6 +88,11 @@ export interface MovementEditorProps {
   /** The saved movement's language version — the text is checked as the
    *  version it is written in. Absent (a new movement) ⇒ the current one. */
   languageVersion?: LanguageVersion;
+  /** Whose checker lints the pin and which dialect the language service
+   *  reads it under. */
+  languageRoute: EditorLanguageRoute;
+  /** The server's lint, for a pin the browser cannot check. */
+  checkRemote: CheckRemote;
   onChange?: (source: string) => void;
   /** Fires with each lint pass — drives the page's diagnostics panel. */
   onDiagnostics?: (diagnostics: MovementDiagnostic[]) => void;
@@ -215,21 +229,16 @@ const theme = EditorView.theme({
 
 const movementHoverDocs = (
   snapshotRef: { current: CatalogSnapshot },
-  languageVersionRef: { current: LanguageVersion | undefined },
+  languageRouteRef: { current: EditorLanguageRoute },
 ) =>
   hoverTooltip((view, pos) => {
+    const options = presentationOptions(languageRouteRef.current);
+    if (options === null) return null;
     // The analyzer can throw on a program shape it doesn't handle yet — one
     // bad hover must degrade THAT request, not kill hover document-wide.
     let info;
     try {
-      info = getHoverInfo(
-        view.state.doc.toString(),
-        pos,
-        snapshotRef.current,
-        languageVersionRef.current !== undefined
-          ? { languageVersion: languageVersionRef.current }
-          : undefined,
-      );
+      info = getHoverInfo(view.state.doc.toString(), pos, snapshotRef.current, options);
     } catch (err) {
       console.error("Movement hover failed:", err);
       return null;
@@ -324,6 +333,7 @@ function navTokenAt(
 
 const definitionNavigation = (
   snapshotRef: { current: CatalogSnapshot },
+  languageRouteRef: { current: EditorLanguageRoute },
   callbacksRef: {
     current: { onNavigate?: (target: DefinitionTarget) => void };
   },
@@ -339,6 +349,9 @@ const definitionNavigation = (
     const doc = view.state.doc.toString();
     const token = navTokenAt(doc, pos);
     if (!token) return undefined;
+    // getDefinition takes no pin (it reads the program as legacy-lang's
+    // current line); a pin with no dialect gets none.
+    if (presentationOptions(languageRouteRef.current) === null) return undefined;
     let target;
     try {
       target = getDefinition(doc, pos, snapshotRef.current);
@@ -492,6 +505,8 @@ export const MovementEditor = forwardRef<
     initialValue,
     snapshot,
     languageVersion,
+    languageRoute,
+    checkRemote,
     onChange,
     onDiagnostics,
     vimEnabled,
@@ -521,6 +536,15 @@ export const MovementEditor = forwardRef<
   const snapshotRef = useRef(snapshot);
   const languageVersionRef = useRef(languageVersion);
   languageVersionRef.current = languageVersion;
+  const languageRouteRef = useRef(languageRoute);
+  languageRouteRef.current = languageRoute;
+  const checkRemoteRef = useRef(checkRemote);
+  checkRemoteRef.current = checkRemote;
+  // The server lint in flight, aborted when a newer pass starts; and what the
+  // last pass that finished showed, which a superseded pass hands back so the
+  // squiggles do not flicker.
+  const remoteLintRef = useRef<AbortController | null>(null);
+  const shownDiagnosticsRef = useRef<MovementDiagnostic[]>([]);
   const vimCompartmentRef = useRef(new Compartment());
   const wrapCompartmentRef = useRef(new Compartment());
   const animTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -691,6 +715,11 @@ export const MovementEditor = forwardRef<
     if (viewRef.current) forceLinting(viewRef.current);
   }, [snapshot]);
 
+  // An upgrade moves the pin, and with it whose checker lints the text.
+  useEffect(() => {
+    if (viewRef.current) forceLinting(viewRef.current);
+  }, [languageVersion, languageRoute.kind, languageRoute.dialect]);
+
   useImperativeHandle(ref, () => ({
     revealRange: (from, to) => {
       const view = viewRef.current;
@@ -738,27 +767,52 @@ export const MovementEditor = forwardRef<
     const host = hostRef.current;
     if (!host) return;
 
+    const toLint = (diagnostics: MovementDiagnostic[]) =>
+      diagnostics.map((d) => ({
+        from: d.from,
+        to: d.to,
+        severity:
+          (d.severity ?? "error") === "info"
+            ? ("info" as const)
+            : (d.severity ?? "error") === "warning"
+              ? ("warning" as const)
+              : ("error" as const),
+        message: d.message,
+        source: d.code,
+      }));
+    const show = (diagnostics: MovementDiagnostic[]) => {
+      shownDiagnosticsRef.current = diagnostics;
+      callbacksRef.current.onDiagnostics?.(diagnostics);
+      return toLint(diagnostics);
+    };
+
     const movementLinter = linter(
-      (view) => {
-        const pinned = languageVersionRef.current;
-        const diagnostics = getMovementDiagnostics(
-          view.state.doc.toString(),
-          snapshotRef.current,
-          pinned !== undefined ? { languageVersion: pinned } : undefined,
-        );
-        callbacksRef.current.onDiagnostics?.(diagnostics);
-        return diagnostics.map((d) => ({
-          from: d.from,
-          to: d.to,
-          severity:
-            (d.severity ?? "error") === "info"
-              ? ("info" as const)
-              : (d.severity ?? "error") === "warning"
-                ? ("warning" as const)
-                : ("error" as const),
-          message: d.message,
-          source: d.code,
-        }));
+      async (view) => {
+        const source = view.state.doc.toString();
+        remoteLintRef.current?.abort();
+        remoteLintRef.current = null;
+        if (lintsInBrowser(languageRouteRef.current)) {
+          const pinned = languageVersionRef.current;
+          return show(
+            getMovementDiagnostics(
+              source,
+              snapshotRef.current,
+              pinned !== undefined ? { languageVersion: pinned } : undefined,
+            ),
+          );
+        }
+        const controller = new AbortController();
+        remoteLintRef.current = controller;
+        let remote;
+        try {
+          remote = await checkRemoteRef.current(source, controller.signal);
+        } catch (err) {
+          if (controller.signal.aborted) return toLint(shownDiagnosticsRef.current);
+          throw err;
+        }
+        if (controller.signal.aborted) return toLint(shownDiagnosticsRef.current);
+        remoteLintRef.current = null;
+        return show(remoteToEditorDiagnostics(source, remote));
       },
       { delay: 350 },
     );
@@ -766,15 +820,15 @@ export const MovementEditor = forwardRef<
     const movementCompletions = (
       context: CompletionContext,
     ): CompletionResult | null => {
+      const presentation = presentationOptions(languageRouteRef.current);
+      if (presentation === null) return null;
       let result;
       try {
         result = getMovementCompletions(
           context.state.doc.toString(),
           context.pos,
           snapshotRef.current,
-          languageVersionRef.current !== undefined
-            ? { languageVersion: languageVersionRef.current }
-            : undefined,
+          presentation,
         );
       } catch (err) {
         console.error("Movement completions failed:", err);
@@ -846,8 +900,8 @@ export const MovementEditor = forwardRef<
           movementLinter,
           lintGutter(),
           autocompletion({ override: [movementCompletions] }),
-          movementHoverDocs(snapshotRef, languageVersionRef),
-          definitionNavigation(snapshotRef, callbacksRef),
+          movementHoverDocs(snapshotRef, languageRouteRef),
+          definitionNavigation(snapshotRef, languageRouteRef, callbacksRef),
           keymap.of([
             ...closeBracketsKeymap,
             ...defaultKeymap,
@@ -866,6 +920,7 @@ export const MovementEditor = forwardRef<
     });
     viewRef.current = view;
     return () => {
+      remoteLintRef.current?.abort();
       view.destroy();
       viewRef.current = null;
     };

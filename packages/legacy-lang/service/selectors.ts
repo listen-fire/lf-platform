@@ -42,7 +42,7 @@ import { parseProgram } from '../parser/parse';
 import { unwrapCredentialArg } from 'movement-lang/parser/scan';
 import { expressionOfSlot, parseMovementExpression } from '../expression/bridge';
 import { CURRENT_LANGUAGE_VERSION, type LanguageVersion } from '../language_version';
-import { since } from '../version_conditionals';
+import { pastLegacy } from '../version_conditionals';
 
 export interface InstanceChain {
   /** The construction's adapter slug (import aliases resolved back). */
@@ -371,7 +371,7 @@ export function scanInstanceChains(
     // this movement's demand like any closure's. A type (`MEMBERS(<T>)`) walks
     // nothing.
     else if (arg.kind === 'closure') {
-      if (since(languageVersion, 3)) walkClosure(arg.closure, aliasScope);
+      if (pastLegacy(languageVersion, 3)) walkClosure(arg.closure, aliasScope);
     }
   };
 
@@ -386,7 +386,7 @@ export function scanInstanceChains(
    * unchanged, and an older movement keeps that scan.
    */
   const walkClosure = (closure: ClosureExpression, aliasScope: Map<string, AliasGrounding>): void => {
-    if (!since(languageVersion, 3)) {
+    if (!pastLegacy(languageVersion, 3)) {
       walk(closure.body, aliasScope);
       return;
     }

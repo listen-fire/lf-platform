@@ -365,3 +365,83 @@ describe('latestRunsByTriggerId', () => {
     expect(result.size).toBe(0);
   });
 });
+
+describe('check — the server lint for an installed pin', () => {
+  const ATTIO_IMPORT = (field: string) => `import { attio } from adapters
+import { acme_main } from credentials
+
+crm = connect attio using acme_main
+
+function \`Import Companies\`(go: <manual-[:Invocation]->>) {
+  write crm-[:Companies]-> {
+    unique by (Name)
+    ${field}: go.Text
+  }
+}
+
+listen as "Import companies" to manual fire \`Import Companies\`
+`;
+  const BARE_MANUAL = 'function echo(run: <manual-[:Invocation]->>) {\n  return 1\n}\nlisten to manual fire echo\n';
+
+  async function caller() {
+    const { fromCatalogSnapshot, mockCatalogSnapshot } = await import('movement-lang');
+    const snapshot = mockCatalogSnapshot({
+      adapters: {
+        attio: {
+          constructionArgs: [{ name: 'credentials', kind: 'credential', required: true }],
+          schema: {
+            positions: { Companies: { properties: { Name: 'text' }, edges: {} } },
+            collections: { Companies: { target: 'Companies' } },
+            writableRoots: { Companies: { fields: { Name: 'text' }, resultShape: { externalId: 'text', Name: 'text' } } },
+          },
+        },
+      },
+      credentials: { acme_main: { adapters: ['attio'] } },
+    });
+    jest.doMock('../../../../services/context', () => ({
+      currentContext: () => ({
+        user: { id: 'user-1', teamId: 'team-1' },
+        principal: { userId: 'user-1', teamId: 'team-1', access: 'write', scopes: ['*'], pinnedTeamId: null },
+      }),
+    }));
+    jest.doMock('../../../../services/user', () => ({
+      UserService: { getById: async () => ({ id: 'user-1' }) },
+    }));
+    jest.doMock('../../../../services/translation_graph/movement/catalog', () => ({
+      ...jest.requireActual('../../../../services/translation_graph/movement/catalog'),
+      movementCatalogForTeam: async () => ({
+        catalog: fromCatalogSnapshot(snapshot),
+        resolveCredentialId: () => undefined,
+        resolveFile: () => undefined,
+        notes: [],
+        gaps: [],
+        runSnapshot: () => snapshot,
+      }),
+    }));
+    const { movementRouter } = await import('../movement');
+    const { trpc } = await import('../../trpc');
+    return movementRouter(trpc.procedure).createCaller({ authorise: async () => {} } as never);
+  }
+
+  beforeEach(() => {
+    jest.resetModules();
+  });
+  afterEach(() => {
+    jest.dontMock('../../../../services/context');
+    jest.dontMock('../../../../services/user');
+    jest.dontMock('../../../../services/translation_graph/movement/catalog');
+  });
+
+  it('a bare manual listen has no diagnostics under the installed pin', async () => {
+    const { diagnostics } = await (await caller()).check({ source: BARE_MANUAL });
+    expect(diagnostics).toEqual([]);
+  });
+
+  it('an unknown field is the wasm checker\'s error', async () => {
+    const clean = await (await caller()).check({ source: ATTIO_IMPORT('Name') });
+    expect(clean.diagnostics).toEqual([]);
+    const { diagnostics } = await (await caller()).check({ source: ATTIO_IMPORT('Nmae') });
+    expect(diagnostics.filter((d) => d.severity === 'error').length).toBeGreaterThan(0);
+    expect(diagnostics.some((d) => d.message.includes('Nmae'))).toBe(true);
+  });
+});

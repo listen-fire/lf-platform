@@ -47,7 +47,7 @@ jest.mock('../catalog', () => ({ movementCatalogForTeam: jest.fn() }));
 import { LANGUAGE_VERSION, fromCatalogSnapshot, mockCatalogSnapshot, type LanguageVersion } from 'movement-lang';
 
 import { diagnoseMovementSource } from '../authoring';
-import { routeOf } from '../language_route';
+import { presentationDialect, routeOf } from '../language_route';
 
 const BARE_MANUAL = 'function echo(run: <manual-[:Invocation]->>) {\n  return 1\n}\nlisten to manual fire echo\n';
 
@@ -143,5 +143,16 @@ describe('routeOf', () => {
       expect(route.diagnostic.code).toMatch(/^MOV_LANGUAGE_VERSION_/);
       expect(route.diagnostic.message).toContain(pin);
     }
+  });
+});
+
+describe('presentationDialect', () => {
+  it('reads a legacy id as itself, the 0.12 line as legacy-lang\'s 5, and gives no dialect for any other line', () => {
+    expect(presentationDialect('4')).toBe('4');
+    expect(presentationDialect('1')).toBe('1');
+    expect(presentationDialect(LANGUAGE_VERSION)).toBe('5');
+    expect(presentationDialect('0.12.0')).toBe('5');
+    expect(presentationDialect('0.13.0')).toBeNull();
+    expect(presentationDialect('0.11.0')).toBeNull();
   });
 });

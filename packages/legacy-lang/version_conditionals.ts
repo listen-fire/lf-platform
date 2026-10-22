@@ -41,3 +41,13 @@ export function before(version: LanguageVersion, n: number): boolean {
 export function changedBetween(from: LanguageVersion, to: LanguageVersion, n: number): boolean {
   return before(from, n) && since(to, n);
 }
+
+/**
+ * For the AST readers only (a scan over a parsed program, never a verdict):
+ * `pin` has the behaviour legacy version `n` introduced. A release pin is past
+ * every legacy behaviour, whatever its line, so a reader can serve any pin the
+ * installed language parses without this copy giving that pin an integer.
+ */
+export function pastLegacy(pin: LanguageVersion, n: number): boolean {
+  return /^\d+$/.test(pin) ? Number(pin) >= n : true;
+}

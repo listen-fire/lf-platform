@@ -260,6 +260,26 @@ describe('storyOf — the whole IR', () => {
     expect(result.story.triggers).toHaveLength(1);
   });
 
+  it('takes its problems and validity from given diagnostics, while the recording still drives the projection', () => {
+    const given = [
+      {
+        code: 'MOV_SCHEMA',
+        message: 'the given checker says no',
+        span: { start: { line: 1, col: 1 }, end: { line: 1, col: 5 } },
+      },
+    ];
+    const result = storyOf({ source: SOURCE, catalog, diagnostics: given });
+    if (!result.ok) throw new Error(`expected a story, got ${result.reason}`);
+    expect(result.story.movement.validity.status).toBe('invalid');
+    expect(result.story.movement.validity.problems.map((p) => p.message)).toEqual(['the given checker says no']);
+    expect(result.story.triggers).toHaveLength(1);
+    expect(result.story.records.length).toBeGreaterThan(0);
+
+    const clean = storyOf({ source: SOURCE, catalog, diagnostics: [] });
+    if (!clean.ok) throw new Error(`expected a story, got ${clean.reason}`);
+    expect(clean.story.movement.validity).toEqual({ status: 'valid', problems: [] });
+  });
+
   it('refuses unparseable source with a typed no-story, never a partial guess', () => {
     const result = storyOf({ source: 'movement m( {{{{', catalog });
     expect(result.ok).toBe(false);

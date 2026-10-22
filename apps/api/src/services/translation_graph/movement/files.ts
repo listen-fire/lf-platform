@@ -23,11 +23,12 @@
 // re-checks every firing through this same resolver, so a broken import
 // always fails loud, never silently).
 
-import { RUN_HOST_UNITS, type LanguageVersion, type Program, type ResolveFile } from 'movement-lang';
-import { CURRENT_LANGUAGE_VERSION, fileExports, isLegacyLanguageVersion, referencedFileImports } from 'legacy-lang';
+import { LANGUAGE_VERSION, RUN_HOST_UNITS, type LanguageVersion, type Program, type ResolveFile } from 'movement-lang';
+import { fileExports, referencedFileImports } from 'legacy-lang';
 import { MovementParseError } from 'movement-lang';
 import { parseProgram } from 'legacy-lang';
 
+import { routeOf } from './language_route';
 import { getMovementRowByName, listMovementRows, type MovementValidityStatus } from './store';
 
 /** Defensive bound on the import closure — no sane library graph nests
@@ -146,7 +147,7 @@ export function manualListenerMovements(program: Program, options: { languageVer
   const constructionAdapters = new Map<string, string>();
   // Past the legacy ids `manual` is the run host's own unit: `listen to manual
   // fire backfill` needs no construction, unless the file binds the name itself.
-  const hostUnits = isLegacyLanguageVersion(options.languageVersion ?? CURRENT_LANGUAGE_VERSION) ? [] : RUN_HOST_UNITS;
+  const hostUnits = routeOf(options.languageVersion ?? LANGUAGE_VERSION).kind !== 'legacy' ? RUN_HOST_UNITS : [];
   for (const unit of hostUnits) constructionAdapters.set(unit, unit);
   for (const statement of program.statements) {
     if (statement.kind === 'import') {

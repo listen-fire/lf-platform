@@ -12,6 +12,7 @@ import {
   LANGUAGE_VERSION,
   RustCheckRefused,
   checkSourceInRust,
+  compatibilityKey,
   compatible,
   fromCatalogSnapshot,
   languageVersionDiagnostic,
@@ -81,4 +82,19 @@ export function checkInstalled(input: {
       ...(resolveFile !== undefined ? { resolveFile } : {}),
     }),
   );
+}
+
+/** The release line legacy-lang's dialect '5' spells. */
+const LEGACY_DIALECT_LINE = '0.12';
+
+/**
+ * The legacy-lang dialect a presentation surface (completions, hover,
+ * definition, the story's projection) reads `pin` under: a legacy id as
+ * itself, the 0.12 line as legacy-lang's '5'. Presentation only, never a
+ * verdict: what is valid is `checkInstalled`'s to say. Any other pin has no
+ * dialect (null), and those surfaces show nothing for it.
+ */
+export function presentationDialect(pin: LanguageVersion): LanguageVersion | null {
+  if (isLegacyLanguageVersion(pin)) return pin;
+  return compatibilityKey(pin) === LEGACY_DIALECT_LINE ? LEGACY_UPGRADE_DIALECT : null;
 }

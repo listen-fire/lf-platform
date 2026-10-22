@@ -10,7 +10,7 @@
 // answer is JSON (the seam guard's round trip proves it), so such a throw is a
 // bug report against the boundary, not a case to record around.
 
-import { CURRENT_LANGUAGE_VERSION } from 'legacy-lang';
+import { LANGUAGE_VERSION } from 'movement-lang';
 import {
   HOST_RECORDING_VERSION,
   familyAndMethod,
@@ -206,7 +206,7 @@ export async function recordEntry<E extends RecordedEntry, Result>({
 }): Promise<Result> {
   const { host, ...data } = input;
   const recordedInput = copied(
-    { ...data, languageVersion: data.languageVersion ?? CURRENT_LANGUAGE_VERSION },
+    { ...data, languageVersion: data.languageVersion ?? LANGUAGE_VERSION },
     entry,
     'input',
   );

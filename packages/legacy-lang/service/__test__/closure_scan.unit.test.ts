@@ -4,7 +4,10 @@
 // reached only by walking from a handle bound inside one was never described
 // and the checker checked that write against nothing.
 
+import { LANGUAGE_VERSION } from 'movement-lang/language_version';
+
 import { scanInstanceChains } from '../selectors';
+import { pastLegacy } from '../../version_conditionals';
 
 const PRELUDE = [
   'import { email, attio } from adapters',
@@ -39,8 +42,8 @@ const insideMap = movement(['MAP(companies, (c) => {', ...WRITES.map((l) => `  $
 const outsideMap = movement(['c = ONLY(companies)', ...WRITES]);
 
 /** Each chain as `adapter: edge → edge`, sorted, for comparing two scans. */
-const paths = (source: string, languageVersion?: number) =>
-  scanInstanceChains(source, languageVersion !== undefined ? { languageVersion } : undefined)
+const paths = (source: string, languageVersion?: number | string) =>
+  scanInstanceChains(source, languageVersion !== undefined ? { languageVersion: String(languageVersion) } : undefined)
     .map(
       (chain) =>
         `${chain.adapter}${chain.startPosition !== undefined ? `@${chain.startPosition}` : ''}: ` +
@@ -81,9 +84,23 @@ describe('the demand scan reads the body of a function handed to a built-in', ()
     expect(paths(source)).toEqual(['attio: Companies']);
   });
 
+  it('a release pin walks the function body, reading the pin without mapping it to an integer', () => {
+    expect(paths(insideMap, LANGUAGE_VERSION)).toEqual(paths(outsideMap, LANGUAGE_VERSION));
+    expect(paths(insideMap, LANGUAGE_VERSION)).not.toEqual([]);
+  });
+
   it('a movement pinned to version 1 or 2 keeps the scan it was saved under', () => {
     for (const languageVersion of [1, 2]) {
       expect(paths(insideMap, languageVersion)).toEqual([]);
     }
+  });
+});
+
+describe('pastLegacy', () => {
+  it('a release pin is past every legacy behaviour; a legacy id compares as its integer', () => {
+    expect(pastLegacy('0.13.0', 3)).toBe(true);
+    expect(pastLegacy(LANGUAGE_VERSION, 3)).toBe(true);
+    expect(pastLegacy('2', 3)).toBe(false);
+    expect(pastLegacy('3', 3)).toBe(true);
   });
 });

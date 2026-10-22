@@ -5,12 +5,25 @@
 // unrelated shapes with unrelated vocabularies, and one of them declares
 // nothing at all — a join that hardcoded either would fail on the other.
 
-import { mockCatalog, type InstanceSchema } from 'movement-lang';
+const wasmAnswers: { next: unknown[] | undefined } = { next: undefined };
+
+jest.mock('movement-lang', () => {
+  const actual = jest.requireActual('movement-lang');
+  return {
+    ...actual,
+    checkSourceInRust: (...args: unknown[]) => wasmAnswers.next ?? actual.checkSourceInRust(...args),
+  };
+});
+jest.mock('../catalog', () => ({ movementCatalogForTeam: jest.fn() }));
+jest.mock('../store', () => ({ getMovementRow: jest.fn(), listDerivedTriggerRows: jest.fn(async () => []) }));
+
+import { LANGUAGE_VERSION, mockCatalog, mockCatalogSnapshot, type InstanceSchema } from 'movement-lang';
 import { storyOf, type StoryIR } from 'legacy-lang';
 
-import type { TeamMovementCatalog } from '../catalog';
+import { movementCatalogForTeam, type TeamMovementCatalog } from '../catalog';
 
 import {
+  projectStoryView,
   joinStoryView,
   storyVocabularyOf,
   type StoryProvisionedListener,
@@ -726,5 +739,49 @@ describe('storyVocabularyOf', () => {
     expect(
       storyVocabularyOf(teamCatalog).recordLabel({ adapterType: 'kg', recordType: 'Person' }),
     ).toBe('Human');
+  });
+});
+
+// ── The projection of a saved row: whose verdict it carries ──
+
+describe('projectStoryView', () => {
+  const teamCatalog = {
+    catalog,
+    resolveFile: () => undefined,
+    instanceSchemas: [],
+    runSnapshot: () => mockCatalogSnapshot({ adapters: {} }),
+  } as unknown as TeamMovementCatalog;
+  const row = { id: 'mv-1', teamId: 'team-1', name: 'Intake', source: SOURCE, validityStatus: null };
+
+  beforeEach(() => {
+    jest.mocked(movementCatalogForTeam).mockResolvedValue(teamCatalog);
+  });
+  afterEach(() => {
+    wasmAnswers.next = undefined;
+  });
+
+  it('an installed pin carries the wasm\'s problems and validity, while the legacy analysis draws the flow', async () => {
+    wasmAnswers.next = [
+      {
+        code: 'MOV_SCHEMA',
+        message: 'only the wasm would say this',
+        span: { start: { line: 2, col: 1 }, end: { line: 2, col: 4 } },
+      },
+    ];
+    const result = await projectStoryView({ ...row, languageVersion: LANGUAGE_VERSION });
+    if (!result.ok) throw new Error(`expected a view, got ${result.reason}`);
+    expect(result.view.movement.validity.status).toBe('invalid');
+    expect(result.view.movement.validity.problems.map((p) => p.message)).toEqual(['only the wasm would say this']);
+    expect(result.view.triggers).toHaveLength(1);
+    expect(result.view.records.length).toBeGreaterThan(0);
+  });
+
+  it('a pin from a line the installed language does not read is unreadable with its version problem', async () => {
+    const result = await projectStoryView({ ...row, languageVersion: '0.13.0' });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('unreadable');
+    expect(result.problems).toHaveLength(1);
+    expect(result.problems[0]!.code).toMatch(/^MOV_LANGUAGE_VERSION_/);
   });
 });

@@ -4,7 +4,8 @@
  *   pnpm dev:editor-repro [--file <path>]
  *
  * `movement-workbench.tsx` does: skeleton snapshot → `catalogForSource` for the
- * whole script → `getMovementDiagnostics`. This runs that exact pipeline, so the
+ * whole script → lint. A release pin's lint is the server's `check` (the wasm
+ * checker), so this runs the same check service the editor calls, and the
  * squiggles an author would see are observable without driving a browser.
  *
  * It exists because a change that hollows out the instance schema shows up here
@@ -24,8 +25,9 @@ import '../../services';
 
 import fs from 'node:fs';
 
-import { getMovementDiagnostics, referencedConstructions } from 'legacy-lang';
+import { referencedConstructions } from 'legacy-lang';
 
+import { checkMovementSource } from '../../services/translation_graph/movement/authoring';
 import { movementCatalogSnapshotForTeam } from '../../services/translation_graph/movement/catalog';
 import { ensureDevLoopTeam } from './_lib';
 
@@ -83,9 +85,10 @@ async function main() {
     console.log(`  GAP ${gap.adapter}: ${gap.detail}`);
   }
 
-  const diagnostics = getMovementDiagnostics(source, snapshot);
+  const checked = await checkMovementSource({ teamId, source });
+  const diagnostics = checked?.diagnostics ?? [];
   console.log(`\n── diagnostics the editor would show: ${diagnostics.length} ──`);
-  for (const d of diagnostics) console.log(`  [${d.severity ?? 'error'}] ${d.code}: ${d.message}`);
+  for (const d of diagnostics) console.log(`  [${d.severity}] ${d.code} ${d.line}:${d.col}: ${d.message}`);
 }
 
 main().then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(1); });

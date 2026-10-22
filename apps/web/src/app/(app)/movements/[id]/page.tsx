@@ -53,6 +53,7 @@ export default function MovementPage() {
       initialListeners={movement.listeners}
       initialRunnable={movement.runnable}
       languageVersion={movement.languageVersion}
+      languageRoute={movement.languageRoute}
       upgradeDiagnostics={movement.upgradeDiagnostics}
       dependents={movement.dependents}
     />

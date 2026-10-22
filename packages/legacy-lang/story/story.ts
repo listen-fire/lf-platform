@@ -681,6 +681,13 @@ export interface StoryInput {
   resolveFile?: ResolveFile;
   /** The saved movement's pin. Absent ⇒ the current version. */
   languageVersion?: LanguageVersion;
+  /**
+   * The verdict of a checker other than this one (the platform's wasm check of
+   * a release pin). When given, it is the story's problems and the validity
+   * derived from them; this package's own check still runs, but only for the
+   * recording that drives the projection.
+   */
+  diagnostics?: Diagnostic[];
 }
 
 /**
@@ -715,7 +722,7 @@ export function storyOf(input: StoryInput): StoryResult {
       // `recordAnalysis: true` always returns one; the fallback keeps the
       // projection total rather than asserting.
       recording: recording ?? { frames: [], writes: [], nodes: [] },
-      diagnostics,
+      diagnostics: input.diagnostics ?? diagnostics,
       languageVersion: input.languageVersion ?? CURRENT_LANGUAGE_VERSION,
       ...(input.name !== undefined ? { name: input.name } : {}),
       ...(input.validityStatus !== undefined ? { validityStatus: input.validityStatus } : {}),

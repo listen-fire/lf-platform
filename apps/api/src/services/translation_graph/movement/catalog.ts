@@ -31,8 +31,8 @@
 //   - construction args beyond `credentials` — manifests don't declare a
 //     construction-config block yet (same TODO as the static catalog).
 
-import { entryPositionKeyOf, instanceSchemaKey, catalogSnapshotOf, type AdapterSpec, type Catalog, type CatalogSnapshot, type CredentialSpec, type SchemaFieldType, type InstanceSchema, type LanguageVersion, type PluginSpec, type ResolveFile } from 'movement-lang';
-import { CURRENT_LANGUAGE_VERSION, parseMovementExpression } from 'legacy-lang';
+import { LANGUAGE_VERSION, entryPositionKeyOf, instanceSchemaKey, catalogSnapshotOf, type AdapterSpec, type Catalog, type CatalogSnapshot, type CredentialSpec, type SchemaFieldType, type InstanceSchema, type LanguageVersion, type PluginSpec, type ResolveFile } from 'movement-lang';
+import { parseMovementExpression } from 'legacy-lang';
 import { parseTraversalPath, referencedConstructions, referencedEventAddresses, scanInstanceChains, surfaceNotEnumerated, type InstanceChain } from 'legacy-lang';
 
 import type { Expression } from 'movement-lang/expression/types';
@@ -680,10 +680,10 @@ async function assembleTeamCatalog(
   const chainPins = new Map<InstanceChain, LanguageVersion>();
   const scanPinned = (source: string, languageVersion: LanguageVersion | undefined) => {
     const chains = scanInstanceChains(source, pinnedOf(languageVersion));
-    for (const chain of chains) chainPins.set(chain, languageVersion ?? CURRENT_LANGUAGE_VERSION);
+    for (const chain of chains) chainPins.set(chain, languageVersion ?? LANGUAGE_VERSION);
     return chains;
   };
-  const pinOf = (chain: InstanceChain) => chainPins.get(chain) ?? CURRENT_LANGUAGE_VERSION;
+  const pinOf = (chain: InstanceChain) => chainPins.get(chain) ?? LANGUAGE_VERSION;
   const allChains = [
     ...(options.source !== undefined ? scanPinned(options.source, options.languageVersion) : []),
     ...[...fileSources].flatMap(([path, source]) => scanPinned(source, filePins.get(path))),
@@ -1899,7 +1899,7 @@ export async function describeMovementInstance(input: {
           instance,
           adapterType,
           narrow: input.narrow,
-          languageVersion: input.languageVersion ?? CURRENT_LANGUAGE_VERSION,
+          languageVersion: input.languageVersion ?? LANGUAGE_VERSION,
         })
       : undefined;
 

@@ -55,6 +55,7 @@ import {
   MovementEditor,
   type MovementEditorHandle,
 } from "@/components/movements/movement-editor";
+import type { CheckRemote, EditorLanguageRoute } from "@/components/movements/editor-lint";
 import { runConnectAction } from "@/components/movements/connect-actions";
 import { MovementStory } from "@/components/movements/story/movement-story";
 import {
@@ -214,6 +215,10 @@ export interface MovementWorkbenchProps {
   /** The saved movement's language version (edit page) — the editor checks
    *  the text as that version. Absent on `/movements/new` (the current one). */
   languageVersion?: LanguageVersion;
+  /** How the server reads the saved movement's pin (edit page): whose checker
+   *  lints it, and the dialect the language service reads it under. Absent on
+   *  `/movements/new`, which takes the installed release's from the catalog. */
+  languageRoute?: EditorLanguageRoute;
   /** What keeps the saved movement off the current language version (edit
    *  page); null when nothing does. */
   upgradeDiagnostics?: UpgradeDiagnostic[] | null;
@@ -562,6 +567,26 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
     }
     return merged;
   }, [catalog, typedSnapshot, fetchedSchemas]);
+
+  const languageRoute = useMemo<EditorLanguageRoute | undefined>(
+    () =>
+      props.languageRoute ??
+      (catalog ? { kind: "installed", dialect: catalog.installed.dialect } : undefined),
+    [props.languageRoute, catalog],
+  );
+
+  // The server's lint for a release pin: the movement's own pin when it has a
+  // row, else the installed release.
+  const checkRemote = useCallback<CheckRemote>(
+    async (source, signal) => {
+      const { diagnostics } = await utils.client.views.movement.check.mutate(
+        { source, ...(movementId !== undefined ? { id: movementId } : {}) },
+        { signal },
+      );
+      return diagnostics;
+    },
+    [utils, movementId],
+  );
 
   const save = trpc.views.movement.save.useMutation({
     onSuccess: (result) => {
@@ -1386,7 +1411,7 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
             </div>
           )}
           <div className={view === "code" ? "min-h-0 flex-1" : "hidden"}>
-            {!snapshot || initialSource === undefined ? (
+            {!snapshot || !languageRoute || initialSource === undefined ? (
               <div className="flex h-full items-center justify-center text-[13px] text-gray-400">
                 <Loader2 size={15} className="mr-2 animate-spin" />
                 Loading your workspace catalog…
@@ -1399,6 +1424,8 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
                 {...(props.languageVersion !== undefined
                   ? { languageVersion: props.languageVersion }
                   : {})}
+                languageRoute={languageRoute}
+                checkRemote={checkRemote}
                 onChange={handleEditorChange}
                 onDiagnostics={setDiagnostics}
                 vimEnabled={vimEnabled}

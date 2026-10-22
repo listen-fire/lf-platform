@@ -15,7 +15,7 @@ import { Router, type RequestHandler } from 'express';
 import { z } from 'zod';
 import { currentPrincipal } from 'principal';
 import { LANGUAGE_VERSION, type LanguageVersion } from 'movement-lang';
-import { getMovementCompletions } from 'legacy-lang';
+import { getMovementCompletions, type MovementCompletions } from 'legacy-lang';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { UserId } from '../../../generated/kysely/core/User';
@@ -83,6 +83,7 @@ import {
   type VersionView,
 } from '../../../services/translation_graph/movement/language_upgrade';
 import { languageVersionInput, pinFromInput } from '../../../services/translation_graph/movement/language_pin_input';
+import { presentationDialect } from '../../../services/translation_graph/movement/language_route';
 import { neverAsAny } from 'movement-engine/public/types';
 import { movementSourceHash } from '../../../services/translation_graph/movement/version_store';
 import { applyContentEdit } from '../../../services/translation_graph/movement/edit';
@@ -1005,15 +1006,23 @@ const completionsAtHandler: RequestHandler = jsonHandler(
       if (!row) return { error: `No automation '${input.automation}' in this team.` };
       languageVersion = row.languageVersion;
     }
-    const result = getMovementCompletions(fullSource, offset, snapshot, {
-      languageVersion: languageVersion ?? LANGUAGE_VERSION,
-    });
+    // Completions come from legacy-lang's language service, read under the
+    // pin's dialect; a pin with none gets none.
+    const pinned = languageVersion ?? LANGUAGE_VERSION;
+    const dialect = presentationDialect(pinned);
+    const result: MovementCompletions =
+      dialect === null
+        ? { from: offset, items: [] }
+        : getMovementCompletions(fullSource, offset, snapshot, { languageVersion: dialect });
     return {
       completions: result.items.map((i) => ({
         label: i.label,
         kind: i.kind,
         ...(i.detail !== undefined ? { detail: i.detail } : {}),
       })),
+      ...(dialect === null
+        ? { note: `No completions for language version ${pinned}: this platform's language service does not read it.` }
+        : {}),
     };
   },
 );
