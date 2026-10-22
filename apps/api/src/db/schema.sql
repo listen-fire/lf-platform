@@ -3292,7 +3292,19 @@ CREATE TABLE automations.trigger_run (
     lease_token uuid,
     -- Which engine ran the run's latest segment ('ts' | 'rust'). Null on runs
     -- from before this existed.
-    engine text
+    engine text,
+    -- Whose run this is: 'platform' (stepped, swept, woken and resumed here) or
+    -- 'lf' (written through the lf store module; lf steps it, and the platform
+    -- only shows it). Every platform scan that claims, sweeps, wakes, re-arms,
+    -- settles, resumes or prunes reads host = 'platform'.
+    host text NOT NULL DEFAULT 'platform' CONSTRAINT trigger_run_host_check CHECK (host IN ('platform', 'lf')),
+    -- What the run's movement returned, as lf records it ({value},
+    -- {truncated, bytes, preview} or {unwritable}). json, not jsonb, so the
+    -- value reads back in the key order it was written in. Written only by lf.
+    returned json,
+    -- The automations.delivery whose event started this run (lf only). No
+    -- foreign key: retention forgets deliveries that settled runs still name.
+    delivery_id uuid
 );
 
 ALTER TABLE ONLY automations.trigger_run
@@ -3303,6 +3315,8 @@ CREATE INDEX trigger_run_team_id_idx ON automations.trigger_run USING btree (tea
 CREATE INDEX trigger_run_trigger_id_idx ON automations.trigger_run USING btree (trigger_id);
 CREATE INDEX trigger_run_running_idx ON automations.trigger_run USING btree (id) WHERE (status = 'running'::text);
 CREATE INDEX trigger_run_created_at_idx ON automations.trigger_run USING btree (created_at);
+CREATE INDEX trigger_run_delivery_id_idx ON automations.trigger_run USING btree (delivery_id);
+CREATE INDEX trigger_run_host_team_idx ON automations.trigger_run USING btree (host, team_id, started_at);
 
 -- The run's version pin, an in-schema FK once more: a run resumes by re-parsing
 -- the version it pinned, so a deleted version must not leave a run pointing at
@@ -3483,7 +3497,7 @@ CREATE TABLE automations.work (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     team_id uuid,
     kind text NOT NULL,
-    key text NOT NULL UNIQUE,
+    key text NOT NULL,
     payload jsonb NOT NULL DEFAULT '{}'::jsonb,
     due_at timestamptz NOT NULL DEFAULT now(),
     interval_ms integer,
@@ -3496,7 +3510,19 @@ CREATE TABLE automations.work (
     -- Times the row was released because its run was busy elsewhere
     -- (WorkDeferred). Not attempts: a deferral is not a failure, never routes a
     -- row to its handler's recover, and backs off on its own fixed schedule.
-    deferrals integer NOT NULL DEFAULT 0
+    deferrals integer NOT NULL DEFAULT 0,
+    -- Whose row this is: 'platform' (claimed by the platform's drain) or 'lf'
+    -- (claimed by lf's drain through the lf store module). Neither claims the
+    -- other's.
+    host text NOT NULL DEFAULT 'platform' CONSTRAINT work_host_check CHECK (host IN ('platform', 'lf')),
+    -- An lf row that kept failing past lf's attempt cap: marked dead with why,
+    -- never claimed again, kept for an operator to read. Written only by lf.
+    dead_at timestamptz,
+    dead_reason text,
+    -- The key is unique per host, not globally: both hosts derive the same keys
+    -- (resume_timer:<runId>, the wake keys), so one host's upsert would
+    -- otherwise land on the other's row.
+    CONSTRAINT work_host_key_unique UNIQUE (host, key)
 );
 CREATE INDEX work_due_idx ON automations.work (due_at);
 CREATE INDEX work_team_idx ON automations.work (team_id) WHERE team_id IS NOT NULL;
@@ -3512,6 +3538,66 @@ CREATE TABLE automations.cache_entry (
     expires_at timestamptz NOT NULL
 );
 CREATE INDEX cache_entry_expires_idx ON automations.cache_entry (expires_at);
+
+-- ── The lf store module's own tables ───────────────────────────────────────
+-- A cloud lf keeps its runs in this schema's run tables (marked host = 'lf')
+-- through the lf store module. These four tables have no platform analogue in
+-- use; their shapes are lf's own Postgres store's (crates/lf/src/
+-- pg_store_schema_{1,2,4,7}.sql in the language repository). Machine churn
+-- nobody edits: not audited, like cache_entry.
+
+-- inbound_checkpoint — written only by the lf store module. A pull source's
+-- cursor, per install and listen (the platform keeps its own cursors on
+-- webhook_subscription, which lf has no counterpart for).
+CREATE TABLE automations.inbound_checkpoint (
+    team_id uuid NOT NULL,
+    subscription_id text NOT NULL,
+    checkpoint jsonb NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (team_id, subscription_id)
+);
+
+-- event_receipt — written only by the lf store module. One row per event
+-- delivered to a listen with the event's idempotencyKey: a redelivery's insert
+-- does nothing and its listen runs nothing.
+CREATE TABLE automations.event_receipt (
+    team_id uuid NOT NULL,
+    listen text NOT NULL,
+    key text NOT NULL,
+    received_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (team_id, listen, key)
+);
+
+-- module_processes — written only by the lf store module. The module processes
+-- the lfs on this store started, one list per tenant, so the next lf stops what
+-- a killed one left running. Written by compare-and-set on version.
+CREATE TABLE automations.module_processes (
+    team_id uuid PRIMARY KEY,
+    processes jsonb NOT NULL,
+    version bigint NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- delivery — written only by the lf store module. A delivery's receipt, kept at
+-- lf's door in its one write: the events it produced (never its raw body,
+-- headers or signature). A provider's own delivery id, when the door has one,
+-- keeps a redelivery out at its subscription. trigger_run.delivery_id names the
+-- delivery whose event started a run. The platform's own receipts stay in
+-- trigger_event, which is per trigger and has no team.
+CREATE TABLE automations.delivery (
+    id uuid PRIMARY KEY,
+    team_id uuid NOT NULL,
+    subscription_id text NOT NULL,
+    external_id text,
+    received_at timestamptz NOT NULL,
+    source text NOT NULL CONSTRAINT delivery_source_check CHECK (source IN ('webhook', 'hook', 'emit', 'cli')),
+    inline boolean NOT NULL,
+    replay_of uuid,
+    events jsonb NOT NULL,
+    event_count integer NOT NULL
+);
+CREATE UNIQUE INDEX delivery_external_idx ON automations.delivery (team_id, subscription_id, external_id) WHERE external_id IS NOT NULL;
+CREATE INDEX delivery_received_idx ON automations.delivery (team_id, received_at);
 
 -- join_pending — the per-frame PENDING-COUNT (§5.4): for each parallel / fan-out
 -- JOIN frame with ≥1 parked descendant, the number of its child branches still

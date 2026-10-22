@@ -53,6 +53,11 @@ export interface EnqueueWorkInput {
   dueAt?: Date;
 }
 
+// Every row this module writes, claims, lists or deletes is the platform's
+// (host = 'platform'); lf's rows in the same table are claimed by lf's drain
+// through the lf store module. By-id writes need no filter: they hold a claim
+// only this module handed out.
+
 /** Upsert by key. Against a row whose lease is live (by the database clock) the
  *  NEW due_at and payload win: a re-arm during the run, which completeWork then
  *  honours. Against an unleased row the EARLIEST due_at wins with the new payload
@@ -66,9 +71,9 @@ export async function enqueueWork(
   assertClaimable(input.kind);
   const dueAt = input.dueAt ?? new Date();
   await sql`
-    INSERT INTO automations.work (kind, key, team_id, payload, due_at, updated_at)
-    VALUES (${input.kind}, ${input.key}, ${input.teamId ?? null}, ${jsonb(input.payload)}, ${dueAt}, ${FIRST_VERSION})
-    ON CONFLICT (key) DO UPDATE
+    INSERT INTO automations.work (host, kind, key, team_id, payload, due_at, updated_at)
+    VALUES ('platform', ${input.kind}, ${input.key}, ${input.teamId ?? null}, ${jsonb(input.payload)}, ${dueAt}, ${FIRST_VERSION})
+    ON CONFLICT (host, key) DO UPDATE
       SET due_at = CASE WHEN work.lease_until > now() THEN EXCLUDED.due_at ELSE LEAST(work.due_at, EXCLUDED.due_at) END,
           payload = EXCLUDED.payload,
           team_id = COALESCE(EXCLUDED.team_id, work.team_id),
@@ -86,9 +91,9 @@ export async function ensurePeriodicWork(input: {
   const dueAt = input.dueAt ?? new Date();
   // A redeploy may change the interval; it must not push back a due_at already set.
   await sql`
-    INSERT INTO automations.work (kind, key, interval_ms, due_at, updated_at)
-    VALUES (${input.kind}, ${input.key}, ${input.intervalMs}, ${dueAt}, ${FIRST_VERSION})
-    ON CONFLICT (key) DO UPDATE
+    INSERT INTO automations.work (host, kind, key, interval_ms, due_at, updated_at)
+    VALUES ('platform', ${input.kind}, ${input.key}, ${input.intervalMs}, ${dueAt}, ${FIRST_VERSION})
+    ON CONFLICT (host, key) DO UPDATE
       SET interval_ms = EXCLUDED.interval_ms, updated_at = ${nextVersion('work')}
       WHERE work.interval_ms IS DISTINCT FROM EXCLUDED.interval_ms`.execute(
     getAutomationsQb(['work']),
@@ -117,7 +122,7 @@ export async function claimDueWork(input: {
   const { rows } = await sql<Work>`
     WITH c AS MATERIALIZED (
       SELECT id FROM automations.work
-      WHERE due_at <= ${now} AND (lease_until IS NULL OR lease_until < now())
+      WHERE host = 'platform' AND due_at <= ${now} AND (lease_until IS NULL OR lease_until < now())
         AND kind = ANY(${kinds}::text[])
         ${ofTeam}
       ORDER BY due_at
@@ -220,18 +225,19 @@ export async function deferWork(input: {
  *  a retired kind is by definition not a `WorkKind` any more. */
 export async function removeRetiredWork(kinds: readonly string[]): Promise<void> {
   if (kinds.length === 0) return;
-  await getAutomationsQb(['work']).deleteFrom('work').where('kind', 'in', [...kinds]).execute();
+  await getAutomationsQb(['work']).deleteFrom('work').where('host', '=', 'platform').where('kind', 'in', [...kinds]).execute();
 }
 
 /** Delete by key (reconcile removes rows for triggers that went away). */
 export async function removeWork(input: { key: string }): Promise<void> {
-  await getAutomationsQb(['work']).deleteFrom('work').where('key', '=', input.key).execute();
+  await getAutomationsQb(['work']).deleteFrom('work').where('host', '=', 'platform').where('key', '=', input.key).execute();
 }
 
 export async function listWorkByKind(kind: WorkKind): Promise<WorkRow[]> {
   const rows = await getAutomationsQb(['work'])
     .selectFrom('work')
     .selectAll()
+    .where('host', '=', 'platform')
     .where('kind', '=', kind)
     .orderBy('due_at')
     .execute();
@@ -252,7 +258,7 @@ export async function awaitTeamWorkSettled(input: {
   for (;;) {
     const { rows } = await sql<{ id: string }>`
       SELECT id FROM automations.work
-      WHERE team_id = ${input.teamId}::uuid
+      WHERE host = 'platform' AND team_id = ${input.teamId}::uuid
         AND (due_at <= now() OR lease_until > now())
       LIMIT 1`.execute(getAutomationsQb(['work']));
     if (rows.length === 0) return true;

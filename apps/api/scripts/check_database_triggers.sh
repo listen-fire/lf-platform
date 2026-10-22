@@ -131,6 +131,11 @@ audit_triggers=`psql -v ON_ERROR_STOP=ON "$DATABASE_URL" <<-EOSQL
       -- OAuth state, loop guard counters). Every row dies within days and the loop
       -- guard writes it on the dispatch hot path; a trail would only double that.
       'automations.cache_entry',
+      -- The lf store module's own tables: a pull cursor, event receipts, a
+      -- tenant's module process list and delivery receipts, all written by lf
+      -- through the module and never edited by a user (the cache_entry shape).
+      'automations.inbound_checkpoint', 'automations.event_receipt',
+      'automations.module_processes', 'automations.delivery',
       -- park_library_source: immutable, content-addressed library texts a park
       -- pins (no id column, never edited or deleted), written only by the engine.
       'automations.park_library_source',

@@ -202,13 +202,26 @@ export function countPendingJoinGroups(addresses: string[]): number {
   for (const count of counts.values()) if (count > 1) groups += 1;
   return groups;
 }
+/** The movement an lf run's trigger id names. lf has no trigger rows: it
+ *  writes `listen:<file>:<movement>` as the trigger id of a run it starts. */
+function lfListenMovement(triggerId: string): string | null {
+  return /^listen:.+:([^:]+)$/.exec(triggerId)?.[1] ?? null;
+}
+
 /** Map trigger id → its user-facing automation name. A movement-derived
  *  trigger's own `name` is the internal `movement/<file>/<lane>` dispatch
  *  key, so this resolves the real movement (one hop via `movement_id`)
- *  rather than handing that string to `listTeamRuns` / `listParkedRuns`. */
+ *  rather than handing that string to `listTeamRuns` / `listParkedRuns`.
+ *  An lf run is named by its movement. */
 async function automationNames(triggerIds: string[]): Promise<Map<string, string>> {
-  const unique = [...new Set(triggerIds)];
-  if (unique.length === 0) return new Map();
+  const out = new Map<string, string>();
+  const unique: string[] = [];
+  for (const id of new Set(triggerIds)) {
+    const movement = lfListenMovement(id);
+    if (movement === null) unique.push(id);
+    else out.set(id, movement);
+  }
+  if (unique.length === 0) return out;
   const rows = await getAutomationsQb(['trigger'])
     .selectFrom('trigger')
     .where('id', 'in', unique as never)
@@ -230,7 +243,6 @@ async function automationNames(triggerIds: string[]): Promise<Map<string, string
       )
     : new Map<string, string>();
 
-  const out = new Map<string, string>();
   for (const r of rows) {
     out.set(
       r.id as unknown as string,

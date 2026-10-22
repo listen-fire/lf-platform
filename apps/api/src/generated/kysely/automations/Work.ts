@@ -35,6 +35,12 @@ export default interface WorkTable {
   lease_token: ColumnType<string | null, string | null, string | null>;
 
   deferrals: ColumnType<number, number | undefined, number>;
+
+  host: ColumnType<string, string | undefined, string>;
+
+  dead_at: ColumnType<Date | null, Date | string | null, Date | string | null>;
+
+  dead_reason: ColumnType<string | null, string | null, string | null>;
 }
 
 export type Work = Selectable<WorkTable>;

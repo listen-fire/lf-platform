@@ -162,6 +162,24 @@ model ConnectToken {
   @@schema("automations")
 }
 
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model Delivery {
+  id             String   @id @db.Uuid
+  teamId         String   @map("team_id") @db.Uuid
+  subscriptionId String   @map("subscription_id")
+  externalId     String?  @map("external_id")
+  receivedAt     DateTime @map("received_at") @db.Timestamptz(6)
+  source         String
+  inline         Boolean
+  replayOf       String?  @map("replay_of") @db.Uuid
+  events         Json
+  eventCount     Int      @map("event_count")
+
+  @@index([teamId, receivedAt], map: "delivery_received_idx")
+  @@map("delivery")
+  @@schema("automations")
+}
+
 model DeployCheck {
   id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   releaseTag      String   @map("release_tag")
@@ -171,6 +189,17 @@ model DeployCheck {
 
   @@unique([releaseTag, languageRelease], map: "deploy_check_release_unique")
   @@map("deploy_check")
+  @@schema("automations")
+}
+
+model EventReceipt {
+  teamId     String   @map("team_id") @db.Uuid
+  listen     String
+  key        String
+  receivedAt DateTime @default(now()) @map("received_at") @db.Timestamptz(6)
+
+  @@id([teamId, listen, key])
+  @@map("event_receipt")
   @@schema("automations")
 }
 
@@ -227,6 +256,17 @@ model GoogleGrantedItem {
   @@schema("automations")
 }
 
+model InboundCheckpoint {
+  teamId         String   @map("team_id") @db.Uuid
+  subscriptionId String   @map("subscription_id")
+  checkpoint     Json
+  updatedAt      DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@id([teamId, subscriptionId])
+  @@map("inbound_checkpoint")
+  @@schema("automations")
+}
+
 model InboundEmailRoute {
   id                    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   address               String   @unique @db.Citext
@@ -270,6 +310,16 @@ model JoinPending {
 
   @@id([runId, frameAddress])
   @@map("join_pending")
+  @@schema("automations")
+}
+
+model ModuleProcesses {
+  teamId    String   @id @map("team_id") @db.Uuid
+  processes Json
+  version   BigInt
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("module_processes")
   @@schema("automations")
 }
 
@@ -609,6 +659,7 @@ model TriggerEvent {
   @@schema("automations")
 }
 
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model TriggerRun {
   id                          String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   teamId                      String             @map("team_id") @db.Uuid
@@ -640,6 +691,9 @@ model TriggerRun {
   leaseUntil                  DateTime?          @map("lease_until") @db.Timestamptz(6)
   leaseToken                  String?            @map("lease_token") @db.Uuid
   engine                      String?
+  host                        String             @default("platform")
+  returned                    Json?              @db.Json
+  deliveryId                  String?            @map("delivery_id") @db.Uuid
   adapterAwaits               AdapterAwait[]
   callbacks                   Callback[]
   joinBranchExports           JoinBranchExport[]
@@ -649,6 +703,8 @@ model TriggerRun {
   triggerEvent                TriggerEvent?      @relation(fields: [triggerEventId], references: [id], onUpdate: NoAction)
 
   @@index([createdAt])
+  @@index([deliveryId])
+  @@index([host, teamId, startedAt], map: "trigger_run_host_team_idx")
   @@index([teamId])
   @@index([triggerEventId])
   @@index([triggerId])
@@ -680,11 +736,12 @@ model AutomationsWebhookSubscription {
   @@schema("automations")
 }
 
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model Work {
   id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   teamId     String?   @map("team_id") @db.Uuid
   kind       String
-  key        String    @unique
+  key        String
   payload    Json      @default("{}")
   dueAt      DateTime  @default(now()) @map("due_at") @db.Timestamptz(6)
   intervalMs Int?      @map("interval_ms")
@@ -695,7 +752,11 @@ model Work {
   updatedAt  DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
   leaseToken String?   @map("lease_token") @db.Uuid
   deferrals  Int       @default(0)
+  host       String    @default("platform")
+  deadAt     DateTime? @map("dead_at") @db.Timestamptz(6)
+  deadReason String?   @map("dead_reason")
 
+  @@unique([host, key], map: "work_host_key_unique")
   @@index([dueAt], map: "work_due_idx")
   @@map("work")
   @@schema("automations")

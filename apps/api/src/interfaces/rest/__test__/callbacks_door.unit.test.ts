@@ -17,14 +17,13 @@ import type { AddressInfo } from 'node:net';
 import type { CallbackRecord } from '../../../services/movement_engine/callback_store';
 import type { CallbackFireOutcome } from '../../../services/movement_engine/callback_fire';
 
+// The door's lookup (an lf run's callback reads as unknown there).
 const getCallback = jest.fn<Promise<CallbackRecord | null>, [string]>();
 const fireCallback = jest.fn<Promise<CallbackFireOutcome>, [unknown]>();
 
-jest.mock('../../../services/movement_engine/callback_store', () => ({
-  getCallback: (id: string) => getCallback(id),
-}));
 jest.mock('../../../services/movement_engine/callback_fire', () => ({
   fireCallback: (input: unknown) => fireCallback(input),
+  getDoorCallback: (id: string) => getCallback(id),
 }));
 
 import { callbacksRouter } from '../callbacks';

@@ -13,8 +13,9 @@ import { Router, type Request, type Response } from 'express';
 
 import type { CallbackParamSpec } from 'engine-contracts';
 
-import { getCallback, type CallbackRecord } from '../../services/movement_engine/callback_store';
-import { fireCallback, type CallbackFireOutcome } from '../../services/movement_engine/callback_fire';
+import type { CallbackRecord } from '../../services/movement_engine/callback_store';
+
+import { fireCallback, getDoorCallback, type CallbackFireOutcome } from '../../services/movement_engine/callback_fire';
 import { logger } from 'movement-engine/public/log';
 
 export const callbacksRouter: ReturnType<typeof Router> = Router();
@@ -22,7 +23,7 @@ export const callbacksRouter: ReturnType<typeof Router> = Router();
 // GET — render only. A callback's `url` points here; a human follows it, reads
 // what will happen, and POSTs.
 callbacksRouter.get('/:id', async (req: Request, res: Response) => {
-  const callback = await getCallback(req.params.id);
+  const callback = await getDoorCallback(req.params.id);
   if (callback === null) {
     res.status(404).type('html').send(messagePage('This link is not valid', 'Nothing here — the link may have been mistyped.'));
     return;

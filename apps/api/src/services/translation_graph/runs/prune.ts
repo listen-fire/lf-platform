@@ -33,7 +33,9 @@ export async function pruneTriggerRuns(
 
   let q = getAutomationsQb(['trigger_run'])
     .deleteFrom('trigger_run')
-    .where('created_at', '<', cutoff);
+    .where('created_at', '<', cutoff)
+    // A live lf run is lf's; once settled it ages out like the platform's.
+    .where((eb) => eb.or([eb('host', '=', 'platform'), eb('status', 'not in', ['running', 'parked'])]));
   if (input.teamId) {
     q = q.where('team_id', '=', input.teamId);
   }

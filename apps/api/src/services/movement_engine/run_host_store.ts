@@ -377,14 +377,17 @@ export const postgresRunHostStore: RunHostStore = {
         .execute();
     },
 
+    // The platform's runs only: an lf run's awaits are woken by lf.
     async correlated({ adapterType, teamId, correlationKey }) {
-      const rows = await getAutomationsQb(['adapter_await'])
+      const rows = await getAutomationsQb(['adapter_await', 'trigger_run'])
         .selectFrom('adapter_await')
-        .where('adapter_type', '=', adapterType)
-        .where('team_id', '=', teamId)
-        .where('correlation_key', '=', correlationKey)
-        .select(['run_id', 'team_id', 'address'])
-        .orderBy('created_at')
+        .innerJoin('trigger_run', 'trigger_run.id', 'adapter_await.run_id')
+        .where('trigger_run.host', '=', 'platform')
+        .where('adapter_await.adapter_type', '=', adapterType)
+        .where('adapter_await.team_id', '=', teamId)
+        .where('adapter_await.correlation_key', '=', correlationKey)
+        .select(['adapter_await.run_id', 'adapter_await.team_id', 'adapter_await.address'])
+        .orderBy('adapter_await.created_at')
         .execute();
       return rows.map((r): CorrelatedAwait => ({ runId: r.run_id, teamId: r.team_id, address: r.address }));
     },
@@ -537,13 +540,14 @@ export const postgresRunHostStore: RunHostStore = {
 };
 
 /** The orphan sweep's half: every `resuming` leaf whose run's lease is free or
- *  lapsed was left by a dead holder, and is parked again. Returns how many. */
+ *  lapsed was left by a dead holder, and is parked again. Returns how many.
+ *  The platform's runs only: a lapsed lf lease is lf's to recover. */
 export async function returnLeavesOfLapsedLeases(): Promise<number> {
   const { rows } = await sql<{ id: string }>`
     UPDATE automations.parked_run p
     SET status = 'parked'
     FROM automations.trigger_run r
-    WHERE p.run_id = r.id AND p.status = 'resuming'
+    WHERE p.run_id = r.id AND p.status = 'resuming' AND r.host = 'platform'
       AND (r.lease_until IS NULL OR r.lease_until < now())
     RETURNING p.id`.execute(getAutomationsQb(['parked_run', 'trigger_run']));
   return rows.length;

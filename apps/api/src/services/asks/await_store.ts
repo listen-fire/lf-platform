@@ -81,14 +81,17 @@ export async function loadResolvableAskAwaits(
   // The correlation_key holds the ask id as opaque text on the generic map, so
   // resolvability is a second read against `ask.state` rather than a cross-type
   // SQL join: load this adapter's rows, then keep the ones whose ask has settled.
-  let corr = getAutomationsQb(['adapter_await'])
+  // The platform's runs only: an lf run's awaits are woken by lf.
+  let corr = getAutomationsQb(['adapter_await', 'trigger_run'])
     .selectFrom('adapter_await')
-    .where('adapter_type', '=', ASK_ADAPTER_TYPE);
+    .innerJoin('trigger_run', 'trigger_run.id', 'adapter_await.run_id')
+    .where('trigger_run.host', '=', 'platform')
+    .where('adapter_await.adapter_type', '=', ASK_ADAPTER_TYPE);
   if (opts.runId !== undefined) {
-    corr = corr.where('run_id', '=', opts.runId);
+    corr = corr.where('adapter_await.run_id', '=', opts.runId);
   }
   const rows = await corr
-    .select(['run_id', 'team_id', 'address', 'correlation_key'])
+    .select(['adapter_await.run_id', 'adapter_await.team_id', 'adapter_await.address', 'adapter_await.correlation_key'])
     .execute();
   if (rows.length === 0) return [];
 
@@ -127,14 +130,17 @@ export interface ClosedAskAwaitPage {
 export async function loadClosedAskAwaitPage(
   opts: { after?: string; limit: number },
 ): Promise<ClosedAskAwaitPage> {
-  let corr = getAutomationsQb(['adapter_await'])
+  // The platform's runs only: an lf run's awaits are woken by lf.
+  let corr = getAutomationsQb(['adapter_await', 'trigger_run'])
     .selectFrom('adapter_await')
-    .where('adapter_type', '=', ASK_ADAPTER_TYPE);
-  if (opts.after !== undefined) corr = corr.where('correlation_key', '>', opts.after);
+    .innerJoin('trigger_run', 'trigger_run.id', 'adapter_await.run_id')
+    .where('trigger_run.host', '=', 'platform')
+    .where('adapter_await.adapter_type', '=', ASK_ADAPTER_TYPE);
+  if (opts.after !== undefined) corr = corr.where('adapter_await.correlation_key', '>', opts.after);
   const rows = await corr
-    .select(['team_id', 'correlation_key'])
+    .select(['adapter_await.team_id', 'adapter_await.correlation_key'])
     .distinct()
-    .orderBy('correlation_key')
+    .orderBy('adapter_await.correlation_key')
     .limit(opts.limit)
     .execute();
   const last = rows[rows.length - 1];

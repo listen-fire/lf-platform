@@ -1089,6 +1089,8 @@ export async function settleOrphanedRunningRuns(): Promise<void> {
   const cutoff = sql<Date>`now() - ${ORPHAN_AFTER}::integer * interval '1 millisecond'`;
   const orphans = await getAutomationsQb(['trigger_run', 'work'])
     .selectFrom('trigger_run')
+    // An lf run's lapsed segment is lf's to fail, by lf's own rule.
+    .where('host', '=', 'platform')
     .where('status', '=', 'running')
     .where((eb) => eb(eb.fn.coalesce('last_heartbeat_at', 'started_at'), '<', cutoff))
     // A run still waiting in the queue has no segment to have died: on a
@@ -1097,7 +1099,7 @@ export async function settleOrphanedRunningRuns(): Promise<void> {
     .where(
       sql<boolean>`NOT (trigger_run.last_heartbeat_at IS NULL AND EXISTS (
         SELECT 1 FROM automations.work
-        WHERE work.kind = 'dispatch_event' AND work.payload->>'runId' = trigger_run.id::text))`,
+        WHERE work.host = 'platform' AND work.kind = 'dispatch_event' AND work.payload->>'runId' = trigger_run.id::text))`,
     )
     .select(['id', 'trigger_event_id', 'failure_reason'])
     .execute();

@@ -38,7 +38,9 @@ export async function resumeRun(input: {
   runId: string;
   teamId: TeamId;
 }): Promise<{ runId: string; resumed: number }> {
-  const runId = await assertOwnedRun(input.runId, input.teamId);
+  const { runId, host } = await assertOwnedRun(input.runId, input.teamId);
+  // lf steps its own runs; resuming one here would step it in a second place.
+  if (host === 'lf') throw new MovementEngineError('MOVENG_RUNTIME', 'this run is stepped by lf: resume it there');
   let resumed = 0;
   let failure: unknown;
   await runResumeSlot.exclusive(runId as unknown as string, async () => {
@@ -88,7 +90,7 @@ export async function abortRun(input: {
   teamId: TeamId;
   abortedBy?: string;
 }): Promise<{ runId: string }> {
-  const runId = await assertOwnedRun(input.runId, input.teamId);
+  const { runId } = await assertOwnedRun(input.runId, input.teamId);
   const reason = input.abortedBy
     ? `Cancelled by ${input.abortedBy}`
     : 'Cancelled by an operator';
@@ -134,16 +136,17 @@ async function readRunStatus(runId: TriggerRunId): Promise<string | undefined> {
   return row?.status;
 }
 
-/** Verify the run belongs to the team; return its branded id. */
-async function assertOwnedRun(runId: string, teamId: TeamId): Promise<TriggerRunId> {
+/** Verify the run belongs to the team; return its branded id and which host
+ *  steps it. */
+async function assertOwnedRun(runId: string, teamId: TeamId): Promise<{ runId: TriggerRunId; host: string }> {
   const row = await getAutomationsQb(['trigger_run'])
     .selectFrom('trigger_run')
     .where('id', '=', runId as TriggerRunId)
     .where('team_id', '=', teamId)
-    .select('id')
+    .select(['id', 'host'])
     .executeTakeFirst();
   if (!row) {
     throw new MovementEngineError('MOVENG_RUNTIME', `run ${runId} not found`);
   }
-  return row.id;
+  return { runId: row.id, host: row.host };
 }

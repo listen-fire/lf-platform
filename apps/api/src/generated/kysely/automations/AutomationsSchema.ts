@@ -3,6 +3,7 @@
 
 import type { default as JoinPendingTable } from './JoinPending';
 import type { default as TelegramTokenTable } from './TelegramToken';
+import type { default as InboundCheckpointTable } from './InboundCheckpoint';
 import type { default as MovementStoryTokenTable } from './MovementStoryToken';
 import type { default as SystemEventTable } from './SystemEvent';
 import type { default as ExposedFileTable } from './ExposedFile';
@@ -17,6 +18,7 @@ import type { default as MovementTable } from './Movement';
 import type { default as MovementIssueTable } from './MovementIssue';
 import type { default as PhoneNumberTable } from './PhoneNumber';
 import type { default as TeamSettingsTable } from './TeamSettings';
+import type { default as EventReceiptTable } from './EventReceipt';
 import type { default as WorkTable } from './Work';
 import type { default as CallbackTable } from './Callback';
 import type { default as TriggerRunTable } from './TriggerRun';
@@ -26,12 +28,14 @@ import type { default as TriggerEventTable } from './TriggerEvent';
 import type { default as CacheEntryTable } from './CacheEntry';
 import type { default as RecordBindingTable } from './RecordBinding';
 import type { default as ParkedRunTable } from './ParkedRun';
+import type { default as ModuleProcessesTable } from './ModuleProcesses';
 import type { default as PlatformOwnedTokenTable } from './PlatformOwnedToken';
 import type { default as ParkLibrarySourceTable } from './ParkLibrarySource';
 import type { default as ConnectTokenTable } from './ConnectToken';
 import type { default as DeployCheckTable } from './DeployCheck';
 import type { default as GoogleGrantedItemTable } from './GoogleGrantedItem';
 import type { default as TelegramIdentityTable } from './TelegramIdentity';
+import type { default as DeliveryTable } from './Delivery';
 import type { default as OutboundEmailTable } from './OutboundEmail';
 import type { default as WebhookSubscriptionTable } from './WebhookSubscription';
 
@@ -39,6 +43,8 @@ export default interface AutomationsSchema {
   join_pending: JoinPendingTable;
 
   telegram_token: TelegramTokenTable;
+
+  inbound_checkpoint: InboundCheckpointTable;
 
   movement_story_token: MovementStoryTokenTable;
 
@@ -68,6 +74,8 @@ export default interface AutomationsSchema {
 
   team_settings: TeamSettingsTable;
 
+  event_receipt: EventReceiptTable;
+
   work: WorkTable;
 
   callback: CallbackTable;
@@ -86,6 +94,8 @@ export default interface AutomationsSchema {
 
   parked_run: ParkedRunTable;
 
+  module_processes: ModuleProcessesTable;
+
   platform_owned_token: PlatformOwnedTokenTable;
 
   park_library_source: ParkLibrarySourceTable;
@@ -97,6 +107,8 @@ export default interface AutomationsSchema {
   google_granted_item: GoogleGrantedItemTable;
 
   telegram_identity: TelegramIdentityTable;
+
+  delivery: DeliveryTable;
 
   outbound_email: OutboundEmailTable;
 

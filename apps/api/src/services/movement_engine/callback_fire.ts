@@ -68,6 +68,22 @@ export type CallbackFireOutcome =
   | { kind: 'mismatch'; callback: CallbackRecord; message: string };
 
 /**
+ * A callback by id as the platform's doors see it: null for an unknown id, and
+ * for a callback whose run lf steps, since that callback's URL is lf's door,
+ * not this one.
+ */
+export async function getDoorCallback(id: string): Promise<CallbackRecord | null> {
+  const callback = await getCallback(id);
+  if (callback === null) return null;
+  const run = await getAutomationsQb(['trigger_run'])
+    .selectFrom('trigger_run')
+    .where('id', '=', triggerRunIdOf(callback.runId))
+    .select('host')
+    .executeTakeFirst();
+  return run?.host === 'lf' ? null : callback;
+}
+
+/**
  * Fire a callback by id. Returns as soon as the claim settles, with the body
  * queued for the next drain, unless `awaitExecution` is set (tests and the dev
  * CLI want the whole round trip in this process).
@@ -82,7 +98,7 @@ export async function fireCallback(input: {
   suppliedValue?: unknown;
   awaitExecution?: boolean;
 }): Promise<CallbackFireOutcome> {
-  const existing = await getCallback(input.id);
+  const existing = await getDoorCallback(input.id);
   if (existing === null) return { kind: 'not_found' };
 
   const bound = bindSuppliedValue(existing.params, input.values, input.suppliedValue);

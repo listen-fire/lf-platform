@@ -69,6 +69,12 @@ export default interface TriggerRunTable {
   lease_token: ColumnType<string | null, string | null, string | null>;
 
   engine: ColumnType<string | null, string | null, string | null>;
+
+  host: ColumnType<string, string | undefined, string>;
+
+  returned: ColumnType<unknown | null, unknown | null, unknown | null>;
+
+  delivery_id: ColumnType<string | null, string | null, string | null>;
 }
 
 export type TriggerRun = Selectable<TriggerRunTable>;

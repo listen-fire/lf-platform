@@ -169,6 +169,7 @@ async function rearmForNextLeaf(input: { runId: TriggerRunId; teamId: string; no
 async function armUnarmedTimerParks(): Promise<void> {
   const leased = await getAutomationsQb(['work'])
     .selectFrom('work')
+    .where('host', '=', 'platform')
     .where('kind', '=', 'resume_timer')
     .where('lease_until', '>', sql<Date>`now()`)
     .select('key')
@@ -177,6 +178,8 @@ async function armUnarmedTimerParks(): Promise<void> {
   const runs = await getAutomationsQb(['trigger_run', 'parked_run'])
     .selectFrom('trigger_run')
     .innerJoin('parked_run', 'parked_run.run_id', 'trigger_run.id')
+    // An lf run's timers are armed by lf.
+    .where('trigger_run.host', '=', 'platform')
     .where('parked_run.park_reason', '=', 'timer')
     .where('parked_run.status', '=', 'parked')
     .where('trigger_run.cancel_requested_at', 'is', null)

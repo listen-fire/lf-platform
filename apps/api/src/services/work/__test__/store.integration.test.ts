@@ -495,6 +495,39 @@ describe('work store', () => {
     expect(raw).toMatchObject({ lease_owner: null, attempts: 0 });
   });
 
+  it('a platform claim never takes an lf row', async () => {
+    const teamId = randomUUID();
+    const shared = freshKey('resume_timer');
+    const lfKeys = [shared, freshKey('wake_await'), freshKey('fire_callback')];
+    const lfKinds: WorkKind[] = ['resume_timer', 'wake_await', 'fire_callback'];
+    // lf's rows as the lf store module writes them: due, unleased, this team's.
+    await getAutomationsQb(['work'])
+      .insertInto('work')
+      .values(lfKeys.map((key, i) => ({ host: 'lf', kind: lfKinds[i] ?? 'resume_timer', key, team_id: teamId, due_at: at(0) })))
+      .execute();
+    try {
+      // The platform's row under the same key is a second row, not lf's.
+      await enqueueWork({ kind: 'resume_timer', key: shared, teamId, dueAt: at(0) });
+
+      const claims = [
+        await claimDueWork({ owner: 'loop', limit: 100, leaseMs: LEASE_MS, now: at(1_000), teamId }),
+        await claimDueWork({ owner: 'loop', limit: 100, leaseMs: LEASE_MS, now: at(1_000), teamId, kinds: lfKinds }),
+        await claimDueWork({ owner: 'loop', limit: 100, leaseMs: LEASE_MS, now: at(1_000), kinds: lfKinds }),
+        await claimDueWork({ owner: 'loop', limit: 100, leaseMs: LEASE_MS, now: at(1_000) }),
+      ].flat();
+
+      const lfRows = await getAutomationsQb(['work']).selectFrom('work').selectAll().where('host', '=', 'lf').where('key', 'in', lfKeys).execute();
+      expect(lfRows).toHaveLength(3);
+      for (const row of lfRows) expect(row).toMatchObject({ lease_owner: null, lease_token: null, attempts: 0 });
+      expect(claims.some((row) => lfRows.some((lf) => lf.id === row.id))).toBe(false);
+      // The platform's own row under the shared key was claimed, once.
+      expect(claims.filter((row) => row.key === shared)).toHaveLength(1);
+      expect((await rowByKey(shared))?.leaseOwner).toBe('loop');
+    } finally {
+      await getAutomationsQb(['work']).deleteFrom('work').where('host', '=', 'lf').where('key', 'in', lfKeys).execute();
+    }
+  });
+
   it('stores team_id and the default payload', async () => {
     const key = freshKey('resume_timer');
     const teamId = randomUUID();

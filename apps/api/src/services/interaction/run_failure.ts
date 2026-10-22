@@ -70,6 +70,7 @@ export async function settleRunsParkedOnTriggers(input: {
 
   const runs = await getAutomationsQb(['trigger_run'])
     .selectFrom('trigger_run')
+    .where('host', '=', 'platform')
     .where('id', 'in', parkedRunIds)
     .where('trigger_id', 'in', input.triggerIds)
     .select('id')
@@ -102,6 +103,8 @@ export async function settleStampedParkedRuns(): Promise<void> {
   const rows = await getAutomationsQb(['trigger_run', 'parked_run'])
     .selectFrom('trigger_run')
     .innerJoin('parked_run', 'parked_run.run_id', 'trigger_run.id')
+    // A stamped lf run is settled by lf's own cancel rule.
+    .where('trigger_run.host', '=', 'platform')
     .where('trigger_run.cancel_requested_at', 'is not', null)
     .select('trigger_run.id as run_id')
     .distinct()
