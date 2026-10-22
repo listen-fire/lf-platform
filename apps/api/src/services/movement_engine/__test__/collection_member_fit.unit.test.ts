@@ -3,7 +3,7 @@
 // value against its accumulator. Under language versions 3 and 4 nothing
 // compared them and the op RAN, handing the function each member as it was:
 // text where a number was typed, a record where a number was typed. That is
-// why the refusals land from Dancing Wren (5) only, with upgrade warnings
+// why the refusals land from 0.12 only, with upgrade warnings
 // before it — the frozen behaviour is pinned here, and version 5 is refused
 // at check.
 
@@ -163,7 +163,7 @@ describe('a collection op\'s typed function, handed members of another type', ()
     expect(payloads((await runUnder(CASES.filterRecordsAsText!, version)).kg)).toEqual([{ n: 1 }]);
   });
 
-  it.each(Object.keys(CASES))('%s is refused at check under Dancing Wren (5)', async name => {
+  it.each(Object.keys(CASES))('%s is refused at check under 0.12', async name => {
     await expect(runUnder(CASES[name]!, LANGUAGE_VERSION)).rejects.toThrow(/MOV_CALL_ARG_(TYPE|MAYBE_RECORD)/);
   });
 });

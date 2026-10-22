@@ -1,7 +1,7 @@
 // A value that may be a record and may be a value (`COALESCE(co, 1)`), handed
 // to a built-in whose argument takes a value: `ROUND(COALESCE(co, 1))`. Under
 // language versions 3 and 4 the checker let it through and the built-in RAN
-// on the record as it was. That is why the refusal lands from Dancing Wren (5)
+// on the record as it was. That is why the refusal lands from 0.12
 // only, with an upgrade warning before it — the frozen behaviour is pinned
 // here, and version 5 is refused at check.
 
@@ -129,7 +129,7 @@ describe('a value that may be a record, handed to a built-in that takes a value'
     expect(payloads((await runUnder(CASES.upper!, version)).kg)).toEqual([{ x: '[OBJECT OBJECT]' }]);
   });
 
-  it.each(Object.keys(CASES))('%s is refused at check under Dancing Wren (5)', async name => {
+  it.each(Object.keys(CASES))('%s is refused at check under 0.12', async name => {
     await expect(runUnder(CASES[name]!, LANGUAGE_VERSION)).rejects.toThrow(/MOV_CALL_ARG_MAYBE_RECORD/);
   });
 });

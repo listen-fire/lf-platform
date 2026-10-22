@@ -16,7 +16,7 @@ import {
   type InstanceSchema,
   type LanguageVersion,
 } from 'movement-lang';
-import type { LanguageRelease } from 'legacy-lang/language_version';
+import { describeLanguageVersion, type LanguageRelease } from 'legacy-lang/language_version';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { currentLanguageVersion } from 'movement-engine/public/adapter-support';
@@ -192,7 +192,7 @@ describe('a run honours its language version pin', () => {
   it('refuses a removed version BY NAME', async () => {
     mockRelease = { current: 3, supported: new Set([2, 3]), deprecated: new Set() };
     const kg = makeKgFake();
-    await expect(run(kg, '1')).rejects.toThrow(/"Quiet Heron" \(1\)/);
+    await expect(run(kg, '1')).rejects.toThrow(describeLanguageVersion(1));
     expect(kg.updates).toEqual([]);
   });
 
@@ -203,8 +203,8 @@ describe('a run honours its language version pin', () => {
     expect(kg.updates).toHaveLength(1);
     const warning = result.trace.find((e) => e.kind === 'warning');
     expect(warning).toMatchObject({ code: 'MOV_LANGUAGE_VERSION_DEPRECATED' });
-    expect(warning && 'message' in warning ? warning.message : '').toMatch(
-      /"Quiet Heron" \(1\).*will be removed/,
+    expect(warning && 'message' in warning ? warning.message : '').toContain(
+      describeLanguageVersion(1),
     );
   });
 });

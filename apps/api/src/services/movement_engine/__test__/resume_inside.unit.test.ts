@@ -7,7 +7,7 @@
 //     before a statement — or just before one of the calls a statement makes —
 //     and resume re-runs that statement, replaying the calls it had finished;
 //   · an AUTHORED wait (`await sleep(…)`, `await FIRST(cb-[:Called]->)`),
-//     which language version 3 allows inside members and called bodies.
+//     which legacy version 3 allows inside members and called bodies.
 //
 // What is pinned: the parked leaf's address names the way back in (`c k` for
 // the k-th call a statement made, `i j` for a member under it), resume re-enters
@@ -587,7 +587,7 @@ describe('an engine suspension inside parallel / race arms', () => {
   });
 });
 
-describe('authored waits (language version 3)', () => {
+describe('authored waits (legacy version 3)', () => {
   it('`await sleep` in every member of a MAP with concurrency 3: each member parks on its own', async () => {
     const h: Harness = {
       source: program(

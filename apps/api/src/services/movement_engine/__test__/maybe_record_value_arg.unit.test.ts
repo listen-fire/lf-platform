@@ -2,7 +2,7 @@
 // to a parameter typed `<number>`. Under language versions 3 and 4 the checker
 // let it through and the call RAN: the record arrived where a number was typed
 // (and a sum over it was NaN, written without a word). That is why the refusal lands from
-// Dancing Wren (5) only, with an upgrade warning before it — the frozen
+// 0.12 only, with an upgrade warning before it — the frozen
 // behaviour is pinned here, and version 5 is refused at check.
 
 import { LANGUAGE_VERSION, type InstanceSchema, type LanguageVersion } from 'movement-lang';
@@ -120,12 +120,12 @@ async function runUnder(languageVersion: LanguageVersion) {
 }
 
 describe('a value that may be a record, handed to a <number> parameter', () => {
-  it('ran under Luminous Owl (4): the record arrived as the number, and the sum over it is NaN', async () => {
+  it('ran under legacy 4: the record arrived as the number, and the sum over it is NaN', async () => {
     const { kg } = await runUnder('4');
     expect(kg.creates.find((c) => c.fields.payload !== undefined)?.fields.payload).toEqual({ y: Number.NaN });
   });
 
-  it('is refused at check under Dancing Wren (5)', async () => {
+  it('is refused at check under 0.12', async () => {
     await expect(runUnder(LANGUAGE_VERSION)).rejects.toThrow(/MOV_CALL_ARG_MAYBE_RECORD/);
   });
 });

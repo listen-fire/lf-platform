@@ -69,8 +69,7 @@ methods below. Each row gives the \`params\` you receive and the
 
 \`deletable\` is an additive descriptor field, so the protocol version
 is unchanged and an adapter written before it still works. But its absence
-means "this type cannot be deleted": under language version 5 (Dancing
-Wren) every \`delete\` of a record of your system is refused while it is
+means "this type cannot be deleted": under language 0.12 every \`delete\` of a record of your system is refused while it is
 authored until your \`describe\` says \`"deletable": true\` on the
 types your \`deleteRecord\` removes. Automations pinned to language
 version 4 or earlier are unaffected.

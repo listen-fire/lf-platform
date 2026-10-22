@@ -1,10 +1,10 @@
 // On this branch the v4 corpus is its own pre-merge copy (c39a99d6) of the version-4 tests, carried verbatim.
-// Language version 4's conformance corpus for the engine: the movement_engine
+// Legacy version 4's conformance corpus for the engine: the movement_engine
 // unit tests as they stood before version 5 — on this branch, cloud-native's
 // own live tests at c39a99d6 (the last commit before the merge that brought
 // version 5), verbatim under `src/__conformance__/v4/` at the positions they
-// had there — run against the current code under language version 4
-// ("Luminous Owl"). A failure is a version-4 behaviour the current code no
+// had there — run against the current code under legacy version 4
+//. A failure is a version-4 behaviour the current code no
 // longer preserves. The corpus files are never edited; a test that asserted a
 // since-refactored internal shape is listed in
 // `src/__conformance__/v4/triage.cjs`. The resolver and setup files are

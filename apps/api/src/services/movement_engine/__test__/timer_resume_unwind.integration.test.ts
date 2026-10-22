@@ -293,7 +293,7 @@ const PARALLEL_TAIL_V3 = [
   'listen to crm { events: ["record.created"] } fire parallel_tail_v3',
 ].join('\n');
 
-// §10.5 under language version 3 — if > parallel([…]) > fan-out. One arm holds
+// §10.5 under legacy version 3 — if > parallel([…]) > fan-out. One arm holds
 // the fan-out, the other a sleep; joins close bottom-up (fan-out → combinator).
 const DEEP_NEST_V3 = [
   ...PRELUDE_V3,

@@ -40,7 +40,7 @@ The language (parser, checker, engine, `lf`, the modules, the handbook) is the `
 
 ## Language versions (breaking changes never break a saved movement)
 
-Every saved movement is pinned to the language version it was written against (an integer with a two-word name, e.g. 1 "Quiet Heron" = the language as of v0.6.0). The pin governs syntax AND semantics, and every layer honours it:
+Every saved movement is pinned to the language release it was written against (a semver such as `0.12.0`; the legacy ids `1` to `4`, from before the language was versioned by its release, stay as they are). The pin governs syntax AND semantics, and every layer honours it:
 
 - A breaking change — a spelling retired, a construct's meaning changed, a plugin's output reshaped, an engine rule tightened — lands as a version conditional (`since(v, n)` / `before(v, n)` on the compile or run context's `languageVersion`) at the point of difference in the parser, checker, engine, plugin or adapter. Never a forked parser, never a second engine.
 - The old behaviour is proved by the older version's own test corpus run against the current code under that version. Add a version = add its fixtures; remove a version = delete its conditionals and its fixtures.
@@ -49,7 +49,7 @@ Every saved movement is pinned to the language version it was written against (a
 - The pin moves only by an explicit upgrade; never automatically, and never by an ordinary edit.
 - The CHANGELOG entry for a break says which version introduces it and why.
 
-Plan: `plans/language-versioning-2026-09-29/` (gitignored, on Henry's machine). Version conditionals for versions 1 to 4 live here, in the legacy packages; the language repository carries none.
+Plan: `plans/language-versioning-2026-09-29/` (gitignored, on Henry's machine). Version conditionals for the legacy ids 1 to 4 live here, in the legacy packages; the language repository carries none.
 
 ## TypeScript & Code Quality
 

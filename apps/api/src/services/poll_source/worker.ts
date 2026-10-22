@@ -116,7 +116,7 @@ async function loadCandidate(triggerId: string): Promise<PollTriggerRow | null> 
 
 /**
  * The cadence to gate on: the listen's own interval or the source default.
- * From language version 5 the listen spells it `every: 5m`; versions 1-4 spell
+ * From language 0.12 the listen spells it `every: 5m`; versions 1-4 spell
  * it `pollIntervalSeconds: 300`. The trigger row carries whichever it was
  * written as, and a run of versions 1-4 can never have written `every`.
  */

@@ -1,7 +1,7 @@
-// Language version 2's conformance corpus for the engine: the movement_engine
+// Legacy version 2's conformance corpus for the engine: the movement_engine
 // unit tests as they stood on the last commit before version 3 (78d6893ddb),
 // verbatim under `src/__conformance__/v2/`, run against the current code under
-// language version 2 ("Bright Otter"). A failure is a version-2 behaviour the
+// legacy version 2. A failure is a version-2 behaviour the
 // current code no longer preserves. The corpus files are never edited; a test
 // that asserted a since-refactored internal shape is listed in
 // `src/__conformance__/v2/triage.cjs`. The resolver and setup files are

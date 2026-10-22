@@ -17,6 +17,9 @@ versions are the git tags described in [`deploy/UPGRADING.md`](deploy/UPGRADING.
 
 <!-- add merged PRs here -->
 
+- A saved movement's pin is now the language release it was written for, shown as a version such as 0.12.0; the legacy ids 1 to 4 are unchanged, and a movement saved at 5 reads 0.12.0.
+- The agent tools' `languageVersion` takes the version string (for example `"0.12.0"`) and, this release only, the old integer (5 means the installed language, 1 to 4 the legacy ids); the `name` beside a `version` in their answers repeats it and goes away after this release.
+
 - The language is installed from the `@listen-fire/*` packages on npm, version 0.12.0-rc.5; this repository no longer builds it.
 - The api image starts again: rc.6's `api` and `api-slim` images exited at startup (`Cannot find module 'story-view/constants/themes'`); the platform's constants are now their own package, built into the api.
 

@@ -2,7 +2,7 @@
 // Companies a write returned. Under language versions 3 and 4 the checker gave
 // it no type and the read RAN: a field the type has read its value, one it has
 // not read null without a word, and text plus one was NaN. From
-// Dancing Wren (5) the value is a Company, as TypeScript's `A | A` is `A`, so
+// 0.12 the value is a Company, as TypeScript's `A | A` is `A`, so
 // those reads are refused at check — and only from 5, with an upgrade warning
 // before. The frozen behaviour is pinned here.
 
@@ -121,12 +121,12 @@ async function runUnder(languageVersion: LanguageVersion) {
 }
 
 describe('a read off one of two records of one type', () => {
-  it('ran under Luminous Owl (4): a field it has read its value, one it has not read null, and text plus one is NaN', async () => {
+  it('ran under legacy 4: a field it has read its value, one it has not read null, and text plus one is NaN', async () => {
     const { kg } = await runUnder('4');
     expect(kg.creates.find((c) => c.fields.payload !== undefined)?.fields.payload).toEqual({ name: 'b', nope: null, sum: Number.NaN });
   });
 
-  it('is refused at check under Dancing Wren (5)', async () => {
+  it('is refused at check under 0.12', async () => {
     await expect(runUnder(LANGUAGE_VERSION)).rejects.toThrow(/MOV_UNKNOWN_PROPERTY/);
   });
 });

@@ -8,7 +8,7 @@
 //
 // A map literal copies a record's fields (its dot plane) and a map's keys in
 // the order written; an absent spread copies nothing. A graph literal copies
-// one record as a snapshot by the checker's plan. And from language version 3
+// one record as a snapshot by the checker's plan. And from legacy version 3
 // a graph literal is checked against its shape when it is built, so a required
 // field never silently ends up empty.
 

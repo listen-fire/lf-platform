@@ -417,7 +417,7 @@ describe('members writing different keys write at once; the same key, one at a t
   });
 });
 
-// `parallel` is retired under Dancing Wren (5); the MAP that replaced it runs
+// `parallel` is retired under 0.12; the MAP that replaced it runs
 // its functions at once, each isolated as a member is.
 describe('the arms all runs at once, and race arms, are isolated as members are', () => {
   const FETCH_ONE = [

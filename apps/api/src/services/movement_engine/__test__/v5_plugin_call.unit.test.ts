@@ -1,4 +1,4 @@
-// A plugin called by position from language version 5, on the Rust engine; the
+// A plugin called by position from language 0.12, on the Rust engine; the
 // harness is plugin_call.unit.test.ts's.
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -257,7 +257,7 @@ const COMPANIES_FOUND = {
   records: [{ name: { value: 'Acme', evidence: { item: 0, quote: 'q' } } }],
 };
 
-// A plugin's arguments by position from language version 5 (design §2.7):
+// A plugin's arguments by position from language 0.12 (design §2.7):
 // its required inputs in the manifest's order, then one settings record. The
 // wire to the plugin stays named — what it is handed is the config versions
 // 1–4 hand it.
@@ -348,7 +348,7 @@ describe('a plugin called by position on the Rust engine', () => {
   });
 });
 
-// A plugin package from language version 5 (design §2.10): a package import
+// A plugin package from language 0.12 (design §2.10): a package import
 // binds each member as `web.fetchUrl`, and a member call is the plugin's own
 // call — invoked by its catalog key, with the named config.
 const WEB = new Set(['fetch_url', 'research']);
@@ -417,7 +417,7 @@ describe("a package's member called on the Rust engine", () => {
 });
 
 // A plugin fed only by an extraction (linkedin_enrichment reads the record a
-// stage enriched) is a function from language version 5: the record is its
+// stage enriched) is a function from language 0.12: the record is its
 // one argument, handed to the plugin as the extracted context a stage handed
 // it, and the call is bound as the record of fields it declares.
 const ENRICHING = [
@@ -453,7 +453,7 @@ describe('a plugin fed only by an extraction, called on the Rust engine', () => 
   });
 });
 
-// From language version 5 a plugin that declares no output is called only as
+// From language 0.12 a plugin that declares no output is called only as
 // a statement, run for its effects: the checkers refuse its value
 // (MOV_PLUGIN_OUTPUT_UNDECLARED, movement-lang's v5_plugin_no_output test), so
 // a checked-clean program reaches it only here. The Rust engine runs it

@@ -216,7 +216,7 @@ movement intake(m: <inbox-[:message]->>) {
     expect(listUnsupportedConstructs(source)).toContain('file-level extract expressions');
   });
 
-  it('passes a hop labelled @old and a bound match (language version 4 forms)', () => {
+  it('passes a hop labelled @old and a bound match (legacy version 4 forms)', () => {
     const source = `${PRELUDE}
 movement intake(m: <inbox-[:message]->>) {
   existing = match crm-[:companies]-> { unique by (\`name\`), name: "Acme" }

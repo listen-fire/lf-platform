@@ -83,7 +83,7 @@ function payload(over: Partial<Record<string, string>>): Record<string, string> 
 }
 
 const STORED_EVENTS: WorldStoredEvent[] = [
-  { id: 'e-1', kind: 'validation_issue', payload: payload({ version: 'Quiet Heron', reason: 'fix the listen' }), occurredAt: new Date('2026-09-29T11:54:00.000Z') },
+  { id: 'e-1', kind: 'validation_issue', payload: payload({ version: '0.12.0', reason: 'fix the listen' }), occurredAt: new Date('2026-09-29T11:54:00.000Z') },
   { id: 'e-2', kind: 'run_paused', payload: payload({ automationId: 'mov-alerts', reason: 'cost cap' }), occurredAt: new Date('2026-09-29T11:55:00.000Z') },
   { id: 'e-3', kind: 'run_paused', payload: payload({ reason: 'cost cap' }), occurredAt: new Date('2026-09-29T11:55:00.000Z') },
   { id: 'e-4', kind: 'release_applied', payload: payload({ automation: '', automationId: '', reason: 'v0.12' }), occurredAt: new Date('2026-09-29T11:56:00.000Z') },

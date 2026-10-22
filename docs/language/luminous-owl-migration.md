@@ -1,5 +1,7 @@
 # Migrating to Luminous Owl (4)
 
+> These describe moves between the integer versions 1–4; the current language is versioned by its release.
+
 Language version 4, **Luminous Owl**, arrives after v0.10.9. The release's [changelog entry](../../CHANGELOG.md) lists each change in a line; this guide carries the full detail, grouped by topic. Every rule here that says "under Luminous Owl (4)" applies only to an automation pinned to version 4. Quiet Heron (1), Bright Otter (2) and Steady Lynx (3) keep their old behaviour, except where a rule says it applies under every version.
 
 ## Contents

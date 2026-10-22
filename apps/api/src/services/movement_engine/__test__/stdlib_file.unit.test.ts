@@ -247,7 +247,7 @@ const PRELUDE = [
 function digestMovement(artifactType: 'pdf' | 'text'): string {
   return [
     PRELUDE,
-    // From language version 5 a PDF is the @lf/pdf plugin's.
+    // From language 0.12 a PDF is the @lf/pdf plugin's.
     ...(artifactType === 'pdf' ? ['import { `@lf/pdf` as pdf } from plugins'] : []),
     '',
     'function weekly_report(msg: <inbox-[:message]->>) {',

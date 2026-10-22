@@ -1,4 +1,4 @@
-// Recursion through the real interpreter (language version 3; Henry's rulings,
+// Recursion through the real interpreter (legacy version 3; Henry's rulings,
 // 2026-10-05):
 //
 //   · a function calls itself, directly or through another, and a closure

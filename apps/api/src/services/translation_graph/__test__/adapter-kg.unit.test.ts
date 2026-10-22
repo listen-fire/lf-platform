@@ -855,7 +855,7 @@ describe('KnowledgeGraphAdapter — getResources / writeResource / writeEvidence
   });
 
   it('`Resources` is an ordinary edge: walked by its name, each landing reads its fields off itself', async () => {
-    // Language version 5: a node's resources are `c-[f:Resources]-> { … f.URL … }`
+    // Language 0.12: a node's resources are `c-[f:Resources]-> { … f.URL … }`
     // — the edge the describe declares, by its name (no `_resources` keying).
     dbState.resources.push({
       id: RESOURCE_ID as string,

@@ -30,7 +30,7 @@ export const LINKEDIN_ENRICHMENT_PLUGIN_MANIFEST: PluginManifest = {
     'it found, and the text of that profile page (both left empty when no ' +
     'confident match exists).',
   additions: LINKEDIN_ENRICHMENT_PLUGIN.signature.additions,
-  // No handbook section yet: it is callable only from language version 5
+  // No handbook section yet: it is callable only from language 0.12
   // (`linkedinEnrichment(record)`), and the handbook documents only the forms
   // to write. `research` resolves a person's profile address from a name.
 };

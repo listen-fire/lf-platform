@@ -766,7 +766,7 @@ describe('writes in the Rust engine', () => {
   });
 
   it('fails a delete of the event or of a value: no record position', async () => {
-    // Version 5 (Dancing Wren) refuses both at the check
+    // Version 0.12 refuses both at the check
     // (MOV_DELETE_NOT_DECLARED, MOV_DELETE_NOT_RECORD).
     for (const body of ['  delete msg', '  x = "a"\n  delete x']) {
       await onRust({

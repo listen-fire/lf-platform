@@ -331,7 +331,7 @@ describe('cache breakpoints', () => {
   });
 });
 
-describe('the call nests inside an expression (language version 3)', () => {
+describe('the call nests inside an expression (legacy version 3)', () => {
   it('ONLY(extract(…)) is the one record it found', async () => {
     const { calls, writes } = await run(
       [

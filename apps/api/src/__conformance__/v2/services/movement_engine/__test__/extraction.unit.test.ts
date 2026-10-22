@@ -2835,7 +2835,7 @@ describe('Layer 5 — files a `through` plugin fetched join `_resources`', () =>
     expect(creates[1].fields.deck).toBe(fileResource.fileRef);
   });
 
-  it('under language version 1, a fetched file stays off `_resources` — they held the sources alone', async () => {
+  it('under legacy version 1, a fetched file stays off `_resources` — they held the sources alone', async () => {
     const { creates, llm } = await runFetched(
       [{ name: 'Acme deck.pdf', url: 'https://docsend.example/acme', file: 'doc-1', text: 'Acme builds rockets.' }],
       1,

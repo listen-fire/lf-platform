@@ -1,10 +1,10 @@
 // On this branch the v3 corpus is its own pre-merge copy (35cd3a3ea8) of the version-3 tests, adapted to the host interface exactly as v1/v2 were carried.
-// Language version 3's conformance corpus for the engine: the movement_engine
+// Legacy version 3's conformance corpus for the engine: the movement_engine
 // unit tests as they stood before version 4 — on this branch, main's
 // b3078e0053 (v0.10.9) tests as cloud-native carried them onto the host
 // boundary (35cd3a3ea8, the last commit before the merge that brought version
 // 4), verbatim under `src/__conformance__/v3/` at the positions they had there
-// — run against the current code under language version 3 ("Steady Lynx"). A
+// — run against the current code under legacy version 3. A
 // failure is a version-3 behaviour the current code no longer preserves. The
 // corpus files are never edited; a test that asserted a since-refactored
 // internal shape is listed in `src/__conformance__/v3/triage.cjs`. The resolver

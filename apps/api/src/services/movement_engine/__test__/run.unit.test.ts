@@ -1982,8 +1982,8 @@ describe('dispatch arity — a multi-parameter movement cannot be the entry', ()
 
 // ── 4b. parallel — env fork + join ──────────────────────────────────────────
 
-// `parallel` is retired under Dancing Wren (5): these pin its join under
-// Luminous Owl (4), and the MAP that replaces it runs its functions at once too.
+// `parallel` is retired under 0.12: these pin its join under
+// legacy 4, and the MAP that replaces it runs its functions at once too.
 describe('parallel — env fork + join', () => {
   /** An n-arrival barrier: each arrival blocks until ALL n have arrived.
    *  Under sequential execution the first arrival never unblocks — the

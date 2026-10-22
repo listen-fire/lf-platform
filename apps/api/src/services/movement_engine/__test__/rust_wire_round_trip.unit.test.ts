@@ -5,7 +5,7 @@
 // host of its own, and the assertions say how the run must end and what the
 // host was handed.
 //
-// The wire is plain JSON (version 5, Dancing Wren). The values are what
+// The wire is plain JSON (version 0.12). The values are what
 // `JSON.parse` makes of a host's text: an own `__proto__` key is a key like
 // any other. It crosses as itself, and a map is a map: a read of it reads the
 // own value, a spread copies it, `Json.stringify` prints it, and nothing ever

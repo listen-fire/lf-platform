@@ -1,6 +1,6 @@
-// Language version 1's conformance corpus for the engine: v0.6.0's own
+// Legacy version 1's conformance corpus for the engine: v0.6.0's own
 // movement_engine unit tests, verbatim under `src/__conformance__/v1/`, run
-// against the current code under language version 1 ("Quiet Heron"). A
+// against the current code under legacy version 1. A
 // failure is a v0.6.0 behaviour the current code no longer preserves. The
 // corpus files are never edited; a test that asserted a since-refactored
 // internal shape is listed in `src/__conformance__/v1/triage.cjs`. The

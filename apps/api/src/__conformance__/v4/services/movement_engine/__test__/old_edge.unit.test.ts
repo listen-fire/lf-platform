@@ -1,6 +1,6 @@
 // Engine coverage for a write handle's `-[:@old]->` — the record as it stood
 // before that write — and for a position write updating the handle it was
-// written through (language version 4).
+// written through (legacy version 4).
 //
 // What is worth pinning: a create has no `@old`; a write that found a record
 // snapshots it (a distinct position, even when nothing changed); a rehearsed

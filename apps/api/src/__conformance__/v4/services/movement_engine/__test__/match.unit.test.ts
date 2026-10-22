@@ -388,7 +388,7 @@ describe('a match against a node this run built', () => {
   });
 });
 
-describe('a miss under language version 4', () => {
+describe('a miss under legacy version 4', () => {
   const NAMED_MISS = [
     '  existing = match crm-[:companies]-> { unique by (`name`), name: "Nope Ltd" }',
     '  write crm-[:notes]-> { title: IF existing == null THEN "absent" ELSE "found" END }',

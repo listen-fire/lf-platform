@@ -4,7 +4,7 @@
 // whichever closure it reached: a record arrived in a text field, a number in
 // a text parameter, and a missing argument failed at run time only on the
 // path that reached the closure wanting it. That is why the refusals land from
-// Dancing Wren (5) only, with upgrade warnings before it — the frozen
+// 0.12 only, with upgrade warnings before it — the frozen
 // behaviour is pinned here, and version 5 is refused at check.
 
 import { LANGUAGE_VERSION, type InstanceSchema, type LanguageVersion } from 'movement-lang';
@@ -170,7 +170,7 @@ describe('a call of one of several closures, under versions 3 and 4', () => {
     await expect(runUnder(CASES.arity!, version)).rejects.toThrow(/takes 1 argument\(s\), got 0/);
   });
 
-  it.each(Object.keys(CASES))('%s is refused at check under Dancing Wren (5)', async name => {
+  it.each(Object.keys(CASES))('%s is refused at check under 0.12', async name => {
     await expect(runUnder(CASES[name]!, LANGUAGE_VERSION)).rejects.toThrow(/MOVENG_CHECK/);
   });
 });

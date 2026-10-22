@@ -1,4 +1,4 @@
-// Language version 5 spells the combinators `race(f, g)` / `all(f, g)`: the
+// Language 0.12 spells the combinators `race(f, g)` / `all(f, g)`: the
 // arms are the call's arguments (a closure is not data, so there is no list
 // of them), there is no `await`, and `parallel` is `all`. A both-engine case
 // written once for every version runs under 5 as this rewrites it. A copy

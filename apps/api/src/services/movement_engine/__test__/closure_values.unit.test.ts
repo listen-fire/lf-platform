@@ -1,4 +1,4 @@
-// Closures are values (language version 5, Dancing Wren), but not data: a
+// Closures are values (the 0.12 language), but not data: a
 // name or parameter whose value is a closure may be called, as TypeScript
 // allows, and `all(f, g)` / `race(f, g)` take closures as their arguments. The
 // TypeScript engine is the reference the Rust engine is compared against, so
@@ -460,7 +460,7 @@ describe('a parameter of closure type (<(params) => <return>>)', () => {
   });
 });
 
-describe('an arrow body that is a combinator (language version 5)', () => {
+describe('an arrow body that is a combinator (language 0.12)', () => {
   it('returns its answer: the race runs, and the closure hands back its receipt', async () => {
     expect(
       await finalPayload(['  g = () => race(() => "first")', '  r = g()', '  write graph-[:note]-> { payload: { r: r } }']),

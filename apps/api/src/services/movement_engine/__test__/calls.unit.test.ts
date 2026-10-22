@@ -331,7 +331,7 @@ describe('§G — _resources block → call with a synthesised node arg → drop
   });
 });
 
-describe('§G under Dancing Wren (5) — `_resources` off an adapter record is not read', () => {
+describe('§G under 0.12 — `_resources` off an adapter record is not read', () => {
   it('refuses before a run; the reserved-reference path is never asked', async () => {
     const email = makeFakeAdapter('email', {
       resources: [{ externalId: 'att-1', name: 'pitch.pdf', data: { filename: 'pitch.pdf', data: 'BYTES-1' } }],

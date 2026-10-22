@@ -1151,7 +1151,7 @@
               "automation": "Sync CRM",
               "automationId": "mov-crm",
               "runId": "",
-              "version": "Quiet Heron",
+              "version": "0.12.0",
               "reason": "fix the listen",
               "url": "http://web/movements/mov-crm",
               "at": "2026-09-29T11:54:00.000Z"
@@ -1228,7 +1228,7 @@
               "automation": "Sync CRM",
               "automationId": "mov-crm",
               "runId": "",
-              "version": "Quiet Heron",
+              "version": "0.12.0",
               "reason": "fix the listen",
               "url": "http://web/movements/mov-crm",
               "at": "2026-09-29T11:54:00.000Z"
@@ -1306,7 +1306,7 @@
               "automation": "Sync CRM",
               "automationId": "mov-crm",
               "runId": "",
-              "version": "Quiet Heron",
+              "version": "0.12.0",
               "reason": "fix the listen",
               "url": "http://web/movements/mov-crm",
               "at": "2026-09-29T11:54:00.000Z"

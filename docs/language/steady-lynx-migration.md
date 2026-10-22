@@ -1,5 +1,7 @@
 # Migrating to Steady Lynx (3)
 
+> These describe moves between the integer versions 1–4; the current language is versioned by its release.
+
 Language version 3, **Steady Lynx**, arrives in v0.10.0. The release's [changelog entry](../../CHANGELOG.md) lists each change in a line; this guide carries the full detail, grouped by topic. Every rule here that says "under Steady Lynx (3)" applies only to an automation pinned to version 3. Quiet Heron (1) and Bright Otter (2) keep their old behaviour, except where a rule says it applies under every version.
 
 ## Contents

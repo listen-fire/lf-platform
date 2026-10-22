@@ -161,7 +161,7 @@ describe('the shipped plugin sections', () => {
   });
 
   it('documents no plugin that has no chapter of its own', () => {
-    // `linkedin_enrichment` is callable only from language version 5 and has
+    // `linkedin_enrichment` is callable only from language 0.12 and has
     // no chapter yet; the handbook teaches only the forms to write.
     expect(getMovementHandbook().chapters['plugin:linkedin_enrichment']).toBeUndefined();
   });
