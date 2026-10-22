@@ -17,8 +17,8 @@ versions are the git tags described in [`deploy/UPGRADING.md`](deploy/UPGRADING.
 
 <!-- add merged PRs here -->
 
-
-
+- A cloud `lf` can keep its runs, parks, work rows and delivery receipts in this installation's own tables: the platform serves lf's store slot at `POST /api/v1/system/slots/store` (an API key with the `system` scope; the tenant is the key owner's team). The migration adds a `host` column to `trigger_run` and `work` (existing rows read `platform`), makes `work` unique on `(host, key)`, and adds four tables. `/runs` lists lf's runs by their movement; Resume is refused for them. See "Running lf against this installation" in `deploy/SELF_HOSTING.md`.
+- The platform can be a cloud `lf`'s secrets module: `POST /api/public/lf-secrets` serves `lf` the team's credentials from the encrypted store, behind an API key with the new `secrets` scope (grantable, in no key's defaults; `pnpm dev:lf-secrets-key` mints the dev loop's). `LF_OAUTH_RELAY_TARGETS` (team id to `lf serve` URL) enables `GET /api/public/lf-secrets/oauth/callback/<team>`, which forwards an OAuth redirect to that team's `lf`. A new table holds the leases that make a platform refresh wait for `lf`'s; the migration applies on upgrade. See `deploy/SELF_HOSTING.md`, "A cloud `lf` keeping its credentials here".
 - A saved movement's pin is now the language release it was written for, shown as a version such as 0.12.0; the legacy ids 1 to 4 are unchanged, and a movement saved at 5 reads 0.12.0.
 - The agent tools' `languageVersion` takes the version string (for example `"0.12.0"`) and, this release only, the old integer (5 means the installed language, 1 to 4 the legacy ids); the `name` beside a `version` in their answers repeats it and goes away after this release.
 
