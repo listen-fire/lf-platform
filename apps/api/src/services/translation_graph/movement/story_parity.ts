@@ -12,7 +12,10 @@
 //   R3  a positional plugin argument is named by the plugin's parameter, where
 //       legacy wrote its ordinal;
 //   R6  a movement's effect row lists its instances in another order;
-//   R7  the analysis gives a hop a landing legacy did not (additions only).
+//   R7  the analysis gives a hop a landing legacy did not (additions only);
+//   R8  a movement calling one imported from a library file is partial, its
+//       reads and writes a subset of legacy's: the analysis sees one file,
+//       where legacy folded the callee in through the catalog's files.
 // Extract descriptions (R2) and declared field types are recovered and must
 // be equal. R4 and R5 were ruled but never met on the corpus, so they hold no
 // normaliser.
@@ -75,7 +78,7 @@ export function legacyStoryUnder5(source: string, snapshot: CatalogSnapshot): St
   };
 }
 
-export type StoryRuling = 'R1' | 'R3' | 'R6' | 'R7';
+export type StoryRuling = 'R1' | 'R3' | 'R6' | 'R7' | 'R8';
 
 export interface StoryDifference {
   /** Where in the story, as a property path. */
@@ -99,7 +102,7 @@ export function compareStories(legacy: StoryResult, wasm: StoryResult): StoryCom
 
 /** Hits per ruling, over any number of comparisons. */
 export function rulingHits(comparisons: StoryComparison[]): Record<StoryRuling, number> {
-  const hits: Record<StoryRuling, number> = { R1: 0, R3: 0, R6: 0, R7: 0 };
+  const hits: Record<StoryRuling, number> = { R1: 0, R3: 0, R6: 0, R7: 0, R8: 0 };
   for (const comparison of comparisons) for (const ruled of comparison.ruled) hits[ruled.ruling] += 1;
   return hits;
 }
@@ -146,6 +149,8 @@ function rulingFor(legacy: unknown, wasm: unknown, path: Array<string | number>)
   ) {
     return 'R3';
   }
+  // R8: a movement's row, partial in the analysis only, doing no more than legacy's.
+  if (key === 'effects' && isEffects(legacy) && isEffects(wasm) && partialSubset(legacy, wasm)) return 'R8';
   // R6: an effect row's instances, the same set in another order.
   if ((key === 'reads' || key === 'writes') && owner === 'effects' && reordered(legacy, wasm)) return 'R6';
   // R7: a hop's landing, given by the analysis only.
@@ -153,6 +158,31 @@ function rulingFor(legacy: unknown, wasm: unknown, path: Array<string | number>)
     return 'R7';
   }
   return undefined;
+}
+
+interface Effects {
+  reads: unknown[];
+  writes: unknown[];
+  ai: unknown;
+  now: unknown;
+  suspend: unknown;
+  partial: unknown;
+}
+
+function isEffects(value: unknown): value is Effects {
+  return isRecord(value) && Array.isArray(value.reads) && Array.isArray(value.writes) && 'partial' in value;
+}
+
+function partialSubset(legacy: Effects, wasm: Effects): boolean {
+  return (
+    wasm.partial === true &&
+    legacy.partial === false &&
+    wasm.reads.every((r) => legacy.reads.includes(r)) &&
+    wasm.writes.every((w) => legacy.writes.includes(w)) &&
+    wasm.ai === legacy.ai &&
+    wasm.now === legacy.now &&
+    wasm.suspend === legacy.suspend
+  );
 }
 
 /** The same distinct names, not in the same order. */

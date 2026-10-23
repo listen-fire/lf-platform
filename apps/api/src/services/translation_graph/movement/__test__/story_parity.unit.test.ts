@@ -65,11 +65,33 @@ const probes: Program[] = fs
   .sort()
   .map((file) => ({ id: `probe ${file}`, name: `probe ${file}`, source: fs.readFileSync(path.join(FIXTURES, file), 'utf8'), snapshot: HANDBOOK_CATALOG }));
 
+/** A movement calling one imported from a library file (the dev stack's `tick` and `lib/greet`). */
+const importedCall: Program = {
+  id: 'imported movement call',
+  name: 'imported movement call',
+  source: [
+    'import { ledger_sys } from adapters',
+    'import { ledger_creds } from credentials',
+    'import { greet } from "lib/greet"',
+    'books = connect ledger_sys using ledger_creds',
+    'function tock(t: <cron-[:Tick]->>) {',
+    '  write books-[:Orgs]-> { Title: greet("${t.`Fired at`}") }',
+    '}',
+    'listen to cron { schedule: "* * * * *" } fire tock',
+    '',
+  ].join('\n'),
+  snapshot: {
+    ...STORY_VIEW_SNAPSHOT,
+    files: { 'lib/greet': { source: 'export function greet(name: <text>) {\n  return "Hi, ${name}!"\n}\n' } },
+  },
+};
+
 const corpus: Program[] = [
   ...claimPrograms,
   ...sectionPrograms,
   ...namedCases,
   { id: 'story view fixture', name: 'story view fixture', source: STORY_VIEW_SOURCE, snapshot: STORY_VIEW_SNAPSHOT },
+  importedCall,
   ...Object.entries(LEGACY_STORY_SOURCES).map(([name, source]) => ({
     id: `legacy story ${name}`,
     name: `legacy story ${name}`,
