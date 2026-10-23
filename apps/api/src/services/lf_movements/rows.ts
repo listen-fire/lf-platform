@@ -108,6 +108,31 @@ function importsOf(file: { text: string; pin: string }): { credentials: string[]
   return { credentials, files };
 }
 
+const lastLeftOut = new Map<string, string>();
+
+/** Logs a team's left-out set when it changes, not on every listing: a watching
+ *  lf lists about every 12 s, so a standing left-out file would otherwise warn
+ *  at that rate. The set is kept per process, per team and per reason. */
+export function logLeftOutChange(options: {
+  tenant: string;
+  reason: 'names' | 'credentials';
+  message: string;
+  names: string[];
+  detail?: Record<string, unknown>;
+}): void {
+  const names = [...options.names].sort();
+  const key = `${options.tenant}:${options.reason}`;
+  const signature = JSON.stringify(names);
+  if ((lastLeftOut.get(key) ?? '[]') === signature) return;
+  if (names.length === 0) {
+    lastLeftOut.delete(key);
+    logger.info('[slots:movements] movements left out earlier are now served', { reason: options.reason });
+    return;
+  }
+  lastLeftOut.set(key, signature);
+  logger.warn(options.message, { count: names.length, names, ...options.detail });
+}
+
 /** The rule above, applied: the served movements by name. */
 async function served(tenant: string): Promise<Map<string, ShippedMovement>> {
   const unnamed: string[] = [];
@@ -120,12 +145,12 @@ async function served(tenant: string): Promise<Map<string, ShippedMovement>> {
     }
     current.set(row.name, row);
   }
-  if (unnamed.length > 0) {
-    logger.warn('[slots:movements] movements left out: their names are not movement paths', {
-      count: unnamed.length,
-      names: unnamed,
-    });
-  }
+  logLeftOutChange({
+    tenant,
+    reason: 'names',
+    message: '[slots:movements] movements left out: their names are not movement paths',
+    names: unnamed,
+  });
 
   const imports = new Map([...current].map(([name, row]) => [name, importsOf(row)]));
   const credentialNames = new Set((await servedCredentials(tenant)).map((credential) => credential.ref));
@@ -143,13 +168,13 @@ async function served(tenant: string): Promise<Map<string, ShippedMovement>> {
       grew = true;
     }
   }
-  if (leftOut.size > 0) {
-    logger.warn('[slots:movements] movements left out: they import a credential the secrets module does not serve', {
-      count: leftOut.size,
-      names: [...leftOut],
-      credentials: [...new Set([...unserved.values()].flat())],
-    });
-  }
+  logLeftOutChange({
+    tenant,
+    reason: 'credentials',
+    message: '[slots:movements] movements left out: they import a credential the secrets module does not serve',
+    names: [...leftOut],
+    detail: { credentials: [...new Set([...unserved.values()].flat())] },
+  });
 
   const listed = new Set<string>();
   const visit = (name: string) => {
