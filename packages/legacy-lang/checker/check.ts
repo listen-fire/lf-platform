@@ -5958,14 +5958,15 @@ class Checker {
     const surfaced = checker.diagnostics.filter(d => diagnosticSeverity(d) !== 'info');
     const result: CheckedLibrary = { scope, surfaced };
     context.checked.set(file.path, result);
-    for (const diagnostic of this.typeOnly ? [] : surfaced) {
+    // A fix's edits are the library file's, so none is carried to the import:
+    // applied to the importer's text, they overwrite whatever it holds there.
+    for (const { fix: _libraryFix, ...diagnostic } of this.typeOnly ? [] : surfaced) {
       this.diagnostics.push({
         ...diagnostic,
         message: `"${file.path}" line ${diagnostic.span.start.line}: ${diagnostic.message}`,
         span: at,
       });
     }
-    // A fix's edits are the library file's, so none is carried to the import.
     const spelling = [...spellingDiagnostics(file.program, checker), ...checker.librarySpelling];
     for (const diagnostic of this.typeOnly ? [] : spelling) {
       this.librarySpelling.push({

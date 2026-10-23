@@ -780,3 +780,154 @@ describe('the deploy check over the real authoring core', () => {
     ]);
   });
 });
+
+describe('an upgrade over the real checkers, with a library the movement imports', () => {
+  // The validation seam is the real `diagnoseMovementSource` against a run
+  // snapshot carrying the team's saved files, so an import resolves as it does
+  // in production: the wasm checker for the installed release, legacy-lang for
+  // what changed meaning on the move from the legacy id.
+  const SLACK = {
+    adapters: {
+      slack: {
+        constructionArgs: [],
+        schema: {
+          positions: {
+            channel: { properties: { Name: 'text' }, edges: {} },
+            message: { properties: { Text: 'text' }, edges: {} },
+            note: { properties: { Body: 'text' }, edges: {} },
+          },
+          collections: { Channels: { target: 'channel' }, note: { target: 'note' } },
+          writableRoots: { note: { fields: { Body: 'text' }, resultShape: { Body: 'text' }, edges: {} } },
+        },
+      },
+    },
+  } satisfies Parameters<typeof mockCatalogSnapshot>[0];
+  // Already upgraded, and holding a refusal whose fix is a place in ITS text
+  // (line 8): `found.summary` may be absent where the write needs a value.
+  const LIBRARY = [
+    'import { slack } from adapters',
+    'chat = connect slack',
+    'node FoundShape: "the relevant information" {',
+    '  summary: <text> "a summary"',
+    '}',
+    'export function summarise(c: <chat-[:channel]->>) {',
+    '  found = extractOne([c.Name], FoundShape, { tier: "careful" })',
+    '  write chat-[:note]-> { Body: found.summary }',
+    '}',
+    '',
+  ].join('\n');
+  // Line 8 of the importer is its prompt, where the library's fix points.
+  const IMPORTER = [
+    'import { summarise } from "lib/summary"',
+    'import { slack } from adapters',
+    'chat = slack()',
+    'movement recap(c: <chat-[:channel]->>) {',
+    '  a = 1',
+    '  b = 2',
+    '  c2 = 3',
+    '  prompt = "Write the weekly recap of this channel for the team"',
+    '  write chat-[:note]-> { Body: prompt }',
+    '}',
+    '',
+  ].join('\n');
+  const snapshot = { ...mockCatalogSnapshot(SLACK), files: { 'lib/summary': { source: LIBRARY } } };
+  const catalog = fromCatalogSnapshot(snapshot);
+  const { diagnoseMovementSource } = jest.requireActual<typeof import('../authoring')>('../authoring');
+  const realValidate: ValidateUnder = async ({ movement: m, languageVersion, upgradingFrom, source }) => ({
+    diagnostics: diagnoseMovementSource(source ?? m.source, {
+      catalog,
+      snapshot,
+      languageVersion,
+      ...(upgradingFrom !== undefined ? { upgradingFrom } : {}),
+    }).diagnostics,
+    gaps: [],
+  });
+  const advanceSpy = () => {
+    const advanced: Array<{ to: LanguageVersion; source?: string }> = [];
+    const advance = async ({ to, source }: { to: LanguageVersion; source?: string }) => {
+      advanced.push({ to, ...(source !== undefined ? { source } : {}) });
+      return { ok: true as const };
+    };
+    return { advanced, advance };
+  };
+
+  it("rewrites only the importer's own old spellings: the library's fix never lands in the importer's text", async () => {
+    jest.mocked(getMovementRow).mockResolvedValueOnce(movement({ id: 'recap', languageVersion: '4', source: IMPORTER }));
+    const { advanced, advance } = advanceSpy();
+
+    const result = await upgradeMovement({ teamId: 'team-1', id: 'recap', acknowledge: true, applyAllFixes: true, validate: realValidate, advance });
+
+    expect(result.status).toBe('blocked');
+    if (result.status === 'not_found') throw new Error('unreachable');
+    expect(result.upgradedSource).toBe(IMPORTER.replace('chat = slack()', 'chat = connect slack').replace('movement recap', 'function recap'));
+    // The library's refusal is still reported, on the import, without a fix.
+    const fromLibrary = result.diagnostics.filter((d) => d.message.startsWith('"lib/summary" line 8'));
+    expect(fromLibrary.map((d) => [d.code, d.line, d.fix])).toEqual([['MOV_ABSENT_REQUIRED', 1, undefined]]);
+    expect(advanced).toEqual([]);
+  });
+
+  it('every text it saves is the one the installed checker validated clean', async () => {
+    const clean = { ...snapshot, files: { 'lib/summary': { source: LIBRARY.replace('Body: found.summary', 'Body: coalesce(found.summary, "")') } } };
+    const validated: Array<{ source: string; clean: boolean; languageVersion: LanguageVersion }> = [];
+    const validate: ValidateUnder = async ({ movement: m, languageVersion, upgradingFrom, source }) => {
+      const text = source ?? m.source;
+      const { diagnostics } = diagnoseMovementSource(text, {
+        catalog: fromCatalogSnapshot(clean),
+        snapshot: clean,
+        languageVersion,
+        ...(upgradingFrom !== undefined ? { upgradingFrom } : {}),
+      });
+      validated.push({ source: text, clean: diagnostics.every((d) => d.severity !== 'error'), languageVersion });
+      return { diagnostics, gaps: [] };
+    };
+    jest.mocked(getMovementRow).mockResolvedValueOnce(movement({ id: 'recap', languageVersion: '4', source: IMPORTER }));
+    jest.mocked(assessMovementValidity).mockReturnValueOnce({ status: 'valid', reason: null } as never);
+    const { advanced, advance } = advanceSpy();
+
+    const result = await upgradeMovement({ teamId: 'team-1', id: 'recap', acknowledge: true, applyAllFixes: true, validate, advance });
+
+    expect(result.status).toBe('upgraded');
+    expect(advanced).toHaveLength(1);
+    expect(validated.at(-1)).toEqual({ source: advanced[0]?.source, clean: true, languageVersion: CUR });
+  });
+
+  // The old extraction with a field typed by a name that needs backticks.
+  const EXTRACTION = [
+    'import { slack } from adapters',
+    'chat = slack()',
+    'movement triage(c: <chat-[:channel]->>) {',
+    '  found = extract "careful" from [c.Name] {',
+    '    reason: <`Pass Reason`> "why it passed"',
+    '  }',
+    '  write chat-[:note]-> { Body: "seen" }',
+    '}',
+    '',
+  ].join('\n');
+
+  it('an upgrade whose rewrite does not check is refused with the diagnostics, and nothing is saved', async () => {
+    jest.mocked(getMovementRow).mockResolvedValueOnce(movement({ id: 'triage', languageVersion: '4', source: EXTRACTION }));
+    const { advanced, advance } = advanceSpy();
+
+    const result = await upgradeMovement({ teamId: 'team-1', id: 'triage', acknowledge: true, applyAllFixes: true, validate: realValidate, advance });
+
+    expect(result.status).toBe('blocked');
+    if (result.status === 'not_found') throw new Error('unreachable');
+    expect(result.diagnostics.some((d) => d.severity === 'error')).toBe(true);
+    expect(advanced).toEqual([]);
+  });
+
+  // The installed language's own rewrite of the extraction keyword drops the
+  // backticks of a type name that is not an identifier (movement-checker
+  // `extract_keyword.rs` `type_marker`), so its result does not parse. The
+  // refusal above holds meanwhile; this case passes once the language's fix
+  // ships, and then stops being marked failing.
+  it.failing("the installed language's rewrite of the extraction keyword keeps a type name's backticks", async () => {
+    jest.mocked(getMovementRow).mockResolvedValueOnce(movement({ id: 'triage', languageVersion: '4', source: EXTRACTION }));
+
+    const result = await upgradeMovement({ teamId: 'team-1', id: 'triage', acknowledge: false, applyAllFixes: true, validate: realValidate });
+
+    if (result.status === 'not_found') throw new Error('unreachable');
+    expect(result.upgradedSource).toContain('reason: <`Pass Reason`> "why it passed"');
+    expect(result.diagnostics.filter((d) => d.code === 'MOV_PARSE')).toEqual([]);
+  });
+});
