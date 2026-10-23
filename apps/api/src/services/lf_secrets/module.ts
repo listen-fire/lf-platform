@@ -23,7 +23,7 @@ import { credentialLifecycle } from '../credentials/credential_lifecycle';
 import { deleteCredential, forgetCachedClients } from '../credentials/delete_credential';
 import { postgresSecrets, type PayloadShape } from '../credentials/secrets_postgres';
 import { lockLease, unlockLease } from './lease';
-import { wireReading, wireTarget, type WireTarget } from './rows';
+import { servedCredentials, wireReading, wireTarget, type WireTarget } from './rows';
 
 export type SecretsMethod = (typeof SECRETS_METHODS)[number];
 
@@ -174,17 +174,7 @@ export function platformSecretsModule({ teamId, userId }: { teamId: TeamId; user
     },
 
     async 'secrets.list'() {
-      const rows = await credentials()
-        .selectFrom('external_service_credentials')
-        .where('team_id', '=', teamId)
-        .where('credentials', 'is not', null)
-        .select(['name', 'type', 'app_id', 'declared_credential', 'wire_binding', sql<string>`encode(sha256(credentials), 'hex')`.as('version')])
-        .orderBy('name')
-        .execute();
-      return rows.flatMap((row) => {
-        const reading = wireReading(row);
-        return reading === null ? [] : [{ ref: row.name, external: reading.external, binding: reading.binding, version: row.version }];
-      });
+      return servedCredentials(teamId);
     },
 
     async 'secrets.lock'(params) {

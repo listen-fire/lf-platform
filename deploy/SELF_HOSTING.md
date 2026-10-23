@@ -690,14 +690,15 @@ core: { movements: platform_movements }
 
 - It is shipped. A save that never passed the checks (or that stopped for confirmation) is a draft and is absent. A shipped movement with a later unshipped edit is listed at its shipped text.
 - Its shipped version is pinned to the installed language line. Movements on the legacy pins 1 to 4 stay on the platform's own engine and are absent.
-- None of its listeners is paused. `lf` has no per-listener pause, and serving a movement the loop guard stopped would silently resume it.
+- None of its listeners is paused, unless a listed movement imports it. `lf` has no per-listener pause, and serving a movement the loop guard stopped would silently resume it; but a pause is about firing, not about being imported, so a paused library that a listed movement imports (directly, or through other paused files) is listed so the import resolves. A paused movement nothing listed imports is absent.
+- Every credential it imports is one the secrets module lists for the team (`import { name } from credentials`). A movement that names another is left out, with every movement that imports it, and the api logs the names; the rest open.
 - Its name is a valid path. A name with a `\`, an empty or `..` segment, or a leading `/` could not be named by `lf`; it is left out and the api logs its name.
 
 The path is `<name>.mvt`, the text is the shipped text, and the version is the text's content hash, so the same text keeps its version across a re-pin. Imports resolve by name as they do here: `import { greet } from "lib/greet"` finds the movement named `lib/greet`, listed as `lib/greet.mvt`.
 
 **Read-only.** `lf upgrade` and `lf init` are refused with the platform's reason. Author and upgrade here.
 
-**What the cloud project must hold.** An external for every adapter the listed movements import, under the platform's adapter name. A listed movement that names a credential the secrets module does not list makes `lf` refuse to open ("What is not listed" above). A listed file that does not parse does not stop `lf` opening: `lf check` reports it and the other movements run.
+**What the cloud project must hold.** An external for every adapter the listed movements import, under the platform's adapter name. A listed file that does not parse does not stop `lf` opening: `lf check` reports it and the other movements run.
 
 **When `lf` sees an edit.** At its next start. `lf serve` keeps the files it opened with. A rename is a new file to `lf`, so its listens start fresh.
 

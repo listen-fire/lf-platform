@@ -24,6 +24,8 @@ import {
   repinCurrentVersion,
 } from '../../translation_graph/movement/version_store';
 import { clearGuardPaused, setGuardPaused } from '../../loop_guard/pause';
+import { persistCredential } from '../../credentials/persist_credential';
+import ExternalServiceType from '../../../generated/kysely/automations/ExternalServiceType';
 import { READ_ONLY_REASON, answerFor } from '../answer';
 
 jest.mock('../../credentials/credential_lifecycle', () => ({
@@ -194,6 +196,44 @@ describe('the movements module', () => {
 
     await clearGuardPaused({ triggerId: guardedTrigger, teamId: teamA, resumedBy: 'test' });
     expect(await paths(teamA)).toEqual(['guarded.mvt']);
+  });
+
+  it('a movement importing a credential the secrets module does not serve is left out, with what imports it', async () => {
+    await persistCredential({
+      teamId: teamA,
+      userId: null,
+      name: 'served_cred',
+      type: ExternalServiceType.REMOTE,
+      appId: 'acme_crm',
+      declaredCredential: 'oauth',
+      credentials: { access_token: 't' },
+    });
+    await seed(teamA, 'uses_served', 'import { served_cred as c } from credentials\n\nfunction a() {}\n');
+    await seed(teamA, 'uses_unserved', 'import { missing_cred } from credentials\n\nfunction b() {}\n');
+    await seed(teamA, 'imports_the_unserved', 'import { b } from "uses_unserved"\n\nfunction c() {}\n');
+    await seed(teamA, 'no_credentials', 'function d() {}\n');
+
+    expect(await paths(teamA)).toEqual(['no_credentials.mvt', 'uses_served.mvt']);
+    expect(await read(teamA, 'uses_unserved.mvt')).toBeNull();
+    expect(await read(teamA, 'imports_the_unserved.mvt')).toBeNull();
+    expect(await read(teamA, 'uses_served.mvt')).not.toBeNull();
+    // Another team's credential of the same name serves nothing here.
+    expect(await paths(teamB)).toEqual([]);
+  });
+
+  it('a paused library a served movement imports is listed; a paused movement nothing imports is not', async () => {
+    const lib = await saveMovement({ teamId: teamA, source: MANUAL('lib'), name: 'lib' });
+    const deeper = await saveMovement({ teamId: teamA, source: MANUAL('deeper'), name: 'deeper' });
+    const alone = await saveMovement({ teamId: teamA, source: MANUAL('alone'), name: 'alone' });
+    if (!lib.ok || !deeper.ok || !alone.ok) throw new Error('test: the probes did not save');
+    await seed(teamA, 'user', 'import { lib } from "lib"\n\nfunction user() {}\n');
+    await seed(teamA, 'paused_user', 'import { deeper } from "deeper"\n\nfunction paused_user() {}\n');
+    for (const saved of [lib, deeper, alone]) {
+      await getAutomationsQb(['trigger']).updateTable('trigger').set({ run_mode: 'off' }).where('id', '=', await triggerOf(saved.movementId)).execute();
+    }
+
+    expect(await paths(teamA)).toEqual(['deeper.mvt', 'lib.mvt', 'paused_user.mvt', 'user.mvt']);
+    expect(await read(teamA, 'alone.mvt')).toBeNull();
   });
 
   it('a name that is not a movement path is left out; a nested name is its path', async () => {
