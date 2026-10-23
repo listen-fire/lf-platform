@@ -7,18 +7,17 @@
  * nothing reads goes to the server too, which answers with the version
  * diagnostic every other surface reports for it.
  *
- * Completions, hover and definition have no wasm equivalent: they read the
- * pin's legacy-lang dialect, and offer nothing when it has none.
+ * Completions, hover and definition follow the same route: legacy-lang in the
+ * browser for a legacy pin, the server's language service for a release pin
+ * (./editor-language.ts), and nothing for a pin nothing reads.
  */
 
-import type { LanguageVersion } from "movement-lang";
 import type { MovementDiagnostic } from "legacy-lang";
 
 /** The server's account of a pin (`views.movement.get`'s `languageRoute`,
  *  `views.movement.catalog`'s `installed` for a new movement). */
 export interface EditorLanguageRoute {
   kind: "legacy" | "installed" | "refused";
-  dialect: LanguageVersion | null;
 }
 
 /** A diagnostic as the server reports it: 1-based line/col. */
@@ -37,13 +36,6 @@ export type CheckRemote = (source: string, signal: AbortSignal) => Promise<Remot
 
 export function lintsInBrowser(route: EditorLanguageRoute): boolean {
   return route.kind === "legacy";
-}
-
-/** The options completions, hover and definition run under; null ⇒ offer none. */
-export function presentationOptions(
-  route: EditorLanguageRoute,
-): { languageVersion: LanguageVersion } | null {
-  return route.dialect === null ? null : { languageVersion: route.dialect };
 }
 
 export function remoteToEditorDiagnostics(

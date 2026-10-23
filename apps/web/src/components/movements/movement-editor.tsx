@@ -3,15 +3,16 @@
 /**
  * CodeMirror 6 editor for `.mvt` movement scripts.
  *
- * Everything language-aware comes from the legacy-lang language service,
- * driven by the team's catalog snapshot, or from the server:
- *   - linting:    getMovementDiagnostics for a legacy pin; the server's
- *                 `check` (the wasm checker) for a release pin, through
- *                 `checkRemote` (debounced by @codemirror/lint either way);
- *   - completion: getMovementCompletions, under the pin's dialect;
- *   - hover:      getHoverInfo, under the pin's dialect.
- * A pin with no dialect gets no completion, hover or definition
- * (./editor-lint.ts). The component makes no network call of its own.
+ * Everything language-aware follows the pin's route (./editor-lint.ts):
+ *   - a legacy pin: the legacy-lang language service in the browser, under
+ *     the pin, driven by the team's catalog snapshot (getMovementDiagnostics,
+ *     getMovementCompletions, getHoverInfo, getDefinition);
+ *   - a release pin: the server, which runs the wasm against the run
+ *     snapshot: the lint through `checkRemote` (`check`), completion, hover
+ *     and definition through `languageRemote` (./editor-language.ts);
+ *   - a pin nothing reads: the server's lint, and nothing else.
+ * The lint is debounced by @codemirror/lint either way. The component makes
+ * no network call of its own: the remotes are the caller's.
  *
  * The snapshot STREAMS: the page fetches a fast skeleton (no instance
  * schemas), then merges per-(adapter, credential) schemas as the source
@@ -27,6 +28,7 @@ import {
   EditorState,
   StateEffect,
   StateField,
+  type Text,
 } from "@codemirror/state";
 import {
   Decoration,
@@ -62,11 +64,22 @@ import { getDefinition, getHoverInfo, getMovementCompletions, getMovementDiagnos
 
 import {
   lintsInBrowser,
-  presentationOptions,
   remoteToEditorDiagnostics,
   type CheckRemote,
   type EditorLanguageRoute,
 } from "./editor-lint";
+import {
+  askDefinition,
+  askHover,
+  completionResultOf,
+  importPathTarget,
+  latest,
+  navTokenAt,
+  presentationOf,
+  type LanguageRemote,
+  type Latest,
+} from "./editor-language";
+import { HOVER_MARKDOWN_CLASS, mountHoverMarkdown } from "./hover-markdown";
 import { movementSyntax } from "./movement-language";
 
 export interface MovementEditorHandle {
@@ -88,11 +101,12 @@ export interface MovementEditorProps {
   /** The saved movement's language version — the text is checked as the
    *  version it is written in. Absent (a new movement) ⇒ the current one. */
   languageVersion?: LanguageVersion;
-  /** Whose checker lints the pin and which dialect the language service
-   *  reads it under. */
+  /** Whose checker lints the pin and whose language service presents it. */
   languageRoute: EditorLanguageRoute;
   /** The server's lint, for a pin the browser cannot check. */
   checkRemote: CheckRemote;
+  /** The server's completion, hover and definition, for a release pin. */
+  languageRemote: LanguageRemote;
   onChange?: (source: string) => void;
   /** Fires with each lint pass — drives the page's diagnostics panel. */
   onDiagnostics?: (diagnostics: MovementDiagnostic[]) => void;
@@ -205,6 +219,29 @@ const theme = EditorView.theme({
     fontStyle: "normal",
     marginLeft: "1.25em",
   },
+  [`.${HOVER_MARKDOWN_CLASS}`]: {
+    padding: "10px 12px",
+    maxWidth: "440px",
+    maxHeight: "320px",
+    overflow: "auto",
+    lineHeight: "1.5",
+    color: "#374151",
+  },
+  [`.${HOVER_MARKDOWN_CLASS} p, .${HOVER_MARKDOWN_CLASS} ul, .${HOVER_MARKDOWN_CLASS} ol, .${HOVER_MARKDOWN_CLASS} pre, .${HOVER_MARKDOWN_CLASS} table`]:
+    { margin: "0 0 6px" },
+  [`.${HOVER_MARKDOWN_CLASS} > :last-child`]: { marginBottom: "0" },
+  [`.${HOVER_MARKDOWN_CLASS} ul, .${HOVER_MARKDOWN_CLASS} ol`]: { paddingLeft: "18px" },
+  [`.${HOVER_MARKDOWN_CLASS} ul`]: { listStyle: "disc" },
+  [`.${HOVER_MARKDOWN_CLASS} ol`]: { listStyle: "decimal" },
+  [`.${HOVER_MARKDOWN_CLASS} code, .${HOVER_MARKDOWN_CLASS} pre`]: {
+    fontFamily: MONO_STACK,
+    color: "#111827",
+  },
+  [`.${HOVER_MARKDOWN_CLASS} pre`]: { whiteSpace: "pre", fontWeight: "600" },
+  [`.${HOVER_MARKDOWN_CLASS} th, .${HOVER_MARKDOWN_CLASS} td`]: {
+    padding: "1px 8px 1px 0",
+    textAlign: "left",
+  },
   ".cm-diagnostic": { padding: "8px 12px" },
   ".cm-diagnostic-error": { borderLeft: "3px solid #ef4444" },
   ".cm-lintRange-error": {
@@ -227,53 +264,88 @@ const theme = EditorView.theme({
   },
 });
 
+/** What the extensions read at the moment they run: the props change without
+ *  the view being rebuilt. */
+interface PresentationRefs {
+  snapshot: { current: CatalogSnapshot };
+  route: { current: EditorLanguageRoute };
+  languageVersion: { current: LanguageVersion | undefined };
+  remote: { current: LanguageRemote };
+}
+
+const presentationOfRefs = (refs: PresentationRefs) =>
+  presentationOf(refs.route.current, refs.languageVersion.current, refs.remote.current);
+
+function legacyHoverCard(contents: string[]): HTMLElement {
+  const dom = document.createElement("div");
+  dom.style.padding = "10px 12px";
+  dom.style.maxWidth = "440px";
+  dom.style.maxHeight = "320px";
+  dom.style.lineHeight = "1.5";
+  // Field lists carry one field per line (\n-delimited); preserve that
+  // whitespace and let long lines (e.g. a wide enum) scroll off to the
+  // right rather than wrapping into an unreadable run.
+  dom.style.overflow = "auto";
+  for (let i = 0; i < contents.length; i++) {
+    const line = document.createElement("div");
+    line.textContent = contents[i];
+    line.style.whiteSpace = "pre";
+    line.style.fontFamily = MONO_STACK;
+    if (i === 0) {
+      line.style.fontWeight = "600";
+      line.style.color = "#111827";
+    } else {
+      line.style.color = "#6b7280";
+      line.style.marginTop = "3px";
+    }
+    dom.appendChild(line);
+  }
+  return dom;
+}
+
 const movementHoverDocs = (
-  snapshotRef: { current: CatalogSnapshot },
-  languageRouteRef: { current: EditorLanguageRoute },
+  refs: PresentationRefs,
+  hovers: Latest,
 ) =>
-  hoverTooltip((view, pos) => {
-    const options = presentationOptions(languageRouteRef.current);
-    if (options === null) return null;
-    // The analyzer can throw on a program shape it doesn't handle yet — one
-    // bad hover must degrade THAT request, not kill hover document-wide.
-    let info;
+  hoverTooltip(async (view, pos) => {
+    const presentation = presentationOfRefs(refs);
+    if (presentation === null) return null;
+    const doc = view.state.doc;
+    if (presentation.kind === "legacy") {
+      // The analyzer can throw on a program shape it doesn't handle yet — one
+      // bad hover must degrade THAT request, not kill hover document-wide.
+      let info;
+      try {
+        info = getHoverInfo(doc.toString(), pos, refs.snapshot.current, presentation.options);
+      } catch (err) {
+        console.error("Movement hover failed:", err);
+        return null;
+      }
+      if (!info) return null;
+      const contents = info.contents;
+      return {
+        pos: info.from,
+        end: info.to,
+        above: true,
+        create: () => ({ dom: legacyHoverCard(contents) }),
+      };
+    }
+    let card;
     try {
-      info = getHoverInfo(view.state.doc.toString(), pos, snapshotRef.current, options);
+      card = await askHover(presentation.remote, hovers, doc.toString(), pos);
     } catch (err) {
       console.error("Movement hover failed:", err);
       return null;
     }
-    if (!info) return null;
+    // Superseded, nothing here, or an answer for text that has since changed.
+    if (card === null || view.state.doc !== doc) return null;
     return {
-      pos: info.from,
-      end: info.to,
+      pos: card.from,
+      end: card.to,
       above: true,
       create: () => {
         const dom = document.createElement("div");
-        dom.style.padding = "10px 12px";
-        dom.style.maxWidth = "440px";
-        dom.style.maxHeight = "320px";
-        dom.style.lineHeight = "1.5";
-        // Field lists carry one field per line (\n-delimited); preserve that
-        // whitespace and let long lines (e.g. a wide enum) scroll off to the
-        // right rather than wrapping into an unreadable run.
-        dom.style.overflow = "auto";
-        for (let i = 0; i < info.contents.length; i++) {
-          const line = document.createElement("div");
-          line.textContent = info.contents[i];
-          line.style.whiteSpace = "pre";
-          if (i === 0) {
-            line.style.fontWeight = "600";
-            line.style.color = "#111827";
-            line.style.fontFamily = MONO_STACK;
-          } else {
-            line.style.color = "#6b7280";
-            line.style.marginTop = "3px";
-            line.style.fontFamily = MONO_STACK;
-          }
-          dom.appendChild(line);
-        }
-        return { dom };
+        return { dom, destroy: mountHoverMarkdown(dom, card.markdown) };
       },
     };
   });
@@ -281,9 +353,10 @@ const movementHoverDocs = (
 // ── Cmd/ctrl-click navigation ──
 //
 // While the modifier is held, hovering a token with a definition target
-// underlines it (the affordance); clicking it fires `onNavigate`. The
-// target comes from the language service's getDefinition — import-line
-// tokens and imported names at use sites; everything else stays inert.
+// underlines it (the affordance); clicking it fires `onNavigate`. An import
+// line's quoted path is resolved lexically; any other token asks the pin's
+// language service (legacy-lang's getDefinition, or the server). A name
+// defined in this file stays inert.
 
 const setNavLink = StateEffect.define<{ from: number; to: number } | null>();
 
@@ -308,106 +381,179 @@ const navLinkField = StateField.define<DecorationSet>({
   provide: (field) => EditorView.decorations.from(field),
 });
 
-/** The clickable token range at `pos`: a word, or the quoted path of an
- *  import line — mirrors what getDefinition resolves. */
-function navTokenAt(
-  doc: string,
-  pos: number,
-): { from: number; to: number } | undefined {
-  let from = pos;
-  while (from > 0 && /[A-Za-z0-9_]/.test(doc[from - 1])) from--;
-  let to = pos;
-  while (to < doc.length && /[A-Za-z0-9_]/.test(doc[to])) to++;
-  if (from !== to) return { from, to };
-  // Inside an import path: expand between the quotes.
-  const lineStart = doc.lastIndexOf("\n", pos - 1) + 1;
-  let lineEnd = doc.indexOf("\n", pos);
-  if (lineEnd === -1) lineEnd = doc.length;
-  const line = doc.slice(lineStart, lineEnd);
-  if (!/^\s*import\b/.test(line)) return undefined;
-  const open = doc.lastIndexOf('"', pos - 1);
-  const close = doc.indexOf('"', pos);
-  if (open < lineStart || close === -1 || close >= lineEnd) return undefined;
-  return { from: open + 1, to: close };
+/** The server's definition of the token starting at `from` in `doc`: settled
+ *  once `answered`, else `done` resolves when it is (undefined if dropped). */
+interface DefinitionQuestion {
+  doc: Text;
+  from: number;
+  answered: boolean;
+  target: DefinitionTarget | undefined;
+  done: Promise<DefinitionTarget | undefined>;
 }
 
+type PointedAt = { token: { from: number; to: number }; doc: Text } & (
+  | { kind: "known"; target: DefinitionTarget }
+  | { kind: "pending"; question: DefinitionQuestion }
+);
+
 const definitionNavigation = (
-  snapshotRef: { current: CatalogSnapshot },
-  languageRouteRef: { current: EditorLanguageRoute },
+  refs: PresentationRefs,
   callbacksRef: {
     current: { onNavigate?: (target: DefinitionTarget) => void };
   },
 ) => {
-  const clear = (view: EditorView) => {
-    if (view.state.field(navLinkField).size > 0) {
-      view.dispatch({ effects: setNavLink.of(null) });
+  const definitions = latest();
+  // The last token asked about, and the token the pointer is on while the
+  // modifier is held: an answer underlines only the token still pointed at.
+  let asked: DefinitionQuestion | null = null;
+  let pointing: { doc: Text; from: number } | null = null;
+
+  const underline = (view: EditorView, range: { from: number; to: number } | null) => {
+    if (range !== null || view.state.field(navLinkField).size > 0) {
+      view.dispatch({ effects: setNavLink.of(range) });
     }
   };
-  const targetAt = (view: EditorView, event: MouseEvent) => {
+  const clear = (view: EditorView) => {
+    pointing = null;
+    underline(view, null);
+  };
+
+  const ask = (
+    remote: LanguageRemote,
+    doc: Text,
+    pos: number,
+    from: number,
+  ): DefinitionQuestion => {
+    if (asked !== null && asked.doc === doc && asked.from === from) return asked;
+    const question: DefinitionQuestion = {
+      doc,
+      from,
+      answered: false,
+      target: undefined,
+      done: Promise.resolve(undefined),
+    };
+    const forget = () => {
+      if (asked === question) asked = null;
+      return undefined;
+    };
+    question.done = askDefinition(remote, definitions, doc.toString(), pos).then(
+      (result) => {
+        if (result === null) return forget();
+        question.answered = true;
+        question.target = result.target;
+        return question.target;
+      },
+      (err: unknown) => {
+        console.error("Movement definition lookup failed:", err);
+        return forget();
+      },
+    );
+    asked = question;
+    return question;
+  };
+
+  /** What the pointer is on: its token, and the target when it is known now
+   *  (the import path, legacy-lang, or a settled server answer). */
+  const lookUp = (view: EditorView, event: MouseEvent): PointedAt | undefined => {
     const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
     if (pos === null) return undefined;
-    const doc = view.state.doc.toString();
-    const token = navTokenAt(doc, pos);
+    const presentation = presentationOfRefs(refs);
+    if (presentation === null) return undefined;
+    const doc = view.state.doc;
+    const text = doc.toString();
+    const token = navTokenAt(text, pos);
     if (!token) return undefined;
-    // getDefinition takes no pin (it reads the program as legacy-lang's
-    // current line); a pin with no dialect gets none.
-    if (presentationOptions(languageRouteRef.current) === null) return undefined;
-    let target;
-    try {
-      target = getDefinition(doc, pos, snapshotRef.current);
-    } catch (err) {
-      console.error("Movement definition lookup failed:", err);
-      return undefined;
+    const path = importPathTarget(text, pos);
+    if (path) return { token, doc, kind: "known", target: path.target };
+    if (presentation.kind === "legacy") {
+      let target;
+      try {
+        target = getDefinition(text, pos, refs.snapshot.current);
+      } catch (err) {
+        console.error("Movement definition lookup failed:", err);
+        return undefined;
+      }
+      return target ? { token, doc, kind: "known", target } : undefined;
     }
-    return target ? { target, token } : undefined;
+    const question = ask(presentation.remote, doc, pos, token.from);
+    if (!question.answered) return { token, doc, kind: "pending", question };
+    return question.target ? { token, doc, kind: "known", target: question.target } : undefined;
   };
-  return [
-    navLinkField,
-    EditorView.domEventHandlers({
-      mousemove(event, view) {
-        if (
-          !callbacksRef.current.onNavigate ||
-          !(event.metaKey || event.ctrlKey)
-        ) {
+
+  return {
+    cancel: () => {
+      pointing = null;
+      asked = null;
+      definitions.cancel();
+    },
+    extension: [
+      navLinkField,
+      EditorView.domEventHandlers({
+        mousemove(event, view) {
+          if (
+            !callbacksRef.current.onNavigate ||
+            !(event.metaKey || event.ctrlKey)
+          ) {
+            clear(view);
+            return false;
+          }
+          const hit = lookUp(view, event);
+          if (!hit) {
+            clear(view);
+            return false;
+          }
+          pointing = { doc: hit.doc, from: hit.token.from };
+          if (hit.kind === "known") {
+            underline(view, hit.token);
+            return false;
+          }
+          underline(view, null);
+          void hit.question.done.then((target) => {
+            if (pointing?.doc !== hit.doc || pointing.from !== hit.token.from) return;
+            if (view.state.doc !== hit.doc) return;
+            underline(view, target ? hit.token : null);
+          });
+          return false;
+        },
+        mousedown(event, view) {
+          const onNavigate = callbacksRef.current.onNavigate;
+          if (!onNavigate || !(event.metaKey || event.ctrlKey)) return false;
+          const hit = lookUp(view, event);
+          if (!hit) return false;
+          event.preventDefault();
+          if (hit.kind === "known") {
+            onNavigate(hit.target);
+            clear(view);
+            return true;
+          }
+          // The answer is still on its way: navigate when it lands, if the
+          // text it answers for is still the text.
+          void hit.question.done.then((target) => {
+            if (target === undefined || view.state.doc !== hit.doc) return;
+            callbacksRef.current.onNavigate?.(target);
+            clear(view);
+          });
+          return true;
+        },
+        keyup(_event, view) {
           clear(view);
           return false;
-        }
-        const hit = targetAt(view, event);
-        if (hit) view.dispatch({ effects: setNavLink.of(hit.token) });
-        else clear(view);
-        return false;
-      },
-      mousedown(event, view) {
-        if (
-          !callbacksRef.current.onNavigate ||
-          !(event.metaKey || event.ctrlKey)
-        )
+        },
+        mouseleave(_event, view) {
+          clear(view);
           return false;
-        const hit = targetAt(view, event);
-        if (!hit) return false;
-        event.preventDefault();
-        callbacksRef.current.onNavigate(hit.target);
-        clear(view);
-        return true;
-      },
-      keyup(_event, view) {
-        clear(view);
-        return false;
-      },
-      mouseleave(_event, view) {
-        clear(view);
-        return false;
-      },
-    }),
-    EditorView.theme({
-      ".cm-definition-link": {
-        textDecoration: "underline",
-        textUnderlineOffset: "3px",
-        textDecorationColor: "#8778F7",
-        cursor: "pointer",
-      },
-    }),
-  ];
+        },
+      }),
+      EditorView.theme({
+        ".cm-definition-link": {
+          textDecoration: "underline",
+          textUnderlineOffset: "3px",
+          textDecorationColor: "#8778F7",
+          cursor: "pointer",
+        },
+      }),
+    ],
+  };
 };
 
 // Line-level diff for the build-stage animation (plans/2026-06-16-demo-build-stage).
@@ -507,6 +653,7 @@ export const MovementEditor = forwardRef<
     languageVersion,
     languageRoute,
     checkRemote,
+    languageRemote,
     onChange,
     onDiagnostics,
     vimEnabled,
@@ -540,6 +687,8 @@ export const MovementEditor = forwardRef<
   languageRouteRef.current = languageRoute;
   const checkRemoteRef = useRef(checkRemote);
   checkRemoteRef.current = checkRemote;
+  const languageRemoteRef = useRef(languageRemote);
+  languageRemoteRef.current = languageRemote;
   // The server lint in flight, aborted when a newer pass starts; and what the
   // last pass that finished showed, which a superseded pass hands back so the
   // squiggles do not flicker.
@@ -718,7 +867,7 @@ export const MovementEditor = forwardRef<
   // An upgrade moves the pin, and with it whose checker lints the text.
   useEffect(() => {
     if (viewRef.current) forceLinting(viewRef.current);
-  }, [languageVersion, languageRoute.kind, languageRoute.dialect]);
+  }, [languageVersion, languageRoute.kind]);
 
   useImperativeHandle(ref, () => ({
     revealRange: (from, to) => {
@@ -817,18 +966,24 @@ export const MovementEditor = forwardRef<
       { delay: 350 },
     );
 
-    const movementCompletions = (
+    const presentationRefs: PresentationRefs = {
+      snapshot: snapshotRef,
+      route: languageRouteRef,
+      languageVersion: languageVersionRef,
+      remote: languageRemoteRef,
+    };
+
+    const legacyCompletions = (
       context: CompletionContext,
+      pin: { languageVersion: LanguageVersion },
     ): CompletionResult | null => {
-      const presentation = presentationOptions(languageRouteRef.current);
-      if (presentation === null) return null;
       let result;
       try {
         result = getMovementCompletions(
           context.state.doc.toString(),
           context.pos,
           snapshotRef.current,
-          presentation,
+          pin,
         );
       } catch (err) {
         console.error("Movement completions failed:", err);
@@ -876,8 +1031,39 @@ export const MovementEditor = forwardRef<
           ...(item.detail !== undefined ? { detail: item.detail } : {}),
         };
       });
-      return { from, options, validFor: /^[\w`#]*$/ };
+      return { from, options: options, validFor: /^[\w`#]*$/ };
     };
+
+    const movementCompletions = async (
+      context: CompletionContext,
+    ): Promise<CompletionResult | null> => {
+      const presentation = presentationOfRefs(presentationRefs);
+      if (presentation === null) return null;
+      if (presentation.kind === "legacy") return legacyCompletions(context, presentation.options);
+      const controller = new AbortController();
+      context.addEventListener("abort", () => controller.abort());
+      let answer;
+      try {
+        answer = await presentation.remote.complete(
+          context.state.doc.toString(),
+          context.pos,
+          controller.signal,
+        );
+      } catch (err) {
+        if (!context.aborted) console.error("Movement completions failed:", err);
+        return null;
+      }
+      if (context.aborted) return null;
+      return completionResultOf(answer, {
+        pos: context.pos,
+        explicit: context.explicit,
+        before: context.state.sliceDoc(Math.max(0, context.pos - 1), context.pos),
+        onConnectAction: (action) => callbacksRef.current.onConnectAction?.(action),
+      });
+    };
+
+    const hovers = latest();
+    const navigation = definitionNavigation(presentationRefs, callbacksRef);
 
     const view = new EditorView({
       parent: host,
@@ -900,8 +1086,8 @@ export const MovementEditor = forwardRef<
           movementLinter,
           lintGutter(),
           autocompletion({ override: [movementCompletions] }),
-          movementHoverDocs(snapshotRef, languageRouteRef),
-          definitionNavigation(snapshotRef, languageRouteRef, callbacksRef),
+          movementHoverDocs(presentationRefs, hovers),
+          navigation.extension,
           keymap.of([
             ...closeBracketsKeymap,
             ...defaultKeymap,
@@ -921,6 +1107,8 @@ export const MovementEditor = forwardRef<
     viewRef.current = view;
     return () => {
       remoteLintRef.current?.abort();
+      hovers.cancel();
+      navigation.cancel();
       view.destroy();
       viewRef.current = null;
     };

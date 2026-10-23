@@ -1,6 +1,5 @@
 import {
   lintsInBrowser,
-  presentationOptions,
   remoteToEditorDiagnostics,
   type RemoteDiagnostic,
 } from "../editor-lint";
@@ -43,14 +42,8 @@ describe("remoteToEditorDiagnostics", () => {
 
 describe("the route switch", () => {
   it("a legacy pin lints in the browser; an installed or refused one asks the server", () => {
-    expect(lintsInBrowser({ kind: "legacy", dialect: "4" })).toBe(true);
-    expect(lintsInBrowser({ kind: "installed", dialect: "5" })).toBe(false);
-    expect(lintsInBrowser({ kind: "refused", dialect: null })).toBe(false);
-  });
-
-  it("completions, hover and definition read the dialect, and nothing without one", () => {
-    expect(presentationOptions({ kind: "installed", dialect: "5" })).toEqual({ languageVersion: "5" });
-    expect(presentationOptions({ kind: "legacy", dialect: "3" })).toEqual({ languageVersion: "3" });
-    expect(presentationOptions({ kind: "refused", dialect: null })).toBeNull();
+    expect(lintsInBrowser({ kind: "legacy" })).toBe(true);
+    expect(lintsInBrowser({ kind: "installed" })).toBe(false);
+    expect(lintsInBrowser({ kind: "refused" })).toBe(false);
   });
 });

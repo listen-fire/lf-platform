@@ -56,6 +56,7 @@ import {
   type MovementEditorHandle,
 } from "@/components/movements/movement-editor";
 import type { CheckRemote, EditorLanguageRoute } from "@/components/movements/editor-lint";
+import type { LanguageRemote } from "@/components/movements/editor-language";
 import { runConnectAction } from "@/components/movements/connect-actions";
 import { MovementStory } from "@/components/movements/story/movement-story";
 import {
@@ -216,8 +217,8 @@ export interface MovementWorkbenchProps {
    *  the text as that version. Absent on `/movements/new` (the current one). */
   languageVersion?: LanguageVersion;
   /** How the server reads the saved movement's pin (edit page): whose checker
-   *  lints it, and the dialect the language service reads it under. Absent on
-   *  `/movements/new`, which takes the installed release's from the catalog. */
+   *  lints it and whose language service presents it. Absent on
+   *  `/movements/new`, which is always the installed release's. */
   languageRoute?: EditorLanguageRoute;
   /** What keeps the saved movement off the current language version (edit
    *  page); null when nothing does. */
@@ -571,7 +572,7 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
   const languageRoute = useMemo<EditorLanguageRoute | undefined>(
     () =>
       props.languageRoute ??
-      (catalog ? { kind: "installed", dialect: catalog.installed.dialect } : undefined),
+      (catalog ? { kind: "installed" } : undefined),
     [props.languageRoute, catalog],
   );
 
@@ -587,6 +588,24 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
     },
     [utils, movementId],
   );
+
+  // The server's completion, hover and definition for a release pin, under
+  // the same pin as its lint.
+  const languageRemote = useMemo<LanguageRemote>(() => {
+    const at = (source: string, offset: number) => ({
+      source,
+      offset,
+      ...(movementId !== undefined ? { id: movementId } : {}),
+    });
+    return {
+      complete: (source, offset, signal) =>
+        utils.client.views.movement.complete.mutate(at(source, offset), { signal }),
+      hover: (source, offset, signal) =>
+        utils.client.views.movement.hover.mutate(at(source, offset), { signal }),
+      definition: (source, offset, signal) =>
+        utils.client.views.movement.definition.mutate(at(source, offset), { signal }),
+    };
+  }, [utils, movementId]);
 
   const save = trpc.views.movement.save.useMutation({
     onSuccess: (result) => {
@@ -1426,6 +1445,7 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
                   : {})}
                 languageRoute={languageRoute}
                 checkRemote={checkRemote}
+                languageRemote={languageRemote}
                 onChange={handleEditorChange}
                 onDiagnostics={setDiagnostics}
                 vimEnabled={vimEnabled}
