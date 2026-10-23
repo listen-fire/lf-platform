@@ -253,7 +253,8 @@ describe('the movements module', () => {
     expect(first).toEqual({ text, version: listed?.version });
     expect(await list(teamA)).toEqual(await list(teamA));
 
-    const repin = '0.12.0';
+    // A pin the installed release reads but is not: a pre-release of its own version.
+    const repin = `${LANGUAGE_VERSION.split('-')[0]}-repin`;
     expect(compatible(repin, LANGUAGE_VERSION)).toBe(true);
     expect(repin).not.toBe(LANGUAGE_VERSION);
     const before = await getAutomationsQb(['movement']).selectFrom('movement').where('id', '=', id as MovementId).select('current_version_id').executeTakeFirstOrThrow();
