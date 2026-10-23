@@ -179,10 +179,12 @@ function shapeLines(node: ShapeNode, indent: string): string[] {
 }
 
 /** `<text>`, `<text | null>`; a borrowed `crm.companies.stage` in its
- *  surface spelling, `` <crm-[:companies]->.`stage`> ``. */
+ *  surface spelling, `` <crm-[:companies]->.`stage`> ``. The parser stores a
+ *  type's name bare, so a name that is not an identifier gets its backticks
+ *  back (`` <`Pass Reason`> ``): written bare it does not parse. */
 function typeMarker(type: string, nullable: true | undefined): string {
   const segments = /^[A-Za-z_][A-Za-z0-9_]*\.[^.]+\.[^.]+$/.test(type) && !type.includes('"') ? type.split('.') : undefined;
-  const written = segments !== undefined ? `${segments[0]}-[:${segments[1]}]->.\`${segments[2]}\`` : type;
+  const written = segments !== undefined ? `${segments[0]}-[:${segments[1]}]->.\`${segments[2]}\`` : type.includes('.') ? type : spelled(type);
   return `<${written}${nullable ? ' | null' : ''}>`;
 }
 

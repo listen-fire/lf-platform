@@ -160,6 +160,20 @@ function go(m: <chat-[:message]->>) {
     }
   });
 
+  it('keeps the backticks of a type name that is not an identifier, so the rewrite parses', () => {
+    const source = `${V5_PRELUDE}function go(m: <chat-[:message]->>) {
+  found = extract from [m.Text] {
+    reason: <\`Pass Reason\`> "why it passed"
+    node lead: "each lead" { verdict: <\`Pass Reason\` | null> "its verdict" }
+  }
+}
+`;
+    const text = upgraded(source);
+    expect(text).toContain('reason: <`Pass Reason`> "why it passed"');
+    expect(text).toContain('verdict: <`Pass Reason` | null> "its verdict"');
+    expect(() => parseProgram(text, { languageVersion: 5 })).not.toThrow();
+  });
+
   it('is refused in a return too', () => {
     const source = `${V5_PRELUDE}function go(m: <chat-[:message]->>) {\n  return extract from [m.Text] { node co: "each" { name: <text> "n" } }\n}\n`;
     expect(upgraded(source)).toContain('return extractOne([m.Text], ExtractedShape)');

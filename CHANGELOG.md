@@ -17,6 +17,9 @@ versions are the git tags described in [`deploy/UPGRADING.md`](deploy/UPGRADING.
 
 <!-- add merged PRs here -->
 
+- Fixed: upgrading an automation that imports a library no longer writes the library's fixes into the automation's text. The checkers surface a library's diagnostics on the import, and kept their fixes, whose places are in the library's text; the upgrade applied them to the importer, overwriting what stood at those lines (a prompt) or appending to its end. The legacy checker now drops them, and the platform drops those the installed language's checker still carries (`listen-fire` to fix at source). An automation upgraded from 1 to 4 while it imported a library may hold such an edit: compare its upgrade save with the version before it.
+- Fixed: the legacy checker's rewrite of the extraction keyword keeps the backticks of a field type named with a space (`` <`Pass Reason`> ``), so its rewrite parses. The installed language's own rewrite, which the upgrade applies, still drops them (`listen-fire` to fix); the upgrade refuses that result with its parse error and saves nothing.
+
 ## [0.12.2] - 2026-10-23
 
 The platform release that matches the language's 0.12.2.
