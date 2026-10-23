@@ -17,6 +17,9 @@ versions are the git tags described in [`deploy/UPGRADING.md`](deploy/UPGRADING.
 
 <!-- add merged PRs here -->
 
+- The editor's completion, hover and go-to-definition, and the story of a movement pinned to a release (the workbench panel and the public link), now come from the language's wasm. A movement pinned to a legacy id (1 to 4) is still served by the platform's own copy of the language, so verdicts do not change. The editor asks the api through three new `views.movement` mutations, `complete`, `hover` and `definition`.
+- The agent's completions route answers a release pin with the language's ten completion kinds (`label`, `kind`, optional `detail`), where it answered the platform copy's kinds before; a legacy pin's answer is unchanged.
+
 ## [0.12.0] - 2026-10-23
 
 The platform release that matches the language's 0.12.0. It gathers the 0.12.0 pre-releases since rc.5.
