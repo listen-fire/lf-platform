@@ -1,20 +1,14 @@
 // A core slot served at a platform route: adapter protocol 2's envelope over
-// Express, with the rules of the language's own slot server
-// (module-runtime `module_wire/wire.ts` `serveSlot`), so a client that reaches a
-// module process reaches this route the same way. Who may call it is the
-// router's question (the system caller and its key); this is only the wire:
-//
-//   • a body that is not the envelope is 400 `bad_request`, unless it names
-//     another protocol version, which is answered (200) `protocol_version`;
-//   • `manifest` is answered with the slot's manifest;
-//   • every other method is the slot's answer, as a 200 envelope: `ok: true`
-//     with its result (`null` for none), or `ok: false` with the refusal's
-//     code (not retryable), or `module_error` for anything else (retryable).
+// Express. The envelope's rules are the language's own
+// (`answerSlotRequest`, the function `serveSlot` answers through), so a client
+// that reaches a module process reaches this route the same way. Who may call
+// it is the router's question (the system caller and its key); this is only
+// the HTTP side: reading the body the middleware parsed and writing the
+// answer's status and JSON.
 
 import type { Request, RequestHandler } from 'express';
-import { PROTOCOL_VERSION } from 'engine-contracts';
-import { SlotRequestEnvelope, type WireSlotManifestShape } from 'engine-contracts/slots';
-import { SlotRefusal, type SlotAnswer } from 'module-runtime/module_wire/wire';
+import type { WireSlotManifestShape } from 'engine-contracts/slots';
+import { SlotRefusal, answerSlotRequest, type SlotAnswer } from 'movement-engine/public/module-wire';
 
 import { logger } from 'movement-engine/public/log';
 
@@ -22,36 +16,22 @@ import { logger } from 'movement-engine/public/log';
  *  makes of it (the tenant a request acts in is read off the request). */
 export function slotHandler(manifest: WireSlotManifestShape, answerFor: (req: Request) => SlotAnswer): RequestHandler {
   return async (req, res) => {
-    const body: unknown = req.body;
-    const envelope = SlotRequestEnvelope.safeParse(body);
-    if (!envelope.success) {
-      const version = body !== null && typeof body === 'object' ? Reflect.get(body, 'protocolVersion') : undefined;
-      if (version !== undefined && version !== PROTOCOL_VERSION) {
-        res.status(200).json({ ok: false, error: { code: 'protocol_version', message: `this module speaks protocol ${PROTOCOL_VERSION}`, retryable: false } });
-        return;
-      }
-      res.status(400).json({ error: 'bad_request' });
-      return;
-    }
-    const { method, params, settings } = envelope.data;
-    try {
-      const result = method === 'manifest' ? manifest : await answerFor(req)(method, params, settings ?? {});
-      res.status(200).json({ ok: true, result: result ?? null });
-    } catch (error) {
-      const refusal = error instanceof SlotRefusal ? error : undefined;
-      const message = error instanceof Error ? error.message : String(error);
-      // A store failure is the server's to see; a refusal is the caller's.
-      // Never the params or settings: they may carry a callback's state.
-      if (refusal === undefined) logger.warn(`[slots:${manifest.slot}] ${method} failed`, { error: message });
-      res.status(200).json({
-        ok: false,
-        error: {
-          code: refusal?.code ?? 'module_error',
-          message,
-          retryable: refusal === undefined,
-          ...(refusal?.data !== undefined ? { data: refusal.data } : {}),
-        },
-      });
-    }
+    const answered = await answerSlotRequest(
+      manifest,
+      async (method, params, settings) => {
+        try {
+          return await answerFor(req)(method, params, settings);
+        } catch (error) {
+          // A store failure is the server's to see; a refusal is the caller's.
+          // Never the params or settings: they may carry a callback's state.
+          if (!(error instanceof SlotRefusal)) {
+            logger.warn(`[slots:${manifest.slot}] ${method} failed`, { error: error instanceof Error ? error.message : String(error) });
+          }
+          throw error;
+        }
+      },
+      req.body,
+    );
+    res.status(answered.status).json(answered.body);
   };
 }
