@@ -4,7 +4,8 @@
 // embedder on its own infrastructure decides how its scheduler and its push
 // subscription prove themselves: a `system` API key, a cloud's signed identity
 // token, or something of its own. The contract a verifier implements is
-// docs/contracts/system-caller.md; this file is its code.
+// docs/contracts/system-caller.md in the language repository; this file is its
+// code.
 //
 // The registry mirrors the work-kind registry's shape (work/drain.ts): module
 // level, filled at boot, read per request. Verifiers are asked in the order they
