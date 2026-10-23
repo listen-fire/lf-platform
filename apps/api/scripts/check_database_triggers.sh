@@ -154,6 +154,10 @@ audit_triggers=`psql -v ON_ERROR_STOP=ON "$DATABASE_URL" <<-EOSQL
       -- the secrets module's lease on a credential lf is refreshing: a
       -- runtime row that lives for one refresh.
       'automations.lf_secrets_lease',
+      -- the movements module's watch positions: each listing an answer was
+      -- given at, written by the api on every answer and deleted after a day
+      -- unseen; nobody edits one.
+      'automations.lf_movements_listing',
       -- knowledge: everything is audited except the change log itself, and
       -- audit_log, which IS the trail. The mutation outbox is a transient
       -- delivery queue and the heartbeat is a worker's pulse -- both machine
