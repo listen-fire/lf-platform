@@ -33,6 +33,12 @@
 #               Pub/Sub push subscription), and dev/scheduler.sh ticks it every
 #               5 s (standing in for Cloud Scheduler). Log:
 #               .dev-loop/scheduler.log.
+#   wake      — the push-tick setup with no door tick (AUTOMATIONS_TICK_URLS
+#               unset): a wake module (@listen-fire/wake-cloud-tasks, in the
+#               API) turns each row's due time into a task on a fake Cloud
+#               Tasks, whose tasks run `pnpm drain:once` as the Cloud Run job
+#               would (log .dev-loop/fake-cloud-tasks.log). The scheduler is
+#               the hourly safety tick ($DEV_LOOP_TICK_EVERY_S, default 3600).
 #
 # The system endpoints' callers are controlled by $SYSTEM_AUTH_MODES, as on a
 # deployment (`api_key` by default). Naming `oidc` starts a fake OpenID Connect
@@ -132,9 +138,9 @@ export MESSAGE_QUEUE_REDIS_HOSTNAME="${MESSAGE_QUEUE_REDIS_HOSTNAME:-localhost}"
 export MESSAGE_QUEUE_REDIS_PORT="${MESSAGE_QUEUE_REDIS_PORT:-$REDIS_HOST_PORT}"
 
 case "$SHAPE" in
-  loop|push-tick) ;;
+  loop|push-tick|wake) ;;
   *)
-    echo "[dev:loop] unknown DEV_LOOP_SHAPE='$SHAPE' (expected: loop, push-tick)"
+    echo "[dev:loop] unknown DEV_LOOP_SHAPE='$SHAPE' (expected: loop, push-tick, wake)"
     exit 1
     ;;
 esac
@@ -162,6 +168,8 @@ export FAKE_CHANNELS_PORT="${FAKE_CHANNELS_PORT:-$((HARNESS_BASE + 1))}"
 export FAKE_REMOTE_ADAPTER_PORT="${FAKE_REMOTE_ADAPTER_PORT:-$((HARNESS_BASE + 2))}"
 # The fake OpenID Connect issuer, started only when SYSTEM_AUTH_MODES names oidc.
 export FAKE_ISSUER_PORT="${FAKE_ISSUER_PORT:-$((HARNESS_BASE + 3))}"
+# The fake Cloud Tasks, started only under the wake shape.
+export FAKE_CLOUD_TASKS_PORT="${FAKE_CLOUD_TASKS_PORT:-$((HARNESS_BASE + 4))}"
 # admin also runs under `pnpm -r --parallel dev`; keep it in this profile's
 # range (base+4 — default stays 3004) so an agent stack never collides with
 # the default stack's admin.
@@ -246,9 +254,9 @@ fi
 # above), so --force-kill can only ever touch this profile's own app-port
 # holders, never another stack's or another project's (e.g. an unrelated
 # sibling repo's `dev` compose project) containers.
-PORTS_TO_CHECK=("$PORT" "$WEB_PORT" "$FAKE_CHANNELS_PORT" "$FAKE_REMOTE_ADAPTER_PORT" "$ADMIN_PORT" "$FAKE_ISSUER_PORT")
+PORTS_TO_CHECK=("$PORT" "$WEB_PORT" "$FAKE_CHANNELS_PORT" "$FAKE_REMOTE_ADAPTER_PORT" "$ADMIN_PORT" "$FAKE_ISSUER_PORT" "$FAKE_CLOUD_TASKS_PORT")
 
-# The loop's own background helpers (fake-channels, fake CRM, fake issuer, scheduler) each run
+# The loop's own background helpers (fake-channels, fake CRM, fake issuer, fake Cloud Tasks, scheduler) each run
 # in a process group of their own, recorded here, so a stop takes down the
 # whole group — the subshell AND the node process it started — and a
 # --force-kill can sweep groups a loop that died without its trap left behind.
@@ -359,6 +367,25 @@ if [ "$SHAPE" = "push-tick" ]; then
   export AUTOMATIONS_DRAIN_MODE=external
   export AUTOMATIONS_TICK_URLS="${AUTOMATIONS_TICK_URLS:-$API_BASE_URL/api/v1/system/automations/drain}"
   echo "[dev:loop] AUTOMATIONS_DRAIN_MODE: external  AUTOMATIONS_TICK_URLS: $AUTOMATIONS_TICK_URLS"
+fi
+
+# The wake shape: push-tick's external drain with no door tick. Each row's due
+# time is told to the wake module, whose tasks on the fake Cloud Tasks run
+# `pnpm drain:once`; the scheduler is only the hourly safety tick. The module
+# signs its own calls with a throwaway key, so nothing reaches Google.
+if [ "$SHAPE" = "wake" ]; then
+  export AUTOMATIONS_DRAIN_MODE=external
+  unset AUTOMATIONS_TICK_URLS
+  export DEV_LOOP_TICK_EVERY_S="${DEV_LOOP_TICK_EVERY_S:-3600}"
+  export WAKE_MODULE=@listen-fire/wake-cloud-tasks
+  export WAKE_SETTING__QUEUE=projects/dev/locations/local/queues/lf-wake
+  export WAKE_SETTING__JOB=projects/dev/locations/local/jobs/lf-drain
+  export WAKE_SETTING__INVOKER_SERVICE_ACCOUNT=lf-drain-invoker@dev.iam.gserviceaccount.com
+  export WAKE_SETTING__BASE_URL="http://127.0.0.1:$FAKE_CLOUD_TASKS_PORT"
+  export WAKE_SETTING__CLIENT_EMAIL=dev-loop-api@dev.iam.gserviceaccount.com
+  WAKE_SETTING__PRIVATE_KEY="$(node -e "const { generateKeyPairSync } = require('node:crypto'); process.stdout.write(generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey.export({ type: 'pkcs8', format: 'pem' }))")"
+  export WAKE_SETTING__PRIVATE_KEY
+  echo "[dev:loop] AUTOMATIONS_DRAIN_MODE: external  WAKE_MODULE: $WAKE_MODULE  Cloud Tasks: $WAKE_SETTING__BASE_URL  safety tick every ${DEV_LOOP_TICK_EVERY_S}s"
 fi
 
 # The system endpoints' callers. With oidc named, the API trusts the fake
@@ -501,6 +528,15 @@ echo "$FAKE_CRM_PID" >> "$HELPERS_FILE"
 echo "[dev:loop] fake CRM (acme_crm): $FAKE_REMOTE_ADAPTER_URL (pid $FAKE_CRM_PID, log $FAKE_CRM_LOG)"
 
 FAKE_ISSUER_PID=""
+if [ "$SHAPE" = "wake" ]; then
+  FAKE_CLOUD_TASKS_LOG="$LOG_DIR/fake-cloud-tasks.log"
+  set -m
+  ( cd apps/api && exec pnpm run dev:fake-cloud-tasks ) > "$FAKE_CLOUD_TASKS_LOG" 2>&1 &
+  FAKE_CLOUD_TASKS_PID=$!
+  set +m
+  echo "$FAKE_CLOUD_TASKS_PID" >> "$HELPERS_FILE"
+  echo "[dev:loop] fake Cloud Tasks: $WAKE_SETTING__BASE_URL (pid $FAKE_CLOUD_TASKS_PID, log $FAKE_CLOUD_TASKS_LOG)"
+fi
 if [ "$WITH_OIDC" -eq 1 ]; then
   FAKE_ISSUER_LOG="$LOG_DIR/fake-issuer.log"
   set -m
@@ -524,7 +560,7 @@ trap cleanup EXIT INT TERM
 # `dev:seed` does, and that installs the fake CRM's adapter. The scheduler is
 # handed this loop's pid and exits once that is gone, so a loop killed without
 # its trap does not leave it ticking.
-if [ "$SHAPE" = "push-tick" ]; then
+if [ "$SHAPE" = "push-tick" ] || [ "$SHAPE" = "wake" ]; then
   echo -n "[dev:loop] Waiting for the fake CRM"
   for i in $(seq 1 60); do
     if curl -s -o /dev/null "$FAKE_REMOTE_ADAPTER_URL"; then echo " up."; break; fi
@@ -539,19 +575,25 @@ if [ "$SHAPE" = "push-tick" ]; then
     *) echo "[dev:loop] minting the system-scope key failed (pnpm dev:system-key)"; exit 1 ;;
   esac
   # With oidc alone the API would refuse the key, so neither the notifier nor
-  # the scheduler is handed it (the mint still provisioned the team).
+  # the scheduler is handed it (the mint still provisioned the team). Under
+  # the wake shape no door ticks, so only the scheduler is: the API would
+  # refuse a tick key without tick URLs.
+  SCHEDULER_TICK_KEY=""
   if [ "$WITH_API_KEY" -eq 1 ]; then
+    SCHEDULER_TICK_KEY="$AUTOMATIONS_TICK_KEY"
+  fi
+  if [ "$WITH_API_KEY" -eq 1 ] && [ "$SHAPE" = "push-tick" ]; then
     export AUTOMATIONS_TICK_KEY
   else
     unset AUTOMATIONS_TICK_KEY
   fi
   SCHEDULER_LOG="$LOG_DIR/scheduler.log"
   set -m
-  bash dev/scheduler.sh "$$" > "$SCHEDULER_LOG" 2>&1 &
+  AUTOMATIONS_TICK_KEY="$SCHEDULER_TICK_KEY" bash dev/scheduler.sh "$$" > "$SCHEDULER_LOG" 2>&1 &
   SCHEDULER_PID=$!
   set +m
   echo "$SCHEDULER_PID" >> "$HELPERS_FILE"
-  echo "[dev:loop] scheduler: ticks $API_BASE_URL's drain every 5 s (pid $SCHEDULER_PID, log $SCHEDULER_LOG)"
+  echo "[dev:loop] scheduler: ticks $API_BASE_URL's drain every ${DEV_LOOP_TICK_EVERY_S:-5} s (pid $SCHEDULER_PID, log $SCHEDULER_LOG)"
 fi
 
 echo "[dev:loop] Starting pnpm dev (parallel: api, web, admin)..."
