@@ -77,7 +77,7 @@ async function shippedMovements(tenant: string): Promise<ShippedMovement[]> {
     ])
     .orderBy('m.name')
     .execute();
-  return rows;
+  return rows.map((row) => ({ ...row, paused: Boolean(row.paused) }));
 }
 
 const servedPin = (pin: string) => compatible(pin, LANGUAGE_VERSION);
