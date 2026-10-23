@@ -13,6 +13,7 @@ import {
 } from './kinds';
 import { logger } from 'movement-engine/public/log';
 import { claimDueWork, completeWork, deferWork, heartbeatWork, releaseWork } from './store';
+import { announceWork } from './wake';
 
 // One process is one owner: owner is only informational (the lease token fences),
 // so a stable name makes the lease column readable across passes.
@@ -150,7 +151,10 @@ async function releaseWithBackoff(input: {
       key: row.key,
       error,
     });
+    return;
   }
+  // The retry is due when no drain may be running to see it.
+  await announceWork(row.kind, dueAt);
 }
 
 async function runRow(input: {
@@ -220,7 +224,9 @@ async function runRow(input: {
           key: row.key,
           error: deferError,
         });
+        return 'deferred';
       }
+      await announceWork(row.kind, dueAt);
       return 'deferred';
     }
     // Handlers own failure recording; the drain only makes the row retry at its due_at.

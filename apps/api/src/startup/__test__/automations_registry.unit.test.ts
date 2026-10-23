@@ -13,6 +13,8 @@ import {
 import { CORE_WORK_KINDS, claimableWorkKinds } from '../../services/work/kinds';
 import { runNamedWorker, workerTick } from '../../lib/worker';
 import * as products from '../../products';
+import { installWakeFromEnv } from '../../lib/wake';
+import { resetWakeForTests, wakeInstalled } from '../../services/work/wake';
 import {
   TICK_KEY_VAR,
   TICK_URLS_VAR,
@@ -320,5 +322,105 @@ describe('registerAutomationsWork', () => {
     // A retired kind is gone from the live list, not merely unscheduled.
     expect(new Set<string>(claimableWorkKinds()).has('await_resume_sweep')).toBe(false);
     expect(new Set<string>(claimableWorkKinds()).has('ask_expiry_sweep')).toBe(false);
+  });
+});
+
+describe('the wake (WAKE_MODULE)', () => {
+  const WAKE = {
+    WAKE_MODULE: '@listen-fire/wake-cloud-tasks',
+    WAKE_SETTING__QUEUE: 'projects/p/locations/l/queues/lf-wake',
+    WAKE_SETTING__JOB: 'projects/p/locations/l/jobs/lf-drain',
+    WAKE_SETTING__INVOKER_SERVICE_ACCOUNT: 'lf-drain-invoker@p.iam.gserviceaccount.com',
+  };
+  const WAKE_VARS = Object.keys(WAKE);
+  const originalWakeEnv = Object.fromEntries(WAKE_VARS.map((name) => [name, process.env[name]]));
+
+  afterEach(() => {
+    resetWakeForTests();
+    jest.restoreAllMocks();
+    for (const name of WAKE_VARS) {
+      const value = originalWakeEnv[name];
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  });
+
+  function startupLines(): string[] {
+    return jest.mocked(console.warn).mock.calls.map(([line]) => String(line));
+  }
+
+  it('no WAKE_MODULE installs no wake, and each mode\'s notifier is as before', () => {
+    for (const name of WAKE_VARS) delete process.env[name];
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    installWakeFromEnv({});
+    expect(wakeInstalled()).toBe(false);
+
+    const modes: Array<[Partial<Record<(typeof DRAIN_ENV_VARS)[number], string>>, (notifier: unknown) => void]> = [
+      [{}, (notifier) => expect(notifier).toBe(inProcessNotifier)],
+      [{ AUTOMATIONS_DRAIN_MODE: 'loop' }, (notifier) => expect(notifier).toBe(inProcessNotifier)],
+      [{ AUTOMATIONS_DRAIN_MODE: 'external' }, (notifier) => expect(notifier).toBeInstanceOf(NoopNotifier)],
+      [
+        { AUTOMATIONS_DRAIN_MODE: 'external', [TICK_URLS_VAR]: 'http://a.test/drain', [TICK_KEY_VAR]: 'lf_key' },
+        (notifier) => expect(notifier).toEqual(new HttpTickNotifier({ urls: ['http://a.test/drain'], apiKey: 'lf_key' })),
+      ],
+    ];
+    for (const [env, expectNotifier] of modes) {
+      installNotifier.mockClear();
+      drainEnv(env);
+      expect(() => assertAutomationsDrainConfigured(env)).not.toThrow();
+      automationsWorkers.workers[0].start();
+      expect(installNotifier).toHaveBeenCalledTimes(1);
+      expectNotifier(installNotifier.mock.calls[0]?.[0]);
+    }
+    expect(wakeInstalled()).toBe(false);
+    expect(startupLines()).toEqual([
+      '[startup] automations.drain: drain mode "loop" (in-process, every 1000 ms)',
+      '[startup] automations.drain: drain mode "loop" (in-process, every 1000 ms)',
+      '[startup] automations.drain: drain mode "external" (no loop; each POST /api/v1/system/automations/drain is a pass; a door waits for the scheduled tick)',
+      '[startup] automations.drain: drain mode "external" (no loop; each POST /api/v1/system/automations/drain is a pass; a door\'s notify ticks AUTOMATIONS_TICK_URLS)',
+    ]);
+  });
+
+  it('WAKE_MODULE with loop mode fails boot', () => {
+    const refusal =
+      'WAKE_MODULE starts drain jobs, but AUTOMATIONS_DRAIN_MODE is loop (this process drains itself): set it to external, or unset WAKE_MODULE';
+    expect(() => assertAutomationsDrainConfigured({ ...WAKE })).toThrow(refusal);
+    expect(() => assertAutomationsDrainConfigured({ ...WAKE, AUTOMATIONS_DRAIN_MODE: 'loop' })).toThrow(refusal);
+    drainEnv({ AUTOMATIONS_DRAIN_MODE: 'loop' });
+    Object.assign(process.env, WAKE);
+    expect(() => automationsWorkers.workers[0].start()).toThrow(refusal);
+    expect(startLoop).not.toHaveBeenCalled();
+  });
+
+  it('WAKE_MODULE in external mode boots, and the drain says a wake starts it', () => {
+    expect(() => assertAutomationsDrainConfigured({ ...WAKE, AUTOMATIONS_DRAIN_MODE: 'external' })).not.toThrow();
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    drainEnv({ AUTOMATIONS_DRAIN_MODE: 'external' });
+    Object.assign(process.env, WAKE);
+    automationsWorkers.workers[0].start();
+    expect(startupLines()).toEqual([
+      '[startup] automations.drain: drain mode "external" (no loop; each POST /api/v1/system/automations/drain is a pass; a door waits for the scheduled tick; a wake starts a drain at each row\'s due time)',
+    ]);
+    installWakeFromEnv({ ...WAKE });
+    expect(wakeInstalled()).toBe(true);
+  });
+
+  it('an unknown WAKE_MODULE fails boot naming the one it knows', () => {
+    const check = () =>
+      assertAutomationsDrainConfigured({ ...WAKE, WAKE_MODULE: '@listen-fire/wake-sqs', AUTOMATIONS_DRAIN_MODE: 'external' });
+    expect(check).toThrow('WAKE_MODULE names "@listen-fire/wake-sqs"');
+    expect(check).toThrow('the one it knows is @listen-fire/wake-cloud-tasks');
+  });
+
+  it('a missing WAKE_SETTING__QUEUE fails boot naming it', () => {
+    const { WAKE_SETTING__QUEUE: _queue, ...withoutQueue } = WAKE;
+    expect(() => assertAutomationsDrainConfigured({ ...withoutQueue, AUTOMATIONS_DRAIN_MODE: 'external' })).toThrow(
+      /^WAKE_SETTING__QUEUE: /,
+    );
+    const key = '-----BEGIN PRIVATE KEY-----\\nsecret\\n-----END PRIVATE KEY-----';
+    const check = () =>
+      assertAutomationsDrainConfigured({ ...WAKE, AUTOMATIONS_DRAIN_MODE: 'external', WAKE_SETTING__PRIVATE_KEY: key });
+    expect(check).toThrow(/^WAKE_SETTING__CLIENT_EMAIL: /);
+    expect(check).not.toThrow(/secret/);
   });
 });

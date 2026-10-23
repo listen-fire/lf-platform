@@ -49,6 +49,9 @@ import { mounts } from './products';
 // drains or serves awaits it first. Scripts that only import this module keep
 // the engine's in-process limiter.
 export { installSharedLimiter } from './lib/limiter';
+// The wake slot (lib/wake.ts), filled from WAKE_MODULE by each entry that
+// enqueues work, after the limiter.
+export { installWakeFromEnv } from './lib/wake';
 
 // The S3 files module and the Google OCR module are optionalDependencies: a
 // light install (pnpm install --no-optional) leaves them, with their cloud SDKs,

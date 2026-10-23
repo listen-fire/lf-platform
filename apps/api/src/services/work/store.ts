@@ -4,6 +4,7 @@ import type { Work } from '../../generated/kysely/automations/Work';
 
 import { getAutomationsQb } from '../../lib/kysely';
 import { assertClaimable, claimableWorkKinds, isWorkKind, type WorkKind, type WorkRow } from './kinds';
+import { announceWork } from './wake';
 
 function toWorkRow(row: Work): WorkRow {
   if (!isWorkKind(row.kind))
@@ -61,7 +62,9 @@ export interface EnqueueWorkInput {
 /** Upsert by key. Against a row whose lease is live (by the database clock) the
  *  NEW due_at and payload win: a re-arm during the run, which completeWork then
  *  honours. Against an unleased row the EARLIEST due_at wins with the new payload
- *  (several leaves of one run share a key). */
+ *  (several leaves of one run share a key). The row's resulting due time is
+ *  announced to the wake after the write; a caller passing its transaction
+ *  announces after commit. */
 export async function enqueueWork(
   input: EnqueueWorkInput,
   /** Enqueue inside a caller's transaction, so the row commits with whatever
@@ -70,14 +73,19 @@ export async function enqueueWork(
 ): Promise<void> {
   assertClaimable(input.kind);
   const dueAt = input.dueAt ?? new Date();
-  await sql`
+  const { rows } = await sql<{ due_at: Date }>`
     INSERT INTO automations.work (host, kind, key, team_id, payload, due_at, updated_at)
     VALUES ('platform', ${input.kind}, ${input.key}, ${input.teamId ?? null}, ${jsonb(input.payload)}, ${dueAt}, ${FIRST_VERSION})
     ON CONFLICT (host, key) DO UPDATE
       SET due_at = CASE WHEN work.lease_until > now() THEN EXCLUDED.due_at ELSE LEAST(work.due_at, EXCLUDED.due_at) END,
           payload = EXCLUDED.payload,
           team_id = COALESCE(EXCLUDED.team_id, work.team_id),
-          updated_at = ${nextVersion('work')}`.execute(opts.db ?? getAutomationsQb(['work']));
+          updated_at = ${nextVersion('work')}
+    RETURNING due_at`.execute(opts.db ?? getAutomationsQb(['work']));
+  // Inside a caller's transaction the row is not visible until it commits, so
+  // a drain the wake started now could miss it: that caller announces.
+  const [row] = rows;
+  if (opts.db === undefined && row !== undefined) await announceWork(input.kind, row.due_at);
 }
 
 /** Upsert a self-rescheduling row (interval_ms set). Idempotent; call at boot. */

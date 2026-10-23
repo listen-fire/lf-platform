@@ -8,7 +8,7 @@ import * as trpcExpress from '@trpc/server/adapters/express';
 import { assertParserReady } from 'movement-lang';
 import * as Sentry from '@sentry/node';
 
-import { installSharedLimiter } from './services';
+import { installSharedLimiter, installWakeFromEnv } from './services';
 import { prismaClient } from './prisma';
 import { initSentry } from './lib/sentry';
 import { logger } from 'movement-engine/public/log';
@@ -168,6 +168,7 @@ initSentry();
 
 async function main() {
   await installSharedLimiter();
+  installWakeFromEnv();
   const httpServer = http.createServer(app);
   const { sockets, upgrade } = initialiseWebSockets(['trpc']);
   httpServer.on('upgrade', upgrade);

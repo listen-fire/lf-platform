@@ -14,6 +14,7 @@ import type { WorkerRegistry } from './registry';
 
 import { neverAsAny } from 'movement-engine/public/types';
 import { mounts } from '../products';
+import { WAKE_MODULE_VAR, wakeFromEnv } from '../lib/wake';
 import { claimLoopTick } from '../lib/worker';
 import {
   HttpTickNotifier,
@@ -117,7 +118,31 @@ function workNotifierFor(mode: DrainMode, env: Env): WorkNotifier {
  *  `startDrain` checks again, for an entry that boots without the server. */
 function assertAutomationsDrainConfigured(env: Env = process.env): void {
   if (!mounts('automations', env)) return;
-  workNotifierFor(drainMode(env), env);
+  const mode = drainMode(env);
+  workNotifierFor(mode, env);
+  wakeFor(mode, env);
+}
+
+/** Whether a wake starts drains for this process's rows. Its settings are
+ *  read here, so a bad one fails the boot. A wake starts drain jobs, which a
+ *  process that drains itself has no use for: one in loop mode is a
+ *  deployment that believes the wake is its drain when it is not. */
+function wakeFor(mode: DrainMode, env: Env): boolean {
+  const wake = wakeFromEnv(env) !== undefined;
+  switch (mode) {
+    case 'loop':
+      if (wake) {
+        throw new Error(
+          `${WAKE_MODULE_VAR} starts drain jobs, but ${DRAIN_MODE_VAR} is loop (this process drains itself): ` +
+            `set it to external, or unset ${WAKE_MODULE_VAR}`,
+        );
+      }
+      return false;
+    case 'external':
+      return wake;
+    default:
+      return neverAsAny(mode);
+  }
 }
 
 /** What one drain pass records, in either mode: the worker pulse. */
@@ -131,6 +156,7 @@ function passRecorder(): (result: DrainResult) => void {
 function startDrain(env: Env): StopDrainLoop | undefined {
   const mode = drainMode(env);
   const notifier = workNotifierFor(mode, env);
+  const wake = wakeFor(mode, env);
   setWorkNotifier(notifier);
   switch (mode) {
     case 'loop': {
@@ -144,7 +170,8 @@ function startDrain(env: Env): StopDrainLoop | undefined {
     case 'external':
       console.warn(
         `[startup] ${DRAIN_WORKER_ID}: drain mode "external" (no loop; each POST /api/v1/system/automations/drain is a pass; ` +
-          `${notifier instanceof HttpTickNotifier ? `a door's notify ticks ${TICK_URLS_VAR}` : 'a door waits for the scheduled tick'})`,
+          `${notifier instanceof HttpTickNotifier ? `a door's notify ticks ${TICK_URLS_VAR}` : 'a door waits for the scheduled tick'}` +
+          `${wake ? "; a wake starts a drain at each row's due time" : ''})`,
       );
       setExternalDrainPassRecorder(passRecorder());
       return undefined;

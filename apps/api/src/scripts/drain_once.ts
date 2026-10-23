@@ -14,7 +14,7 @@
  *   pnpm drain:once [...]                  # the same, against the dev loop
  */
 
-import { installSharedLimiter } from '../services';
+import { installSharedLimiter, installWakeFromEnv } from '../services';
 
 import { randomUUID } from 'node:crypto';
 
@@ -23,6 +23,7 @@ import { prismaClient } from '../prisma';
 import { mounts } from '../products';
 import { drainUntilIdle, type DrainStop } from '../services/work/drain';
 import { assertLfEngineTeamsRetired } from '../services/lf_engine/team_engine';
+import { settleWakes } from '../services/work/wake';
 import { registerAutomationsWork } from '../startup/automations';
 
 // The tick endpoint's bounds, so a job and a tick are the same pass.
@@ -79,14 +80,23 @@ export async function drainOnceMain(argv: readonly string[] = process.argv.slice
   return EXIT_CODE[result.stopped];
 }
 
-/** Run once, close the pools, and exit with the run's code. */
+// How long an exiting job waits for the wakes its re-arms announced.
+const SETTLE_WAKES_MS = 5_000;
+
+/** Run once, close the pools, and exit with the run's code. The job runs with
+ *  the api's environment, so its own re-arms (a poll's next due, a cron's
+ *  next fire, a retry) are announced to the same wake. */
 export async function drainOnceAndExit(): Promise<never> {
   const code = await installSharedLimiter()
-    .then(() => drainOnceMain())
+    .then(() => {
+      installWakeFromEnv();
+      return drainOnceMain();
+    })
     .catch((err: unknown) => {
       console.error('[drain:once] failed', err);
       return 1;
     });
+  await settleWakes(SETTLE_WAKES_MS);
   await Promise.allSettled([prismaClient.$disconnect(), globalQb.destroy()]);
   process.exit(code);
 }

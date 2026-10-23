@@ -45,6 +45,7 @@ import {
 import { getAutomationsQb, getQb } from '../../lib/kysely';
 import { apiBaseUrl } from '../../lib/api_base_url';
 import { enqueueWork } from '../work/store';
+import { announceWork } from '../work/wake';
 
 // ── The id namespace ───────────────────────────────────────────────────────
 
@@ -405,27 +406,32 @@ export async function claimCallbackFireWithBody(input: {
   values: Record<string, unknown>;
   bodyDueAt: Date;
 }): Promise<CallbackClaim> {
-  return getAutomationsQb(['callback'])
+  let bodyKind: string | undefined;
+  const claimed = await getAutomationsQb(['callback'])
     .transaction()
     .execute(async (trx) => {
-      const claimed = await claimCallbackFire({ id: input.id, values: input.values }, { db: trx });
-      if (claimed.kind === 'recorded') {
-        await enqueueCallbackBody(
-          { callback: claimed.callback, callIndex: claimed.callback.calls.length - 1 },
+      const claim = await claimCallbackFire({ id: input.id, values: input.values }, { db: trx });
+      if (claim.kind === 'recorded') {
+        bodyKind = await enqueueCallbackBody(
+          { callback: claim.callback, callIndex: claim.callback.calls.length - 1 },
           { dueAt: input.bodyDueAt, db: trx },
         );
       }
-      return claimed;
+      return claim;
     });
+  // Announced after commit: a drain the wake starts must find the row.
+  if (claimed.kind === 'recorded' && bodyKind !== undefined) await announceWork(bodyKind, input.bodyDueAt);
+  return claimed;
 }
 
 /** One recorded call's body as a work row (the core's key and payload), so a
  *  call is queued once however often this is reached; an earlier due time
- *  wins. */
+ *  wins. Answers the row's kind, for a caller that announces it after its
+ *  transaction commits. */
 export async function enqueueCallbackBody(
   input: { callback: Pick<CallbackRecord, 'id' | 'teamId'>; callIndex: number },
   opts: { dueAt: Date; db?: CallbackDb },
-): Promise<void> {
+): Promise<string> {
   const work = callbackBodyWork({
     callbackId: input.callback.id,
     teamId: input.callback.teamId,
@@ -436,6 +442,7 @@ export async function enqueueCallbackBody(
     { kind: work.kind, key: work.key, teamId: work.teamId, payload: work.payload, dueAt: opts.dueAt },
     opts.db !== undefined ? { db: opts.db } : {},
   );
+  return work.kind;
 }
 
 // ── Revocation (the run's lifecycle drives it; there is no sweeper) ────────
