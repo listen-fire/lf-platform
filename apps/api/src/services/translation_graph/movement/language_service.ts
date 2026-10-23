@@ -66,7 +66,7 @@ const editorSnapshots = new LRUCache<string, Promise<CatalogSnapshot>>({ max: 10
  * is retried with the cursor's line blanked, then falls back to a catalog
  * that describes nothing, as the lint does.
  */
-export function editorSnapshotOf(input: {
+function editorSnapshotOf(input: {
   teamId: string;
   source: string;
   pin: LanguageVersion;
@@ -165,7 +165,7 @@ export function defineAt(request: EditorRequest): Promise<EditorAnswer<Definitio
   return answerAt(request, definitionAt);
 }
 
-export interface AgentCompletions {
+interface AgentCompletions {
   completions: Array<{ label: string; kind: string; detail?: string }>;
   note?: string;
 }

@@ -53,4 +53,4 @@ function installWakeFromEnv(env: Env = process.env): void {
   );
 }
 
-export { WAKE_MODULE_VAR, WAKE_SETTING_PREFIX, installWakeFromEnv, wakeFromEnv };
+export { WAKE_MODULE_VAR, installWakeFromEnv, wakeFromEnv };

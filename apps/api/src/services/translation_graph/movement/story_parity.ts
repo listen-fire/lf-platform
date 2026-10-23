@@ -77,9 +77,9 @@ export function legacyStoryUnder5(source: string, snapshot: CatalogSnapshot): St
   };
 }
 
-export type StoryRuling = 'R1' | 'R3' | 'R6' | 'R7' | 'R8';
+type StoryRuling = 'R1' | 'R3' | 'R6' | 'R7' | 'R8';
 
-export interface StoryDifference {
+interface StoryDifference {
   /** Where in the story, as a property path. */
   path: string;
   legacy: unknown;
