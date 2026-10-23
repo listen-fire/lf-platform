@@ -1,9 +1,13 @@
 // The engine switch (real DB, the real router and engine): for one team,
 // exactly one of "the movements slot serves its movements" and "the platform's
-// dispatch runs its listeners" holds, and LF_ENGINE_TEAMS decides which. An
-// explicit dry run (the editor's test run) still dispatches on the platform.
+// dispatch runs its listeners" holds, and the team's engine setting decides
+// which. A switch is seen by this process's next dispatch with no wait, every
+// switch leaves an audit entry, and an explicit dry run (the editor's test run)
+// still dispatches on the platform.
 
 import { randomUUID } from 'node:crypto';
+
+import { sql } from 'kysely';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { MovementId } from '../../../generated/kysely/automations/Movement';
@@ -18,6 +22,8 @@ import { dispatchTriggerByIdEvent } from '../../translation_graph/triggers/route
 import { storeTriggerEvent } from '../../translation_graph/triggers/event_store';
 import { describeDroppedReason } from '../../translation_graph/triggers/dropped_reason';
 import { answerFor } from '../../lf_movements/answer';
+import { switchTeamEngine } from '../switch';
+import { readTeamEngine } from '../team_engine';
 
 jest.mock('../../credentials/credential_lifecycle', () => ({
   credentialLifecycle: () => undefined,
@@ -33,7 +39,6 @@ function hello(go: <runs-[:\`Invocation\`]->>) {
 listen to runs {} fire hello
 `;
 
-const savedEngineTeams = process.env.LF_ENGINE_TEAMS;
 let teamId: TeamId;
 let triggerId: TriggerId;
 
@@ -92,20 +97,19 @@ beforeAll(async () => {
   triggerId = trigger.id as TriggerId;
 });
 
-afterEach(() => {
-  if (savedEngineTeams === undefined) delete process.env.LF_ENGINE_TEAMS;
-  else process.env.LF_ENGINE_TEAMS = savedEngineTeams;
+afterEach(async () => {
+  await switchTeamEngine(teamId, { engine: 'platform', changedBy: null });
 });
 
 afterAll(async () => {
   await getAutomationsQb(['trigger']).deleteFrom('trigger').where('team_id', '=', teamId).execute();
   await getAutomationsQb(['movement']).deleteFrom('movement').where('team_id', '=', teamId).execute();
+  await getAutomationsQb(['team_engine']).deleteFrom('team_engine').where('team_id', '=', teamId).execute();
   await cleanupTeam(teamId);
 });
 
 describe('the engine switch', () => {
   it("the platform's dispatch and the movements slot are never both on for one team", async () => {
-    delete process.env.LF_ENGINE_TEAMS;
     const servesUnset = await slotServes();
     const unset = await dispatchRuns();
     expect(servesUnset).toBe(false);
@@ -113,7 +117,7 @@ describe('the engine switch', () => {
     expect(unset.droppedReason).toBeUndefined();
     expect(servesUnset !== unset.ran).toBe(true);
 
-    process.env.LF_ENGINE_TEAMS = teamId;
+    await switchTeamEngine(teamId, { engine: 'lf', changedBy: null });
     const servesSet = await slotServes();
     const set = await dispatchRuns();
     expect(servesSet).toBe(true);
@@ -121,10 +125,38 @@ describe('the engine switch', () => {
     expect(set.droppedReason).toBe('engine_lf');
     expect(set.receipt).toEqual({ status: 'suppressed', failure_reason: describeDroppedReason('engine_lf') });
     expect(servesSet !== set.ran).toBe(true);
+
+    await switchTeamEngine(teamId, { engine: 'platform', changedBy: null });
+    const servesBack = await slotServes();
+    const back = await dispatchRuns();
+    expect(servesBack).toBe(false);
+    expect(back.ran).toBe(true);
+    expect(back.droppedReason).toBeUndefined();
+  });
+
+  it('every switch is one audit entry naming who switched, and a repeat of the current engine writes none', async () => {
+    const userId = randomUUID();
+    const auditRows = async () =>
+      getAutomationsQb(['audit_log'])
+        .selectFrom('audit_log')
+        .where('table_name', '=', 'team_engine')
+        .where(sql<boolean>`new->>'team_id' = ${teamId} or old->>'team_id' = ${teamId}`)
+        .select(['op', 'new'])
+        .orderBy('version')
+        .execute();
+    const before = (await auditRows()).length;
+
+    expect(await switchTeamEngine(teamId, { engine: 'lf', changedBy: userId })).toEqual({ engine: 'lf', changed: true });
+    expect(await switchTeamEngine(teamId, { engine: 'lf', changedBy: userId })).toEqual({ engine: 'lf', changed: false });
+    expect(await readTeamEngine(teamId)).toEqual({ engine: 'lf', changedAt: expect.any(Date), changedBy: userId });
+
+    const after = await auditRows();
+    expect(after.length - before).toBe(1);
+    expect(after.at(-1)?.new).toEqual(expect.objectContaining({ team_id: teamId, engine: 'lf', changed_by: userId }));
   });
 
   it('an explicit dry run still dispatches on the platform for an lf-engined team', async () => {
-    process.env.LF_ENGINE_TEAMS = teamId;
+    await switchTeamEngine(teamId, { engine: 'lf', changedBy: null });
     const outcome = await dispatchTriggerByIdEvent({ triggerId, teamId, event: manualEvent(), dryRun: true });
     expect(outcome.droppedReason).toBeUndefined();
     expect(outcome.movementFirings).toEqual([expect.objectContaining({ movementName: 'hello', dryRun: true })]);

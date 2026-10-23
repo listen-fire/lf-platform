@@ -6,8 +6,9 @@
  *   DEV_LOOP_PROFILE=agent pnpm dev:lf-movements-verify --contract
  *
  * Prerequisites: the agent stack is up (`pnpm dev:loop:agent`) and seeded
- * (`pnpm dev:seed`); `--contract` also needs the loop booted with
- * `LF_ENGINE_TEAMS` naming the dev-loop team, and `LF_BIN` (lf >= 0.12.0-rc.10).
+ * (`pnpm dev:seed`); `--contract` also needs the dev-loop team's engine
+ * switched to lf (its team settings page, or `pnpm cli team-engine --team <id>
+ * --set lf`), and `LF_BIN` (lf >= 0.12.0-rc.10).
  *
  * `--save` does the setup:
  *   - the dev-loop team's `acme_crm` fake CRM install (its bearer is the

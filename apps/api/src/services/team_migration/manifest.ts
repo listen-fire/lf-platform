@@ -318,6 +318,12 @@ export const MANIFEST: Record<Product, TableSpec[]> = {
     { table: 'telegram_token', tenancy: { kind: 'team_column' } },
     { table: 'inbound_email_route', tenancy: { kind: 'team_column' } },
     { table: 'team_settings', tenancy: { kind: 'team_column' } },
+    {
+      table: 'team_engine',
+      tenancy: { kind: 'team_column' },
+      exportExcludedBecause:
+        'which engine runs the team pairs it with a cloud lf configured against the source; carried as lf, the target would run none of its automations with no lf to take over, so the team arrives on the platform and an admin switches it there',
+    },
     { table: 'outbound_email', tenancy: { kind: 'team_column' }, history: true },
     {
       // The phone family's tenancy leaves this schema: `phone_number.user_id`

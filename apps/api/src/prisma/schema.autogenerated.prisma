@@ -579,6 +579,18 @@ model SystemEvent {
   @@schema("automations")
 }
 
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model TeamEngine {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  teamId    String   @unique @map("team_id") @db.Uuid
+  engine    String
+  changedAt DateTime @default(now()) @map("changed_at") @db.Timestamptz(6)
+  changedBy String?  @map("changed_by") @db.Uuid
+
+  @@map("team_engine")
+  @@schema("automations")
+}
+
 model AutomationsTeamSettings {
   id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   teamId         String         @unique @map("team_id") @db.Uuid

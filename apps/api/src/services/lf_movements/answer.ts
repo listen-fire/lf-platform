@@ -1,7 +1,10 @@
 // The movements slot served over a team's saved movements, read-only. The
-// tenant is the key owner's team, as for the store slot, and the team must be
-// lf-engined (LF_ENGINE_TEAMS): otherwise the platform runs its listeners, and
-// serving them to lf too would run each twice. What is listed is rows.ts's
+// tenant is the key owner's team, as for the store slot, and the team's engine
+// setting must be lf: otherwise the platform runs its listeners, and serving
+// them to lf too would run each twice. The setting is read fresh on every
+// request rather than through dispatch's copy: lf asks rarely (at session
+// open), and a slot that refuses the moment a team is switched back cannot
+// hand a starting lf a team the platform has resumed. What is listed is rows.ts's
 // rule. A write is answered `read_only` after its params are checked: the
 // platform's authoring is the only writer, since a save there checks the text,
 // can stop for consent, and provisions listeners, none of which the wire's
@@ -21,7 +24,7 @@ import {
   type WireSlotManifestShape,
 } from 'engine-contracts/slots';
 
-import { isLfEngineTeam } from '../lf_engine/teams';
+import { readTeamEngine } from '../lf_engine/team_engine';
 import { servedMovement, servedMovements, type ServedMovementsTenant } from './rows';
 
 export const LF_MOVEMENTS_MANIFEST: WireSlotManifestShape = {
@@ -36,7 +39,16 @@ export const READ_ONLY_REASON =
   "the platform's authoring is the only writer of this team's movements: save them in the platform, which checks them and provisions their listeners";
 
 interface AnswerDeps {
-  isLfEngineTeam(teamId: string): boolean;
+  isLfEngineTeam(teamId: string): Promise<boolean> | boolean;
+}
+
+const settingDeps: AnswerDeps = {
+  isLfEngineTeam: async (teamId) => (await readTeamEngine(teamId)).engine === 'lf',
+};
+
+/** The refusal for a team whose engine is the platform. */
+export function platformEngineRefusal(teamId: string): string {
+  return `team \`${teamId}\` runs its automations on the platform: switch its engine to lf in its team settings before lf runs them`;
 }
 
 function parsed<S extends z.ZodType>(method: string, schema: S, params: Record<string, unknown>): z.output<S> {
@@ -73,13 +85,10 @@ async function dispatch(scope: ServedMovementsTenant, method: string, params: Re
 
 /** The slot's answer in one tenant. `manifest` never reaches it (the route
  *  answers it), so a team that is not lf-engined is refused everything here. */
-export function answerFor(scope: ServedMovementsTenant, deps: AnswerDeps = { isLfEngineTeam }): SlotAnswer {
+export function answerFor(scope: ServedMovementsTenant, deps: AnswerDeps = settingDeps): SlotAnswer {
   return async (method, params, settings) => {
-    if (!deps.isLfEngineTeam(scope.tenant)) {
-      throw new SlotRefusal(
-        'settings',
-        `team \`${scope.tenant}\` runs its automations on the platform: add it to LF_ENGINE_TEAMS before lf runs them`,
-      );
+    if (!(await deps.isLfEngineTeam(scope.tenant))) {
+      throw new SlotRefusal('settings', platformEngineRefusal(scope.tenant));
     }
     if (settings.tenant !== undefined && settings.tenant !== scope.tenant) {
       throw new SlotRefusal('settings', 'the `tenant` setting names another team: this module serves the team that owns the key');

@@ -39,6 +39,7 @@ const VIEW_ROUTER_UNITS: Readonly<Record<string, Unit | readonly Unit[]>> = {
   plugins: 'automations',
   portfolio: 'valuations',
   remoteAdapter: 'automations',
+  teamEngine: 'automations',
   teamMembers: 'core',
   // The dev loop's injection door. Never on a self-host: it fabricates inbound
   // events, so `residual` keeps it in the composed deployment only.

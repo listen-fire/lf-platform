@@ -25,6 +25,8 @@ import { upsertMovementRow } from '../../../services/translation_graph/movement/
 import { mintMovementVersionIfChanged, movementSourceHash } from '../../../services/translation_graph/movement/version_store';
 import { LANGUAGE_VERSION } from 'movement-lang';
 import { systemRouter } from '../v1/system';
+import { switchTeamEngine } from '../../../services/lf_engine/switch';
+import { platformEngineRefusal } from '../../../services/lf_movements/answer';
 
 let server: Server;
 let url: string;
@@ -32,7 +34,6 @@ let owner: { teamId: TeamId; userId: UserId };
 let other: { teamId: TeamId; userId: UserId };
 let systemKey: string;
 let knowledgeKey: string;
-const savedEngineTeams = process.env.LF_ENGINE_TEAMS;
 
 async function makeOwner(): Promise<{ teamId: TeamId; userId: UserId }> {
   const teamId = randomUUID() as TeamId;
@@ -76,13 +77,13 @@ afterAll(async () => {
   await getCoreQb(['api_key']).deleteFrom('api_key').where('team_id', '=', owner.teamId).execute();
   for (const { teamId } of [owner, other]) {
     await getAutomationsQb(['movement']).deleteFrom('movement').where('team_id', '=', teamId).execute();
+    await getAutomationsQb(['team_engine']).deleteFrom('team_engine').where('team_id', '=', teamId).execute();
     await cleanupTeam(teamId);
   }
 });
 
-afterEach(() => {
-  if (savedEngineTeams === undefined) delete process.env.LF_ENGINE_TEAMS;
-  else process.env.LF_ENGINE_TEAMS = savedEngineTeams;
+afterEach(async () => {
+  for (const { teamId } of [owner, other]) await switchTeamEngine(teamId, { engine: 'platform', changedBy: null });
 });
 
 function post(body: unknown, key: string | null = systemKey) {
@@ -109,7 +110,7 @@ describe('the movements slot route', () => {
   });
 
   it('refuses an unknown method, a lost protocol version, and a body that is not the envelope', async () => {
-    process.env.LF_ENGINE_TEAMS = owner.teamId;
+    await switchTeamEngine(owner.teamId, { engine: 'lf', changedBy: null });
     const unknown = await call('movements.nothing');
     expect(unknown.status).toBe(200);
     expect(await unknown.json()).toEqual({ ok: false, error: { code: 'method_not_implemented', message: 'no method "movements.nothing"', retryable: false } });
@@ -132,18 +133,17 @@ describe('the movements slot route', () => {
   });
 
   it("acts in the tenant of the key's owner, and only once that team is lf-engined", async () => {
-    delete process.env.LF_ENGINE_TEAMS;
     const unmarked = await call('movements.list');
     expect(await unmarked.json()).toEqual({
       ok: false,
       error: {
         code: 'settings',
-        message: `team \`${owner.teamId}\` runs its automations on the platform: add it to LF_ENGINE_TEAMS before lf runs them`,
+        message: platformEngineRefusal(owner.teamId),
         retryable: false,
       },
     });
 
-    process.env.LF_ENGINE_TEAMS = `${owner.teamId},${other.teamId}`;
+    for (const { teamId } of [owner, other]) await switchTeamEngine(teamId, { engine: 'lf', changedBy: null });
     const listed = await call('movements.list');
     expect(await listed.json()).toEqual({ ok: true, result: [{ path: 'mine.mvt', version: movementSourceHash('function mine() {}\n') }] });
     expect(await (await call('movements.read', { path: 'theirs.mvt' })).json()).toEqual({ ok: true, result: null });

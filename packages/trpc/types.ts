@@ -1,7 +1,7 @@
 import { CapturedWrite } from 'movement-engine/public/adapter';
 import * as engine_contracts_trigger_config from 'engine-contracts/trigger_config';
 import * as _prisma_client_runtime_library from '@prisma/client/runtime/library';
-import { StoryProblem, StoryShapeNode, StoryEdge, Step, Chip, StoryFilter, StoryValidity, FieldType } from 'legacy-lang';
+import { StoryValidity, Chip, StoryFilter, StoryShapeNode, StoryEdge, Step, StoryProblem, FieldType } from 'legacy-lang';
 import { CatalogSnapshot, InstanceSchema, LanguageVersion, Diagnostic } from 'movement-lang';
 import * as _trpc_server_observable from '@trpc/server/observable';
 import { AskState } from '@listen-fire/ask';
@@ -134,6 +134,15 @@ export type UserEmailId = string & {
 export type TeamInviteId = string & {
     __brand: 'core.team_invite';
 };
+
+declare const TEAM_ENGINES: readonly ["platform", "lf"];
+export type TeamEngine = (typeof TEAM_ENGINES)[number];
+
+export interface TeamEngineSwitch {
+    engine: TeamEngine;
+    /** Whether this call changed the setting (false: it already was `engine`). */
+    changed: boolean;
+}
 
 /** One would-be write the movement produced under dry-run — the
  *  `CapturedWrite` currency, surfaced verbatim to the UI. */
@@ -4679,10 +4688,12 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 created_at: Date;
                 team_id: string;
                 status: string;
+                engine: string | null;
                 steps: unknown;
                 diagnostics: unknown;
                 errors: unknown;
-                engine: string | null;
+                host: string;
+                returned: unknown;
                 trigger_id: string;
                 trigger_type: string;
                 record_id: string | null;
@@ -4704,6 +4715,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 lease_owner: string | null;
                 lease_until: Date | null;
                 lease_token: string | null;
+                delivery_id: string | null;
             }>;
         }>;
         controlTower: _trpc_server.CreateRouterInner<_trpc_server.RootConfig<{
@@ -9454,7 +9466,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     };
                     investments: {
                         id: InvestmentId;
-                        date: Date | null;
+                        date: string | null;
                     }[];
                 } | null>;
                 addDividends: _trpc_server.BuildProcedure<"mutation", {
@@ -11390,7 +11402,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 supportedTriggers: string[];
                 webhookEventTypeId?: string | undefined;
                 kind?: "core" | "adapter" | "plugin" | undefined;
-                slot?: "models" | "files" | "store" | "judge" | "limiter" | "loopGuard" | "browser" | "wake" | "ocr" | "secrets" | undefined;
+                slot?: "models" | "files" | "store" | "judge" | "limiter" | "loopGuard" | "browser" | "wake" | "ocr" | "secrets" | "movements" | undefined;
                 settings?: {
                     name: string;
                     label?: string | undefined;
@@ -11432,6 +11444,9 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     signatureHeaders: string[];
                     intercepts?: "slack_url_verification"[] | undefined;
                     secretIssuedBy?: "provider" | "installer" | undefined;
+                    deliveryId?: {
+                        header: string;
+                    } | undefined;
                 } | {
                     providerKey: string;
                     scheme: "module";
@@ -11542,7 +11557,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     supportedTriggers: string[];
                     webhookEventTypeId?: string | undefined;
                     kind?: "core" | "adapter" | "plugin" | undefined;
-                    slot?: "models" | "files" | "store" | "judge" | "limiter" | "loopGuard" | "browser" | "wake" | "ocr" | "secrets" | undefined;
+                    slot?: "models" | "files" | "store" | "judge" | "limiter" | "loopGuard" | "browser" | "wake" | "ocr" | "secrets" | "movements" | undefined;
                     settings?: {
                         name: string;
                         label?: string | undefined;
@@ -11584,6 +11599,9 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         signatureHeaders: string[];
                         intercepts?: "slack_url_verification"[] | undefined;
                         secretIssuedBy?: "provider" | "installer" | undefined;
+                        deliveryId?: {
+                            header: string;
+                        } | undefined;
                     } | {
                         providerKey: string;
                         scheme: "module";
@@ -11679,7 +11697,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     supportedTriggers: string[];
                     webhookEventTypeId?: string | undefined;
                     kind?: "core" | "adapter" | "plugin" | undefined;
-                    slot?: "models" | "files" | "store" | "judge" | "limiter" | "loopGuard" | "browser" | "wake" | "ocr" | "secrets" | undefined;
+                    slot?: "models" | "files" | "store" | "judge" | "limiter" | "loopGuard" | "browser" | "wake" | "ocr" | "secrets" | "movements" | undefined;
                     settings?: {
                         name: string;
                         label?: string | undefined;
@@ -11721,6 +11739,9 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         signatureHeaders: string[];
                         intercepts?: "slack_url_verification"[] | undefined;
                         secretIssuedBy?: "provider" | "installer" | undefined;
+                        deliveryId?: {
+                            header: string;
+                        } | undefined;
                     } | {
                         providerKey: string;
                         scheme: "module";
@@ -12484,6 +12505,71 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
             }, MovementRunAsyncResult>;
+        }>;
+        teamEngine: _trpc_server.CreateRouterInner<_trpc_server.RootConfig<{
+            ctx: {
+                authorise: () => Promise<void>;
+            };
+            meta: object;
+            errorShape: {
+                message: string;
+                code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
+                data: _trpc_server_dist_error_formatter.DefaultErrorData;
+            };
+            transformer: _trpc_server.DefaultDataTransformer;
+        }>, {
+            get: _trpc_server.BuildProcedure<"query", {
+                _config: _trpc_server.RootConfig<{
+                    ctx: {
+                        authorise: () => Promise<void>;
+                    };
+                    meta: object;
+                    errorShape: {
+                        message: string;
+                        code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
+                        data: _trpc_server_dist_error_formatter.DefaultErrorData;
+                    };
+                    transformer: _trpc_server.DefaultDataTransformer;
+                }>;
+                _meta: object;
+                _ctx_out: {
+                    authorise: () => Promise<void>;
+                };
+                _input_in: typeof _trpc_server.unsetMarker;
+                _input_out: typeof _trpc_server.unsetMarker;
+                _output_in: typeof _trpc_server.unsetMarker;
+                _output_out: typeof _trpc_server.unsetMarker;
+            }, {
+                engine: "platform" | "lf";
+                changedAt: string | null;
+                changedBy: string | null;
+            }>;
+            set: _trpc_server.BuildProcedure<"mutation", {
+                _config: _trpc_server.RootConfig<{
+                    ctx: {
+                        authorise: () => Promise<void>;
+                    };
+                    meta: object;
+                    errorShape: {
+                        message: string;
+                        code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
+                        data: _trpc_server_dist_error_formatter.DefaultErrorData;
+                    };
+                    transformer: _trpc_server.DefaultDataTransformer;
+                }>;
+                _meta: object;
+                _ctx_out: {
+                    authorise: () => Promise<void>;
+                };
+                _input_in: {
+                    engine: "platform" | "lf";
+                };
+                _input_out: {
+                    engine: "platform" | "lf";
+                };
+                _output_in: typeof _trpc_server.unsetMarker;
+                _output_out: typeof _trpc_server.unsetMarker;
+            }, TeamEngineSwitch>;
         }>;
         teamMembers: _trpc_server.CreateRouterInner<_trpc_server.RootConfig<{
             ctx: {

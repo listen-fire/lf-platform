@@ -8,6 +8,8 @@
  * them on the team at once. Removing a member signs them out. A read-only
  * member sees the roster and nothing they could change.
  *
+ * Where automations is mounted, the page also says which engine runs the
+ * team's automations (the platform or a cloud lf) and switches it (engine.tsx).
  */
 
 import { useState } from "react";
@@ -16,10 +18,13 @@ import { Bot, MailPlus, Pencil, Phone, UserMinus, UserPlus, X } from "lucide-rea
 import { neverAsAny } from "movement-lang";
 
 import { trpc } from "@/lib/trpc";
+import { unitIsMounted } from "@/lib/capabilities";
+import { useCapabilities } from "@/lib/capabilities-provider";
 import { Button } from "@/components/ui";
 import { usePageTitle } from "@/components/page-title";
 
 import { Card } from "../card";
+import { EngineCard, otherEngine } from "./engine";
 
 type Access = "read" | "write";
 
@@ -521,9 +526,52 @@ function MemberRow({
   );
 }
 
+/** The team's engine, where automations is mounted (it owns the setting). */
+function EngineSection({ canWrite, members }: { canWrite: boolean; members: Member[] }) {
+  const setting = trpc.views.teamEngine.get.useQuery();
+  const utils = trpc.useUtils();
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const change = trpc.views.teamEngine.set.useMutation({
+    onSuccess: () => {
+      setConfirming(false);
+      setError(null);
+      void utils.views.teamEngine.get.invalidate();
+    },
+    onError: (e) => {
+      setConfirming(false);
+      setError(e.message);
+    },
+  });
+
+  if (!setting.data) return null;
+  const { engine, changedAt, changedBy } = setting.data;
+  const changedByName =
+    changedBy === null ? null : (members.find((m) => m.userId === changedBy)?.username ?? null);
+
+  return (
+    <EngineCard
+      engine={engine}
+      changedAt={changedAt}
+      changedByName={changedByName}
+      canWrite={canWrite}
+      confirming={confirming}
+      busy={change.isLoading}
+      error={error}
+      onAsk={() => {
+        setError(null);
+        setConfirming(true);
+      }}
+      onConfirm={() => change.mutate({ engine: otherEngine(engine) })}
+      onCancel={() => setConfirming(false)}
+    />
+  );
+}
+
 export default function TeamPage() {
   usePageTitle("Team — Listen-Fire");
 
+  const automationsMounted = unitIsMounted("automations", useCapabilities());
   const overview = trpc.views.teamMembers.overview.useQuery();
   const utils = trpc.useUtils();
   const refresh = () => void utils.views.teamMembers.overview.invalidate();
@@ -604,6 +652,8 @@ export default function TeamPage() {
           ))}
         </div>
       </Card>
+
+      {automationsMounted && <EngineSection canWrite={canWrite} members={members} />}
     </div>
   );
 }

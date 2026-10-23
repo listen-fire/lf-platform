@@ -75,7 +75,7 @@ import { linkTrpcWsServer, trpcRouter } from './interfaces/trpc';
 import { webhookSyncRouter } from './interfaces/rest/webhookSync';
 import { adapterDoorsRouter } from './interfaces/rest/adapterDoors';
 import { assertLfOAuthRelayConfigured, createLfOAuthRelayRouter, createLfSecretsRouter } from './interfaces/rest/lfSecrets';
-import { assertLfEngineTeamsConfigured } from './services/lf_engine/teams';
+import { assertLfEngineTeamsRetired } from './services/lf_engine/team_engine';
 import { telegramBuiltinRouter } from './interfaces/rest/telegramBuiltin';
 import { slackEventsRouter } from './interfaces/rest/slackEvents';
 import { slackInteractivityRouter } from './interfaces/rest/slackInteractivity';
@@ -145,9 +145,9 @@ assertSystemAuthConfigured();
 // production) is a deployment whose sign-ins go nowhere.
 assertLfOAuthRelayConfigured();
 
-// A list of lf-engined teams that is not a list of team ids is a deployment
-// that believes it handed a team to lf while the platform still runs it.
-assertLfEngineTeamsConfigured();
+// A deployment still naming lf-engined teams in the retired environment list
+// would hand them back to the platform while their cloud lf still runs them.
+assertLfEngineTeamsRetired();
 
 // A search rate set to something that is not a positive whole number is a
 // deployment that believes its Bright Data searches are paced when they are not.

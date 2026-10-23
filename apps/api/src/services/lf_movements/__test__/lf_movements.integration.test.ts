@@ -26,7 +26,7 @@ import {
 import { clearGuardPaused, setGuardPaused } from '../../loop_guard/pause';
 import { persistCredential } from '../../credentials/persist_credential';
 import ExternalServiceType from '../../../generated/kysely/automations/ExternalServiceType';
-import { READ_ONLY_REASON, answerFor } from '../answer';
+import { READ_ONLY_REASON, answerFor, platformEngineRefusal } from '../answer';
 
 jest.mock('../../credentials/credential_lifecycle', () => ({
   credentialLifecycle: () => undefined,
@@ -302,7 +302,7 @@ describe('the movements module', () => {
   it('a team that is not lf-engined is refused every method, and so is a request naming another tenant', async () => {
     await seed(teamA, 'hidden', 'function hidden() {}\n');
     const unmarked = slot(teamA, { isLfEngineTeam: () => false });
-    const text = `team \`${teamA}\` runs its automations on the platform: add it to LF_ENGINE_TEAMS before lf runs them`;
+    const text = platformEngineRefusal(teamA);
     for (const [method, params] of [
       ['movements.list', {}],
       ['movements.read', { path: 'hidden.mvt' }],

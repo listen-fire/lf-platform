@@ -35,7 +35,7 @@ import { notifyBreach } from '../../loop_guard/notify';
 import { resolveThresholds } from '../../loop_guard/thresholds';
 import { neverAsAny } from 'movement-engine/public/types';
 import { describeDroppedReason, type DroppedReason } from './dropped_reason';
-import { isLfEngineTeam } from '../../lf_engine/teams';
+import { isLfEngineTeam } from '../../lf_engine/team_engine';
 import {
   runMovementFiring,
   shippedMovementForTrigger,
@@ -119,12 +119,13 @@ export interface TriggerIdDispatchResult {
 export async function dispatchTriggerByIdEvent(
   input: TriggerIdDispatchInput,
 ): Promise<TriggerIdDispatchResult> {
-  // The engine switch, before anything else (and with no query): an
-  // lf-engined team's listeners are lf's to run, so a live firing here is
-  // dropped and its receipt kept replayable. Every door passes here (inbound,
-  // poll, cron, Run-now); an explicit dry run is the editor's test run, which
-  // runs nothing for real, so it still dispatches.
-  if (!input.dryRun && isLfEngineTeam(input.teamId)) {
+  // The engine switch, before anything else (read through the process's copy
+  // of the lf-engined teams, so no query per firing): an lf-engined team's
+  // listeners are lf's to run, so a live firing here is dropped and its
+  // receipt kept replayable. Every door passes here (inbound, poll, cron,
+  // Run-now); an explicit dry run is the editor's test run, which runs nothing
+  // for real, so it still dispatches.
+  if (!input.dryRun && (await isLfEngineTeam(input.teamId))) {
     if (input.storedEventId !== undefined) {
       await markTriggerEventSuppressed(input.storedEventId, describeDroppedReason('engine_lf'));
     }

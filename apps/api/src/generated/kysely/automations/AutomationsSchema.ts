@@ -38,6 +38,7 @@ import type { default as GoogleGrantedItemTable } from './GoogleGrantedItem';
 import type { default as TelegramIdentityTable } from './TelegramIdentity';
 import type { default as DeliveryTable } from './Delivery';
 import type { default as OutboundEmailTable } from './OutboundEmail';
+import type { default as TeamEngineTable } from './TeamEngine';
 import type { default as WebhookSubscriptionTable } from './WebhookSubscription';
 
 export default interface AutomationsSchema {
@@ -114,6 +115,8 @@ export default interface AutomationsSchema {
   delivery: DeliveryTable;
 
   outbound_email: OutboundEmailTable;
+
+  team_engine: TeamEngineTable;
 
   webhook_subscription: WebhookSubscriptionTable;
 }

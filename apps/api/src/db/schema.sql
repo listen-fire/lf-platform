@@ -4323,6 +4323,31 @@ CREATE UNIQUE INDEX team_settings_team_id_key ON automations.team_settings USING
 
 CREATE TRIGGER team_settings_audit AFTER INSERT OR DELETE OR UPDATE ON automations.team_settings FOR EACH ROW EXECUTE FUNCTION automations.audit();
 
+-- ## Team engine — which engine runs a team's automations
+--
+-- 'platform' (the default; no row means it) or 'lf': a cloud lf reads the
+-- team's movements through the movements slot and runs them, and the platform
+-- runs none of them (its dispatch drops their firings, and it registers no
+-- vendor webhook or poll for them). One row per team that has ever switched;
+-- `changed_at`/`changed_by` say who switched it last, and the audit trigger
+-- keeps every switch. `changed_by` is an opaque user id (no FK, D3); null is
+-- the operator CLI. `id` exists for automations.audit(), which keys on it.
+CREATE TABLE automations.team_engine (
+    id uuid DEFAULT pg_catalog.gen_random_uuid() NOT NULL,
+    team_id uuid NOT NULL, -- opaque tenant id; no foreign key (D3)
+    engine text NOT NULL,
+    changed_at timestamptz DEFAULT now() NOT NULL,
+    changed_by uuid,
+    CONSTRAINT team_engine_engine_check CHECK (engine IN ('platform', 'lf'))
+);
+
+ALTER TABLE ONLY automations.team_engine
+    ADD CONSTRAINT team_engine_pkey PRIMARY KEY (id);
+
+CREATE UNIQUE INDEX team_engine_team_id_key ON automations.team_engine USING btree (team_id);
+
+CREATE TRIGGER team_engine_audit AFTER INSERT OR DELETE OR UPDATE ON automations.team_engine FOR EACH ROW EXECUTE FUNCTION automations.audit();
+
 
 -- =============================================================================
 -- AUTOMATIONS — Row-Level Security

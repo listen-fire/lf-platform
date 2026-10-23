@@ -702,14 +702,17 @@ The path is `<name>.mvt`, the text is the shipped text, and the version is the t
 
 **When `lf` sees an edit.** At its next start. `lf serve` keeps the files it opened with. A rename is a new file to `lf`, so its listens start fresh.
 
-**`LF_ENGINE_TEAMS`.** A comma-separated list of team ids whose movements run in `lf`. It is the one switch that keeps the platform and `lf` from both running a team's listeners.
+**The team's engine.** Which engine runs a team's automations, the platform or `lf`, is a setting of the team. It is the one switch that keeps the platform and `lf` from both running a team's listeners. A member with full access switches it on the team's settings page (`/settings/team`, "Where this team's automations run"); an installation without the web app uses the CLI, `pnpm cli team-engine --team <uuid> --set lf` (or `--set platform`; without `--set` it prints the current engine). Every switch is kept in the automations audit log with who made it.
 
-- A team not on the list is not served: every method but `manifest` is refused with the code `settings`, naming the variable.
-- For a team on the list the platform drops every live firing (cron, inbound webhooks and polls, Run-now) as `engine_lf`. The received event is kept, marked suppressed, and can be replayed. The editor's test runs still work. A run parked before the switch finishes here.
+- A team on the platform (every team, until switched) is not served: every method but `manifest` is refused with the code `settings`.
+- For a team on `lf` the platform drops every live firing (cron, inbound webhooks and polls, Run-now) as `engine_lf`. The received event is kept, marked suppressed, and can be replayed. The editor's test runs still work. A run parked before the switch finishes here.
 - Vendor webhooks and polls for the team are still received and then dropped.
-- A malformed value (an entry that is not a team id) fails boot naming the variable. Unset means no team is switched.
+- Each api and drain process keeps its copy of the lf-engined teams for at most 5 seconds, so a switch reaches every process within 5 seconds (the process that made it at once). The movements slot reads the setting on every request.
+- A team's engine is not carried by `export-team`: an imported team starts on the platform.
 
-Switching order: set it on every api and drain process first, then start the cloud `lf`. To switch back, stop `lf` first, then remove the team from the list.
+Switching order: switch the team to `lf` first, then start the cloud `lf` at least 5 seconds later. To switch back, stop `lf` first, then switch the team back.
+
+`LF_ENGINE_TEAMS`, the environment list that was the switch in 0.12.0-rc.11, is retired. The api and the drain refuse to boot while it is set, naming it, so an upgrade never hands those teams back to the platform: once the upgrade's migration has run, switch each listed team with the CLI above, then unset it.
 
 **Checking the wiring.** The module's conformance suite drives `lf`'s own client against the route:
 
@@ -907,7 +910,7 @@ docker compose run --rm -v "$PWD/bundles:/bundles" \
 
 **Credentials arrive as shells.** Read this before importing anything with automations in it. A connection's id, name and type cross intact, so every trigger and subscription that references it still resolves — but the secret does not. It is bound by encryption to the source installation's key, and for any app you registered yourself it authenticates against the source operator's registration, so it would be worthless against yours however it were carried. Each shell is stamped as needing reconnection, and an automation that reaches for one fails by name rather than with an opaque decryption error. Afterwards you have two jobs: reconnect every connection against your own app registrations, and re-save every listening trigger so it registers a fresh subscription at the new hostname.
 
-**Not carried, and why.** The audit trail (it records writes against the source database); the undelivered outboxes (events addressed to the source's subscribers — carrying them would fire the target's listeners for writes it never saw); live single-use capabilities and codes minted for the source origin; a pasted model key and the handle on the source operator's own app registration. One genuine gap rather than a policy choice: the table behind temporarily exposed files carries no team and no owner, so there is no expression that selects one tenant's rows out of it — it can be neither exported nor purged per team. Those rows expire on their own and their URLs are absolute at the source origin, so they are dead at cutover anyway.
+**Not carried, and why.** The audit trail (it records writes against the source database); which engine runs the team (a team switched to a cloud `lf` arrives on the platform, since no `lf` is pointed at the target yet); the undelivered outboxes (events addressed to the source's subscribers — carrying them would fire the target's listeners for writes it never saw); live single-use capabilities and codes minted for the source origin; a pasted model key and the handle on the source operator's own app registration. One genuine gap rather than a policy choice: the table behind temporarily exposed files carries no team and no owner, so there is no expression that selects one tenant's rows out of it — it can be neither exported nor purged per team. Those rows expire on their own and their URLs are absolute at the source origin, so they are dead at cutover anyway.
 
 **Two asymmetries worth knowing.** Currency reference data travels with the bundle even though it belongs to the installation rather than the team, because a fresh target has none and the team's own prices point at it; if the target already has its own copy, that copy wins, and a team deletion never removes it. And a person who also belongs to another team is spared by a delete, along with their contact rows — a person is not one team's property — which is one reason the executed row count is usually lower than the dry run's.
 
@@ -974,7 +977,7 @@ Everything here is set by you, in `deploy/.env`. Nothing in this table is genera
 | `LISTEN_FIRE_PRINCIPAL` | only without `up.sh` | `core`. Must agree with whether `core` is in the unit list, checked in both directions |
 | `LISTEN_FIRE_SCOPES` | no | `*` — the API key grants everything. Narrow it to what a key actually needs. The `secrets` scope (the door a cloud `lf` keeps its credentials behind) is granted only when named, or by `*`; see "A cloud `lf` keeping its credentials here" |
 | `LF_OAUTH_RELAY_TARGETS` | only to relay a cloud `lf`'s OAuth sign-ins | empty — the relay at `/api/public/lf-secrets/oauth/callback/<team id>` refuses every team. A JSON object from team id to that team's `lf serve` URL; `https` only in production. Boot refuses a malformed value naming the variable. See "A cloud `lf` keeping its credentials here" |
-| `LF_ENGINE_TEAMS` | only to run a team's movements in a cloud `lf` | empty — no team is switched. Comma-separated team ids; for each, the movements slot serves the team and the platform drops its live firings as `engine_lf`. Boot refuses an entry that is not a team id, naming the variable. See "A cloud `lf` running this installation's movements" |
+| `LF_ENGINE_TEAMS` | never (retired) | unset. The api and the drain refuse to boot while it is set: a team's engine is now a setting (see "The team's engine" under "A cloud `lf` running this installation's movements"); switch each team it listed with `pnpm cli team-engine --team <uuid> --set lf`, then unset it |
 | `LISTEN_FIRE_ACCESS` | no | `write`; `read` makes the key read-only |
 | `LISTEN_FIRE_ALLOW_ANONYMOUS` | no | `false`. `true` removes the key requirement entirely — only on an API nothing else can reach |
 | `DATABASE_URL` | only with your own database | the bundled Postgres, whose URL is generated on first boot. Setting it also takes that service out of the composition |

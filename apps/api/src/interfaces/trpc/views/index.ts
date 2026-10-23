@@ -26,6 +26,7 @@ import { usageRouter } from './usage';
 import { valuationsRouter } from './valuations';
 import { userSettingsRouter } from './userSettings';
 import { webhookSubscriptionsRouter } from './webhookSubscriptions';
+import { teamEngineRouter } from './teamEngine';
 import { teamMembersRouter } from './teamMembers';
 import { testHarnessRouter } from './testHarness';
 
@@ -58,6 +59,7 @@ const viewsRouter = trpc.router({
   portfolio: portfolioRouter(gatedProcedure),
   remoteAdapter: remoteAdapterRouter(gatedProcedure),
   triggers: triggersRouter(gatedProcedure),
+  teamEngine: teamEngineRouter(gatedProcedure),
   teamMembers: teamMembersRouter(gatedProcedure),
   usage: usageRouter(gatedProcedure),
   valuations: valuationsRouter(gatedProcedure),
