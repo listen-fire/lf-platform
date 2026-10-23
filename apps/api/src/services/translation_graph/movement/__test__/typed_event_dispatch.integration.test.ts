@@ -46,6 +46,7 @@ import {
   staticCatalogFromManifests,
 } from '../catalog';
 import { resolveAdapter } from '../../adapters/resolve';
+import { mintMovementVersionIfChanged } from '../version_store';
 import {
   makeStablePosition,
   positionData,
@@ -227,6 +228,8 @@ async function seedMovementWithAttioTrigger(teamId: TeamId): Promise<{
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .values({ id: movementId, team_id: teamId, name: 'Notify new company', source: NOTIFY_NEW_COMPANY, language_version: LANGUAGE_VERSION } as any)
     .execute();
+  // Shipped: a firing runs the movement's current version.
+  await mintMovementVersionIfChanged({ teamId, movementId, source: NOTIFY_NEW_COMPANY, languageVersion: LANGUAGE_VERSION });
 
   const triggerId = randomUUID() as TriggerId;
   await getAutomationsQb(['trigger'])

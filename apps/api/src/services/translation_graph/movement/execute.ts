@@ -1,7 +1,14 @@
 // Movement firings on the movement engine.
 //
-// Movements execute from their CANONICAL TEXT through `runMovement`
-// (services/movement_engine/run.ts), against the team catalog. The one
+// Movements execute from their SHIPPED TEXT through `runMovement`
+// (services/movement_engine/run.ts), against the team catalog: a fresh firing
+// runs the movement's current version (`movement_version` at
+// `current_version_id`), never the row's live `source`, which may be an edit
+// whose save stopped at `needsConfirmation` and never shipped; a resume runs
+// the version its run pinned. Imported files resolve to their shipped text
+// too. A movement with no current version has never shipped and does not
+// fire. The editor's test run (./test_run.ts) is the one runner of the live
+// text. The one
 // consumer is `dispatchTriggerByIdEvent` (triggers/router.ts): every
 // movement-derived trigger (trigger.movement_id set) fires through
 // `runMovementFiring` — live events, kg mutations, cron ticks, and
@@ -34,7 +41,7 @@ import { noteFirstFiringLeaseLost, TriggerRunRecorder, type TriggerRunTriggerTyp
 import { runCatalogSnapshotForTeam } from './catalog';
 import { getMovementRow, recordValidityOutcome, type MovementRow } from './store';
 import { assessMovementValidity, validateMovementForTeam } from './authoring';
-import { movementSourceHash } from './version_store';
+import { loadPinnedVersion, movementSourceHash } from './version_store';
 import { recordMovementFailureIssue, resolveMovementIssues } from './issues';
 import { clearIntrospectionCache } from './instance_cache';
 import { withFiringContext } from './firing_context';
@@ -56,7 +63,7 @@ import { RunLeaseLost, takeRunLease, type HeldRunLease } from '../../movement_en
  */
 async function interpretMovementFiring(input: {
   teamId: TeamId;
-  movementRow: MovementRow;
+  version: ShippedVersion;
   /** Which movement in the file to run; absent = the file's only one. */
   movementName?: string;
   event: TriggerEvent;
@@ -81,13 +88,14 @@ async function interpretMovementFiring(input: {
   lease?: HeldRunLease;
 }): Promise<MovementRunResult> {
   const teamCatalog = await runCatalogSnapshotForTeam(input.teamId, {
-    source: input.movementRow.source,
-    languageVersion: input.movementRow.languageVersion,
+    source: input.version.source,
+    languageVersion: input.version.languageVersion,
+    imports: 'shipped',
   });
   return runMovement({
-    source: input.movementRow.source,
-    // Compile and run under the movement's pin, never the current version.
-    languageVersion: input.movementRow.languageVersion,
+    source: input.version.source,
+    // Compile and run under the shipped version's pin, never the release's.
+    languageVersion: input.version.languageVersion,
     ...(input.movementName !== undefined ? { movementName: input.movementName } : {}),
     event: input.event,
     teamId: tenantOfTeam(input.teamId),
@@ -199,7 +207,7 @@ async function noteLostFirstFiring(runId: TriggerRunId, lost: MovementFiringOutc
 async function refreshValidityOnContradiction(input: {
   teamId: TeamId;
   /** The movement that ran: its id + the SOURCE THAT EXECUTED (the live row's
-   *  source on a firing; the pinned version's source on a resume). */
+   *  shipped version's source on a firing; the pinned version's on a resume). */
   movement: { id: string; source: string };
   outcome: 'success' | 'failure';
 }): Promise<void> {
@@ -257,7 +265,8 @@ type MovementFiringInput = {
    *  the movement in a multi-movement file. Absent ⇒ fall back to the legacy
    *  name convention, then the file's sole declaration. */
   firedMovementName?: string;
-  movementRow: MovementRow;
+  /** What fires: the movement and the version it shipped. */
+  movement: ShippedMovement;
   event: TriggerEvent;
   recordingTriggerType: TriggerRunTriggerType;
   dryRun?: boolean;
@@ -286,9 +295,8 @@ async function runMovementFiringInContext(
     triggerType: input.recordingTriggerType,
     triggerEvent: input.event,
     ...(input.dryRun !== undefined ? { dryRun: input.dryRun } : {}),
-    // Pin the version the run executes against (P11). Null for movements not
-    // yet versioned (saved before versioning, or never cleanly saved since).
-    movementVersionId: input.movementRow.currentVersionId,
+    // Pin the version the run executes (P11): the shipped one it runs.
+    movementVersionId: input.movement.version.id,
     ...(input.existingRunId !== undefined ? { existingRunId: input.existingRunId } : {}),
     ...(input.triggerEventId !== undefined ? { triggerEventId: input.triggerEventId } : {}),
   });
@@ -327,7 +335,7 @@ async function runMovementFiringInContext(
     const runFiring = () =>
       interpretMovementFiring({
         teamId: input.teamId,
-        movementRow: input.movementRow,
+        version: input.movement.version,
         ...(movementName !== undefined ? { movementName } : {}),
         event: input.event,
         firedAt: recorder.firedAt,
@@ -351,7 +359,7 @@ async function runMovementFiringInContext(
     }).runAsync(runFiring);
     const lostBeforeSettle = leaseLostBeforeSettle(lease, {
       runId: recorder.triggerRunId,
-      movementId: input.movementRow.id,
+      movementId: input.movement.row.id,
     });
     if (lostBeforeSettle !== null) return noteLostFirstFiring(recorder.triggerRunId, lostBeforeSettle);
     if (result.cancelled) {
@@ -363,7 +371,7 @@ async function runMovementFiringInContext(
       // onto the step channel first, or the run settles `failed` claiming it
       // wrote nothing while the records sit in the external systems.
       recorder.recordMovementStep({
-        movementId: input.movementRow.id,
+        movementId: input.movement.row.id,
         movementName: result.movementName,
         sourceAdapterType: input.event.adapterType,
         result,
@@ -390,7 +398,7 @@ async function runMovementFiringInContext(
       // channel. The resuming recorder appends its own segment rather than
       // replacing this one.
       recorder.recordMovementStep({
-        movementId: input.movementRow.id,
+        movementId: input.movement.row.id,
         movementName: result.movementName,
         sourceAdapterType: input.event.adapterType,
         result,
@@ -399,7 +407,7 @@ async function runMovementFiringInContext(
       return { result };
     }
     recorder.recordMovementStep({
-      movementId: input.movementRow.id,
+      movementId: input.movement.row.id,
       movementName: result.movementName,
       sourceAdapterType: input.event.adapterType,
       result,
@@ -408,23 +416,23 @@ async function runMovementFiringInContext(
     if (!input.dryRun) {
       await refreshValidityOnContradiction({
         teamId: input.teamId,
-        movement: { id: input.movementRow.id, source: input.movementRow.source },
+        movement: { id: input.movement.row.id, source: input.movement.version.source },
         outcome: 'success',
       });
       // A clean live run closes the movement's open issues (the quiet half
       // of the surprise-success path).
-      await resolveMovementIssues({ movementId: input.movementRow.id }).catch(() => {});
+      await resolveMovementIssues({ movementId: input.movement.row.id }).catch(() => {});
     }
     return { result };
   } catch (err) {
-    const context = { runId: recorder.triggerRunId, movementId: input.movementRow.id };
+    const context = { runId: recorder.triggerRunId, movementId: input.movement.row.id };
     const lost = leaseLostOutcome(err, context) ?? leaseLostBeforeSettle(lease, context);
     if (lost !== null) return noteLostFirstFiring(recorder.triggerRunId, lost);
     const { error, partial } = unwrapRunFailure(err);
     const message = describeError(error);
     logger.error('[MovementEngine] movement firing failed', {
       triggerId: input.triggerId,
-      movementId: input.movementRow.id,
+      movementId: input.movement.row.id,
       error: message,
     });
     // A live failure lands in its Sentry-shaped ISSUE (one row per
@@ -434,8 +442,8 @@ async function runMovementFiringInContext(
     if (!input.dryRun) {
       await recordMovementFailureIssue({
         teamId: input.teamId as unknown as string,
-        movementId: input.movementRow.id,
-        movementName: input.movementRow.name,
+        movementId: input.movement.row.id,
+        movementName: input.movement.row.name,
         triggerName: input.triggerName,
         runId: recorder.triggerRunId as unknown as string,
         message,
@@ -446,8 +454,8 @@ async function runMovementFiringInContext(
       );
     }
     recorder.recordStepFailure({
-      tgId: `movement:${input.movementRow.id}`,
-      tgName: movementName ?? input.movementRow.name,
+      tgId: `movement:${input.movement.row.id}`,
+      tgName: movementName ?? input.movement.row.name,
       sourceAdapterType: input.event.adapterType,
       message,
       ...(partial !== undefined ? { partial } : {}),
@@ -456,7 +464,7 @@ async function runMovementFiringInContext(
     if (!input.dryRun) {
       await refreshValidityOnContradiction({
         teamId: input.teamId,
-        movement: { id: input.movementRow.id, source: input.movementRow.source },
+        movement: { id: input.movement.row.id, source: input.movement.version.source },
         outcome: 'failure',
       });
     }
@@ -578,6 +586,7 @@ async function resumeMovementFiringInContext(
     const teamCatalog = await runCatalogSnapshotForTeam(input.teamId, {
       source: input.pinnedSource,
       languageVersion,
+      imports: 'shipped',
     });
     const commonInput = {
       source: input.pinnedSource,
@@ -806,6 +815,7 @@ async function fireCallbackFiringInContext(
     const teamCatalog = await runCatalogSnapshotForTeam(input.teamId, {
       source: input.pinnedSource,
       languageVersion,
+      imports: 'shipped',
     });
     const fire = () =>
       fireCallbackBody({
@@ -885,6 +895,41 @@ async function fireCallbackFiringInContext(
 function firedMovementNameFromTriggerName(triggerName: string): string | undefined {
   const parts = triggerName.split('/');
   return parts.length >= 3 ? parts[parts.length - 1] : undefined;
+}
+
+/** A movement as it fires: its row (identity, name, validity) and the text it
+ *  shipped. */
+export interface ShippedMovement {
+  row: MovementRow;
+  version: ShippedVersion;
+}
+
+/** The current version of a movement: what a fresh firing runs and pins. */
+export interface ShippedVersion {
+  id: string;
+  source: string;
+  languageVersion: LanguageVersion;
+}
+
+/**
+ * What a movement-derived trigger fires: the movement's shipped version.
+ * `missing` = the row is gone (the FK clears `trigger.movement_id` on delete,
+ * so this is a narrow race); `not_shipped` = no save of it ever shipped, so
+ * there is nothing to run. The provisioner derives listeners only on a
+ * shipped save, so a listener over an unshipped movement is a row from before
+ * versioning.
+ */
+export async function shippedMovementForTrigger(input: {
+  teamId: TeamId;
+  movementId: string;
+}): Promise<{ kind: 'shipped'; movement: ShippedMovement } | { kind: 'missing' } | { kind: 'not_shipped' }> {
+  const row = await movementForTrigger(input);
+  if (row === null) return { kind: 'missing' };
+  if (row.currentVersionId === null) return { kind: 'not_shipped' };
+  const version = await loadPinnedVersion(row.currentVersionId);
+  // The pointer is a foreign key, so a version it names exists.
+  if (version === null) return { kind: 'not_shipped' };
+  return { kind: 'shipped', movement: { row, version: { id: row.currentVersionId, ...version } } };
 }
 
 /**

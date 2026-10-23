@@ -1,8 +1,10 @@
 // Text-canonical movement storage (`automations.movement`).
 //
-// The movement row's `source` column is THE persisted program — execution
-// (dispatch and "Run now") reads this text directly through the movement
-// engine (services/movement_engine/run.ts). The only derived artifacts
+// The movement row's `source` column is THE persisted program as last saved —
+// the text the editor shows, which may be an edit whose save stopped at
+// `needsConfirmation`. Execution never reads it: a firing runs the shipped
+// version (`current_version_id`, ./version_store.ts; ./execute.ts), and only
+// the editor's test run tries this text. The only derived artifacts
 // are the file's LISTENER triggers — one `automations.trigger` row per
 // `listen` statement, linked back via `trigger.movement_id` and named
 // `movement/<file>/<movement>` (see ./provision.ts reconciliation).

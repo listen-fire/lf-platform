@@ -32,6 +32,10 @@ export type DroppedReason =
   // The TG execution engine has been retired (plans/2026-06-14-kill-tg), so
   // only movement-derived triggers execute; there is nothing to dispatch.
   | 'no_movement'
+  // The listener's movement has no current version: no save of it ever
+  // shipped, so there is no text to run (an unconfirmed edit is not one). The
+  // receipt is RECORDED as suppressed (replayable).
+  | 'not_shipped'
   // The team is lf-engined (LF_ENGINE_TEAMS): lf runs its listeners, so the
   // platform's dispatch runs none. The receipt is RECORDED as suppressed
   // (replayable), so switching the team back can replay what lf did not see.
@@ -61,6 +65,8 @@ export function describeDroppedReason(reason: DroppedReason): string {
       return 'the listener row was not found — re-save the automation, then run it again';
     case 'engine_lf':
       return "this team's automations run in lf, not on the platform (LF_ENGINE_TEAMS)";
+    case 'not_shipped':
+      return 'this automation has never been saved live — an edit waiting for confirmation does not run; confirm or fix the save, then run it again';
     case 'no_bound_tgs':
     case 'no_movement':
       return 'this listener has no automation bound to it — re-save the automation, then run it again';

@@ -9,6 +9,9 @@
 //      never sees a throw).
 //   3. movementForTrigger — loads the trigger's movement row; null when
 //      the row is gone.
+//   4. shippedMovementForTrigger + the firing — what fires is the movement's
+//      current version, never the row's live (draft) text; a movement with no
+//      current version is `not_shipped`.
 
 // Order-sensitive cycle guard (mirrors run_now.unit.test.ts).
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -106,6 +109,11 @@ jest.mock('../store', () => ({
   getMovementRow: jest.fn(),
 }));
 
+jest.mock('../version_store', () => ({
+  ...jest.requireActual('../version_store'),
+  loadPinnedVersion: jest.fn(),
+}));
+
 // The team-Context seam a background firing runs inside — pass-through here;
 // it has its own test (./firing_context.unit.test.ts).
 jest.mock('../firing_context', () => ({
@@ -128,7 +136,7 @@ import type { TriggerEvent } from 'movement-engine/public/inbound';
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 
 import { RunLeaseLost } from '../../../movement_engine/run_lease';
-import { movementForTrigger, resumeMovementFiring, runMovementFiring } from '../execute';
+import { movementForTrigger, resumeMovementFiring, runMovementFiring, shippedMovementForTrigger } from '../execute';
 
 const { runMovement, resumeMovement } = jest.requireMock('@listen-fire/legacy-engine/dispatch') as {
   runMovement: jest.Mock;
@@ -142,6 +150,9 @@ const { runCatalogSnapshotForTeam } = jest.requireMock('../catalog') as {
 };
 const { getMovementRow } = jest.requireMock('../store') as {
   getMovementRow: jest.Mock;
+};
+const { loadPinnedVersion } = jest.requireMock('../version_store') as {
+  loadPinnedVersion: jest.Mock;
 };
 const { TriggerRunRecorder } = jest.requireMock('../../runs/trigger_run') as {
   TriggerRunRecorder: jest.Mock;
@@ -173,6 +184,13 @@ const movementRow = (overrides: Record<string, unknown> = {}) => ({
   createdAt: new Date(),
   updatedAt: new Date(),
   ...overrides,
+});
+
+/** The movement as it fires: its row, and the version it shipped. The row's
+ *  live text is a draft that must never run. */
+const shippedMovement = (versionOverrides: Record<string, unknown> = {}) => ({
+  row: movementRow({ source: 'movement half_written(' }),
+  version: { id: 'mv-1', source: CLEAN_SOURCE, languageVersion: '0.12.0', ...versionOverrides },
 });
 
 const event: TriggerEvent = {
@@ -220,7 +238,7 @@ describe('runMovementFiring', () => {
       teamId: TEAM,
       triggerId: 't-1',
       triggerName: 'movement/intake_file/intake',
-      movementRow: movementRow() as never,
+      movement: shippedMovement() as never,
       event,
       recordingTriggerType: 'webhook',
     });
@@ -229,7 +247,12 @@ describe('runMovementFiring', () => {
     // movement the listen fires (name convention). Natural-name → internal-id
     // translation is the engine's adapter-layer concern now — no map rides
     // the runMovement input.
-    expect(runCatalogSnapshotForTeam).toHaveBeenCalledWith(TEAM, { source: CLEAN_SOURCE });
+    // The SHIPPED text, never the row's draft, with its imports' shipped text.
+    expect(runCatalogSnapshotForTeam).toHaveBeenCalledWith(TEAM, {
+      source: CLEAN_SOURCE,
+      languageVersion: '0.12.0',
+      imports: 'shipped',
+    });
     expect(runMovement).toHaveBeenCalledWith(
       expect.objectContaining({
         source: CLEAN_SOURCE,
@@ -264,7 +287,7 @@ describe('runMovementFiring', () => {
       teamId: TEAM,
       triggerId: 't-1',
       triggerName: 'movement/intake_file/intake',
-      movementRow: movementRow() as never,
+      movement: shippedMovement() as never,
       event,
       recordingTriggerType: 'webhook',
     });
@@ -284,7 +307,7 @@ describe('runMovementFiring', () => {
       teamId: TEAM,
       triggerId: 't-1',
       triggerName: 'movement/intake_file/intake',
-      movementRow: movementRow() as never,
+      movement: shippedMovement() as never,
       event,
       recordingTriggerType: 'webhook',
     });
@@ -309,7 +332,7 @@ describe('runMovementFiring', () => {
       teamId: TEAM,
       triggerId: 't-1',
       triggerName: 'movement/intake_file/intake',
-      movementRow: movementRow() as never,
+      movement: shippedMovement() as never,
       event,
       recordingTriggerType: 'webhook',
     });
@@ -334,7 +357,7 @@ describe('runMovementFiring', () => {
       teamId: TEAM,
       triggerId: 't-1',
       triggerName: 'movement/intake_file/intake',
-      movementRow: movementRow() as never,
+      movement: shippedMovement() as never,
       event,
       recordingTriggerType: 'webhook',
     });
@@ -368,7 +391,7 @@ describe('runMovementFiring', () => {
       teamId: TEAM,
       triggerId: 't-1',
       triggerName: 'movement/intake_file/intake',
-      movementRow: movementRow() as never,
+      movement: shippedMovement() as never,
       event,
       recordingTriggerType: 'webhook',
       dryRun: true,
@@ -410,7 +433,7 @@ describe('runMovementFiring', () => {
       teamId: TEAM,
       triggerId: 't-1',
       triggerName: 'movement/intake_file/intake',
-      movementRow: movementRow() as never,
+      movement: shippedMovement() as never,
       event,
       recordingTriggerType: 'webhook',
     });
@@ -438,7 +461,7 @@ describe('runMovementFiring', () => {
       teamId: TEAM,
       triggerId: 't-1',
       triggerName: 'movement/intake_file/intake',
-      movementRow: movementRow() as never,
+      movement: shippedMovement() as never,
       event,
       recordingTriggerType: 'webhook',
     });
@@ -447,13 +470,13 @@ describe('runMovementFiring', () => {
 });
 
 describe('a firing runs under the movement\'s language version pin', () => {
-  it('hands the engine the saved row\'s pin, not the current version', async () => {
+  it('hands the engine the shipped version\'s pin, not the current version', async () => {
     runMovement.mockResolvedValue({ movementName: 'intake', writes: [], extractionSites: {}, trace: [] });
     await runMovementFiring({
       teamId: TEAM,
       triggerId: 't-1',
       triggerName: 'movement/intake_file/intake',
-      movementRow: movementRow({ languageVersion: '1' }) as never,
+      movement: shippedMovement({ languageVersion: '1' }) as never,
       event,
       recordingTriggerType: 'webhook',
     });
@@ -575,5 +598,28 @@ describe('movementForTrigger', () => {
     await expect(
       movementForTrigger({ teamId: TEAM, movementId: 'ghost' }),
     ).resolves.toBeNull();
+  });
+});
+
+describe('shippedMovementForTrigger', () => {
+  it('is the row with its current version; the row\'s live text is not what fires', async () => {
+    getMovementRow.mockResolvedValue(movementRow({ source: 'a draft', languageVersion: '0.12.0' }));
+    loadPinnedVersion.mockResolvedValue({ source: CLEAN_SOURCE, languageVersion: '0.12.0' });
+    await expect(shippedMovementForTrigger({ teamId: TEAM, movementId: 'mov-1' })).resolves.toMatchObject({
+      kind: 'shipped',
+      movement: { row: { id: 'mov-1', source: 'a draft' }, version: { id: 'mv-1', source: CLEAN_SOURCE, languageVersion: '0.12.0' } },
+    });
+    expect(loadPinnedVersion).toHaveBeenCalledWith('mv-1');
+  });
+
+  it('a movement with no current version never shipped', async () => {
+    getMovementRow.mockResolvedValue(movementRow({ currentVersionId: null }));
+    await expect(shippedMovementForTrigger({ teamId: TEAM, movementId: 'mov-1' })).resolves.toEqual({ kind: 'not_shipped' });
+    expect(loadPinnedVersion).not.toHaveBeenCalled();
+  });
+
+  it('a gone row is missing', async () => {
+    getMovementRow.mockResolvedValue(null);
+    await expect(shippedMovementForTrigger({ teamId: TEAM, movementId: 'ghost' })).resolves.toEqual({ kind: 'missing' });
   });
 });

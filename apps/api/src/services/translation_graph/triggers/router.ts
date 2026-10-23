@@ -37,8 +37,8 @@ import { neverAsAny } from 'movement-engine/public/types';
 import { describeDroppedReason, type DroppedReason } from './dropped_reason';
 import { isLfEngineTeam } from '../../lf_engine/teams';
 import {
-  movementForTrigger,
   runMovementFiring,
+  shippedMovementForTrigger,
 } from '../movement/execute';
 
 // ── Trigger-id dispatch (R, 2026-05-28) ───────────────────────────────────
@@ -268,11 +268,26 @@ export async function dispatchTriggerByIdEvent(
   // `runMovementFiring`: a thrown engine error records a FAILED
   // trigger_run and comes back as a value — dispatch never crashes.
   if (triggerRow.movementId !== null) {
-    const movementRow = await movementForTrigger({
+    // What fires is the shipped version, never the row's live text: an edit
+    // whose save stopped at `needsConfirmation` changes nothing that runs.
+    // This holds under dry run too (a `dry_run` listener rehearses what would
+    // fire); the editor's test run, which tries the draft, does not come
+    // through here.
+    const fired = await shippedMovementForTrigger({
       teamId: input.teamId,
       movementId: triggerRow.movementId,
     });
-    if (!movementRow) {
+    if (fired.kind === 'not_shipped') {
+      logger.info('[TGRouter] dropped: the movement has never shipped', {
+        triggerId: input.triggerId,
+        movementId: triggerRow.movementId,
+      });
+      if (input.storedEventId !== undefined) {
+        await markTriggerEventSuppressed(input.storedEventId, describeDroppedReason('not_shipped'));
+      }
+      return { evaluations: [], droppedReason: 'not_shipped' };
+    }
+    if (fired.kind === 'missing') {
       logger.warn('[TGRouter] dispatchTriggerByIdEvent: movement row not found', {
         triggerId: input.triggerId,
         movementId: triggerRow.movementId,
@@ -294,7 +309,7 @@ export async function dispatchTriggerByIdEvent(
       ...(triggerRow.firedMovementName !== null
         ? { firedMovementName: triggerRow.firedMovementName }
         : {}),
-      movementRow,
+      movement: fired.movement,
       event: input.event,
       recordingTriggerType,
       dryRun,

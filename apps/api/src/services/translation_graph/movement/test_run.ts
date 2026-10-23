@@ -88,6 +88,9 @@ export async function runMovementTestRun(
     return { ok: false, error: 'This automation has no movement to run yet.' };
   }
 
+  // The test run tries the LIVE text, the draft the author is editing, with
+  // its imports' live text too: trying an edit before it ships is what it is
+  // for. Every firing runs the shipped version instead (./execute.ts).
   const movementRow = await getMovementRow({
     teamId: input.teamId as unknown as string,
     id: trigger.movementId,
@@ -153,6 +156,7 @@ export async function runMovementTestRun(
     teamCatalog = await runCatalogSnapshotForTeam(input.teamId, {
       source: movementRow.source,
       languageVersion: movementRow.languageVersion,
+      imports: 'live',
     });
   } catch (err) {
     return {

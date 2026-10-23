@@ -20,7 +20,8 @@
 // afterwards. A file with zero listens is a library — saving it retires
 // any previously derived triggers.
 //
-// EXECUTION reads the canonical text: a movement-derived trigger always
+// EXECUTION reads the SHIPPED text (the version a shipped save mints, not
+// the row's live source): a movement-derived trigger always
 // dispatches through `runMovement` (the movement engine,
 // services/movement_engine/run.ts) — see ./execute.ts and
 // triggers/router.ts. The trigger row is purely the dispatch index; it

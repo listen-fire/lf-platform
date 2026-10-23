@@ -190,6 +190,23 @@ export async function loadPinnedVersion(
   return row ? { source: row.source, languageVersion: row.language_version } : null;
 }
 
+/** The text a file runs as, found by its name (an import path): its current
+ *  version's source and pin. Null when no file has that name or the file never
+ *  shipped — a firing never imports a draft. */
+export async function loadShippedFileByName(input: {
+  teamId: string;
+  name: string;
+}): Promise<{ source: string; languageVersion: LanguageVersion } | null> {
+  const row = await getAutomationsQb(['movement', 'movement_version'])
+    .selectFrom('movement')
+    .innerJoin('movement_version', 'movement_version.id', 'movement.current_version_id')
+    .where('movement.team_id', '=', input.teamId)
+    .where('movement.name', '=', input.name)
+    .select(['movement_version.source as source', 'movement_version.language_version as language_version'])
+    .executeTakeFirst();
+  return row ? { source: row.source, languageVersion: row.language_version } : null;
+}
+
 /** Which saved version a run executed, against the one that would run
  *  today. A run pins its version at start, so a firing from before the
  *  last save ran OLDER logic than the editor shows — the thing that

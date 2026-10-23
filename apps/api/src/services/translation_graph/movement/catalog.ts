@@ -70,6 +70,7 @@ import { narrowForInspection, refineInstanceSchema } from './refinements';
 import { narrowEventPositions } from './listen_narrowing';
 import { positionConsumedHopKeys } from './listen_address';
 import { getMovementRowByName, listMovementRows } from './store';
+import { loadShippedFileByName } from './version_store';
 import {
   credentialImportNames,
   instanceSchemaFromDescriptors,
@@ -617,6 +618,35 @@ interface TeamCatalogOptions {
   /** `source`'s language-version pin — absent means the current version, as
    *  for an entry point given none. */
   languageVersion?: LanguageVersion;
+  /** Which text `source`'s file imports resolve to; absent means `live`. */
+  imports?: ImportText;
+}
+
+/**
+ * Which text an imported file resolves to. A firing imports what shipped (the
+ * file's current version), so an unconfirmed edit of a library changes nothing
+ * that runs. The editor, its checks and its test run import the live text: the
+ * drafts being edited. A file that never shipped has no text a firing can
+ * import, so the import is unresolved and the run fails loud.
+ */
+export type ImportText = 'shipped' | 'live';
+
+async function loadImportedFile(input: {
+  teamId: TeamId;
+  path: string;
+  imports: ImportText;
+}): Promise<{ source: string; languageVersion: LanguageVersion } | null> {
+  const teamId = input.teamId as unknown as string;
+  switch (input.imports) {
+    case 'shipped':
+      return loadShippedFileByName({ teamId, name: input.path });
+    case 'live': {
+      const row = await getMovementRowByName({ teamId, name: input.path });
+      return row === null ? null : { source: row.source, languageVersion: row.languageVersion };
+    }
+    default:
+      return neverAsAny(input.imports);
+  }
 }
 
 /** The compile catalog plus the pieces it was assembled from, so the run-path
@@ -653,10 +683,10 @@ async function assembleTeamCatalog(
       ? await assembleMovementFileSources({
           rootSource: options.source,
           load: async (path) => {
-            const row = await getMovementRowByName({ teamId: teamId as unknown as string, name: path });
-            if (row === null) return null;
-            filePins.set(path, row.languageVersion);
-            return row.source;
+            const file = await loadImportedFile({ teamId, path, imports: options.imports ?? 'live' });
+            if (file === null) return null;
+            filePins.set(path, file.languageVersion);
+            return file.source;
           },
         })
       : await allTeamMovementSources(teamId, filePins);
@@ -1495,7 +1525,7 @@ function credentialsOf(
  */
 export async function runCatalogSnapshotForTeam(
   teamId: TeamId,
-  options: { source: string; languageVersion?: LanguageVersion },
+  options: { source: string; languageVersion?: LanguageVersion; imports: ImportText },
 ): Promise<RunCatalogSnapshot> {
   return runSnapshotOf(await assembleTeamCatalog(teamId, options), options);
 }

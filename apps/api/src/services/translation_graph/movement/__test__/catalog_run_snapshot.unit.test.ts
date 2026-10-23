@@ -79,14 +79,14 @@ const PROGRAM = ['import { tidy } from "helpers"', 'movement intake(f: <Files>) 
 
 describe('runCatalogSnapshotForTeam', () => {
   it('carries exactly the import closure, not every saved movement', async () => {
-    const { snapshot } = await runCatalogSnapshotForTeam(TEAM, { source: PROGRAM });
+    const { snapshot } = await runCatalogSnapshotForTeam(TEAM, { source: PROGRAM, imports: 'live' });
 
     expect(snapshot.files).toEqual({ helpers: { source: LIBRARY } });
     expect(listMovementRows).not.toHaveBeenCalled();
   });
 
   it('hands the host the credential ids by import name', async () => {
-    const { snapshot, credentialIds } = await runCatalogSnapshotForTeam(TEAM, { source: PROGRAM });
+    const { snapshot, credentialIds } = await runCatalogSnapshotForTeam(TEAM, { source: PROGRAM, imports: 'live' });
 
     expect(credentialIds).toEqual({ 'Dev Loop Attio': 'cred-attio-1' });
     expect(Object.keys(snapshot.credentials)).toEqual(['Dev Loop Attio']);
