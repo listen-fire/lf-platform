@@ -17,6 +17,11 @@ versions are the git tags described in [`deploy/UPGRADING.md`](deploy/UPGRADING.
 
 <!-- add merged PRs here -->
 
+## [0.12.2] - 2026-10-23
+
+The platform release that matches the language's 0.12.2.
+
+- The language is installed at 0.12.2: every `@listen-fire/*` package this repository depends on, and the `fake-channels` image's `FAKE_CHANNELS_VERSION`. `lf` 0.12.2 refuses a movements module without `movements.watch`, which the slot below answers.
 - The movements slot (`POST /api/v1/system/slots/movements`) answers `movements.watch`, which `lf serve` and `lf drain` require from 0.12.2: a cloud `lf` now picks up a ship, a delete, a pause or resume, or a credential change within about two seconds instead of at its next start. A movement leaving what the team is served for any reason is reported `removed`. The api holds a quiet watch for at most 25 seconds, at most four per team per process; any proxy in front of the api must allow requests longer than that. Each api process opens one extra Postgres connection of its own while it holds a watch. The migration adds `automations.lf_movements_listing` (the listing behind each watch position, deleted after a day unseen) and triggers on `automations.movement`, `automations.trigger` and `automations.external_service_credentials` that notify a per-team channel. See "When `lf` sees an edit" in `deploy/SELF_HOSTING.md`.
 
 ## [0.12.1] - 2026-10-23
@@ -2190,7 +2195,8 @@ Releases before v0.11 are kept one file per minor line, newest first:
 - [v0.2.x](docs/changelog/v0.2.md) (v0.2.0)
 - [v0.1.x](docs/changelog/v0.1.md) (v0.1.0 to v0.1.2)
 
-[Unreleased]: https://github.com/listen-fire/lf-platform/compare/v0.12.1...HEAD
+[Unreleased]: https://github.com/listen-fire/lf-platform/compare/v0.12.2...HEAD
+[0.12.2]: https://github.com/listen-fire/lf-platform/compare/v0.12.1...v0.12.2
 [0.12.1]: https://github.com/listen-fire/lf-platform/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/listen-fire/lf-platform/compare/v0.12.0-rc.5...v0.12.0
 [0.12.0-rc.5]: https://github.com/listen-fire/listen-fire/compare/v0.12.0-rc.4...v0.12.0-rc.5

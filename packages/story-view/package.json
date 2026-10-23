@@ -17,7 +17,7 @@
     "esbuild": "0.23.1",
     "legacy-lang": "workspace:@listen-fire/legacy-lang@*",
     "lucide-react": "^0.574.0",
-    "movement-lang": "npm:@listen-fire/movement-lang@0.12.1",
+    "movement-lang": "npm:@listen-fire/movement-lang@0.12.2",
     "platform-constants": "workspace:@listen-fire/platform-constants@*",
     "react": "18.3.1",
     "react-dom": "18.3.1",
