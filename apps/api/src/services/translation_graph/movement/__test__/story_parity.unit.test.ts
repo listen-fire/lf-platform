@@ -17,7 +17,7 @@ import { LANGUAGE_VERSION, type CatalogSnapshot } from 'movement-lang';
 
 import { getMovementHandbook } from '../../../../lib/knowledge/movement_handbook';
 import { storyFromAnalysis } from '../story_from_analysis';
-import { compareStories, legacyStoryUnder5, rulingHits, type StoryComparison, type StoryDifference } from '../story_parity';
+import { compareStories, legacyStoryUnder5, rulingHits, type StoryComparison } from '../story_parity';
 import { LEGACY_STORY_SNAPSHOT, LEGACY_STORY_SOURCES } from './__fixtures__/story/legacy_story';
 import { STORY_VIEW_SNAPSHOT, STORY_VIEW_SOURCE } from './__fixtures__/story/story_view';
 
@@ -101,35 +101,6 @@ const corpus: Program[] = [
   ...probes,
 ];
 
-/**
- * Programs whose story differs only because the language's story recorder
- * under-records a movement's effects: it misses the read of `exists()` over a
- * walk with a hop WHERE (claims 16, 90) and of `File.read` (claims 24, 53,
- * 95, the chunks probe), and the `now` of `Date.today(zone)`, `DateTime.at`
- * and the `Date.*` members (claims 20, 96). The fix is the recorder's, in the
- * language repository, and lands with the re-packed movement-lang tarball;
- * this set goes with it.
- */
-const PENDING_LANGUAGE_FIX = new Set([
-  'claim 16',
-  'claim 20',
-  'claim 24',
-  'claim 53',
-  'claim 90',
-  'claim 95',
-  'claim 96',
-  'probe read_chunks_probe.mvt',
-]);
-
-/** Whether a difference is the recorder's under-recording: fewer reads, or `now` lost. */
-function isRecorderGap(difference: StoryDifference): boolean {
-  if (/\.effects\.now$/.test(difference.path)) return difference.legacy === true && difference.wasm === false;
-  if (/\.effects\.reads\.length$/.test(difference.path)) {
-    return typeof difference.legacy === 'number' && typeof difference.wasm === 'number' && difference.wasm < difference.legacy;
-  }
-  return /\.effects\.reads\[\d+\]$/.test(difference.path);
-}
-
 function compared(program: Program): StoryComparison {
   return compareStories(
     legacyStoryUnder5(program.source, program.snapshot),
@@ -156,19 +127,10 @@ describe('the story parity', () => {
       [`story parity: ${corpus.length} programs; hits ${JSON.stringify(hits)}`, ...ruled].join('\n'),
     );
     const differences = comparisons
-      .filter(({ program }) => !PENDING_LANGUAGE_FIX.has(program.id))
       .flatMap(({ program, comparison }) =>
         comparison.differences.map((d) => `${program.name} ${d.path}: ${JSON.stringify(d.legacy)} != ${JSON.stringify(d.wasm)}`),
       );
     expect(differences).toEqual([]);
-    // Each pending program still differs, and only by the recorder's gap: when
-    // the fixed tarball lands, this fails until the set is emptied.
-    for (const id of PENDING_LANGUAGE_FIX) {
-      const pending = comparisons.find(({ program }) => program.id === id);
-      expect(pending).toBeDefined();
-      expect(pending!.comparison.differences.length).toBeGreaterThan(0);
-      expect(pending!.comparison.differences.filter((d) => !isRecorderGap(d))).toEqual([]);
-    }
     for (const count of Object.values(hits)) expect(count).toBeGreaterThan(0);
   });
 });
