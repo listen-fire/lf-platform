@@ -44,7 +44,8 @@ import type {
 import { getAdapterManifest, inboundAddressFor } from '../adapters/registry';
 import { resolveEventPhrase } from '../vocabulary';
 import { movementCatalogForTeam, type TeamMovementCatalog } from './catalog';
-import { checkInstalled, presentationDialect, routeOf } from './language_route';
+import { routeOf } from './language_route';
+import { storyFromAnalysis } from './story_from_analysis';
 import {
   getMovementRow,
   listDerivedTriggerRows,
@@ -634,7 +635,6 @@ export async function projectStoryView(row: {
   if (route.kind === 'refused') {
     return { ok: false, reason: 'unreadable', movement, problems: [storyProblemOf(route.diagnostic)] };
   }
-  const dialect = presentationDialect(route.pin);
 
   // Same fallback the authoring path takes: assembling a source-scoped catalog
   // needs the source to parse, and the whole point of the unreadable branch is
@@ -651,36 +651,30 @@ export async function projectStoryView(row: {
     teamCatalog = await movementCatalogForTeam(row.teamId as TeamId, { types: [] });
   }
 
-  // A release pin's problems and validity are the wasm's, against the run
-  // snapshot, as on every other surface. legacy-lang's analysis under the
-  // pin's dialect only draws the picture.
-  const installed =
+  // A release pin's story is the wasm's story analysis against the run
+  // snapshot: one call for the verdict and the picture. A legacy id is
+  // legacy-lang's, under its own pin.
+  const validity = row.validityStatus !== null ? { validityStatus: row.validityStatus } : {};
+  const result =
     route.kind === 'installed'
-      ? checkInstalled({ source: row.source, snapshot: runSnapshotOf(teamCatalog), pin: route.pin })
-      : undefined;
-  // An installed line no legacy-lang dialect spells has a verdict but no
-  // analysis to draw it from.
-  if (dialect === null) {
-    return { ok: false, reason: 'unreadable', movement, problems: (installed ?? []).map(storyProblemOf) };
-  }
-
-  const result = storyOf({
-    source: row.source,
-    catalog: teamCatalog.catalog,
-    name: row.name,
-    resolveFile: teamCatalog.resolveFile,
-    ...(row.validityStatus !== null ? { validityStatus: row.validityStatus } : {}),
-    languageVersion: dialect,
-    ...(installed !== undefined ? { diagnostics: installed } : {}),
-  });
+      ? storyFromAnalysis({
+          source: row.source,
+          snapshot: runSnapshotOf(teamCatalog),
+          pin: route.pin,
+          name: row.name,
+          ...validity,
+        }).result
+      : storyOf({
+          source: row.source,
+          catalog: teamCatalog.catalog,
+          name: row.name,
+          resolveFile: teamCatalog.resolveFile,
+          languageVersion: route.pin,
+          ...validity,
+        });
 
   if (!result.ok) {
-    return {
-      ok: false,
-      reason: 'unreadable',
-      movement,
-      problems: installed !== undefined && installed.length > 0 ? installed.map(storyProblemOf) : result.problems,
-    };
+    return { ok: false, reason: 'unreadable', movement, problems: result.problems };
   }
 
   return {

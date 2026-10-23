@@ -1,0 +1,32 @@
+import { desk_sys, ledger_sys } from adapters
+import { desk_creds, ledger_creds } from credentials
+
+desk = connect desk_sys using desk_creds
+books = connect ledger_sys using ledger_creds
+
+type Mood = <"calm" | "cross">
+
+node Base: "the base" {
+  title: <text> "a title"
+}
+
+node Note extends Base {
+  mood: <Mood> "how it reads"
+  owner: <text | null> "who wrote it, if said"
+}
+
+function intake(n: <desk-[:note]->>) {
+  found = extractOne([n.`text`], Note)
+  org = write books-[:Orgs]-> { Title: n.`text` }
+  entry = write org-[:Entries]-> { Amount: 12 }
+  unlink org -[:Entries]-> entry
+  if (found == null) {
+    fail("nothing found")
+  } else {
+    write entry { Stage: "seen" }
+  }
+  done = race(() => { fail("late") }, () => { return true })
+  return 1
+}
+
+listen to desk { box: "inbound", events: ["note.filed"] } fire intake

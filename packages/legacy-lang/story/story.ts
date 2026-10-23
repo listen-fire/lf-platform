@@ -26,6 +26,8 @@ import {
   type CallStatement,
   type CollectionOp,
   type ExprSlot,
+  type ExtractCallExpression,
+  type ExtractExpression,
   type IfStatement,
   type ListenDeclaration,
   type MovementParam,
@@ -54,42 +56,28 @@ import {
   typeNameOf,
 } from 'movement-lang/parser/ast';
 import { MovementParseError, parseProgram } from '../parser/parse';
-import { expressionOfSlot } from '../expression/bridge';
 import { parseFieldTypeName, type Catalog, type SchemaFieldType } from '../checker/catalog';
-import { EMPTY_ROW, instanceNames, type EffectRow } from '../checker/effects';
-import { bodyExits, terminates, type Exits } from '../checker/flow';
 import type { ResolveFile } from '../checker/link';
 import { CURRENT_LANGUAGE_VERSION, assertLegacyDialect, type LanguageVersion } from '../language_version';
-import {
-  EXTRACT_ROOT_NAME,
-  maybeAbsent,
-  type ExtractNodeType,
-  type PositionTypeRef,
-} from '../checker/typing';
-import type { Scope, ScopeSymbol } from '../checker/scopes';
+import { maybeAbsent } from '../checker/typing';
 import {
   type CheckRecording,
   type Diagnostic,
   type DiagnosticSeverity,
-  type RecordedAwait,
-  type RecordedBranch,
-  type RecordedCall,
-  type RecordedCallReading,
-  type RecordedExtract,
-  type RecordedInstance,
-  type RecordedLanding,
-  type RecordedLink,
-  type RecordedListen,
-  type RecordedNode,
-  type RecordedCombinator,
-  type RecordedTraversal,
-  type RecordedWrite,
-  type RecordedValuePath,
   checkProgramWithLink,
   collectExpressionNames,
   diagnosticSeverity,
-  valuePathKey,
 } from '../checker/check';
+import { spanKey } from './facts';
+import type {
+  StoryFactCallReading,
+  StoryFactLanding,
+  StoryFactNode,
+  StoryFactSymbol,
+  StoryFactWrite,
+  StoryFacts,
+} from './facts';
+import { recordingFacts } from './recording_facts';
 
 // ── The IR ──
 
@@ -744,14 +732,29 @@ export interface ProjectStoryInput {
 
 /** The projection itself, for a caller that has already checked the program. */
 export function projectStory(input: ProjectStoryInput): StoryIR {
-  return new Projection(input).run();
+  return projectStoryFrom(recordingFacts(input.recording, input.languageVersion), {
+    program: input.program,
+    diagnostics: input.diagnostics,
+    ...(input.name !== undefined ? { name: input.name } : {}),
+    ...(input.validityStatus !== undefined ? { validityStatus: input.validityStatus } : {}),
+  });
+}
+
+export interface ProjectStoryFromInput {
+  program: Program;
+  diagnostics: Diagnostic[];
+  name?: string;
+  validityStatus?: StoryValidityStatus;
+}
+
+/** The projection over any source of the check's facts: this package's
+ *  recording for a legacy pin, the language's story analysis for a release
+ *  pin. */
+export function projectStoryFrom<S>(facts: StoryFacts<S>, input: ProjectStoryFromInput): StoryIR {
+  return new Projection(facts, input).run();
 }
 
 // ── Projection ──
-
-function spanKey(span: Span): string {
-  return `${span.start.line}:${span.start.col}-${span.end.line}:${span.end.col}`;
-}
 
 /** A record's id — derived from where it is WRITTEN, so it is stable across
  *  projections of the same source and unique by construction. */
@@ -832,46 +835,6 @@ function nameRead(expr: Expression): { name: string; field?: string } | undefine
   return { name: expr.aliasRoot, field: expr.expression.propertyTypeId };
 }
 
-/** The extraction node a type stands on, through the absence wrapper. */
-function extractNodeOf(type: PositionTypeRef): ExtractNodeType | undefined {
-  if (type.kind === 'extract') return type.node;
-  if (type.kind === 'maybeEmpty') return extractNodeOf(type.of);
-  return undefined;
-}
-
-/**
- * WHERE a type sits, as the pair a display label is looked up by. Only the
- * kinds that HAVE a place answer: a checker-local node belongs to no system, a
- * block meta and a race receipt are structures rather than positions, and
- * saying nothing for them is what keeps their references honest.
- */
-function positionAddress(
-  type: PositionTypeRef,
-): { instance?: string; recordType?: string } | undefined {
-  switch (type.kind) {
-    case 'position':
-      return { instance: type.instance.name, recordType: type.position };
-    case 'union':
-      return { instance: type.instance.name, recordType: type.union };
-    case 'handle':
-      return {
-        instance: type.instance.name,
-        ...(type.position !== undefined ? { recordType: type.position } : {}),
-      };
-    case 'meta':
-      return { instance: type.instance.name };
-    case 'maybeEmpty':
-      return positionAddress(type.of);
-    // One of several records has no one place.
-    case 'oneOf':
-      return undefined;
-    case 'extract':
-    case 'closure':
-    case 'local':
-      return undefined;
-  }
-}
-
 function typeRefOf(type: TypeRef | undefined): StoryParam['type'] {
   if (type === undefined) return undefined;
   return {
@@ -900,9 +863,7 @@ function shapeNodeOf(node: ShapeNode, position: string): StoryShapeNode {
   };
 }
 
-class Projection {
-  private readonly writes = new Map<string, RecordedWrite>();
-  private readonly nodes = new Map<string, RecordedNode>();
+class Projection<S> {
   /** Record id by the BINDING that holds it — how a parent path's root, an
    *  awaited ask handle, or a link endpoint finds the record it names. */
   private readonly recordByBinding = new Map<string, string>();
@@ -913,14 +874,6 @@ class Projection {
   /** Names bound to a deferred action. Flow order, for the same reason the two
    *  above are: `callback` is a thing the FLOW does, not a type a name has. */
   private readonly callbackBindings = new Set<string>();
-  /** Traversals walked inside an expression, by the slot they were written in
-   *  and the chain they walk — a slot can hold more than one. */
-  private readonly valuePaths = new Map<string, RecordedValuePath>();
-  /** A stable id per recorded value path, in recording order — the key a
-   *  resolved view hangs a walk's display vocabulary on, exactly as a head's
-   *  own span-derived id does. A slot can hold two walks, so the span alone
-   *  would not tell them apart. */
-  private readonly valuePathIds = new Map<string, string>();
   /** Names bound to a call's value, by the movement called. */
   private readonly callBindings = new Map<string, string>();
   private readonly records: StoryRecord[] = [];
@@ -928,39 +881,18 @@ class Projection {
   private readonly instances: StoryInstance[] = [];
   private readonly triggers: StoryTrigger[] = [];
 
-  constructor(private readonly input: ProjectStoryInput) {
-    for (const write of input.recording.writes) {
-      this.writes.set(spanKey(write.span), write);
-    }
-    for (const node of input.recording.nodes) {
-      this.nodes.set(`${node.kind}:${spanKey(node.span)}`, node);
-      if (node.kind === 'valuePath') {
-        const key = `${spanKey(node.span)}|${node.key}`;
-        if (!this.valuePaths.has(key)) {
-          this.valuePaths.set(key, node);
-          this.valuePathIds.set(key, `trv:${this.valuePathIds.size}:${spanKey(node.span)}`);
-        }
-      }
-    }
-  }
-
-  /** What leaves an `if` arm — the checker's own rule for this version, so a
-   *  lane is capped exactly where the checker narrows below the `if`. */
-  private armExits(): Exits {
-    return bodyExits(this.input.languageVersion);
-  }
+  constructor(
+    private readonly facts: StoryFacts<S>,
+    private readonly input: ProjectStoryFromInput,
+  ) {}
 
   run(): StoryIR {
-    for (const node of this.input.recording.nodes) {
-      if (node.kind === 'instance') this.addInstance(node);
-    }
+    for (const node of this.facts.instances()) this.addInstance(node);
     const flow = this.steps(this.input.program.statements);
     // After the flow walk: a listen is a file-level statement, so the trigger
     // rows are complete either way, but the record ids they could reference are
     // not until the walk has assigned them.
-    for (const node of this.input.recording.nodes) {
-      if (node.kind === 'listen') this.addTrigger(node);
-    }
+    for (const node of this.facts.listens()) this.addTrigger(node);
     return {
       movement: {
         ...(this.input.name !== undefined ? { name: this.input.name } : {}),
@@ -980,14 +912,10 @@ class Projection {
    *  another is shown whole — the tree the checker resolved, its base's members
    *  first — since that is what a `<Recap Entry>` carries. */
   private shapes(): StoryShapeNode[] {
-    const file = this.input.recording.frames[0]?.scope;
     const shapes: StoryShapeNode[] = [];
     for (const statement of this.input.program.statements) {
       if (statement.kind !== 'shape') continue;
-      const symbol = file?.symbols.get(statement.name);
-      const resolved =
-        symbol?.kind === 'shape' && sameSpan(symbol.span, statement.span) ? symbol.declaration : undefined;
-      shapes.push(shapeNodeOf((resolved ?? statement).root, statement.name));
+      shapes.push(shapeNodeOf(this.facts.shape(statement) ?? statement.root, statement.name));
     }
     return shapes;
   }
@@ -1008,7 +936,7 @@ class Projection {
     return { status, problems };
   }
 
-  private addInstance(node: RecordedInstance): void {
+  private addInstance(node: Extract<StoryFactNode<S>, { kind: 'instance' }>): void {
     this.instances.push({
       name: node.name,
       ...(node.adapterType !== undefined ? { adapterType: node.adapterType } : {}),
@@ -1021,7 +949,7 @@ class Projection {
     return this.instances.find((i) => i.name === instanceName)?.adapterType;
   }
 
-  private addTrigger(node: RecordedListen): void {
+  private addTrigger(node: Extract<StoryFactNode<S>, { kind: 'listen' }>): void {
     const listen = this.listenAt(node.span);
     this.triggers.push({
       id: triggerId(node.span),
@@ -1049,26 +977,24 @@ class Projection {
 
   // ── Names and expressions ──
 
-  private ref(name: string, scope: Scope): StoryRef {
-    const resolution = scope.resolve(name);
-    return resolution.kind === 'found'
-      ? { name, declaredAt: resolution.symbol.span }
-      : { name };
+  private ref(name: string, scope: S): StoryRef {
+    const symbol = this.facts.resolve(scope, name);
+    return symbol !== undefined ? { name, declaredAt: symbol.span } : { name };
   }
 
   /** A name as a graph endpoint: the record it holds, when it holds one. */
-  private endpoint(name: string, scope: Scope): StoryEndpoint {
+  private endpoint(name: string, scope: S): StoryEndpoint {
     const record = this.recordByBinding.get(name);
     return record !== undefined
       ? { kind: 'record', id: record }
       : { kind: 'binding', ref: this.ref(name, scope) };
   }
 
-  private chip(slot: ExprSlot, scope: Scope): Chip {
+  private chip(slot: ExprSlot, scope: S): Chip {
     const source = slot.raw.trim();
     let parsed: Expression;
     try {
-      parsed = expressionOfSlot(slot, this.input.languageVersion);
+      parsed = this.facts.expressionOf(slot);
     } catch {
       return { source, role: 'unparsed', refs: [], parts: [{ kind: 'text', text: source }] };
     }
@@ -1088,7 +1014,7 @@ class Projection {
    * phrase could be composed from without leaving part of it out, and stays
    * exactly as the author wrote it.
    */
-  private pathChip(head: PathHead, scope: Scope): Chip {
+  private pathChip(head: PathHead, scope: S): Chip {
     const source = rawPath(head);
     const walked = this.traversal(head, scope);
     const composable =
@@ -1129,11 +1055,11 @@ class Projection {
    * compiler's own printer over the parsed expression: still derived from
    * structure, never re-read off the syntax.
    */
-  private chipOfExpression(expr: Expression, scope: Scope): Chip {
+  private chipOfExpression(expr: Expression, scope: S): Chip {
     return this.chipOf(expr, serialize(expr, (id) => id), scope);
   }
 
-  private chipOf(parsed: Expression, source: string, scope: Scope, slot?: Span): Chip {
+  private chipOf(parsed: Expression, source: string, scope: S, slot?: Span): Chip {
     const refs = this.namesIn(parsed, scope);
     const role: Chip['role'] =
       containsExpressionType(parsed, 'llm') ? 'ai'
@@ -1160,7 +1086,7 @@ class Projection {
   private parts(
     parsed: Expression,
     source: string,
-    scope: Scope,
+    scope: S,
     slot: Span | undefined,
   ): ChipPart[] {
     return this.split(parsed, scope, slot) ?? [{ kind: 'text', text: source }];
@@ -1168,7 +1094,7 @@ class Projection {
 
   /** The parts of an expression whose shape has parts. `undefined` ⇒ it has
    *  none, and the caller decides what to show whole. */
-  private split(expr: Expression, scope: Scope, slot: Span | undefined): ChipPart[] | undefined {
+  private split(expr: Expression, scope: S, slot: Span | undefined): ChipPart[] | undefined {
     const whole = this.reference(expr, scope, slot);
     if (whole !== undefined) return [{ kind: 'reference', reference: whole }];
     switch (expr.type) {
@@ -1230,7 +1156,7 @@ class Projection {
     fn: string,
     argument: Expression,
     whole: Expression,
-    scope: Scope,
+    scope: S,
     slot: Span | undefined,
   ): ChipPart | undefined {
     if (slot === undefined) return undefined;
@@ -1251,19 +1177,17 @@ class Projection {
    */
   private valuePathTraversal(
     expr: Extract<Expression, { type: 'traverse' }>,
-    scope: Scope,
+    scope: S,
     slot: Span,
   ): StoryTraversal | undefined {
-    const key = `${spanKey(slot)}|${valuePathKey(expr.aliasRoot, expr.steps)}`;
-    const recorded = this.valuePaths.get(key);
-    const id = this.valuePathIds.get(key);
-    if (recorded === undefined || id === undefined) return undefined;
+    const recorded = this.facts.valuePath(slot, expr.aliasRoot, expr.steps);
+    if (recorded === undefined) return undefined;
     const hops = recorded.steps.flatMap((step, index) =>
       this.hop(step, recorded.landings[index], scope),
     );
     if (hops.length === 0) return undefined;
     return {
-      id,
+      id: recorded.id,
       source: serialize(expr, (name) => name),
       ...(recorded.root !== undefined ? { root: this.ref(recorded.root, scope) } : {}),
       hops,
@@ -1271,11 +1195,11 @@ class Projection {
   }
 
   /** A nested expression: split where it splits, shown whole where it does not. */
-  private pieces(expr: Expression, scope: Scope, slot: Span | undefined): ChipPart[] {
+  private pieces(expr: Expression, scope: S, slot: Span | undefined): ChipPart[] {
     return this.split(expr, scope, slot) ?? [this.piece(expr, scope, slot)];
   }
 
-  private piece(expr: Expression, scope: Scope, slot: Span | undefined): ChipPart {
+  private piece(expr: Expression, scope: S, slot: Span | undefined): ChipPart {
     const reference = this.reference(expr, scope, slot);
     if (reference !== undefined) return { kind: 'reference', reference };
     return {
@@ -1287,7 +1211,7 @@ class Projection {
 
   /** The names an expression reads, resolved — its own hop aliases excluded,
    *  since those are bound inside it and never leak out. */
-  private namesIn(expr: Expression, scope: Scope): StoryRef[] {
+  private namesIn(expr: Expression, scope: S): StoryRef[] {
     const names = collectExpressionNames(expr);
     return [...new Set(names.refs)]
       .filter((name) => !names.aliases.has(name))
@@ -1296,7 +1220,7 @@ class Projection {
 
   /** Inside a template a fixed run is the author's own PROSE, so it reads as
    *  words; anywhere else a fixed value is a value, and reads as one. */
-  private templatePiece(expr: Expression, scope: Scope, slot: Span | undefined): ChipPart {
+  private templatePiece(expr: Expression, scope: S, slot: Span | undefined): ChipPart {
     if (expr.type === 'static') return { kind: 'text', text: `${expr.value ?? ''}` };
     const split = this.split(expr, scope, slot);
     return split?.length === 1 && split[0] !== undefined ? split[0] : this.piece(expr, scope, slot);
@@ -1310,7 +1234,7 @@ class Projection {
    */
   private reference(
     expr: Expression,
-    scope: Scope,
+    scope: S,
     slot: Span | undefined,
   ): StoryReference | undefined {
     const read = nameRead(expr);
@@ -1338,16 +1262,14 @@ class Projection {
    */
   private pathReference(
     expr: Expression,
-    scope: Scope,
+    scope: S,
     slot: Span | undefined,
   ): StoryReference | undefined {
     if (slot === undefined) return undefined;
     if (expr.type !== 'traverse') return undefined;
     if (expr.aliasRoot === undefined || expr.steps.length === 0) return undefined;
     if (expr.expression.type !== 'property') return undefined;
-    const recorded = this.valuePaths.get(
-      `${spanKey(slot)}|${valuePathKey(expr.aliasRoot, expr.steps)}`,
-    );
+    const recorded = this.facts.valuePath(slot, expr.aliasRoot, expr.steps);
     if (recorded === undefined) return undefined;
     const hops = recorded.steps.flatMap((step, index) =>
       this.hop(step, recorded.landings[index], scope),
@@ -1372,15 +1294,15 @@ class Projection {
    * story, and the reader watched each of them happen. Everything else comes
    * off the checker's own type for the binding.
    */
-  private origin(name: string, scope: Scope): StoryOrigin | undefined {
+  private origin(name: string, scope: S): StoryOrigin | undefined {
     const record = this.recordByBinding.get(name);
     if (record !== undefined) return { kind: 'record', record };
     if (this.answerBindings.has(name)) return { kind: 'answer' };
     if (this.callbackBindings.has(name)) return { kind: 'callback', name };
     const called = this.callBindings.get(name);
     if (called !== undefined) return { kind: 'call', movement: called };
-    const resolution = scope.resolve(name);
-    return resolution.kind === 'found' ? this.originOfSymbol(resolution.symbol) : undefined;
+    const symbol = this.facts.resolve(scope, name);
+    return symbol !== undefined ? this.originOfSymbol(symbol) : undefined;
   }
 
   /**
@@ -1388,10 +1310,8 @@ class Projection {
    * A parameter whose type resolved to nothing carries no target, and the
    * renderer then says the parameter's name and stops.
    */
-  private param(param: MovementParam, inside: Scope): StoryParam {
-    const resolution = inside.resolve(param.name);
-    const posType = resolution.kind === 'found' ? resolution.symbol.posType : undefined;
-    const address = posType !== undefined ? positionAddress(posType) : undefined;
+  private param(param: MovementParam, inside: S): StoryParam {
+    const address = this.facts.resolve(inside, param.name)?.address;
     const authored = typeRefOf(typeNameOf(param.type));
     if (param.type !== undefined && isValueTypeRef(param.type)) {
       return { name: param.name, valueType: spellValueType(param.type) };
@@ -1410,17 +1330,15 @@ class Projection {
     };
   }
 
-  private originOfSymbol(symbol: ScopeSymbol): StoryOrigin | undefined {
-    const posType = symbol.posType;
-    if (posType === undefined) return undefined;
-    const extracted = extractNodeOf(posType);
+  private originOfSymbol(symbol: StoryFactSymbol): StoryOrigin | undefined {
+    const extracted = symbol.extracted;
     if (extracted !== undefined) {
       return {
         kind: 'extracted',
-        ...(extracted.name !== EXTRACT_ROOT_NAME ? { entity: extracted.name } : {}),
+        ...(extracted.entity !== undefined ? { entity: extracted.entity } : {}),
       };
     }
-    const address = positionAddress(posType);
+    const address = symbol.address;
     if (address === undefined) return undefined;
     const adapterType = this.adapterTypeOf(address.instance);
     const target: StoryTarget = {
@@ -1439,17 +1357,12 @@ class Projection {
    * the same sentence, and a sentence that fits two things names neither — so
    * the projection reports the collision and lets the renderer say which.
    */
-  private ambiguous(name: string, scope: Scope, origin: StoryOrigin): boolean {
+  private ambiguous(name: string, scope: S, origin: StoryOrigin): boolean {
     const key = this.phraseKey(origin);
-    const seen = new Set<string>();
-    for (let s: Scope | undefined = scope; s; s = s.parent) {
-      for (const other of s.symbols.keys()) {
-        if (seen.has(other)) continue; // an inner binding shadows an outer one
-        seen.add(other);
-        if (other === name) continue;
-        const otherOrigin = this.origin(other, scope);
-        if (otherOrigin !== undefined && this.phraseKey(otherOrigin) === key) return true;
-      }
+    for (const other of this.facts.visibleNames(scope)) {
+      if (other === name) continue;
+      const otherOrigin = this.origin(other, scope);
+      if (otherOrigin !== undefined && this.phraseKey(otherOrigin) === key) return true;
     }
     return false;
   }
@@ -1490,10 +1403,8 @@ class Projection {
    * checker never recorded (or never managed to parse) yields a traversal with
    * no hops, which says exactly that.
    */
-  private traversal(head: PathHead, scope: Scope): StoryTraversal {
-    const recorded = this.nodes.get(`traversal:${spanKey(head.span)}`);
-    const node: RecordedTraversal | undefined =
-      recorded?.kind === 'traversal' ? recorded : undefined;
+  private traversal(head: PathHead, scope: S): StoryTraversal {
+    const node = this.facts.node('traversal', head.span);
     return {
       id: traversalId(head.span),
       source: rawPath(head),
@@ -1513,8 +1424,8 @@ class Projection {
    *  anonymous one. */
   private hop(
     step: TraversalStep,
-    landing: RecordedLanding | undefined,
-    scope: Scope,
+    landing: StoryFactLanding | undefined,
+    scope: S,
   ): StoryHop[] {
     if (step.type !== 'edge' && step.type !== 'meta_edge') return [];
     const filter = step.type === 'edge' ? step.expressionFilter : undefined;
@@ -1528,7 +1439,7 @@ class Projection {
     ];
   }
 
-  private landing(landing: RecordedLanding): NonNullable<StoryHop['landing']> {
+  private landing(landing: StoryFactLanding): NonNullable<StoryHop['landing']> {
     const adapterType = this.adapterTypeOf(landing.instance);
     return {
       ...(adapterType !== undefined ? { adapterType } : {}),
@@ -1537,7 +1448,7 @@ class Projection {
     };
   }
 
-  private filter(expr: Expression, scope: Scope): StoryFilter {
+  private filter(expr: Expression, scope: S): StoryFilter {
     const simple = simpleComparisons(expr);
     if (simple === undefined) return { kind: 'expression', chip: this.chipOfExpression(expr, scope) };
     return {
@@ -1554,7 +1465,7 @@ class Projection {
 
   private addRecord(
     write: WriteExpression | MatchExpression,
-    recorded: RecordedWrite | undefined,
+    recorded: StoryFactWrite<S> | undefined,
   ): string {
     const id = recordId(write.span);
     const scope = recorded?.scope;
@@ -1633,7 +1544,7 @@ class Projection {
         // The checker records a frame for the movement whose span IS the
         // declaration's, so the parameters are looked up where they are BOUND —
         // their types are the checker's, never re-derived from the annotation.
-        const inside = this.scopeOfNearest(statement.span);
+        const inside = this.facts.scopeAt(statement.span);
         return {
           kind: 'movement',
           name: statement.name,
@@ -1642,11 +1553,11 @@ class Projection {
           // A `return` written straight in the body is a step on the spine,
           // not a capped lane, so it leaves the run's own ending to be drawn;
           // only a terminator that caps its lanes stands in for that ending.
-          terminates: terminates(statement.body.filter(s => s.kind !== 'return'), this.armExits()),
+          terminates: this.facts.terminates('movement', statement.span, statement.body),
           // The row is the checker's, filed on the declaration it belongs to —
           // read back through the same symbol the parameters were typed from,
           // never re-derived here.
-          effects: storyEffects(declaredMovementRow(inside, statement.name)),
+          effects: this.facts.movementEffects(inside, statement.name),
           at: statement.span,
         };
       }
@@ -1655,7 +1566,7 @@ class Projection {
       case 'return': {
         const effect = this.returnedEffectStep(statement.value, statement.span);
         if (effect !== undefined) return effect;
-        const scope = this.scopeOfNearest(statement.span);
+        const scope = this.facts.scopeAt(statement.span);
         return {
           kind: 'return',
           ...(statement.value.kind === 'expr'
@@ -1671,7 +1582,7 @@ class Projection {
       case 'write':
         return {
           kind: 'write',
-          record: this.addRecord(statement.write, this.writes.get(spanKey(statement.write.span))),
+          record: this.addRecord(statement.write, this.facts.write((statement.write.span))),
           at: statement.span,
         };
       case 'call': {
@@ -1696,7 +1607,9 @@ class Projection {
       case 'link':
         return this.linkSteps(statement.link);
       case 'unlink': {
-        const scope = this.scopeOfNearest(statement.span);
+        // The analysis records an unlink's scope; this package's recording does
+        // not, and the nearest frame is the scope it stood in.
+        const scope = this.facts.node('unlink', statement.span)?.scope ?? this.facts.scopeAt(statement.span);
         return {
           kind: 'unlink',
           edge: statement.edge,
@@ -1707,8 +1620,8 @@ class Projection {
       }
       case 'delete':
       case 'refresh': {
-        const recorded = this.nodes.get(`${statement.kind}:${spanKey(statement.span)}`);
-        const scope = recorded !== undefined ? recorded.scope : this.scopeOfNearest(statement.span);
+        const recorded = this.facts.node(statement.kind, statement.span);
+        const scope = recorded !== undefined ? recorded.scope : this.facts.scopeAt(statement.span);
         return {
           kind: statement.kind,
           subject: this.ref(statement.name, scope),
@@ -1733,11 +1646,11 @@ class Projection {
           kind: 'bind',
           of: 'collection',
           op: statement.collection.op,
-          over: this.chip(statement.collection.source, this.scopeOfNearest(statement.span)),
+          over: this.chip(statement.collection.source, this.facts.scopeAt(statement.span)),
           at: statement.span,
         };
       case 'error': {
-        const scope = this.scopeOfNearest(statement.span);
+        const scope = this.facts.scopeAt(statement.span);
         return { kind: 'error', message: this.chip(statement.message, scope), at: statement.span };
       }
     }
@@ -1753,7 +1666,7 @@ class Projection {
       case 'write':
         return {
           kind: 'write',
-          record: this.addRecord(value.write, this.writes.get(spanKey(value.write.span))),
+          record: this.addRecord(value.write, this.facts.write((value.write.span))),
           at,
         };
       case 'match':
@@ -1783,7 +1696,7 @@ class Projection {
       case 'write':
         return {
           kind: 'write',
-          record: this.addRecord(value.write, this.writes.get(spanKey(value.write.span))),
+          record: this.addRecord(value.write, this.facts.write((value.write.span))),
           at,
         };
       case 'match':
@@ -1791,11 +1704,11 @@ class Projection {
       case 'link':
         return this.linkSteps(value.link);
       case 'extract':
-        return this.extractStep(value.extract.span, value.extract.from, binding, at);
+        return this.extractStep(value.extract, value.extract.from, binding, at);
       // The call is the same step to a reader: what it read, and the tree of
       // what it found (the shape, recorded by the checker at the call).
       case 'extractCall':
-        return this.extractStep(value.extractCall.span, [value.extractCall.content], binding, at);
+        return this.extractStep(value.extractCall, [value.extractCall.content], binding, at);
       case 'await': {
         const src = value.await.source;
         if (src.kind === 'combinator') {
@@ -1822,24 +1735,24 @@ class Projection {
         // `call` at this span means the checker read it as an invocation; an
         // `instance` means it constructed one (already a top-level row, not a
         // step).
-        const call = this.nodes.get(`call:${spanKey(value.construct.span)}`);
+        const call = this.facts.node('call', value.construct.span);
         return call !== undefined
           ? this.callStep(constructionAsCall(value.construct), binding)
           : undefined;
       }
       case 'lazy': {
-        const scope = this.scopeOfNearest(at);
+        const scope = this.facts.scopeAt(at);
         return { kind: 'value', binding, value: this.pathChip(value.lazy.head, scope), at };
       }
       case 'expr': {
-        const scope = this.scopeOfNearest(at);
+        const scope = this.facts.scopeAt(at);
         return { kind: 'value', binding, value: this.chip(value.expr, scope), at };
       }
       case 'node':
         return {
           kind: 'node',
           binding,
-          node: this.nodeLiteral(value.node, this.scopeOfNearest(at)),
+          node: this.nodeLiteral(value.node, this.facts.scopeAt(at)),
           at,
         };
       // The body is projected by the ordinary flow walk. The checker already
@@ -1866,7 +1779,7 @@ class Projection {
           binding,
           of: value.kind,
           op: value.collection.op,
-          over: this.chip(value.collection.source, this.scopeOfNearest(at)),
+          over: this.chip(value.collection.source, this.facts.scopeAt(at)),
           at,
         };
       // `MEMBERS` binds a value the flow shows no richer form for — the same
@@ -1882,9 +1795,8 @@ class Projection {
 
   /** How the checker read a call whose callee is a built-in — undefined for
    *  a function's call (and wherever the checker recorded nothing). */
-  private builtinReading(call: CallStatement): RecordedCallReading['reading'] | undefined {
-    const recorded = this.nodes.get(`callReading:${spanKey(call.span)}`);
-    return recorded?.kind === 'callReading' ? recorded.reading : undefined;
+  private builtinReading(call: CallStatement): StoryFactCallReading | undefined {
+    return this.facts.node('callReading', call.span)?.reading;
   }
 
   /** A bound or returned call to a built-in, as the value form it resolved
@@ -1905,9 +1817,8 @@ class Projection {
   }
 
   private callStep(call: CallStatement, binding: string | undefined): Step {
-    const recorded = this.nodes.get(`call:${spanKey(call.span)}`);
-    const node = recorded?.kind === 'call' ? (recorded as RecordedCall) : undefined;
-    const scope = node?.scope ?? this.scopeOfNearest(call.span);
+    const node = this.facts.node('call', call.span);
+    const scope = node?.scope ?? this.facts.scopeAt(call.span);
     const args = call.args.map((arg, index) =>
       this.arg(arg, arg.name ?? node?.argParams?.[index] ?? `${index + 1}`, scope));
     if (binding !== undefined) this.callBindings.set(binding, call.callee);
@@ -1924,7 +1835,7 @@ class Projection {
   /** One argument. A POSITION argument is not a value, and it used to be
    *  dropped — which is how `notify(n: node { … })` rendered as a call with no
    *  arguments at all. Each form now carries what it actually is. */
-  private arg(arg: CallArg, name: string, scope: Scope): StoryArg {
+  private arg(arg: CallArg, name: string, scope: S): StoryArg {
     switch (arg.kind) {
       case 'expr':
         return { name, kind: 'value', chip: this.chip(arg.expr, scope) };
@@ -1946,13 +1857,13 @@ class Projection {
         return {
           name,
           kind: 'record',
-          record: this.addRecord(arg.write, this.writes.get(spanKey(arg.write.span))),
+          record: this.addRecord(arg.write, this.facts.write((arg.write.span))),
         };
     }
   }
 
   /** An assembled node, as its contents. */
-  private nodeLiteral(literal: NodeLiteral, scope: Scope): StoryNode {
+  private nodeLiteral(literal: NodeLiteral, scope: S): StoryNode {
     const fields: Record<string, Chip> = {};
     const children: StoryNode['children'] = [];
     for (const entry of literal.entries) {
@@ -1991,9 +1902,8 @@ class Projection {
    *  the link onto the record that match found. */
   private linkSteps(link: LinkExpression): Step[] {
     const found = link.to.kind === 'match' ? this.matchStep(link.to.match, link.to.match.span) : undefined;
-    const recorded = this.nodes.get(`link:${spanKey(link.span)}`);
-    if (recorded?.kind !== 'link') return found !== undefined ? [found] : [];
-    const node: RecordedLink = recorded;
+    const node = this.facts.node('link', link.span);
+    if (node === undefined) return found !== undefined ? [found] : [];
     const from = this.endpoint(node.from, node.scope);
     const to: StoryEndpoint =
       link.to.kind === 'handle'
@@ -2007,7 +1917,7 @@ class Projection {
   /** A `match` finds a row of the graph — recorded by the checker exactly as a
    *  write body is, with action `find`. */
   private matchStep(match: MatchExpression, at: Span): Extract<Step, { kind: 'match' }> {
-    const recorded = this.writes.get(spanKey(match.span));
+    const recorded = this.facts.write(match.span);
     return {
       kind: 'match',
       record: this.addRecord(match, recorded),
@@ -2017,19 +1927,19 @@ class Projection {
   }
 
   private extractStep(
-    span: Span,
+    written: ExtractExpression | ExtractCallExpression,
     from: ExprSlot[],
     binding: string | undefined,
     at: Span,
   ): Step {
-    const recorded = this.nodes.get(`extract:${spanKey(span)}`);
-    const node = recorded?.kind === 'extract' ? (recorded as RecordedExtract) : undefined;
-    const scope = node?.scope ?? this.scopeOfNearest(at);
+    const node = this.facts.node('extract', written.span);
+    const tree = node !== undefined ? this.facts.extractTree(written.span, written) : undefined;
+    const scope = node?.scope ?? this.facts.scopeAt(at);
     return {
       kind: 'extract',
       ...(binding !== undefined ? { binding } : {}),
       from: from.map((slot) => this.chip(slot, scope)),
-      ...(node !== undefined ? { tree: projectExtractNode(node.node) } : {}),
+      ...(tree !== undefined ? { tree } : {}),
       at,
     };
   }
@@ -2041,8 +1951,7 @@ class Projection {
    * what the record is called.
    */
   private awaitStep(span: Span, binding: string | undefined, at: Span): Step {
-    const recorded = this.nodes.get(`await:${spanKey(span)}`);
-    const node = recorded?.kind === 'await' ? (recorded as RecordedAwait) : undefined;
+    const node = this.facts.node('await', span);
     if (node === undefined) return { kind: 'wait', wait: { kind: 'edge' }, at };
     const source = node.source;
     if (source.kind === 'sleep') {
@@ -2100,8 +2009,7 @@ class Projection {
     binding: string | undefined,
     at: Span,
   ): Step {
-    const recorded = this.nodes.get(`combinator:${spanKey(expr.span)}`);
-    const node = recorded?.kind === 'combinator' ? (recorded as RecordedCombinator) : undefined;
+    const node = this.facts.node('combinator', expr.span);
     // Arms built at run time have no lanes to draw — the picture says what it
     // knows (the combinator ran, and what it bound), not a lane count it made up.
     const arms = writtenArms(expr.arms);
@@ -2117,7 +2025,7 @@ class Projection {
           steps: this.steps(arm.closure.body),
           // A `return` here is the arm's VALUE: the combinator takes it and the
           // run carries on, so only an `ERROR` caps a lane.
-          terminates: terminates(arm.closure.body, { returns: false }),
+          terminates: this.facts.terminates('combinatorArm', armAt, arm.closure.body),
           at: armAt,
         };
       }),
@@ -2127,8 +2035,7 @@ class Projection {
   }
 
   private branchStep(statement: IfStatement): Step {
-    const recorded = this.nodes.get(`branch:${spanKey(statement.span)}`);
-    const node = recorded?.kind === 'branch' ? (recorded as RecordedBranch) : undefined;
+    const node = this.facts.node('branch', statement.span);
     return {
       kind: 'branch',
       arms: statement.arms.map((arm, index) => ({
@@ -2136,17 +2043,17 @@ class Projection {
         // tests have narrowed, and where the checker read it.
         condition: this.chip(
           arm.condition,
-          node?.arms[index]?.scope ?? node?.scope ?? this.scopeOfNearest(arm.span),
+          node?.arms[index]?.scope ?? node?.scope ?? this.facts.scopeAt(arm.span),
         ),
         steps: this.steps(arm.body),
-        terminates: terminates(arm.body, this.armExits()),
+        terminates: this.facts.terminates('arm', arm.span, arm.body),
         at: arm.span,
       })),
       ...(statement.elseArm !== undefined
         ? {
             otherwise: {
               steps: this.steps(statement.elseArm.body),
-              terminates: terminates(statement.elseArm.body, this.armExits()),
+              terminates: this.facts.terminates('else', statement.elseArm.span, statement.elseArm.body),
               at: statement.elseArm.span,
             },
           }
@@ -2159,87 +2066,13 @@ class Projection {
 
   /** The scope a traversal block's HEAD was written in — the block's own frame
    *  is the body's, and the head resolves outside it. */
-  private blockScope(span: Span): Scope {
-    return this.scopeOfNearest(span);
+  private blockScope(span: Span): S {
+    return this.facts.scopeAt(span);
   }
-
-  /**
-   * The innermost recorded frame containing `span`. Used where no recorded node
-   * carries the scope directly (a statement the checker resolves without
-   * recording anything of its own); the frames were recorded by the same walk,
-   * so this is the scope the checker stood in.
-   */
-  private scopeOfNearest(span: Span): Scope {
-    let best: { span: Span; scope: Scope } | undefined;
-    for (const frame of this.input.recording.frames) {
-      if (!contains(frame.span, span)) continue;
-      if (best === undefined || contains(best.span, frame.span)) {
-        best = { span: frame.span, scope: frame.scope };
-      }
-    }
-    if (best !== undefined) return best.scope;
-    // The file frame is recorded first and covers everything; falling back to
-    // it keeps the projection total on a recording that has one.
-    const file = this.input.recording.frames[0];
-    if (file !== undefined) return file.scope;
-    throw new Error('projectStory: the recording has no scope frames');
-  }
-}
-
-// By value: a span read back from the checker's scope need not be the very
-// object the parse produced.
-function sameSpan(a: Span, b: Span): boolean {
-  return a.start.line === b.start.line && a.start.col === b.start.col && a.end.line === b.end.line && a.end.col === b.end.col;
-}
-
-function contains(outer: Span, inner: Span): boolean {
-  return before(outer.start, inner.start) && before(inner.end, outer.end);
-}
-
-/**
- * A declared movement's inferred row, off the symbol the checker filed it on.
- * An unchecked program (or one whose declaration never resolved) has no row —
- * which is a lower bound, not "does nothing", so the fallback says so.
- */
-function declaredMovementRow(scope: Scope, name: string): EffectRow {
-  const resolution = scope.resolve(name);
-  if (resolution.kind !== 'found') return { ...EMPTY_ROW, partial: true };
-  return resolution.symbol.movement?.effects ?? { ...EMPTY_ROW, partial: true };
-}
-
-function storyEffects(row: EffectRow): StoryEffects {
-  return {
-    reads: instanceNames(row.read),
-    writes: instanceNames(row.write),
-    ai: row.ai,
-    now: row.now,
-    suspend: row.suspend,
-    partial: row.partial,
-  };
-}
-
-function before(a: { line: number; col: number }, b: { line: number; col: number }): boolean {
-  return a.line < b.line || (a.line === b.line && a.col <= b.col);
-}
-
-function projectExtractNode(node: ExtractNodeType): StoryExtractNode {
-  return {
-    name: node.name,
-    ...(node.description !== undefined ? { description: node.description } : {}),
-    fields: [...node.properties.entries()].map(([name, info]) => ({
-      name,
-      ...(info.description !== undefined ? { description: info.description } : {}),
-      ...(info.explicit !== undefined
-        ? { type: info.nullable ? (maybeAbsent(info.explicit) ?? info.explicit) : info.explicit }
-        : {}),
-      at: info.span,
-    })),
-    children: [...node.children.values()].map(projectExtractNode),
-  };
 }
 
 /** Every statement in the program, nested bodies included. */
-function walkStatements(statements: Statement[], visit: (statement: Statement) => void): void {
+export function walkStatements(statements: Statement[], visit: (statement: Statement) => void): void {
   for (const statement of statements) {
     visit(statement);
     switch (statement.kind) {

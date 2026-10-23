@@ -37,6 +37,7 @@ export * from './checker/upgrade';
 export * from './checker/collection_config';
 export * from './checker/extract_config';
 export * from './story/story';
+export * from './story/facts';
 export * from './service/constructions';
 export * from './service/selectors';
 export * from './service/service';

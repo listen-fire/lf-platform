@@ -5,19 +5,44 @@
 // unrelated shapes with unrelated vocabularies, and one of them declares
 // nothing at all — a join that hardcoded either would fail on the other.
 
+/** Diagnostics the next story analysis answers in place of its own. */
 const wasmAnswers: { next: unknown[] | undefined } = { next: undefined };
+const calls = { storyAnalysisInRust: 0, checkSourceInRust: 0, checkProgramWithLink: 0, storyOf: [] as unknown[] };
 
 jest.mock('movement-lang', () => {
   const actual = jest.requireActual('movement-lang');
   return {
     ...actual,
-    checkSourceInRust: (...args: unknown[]) => wasmAnswers.next ?? actual.checkSourceInRust(...args),
+    storyAnalysisInRust: (...args: unknown[]) => {
+      calls.storyAnalysisInRust += 1;
+      const analysis = actual.storyAnalysisInRust(...args);
+      return wasmAnswers.next !== undefined ? { ...analysis, diagnostics: wasmAnswers.next } : analysis;
+    },
+    checkSourceInRust: (...args: unknown[]) => {
+      calls.checkSourceInRust += 1;
+      return actual.checkSourceInRust(...args);
+    },
+  };
+});
+jest.mock('legacy-lang', () => {
+  const actual = jest.requireActual('legacy-lang');
+  return {
+    ...actual,
+    checkProgramWithLink: (...args: unknown[]) => {
+      calls.checkProgramWithLink += 1;
+      return actual.checkProgramWithLink(...args);
+    },
+    storyOf: (input: { languageVersion?: unknown }) => {
+      calls.storyOf.push(input.languageVersion);
+      return actual.storyOf(input);
+    },
   };
 });
 jest.mock('../catalog', () => ({ movementCatalogForTeam: jest.fn() }));
 jest.mock('../store', () => ({ getMovementRow: jest.fn(), listDerivedTriggerRows: jest.fn(async () => []) }));
 
-import { LANGUAGE_VERSION, mockCatalog, mockCatalogSnapshot, type InstanceSchema } from 'movement-lang';
+import { LANGUAGE_VERSION } from 'movement-lang';
+import { STORY_VIEW_CATALOG, STORY_VIEW_SNAPSHOT, STORY_VIEW_SOURCE } from './__fixtures__/story/story_view';
 import { storyOf, type StoryIR } from 'legacy-lang';
 
 import { movementCatalogForTeam, type TeamMovementCatalog } from '../catalog';
@@ -33,92 +58,8 @@ import {
 
 // ── Fixture: two systems that share no vocabulary ──
 
-/** The trigger side, plus the pause: a desk whose Query root awaits a Reply. */
-const deskSchema: InstanceSchema = {
-  positions: {
-    note: { properties: { text: 'text' }, edges: {} },
-    reply: { properties: { answer: 'boolean' }, edges: {} },
-  },
-  collections: { Query: { target: 'Query' } },
-  supportsInPlaceUpdate: true,
-  writableRoots: {
-    Query: {
-      fields: { prompt: 'text' },
-      resultShape: { externalId: 'text' },
-      edges: { Reply: { target: 'reply', awaitable: true, watchable: true, resolvesEmpty: true } },
-    },
-  },
-  eventPositions: [{ position: 'note', on: ['note.filed'] }],
-};
-
-/** The write side: a two-record graph with a parent edge. */
-const ledgerSchema: InstanceSchema = {
-  positions: {
-    Orgs: { properties: { Title: 'text' }, edges: { Entries: { target: 'Entries', writable: true } } },
-    Entries: { properties: { Amount: 'number' }, edges: {} },
-  },
-  collections: { Orgs: { target: 'Orgs' } },
-  supportsInPlaceUpdate: true,
-  writableRoots: {
-    Orgs: {
-      fields: { Title: 'text' },
-      resultShape: { externalId: 'text' },
-      edges: { Entries: { target: 'Entries', writable: true } },
-    },
-    Entries: { fields: { Amount: 'number', Stage: 'text' }, resultShape: {} },
-  },
-};
-
-const catalog = mockCatalog({
-  adapters: {
-    desk_sys: {
-      constructionArgs: [{ name: 'credentials', kind: 'credential', required: true }],
-      triggerConfig: ['box', 'events'],
-      triggerConfigOptions: { events: ['note.filed'] },
-      schema: deskSchema,
-    },
-    ledger_sys: {
-      constructionArgs: [{ name: 'credentials', kind: 'credential', required: true }],
-      schema: ledgerSchema,
-    },
-  },
-  credentials: { desk_creds: { adapter: 'desk_sys' }, ledger_creds: { adapter: 'ledger_sys' } },
-});
-
-const SOURCE = `import { desk_sys, ledger_sys } from adapters
-import { desk_creds, ledger_creds } from credentials
-
-desk = connect desk_sys using desk_creds
-books = connect ledger_sys using ledger_creds
-
-function intake(n: <desk-[:note]->>) {
-  facts = extractOne([n.\`text\`], node Facts: "what the note says" {
-    who: <text> "who filed it"
-    node vendor: "the supplier it mentions" {
-      title: <text> "the supplier's name"
-      node contact: "anyone named at the supplier" {
-        email: <text> "their email address"
-      }
-    }
-  })
-  org = write books-[:Orgs]-> { unique by (\`Title\`) Title: n.\`text\` }
-  entry = write org-[:Entries]-> { Amount: 12 }
-  books-[shop:Orgs WHERE shop.\`Title\` == "acme"]-> {
-    seen = shop.\`Title\`
-  }
-  org-[line:Entries]-> {
-    seen_line = line.\`Amount\`
-  }
-  q = write desk-[:Query]-> { prompt: "approve this?" }
-  ok = await first(q-[:Reply]->)
-  if (ok) {
-    write entry { Stage: "settled" }
-  }
-  await sleep(2d)
-}
-
-listen to desk { box: "inbound", events: ["note.filed"] } fire intake
-`;
+const catalog = STORY_VIEW_CATALOG;
+const SOURCE = STORY_VIEW_SOURCE;
 
 /**
  * Display vocabulary that agrees with NOTHING in the program's own spelling —
@@ -744,23 +685,41 @@ describe('storyVocabularyOf', () => {
 
 // ── The projection of a saved row: whose verdict it carries ──
 
+/** The fixture's systems, as a program pinned before 0.12 spells them. */
+const LEGACY_SOURCE = `import { desk_sys, ledger_sys } from adapters
+import { desk_creds, ledger_creds } from credentials
+
+desk = desk_sys(credentials: desk_creds)
+books = ledger_sys(credentials: ledger_creds)
+
+movement intake(n: <desk-[:note]->>) {
+  org = write books-[:Orgs]-> { Title: n.\`text\` }
+}
+
+listen to desk { box: "inbound", events: ["note.filed"] } fire intake
+`;
+
 describe('projectStoryView', () => {
   const teamCatalog = {
     catalog,
     resolveFile: () => undefined,
     instanceSchemas: [],
-    runSnapshot: () => mockCatalogSnapshot({ adapters: {} }),
+    runSnapshot: () => STORY_VIEW_SNAPSHOT,
   } as unknown as TeamMovementCatalog;
   const row = { id: 'mv-1', teamId: 'team-1', name: 'Intake', source: SOURCE, validityStatus: null };
 
   beforeEach(() => {
     jest.mocked(movementCatalogForTeam).mockResolvedValue(teamCatalog);
+    calls.storyAnalysisInRust = 0;
+    calls.checkSourceInRust = 0;
+    calls.checkProgramWithLink = 0;
+    calls.storyOf = [];
   });
   afterEach(() => {
     wasmAnswers.next = undefined;
   });
 
-  it('an installed pin carries the wasm\'s problems and validity, while the legacy analysis draws the flow', async () => {
+  it('an installed pin carries the wasm\'s problems and validity, and the analysis draws the flow', async () => {
     wasmAnswers.next = [
       {
         code: 'MOV_SCHEMA',
@@ -774,6 +733,32 @@ describe('projectStoryView', () => {
     expect(result.view.movement.validity.problems.map((p) => p.message)).toEqual(['only the wasm would say this']);
     expect(result.view.triggers).toHaveLength(1);
     expect(result.view.records.length).toBeGreaterThan(0);
+  });
+
+  it("an installed pin's verdict and picture come from one story analysis", async () => {
+    const result = await projectStoryView({ ...row, languageVersion: LANGUAGE_VERSION });
+    if (!result.ok) throw new Error(`expected a view, got ${result.reason}`);
+    expect(calls).toEqual({ storyAnalysisInRust: 1, checkSourceInRust: 0, checkProgramWithLink: 0, storyOf: [] });
+    expect(result.view.movement.validity.status).toBe('valid');
+    expect(result.view.triggers).toHaveLength(1);
+    expect(result.view.records.map((r) => r.binding)).toEqual(['org', 'entry', 'q', undefined]);
+  });
+
+  it('a legacy pin is still drawn by legacy-lang', async () => {
+    const result = await projectStoryView({ ...row, source: LEGACY_SOURCE, languageVersion: '4' });
+    if (!result.ok) throw new Error(`expected a view, got ${result.reason}`);
+    expect(calls.storyOf).toEqual(['4']);
+    expect(calls.storyAnalysisInRust).toBe(0);
+    expect(result.view.triggers).toHaveLength(1);
+    expect(result.view.records.map((r) => r.binding)).toEqual(['org']);
+  });
+
+  it("a source the artifact will not read is unreadable with its refusal at 1:1, as the check reports it", async () => {
+    const result = await projectStoryView({ ...row, source: 'function m( {{{{', languageVersion: LANGUAGE_VERSION });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.problems).toHaveLength(1);
+    expect(result.problems[0]).toMatchObject({ code: 'MOV_PARSE', span: { start: { line: 1, col: 1 } } });
   });
 
   it('a pin from a line the installed language does not read is unreadable with its version problem', async () => {
