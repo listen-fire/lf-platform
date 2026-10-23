@@ -19,6 +19,7 @@ versions are the git tags described in [`deploy/UPGRADING.md`](deploy/UPGRADING.
 
 - The editor's completion, hover and go-to-definition, and the story of a movement pinned to a release (the workbench panel and the public link), now come from the language's wasm. A movement pinned to a legacy id (1 to 4) is still served by the platform's own copy of the language, so verdicts do not change. The editor asks the api through three new `views.movement` mutations, `complete`, `hover` and `definition`.
 - The agent's completions route answers a release pin with the language's ten completion kinds (`label`, `kind`, optional `detail`), where it answered the platform copy's kinds before; a legacy pin's answer is unchanged.
+- A third deployment shape, the wake: with `AUTOMATIONS_DRAIN_MODE=external`, `WAKE_MODULE=@listen-fire/wake-cloud-tasks` and its `WAKE_SETTING__…` settings on the API and the drain job, each work row's due time becomes a Google Cloud Tasks task that starts the drain-once job, so Cloud Scheduler drops to an hourly safety tick. Unset, nothing changes. See "Deployment shapes" in `deploy/SELF_HOSTING.md`.
 
 ## [0.12.0] - 2026-10-23
 

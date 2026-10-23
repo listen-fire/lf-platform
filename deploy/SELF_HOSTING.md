@@ -327,7 +327,7 @@ Demo mode is a way to look at Listen-Fire, not a security posture. Do not expose
 
 ## Deployment shapes
 
-Automations' background work is rows in one work table (see "Automations" below), and something has to drain it. There are two ways to run that.
+Automations' background work is rows in one work table (see "Automations" below), and something has to drain it. There are three ways to run that.
 
 ### 1. Always-on loop (the default)
 
@@ -354,6 +354,27 @@ On GCP:
 | a door's notify | `AUTOMATIONS_TICK_URLS` set to the Cloud Run service's drain endpoint, which any instance answers, with `api_key` among `SYSTEM_AUTH_MODES` (the notifier sends the key). A Pub/Sub push subscription delivering straight to that endpoint is the managed fan-in: give it an OIDC token whose audience is the drain URL and whose service account is on `SYSTEM_AUTH_OIDC_ALLOWED_SUBJECTS`, with `oidc` among the modes |
 | the schedule | Cloud Scheduler, an HTTP job POSTing the drain endpoint every minute with an OIDC token the same way (audience the drain URL, its service account allow-listed), or with the `system` key in its `Authorization` header |
 | a pure-schedule deployment | a Cloud Run job running `node build/scripts/drain_once.js`, triggered by Cloud Scheduler, with no notify set |
+
+### 3. Wake
+
+External mode with the drain-once job, and nothing draining between rows: a wake module turns each row's due time into a Cloud Tasks task that starts the job. A webhook's work starts the job now; a timer, a cron's next fire, a poll's next pull or a retry starts it at its due time. An idle installation starts no job at all, where a one-minute schedule boots one every minute.
+
+- Set `AUTOMATIONS_DRAIN_MODE=external` and `WAKE_MODULE=@listen-fire/wake-cloud-tasks`, with its settings as `WAKE_SETTING__<NAME>`:
+  - `WAKE_SETTING__QUEUE`: the queue, `projects/<project>/locations/<location>/queues/<name>`;
+  - `WAKE_SETTING__JOB`: the drain-once job, `projects/<project>/locations/<location>/jobs/<name>`;
+  - `WAKE_SETTING__INVOKER_SERVICE_ACCOUNT`: the account whose OAuth token each task carries to start the job;
+  - `WAKE_SETTING__COALESCE_WINDOW_MS` (optional, default 60000): wakes inside one window make one task, named `<job>-<window>`;
+  - `WAKE_SETTING__CLIENT_EMAIL` and `WAKE_SETTING__PRIVATE_KEY` (optional, together): a key the module signs its own calls with. On Google Cloud leave both unset, and the service's own account is used.
+- Set the same settings on the API service and on the drain job. The job's own re-arms (a poll's next pull, a cron's next fire, a retry) are wakes too, and it waits up to 5 s for them before it exits.
+- IAM:
+  - the API's and the job's accounts need `roles/cloudtasks.enqueuer` on the queue, `cloudtasks.tasks.get` (`roles/cloudtasks.viewer`), and `iam.serviceAccountUser` on the invoker account;
+  - the invoker needs `run.jobs.run` on the job (`roles/run.invoker`).
+- Reduce Cloud Scheduler to an hourly safety tick, and leave `AUTOMATIONS_TICK_URLS` unset: the wake replaces the door's notify.
+- What waits for the safety tick or the next drain:
+  - the periodic sweeps, which are never woken (any drain runs them), so a run whose process died is failed at the next drain rather than within a minute and a half;
+  - a newly shipped cron or poll's first arming, which a sweep does.
+- A failed wake loses no work. An enqueue waits at most a second for the wake's answer, then goes on; the failure is logged at most once a minute (`[work] the wake was not told of <kind> work (…)`), and the row drains at the next tick.
+- The boot log names the wake (`[wake] each row's due time is told to @listen-fire/wake-cloud-tasks: …`). A setting the module refuses, an unknown `WAKE_MODULE`, or `WAKE_MODULE` with `loop` mode fails boot naming it.
 
 ### Who may call the system endpoints
 
@@ -941,6 +962,8 @@ Everything here is set by you, in `deploy/.env`. Nothing in this table is genera
 | `MOVEMENT_WRITE_LOCK_TIMEOUT_MS` | no | 60000 — how many milliseconds a write waits for another run's lock on the same record (or record type, for `unique by`) before its step fails with `write lock timeout: <name>`; see "Automations". Boot refuses anything that is not a positive whole number |
 | `AUTOMATIONS_DRAIN_MODE` | no | `loop` — each instance drains automations' work on its own timer. `external` turns the timer off, and every pass is a call to the drain endpoint; see "Deployment shapes". Boot refuses any other value |
 | `AUTOMATIONS_TICK_URLS` / `AUTOMATIONS_TICK_KEY` | no | in `external` mode, a door's work waits for the next scheduled tick. Set both (comma-separated drain endpoint URLs, and a `system` scope key) to have each enqueue POST a tick to every URL; half the pair fails boot naming both. Ignored in `loop` mode |
+| `WAKE_MODULE` | no | unset — nothing is told when work comes due, and every pass comes from the drain mode. `@listen-fire/wake-cloud-tasks` makes each row's due time a Cloud Tasks task that starts the drain-once job; see "Deployment shapes". Requires `external` mode; any other module fails boot |
+| `WAKE_SETTING__<NAME>` | with `WAKE_MODULE` | the module's settings: `QUEUE`, `JOB` and `INVOKER_SERVICE_ACCOUNT` required, `COALESCE_WINDOW_MS`, `CLIENT_EMAIL` and `PRIVATE_KEY` optional; see "Deployment shapes". A setting the module refuses fails boot naming it |
 | `SYSTEM_AUTH_MODES` | no | `api_key` — the system endpoints accept a `system` scope key. A comma-separated list of `api_key` and `oidc`; see "Who may call the system endpoints". Boot refuses any other mode |
 | `SYSTEM_AUTH_OIDC_ISSUER` / `SYSTEM_AUTH_OIDC_AUDIENCE` / `SYSTEM_AUTH_OIDC_ALLOWED_SUBJECTS` | with `oidc` | the issuer whose keys sign the tokens (`https://accounts.google.com`), the audience they must name (the drain URL), and the comma-separated subjects or verified emails allowed. Boot refuses `oidc` without all three |
 | `GOOGLE_MODEL_REGION` | no | `global` — where models are addressed on Google Cloud, for both the `vertex` (Claude) and `gemini` providers. `GOOGLE_PROJECT_LOCATION` is separate and stays the location OCR uses |
