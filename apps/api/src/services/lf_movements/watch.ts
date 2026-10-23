@@ -40,7 +40,7 @@ import { servedMovements, type ServedMovementsTenant } from './rows';
 export const WATCH_HOLD_MS = 25_000;
 
 /** The most watches of one team held at once in one process. */
-export const WATCH_HELD_PER_TEAM = 4;
+const WATCH_HELD_PER_TEAM = 4;
 
 /** A listing row unseen this long is deleted when the team's next listing is stored. */
 const LISTING_UNSEEN_DAYS = 1;
@@ -50,7 +50,7 @@ interface Listed {
   version: string;
 }
 
-export interface MovementsWatcherOptions {
+interface MovementsWatcherOptions {
   changes: TeamChanges;
   holdMs?: number;
   heldPerTeam?: number;

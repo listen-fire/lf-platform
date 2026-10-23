@@ -18,7 +18,7 @@ const CLIENT_KEEPALIVE_DELAY_MS = 30_000;
 /** What a held watch waits on: `changed` when the team's channel was notified
  *  (since subscribing, or since the last wait), `lost` when the connection
  *  dropped, `quiet` when the time ran out first. */
-export type TeamChangeWake = 'changed' | 'lost' | 'quiet';
+type TeamChangeWake = 'changed' | 'lost' | 'quiet';
 
 export interface TeamChangeSubscription {
   /** Waits up to `ms` for the team's channel. A notification that arrived
