@@ -15,6 +15,7 @@ const card = (overrides: Partial<EngineCardProps>) =>
       confirming: false,
       busy: false,
       error: null,
+      notes: [],
       onAsk: noop,
       onConfirm: noop,
       onCancel: noop,
@@ -42,6 +43,7 @@ describe("the team engine toggle", () => {
     expect(toLf).toContain(escaped(SWITCH_CONSEQUENCES.lf));
     expect(SWITCH_CONSEQUENCES.lf).toContain("The platform stops running this team's automations");
     expect(SWITCH_CONSEQUENCES.lf).toContain("A cloud lf must take over");
+    expect(SWITCH_CONSEQUENCES.lf).toContain("webhooks and polls it registered for them are removed");
     expect(toLf).toContain('data-testid="team-engine-confirm-yes"');
 
     const toPlatform = card({ engine: "lf", confirming: true });
@@ -62,5 +64,12 @@ describe("the team engine toggle", () => {
     expect(card({ error: "Only members with write access can switch the team's engine." })).toContain(
       'data-testid="team-engine-error"',
     );
+  });
+
+  it("lists what a vendor refused after a switch", () => {
+    const html = card({ notes: ["acme: external deregistration failed (timeout) — subscription retired locally"] });
+    expect(html).toContain('data-testid="team-engine-notes"');
+    expect(html).toContain("external deregistration failed");
+    expect(card({})).not.toContain('data-testid="team-engine-notes"');
   });
 });

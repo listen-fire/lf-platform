@@ -55,11 +55,11 @@ describe("the team's engine on its settings page", () => {
   });
 
   it('a member with write access switches it, and is recorded as the one who did', async () => {
-    expect(await actingAs(admin, (c) => c.set({ engine: 'lf' }))).toEqual({ ok: { engine: 'lf', changed: true } });
+    expect(await actingAs(admin, (c) => c.set({ engine: 'lf' }))).toEqual({ ok: { engine: 'lf', changed: true, notes: [] } });
     const read = await actingAs(reader, (c) => c.get());
     expect(read).toEqual({ ok: { engine: 'lf', changedAt: expect.any(String), changedBy: admin.userId } });
 
-    expect(await actingAs(admin, (c) => c.set({ engine: 'platform' }))).toEqual({ ok: { engine: 'platform', changed: true } });
+    expect(await actingAs(admin, (c) => c.set({ engine: 'platform' }))).toEqual({ ok: { engine: 'platform', changed: true, notes: [] } });
     expect((await readTeamEngine(teamId)).engine).toBe('platform');
   });
 
@@ -70,7 +70,7 @@ describe("the team's engine on its settings page", () => {
   });
 
   it("a switch acts on the actor's own team only", async () => {
-    expect(await actingAs(outsider, (c) => c.set({ engine: 'lf' }))).toEqual({ ok: { engine: 'lf', changed: true } });
+    expect(await actingAs(outsider, (c) => c.set({ engine: 'lf' }))).toEqual({ ok: { engine: 'lf', changed: true, notes: [] } });
     expect((await readTeamEngine(otherTeamId)).engine).toBe('lf');
     expect((await readTeamEngine(teamId)).engine).toBe('platform');
   });

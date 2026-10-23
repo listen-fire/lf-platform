@@ -14,9 +14,9 @@ export type Engine = "platform" | "lf";
 /** What each switch does, said before the second click. */
 export const SWITCH_CONSEQUENCES: Record<Engine, string> = {
   lf:
-    "The platform stops running this team's automations: every firing is dropped (the events are kept and can be replayed). A cloud lf must take over. Start it once this switch is a few seconds old.",
+    "The platform stops running this team's automations: every firing is dropped (the events are kept and can be replayed), and the webhooks and polls it registered for them are removed. A cloud lf must take over. Start it once this switch is a few seconds old.",
   platform:
-    "Stop the cloud lf first. The platform starts running this team's automations again within a few seconds.",
+    "Stop the cloud lf first. The platform registers this team's webhooks and polls again and starts running its automations within a few seconds.",
 };
 
 const WHERE: Record<Engine, string> = {
@@ -44,6 +44,8 @@ export interface EngineCardProps {
   confirming: boolean;
   busy: boolean;
   error: string | null;
+  /** What the last switch could not do with a vendor's webhooks, one line each. */
+  notes: string[];
   onAsk: () => void;
   onConfirm: () => void;
   onCancel: () => void;
@@ -96,6 +98,16 @@ export function EngineCard(props: EngineCardProps) {
           <Button variant="secondary" size="sm" onClick={props.onAsk} data-testid="team-engine-switch">
             {SWITCH_LABEL[target]}
           </Button>
+        </div>
+      )}
+      {props.notes.length > 0 && (
+        <div className="mt-2 text-[12px] text-amber-700" data-testid="team-engine-notes">
+          <p>Switched, but not every webhook followed:</p>
+          <ul className="mt-1 list-disc pl-4">
+            {props.notes.map((note) => (
+              <li key={note}>{note}</li>
+            ))}
+          </ul>
         </div>
       )}
       {props.error !== null && (

@@ -20,6 +20,8 @@ jest.mock('../../../../lib/kysely', () => {
     translation_graph: [],
     team: [],
     webhook_subscription: [],
+    // The subscription sync reads the team's engine (none here: the platform).
+    team_engine: [],
     movement_version: [],
     // Retiring a listener settles the runs parked on it
     // (`settleRunsParkedOnTriggers`), so the retire path reads both of these.

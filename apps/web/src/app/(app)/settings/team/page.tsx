@@ -532,10 +532,12 @@ function EngineSection({ canWrite, members }: { canWrite: boolean; members: Memb
   const utils = trpc.useUtils();
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notes, setNotes] = useState<string[]>([]);
   const change = trpc.views.teamEngine.set.useMutation({
-    onSuccess: () => {
+    onSuccess: (result) => {
       setConfirming(false);
       setError(null);
+      setNotes(result.notes);
       void utils.views.teamEngine.get.invalidate();
     },
     onError: (e) => {
@@ -558,8 +560,10 @@ function EngineSection({ canWrite, members }: { canWrite: boolean; members: Memb
       confirming={confirming}
       busy={change.isLoading}
       error={error}
+      notes={notes}
       onAsk={() => {
         setError(null);
+        setNotes([]);
         setConfirming(true);
       }}
       onConfirm={() => change.mutate({ engine: otherEngine(engine) })}

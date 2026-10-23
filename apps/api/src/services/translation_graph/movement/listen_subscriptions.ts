@@ -20,7 +20,11 @@
 //     against it);
 //   - a channel whose last listen disappeared is torn down: the external
 //     registration removed, the row soft-deleted. Operator-created rows
-//     (Settings UI; `provisioned_by` NULL) are never touched.
+//     (Settings UI; `provisioned_by` NULL) are never touched;
+//   - a team whose engine is lf wants no channel at all: a cloud lf runs its
+//     listeners and registers its own, so every channel is torn down, and a
+//     switch back to the platform provisions them afresh (lf_engine/switch.ts
+//     runs this sync on every switch).
 //
 // Called from movement save/delete (provision.ts) AFTER trigger rows are
 // reconciled, so the trigger table IS the desired state — the sync is
@@ -44,6 +48,7 @@ import { builtinInboundSecretIssuedByProvider } from '../adapters/builtin_module
 import { teamAdapterManifestSet } from '../adapters/team_manifests';
 import { eventConfigList } from 'movement-engine/public/inbound';
 import { canonicalAddress, resolvedAddressOfJson } from './listen_address';
+import { readTeamEngine } from '../../lf_engine/team_engine';
 
 export const MOVEMENT_LISTEN_PROVISIONER = 'movement-listen';
 
@@ -309,7 +314,10 @@ export async function syncListenSubscriptions(input: { teamId: TeamId }): Promis
   // A remote install's provider key is not a registry alias, so teardown maps
   // a row's key back to its slug through the same rule that minted it.
   const slugByProviderKey = new Map(manifests.map((m) => [webhookProviderKey(m), m.adapterType]));
-  const desired = await desiredChannels(input.teamId, manifestBySlug, notes);
+  // Read fresh, not through dispatch's copy: this runs right after a switch,
+  // in whichever process made it or saved a movement.
+  const lfEngined = (await readTeamEngine(input.teamId)).engine === 'lf';
+  const desired = lfEngined ? [] : await desiredChannels(input.teamId, manifestBySlug, notes);
   const existing = await provisionedRows(input.teamId);
 
   const rowFor = (channel: DesiredChannel): SubscriptionRow | undefined =>

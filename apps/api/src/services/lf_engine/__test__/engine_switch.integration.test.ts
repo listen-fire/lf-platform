@@ -146,8 +146,8 @@ describe('the engine switch', () => {
         .execute();
     const before = (await auditRows()).length;
 
-    expect(await switchTeamEngine(teamId, { engine: 'lf', changedBy: userId })).toEqual({ engine: 'lf', changed: true });
-    expect(await switchTeamEngine(teamId, { engine: 'lf', changedBy: userId })).toEqual({ engine: 'lf', changed: false });
+    expect(await switchTeamEngine(teamId, { engine: 'lf', changedBy: userId })).toEqual({ engine: 'lf', changed: true, notes: [] });
+    expect(await switchTeamEngine(teamId, { engine: 'lf', changedBy: userId })).toEqual({ engine: 'lf', changed: false, notes: [] });
     expect(await readTeamEngine(teamId)).toEqual({ engine: 'lf', changedAt: expect.any(Date), changedBy: userId });
 
     const after = await auditRows();

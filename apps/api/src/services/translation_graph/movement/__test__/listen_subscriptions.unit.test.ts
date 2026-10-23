@@ -23,6 +23,7 @@ jest.mock('../../../../lib/kysely', () => {
     trigger: [],
     webhook_subscription: [],
     remote_adapter: [],
+    team_engine: [],
   };
   const matches = (row: Row, wheres: Array<[string, string, unknown]>) =>
     wheres.every(([col, op, val]) => {

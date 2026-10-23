@@ -706,7 +706,8 @@ The path is `<name>.mvt`, the text is the shipped text, and the version is the t
 
 - A team on the platform (every team, until switched) is not served: every method but `manifest` is refused with the code `settings`.
 - For a team on `lf` the platform drops every live firing (cron, inbound webhooks and polls, Run-now) as `engine_lf`. The received event is kept, marked suppressed, and can be replayed. The editor's test runs still work. A run parked before the switch finishes here.
-- Vendor webhooks and polls for the team are still received and then dropped.
+- The platform registers no vendor webhook or poll for the team. At the switch, every webhook it provisioned for the team's listeners is deregistered at the vendor where the vendor's API allows (a refusal is shown on the toggle and printed by the CLI, and the subscription is retired here either way, so a delivery to it is refused); saving a movement registers none; the poll scanner skips the team. Switching back registers them again, and the first poll after it starts from the moment it runs, so nothing `lf` handled is replayed (events between stopping `lf` and that first poll are not fetched). Inbound mail, the shared Slack, Telegram and WhatsApp bots, and webhooks you created by hand on the webhooks settings page still deliver, and are dropped as `engine_lf`.
+- Switching again to the engine a team already has repeats the registration step, which retries a deregistration a vendor refused.
 - Each api and drain process keeps its copy of the lf-engined teams for at most 5 seconds, so a switch reaches every process within 5 seconds (the process that made it at once). The movements slot reads the setting on every request.
 - A team's engine is not carried by `export-team`: an imported team starts on the platform.
 

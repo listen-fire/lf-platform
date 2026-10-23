@@ -142,6 +142,9 @@ export interface TeamEngineSwitch {
     engine: TeamEngine;
     /** Whether this call changed the setting (false: it already was `engine`). */
     changed: boolean;
+    /** What the vendor registrations could not do, one line each. Empty when
+     *  every webhook was registered or removed as the engine requires. */
+    notes: string[];
 }
 
 /** One would-be write the movement produced under dry-run — the

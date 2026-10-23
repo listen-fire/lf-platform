@@ -12,6 +12,13 @@
 // pull; a failed pull throws, so the drain retries that row alone with backoff
 // and one broken source never starves the rest. The periodic `poll_reconcile`
 // keeps exactly one row per poll-source trigger.
+//
+// A team whose engine is lf is not polled: a cloud lf polls for it. Its
+// triggers are no candidates, so their rows are not re-armed and the reconcile
+// removes them. A switch back to the platform forgets their progress
+// (`forgetPollProgress`), so the first poll after it sets a fresh mark and
+// emits nothing, as a first poll does, rather than replaying everything lf
+// already handled since the platform last polled.
 
 import { sql } from 'kysely';
 import { durationToMs, isValidDuration } from 'legacy-lang';
@@ -35,6 +42,7 @@ import {
 import { dispatchDiscriminableEvent } from '../translation_graph/triggers/dispatch_event';
 import { registerWorkHandler } from '../work/drain';
 import { enqueueWork, listWorkByKind, removeWork } from '../work/store';
+import { lfEngineTeams } from '../lf_engine/team_engine';
 
 /** One row per poll-source trigger, due at its next poll. */
 export function pollWorkKey(triggerId: string): string {
@@ -103,15 +111,39 @@ function toPollTriggerRow(
 }
 
 async function loadCandidates(): Promise<PollTriggerRow[]> {
-  const rows = await activeTriggers().execute();
-  return rows.filter((r) => isPollSource(r.kind)).map(toPollTriggerRow);
+  const [rows, lfTeams] = await Promise.all([activeTriggers().execute(), lfEngineTeams()]);
+  return rows
+    .filter((r) => isPollSource(r.kind) && !lfTeams.has(r.team_id))
+    .map(toPollTriggerRow);
 }
 
 async function loadCandidate(triggerId: string): Promise<PollTriggerRow | null> {
   const row = await activeTriggers()
     .where('id', '=', triggerId as TriggerId)
     .executeTakeFirst();
-  return row && isPollSource(row.kind) ? toPollTriggerRow(row) : null;
+  if (!row || !isPollSource(row.kind)) return null;
+  return (await lfEngineTeams()).has(row.team_id) ? null : toPollTriggerRow(row);
+}
+
+/**
+ * Forget how far the platform polled for a team's listeners, so the next poll
+ * of each is a first poll: it sets the mark to now and emits nothing. Run when
+ * the team comes back from lf, which handled the events since.
+ */
+export async function forgetPollProgress(teamId: TeamId): Promise<void> {
+  const rows = await getAutomationsQb(['trigger'])
+    .selectFrom('trigger')
+    .where('team_id', '=', teamId)
+    .where('movement_id', 'is not', null)
+    .select(['id', 'kind'])
+    .execute();
+  const ids = rows.filter((r) => isPollSource(r.kind)).map((r) => r.id);
+  if (ids.length === 0) return;
+  await getAutomationsQb(['trigger'])
+    .updateTable('trigger')
+    .set({ poll_checkpoint: null, poll_last_at: null })
+    .where('id', 'in', ids)
+    .execute();
 }
 
 /**

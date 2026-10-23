@@ -73,6 +73,12 @@ jest.mock('../../translation_graph/triggers/event_store', () => ({
   markTriggerEventFailed: async () => {},
 }));
 
+// ── The team engine: the teams a cloud lf polls for ─────────────────────────
+let lfTeams = new Set<string>();
+jest.mock('../../lf_engine/team_engine', () => ({
+  lfEngineTeams: async () => lfTeams,
+}));
+
 jest.mock('../../work/store', () => ({
   enqueueWork: jest.fn(async () => {}),
   removeWork: jest.fn(async () => {}),
@@ -166,6 +172,34 @@ beforeEach(() => {
   jest.clearAllMocks();
   listWorkByKind.mockResolvedValue([]);
   pollIntervalSeconds = 300;
+  lfTeams = new Set();
+});
+
+describe('a team whose engine is lf', () => {
+  it('is not polled: its row pulls nothing, dispatches nothing and is not re-armed', async () => {
+    rows = [row()];
+    lfTeams = new Set(['team-1']);
+
+    await poll(T1);
+
+    expect(getEventsMock).not.toHaveBeenCalled();
+    expect(dispatchMock).not.toHaveBeenCalled();
+    expect(updates).toHaveLength(0);
+    expect(enqueueWork).not.toHaveBeenCalled();
+  });
+
+  it("is skipped by the reconcile, which removes its row and keeps another team's", async () => {
+    rows = [row(), row({ id: T2, team_id: 'team-2' })];
+    lfTeams = new Set(['team-1']);
+    listWorkByKind.mockResolvedValue([workRow({ triggerId: T1 }), workRow({ triggerId: T2 })]);
+
+    await pollReconcileHandler.run({}, testWorkContext(NOW));
+
+    expect(enqueueWork).toHaveBeenCalledTimes(1);
+    expect(enqueueWork).toHaveBeenCalledWith(expect.objectContaining({ key: pollWorkKey(T2) }));
+    expect(removeWork).toHaveBeenCalledWith({ key: pollWorkKey(T1) });
+    expect(removeWork).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('pollSourceHandler', () => {

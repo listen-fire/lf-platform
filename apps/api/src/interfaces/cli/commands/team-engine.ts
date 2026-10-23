@@ -46,5 +46,6 @@ export default class extends Command {
     }
     const result = await switchTeamEngine(options.team, { engine: engine.data, changedBy: null });
     console.warn(`team ${options.team}: ${result.engine}${result.changed ? '' : ' (already)'}`);
+    for (const note of result.notes) console.warn(`  ${note}`);
   }
 }
