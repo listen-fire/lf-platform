@@ -9,11 +9,11 @@
 //     a refusal — unless nothing at all narrows, which is boundedness.
 
 import { parseProgram } from '../../parser/parse';
-import { checkProgram, Diagnostic, DiagnosticCodes as C } from '../check';
+import { checkProgram, checkProgramWithLink, Diagnostic, DiagnosticCodes as C } from '../check';
+import { effectRowOf, type EffectRow } from '../effects';
 import { spelledFor } from './surface_spelling';
 import { CollectionSchema, InstanceSchema, mockCatalog } from '../catalog';
 import { TypedDiagnosticCodes as T } from '../typing';
-import { storyOf } from '../../story/story';
 
 const PUSHED: InstanceSchema = {
   positions: {
@@ -87,6 +87,18 @@ const messagesBefore5 = (source: string, schema: InstanceSchema, plugins = {}): 
 
 // ── Plugins are functions ────────────────────────────────────────────────────
 
+/** The inferred row of the plugin program's `look`, read off the checker's
+ *  recording: the fact the picture of a movement is drawn from. */
+function lookRow(source: string, plugins = {}): EffectRow {
+  const catalog = mockCatalog({ adapters: { desk: { constructionArgs: [], schema: PUSHED } }, plugins });
+  const { recording } = checkProgramWithLink(parseProgram(source), catalog, { recordAnalysis: true });
+  const file = recording?.frames.find((frame) => frame.kind === 'file');
+  const symbol = file?.scope.symbols.get('look');
+  const row = symbol === undefined ? undefined : effectRowOf(symbol);
+  if (row === undefined) throw new Error("the check recorded no row for 'look'");
+  return row;
+}
+
 const PLUGIN_PROGRAM = (call: string): string => `import { desk } from adapters
 import { scan_web } from plugins
 
@@ -112,39 +124,23 @@ describe('a plugin is a function whose row is declared', () => {
     expect(errors(source, PUSHED, plugins)).toEqual([]);
   });
 
-  it('the declared row FOLDS — the picture says the movement reads the web', () => {
+  it('the declared row FOLDS — the movement reads the web', () => {
     const plugins = { scan_web: FOUND_TEXT };
-    const result = storyOf({
-      source: PLUGIN_PROGRAM('  found = scan_web(url: t.`Title`)'),
-      catalog: mockCatalog({
-        adapters: { desk: { constructionArgs: [], schema: PUSHED } },
-        plugins,
-      }),
-    });
-    expect(result.ok).toBe(true);
-    const movement = result.ok
-      ? result.story.flow.find((step) => step.kind === 'movement')
-      : undefined;
-    expect(movement?.kind === 'movement' ? movement.effects.reads : undefined).toContain('the web');
-    expect(movement?.kind === 'movement' ? movement.effects.ai : undefined).toBe(true);
+    const row = lookRow(PLUGIN_PROGRAM('  found = scan_web(url: t.`Title`)'), plugins);
+    expect(row.read.map((instance) => instance.name)).toContain('the web');
+    expect(row.ai).toBe(true);
     // A declaration is a complete claim, so folding one leaves no lower bound.
-    expect(movement?.kind === 'movement' ? movement.effects.partial : undefined).toBe(false);
+    expect(row.partial).toBe(false);
   });
 
   it('NOT declaring one leaves the row a lower bound rather than a clean sheet', () => {
-    const result = storyOf({
-      source: PLUGIN_PROGRAM(`  m = extract from [t.\`Title\`] through [scan_web] {
+    const row = lookRow(
+      PLUGIN_PROGRAM(`  m = extract from [t.\`Title\`] through [scan_web] {
     name: "the company"
   }`),
-      catalog: mockCatalog({
-        adapters: { desk: { constructionArgs: [], schema: PUSHED } },
-        plugins: { scan_web: { args: ['url'], priced: false } },
-      }),
-    });
-    const movement = result.ok
-      ? result.story.flow.find((step) => step.kind === 'movement')
-      : undefined;
-    expect(movement?.kind === 'movement' ? movement.effects.partial : undefined).toBe(true);
+      { scan_web: { args: ['url'], priced: false } },
+    );
+    expect(row.partial).toBe(true);
   });
 
   it('an UNDECLARED row keeps the plugin to a through-stage, and says so (version 4)', () => {

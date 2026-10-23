@@ -207,7 +207,7 @@ describe("the route", () => {
     expect(legacy !== null && "remote" in legacy).toBe(false);
 
     expect(presentationOf({ kind: "refused" }, "0.13.0", remote)).toBeNull();
-    // A legacy route without its pin has no dialect to present under.
+    // A legacy route without its pin has no legacy id to present under.
     expect(presentationOf({ kind: "legacy" }, undefined, remote)).toBeNull();
 
     const installed = presentationOf({ kind: "installed" }, undefined, remote);

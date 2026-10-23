@@ -103,7 +103,7 @@ movement use(e: <src-[:${opts.positionName}]->>) {
 }
 `;
     const idx = source.indexOf('doc = to_doc');
-    const text = getHoverInfo(source, idx + 1, snapshot)?.contents.join(' ') ?? '';
+    const text = getHoverInfo(source, idx + 1, snapshot, { languageVersion: '4' })?.contents.join(' ') ?? '';
     expect(text).toContain('to_doc');
     expect(text).not.toBe('doc — value');
   });
@@ -115,7 +115,7 @@ movement use(e: <src-[:${opts.positionName}]->>) {
   x = doc.¦
 }
 `);
-    expect(labels(getMovementCompletions(source, offset, snapshot))).toEqual(
+    expect(labels(getMovementCompletions(source, offset, snapshot, { languageVersion: '4' }))).toEqual(
       expect.arrayContaining(['title']),
     );
   });
@@ -127,7 +127,7 @@ movement use(e: <src-[:${opts.positionName}]->>) {
   doc-[:¦
 }
 `);
-    expect(labels(getMovementCompletions(source, offset, snapshot))).toEqual(
+    expect(labels(getMovementCompletions(source, offset, snapshot, { languageVersion: '4' }))).toEqual(
       expect.arrayContaining(['parts']),
     );
   });
@@ -139,7 +139,7 @@ movement use(e: <src-[:${opts.positionName}]->>) {
   x = doc.¦
 }
 `);
-    expect(labels(getMovementCompletions(source, offset, snapshot))).not.toContain('m');
+    expect(labels(getMovementCompletions(source, offset, snapshot, { languageVersion: '4' }))).not.toContain('m');
   });
 
   it('includes the bound call in identifier completions', () => {
@@ -149,7 +149,7 @@ movement use(e: <src-[:${opts.positionName}]->>) {
   ¦
 }
 `);
-    expect(labels(getMovementCompletions(source, offset, snapshot))).toContain('doc');
+    expect(labels(getMovementCompletions(source, offset, snapshot, { languageVersion: '4' }))).toContain('doc');
   });
 
   it("a traversal off the value reaches the LANDING's own fields", () => {
@@ -161,7 +161,7 @@ movement use(e: <src-[:${opts.positionName}]->>) {
   }
 }
 `);
-    expect(labels(getMovementCompletions(source, offset, snapshot))).toEqual(
+    expect(labels(getMovementCompletions(source, offset, snapshot, { languageVersion: '4' }))).toEqual(
       expect.arrayContaining([opts.landingField]),
     );
   });

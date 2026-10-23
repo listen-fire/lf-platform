@@ -82,14 +82,14 @@ function caret(text: string): { source: string; offset: number } {
 
 function labelsAt(text: string): string[] {
   const { source, offset } = caret(text);
-  return getMovementCompletions(source, offset, snapshot).items.map(i => i.label);
+  return getMovementCompletions(source, offset, snapshot, { languageVersion: '4' }).items.map(i => i.label);
 }
 
 /** Hover on the LAST occurrence of `token` (a use site, never the binder). */
 function hoverAtUse(source: string, token: string): string {
   const at = source.lastIndexOf(token);
   if (at === -1) throw new Error(`no '${token}' in fixture`);
-  return getHoverInfo(source, at + 1, snapshot)?.contents.join('\n') ?? '';
+  return getHoverInfo(source, at + 1, snapshot, { languageVersion: '4' })?.contents.join('\n') ?? '';
 }
 
 describe('race arms are scopes the editor can stand inside', () => {
@@ -189,7 +189,7 @@ movement route(p: <ops-[:party]->>) {
 
   it('hovers the narrowed variant inside the arm', () => {
     const at = source.indexOf('p.`subject`');
-    expect(getHoverInfo(source, at, snapshot)?.contents.join('\n')).toContain('ops.ticket');
+    expect(getHoverInfo(source, at, snapshot, { languageVersion: '4' })?.contents.join('\n')).toContain('ops.ticket');
   });
 
   // The else eliminates what the arm above tested, so a two-member union
@@ -197,7 +197,7 @@ movement route(p: <ops-[:party]->>) {
   // hover reads the scopes the checker records rather than walking its own.
   it('the else arm hovers the REMAINING variant, not the whole union', () => {
     const at = source.indexOf('p.`rota`');
-    const contents = getHoverInfo(source, at, snapshot)?.contents.join('\n');
+    const contents = getHoverInfo(source, at, snapshot, { languageVersion: '4' })?.contents.join('\n');
     expect(contents).toContain('ops.agent');
     expect(contents).not.toContain('ops.party');
   });

@@ -12,9 +12,8 @@
 // one head position that needs a name asks for one.
 
 import { parseProgram } from '../../parser/parse';
-import { checkProgram, Diagnostic } from '../check';
+import { checkProgram, checkProgramWithLink, Diagnostic } from '../check';
 import { mockCatalog, type InstanceSchema } from '../catalog';
-import { storyOf } from '../../story/story';
 
 const crmSchema: InstanceSchema = {
   positions: {
@@ -150,15 +149,18 @@ describe("await parks on a record it can name again", () => {
   });
 });
 
-describe('the story shows the expression the author wrote', () => {
-  it('carries the head as source, and the root as its own chip', () => {
-    const result = storyOf({
-      source: source(`${ROWS}  rows[0]-[f:Founders]-> {\n    x = f.\`Name\`\n  }\n  }`),
+describe('the recording keeps the expression head the author wrote', () => {
+  it('records the walk with no named root, its hop landed where the type walk put it', () => {
+    const { recording } = checkProgramWithLink(
+      parseProgram(source(`${ROWS}  rows[0]-[f:Founders]-> {\n    x = f.\`Name\`\n  }\n  }`)),
       catalog,
-    });
-    if (!result.ok) throw new Error(`expected a story, got ${result.reason}`);
-    const json = JSON.stringify(result.story);
-    expect(json).toContain('rows[0]-[f:Founders]->');
-    expect(json).toContain('"rootExpression"');
+      { recordAnalysis: true },
+    );
+    const walks = (recording?.nodes ?? []).filter((node) => node.kind === 'traversal');
+    expect(walks).toHaveLength(1);
+    const [head] = walks;
+    expect(head?.root).toBeUndefined();
+    expect(head?.steps.map((step) => step.edgeTypeId)).toEqual(['Founders']);
+    expect(head?.landings).toEqual([{ instance: 'crm', position: 'person' }]);
   });
 });

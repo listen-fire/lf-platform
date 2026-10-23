@@ -57,7 +57,7 @@ export function presentationOf(
   switch (route.kind) {
     case "legacy":
       // A legacy route always comes with its pin; without one there is no
-      // dialect to read the text under.
+      // legacy id to read the text under.
       return languageVersion === undefined ? null : { kind: "legacy", options: { languageVersion } };
     case "installed":
       return { kind: "installed", remote };

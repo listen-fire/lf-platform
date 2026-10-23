@@ -79,7 +79,7 @@ const snapshot: CatalogSnapshot = {
 };
 
 const complete = (source: string) =>
-  getMovementCompletions(source, source.length, snapshot);
+  getMovementCompletions(source, source.length, snapshot, { languageVersion: '4' });
 
 describe('import completions', () => {
   it('completes import paths from the saved movement files', () => {
@@ -107,6 +107,7 @@ describe('import completions', () => {
       'import {  } from "lib/file-routines"',
       'import { '.length,
       snapshot,
+      { languageVersion: '4' },
     );
     expect(completions.items.map(i => `${i.kind}:${i.label}`).sort()).toEqual([
       'function:files_to_dropbox',
@@ -173,7 +174,7 @@ describe('analysis typing for imported names', () => {
 
   it('an imported declaration is NOT offered as a write target (the construct is retired)', () => {
     const offset = source.indexOf('write ') + 'write '.length;
-    const { items } = getMovementCompletions(source, offset, snapshot);
+    const { items } = getMovementCompletions(source, offset, snapshot, { languageVersion: '4' });
     expect(items.map(i => i.label)).not.toContain('Files.');
   });
 
@@ -182,7 +183,7 @@ describe('analysis typing for imported names', () => {
     // only valid mid-edit at the cursor's own line).
     const parseable = source.replace('  write ', '  f = node { name: msg.`subject` }');
     const offset = parseable.indexOf('Files } from');
-    const hover = getHoverInfo(parseable, offset + 1, snapshot);
+    const hover = getHoverInfo(parseable, offset + 1, snapshot, { languageVersion: '4' });
     expect(hover?.contents.join('\n')).toContain('declared node');
   });
 });

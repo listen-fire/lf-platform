@@ -1,7 +1,7 @@
 /**
  * The story parity over the active dev-loop stack's saved movements: every
  * current-pin row's story as the wasm's story analysis draws it, against the
- * story legacy-lang drew under '5', through the same comparison the parity
+ * story legacy-lang drew under its 0.12 dialect, through the same comparison the parity
  * test holds the corpus to. Read-only.
  *
  *   TZ=utc corepack pnpm exec ts-node --project tsconfig.dev.json --transpile-only \

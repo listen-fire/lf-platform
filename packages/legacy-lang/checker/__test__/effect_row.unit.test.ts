@@ -10,7 +10,6 @@ import { checkProgram, checkProgramWithLink, instanceRefOf } from '../check';
 import { effectRowOf, isPureRow, type EffectRow } from '../effects';
 import { InstanceSchema, mockCatalog } from '../catalog';
 import type { Scope } from '../scopes';
-import { storyOf, type Step } from '../../story/story';
 import { notKeywordRetirement } from './keyword_retirement';
 
 const crmSchema: InstanceSchema = {
@@ -368,22 +367,18 @@ describe("a closure's row rides in its type", () => {
   });
 });
 
-describe('the picture reads the row off the declaration', () => {
-  it("a movement step carries its row, with instances named as the author bound them", () => {
-    const source = `${PRELUDE}function announce(c: <crm-[:company]->>) {
+describe('the row is read off the declaration', () => {
+  it("a movement's row names its instances as the author bound them", () => {
+    const source = `function announce(c: <crm-[:company]->>) {
   crm-[co:companies]-> {
     write chat-[:messages]-> { Body: ai("a one-line summary") }
   }
   await sleep(1d)
 }`;
-    const result = storyOf({ source, catalog });
-    if (!result.ok) throw new Error('the story did not project');
-    const movement = result.story.flow.find(
-      (step): step is Extract<Step, { kind: 'movement' }> => step.kind === 'movement',
-    );
-    expect(movement?.effects).toEqual({
-      reads: ['crm'],
-      writes: ['chat'],
+    const row = rowOf(source, 'announce');
+    expect({ ...row, read: row.read.map((i) => i.name), write: row.write.map((i) => i.name) }).toEqual({
+      read: ['crm'],
+      write: ['chat'],
       ai: true,
       now: false,
       suspend: true,

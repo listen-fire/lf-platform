@@ -85,7 +85,7 @@ export const LEGACY_STORY_SNAPSHOT = mockCatalogSnapshot({
   },
 });
 
-const SOURCE = `import { mail, crm_sys, asksys } from adapters
+export const SOURCE = `import { mail, crm_sys, asksys } from adapters
 import { inbox_creds, crm_creds, ask_creds } from credentials
 
 inbox = connect mail using inbox_creds
@@ -128,7 +128,7 @@ function intake(m: <inbox-[:message]->>) {
 listen to inbox { key: "dealflow", events: ["message.received"] } fire intake
 `;
 
-const TRAVERSALS = `import { mail, crm_sys, asksys } from adapters
+export const TRAVERSALS = `import { mail, crm_sys, asksys } from adapters
 import { inbox_creds, crm_creds, ask_creds } from credentials
 
 inbox = connect mail using inbox_creds
@@ -164,7 +164,7 @@ function flows(m: <inbox-[:message]->>) {
 listen to inbox { key: "flows" } fire flows
 `;
 
-const CALLBACK_SOURCE = `import { crm_sys } from adapters
+export const CALLBACK_SOURCE = `import { crm_sys } from adapters
 import { crm_creds } from credentials
 
 book = connect crm_sys using crm_creds

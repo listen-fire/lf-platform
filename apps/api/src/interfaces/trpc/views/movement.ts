@@ -90,7 +90,6 @@ import {
   type AuthoringDiagnostic,
 } from '../../../services/translation_graph/movement/authoring';
 import {
-  presentationDialect,
   routeOf,
   type PinRoute,
 } from '../../../services/translation_graph/movement/language_route';
@@ -360,21 +359,19 @@ type MovementListItemResponse = Omit<MovementListItem, 'listeners'> & {
 /**
  * How the editor treats a pin. `kind`: whose checker lints it (`legacy`: the
  * browser's; `installed`: the server's `check`; `refused`: nothing reads it).
- * `dialect`: what completions, hover and definition read it as; null ⇒ none.
+ * Completions, hover and definition follow the same kind.
  */
 export interface MovementLanguageRoute {
   kind: PinRoute['kind'];
-  dialect: LanguageVersion | null;
 }
 
 function languageRouteOf(pin: LanguageVersion): MovementLanguageRoute {
-  return { kind: routeOf(pin).kind, dialect: presentationDialect(pin) };
+  return { kind: routeOf(pin).kind };
 }
 
-/** The skeleton, with the release a new movement is pinned to and the
- *  dialect the editor's language service reads it under. */
+/** The skeleton, with the release a new movement is pinned to. */
 export type MovementCatalogResponse = TeamCatalogSnapshot & {
-  installed: { pin: LanguageVersion; dialect: LanguageVersion | null };
+  installed: { pin: LanguageVersion };
 };
 
 type MovementDetailResponse = MovementDetail & {
@@ -433,8 +430,8 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
       const ctx = currentContext();
       const teamId = ctx.user.teamId as TeamId;
       const skeleton = await movementCatalogSnapshotForTeam(teamId);
-      // What a new movement is pinned to, and how the editor reads it.
-      return { ...skeleton, installed: { pin: LANGUAGE_VERSION, dialect: presentationDialect(LANGUAGE_VERSION) } };
+      // What a new movement is pinned to.
+      return { ...skeleton, installed: { pin: LANGUAGE_VERSION } };
     }),
 
     /**

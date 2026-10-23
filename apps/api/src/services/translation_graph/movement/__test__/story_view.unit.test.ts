@@ -43,7 +43,8 @@ jest.mock('../store', () => ({ getMovementRow: jest.fn(), listDerivedTriggerRows
 
 import { LANGUAGE_VERSION } from 'movement-lang';
 import { STORY_VIEW_CATALOG, STORY_VIEW_SNAPSHOT, STORY_VIEW_SOURCE } from './__fixtures__/story/story_view';
-import { storyOf, type StoryIR } from 'legacy-lang';
+import type { StoryIR, StoryResult } from 'legacy-lang';
+import { storyFromAnalysis } from '../story_from_analysis';
 
 import { movementCatalogForTeam, type TeamMovementCatalog } from '../catalog';
 
@@ -59,6 +60,11 @@ import {
 // ── Fixture: two systems that share no vocabulary ──
 
 const catalog = STORY_VIEW_CATALOG;
+
+/** The story the platform draws for a current pin: the join is over this picture. */
+function storyOf(input: { source: string; name?: string }): StoryResult {
+  return storyFromAnalysis({ ...input, snapshot: STORY_VIEW_SNAPSHOT, pin: LANGUAGE_VERSION }).result;
+}
 const SOURCE = STORY_VIEW_SOURCE;
 
 /**
@@ -89,7 +95,7 @@ const vocabulary: StoryVocabulary = {
 };
 
 function ir(): StoryIR {
-  const result = storyOf({ source: SOURCE, catalog, name: 'Intake' });
+  const result = storyOf({ source: SOURCE, name: 'Intake' });
   if (!result.ok) throw new Error(`expected a story, got ${result.reason}`);
   return result.story;
 }
@@ -315,7 +321,7 @@ movement pick() {
   one = FIRST(books-[fold:Orgs WHERE \`Title\` == "acme"]->)
 }
 `;
-    const result = storyOf({ source, catalog, name: 'Pick' });
+    const result = storyOf({ source, name: 'Pick' });
     if (!result.ok) throw new Error(`expected a story, got ${result.reason}`);
     const v = joinStoryView({
       movement: { id: 'mv-2', name: 'Pick', validity: result.story.movement.validity },
@@ -364,7 +370,7 @@ listen to desk { box: "inbound", events: ["note.filed"] } fire intake
 `;
 
   function declaredView(): StoryView {
-    const result = storyOf({ source: DECLARED_SOURCE, catalog, name: 'Intake' });
+    const result = storyOf({ source: DECLARED_SOURCE, name: 'Intake' });
     if (!result.ok) throw new Error(`expected a story, got ${result.reason}`);
     expect(result.story.movement.validity.status).toBe('valid');
     return joinStoryView({
@@ -606,7 +612,6 @@ describe('honesty', () => {
   it('carries the validity ruling through untouched', () => {
     const invalid = storyOf({
       source: `${SOURCE}\nmovement broken(n: <desk-[:note]->>) { write books-[:Nope]-> { Title: "x" } }`,
-      catalog,
     });
     if (!invalid.ok) throw new Error('expected a story');
     const v = joinStoryView({

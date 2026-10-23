@@ -15,6 +15,7 @@
 
 import { Loc, Program, Span } from 'movement-lang/parser/ast';
 import { MovementParseError, parseProgram } from '../parser/parse';
+import type { LanguageVersion } from '../language_version';
 import {
   checkProgramWithLink,
   type CheckRecording,
@@ -194,12 +195,12 @@ function isInside(inner: RecordedFrame, outer: RecordedFrame): boolean {
  * One recorded check per (snapshot, parsed text). Completions, hover and
  * definition all ask about the SAME buffer, and each question would
  * otherwise re-check every imported library; the key is the text actually
- * PARSED (blanked line included), so a keystroke misses and a second
- * question about the same edit hits. One entry per snapshot — the current
+ * PARSED (blanked line included) and the pin it was parsed and checked
+ * under, so a keystroke misses and a second question about the same edit hits. One entry per snapshot — the current
  * buffer is the only one anyone asks about — in a WeakMap so a superseded
  * snapshot is collectable.
  */
-const CHECKED = new WeakMap<CatalogSnapshot, { parsed: string; analysis: Analysis }>();
+const CHECKED = new WeakMap<CatalogSnapshot, { parsed: string; languageVersion: LanguageVersion; analysis: Analysis }>();
 
 /**
  * Parses with editing tolerance, then checks with recording on: the raw
@@ -212,8 +213,9 @@ const CHECKED = new WeakMap<CatalogSnapshot, { parsed: string; analysis: Analysi
 export function analyze(
   source: string,
   snapshot: CatalogSnapshot,
-  options: { cursorOffset?: number } = {},
+  options: { cursorOffset?: number; languageVersion: LanguageVersion },
 ): Analysis {
+  const { languageVersion } = options;
   const candidates = [source];
   if (options.cursorOffset !== undefined) {
     const blanked = blankLineAt(source, options.cursorOffset);
@@ -222,20 +224,21 @@ export function analyze(
   const resolveFile = resolveFileFromSnapshot(snapshot);
   for (const text of candidates) {
     const cached = CHECKED.get(snapshot);
-    if (cached?.parsed === text) return cached.analysis;
+    if (cached?.parsed === text && cached.languageVersion === languageVersion) return cached.analysis;
     let program: Program;
     try {
-      program = parseProgram(text);
+      program = parseProgram(text, { languageVersion });
     } catch (e) {
       if (!(e instanceof MovementParseError)) throw e;
       continue;
     }
     const { recording } = checkProgramWithLink(program, fromCatalogSnapshot(snapshot), {
       recordAnalysis: true,
+      languageVersion,
       ...(resolveFile ? { resolveFile } : {}),
     });
     const analysis = new Analysis(recording);
-    CHECKED.set(snapshot, { parsed: text, analysis });
+    CHECKED.set(snapshot, { parsed: text, languageVersion, analysis });
     return analysis;
   }
   return new Analysis();

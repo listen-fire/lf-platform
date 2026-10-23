@@ -8,6 +8,7 @@
 require('engine-contracts/expression/schemas');
 
 const counters = { rust: 0, ts: 0, scan: 0 };
+const upgradeTargets: unknown[] = [];
 
 jest.mock('movement-lang', () => {
   const actual = jest.requireActual('movement-lang');
@@ -28,6 +29,10 @@ jest.mock('legacy-lang', () => {
       counters.ts += 1;
       return actual.checkProgram(...args);
     },
+    upgradeWarnings: (...args: unknown[]) => {
+      upgradeTargets.push((args[2] as { languageVersion?: unknown } | undefined)?.languageVersion);
+      return actual.upgradeWarnings(...args);
+    },
   };
 });
 
@@ -47,7 +52,7 @@ jest.mock('../catalog', () => ({ movementCatalogForTeam: jest.fn() }));
 import { LANGUAGE_VERSION, fromCatalogSnapshot, mockCatalogSnapshot, type LanguageVersion } from 'movement-lang';
 
 import { diagnoseMovementSource } from '../authoring';
-import { presentationDialect, routeOf } from '../language_route';
+import { checkInstalled, routeOf } from '../language_route';
 
 const BARE_MANUAL = 'function echo(run: <manual-[:Invocation]->>) {\n  return 1\n}\nlisten to manual fire echo\n';
 
@@ -146,13 +151,14 @@ describe('routeOf', () => {
   });
 });
 
-describe('presentationDialect', () => {
-  it('reads a legacy id as itself, the 0.12 line as legacy-lang\'s 5, and gives no dialect for any other line', () => {
-    expect(presentationDialect('4')).toBe('4');
-    expect(presentationDialect('1')).toBe('1');
-    expect(presentationDialect(LANGUAGE_VERSION)).toBe('5');
-    expect(presentationDialect('0.12.0')).toBe('5');
-    expect(presentationDialect('0.13.0')).toBeNull();
-    expect(presentationDialect('0.11.0')).toBeNull();
+describe('the only \'5\' left', () => {
+  it("upgrade warnings aim at legacy-lang's '5', the only '5' left", () => {
+    upgradeTargets.length = 0;
+    checkInstalled({ source: IMPORT_COMPANIES, snapshot, pin: LANGUAGE_VERSION, upgradingFrom: '4' });
+    expect(upgradeTargets).toEqual(['5']);
+
+    upgradeTargets.length = 0;
+    checkInstalled({ source: IMPORT_COMPANIES, snapshot, pin: LANGUAGE_VERSION });
+    expect(upgradeTargets).toEqual([]);
   });
 });

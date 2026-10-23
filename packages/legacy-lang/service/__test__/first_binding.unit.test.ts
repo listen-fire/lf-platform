@@ -112,7 +112,7 @@ movement notify(evt: <chat-[:${opts.collectionName}]->>) {
   it('hovers the bound name with a position hover naming the landed type and its absence', () => {
     const idx = movement.indexOf('channel =');
     const { source } = caret(movement);
-    const hover = getHoverInfo(source, idx + 1, snapshot);
+    const hover = getHoverInfo(source, idx + 1, snapshot, { languageVersion: '4' });
     const text = hover?.contents.join(' ') ?? '';
     expect(text).toContain(`chat.${opts.positionName}`);
     expect(text).toContain('which may be empty');
@@ -127,7 +127,7 @@ movement notify(evt: <chat-[:${opts.collectionName}]->>) {
   channel-[:¦
 }
 `);
-    const result = getMovementCompletions(source, offset, snapshot);
+    const result = getMovementCompletions(source, offset, snapshot, { languageVersion: '4' });
     expect(labels(result)).toEqual(expect.arrayContaining([opts.edgeName]));
   });
 
@@ -138,13 +138,13 @@ movement notify(evt: <chat-[:${opts.collectionName}]->>) {
   x = channel.¦
 }
 `);
-    const result = getMovementCompletions(source, offset, snapshot);
+    const result = getMovementCompletions(source, offset, snapshot, { languageVersion: '4' });
     expect(labels(result)).toEqual(expect.arrayContaining([opts.positionField]));
   });
 
   it('includes `channel` in identifier completions inside the movement body', () => {
     const { source, offset } = caret(movement);
-    const result = getMovementCompletions(source, offset, snapshot);
+    const result = getMovementCompletions(source, offset, snapshot, { languageVersion: '4' });
     expect(labels(result)).toContain('channel');
   });
 
@@ -165,7 +165,7 @@ movement notify(evt: <chat-[:${opts.collectionName}]->>) {
 }
 `;
     const hoverText = (offset: number): string =>
-      getHoverInfo(guarded, offset, snapshot)?.contents.join(' ') ?? '';
+      getHoverInfo(guarded, offset, snapshot, { languageVersion: '4' })?.contents.join(' ') ?? '';
 
     it('still calls the binding maybe-empty at its own declaration', () => {
       const text = hoverText(guarded.indexOf('channel =') + 1);

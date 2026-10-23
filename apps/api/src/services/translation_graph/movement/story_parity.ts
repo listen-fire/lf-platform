@@ -2,9 +2,9 @@
 // the comparison that holds the two equal.
 //
 // Before, a release pin's picture was legacy-lang's projection of its own
-// check under its dialect '5', its verdict the wasm's. `legacyStoryUnder5`
-// rebuilds exactly that without `storyOf`, so it outlives '5' leaving
-// presentation. `compareStories` reports every difference, except the ones
+// check under legacy-lang's dialect of the 0.12 surface, its verdict the
+// wasm's. `legacyStoryUnder5` rebuilds exactly that without `storyOf`, which
+// refuses that dialect now. `compareStories` reports every difference, except the ones
 // ruled acceptable, which it counts.
 //
 // The rulings (PLAN-17):
@@ -37,17 +37,16 @@ import {
   type StoryResult,
 } from 'legacy-lang';
 
-/** legacy-lang's integer for the 0.12 surface, as the story was drawn under it. */
-const LEGACY_DIALECT = '5';
+import { LEGACY_UPGRADE_DIALECT } from './language_route';
 
 /**
- * Today's production picture of a release pin: legacy-lang's recording of
- * its own check under '5', projected, carrying the wasm's verdict.
+ * The picture a release pin had before the analysis: legacy-lang's recording of
+ * its own check under the 0.12 dialect, projected, carrying the wasm's verdict.
  */
 export function legacyStoryUnder5(source: string, snapshot: CatalogSnapshot): StoryResult {
   let program;
   try {
-    program = parseProgram(source, { languageVersion: LEGACY_DIALECT });
+    program = parseProgram(source, { languageVersion: LEGACY_UPGRADE_DIALECT });
   } catch (error) {
     if (!(error instanceof MovementParseError)) throw error;
     const span = { start: error.loc, end: error.loc };
@@ -64,7 +63,7 @@ export function legacyStoryUnder5(source: string, snapshot: CatalogSnapshot): St
   const resolveFile = resolveFileFromSnapshot(snapshot);
   const { recording } = checkProgramWithLink(program, fromCatalogSnapshot(snapshot), {
     recordAnalysis: true,
-    languageVersion: LEGACY_DIALECT,
+    languageVersion: LEGACY_UPGRADE_DIALECT,
     ...(resolveFile !== undefined ? { resolveFile } : {}),
   });
   return {
@@ -73,7 +72,7 @@ export function legacyStoryUnder5(source: string, snapshot: CatalogSnapshot): St
       program,
       recording: recording ?? { frames: [], writes: [], nodes: [] },
       diagnostics,
-      languageVersion: LEGACY_DIALECT,
+      languageVersion: LEGACY_UPGRADE_DIALECT,
     }),
   };
 }

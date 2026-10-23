@@ -15,7 +15,7 @@ import type { Loc, Span } from 'movement-lang/parser/ast';
 import { spellParamType } from 'movement-lang/parser/ast';
 import { MovementParseError, parseProgram } from '../parser/parse';
 import { CURRENT_LANGUAGE_VERSION, type LanguageVersion } from '../language_version';
-import { assertLegacyDialect, since } from '../version_conditionals';
+import { assertLegacyDialect, assertLegacyPresentationPin } from '../version_conditionals';
 import { CLOSER, opensHop, scanName, skipOpaque } from 'movement-lang/parser/scan';
 import {
   checkProgram,
@@ -50,14 +50,6 @@ import {
   STDLIB_FAMILIES,
 } from '../expression/stdlib';
 import { fileExports } from '../checker/link';
-import {
-  V5_KEYWORD_HOVERS,
-  insideWalkBrackets,
-  v5EverydayItems,
-  v5MemberCompletions,
-  v5StandardCompletions,
-  v5StandardHover,
-} from './surface_v5';
 import {
   analyze,
   lineStartsOf,
@@ -212,30 +204,8 @@ const BODY_KEYWORDS: MovementCompletionItem[] = [
   { label: 'link', insert: 'link ', kind: 'keyword', detail: 'connect two records you hold — find one first (`to = match …`), then `if to != null { link a -[:e]-> to }`' },
 ];
 
-/** The statement keywords as `languageVersion` writes them: from 5 a
- *  declaration is a `function` and an `if` condition is parenthesised. */
-function fileKeywords(languageVersion: LanguageVersion): MovementCompletionItem[] {
-  if (!since(languageVersion, 5)) return FILE_KEYWORDS;
-  return FILE_KEYWORDS.map(item =>
-    item.label === 'movement' ? { label: 'function', insert: 'function ', kind: 'keyword', detail: 'declare a function' } : item,
-  );
-}
-
-function bodyKeywords(languageVersion: LanguageVersion): MovementCompletionItem[] {
-  if (!since(languageVersion, 5)) return BODY_KEYWORDS;
-  return BODY_KEYWORDS.map(item => {
-    if (item.label === 'if') return { ...item, insert: 'if (' };
-    if (item.label === 'link') return { ...item, detail: 'connect two records you hold — find one first (`to = match …`), then `if (to != null) { link a -[:e]-> to }`' };
-    return item;
-  });
-}
-
-/** The concurrent join is spelled `parallel {` before language version 5 and `all(` from it. */
-function joinKeyword(languageVersion: LanguageVersion): MovementCompletionItem {
-  return since(languageVersion, 5)
-    ? { label: 'all', insert: 'all(', kind: 'keyword', detail: 'run functions concurrently — `r = all(f, () => { … })`: one slot per function, in order' }
-    : { label: 'parallel', insert: 'parallel {', kind: 'keyword', detail: 'run statements concurrently' };
-}
+/** The concurrent join, as the legacy ids spell it. */
+const JOIN_KEYWORD: MovementCompletionItem = { label: 'parallel', insert: 'parallel {', kind: 'keyword', detail: 'run statements concurrently' };
 
 /**
  * The ambient "meta-fields" — values a movement can read in any expression
@@ -329,7 +299,7 @@ export function getMovementCompletions(
   options?: { languageVersion?: LanguageVersion },
 ): MovementCompletions {
   const languageVersion = options?.languageVersion ?? CURRENT_LANGUAGE_VERSION;
-  assertLegacyDialect(languageVersion);
+  assertLegacyPresentationPin(languageVersion);
   const clamped = Math.max(0, Math.min(offset, source.length));
   const before = source.slice(0, clamped);
   const lineStart = before.lastIndexOf('\n') + 1;
@@ -383,7 +353,7 @@ export function getMovementCompletions(
     return NO_COMPLETIONS;
   }
 
-  const analysis = analyze(source, snapshot, { cursorOffset: clamped });
+  const analysis = analyze(source, snapshot, { cursorOffset: clamped, languageVersion });
   const lineStarts = lineStartsOf(source);
   const loc = locOfOffset(lineStarts, clamped);
   const scope = analysis.symbolsAt(loc);
@@ -744,7 +714,7 @@ export function getMovementCompletions(
   if (blankLine) {
     const frame = analysis.frameAt(loc);
     const items: MovementCompletionItem[] =
-      frame === undefined || frame.kind === 'file' ? [...fileKeywords(languageVersion)] : [...bodyKeywords(languageVersion), joinKeyword(languageVersion)];
+      frame === undefined || frame.kind === 'file' ? [...FILE_KEYWORDS] : [...BODY_KEYWORDS, JOIN_KEYWORD];
     if (frame !== undefined && frame.kind !== 'file') {
       for (const symbol of scope.values()) {
         if (symbol.kind === 'movement') {
@@ -771,11 +741,7 @@ export function getMovementCompletions(
     const items: MovementCompletionItem[] = [...RVALUE_KEYWORDS];
     for (const symbol of scope.values()) {
       if (symbol.kind === 'adapter') {
-        items.push(
-          since(languageVersion, 5)
-            ? { label: `connect ${symbol.name} using …`, insert: `connect ${symbol.name} using `, kind: 'function', detail: 'connect an instance' }
-            : { label: `${symbol.name}(credentials: …)`, insert: `${symbol.name}(credentials: `, kind: 'function', detail: 'construct an instance' },
-        );
+        items.push({ label: `${symbol.name}(credentials: …)`, insert: `${symbol.name}(credentials: `, kind: 'function', detail: 'construct an instance' });
       } else if (
         symbol.posType !== undefined ||
         symbol.schema !== undefined ||
@@ -808,12 +774,12 @@ export function getMovementCompletions(
         detail: `option of ${fieldName}`,
       }));
       if (inString) return done(enumItems);
-      return expressionCompletions({ lineBefore, scope, done, prepend: enumItems, languageVersion });
+      return expressionCompletions({ lineBefore, scope, done, prepend: enumItems });
     }
   }
 
   // ── expression position: delegate to the shared formula engine ──
-  return expressionCompletions({ lineBefore, scope, done, languageVersion });
+  return expressionCompletions({ lineBefore, scope, done });
 }
 
 // ── Expression delegation ──
@@ -824,20 +790,10 @@ function expressionCompletions(input: {
   done: (items: MovementCompletionItem[], from?: number) => MovementCompletions;
   /** Items to surface ahead of the formula engine's (e.g. enum options). */
   prepend?: MovementCompletionItem[];
-  languageVersion: LanguageVersion;
 }): MovementCompletions {
-  const { lineBefore, scope, done, prepend = [], languageVersion } = input;
+  const { lineBefore, scope, done, prepend = [] } = input;
   const segment = expressionSegment(lineBefore);
   if (segment === undefined) return prepend.length > 0 ? done(prepend) : NO_COMPLETIONS;
-  // From version 5 an everyday expression is spelled as TypeScript's; walk
-  // brackets keep their CAPS words in every version.
-  const everyday = since(languageVersion, 5) && !insideWalkBrackets(segment.text);
-  if (everyday) {
-    const namespace = STDLIB_MEMBER_ACCESS.exec(segment.text)?.[1];
-    const members = namespace !== undefined ? v5MemberCompletions(namespace) : undefined;
-    if (members !== undefined) return done(members);
-  }
-
   // ── namespace member access: `DATE.par` → the DATE family's members ──
   // The partial after the dot is `wordFrom`, so the default `from` prefix-filters.
   const memberItems = stdlibMemberCompletions(segment.text);
@@ -856,9 +812,9 @@ function expressionCompletions(input: {
   const formula: MovementCompletionItem[] = delegated.map(c => ({ ...c }));
   const items: MovementCompletionItem[] = [
     ...prepend,
-    ...(everyday ? v5EverydayItems(formula) : formula),
+    ...formula,
     ...MOVEMENT_META_COMPLETIONS,
-    ...(everyday ? v5StandardCompletions() : STDLIB_COMPLETIONS),
+    ...STDLIB_COMPLETIONS,
   ];
 
   if (valueExpecting(segment.text)) {
@@ -875,11 +831,7 @@ function expressionCompletions(input: {
       }
     }
   } else if (segment.isCondition && /[`\w\])]\s+[A-Za-z_]?\w*$/.test(segment.text)) {
-    items.push(
-      everyday
-        ? { label: 'is', insert: 'is ', kind: 'keyword', detail: 'type test — narrows in the block' }
-        : { label: 'IS', insert: 'IS ', kind: 'keyword', detail: 'type test — narrows in the block' },
-    );
+    items.push({ label: 'IS', insert: 'IS ', kind: 'keyword', detail: 'type test — narrows in the block' });
   }
   return done(items);
 }
@@ -1215,14 +1167,17 @@ export function getDefinition(
   source: string,
   offset: number,
   snapshot?: CatalogSnapshot,
+  options?: { languageVersion?: LanguageVersion },
 ): DefinitionTarget | undefined {
+  const languageVersion = options?.languageVersion ?? CURRENT_LANGUAGE_VERSION;
+  assertLegacyPresentationPin(languageVersion);
   const fromImportLine = importLineTarget(source, offset);
   if (fromImportLine) return fromImportLine;
 
   const word = wordAt(source, offset);
   if (!word) return undefined;
   const snap = snapshot ?? EMPTY_CATALOG_SNAPSHOT;
-  const analysis = analyze(source, snap, { cursorOffset: offset });
+  const analysis = analyze(source, snap, { cursorOffset: offset, languageVersion });
   const loc = locOfOffset(lineStartsOf(source), word.from);
   const symbol = analysis.resolveAt(word.text, loc);
   if (!symbol) return undefined;
@@ -1312,8 +1267,7 @@ export function getHoverInfo(
   options?: { languageVersion?: LanguageVersion },
 ): MovementHover | undefined {
   const languageVersion = options?.languageVersion ?? CURRENT_LANGUAGE_VERSION;
-  assertLegacyDialect(languageVersion);
-  const v5 = since(languageVersion, 5);
+  assertLegacyPresentationPin(languageVersion);
   // A backtick-quoted name (`\`Sender Name\``) is one token even with spaces —
   // prefer it so multi-word fields resolve.
   const word = backtickTokenAt(source, offset) ?? wordAt(source, offset);
@@ -1322,7 +1276,7 @@ export function getHoverInfo(
   // imported value of the same spelling.
   const importHover = importContextHover(source, word);
   if (importHover) return importHover;
-  const analysis = analyze(source, snapshot, { cursorOffset: offset });
+  const analysis = analyze(source, snapshot, { cursorOffset: offset, languageVersion });
   const lineStarts = lineStartsOf(source);
   const loc = locOfOffset(lineStarts, word.from);
   // `unique by` is a keyword, not a symbol — hovering it inside a write
@@ -1342,7 +1296,7 @@ export function getHoverInfo(
   // field literally named DATE is implausible, and the char after the token
   // (`(` vs `.`) tells coercer from namespace, so this only fires on real
   // stdlib intent.
-  const stdlibHov = v5 ? v5StandardHover(source, word) : stdlibHover(source, word);
+  const stdlibHov = stdlibHover(source, word);
   if (stdlibHov) return stdlibHov;
   const symbol = analysis.resolveAt(word.text, loc);
   // Not a symbol: a field read (`item.Text`), a write-body field key (`Name:`),
@@ -1356,7 +1310,7 @@ export function getHoverInfo(
     if (edgeHover) return edgeHover;
     const cfgHover = configKeyHover(source, word, analysis.symbolsAt(loc), snapshot);
     if (cfgHover) return cfgHover;
-    const keyword = (v5 ? V5_KEYWORD_HOVERS[word.text] : undefined) ?? KEYWORD_HOVERS[word.text];
+    const keyword = KEYWORD_HOVERS[word.text];
     return keyword !== undefined ? { from: word.from, to: word.to, contents: [keyword] } : undefined;
   }
   const contents = hoverContents(symbol, snapshot);

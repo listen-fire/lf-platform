@@ -68,7 +68,7 @@ function definitionAt(text: string, withSnapshot = true): DefinitionTarget | und
   const offset = text.indexOf('¦');
   if (offset === -1) throw new Error('no caret in fixture');
   const source = text.slice(0, offset) + text.slice(offset + 1);
-  return getDefinition(source, offset, withSnapshot ? snapshot : undefined);
+  return getDefinition(source, offset, withSnapshot ? snapshot : undefined, { languageVersion: '4' });
 }
 
 const BODY = `

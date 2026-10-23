@@ -6,13 +6,14 @@
 // pin is refused with the language's own text, and nothing reads it.
 //
 // Every verdict on a current pin goes through here; no caller hands a semver
-// to legacy-lang's checker or legacy-engine's scan.
+// to legacy-lang's checker or legacy-engine's scan. Presentation (completion,
+// hover, definition, the story) is not here: it follows `routeOf`'s kind, the
+// wasm for an installed pin and legacy-lang under its own id for a legacy one.
 
 import {
   LANGUAGE_VERSION,
   RustCheckRefused,
   checkSourceInRust,
-  compatibilityKey,
   compatible,
   fromCatalogSnapshot,
   languageVersionDiagnostic,
@@ -42,8 +43,12 @@ export function routeOf(pin: LanguageVersion): PinRoute {
   return { kind: 'refused', diagnostic };
 }
 
-/** legacy-lang's own integer for the 0.12 surface: the target of a legacy → installed move's upgrade warnings. */
-const LEGACY_UPGRADE_DIALECT = '5';
+/**
+ * legacy-lang's own integer for the 0.12 surface: the target of a legacy →
+ * installed move's upgrade warnings, and the only 5 left in the platform. No
+ * presentation surface reads a pin as it.
+ */
+export const LEGACY_UPGRADE_DIALECT = '5';
 
 /**
  * The wasm checker's diagnostics for `source` under an installed pin, against
@@ -82,19 +87,4 @@ export function checkInstalled(input: {
       ...(resolveFile !== undefined ? { resolveFile } : {}),
     }),
   );
-}
-
-/** The release line legacy-lang's dialect '5' spells. */
-const LEGACY_DIALECT_LINE = '0.12';
-
-/**
- * The legacy-lang dialect a presentation surface (completions, hover,
- * definition, the story's projection) reads `pin` under: a legacy id as
- * itself, the 0.12 line as legacy-lang's '5'. Presentation only, never a
- * verdict: what is valid is `checkInstalled`'s to say. Any other pin has no
- * dialect (null), and those surfaces show nothing for it.
- */
-export function presentationDialect(pin: LanguageVersion): LanguageVersion | null {
-  if (isLegacyLanguageVersion(pin)) return pin;
-  return compatibilityKey(pin) === LEGACY_DIALECT_LINE ? LEGACY_UPGRADE_DIALECT : null;
 }

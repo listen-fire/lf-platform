@@ -134,6 +134,7 @@ crm = crm_type(credentials: AttioCred)
       SAMPLE_SOURCE,
       SAMPLE_SOURCE.lastIndexOf('attioTarget') + 1,
       snapshot,
+      { languageVersion: '4' },
     );
     expect(hover).toBeDefined();
     const text = hover!.contents.join('\n');
@@ -152,7 +153,7 @@ ${cursorLine}
 }
 `;
     const offset = body.indexOf(cursorLine) + cursorLine.length;
-    const result = getMovementCompletions(body, offset, snapshot);
+    const result = getMovementCompletions(body, offset, snapshot, { languageVersion: '4' });
     expect(result.items.map((i) => i.label)).toEqual(['company', 'person']);
   });
 
@@ -185,6 +186,7 @@ describe('honest hover when a schema cannot load', () => {
       SAMPLE_SOURCE,
       SAMPLE_SOURCE.lastIndexOf('attioTarget') + 1,
       failed,
+      { languageVersion: '4' },
     );
     expect(hover).toBeDefined();
     const text = hover!.contents.join('\n');
@@ -212,6 +214,7 @@ describe('honest hover when a schema cannot load', () => {
       SAMPLE_SOURCE,
       SAMPLE_SOURCE.lastIndexOf('attioTarget') + 1,
       recovered,
+      { languageVersion: '4' },
     );
     expect(hover!.contents.join('\n')).toContain('Reads: company, person');
   });

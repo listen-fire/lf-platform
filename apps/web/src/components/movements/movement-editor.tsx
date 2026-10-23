@@ -468,7 +468,7 @@ const definitionNavigation = (
     if (presentation.kind === "legacy") {
       let target;
       try {
-        target = getDefinition(text, pos, refs.snapshot.current);
+        target = getDefinition(text, pos, refs.snapshot.current, presentation.options);
       } catch (err) {
         console.error("Movement definition lookup failed:", err);
         return undefined;

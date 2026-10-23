@@ -114,8 +114,8 @@ inbox = connect email using dealflow_inbox
 crm = connect attio using acme_main
 `;
 
-/** This file pins the editor's view of the surface up to version 4; the
- *  v5 surface's is surface_v5.unit.test.ts. */
+/** This file pins the editor's view of the legacy surface (version 4). The
+ *  current surface's is the wasm's: the language's own service tests. */
 const VERSION_4 = { languageVersion: 4 } as const;
 
 function caret(text: string): { source: string; offset: number } {

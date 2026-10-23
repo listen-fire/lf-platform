@@ -1,7 +1,8 @@
 // The TypeScript parser, checker, editor service and story. They read the
-// legacy ids 1 to 4, and '5', this copy's dialect of the 0.12 surface (for
-// presentation and as the target of upgrade warnings, never a stored pin); a
-// release's semver is refused (version_conditionals.ts). The names the language
+// legacy ids 1 to 4. The editor service and the story present only those; '5',
+// this copy's dialect of the 0.12 surface, is the checker's upgrade target
+// alone, never a stored pin and never presented. A release's semver is refused
+// (version_conditionals.ts). The names the language
 // package keeps (the catalog and schema types, the diagnostic, the snapshot,
 // the wasm bindings) are imported from
 // `movement-lang`, not from here.

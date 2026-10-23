@@ -1299,18 +1299,15 @@ export type MovementEventItem = {
 /**
  * How the editor treats a pin. `kind`: whose checker lints it (`legacy`: the
  * browser's; `installed`: the server's `check`; `refused`: nothing reads it).
- * `dialect`: what completions, hover and definition read it as; null ⇒ none.
+ * Completions, hover and definition follow the same kind.
  */
 export interface MovementLanguageRoute {
     kind: PinRoute['kind'];
-    dialect: LanguageVersion | null;
 }
-/** The skeleton, with the release a new movement is pinned to and the
- *  dialect the editor's language service reads it under. */
+/** The skeleton, with the release a new movement is pinned to. */
 export type MovementCatalogResponse = TeamCatalogSnapshot & {
     installed: {
         pin: LanguageVersion;
-        dialect: LanguageVersion | null;
     };
 };
 

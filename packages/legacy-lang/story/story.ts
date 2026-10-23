@@ -58,7 +58,7 @@ import {
 import { MovementParseError, parseProgram } from '../parser/parse';
 import { parseFieldTypeName, type Catalog, type SchemaFieldType } from '../checker/catalog';
 import type { ResolveFile } from '../checker/link';
-import { CURRENT_LANGUAGE_VERSION, assertLegacyDialect, type LanguageVersion } from '../language_version';
+import { CURRENT_LANGUAGE_VERSION, assertLegacyPresentationPin, type LanguageVersion } from '../language_version';
 import { maybeAbsent } from '../checker/typing';
 import {
   type CheckRecording,
@@ -667,15 +667,8 @@ export interface StoryInput {
    */
   validityStatus?: StoryValidityStatus;
   resolveFile?: ResolveFile;
-  /** The saved movement's pin. Absent ⇒ the current version. */
+  /** The saved movement's legacy id ('1'..'4'). Absent ⇒ the current version, which only a conformance setup makes one. */
   languageVersion?: LanguageVersion;
-  /**
-   * The verdict of a checker other than this one (the platform's wasm check of
-   * a release pin). When given, it is the story's problems and the validity
-   * derived from them; this package's own check still runs, but only for the
-   * recording that drives the projection.
-   */
-  diagnostics?: Diagnostic[];
 }
 
 /**
@@ -683,7 +676,7 @@ export interface StoryInput {
  * function of the source and the catalog.
  */
 export function storyOf(input: StoryInput): StoryResult {
-  assertLegacyDialect(input.languageVersion ?? CURRENT_LANGUAGE_VERSION);
+  assertLegacyPresentationPin(input.languageVersion ?? CURRENT_LANGUAGE_VERSION);
   let program: Program;
   try {
     program = parseProgram(
@@ -711,7 +704,7 @@ export function storyOf(input: StoryInput): StoryResult {
       // `recordAnalysis: true` always returns one; the fallback keeps the
       // projection total rather than asserting.
       recording: recording ?? { frames: [], writes: [], nodes: [] },
-      diagnostics: input.diagnostics ?? diagnostics,
+      diagnostics,
       languageVersion: input.languageVersion ?? CURRENT_LANGUAGE_VERSION,
       ...(input.name !== undefined ? { name: input.name } : {}),
       ...(input.validityStatus !== undefined ? { validityStatus: input.validityStatus } : {}),
