@@ -28,11 +28,12 @@ import type {
 } from 'movement-lang';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { CatalogGap } from './catalog';
-import { getMovementRow, type MovementValidityStatus } from './store';
+import type { MovementValidityStatus } from './store';
 
 import { listUnsupportedConstructs } from '@listen-fire/legacy-engine/services/movement_engine/interpretable';
 import { movementCatalogForTeam } from './catalog';
 import { checkInstalled, routeOf } from './language_route';
+import { editorPinOf } from './language_service';
 import { stepTimer, type StepTimer } from './timing';
 
 
@@ -348,12 +349,8 @@ export async function checkMovementSource(input: {
   id?: string;
   languageVersion?: LanguageVersion;
 }): Promise<{ diagnostics: AuthoringDiagnostic[] } | null> {
-  let pin = input.languageVersion ?? LANGUAGE_VERSION;
-  if (input.id !== undefined) {
-    const row = await getMovementRow({ teamId: input.teamId, id: input.id });
-    if (row === null) return null;
-    pin = row.languageVersion;
-  }
+  const pin = await editorPinOf(input);
+  if (pin === null) return null;
   const validation = await validateMovementForTeam({
     teamId: input.teamId,
     source: input.source,

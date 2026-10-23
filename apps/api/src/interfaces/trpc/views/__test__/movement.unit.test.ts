@@ -445,3 +445,172 @@ listen as "Import companies" to manual fire \`Import Companies\`
     expect(diagnostics.some((d) => d.message.includes('Nmae'))).toBe(true);
   });
 });
+
+describe('complete, hover and definition — the wasm language service for a release pin', () => {
+  const LIBRARY = 'export function greet(name: <text>) {\n  return "Hi ${name}"\n}\n';
+  const PROGRAM = `import { attio } from adapters
+import { acme_main } from credentials
+import { greet } from "lib/greet"
+
+crm = connect attio using acme_main
+
+function hello(go: <manual-[:Invocation]->>) {
+  write crm-[:Companies]-> {
+    unique by (Name)
+    Name: greet(go.Text)
+  }
+}
+
+listen to manual fire hello
+`;
+  const KNOWN_ID = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
+  const UNKNOWN_ID = '9b2f4a1e-3c5d-4e6f-8a7b-0c1d2e3f4a5b';
+  const after = (source: string, marker: string) => source.indexOf(marker) + marker.length;
+  const calls = { catalog: 0 };
+
+  async function snapshotOf() {
+    const { mockCatalogSnapshot } = await import('movement-lang');
+    return {
+      ...mockCatalogSnapshot({
+        adapters: {
+          manual: {
+            constructionArgs: [],
+            canFire: true,
+            schema: {
+              positions: { Invocation: { properties: { Text: 'text' }, edges: {} } },
+              collections: {},
+              writableRoots: {},
+              eventPosition: 'Invocation',
+              eventPositions: [{ position: 'Invocation' }],
+            },
+          },
+          attio: {
+            constructionArgs: [{ name: 'credentials', kind: 'credential', required: true }],
+            schema: {
+              positions: { Companies: { properties: { Name: 'text' }, edges: {} } },
+              collections: { Companies: { target: 'Companies' } },
+              writableRoots: { Companies: { fields: { Name: 'text' }, resultShape: { externalId: 'text', Name: 'text' } } },
+            },
+          },
+        },
+        credentials: { acme_main: { adapters: ['attio'] } },
+      }),
+      files: { 'lib/greet': { source: LIBRARY } },
+    };
+  }
+
+  async function caller(teamId: string) {
+    const snapshot = await snapshotOf();
+    jest.doMock('../../../../services/context', () => ({
+      currentContext: () => ({
+        user: { id: 'user-1', teamId },
+        principal: { userId: 'user-1', teamId, access: 'write', scopes: ['*'], pinnedTeamId: null },
+      }),
+    }));
+    jest.doMock('../../../../services/user', () => ({
+      UserService: { getById: async () => ({ id: 'user-1' }) },
+    }));
+    jest.doMock('../../../../services/translation_graph/movement/store', () => ({
+      ...jest.requireActual('../../../../services/translation_graph/movement/store'),
+      getMovementRow: async (input: { id: string }) =>
+        input.id === KNOWN_ID ? { id: KNOWN_ID, languageVersion: '4' } : null,
+    }));
+    jest.doMock('../../../../services/translation_graph/movement/catalog', () => {
+      const { fromCatalogSnapshot, parseProgram, LANGUAGE_VERSION } = jest.requireActual('movement-lang');
+      return {
+        ...jest.requireActual('../../../../services/translation_graph/movement/catalog'),
+        // Like the live assembly, a source that does not parse throws.
+        movementCatalogForTeam: async (_teamId: string, options: { source?: string; languageVersion?: string } = {}) => {
+          calls.catalog += 1;
+          if (options.source !== undefined) parseProgram(options.source, { languageVersion: options.languageVersion ?? LANGUAGE_VERSION });
+          return {
+            catalog: fromCatalogSnapshot(snapshot),
+            resolveCredentialId: () => undefined,
+            resolveFile: () => undefined,
+            notes: [],
+            gaps: [],
+            runSnapshot: () => snapshot,
+          };
+        },
+      };
+    });
+    const { movementRouter } = await import('../movement');
+    const { trpc } = await import('../../trpc');
+    return movementRouter(trpc.procedure).createCaller({ authorise: async () => {} } as never);
+  }
+
+  let teams = 0;
+  const freshTeam = () => `team-language-${++teams}`;
+
+  beforeEach(() => {
+    jest.resetModules();
+    calls.catalog = 0;
+  });
+  afterEach(() => {
+    jest.dontMock('../../../../services/context');
+    jest.dontMock('../../../../services/user');
+    jest.dontMock('../../../../services/translation_graph/movement/store');
+    jest.dontMock('../../../../services/translation_graph/movement/catalog');
+  });
+
+  it('complete, hover and definition answer what the binding answers against the run snapshot', async () => {
+    const api = await caller(freshTeam());
+    const { LANGUAGE_VERSION, completionsAt, hoverAt, definitionAt } = await import('movement-lang');
+    const snapshot = await snapshotOf();
+    const options = { languageVersion: LANGUAGE_VERSION };
+    const inBody = after(PROGRAM, 'Name: gr');
+    const sorted = (items: unknown[]) => items.map((i) => JSON.stringify(i)).sort();
+
+    const completed = await api.complete({ source: PROGRAM, offset: inBody });
+    const expected = completionsAt(PROGRAM, inBody, snapshot, options);
+    expect(sorted(completed.items)).toEqual(sorted(expected.items));
+    expect(completed.items.length).toBeGreaterThan(0);
+
+    const onField = after(PROGRAM, 'go.Te');
+    const card = await api.hover({ source: PROGRAM, offset: onField });
+    expect(card).toEqual(hoverAt(PROGRAM, onField, snapshot, options));
+    expect(card?.markdown.length).toBeGreaterThan(0);
+
+    const defined = await api.definition({ source: PROGRAM, offset: inBody });
+    expect(defined).toEqual(definitionAt(PROGRAM, inBody, snapshot, options));
+    expect(defined).toMatchObject({ file: 'lib/greet' });
+  });
+
+  it('a half-typed line still completes', async () => {
+    const api = await caller(freshTeam());
+    const { LANGUAGE_VERSION, completionsAt } = await import('movement-lang');
+    const lineEnd = after(PROGRAM, '    unique by (Name)\n');
+    const typed = '    x = go.';
+    const source = PROGRAM.slice(0, lineEnd) + typed + '\n' + PROGRAM.slice(lineEnd);
+    const offset = lineEnd + typed.length;
+    const completed = await api.complete({ source, offset });
+    const expected = completionsAt(source, offset, await snapshotOf(), { languageVersion: LANGUAGE_VERSION });
+    expect(completed.items.map((i) => i.label)).toContain('Text');
+    expect(completed.items.map((i) => i.label).sort()).toEqual(expected.items.map((i) => i.label).sort());
+  });
+
+  it('a legacy pin is refused; a refused pin is empty without a catalog', async () => {
+    const api = await caller(freshTeam());
+    for (const ask of [api.complete, api.hover, api.definition]) {
+      await expect(ask({ source: PROGRAM, offset: 10, languageVersion: '4' })).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message: "a legacy pin's language service runs in the browser",
+      });
+    }
+    // The movement's own pin, a legacy id, is refused the same way.
+    await expect(api.complete({ source: PROGRAM, offset: 10, id: KNOWN_ID })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+    expect(await api.complete({ source: PROGRAM, offset: 10, languageVersion: '0.13.0' })).toEqual({ from: 10, to: 10, items: [] });
+    expect(await api.hover({ source: PROGRAM, offset: 10, languageVersion: '0.13.0' })).toBeNull();
+    expect(await api.definition({ source: PROGRAM, offset: 10, languageVersion: '0.13.0' })).toBeNull();
+    expect(calls.catalog).toBe(0);
+  });
+
+  it('an unknown movement is NOT_FOUND', async () => {
+    const api = await caller(freshTeam());
+    for (const ask of [api.complete, api.hover, api.definition]) {
+      await expect(ask({ source: PROGRAM, offset: 10, id: UNKNOWN_ID })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    }
+    expect(calls.catalog).toBe(0);
+  });
+});

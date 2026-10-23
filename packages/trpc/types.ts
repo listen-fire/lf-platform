@@ -3,6 +3,7 @@ import * as engine_contracts_trigger_config from 'engine-contracts/trigger_confi
 import * as _prisma_client_runtime_library from '@prisma/client/runtime/library';
 import { StoryValidity, Chip, StoryFilter, StoryShapeNode, StoryEdge, Step, StoryProblem, FieldType } from 'legacy-lang';
 import { CatalogSnapshot, InstanceSchema, LanguageVersion, Diagnostic } from 'movement-lang';
+import * as movement_lang_index from 'movement-lang/index';
 import * as _trpc_server_observable from '@trpc/server/observable';
 import { AskState } from '@listen-fire/ask';
 import * as engine_contracts_adapter from 'engine-contracts/adapter';
@@ -8548,6 +8549,102 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
             }, {
                 diagnostics: AuthoringDiagnostic[];
             }>;
+            complete: _trpc_server.BuildProcedure<"mutation", {
+                _config: _trpc_server.RootConfig<{
+                    ctx: {
+                        authorise: () => Promise<void>;
+                    };
+                    meta: object;
+                    errorShape: {
+                        message: string;
+                        code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
+                        data: _trpc_server_dist_error_formatter.DefaultErrorData;
+                    };
+                    transformer: _trpc_server.DefaultDataTransformer;
+                }>;
+                _meta: object;
+                _ctx_out: {
+                    authorise: () => Promise<void>;
+                };
+                _input_in: {
+                    source: string;
+                    offset: number;
+                    id?: string | undefined;
+                    languageVersion?: string | undefined;
+                };
+                _input_out: {
+                    source: string;
+                    offset: number;
+                    id?: string | undefined;
+                    languageVersion?: string | undefined;
+                };
+                _output_in: typeof _trpc_server.unsetMarker;
+                _output_out: typeof _trpc_server.unsetMarker;
+            }, movement_lang_index.Completions>;
+            hover: _trpc_server.BuildProcedure<"mutation", {
+                _config: _trpc_server.RootConfig<{
+                    ctx: {
+                        authorise: () => Promise<void>;
+                    };
+                    meta: object;
+                    errorShape: {
+                        message: string;
+                        code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
+                        data: _trpc_server_dist_error_formatter.DefaultErrorData;
+                    };
+                    transformer: _trpc_server.DefaultDataTransformer;
+                }>;
+                _meta: object;
+                _ctx_out: {
+                    authorise: () => Promise<void>;
+                };
+                _input_in: {
+                    source: string;
+                    offset: number;
+                    id?: string | undefined;
+                    languageVersion?: string | undefined;
+                };
+                _input_out: {
+                    source: string;
+                    offset: number;
+                    id?: string | undefined;
+                    languageVersion?: string | undefined;
+                };
+                _output_in: typeof _trpc_server.unsetMarker;
+                _output_out: typeof _trpc_server.unsetMarker;
+            }, movement_lang_index.HoverCard | null>;
+            definition: _trpc_server.BuildProcedure<"mutation", {
+                _config: _trpc_server.RootConfig<{
+                    ctx: {
+                        authorise: () => Promise<void>;
+                    };
+                    meta: object;
+                    errorShape: {
+                        message: string;
+                        code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
+                        data: _trpc_server_dist_error_formatter.DefaultErrorData;
+                    };
+                    transformer: _trpc_server.DefaultDataTransformer;
+                }>;
+                _meta: object;
+                _ctx_out: {
+                    authorise: () => Promise<void>;
+                };
+                _input_in: {
+                    source: string;
+                    offset: number;
+                    id?: string | undefined;
+                    languageVersion?: string | undefined;
+                };
+                _input_out: {
+                    source: string;
+                    offset: number;
+                    id?: string | undefined;
+                    languageVersion?: string | undefined;
+                };
+                _output_in: typeof _trpc_server.unsetMarker;
+                _output_out: typeof _trpc_server.unsetMarker;
+            }, movement_lang_index.Definition | null>;
             catalogForSource: _trpc_server.BuildProcedure<"mutation", {
                 _config: _trpc_server.RootConfig<{
                     ctx: {

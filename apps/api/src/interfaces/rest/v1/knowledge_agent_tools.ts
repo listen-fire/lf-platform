@@ -15,7 +15,6 @@ import { Router, type RequestHandler } from 'express';
 import { z } from 'zod';
 import { currentPrincipal } from 'principal';
 import { LANGUAGE_VERSION, type LanguageVersion } from 'movement-lang';
-import { getMovementCompletions, type MovementCompletions } from 'legacy-lang';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { UserId } from '../../../generated/kysely/core/User';
@@ -83,7 +82,7 @@ import {
   type VersionView,
 } from '../../../services/translation_graph/movement/language_upgrade';
 import { languageVersionInput, pinFromInput } from '../../../services/translation_graph/movement/language_pin_input';
-import { presentationDialect } from '../../../services/translation_graph/movement/language_route';
+import { agentCompletionsAt } from '../../../services/translation_graph/movement/language_service';
 import { neverAsAny } from 'movement-engine/public/types';
 import { movementSourceHash } from '../../../services/translation_graph/movement/version_store';
 import { applyContentEdit } from '../../../services/translation_graph/movement/edit';
@@ -996,7 +995,6 @@ const completionsAtHandler: RequestHandler = jsonHandler(
         ? input.source
         : input.source.slice(0, markerIdx) + input.source.slice(markerIdx + MARKER.length);
     const teamId = (await resolveToolTeam(input.team)) as TeamId;
-    const { snapshot } = await movementCatalogSnapshotForTeam(teamId);
     // Same version rule as validateAutomationText: explicit, else the saved automation's pin, else current.
     const pin = input.languageVersion !== undefined ? pinFromInput(input.languageVersion) : undefined;
     if (pin !== undefined && 'error' in pin) return pin;
@@ -1006,24 +1004,7 @@ const completionsAtHandler: RequestHandler = jsonHandler(
       if (!row) return { error: `No automation '${input.automation}' in this team.` };
       languageVersion = row.languageVersion;
     }
-    // Completions come from legacy-lang's language service, read under the
-    // pin's dialect; a pin with none gets none.
-    const pinned = languageVersion ?? LANGUAGE_VERSION;
-    const dialect = presentationDialect(pinned);
-    const result: MovementCompletions =
-      dialect === null
-        ? { from: offset, items: [] }
-        : getMovementCompletions(fullSource, offset, snapshot, { languageVersion: dialect });
-    return {
-      completions: result.items.map((i) => ({
-        label: i.label,
-        kind: i.kind,
-        ...(i.detail !== undefined ? { detail: i.detail } : {}),
-      })),
-      ...(dialect === null
-        ? { note: `No completions for language version ${pinned}: this platform's language service does not read it.` }
-        : {}),
-    };
+    return agentCompletionsAt({ teamId, source: fullSource, offset, pin: languageVersion ?? LANGUAGE_VERSION });
   },
 );
 
@@ -1693,7 +1674,7 @@ function registerAutomationToolRoutes(): void {
   reg('GET', '/automations/grep', 'Search across a team\'s automations for a literal snippet (or, with isRegex: true, a regular expression) and get back every matching line: { matches: [{ id, name, teamId, line, text, before, after }], truncated }. Query: pattern, isRegex?, contextLines? (lines of surrounding context per match, default 0), team? (default: every team the connection covers). Capped at 200 matches. Use it to find where something is defined or imported before editing it.', { inputSchema: grepAutomationsSchema, readOnly: true, latency: 'fast' });
   reg('POST', '/automations/validate', 'Typecheck an automation program against the live connected systems WITHOUT saving. Returns diagnostics (code, message, severity, line/col). A clean validation predicts a live save; saving runs the same check first, so this is for exploring. Acts in your default team unless you pass `team`. Also the top-level "validateAutomation" tool.', { inputSchema: validateMovementSchema, latency: 'medium' });
   reg('POST', '/automations/upgrade', 'Move a saved automation onto the current language version. Body: { automation, acknowledge?, team? }. Rewrites its old spellings by the checker\'s fixes, validates the result under the current version and returns { status, from, to, diagnostics, upgradedSource?, message }: `blocked` (diagnostics to repair), `needs_acknowledgement` (clean — call again with acknowledge: true to move it), `upgraded`, `already_current`, or `unverified`. Without acknowledge nothing changes. Also the top-level "upgradeAutomation" tool.', { inputSchema: upgradeMovementSchema, latency: 'medium' });
-  reg('POST', '/automations/completions', 'Given an automation program with a `<|>` cursor marker, return the valid next tokens at that point (writable fields, edges, enum options). Body: { source, team?, automation?, languageVersion? } (a saved automation completes under its pinned language version).', { inputSchema: completionsAtSchema, latency: 'medium' });
+  reg('POST', '/automations/completions', 'Given an automation program with a `<|>` cursor marker, return the valid next tokens at that point (writable fields, edges, enum options). Body: { source, team?, automation?, languageVersion? } (a saved automation completes under its pinned language version). Returns { completions: [{ label, kind, detail? }], note? }; under a release pin the kinds are the language service\'s: variable, function, field, edge, module, keyword, property, credential, type, namespace.', { inputSchema: completionsAtSchema, latency: 'medium' });
   reg('POST', '/automations/save', 'Save an automation program and provision its listeners (authoring → live). It validates first: text with errors, or that can\'t be verified, is NOT saved — the answer is { ok: false, saved: false, diagnostics } — and acknowledgeErrors: true ships it anyway (replacing whatever ran, even broken). A clean save goes live. No "draft" quietly keeps the last good version running. Returns diagnostics, per-listener details, runnable, `warnings` (saved fine, but would surprise the user — a movement name another automation already fires, or listeners retired because the saved source could not be read; always relay these), and `storyUrl` — a login-free link to a picture of what the automation does, worth offering as a labelled link once a save goes live. Body: { source, name?, description?, id?, acknowledgeErrors?, expectedRevision?, team? } — pass id to re-save, expectedRevision (the `revision` from your last getAutomation read) when updating an EXISTING automation so a concurrent edit can\'t be silently clobbered — a stale expectedRevision is rejected with { ok: false, conflict } instead of overwriting; call getAutomation again, merge, and re-save with the new revision. Omit expectedRevision for today\'s behaviour (no precondition — last write wins); it\'s ignored when creating a new automation. `team` files it in a specific team. Also the top-level "saveAutomation" tool.', { inputSchema: saveMovementSchema, latency: 'medium' });
   reg('POST', '/automations/delete', 'Permanently delete a saved automation and every listener it derives (a hard delete — the automation and its run triggers are gone, and any now-orphaned external subscriptions are torn down). Body: { automation, team? } — the automation id (from listAutomations); pass `team` when you belong to more than one. Returns { deleted } — false if no automation with that id lives in the resolved team. Also the top-level "deleteAutomation" tool.', { inputSchema: deleteMovementSchema, latency: 'fast' });
   reg('POST', '/automations/run', 'Dispatch a saved automation on its manual channel and return IMMEDIATELY with { runId, status: "running" } — the run executes asynchronously (it can take a while). Optionally pass text and/or files as its input. Body: { automation, text?, files?, requestId?, team? } — a retry with the same requestId returns the same run. Poll /automations/run-status (the "checkRun" tool) with the runId for the outcome. Also the top-level "runAutomation" tool.', { inputSchema: runMovementSchema, latency: 'fast' });

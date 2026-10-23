@@ -34,7 +34,13 @@
  */
 
 import { TRPCError } from '@trpc/server';
-import { LANGUAGE_VERSION, type LanguageVersion } from 'movement-lang';
+import {
+  LANGUAGE_VERSION,
+  type Completions,
+  type Definition,
+  type HoverCard,
+  type LanguageVersion,
+} from 'movement-lang';
 import { z } from 'zod';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
@@ -88,6 +94,13 @@ import {
   routeOf,
   type PinRoute,
 } from '../../../services/translation_graph/movement/language_route';
+import {
+  LEGACY_PRESENTATION_MESSAGE,
+  completeAt,
+  defineAt,
+  hoverAt,
+  type EditorAnswer,
+} from '../../../services/translation_graph/movement/language_service';
 import {
   storyViewForMovement,
   type StoryViewResult,
@@ -378,6 +391,40 @@ type SaveMovementResponse = SaveMovementResult & {
   dependentChecks: DependentCheckResult[] | null;
 };
 
+/** What the editor asks the language service: a position in a program, under
+ *  the pin `check` reads it under. */
+const editorPositionInput = z.object({
+  source: z.string(),
+  offset: z.number().int().nonnegative(),
+  id: z.string().uuid().optional(),
+  languageVersion: z.string().optional(),
+});
+
+function answered<T>(answer: EditorAnswer<T>, id: string | undefined): T {
+  switch (answer.kind) {
+    case 'answer':
+      return answer.answer;
+    case 'not-found':
+      throw new TRPCError({ code: 'NOT_FOUND', message: `no movement ${id}` });
+    case 'legacy-presentation':
+      throw new TRPCError({ code: 'BAD_REQUEST', message: LEGACY_PRESENTATION_MESSAGE });
+    default: {
+      const unreachable: never = answer;
+      throw new Error(`unhandled editor answer ${JSON.stringify(unreachable)}`);
+    }
+  }
+}
+
+function editorRequestOf(input: z.infer<typeof editorPositionInput>) {
+  return {
+    teamId: currentContext().user.teamId,
+    source: input.source,
+    offset: input.offset,
+    ...(input.id !== undefined ? { id: input.id } : {}),
+    ...(input.languageVersion !== undefined ? { languageVersion: input.languageVersion } : {}),
+  };
+}
+
 const movementRouter = (procedure: typeof trpc.procedure) => {
   const userProcedure = sharedUserProcedure(procedure);
 
@@ -416,6 +463,25 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
         if (checked === null) throw new TRPCError({ code: 'NOT_FOUND', message: `no movement ${input.id}` });
         return checked;
       }),
+
+    /**
+     * The completions, hover card and definition at `offset` (UTF-16) for a
+     * release pin: the wasm's language service against the run snapshot
+     * `check` lints against. The pin is `check`'s. A legacy pin's language
+     * service runs in the browser, so it is refused; a pin nothing reads gets
+     * empty answers. MUTATIONS for `check`'s reason: the program is the input.
+     */
+    complete: userProcedure
+      .input(editorPositionInput)
+      .mutation(async ({ input }): Promise<Completions> => answered(await completeAt(editorRequestOf(input)), input.id)),
+
+    hover: userProcedure
+      .input(editorPositionInput)
+      .mutation(async ({ input }): Promise<HoverCard | null> => answered(await hoverAt(editorRequestOf(input)), input.id)),
+
+    definition: userProcedure
+      .input(editorPositionInput)
+      .mutation(async ({ input }): Promise<Definition | null> => answered(await defineAt(editorRequestOf(input)), input.id)),
 
     /**
      * The same snapshot, TYPED FOR ONE PROGRAM: instance schemas filled by the
