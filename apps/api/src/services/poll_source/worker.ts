@@ -212,6 +212,7 @@ export const pollReconcileHandler: WorkHandler = {
         .filter((row) => row.leaseUntil !== null && row.leaseUntil > now)
         .map((row) => row.key),
     );
+    const rowByKey = new Map(rows.map((row) => [row.key, row]));
     const activeKeys = new Set<string>();
     for (const candidate of candidates) {
       const key = pollWorkKey(candidate.id);
@@ -223,7 +224,16 @@ export const pollReconcileHandler: WorkHandler = {
         const dueAt = candidate.lastPolledAt
           ? new Date(candidate.lastPolledAt.getTime() + intervalMs)
           : now;
-        await armPoll(candidate, dueAt);
+        // A row with attempts left over was released by the drain after a failed
+        // pull and holds its backoff time. `poll_last_at` does not advance on a
+        // failure, so last poll + interval is long past and would pull the retry
+        // forward to now on every reconcile.
+        const existing = rowByKey.get(key);
+        const backedOff = existing !== undefined && existing.attempts > 0;
+        await armPoll(
+          candidate,
+          backedOff && existing.dueAt > dueAt ? existing.dueAt : dueAt,
+        );
       } catch (err) {
         logger.error('[PollSource] reconcile failed for trigger', {
           triggerId: candidate.id,

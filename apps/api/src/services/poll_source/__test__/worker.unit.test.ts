@@ -131,16 +131,21 @@ function event(over: Partial<DiscriminableEvent> = {}): DiscriminableEvent {
   return { payload: { title: 'Sync' }, externalId: 'note-9', tag: 'granola:note', ...over };
 }
 
-function workRow(input: { triggerId: string; leaseUntil?: Date | null }): WorkRow {
+function workRow(input: {
+  triggerId: string;
+  leaseUntil?: Date | null;
+  attempts?: number;
+  dueAt?: Date;
+}): WorkRow {
   return {
     id: `work-${input.triggerId}`,
     teamId: 'team-1',
     kind: 'poll_source',
     key: pollWorkKey(input.triggerId),
     payload: { triggerId: input.triggerId },
-    dueAt: new Date(0),
+    dueAt: input.dueAt ?? new Date(0),
     intervalMs: null,
-    attempts: input.leaseUntil ? 1 : 0,
+    attempts: input.attempts ?? (input.leaseUntil ? 1 : 0),
     deferrals: 0,
     leaseOwner: input.leaseUntil ? 'other' : null,
     leaseUntil: input.leaseUntil ?? null,
@@ -306,6 +311,26 @@ describe('pollReconcileHandler', () => {
     expect(listWorkByKind).toHaveBeenCalledWith('poll_source');
     expect(removeWork).toHaveBeenCalledTimes(1);
     expect(removeWork).toHaveBeenCalledWith({ key: pollWorkKey(T2) });
+  });
+
+  it('does not pull a failed row out of its backoff to the long-past last poll + interval', async () => {
+    const stale = new Date(NOW.getTime() - 3_600_000);
+    const backoffEnds = new Date(NOW.getTime() + 120_000);
+    rows = [row({ id: T1, poll_last_at: stale })];
+    listWorkByKind.mockResolvedValue([workRow({ triggerId: T1, attempts: 3, dueAt: backoffEnds })]);
+    await pollReconcileHandler.run({}, testWorkContext(NOW));
+    expect(enqueueWork).toHaveBeenCalledTimes(1);
+    expect(enqueueWork).toHaveBeenCalledWith(armedAt(T1, backoffEnds));
+  });
+
+  it('re-arms a healthy row at last poll + interval even when its row is due later', async () => {
+    const lastPolled = new Date(NOW.getTime() - 60_000);
+    rows = [row({ id: T1, poll_last_at: lastPolled })];
+    listWorkByKind.mockResolvedValue([
+      workRow({ triggerId: T1, attempts: 0, dueAt: new Date(NOW.getTime() + 999_000) }),
+    ]);
+    await pollReconcileHandler.run({}, testWorkContext(NOW));
+    expect(enqueueWork).toHaveBeenCalledWith(armedAt(T1, new Date(lastPolled.getTime() + 300_000)));
   });
 
   it('leaves a leased row to its running handler', async () => {
