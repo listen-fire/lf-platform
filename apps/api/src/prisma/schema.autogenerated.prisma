@@ -315,6 +315,18 @@ model JoinPending {
   @@schema("automations")
 }
 
+model LfMovementsListing {
+  teamId  String   @map("team_id") @db.Uuid
+  cursor  String
+  listing Json
+  seenAt  DateTime @default(now()) @map("seen_at") @db.Timestamptz(6)
+
+  @@id([teamId, cursor])
+  @@index([teamId, seenAt], map: "lf_movements_listing_seen_at_idx")
+  @@map("lf_movements_listing")
+  @@schema("automations")
+}
+
 model LfSecretsLease {
   teamId    String   @map("team_id") @db.Uuid
   ref       String

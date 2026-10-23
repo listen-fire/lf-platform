@@ -4348,6 +4348,64 @@ CREATE UNIQUE INDEX team_engine_team_id_key ON automations.team_engine USING btr
 
 CREATE TRIGGER team_engine_audit AFTER INSERT OR DELETE OR UPDATE ON automations.team_engine FOR EACH ROW EXECUTE FUNCTION automations.audit();
 
+-- lf's movements slot: the listing behind each `movements.watch` cursor
+-- (services/lf_movements/watch.ts). A cursor is a hash of the team and the
+-- paths and versions it is served, so a cursor one api instance minted is
+-- answered by any other: the listing is here, not in a process. One row per
+-- distinct listing; a row unseen for a day is deleted when the team's next
+-- listing is stored.
+CREATE TABLE automations.lf_movements_listing (
+    team_id uuid NOT NULL, -- opaque tenant id; no foreign key (D3)
+    cursor text NOT NULL,
+    listing jsonb NOT NULL, -- [{ path, version }], ordered by path
+    seen_at timestamptz DEFAULT now() NOT NULL
+);
+
+ALTER TABLE ONLY automations.lf_movements_listing
+    ADD CONSTRAINT lf_movements_listing_pkey PRIMARY KEY (team_id, cursor);
+
+CREATE INDEX lf_movements_listing_seen_at_idx ON automations.lf_movements_listing USING btree (team_id, seen_at);
+
+-- Wakes a held `movements.watch` of the team whose served set a write may have
+-- changed: a NOTIFY on the team's own channel, which the api LISTENs on while
+-- it holds a watch for that team. The triggers below fire only on the writes
+-- that can change what lf is served (services/lf_movements/rows.ts): a
+-- movement shipped, renamed or deleted; a listener paused or resumed; a
+-- credential connected, emptied, renamed or rebound. A token refresh or a
+-- scheduler's checkpoint does not fire them. The watch re-lists and compares,
+-- so a wake that changed nothing costs one scan and answers nothing.
+CREATE FUNCTION automations.lf_movements_notify() RETURNS pg_catalog.trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF TG_OP <> 'INSERT' THEN
+    PERFORM pg_notify('lf_movements_' || replace(OLD.team_id::text, '-', ''), '');
+  END IF;
+  IF TG_OP <> 'DELETE' THEN
+    PERFORM pg_notify('lf_movements_' || replace(NEW.team_id::text, '-', ''), '');
+  END IF;
+  RETURN NULL;
+END;
+$$;
+
+CREATE TRIGGER movement_lf_movements_insert AFTER INSERT ON automations.movement FOR EACH ROW WHEN ((new.current_version_id IS NOT NULL)) EXECUTE FUNCTION automations.lf_movements_notify();
+
+CREATE TRIGGER movement_lf_movements_delete AFTER DELETE ON automations.movement FOR EACH ROW WHEN ((old.current_version_id IS NOT NULL)) EXECUTE FUNCTION automations.lf_movements_notify();
+
+CREATE TRIGGER movement_lf_movements_update AFTER UPDATE ON automations.movement FOR EACH ROW WHEN (((old.current_version_id IS DISTINCT FROM new.current_version_id) OR (old.name IS DISTINCT FROM new.name) OR (old.team_id IS DISTINCT FROM new.team_id))) EXECUTE FUNCTION automations.lf_movements_notify();
+
+CREATE TRIGGER trigger_lf_movements_insert AFTER INSERT ON automations.trigger FOR EACH ROW WHEN (((new.run_mode = 'off'::text) OR (new.guard_paused_at IS NOT NULL))) EXECUTE FUNCTION automations.lf_movements_notify();
+
+CREATE TRIGGER trigger_lf_movements_delete AFTER DELETE ON automations.trigger FOR EACH ROW WHEN (((old.run_mode = 'off'::text) OR (old.guard_paused_at IS NOT NULL))) EXECUTE FUNCTION automations.lf_movements_notify();
+
+CREATE TRIGGER trigger_lf_movements_update AFTER UPDATE ON automations.trigger FOR EACH ROW WHEN (((old.run_mode IS DISTINCT FROM new.run_mode) OR ((old.guard_paused_at IS NULL) <> (new.guard_paused_at IS NULL)) OR (old.movement_id IS DISTINCT FROM new.movement_id) OR (old.team_id IS DISTINCT FROM new.team_id))) EXECUTE FUNCTION automations.lf_movements_notify();
+
+CREATE TRIGGER external_service_credentials_lf_movements_insert AFTER INSERT ON automations.external_service_credentials FOR EACH ROW WHEN ((new.credentials IS NOT NULL)) EXECUTE FUNCTION automations.lf_movements_notify();
+
+CREATE TRIGGER external_service_credentials_lf_movements_delete AFTER DELETE ON automations.external_service_credentials FOR EACH ROW WHEN ((old.credentials IS NOT NULL)) EXECUTE FUNCTION automations.lf_movements_notify();
+
+CREATE TRIGGER external_service_credentials_lf_movements_update AFTER UPDATE ON automations.external_service_credentials FOR EACH ROW WHEN ((((old.credentials IS NULL) <> (new.credentials IS NULL)) OR (old.name IS DISTINCT FROM new.name) OR (old.type IS DISTINCT FROM new.type) OR (old.app_id IS DISTINCT FROM new.app_id) OR (old.declared_credential IS DISTINCT FROM new.declared_credential) OR (old.wire_binding IS DISTINCT FROM new.wire_binding) OR (old.team_id IS DISTINCT FROM new.team_id))) EXECUTE FUNCTION automations.lf_movements_notify();
+
 
 -- =============================================================================
 -- AUTOMATIONS — Row-Level Security

@@ -21,6 +21,7 @@ import type { default as TeamSettingsTable } from './TeamSettings';
 import type { default as EventReceiptTable } from './EventReceipt';
 import type { default as WorkTable } from './Work';
 import type { default as CallbackTable } from './Callback';
+import type { default as LfMovementsListingTable } from './LfMovementsListing';
 import type { default as TriggerRunTable } from './TriggerRun';
 import type { default as TriggerTable } from './Trigger';
 import type { default as AuditLogTable } from './AuditLog';
@@ -81,6 +82,8 @@ export default interface AutomationsSchema {
   work: WorkTable;
 
   callback: CallbackTable;
+
+  lf_movements_listing: LfMovementsListingTable;
 
   trigger_run: TriggerRunTable;
 

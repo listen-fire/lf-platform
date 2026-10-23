@@ -11,19 +11,24 @@
 // Cases a and b get a fresh throwaway team each, lf-engined through `deps`,
 // seeded with the movements `hello` and `lib/greet`; c runs in the key's team.
 //
-// The shared cases are not all held: the slot's own five cases that create
-// files cannot hold for a module that is read-only, and the contract's
-// read-only cases replace them. The three that write nothing are picked by
-// name, and the suite asserts it found exactly those three.
+// The shared cases are not all held: the slot's own cases that create files
+// cannot hold for a module that is read-only, and the contract's read-only
+// cases replace them. The six that write nothing are picked by name, and the
+// suite asserts it found exactly those six. The watch cases that need a change
+// (added, changed, removed, two watchers) are the platform's own below: the
+// change is a ship, an unship or a pause made through the platform, and the
+// watch is asked over the bridge.
 
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createInterface } from 'node:readline';
 import { promisify } from 'node:util';
 
 import { serveSlot, SlotClient, startModule, type SlotAddress } from 'module-runtime/module_wire/wire';
+import { MovementsWatchAnswer, type MovementsChangeShape } from 'engine-contracts/slots';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 
@@ -170,12 +175,45 @@ interface Listed {
 }
 
 const listed = async (client: SlotClient) => (await client.call('movements.list', {})) as Listed[];
+const watched = (client: SlotClient, params: { cursor?: string; waitMs: number }) => client.read('movements.watch', params, MovementsWatchAnswer);
+
+async function cursorOf(client: SlotClient): Promise<string> {
+  const answer = await watched(client, { waitMs: 0 });
+  if (!('cursor' in answer)) throw new Error('test: a watch without a cursor answered resync');
+  return answer.cursor;
+}
+
+/** Asks from `cursor` (held up to a second at a time) until an event is
+ *  `wanted`, for at most 10 s, as the slot's own watch cases do. */
+async function watchedUntil(
+  client: SlotClient,
+  cursor: string,
+  wanted: (event: MovementsChangeShape) => boolean,
+): Promise<{ cursor: string; seen: MovementsChangeShape[] }> {
+  const deadline = Date.now() + 10_000;
+  const seen: MovementsChangeShape[] = [];
+  let from = cursor;
+  while (Date.now() < deadline) {
+    const answer = await watched(client, { cursor: from, waitMs: 1_000 });
+    if (!('cursor' in answer)) throw new Error(`test: ${from} answered resync`);
+    from = answer.cursor;
+    seen.push(...answer.events);
+    if (answer.events.some(wanted)) return { cursor: from, seen };
+  }
+  throw new Error(`test: no wanted event within 10 s; saw ${JSON.stringify(seen)}`);
+}
+
+const eventAt = (path: string, kind: MovementsChangeShape['kind']) => (event: MovementsChangeShape) => event.path === path && event.kind === kind;
+const versionIn = (seen: MovementsChangeShape[], wanted: (event: MovementsChangeShape) => boolean) => {
+  const event = seen.find(wanted);
+  return event !== undefined && event.kind !== 'removed' ? event.version : undefined;
+};
 const readOf = async (client: SlotClient, path: string) => (await client.call('movements.read', { path })) as { text: string; version: string } | null;
 
 describe('the movements slot over the platform module', () => {
-  it('holds exactly the three write-free cases of the slot, by name', () => {
-    expect(WRITE_FREE_CASE_PREFIXES).toHaveLength(3);
-    expect(writeFreeMatches.map((found) => found.length)).toEqual([1, 1, 1]);
+  it('holds exactly the six write-free cases of the slot, by name', () => {
+    expect(WRITE_FREE_CASE_PREFIXES).toHaveLength(6);
+    expect(writeFreeMatches.map((found) => found.length)).toEqual([1, 1, 1, 1, 1, 1]);
   });
 
   for (const bridge of bridges) {
@@ -239,6 +277,47 @@ describe('the movements slot over the platform module', () => {
         expect(after.get('hello.mvt')).toBe(before.get('hello.mvt'));
         expect((await readOf(client, 'lib/greet.mvt'))?.text).toBe(GREET_NEW);
       });
+
+      // The platform's changes to a real route's team are the stack's, not this test's to make.
+      const changing = bridge.over === 'the real route' ? it.skip : it;
+
+      changing('a shipped movement is reported added and a new shipped text changed, each with the version read answers', async () => {
+        const one = await reachOne();
+        const client = new SlotClient(one.address);
+        const cursor = await cursorOf(client);
+        await ship(one.tenant ?? '', 'fresh', HELLO.replaceAll('hello', 'fresh'));
+        const added = await watchedUntil(client, cursor, eventAt('fresh.mvt', 'added'));
+        expect(versionIn(added.seen, eventAt('fresh.mvt', 'added'))).toBe((await readOf(client, 'fresh.mvt'))?.version);
+
+        await ship(one.tenant ?? '', 'lib/greet', GREET_NEW);
+        const changed = await watchedUntil(client, added.cursor, eventAt('lib/greet.mvt', 'changed'));
+        expect(versionIn(changed.seen, eventAt('lib/greet.mvt', 'changed'))).toBe((await readOf(client, 'lib/greet.mvt'))?.version);
+        expect(changed.seen.filter(eventAt('fresh.mvt', 'added'))).toEqual([]);
+      });
+
+      changing('an unshipped movement and a paused one are reported removed', async () => {
+        const one = await reachOne();
+        const client = new SlotClient(one.address);
+        const tenant = (one.tenant ?? '') as TeamId;
+        await ship(tenant, 'paused', HELLO.replaceAll('hello', 'paused'));
+        const cursor = await cursorOf(client);
+
+        await getAutomationsQb(['movement']).updateTable('movement').set({ current_version_id: null }).where('team_id', '=', tenant).where('name', '=', 'hello').execute();
+        const unshipped = await watchedUntil(client, cursor, eventAt('hello.mvt', 'removed'));
+
+        const paused = await getAutomationsQb(['movement']).selectFrom('movement').where('team_id', '=', tenant).where('name', '=', 'paused').select('id').executeTakeFirstOrThrow();
+        await getAutomationsQb(['trigger']).updateTable('trigger').set({ run_mode: 'off' }).where('movement_id', '=', paused.id).execute();
+        await watchedUntil(client, unshipped.cursor, eventAt('paused.mvt', 'removed'));
+      });
+
+      changing('two watchers from one cursor both see a ship', async () => {
+        const one = await reachOne();
+        const client = new SlotClient(one.address);
+        const cursor = await cursorOf(client);
+        await ship(one.tenant ?? '', 'both', HELLO.replaceAll('hello', 'both'));
+        await watchedUntil(client, cursor, eventAt('both.mvt', 'added'));
+        await watchedUntil(client, cursor, eventAt('both.mvt', 'added'));
+      });
     });
   }
 
@@ -254,6 +333,54 @@ describe('the movements slot over the platform module', () => {
       const run = await exec(LF_BIN ?? '', ['run', 'hello', '--dir', project], { env });
       expect(run.stdout).toContain('Hello, ');
     } finally {
+      await served.close();
+      rmSync(project, { recursive: true, force: true });
+      await dropTeam(tenant);
+    }
+  }, 60_000);
+
+  // lf's own watch over the module: a long-running `lf serve` takes a ship and
+  // an unship made on the platform without a restart, as lf prints them.
+  (LF_BIN === undefined || LF_BIN === '' ? it.skip : it)('lf serve follows a ship and an unship over the module without a restart', async () => {
+    const tenant = await seededTeam();
+    const { served, token } = await serveModule(tenant);
+    const project = scratchProject(served.address.baseUrl);
+    const server = spawn(LF_BIN ?? '', ['serve', '--port', '0', '--dir', project], {
+      env: { ...process.env, ...settingsFor(token) },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const lines: string[] = [];
+    const waiters: Array<{ pattern: RegExp; found: () => void }> = [];
+    for (const output of [server.stdout, server.stderr]) {
+      createInterface({ input: output }).on('line', (line) => {
+        lines.push(line);
+        for (const waiter of [...waiters]) {
+          if (!waiter.pattern.test(line)) continue;
+          waiters.splice(waiters.indexOf(waiter), 1);
+          waiter.found();
+        }
+      });
+    }
+    const printed = (pattern: RegExp, ms: number) =>
+      new Promise<number>((resolve, reject) => {
+        const since = Date.now();
+        if (lines.some((line) => pattern.test(line))) return resolve(0);
+        const timer = setTimeout(() => reject(new Error(`lf serve printed no ${pattern} in ${ms} ms:\n${lines.join('\n')}`)), ms);
+        waiters.push({ pattern, found: () => (clearTimeout(timer), resolve(Date.now() - since)) });
+      });
+    const exited = new Promise<void>((resolve) => server.once('exit', () => resolve()));
+    try {
+      await printed(/serving on http:\/\/127\.0\.0\.1:\d+/, 30_000);
+      // lf takes its first cursor after the open; give it a moment to hold its watch.
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+      await ship(tenant, 'fresh', HELLO.replaceAll('hello', 'fresh'));
+      expect(await printed(/^movements: fresh\.mvt added$/, 5_000)).toBeLessThan(5_000);
+
+      await getAutomationsQb(['movement']).updateTable('movement').set({ current_version_id: null }).where('team_id', '=', tenant).where('name', '=', 'fresh').execute();
+      await printed(/^movements: fresh\.mvt removed$/, 5_000);
+    } finally {
+      server.kill('SIGTERM');
+      await exited;
       await served.close();
       rmSync(project, { recursive: true, force: true });
       await dropTeam(tenant);

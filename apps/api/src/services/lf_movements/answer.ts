@@ -8,7 +8,7 @@
 // rule. A write is answered `read_only` after its params are checked: the
 // platform's authoring is the only writer, since a save there checks the text,
 // can stop for consent, and provisions listeners, none of which the wire's
-// write can carry.
+// write can carry. A watch is answered from the stored listings (watch.ts).
 //
 // Nothing secret or textual leaves in a log or an error: a failure is a fixed
 // text naming the method and path, never the movement's text.
@@ -19,13 +19,17 @@ import { MANIFEST_PROTOCOL_VERSION } from 'engine-contracts';
 import {
   MOVEMENTS_METHODS,
   MovementsReadRequest,
+  MovementsWatchRequest,
   MovementsWriteRequest,
   type MovementsWriteAnswerShape,
   type WireSlotManifestShape,
 } from 'engine-contracts/slots';
 
+import { getDatabaseUrl } from '../../prisma';
 import { readTeamEngine } from '../lf_engine/team_engine';
 import { servedMovement, servedMovements, type ServedMovementsTenant } from './rows';
+import { postgresTeamChanges } from './team_changes';
+import { movementsWatcher, type MovementsWatcher } from './watch';
 
 export const LF_MOVEMENTS_MANIFEST: WireSlotManifestShape = {
   protocolVersion: MANIFEST_PROTOCOL_VERSION,
@@ -40,6 +44,21 @@ export const READ_ONLY_REASON =
 
 interface AnswerDeps {
   isLfEngineTeam(teamId: string): Promise<boolean> | boolean;
+  /** The process's watcher unless a test brings its own (a second api instance). */
+  watcher?: MovementsWatcher;
+}
+
+let processWatcher: MovementsWatcher | null = null;
+
+/** One per process: its held watches share one LISTEN connection and one count per team. */
+function sharedWatcher(): MovementsWatcher {
+  if (processWatcher === null) {
+    const { url } = getDatabaseUrl(false);
+    // Boot requires DATABASE_URL (prisma/index.ts); this only narrows it.
+    if (url === undefined) throw new Error('DATABASE_URL is unset');
+    processWatcher = movementsWatcher({ changes: postgresTeamChanges(url) });
+  }
+  return processWatcher;
 }
 
 const settingDeps: AnswerDeps = {
@@ -67,7 +86,12 @@ function failureText(method: string, params: Record<string, unknown>): string {
   return `the platform could not ${verb} "${path}"`;
 }
 
-async function dispatch(scope: ServedMovementsTenant, method: string, params: Record<string, unknown>): Promise<unknown> {
+async function dispatch(
+  scope: ServedMovementsTenant,
+  method: string,
+  params: Record<string, unknown>,
+  watcher: () => MovementsWatcher,
+): Promise<unknown> {
   switch (method) {
     case 'movements.list':
       return servedMovements(scope);
@@ -78,6 +102,8 @@ async function dispatch(scope: ServedMovementsTenant, method: string, params: Re
       const answer: MovementsWriteAnswerShape = { kind: 'read_only', reason: READ_ONLY_REASON };
       return answer;
     }
+    case 'movements.watch':
+      return watcher().watch(scope, parsed(method, MovementsWatchRequest, params));
     default:
       throw new SlotRefusal('method_not_implemented', `no method "${method}"`);
   }
@@ -94,7 +120,7 @@ export function answerFor(scope: ServedMovementsTenant, deps: AnswerDeps = setti
       throw new SlotRefusal('settings', 'the `tenant` setting names another team: this module serves the team that owns the key');
     }
     try {
-      return await dispatch(scope, method, params);
+      return await dispatch(scope, method, params, () => deps.watcher ?? sharedWatcher());
     } catch (error) {
       if (error instanceof SlotRefusal) throw error;
       throw new Error(failureText(method, params));

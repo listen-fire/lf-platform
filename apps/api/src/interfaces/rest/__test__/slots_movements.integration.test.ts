@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 
 import express from 'express';
+import { sql } from 'kysely';
 import { MOVEMENTS_METHODS } from 'engine-contracts/slots';
 
 import type { AddressInfo } from 'node:net';
@@ -77,6 +78,7 @@ afterAll(async () => {
   await getCoreQb(['api_key']).deleteFrom('api_key').where('team_id', '=', owner.teamId).execute();
   for (const { teamId } of [owner, other]) {
     await getAutomationsQb(['movement']).deleteFrom('movement').where('team_id', '=', teamId).execute();
+    await sql`DELETE FROM automations.lf_movements_listing WHERE team_id = ${teamId}`.execute(getAutomationsQb(['lf_movements_listing']));
     await getAutomationsQb(['team_engine']).deleteFrom('team_engine').where('team_id', '=', teamId).execute();
     await cleanupTeam(teamId);
   }
@@ -98,7 +100,7 @@ const call = (method: string, params: Record<string, unknown> = {}, settings: Re
   post({ protocolVersion: '2', method, cacheScopeId: '<slot>', params, settings });
 
 describe('the movements slot route', () => {
-  it('answers its manifest: the movements slot and its three methods', async () => {
+  it('answers its manifest: the movements slot and its four methods', async () => {
     const res = await call('manifest');
 
     expect(res.status).toBe(200);
@@ -106,7 +108,7 @@ describe('the movements slot route', () => {
       ok: true,
       result: { protocolVersion: 2, name: 'lf-platform-movements', kind: 'core', slot: 'movements', methods: [...MOVEMENTS_METHODS] },
     });
-    expect(MOVEMENTS_METHODS).toHaveLength(3);
+    expect(MOVEMENTS_METHODS).toHaveLength(4);
   });
 
   it('refuses an unknown method, a lost protocol version, and a body that is not the envelope', async () => {
@@ -149,5 +151,30 @@ describe('the movements slot route', () => {
     expect(await (await call('movements.read', { path: 'theirs.mvt' })).json()).toEqual({ ok: true, result: null });
     const elsewhere = await call('movements.list', {}, { tenant: other.teamId });
     expect(await elsewhere.json()).toMatchObject({ ok: false, error: { code: 'settings', retryable: false } });
+  });
+
+  it('holds a watch in the tenant of the key and answers it within 2 s of a ship; a cursor of another team is resync', async () => {
+    await switchTeamEngine(owner.teamId, { engine: 'lf', changedBy: null });
+    const refused = await call('movements.watch', {});
+    expect(await refused.json()).toMatchObject({ ok: false, error: { code: 'bad_request', retryable: false } });
+
+    const first = (await (await call('movements.watch', { waitMs: 0 })).json()) as { ok: true; result: { cursor: string; events: unknown[] } };
+    expect(first.result.events).toEqual([]);
+    const held = call('movements.watch', { cursor: first.result.cursor, waitMs: 10_000 });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const wrote = Date.now();
+    await seed(owner.teamId, 'watched', 'function watched() {}\n');
+    const answer = await (await held).json();
+    expect(Date.now() - wrote).toBeLessThan(2_000);
+    expect(answer).toEqual({
+      ok: true,
+      result: { cursor: expect.any(String), events: [{ kind: 'added', path: 'watched.mvt', version: movementSourceHash('function watched() {}\n') }] },
+    });
+
+    await switchTeamEngine(other.teamId, { engine: 'lf', changedBy: null });
+    const otherKey = (await ApiKeyService.createForOwner({ name: 'other lf', scopes: ['system'], teamId: other.teamId, createdBy: other.userId })).key;
+    const theirs = await post({ protocolVersion: '2', method: 'movements.watch', cacheScopeId: '<slot>', params: { cursor: first.result.cursor, waitMs: 0 }, settings: {} }, otherKey);
+    expect(await theirs.json()).toEqual({ ok: true, result: { resync: true } });
+    await getCoreQb(['api_key']).deleteFrom('api_key').where('team_id', '=', other.teamId).execute();
   });
 });

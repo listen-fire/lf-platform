@@ -294,6 +294,12 @@ export const MANIFEST: Record<Product, TableSpec[]> = {
         'a runtime row of seconds’ life, keyed by team and ref, naming rows the source’s tenant held; it is deleted with the team and is not carried',
     },
     {
+      table: 'lf_movements_listing',
+      tenancy: { kind: 'team_column' },
+      exportExcludedBecause:
+        'the listings behind the watch positions a cloud lf of the source holds; a position is a hash over the source’s team id, so none would name anything on the target. It is deleted with the team and is not carried',
+    },
+    {
       // SHELL ROWS. The id survives because `trigger.credentials_id` and
       // `webhook_subscription.credentials_id` point at it; the ciphertext does
       // not, because it is AAD-bound to a master key this deployment does not
