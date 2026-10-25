@@ -1388,7 +1388,7 @@ function isCombinatorFrameState(value: unknown): value is CombinatorFrameState {
 /** A combinator's arm count: written in the source, or kept at its frame. */
 function armCountOf(
   combinator: CombinatorExpression,
-  rows: ReadonlyArray<{ branchIndex: number; exports: unknown }>,
+  rows: ReadonlyArray<{ branchIndex: number; exports?: unknown }>,
 ): number {
   if (combinator.arms.kind !== 'dynamic') return literalArmsOf(combinator).length;
   const kept = rows.find((row) => row.branchIndex === FRAME_STATE_INDEX)?.exports;
@@ -3273,12 +3273,13 @@ class Interpreter {
    * — which for a race is exactly "this one did not win".
    */
   private async receiptFromExports(
-    rows: Array<{ branchIndex: number; exports: unknown }>,
+    rows: Array<{ branchIndex: number; exports?: unknown }>,
     armCount: number,
     ctx: RehydrationContext,
   ): Promise<Binding> {
     const slots: Binding[] = new Array(armCount).fill(nullSlot());
     for (const row of rows) {
+      if (row.exports === undefined) continue;
       const exports = row.exports as Record<string, BindingDescriptor>;
       const descriptor = exports[RETURN_SLOT];
       if (descriptor === undefined) continue;
