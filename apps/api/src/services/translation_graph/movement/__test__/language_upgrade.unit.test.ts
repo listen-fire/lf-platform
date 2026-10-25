@@ -916,12 +916,7 @@ describe('an upgrade over the real checkers, with a library the movement imports
     expect(advanced).toEqual([]);
   });
 
-  // The installed language's own rewrite of the extraction keyword drops the
-  // backticks of a type name that is not an identifier (movement-checker
-  // `extract_keyword.rs` `type_marker`), so its result does not parse. The
-  // refusal above holds meanwhile; this case passes once the language's fix
-  // ships, and then stops being marked failing.
-  it.failing("the installed language's rewrite of the extraction keyword keeps a type name's backticks", async () => {
+  it("the installed language's rewrite of the extraction keyword keeps a type name's backticks", async () => {
     jest.mocked(getMovementRow).mockResolvedValueOnce(movement({ id: 'triage', languageVersion: '4', source: EXTRACTION }));
 
     const result = await upgradeMovement({ teamId: 'team-1', id: 'triage', acknowledge: false, applyAllFixes: true, validate: realValidate });

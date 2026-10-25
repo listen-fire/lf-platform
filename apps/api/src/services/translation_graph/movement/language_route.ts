@@ -25,7 +25,6 @@ import {
   type LanguageVersion,
   type Program,
   type ResolveFile,
-  type Span,
 } from 'movement-lang';
 import { isLegacyLanguageVersion, upgradeWarnings, withUpgradeWarnings } from 'legacy-lang';
 
@@ -78,45 +77,14 @@ export function checkInstalled(input: {
     if (!(error instanceof RustCheckRefused)) throw error;
     return [{ code: 'MOV_PARSE', message: error.message, span: { start: { line: 1, col: 1 }, end: { line: 1, col: 1 } } }];
   }
-  const program = input.program ?? parseProgram(source, { languageVersion: pin });
-  checked = withoutLibraryFixes(checked, program);
   if (!fromLegacy) return checked;
   const resolveFile = input.resolveFile ?? resolveFileFromSnapshot(snapshot);
   return withUpgradeWarnings(
     checked,
-    upgradeWarnings(program, input.catalog ?? fromCatalogSnapshot(snapshot), {
+    upgradeWarnings(input.program ?? parseProgram(source, { languageVersion: pin }), input.catalog ?? fromCatalogSnapshot(snapshot), {
       languageVersion: LEGACY_UPGRADE_DIALECT,
       upgradingFrom,
       ...(resolveFile !== undefined ? { resolveFile } : {}),
     }),
   );
-}
-
-/**
- * `diagnostics` without the fixes the wasm checker carries onto an importer
- * from a library it imports. The checker surfaces each of a library's
- * diagnostics at the import that pulled the library in, prefixed with its
- * path and line, but keeps the fix, whose edits are places in the LIBRARY's
- * text: applied to the importer's (an upgrade applies the fixes it is handed)
- * they overwrite whatever the importer holds at those lines. The diagnostic
- * stays; only its fix goes. A diagnostic carries no file, so a library's is
- * known by where the checker puts it: exactly a file import's statement, its
- * message led by that import's path.
- */
-function withoutLibraryFixes(diagnostics: Diagnostic[], program: Program): Diagnostic[] {
-  const fileImports = program.statements.flatMap((statement) =>
-    statement.kind === 'import' && statement.source.kind === 'file' ? [{ span: statement.span, path: statement.source.path }] : [],
-  );
-  if (fileImports.length === 0) return diagnostics;
-  const fromLibrary = (d: Diagnostic): boolean =>
-    fileImports.some((i) => sameSpan(i.span, d.span) && d.message.startsWith(`"${i.path}" line `));
-  return diagnostics.map((d) => {
-    if (d.fix === undefined || !fromLibrary(d)) return d;
-    const { fix: _libraryFix, ...surfaced } = d;
-    return surfaced;
-  });
-}
-
-function sameSpan(a: Span, b: Span): boolean {
-  return a.start.line === b.start.line && a.start.col === b.start.col && a.end.line === b.end.line && a.end.col === b.end.col;
 }
