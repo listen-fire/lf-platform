@@ -302,6 +302,44 @@ describe('the lf store module', () => {
     await expect(lf('work.enqueue', { kind: 'dispatch_event', key: 'k', payload: {} })).rejects.toThrow('not a work kind: dispatch_event');
   });
 
+  it('queues a row only when no row has its key, in any state, and leaves a row there as it is', async () => {
+    const [a, b] = [store(teamA), store(teamB)];
+    const key = `poll_listen:acme_crm-${randomUUID()}`;
+    const row = (payload: unknown, dueAt: string) => ({ kind: 'poll_listen', key, payload, dueAt });
+    const stored = () =>
+      getAutomationsQb(['work']).selectFrom('work').selectAll().where('host', '=', 'lf').where('key', '=', `lf:${teamA}:${key}`).execute();
+
+    expect(await a('work.enqueueIfAbsent', row({ n: 1 }, past(1_000)))).toBe(true);
+    const [first] = await stored();
+    expect(first).toMatchObject({ payload: { n: 1 }, team_id: teamA, attempts: 0 });
+
+    // Queued: a second arm queues nothing and moves nothing.
+    expect(await a('work.enqueueIfAbsent', row({ n: 2 }, past(500)))).toBe(false);
+    expect(await stored()).toEqual([first]);
+
+    // Leased.
+    const [claimed] = (await a('work.claimDue', { limit: 10, leaseMs: 60_000 })) as { id: string; claim: string }[];
+    const [leased] = await stored();
+    expect(leased?.lease_token).not.toBeNull();
+    expect(await a('work.enqueueIfAbsent', row({ n: 3 }, future(60_000)))).toBe(false);
+    expect(await stored()).toEqual([leased]);
+
+    // Dead.
+    await a('work.bury', { id: claimed?.id, claim: claimed?.claim, reason: 'gave up' });
+    const [dead] = await stored();
+    expect(dead?.dead_at).not.toBeNull();
+    expect(await a('work.enqueueIfAbsent', row({ n: 4 }, past(1_000)))).toBe(false);
+    expect(await stored()).toEqual([dead]);
+
+    // Another team's same key is its own row.
+    expect(await b('work.enqueueIfAbsent', row({ n: 5 }, past(1_000)))).toBe(true);
+    expect(await b('work.enqueueIfAbsent', row({ n: 6 }, past(1_000)))).toBe(false);
+    expect(await stored()).toEqual([dead]);
+
+    await expect(a('work.enqueueIfAbsent', { kind: 'dispatch_event', key: 'k', payload: {} })).rejects.toThrow('not a work kind: dispatch_event');
+    await expect(a('work.enqueueIfAbsent', { ...row({}, past(1)), teamId: teamB })).rejects.toThrow(SlotRefusal);
+  });
+
   it('sweeps only settled deliveries no lf fire_event row names, and swaps processes by compare-and-set', async () => {
     const lf = store(teamA);
     const settled = delivery(null);

@@ -86,6 +86,25 @@ export async function enqueue(scope: LfTenant, input: Omit<NewWorkRow, 'teamId'>
   return null;
 }
 
+/**
+ * `work.enqueueIfAbsent`: queues the row only when no row has its key, in any
+ * state (due, leased or dead); a row already there keeps its due time and
+ * payload. One conditional write, so workers arming the same standing row at
+ * once queue it once. Answers whether it queued.
+ */
+export async function enqueueIfAbsent(scope: LfTenant, input: Omit<NewWorkRow, 'teamId'> & { teamId: string | null }): Promise<boolean> {
+  refuseAnotherTenant(scope, input.teamId);
+  if (!isLfWorkKind(input.kind)) throw new Error(`not a work kind: ${input.kind}`);
+  const teamId = input.teamId ?? scope.tenant;
+  const { rows } = await sql<{ id: string }>`
+    insert into automations.work as work (host, kind, key, team_id, payload, due_at, updated_at)
+    values ('lf', ${input.kind}::text, ${storedKey(teamId, input.key)}::text, ${teamId}::uuid, ${JSON.stringify(input.payload ?? null)}::text::jsonb,
+            coalesce(${input.dueAt}::timestamptz, now()), date_trunc('milliseconds', clock_timestamp()))
+    on conflict (host, key) do nothing
+    returning work.id::text as id`.execute(pool());
+  return rows.length === 1;
+}
+
 /** The kinds a claim takes: the ones named, every one of lf's when none are. */
 function kindsOf(kinds: readonly string[] | null): readonly string[] {
   if (kinds === null) return LF_WORK_KINDS;

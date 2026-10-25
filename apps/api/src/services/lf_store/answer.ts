@@ -185,6 +185,7 @@ const HANDLERS: { readonly [M in LfStoreMethod]: Handler } = {
   'leases.dropRunState': handler(z.object({ runId: str, fence: optStr }), live.dropRunState),
 
   'work.enqueue': handler(z.object({ kind: str, key: str, payload: value, dueAt: optStr, teamId: optStr }), work.enqueue),
+  'work.enqueueIfAbsent': handler(z.object({ kind: str, key: str, payload: value, dueAt: optStr, teamId: optStr }), work.enqueueIfAbsent),
   'work.claimDue': handler(z.object({ limit: int, leaseMs: int, dueBy: optStr, kinds: optStrings }), work.claimDue),
   'work.complete': handler(z.object({ id: str, claim: str }), work.complete),
   'work.release': handler(z.object({ id: str, claim: str, dueAt: optStr, why: optStr }), work.release),

@@ -67,6 +67,7 @@ export const LF_STORE_METHODS = [
     'inbound.delivery',
     'inbound.sweepDeliveries',
     'inbound.forgetDeliveryId',
+    'work.enqueueIfAbsent',
 ] as const;
 
 export type LfStoreMethod = (typeof LF_STORE_METHODS)[number];
