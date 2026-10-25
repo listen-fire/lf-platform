@@ -97,6 +97,8 @@ class Context extends EventEmitter implements ClsStorage {
   private _kyselyTrx?: Kysely<any>;
 
   private cleanups: Promise<void>[] = [];
+  /** Set when the context was closed by an error: its transaction rolled back. */
+  private failed = false;
 
   constructor(
     opts: {
@@ -228,6 +230,7 @@ class Context extends EventEmitter implements ClsStorage {
    * listening; cleanup always runs either way.
    */
   async error(err: unknown) {
+    this.failed = true;
     if (this.listenerCount('error') > 0) {
       this.emit('error', err);
     }
@@ -534,9 +537,14 @@ class Context extends EventEmitter implements ClsStorage {
     return this._kyselyTrx;
   }
 
+  /** Run `fn` once this context's transaction has committed; immediately
+   *  outside a transaction; never when the context closes on an error, which
+   *  rolls the transaction back. */
   onChangesCommitted(fn: () => unknown) {
     if (this.inTransaction) {
-      this.on('close', () => fn());
+      this.on('close', () => {
+        if (!this.failed) fn();
+      });
     } else {
       fn();
     }

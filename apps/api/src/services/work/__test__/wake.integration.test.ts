@@ -11,6 +11,8 @@ import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
 
 import { getAutomationsQb, getCoreQb } from '../../../lib/kysely';
+import { Context } from '../../context';
+import { userPrincipal } from '../../principal';
 import { claimCallbackFireWithBody, mintCallback } from '../../movement_engine/callback_store';
 import { WorkDeferred, drainWork, registerWorkHandler, resetWorkHandlersForTests } from '../drain';
 import { claimDueWork, completeWork, enqueueWork, ensurePeriodicWork, listWorkByKind, removeWork } from '../store';
@@ -136,6 +138,71 @@ describe('what enqueueWork tells the wake', () => {
     const rearmed = (await listWorkByKind('timer_sweep')).find((each) => each.key === key);
     expect(rearmed?.dueAt.getTime()).toBeGreaterThan(Date.now());
     expect(told).toEqual([]);
+  });
+});
+
+describe('a work row written in a request transaction', () => {
+  // The slot reads the row from outside the transaction, as a drain the wake
+  // started would: before the commit it finds nothing.
+  function slotThatReadsTheRow(key: string): { told: Told[]; seen: boolean[] } {
+    const told: Told[] = [];
+    const seen: boolean[] = [];
+    const read = async (): Promise<void> => {
+      const { rows } = await sql<{ id: string }>`
+        SELECT id FROM automations.work WHERE key = ${key}`.execute(getAutomationsQb(['work']));
+      seen.push(rows.length === 1);
+    };
+    installWake({
+      async now(kind) {
+        told.push({ call: 'now', kind });
+        await read();
+      },
+      async at(kind, at) {
+        told.push({ call: 'at', kind, at });
+        await read();
+      },
+    });
+    return { told, seen };
+  }
+
+  function requestContext(): Context {
+    const ctx = new Context();
+    ctx.bindPrincipal(userPrincipal({ userId: randomUUID(), teamId }));
+    return ctx;
+  }
+
+  it('is announced after the transaction commits, and the drain it starts finds the row', async () => {
+    const key = freshKey('fire_cron');
+    const { told, seen } = slotThatReadsTheRow(key);
+    const ctx = requestContext();
+
+    await ctx.runAsync(async () => {
+      await ctx.enterTransaction();
+      await enqueueWork({ kind: 'fire_cron', key, teamId, payload: {} });
+      expect(told).toEqual([]);
+    });
+
+    await settleWakes(WAKE_WAIT_MS);
+    expect(told).toEqual([{ call: 'now', kind: 'fire_cron' }]);
+    expect(seen).toEqual([true]);
+  });
+
+  it('is announced by nothing when the transaction rolls back', async () => {
+    const key = freshKey('fire_cron');
+    const { told } = slotThatReadsTheRow(key);
+    const ctx = requestContext();
+
+    await expect(
+      ctx.runAsync(async () => {
+        await ctx.enterTransaction();
+        await enqueueWork({ kind: 'fire_cron', key, teamId, payload: {} });
+        throw new Error('the request failed');
+      }),
+    ).rejects.toThrow('the request failed');
+
+    await settleWakes(WAKE_WAIT_MS);
+    expect(told).toEqual([]);
+    expect(await listWorkByKind('fire_cron')).toEqual([]);
   });
 });
 

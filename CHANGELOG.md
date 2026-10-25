@@ -17,6 +17,8 @@ versions are the git tags described in [`deploy/UPGRADING.md`](deploy/UPGRADING.
 
 <!-- add merged PRs here -->
 
+- Fixed: a work row written inside a web request's database transaction is announced to the wake only after the transaction commits, and not at all if it rolls back. Before, the drain job the wake started could look for the row before it was visible. The same rule now holds for the other after-commit notices a request registers (they also ran when the request rolled back). Operators: nothing to set.
+
 - Fixed: shipping an automation that adds, changes or removes a cron or poll listener now asks for the schedule reconcile at once. Under the Cloud Tasks wake a new schedule was not armed until the next drain, which could be the hourly safety tick. Operators: nothing to set.
 
 ## [0.12.5] - 2026-10-25

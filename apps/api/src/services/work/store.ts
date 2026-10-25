@@ -3,6 +3,7 @@ import { sql, type QueryExecutorProvider } from 'kysely';
 import type { Work } from '../../generated/kysely/automations/Work';
 
 import { getAutomationsQb } from '../../lib/kysely';
+import { unsafeCurrentContext } from '../context';
 import { assertClaimable, claimableWorkKinds, isWorkKind, type WorkKind, type WorkRow } from './kinds';
 import { announceWork } from './wake';
 
@@ -64,7 +65,8 @@ export interface EnqueueWorkInput {
  *  honours. Against an unleased row the EARLIEST due_at wins with the new payload
  *  (several leaves of one run share a key). The row's resulting due time is
  *  announced to the wake after the write; a caller passing its transaction
- *  announces after commit. */
+ *  announces after commit; inside a request's context transaction the
+ *  announcement waits for the commit and is dropped by a rollback. */
 export async function enqueueWork(
   input: EnqueueWorkInput,
   /** Enqueue inside a caller's transaction, so the row commits with whatever
@@ -85,7 +87,16 @@ export async function enqueueWork(
   // Inside a caller's transaction the row is not visible until it commits, so
   // a drain the wake started now could miss it: that caller announces.
   const [row] = rows;
-  if (opts.db === undefined && row !== undefined) await announceWork(input.kind, row.due_at);
+  if (opts.db !== undefined || row === undefined) return;
+  // A request's context transaction carries the write without the caller
+  // naming it (getAutomationsQb joins it): announce when it commits, never
+  // if it rolls back.
+  const ctx = unsafeCurrentContext();
+  if (ctx?.kyselyTrx !== undefined) {
+    ctx.onChangesCommitted(() => void announceWork(input.kind, row.due_at));
+    return;
+  }
+  await announceWork(input.kind, row.due_at);
 }
 
 /** Insert only when no row has the key, in any state (due, leased or dead); a
