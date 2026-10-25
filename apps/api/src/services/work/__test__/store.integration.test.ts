@@ -10,6 +10,7 @@ import {
   completeWork,
   deferWork,
   enqueueWork,
+  enqueueWorkIfAbsent,
   ensurePeriodicWork,
   heartbeatWork,
   listWorkByKind,
@@ -130,6 +131,39 @@ describe('work store', () => {
     const row = await rowByKey(key);
     expect(row?.dueAt).toEqual(at(0));
     expect(row?.payload).toEqual({ runId: 'b' });
+  });
+
+  it('enqueueWorkIfAbsent queues once and leaves a due, leased or dead row as it was', async () => {
+    const key = freshKey('resume_timer');
+    expect(await enqueueWorkIfAbsent({ kind: 'resume_timer', key, payload: { runId: 'a' }, dueAt: at(60_000) })).toBe(true);
+    const queued = await rowByKey(key);
+    expect(queued).toMatchObject({ dueAt: at(60_000), payload: { runId: 'a' } });
+
+    // Due: an earlier due time and a new payload do not move it.
+    expect(await enqueueWorkIfAbsent({ kind: 'resume_timer', key, payload: { runId: 'b' }, dueAt: at(0) })).toBe(false);
+    expect(await rowByKey(key)).toEqual(queued);
+
+    // Leased.
+    await sql`UPDATE automations.work SET due_at = ${at(0)} WHERE key = ${key}`.execute(getAutomationsQb(['work']));
+    const leased = await claimOne({ owner: 'drainer-1' });
+    expect(await enqueueWorkIfAbsent({ kind: 'resume_timer', key, payload: { runId: 'c' }, dueAt: at(0) })).toBe(false);
+    expect(await rowByKey(key)).toEqual(leased);
+
+    // Dead: a lapsed lease.
+    await expireLease(key);
+    const dead = await rowByKey(key);
+    expect(await enqueueWorkIfAbsent({ kind: 'resume_timer', key, payload: { runId: 'd' }, dueAt: at(0) })).toBe(false);
+    expect(await rowByKey(key)).toEqual(dead);
+  });
+
+  it('enqueueWorkIfAbsent from several callers at once queues one row', async () => {
+    const key = freshKey('resume_timer');
+    const queued = await Promise.all(
+      Array.from({ length: 4 }, (_, i) => enqueueWorkIfAbsent({ kind: 'resume_timer', key, payload: { runId: String(i) }, dueAt: at(i * 1_000) })),
+    );
+    expect(queued.filter(Boolean)).toHaveLength(1);
+    const winner = queued.indexOf(true);
+    expect(await rowByKey(key)).toMatchObject({ dueAt: at(winner * 1_000), payload: { runId: String(winner) } });
   });
 
   it('enqueueWork keeps the existing team_id when the caller omits it', async () => {

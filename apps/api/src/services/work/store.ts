@@ -88,6 +88,24 @@ export async function enqueueWork(
   if (opts.db === undefined && row !== undefined) await announceWork(input.kind, row.due_at);
 }
 
+/** Insert only when no row has the key, in any state (due, leased or dead); a
+ *  row already there keeps its due time and payload. One conditional write, so
+ *  workers arming the same standing row at once queue it once and never move
+ *  the due time of a row another holds. Answers whether it queued. */
+export async function enqueueWorkIfAbsent(input: EnqueueWorkInput): Promise<boolean> {
+  assertClaimable(input.kind);
+  const dueAt = input.dueAt ?? new Date();
+  const { rows } = await sql<{ due_at: Date }>`
+    INSERT INTO automations.work (host, kind, key, team_id, payload, due_at, updated_at)
+    VALUES ('platform', ${input.kind}, ${input.key}, ${input.teamId ?? null}, ${jsonb(input.payload)}, ${dueAt}, ${FIRST_VERSION})
+    ON CONFLICT (host, key) DO NOTHING
+    RETURNING due_at`.execute(getAutomationsQb(['work']));
+  const [row] = rows;
+  if (row === undefined) return false;
+  await announceWork(input.kind, row.due_at);
+  return true;
+}
+
 /** Upsert a self-rescheduling row (interval_ms set). Idempotent; call at boot. */
 export async function ensurePeriodicWork(input: {
   kind: WorkKind;

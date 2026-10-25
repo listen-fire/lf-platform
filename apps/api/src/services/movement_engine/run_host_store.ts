@@ -32,7 +32,7 @@ import type { ParkLibrarySourceTeamId, ParkLibrarySourceHash } from '../../gener
 
 import { getAutomationsQb } from '../../lib/kysely';
 import { isWorkKind } from '../work/kinds';
-import { claimDueWork, completeWork, enqueueWork, releaseWork } from '../work/store';
+import { claimDueWork, completeWork, enqueueWork, enqueueWorkIfAbsent, releaseWork } from '../work/store';
 
 // ── Boundary conversions ────────────────────────────────────────────────────
 
@@ -489,6 +489,11 @@ export const postgresRunHostStore: RunHostStore = {
     async enqueue({ kind, key, payload, dueAt, teamId }) {
       if (!isWorkKind(kind)) throw new Error(`'${kind}' is not a work kind this process knows`);
       await enqueueWork({ kind, key, payload, ...(teamId !== undefined ? { teamId } : {}), ...(dueAt !== undefined ? { dueAt: new Date(dueAt) } : {}) });
+    },
+
+    async enqueueIfAbsent({ kind, key, payload, dueAt, teamId }) {
+      if (!isWorkKind(kind)) throw new Error(`'${kind}' is not a work kind this process knows`);
+      return enqueueWorkIfAbsent({ kind, key, payload, ...(teamId !== undefined ? { teamId } : {}), ...(dueAt !== undefined ? { dueAt: new Date(dueAt) } : {}) });
     },
 
     async claimDue({ limit, leaseMs, dueBy, kinds }) {
