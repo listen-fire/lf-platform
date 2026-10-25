@@ -4794,11 +4794,11 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 };
                 _input_in: {
                     askId: string;
-                    answer: unknown;
+                    answer?: unknown;
                 };
                 _input_out: {
                     askId: string;
-                    answer: unknown;
+                    answer?: unknown;
                 };
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
