@@ -57,6 +57,7 @@
 // retired.
 
 import { randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 
 import { parseProgram as parseInstalled, scanName } from 'movement-lang';
 import { checkProgram } from 'legacy-lang';
@@ -81,7 +82,10 @@ import type { FileListener } from 'movement-engine/public/inbound';
 import { collectFileListeners } from '@listen-fire/legacy-engine/services/translation_graph/file_listeners';
 import { recordUserMilestone, recordTeamMilestone } from '../../../lib/journey';
 import { getAutomationsQb } from '../../../lib/kysely';
-import { getAdapterManifest, inboundAddressFor } from '../adapters/registry';
+import { getAdapterManifest, inboundAddressFor, isPollSource } from '../adapters/registry';
+import { CRON_ADAPTER_TYPE } from '../adapters/cron';
+import { enqueueWork } from '../../work/store';
+import type { WorkKind } from '../../work/kinds';
 import { syncListenSubscriptions } from './listen_subscriptions';
 import { addressHops, resolveListenAddress } from './listen_address';
 import { cachedAdapterInstance } from './instance_cache';
@@ -373,6 +377,13 @@ export function planListenerReconciliation(input: {
   return { matches, retired: remaining };
 }
 
+/** The periodic reconcile that arms a listener of this kind, if it is a
+ *  schedule: a cron fires from the clock, a poll source from its interval. */
+function reconcileKindFor(kind: string): Extract<WorkKind, 'cron_reconcile' | 'poll_reconcile'> | undefined {
+  if (kind === CRON_ADAPTER_TYPE) return 'cron_reconcile';
+  return isPollSource(kind) ? 'poll_reconcile' : undefined;
+}
+
 async function reconcileDerivedTriggers(input: {
   teamId: TeamId;
   movementRow: MovementRow;
@@ -380,8 +391,15 @@ async function reconcileDerivedTriggers(input: {
   /** What to tell a run parked on a listener this reconciliation retires.
    *  Defaults to the ordinary case (the `listen` line went away). */
   retirementReason?: string;
-}): Promise<ProvisionedListener[]> {
+}): Promise<{ listeners: ProvisionedListener[]; reconciles: Set<WorkKind> }> {
   const qb = getAutomationsQb(['trigger']);
+  // The schedule reconciles whose rows this save made stale: a new, changed or
+  // retired cron or poll. An unchanged listener is armed already.
+  const reconciles = new Set<WorkKind>();
+  const noteSchedule = (kind: string): void => {
+    const reconcile = reconcileKindFor(kind);
+    if (reconcile !== undefined) reconciles.add(reconcile);
+  };
   const existing = await listDerivedTriggerRows(input.movementRow.id);
   const plan = planListenerReconciliation({
     desired: input.desired.map((d) => ({
@@ -413,6 +431,7 @@ async function reconcileDerivedTriggers(input: {
     });
   }
   for (const row of plan.retired) {
+    noteSchedule(row.kind);
     await qb
       .deleteFrom('trigger')
       .where('id', '=', row.id as TriggerId)
@@ -440,6 +459,14 @@ async function reconcileDerivedTriggers(input: {
       // the operator pause must not silently resume — a save is not consent
       // to start running again. See triggers/run_mode.ts.
       triggerId = kept.id;
+      if (
+        kept.kind !== desired.adapter ||
+        !isDeepStrictEqual(kept.config, desired.config) ||
+        !isDeepStrictEqual(kept.resolvedAddress ?? null, desired.resolvedAddress ?? null)
+      ) {
+        noteSchedule(kept.kind);
+        noteSchedule(desired.adapter);
+      }
       runMode =
         kept.runMode === 'off' ? 'off'
         : textRunMode === 'dry_run' ? 'dry_run'
@@ -463,6 +490,7 @@ async function reconcileDerivedTriggers(input: {
     } else {
       triggerId = randomUUID();
       runMode = textRunMode;
+      noteSchedule(desired.adapter);
       await qb
         .insertInto('trigger')
         .values({
@@ -497,7 +525,7 @@ async function reconcileDerivedTriggers(input: {
       reused: kept !== undefined,
     });
   }
-  return listeners;
+  return { listeners, reconciles };
 }
 
 // ── Provision: check the program, then reconcile the listeners ──────────────
@@ -624,13 +652,17 @@ async function provisionListeners(input: {
     };
   }
 
-  const listeners = await within('reconcile', () =>
+  const { listeners, reconciles } = await within('reconcile', () =>
     reconcileDerivedTriggers({
       teamId: input.teamId,
       movementRow: input.movementRow,
       desired,
     }),
   );
+
+  // Under the wake the drain is a job started on demand: a new schedule would
+  // wait for the next hourly safety tick to be armed. Ask for the reconcile now.
+  for (const kind of reconciles) await enqueueWork({ kind, key: kind });
 
   // External event subscriptions follow the listens: the trigger table is
   // now the desired state, so the global per-team diff-sync (attio

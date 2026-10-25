@@ -210,8 +210,15 @@ jest.mock('../../adapters/registry', () => {
     },
     // No manifest ⇒ no address hops ⇒ the listen-address resolution no-ops.
     getAdapterManifest: () => null,
+    isPollSource: jest.fn((_slug: string) => false),
   };
 });
+
+// A shipped cron or poll is armed by the periodic reconciles; the save asks
+// for a reconcile now (the store write and the wake are their own suites').
+jest.mock('../../../work/store', () => ({
+  enqueueWork: jest.fn(async () => {}),
+}));
 
 // External event-subscription diff-sync — its own suite
 // (listen_kg_save.unit.test.ts) exercises the real module; here it would
@@ -292,6 +299,9 @@ const db = jest.requireMock('../../../../lib/kysely') as {
 const catalogMock = jest.requireMock('../catalog') as {
   movementCatalogForTeam: jest.Mock;
 };
+
+const registryMock = jest.requireMock('../../adapters/registry') as { isPollSource: jest.Mock };
+const workStore = jest.requireMock('../../../work/store') as { enqueueWork: jest.Mock };
 
 const journey = jest.requireMock('../../../../lib/journey') as {
   recordUserMilestone: jest.Mock;
@@ -840,6 +850,56 @@ listen to inbox { key: "deals" } fire intake
 // (so it can never outrun the user's `first_mcp_call`, stamped earlier in
 // the same request by the auth middleware); the team's counts ANY route,
 // unconditionally, so a web-UI save still lights up the account.
+describe('saveMovement — a shipped schedule is armed promptly', () => {
+  const cronSource = (schedule: string) =>
+    `function tick(t: <cron-[:Tick]->>) {\n  return 1\n}\nlisten to cron { schedule: "${schedule}" } fire tick\n`;
+  const reconcileCalls = () => workStore.enqueueWork.mock.calls.map(([input]) => input);
+
+  beforeEach(() => {
+    registryMock.isPollSource.mockImplementation(() => false);
+  });
+
+  it('a new cron listener asks for a cron reconcile due now', async () => {
+    const result = await saveMovement({ teamId: TEAM, source: cronSource('0 9 * * *') });
+    expect(result.ok).toBe(true);
+    expect(reconcileCalls()).toEqual([{ kind: 'cron_reconcile', key: 'cron_reconcile' }]);
+  });
+
+  it('a changed schedule asks again; an unchanged re-save does not', async () => {
+    const first = await saveMovement({ teamId: TEAM, source: cronSource('0 9 * * *') });
+    if (!first.ok) throw new Error('first save should ship');
+    workStore.enqueueWork.mockClear();
+
+    await saveMovement({ teamId: TEAM, id: first.movementId, source: cronSource('0 9 * * *') });
+    expect(reconcileCalls()).toEqual([]);
+
+    await saveMovement({ teamId: TEAM, id: first.movementId, source: cronSource('0 10 * * *') });
+    expect(reconcileCalls()).toEqual([{ kind: 'cron_reconcile', key: 'cron_reconcile' }]);
+  });
+
+  it('removing the cron listener asks too, so its work row goes', async () => {
+    const first = await saveMovement({ teamId: TEAM, source: cronSource('0 9 * * *') });
+    if (!first.ok) throw new Error('first save should ship');
+    workStore.enqueueWork.mockClear();
+
+    await saveMovement({ teamId: TEAM, id: first.movementId, source: NO_LISTEN });
+    expect(reconcileCalls()).toEqual([{ kind: 'cron_reconcile', key: 'cron_reconcile' }]);
+  });
+
+  it('a new poll listener asks for a poll reconcile due now', async () => {
+    registryMock.isPollSource.mockImplementation((slug: string) => slug === 'email');
+    const result = await saveMovement({ teamId: TEAM, source: SOURCE_V1 });
+    expect(result.ok).toBe(true);
+    expect(reconcileCalls()).toEqual([{ kind: 'poll_reconcile', key: 'poll_reconcile' }]);
+  });
+
+  it('a movement without schedules asks for nothing', async () => {
+    await saveMovement({ teamId: TEAM, source: SOURCE_V1 });
+    await saveMovement({ teamId: TEAM, source: NO_LISTEN });
+    expect(reconcileCalls()).toEqual([]);
+  });
+});
+
 describe('saveMovement — journey milestone MCP gate (monotonicity)', () => {
   it('web-UI save (no MCP context): user milestone does NOT fire, team milestone does', async () => {
     // beforeEach already leaves unsafeCurrentContext() returning undefined —

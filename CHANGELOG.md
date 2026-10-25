@@ -17,6 +17,8 @@ versions are the git tags described in [`deploy/UPGRADING.md`](deploy/UPGRADING.
 
 <!-- add merged PRs here -->
 
+- Fixed: shipping an automation that adds, changes or removes a cron or poll listener now asks for the schedule reconcile at once. Under the Cloud Tasks wake a new schedule was not armed until the next drain, which could be the hourly safety tick. Operators: nothing to set.
+
 ## [0.12.5] - 2026-10-25
 
 The platform release that matches the language's 0.12.5.

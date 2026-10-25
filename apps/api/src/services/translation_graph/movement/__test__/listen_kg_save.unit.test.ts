@@ -156,6 +156,7 @@ jest.mock('../../adapters/registry', () => {
     manifests.find((m) => m.adapterType === (aliasToSlug[slug] ?? slug)) ?? null;
   return {
     listAdapterManifests: () => manifests,
+    isPollSource: () => false,
     getAdapterManifest: getManifest,
     resolveAdapterSlug: (kind: string) => aliasToSlug[kind] ?? kind,
     hasAdapter: (kind: string) => manifests.some((m) => m.adapterType === (aliasToSlug[kind] ?? kind)),

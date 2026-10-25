@@ -164,6 +164,7 @@ jest.mock('../../adapters/registry', () => {
     },
     // No manifest ⇒ no address hops ⇒ the listen-address resolution no-ops.
     getAdapterManifest: () => null,
+    isPollSource: () => false,
   };
 });
 
