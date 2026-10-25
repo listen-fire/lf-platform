@@ -17,6 +17,8 @@ versions are the git tags described in [`deploy/UPGRADING.md`](deploy/UPGRADING.
 
 <!-- add merged PRs here -->
 
+- Docs: the wake section of the self-hosting guide lists the IAM each account needs as one required list, including `cloudtasks.tasks.get` for the API and the drain job and `run.jobs.run` for the invoker. Operators: check the grants if wakes fail with a permission error.
+
 - Fixed: the development seed (`pnpm dev:seed`) makes the user who owns the dev-loop login email a member of the dev team. On a database seeded before the email was claimed, the login and the team member were two users and every page the UI test tool opened answered 403. Operators: development only; nothing to set.
 
 - Fixed: a work row written inside a web request's database transaction is announced to the wake only after the transaction commits, and not at all if it rolls back. Before, the drain job the wake started could look for the row before it was visible. The same rule now holds for the other after-commit notices a request registers (they also ran when the request rolled back). Operators: nothing to set.

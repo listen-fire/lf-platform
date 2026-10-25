@@ -366,13 +366,15 @@ External mode with the drain-once job, and nothing draining between rows: a wake
   - `WAKE_SETTING__COALESCE_WINDOW_MS` (optional, default 60000): wakes inside one window make one task, named `<job>-<window>`;
   - `WAKE_SETTING__CLIENT_EMAIL` and `WAKE_SETTING__PRIVATE_KEY` (optional, together): a key the module signs its own calls with. On Google Cloud leave both unset, and the service's own account is used.
 - Set the same settings on the API service and on the drain job. The job's own re-arms (a poll's next pull, a cron's next fire, a retry) are wakes too, and it waits up to 5 s for them before it exits.
-- IAM:
-  - the API's and the job's accounts need `roles/cloudtasks.enqueuer` on the queue, `cloudtasks.tasks.get` (`roles/cloudtasks.viewer`), and `iam.serviceAccountUser` on the invoker account;
-  - the invoker needs `run.jobs.run` on the job (`roles/run.invoker`).
+- IAM (this repository carries no Terraform for the queue or the job, so grant these yourself). Every one is required:
+  - the API's and the drain job's service accounts:
+    - `cloudtasks.tasks.create` on the queue (`roles/cloudtasks.enqueuer`);
+    - `cloudtasks.tasks.get` on the queue (`roles/cloudtasks.viewer`), which the check that a coalesced task name is already spent uses;
+    - `iam.serviceAccounts.actAs` on the invoker account (`roles/iam.serviceAccountUser`);
+  - the invoker service account: `run.jobs.run` on the drain job (`roles/run.invoker`), since each task starts the job with its OAuth token.
 - Reduce Cloud Scheduler to an hourly safety tick, and leave `AUTOMATIONS_TICK_URLS` unset: the wake replaces the door's notify.
 - What waits for the safety tick or the next drain:
-  - the periodic sweeps, which are never woken (any drain runs them), so a run whose process died is failed at the next drain rather than within a minute and a half;
-  - a newly shipped cron or poll's first arming, which a sweep does.
+  - the periodic sweeps, which are never woken (any drain runs them), so a run whose process died is failed at the next drain rather than within a minute and a half.
 - A failed wake loses no work. An enqueue waits at most a second for the wake's answer, then goes on; the failure is logged at most once a minute (`[work] the wake was not told of <kind> work (…)`), and the row drains at the next tick.
 - The boot log names the wake (`[wake] each row's due time is told to @listen-fire/wake-cloud-tasks: …`). A setting the module refuses, an unknown `WAKE_MODULE`, or `WAKE_MODULE` with `loop` mode fails boot naming it.
 
