@@ -69,8 +69,20 @@ afterAll(async () => {
   await getAutomationsQb(['trigger_run']).deleteFrom('trigger_run').where('id', 'in', runs).execute();
 });
 
+// This case arms and claims an lf polled listen's row (kind `poll_listen`). The
+// platform's run host never holds one: the platform polls through its own
+// `poll_source` rows, and lf's rows go through the store module, whose contract
+// (lf_store/store_contract) runs this case. The conditional insert itself is
+// held by work/__test__/store.integration.
+const LF_POLLED_LISTEN_CASE = 'work: a key queued if absent is queued once; a row there, due later or leased, is left as it was';
+
 describe('the run host contract on Postgres', () => {
+  it('names the one case it leaves to the store module', () => {
+    expect(runHostContractCases.map((c) => c.name)).toContain(LF_POLLED_LISTEN_CASE);
+  });
+
   for (const contractCase of runHostContractCases) {
+    if (contractCase.name === LF_POLLED_LISTEN_CASE) continue;
     it(contractCase.name, () => contractCase.run(backend));
   }
 });

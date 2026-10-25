@@ -154,8 +154,8 @@ function deliveryBackend(backend: RpcStoreBackend, tenant: string): DeliveryCont
 const recordCases = [...runHostContractCases, ...callbackContractCases, ...cancelContractCases];
 
 describe('the store slot over the platform module', () => {
-  it('holds the engine contract to its 50 cases', () => {
-    expect(recordCases.length + deliveryContractCases.length).toBe(50);
+  it('holds the engine contract to its 51 cases', () => {
+    expect(recordCases.length + deliveryContractCases.length).toBe(51);
   });
 
   for (const bridge of bridges) {
