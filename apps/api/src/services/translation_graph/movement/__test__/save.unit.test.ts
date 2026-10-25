@@ -862,7 +862,7 @@ describe('saveMovement — a shipped schedule is armed promptly', () => {
   it('a new cron listener asks for a cron reconcile due now', async () => {
     const result = await saveMovement({ teamId: TEAM, source: cronSource('0 9 * * *') });
     expect(result.ok).toBe(true);
-    expect(reconcileCalls()).toEqual([{ kind: 'cron_reconcile', key: 'cron_reconcile' }]);
+    expect(reconcileCalls()).toEqual([{ kind: 'cron_reconcile', key: 'cron_reconcile:shipped' }]);
   });
 
   it('a changed schedule asks again; an unchanged re-save does not', async () => {
@@ -874,7 +874,7 @@ describe('saveMovement — a shipped schedule is armed promptly', () => {
     expect(reconcileCalls()).toEqual([]);
 
     await saveMovement({ teamId: TEAM, id: first.movementId, source: cronSource('0 10 * * *') });
-    expect(reconcileCalls()).toEqual([{ kind: 'cron_reconcile', key: 'cron_reconcile' }]);
+    expect(reconcileCalls()).toEqual([{ kind: 'cron_reconcile', key: 'cron_reconcile:shipped' }]);
   });
 
   it('removing the cron listener asks too, so its work row goes', async () => {
@@ -883,14 +883,14 @@ describe('saveMovement — a shipped schedule is armed promptly', () => {
     workStore.enqueueWork.mockClear();
 
     await saveMovement({ teamId: TEAM, id: first.movementId, source: NO_LISTEN });
-    expect(reconcileCalls()).toEqual([{ kind: 'cron_reconcile', key: 'cron_reconcile' }]);
+    expect(reconcileCalls()).toEqual([{ kind: 'cron_reconcile', key: 'cron_reconcile:shipped' }]);
   });
 
   it('a new poll listener asks for a poll reconcile due now', async () => {
     registryMock.isPollSource.mockImplementation((slug: string) => slug === 'email');
     const result = await saveMovement({ teamId: TEAM, source: SOURCE_V1 });
     expect(result.ok).toBe(true);
-    expect(reconcileCalls()).toEqual([{ kind: 'poll_reconcile', key: 'poll_reconcile' }]);
+    expect(reconcileCalls()).toEqual([{ kind: 'poll_reconcile', key: 'poll_reconcile:shipped' }]);
   });
 
   it('a movement without schedules asks for nothing', async () => {

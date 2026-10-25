@@ -206,6 +206,30 @@ describe('a work row written in a request transaction', () => {
   });
 });
 
+describe('a shipped schedule asking for a reconcile', () => {
+  it('while the periodic row is leased gets its own row due now, which does not re-arm', async () => {
+    // Other suites' rows of this kind must not be claimed in their place.
+    await getAutomationsQb(['work']).deleteFrom('work').where('host', '=', 'platform').where('kind', '=', 'cron_reconcile').execute();
+    await ensurePeriodicWork({ kind: 'cron_reconcile', key: 'cron_reconcile', intervalMs: 3_600_000, dueAt: new Date(Date.now() - 1000) });
+    const [periodic] = await claimDueWork({ owner: 'ship-test', limit: 1, leaseMs: 60_000, kinds: ['cron_reconcile'] });
+    expect(periodic.key).toBe('cron_reconcile');
+
+    await enqueueWork({ kind: 'cron_reconcile', key: 'cron_reconcile:shipped' });
+
+    const rows = await listWorkByKind('cron_reconcile');
+    const shipped = rows.find((row) => row.key === 'cron_reconcile:shipped');
+    expect(shipped?.intervalMs).toBeNull();
+    expect(shipped?.dueAt.getTime()).toBeLessThanOrEqual(Date.now());
+    const [claimed] = await claimDueWork({ owner: 'ship-test', limit: 1, leaseMs: 60_000, kinds: ['cron_reconcile'] });
+    expect(claimed.key).toBe('cron_reconcile:shipped');
+
+    await completeWork({ id: claimed.id, leaseToken: claimed.leaseToken!, claimedUpdatedAt: claimed.updatedAt });
+    const after = await listWorkByKind('cron_reconcile');
+    expect(after.map((row) => row.key)).toEqual(['cron_reconcile']);
+    await removeWork({ key: 'cron_reconcile' });
+  });
+});
+
 describe('what the drain tells the wake', () => {
   it('a released row is announced at its backoff, a deferred one at its deferral', async () => {
     const { slot, told } = recordingSlot();

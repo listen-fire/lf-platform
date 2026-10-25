@@ -662,7 +662,9 @@ async function provisionListeners(input: {
 
   // Under the wake the drain is a job started on demand: a new schedule would
   // wait for the next hourly safety tick to be armed. Ask for the reconcile now.
-  for (const kind of reconciles) await enqueueWork({ kind, key: kind });
+  // Its own one-shot row, not the periodic one: while a drain holds the
+  // periodic row's lease, a request on that key is pushed to the next interval.
+  for (const kind of reconciles) await enqueueWork({ kind, key: `${kind}:shipped` });
 
   // External event subscriptions follow the listens: the trigger table is
   // now the desired state, so the global per-team diff-sync (attio
