@@ -340,6 +340,113 @@ export async function ensurePublicUser(): Promise<void> {
 }
 
 /**
+ * The user the dev-loop token logs in as, made a write member of the team.
+ *
+ * The token carries only the email, so the user is whoever owns that email.
+ * The seed's own user (by team and username) can differ from it on a database
+ * seeded before the email was claimed; the membership must then belong to the
+ * email's owner, or every team-scoped request answers 403. Throws if, after
+ * this, the email's owner is not a member.
+ */
+export async function ensureDevLoopLogin(options: {
+  teamId: string;
+  email?: string;
+}): Promise<{ userId: string; created: boolean }> {
+  const { teamId } = options;
+  const email = options.email ?? DEV_LOOP_EMAIL;
+  const qb = getQb(['core.user', 'core.user_email', 'core.team_membership']);
+  let created = false;
+
+  // 2. User
+  let userId: string;
+  const existingUser = await qb
+    .selectFrom('core.user as user')
+    .where('default_team_id', '=', teamId as TeamId)
+    .where('username', '=', DEV_LOOP_USERNAME)
+    .select(['id'])
+    .executeTakeFirst();
+  if (existingUser) {
+    userId = existingUser.id;
+  } else {
+    // A static-identity deployment sets LISTEN_FIRE_USER_ID at boot for attribution,
+    // and that id has to be a user that EXISTS — so the seed accepts the same
+    // pinned value rather than minting one nobody configured.
+    userId = process.env.TEST_HARNESS_USER_ID ?? randomUUID();
+    await qb
+      .insertInto('core.user')
+      .values({
+        id: userId as UserId,
+        default_team_id: teamId as TeamId,
+        username: DEV_LOOP_USERNAME,
+        granted_access_at: new Date(),
+        is_platform_admin: true,
+      } as any)
+      .execute();
+    created = true;
+  }
+
+  // 2a. User email + access grant — `unauthorisedGetUserByEmail` (the
+  // cookie/bearer auth path) resolves a `user_email` row whose user has
+  // `granted_access_at` set. Both must exist for the dev-loop account to
+  // authenticate through the UI. An email already owned by another user
+  // makes THAT user the login: the token cannot name anyone else.
+  const existingEmail = await qb
+    .selectFrom('core.user_email as user_email')
+    .where('email', '=', email)
+    .select(['id', 'user_id'])
+    .executeTakeFirst();
+  if (existingEmail) {
+    userId = existingEmail.user_id;
+  } else {
+    await qb
+      .insertInto('core.user_email')
+      .values({
+        id: randomUUID(),
+        user_id: userId,
+        email,
+        is_primary: true,
+      } as any)
+      .execute();
+  }
+  // Defensive: ensure the gate the auth lookup requires is set, even for
+  // an older user row that was created without it.
+  await qb
+    .updateTable('core.user as user')
+    .set({ granted_access_at: new Date() } as any)
+    .where('id', '=', userId as UserId)
+    .where('granted_access_at', 'is', null)
+    .execute();
+
+  // 2c. Team membership — flat access model. The dev-loop user is a platform
+  // admin (authorises via is_platform_admin regardless), but a write
+  // membership keeps the team-scoped path exercisable and mirrors what the
+  // real onboarding flow produces. Idempotent on (user_id, team_id).
+  const membership = () =>
+    qb
+      .selectFrom('core.team_membership as team_membership')
+      .where('user_id', '=', userId as UserId)
+      .where('team_id', '=', teamId as TeamId)
+      .select('id')
+      .executeTakeFirst();
+  if (!(await membership())) {
+    await qb
+      .insertInto('core.team_membership')
+      .values({
+        id: randomUUID(),
+        user_id: userId,
+        team_id: teamId,
+        access: 'write',
+      } as any)
+      .execute();
+  }
+  if (!(await membership())) {
+    throw new Error(`dev-loop login ${email} (user ${userId}) is not a member of team ${teamId}`);
+  }
+
+  return { userId, created };
+}
+
+/**
  * Idempotently provision the dev-loop test team using the team id pinned in
  * TEST_HARNESS_TEAM_ID. Materialises the vc-dealflow ontology, creates a
  * pipeline configuration, and creates mock Attio credentials.
@@ -386,86 +493,10 @@ export async function ensureDevLoopTeam(): Promise<SeedResult> {
       .execute();
     created.team = true;
   }
-  // 2. User
-  let userId: string;
-  const existingUser = await qb
-    .selectFrom('core.user as user')
-    .where('default_team_id', '=', teamId as TeamId)
-    .where('username', '=', DEV_LOOP_USERNAME)
-    .select(['id'])
-    .executeTakeFirst();
-  if (existingUser) {
-    userId = existingUser.id;
-  } else {
-    // A static-identity deployment sets LISTEN_FIRE_USER_ID at boot for attribution,
-    // and that id has to be a user that EXISTS — so the seed accepts the same
-    // pinned value rather than minting one nobody configured.
-    userId = process.env.TEST_HARNESS_USER_ID ?? randomUUID();
-    await qb
-      .insertInto('core.user')
-      .values({
-        id: userId as UserId,
-        default_team_id: teamId as TeamId,
-        username: DEV_LOOP_USERNAME,
-        granted_access_at: new Date(),
-        is_platform_admin: true,
-      } as any)
-      .execute();
-    created.user = true;
-  }
-
-  // 2a. User email + access grant — `unauthorisedGetUserByEmail` (the
-  // cookie/bearer auth path) resolves a `user_email` row whose user has
-  // `granted_access_at` set. Both must exist for the dev-loop account to
-  // authenticate through the UI. Idempotent for users that pre-date this
-  // step (the row used to be created only on first user insert, which
-  // left older dev-loop users unable to log in).
-  const existingEmail = await qb
-    .selectFrom('core.user_email as user_email')
-    .where('email', '=', DEV_LOOP_EMAIL)
-    .select('id')
-    .executeTakeFirst();
-  if (!existingEmail) {
-    await qb
-      .insertInto('core.user_email')
-      .values({
-        id: randomUUID(),
-        user_id: userId,
-        email: DEV_LOOP_EMAIL,
-        is_primary: true,
-      } as any)
-      .execute();
-  }
-  // Defensive: ensure the gate the auth lookup requires is set, even for
-  // an older user row that was created without it.
-  await qb
-    .updateTable('core.user as user')
-    .set({ granted_access_at: new Date() } as any)
-    .where('id', '=', userId as UserId)
-    .where('granted_access_at', 'is', null)
-    .execute();
-
-  // 2c. Team membership — flat access model. The dev-loop user is a platform
-  // admin (authorises via is_platform_admin regardless), but a write
-  // membership keeps the team-scoped path exercisable and mirrors what the
-  // real onboarding flow produces. Idempotent on (user_id, team_id).
-  const existingMembership = await qb
-    .selectFrom('core.team_membership as team_membership')
-    .where('user_id', '=', userId as UserId)
-    .where('team_id', '=', teamId as TeamId)
-    .select('id')
-    .executeTakeFirst();
-  if (!existingMembership) {
-    await qb
-      .insertInto('core.team_membership')
-      .values({
-        id: randomUUID(),
-        user_id: userId,
-        team_id: teamId,
-        access: 'write',
-      } as any)
-      .execute();
-  }
+  // 2. The login user: the one the token's email resolves to, and a member of the team.
+  const login = await ensureDevLoopLogin({ teamId });
+  const userId = login.userId;
+  created.user = login.created;
 
   // 3. Ontology — only materialise if no node types exist yet
   const existingNodeTypes = await getKnowledgeQb(['node_type'])
