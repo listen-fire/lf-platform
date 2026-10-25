@@ -9,6 +9,8 @@ overrides:
   '@grpc/grpc-js@>=1.14.0 <1.14.5': 1.14.6
   '@modelcontextprotocol/sdk@>=1.0.0 <1.32.0': 1.32.1
   axios@>=1.0.0 <1.16.0: 1.20.0
+  body-parser@>=1.0.0 <1.20.9: 1.20.9
+  body-parser@>=2.0.0 <2.4.0: 2.4.0
   brace-expansion@>=1.0.0 <1.1.20: 1.1.21
   brace-expansion@>=2.0.0 <2.1.6: 2.1.7
   brace-expansion@>=4.0.0 <5.0.11: 5.0.12
@@ -50,6 +52,7 @@ overrides:
   tmp@>=0.2.0 <0.2.6: 0.2.7
   undici@>=6.0.0 <6.28.1: 6.29.1
   ws@>=8.0.0 <8.21.0: 8.22.0
+  zod@>=4.0.0 <4.6.6: 4.6.7
 
 importers:
 
@@ -152,13 +155,13 @@ importers:
     dependencies:
       '@anthropic-ai/sdk':
         specifier: ^0.126.0
-        version: 0.126.0(zod@4.1.12)
+        version: 0.126.0(zod@4.6.7)
       '@anthropic-ai/vertex-sdk':
         specifier: ^0.19.9
-        version: 0.19.10(zod@4.1.12)
+        version: 0.19.10(zod@4.6.7)
       '@google/genai':
         specifier: ^2.24.0
-        version: 2.24.0(@modelcontextprotocol/sdk@1.32.1(zod@4.1.12))
+        version: 2.24.0(@modelcontextprotocol/sdk@1.32.1(zod@4.6.7))
       '@listen-fire/affinity':
         specifier: 0.12.3
         version: 0.12.3(tsx@4.21.0)
@@ -239,7 +242,7 @@ importers:
         version: 0.12.3(tsx@4.21.0)
       '@modelcontextprotocol/sdk':
         specifier: ^1.32.1
-        version: 1.32.1(@cfworker/json-schema@4.1.1)(zod@4.1.12)
+        version: 1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7)
       '@notionhq/client':
         specifier: 2.2.15
         version: 2.2.15(encoding@0.1.13)
@@ -479,7 +482,7 @@ importers:
         version: 4.0.3
       model-providers:
         specifier: npm:@listen-fire/model-providers@0.12.3
-        version: '@listen-fire/model-providers@0.12.3(@anthropic-ai/sdk@0.126.0(zod@4.1.12))(@anthropic-ai/vertex-sdk@0.19.10(zod@4.1.12))(@google/genai@2.24.0(@modelcontextprotocol/sdk@1.32.1(zod@4.1.12)))(google-auth-library@10.3.0)(openai@5.22.0(ws@8.22.0)(zod@4.1.12))'
+        version: '@listen-fire/model-providers@0.12.3(@anthropic-ai/sdk@0.126.0(zod@4.6.7))(@anthropic-ai/vertex-sdk@0.19.10(zod@4.6.7))(@google/genai@2.24.0(@modelcontextprotocol/sdk@1.32.1(zod@4.6.7)))(google-auth-library@10.3.0)(openai@5.22.0(ws@8.22.0)(zod@4.6.7))'
       module-kit:
         specifier: npm:@listen-fire/module-kit@0.12.3
         version: '@listen-fire/module-kit@0.12.3(tsx@4.21.0)'
@@ -503,7 +506,7 @@ importers:
         version: 3.0.0
       openai:
         specifier: 5.22.0
-        version: 5.22.0(ws@8.22.0)(zod@4.1.12)
+        version: 5.22.0(ws@8.22.0)(zod@4.6.7)
       pg:
         specifier: 8.12.0
         version: 8.12.0
@@ -595,8 +598,8 @@ importers:
         specifier: 4.0.0
         version: 4.0.0
       zod:
-        specifier: 4.1.12
-        version: 4.1.12
+        specifier: 4.6.7
+        version: 4.6.7
     optionalDependencies:
       files-s3:
         specifier: npm:@listen-fire/files-s3@0.12.3
@@ -865,8 +868,8 @@ importers:
         specifier: 0.12.3
         version: 0.12.3(tsx@4.21.0)
       zod:
-        specifier: 4.1.12
-        version: 4.1.12
+        specifier: 4.6.7
+        version: 4.6.7
     devDependencies:
       '@types/jest':
         specifier: 29.5.14
@@ -902,8 +905,8 @@ importers:
         specifier: 0.12.3
         version: 0.12.3
       zod:
-        specifier: 4.1.12
-        version: 4.1.12
+        specifier: 4.6.7
+        version: 4.6.7
     devDependencies:
       '@types/jest':
         specifier: 29.5.14
@@ -942,8 +945,8 @@ importers:
         specifier: 0.12.3
         version: 0.12.3
       zod:
-        specifier: 4.1.12
-        version: 4.1.12
+        specifier: 4.6.7
+        version: 4.6.7
     devDependencies:
       '@types/jest':
         specifier: 29.5.14
@@ -999,14 +1002,14 @@ importers:
         version: 0.12.3
       '@listen-fire/model-providers':
         specifier: 0.12.3
-        version: 0.12.3(@anthropic-ai/sdk@0.126.0(zod@4.1.12))(@anthropic-ai/vertex-sdk@0.19.10(zod@4.1.12))(@google/genai@2.24.0(@modelcontextprotocol/sdk@1.32.1(zod@4.1.12)))(google-auth-library@10.3.0)(openai@5.22.0(ws@8.22.0)(zod@4.1.12))
+        version: 0.12.3(@anthropic-ai/sdk@0.126.0(zod@4.6.7))(@anthropic-ai/vertex-sdk@0.19.10(zod@4.6.7))(@google/genai@2.24.0(@modelcontextprotocol/sdk@1.32.1(zod@4.6.7)))(google-auth-library@10.3.0)(openai@5.22.0(ws@8.22.0)(zod@4.6.7))
       zod:
-        specifier: 4.1.12
-        version: 4.1.12
+        specifier: 4.6.7
+        version: 4.6.7
     devDependencies:
       '@google/genai':
         specifier: ^2.24.0
-        version: 2.24.0(@modelcontextprotocol/sdk@1.32.1(zod@4.1.12))
+        version: 2.24.0(@modelcontextprotocol/sdk@1.32.1(zod@4.6.7))
       '@types/jest':
         specifier: 29.5.14
         version: 29.5.14
@@ -1015,13 +1018,13 @@ importers:
         version: 20.16.5
       model-providers:
         specifier: npm:@listen-fire/model-providers@0.12.3
-        version: '@listen-fire/model-providers@0.12.3(@anthropic-ai/sdk@0.126.0(zod@4.1.12))(@anthropic-ai/vertex-sdk@0.19.10(zod@4.1.12))(@google/genai@2.24.0(@modelcontextprotocol/sdk@1.32.1(zod@4.1.12)))(google-auth-library@10.3.0)(openai@5.22.0(ws@8.22.0)(zod@4.1.12))'
+        version: '@listen-fire/model-providers@0.12.3(@anthropic-ai/sdk@0.126.0(zod@4.6.7))(@anthropic-ai/vertex-sdk@0.19.10(zod@4.6.7))(@google/genai@2.24.0(@modelcontextprotocol/sdk@1.32.1(zod@4.6.7)))(google-auth-library@10.3.0)(openai@5.22.0(ws@8.22.0)(zod@4.6.7))'
       movement-engine:
         specifier: npm:@listen-fire/engine@0.12.3
         version: '@listen-fire/engine@0.12.3'
       openai:
         specifier: 5.22.0
-        version: 5.22.0(ws@8.22.0)(zod@4.1.12)
+        version: 5.22.0(ws@8.22.0)(zod@4.6.7)
       typescript:
         specifier: 5.5.4
         version: 5.5.4
@@ -1033,14 +1036,14 @@ importers:
         version: 0.12.3
       '@listen-fire/model-providers':
         specifier: 0.12.3
-        version: 0.12.3(@anthropic-ai/sdk@0.126.0(zod@4.1.12))(@anthropic-ai/vertex-sdk@0.19.10(zod@4.1.12))(@google/genai@2.24.0(@modelcontextprotocol/sdk@1.32.1(zod@4.1.12)))(google-auth-library@10.3.0)(openai@5.22.0(ws@8.22.0)(zod@4.1.12))
+        version: 0.12.3(@anthropic-ai/sdk@0.126.0(zod@4.6.7))(@anthropic-ai/vertex-sdk@0.19.10(zod@4.6.7))(@google/genai@2.24.0(@modelcontextprotocol/sdk@1.32.1(zod@4.6.7)))(google-auth-library@10.3.0)(openai@5.22.0(ws@8.22.0)(zod@4.6.7))
       zod:
-        specifier: 4.1.12
-        version: 4.1.12
+        specifier: 4.6.7
+        version: 4.6.7
     devDependencies:
       '@google/genai':
         specifier: ^2.24.0
-        version: 2.24.0(@modelcontextprotocol/sdk@1.32.1(zod@4.1.12))
+        version: 2.24.0(@modelcontextprotocol/sdk@1.32.1(zod@4.6.7))
       '@types/jest':
         specifier: 29.5.14
         version: 29.5.14
@@ -1049,13 +1052,13 @@ importers:
         version: 20.16.5
       model-providers:
         specifier: npm:@listen-fire/model-providers@0.12.3
-        version: '@listen-fire/model-providers@0.12.3(@anthropic-ai/sdk@0.126.0(zod@4.1.12))(@anthropic-ai/vertex-sdk@0.19.10(zod@4.1.12))(@google/genai@2.24.0(@modelcontextprotocol/sdk@1.32.1(zod@4.1.12)))(google-auth-library@10.3.0)(openai@5.22.0(ws@8.22.0)(zod@4.1.12))'
+        version: '@listen-fire/model-providers@0.12.3(@anthropic-ai/sdk@0.126.0(zod@4.6.7))(@anthropic-ai/vertex-sdk@0.19.10(zod@4.6.7))(@google/genai@2.24.0(@modelcontextprotocol/sdk@1.32.1(zod@4.6.7)))(google-auth-library@10.3.0)(openai@5.22.0(ws@8.22.0)(zod@4.6.7))'
       movement-engine:
         specifier: npm:@listen-fire/engine@0.12.3
         version: '@listen-fire/engine@0.12.3'
       openai:
         specifier: 5.22.0
-        version: 5.22.0(ws@8.22.0)(zod@4.1.12)
+        version: 5.22.0(ws@8.22.0)(zod@4.6.7)
       typescript:
         specifier: 5.5.4
         version: 5.5.4
@@ -1075,8 +1078,8 @@ importers:
         specifier: npm:@listen-fire/movement-lang@0.12.3
         version: '@listen-fire/movement-lang@0.12.3'
       zod:
-        specifier: 4.1.12
-        version: 4.1.12
+        specifier: 4.6.7
+        version: 4.6.7
     devDependencies:
       '@types/jest':
         specifier: 29.5.14
@@ -1169,14 +1172,14 @@ importers:
         version: 0.12.3
       '@listen-fire/model-providers':
         specifier: 0.12.3
-        version: 0.12.3(@anthropic-ai/sdk@0.126.0(zod@4.1.12))(@anthropic-ai/vertex-sdk@0.19.10(zod@4.1.12))(@google/genai@2.24.0(@modelcontextprotocol/sdk@1.32.1(zod@4.1.12)))(google-auth-library@10.3.0)(openai@5.22.0(ws@8.22.0)(zod@4.1.12))
+        version: 0.12.3(@anthropic-ai/sdk@0.126.0(zod@4.6.7))(@anthropic-ai/vertex-sdk@0.19.10(zod@4.6.7))(@google/genai@2.24.0(@modelcontextprotocol/sdk@1.32.1(zod@4.6.7)))(google-auth-library@10.3.0)(openai@5.22.0(ws@8.22.0)(zod@4.6.7))
       zod:
-        specifier: 4.1.12
-        version: 4.1.12
+        specifier: 4.6.7
+        version: 4.6.7
     devDependencies:
       '@google/genai':
         specifier: ^2.24.0
-        version: 2.24.0(@modelcontextprotocol/sdk@1.32.1(zod@4.1.12))
+        version: 2.24.0(@modelcontextprotocol/sdk@1.32.1(zod@4.6.7))
       '@types/jest':
         specifier: 29.5.14
         version: 29.5.14
@@ -1185,13 +1188,13 @@ importers:
         version: 20.16.5
       model-providers:
         specifier: npm:@listen-fire/model-providers@0.12.3
-        version: '@listen-fire/model-providers@0.12.3(@anthropic-ai/sdk@0.126.0(zod@4.1.12))(@anthropic-ai/vertex-sdk@0.19.10(zod@4.1.12))(@google/genai@2.24.0(@modelcontextprotocol/sdk@1.32.1(zod@4.1.12)))(google-auth-library@10.3.0)(openai@5.22.0(ws@8.22.0)(zod@4.1.12))'
+        version: '@listen-fire/model-providers@0.12.3(@anthropic-ai/sdk@0.126.0(zod@4.6.7))(@anthropic-ai/vertex-sdk@0.19.10(zod@4.6.7))(@google/genai@2.24.0(@modelcontextprotocol/sdk@1.32.1(zod@4.6.7)))(google-auth-library@10.3.0)(openai@5.22.0(ws@8.22.0)(zod@4.6.7))'
       movement-engine:
         specifier: npm:@listen-fire/engine@0.12.3
         version: '@listen-fire/engine@0.12.3'
       openai:
         specifier: 5.22.0
-        version: 5.22.0(ws@8.22.0)(zod@4.1.12)
+        version: 5.22.0(ws@8.22.0)(zod@4.6.7)
       typescript:
         specifier: 5.5.4
         version: 5.5.4
@@ -1226,8 +1229,8 @@ importers:
         specifier: 5.5.4
         version: 5.5.4
       zod:
-        specifier: 4.1.12
-        version: 4.1.12
+        specifier: 4.6.7
+        version: 4.6.7
     devDependencies:
       '@trpc/server':
         specifier: 10.45.4
@@ -1258,7 +1261,7 @@ packages:
     resolution: {integrity: sha512-VhiZl6rA/8uC+MgDaOhEcAWaIZ2tPnIY885jlZqxrGrutUW2nqCtophBtlsX0tk5kChBUjV/1NVjL3y0M4OwUg==}
     hasBin: true
     peerDependencies:
-      zod: ^3.25.0 || ^4.0.0
+      zod: 4.6.7
     peerDependenciesMeta:
       zod:
         optional: true
@@ -3172,7 +3175,7 @@ packages:
     engines: {node: '>=18'}
     peerDependencies:
       '@cfworker/json-schema': ^4.1.1
-      zod: ^3.25 || ^4.0
+      zod: 4.6.7
     peerDependenciesMeta:
       '@cfworker/json-schema':
         optional: true
@@ -5753,12 +5756,12 @@ packages:
   bn.js@4.12.3:
     resolution: {integrity: sha512-fGTi3gxV/23FTYdAoUtLYp6qySe2KE3teyZitipKNRuVYcBkoP/bB3guXN/XVKUe9mxCHXnc9C4ocyz8OmgN0g==}
 
-  body-parser@1.20.3:
-    resolution: {integrity: sha512-7rAxByjUMqQ3/bHJy7D6OGXvx/MMc4IqBn/X0fcM1QUcAItpZrBEYhWGem+tzXH90c+G01ypMcYJBO9Y30203g==}
+  body-parser@1.20.9:
+    resolution: {integrity: sha512-FISIQxV5u91Y9gvuFq3q/tA/qTqLJn3AhRcEvyozyhJTh5OBFFtv827AdHU7Rbyct4r+Ba1/99oFa1Y3yuFsdw==}
     engines: {node: '>= 0.8', npm: 1.2.8000 || >= 1.4.16}
 
-  body-parser@2.2.2:
-    resolution: {integrity: sha512-oP5VkATKlNwcgvxi0vM0p/D3n2C3EReYVX+DNYs5TjZFn/oQt2j+4sVJtSMr18pdRr8wjTcBl6LoV+FUwzPmNA==}
+  body-parser@2.4.0:
+    resolution: {integrity: sha512-Ifk1KcLrxaGt1occQagQNFNNOqRt1LFuehEnHHzB8Z6cRgIxRU1TBaiIsUiCdA+gy5PL7Y1IX31DNKkRmxtXjQ==}
     engines: {node: '>=18'}
 
   boolbase@1.0.0:
@@ -6116,6 +6119,10 @@ packages:
   content-type@1.0.5:
     resolution: {integrity: sha512-nTjqfcBFEipKdXCv4YDQWCfmcLZKm81ldF0pAopTvyrFGVbcR6P/VAAd5G7N+0tTr8QqiU0tFadD6FK4NtJwOA==}
     engines: {node: '>= 0.6'}
+
+  content-type@2.1.0:
+    resolution: {integrity: sha512-mj7UPXE0jaqaOsukNZRUEfEi2AcL7C/vwmwcHV0O97eO1E1pxBZuyjlZrx5seTaNBg1U6+o35wpa35Qfcc+7ag==}
+    engines: {node: '>=18'}
 
   convert-source-map@1.9.0:
     resolution: {integrity: sha512-ASFBup0Mz1uyiIjANan1jzLQami9z1PoYSZCiiYW2FczPbenXc45FZdBZLzOT+r6+iciuEModtmCti+hjaAk0A==}
@@ -7497,6 +7504,10 @@ packages:
 
   iconv-lite@0.7.2:
     resolution: {integrity: sha512-im9DjEDQ55s9fL4EYzOAv0yMqmMBSZp6G0VvFyTMPKWxiSBHUj9NW/qqLmXUwXrrM7AvqSlTCfvqRb0cM8yYqw==}
+    engines: {node: '>=0.10.0'}
+
+  iconv-lite@0.7.3:
+    resolution: {integrity: sha512-IKXpvIzjnC9XTAUbVBcMfGS0EPaIXtW6v+zr+RRp+hqULEpo0owZax6wyRwPOJbWbzjYspQwusTsfVr0ifh4uQ==}
     engines: {node: '>=0.10.0'}
 
   identity-function@1.0.0:
@@ -9347,6 +9358,10 @@ packages:
     resolution: {integrity: sha512-mAZTtNCeetKMH+pSjrb76NAM8V9a05I9aBZOHztWy/UqcJdQYNsf59vrRKWnojAT9Y+GbIvoTBC++CPHqpDBhQ==}
     engines: {node: '>=0.6'}
 
+  qs@6.16.1:
+    resolution: {integrity: sha512-5Px6J7rfHBAGUhNQ3es4YzcOdBBw0SDcVtThJml4RdnKw4tKs2epA0kPZ+K8X+WiHktT93RHVcQ/3ym5aTCgtg==}
+    engines: {node: '>=0.6'}
+
   querystringify@2.2.0:
     resolution: {integrity: sha512-FIqgj2EUvTa7R50u0rGsyTftzjYmv/a3hO345bZNrqabNqjtgiDMgmo4mkUjd+nzU5oF3dClKqFIPUKybUyqoQ==}
 
@@ -9376,8 +9391,8 @@ packages:
     resolution: {integrity: sha512-Hrgsx+orqoygnmhFbKaHE6c296J+HTAQXoxEF6gNupROmmGJRoyzfG3ccAveqCBrwr/2yxQ5BVd/GTl5agOwSg==}
     engines: {node: '>= 0.6'}
 
-  raw-body@2.5.2:
-    resolution: {integrity: sha512-8zGqypfENjCIqGhgXToC8aB2r7YrBX+AQAfIPs/Mlk+BtPTztOvTS01NRW/3Eh60J+a48lt8qsCzirQ6loCVfA==}
+  raw-body@2.5.3:
+    resolution: {integrity: sha512-s4VSOf6yN0rvbRZGxs8Om5CWj6seneMwK3oDb4lWDH0UPhWcxwOWw5+qk24bxq87szX1ydrwylIOp2uG1ojUpA==}
     engines: {node: '>= 0.8'}
 
   raw-body@3.0.2:
@@ -9838,6 +9853,10 @@ packages:
     resolution: {integrity: sha512-FCLHtRD/gnpCiCHEiJLOwdmFP+wzCmDEkc9y7NsYxeF4u7Btsn1ZuwgwJGxImImHicJArLP4R0yX4c2KCrMrTA==}
     engines: {node: '>= 0.4'}
 
+  side-channel-list@1.0.1:
+    resolution: {integrity: sha512-mjn/0bi/oUURjc5Xl7IaWi/OJJJumuoJFQJfDDyO46+hBWsfaVM65TBHq2eoZBhzl9EchxOijpkbRC8SVBQU0w==}
+    engines: {node: '>= 0.4'}
+
   side-channel-map@1.0.1:
     resolution: {integrity: sha512-VCjCNfgMsby3tTdo02nbjtM/ewra6jPHmpThenkTYh8pG9ucZ/1P8So4u4FGBek/BjpOVsDCMoLA/iuBKIFXRA==}
     engines: {node: '>= 0.4'}
@@ -9852,6 +9871,10 @@ packages:
 
   side-channel@1.1.0:
     resolution: {integrity: sha512-ZX99e6tRweoUXqR+VBrslhda51Nh5MTQwou5tnUDgbtyM0dBgmhEDtWGP/xbKn6hqfPRHujUNwz5fy/wbbhnpw==}
+    engines: {node: '>= 0.4'}
+
+  side-channel@1.1.1:
+    resolution: {integrity: sha512-6x6dK6zJdpTzF4sQeNYxwtvBzf6Eg4GtlesS94HOvTudUeyK2WXAaIfmDgsyslYrRBeFIlsi54AYsFGUuhmvrQ==}
     engines: {node: '>= 0.4'}
 
   signal-exit@3.0.7:
@@ -10525,6 +10548,10 @@ packages:
     resolution: {integrity: sha512-OZs6gsjF4vMp32qrCbiVSkrFmXtG/AZhY3t0iAMrMBiAZyV9oALtXO8hsrHbMXF9x6L3grlFuwW2oAz7cav+Gw==}
     engines: {node: '>= 0.6'}
 
+  type-is@2.1.0:
+    resolution: {integrity: sha512-faYHw0anBbc/kWF3zFTEnxSFOAGUX9GFbOBthvDdLsIlEoWOFOtS0zgCiQYwIskL9iGXZL3kAXD8OoZ4GmMATA==}
+    engines: {node: '>= 18'}
+
   typed-array-buffer@1.0.2:
     resolution: {integrity: sha512-gEymJYKZtKXzzBzM4jqa9w6Q1Jjm7x2d+sh19AdsD4wqnMPDYyvwpsIc2Q/835kHuo3BEQ7CjelGhfTsoBb2MQ==}
     engines: {node: '>= 0.4'}
@@ -11059,7 +11086,7 @@ packages:
   zod-to-json-schema@3.25.1:
     resolution: {integrity: sha512-pM/SU9d3YAggzi6MtR4h7ruuQlqKtad8e9S0fmxcMi+ueAK5Korys/aWcV9LIIHTVbj01NdzxcnXSN+O74ZIVA==}
     peerDependencies:
-      zod: ^3.25 || ^4
+      zod: 4.6.7
 
   zod-validation-error@3.3.1:
     resolution: {integrity: sha512-uFzCZz7FQis256dqw4AhPQgD6f3pzNca/Zh62RNELavlumQB3nDIUFbF5JQfFLcMbO1s02Q7Xg/gpcOBlEnYZA==}
@@ -11070,8 +11097,8 @@ packages:
   zod@3.23.8:
     resolution: {integrity: sha512-XBx9AXhXktjUqnepgTiE5flcKIYWi/rme0Eaj+5Y0lftuGBq+jyRu/md4WnuxqgP1ubdpNCsYEYPxrzVHD8d6g==}
 
-  zod@4.1.12:
-    resolution: {integrity: sha512-JInaHOamG8pt5+Ey8kGmdcAcg3OL9reK8ltczgHTAwNhMys/6ThXHityHxVV2p3fkw/c+MAvBHFVYHFZDmjMCQ==}
+  zod@4.6.7:
+    resolution: {integrity: sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==}
 
   zundo@2.3.0:
     resolution: {integrity: sha512-4GXYxXA17SIKYhVbWHdSEU04P697IMyVGXrC2TnzoyohEAWytFNOKqOp5gTGvaW93F/PM5Y0evbGtOPF0PWQwQ==}
@@ -11127,16 +11154,16 @@ snapshots:
 
   '@antfu/ni@0.21.8': {}
 
-  '@anthropic-ai/sdk@0.126.0(zod@4.1.12)':
+  '@anthropic-ai/sdk@0.126.0(zod@4.6.7)':
     dependencies:
       json-schema-to-ts: 3.1.1
       standardwebhooks: 1.1.1
     optionalDependencies:
-      zod: 4.1.12
+      zod: 4.6.7
 
-  '@anthropic-ai/vertex-sdk@0.19.10(zod@4.1.12)':
+  '@anthropic-ai/vertex-sdk@0.19.10(zod@4.6.7)':
     dependencies:
-      '@anthropic-ai/sdk': 0.126.0(zod@4.1.12)
+      '@anthropic-ai/sdk': 0.126.0(zod@4.6.7)
       google-auth-library: 10.3.0
     transitivePeerDependencies:
       - supports-color
@@ -13044,14 +13071,14 @@ snapshots:
       - supports-color
     optional: true
 
-  '@google/genai@2.24.0(@modelcontextprotocol/sdk@1.32.1(zod@4.1.12))':
+  '@google/genai@2.24.0(@modelcontextprotocol/sdk@1.32.1(zod@4.6.7))':
     dependencies:
       google-auth-library: 10.3.0
       p-retry: 4.6.2
       protobufjs: 7.6.6
       ws: 8.22.0
     optionalDependencies:
-      '@modelcontextprotocol/sdk': 1.32.1(@cfworker/json-schema@4.1.1)(zod@4.1.12)
+      '@modelcontextprotocol/sdk': 1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7)
     transitivePeerDependencies:
       - bufferutil
       - supports-color
@@ -13525,7 +13552,7 @@ snapshots:
       exponential-backoff: 3.1.1
       lodash: 4.18.1
       tldts: 6.1.44
-      zod: 4.1.12
+      zod: 4.6.7
     transitivePeerDependencies:
       - tsx
 
@@ -13537,17 +13564,17 @@ snapshots:
       '@listen-fire/movement-lang': 0.12.3
       exponential-backoff: 3.1.1
       lru-cache: 10.4.3
-      zod: 4.1.12
+      zod: 4.6.7
     transitivePeerDependencies:
       - tsx
 
   '@listen-fire/anthropic@0.12.3':
     dependencies:
-      '@anthropic-ai/sdk': 0.126.0(zod@4.1.12)
+      '@anthropic-ai/sdk': 0.126.0(zod@4.6.7)
       '@listen-fire/engine': 0.12.3
       exponential-backoff: 3.1.1
       jsonrepair: 3.8.0
-      zod: 4.1.12
+      zod: 4.6.7
 
   '@listen-fire/attio@0.12.3(tsx@4.21.0)':
     dependencies:
@@ -13557,7 +13584,7 @@ snapshots:
       '@listen-fire/movement-lang': 0.12.3
       exponential-backoff: 3.1.1
       lru-cache: 10.4.3
-      zod: 4.1.12
+      zod: 4.6.7
     transitivePeerDependencies:
       - tsx
 
@@ -13567,7 +13594,7 @@ snapshots:
       '@listen-fire/engine-contracts': 0.12.3
       '@listen-fire/module-kit': 0.12.3(tsx@4.21.0)
       '@listen-fire/movement-lang': 0.12.3
-      zod: 4.1.12
+      zod: 4.6.7
     transitivePeerDependencies:
       - tsx
 
@@ -13577,7 +13604,7 @@ snapshots:
       '@listen-fire/engine-contracts': 0.12.3
       '@listen-fire/module-kit': 0.12.3(tsx@4.21.0)
       '@listen-fire/movement-lang': 0.12.3
-      zod: 4.1.12
+      zod: 4.6.7
     transitivePeerDependencies:
       - tsx
 
@@ -13589,7 +13616,7 @@ snapshots:
       form-data: 4.0.6
       html-to-text: 9.0.5
       mailgun.js: 10.2.3
-      zod: 4.1.12
+      zod: 4.6.7
     transitivePeerDependencies:
       - debug
       - supports-color
@@ -13598,7 +13625,7 @@ snapshots:
   '@listen-fire/engine-contracts@0.12.3':
     dependencies:
       '@listen-fire/movement-lang': 0.12.3
-      zod: 4.1.12
+      zod: 4.6.7
 
   '@listen-fire/engine@0.12.3':
     dependencies:
@@ -13606,7 +13633,7 @@ snapshots:
       '@listen-fire/module-runtime': 0.12.3
       '@listen-fire/movement-lang': 0.12.3
       safe-stable-stringify: 2.5.0
-      zod: 4.1.12
+      zod: 4.6.7
 
   '@listen-fire/evertrace@0.12.3(tsx@4.21.0)':
     dependencies:
@@ -13614,7 +13641,7 @@ snapshots:
       '@listen-fire/engine-contracts': 0.12.3
       '@listen-fire/module-kit': 0.12.3(tsx@4.21.0)
       '@listen-fire/movement-lang': 0.12.3
-      zod: 4.1.12
+      zod: 4.6.7
     transitivePeerDependencies:
       - tsx
 
@@ -13625,7 +13652,7 @@ snapshots:
       better-sqlite3: 11.10.0
       express: 4.22.1
       tsx: 4.21.0
-      zod: 4.1.12
+      zod: 4.6.7
     transitivePeerDependencies:
       - supports-color
 
@@ -13658,7 +13685,7 @@ snapshots:
       '@listen-fire/movement-lang': 0.12.3
       googleapis: 164.1.0
       html-to-text: 9.0.5
-      zod: 4.1.12
+      zod: 4.6.7
     transitivePeerDependencies:
       - supports-color
       - tsx
@@ -13669,7 +13696,7 @@ snapshots:
       '@listen-fire/google-sheets': 0.12.3(tsx@4.21.0)
       '@listen-fire/module-kit': 0.12.3(tsx@4.21.0)
       googleapis: 164.1.0
-      zod: 4.1.12
+      zod: 4.6.7
     transitivePeerDependencies:
       - supports-color
       - tsx
@@ -13681,7 +13708,7 @@ snapshots:
       '@listen-fire/module-kit': 0.12.3(tsx@4.21.0)
       '@listen-fire/movement-lang': 0.12.3
       exponential-backoff: 3.1.1
-      zod: 4.1.12
+      zod: 4.6.7
     transitivePeerDependencies:
       - tsx
 
@@ -13691,7 +13718,7 @@ snapshots:
       '@listen-fire/engine-contracts': 0.12.3
       '@listen-fire/module-kit': 0.12.3(tsx@4.21.0)
       '@listen-fire/movement-lang': 0.12.3
-      zod: 4.1.12
+      zod: 4.6.7
     transitivePeerDependencies:
       - tsx
 
@@ -13707,35 +13734,35 @@ snapshots:
       '@listen-fire/engine-contracts': 0.12.3
       '@listen-fire/module-kit': 0.12.3(tsx@4.21.0)
       '@listen-fire/module-runtime': 0.12.3
-      zod: 4.1.12
+      zod: 4.6.7
     transitivePeerDependencies:
       - tsx
 
-  '@listen-fire/model-providers@0.12.3(@anthropic-ai/sdk@0.126.0(zod@4.1.12))(@anthropic-ai/vertex-sdk@0.19.10(zod@4.1.12))(@google/genai@2.24.0(@modelcontextprotocol/sdk@1.32.1(zod@4.1.12)))(google-auth-library@10.3.0)(openai@5.22.0(ws@8.22.0)(zod@4.1.12))':
+  '@listen-fire/model-providers@0.12.3(@anthropic-ai/sdk@0.126.0(zod@4.6.7))(@anthropic-ai/vertex-sdk@0.19.10(zod@4.6.7))(@google/genai@2.24.0(@modelcontextprotocol/sdk@1.32.1(zod@4.6.7)))(google-auth-library@10.3.0)(openai@5.22.0(ws@8.22.0)(zod@4.6.7))':
     dependencies:
       '@listen-fire/anthropic': 0.12.3
       '@listen-fire/engine': 0.12.3
-      zod: 4.1.12
+      zod: 4.6.7
     optionalDependencies:
-      '@anthropic-ai/sdk': 0.126.0(zod@4.1.12)
-      '@anthropic-ai/vertex-sdk': 0.19.10(zod@4.1.12)
-      '@google/genai': 2.24.0(@modelcontextprotocol/sdk@1.32.1(zod@4.1.12))
+      '@anthropic-ai/sdk': 0.126.0(zod@4.6.7)
+      '@anthropic-ai/vertex-sdk': 0.19.10(zod@4.6.7)
+      '@google/genai': 2.24.0(@modelcontextprotocol/sdk@1.32.1(zod@4.6.7))
       google-auth-library: 10.3.0
-      openai: 5.22.0(ws@8.22.0)(zod@4.1.12)
+      openai: 5.22.0(ws@8.22.0)(zod@4.6.7)
 
   '@listen-fire/module-kit@0.12.3(tsx@4.21.0)':
     dependencies:
       '@listen-fire/engine-contracts': 0.12.3
       '@listen-fire/module-runtime': 0.12.3
       '@listen-fire/movement-lang': 0.12.3
-      zod: 4.1.12
+      zod: 4.6.7
     optionalDependencies:
       tsx: 4.21.0
 
   '@listen-fire/module-runtime@0.12.3':
     dependencies:
       '@listen-fire/engine-contracts': 0.12.3
-      zod: 4.1.12
+      zod: 4.6.7
 
   '@listen-fire/movement-lang@0.12.3':
     dependencies:
@@ -13764,7 +13791,7 @@ snapshots:
     dependencies:
       '@listen-fire/engine': 0.12.3
       pg: 8.12.0
-      zod: 4.1.12
+      zod: 4.6.7
     transitivePeerDependencies:
       - pg-native
 
@@ -13775,7 +13802,7 @@ snapshots:
       '@listen-fire/module-kit': 0.12.3(tsx@4.21.0)
       '@listen-fire/movement-lang': 0.12.3
       '@slack/web-api': 7.11.0
-      zod: 4.1.12
+      zod: 4.6.7
     transitivePeerDependencies:
       - debug
       - supports-color
@@ -13787,7 +13814,7 @@ snapshots:
       '@listen-fire/engine-contracts': 0.12.3
       '@listen-fire/module-kit': 0.12.3(tsx@4.21.0)
       '@listen-fire/movement-lang': 0.12.3
-      zod: 4.1.12
+      zod: 4.6.7
     transitivePeerDependencies:
       - tsx
 
@@ -13809,7 +13836,7 @@ snapshots:
       '@listen-fire/movement-lang': 0.12.3
       html-to-text: 9.0.5
       jspdf: 4.2.1
-      zod: 4.1.12
+      zod: 4.6.7
     transitivePeerDependencies:
       - '@napi-rs/canvas'
       - tsx
@@ -13821,13 +13848,13 @@ snapshots:
       '@listen-fire/module-kit': 0.12.3(tsx@4.21.0)
       '@listen-fire/movement-lang': 0.12.3
       mime: 4.0.3
-      zod: 4.1.12
+      zod: 4.6.7
     transitivePeerDependencies:
       - tsx
 
   '@marijn/find-cluster-break@1.0.2': {}
 
-  '@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.1.12)':
+  '@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7)':
     dependencies:
       '@hono/node-server': 1.19.11(hono@4.13.13)
       ajv: 8.17.1
@@ -13844,8 +13871,8 @@ snapshots:
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
       raw-body: 3.0.2
-      zod: 4.1.12
-      zod-to-json-schema: 3.25.1(zod@4.1.12)
+      zod: 4.6.7
+      zod-to-json-schema: 3.25.1(zod@4.6.7)
     optionalDependencies:
       '@cfworker/json-schema': 4.1.1
     transitivePeerDependencies:
@@ -16892,34 +16919,34 @@ snapshots:
 
   bn.js@4.12.3: {}
 
-  body-parser@1.20.3:
+  body-parser@1.20.9:
     dependencies:
       bytes: 3.1.2
       content-type: 1.0.5
       debug: 2.6.9
       depd: 2.0.0
       destroy: 1.2.0
-      http-errors: 2.0.0
+      http-errors: 2.0.1
       iconv-lite: 0.4.24
       on-finished: 2.4.1
-      qs: 6.13.0
-      raw-body: 2.5.2
+      qs: 6.16.1
+      raw-body: 2.5.3
       type-is: 1.6.18
       unpipe: 1.0.0
     transitivePeerDependencies:
       - supports-color
 
-  body-parser@2.2.2:
+  body-parser@2.4.0:
     dependencies:
       bytes: 3.1.2
-      content-type: 1.0.5
+      content-type: 2.1.0
       debug: 4.4.3
       http-errors: 2.0.1
-      iconv-lite: 0.7.2
+      iconv-lite: 0.7.3
       on-finished: 2.4.1
-      qs: 6.15.0
+      qs: 6.16.1
       raw-body: 3.0.2
-      type-is: 2.0.1
+      type-is: 2.1.0
     transitivePeerDependencies:
       - supports-color
 
@@ -17326,6 +17353,8 @@ snapshots:
   content-disposition@1.0.1: {}
 
   content-type@1.0.5: {}
+
+  content-type@2.1.0: {}
 
   convert-source-map@1.9.0: {}
 
@@ -18286,7 +18315,7 @@ snapshots:
     dependencies:
       accepts: 1.3.8
       array-flatten: 1.1.1
-      body-parser: 1.20.3
+      body-parser: 1.20.9
       content-disposition: 0.5.4
       content-type: 1.0.5
       cookie: 0.6.0
@@ -18322,7 +18351,7 @@ snapshots:
     dependencies:
       accepts: 1.3.8
       array-flatten: 1.1.1
-      body-parser: 1.20.3
+      body-parser: 1.20.9
       content-disposition: 0.5.4
       content-type: 1.0.5
       cookie: 0.7.2
@@ -18357,7 +18386,7 @@ snapshots:
   express@5.2.1:
     dependencies:
       accepts: 2.0.0
-      body-parser: 2.2.2
+      body-parser: 2.4.0
       content-disposition: 1.0.1
       content-type: 1.0.5
       cookie: 0.7.2
@@ -19127,6 +19156,10 @@ snapshots:
       safer-buffer: 2.1.2
 
   iconv-lite@0.7.2:
+    dependencies:
+      safer-buffer: 2.1.2
+
+  iconv-lite@0.7.3:
     dependencies:
       safer-buffer: 2.1.2
 
@@ -20990,10 +21023,10 @@ snapshots:
       is-docker: 2.2.1
       is-wsl: 2.2.0
 
-  openai@5.22.0(ws@8.22.0)(zod@4.1.12):
+  openai@5.22.0(ws@8.22.0)(zod@4.6.7):
     optionalDependencies:
       ws: 8.22.0
-      zod: 4.1.12
+      zod: 4.6.7
 
   optionator@0.9.4:
     dependencies:
@@ -21498,6 +21531,11 @@ snapshots:
     dependencies:
       side-channel: 1.1.0
 
+  qs@6.16.1:
+    dependencies:
+      es-define-property: 1.0.1
+      side-channel: 1.1.1
+
   querystringify@2.2.0: {}
 
   queue-microtask@1.2.3: {}
@@ -21527,10 +21565,10 @@ snapshots:
 
   range-parser@1.2.1: {}
 
-  raw-body@2.5.2:
+  raw-body@2.5.3:
     dependencies:
       bytes: 3.1.2
-      http-errors: 2.0.0
+      http-errors: 2.0.1
       iconv-lite: 0.4.24
       unpipe: 1.0.0
 
@@ -22233,6 +22271,11 @@ snapshots:
       es-errors: 1.3.0
       object-inspect: 1.13.4
 
+  side-channel-list@1.0.1:
+    dependencies:
+      es-errors: 1.3.0
+      object-inspect: 1.13.4
+
   side-channel-map@1.0.1:
     dependencies:
       call-bound: 1.0.4
@@ -22260,6 +22303,14 @@ snapshots:
       es-errors: 1.3.0
       object-inspect: 1.13.4
       side-channel-list: 1.0.0
+      side-channel-map: 1.0.1
+      side-channel-weakmap: 1.0.2
+
+  side-channel@1.1.1:
+    dependencies:
+      es-errors: 1.3.0
+      object-inspect: 1.13.4
+      side-channel-list: 1.0.1
       side-channel-map: 1.0.1
       side-channel-weakmap: 1.0.2
 
@@ -23133,6 +23184,12 @@ snapshots:
       media-typer: 1.1.0
       mime-types: 3.0.2
 
+  type-is@2.1.0:
+    dependencies:
+      content-type: 2.1.0
+      media-typer: 1.1.0
+      mime-types: 3.0.2
+
   typed-array-buffer@1.0.2:
     dependencies:
       call-bind: 1.0.7
@@ -23873,9 +23930,9 @@ snapshots:
       compress-commons: 4.1.2
       readable-stream: 3.6.2
 
-  zod-to-json-schema@3.25.1(zod@4.1.12):
+  zod-to-json-schema@3.25.1(zod@4.6.7):
     dependencies:
-      zod: 4.1.12
+      zod: 4.6.7
 
   zod-validation-error@3.3.1(zod@3.23.8):
     dependencies:
@@ -23883,7 +23940,7 @@ snapshots:
 
   zod@3.23.8: {}
 
-  zod@4.1.12: {}
+  zod@4.6.7: {}
 
   zundo@2.3.0(zustand@5.0.9(@types/react@18.3.18)(react@18.3.1)(use-sync-external-store@1.2.2(react@18.3.1))):
     dependencies:

@@ -66,6 +66,8 @@
     "@grpc/grpc-js@>=1.14.0 <1.14.5": "GHSA-5375-pq7m-f5r2, GHSA-99f4-grh7-6pcq, GHSA-m9gg-hp2v-232j",
     "@modelcontextprotocol/sdk@>=1.0.0 <1.32.0": "GHSA-6qxp-vccf-f47h, GHSA-22jm-h49p-29qw, GHSA-46jr-4wx8-v453 (via @google/genai)",
     "axios@>=1.0.0 <1.16.0": "GHSA-4hjh-wcwx-xvwj and ten more axios advisories fixed by 1.16.0 (via mailgun.js)",
+    "body-parser@>=1.0.0 <1.20.9": "GHSA-27r3-jxmh-p828 (via express 4)",
+    "body-parser@>=2.0.0 <2.4.0": "GHSA-27r3-jxmh-p828 (via express 5 under @modelcontextprotocol/sdk)",
     "brace-expansion@>=1.0.0 <1.1.20": "GHSA-3jxr-9vmj-r5cp, GHSA-mh99-v99m-4gvg, GHSA-rgw5-rvv9-x895, GHSA-qhr7-859c-m2p7, GHSA-6j4f-fj2g-mc7p",
     "brace-expansion@>=2.0.0 <2.1.6": "same brace-expansion advisories, 2.x line",
     "brace-expansion@>=4.0.0 <5.0.11": "same brace-expansion advisories, 5.x line",
@@ -107,10 +109,12 @@
     "tmp@>=0.2.0 <0.2.6": "GHSA-ph9p-34f9-6g65",
     "undici@>=6.0.0 <6.28.1": "GHSA-f269-vfmq-vjvj and four more undici advisories (via cheerio)",
     "ws@>=8.0.0 <8.21.0": "GHSA-96hv-2xvq-fx4p",
+    "zod@>=4.0.0 <4.6.6": "GHSA-mrhx-c7xc-m3w5 (the anthropic sdk, @modelcontextprotocol/sdk, @listen-fire/engine-contracts, and this repository's own 4.x pins); the 3.x line has no fix, see //pnpm.auditConfig",
     "@pinecone-database/pinecone>@sinclair/typebox": "pre-existing; not an advisory"
   },
   "//pnpm.auditConfig": {
-    "CVE-2026-93687": "GHSA-vfj7-8cjw-p6xm, braces <=3.0.3 stack-exhaustion DoS from attacker-supplied nested brace patterns. No patched braces release exists (3.0.3 is the latest). Every path is build tooling (tailwindcss, sass, tsup, prisma internals, the Sentry bundler plugin, fast-glob/micromatch), never a request path. Remove this entry once braces ships a fix."
+    "CVE-2026-93687": "GHSA-vfj7-8cjw-p6xm, braces <=3.0.3 stack-exhaustion DoS from attacker-supplied nested brace patterns. No patched braces release exists (3.0.3 is the latest). Every path is build tooling (tailwindcss, sass, tsup, prisma internals, the Sentry bundler plugin, fast-glob/micromatch), never a request path. Remove this entry once braces ships a fix.",
+    "CVE-2023-54404": "GHSA-mrhx-c7xc-m3w5, zod <4.6.6 memory exhaustion when an unbounded array schema parses an attacker-supplied oversized array. The 4.x copies are overridden to 4.6.7; no 3.x release is fixed. Its three 3.23.8 dependents never parse untrusted input with it: apps/web imports zod only in one unit test (shape-editor-roundtrip), apps/admin does not import it, and prisma-kysely is a vestigial prisma generator nothing in apps/api imports. Remove when web/admin move to zod 4 (and prisma-kysely is dropped)."
   },
   "pnpm": {
     "overrides": {
@@ -118,6 +122,8 @@
       "@grpc/grpc-js@>=1.14.0 <1.14.5": "1.14.6",
       "@modelcontextprotocol/sdk@>=1.0.0 <1.32.0": "1.32.1",
       "axios@>=1.0.0 <1.16.0": "1.20.0",
+      "body-parser@>=1.0.0 <1.20.9": "1.20.9",
+      "body-parser@>=2.0.0 <2.4.0": "2.4.0",
       "brace-expansion@>=1.0.0 <1.1.20": "1.1.21",
       "brace-expansion@>=2.0.0 <2.1.6": "2.1.7",
       "brace-expansion@>=4.0.0 <5.0.11": "5.0.12",
@@ -158,11 +164,13 @@
       "tar-fs@>=2.0.0 <2.1.4": "2.1.5",
       "tmp@>=0.2.0 <0.2.6": "0.2.7",
       "undici@>=6.0.0 <6.28.1": "6.29.1",
-      "ws@>=8.0.0 <8.21.0": "8.22.0"
+      "ws@>=8.0.0 <8.21.0": "8.22.0",
+      "zod@>=4.0.0 <4.6.6": "4.6.7"
     },
     "auditConfig": {
       "ignoreCves": [
-        "CVE-2026-93687"
+        "CVE-2026-93687",
+        "CVE-2023-54404"
       ]
     }
   },
