@@ -17,6 +17,13 @@ versions are the git tags described in [`deploy/UPGRADING.md`](deploy/UPGRADING.
 
 <!-- add merged PRs here -->
 
+## [0.12.5] - 2026-10-25
+
+The platform release that matches the language's 0.12.5.
+
+- The language is installed at 0.12.5: every `@listen-fire/*` package this repository depends on, and the `fake-channels` image's `FAKE_CHANNELS_VERSION`.
+- The store slot (`POST /api/v1/system/slots/store`) answers `work.enqueueIfAbsent`, which `lf` 0.12.5 requires to arm a polled listen: it queues a work row only when no row has its key, and leaves a row that exists (due, leased or dead) as it is. With it, several `lf drain` workers started at once poll a polled listen once rather than again at once. An `lf` 0.12.5 against an installation without it fails a polled listen's arm naming the method. No migration.
+
 ## [0.12.4] - 2026-10-25
 
 The platform release that matches the language's 0.12.4.
@@ -2203,7 +2210,8 @@ Releases before v0.11 are kept one file per minor line, newest first:
 - [v0.2.x](docs/changelog/v0.2.md) (v0.2.0)
 - [v0.1.x](docs/changelog/v0.1.md) (v0.1.0 to v0.1.2)
 
-[Unreleased]: https://github.com/listen-fire/lf-platform/compare/v0.12.4...HEAD
+[Unreleased]: https://github.com/listen-fire/lf-platform/compare/v0.12.5...HEAD
+[0.12.5]: https://github.com/listen-fire/lf-platform/compare/v0.12.4...v0.12.5
 [0.12.4]: https://github.com/listen-fire/lf-platform/compare/v0.12.2...v0.12.4
 [0.12.2]: https://github.com/listen-fire/lf-platform/compare/v0.12.1...v0.12.2
 [0.12.1]: https://github.com/listen-fire/lf-platform/compare/v0.12.0...v0.12.1
