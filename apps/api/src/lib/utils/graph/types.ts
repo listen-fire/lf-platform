@@ -88,8 +88,8 @@ function deserialiseObject<DataMap extends DataMapType>(parsed: unknown): HObjec
           id: z.string(),
           modelName: z.string(),
           type: z.enum(['Node']),
-          data: z.any(),
-          meta: z.any(),
+          data: z.any().optional(),
+          meta: z.any().optional(),
           indices: z.array(z.string()),
         })
         .parse(parsed);
@@ -111,7 +111,7 @@ function deserialiseObject<DataMap extends DataMapType>(parsed: unknown): HObjec
           type: z.enum(['Edge']),
           from: z.string(),
           to: z.string(),
-          data: z.any(),
+          data: z.any().optional(),
         })
         .parse(parsed);
 

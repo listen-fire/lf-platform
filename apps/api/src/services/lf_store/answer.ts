@@ -37,7 +37,7 @@ const int = z.number().int();
 /** A flag: absent is false. */
 const flag = z.boolean().nullish().transform((v) => v === true);
 /** Any JSON value; absent is stored as `null`, as `x ?? null`. */
-const value = z.unknown().transform((v) => v ?? null);
+const value = z.unknown().optional().transform((v) => v ?? null);
 const strings = z.array(z.string());
 const optStrings = z.array(z.string()).nullish().transform((v) => v ?? null);
 

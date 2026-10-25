@@ -80,7 +80,7 @@ export const askRecordSchema = z.object({
   /** Correct only — the records offered for review (immutable). */
   rows: z.array(askRowSpecSchema).nullable(),
   state: z.enum(ASK_STATES),
-  answer: z.unknown(),
+  answer: z.unknown().optional(),
   token: z.string(),
   tokenExpiresAt: z.string(),
   provenance: z.record(z.string(), z.unknown()),

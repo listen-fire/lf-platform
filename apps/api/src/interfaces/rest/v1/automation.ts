@@ -76,7 +76,7 @@ const listAsksHandler: RequestHandler = async (_req, res) => {
 };
 
 const answerAskSchema = z.object({
-  answer: z.unknown(),
+  answer: z.unknown().optional(),
 });
 
 const answerAskHandler: RequestHandler = async (req, res) => {

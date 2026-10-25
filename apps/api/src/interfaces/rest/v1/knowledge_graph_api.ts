@@ -108,7 +108,7 @@ const mutationContextSchema = z.record(z.string(), z.unknown());
 const propertyWriteSchema = z.object({
   propertyTypeId: z.string().min(1),
   /** `null` clears the property — the door's semantics (D37a), not ours. */
-  value: z.unknown(),
+  value: z.unknown().optional(),
   description: z.string().optional(),
 });
 

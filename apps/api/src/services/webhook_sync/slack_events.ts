@@ -152,7 +152,7 @@ declare module '../work/kinds' {
   }
 }
 
-const slackEventPayloadSchema = z.object({ envelope: z.unknown() });
+const slackEventPayloadSchema = z.object({ envelope: z.unknown().optional() });
 
 const slackEventIdSchema = z.object({ event_id: z.string().min(1) });
 

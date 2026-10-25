@@ -21,8 +21,8 @@ const deliverySchema = z.object({
   actor: actorSchema,
   data: z.object({
     id: z.string(),
-    before: z.unknown().nullable(),
-    after: z.unknown().nullable(),
+    before: z.unknown().nullable().optional(),
+    after: z.unknown().nullable().optional(),
   }),
 });
 

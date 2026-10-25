@@ -61,7 +61,7 @@ const controlTowerRouter = (procedure: typeof trpc.procedure) => {
      *  door drives (link page, Slack buttons, MCP). The answer is validated
      *  against the question's answer type, then any run waiting on it resumes. */
     answerAskRecord: userProcedure
-      .input(z.object({ askId: z.string().min(1), answer: z.unknown() }))
+      .input(z.object({ askId: z.string().min(1), answer: z.unknown().optional() }))
       .mutation(async ({ input }): Promise<{ askId: string; state: string }> => {
         const ctx = currentContext();
         return answerAskRecordForTeam({
