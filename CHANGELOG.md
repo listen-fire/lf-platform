@@ -17,6 +17,11 @@ versions are the git tags described in [`deploy/UPGRADING.md`](deploy/UPGRADING.
 
 <!-- add merged PRs here -->
 
+## [0.12.3] - 2026-10-25
+
+The platform release that matches the language's 0.12.3.
+
+- The language is installed at 0.12.3: every `@listen-fire/*` package this repository depends on, and the `fake-channels` image's `FAKE_CHANNELS_VERSION`. Operators: a record a library movement returns now writes back through the connection the library read it with, where a caller reusing that connection's name with another credential wrote to the wrong workspace (the language's CHANGELOG, 0.12.3). A park may now carry that connection's identity; the platform stores park state as the engine writes it, so nothing to migrate, and parks written before resume as before.
 - Fixed: upgrading an automation that imports a library no longer writes the library's fixes into the automation's text. The checkers surface a library's diagnostics on the import, and kept their fixes, whose places are in the library's text; the upgrade applied them to the importer, overwriting what stood at those lines (a prompt) or appending to its end. The legacy checker now drops them, and the platform drops those the installed language's checker still carries (`listen-fire` to fix at source). An automation upgraded from 1 to 4 while it imported a library may hold such an edit: compare its upgrade save with the version before it.
 - Fixed: the legacy checker's rewrite of the extraction keyword keeps the backticks of a field type named with a space (`` <`Pass Reason`> ``), so its rewrite parses. The installed language's own rewrite, which the upgrade applies, still drops them (`listen-fire` to fix); the upgrade refuses that result with its parse error and saves nothing.
 
@@ -2198,7 +2203,8 @@ Releases before v0.11 are kept one file per minor line, newest first:
 - [v0.2.x](docs/changelog/v0.2.md) (v0.2.0)
 - [v0.1.x](docs/changelog/v0.1.md) (v0.1.0 to v0.1.2)
 
-[Unreleased]: https://github.com/listen-fire/lf-platform/compare/v0.12.2...HEAD
+[Unreleased]: https://github.com/listen-fire/lf-platform/compare/v0.12.3...HEAD
+[0.12.3]: https://github.com/listen-fire/lf-platform/compare/v0.12.2...v0.12.3
 [0.12.2]: https://github.com/listen-fire/lf-platform/compare/v0.12.1...v0.12.2
 [0.12.1]: https://github.com/listen-fire/lf-platform/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/listen-fire/lf-platform/compare/v0.12.0-rc.5...v0.12.0
