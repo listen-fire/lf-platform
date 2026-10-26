@@ -2,7 +2,7 @@
   "name": "@listen-fire/kg",
   "private": true,
   "license": "Apache-2.0",
-  "version": "0.12.5",
+  "version": "0.12.6",
   "description": "The platform's knowledge graph as a module (`@lf/kg`): its record types read from the team's own model, reads and writes through a store the host supplies, and its change events delivered through the host's inbound path like any adapter's. Loaded in process by the platform.",
   "engines": {
     "node": "22.23.4"
@@ -15,19 +15,19 @@
   "types": "index.ts",
   "type": "commonjs",
   "dependencies": {
-    "@listen-fire/engine": "0.12.5",
-    "@listen-fire/engine-contracts": "0.12.5",
-    "@listen-fire/module-kit": "0.12.5",
-    "@listen-fire/movement-lang": "0.12.5",
+    "@listen-fire/engine": "catalog:",
+    "@listen-fire/engine-contracts": "catalog:",
+    "@listen-fire/module-kit": "0.12.6",
+    "@listen-fire/movement-lang": "catalog:",
     "zod": "4.1.12"
   },
   "devDependencies": {
     "@types/jest": "29.5.14",
     "@types/node": "20.16.5",
-    "engine-contracts": "npm:@listen-fire/engine-contracts@0.12.5",
-    "module-kit": "npm:@listen-fire/module-kit@0.12.5",
-    "movement-engine": "npm:@listen-fire/engine@0.12.5",
-    "movement-lang": "npm:@listen-fire/movement-lang@0.12.5",
+    "engine-contracts": "catalog:",
+    "module-kit": "npm:@listen-fire/module-kit@0.12.6",
+    "movement-engine": "catalog:",
+    "movement-lang": "catalog:",
     "typescript": "5.5.4"
   },
   "repository": {

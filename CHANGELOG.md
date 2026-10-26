@@ -17,6 +17,14 @@ versions are the git tags described in [`deploy/UPGRADING.md`](deploy/UPGRADING.
 
 <!-- add merged PRs here -->
 
+## [0.12.6] - 2026-10-26
+
+The platform release that matches the language's 0.12.6.
+
+- The language core is installed at 0.12.6 from one place: the `catalog:` block of `pnpm-workspace.yaml` holds `@listen-fire/engine`, `@listen-fire/engine-contracts` and `@listen-fire/movement-lang` (under their own names and their `movement-engine`, `engine-contracts` and `movement-lang` aliases), and every package that uses them says `catalog:`. Adopting a core release is that block: one version per line, the same on all six.
+- Every other `@listen-fire/*` package (the modules, `module-kit`, `module-runtime`, `fake-channels`, `handbook`, `model-providers` and the rest) is pinned on its own exact version. From 0.12.6 the language publishes only the packages that changed, so these versions now move independently of the core and of each other: all are at 0.12.6 today. The `fake-channels` image's `FAKE_CHANNELS_VERSION` names fake-channels' own version.
+- Adapter protocol 2.N (the language's CHANGELOG, 0.12.6). A module's `manifest` now states the minor of adapter protocol 2 it uses, `protocolMinor`, and `lf` 0.12.6 asks a core module for its manifest before any other method and refuses one outside 2.0 to 2.2 by name. The platform's slot routes already answer `manifest` before anything else: the store route (`POST /api/v1/system/slots/store`) states 2.2 and the movements route (`/slots/movements`) 2.1, stamped by the language's slot runtime; the secrets door (`POST /api/public/lf-secrets`) states 2.0 and answers its manifest before reading the `team` setting. Installing a remote adapter refuses one that states a minor above 2, by name; the adapter handbook says so. Operators: nothing to set; an `lf` up to 0.12.5 ignores the field.
+
 - Docs: the wake section of the self-hosting guide lists the IAM each account needs as one required list, including `cloudtasks.tasks.get` for the API and the drain job and `run.jobs.run` for the invoker. Operators: check the grants if wakes fail with a permission error.
 
 - Fixed: the development seed (`pnpm dev:seed`) makes the user who owns the dev-loop login email a member of the dev team. On a database seeded before the email was claimed, the login and the team member were two users and every page the UI test tool opened answered 403. Operators: development only; nothing to set.
@@ -2218,7 +2226,8 @@ Releases before v0.11 are kept one file per minor line, newest first:
 - [v0.2.x](docs/changelog/v0.2.md) (v0.2.0)
 - [v0.1.x](docs/changelog/v0.1.md) (v0.1.0 to v0.1.2)
 
-[Unreleased]: https://github.com/listen-fire/lf-platform/compare/v0.12.5...HEAD
+[Unreleased]: https://github.com/listen-fire/lf-platform/compare/v0.12.6...HEAD
+[0.12.6]: https://github.com/listen-fire/lf-platform/compare/v0.12.5...v0.12.6
 [0.12.5]: https://github.com/listen-fire/lf-platform/compare/v0.12.4...v0.12.5
 [0.12.4]: https://github.com/listen-fire/lf-platform/compare/v0.12.2...v0.12.4
 [0.12.2]: https://github.com/listen-fire/lf-platform/compare/v0.12.1...v0.12.2
