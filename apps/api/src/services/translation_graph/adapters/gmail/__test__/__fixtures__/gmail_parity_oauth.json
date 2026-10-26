@@ -2409,6 +2409,7 @@
             "externalId": "msg-acme",
             "idempotencyKey": "gmail:msg-acme",
             "tag": "gmail:message_received",
+            "eventType": "message_received",
             "occurredAt": "2026-10-10T09:00:00.000Z"
           },
           {
@@ -2438,6 +2439,7 @@
             "externalId": "msg-beta",
             "idempotencyKey": "gmail:msg-beta",
             "tag": "gmail:message_received",
+            "eventType": "message_received",
             "occurredAt": "2026-10-11T10:30:00.000Z"
           },
           {
@@ -2467,6 +2469,7 @@
             "externalId": "msg-acme-2",
             "idempotencyKey": "gmail:msg-acme-2",
             "tag": "gmail:message_received",
+            "eventType": "message_received",
             "occurredAt": "2026-10-13T11:00:00.000Z"
           }
         ],
@@ -2517,6 +2520,7 @@
             "externalId": "msg-acme",
             "idempotencyKey": "gmail:msg-acme",
             "tag": "gmail:message_received",
+            "eventType": "message_received",
             "occurredAt": "2026-10-10T09:00:00.000Z"
           },
           {
@@ -2546,6 +2550,7 @@
             "externalId": "msg-acme-2",
             "idempotencyKey": "gmail:msg-acme-2",
             "tag": "gmail:message_received",
+            "eventType": "message_received",
             "occurredAt": "2026-10-13T11:00:00.000Z"
           }
         ],
@@ -2602,6 +2607,7 @@
             "externalId": "msg-acme",
             "idempotencyKey": "gmail:msg-acme",
             "tag": "gmail:message_received",
+            "eventType": "message_received",
             "occurredAt": "2026-10-10T09:00:00.000Z"
           },
           {
@@ -2631,6 +2637,7 @@
             "externalId": "msg-beta",
             "idempotencyKey": "gmail:msg-beta",
             "tag": "gmail:message_received",
+            "eventType": "message_received",
             "occurredAt": "2026-10-11T10:30:00.000Z"
           },
           {
@@ -2659,6 +2666,7 @@
             "externalId": "msg-spam",
             "idempotencyKey": "gmail:msg-spam",
             "tag": "gmail:message_received",
+            "eventType": "message_received",
             "occurredAt": "2026-10-12T08:00:00.000Z"
           },
           {
@@ -2688,6 +2696,7 @@
             "externalId": "msg-acme-2",
             "idempotencyKey": "gmail:msg-acme-2",
             "tag": "gmail:message_received",
+            "eventType": "message_received",
             "occurredAt": "2026-10-13T11:00:00.000Z"
           }
         ],
@@ -2738,6 +2747,7 @@
             "externalId": "msg-acme",
             "idempotencyKey": "gmail:msg-acme",
             "tag": "gmail:message_received",
+            "eventType": "message_received",
             "occurredAt": "2026-10-10T09:00:00.000Z"
           },
           {
@@ -2767,6 +2777,7 @@
             "externalId": "msg-acme-2",
             "idempotencyKey": "gmail:msg-acme-2",
             "tag": "gmail:message_received",
+            "eventType": "message_received",
             "occurredAt": "2026-10-13T11:00:00.000Z"
           }
         ],
@@ -2814,6 +2825,7 @@
             "externalId": "msg-beta",
             "idempotencyKey": "gmail:msg-beta",
             "tag": "gmail:message_received",
+            "eventType": "message_received",
             "occurredAt": "2026-10-11T10:30:00.000Z"
           },
           {
@@ -2844,6 +2856,7 @@
             "externalId": "msg-acme-2",
             "idempotencyKey": "gmail:msg-acme-2",
             "tag": "gmail:message_received",
+            "eventType": "message_received",
             "occurredAt": "2026-10-13T11:00:00.000Z"
           }
         ],

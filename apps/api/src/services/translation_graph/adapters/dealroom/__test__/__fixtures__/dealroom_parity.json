@@ -7431,6 +7431,7 @@
             },
             "externalId": "4",
             "tag": "dealroom:funding_round",
+            "eventType": "funding_round",
             "occurredAt": "2026-07-04T11:00:00.000Z"
           },
           {
@@ -7533,6 +7534,7 @@
             },
             "externalId": "12",
             "tag": "dealroom:funding_round",
+            "eventType": "funding_round",
             "occurredAt": "2026-08-30T12:00:00.000Z"
           }
         ],
@@ -7658,6 +7660,7 @@
             },
             "externalId": "4",
             "tag": "dealroom:funding_round",
+            "eventType": "funding_round",
             "occurredAt": "2026-07-04T11:00:00.000Z"
           }
         ],

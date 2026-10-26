@@ -1253,6 +1253,7 @@
             },
             "externalId": "note-parity-1",
             "tag": "granola:note",
+            "eventType": "note",
             "occurredAt": "2026-06-19T10:00:00.000Z"
           },
           {
@@ -1267,6 +1268,7 @@
             },
             "externalId": "note-parity-2",
             "tag": "granola:note",
+            "eventType": "note",
             "occurredAt": "2026-07-02T15:30:00.000Z"
           },
           {
@@ -1292,6 +1294,7 @@
             },
             "externalId": "note-parity-4",
             "tag": "granola:note",
+            "eventType": "note",
             "occurredAt": "2026-08-01T11:00:00.000Z"
           }
         ],
@@ -1330,6 +1333,7 @@
             },
             "externalId": "note-parity-1",
             "tag": "granola:note",
+            "eventType": "note",
             "occurredAt": "2026-06-19T10:00:00.000Z"
           },
           {
@@ -1355,6 +1359,7 @@
             },
             "externalId": "note-parity-4",
             "tag": "granola:note",
+            "eventType": "note",
             "occurredAt": "2026-08-01T11:00:00.000Z"
           }
         ],
@@ -1390,6 +1395,7 @@
             },
             "externalId": "note-parity-4",
             "tag": "granola:note",
+            "eventType": "note",
             "occurredAt": "2026-08-01T11:00:00.000Z"
           }
         ],
