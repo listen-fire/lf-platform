@@ -5,4 +5,7 @@ import { z } from 'zod';
 
 import type { TeamId } from '../generated/kysely/core/Team';
 
-export const teamIdSchema = z.custom<TeamId>((value) => z.uuid().safeParse(value).success);
+// Any 8-4-4-4-12 hex id, as Postgres's `uuid` keeps it: a team id need not
+// carry an RFC version and variant (the dev loop's 11111111-2222-3333-4444-…
+// does not), and `z.uuid()` would refuse one the database holds.
+export const teamIdSchema = z.custom<TeamId>((value) => z.guid().safeParse(value).success);
