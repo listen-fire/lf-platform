@@ -215,7 +215,7 @@ function seek(t) {
       `<span style="opacity:${at(0)}">Domains</span><span style="opacity:${at(0)}">${esc(w[0].values.Domains)}</span>` +
       (w[0].values.Description ? `<span style="opacity:${at(0)}">Description</span><span style="opacity:${at(0)}">${esc(w[0].values.Description)}</span>` : '') +
       `<span style="opacity:${at(1)}">Team</span><span style="opacity:${at(1)}">${esc(w[1].values.Name)} · ${esc(w[1].values.Email)}</span>` +
-      `<span style="opacity:${at(2)}">VC Deal Flow</span><span style="opacity:${at(2)}"><span class="pill" style="background:rgba(74,222,128,.15);color:var(--green)">${esc(w[2].values.Stage)}</span></span>`;
+      `<span style="opacity:${at(2)}">VC Deal Flow</span><span style="opacity:${at(2)}"><span class="pill" style="background:color-mix(in srgb, var(--green) 15%, transparent);color:var(--green)">${esc(w[2].values.Stage)}</span></span>`;
     show($('r2'), at(3), 0, 40);
     $('r2kv').innerHTML = `<span>Title</span><span>${esc(w[3].values.Title)}</span><span>Content</span><span>the full email body</span>`;
     show($('r3'), at(4), 0, 40);

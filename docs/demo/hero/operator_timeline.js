@@ -153,7 +153,7 @@ function seek(t) {
       `<span>Domains</span><span>${esc(cv.Domains)}</span>` +
       (cv.Description ? `<span>Description</span><span>${esc(cv.Description)}</span>` : '') +
       `<span>Team</span><span>${esc(PERSON.values.Name)} · ${esc(PERSON.values.Email)}</span>` +
-      `<span>${esc(PIPELINE)}</span><span><span class="pill" style="background:rgba(74,222,128,.15);color:var(--green)">${esc(STAGE.values.Stage)}</span></span>`;
+      `<span>${esc(PIPELINE)}</span><span><span class="pill" style="background:color-mix(in srgb, var(--green) 15%, transparent);color:var(--green)">${esc(STAGE.values.Stage)}</span></span>`;
     show($('r3'), fade(t, R3, R3 + 0.5), 0, 40);
     $('r3lbl').textContent = `${tool(MESSAGE)} · #${CHANNEL}`;
     $('r3tx').textContent = MESSAGE.values.Message;

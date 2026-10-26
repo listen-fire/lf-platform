@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Listen-Fire operator demo</title>
+<title>listen-fire operator demo</title>
 <link rel="stylesheet" href="fonts/fonts.css">
 <link rel="stylesheet" href="demo.css">
 <style>
@@ -21,7 +21,7 @@
   #catch .line { font-size: 27px; line-height: 1.4; }
   #catch .opts { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 14px 0 0; font-size: 22px; color: var(--dim); }
   #catch .opt { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 5px 16px; color: var(--text); font-size: 22px; }
-  #catch .opt.pick { border-color: rgba(74,222,128,.6); background: rgba(74,222,128,.15); color: var(--green); font-weight: 700; }
+  #catch .opt.pick { border-color: color-mix(in srgb, var(--green) 60%, transparent); background: color-mix(in srgb, var(--green) 15%, transparent); color: var(--green); font-weight: 700; }
   #catch .use { font-size: 27px; margin-top: 14px; }
   #catch .use b { color: var(--green); }
 
@@ -80,7 +80,7 @@
 <!-- it happens -->
 <div id="runstage">
   <div class="abs card" id="email">
-    <div class="lbl">Gmail · inbox <span class="pill" id="elabel" style="background:rgba(255,122,69,.18);color:var(--accent2)"></span></div>
+    <div class="lbl">Gmail · inbox <span class="pill" id="elabel" style="background:color-mix(in srgb, var(--accent) 18%, transparent);color:var(--accent2)"></span></div>
     <div class="from" id="efrom"></div><div class="addr" id="eaddr"></div>
     <div class="subj" id="esubj"></div><div class="body" id="ebody"></div>
   </div>
@@ -91,7 +91,7 @@
   <div class="abs" id="results">
     <div class="card res" id="r1"><div class="lbl" id="r1lbl"></div><div class="kv" id="r1kv"></div></div>
     <div class="card res" id="r3"><div class="lbl" id="r3lbl"></div>
-      <div class="sl"><div class="av"></div><div><div class="nm">Listen-Fire<small>APP</small></div><div class="tx" id="r3tx"></div></div></div></div>
+      <div class="sl"><div class="av"></div><div><div class="nm">listen-fire<small>APP</small></div><div class="tx" id="r3tx"></div></div></div></div>
   </div>
   <div class="center" id="runstat"></div>
 </div>
@@ -108,7 +108,7 @@
 <div id="endmark" class="center"><div class="h1">listen<span>-</span>fire</div>
   <div class="h2" style="margin-top:18px; font-size:40px">The automation language for agents.</div></div>
 
-<div class="abs" id="footer">Real run · Listen-Fire dev loop with stand-in Gmail, Attio &amp; Slack</div>
+<div class="abs" id="footer">Real run · listen-fire dev loop with stand-in Gmail, Attio &amp; Slack</div>
 <div class="abs" id="caption"></div>
 
 <script src="data.js"></script>

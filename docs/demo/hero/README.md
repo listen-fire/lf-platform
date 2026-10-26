@@ -52,6 +52,8 @@ the stack already up it only seeds.
 - `programs/founder_email.txt`: the founder's email body.
 - `demo.html` and `timeline.js`: the video. Every element is a pure function
   of `t`, so frames capture deterministically.
+- `soundtrack.m4a`: the music under both cuts. `render.cjs` refuses to render
+  without it.
 - `scripts/`: boot, capture (`mcp.sh` calls one connector tool the way an
   agent does), data build, fonts, render.
 

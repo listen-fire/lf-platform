@@ -1,6 +1,6 @@
 // Deterministic frame renderer: loads a page (demo.html by default), calls
 // window.seek(t) for each frame, screenshots it and pipes the PNGs into ffmpeg
-// (H.264, yuv420p).
+// (H.264, yuv420p), with soundtrack.m4a laid under it.
 //   node scripts/render.cjs out.mp4 [fps]       → the whole video
 //   node scripts/render.cjs --stills 24 34 46   → stills/t<sec>.png
 //   --page operator.html (anywhere in the args) → listen-fire-operator.mp4,
@@ -16,6 +16,9 @@ const PAGE = pageAt >= 0 ? args.splice(pageAt, 2)[1] : 'demo.html';
 const STEM = path.basename(PAGE, '.html');
 const STILLS = STEM === 'demo' ? 'stills' : `stills-${STEM}`;
 const DEFAULT_OUT = STEM === 'demo' ? 'listen-fire-hero.mp4' : `listen-fire-${STEM}.mp4`;
+// Both cuts share one soundtrack. It is required: a render without it once
+// shipped silent videos.
+const SOUNDTRACK = path.join(HERE, 'soundtrack.m4a');
 const REPO = path.join(HERE, '..', '..', '..');
 const pnpmDir = path.join(REPO, 'node_modules', '.pnpm');
 const pw = fs.readdirSync(pnpmDir).find((d) => /^playwright@/.test(d));
@@ -52,10 +55,15 @@ function headlessShell() {
     return;
   }
 
+  if (!fs.existsSync(SOUNDTRACK)) {
+    console.error(`no soundtrack at ${SOUNDTRACK}`);
+    process.exit(1);
+  }
   const out = args[0] || path.join(HERE, DEFAULT_OUT);
   const fps = Number(args[1] || 30);
   const duration = await page.evaluate(() => window.DURATION);
   const ff = spawn('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(fps), '-i', '-',
+    '-i', SOUNDTRACK, '-map', '0:v', '-map', '1:a', '-c:a', 'copy', '-shortest',
     '-c:v', 'libx264', '-preset', 'slow', '-crf', '18', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', out],
     { stdio: ['pipe', 'inherit', 'inherit'] });
   const frames = Math.round(duration * fps);
