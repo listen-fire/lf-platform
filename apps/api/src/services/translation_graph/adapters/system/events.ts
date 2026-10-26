@@ -6,6 +6,11 @@
 // `Run Failed` is not stored here: the run table already records every failure
 // from every writer, so the poll reads that. The other kinds happen once, in
 // one place, and leave nothing else behind to read.
+//
+// The run table holds lf's runs too (`host = 'lf'`, written through the store
+// slot), so a failed lf run is reported like any other: named by the movement
+// file it ran, linked to that movement's page here when the team keeps one by
+// that name.
 
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type { SystemEventId } from '../../../../generated/kysely/automations/SystemEvent';
@@ -21,6 +26,8 @@ import type {
   SystemEventPayload,
   SystemRecords,
 } from '@listen-fire/system';
+
+import { z } from 'zod';
 
 import { getAutomationsQb } from '../../../../lib/kysely';
 import { getEnvVar } from '../../../../lib/utils/environment';
@@ -111,41 +118,25 @@ function firstErrorMessage(errors: unknown): string | undefined {
  *  row, so anything else (a legacy or simulated run) has no automation. */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** The team's failed runs strictly after `after`, no later than `until`,
- *  oldest first, each with the automation it belongs to. */
-async function readFailedRuns({
-  teamId,
-  after,
-  until,
-  limit,
-}: {
-  teamId: TeamId;
-  after: RunFailedMark;
-  until: Date;
-  limit: number;
-}): Promise<FailedRun[]> {
-  const afterAt = new Date(after.failedAt);
-  const runs = await getAutomationsQb(['trigger_run'])
-    .selectFrom('trigger_run')
-    .where('team_id', '=', teamId)
-    .where('status', '=', 'failed')
-    // A rehearsal failing is the author trying something, not an incident.
-    .where('dry_run', '=', false)
-    .where('failed_at', 'is not', null)
-    .where('failed_at', '<=', until)
-    .where((eb) =>
-      eb.or([
-        eb('failed_at', '>', afterAt),
-        eb.and([eb('failed_at', '=', afterAt), eb('id', '>', after.runId as TriggerRunId)]),
-      ]),
-    )
-    .select(['id', 'trigger_id', 'failed_at', 'failure_reason', 'errors'])
-    .orderBy('failed_at', 'asc')
-    .orderBy('id', 'asc')
-    .limit(limit)
-    .execute();
-  if (runs.length === 0) return [];
+/** What an lf run row's payload says it ran (lf_store/runs.ts writes it). */
+const lfRunPayload = z.object({ file: z.string(), movement: z.string() });
 
+interface FailedRunRow {
+  id: string;
+  host: string;
+  trigger_id: string;
+  trigger_payload: unknown;
+  failed_at: Date;
+  failure_reason: string | null;
+  errors: unknown;
+}
+
+function reasonOf(run: FailedRunRow): string {
+  return run.failure_reason ?? firstErrorMessage(run.errors) ?? 'The run failed without a recorded reason.';
+}
+
+/** The platform's own runs, each with the automation its trigger belongs to. */
+async function platformFailedRuns(teamId: TeamId, runs: readonly FailedRunRow[]): Promise<Map<string, FailedRun>> {
   const triggerIds = [...new Set(runs.map((r) => r.trigger_id).filter((id) => UUID.test(id)))];
   const triggers =
     triggerIds.length === 0
@@ -173,21 +164,112 @@ async function readFailedRuns({
           .execute();
   const nameByMovement = new Map(movements.map((m) => [m.id as string, m.name]));
 
-  return runs.flatMap((run) => {
+  return new Map<string, FailedRun>(
+    runs.map((run) => {
+      const automationId = movementByTrigger.get(run.trigger_id);
+      const name = automationId === undefined ? undefined : nameByMovement.get(automationId);
+      return [
+        run.id,
+        {
+          runId: run.id,
+          automation: automationId !== undefined && name !== undefined ? { id: automationId, name } : null,
+          reason: reasonOf(run),
+          failedAt: run.failed_at,
+        },
+      ];
+    }),
+  );
+}
+
+/** lf's runs. The automation is the listen's pipeline (`listen:<file>:<movement>`,
+ *  the run's trigger id), named by its file; lf's poll names a listener by the
+ *  movement it fires, which the run carries. Its runs are not on a movement's
+ *  activity, so the link is the movement's page when the team keeps a movement
+ *  named by the file (as lf's movements slot serves them), else the
+ *  automations list. */
+async function lfFailedRuns(teamId: TeamId, runs: readonly FailedRunRow[]): Promise<Map<string, FailedRun>> {
+  const ran = runs.map((run) => ({ run, payload: lfRunPayload.safeParse(run.trigger_payload) }));
+  const files = [...new Set(ran.flatMap(({ payload }) => (payload.success ? [payload.data.file] : [])))];
+  const movements =
+    files.length === 0
+      ? []
+      : await getAutomationsQb(['movement'])
+          .selectFrom('movement')
+          .where('team_id', '=', teamId)
+          .where('name', 'in', files)
+          .select(['id', 'name'])
+          .execute();
+  const movementByName = new Map(movements.map((m) => [m.name, m.id as string]));
+
+  return new Map<string, FailedRun>(
+    ran.map(({ run, payload }) => {
+      if (!payload.success) {
+        // A row lf did not write as its store writes them: nothing to name.
+        return [run.id, { runId: run.id, automation: null, reason: reasonOf(run), failedAt: run.failed_at }];
+      }
+      const movementId = movementByName.get(payload.data.file);
+      return [
+        run.id,
+        {
+          runId: run.id,
+          automation: { id: run.trigger_id, name: payload.data.file },
+          firedMovement: payload.data.movement,
+          url: movementId === undefined ? automationsUrl() : automationUrl(movementId),
+          reason: reasonOf(run),
+          failedAt: run.failed_at,
+        },
+      ];
+    }),
+  );
+}
+
+/** The team's failed runs, the platform's and lf's, strictly after `after`,
+ *  no later than `until`, oldest first, each with the automation it belongs
+ *  to. */
+async function readFailedRuns({
+  teamId,
+  after,
+  until,
+  limit,
+}: {
+  teamId: TeamId;
+  after: RunFailedMark;
+  until: Date;
+  limit: number;
+}): Promise<FailedRun[]> {
+  const afterAt = new Date(after.failedAt);
+  const rows = await getAutomationsQb(['trigger_run'])
+    .selectFrom('trigger_run')
+    .where('team_id', '=', teamId)
+    .where('status', '=', 'failed')
+    // A rehearsal failing is the author trying something, not an incident.
+    .where('dry_run', '=', false)
+    .where('failed_at', 'is not', null)
+    .where('failed_at', '<=', until)
+    .where((eb) =>
+      eb.or([
+        eb('failed_at', '>', afterAt),
+        eb.and([eb('failed_at', '=', afterAt), eb('id', '>', after.runId as TriggerRunId)]),
+      ]),
+    )
+    .select(['id', 'host', 'trigger_id', 'trigger_payload', 'failed_at', 'failure_reason', 'errors'])
+    .orderBy('failed_at', 'asc')
+    .orderBy('id', 'asc')
+    .limit(limit)
+    .execute();
+  const runs = rows.flatMap((row): FailedRunRow[] =>
     // Unreachable (the query requires it), but the column type cannot say so.
-    if (run.failed_at === null) return [];
-    const automationId = movementByTrigger.get(run.trigger_id);
-    const name = automationId === undefined ? undefined : nameByMovement.get(automationId);
-    return [
-      {
-        runId: run.id as string,
-        automation:
-          automationId !== undefined && name !== undefined ? { id: automationId, name } : null,
-        reason:
-          run.failure_reason ?? firstErrorMessage(run.errors) ?? 'The run failed without a recorded reason.',
-        failedAt: run.failed_at,
-      },
-    ];
+    row.failed_at === null ? [] : [{ ...row, id: row.id as string, failed_at: row.failed_at }],
+  );
+  if (runs.length === 0) return [];
+
+  const [platform, lf] = await Promise.all([
+    platformFailedRuns(teamId, runs.filter((run) => run.host !== 'lf')),
+    lfFailedRuns(teamId, runs.filter((run) => run.host === 'lf')),
+  ]);
+  return runs.flatMap((run) => {
+    const failed = platform.get(run.id) ?? lf.get(run.id);
+    return failed === undefined ? [] : [failed];
   });
 }
 

@@ -314,3 +314,38 @@ describe('deploy check kinds emission', () => {
     expect((result.checkpoint as SystemCheckpoint).runFailed).toEqual(MARK);
   });
 });
+
+describe('Run Failed emission for a run lf recorded', () => {
+  const lfRun = (over: Partial<FailedRun> = {}) =>
+    failedRun({
+      runId: 'run-lf',
+      automation: { id: 'listen:Nightly Sync:sync', name: 'Nightly Sync' },
+      firedMovement: 'sync',
+      url: 'http://localhost:3003/movements/mov-sync',
+      ...over,
+    });
+
+  it('links where the host says the run is opened', async () => {
+    const { poll } = source([lfRun()]);
+    const result = await poll.getEvents({ config: {}, checkpoint: { runFailed: MARK }, movementId: 'Run Failed' });
+    expect(result.events.map((e) => e.payload)).toEqual([
+      expect.objectContaining({ automation: 'Nightly Sync', automationId: 'listen:Nightly Sync:sync', url: 'http://localhost:3003/movements/mov-sync' }),
+    ]);
+  });
+
+  it('skips the listener named, as lf names it, by the movement its listen fires, and still moves past it', async () => {
+    const own = lfRun({ runId: 'run-own', automation: { id: 'listen:Automation Alerts:Run Failed', name: 'Automation Alerts' }, firedMovement: 'Run Failed' });
+    const { poll } = source([lfRun(), own]);
+    const result = await poll.getEvents({ config: {}, checkpoint: { runFailed: MARK }, movementId: 'Run Failed' });
+    expect(result.events.map((e) => e.externalId)).toEqual(['run-lf']);
+    expect((result.checkpoint as SystemCheckpoint).runFailed?.runId).toBe('run-own');
+  });
+
+  it('skips the listener named by its pipeline, and reports everything to a poll that names none', async () => {
+    const { poll } = source([lfRun()]);
+    const byPipeline = await poll.getEvents({ config: {}, checkpoint: { runFailed: MARK }, movementId: 'listen:Nightly Sync:sync' });
+    expect(byPipeline.events).toEqual([]);
+    const unnamed = await poll.getEvents({ config: {}, checkpoint: { runFailed: MARK } });
+    expect(unnamed.events.map((e) => e.externalId)).toEqual(['run-lf']);
+  });
+});

@@ -14,12 +14,13 @@
 import { logger } from 'movement-engine/public/log';
 
 /** What an accepted caller may do on the system surface: tick the drain,
- *  serve lf's store slot (`/slots/store`) over the platform's run tables, or
+ *  serve lf's store slot (`/slots/store`) over the platform's run tables,
  *  serve lf's movements slot (`/slots/movements`) over the team's saved
- *  movements, read-only. */
-type SystemAction = 'drain' | 'store_slot' | 'movements_slot';
+ *  movements, read-only, or serve lf the `system` adapter
+ *  (`/adapters/system`) over the team's runs and the platform's events. */
+type SystemAction = 'drain' | 'store_slot' | 'movements_slot' | 'system_adapter';
 
-const SYSTEM_ACTIONS: readonly SystemAction[] = ['drain', 'store_slot', 'movements_slot'];
+const SYSTEM_ACTIONS: readonly SystemAction[] = ['drain', 'store_slot', 'movements_slot', 'system_adapter'];
 
 /** Host-specific: the API key this host's own authentication already verified
  *  for the request, when it carried one. The api_key verifier reads it; other

@@ -15,7 +15,9 @@
 // An automation is never told about its own failures: a handler that fails
 // while reporting a failure would otherwise report itself, forever. The host
 // hands the listening automation's id in, and its own runs are skipped (the
-// checkpoint still passes them, so they are never reconsidered).
+// checkpoint still passes them, so they are never reconsidered). The platform
+// names the listener by its movement's id; lf names it by the movement its
+// listen fires, so a run lf recorded carries that movement too.
 
 import type { DiscriminableEvent } from 'movement-engine/public/adapter';
 import type { PollAnswer, PollInput } from 'module-kit';
@@ -71,6 +73,12 @@ export interface SystemCheckpoint {
 export interface FailedRun {
   runId: string;
   automation: { id: string; name: string } | null;
+  /** The movement the run's listen fired, for a run lf recorded: an lf poll
+   *  names the listening automation by that movement alone. */
+  firedMovement?: string;
+  /** Where a person opens the run, when that is not the automation's failed
+   *  runs (an lf run is not listed there). */
+  url?: string;
   reason: string;
   failedAt: Date;
 }
@@ -136,7 +144,7 @@ export function runFailedEvent(run: OwnedFailedRun, webBaseUrl: string): Discrim
     // one record shape every kind shares.
     version: '',
     reason: run.reason,
-    url: failedRunsUrl(webBaseUrl, run.automation.id),
+    url: run.url ?? failedRunsUrl(webBaseUrl, run.automation.id),
     at,
   };
   return {
@@ -188,6 +196,13 @@ export async function pollSystemEvents(records: SystemRecords, tenant: string, i
   };
 }
 
+/** Whether a failed run is the listening automation's own: by the
+ *  automation's id, or, for a run lf recorded, by the movement it fired. */
+function isListenersOwn(run: OwnedFailedRun, movementId: string | undefined): boolean {
+  if (movementId === undefined) return false;
+  return run.automation.id === movementId || run.firedMovement === movementId;
+}
+
 async function pollRunFailed(
   records: SystemRecords,
   input: { tenant: string; mark: RunFailedMark | undefined; until: Date; movementId: string | undefined },
@@ -203,7 +218,7 @@ async function pollRunFailed(
   return {
     events: runs
       .filter((run): run is OwnedFailedRun => run.automation !== null)
-      .filter((run) => run.automation.id !== input.movementId)
+      .filter((run) => !isListenersOwn(run, input.movementId))
       .map((run) => runFailedEvent(run, webBaseUrl)),
     mark: last === undefined ? input.mark : { failedAt: last.failedAt.toISOString(), runId: last.runId },
   };

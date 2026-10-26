@@ -1,8 +1,9 @@
 // `@lf/system`: the platform itself as a source, as a module. Platform-
 // supplied: only the platform keeps the records it reads (its runs, the
 // events it stores), so the platform defines it with them
-// (`systemModuleWith`) and hosts it in process. There is no lf story and no
-// process transport: nothing outside the platform has these records.
+// (`systemModuleWith`), hosts it in process, and serves it to a cloud lf at
+// a route of its own over the adapter protocol. It is never published: no
+// other host has these records.
 
 import { defineModule, type AdapterModuleDefinition } from 'module-kit';
 

@@ -15,6 +15,7 @@ import { rustRunStats } from 'movement-engine/public/movement-engine';
 import { LF_STORE_MANIFEST, answerFor as storeAnswerFor } from '../../../services/lf_store/answer';
 import { LF_MOVEMENTS_MANIFEST, answerFor as movementsAnswerFor } from '../../../services/lf_movements/answer';
 import { slotHandler } from './slots';
+import { systemAdapterHandler } from './system_adapter';
 import {
   requireSystemAction,
   requireSystemCaller,
@@ -135,6 +136,11 @@ const storeSlotHandler = slotHandler(LF_STORE_MANIFEST, () => storeAnswerFor({ t
  *  (services/lf_movements), in the tenant of the key's owner. */
 const movementsSlotHandler = slotHandler(LF_MOVEMENTS_MANIFEST, () => movementsAnswerFor({ tenant: actingTeamId() }));
 
+/** The `system` adapter served to lf (./system_adapter.ts): the team's
+ *  failed runs, lf's among them, and the platform's stored events, in the
+ *  tenant of the key's owner. */
+const systemAdapterRouteHandler = systemAdapterHandler(() => actingTeamId());
+
 const systemRouter: ReturnType<typeof Router> = Router();
 
 // Who may call these routes is the system caller verifiers' question
@@ -153,6 +159,7 @@ if (mounts('automations')) {
   systemRouter.post('/automations/drain', requireSystemAction('drain'), route(drainAutomationsHandler));
   systemRouter.post('/slots/store', tenant, requireSystemAction('store_slot'), route(storeSlotHandler));
   systemRouter.post('/slots/movements', tenant, requireSystemAction('movements_slot'), route(movementsSlotHandler));
+  systemRouter.post('/adapters/system', tenant, requireSystemAction('system_adapter'), route(systemAdapterRouteHandler));
 }
 
 export { systemRouter };
