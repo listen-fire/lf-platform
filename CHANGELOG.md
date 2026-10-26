@@ -17,8 +17,14 @@ versions are the git tags described in [`deploy/UPGRADING.md`](deploy/UPGRADING.
 
 <!-- add merged PRs here -->
 
+## [0.12.8] - 2026-10-26
+
+The platform release that matches the language's 0.12.8.
+
+- The language core is at 0.12.8 (the catalog block). Modules pinned on their own latest: `module-kit`, `module-runtime` and `affinity` 0.12.7 (moved in the language's 0.12.7); `gmail`, `evertrace`, `dealroom` and `granola` 0.12.7 (they now label their poll events). Every other `@listen-fire/*` package stays at 0.12.6, its latest. The workspace's own packages carry 0.12.8. Operators: nothing to set.
 - A cloud `lf` can listen to the platform's own events. The platform serves the `system` adapter (Run Failed, Validation Issue, Deprecated Version, Release Applied) to `lf` at `POST /api/v1/system/adapters/system`, over adapter protocol 2, in the tenant of the system scope key's owner. Before, a movement importing `system` failed `lf check` with `MOV_IMPORT_UNKNOWN system`. A failed `lf` run is now reported as Run Failed, named by its movement file and linked to that movement's page; the listener's own runs are skipped. Operators: add the external and give it the key with `lf connect system` (the self-hosting guide, "A cloud `lf` listening to this installation's own events"); a system scope key now also carries the new `system_adapter` action.
 - Fixed: a team id that is uuid-shaped but carries no RFC version and variant (the dev loop's `11111111-2222-3333-4444-555555555555`) is accepted where the platform reads one from text: the system adapter's records, the adapter push doors' team header, the Slack events door and the in-process modules. Before, the system poll and those doors refused such a team. Operators: nothing to set.
+- The `system` module labels each poll event with its kind's name (`Run Failed`, `Run Paused`, `Validation Issue`, `Deprecated Version`, `Release Applied`) as its `eventType`, as adapter protocol 2.3 asks of a polled source (the language's CHANGELOG, 0.12.8). It is the name a listen's `events:` selects with, so an `lf` that narrows a listen's events by it delivers what the poll chose. The module states no new protocol minor: labelling needs nothing from the host. The platform's own dispatch of these events is unchanged. Operators: nothing to set.
 
 ## [0.12.6] - 2026-10-26
 
@@ -2230,7 +2236,8 @@ Releases before v0.11 are kept one file per minor line, newest first:
 - [v0.2.x](docs/changelog/v0.2.md) (v0.2.0)
 - [v0.1.x](docs/changelog/v0.1.md) (v0.1.0 to v0.1.2)
 
-[Unreleased]: https://github.com/listen-fire/lf-platform/compare/v0.12.6...HEAD
+[Unreleased]: https://github.com/listen-fire/lf-platform/compare/v0.12.8...HEAD
+[0.12.8]: https://github.com/listen-fire/lf-platform/compare/v0.12.6...v0.12.8
 [0.12.6]: https://github.com/listen-fire/lf-platform/compare/v0.12.5...v0.12.6
 [0.12.5]: https://github.com/listen-fire/lf-platform/compare/v0.12.4...v0.12.5
 [0.12.4]: https://github.com/listen-fire/lf-platform/compare/v0.12.2...v0.12.4
