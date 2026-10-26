@@ -116,7 +116,7 @@ async function call(owner: Owner, method: string, params: Record<string, unknown
 }
 
 interface PollResult {
-  events: { payload: Record<string, string>; externalId: string; tag: string }[];
+  events: { payload: Record<string, string>; externalId: string; tag: string; eventType?: string }[];
   checkpoint: { runFailed?: { failedAt: string; runId: string } };
 }
 
@@ -186,6 +186,8 @@ describe('the system adapter route', () => {
     expect(polled.events.map((e) => e.externalId)).toEqual([sync, loose]);
     expect(polled.events[0]).toMatchObject({
       tag: 'system:run_failed',
+      // lf narrows a listen's events by it, so it carries the listen's name.
+      eventType: 'Run Failed',
       payload: {
         automation: 'Nightly Sync',
         automationId: 'listen:Nightly Sync:sync',
