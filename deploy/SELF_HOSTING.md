@@ -753,6 +753,32 @@ LF_BIN=<path to lf> LF_MOVEMENTS_SLOT_URL=<API_BASE_URL>/api/v1/system/slots/mov
 
 `LF_BIN` is an `lf` of 0.12.2 or later, which asks for `movements.watch`. Without it the bridge through `lf`'s client and the import check are skipped; without the URL and key, the bridge against the running route is. One case on each bridge holds a quiet watch for the full 25 seconds. On the dev loop, `corepack pnpm dev:lf-movements-verify` writes the movements and a scratch `lf` project, and `--contract` runs the suite against the loop's route.
 
+### A cloud `lf` listening to this installation's own events
+
+A movement that imports `system` (`sys = connect system`, then `listen to sys { events: ["Run Failed"] }`) listens to the platform's own events: a run that failed, and the deploy check's Validation Issue, Deprecated Version and Release Applied. Only this installation keeps those records, so it serves the `system` adapter to a cloud `lf` over adapter protocol 2. It is the same module the platform runs in process, over the same records.
+
+**The route.** `POST /api/v1/system/adapters/system`, on the system router, mounted whenever automations is. It takes the `system_adapter` action, so the caller is an API key holding the `system` scope (the key the store and movements slots use serves). The tenant is the key owner's team. `lf` sends a team header of its own; the route ignores it. A request with no credential is refused with `403`, an unknown key with `401`. `manifest` is answered before anything else, with no listen, checkpoint or setting needed.
+
+**Naming the module in the `lf` project.** Add `externals/system/lf-external.yaml`:
+
+```yaml
+name: system
+kind: adapter
+protocol: 2
+url: <API_BASE_URL>/api/v1/system/adapters/system
+auth: { kind: bearer, field: key }
+```
+
+Then give it the key once with `lf connect system`. It asks for the secret (field `key`: the system scope key) and keeps it in the secrets module as the external's install, named `system`. On this installation that module is the secrets door, so the key is stored encrypted here, as a credential of type `REMOTE` named `system`. An environment variable (`LF_SECRET__SYSTEM__KEY`) does not serve: `lf` reads it as a user credential, and the checker then asks for `connect system using …`.
+
+**What `lf` hears.**
+
+- **Run Failed** comes from the run table, which holds `lf`'s runs too (written through the store slot). An `lf` run's `Automation` is its movement file (`Nightly Sync` for `Nightly Sync.mvt`), and its `Automation Id` is the listen it ran (`listen:<file>:<movement>`).
+- **Its link.** `Url` is the page of the movement of that name here (every movement the movements slot serves is one), else the automations list. A movement's activity view does not list `lf` runs, so the link does not filter to failed runs as it does for a platform run.
+- **Never its own failures.** `lf` names the listening automation in a poll by the movement its listen fires (`Run Failed` for ``listen … fire `Run Failed` ``), not by its file. The poll skips every failed `lf` run of a movement of that name, so a listener also never hears of a movement with the same name in another file.
+- **Validation Issue, Deprecated Version and Release Applied** come from the events the deploy check stores, as on the platform. Run Paused is the platform's cost limit, which `lf` runs never reach.
+- **When.** The first poll of each listen sets its mark and reports nothing, so going live never replays earlier events. A failure is reported once the run is more than ten seconds old, at the listen's poll interval (60 seconds unless the listen says `every`). Rehearsals are left out.
+
 ## Core
 
 Accounts, teams, invitations, login, and the OAuth server that lets an agent connect to this installation on a person's behalf. You run it as soon as more than one human needs an account of their own; that is the whole decision.

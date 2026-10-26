@@ -17,6 +17,9 @@ versions are the git tags described in [`deploy/UPGRADING.md`](deploy/UPGRADING.
 
 <!-- add merged PRs here -->
 
+- A cloud `lf` can listen to the platform's own events. The platform serves the `system` adapter (Run Failed, Validation Issue, Deprecated Version, Release Applied) to `lf` at `POST /api/v1/system/adapters/system`, over adapter protocol 2, in the tenant of the system scope key's owner. Before, a movement importing `system` failed `lf check` with `MOV_IMPORT_UNKNOWN system`. A failed `lf` run is now reported as Run Failed, named by its movement file and linked to that movement's page; the listener's own runs are skipped. Operators: add the external and give it the key with `lf connect system` (the self-hosting guide, "A cloud `lf` listening to this installation's own events"); a system scope key now also carries the new `system_adapter` action.
+- Fixed: a team id that is uuid-shaped but carries no RFC version and variant (the dev loop's `11111111-2222-3333-4444-555555555555`) is accepted where the platform reads one from text: the system adapter's records, the adapter push doors' team header, the Slack events door and the in-process modules. Before, the system poll and those doors refused such a team. Operators: nothing to set.
+
 ## [0.12.6] - 2026-10-26
 
 The platform release that matches the language's 0.12.6.
