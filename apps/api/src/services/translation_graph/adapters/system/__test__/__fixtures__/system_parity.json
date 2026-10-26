@@ -1088,6 +1088,7 @@
             "externalId": "run-a",
             "idempotencyKey": "system:run_failed:run-a",
             "tag": "system:run_failed",
+            "eventType": "Run Failed",
             "occurredAt": "2026-09-29T11:51:00.000Z"
           }
         ],
@@ -1116,6 +1117,7 @@
             "externalId": "run-a",
             "idempotencyKey": "system:run_failed:run-a",
             "tag": "system:run_failed",
+            "eventType": "Run Failed",
             "occurredAt": "2026-09-29T11:51:00.000Z"
           },
           {
@@ -1131,6 +1133,7 @@
             "externalId": "run-b",
             "idempotencyKey": "system:run_failed:run-b",
             "tag": "system:run_failed",
+            "eventType": "Run Failed",
             "occurredAt": "2026-09-29T11:52:00.000Z"
           }
         ],
@@ -1159,6 +1162,7 @@
             "externalId": "e-1",
             "idempotencyKey": "system:validation_issue:e-1",
             "tag": "system:validation_issue",
+            "eventType": "Validation Issue",
             "occurredAt": "2026-09-29T11:54:00.000Z"
           },
           {
@@ -1174,6 +1178,7 @@
             "externalId": "e-3",
             "idempotencyKey": "system:run_paused:e-3",
             "tag": "system:run_paused",
+            "eventType": "Run Paused",
             "occurredAt": "2026-09-29T11:55:00.000Z"
           },
           {
@@ -1189,6 +1194,7 @@
             "externalId": "e-4",
             "idempotencyKey": "system:release_applied:e-4",
             "tag": "system:release_applied",
+            "eventType": "Release Applied",
             "occurredAt": "2026-09-29T11:56:00.000Z"
           }
         ],
@@ -1221,6 +1227,7 @@
             "externalId": "run-a",
             "idempotencyKey": "system:run_failed:run-a",
             "tag": "system:run_failed",
+            "eventType": "Run Failed",
             "occurredAt": "2026-09-29T11:51:00.000Z"
           },
           {
@@ -1236,6 +1243,7 @@
             "externalId": "e-1",
             "idempotencyKey": "system:validation_issue:e-1",
             "tag": "system:validation_issue",
+            "eventType": "Validation Issue",
             "occurredAt": "2026-09-29T11:54:00.000Z"
           },
           {
@@ -1251,6 +1259,7 @@
             "externalId": "e-3",
             "idempotencyKey": "system:run_paused:e-3",
             "tag": "system:run_paused",
+            "eventType": "Run Paused",
             "occurredAt": "2026-09-29T11:55:00.000Z"
           },
           {
@@ -1266,6 +1275,7 @@
             "externalId": "e-4",
             "idempotencyKey": "system:release_applied:e-4",
             "tag": "system:release_applied",
+            "eventType": "Release Applied",
             "occurredAt": "2026-09-29T11:56:00.000Z"
           }
         ],
@@ -1314,6 +1324,7 @@
             "externalId": "e-1",
             "idempotencyKey": "system:validation_issue:e-1",
             "tag": "system:validation_issue",
+            "eventType": "Validation Issue",
             "occurredAt": "2026-09-29T11:54:00.000Z"
           }
         ],

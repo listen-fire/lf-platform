@@ -186,7 +186,7 @@ describe('the system adapter route', () => {
     expect(polled.events.map((e) => e.externalId)).toEqual([sync, loose]);
     expect(polled.events[0]).toMatchObject({
       tag: 'system:run_failed',
-      // lf narrows a listen's events by it, so it carries the listen's name.
+      // The module labels it with the name a listen's `events:` selects with.
       eventType: 'Run Failed',
       payload: {
         automation: 'Nightly Sync',

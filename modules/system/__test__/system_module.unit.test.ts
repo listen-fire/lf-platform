@@ -150,6 +150,8 @@ describe('Run Failed emission', () => {
     const [event] = result.events;
     expect(event).toMatchObject({
       tag: RUN_FAILED.tag,
+      // The name a listen's `events:` selects with (protocol 2.3).
+      eventType: 'Run Failed',
       externalId: 'run-1',
       idempotencyKey: 'system:run_failed:run-1',
       occurredAt: '2026-09-29T11:55:00.000Z',
@@ -271,6 +273,7 @@ describe('deploy check kinds emission', () => {
         externalId: 'evt-1',
         idempotencyKey: `${VALIDATION_ISSUE.tag}:evt-1`,
         tag: VALIDATION_ISSUE.tag,
+        eventType: 'Validation Issue',
         occurredAt: '2026-09-29T11:55:00.000Z',
       },
     ]);

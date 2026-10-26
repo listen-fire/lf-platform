@@ -11,21 +11,14 @@
 // pieces: the envelope checked as the kit checks it, `poll` from the loaded
 // module, every other method (`manifest` first among them) as the kit answers
 // an adapter.
-//
-// One field is added on the way out: each polled event's `eventType`, the
-// kind's natural name. lf (0.12.6) narrows every event a listen receives to
-// the listen's `events` by `eventType`, polled ones included, and drops an
-// event without one; the platform's own poll dispatch does not narrow, so the
-// module leaves it unset (the protocol's rule for a poll). The name is the
-// one the listen selected with, so the narrowing passes what the poll chose.
 
 import type { Request, RequestHandler } from 'express';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 
 import { METHODS, PROTOCOL_VERSION, RpcRequest, type MethodName } from 'engine-contracts';
-import { adapterInProcess, noCredential, refusingFiles, refusingKv, type InProcessAdapterModule, type PollAnswer } from 'module-kit';
+import { adapterInProcess, noCredential, refusingFiles, refusingKv, type InProcessAdapterModule } from 'module-kit';
 import { answerAdapterRequest, errorAnswer, errorEnvelope, type CheckedRequest, type ProtocolAnswer } from 'module-kit/server';
-import { SYSTEM_EVENT_KINDS, systemModuleWith } from '@listen-fire/system';
+import { systemModuleWith } from '@listen-fire/system';
 
 import { logger } from 'movement-engine/public/log';
 import { platformSystemRecords } from '../../../services/translation_graph/adapters/system/events';
@@ -72,17 +65,6 @@ function loadFor(teamId: TeamId): InProcessAdapterModule {
   });
 }
 
-/** Each event with its kind's natural name as its `eventType`. */
-function withEventTypes(answer: PollAnswer): PollAnswer {
-  return {
-    ...answer,
-    events: answer.events.map((event) => {
-      const kind = SYSTEM_EVENT_KINDS.find((k) => k.tag === event.tag);
-      return kind === undefined ? event : { ...event, eventType: kind.displayName };
-    }),
-  };
-}
-
 async function answer(teamId: TeamId, request: CheckedRequest): Promise<ProtocolAnswer> {
   const loaded = loadFor(teamId);
   if (request.method === 'poll') {
@@ -91,7 +73,7 @@ async function answer(teamId: TeamId, request: CheckedRequest): Promise<Protocol
       return { status: 200, body: errorEnvelope('method_not_implemented', `Module ${SYSTEM_MODULE.name} does not implement "poll".`, false) };
     }
     try {
-      return { status: 200, body: { ok: true, result: withEventTypes(await poll(METHODS.poll.params.parse(request.params))) } };
+      return { status: 200, body: { ok: true, result: await poll(METHODS.poll.params.parse(request.params)) } };
     } catch (error) {
       return { status: 200, body: errorAnswer('poll', error) };
     }

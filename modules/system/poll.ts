@@ -18,6 +18,11 @@
 // checkpoint still passes them, so they are never reconsidered). The platform
 // names the listener by its movement's id; lf names it by the movement its
 // listen fires, so a run lf recorded carries that movement too.
+//
+// Each event carries its kind's natural name as its `eventType` (adapter
+// protocol 2.3: a source labels its poll events). It is the name a listen's
+// `events:` selects with, so a host that narrows a listen's events by it
+// passes exactly what the poll chose.
 
 import type { DiscriminableEvent } from 'movement-engine/public/adapter';
 import type { PollAnswer, PollInput } from 'module-kit';
@@ -154,6 +159,7 @@ export function runFailedEvent(run: OwnedFailedRun, webBaseUrl: string): Discrim
     // a crash between dispatch and checkpoint replays the poll.
     idempotencyKey: `${RUN_FAILED.tag}:${run.runId}`,
     tag: RUN_FAILED.tag,
+    eventType: RUN_FAILED.displayName,
     occurredAt: at,
   };
 }
@@ -167,6 +173,7 @@ export function storedSystemEvent(event: StoredSystemEvent): DiscriminableEvent 
     // Per-trigger receipt dedupe, as for a failed run.
     idempotencyKey: `${kind.tag}:${event.id}`,
     tag: kind.tag,
+    eventType: kind.displayName,
     occurredAt: event.occurredAt.toISOString(),
   };
 }
