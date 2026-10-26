@@ -2,7 +2,7 @@
   "name": "@listen-fire/system",
   "private": true,
   "license": "Apache-2.0",
-  "version": "0.12.6",
+  "version": "0.12.8",
   "description": "The platform itself as a source (a run failed or paused, a release was deployed) as a module. Platform-supplied: the platform hosts it in process and hands it its own records of runs and events; it is never published: the platform serves it to a cloud lf at a route of its own, over the same records.",
   "engines": {
     "node": "22.23.4"
@@ -16,12 +16,12 @@
   "type": "commonjs",
   "dependencies": {
     "@listen-fire/engine": "catalog:",
-    "@listen-fire/module-kit": "0.12.6"
+    "@listen-fire/module-kit": "0.12.7"
   },
   "devDependencies": {
     "@types/jest": "29.5.14",
     "@types/node": "20.16.5",
-    "module-kit": "npm:@listen-fire/module-kit@0.12.6",
+    "module-kit": "npm:@listen-fire/module-kit@0.12.7",
     "movement-engine": "catalog:",
     "typescript": "5.5.4"
   }

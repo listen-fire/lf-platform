@@ -1,7 +1,7 @@
 {
   "name": "@listen-fire/transcription-providers",
   "license": "Apache-2.0",
-  "version": "0.12.6",
+  "version": "0.12.8",
   "description": "Audio transcription behind the model map (OpenAI, Gemini). The vendor SDKs are optional peers loaded on first use; the environment and the host answers (usage recording, token counting) are passed in as @listen-fire/model-providers' ModelHost.",
   "engines": {
     "node": "22.23.4"

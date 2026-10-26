@@ -2,7 +2,7 @@
   "name": "@listen-fire/ask",
   "private": true,
   "license": "Apache-2.0",
-  "version": "0.12.6",
+  "version": "0.12.8",
   "description": "Asking a person mid-run (the ask families, their answers, the Response edge a run awaits) as a module. Loaded in process by the platform, whose asks table is its kv.",
   "engines": {
     "node": "22.23.4"
@@ -17,14 +17,14 @@
   "dependencies": {
     "@listen-fire/engine": "catalog:",
     "@listen-fire/engine-contracts": "catalog:",
-    "@listen-fire/module-kit": "0.12.6",
+    "@listen-fire/module-kit": "0.12.7",
     "zod": "4.1.12"
   },
   "devDependencies": {
     "@types/jest": "29.5.14",
     "@types/node": "20.16.5",
     "engine-contracts": "catalog:",
-    "module-kit": "npm:@listen-fire/module-kit@0.12.6",
+    "module-kit": "npm:@listen-fire/module-kit@0.12.7",
     "movement-engine": "catalog:",
     "typescript": "5.5.4"
   },
