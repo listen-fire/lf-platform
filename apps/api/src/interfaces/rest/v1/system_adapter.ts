@@ -38,7 +38,7 @@ function checkedRequest(body: unknown): { ok: true; request: CheckedRequest } | 
   if (!parsed.success) {
     return { ok: false, answer: { status: 400, body: errorEnvelope('bad_request', 'Malformed request: not a protocol 2 envelope', false) } };
   }
-  const { method, params } = parsed.data;
+  const { method, params, cacheScopeId } = parsed.data;
   if (parsed.data.protocolVersion !== PROTOCOL_VERSION) {
     return { ok: false, answer: { status: 200, body: errorEnvelope('protocol_version', `expected protocol version ${PROTOCOL_VERSION}`, false) } };
   }
@@ -48,7 +48,7 @@ function checkedRequest(body: unknown): { ok: true; request: CheckedRequest } | 
   if (!METHODS[method].params.safeParse(params).success) {
     return { ok: false, answer: { status: 200, body: errorEnvelope('bad_request', `${method}: params do not match the method's schema`, false) } };
   }
-  return { ok: true, request: { method, params } };
+  return { ok: true, request: { method, cacheScopeId, params } };
 }
 
 /** The module loaded for one tenant. It declares no credential and keeps no
