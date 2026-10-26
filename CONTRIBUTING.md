@@ -4,7 +4,7 @@ This is the platform repository. The language (`lf`, the engine, the handbook, t
 
 ## Setting up
 
-You need Docker (for Postgres and Redis), Node 22.23.4 (the version pinned in [`.nvmrc`](.nvmrc)), and pnpm 9.5 or later (the root `package.json` pins `pnpm@9.5.0` as its `packageManager` and declares `"pnpm": "^9.5.0"` in `engines`).
+You need Docker (for Postgres and Redis), Node 22.23.4 (the version pinned in [`.nvmrc`](.nvmrc)), and pnpm 9.15.9 (the root `package.json` pins `pnpm@9.15.9` as its `packageManager`, which corepack picks up, and declares `"pnpm": "^9.15.9"` in `engines`).
 
 ```bash
 nvm install && nvm use          # reads .nvmrc
