@@ -77,13 +77,13 @@ const call = (method: string, params: Record<string, unknown> = {}, settings: Re
   post({ protocolVersion: '2', method, cacheScopeId: '<slot>', params, settings });
 
 describe('the store slot route', () => {
-  it('answers its manifest: the store slot and its 65 methods', async () => {
+  it('answers its manifest before any open: the store slot, adapter protocol 2.2 (work.enqueueIfAbsent), and its 65 methods', async () => {
     const res = await call('manifest');
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       ok: true,
-      result: { protocolVersion: 2, name: 'lf-platform-store', kind: 'core', slot: 'store', methods: [...LF_STORE_METHODS] },
+      result: { protocolVersion: 2, protocolMinor: 2, name: 'lf-platform-store', kind: 'core', slot: 'store', methods: [...LF_STORE_METHODS] },
     });
     expect(LF_STORE_METHODS).toHaveLength(65);
   });

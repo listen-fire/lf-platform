@@ -108,6 +108,9 @@ methods, and mark entry points \`readable: false\`.
 - \`protocolVersion\` is the number \`2\`. Installing calls your
   \`manifest\` with the secret and refuses a server that answers anything
   else.
+- \`protocolMinor\` (optional) is the minor of version 2 your manifest uses:
+  1 when \`methods\` lists a \`<slot>.watch\`, 2 for \`work.enqueueIfAbsent\`,
+  else 0. Leave it out and it reads as 0; installing refuses a minor above 2.
 - \`methods\` MUST list exactly the methods you implement — Listen-Fire
   prunes calls to anything absent.
 

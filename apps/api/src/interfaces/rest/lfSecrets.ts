@@ -35,8 +35,11 @@ import { platformSecretsModule, type SecretsMethod } from '../../services/lf_sec
 
 const SECRETS_SCOPE = 'secrets';
 
+// Answered before the key's team is read: lf asks for it before any other
+// method. The secrets slot's methods are all from adapter protocol 2.0.
 const MANIFEST: WireSlotManifestShape = {
   protocolVersion: 2,
+  protocolMinor: 0,
   name: 'lf_platform_secrets',
   kind: 'core',
   slot: 'secrets',

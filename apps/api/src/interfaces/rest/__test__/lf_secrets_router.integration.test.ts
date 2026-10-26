@@ -10,6 +10,7 @@ import express from 'express';
 import { z } from 'zod';
 import { SlotClient, SlotRefused, type SlotAddress } from 'movement-engine/public/module-wire';
 import { SecretsListed, WireSlotManifest } from 'engine-contracts/slots';
+import { protocolMinorOf } from 'engine-contracts/protocol';
 import { logger } from 'movement-engine/public/log';
 
 import type { AddressInfo } from 'node:net';
@@ -135,8 +136,10 @@ describe('team setting must match the key', () => {
 describe('the envelope', () => {
   it('answers manifest, refuses an unknown method, another protocol version and a body that is not JSON', async () => {
     const key = await mintKey(['secrets'], teamA);
-    const manifest = WireSlotManifest.parse(await client(key).call('manifest', {}));
-    expect(manifest).toMatchObject({ protocolVersion: 2, name: 'lf_platform_secrets', kind: 'core', slot: 'secrets' });
+    // No team setting: lf asks for the manifest before any other method.
+    const manifest = WireSlotManifest.parse(await client(key, {}).call('manifest', {}));
+    expect(manifest).toMatchObject({ protocolVersion: 2, protocolMinor: 0, name: 'lf_platform_secrets', kind: 'core', slot: 'secrets' });
+    expect(manifest.protocolMinor).toBe(protocolMinorOf(manifest));
     expect(manifest.methods).toContain('secrets.writeBack');
     expect(await refusedCode(client(key).call('secrets.noSuchMethod', {}))).toBe('method_not_implemented');
     const other = await post(key, JSON.stringify({ protocolVersion: '1', method: 'manifest', params: {} }));
