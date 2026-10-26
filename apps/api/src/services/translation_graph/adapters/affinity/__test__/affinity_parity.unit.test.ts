@@ -164,7 +164,11 @@ async function expectAffinityParity(subjectAt: (baseUrl: string) => Promise<Adap
         return createRemoteAdapter({
           config,
           secret: '',
-          cacheScopeId: install.credentialsId,
+          // Outside any run, as the in-process lines are: inside one, the kit
+          // (0.12.7) answers repeated reads from the run's memo, so the script
+          // would make fewer requests than the recording for a reason that is
+          // not the module's.
+          cacheScopeId: '<none>',
           manifest: await fetchRemoteManifest(config, ''),
           documents: { put: async () => ({}) } as never,
           credential: { name: 'affinity', secrets: createSecretsFamily({ backend: credentials }), ref: install.credentialsId },
