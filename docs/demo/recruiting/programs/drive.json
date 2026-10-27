@@ -1,0 +1,6 @@
+{
+  "entities": [
+    { "entity_type": "file", "id": "fold-scorecards", "data": { "id": "fold-scorecards", "name": "Scorecards", "mimeType": "application/vnd.google-apps.folder", "parents": ["root"], "webViewLink": "https://drive.google.com/drive/folders/fold-scorecards", "content": null, "size": null } },
+    { "entity_type": "file", "id": "doc-scorecard-template", "data": { "id": "doc-scorecard-template", "name": "Interview scorecard", "mimeType": "application/vnd.google-apps.document", "parents": ["root"], "webViewLink": "https://docs.google.com/document/d/doc-scorecard-template", "content": "Interview scorecard\n\nCandidate:\nRole:\nInterviewer:\n\nTechnical depth (1-4):\nCommunication (1-4):\nOwnership (1-4):\n\nRecommendation: Strong yes / Yes / No / Strong no\nNotes:", "size": null } }
+  ]
+}

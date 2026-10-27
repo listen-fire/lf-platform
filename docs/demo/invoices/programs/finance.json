@@ -1,0 +1,5 @@
+{
+  "entities": [
+    { "entity_type": "channel", "id": "C0FINANCE", "data": { "id": "C0FINANCE", "name": "finance", "is_private": false, "is_member": true, "num_members": 5 } }
+  ]
+}

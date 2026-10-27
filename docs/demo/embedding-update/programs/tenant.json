@@ -1,0 +1,10 @@
+{
+  "tenant": "brightline",
+  "customer": "Brightline Freight",
+  "fields": [
+    { "name": "Stage", "options": ["Lead", "Qualified", "Won"] },
+    { "name": "Owner" },
+    { "name": "Onboarding", "options": ["Not started", "Kickoff booked", "Live"] }
+  ],
+  "slack": "slack_brightline.json"
+}

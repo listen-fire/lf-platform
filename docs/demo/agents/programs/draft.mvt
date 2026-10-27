@@ -1,0 +1,51 @@
+import { webhook, mcp, `@lf/gmail` as gmail, `@lf/slack` as slack } from adapters
+import { stripe_events, crm, billing_mail, team_slack } from credentials
+
+stripe    = connect webhook using stripe_events
+customers = connect mcp using crm
+mail      = connect gmail using billing_mail
+team      = connect slack using team_slack
+
+type EventType = <"invoice.payment_failed">
+
+node `Invoice Payment Failed` {
+  id: <text>
+  type: <EventType>
+  node data {
+    node object {
+      id: <text>
+      customer: <text>
+      customer_email: <text>
+      customer_name: <text | null>
+      amount_due: <number>
+      currency: <text>
+      attempt_count: <number>
+      hosted_invoice_url: <text>
+    }
+  }
+}
+
+function `Payment Failed`(event: <`Invoice Payment Failed`>) {
+  invoice = event.data.object
+  account = only(customers-[c:find_customer_by_email WHERE c.email == invoice.customer_email]->)
+  if (account == null || account.found == false) {
+    fail("no customer in the CRM has the email ${invoice.customer_email} (Stripe customer ${invoice.customer}, invoice ${invoice.id})")
+  }
+  amount = "$${invoice.amount_due / 100}"
+
+  if (account.plan == "annual") {
+    channel = only(team-[ch:Channels WHERE ch.Name == "accounts"]->)
+    if (channel == null) { fail("there is no #accounts channel") }
+    write channel-[:Messages]-> {
+      Message: "${account.account_manager}: ${account.company} (yearly plan) has a failed payment of ${amount}, attempt ${invoice.attempt_count}. Invoice: ${invoice.hosted_invoice_url}"
+    }
+  } else {
+    write mail-[:Messages]-> {
+      To: [invoice.customer_email]
+      Subject: "Your Ledgerline payment didn't go through"
+      Body: "Hi ${account.name},\n\nWe tried to take your Ledgerline payment of ${amount} and it didn't go through. It's usually an expired card or a bank check.\n\nYou can update your card and pay here: ${invoice.hosted_invoice_url}\n\nWe'll try again in a few days. If anything's changed, just reply to this email.\n\nThe Ledgerline team"
+    }
+  }
+}
+
+listen to stripe { payload: <`Invoice Payment Failed`> } fire `Payment Failed`

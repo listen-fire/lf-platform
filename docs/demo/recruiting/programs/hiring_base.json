@@ -1,0 +1,38 @@
+{
+  "entities": [
+    { "entity_type": "base", "id": "appHIRE01", "data": { "id": "appHIRE01", "name": "Hiring" } },
+    {
+      "entity_type": "table:appHIRE01",
+      "id": "tblCAND01",
+      "data": {
+        "id": "tblCAND01",
+        "name": "Candidates",
+        "primaryFieldId": "fldName",
+        "fields": [
+          { "id": "fldName", "name": "Name", "type": "singleLineText" },
+          { "id": "fldEmail", "name": "Email", "type": "email" },
+          { "id": "fldRole", "name": "Role", "type": "singleLineText" },
+          { "id": "fldStage", "name": "Stage", "type": "singleSelect", "options": { "choices": [
+            { "id": "selApplied", "name": "Applied" },
+            { "id": "selScreen", "name": "Screen" },
+            { "id": "selInterview", "name": "Interview" },
+            { "id": "selOffer", "name": "Offer" },
+            { "id": "selRejected", "name": "Rejected" }
+          ] } },
+          { "id": "fldInterviewer", "name": "Interviewer", "type": "singleLineText" },
+          { "id": "fldScorecard", "name": "Scorecard", "type": "url" },
+          { "id": "fldNotes", "name": "Notes", "type": "multilineText" }
+        ]
+      }
+    },
+    { "entity_type": "record:appHIRE01:tblCAND01", "id": "recPRIYA01", "data": { "id": "recPRIYA01", "createdTime": "2026-10-19T09:12:00.000Z", "fields": {
+      "Name": "Priya Raman", "Email": "priya.raman@fastmail.com", "Role": "Senior Backend Engineer", "Stage": "Screen", "Interviewer": "Marcus Webb",
+      "Notes": "Strong phone screen. Built payments infrastructure at a fintech; asked about on-call." } } },
+    { "entity_type": "record:appHIRE01:tblCAND01", "id": "recTOMAS01", "data": { "id": "recTOMAS01", "createdTime": "2026-10-22T14:40:00.000Z", "fields": {
+      "Name": "Tomás Ferreira", "Email": "tomas.ferreira@proton.me", "Role": "Product Designer", "Stage": "Applied", "Interviewer": "Aisha Bello",
+      "Notes": "Portfolio: onboarding redesign for a logistics app." } } },
+    { "entity_type": "record:appHIRE01:tblCAND01", "id": "recGRACE01", "data": { "id": "recGRACE01", "createdTime": "2026-10-12T11:05:00.000Z", "fields": {
+      "Name": "Grace Lindqvist", "Email": "grace.lindqvist@outlook.com", "Role": "Data Analyst", "Stage": "Offer", "Interviewer": "Marcus Webb",
+      "Scorecard": "https://docs.google.com/document/d/doc-scorecard-grace" } } }
+  ]
+}

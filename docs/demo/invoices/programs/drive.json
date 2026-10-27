@@ -1,0 +1,17 @@
+{
+  "entities": [
+    {
+      "entity_type": "file",
+      "id": "fold-invoices",
+      "data": {
+        "id": "fold-invoices",
+        "name": "Invoices",
+        "mimeType": "application/vnd.google-apps.folder",
+        "parents": ["root"],
+        "webViewLink": "https://drive.google.com/drive/folders/fold-invoices",
+        "content": null,
+        "size": null
+      }
+    }
+  ]
+}

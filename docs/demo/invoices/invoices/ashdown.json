@@ -1,0 +1,28 @@
+{
+  "file": "ABC-1186.pdf",
+  "number": "ABC-1186",
+  "date": "2026-10-26",
+  "due": "2026-11-25",
+  "po": "FS-PO-3366",
+  "terms": "30 days from invoice date",
+  "vatRate": 0.2,
+  "accent": "#8a4b2f",
+  "supplier": {
+    "name": "Ashdown Building Contractors Ltd",
+    "company": "Ashdown Building Contractors Ltd · Registered in England and Wales no. 06592148",
+    "address": ["Ashdown Yard, Feeder Road", "Bristol BS2 0TJ"],
+    "email": "invoices@ashdown-building.co.uk",
+    "phone": "0117 496 0724",
+    "vat": "GB 913 4470 52",
+    "bank": "NatWest, sort code 56-00-31, account 70219946"
+  },
+  "customer": {
+    "name": "Fenwick & Shaw Architects LLP",
+    "address": ["Accounts Payable", "18 Queen Square", "Bristol BS1 4NT"]
+  },
+  "lines": [
+    { "description": "Studio refit, stage 2: stud partition walls, second floor", "qty": 1, "unit": 6200 },
+    { "description": "Electrical first fix, second floor (14 circuits)", "qty": 1, "unit": 2850 },
+    { "description": "Making good and decoration, meeting rooms 2 and 3", "qty": 1, "unit": 1450 }
+  ]
+}

@@ -1,0 +1,1 @@
+From now on, when a customer's payment fails, look them up in the CRM. If they're on a monthly plan, send our retry email. If they're on an annual plan, tell their account manager in #accounts on Slack.

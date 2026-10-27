@@ -1,0 +1,5 @@
+{
+  "entities": [
+    { "entity_type": "mailbox", "id": "mailbox", "data": { "emailAddress": "hannah.lowe@haldenrobotics.com", "historyId": 1000, "oldestHistoryId": 1 } }
+  ]
+}

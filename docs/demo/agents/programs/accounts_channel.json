@@ -1,0 +1,5 @@
+{
+  "entities": [
+    { "entity_type": "channel", "id": "C07ACCTS01", "data": { "id": "C07ACCTS01", "name": "accounts", "is_private": false, "is_member": true, "num_members": 6 } }
+  ]
+}

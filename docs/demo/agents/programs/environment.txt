@@ -1,0 +1,3 @@
+Operating environment: webhook events may be delivered more than once, and external services occasionally fail transiently.
+
+Your user is not available to answer questions while you work. Choose sensible defaults, and say what you chose in your closing note.

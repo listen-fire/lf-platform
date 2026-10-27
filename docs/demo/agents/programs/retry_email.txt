@@ -1,0 +1,11 @@
+Subject: Your Ledgerline payment didn't go through
+
+Hi <customer's name>,
+
+We tried to take your Ledgerline payment of <amount, e.g. $49> and it didn't go through. It's usually an expired card or a bank check.
+
+You can update your card and pay here: <the invoice's hosted_invoice_url>
+
+We'll try again in a few days. If anything's changed, just reply to this email.
+
+The Ledgerline team

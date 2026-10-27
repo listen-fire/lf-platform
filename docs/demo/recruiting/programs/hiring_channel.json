@@ -1,0 +1,5 @@
+{
+  "entities": [
+    { "entity_type": "channel", "id": "C0HIRING", "data": { "id": "C0HIRING", "name": "hiring", "is_private": false, "is_member": true, "num_members": 6 } }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "file": "PW-20417.pdf",
+  "number": "PW-20417",
+  "date": "2026-10-23",
+  "due": "2026-11-22",
+  "po": "FS-PO-3381",
+  "terms": "30 days from invoice date",
+  "vatRate": 0.2,
+  "accent": "#2f5d8a",
+  "supplier": {
+    "name": "Paperworks Stationery Ltd",
+    "company": "Paperworks Stationery Ltd · Registered in England and Wales no. 08814273",
+    "address": ["Unit 4, Avonmeads Trade Park", "Bristol BS2 0SP"],
+    "email": "accounts@paperworks-stationery.co.uk",
+    "phone": "0117 496 0381",
+    "vat": "GB 284 6612 09",
+    "bank": "Lloyds Bank, sort code 30-94-57, account 41827763"
+  },
+  "customer": {
+    "name": "Fenwick & Shaw Architects LLP",
+    "address": ["Accounts Payable", "18 Queen Square", "Bristol BS1 4NT"]
+  },
+  "lines": [
+    { "description": "A4 copier paper, 80gsm, box of 5 reams", "qty": 40, "unit": 9.5 },
+    { "description": "HP 59A black toner cartridge", "qty": 4, "unit": 55 },
+    { "description": "Archive storage box, A4, pack of 10", "qty": 10, "unit": 10 }
+  ]
+}

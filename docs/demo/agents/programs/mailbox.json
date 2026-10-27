@@ -1,0 +1,5 @@
+{
+  "entities": [
+    { "entity_type": "mailbox", "id": "mailbox", "data": { "emailAddress": "billing@ledgerline.io", "historyId": 1000, "oldestHistoryId": 1 } }
+  ]
+}

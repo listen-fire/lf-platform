@@ -1,0 +1,26 @@
+{
+  "entities": [
+    {
+      "entity_type": "channel",
+      "id": "C0BLDEALS",
+      "data": {
+        "id": "C0BLDEALS",
+        "name": "deals",
+        "is_private": false,
+        "is_member": true,
+        "num_members": 7
+      }
+    },
+    {
+      "entity_type": "channel",
+      "id": "C0BLDISPATCH",
+      "data": {
+        "id": "C0BLDISPATCH",
+        "name": "dispatch",
+        "is_private": false,
+        "is_member": true,
+        "num_members": 12
+      }
+    }
+  ]
+}

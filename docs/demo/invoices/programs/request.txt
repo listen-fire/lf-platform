@@ -1,0 +1,1 @@
+When a supplier emails us an invoice, file the PDF in Drive under Invoices by supplier and month, add it to the Ledger sheet, and flag anything over £5,000 in #finance on Slack.

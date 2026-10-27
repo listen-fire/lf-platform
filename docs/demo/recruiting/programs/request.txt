@@ -1,0 +1,1 @@
+When a candidate moves to Interview, make their interview scorecard from our template in Drive, tell the interviewer in #hiring on Slack, and draft the scheduling email to the candidate for me to check and send.

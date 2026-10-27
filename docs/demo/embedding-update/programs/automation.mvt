@@ -1,0 +1,14 @@
+import { crm, slack } from adapters
+import { workspace, slack_workspace } from credentials
+
+app  = connect crm using workspace
+team = connect slack using slack_workspace
+
+function `Kick Off Won Deal`(company: <app-[:Company]->>) {
+  write company { Onboarding: "Kickoff booked" }
+  deals = only(team-[ch:Channels WHERE ch.Name == "deals"]->)
+  if (deals == null) { fail("there is no #deals channel") }
+  write deals-[:Messages]-> { Message: "Deal won: ${company.Name} (owner: ${company.Owner})" }
+}
+
+listen to app { events: ["company.updated"], field: "Stage", becomes: "Won" } fire `Kick Off Won Deal`

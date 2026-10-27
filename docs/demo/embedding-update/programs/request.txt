@@ -1,0 +1,1 @@
+When a deal is marked Won, set its onboarding to Kickoff booked and post it to our #deals Slack channel with who owns it.

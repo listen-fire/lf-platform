@@ -1,0 +1,33 @@
+{
+  "entities": [
+    {
+      "entity_type": "spreadsheet",
+      "id": "ledger",
+      "data": {
+        "spreadsheetId": "ledger",
+        "properties": { "title": "Ledger" },
+        "sheets": [
+          {
+            "properties": { "sheetId": 0, "title": "Invoices", "gridProperties": { "columnCount": 26 } },
+            "tables": [
+              {
+                "tableId": "table-invoices",
+                "name": "Invoices",
+                "range": { "startRowIndex": 0, "endRowIndex": 1, "startColumnIndex": 0, "endColumnIndex": 7 },
+                "columnProperties": [
+                  { "columnIndex": 0, "columnName": "Supplier", "columnType": "TEXT" },
+                  { "columnIndex": 1, "columnName": "Invoice number", "columnType": "TEXT" },
+                  { "columnIndex": 2, "columnName": "Invoice date", "columnType": "DATE" },
+                  { "columnIndex": 3, "columnName": "Due date", "columnType": "DATE" },
+                  { "columnIndex": 4, "columnName": "Amount", "columnType": "CURRENCY" },
+                  { "columnIndex": 5, "columnName": "Currency", "columnType": "TEXT" },
+                  { "columnIndex": 6, "columnName": "Filed at", "columnType": "TEXT" }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

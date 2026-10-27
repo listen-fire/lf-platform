@@ -1,0 +1,32 @@
+import { `@lf/airtable` as airtable, `@lf/google_drive` as drive, `@lf/slack` as slack, `@lf/gmail` as gmail } from adapters
+import { hannah_airtable, hannah_drive, hiring_slack, hannah_mail } from credentials
+
+hiring = connect airtable using hannah_airtable { base: "Hiring" }
+docs   = connect drive using hannah_drive
+team   = connect slack using hiring_slack
+mail   = connect gmail using hannah_mail
+
+function schedule_interview(change: <hiring-[:`Record Change` WHERE `table` == "tblCAND01"]->>) {
+  candidate = only(change-[:Record]->)
+  if (candidate == null) { fail("the changed candidate is not in Candidates") }
+
+  template = only(docs-[t:Files WHERE t.Name == "Interview scorecard"]->)
+  if (template == null) { fail("there is no Interview scorecard template in Drive") }
+  folder = only(docs-[f:Folders WHERE f.Name == "Scorecards"]->)
+  if (folder == null) { fail("there is no Scorecards folder in Drive") }
+  scorecard = write (folder-[:Files]->, template-[:Copies]->) { Name: "Interview scorecard: ${candidate.Name}" }
+
+  write candidate { Scorecard: scorecard.Url }
+
+  channel = only(team-[ch:Channels WHERE ch.Name == "hiring"]->)
+  if (channel == null) { fail("there is no #hiring channel") }
+  write channel-[:Messages]-> { Message: "${candidate.Interviewer}: ${candidate.Name} (${candidate.Role}) is moving to interview with you. Scorecard: ${scorecard.Url}" }
+
+  write mail-[:Drafts]-> {
+    To: [candidate.Email]
+    Subject: "Next step: interview for ${candidate.Role}"
+    Body: "Hi ${candidate.Name},\n\nThank you for your time so far. We'd like to invite you to an interview with ${candidate.Interviewer} for the ${candidate.Role} role.\n\nCould you share a few times that suit you next week?\n\nBest,\nHannah"
+  }
+}
+
+listen to hiring { base: "appHIRE01", table: "tblCAND01", events: ["record.updated"], field: "Stage", becomes: "Interviewing" } fire schedule_interview

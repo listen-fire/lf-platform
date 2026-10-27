@@ -1,0 +1,53 @@
+import { `@lf/gmail` as gmail, `@lf/google_drive` as drive, `@lf/google_sheets` as sheets, `@lf/slack` as slack } from adapters
+import { finance_inbox, finance_drive, ledger, finance_slack } from credentials
+
+inbox  = connect gmail using finance_inbox
+files  = connect drive using finance_drive
+books  = connect sheets using ledger { spreadsheet: "Ledger" }
+team   = connect slack using finance_slack
+
+type CurrencyCode = <"GBP" | "EUR" | "USD">
+
+node Invoice: "the supplier's invoice in this email" {
+  supplier: <text> "the supplier's company name, as printed on the invoice"
+  number:   <text> "the invoice number"
+  date:     <date> "the invoice date"
+  due:      <date> "the date payment is due"
+  amount:   <number> "the total due, including VAT"
+  currency: <CurrencyCode> "the currency of the total"
+}
+
+function `File Invoice`(msg: <inbox-[:Message]->>) {
+  pdfs = msg-[a:Attachments WHERE a.`Content Type` == "application/pdf"]->
+  pdf = first(pdfs)
+  if (pdf == null) { fail("no PDF attached to \"${msg.Subject}\" from ${msg.From}") }
+
+  invoice = extractOne([msg.Body, pdf.File], Invoice, { tier: "quick" })
+  if (invoice == null) { fail("no invoice in ${pdf.Name}") }
+  if (invoice.date == null || invoice.amount == null) { fail("${pdf.Name} has no invoice date or total") }
+  month = Date.format(invoice.date, "YYYY-MM")
+
+  root = only(files-[f:Folders WHERE f.Name == "Invoices"]->)
+  if (root == null) { fail("the Invoices folder is not shared with this connection") }
+  supplier = write root-[:Folders]-> { Name: invoice.supplier }
+  folder   = write supplier-[:Folders]-> { Name: month }
+  filed    = write folder-[:Files]-> { Name: pdf.Name, File: pdf.File }
+
+  write books-[:`Invoices (table)`]-> {
+    Supplier:         invoice.supplier
+    `Invoice number`: invoice.number
+    `Invoice date`:   invoice.date
+    `Due date` ?:     invoice.due
+    Amount:           invoice.amount
+    Currency ?:       invoice.currency
+    `Filed at`:       "Invoices/${invoice.supplier}/${month}/${pdf.Name}"
+  }
+
+  if (invoice.currency == "GBP" && invoice.amount > 5000) {
+    channel = only(team-[ch:Channels WHERE ch.Name == "finance"]->)
+    if (channel == null) { fail("there is no #finance channel") }
+    write channel-[:Messages]-> { Message: "Over £5,000: ${invoice.supplier} invoice ${invoice.number} for ${Currency.formatFigure(invoice.amount, "GBP")}, due ${Date.format(invoice.due, "D MMMM YYYY")}. Filed in Invoices/${invoice.supplier}/${month}." }
+  }
+}
+
+listen to inbox { events: ["message_received"] } fire `File Invoice`
