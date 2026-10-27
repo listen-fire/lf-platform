@@ -14,7 +14,7 @@
 import { z } from 'zod';
 import { WireListenDeclarations, WireManifestProtocolVersion, WireModuleDeclarations } from 'engine-contracts';
 
-import type { AdapterManifest } from 'movement-engine/public/adapter';
+import type { AdapterManifest, ListenConfigKey } from 'movement-engine/public/adapter';
 import type { TriggerType } from 'movement-engine/public/adapter';
 
 export const RemoteAdapterManifestFile = z.object({
@@ -175,11 +175,39 @@ export function remoteAdapterManifest(file: RemoteAdapterManifestFile): AdapterM
     ...(file.defaultSubscribedEvents !== undefined
       ? { defaultSubscribedEvents: file.defaultSubscribedEvents }
       : {}),
-    ...(file.listenConfig !== undefined ? { listenConfig: file.listenConfig } : {}),
+    ...(file.listenConfig !== undefined ? { listenConfig: file.listenConfig.map(listenConfigKey) } : {}),
     methods: file.methods,
     ...((file.credentials ?? []).length > 0
       ? { declaredCredentials: (file.credentials ?? []).map((declared) => declared.name) }
       : {}),
     introspectedSchema: true,
+  };
+}
+
+/** The formats this release's checker validates. A record, so a format the
+ *  engine adds fails this file's type-check until it is listed here. */
+const CHECKED_LISTEN_FORMATS: Record<NonNullable<ListenConfigKey['format']>, true> = {
+  cron: true,
+  timezone: true,
+  fields: true,
+  strings: true,
+  type: true,
+  field: true,
+  'field-value': true,
+};
+
+function isCheckedListenFormat(format: string): format is NonNullable<ListenConfigKey['format']> {
+  return Object.hasOwn(CHECKED_LISTEN_FORMATS, format);
+}
+
+/** The wire keeps a format this release does not know (a newer module's); the
+ *  key is still a listen key, but its value goes unchecked, as the protocol
+ *  says. */
+function listenConfigKey(entry: NonNullable<RemoteAdapterManifestFile['listenConfig']>[number]): ListenConfigKey {
+  return {
+    key: entry.key,
+    ...(entry.required !== undefined ? { required: entry.required } : {}),
+    ...(entry.format !== undefined && isCheckedListenFormat(entry.format) ? { format: entry.format } : {}),
+    ...(entry.narrows !== undefined ? { narrows: entry.narrows } : {}),
   };
 }

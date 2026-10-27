@@ -47,7 +47,7 @@ jest.mock('googleapis', () => ({
   },
 }));
 
-import { GMAIL_READONLY_SCOPE, GMAIL_SEND_SCOPE } from '@listen-fire/gmail/api_client';
+import { GMAIL_COMPOSE_SCOPE, GMAIL_READONLY_SCOPE, GMAIL_SEND_SCOPE } from '@listen-fire/gmail/api_client';
 import {
   GMAIL_DELEGATION_MESSAGE,
   GmailApiClient,
@@ -182,12 +182,13 @@ describe('classifyGmailError — which scope set was being requested', () => {
 });
 
 describe('GmailApiClient — each call asks for only the scope it needs', () => {
-  it('builds a readonly-scoped client and a send-scoped client up front', () => {
+  it('builds a readonly-scoped, a send-scoped and a compose-scoped client up front', () => {
     // eslint-disable-next-line no-new
     new GmailApiClient({ mailbox: 'deals@example.com' });
     expect(delegatedAuthCalls).toEqual([
       { subject: 'deals@example.com', scopes: [GMAIL_READONLY_SCOPE] },
       { subject: 'deals@example.com', scopes: [GMAIL_SEND_SCOPE] },
+      { subject: 'deals@example.com', scopes: [GMAIL_COMPOSE_SCOPE] },
     ]);
   });
 

@@ -22,6 +22,7 @@ import { z } from 'zod';
 import type { GmailConnectMethod } from './connect_method';
 
 import {
+  GMAIL_COMPOSE_SCOPE,
   GMAIL_READONLY_SCOPE,
   GMAIL_SEND_SCOPE,
   GmailApiClient as ModuleGmailApiClient,
@@ -63,6 +64,7 @@ export {
 const DELEGATED_SCOPES: Record<GmailScope, readonly string[]> = {
   read: [GMAIL_READONLY_SCOPE],
   send: [GMAIL_SEND_SCOPE],
+  compose: [GMAIL_COMPOSE_SCOPE],
 };
 
 /** What the dev loop's fake is authenticated with: a fake needs no token, and
@@ -170,7 +172,11 @@ export class GmailApiClient extends ModuleGmailApiClient {
     } else if (fake !== undefined) {
       accessToken = async () => DEV_LOOP_GMAIL_TOKEN;
     } else {
-      const perScope = { read: delegatedToken(stored.mailbox, 'read'), send: delegatedToken(stored.mailbox, 'send') };
+      const perScope: Record<GmailScope, () => Promise<string>> = {
+        read: delegatedToken(stored.mailbox, 'read'),
+        send: delegatedToken(stored.mailbox, 'send'),
+        compose: delegatedToken(stored.mailbox, 'compose'),
+      };
       accessToken = (scope) => perScope[scope]();
     }
     super(
@@ -375,10 +381,11 @@ export async function validateGmailMailbox(
       case 'no_such_mailbox':
         return { ok: false, message: GMAIL_NO_MAILBOX_MESSAGE };
       // `users.getProfile` only ever asks for the readonly scope, so a
-      // send-scope failure can never actually classify this way — kept
+      // send- or compose-scope failure can never actually classify this way — kept
       // explicit rather than folded into `other` so the switch stays
       // exhaustive against `GmailFailure` without an `as`.
       case 'missing_send_scope':
+      case 'missing_compose_scope':
       case 'history_expired':
       case 'other':
         return { ok: false, message: `Google could not be reached: ${failure.message}` };

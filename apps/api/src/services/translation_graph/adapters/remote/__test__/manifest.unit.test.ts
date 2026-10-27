@@ -74,6 +74,19 @@ describe('RemoteAdapterManifestFile', () => {
     expect(RemoteAdapterManifestFile.safeParse({ ...base, methods: [...base.methods, 'poll'] }).success).toBe(true);
   });
 
+  it('keeps a listen key whose format this release does not know, leaving its value unchecked', () => {
+    const projected = remoteAdapterManifest(
+      RemoteAdapterManifestFile.parse({
+        ...base,
+        listenConfig: [
+          { key: 'schedule', required: true, format: 'cron' },
+          { key: 'window', format: 'iso-duration' },
+        ],
+      }),
+    );
+    expect(projected.listenConfig).toEqual([{ key: 'schedule', required: true, format: 'cron' }, { key: 'window' }]);
+  });
+
   it('refuses a malformed declaration, as the protocol does', () => {
     expect(RemoteAdapterManifestFile.safeParse({ ...base, inbound: { providerKey: 'acme', scheme: 'unknown', signatureHeaders: ['x'] } }).success).toBe(false);
     expect(RemoteAdapterManifestFile.safeParse({ ...base, poll: { intervalSeconds: 0 } }).success).toBe(false);
