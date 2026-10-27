@@ -24,6 +24,7 @@ import { limitRequest, limited, limiterSlot, throttleAfter, vendorWaitMs, type C
 import ExternalServiceType from '../../../../generated/kysely/automations/ExternalServiceType';
 import { publicFetch, urlRefusal } from '../../../../lib/net/public_fetch';
 import type { BuiltinInstall } from '../builtin_modules';
+import { MCP_CONNECTIONS_ENABLED, MCP_DISABLED_MESSAGE } from './enabled';
 
 /** The module's own manifest, with the credential type the platform stores
  *  an MCP connection under. */
@@ -42,8 +43,13 @@ export const mcpCredsShape = z.object({
   header: z.string().optional(),
 });
 
-/** The same, its URL held to the rule its requests are. */
+/** The same, its URL held to the rule its requests are, and refused outright
+ *  where the deployment has MCP off. */
 export const mcpCredsParser = mcpCredsShape.superRefine((credentials, ctx) => {
+  if (!MCP_CONNECTIONS_ENABLED) {
+    ctx.addIssue({ code: 'custom', message: MCP_DISABLED_MESSAGE });
+    return;
+  }
   const refusal = mcpUrlRefusal(credentials.url);
   if (refusal !== undefined) ctx.addIssue({ code: 'custom', path: ['url'], message: refusal });
 });

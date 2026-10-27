@@ -65,6 +65,7 @@ import { SYSTEM_MANIFEST } from '@listen-fire/system/manifest';
 import { NATIVE_VALUATIONS_MANIFEST } from '@listen-fire/native-valuations/manifest';
 import { EMAIL_MANIFEST } from '@listen-fire/email/manifest';
 import { MCP_STORED_CREDENTIAL, MCP_PLATFORM_MANIFEST, mcpServerFetch } from './mcp';
+import { MCP_CONNECTIONS_ENABLED } from './mcp/enabled';
 import { kgManifest } from '@listen-fire/kg/manifest';
 import {
   WEB_MODULE_PLUGINS,
@@ -449,7 +450,8 @@ export const BUILTIN_MODULES: BuiltinModuleTable = {
   // server's URL and a token, and every request to that user-supplied
   // address goes through the platform's public-address fetch (./mcp).
   // Token sign-in only: the platform takes no OAuth app per server yet.
-  mcp: {
+  // Absent unless the deployment turns it on (MCP_CONNECTIONS_ENABLED).
+  ...(MCP_CONNECTIONS_ENABLED ? { mcp: {
     kind: 'adapter',
     line: 'module',
     manifest: MCP_PLATFORM_MANIFEST,
@@ -459,7 +461,7 @@ export const BUILTIN_MODULES: BuiltinModuleTable = {
     },
     declaredCredential: MCP_STORED_CREDENTIAL,
     fetch: mcpServerFetch,
-  },
+  } } : {}),
   // The platform's own provider keys (its environment) as the install's
   // credential: nobody connects email here.
   email: {

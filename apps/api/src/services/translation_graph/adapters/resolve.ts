@@ -30,6 +30,8 @@ import {
   listAdapterTypes,
   resolveAdapterSlug,
 } from './registry';
+import { MCP_ADAPTER_TYPE } from '@listen-fire/mcp/manifest';
+import { MCP_DISABLED_MESSAGE } from './mcp/enabled';
 import { getRemoteAdapter, rowToManifest } from './remote/store';
 import { hostedDocumentStore } from '../engine/files/retrieve';
 import { RemoteAdapterCredentialPayload, type RemoteAdapterManifestFile } from './remote/manifest';
@@ -76,6 +78,7 @@ export async function resolveAdapter(input: {
     adapterType: slug,
   });
   if (!row) {
+    if (slug === MCP_ADAPTER_TYPE) throw new Error(MCP_DISABLED_MESSAGE);
     throw new Error(
       `Unknown adapter type: ${input.adapterType} (slug: ${slug}). Registered: ${listAdapterTypes().join(', ')} (and no remote_adapter install for this team).`,
     );

@@ -226,6 +226,14 @@ export function IntegrationModal({
   const utils = trpc.useUtils();
   const connectMethods = trpc.views.credentials.connectMethods.useQuery();
   const gmailPolicy = trpc.views.credentials.gmailConnectPolicy.useQuery();
+  // MCP servers are offered only where the deployment has them on: the server
+  // advertises MCP as key-entry then, and as app-only when the switch is off.
+  const typeOptions = CREDENTIAL_TYPE_OPTIONS.filter(
+    (o) =>
+      o.value !== ExternalServiceType.MCP ||
+      existing?.type === ExternalServiceType.MCP ||
+      connectMethods.data?.[ExternalServiceType.MCP] === "key-entry",
+  );
   const { mutateAsync: addCredential } =
     trpc.views.credentials.addCredential.useMutation();
   const { mutateAsync: updateCredential } =
@@ -453,7 +461,7 @@ export function IntegrationModal({
                 }
               }}
               disabled={!!existing}
-              options={CREDENTIAL_TYPE_OPTIONS}
+              options={typeOptions}
             />
           </div>
           <div>

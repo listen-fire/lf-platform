@@ -52,6 +52,7 @@ import { connectMethodForType } from '../../credentials/connect_link';
 import { isLegacyApp } from '../../credentials/app_id';
 import { isCredentialType } from '../adapters/credential_type';
 import { indexManifestsByName, listAdapterManifests } from '../adapters/registry';
+import { mcpDisabledRefusal } from '../adapters/mcp/enabled';
 import { listRemoteAdapters } from '../adapters/remote/store';
 import { teamAdapterManifests } from '../adapters/team_manifests';
 import { platformPluginSpecNamed, platformPluginSpecs, snapshotPluginSpecs } from './plugin_specs';
@@ -1527,6 +1528,8 @@ export async function runCatalogSnapshotForTeam(
   teamId: TeamId,
   options: { source: string; languageVersion?: LanguageVersion; imports: ImportText },
 ): Promise<RunCatalogSnapshot> {
+  const refusal = mcpDisabledRefusal(options.source);
+  if (refusal !== undefined) throw new Error(refusal);
   return runSnapshotOf(await assembleTeamCatalog(teamId, options), options);
 }
 

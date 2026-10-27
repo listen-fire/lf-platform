@@ -51,6 +51,9 @@ const defaults: Record<string, string> = {
   // would point every deployment at Listen-Fire — so the fixtures name the
   // deployment they were written against.
   INBOUND_EMAIL_ADDRESS: 'inbox@example.com',
+  // MCP connections are off by default in a deployment; the suites exercise
+  // them, and the one that proves the off state boots its own registry.
+  MCP_CONNECTIONS_ENABLED: 'true',
 };
 
 for (const [key, value] of Object.entries(defaults)) {

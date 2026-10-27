@@ -31,6 +31,7 @@ import { gmailConnectMethod } from '../../adapters/gmail/connect_method';
 import { neverAsAny } from 'movement-engine/public/types';
 import { RemoteAdapterCredentialPayload } from '../translation_graph/adapters/remote/manifest';
 import { mcpCredsShape, mcpUrlRefusal } from '../translation_graph/adapters/mcp';
+import { MCP_CONNECTIONS_ENABLED } from '../translation_graph/adapters/mcp/enabled';
 
 /** Stored Granola credential — the API key the user pastes. */
 export const granolaCredsParser = z.object({
@@ -246,7 +247,7 @@ const CONNECT_FORM_SPECS: Partial<Record<ExternalServiceType, ConnectFormSpec>> 
   // checked against the rule its requests are held to before anything is
   // stored, so a URL the platform would refuse to reach is refused here, by
   // name, while the user is still on the form.
-  [ExternalServiceType.MCP]: specFor(
+  ...(MCP_CONNECTIONS_ENABLED ? { [ExternalServiceType.MCP]: specFor(
     mcpCredsShape,
     [
       {
@@ -282,7 +283,7 @@ const CONNECT_FORM_SPECS: Partial<Record<ExternalServiceType, ConnectFormSpec>> 
         return refusal === undefined ? { ok: true } : { ok: false, message: refusal };
       },
     },
-  ),
+  ) } : {}),
   // Gmail's DELEGATED method: the mailbox is connected by NAMING it, not by
   // signing into one — the deployment's Google service account acts as the
   // address through domain wide delegation, which a Workspace admin grants

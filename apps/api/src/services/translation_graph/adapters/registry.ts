@@ -53,6 +53,7 @@ import { ASK_MANIFEST } from '@listen-fire/ask/manifest';
 import { SYSTEM_ADAPTER_TYPE, SYSTEM_MANIFEST, createSystemAdapter, createSystemPollSource } from './system';
 import { MCP_ADAPTER_TYPE } from '@listen-fire/mcp/manifest';
 import { MCP_PLATFORM_MANIFEST } from './mcp';
+import { MCP_CONNECTIONS_ENABLED, MCP_DISABLED_MESSAGE } from './mcp/enabled';
 
 /**
  * Factory signature: takes per-team + per-consumer context. Adapters that
@@ -209,8 +210,9 @@ const ADAPTER_FACTORIES: Record<string, AdapterFactory> = {
   // its BUILTIN_MODULES line picks module or legacy.
   [SYSTEM_ADAPTER_TYPE]: builtinAdapterFactory(SYSTEM_ADAPTER_TYPE, createSystemAdapter),
   // Any MCP server a team connects — the `@lf/mcp` module, one server per
-  // connection, its tools the connection's types.
-  [MCP_ADAPTER_TYPE]: moduleOnlyAdapterFactory(MCP_ADAPTER_TYPE),
+  // connection, its tools the connection's types. Registered only when the
+  // deployment turns MCP on.
+  ...(MCP_CONNECTIONS_ENABLED ? { [MCP_ADAPTER_TYPE]: moduleOnlyAdapterFactory(MCP_ADAPTER_TYPE) } : {}),
 };
 
 /**
@@ -289,7 +291,7 @@ const ADAPTER_MANIFESTS: Record<string, AdapterManifest> = {
   [GMAIL_ADAPTER_TYPE]: GMAIL_MANIFEST,
   [ASK_ADAPTER_TYPE]: ASK_MANIFEST,
   [SYSTEM_ADAPTER_TYPE]: SYSTEM_MANIFEST,
-  [MCP_ADAPTER_TYPE]: MCP_PLATFORM_MANIFEST,
+  ...(MCP_CONNECTIONS_ENABLED ? { [MCP_ADAPTER_TYPE]: MCP_PLATFORM_MANIFEST } : {}),
 };
 
 /**
@@ -394,6 +396,7 @@ export function getAdapter(input: {
   const slug = resolveAdapterSlug(input.adapterType);
   const factory = ADAPTER_FACTORIES[slug];
   if (!factory) {
+    if (slug === MCP_ADAPTER_TYPE) throw new Error(MCP_DISABLED_MESSAGE);
     throw new Error(
       `Unknown adapter type: ${input.adapterType}. Registered: ${Object.keys(ADAPTER_FACTORIES).join(', ')}`,
     );

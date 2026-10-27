@@ -41,6 +41,10 @@ if (!process.env.DATABASE_URL_TEST) {
 // in `lib/kysely.ts` connects to the test DB. Mirrors the readonly URL
 // for symmetry; integration tests don't use the readonly client today
 // but the prisma module requires the env var when NODE_ENV != 'test'.
+// MCP connections are off by default in a deployment; the integration suite
+// runs with them on (the MCP hosting test needs the adapter registered).
+process.env.MCP_CONNECTIONS_ENABLED ??= 'true';
+
 process.env.DATABASE_URL = process.env.DATABASE_URL_TEST;
 
 process.env.DATABASE_URL_READONLY =
