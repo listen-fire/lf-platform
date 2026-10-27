@@ -2344,6 +2344,7 @@ enum ExternalServiceType {
   REMOTE
   EVERTRACE
   DEALROOM
+  MCP
 
   @@schema("automations")
 }

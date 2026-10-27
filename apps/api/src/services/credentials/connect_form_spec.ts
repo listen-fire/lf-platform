@@ -30,6 +30,7 @@ import {
 import { gmailConnectMethod } from '../../adapters/gmail/connect_method';
 import { neverAsAny } from 'movement-engine/public/types';
 import { RemoteAdapterCredentialPayload } from '../translation_graph/adapters/remote/manifest';
+import { mcpCredsShape, mcpUrlRefusal } from '../translation_graph/adapters/mcp';
 
 /** Stored Granola credential — the API key the user pastes. */
 export const granolaCredsParser = z.object({
@@ -239,6 +240,47 @@ const CONNECT_FORM_SPECS: Partial<Record<ExternalServiceType, ConnectFormSpec>> 
         'Copy the API key and paste it below.',
       ],
       note: 'API access is part of a Dealroom Premium plan \u2014 ask your account manager if the API section is missing.',
+    },
+  ),
+  // An MCP server: the module's token credential, field for field. The URL is
+  // checked against the rule its requests are held to before anything is
+  // stored, so a URL the platform would refuse to reach is refused here, by
+  // name, while the user is still on the form.
+  [ExternalServiceType.MCP]: specFor(
+    mcpCredsShape,
+    [
+      {
+        name: 'url',
+        label: 'Server URL',
+        secret: false,
+        optional: false,
+        kind: 'url',
+        placeholder: 'https://mcp.example.com/mcp',
+        help: 'The address of the MCP server (streamable HTTP), starting with https://.',
+      },
+      { name: 'token', label: 'Token', secret: true, optional: false, kind: 'text' },
+      {
+        name: 'header',
+        label: 'Header name (optional)',
+        secret: false,
+        optional: true,
+        kind: 'text',
+        help:
+          'Leave this blank to send the token as "Authorization: Bearer <token>". ' +
+          'If the server wants the token in another header (e.g. X-API-Key), name it here.',
+      },
+    ],
+    {
+      guide: [
+        'Find the MCP server’s URL in its documentation or settings: it ends in /mcp for most servers.',
+        'Create an API token (or personal access token) for it at the provider.',
+        'Paste both below. Each connection is one server: connect another server under another name.',
+      ],
+      note: 'Only servers that take a token are supported here; a server that only offers an OAuth sign-in cannot be connected yet.',
+      validate: async (credentials) => {
+        const refusal = mcpUrlRefusal(mcpCredsShape.parse(credentials).url);
+        return refusal === undefined ? { ok: true } : { ok: false, message: refusal };
+      },
     },
   ),
   // Gmail's DELEGATED method: the mailbox is connected by NAMING it, not by

@@ -33,7 +33,8 @@ export const enum ExternalServiceType {
     TELEGRAM = "TELEGRAM",
     REMOTE = "REMOTE",
     EVERTRACE = "EVERTRACE",
-    DEALROOM = "DEALROOM"
+    DEALROOM = "DEALROOM",
+    MCP = "MCP"
 }
 
 /** Identifier type for automations.external_service_credentials */
@@ -3797,6 +3798,13 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         baseUrl?: string | undefined;
                     };
                 } | {
+                    type: ExternalServiceType.MCP;
+                    credentials: {
+                        url: string;
+                        token: string;
+                        header?: string | undefined;
+                    };
+                } | {
                     type: ExternalServiceType.NATIVE_VALUATIONS | ExternalServiceType.NATIVE_KNOWLEDGE;
                     baseUrl?: string | undefined;
                 } | {
@@ -3875,6 +3883,13 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     credentials: {
                         apiKey: string;
                         baseUrl?: string | undefined;
+                    };
+                } | {
+                    type: ExternalServiceType.MCP;
+                    credentials: {
+                        url: string;
+                        token: string;
+                        header?: string | undefined;
                     };
                 } | {
                     type: ExternalServiceType.NATIVE_VALUATIONS | ExternalServiceType.NATIVE_KNOWLEDGE;
@@ -3978,6 +3993,13 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         baseUrl?: string | undefined;
                     };
                 } | {
+                    type: ExternalServiceType.MCP;
+                    credentials: {
+                        url: string;
+                        token: string;
+                        header?: string | undefined;
+                    };
+                } | {
                     type: ExternalServiceType.NATIVE_VALUATIONS;
                     baseUrl?: string | undefined;
                 } | {
@@ -4057,6 +4079,13 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     credentials: {
                         apiKey: string;
                         baseUrl?: string | undefined;
+                    };
+                } | {
+                    type: ExternalServiceType.MCP;
+                    credentials: {
+                        url: string;
+                        token: string;
+                        header?: string | undefined;
                     };
                 } | {
                     type: ExternalServiceType.NATIVE_VALUATIONS;

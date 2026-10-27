@@ -28,6 +28,7 @@ const CREDENTIAL_TYPE_OPTIONS = [
   { label: "Gmail", value: ExternalServiceType.GOOGLE_GMAIL, icon: typeIcon(ExternalServiceType.GOOGLE_GMAIL) },
   { label: "Google Drive", value: ExternalServiceType.GOOGLE, icon: typeIcon(ExternalServiceType.GOOGLE) },
   { label: "Granola", value: ExternalServiceType.GRANOLA, icon: typeIcon(ExternalServiceType.GRANOLA) },
+  { label: "MCP server", value: ExternalServiceType.MCP, icon: typeIcon(ExternalServiceType.MCP) },
   { label: "Slack", value: ExternalServiceType.SLACK, icon: typeIcon(ExternalServiceType.SLACK) },
 ];
 
@@ -240,6 +241,11 @@ export function IntegrationModal({
   const [granolaApiKey, setGranolaApiKey] = useState("");
   const [evertraceApiKey, setEvertraceApiKey] = useState("");
   const [dealroomApiKey, setDealroomApiKey] = useState("");
+  // An MCP server: its URL, a token, and the header the token goes in when the
+  // server does not take a bearer.
+  const [mcpUrl, setMcpUrl] = useState("");
+  const [mcpToken, setMcpToken] = useState("");
+  const [mcpHeader, setMcpHeader] = useState("");
   const [attioAccessToken, setAttioAccessToken] = useState("");
   // Gmail, under the delegated method: the deployment's service account acts as
   // the mailbox, so the address is the whole credential.
@@ -280,6 +286,9 @@ export function IntegrationModal({
     setGranolaApiKey("");
     setEvertraceApiKey("");
     setDealroomApiKey("");
+    setMcpUrl("");
+    setMcpToken("");
+    setMcpHeader("");
     setAttioAccessToken("");
     setGmailMailbox("");
     setGmailRefreshToken("");
@@ -314,6 +323,7 @@ export function IntegrationModal({
     (type === ExternalServiceType.GRANOLA && !!granolaApiKey) ||
     (type === ExternalServiceType.EVERTRACE && !!evertraceApiKey) ||
     (type === ExternalServiceType.DEALROOM && !!dealroomApiKey) ||
+    (type === ExternalServiceType.MCP && !!mcpUrl.trim() && !!mcpToken) ||
     (attioKeyEntry && !!attioAccessToken) ||
     (gmailMailboxEntry && !!gmailMailbox.trim()) ||
     (gmail.refreshToken && !!gmailRefreshToken.trim()) ||
@@ -353,6 +363,16 @@ export function IntegrationModal({
           await updateCredential({ id: existing.id, name: name.trim(), type, credentials: { apiKey: dealroomApiKey } });
         } else {
           await addCredential({ name: name.trim(), type, credentials: { apiKey: dealroomApiKey } });
+        }
+      } else if (type === ExternalServiceType.MCP) {
+        const url = mcpUrl.trim();
+        const header = mcpHeader.trim();
+        if (!url || !mcpToken) return;
+        const credentials = { url, token: mcpToken, ...(header ? { header } : {}) };
+        if (existing) {
+          await updateCredential({ id: existing.id, name: name.trim(), type, credentials });
+        } else {
+          await addCredential({ name: name.trim(), type, credentials });
         }
       } else if (gmailMailboxEntry) {
         const mailbox = gmailMailbox.trim();
@@ -526,6 +546,51 @@ export function IntegrationModal({
             <p className="mt-1 text-[11px] text-gray-400">
               Dealroom → account settings → API
             </p>
+          </div>
+        )}
+
+        {/* MCP server — URL, token and optional header name */}
+        {type === ExternalServiceType.MCP && (
+          <div className="space-y-3">
+            <div>
+              <label className="mb-1 block text-[12px] font-medium text-gray-600">
+                Server URL
+              </label>
+              <input
+                type="url"
+                value={mcpUrl}
+                onChange={(e) => setMcpUrl(e.target.value)}
+                placeholder="https://mcp.example.com/mcp"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[12px] font-medium text-gray-600">
+                Token
+              </label>
+              <input
+                type="password"
+                value={mcpToken}
+                onChange={(e) => setMcpToken(e.target.value)}
+                placeholder="Token..."
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[12px] font-medium text-gray-600">
+                Header name (optional)
+              </label>
+              <input
+                type="text"
+                value={mcpHeader}
+                onChange={(e) => setMcpHeader(e.target.value)}
+                placeholder="Authorization: Bearer"
+                className={inputClass}
+              />
+              <p className="mt-1 text-[11px] text-gray-400">
+                Blank sends the token as a bearer. Servers that only sign in with OAuth cannot be connected yet.
+              </p>
+            </div>
           </div>
         )}
 

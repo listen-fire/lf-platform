@@ -10,7 +10,7 @@ import type { SecretsBindingShape } from 'engine-contracts/slots';
 
 import ExternalServiceType from '../../generated/kysely/automations/ExternalServiceType';
 import { getAutomationsQb } from '../../lib/kysely';
-import { BUILTIN_MODULES, type BuiltinModuleLine } from '../translation_graph/adapters/builtin_modules';
+import { BUILTIN_MODULES, storedDeclaration, type BuiltinModuleLine } from '../translation_graph/adapters/builtin_modules';
 import { GMAIL_APP_ID, defaultAppIdForType, gmailCredentialShape } from '../credentials/app_id';
 import { flatPayloadShape, type PayloadShape } from '../credentials/secrets_postgres';
 import { gmailOAuthPayloadShape } from '../../adapters/gmail/module_credential';
@@ -89,7 +89,7 @@ export function wireReading(row: StoredBinding): WireReading | null {
   if (row.type === ExternalServiceType.GOOGLE_GMAIL && gmailCredentialShape(row.app_id) !== 'oauth') return null;
   const found = lineForType(row.type);
   if (found === undefined) return null;
-  const declared = row.declared_credential ?? found.line.load().credentials[0]?.name;
+  const declared = row.declared_credential ?? storedDeclaration(found.line.load(), found.line.declaredCredential)?.name;
   const binding = named ?? (declared !== undefined ? { credential: declared } : 'legacy');
   return { external: found.external, binding, shape: shapeOf(row.type, found.line) };
 }

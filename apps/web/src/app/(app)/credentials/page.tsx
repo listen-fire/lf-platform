@@ -54,6 +54,7 @@ const TYPE_LABELS: Record<string, string> = {
   GOOGLE: "Google Drive",
   GOOGLE_GMAIL: "Gmail",
   GRANOLA: "Granola",
+  MCP: "MCP server",
   MAILGUN: "Mailgun",
   SLACK: "Slack",
   TWILIO: "Twilio",

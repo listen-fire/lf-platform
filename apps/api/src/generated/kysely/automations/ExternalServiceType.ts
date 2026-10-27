@@ -21,6 +21,7 @@ enum ExternalServiceType {
   REMOTE = 'REMOTE',
   EVERTRACE = 'EVERTRACE',
   DEALROOM = 'DEALROOM',
+  MCP = 'MCP',
 };
 
 export default ExternalServiceType;

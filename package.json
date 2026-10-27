@@ -40,6 +40,7 @@
     "dev:telegram": "cd apps/api && pnpm run dev:telegram",
     "dev:evertrace": "cd apps/api && pnpm run dev:evertrace",
     "dev:dealroom": "cd apps/api && pnpm run dev:dealroom",
+    "dev:mcp": "cd apps/api && pnpm run dev:mcp",
     "dev:gmail": "cd apps/api && pnpm run dev:gmail",
     "dev:oauth": "cd apps/api && pnpm run dev:oauth",
     "health": "cd apps/api && pnpm run health",

@@ -30,6 +30,7 @@ import { nativeValuationsCredsParser } from '../../../services/translation_graph
 import { granolaCredsParser } from '../../../services/credentials/connect_form_spec';
 import { evertraceCredsParser } from '@listen-fire/evertrace/api_client';
 import { dealroomCredsParser } from '@listen-fire/dealroom/api_client';
+import { mcpCredsParser } from '../../../services/translation_graph/adapters/mcp';
 import { credentialLifecycle } from '../../../services/credentials/credential_lifecycle';
 import { persistCredential } from '../../../services/credentials/persist_credential';
 import { deleteCredential, forgetCachedClients } from '../../../services/credentials/delete_credential';
@@ -172,6 +173,10 @@ const credentialsRouter = (procedure: typeof trpc.procedure) => {
               type: z.literal(ExternalServiceType.DEALROOM),
               credentials: dealroomCredsParser,
             }),
+            z.object({
+              type: z.literal(ExternalServiceType.MCP),
+              credentials: mcpCredsParser,
+            }),
             // The intrinsic types — we own both ends of the auth. The caller
             // supplies no key; the server mints one with the right scope,
             // registers it for echo suppression, and stores the plaintext
@@ -281,6 +286,10 @@ const credentialsRouter = (procedure: typeof trpc.procedure) => {
             z.object({
               type: z.literal(ExternalServiceType.DEALROOM),
               credentials: dealroomCredsParser,
+            }),
+            z.object({
+              type: z.literal(ExternalServiceType.MCP),
+              credentials: mcpCredsParser,
             }),
             // NATIVE_VALUATIONS updates never rotate the api-key (re-mint
             // means a stale platform_owned_token entry — handled by

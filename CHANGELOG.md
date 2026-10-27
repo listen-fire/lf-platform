@@ -17,6 +17,16 @@ versions are the git tags described in [`deploy/UPGRADING.md`](deploy/UPGRADING.
 
 <!-- add merged PRs here -->
 
+## [0.12.9] - 2026-10-27
+
+The platform release that matches the language's 0.12.9.
+
+- The language core is at 0.12.9 (the catalog block). Every other `@listen-fire/*` package stays on its own latest, unchanged.
+- MCP servers. A team connects any remote MCP server (streamable HTTP) as an `MCP server` connection: its URL, a token, and optionally the header the token goes in. The module is `@listen-fire/mcp` 0.12.8, loaded in process like the other bundled modules. Each connection is one server and is typed by that server's own tools, read when the connection is described: a tool that changes things is a type a movement writes, its answer read off the write; a read-only tool is a type it reads, its arguments pinned with `==` in the read's `WHERE`. Two connections in one team are typed each by its own server. Connect it in the app, or through the connect link the agent's `connectSystem` mints (a key-entry form). Token only: a server that signs in only with OAuth cannot be connected yet, because the platform has no place for a team's own OAuth app on a bundled module. Credentials of the new type `MCP` (migration `20261027_090000_mcp_external_service_type`). The platform serves them to `lf` as the module's `mcp_token` credential.
+- Security: an MCP connection's URL comes from a user, so the API reaches it only over https and only at a public address. A host that is, or resolves to, a private, loopback, link-local or reserved address (the cloud metadata address `169.254.169.254` among them) is refused before any request; the address is checked again as the connection opens, so a name that resolves differently the second time is refused too; redirects are not followed. The connect form refuses an http URL before storing it. Plain http to `localhost` is reached only when `NODE_ENV` is `development` or `test`. The CSV import's guard and this one share the address rules (`apps/api/src/lib/net`).
+- Each request to an MCP server counts against `REMOTE_ADAPTER_MAX_CALLS_PER_RUN` (default 2000), the per-run ceiling a remote adapter's calls count against; one tool call is about three requests. Operators: nothing to set.
+- Dev loop: `pnpm dev:mcp serve | connect | setup` serves a fake MCP server, connects it for the dev-loop team through the connect link, and saves a movement that calls its tools.
+
 ## [0.12.8] - 2026-10-26
 
 The platform release that matches the language's 0.12.8.

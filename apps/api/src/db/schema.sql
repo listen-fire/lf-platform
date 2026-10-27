@@ -3841,7 +3841,8 @@ CREATE TYPE automations."ExternalServiceType" AS ENUM (
     'TELEGRAM',
     'REMOTE',
     'EVERTRACE',
-    'DEALROOM'
+    'DEALROOM',
+    'MCP'
 );
 
 CREATE TABLE automations.external_service_credentials (

@@ -64,6 +64,7 @@ import { ASK_MANIFEST } from '@listen-fire/ask/manifest';
 import { SYSTEM_MANIFEST } from '@listen-fire/system/manifest';
 import { NATIVE_VALUATIONS_MANIFEST } from '@listen-fire/native-valuations/manifest';
 import { EMAIL_MANIFEST } from '@listen-fire/email/manifest';
+import { MCP_STORED_CREDENTIAL, MCP_PLATFORM_MANIFEST, mcpServerFetch } from './mcp';
 import { kgManifest } from '@listen-fire/kg/manifest';
 import {
   WEB_MODULE_PLUGINS,
@@ -116,6 +117,12 @@ export interface ModuleLineHost {
    *  enough. Default: the stored credential, read the way `storedAs` says
    *  and refreshed with `hostApp`. */
   credential?: (install: BuiltinInstall) => ModuleCredential;
+  /** Which of the credentials the module declares the stored one fills, when
+   *  the platform connects only one of them and it is not the first. */
+  declaredCredential?: string;
+  /** The fetch the module's provider requests go through, when its addresses
+   *  come from the user rather than the module. Default: the global fetch. */
+  fetch?: () => typeof fetch;
   /** The install's kv. Default: refused, by name. */
   kv?: (install: BuiltinInstall) => ModuleKv;
   /** The install's files. Default: refused, by name. */
@@ -438,6 +445,21 @@ export const BUILTIN_MODULES: BuiltinModuleTable = {
     // means this platform's own API.
     sharedCredential: () => ({ baseUrl: apiBaseUrl() }),
   },
+  // Any MCP server a team connects (@lf/mcp): each connection stores its
+  // server's URL and a token, and every request to that user-supplied
+  // address goes through the platform's public-address fetch (./mcp).
+  // Token sign-in only: the platform takes no OAuth app per server yet.
+  mcp: {
+    kind: 'adapter',
+    line: 'module',
+    manifest: MCP_PLATFORM_MANIFEST,
+    load: () => {
+      const { mcpModule }: typeof import('@listen-fire/mcp') = require('@listen-fire/mcp');
+      return mcpModule;
+    },
+    declaredCredential: MCP_STORED_CREDENTIAL,
+    fetch: mcpServerFetch,
+  },
   // The platform's own provider keys (its environment) as the install's
   // credential: nobody connects email here.
   email: {
@@ -519,12 +541,19 @@ export const HOST_REFRESH_WINDOW_MS = 5 * 60_000;
 function storedCredential(
   definition: ModuleDefinition,
   install: BuiltinInstall,
-  options: { secrets: SecretsFamily; hostApp?: () => HostOAuthApp | undefined; shared?: () => CredentialFields | undefined },
+  options: {
+    secrets: SecretsFamily;
+    declaredCredential?: string;
+    hostApp?: () => HostOAuthApp | undefined;
+    shared?: () => CredentialFields | undefined;
+  },
 ): ModuleCredential {
   const { secrets, hostApp, shared } = options;
-  const declared = definition.credentials[0];
+  const declared = storedDeclaration(definition, options.declaredCredential);
   const displayName = definition.kind === 'adapter' ? definition.manifest.displayName : definition.name;
-  if (declared === undefined) return noCredential(`module ${definition.name} declares no credential`);
+  if (declared === undefined) {
+    return noCredential(`module ${definition.name} declares no credential${options.declaredCredential !== undefined ? ` "${options.declaredCredential}"` : ''}`);
+  }
   const ref = install.credentialsId;
   if (ref === undefined) {
     const sharedFields = shared?.();
@@ -575,6 +604,12 @@ function storedCredential(
   };
 }
 
+/** The declared credential a module line's stored credential fills: the one
+ *  the line names, else the module's first. */
+export function storedDeclaration(definition: ModuleDefinition, named: string | undefined): ModuleDefinition['credentials'][number] | undefined {
+  return named === undefined ? definition.credentials[0] : definition.credentials.find((declared) => declared.name === named);
+}
+
 /** `stored`, with each field it leaves blank taken from `shared`. The same
  *  object when nothing is filled, so a module's per-credential cache holds. */
 function filledFrom(stored: CredentialFields, shared: CredentialFields | undefined): CredentialFields {
@@ -594,13 +629,13 @@ function harnessBaseUrl(entry: AdapterModuleLine, definition: AdapterModuleDefin
 
 /** What the platform hosts a module line's module with, for one install:
  *  the stored credential, the line's kv, files and linked identities
- *  (refused by name where the line names none), and the platform's browser
- *  slot (Chromium on the api image, empty on api-slim). */
+ *  (refused by name where the line names none), the platform's browser
+ *  slot (Chromium on the api image, empty on api-slim), and the line's fetch. */
 function platformHost(
   entry: ModuleLineHost,
   definition: ModuleDefinition,
   install: BuiltinInstall,
-): { credential: ModuleCredential; kv: ModuleKv; files: ModuleFiles; identities?: ModuleIdentities; browser: BrowserSlot } {
+): { credential: ModuleCredential; kv: ModuleKv; files: ModuleFiles; identities?: ModuleIdentities; browser: BrowserSlot; fetch?: typeof fetch } {
   const secrets = createSecretsFamily({
     backend: postgresSecrets({ teamId: install.teamId, ...(entry.storedAs !== undefined ? { shape: entry.storedAs } : {}) }),
     warn: (message) => logger.warn(message),
@@ -611,6 +646,7 @@ function platformHost(
       entry.credential?.(install) ??
       storedCredential(definition, install, {
         secrets,
+        ...(entry.declaredCredential !== undefined ? { declaredCredential: entry.declaredCredential } : {}),
         ...(entry.hostApp !== undefined ? { hostApp: entry.hostApp } : {}),
         ...(entry.sharedCredential !== undefined ? { shared: entry.sharedCredential } : {}),
       }),
@@ -618,6 +654,7 @@ function platformHost(
     files: entry.files?.(install) ?? refusingFiles(unavailable('ctx.files')),
     ...(entry.identities !== undefined ? { identities: entry.identities(install.teamId) } : {}),
     browser: platformBrowser,
+    ...(entry.fetch !== undefined ? { fetch: entry.fetch() } : {}),
   };
 }
 

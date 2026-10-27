@@ -3,6 +3,7 @@ import {
   isKeyEntryConnectable,
 } from '../connect_form_spec';
 import ExternalServiceType from '../../../generated/kysely/automations/ExternalServiceType';
+import { mcpModule, TOKEN_CREDENTIAL } from '@listen-fire/mcp';
 
 describe('connect_form_spec', () => {
   it('renders the Granola form as a single secret apiKey field', () => {
@@ -61,6 +62,7 @@ describe('connect_form_spec', () => {
       ExternalServiceType.GRANOLA,
       ExternalServiceType.EVERTRACE,
       ExternalServiceType.DEALROOM,
+      ExternalServiceType.MCP,
     ]) {
       const spec = connectFormSpecForType(type)!;
       expect(spec.guide?.length ?? 0).toBeGreaterThan(0);
@@ -79,6 +81,28 @@ describe('connect_form_spec', () => {
     expect(spec.fields.map((f) => f.name)).toEqual(['apiKey', 'baseUrl']);
     expect(spec.parse({ apiKey: ' dr_key ', baseUrl: '' })).toEqual({ apiKey: 'dr_key' });
     expect(() => spec.parse({ apiKey: '  ' })).toThrow();
+  });
+
+  it('renders the MCP form as the module\'s token credential, field for field', () => {
+    const spec = connectFormSpecForType(ExternalServiceType.MCP)!;
+    const declared = mcpModule.credentials.find((c) => c.name === TOKEN_CREDENTIAL);
+    expect(spec.fields.map((f) => [f.name, f.secret, f.optional])).toEqual(
+      declared?.fields.map((f) => [f.name, f.secret !== false, 'optional' in f && f.optional === true]),
+    );
+    expect(spec.parse({ url: ' https://mcp.example.com/mcp ', token: ' tok ', header: '' })).toEqual({
+      url: 'https://mcp.example.com/mcp',
+      token: 'tok',
+    });
+    expect(() => spec.parse({ url: 'https://mcp.example.com/mcp', token: '' })).toThrow();
+  });
+
+  it('refuses an MCP server URL the platform would not reach, by name, before storing it', async () => {
+    const spec = connectFormSpecForType(ExternalServiceType.MCP)!;
+    expect(await spec.validate!(spec.parse({ url: 'http://mcp.example.com/mcp', token: 'tok' }))).toEqual({
+      ok: false,
+      message: 'MCP server URL "http://mcp.example.com/mcp" must be https (http is reached only for localhost, in development).',
+    });
+    expect(await spec.validate!(spec.parse({ url: 'https://mcp.example.com/mcp', token: 'tok' }))).toEqual({ ok: true });
   });
 
   it('has no spec for intrinsic / handshake credentials', () => {

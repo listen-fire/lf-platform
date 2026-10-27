@@ -48,6 +48,12 @@ describe('a row as lf reads it', () => {
     expect(wireReading(row({ type: ExternalServiceType.SLACK, app_id: 'listen-fire' }))).toMatchObject({ external: 'slack', binding: { credential: 'slack' } });
   });
 
+  it('an MCP connection reads as the token credential the platform stores, not the module\'s first', () => {
+    const mcp = wireReading(row({ type: ExternalServiceType.MCP }));
+    expect(mcp).toMatchObject({ external: 'mcp', binding: { credential: 'mcp_token' } });
+    expect(mcp?.shape).toBe(flatPayloadShape);
+  });
+
   it('GOOGLE reads as the first of its two lines, google_sheets', () => {
     expect(wireReading(row({ type: ExternalServiceType.GOOGLE }))).toMatchObject({ external: 'google_sheets', binding: { credential: 'google' } });
   });

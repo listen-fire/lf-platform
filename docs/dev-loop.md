@@ -586,6 +586,26 @@ After setup, fire with `pnpm dev:inject dealroom --round …` and inspect with
 Dealroom declares no `sequenced` edge, so the checker asks any fold over one of
 its walks for an explicit `ORDER BY`.
 
+### `pnpm dev:mcp`
+
+An MCP server connected the way a person connects one, and a movement calling
+its tools:
+
+```bash
+pnpm dev:mcp serve --port 4790              # a fake MCP issue tracker; leave it running
+pnpm dev:mcp connect --url http://127.0.0.1:4790/mcp
+pnpm dev:mcp setup                          # saves the probe movement, mcp_probe
+pnpm dev:movement run mcp_probe
+```
+
+`connect` mints the connect link the agent's `connectSystem` mints and submits
+its key-entry form (URL, token, header) to the running API, which stores the
+`Dev Loop MCP` credential. `serve` prints each tool call it receives:
+`create_issue`, then `search_issues` with the pinned query, then a second
+`create_issue` whose title carries the first call's answer. The URL is http on
+localhost, which the API reaches only because the dev loop's `NODE_ENV` is
+`development`; anywhere else an MCP server must be https at a public address.
+
 ### Fake OAuth provider
 
 The fake-channels package serves a generic OAuth2 provider under `/oauth`, so a
