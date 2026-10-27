@@ -779,7 +779,7 @@ describe('AI(): runMovement through the LlmClient seam', () => {
         skipped: 'empty_source',
         emissions: { Mentions: 0 },
       },
-      { kind: 'ai', prompt: 'a next step, if any', hasValue: false },
+      { kind: 'ai', prompt: 'a next step, if any', hasValue: false, tier: null, model: 'haiku', effort: 'low' },
       // Nothing extracted, so the walk's guard closes, then the AI's.
       { kind: 'gate', outcome: false },
       { kind: 'gate', outcome: false },

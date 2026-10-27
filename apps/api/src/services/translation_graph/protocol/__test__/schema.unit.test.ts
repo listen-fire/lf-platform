@@ -226,6 +226,7 @@ describe('METHODS registry', () => {
       'linkRecords',
       'unlinkRecords',
       'ensureEventSubscription',
+      'refreshEventSubscription',
       'removeEventSubscription',
       'resolveAwait',
       'wakeKeys',

@@ -103,7 +103,7 @@ function wireMessage(over: {
 
 interface FakeCalls {
   profile: number;
-  history: { startHistoryId: string; labelId?: string }[];
+  history: { startHistoryId: string; labelId?: string; types?: readonly string[] }[];
   list: { query?: string; maxResults?: number }[];
   get: string[];
   attachments: { messageId: string; attachmentId: string }[];
@@ -124,12 +124,12 @@ function fakeClient(setup: {
       calls.profile += 1;
       return { emailAddress: 'deals@example.com', historyId: '5000', ...setup.profile };
     },
-    async listHistory(input: { startHistoryId: string; labelId?: string }) {
+    async listHistory(input: { startHistoryId: string; labelId?: string; types?: readonly string[] }) {
       calls.history.push(input);
       if (setup.historyExpired) {
         throw new GmailApiError('history_expired', 404, 'history.list', 'Not Found');
       }
-      return { added: setup.historyAdded ?? [], historyId: '5100' };
+      return { added: setup.historyAdded ?? [], labelled: [], historyId: '5100' };
     },
     async listMessages(input: { query?: string; maxResults?: number }) {
       calls.list.push(input);
@@ -193,8 +193,8 @@ describe('the manifest', () => {
     expect(GMAIL_MANIFEST.triggerKinds).toBeUndefined();
   });
 
-  it('declares one event and lets a listen narrow it with a Gmail query', () => {
-    expect(GMAIL_MANIFEST.subscribableEvents).toEqual(['message_received']);
+  it('declares its two events and lets a listen narrow them with a Gmail query', () => {
+    expect(GMAIL_MANIFEST.subscribableEvents).toEqual(['message_received', 'label_added']);
     expect(GMAIL_MANIFEST.listenConfig?.map((k) => k.key)).toEqual([
       'query',
       'labels',
@@ -225,7 +225,7 @@ describe('the entry surface', () => {
     const messages = entries.filter((e) => e.typeId === GMAIL_MESSAGE_TYPE_ID);
     expect(messages).toHaveLength(2);
     expect(messages[0]).toMatchObject({ readable: true, writable: true, collectionName: 'Messages' });
-    expect(messages[1]).toMatchObject({ readable: false, fires: true, firesOn: ['message_received'] });
+    expect(messages[1]).toMatchObject({ readable: false, fires: true, firesOn: ['message_received', 'label_added'] });
   });
 
   it('keeps Attachment unreadable from the root — it is reached through its message', async () => {
@@ -236,11 +236,11 @@ describe('the entry surface', () => {
     expect(attachment?.collectionName).toBeUndefined();
   });
 
-  it('the message collection is the ONLY writable entry — an attachment is never created', async () => {
+  it('the messages and drafts collections are the only writable entries — an attachment is never created', async () => {
     const writable = (await adapter.listEntryPoints())
       .filter((e) => e.writable)
       .map((e) => e.collectionName);
-    expect(writable).toEqual(['Messages']);
+    expect(writable).toEqual(['Messages', 'Drafts']);
   });
 });
 
@@ -250,9 +250,9 @@ describe('describe', () => {
   it('answers for the mailbox meta node by either address', async () => {
     const byMeta = await adapter.describe(ADAPTER_META_TYPE_ID);
     const byId = await adapter.describe(GMAIL_MAILBOX_TYPE_ID);
-    expect(byMeta?.references.map((r) => r.name)).toEqual(['Messages', 'Message']);
+    expect(byMeta?.references.map((r) => r.name)).toEqual(['Messages', 'Drafts', 'Message']);
     expect(byId?.description).toBe(byMeta?.description);
-    expect(byMeta?.description).toMatch(/no labelling, no archiving, no deleting, no drafts/);
+    expect(byMeta?.description).toMatch(/no labelling, no archiving, no deleting\./);
   });
 
   it('describes a message by its NATURAL name as well as its type id', async () => {
@@ -266,9 +266,9 @@ describe('describe', () => {
     const descriptor = await adapter.describe(GMAIL_MESSAGE_TYPE_ID);
     expect(descriptor?.fields.map((f) => f.displayName)).toEqual([
       'Message Id', 'Thread Id', 'Subject', 'From', 'To', 'Cc', 'Date', 'Snippet',
-      'Body', 'Plain Body', 'HTML Body', 'Files', 'Labels', 'Has Attachments',
+      'Body', 'Plain Body', 'HTML Body', 'Files', 'Labels', 'Has Attachments', 'Added Label',
     ]);
-    expect(descriptor?.references.map((r) => r.name)).toEqual(['Attachments', 'Replies']);
+    expect(descriptor?.references.map((r) => r.name)).toEqual(['Attachments', 'Replies', 'Drafts']);
   });
 
   it('names the send-side fields, and only those, as writable', async () => {
@@ -316,7 +316,7 @@ describe('describe', () => {
   // write promise — the mailbox's own `Messages` and a message's `Replies` —
   // and every other reference omits `writable`, which IS the read-only fact
   // rather than an absent opinion.
-  it('projects an instance whose only writes are the send and the reply', async () => {
+  it('projects an instance whose only writes are the send, the reply and the draft', async () => {
     const entries = await adapter.listEntryPoints();
     const descriptors = new Map(
       (
@@ -340,11 +340,11 @@ describe('describe', () => {
         .filter(([, edge]) => edge.writable !== false)
         .map(([edge]) => `${position}-[:${edge}]->`),
     );
-    expect(writable).toEqual(['Message-[:Replies]->']);
-    expect(Object.keys(agentSchema.positions).sort()).toEqual(['Attachment', 'Message']);
+    expect(writable).toEqual(['Message-[:Replies]->', 'Message-[:Drafts]->']);
+    expect(Object.keys(agentSchema.positions).sort()).toEqual(['Attachment', 'Draft', 'Message']);
     // The send itself hangs off the MAILBOX, not off a position — the root's
-    // own collection is where a new message is created.
-    expect(Object.keys(agentSchema.writableRoots)).toEqual(['Message']);
+    // own collections are where a new message, or a new draft, is created.
+    expect(Object.keys(agentSchema.writableRoots)).toEqual(['Message', 'Draft']);
     // The order Gmail answers in names a real, orderable Message field by the
     // name an ORDER BY writes — or the checker could never match it.
     const natural = schema.collections['Messages']?.capability?.naturalOrder;
@@ -526,6 +526,7 @@ describe('event typing', () => {
     const types = await createGmailAdapter({ teamId: TEAM }).listEventTypes?.();
     expect(types).toEqual([
       { tag: GMAIL_MESSAGE_EVENT_TAG, positionType: GMAIL_MESSAGE_TYPE_ID, match: { path: 'id', equals: [] } },
+      { tag: 'gmail:label_added', positionType: GMAIL_MESSAGE_TYPE_ID, match: { path: 'id', equals: [] } },
     ]);
   });
 });
@@ -628,7 +629,7 @@ describe('a normal poll', () => {
       checkpoint: { historyId: '4000', lastSeenAt: '2026-09-21T00:00:00.000Z' },
     });
 
-    expect(calls.history).toEqual([{ startHistoryId: '4000', labelId: 'INBOX' }]);
+    expect(calls.history).toEqual([{ startHistoryId: '4000', labelId: 'INBOX', types: ['messageAdded'] }]);
     expect(result.checkpoint).toMatchObject({ historyId: '5100' });
     expect(result.events).toHaveLength(1);
     expect(result.events[0]).toMatchObject({

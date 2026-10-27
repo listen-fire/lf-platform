@@ -119,8 +119,8 @@ describe('the signed-in shape', () => {
     const client = await resolveGmailClient({ teamId: TEAM, credentialsId: 'cred-1' });
     expect(client).not.toBeNull();
     expect(delegatedAuth).not.toHaveBeenCalled();
-    // One client per scope, both carrying the sign-in's one token.
-    expect(builtAuths).toHaveLength(2);
+    // One client per scope (read, send, compose), each carrying the sign-in's one token.
+    expect(builtAuths).toHaveLength(3);
   });
 
   it('still obeys an allowlist that IS set', async () => {

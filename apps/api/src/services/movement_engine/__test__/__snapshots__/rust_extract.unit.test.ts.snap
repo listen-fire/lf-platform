@@ -34,7 +34,9 @@ exports[`extraction calls and plugin calls in the Rust engine a model reply hold
         "emissions": {
           "Named": 1
         },
+        "tier": null,
         "model": "sonnet",
+        "effort": "low",
         "durationMs": 0,
         "cache": {
           "breakpoints": [
@@ -101,7 +103,9 @@ exports[`extraction calls and plugin calls in the Rust engine a plugin's or a fi
         "emissions": {
           "Named": 1
         },
+        "tier": null,
         "model": "sonnet",
+        "effort": "low",
         "durationMs": 0,
         "cache": {
           "breakpoints": [
@@ -204,7 +208,9 @@ exports[`extraction calls and plugin calls in the Rust engine an extraction call
           ],
           "sample": "{\\"records\\":[]}"
         },
+        "tier": null,
         "model": "claude-opus-5",
+        "effort": "low",
         "durationMs": 0,
         "cache": {
           "breakpoints": [
@@ -264,7 +270,9 @@ exports[`extraction calls and plugin calls in the Rust engine an extraction call
           ],
           "sample": "{\\"records\\":[]}"
         },
+        "tier": null,
         "model": "claude-opus-5",
+        "effort": "low",
         "durationMs": 0,
         "cache": {
           "breakpoints": [
@@ -321,7 +329,9 @@ exports[`extraction calls and plugin calls in the Rust engine asks each tier's m
         "emissions": {
           "Named": 1
         },
+        "tier": "quick",
         "model": "sonnet",
+        "effort": "low",
         "durationMs": 0,
         "cache": {
           "breakpoints": [
@@ -345,7 +355,10 @@ exports[`extraction calls and plugin calls in the Rust engine asks each tier's m
       {
         "kind": "ai",
         "prompt": "why 7",
-        "hasValue": true
+        "hasValue": true,
+        "tier": "quick",
+        "model": "haiku",
+        "effort": "low"
       }
     ]
   }
@@ -392,7 +405,9 @@ exports[`extraction calls and plugin calls in the Rust engine asks each tier's m
         "emissions": {
           "Named": 1
         },
+        "tier": "careful",
         "model": "sonnet",
+        "effort": "high",
         "durationMs": 0,
         "cache": {
           "breakpoints": [
@@ -416,7 +431,10 @@ exports[`extraction calls and plugin calls in the Rust engine asks each tier's m
       {
         "kind": "ai",
         "prompt": "why 9",
-        "hasValue": true
+        "hasValue": true,
+        "tier": "careful",
+        "model": "sonnet",
+        "effort": null
       }
     ]
   }
@@ -464,7 +482,9 @@ exports[`extraction calls and plugin calls in the Rust engine asks each tier's m
         "emissions": {
           "Named": 1
         },
+        "tier": "thorough",
         "model": "sonnet",
+        "effort": "xhigh",
         "durationMs": 0,
         "cache": {
           "breakpoints": [
@@ -488,7 +508,10 @@ exports[`extraction calls and plugin calls in the Rust engine asks each tier's m
       {
         "kind": "ai",
         "prompt": "why 10",
-        "hasValue": true
+        "hasValue": true,
+        "tier": "thorough",
+        "model": "opus5",
+        "effort": null
       }
     ]
   }
@@ -535,7 +558,9 @@ exports[`extraction calls and plugin calls in the Rust engine asks each tier's m
         "emissions": {
           "Named": 1
         },
+        "tier": "careful",
         "model": "sonnet",
+        "effort": "high",
         "durationMs": 0,
         "cache": {
           "breakpoints": [
@@ -559,7 +584,10 @@ exports[`extraction calls and plugin calls in the Rust engine asks each tier's m
       {
         "kind": "ai",
         "prompt": "why 7",
-        "hasValue": true
+        "hasValue": true,
+        "tier": "careful",
+        "model": "sonnet",
+        "effort": null
       }
     ]
   }
@@ -605,7 +633,9 @@ exports[`extraction calls and plugin calls in the Rust engine asks each tier's m
         "emissions": {
           "Named": 1
         },
+        "tier": null,
         "model": "sonnet",
+        "effort": "low",
         "durationMs": 0,
         "cache": {
           "breakpoints": [
@@ -629,7 +659,10 @@ exports[`extraction calls and plugin calls in the Rust engine asks each tier's m
       {
         "kind": "ai",
         "prompt": "why 0",
-        "hasValue": true
+        "hasValue": true,
+        "tier": "careful",
+        "model": "sonnet",
+        "effort": null
       }
     ]
   }
@@ -676,7 +709,9 @@ exports[`extraction calls and plugin calls in the Rust engine asks each tier's m
         "emissions": {
           "Named": 1
         },
+        "tier": "quick",
         "model": "sonnet",
+        "effort": "low",
         "durationMs": 0,
         "cache": {
           "breakpoints": [
@@ -700,7 +735,10 @@ exports[`extraction calls and plugin calls in the Rust engine asks each tier's m
       {
         "kind": "ai",
         "prompt": "why 7",
-        "hasValue": true
+        "hasValue": true,
+        "tier": "quick",
+        "model": "haiku",
+        "effort": "low"
       }
     ]
   }
@@ -746,7 +784,9 @@ exports[`extraction calls and plugin calls in the Rust engine asks each tier's m
         "emissions": {
           "Named": 1
         },
+        "tier": "careful",
         "model": "claude-opus-5",
+        "effort": "medium",
         "durationMs": 0,
         "cache": {
           "breakpoints": [
@@ -770,7 +810,10 @@ exports[`extraction calls and plugin calls in the Rust engine asks each tier's m
       {
         "kind": "ai",
         "prompt": "why 9",
-        "hasValue": true
+        "hasValue": true,
+        "tier": "careful",
+        "model": "sonnet",
+        "effort": null
       }
     ]
   }
@@ -817,7 +860,9 @@ exports[`extraction calls and plugin calls in the Rust engine asks each tier's m
         "emissions": {
           "Named": 1
         },
+        "tier": "thorough",
         "model": "sonnet",
+        "effort": "low",
         "durationMs": 0,
         "cache": {
           "breakpoints": [
@@ -841,7 +886,10 @@ exports[`extraction calls and plugin calls in the Rust engine asks each tier's m
       {
         "kind": "ai",
         "prompt": "why 10",
-        "hasValue": true
+        "hasValue": true,
+        "tier": "thorough",
+        "model": "opus5",
+        "effort": null
       }
     ]
   }
@@ -887,7 +935,9 @@ exports[`extraction calls and plugin calls in the Rust engine asks each tier's m
         "emissions": {
           "Named": 1
         },
+        "tier": "careful",
         "model": "claude-opus-5",
+        "effort": "medium",
         "durationMs": 0,
         "cache": {
           "breakpoints": [
@@ -911,7 +961,10 @@ exports[`extraction calls and plugin calls in the Rust engine asks each tier's m
       {
         "kind": "ai",
         "prompt": "why 7",
-        "hasValue": true
+        "hasValue": true,
+        "tier": "careful",
+        "model": "sonnet",
+        "effort": null
       }
     ]
   }
@@ -957,7 +1010,9 @@ exports[`extraction calls and plugin calls in the Rust engine asks each tier's m
         "emissions": {
           "Named": 1
         },
+        "tier": null,
         "model": "sonnet",
+        "effort": "low",
         "durationMs": 0,
         "cache": {
           "breakpoints": [
@@ -981,7 +1036,10 @@ exports[`extraction calls and plugin calls in the Rust engine asks each tier's m
       {
         "kind": "ai",
         "prompt": "why 0",
-        "hasValue": true
+        "hasValue": true,
+        "tier": "careful",
+        "model": "sonnet",
+        "effort": null
       }
     ]
   }
@@ -1107,7 +1165,9 @@ exports[`extraction calls and plugin calls in the Rust engine hands a plugin a r
         "emissions": {
           "Named": 1
         },
+        "tier": null,
         "model": "sonnet",
+        "effort": "low",
         "durationMs": 0,
         "cache": {
           "breakpoints": [
@@ -1213,7 +1273,9 @@ exports[`extraction calls and plugin calls in the Rust engine reads a library de
         "emissions": {
           "Deal": 1
         },
+        "tier": null,
         "model": "sonnet",
+        "effort": "low",
         "durationMs": 0,
         "cache": {
           "breakpoints": [
@@ -1289,7 +1351,9 @@ exports[`extraction calls and plugin calls in the Rust engine reads a model numb
         "dropped": {
           "Raise": 1
         },
+        "tier": null,
         "model": "sonnet",
+        "effort": "low",
         "durationMs": 0,
         "cache": {
           "breakpoints": [
@@ -1358,7 +1422,9 @@ exports[`extraction calls and plugin calls in the Rust engine records held as va
         "emissions": {
           "Deals": 1
         },
+        "tier": null,
         "model": "sonnet",
+        "effort": "low",
         "durationMs": 0,
         "cache": {
           "breakpoints": [
@@ -1402,7 +1468,9 @@ exports[`extraction calls and plugin calls in the Rust engine records held as va
         "emissions": {
           "Named": 1
         },
+        "tier": null,
         "model": "sonnet",
+        "effort": "low",
         "durationMs": 0,
         "cache": {
           "breakpoints": [
@@ -1498,7 +1566,9 @@ exports[`extraction calls and plugin calls in the Rust engine records held as va
         "emissions": {
           "Deals": 1
         },
+        "tier": null,
         "model": "sonnet",
+        "effort": "low",
         "durationMs": 0,
         "cache": {
           "breakpoints": [
@@ -1611,7 +1681,9 @@ exports[`extraction calls and plugin calls in the Rust engine runs a library's f
         "emissions": {
           "Batch": 1
         },
+        "tier": null,
         "model": "sonnet",
+        "effort": "low",
         "durationMs": 0,
         "cache": {
           "breakpoints": [
@@ -1678,7 +1750,9 @@ exports[`extraction calls and plugin calls in the Rust engine runs an extraction
         "emissions": {
           "Entry": 1
         },
+        "tier": null,
         "model": "sonnet",
+        "effort": "low",
         "durationMs": 0,
         "cache": {
           "breakpoints": [
@@ -1748,7 +1822,9 @@ exports[`extraction calls and plugin calls in the Rust engine runs an extraction
         "emissions": {
           "Entry": 1
         },
+        "tier": null,
         "model": "sonnet",
+        "effort": "low",
         "durationMs": 0,
         "cache": {
           "breakpoints": [
@@ -1784,7 +1860,9 @@ exports[`extraction calls and plugin calls in the Rust engine runs an extraction
         "emissions": {
           "Entry": 1
         },
+        "tier": null,
         "model": "sonnet",
+        "effort": "low",
         "durationMs": 0,
         "cache": {
           "breakpoints": [
@@ -1858,7 +1936,9 @@ exports[`extraction calls and plugin calls in the Rust engine runs an extraction
         "emissions": {
           "Entry": 1
         },
+        "tier": null,
         "model": "sonnet",
+        "effort": "low",
         "durationMs": 0,
         "cache": {
           "breakpoints": [
@@ -1894,7 +1974,9 @@ exports[`extraction calls and plugin calls in the Rust engine runs an extraction
         "emissions": {
           "Entry": 1
         },
+        "tier": null,
         "model": "sonnet",
+        "effort": "low",
         "durationMs": 0,
         "cache": {
           "breakpoints": [
@@ -1955,7 +2037,9 @@ exports[`extraction calls and plugin calls in the Rust engine runs an extraction
         "emissions": {
           "Entry": 1
         },
+        "tier": null,
         "model": "sonnet",
+        "effort": "low",
         "durationMs": 0,
         "cache": {
           "breakpoints": [
@@ -2134,7 +2218,9 @@ exports[`extraction calls and plugin calls in the Rust engine the file reader's 
         "emissions": {
           "Named": 1
         },
+        "tier": null,
         "model": "sonnet",
+        "effort": "low",
         "durationMs": 0,
         "cache": {
           "breakpoints": [

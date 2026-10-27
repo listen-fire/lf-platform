@@ -65,9 +65,10 @@ describe('adapter triggerExpectation — honest inbound semantics', () => {
     const t = WHATSAPP_MANIFEST.triggerExpectation;
     expect(t).toBeDefined();
     expect(t).toMatch(/never reads/i);
-    // The number is a channel the user messages DELIBERATELY (not passive chat
-    // access) — the copy frames it first-person rather than as blanket capture.
-    expect(t).toMatch(/messages\s+deliberately/i);
+    // On the shared number only the user's own linked phone reaches their
+    // movements (not passive chat access): the copy frames it first-person.
+    expect(t).toMatch(/only messages the user sends from their own linked number/i);
+    expect(t).toMatch(/first-person/i);
   });
 
   it('cron and manual disclaim any reactive capture', () => {

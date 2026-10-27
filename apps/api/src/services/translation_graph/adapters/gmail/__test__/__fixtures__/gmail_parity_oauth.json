@@ -18,9 +18,18 @@
           "readable": false,
           "fires": true,
           "firesOn": [
-            "message_received"
+            "message_received",
+            "label_added"
           ],
-          "description": "Delivered when a message arrives in the mailbox that was not there at the last look. Read its fields straight off, or walk `Attachments`."
+          "description": "Delivered when a message arrives in the mailbox that was not there at the last look (`message_received`), or when a label is added to a message already there (`label_added`, with `Added Label` set). Read its fields straight off, or walk `Attachments`."
+        },
+        {
+          "typeId": "gmail:draft",
+          "displayName": "Draft",
+          "writable": true,
+          "readable": false,
+          "collectionName": "Drafts",
+          "description": "A Draft written along the mailbox’s `Drafts` edge is kept unsent for a person to finish; along a message’s `Drafts` edge it is a reply kept unsent, threaded as a reply is. Drafts work only where the mailbox was signed in with drafts enabled (the `gmail_drafts` credential)."
         },
         {
           "typeId": "gmail:attachment",
@@ -189,7 +198,7 @@
             "cardinality": "many",
             "writable": false,
             "required": false,
-            "description": "Gmail label ids — the system ones (INBOX, UNREAD, IMPORTANT) in capitals, and a user label by its own name. A WHERE reaches the search as `label:`. This connection can read them and can never set one.",
+            "description": "Gmail label ids — the system ones (INBOX, UNREAD, IMPORTANT) in capitals, and a user label by the id Gmail gave it (Label_12). A WHERE reaches the search as `label:`. This connection can read them and can never set one.",
             "capability": {
               "filterOperators": [
                 "eq",
@@ -205,6 +214,14 @@
             "writable": false,
             "required": false,
             "description": "Whether walking `Attachments` would find anything — true without fetching a single byte."
+          },
+          {
+            "fieldId": "addedLabel",
+            "displayName": "Added Label",
+            "kind": "string",
+            "writable": false,
+            "required": false,
+            "description": "On a message a `label_added` listen delivered: the label id that was just added. Empty on any other message."
           }
         ],
         "references": [
@@ -228,6 +245,17 @@
             "readable": false,
             "linkable": false,
             "description": "Write here to reply to this message inside its conversation. The thread, the `Re:` subject and the `In-Reply-To` / `References` headers all come from this parent — a reply names only what it says (`Body`), and may override `Subject`, `To` or `Cc`. Not readable: this connection sends into a conversation, it does not read one back."
+          },
+          {
+            "fieldId": "message_drafts",
+            "targetTypeId": "gmail:draft",
+            "cardinality": "many",
+            "direction": "outgoing",
+            "name": "Drafts",
+            "writable": true,
+            "readable": false,
+            "linkable": false,
+            "description": "Write here to keep a reply to this message unsent, for a person to finish. Threaded exactly as a reply along `Replies` is."
           }
         ]
       }
@@ -428,7 +456,7 @@
             "cardinality": "many",
             "writable": false,
             "required": false,
-            "description": "Gmail label ids — the system ones (INBOX, UNREAD, IMPORTANT) in capitals, and a user label by its own name. A WHERE reaches the search as `label:`. This connection can read them and can never set one.",
+            "description": "Gmail label ids — the system ones (INBOX, UNREAD, IMPORTANT) in capitals, and a user label by the id Gmail gave it (Label_12). A WHERE reaches the search as `label:`. This connection can read them and can never set one.",
             "capability": {
               "filterOperators": [
                 "eq",
@@ -444,6 +472,14 @@
             "writable": false,
             "required": false,
             "description": "Whether walking `Attachments` would find anything — true without fetching a single byte."
+          },
+          {
+            "fieldId": "addedLabel",
+            "displayName": "Added Label",
+            "kind": "string",
+            "writable": false,
+            "required": false,
+            "description": "On a message a `label_added` listen delivered: the label id that was just added. Empty on any other message."
           }
         ],
         "references": [
@@ -467,6 +503,17 @@
             "readable": false,
             "linkable": false,
             "description": "Write here to reply to this message inside its conversation. The thread, the `Re:` subject and the `In-Reply-To` / `References` headers all come from this parent — a reply names only what it says (`Body`), and may override `Subject`, `To` or `Cc`. Not readable: this connection sends into a conversation, it does not read one back."
+          },
+          {
+            "fieldId": "message_drafts",
+            "targetTypeId": "gmail:draft",
+            "cardinality": "many",
+            "direction": "outgoing",
+            "name": "Drafts",
+            "writable": true,
+            "readable": false,
+            "linkable": false,
+            "description": "Write here to keep a reply to this message unsent, for a person to finish. Threaded exactly as a reply along `Replies` is."
           }
         ]
       }
@@ -481,7 +528,7 @@
         "descriptor": {
           "typeId": "meta",
           "displayName": "Gmail",
-          "description": "One Google Workspace mailbox. Walk `Messages` to search it, write along `Messages` to send as the mailbox, or listen on `Message` to run when mail arrives. A Message written along the mailbox’s `Messages` edge is a NEW message; a Message written along another message’s `Replies` edge is a reply, and its thread, its `Re:` subject and its reply headers all come from that parent rather than from fields. Reading and sending are the whole of what this connection can do: no labelling, no archiving, no deleting, no drafts.",
+          "description": "One Google Workspace mailbox. Walk `Messages` to search it, write along `Messages` to send as the mailbox, or listen on `Message` to run when mail arrives or is labelled. A Message written along the mailbox’s `Messages` edge is a NEW message; a Message written along another message’s `Replies` edge is a reply, and its thread, its `Re:` subject and its reply headers all come from that parent rather than from fields. A Draft written along the mailbox’s `Drafts` edge is kept unsent for a person to finish; along a message’s `Drafts` edge it is a reply kept unsent, threaded as a reply is. Drafts work only where the mailbox was signed in with drafts enabled (the `gmail_drafts` credential). Reading, sending and drafting are the whole of what this connection can do: no labelling, no archiving, no deleting.",
           "fields": [],
           "references": [
             {
@@ -505,6 +552,17 @@
               }
             },
             {
+              "fieldId": "Drafts",
+              "targetTypeId": "gmail:draft",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "name": "Drafts",
+              "writable": true,
+              "readable": false,
+              "linkable": false,
+              "description": "Write here to keep a new message unsent. A Draft written along the mailbox’s `Drafts` edge is kept unsent for a person to finish; along a message’s `Drafts` edge it is a reply kept unsent, threaded as a reply is. Drafts work only where the mailbox was signed in with drafts enabled (the `gmail_drafts` credential)."
+            },
+            {
               "fieldId": "fires:gmail:message",
               "targetTypeId": "gmail:message",
               "cardinality": "one",
@@ -512,10 +570,11 @@
               "name": "Message",
               "fires": true,
               "firesOn": [
-                "message_received"
+                "message_received",
+                "label_added"
               ],
               "readable": false,
-              "description": "A message that has just arrived — what a listen delivers."
+              "description": "A message that has just arrived, or just been labelled — what a listen delivers."
             }
           ]
         },
@@ -523,6 +582,14 @@
           "Messages": {
             "adapterType": "gmail",
             "recordType": "gmail:message",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "Drafts": {
+            "adapterType": "gmail",
+            "recordType": "gmail:draft",
             "identity": {
               "kind": "unstable",
               "data": {}
@@ -691,7 +758,7 @@
                 "cardinality": "many",
                 "writable": false,
                 "required": false,
-                "description": "Gmail label ids — the system ones (INBOX, UNREAD, IMPORTANT) in capitals, and a user label by its own name. A WHERE reaches the search as `label:`. This connection can read them and can never set one.",
+                "description": "Gmail label ids — the system ones (INBOX, UNREAD, IMPORTANT) in capitals, and a user label by the id Gmail gave it (Label_12). A WHERE reaches the search as `label:`. This connection can read them and can never set one.",
                 "capability": {
                   "filterOperators": [
                     "eq",
@@ -707,6 +774,98 @@
                 "writable": false,
                 "required": false,
                 "description": "Whether walking `Attachments` would find anything — true without fetching a single byte."
+              },
+              {
+                "fieldId": "addedLabel",
+                "displayName": "Added Label",
+                "kind": "string",
+                "writable": false,
+                "required": false,
+                "description": "On a message a `label_added` listen delivered: the label id that was just added. Empty on any other message."
+              }
+            ]
+          },
+          "Drafts": {
+            "typeId": "gmail:draft",
+            "displayName": "Draft",
+            "description": "A message kept unsent in the mailbox. A Draft written along the mailbox’s `Drafts` edge is kept unsent for a person to finish; along a message’s `Drafts` edge it is a reply kept unsent, threaded as a reply is. Drafts work only where the mailbox was signed in with drafts enabled (the `gmail_drafts` credential). Every field is optional: a person finishes the draft. The write hands back its `Id`, `Message Id` and `Thread Id`.",
+            "fields": [
+              {
+                "fieldId": "id",
+                "displayName": "Id",
+                "kind": "string",
+                "writable": false,
+                "required": false,
+                "description": "Gmail's id for the draft (not its message's)."
+              },
+              {
+                "fieldId": "messageId",
+                "displayName": "Message Id",
+                "kind": "string",
+                "writable": false,
+                "required": false,
+                "description": "The id of the message the draft holds."
+              },
+              {
+                "fieldId": "threadId",
+                "displayName": "Thread Id",
+                "kind": "string",
+                "writable": false,
+                "required": false,
+                "description": "The conversation the draft belongs to: its parent’s, on a reply draft."
+              },
+              {
+                "fieldId": "to",
+                "displayName": "To",
+                "kind": "string",
+                "cardinality": "many",
+                "writable": true,
+                "required": false,
+                "description": "The addresses on the \"To\" header. A reply draft that leaves it unset answers whoever sent the parent."
+              },
+              {
+                "fieldId": "cc",
+                "displayName": "Cc",
+                "kind": "string",
+                "cardinality": "many",
+                "writable": true,
+                "required": false,
+                "description": "The addresses on the \"Cc\" header."
+              },
+              {
+                "fieldId": "subject",
+                "displayName": "Subject",
+                "kind": "string",
+                "writable": true,
+                "required": false,
+                "description": "The subject line; a reply draft that leaves it unset gets the parent’s with `Re:` in front."
+              },
+              {
+                "fieldId": "body",
+                "displayName": "Body",
+                "kind": "string",
+                "writable": true,
+                "uiHint": "textarea",
+                "required": false,
+                "description": "The plain-text body."
+              },
+              {
+                "fieldId": "bodyHtml",
+                "displayName": "HTML Body",
+                "kind": "string",
+                "writable": true,
+                "required": false,
+                "description": "The HTML alternative, set alongside `Body`."
+              },
+              {
+                "fieldId": "files",
+                "displayName": "Files",
+                "kind": "file",
+                "cardinality": "many",
+                "writable": true,
+                "readable": false,
+                "required": false,
+                "description": "Files to attach — a list of file values the run already holds."
               }
             ]
           },
@@ -863,7 +1022,7 @@
                 "cardinality": "many",
                 "writable": false,
                 "required": false,
-                "description": "Gmail label ids — the system ones (INBOX, UNREAD, IMPORTANT) in capitals, and a user label by its own name. A WHERE reaches the search as `label:`. This connection can read them and can never set one.",
+                "description": "Gmail label ids — the system ones (INBOX, UNREAD, IMPORTANT) in capitals, and a user label by the id Gmail gave it (Label_12). A WHERE reaches the search as `label:`. This connection can read them and can never set one.",
                 "capability": {
                   "filterOperators": [
                     "eq",
@@ -879,6 +1038,14 @@
                 "writable": false,
                 "required": false,
                 "description": "Whether walking `Attachments` would find anything — true without fetching a single byte."
+              },
+              {
+                "fieldId": "addedLabel",
+                "displayName": "Added Label",
+                "kind": "string",
+                "writable": false,
+                "required": false,
+                "description": "On a message a `label_added` listen delivered: the label id that was just added. Empty on any other message."
               }
             ]
           }
@@ -890,6 +1057,14 @@
       "answer": [
         {
           "tag": "gmail:message_received",
+          "positionType": "gmail:message",
+          "match": {
+            "path": "id",
+            "equals": []
+          }
+        },
+        {
+          "tag": "gmail:label_added",
           "positionType": "gmail:message",
           "match": {
             "path": "id",
@@ -1689,7 +1864,7 @@
               "cardinality": "many",
               "writable": false,
               "required": false,
-              "description": "Gmail label ids — the system ones (INBOX, UNREAD, IMPORTANT) in capitals, and a user label by its own name. A WHERE reaches the search as `label:`. This connection can read them and can never set one.",
+              "description": "Gmail label ids — the system ones (INBOX, UNREAD, IMPORTANT) in capitals, and a user label by the id Gmail gave it (Label_12). A WHERE reaches the search as `label:`. This connection can read them and can never set one.",
               "capability": {
                 "filterOperators": [
                   "eq",
@@ -1705,6 +1880,14 @@
               "writable": false,
               "required": false,
               "description": "Whether walking `Attachments` would find anything — true without fetching a single byte."
+            },
+            {
+              "fieldId": "addedLabel",
+              "displayName": "Added Label",
+              "kind": "string",
+              "writable": false,
+              "required": false,
+              "description": "On a message a `label_added` listen delivered: the label id that was just added. Empty on any other message."
             }
           ],
           "references": [
@@ -1728,6 +1911,17 @@
               "readable": false,
               "linkable": false,
               "description": "Write here to reply to this message inside its conversation. The thread, the `Re:` subject and the `In-Reply-To` / `References` headers all come from this parent — a reply names only what it says (`Body`), and may override `Subject`, `To` or `Cc`. Not readable: this connection sends into a conversation, it does not read one back."
+            },
+            {
+              "fieldId": "message_drafts",
+              "targetTypeId": "gmail:draft",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "name": "Drafts",
+              "writable": true,
+              "readable": false,
+              "linkable": false,
+              "description": "Write here to keep a reply to this message unsent, for a person to finish. Threaded exactly as a reply along `Replies` is."
             }
           ]
         },
@@ -1743,6 +1937,14 @@
           "message_replies": {
             "adapterType": "gmail",
             "recordType": "gmail:message",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "message_drafts": {
+            "adapterType": "gmail",
+            "recordType": "gmail:draft",
             "identity": {
               "kind": "unstable",
               "data": {}
@@ -1940,7 +2142,7 @@
                 "cardinality": "many",
                 "writable": false,
                 "required": false,
-                "description": "Gmail label ids — the system ones (INBOX, UNREAD, IMPORTANT) in capitals, and a user label by its own name. A WHERE reaches the search as `label:`. This connection can read them and can never set one.",
+                "description": "Gmail label ids — the system ones (INBOX, UNREAD, IMPORTANT) in capitals, and a user label by the id Gmail gave it (Label_12). A WHERE reaches the search as `label:`. This connection can read them and can never set one.",
                 "capability": {
                   "filterOperators": [
                     "eq",
@@ -1956,6 +2158,98 @@
                 "writable": false,
                 "required": false,
                 "description": "Whether walking `Attachments` would find anything — true without fetching a single byte."
+              },
+              {
+                "fieldId": "addedLabel",
+                "displayName": "Added Label",
+                "kind": "string",
+                "writable": false,
+                "required": false,
+                "description": "On a message a `label_added` listen delivered: the label id that was just added. Empty on any other message."
+              }
+            ]
+          },
+          "message_drafts": {
+            "typeId": "gmail:draft",
+            "displayName": "Draft",
+            "description": "A message kept unsent in the mailbox. A Draft written along the mailbox’s `Drafts` edge is kept unsent for a person to finish; along a message’s `Drafts` edge it is a reply kept unsent, threaded as a reply is. Drafts work only where the mailbox was signed in with drafts enabled (the `gmail_drafts` credential). Every field is optional: a person finishes the draft. The write hands back its `Id`, `Message Id` and `Thread Id`.",
+            "fields": [
+              {
+                "fieldId": "id",
+                "displayName": "Id",
+                "kind": "string",
+                "writable": false,
+                "required": false,
+                "description": "Gmail's id for the draft (not its message's)."
+              },
+              {
+                "fieldId": "messageId",
+                "displayName": "Message Id",
+                "kind": "string",
+                "writable": false,
+                "required": false,
+                "description": "The id of the message the draft holds."
+              },
+              {
+                "fieldId": "threadId",
+                "displayName": "Thread Id",
+                "kind": "string",
+                "writable": false,
+                "required": false,
+                "description": "The conversation the draft belongs to: its parent’s, on a reply draft."
+              },
+              {
+                "fieldId": "to",
+                "displayName": "To",
+                "kind": "string",
+                "cardinality": "many",
+                "writable": true,
+                "required": false,
+                "description": "The addresses on the \"To\" header. A reply draft that leaves it unset answers whoever sent the parent."
+              },
+              {
+                "fieldId": "cc",
+                "displayName": "Cc",
+                "kind": "string",
+                "cardinality": "many",
+                "writable": true,
+                "required": false,
+                "description": "The addresses on the \"Cc\" header."
+              },
+              {
+                "fieldId": "subject",
+                "displayName": "Subject",
+                "kind": "string",
+                "writable": true,
+                "required": false,
+                "description": "The subject line; a reply draft that leaves it unset gets the parent’s with `Re:` in front."
+              },
+              {
+                "fieldId": "body",
+                "displayName": "Body",
+                "kind": "string",
+                "writable": true,
+                "uiHint": "textarea",
+                "required": false,
+                "description": "The plain-text body."
+              },
+              {
+                "fieldId": "bodyHtml",
+                "displayName": "HTML Body",
+                "kind": "string",
+                "writable": true,
+                "required": false,
+                "description": "The HTML alternative, set alongside `Body`."
+              },
+              {
+                "fieldId": "files",
+                "displayName": "Files",
+                "kind": "file",
+                "cardinality": "many",
+                "writable": true,
+                "readable": false,
+                "required": false,
+                "description": "Files to attach — a list of file values the run already holds."
               }
             ]
           }
@@ -2199,13 +2493,13 @@
         "externalId": "sent-1",
         "recordType": "Message",
         "data": {
-          "id": "sent-1",
-          "threadId": "sent-1",
-          "from": "dev-loop@listen-fire.local",
-          "to": [
+          "Message Id": "sent-1",
+          "Thread Id": "sent-1",
+          "From": "dev-loop@listen-fire.local",
+          "To": [
             "rita@acme.com"
           ],
-          "subject": "Your Q3 figures"
+          "Subject": "Your Q3 figures"
         }
       }
     },
@@ -2216,17 +2510,17 @@
         "externalId": "sent-2",
         "recordType": "Message",
         "data": {
-          "id": "sent-2",
-          "threadId": "sent-2",
-          "from": "dev-loop@listen-fire.local",
-          "to": [
+          "Message Id": "sent-2",
+          "Thread Id": "sent-2",
+          "From": "dev-loop@listen-fire.local",
+          "To": [
             "Rita Okoye <rita@acme.com>",
             "sam@beta.io"
           ],
-          "cc": [
+          "Cc": [
             "ops@acme.com"
           ],
-          "subject": "Both of you"
+          "Subject": "Both of you"
         }
       }
     },
@@ -2237,13 +2531,13 @@
         "externalId": "sent-3",
         "recordType": "Message",
         "data": {
-          "id": "sent-3",
-          "threadId": "sent-3",
-          "from": "dev-loop@listen-fire.local",
-          "to": [
+          "Message Id": "sent-3",
+          "Thread Id": "sent-3",
+          "From": "dev-loop@listen-fire.local",
+          "To": [
             "rita@acme.com"
           ],
-          "subject": "Notes"
+          "Subject": "Notes"
         }
       }
     },
@@ -2254,13 +2548,13 @@
         "externalId": "sent-4",
         "recordType": "Message",
         "data": {
-          "id": "sent-4",
-          "threadId": "sent-4",
-          "from": "dev-loop@listen-fire.local",
-          "to": [
+          "Message Id": "sent-4",
+          "Thread Id": "sent-4",
+          "From": "dev-loop@listen-fire.local",
+          "To": [
             "sam@beta.io"
           ],
-          "subject": "Fwd: Q3 figures"
+          "Subject": "Fwd: Q3 figures"
         }
       }
     },
@@ -2271,13 +2565,13 @@
         "externalId": "sent-5",
         "recordType": "Message",
         "data": {
-          "id": "sent-5",
-          "threadId": "msg-acme",
-          "from": "dev-loop@listen-fire.local",
-          "to": [
+          "Message Id": "sent-5",
+          "Thread Id": "msg-acme",
+          "From": "dev-loop@listen-fire.local",
+          "To": [
             "Rita Okoye <rita@acme.com>"
           ],
-          "subject": "Re: Q3 figures"
+          "Subject": "Re: Q3 figures"
         }
       }
     },
@@ -2288,13 +2582,13 @@
         "externalId": "sent-6",
         "recordType": "Message",
         "data": {
-          "id": "sent-6",
-          "threadId": "msg-acme",
-          "from": "dev-loop@listen-fire.local",
-          "to": [
+          "Message Id": "sent-6",
+          "Thread Id": "msg-acme",
+          "From": "dev-loop@listen-fire.local",
+          "To": [
             "sam@beta.io"
           ],
-          "subject": "Q3 (for Sam)"
+          "Subject": "Q3 (for Sam)"
         }
       }
     },
@@ -2331,7 +2625,7 @@
     {
       "step": "refused: create an Attachment",
       "answer": {
-        "error": "GmailAdapter.createRecord: 'Attachment' is not something this mailbox can create — a Gmail write is a Message, sent or replied."
+        "error": "GmailAdapter.createRecord: 'Attachment' is not something this mailbox can create — a Gmail write is a Message, sent or replied, or a Draft."
       }
     },
     {
@@ -2869,7 +3163,7 @@
     {
       "step": "refused: poll with labels that are not a list",
       "answer": {
-        "error": "a Gmail listener's 'labels' must be a non-empty list of Gmail label ids — e.g. labels: [\"INBOX\", \"SPAM\"]"
+        "error": "a Gmail listener's 'labels' must be a non-empty list of Gmail labels, by name or id — e.g. labels: [\"INBOX\", \"SPAM\"] or labels: [\"Deals\"]"
       }
     }
   ],

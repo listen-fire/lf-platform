@@ -79,7 +79,7 @@
       "answer": {
         "typeId": "File",
         "displayName": "File",
-        "description": "A file in Google Drive. On a create (along a folder's `Files` edge), provide EITHER `File` (upload bytes) OR `Content` (text imported as a Google Doc) — not both. `File` reads the content back as bytes.",
+        "description": "A file in Google Drive. On a create (along a folder's `Files` edge), provide EITHER `File` (upload bytes) OR `Content` (text imported as a Google Doc) — not both. `File` reads the content back as bytes. To copy a file you were granted into a folder, write it along both edges: `write (folder-[:Files]->, template-[:Copies]->) { Name: \"…\" }` (Name optional; Drive names the copy otherwise). The copy is a normal file afterwards.",
         "fields": [
           {
             "fieldId": "name",
@@ -142,7 +142,17 @@
             "required": false
           }
         ],
-        "references": [],
+        "references": [
+          {
+            "fieldId": "copies",
+            "targetTypeId": "File",
+            "cardinality": "many",
+            "direction": "outgoing",
+            "name": "Copies",
+            "description": "Write-only: a copy of this file. Write along it together with the destination folder's `Files` edge: `write (folder-[:Files]->, file-[:Copies]->) { Name: \"…\" }`.",
+            "writable": true
+          }
+        ],
         "uniquenessAuthorable": false
       }
     },
@@ -237,7 +247,7 @@
           "Files": {
             "typeId": "File",
             "displayName": "File",
-            "description": "A file in Google Drive. On a create (along a folder's `Files` edge), provide EITHER `File` (upload bytes) OR `Content` (text imported as a Google Doc) — not both. `File` reads the content back as bytes.",
+            "description": "A file in Google Drive. On a create (along a folder's `Files` edge), provide EITHER `File` (upload bytes) OR `Content` (text imported as a Google Doc) — not both. `File` reads the content back as bytes. To copy a file you were granted into a folder, write it along both edges: `write (folder-[:Files]->, template-[:Copies]->) { Name: \"…\" }` (Name optional; Drive names the copy otherwise). The copy is a normal file afterwards.",
             "fields": [
               {
                 "fieldId": "name",
@@ -505,7 +515,7 @@
           "files": {
             "typeId": "File",
             "displayName": "File",
-            "description": "A file in Google Drive. On a create (along a folder's `Files` edge), provide EITHER `File` (upload bytes) OR `Content` (text imported as a Google Doc) — not both. `File` reads the content back as bytes.",
+            "description": "A file in Google Drive. On a create (along a folder's `Files` edge), provide EITHER `File` (upload bytes) OR `Content` (text imported as a Google Doc) — not both. `File` reads the content back as bytes. To copy a file you were granted into a folder, write it along both edges: `write (folder-[:Files]->, template-[:Copies]->) { Name: \"…\" }` (Name optional; Drive names the copy otherwise). The copy is a normal file afterwards.",
             "fields": [
               {
                 "fieldId": "name",
@@ -611,7 +621,7 @@
         "descriptor": {
           "typeId": "File",
           "displayName": "File",
-          "description": "A file in Google Drive. On a create (along a folder's `Files` edge), provide EITHER `File` (upload bytes) OR `Content` (text imported as a Google Doc) — not both. `File` reads the content back as bytes.",
+          "description": "A file in Google Drive. On a create (along a folder's `Files` edge), provide EITHER `File` (upload bytes) OR `Content` (text imported as a Google Doc) — not both. `File` reads the content back as bytes. To copy a file you were granted into a folder, write it along both edges: `write (folder-[:Files]->, template-[:Copies]->) { Name: \"…\" }` (Name optional; Drive names the copy otherwise). The copy is a normal file afterwards.",
           "fields": [
             {
               "fieldId": "name",
@@ -674,8 +684,98 @@
               "required": false
             }
           ],
-          "references": [],
+          "references": [
+            {
+              "fieldId": "copies",
+              "targetTypeId": "File",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "name": "Copies",
+              "description": "Write-only: a copy of this file. Write along it together with the destination folder's `Files` edge: `write (folder-[:Files]->, file-[:Copies]->) { Name: \"…\" }`.",
+              "writable": true
+            }
+          ],
           "uniquenessAuthorable": false
+        },
+        "targetPositions": {
+          "copies": {
+            "adapterType": "google_drive",
+            "recordType": "File",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          }
+        },
+        "targetNodes": {
+          "copies": {
+            "typeId": "File",
+            "displayName": "File",
+            "description": "A file in Google Drive. On a create (along a folder's `Files` edge), provide EITHER `File` (upload bytes) OR `Content` (text imported as a Google Doc) — not both. `File` reads the content back as bytes. To copy a file you were granted into a folder, write it along both edges: `write (folder-[:Files]->, template-[:Copies]->) { Name: \"…\" }` (Name optional; Drive names the copy otherwise). The copy is a normal file afterwards.",
+            "fields": [
+              {
+                "fieldId": "name",
+                "displayName": "Name",
+                "kind": "string",
+                "cardinality": "one",
+                "writable": true,
+                "required": false,
+                "description": "The file name. Optional on a create — defaults to the file value's own name."
+              },
+              {
+                "fieldId": "file",
+                "displayName": "File",
+                "kind": "file",
+                "cardinality": "one",
+                "writable": true,
+                "required": false,
+                "description": "The file content. On a create: a File-typed value (e.g. FILE(…) or a file read from another system) or inline text uploaded as-is. On a read: the bytes — Docs-native files cannot be fetched this way (export is a recorded follow-up)."
+              },
+              {
+                "fieldId": "content",
+                "displayName": "Content",
+                "kind": "string",
+                "cardinality": "one",
+                "writable": true,
+                "required": false,
+                "readable": false,
+                "description": "Text imported as a Google Doc (the doc body). Write-only — a Doc's text cannot be read back through this adapter today. Provide either Content or File, not both."
+              },
+              {
+                "fieldId": "id",
+                "displayName": "Id",
+                "kind": "string",
+                "cardinality": "one",
+                "writable": false,
+                "required": false
+              },
+              {
+                "fieldId": "mimeType",
+                "displayName": "Mime Type",
+                "kind": "string",
+                "cardinality": "one",
+                "writable": false,
+                "required": false
+              },
+              {
+                "fieldId": "url",
+                "displayName": "Url",
+                "kind": "string",
+                "cardinality": "one",
+                "writable": false,
+                "required": false
+              },
+              {
+                "fieldId": "size",
+                "displayName": "Size",
+                "kind": "number",
+                "cardinality": "one",
+                "writable": false,
+                "required": false
+              }
+            ],
+            "uniquenessAuthorable": false
+          }
         }
       }
     },
@@ -801,8 +901,9 @@
         "adapterType": "google_drive",
         "externalId": "1",
         "data": {
-          "name": "Q3 Deals",
-          "url": "https://drive.google.com/drive/folders/1"
+          "Id": "1",
+          "Name": "Q3 Deals",
+          "Url": "https://drive.google.com/drive/folders/1"
         }
       }
     },
@@ -812,8 +913,9 @@
         "adapterType": "google_drive",
         "externalId": "1",
         "data": {
-          "name": "Q3 Deals",
-          "url": "https://drive.google.com/drive/folders/1"
+          "Id": "1",
+          "Name": "Q3 Deals",
+          "Url": "https://drive.google.com/drive/folders/1"
         }
       }
     },
@@ -823,8 +925,9 @@
         "adapterType": "google_drive",
         "externalId": "2",
         "data": {
-          "name": "Pinned",
-          "url": "https://drive.google.com/drive/folders/2"
+          "Id": "2",
+          "Name": "Pinned",
+          "Url": "https://drive.google.com/drive/folders/2"
         }
       }
     },
@@ -840,8 +943,11 @@
         "adapterType": "google_drive",
         "externalId": "3",
         "data": {
-          "name": "Deal notes",
-          "url": "https://drive.google.com/file/d/3"
+          "Id": "3",
+          "Name": "Deal notes",
+          "Url": "https://drive.google.com/file/d/3",
+          "Mime Type": "application/vnd.google-apps.document",
+          "Size": null
         }
       }
     },
@@ -851,8 +957,11 @@
         "adapterType": "google_drive",
         "externalId": "4",
         "data": {
-          "name": "inline.txt",
-          "url": "https://drive.google.com/file/d/4"
+          "Id": "4",
+          "Name": "inline.txt",
+          "Url": "https://drive.google.com/file/d/4",
+          "Mime Type": "text/plain",
+          "Size": null
         }
       }
     },
@@ -862,8 +971,11 @@
         "adapterType": "google_drive",
         "externalId": "5",
         "data": {
-          "name": "composed.md",
-          "url": "https://drive.google.com/file/d/5"
+          "Id": "5",
+          "Name": "composed.md",
+          "Url": "https://drive.google.com/file/d/5",
+          "Mime Type": "text/markdown",
+          "Size": null
         }
       }
     },
@@ -873,8 +985,11 @@
         "adapterType": "google_drive",
         "externalId": "6",
         "data": {
-          "name": "memo-copy.txt",
-          "url": "https://drive.google.com/file/d/6"
+          "Id": "6",
+          "Name": "memo-copy.txt",
+          "Url": "https://drive.google.com/file/d/6",
+          "Mime Type": "text/plain",
+          "Size": null
         }
       }
     },
@@ -884,8 +999,11 @@
         "adapterType": "google_drive",
         "externalId": "7",
         "data": {
-          "name": "acme-memo.txt",
-          "url": "https://drive.google.com/file/d/7"
+          "Id": "7",
+          "Name": "acme-memo.txt",
+          "Url": "https://drive.google.com/file/d/7",
+          "Mime Type": "text/plain",
+          "Size": null
         }
       }
     },
@@ -1017,7 +1135,7 @@
               "data": {
                 "id": "4",
                 "name": "inline.txt",
-                "mimeType": "application/octet-stream",
+                "mimeType": "text/plain",
                 "webViewLink": "https://drive.google.com/file/d/4",
                 "size": 19
               }
@@ -1034,7 +1152,7 @@
               "data": {
                 "id": "5",
                 "name": "composed.md",
-                "mimeType": "application/octet-stream",
+                "mimeType": "text/markdown",
                 "webViewLink": "https://drive.google.com/file/d/5",
                 "size": 10
               }
@@ -1051,7 +1169,7 @@
               "data": {
                 "id": "6",
                 "name": "memo-copy.txt",
-                "mimeType": "application/octet-stream",
+                "mimeType": "text/plain",
                 "webViewLink": "https://drive.google.com/file/d/6",
                 "size": 47
               }
@@ -1068,7 +1186,7 @@
               "data": {
                 "id": "7",
                 "name": "acme-memo.txt",
-                "mimeType": "application/octet-stream",
+                "mimeType": "text/plain",
                 "webViewLink": "https://drive.google.com/file/d/7",
                 "size": 47
               }
@@ -1082,7 +1200,7 @@
       "answer": {
         "__brand": "FileRef",
         "name": "memo-copy.txt",
-        "contentType": "application/octet-stream",
+        "contentType": "text/plain",
         "size": 47,
         "source": {
           "adapterType": "google_drive",
@@ -1094,7 +1212,7 @@
     {
       "step": "memo copy bytes",
       "answer": {
-        "contentType": "application/octet-stream",
+        "contentType": "text/plain",
         "base64": "QWNtZSBpbnZlc3RtZW50IG1lbW86IEFSUiAxLjJNLCBncm93aW5nIDglIE1vTS4="
       }
     }
@@ -1123,7 +1241,7 @@
       "body": null,
       "status": 200,
       "response": "Acme investment memo: ARR 1.2M, growing 8% MoM.",
-      "responseContentType": "text/plain; charset=utf-8"
+      "responseContentType": "text/plain"
     },
     {
       "method": "GET",
@@ -1132,7 +1250,7 @@
       "body": null,
       "status": 200,
       "response": "Acme investment memo: ARR 1.2M, growing 8% MoM.",
-      "responseContentType": "text/plain; charset=utf-8"
+      "responseContentType": "text/plain"
     },
     {
       "method": "GET",
@@ -1217,7 +1335,7 @@
         ]
       },
       "status": 200,
-      "response": "{\"id\":\"3\",\"name\":\"Deal notes\",\"mimeType\":\"application/vnd.google-apps.document\",\"parents\":[\"fold-deals\"],\"webViewLink\":\"https://drive.google.com/file/d/3\",\"size\":24}"
+      "response": "{\"id\":\"3\",\"name\":\"Deal notes\",\"mimeType\":\"application/vnd.google-apps.document\",\"parents\":[\"fold-deals\"],\"webViewLink\":\"https://drive.google.com/file/d/3\",\"size\":24,\"md5Checksum\":\"66b4674c6243a223f3226ee7ec34fa16\",\"sha256Checksum\":\"ed143ee8929d9be2615db1c49b5b40b13fbf492aea4b056b4fbda70cf2433d7c\"}"
     },
     {
       "method": "POST",
@@ -1241,7 +1359,7 @@
         ]
       },
       "status": 200,
-      "response": "{\"id\":\"4\",\"name\":\"inline.txt\",\"mimeType\":\"application/octet-stream\",\"parents\":[\"fold-deals\"],\"webViewLink\":\"https://drive.google.com/file/d/4\",\"size\":19}"
+      "response": "{\"id\":\"4\",\"name\":\"inline.txt\",\"mimeType\":\"text/plain\",\"parents\":[\"fold-deals\"],\"webViewLink\":\"https://drive.google.com/file/d/4\",\"size\":19,\"md5Checksum\":\"a39bc328673ff60aefc9f9670c6fcb09\",\"sha256Checksum\":\"7a122c7d4e9aee86a760e429a4322ceafa667402454eb914c3f7b0b15e089e7c\"}"
     },
     {
       "method": "POST",
@@ -1265,7 +1383,7 @@
         ]
       },
       "status": 200,
-      "response": "{\"id\":\"5\",\"name\":\"composed.md\",\"mimeType\":\"application/octet-stream\",\"parents\":[\"fold-deals\"],\"webViewLink\":\"https://drive.google.com/file/d/5\",\"size\":10}"
+      "response": "{\"id\":\"5\",\"name\":\"composed.md\",\"mimeType\":\"text/markdown\",\"parents\":[\"fold-deals\"],\"webViewLink\":\"https://drive.google.com/file/d/5\",\"size\":10,\"md5Checksum\":\"e660033c2e4816fd24894a5085f09039\",\"sha256Checksum\":\"d2af3bd8031e5cd3fc4125ab1a9c1cd6a07585fdce047493505856eb5aa20d02\"}"
     },
     {
       "method": "GET",
@@ -1274,7 +1392,7 @@
       "body": null,
       "status": 200,
       "response": "Acme investment memo: ARR 1.2M, growing 8% MoM.",
-      "responseContentType": "text/plain; charset=utf-8"
+      "responseContentType": "text/plain"
     },
     {
       "method": "POST",
@@ -1298,7 +1416,7 @@
         ]
       },
       "status": 200,
-      "response": "{\"id\":\"6\",\"name\":\"memo-copy.txt\",\"mimeType\":\"application/octet-stream\",\"parents\":[\"fold-deals\"],\"webViewLink\":\"https://drive.google.com/file/d/6\",\"size\":47}"
+      "response": "{\"id\":\"6\",\"name\":\"memo-copy.txt\",\"mimeType\":\"text/plain\",\"parents\":[\"fold-deals\"],\"webViewLink\":\"https://drive.google.com/file/d/6\",\"size\":47,\"md5Checksum\":\"ce858d49559f87fa6c211cd861af814a\",\"sha256Checksum\":\"0654942061248d28206df57936ca9a9863a69a8764f74018d380bafbc2ffacb7\"}"
     },
     {
       "method": "GET",
@@ -1307,7 +1425,7 @@
       "body": null,
       "status": 200,
       "response": "Acme investment memo: ARR 1.2M, growing 8% MoM.",
-      "responseContentType": "text/plain; charset=utf-8"
+      "responseContentType": "text/plain"
     },
     {
       "method": "POST",
@@ -1331,7 +1449,7 @@
         ]
       },
       "status": 200,
-      "response": "{\"id\":\"7\",\"name\":\"acme-memo.txt\",\"mimeType\":\"application/octet-stream\",\"parents\":[\"fold-deals\"],\"webViewLink\":\"https://drive.google.com/file/d/7\",\"size\":47}"
+      "response": "{\"id\":\"7\",\"name\":\"acme-memo.txt\",\"mimeType\":\"text/plain\",\"parents\":[\"fold-deals\"],\"webViewLink\":\"https://drive.google.com/file/d/7\",\"size\":47,\"md5Checksum\":\"ce858d49559f87fa6c211cd861af814a\",\"sha256Checksum\":\"0654942061248d28206df57936ca9a9863a69a8764f74018d380bafbc2ffacb7\"}"
     },
     {
       "method": "GET",
@@ -1347,7 +1465,7 @@
       "authorization": "Bearer parity-google-access-token",
       "body": null,
       "status": 200,
-      "response": "{\"files\":[{\"id\":\"file-memo\",\"name\":\"acme-memo.txt\",\"mimeType\":\"text/plain\",\"parents\":[\"fold-deals\"],\"webViewLink\":\"https://drive.google.com/file/d/file-memo\",\"size\":47},{\"id\":\"3\",\"name\":\"Deal notes\",\"mimeType\":\"application/vnd.google-apps.document\",\"parents\":[\"fold-deals\"],\"webViewLink\":\"https://drive.google.com/file/d/3\",\"size\":24},{\"id\":\"4\",\"name\":\"inline.txt\",\"mimeType\":\"application/octet-stream\",\"parents\":[\"fold-deals\"],\"webViewLink\":\"https://drive.google.com/file/d/4\",\"size\":19},{\"id\":\"5\",\"name\":\"composed.md\",\"mimeType\":\"application/octet-stream\",\"parents\":[\"fold-deals\"],\"webViewLink\":\"https://drive.google.com/file/d/5\",\"size\":10},{\"id\":\"6\",\"name\":\"memo-copy.txt\",\"mimeType\":\"application/octet-stream\",\"parents\":[\"fold-deals\"],\"webViewLink\":\"https://drive.google.com/file/d/6\",\"size\":47},{\"id\":\"7\",\"name\":\"acme-memo.txt\",\"mimeType\":\"application/octet-stream\",\"parents\":[\"fold-deals\"],\"webViewLink\":\"https://drive.google.com/file/d/7\",\"size\":47}]}"
+      "response": "{\"files\":[{\"id\":\"file-memo\",\"name\":\"acme-memo.txt\",\"mimeType\":\"text/plain\",\"parents\":[\"fold-deals\"],\"webViewLink\":\"https://drive.google.com/file/d/file-memo\",\"size\":47},{\"id\":\"3\",\"name\":\"Deal notes\",\"mimeType\":\"application/vnd.google-apps.document\",\"parents\":[\"fold-deals\"],\"webViewLink\":\"https://drive.google.com/file/d/3\",\"size\":24,\"md5Checksum\":\"66b4674c6243a223f3226ee7ec34fa16\",\"sha256Checksum\":\"ed143ee8929d9be2615db1c49b5b40b13fbf492aea4b056b4fbda70cf2433d7c\"},{\"id\":\"4\",\"name\":\"inline.txt\",\"mimeType\":\"text/plain\",\"parents\":[\"fold-deals\"],\"webViewLink\":\"https://drive.google.com/file/d/4\",\"size\":19,\"md5Checksum\":\"a39bc328673ff60aefc9f9670c6fcb09\",\"sha256Checksum\":\"7a122c7d4e9aee86a760e429a4322ceafa667402454eb914c3f7b0b15e089e7c\"},{\"id\":\"5\",\"name\":\"composed.md\",\"mimeType\":\"text/markdown\",\"parents\":[\"fold-deals\"],\"webViewLink\":\"https://drive.google.com/file/d/5\",\"size\":10,\"md5Checksum\":\"e660033c2e4816fd24894a5085f09039\",\"sha256Checksum\":\"d2af3bd8031e5cd3fc4125ab1a9c1cd6a07585fdce047493505856eb5aa20d02\"},{\"id\":\"6\",\"name\":\"memo-copy.txt\",\"mimeType\":\"text/plain\",\"parents\":[\"fold-deals\"],\"webViewLink\":\"https://drive.google.com/file/d/6\",\"size\":47,\"md5Checksum\":\"ce858d49559f87fa6c211cd861af814a\",\"sha256Checksum\":\"0654942061248d28206df57936ca9a9863a69a8764f74018d380bafbc2ffacb7\"},{\"id\":\"7\",\"name\":\"acme-memo.txt\",\"mimeType\":\"text/plain\",\"parents\":[\"fold-deals\"],\"webViewLink\":\"https://drive.google.com/file/d/7\",\"size\":47,\"md5Checksum\":\"ce858d49559f87fa6c211cd861af814a\",\"sha256Checksum\":\"0654942061248d28206df57936ca9a9863a69a8764f74018d380bafbc2ffacb7\"}]}"
     },
     {
       "method": "GET",
@@ -1356,7 +1474,7 @@
       "body": null,
       "status": 200,
       "response": "Acme investment memo: ARR 1.2M, growing 8% MoM.",
-      "responseContentType": "application/octet-stream; charset=utf-8"
+      "responseContentType": "text/plain"
     }
   ]
 }
