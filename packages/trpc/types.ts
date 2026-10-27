@@ -4535,6 +4535,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     knownValuePattern?: string | undefined;
                     referenceTargetType?: string | undefined;
                     readable?: boolean | undefined;
+                    pinned?: boolean | undefined;
                     anchor?: {
                         kind: "node";
                     } | {
@@ -4591,6 +4592,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         knownValuePattern?: string | undefined;
                         referenceTargetType?: string | undefined;
                         readable?: boolean | undefined;
+                        pinned?: boolean | undefined;
                         anchor?: {
                             kind: "node";
                         } | {
@@ -11616,7 +11618,11 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 listenConfig?: {
                     key: string;
                     required?: boolean | undefined;
-                    format?: "fields" | "cron" | "timezone" | "strings" | undefined;
+                    format?: string | undefined;
+                    narrows?: {
+                        collection: string;
+                        matchField: string;
+                    } | undefined;
                 }[] | undefined;
                 displayName?: string | undefined;
                 description?: string | undefined;
@@ -11771,7 +11777,11 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     listenConfig?: {
                         key: string;
                         required?: boolean | undefined;
-                        format?: "fields" | "cron" | "timezone" | "strings" | undefined;
+                        format?: string | undefined;
+                        narrows?: {
+                            collection: string;
+                            matchField: string;
+                        } | undefined;
                     }[] | undefined;
                     displayName?: string | undefined;
                     description?: string | undefined;
@@ -11911,7 +11921,11 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     listenConfig?: {
                         key: string;
                         required?: boolean | undefined;
-                        format?: "fields" | "cron" | "timezone" | "strings" | undefined;
+                        format?: string | undefined;
+                        narrows?: {
+                            collection: string;
+                            matchField: string;
+                        } | undefined;
                     }[] | undefined;
                     displayName?: string | undefined;
                     description?: string | undefined;
