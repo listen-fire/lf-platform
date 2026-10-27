@@ -97,8 +97,7 @@ function pricingKey(served: Served): string {
 
 /** Where an unpriced key came from, in the terms an operator changes: the map
  *  line that produced it, or the map's silence about that name. */
-function originOf(served: Served): string {
-  if (served.provider === 'jev') return 'Jev, which no MODEL_MAP line routes';
+function originOf(served: Resolved): string {
   const key = pricingKey(served);
   const { home } = models[served.preferred];
   return served.provider === home && served.wireModel === served.preferred
@@ -113,6 +112,9 @@ function calculateCostMicrodollars(options: {
   cacheReadTokens: number;
   cacheCreationTokens: number;
 }): number {
+  if (options.served.provider === 'jev') {
+    return Math.round(options.inputTokens * JEV_MICRODOLLARS_PER_INPUT_TOKEN);
+  }
   const key = pricingKey(options.served);
   const cost = costMicrodollars(key, options);
   if (cost === undefined) {
@@ -136,6 +138,12 @@ interface JevCall {
   provider: 'jev';
   wireModel: string;
 }
+
+/** Jev's listed price, $0.042 per million input tokens with output free (Jev's
+ *  own docs, as the Jev evaluation of 2026-09-17 read them). It lives here, not
+ *  in the anthropic module's prices.json, because that table is keyed by wire
+ *  model and Jev answers under whatever model name it is currently serving. */
+const JEV_MICRODOLLARS_PER_INPUT_TOKEN = 0.042;
 
 /** Who answered a call and under what name. */
 type Served = Resolved | JevCall;

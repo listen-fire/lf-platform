@@ -235,6 +235,24 @@ describe('what a model call charges', () => {
     expect(values.mock.calls[0]?.[0].cost_microdollars).toBe(3 * DOLLAR);
   });
 
+  it('a Jev judgement is charged against the run, by its input tokens', async () => {
+    const values = jest.fn().mockReturnValue({ execute: async () => undefined });
+    insertInto.mockReturnValue({ values });
+    const { cost } = await withSpendMeter(NO_BUDGET_LIMIT, async () => {
+      await new LlmUsageContext({ teamId: 'team-1' }).runAsync(async () => {
+        await recordLlmUsage({
+          resolved: { provider: 'jev', wireModel: 'jev-latest' },
+          callType: 'structured',
+          inputTokens: 1_000_000,
+          outputTokens: 1_000_000,
+        });
+      });
+    });
+    // $0.042/M in; Jev's output is free.
+    expect(cost).toEqual([{ source: 'model:jev-latest', microdollars: 42_000 }]);
+    expect(values.mock.calls[0]?.[0].cost_microdollars).toBe(42_000);
+  });
+
   it('charges before its first await, so the next priced step already sees it', async () => {
     await refusal(
       withSpendMeter(budget(2 * DOLLAR), async () => {

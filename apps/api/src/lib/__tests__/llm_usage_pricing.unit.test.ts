@@ -137,6 +137,13 @@ describe('Jev, which no map line routes', () => {
     expect(row.model).toBe('jev-1');
     expect(row.preferred_model).toBeNull();
   });
+
+  it('is priced at $0.042 per million input tokens, whatever model name it answers under', async () => {
+    const mod = load();
+    const row = await record(mod, { provider: 'jev', wireModel: 'jev-2026-10' });
+    expect(row.cost_microdollars).toBe(42_000);
+    expect(warnings()).toHaveLength(0);
+  });
 });
 
 describe('a key nobody priced', () => {
