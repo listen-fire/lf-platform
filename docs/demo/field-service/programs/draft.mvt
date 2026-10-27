@@ -1,0 +1,35 @@
+import { `@lf/whatsapp` as whatsapp, `@lf/google_sheets` as sheets, `@lf/slack` as slack } from adapters
+import { customers, job_log, ops_slack } from credentials
+
+inbox = connect whatsapp using customers
+log   = connect sheets using job_log { spreadsheet: "Job log" }
+team  = connect slack using ops_slack
+
+type Urgency = <"urgent" | "routine">
+
+node Job: "the job this customer is asking us to do" {
+  summary: <text> "the job, in a few words"
+  address: <text | null> "the site address, if they gave one"
+  urgency: <Urgency> "urgent if damage is happening now or anyone is in danger, so someone must come today; otherwise routine"
+}
+
+function `Job Intake`(msg: <inbox-[:Message]->>) {
+  job = extractOne([msg.Body], Job, { tier: "quick" })
+  if (job == null) { fail("no job in the message from ${msg.From}") }
+  address = coalesce(job.address, "not given")
+
+  write log-[:`Jobs (table)`]-> {
+    Customer:   msg.From
+    Address:    address
+    Job:        job.summary
+    Urgency ?:  job.urgency
+  }
+
+  if (job.urgency == "urgent") {
+    channel = only(team-[ch:Channels WHERE ch.Name == "on-call"]->)
+    if (channel == null) { fail("there is no #on-call channel") }
+    write channel-[:Messages]-> { Message: "Dan Price, on call: urgent job at ${address}. ${job.summary}. Customer: ${msg.From}" }
+  }
+}
+
+listen to inbox { events: ["message"] } fire `Job Intake`

@@ -1,0 +1,30 @@
+{
+  "entities": [
+    {
+      "entity_type": "spreadsheet",
+      "id": "job-log",
+      "data": {
+        "spreadsheetId": "job-log",
+        "properties": { "title": "Job log" },
+        "sheets": [
+          {
+            "properties": { "sheetId": 0, "title": "Jobs", "gridProperties": { "columnCount": 26 } },
+            "tables": [
+              {
+                "tableId": "table-jobs",
+                "name": "Jobs",
+                "range": { "startRowIndex": 0, "endRowIndex": 1, "startColumnIndex": 0, "endColumnIndex": 4 },
+                "columnProperties": [
+                  { "columnIndex": 0, "columnName": "Customer", "columnType": "TEXT" },
+                  { "columnIndex": 1, "columnName": "Site address", "columnType": "TEXT" },
+                  { "columnIndex": 2, "columnName": "Job", "columnType": "TEXT" },
+                  { "columnIndex": 3, "columnName": "Urgency", "columnType": "TEXT" }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

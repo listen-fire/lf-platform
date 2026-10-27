@@ -1,6 +1,6 @@
 #!/bin/bash
-# Boot the agent dev loop in a fresh Linux cloud container and provision what
-# the hero demo needs (dev team, Gmail + Slack credentials). Idempotent.
+# Boot the agent dev loop in a fresh Linux cloud container and seed the dev
+# team. Idempotent. Each video's capture.sh provisions the systems it uses.
 #
 # Works around three things a fresh container hits (none are needed on a
 # developer's Mac with the stack already set up):
@@ -10,11 +10,11 @@
 set -euo pipefail
 if [ "$(uname)" != "Linux" ]; then
   echo "boot.sh is for a fresh Linux cloud container. On a Mac: pnpm dev:loop:agent, then" >&2
-  echo "pnpm dev:seed && pnpm dev:gmail setup, with ANTHROPIC_API_KEY in apps/api/.env." >&2
+  echo "pnpm dev:seed, with ANTHROPIC_API_KEY in apps/api/.env." >&2
   exit 1
 fi
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
-REPO="$(cd "$HERE/../../.." && pwd)"
+REPO="$(cd "$HERE/../.." && pwd)"
 WORK="$HERE/.work"
 mkdir -p "$WORK/bin"
 
@@ -45,7 +45,7 @@ if [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3500/healthz)" =
   # A cloud session points ANTHROPIC_BASE_URL at its own proxy; the stack's
   # model calls must go to Anthropic itself, with ANTHROPIC_API_KEY from the
   # environment's settings.
-  [ -n "${ANTHROPIC_API_KEY:-}" ] || echo "warning: ANTHROPIC_API_KEY unset, so the demo's extraction will fail" >&2
+  [ -n "${ANTHROPIC_API_KEY:-}" ] || echo "warning: ANTHROPIC_API_KEY unset, so the demos' model calls will fail" >&2
   (cd "$REPO" && PATH="$WORK/bin:$PATH" ANTHROPIC_BASE_URL=https://api.anthropic.com \
     nohup pnpm dev:loop:agent --force-kill >"$WORK/loop.out" 2>&1 &)
   echo "waiting for the API on :3500 (first boot compiles for a few minutes)…"
@@ -57,5 +57,4 @@ fi
 
 cd "$REPO"
 pnpm -s dev:seed >/dev/null
-pnpm -s dev:gmail setup >/dev/null
-echo "stack up, team seeded, Gmail + Slack provisioned"
+echo "stack up, team seeded"

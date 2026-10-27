@@ -1,0 +1,5 @@
+{
+  "entities": [
+    { "entity_type": "channel", "id": "C0ONCALL", "data": { "id": "C0ONCALL", "name": "on-call", "is_private": false, "is_member": true, "num_members": 4 } }
+  ]
+}

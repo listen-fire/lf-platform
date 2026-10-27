@@ -1,23 +1,27 @@
 #!/bin/bash
-# The hero demo's authoring loop and run, against the dev loop booted by
-# boot.sh. Plays the agent over the real automation MCP connector, then sends
-# the founder's email through the fake Gmail poll. Every response lands in
+# The dealflow demo's authoring loop and run, against the seeded agent dev
+# loop (see ../README.md). Plays the agent over the real automation MCP
+# connector, then sends the founder's email through the fake Gmail poll. Every response lands in
 # .work/capture/, which build_data.cjs turns into the video's data.js in the site repo.
 #
-# The run makes one real extraction call, so boot.sh must have started the
-# stack with ANTHROPIC_API_KEY set.
+# The run makes one real extraction call, so the stack must have
+# ANTHROPIC_API_KEY set.
 set -euo pipefail
-HERE="$(cd "$(dirname "$0")/.." && pwd)"
-REPO="$(cd "$HERE/../../.." && pwd)"
-WORK="$HERE/.work"; CAP="$WORK/capture"
-MCP="$HERE/scripts/mcp.sh"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+DEMO="$(cd "$HERE/.." && pwd)"
+REPO="$(cd "$DEMO/../.." && pwd)"
+CAP="$HERE/.work/capture"
+MCP="$DEMO/scripts/mcp.sh"
 FAKE=http://localhost:6056
-mkdir -p "$CAP"
+mkdir -p "$CAP" "$DEMO/.work"
+
+# Gmail + Slack credentials (and Gmail's own proof automation, removed below).
+(cd "$REPO" && pnpm -s dev:gmail setup >/dev/null)
 
 # A key acting as the dev-loop team.
 (cd "$REPO/apps/api" && TZ=utc npx ts-node --project tsconfig.dev.json --transpile-only \
-  -r dotenv/config -r tsconfig-paths/register "$HERE/scripts/mint_key.ts") \
-  | sed -n 's/^KEY=//p' >"$WORK/key"
+  -r dotenv/config -r tsconfig-paths/register "$DEMO/scripts/mint_key.ts") \
+  | sed -n 's/^KEY=//p' >"$DEMO/.work/key"
 
 # Only this demo's automation may listen to the mailbox.
 "$MCP" listAutomations '{}' | jq -r '.movements[] | select(.name == "gmail_message_intake" or .name == "Founder intake") | .id' |

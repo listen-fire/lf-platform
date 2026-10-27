@@ -1,10 +1,10 @@
 // Mint an automation API key for the dev-loop team, the way
 // apps/api/src/scripts/dev/measure_authoring_loop.ts does. Prints KEY=<key>.
 // Run from apps/api (see capture.sh) so its tsconfig paths and .env apply.
-import '../../../../apps/api/src/scripts/dev/_profile_loader';
-import '../../../../apps/api/src/services';
-import { ApiKeyService } from '../../../../apps/api/src/services/api_key';
-import { getCoreQb } from '../../../../apps/api/src/lib/kysely';
+import '../../../apps/api/src/scripts/dev/_profile_loader';
+import '../../../apps/api/src/services';
+import { ApiKeyService } from '../../../apps/api/src/services/api_key';
+import { getCoreQb } from '../../../apps/api/src/lib/kysely';
 
 (async () => {
   const teamId = process.env.TEST_HARNESS_TEAM_ID;
@@ -16,7 +16,7 @@ import { getCoreQb } from '../../../../apps/api/src/lib/kysely';
     .limit(1)
     .execute();
   const { key } = await ApiKeyService.createForOwner({
-    name: `hero-demo-${Date.now()}`,
+    name: `demo-${Date.now()}`,
     scopes: ['*', 'automation'],
     teamId,
     createdBy: member?.user_id as unknown as string,

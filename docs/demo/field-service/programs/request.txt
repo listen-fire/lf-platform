@@ -1,0 +1,1 @@
+When a customer messages us on WhatsApp, log the job in the Job log sheet, and if it's urgent page the on-call engineer in our #on-call Slack channel.
