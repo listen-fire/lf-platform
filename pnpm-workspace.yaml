@@ -7,9 +7,9 @@ packages:
 # version: adopting a core release is this block. Every other @listen-fire
 # package is pinned on its own version in the package that uses it.
 catalog:
-  "@listen-fire/engine": 0.12.9
-  "@listen-fire/engine-contracts": 0.12.9
-  "@listen-fire/movement-lang": 0.12.9
-  movement-engine: npm:@listen-fire/engine@0.12.9
-  engine-contracts: npm:@listen-fire/engine-contracts@0.12.9
-  movement-lang: npm:@listen-fire/movement-lang@0.12.9
+  "@listen-fire/engine": 0.12.10
+  "@listen-fire/engine-contracts": 0.12.10
+  "@listen-fire/movement-lang": 0.12.10
+  movement-engine: npm:@listen-fire/engine@0.12.10
+  engine-contracts: npm:@listen-fire/engine-contracts@0.12.10
+  movement-lang: npm:@listen-fire/movement-lang@0.12.10
