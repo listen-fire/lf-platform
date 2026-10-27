@@ -2040,10 +2040,12 @@ async function traverseFrom(
 /**
  * The record(s) a value-plane binding holds, as the binding a walk starts
  * from — or undefined where the read is the value plane's own. One record reads
- * as itself on both planes. A LIST of records reads as landings only when the
- * read walks (a hop, or an EXISTS that hops or filters): a bare field read or a
- * bare EXISTS over a list keeps its value-plane meaning (a projection, "is the
- * list non-empty"), which is what the checker typed it as.
+ * as itself on both planes. A LIST of records reads as landings when the read
+ * walks (a hop, or an EXISTS that hops or filters) and when it reads a field:
+ * after `row = a-[:E]->`, `row.F` reads each record's field and collapses as
+ * the walk read in place (`a-[:E]->.F`) does, where it read the list's own
+ * field, which a list has none of. A bare EXISTS over a list keeps its
+ * value-plane meaning ("is the list non-empty").
  */
 function heldRecords(
   value: unknown,
@@ -2055,7 +2057,9 @@ function heldRecords(
     expr.steps.length > 0 ||
     (expr.expression.type === 'exists' &&
       (expr.expression.steps.length > 0 || expr.expression.where !== undefined));
-  return walks ? held : undefined;
+  const field = fieldTerminalId(expr.expression);
+  const readsField = field !== undefined && field !== POSITION_SENTINEL;
+  return walks || readsField ? held : undefined;
 }
 
 /** The binding a value-plane value IS, when it is records: one record as

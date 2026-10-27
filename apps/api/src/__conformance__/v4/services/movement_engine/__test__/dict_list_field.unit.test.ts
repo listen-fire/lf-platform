@@ -398,3 +398,19 @@ describe('the records a block returned, kept in a map at the top level', () => {
     expect(writes.map((w) => w.fields?.name)).toEqual(['2:Seed,Series A']);
   });
 });
+
+describe('a field read off a name bound to a walk', () => {
+  it('reads each record the walk landed on, as the walk read in place does', async () => {
+    const { writes } = await run(
+      [
+        '  companies = extract([msg.`text`], Company)',
+        '  MAP(companies, (c) => {',
+        '    walked = c-[:round]->',
+        '    write crm-[:companies]-> { name: "bound ${walked.stage} / walked ${c-[:round]->.stage}" }',
+        '  })',
+      ],
+      [COMPANIES],
+    );
+    expect(writes.map((w) => w.fields?.name)).toEqual(['bound Seed / walked Seed', 'bound Series A / walked Series A']);
+  });
+});
