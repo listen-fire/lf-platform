@@ -98,7 +98,7 @@ here.**
 - \`protocolVersion\` is \`2\`; installing asks your server's
   \`manifest\` and refuses anything else.
 - \`protocolMinor\` may sit beside it (0 for this adapter); a server that
-  states a minor above 2 is refused by name.
+  states a minor above 4 is refused by name.
 
 ### Installing it in Listen-Fire
 

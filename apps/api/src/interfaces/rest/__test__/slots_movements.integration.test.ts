@@ -100,13 +100,13 @@ const call = (method: string, params: Record<string, unknown> = {}, settings: Re
   post({ protocolVersion: '2', method, cacheScopeId: '<slot>', params, settings });
 
 describe('the movements slot route', () => {
-  it('answers its manifest before any other method: the movements slot, adapter protocol 2.1 (movements.watch), and its four methods', async () => {
+  it('answers its manifest before any other method: the movements slot, needing nothing of a 2.x host, and its four methods', async () => {
     const res = await call('manifest');
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       ok: true,
-      result: { protocolVersion: 2, protocolMinor: 1, name: 'lf-platform-movements', kind: 'core', slot: 'movements', methods: [...MOVEMENTS_METHODS] },
+      result: { protocolVersion: 2, protocolMinor: 0, name: 'lf-platform-movements', kind: 'core', slot: 'movements', methods: [...MOVEMENTS_METHODS] },
     });
     expect(MOVEMENTS_METHODS).toHaveLength(4);
   });
