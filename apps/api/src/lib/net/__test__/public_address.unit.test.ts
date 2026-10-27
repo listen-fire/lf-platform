@@ -1,4 +1,4 @@
-import { isBlockedAddress } from './safe_csv_fetch';
+import { isBlockedAddress } from '../public_address';
 
 describe('isBlockedAddress', () => {
   it('blocks private, loopback, link-local, and reserved IPv4', () => {
