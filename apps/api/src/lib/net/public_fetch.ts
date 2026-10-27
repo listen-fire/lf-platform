@@ -112,16 +112,20 @@ export function publicFetch(options: PublicFetchOptions = {}): typeof fetch {
     }
     const refusal = schemeRefusal(url, env);
     if (refusal !== undefined) throw new RefusedUrl(`the URL ${refusal}.`);
-    if (isAllowedLocal(url, env)) return send(input, init);
-    try {
-      await publicAddressesOf(url.hostname, lookup);
-    } catch (error) {
-      throw new RefusedUrl(error instanceof Error ? error.message : String(error));
+    let response: Response;
+    if (isAllowedLocal(url, env)) {
+      response = await send(input, { ...init, redirect: 'manual' });
+    } else {
+      try {
+        await publicAddressesOf(url.hostname, lookup);
+      } catch (error) {
+        throw new RefusedUrl(error instanceof Error ? error.message : String(error));
+      }
+      // `dispatcher` is the runtime's (undici's) own option, which the DOM's
+      // RequestInit does not list.
+      const guarded: RequestInit & { dispatcher: Agent } = { ...init, redirect: 'manual', dispatcher: agentFor(lookup) };
+      response = await send(input, guarded);
     }
-    // `dispatcher` is the runtime's (undici's) own option, which the DOM's
-    // RequestInit does not list.
-    const guarded: RequestInit & { dispatcher: Agent } = { ...init, redirect: 'manual', dispatcher: agentFor(lookup) };
-    const response = await send(input, guarded);
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get('location');
       await response.body?.cancel();

@@ -37,15 +37,19 @@ function inRange(int: number, base: string, prefix: number): boolean {
 const BLOCKED_IPV4: Array<[string, number]> = [
   ['0.0.0.0', 8],
   ['10.0.0.0', 8],
-  ['100.64.0.0', 10],
+  ['100.64.0.0', 10], // carrier-grade NAT
   ['127.0.0.0', 8],
-  ['169.254.0.0', 16],
+  ['169.254.0.0', 16], // link-local, the cloud metadata address among them
   ['172.16.0.0', 12],
   ['192.0.0.0', 24],
+  ['192.0.2.0', 24], // documentation
+  ['192.88.99.0', 24], // 6to4 relay
   ['192.168.0.0', 16],
   ['198.18.0.0', 15],
+  ['198.51.100.0', 24], // documentation
+  ['203.0.113.0', 24], // documentation
   ['224.0.0.0', 4], // multicast
-  ['240.0.0.0', 4], // reserved
+  ['240.0.0.0', 4], // reserved, broadcast included
 ];
 
 function isBlockedIpv4(ip: string): boolean {
@@ -54,38 +58,62 @@ function isBlockedIpv4(ip: string): boolean {
   return BLOCKED_IPV4.some(([base, prefix]) => inRange(int, base, prefix));
 }
 
-function isBlockedIpv6(ip: string): boolean {
-  const lower = ip.toLowerCase();
-
-  // IPv4-mapped (::ffff:a.b.c.d or ::ffff:xxxx:xxxx) → run the IPv4 checks.
-  const mappedPrefix = '::ffff:';
-  if (lower.startsWith(mappedPrefix)) {
-    const rest = lower.slice(mappedPrefix.length);
-    if (rest.includes('.')) {
-      return isBlockedIpv4(rest);
-    }
-    // ::ffff:xxxx:xxxx hextet form — reconstruct the dotted quad.
-    const hextets = rest.split(':');
-    if (hextets.length === 2) {
-      const high = parseInt(hextets[0], 16);
-      const low = parseInt(hextets[1], 16);
-      if (!Number.isNaN(high) && !Number.isNaN(low)) {
-        const dotted = `${(high >> 8) & 0xff}.${high & 0xff}.${(low >> 8) & 0xff}.${low & 0xff}`;
-        return isBlockedIpv4(dotted);
-      }
-    }
+/** The eight 16-bit groups of a valid IPv6 literal, however it is written
+ *  (compressed, expanded, or with a dotted IPv4 tail). */
+function ipv6Groups(ip: string): number[] | null {
+  let text = ip.toLowerCase();
+  const zone = text.indexOf('%');
+  if (zone !== -1) text = text.slice(0, zone);
+  const dotted = /^(.*:)(\d+\.\d+\.\d+\.\d+)$/.exec(text);
+  if (dotted !== null) {
+    const int = ipv4ToInt(dotted[2]!);
+    if (int === null) return null;
+    text = `${dotted[1]}${(int >>> 16).toString(16)}:${(int & 0xffff).toString(16)}`;
   }
+  const halves = text.split('::');
+  if (halves.length > 2) return null;
+  const parse = (part: string) => (part === '' ? [] : part.split(':').map((group) => parseInt(group, 16)));
+  const head = parse(halves[0]!);
+  const tail = halves.length === 2 ? parse(halves[1]!) : [];
+  const missing = 8 - head.length - tail.length;
+  if (halves.length === 2 ? missing < 1 : missing !== 0) return null;
+  const groups = [...head, ...new Array<number>(halves.length === 2 ? missing : 0).fill(0), ...tail];
+  return groups.every((group) => Number.isInteger(group) && group >= 0 && group <= 0xffff) ? groups : null;
+}
 
-  if (lower === '::1') return true; // loopback
-  if (lower === '::') return true; // unspecified
+/** The IPv4 address held in two groups of an IPv6 one. */
+function embeddedIpv4(high: number, low: number): string {
+  return `${high >> 8}.${high & 0xff}.${low >> 8}.${low & 0xff}`;
+}
 
-  const firstHextet = parseInt(lower.split(':')[0] || '0', 16);
-  if (Number.isNaN(firstHextet)) return true; // fail closed
+function isBlockedIpv6(ip: string): boolean {
+  const groups = ipv6Groups(ip);
+  if (groups === null) return true; // fail closed
+  const [g0 = 0, g1 = 0, g2 = 0, g3 = 0, g4 = 0, g5 = 0, g6 = 0, g7 = 0] = groups;
+  const zeroTo = (count: number) => groups.slice(0, count).every((group) => group === 0);
 
-  // fc00::/7 — unique local (first 7 bits are 1111110)
-  if ((firstHextet & 0xfe00) === 0xfc00) return true;
-  // fe80::/10 — link-local (first 10 bits are 1111111010)
-  if ((firstHextet & 0xffc0) === 0xfe80) return true;
+  // ::/96 — unspecified, loopback, and the retired IPv4-compatible form.
+  if (zeroTo(6)) return true;
+  // ::ffff:0:0/96 — an IPv4 address written as IPv6: the IPv4 rules decide.
+  if (zeroTo(5) && g5 === 0xffff) return isBlockedIpv4(embeddedIpv4(g6, g7));
+  // ::ffff:0:0:0/96 — the translated IPv4 form (SIIT).
+  if (zeroTo(4) && g4 === 0xffff && g5 === 0) return isBlockedIpv4(embeddedIpv4(g6, g7));
+  // 64:ff9b::/96 — NAT64 of an IPv4 address: the IPv4 rules decide.
+  if (g0 === 0x64 && g1 === 0xff9b && g2 === 0 && g3 === 0 && g4 === 0 && g5 === 0) return isBlockedIpv4(embeddedIpv4(g6, g7));
+  // 64:ff9b:1::/48 — NAT64 for local networks.
+  if (g0 === 0x64 && g1 === 0xff9b && g2 === 1) return true;
+  // 100::/64 — discard.
+  if (g0 === 0x100 && g1 === 0 && g2 === 0 && g3 === 0) return true;
+  // 2001::/32 Teredo and 2001:db8::/32 documentation.
+  if (g0 === 0x2001 && (g1 === 0 || g1 === 0xdb8)) return true;
+  // 2002::/16 — 6to4, whose next 32 bits are an IPv4 address.
+  if (g0 === 0x2002) return isBlockedIpv4(embeddedIpv4(g1, g2));
+  // fc00::/7 — unique local (fd00:ec2::254, the AWS metadata address, among them).
+  if ((g0 & 0xfe00) === 0xfc00) return true;
+  // fe80::/10 link-local and fec0::/10 site-local.
+  if ((g0 & 0xffc0) === 0xfe80 || (g0 & 0xffc0) === 0xfec0) return true;
+  // ff00::/8 — multicast.
+  if ((g0 & 0xff00) === 0xff00) return true;
 
   return false;
 }
@@ -101,6 +129,9 @@ export function isBlockedAddress(ip: string): boolean {
   if (kind === 6) return isBlockedIpv6(ip);
   return true; // not a valid IP literal → fail closed
 }
+
+/** The names clouds give their instance metadata service. */
+const METADATA_HOSTNAMES: ReadonlySet<string> = new Set(['metadata.google.internal', 'metadata.goog', 'metadata']);
 
 /** A host refused because it is, or resolves to, an address that is not public. */
 export class NonPublicAddress extends Error {
@@ -121,6 +152,9 @@ export async function publicAddressesOf(
   lookup: HostLookup = systemLookup,
 ): Promise<Array<{ address: string; family: number }>> {
   const bare = hostname.startsWith('[') && hostname.endsWith(']') ? hostname.slice(1, -1) : hostname;
+  // Refused by name as well as by address: inside a cloud they resolve to the
+  // metadata address, but a resolver elsewhere may answer something else.
+  if (METADATA_HOSTNAMES.has(bare.toLowerCase().replace(/\.+$/, ''))) throw new NonPublicAddress(bare);
   const literal = isIP(bare);
   if (literal !== 0) {
     if (isBlockedAddress(bare)) throw new NonPublicAddress(bare);

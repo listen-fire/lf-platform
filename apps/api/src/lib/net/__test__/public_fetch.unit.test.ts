@@ -3,6 +3,8 @@
 // resolver stands in for DNS, and a stub fetch for the network, so nothing here
 // leaves the machine.
 
+import http from 'node:http';
+
 import { Agent } from 'undici';
 
 import type { HostLookup } from '../public_address';
@@ -50,7 +52,19 @@ describe('publicFetch', () => {
     const send = stubFetch();
     const guarded = publicFetch({ env: PRODUCTION, lookup, fetch: send });
 
-    for (const url of ['https://169.254.169.254/latest/meta-data', 'https://192.168.1.10/mcp', 'https://[::1]/mcp', 'https://[fe80::1]/mcp']) {
+    for (const url of [
+      'https://169.254.169.254/latest/meta-data',
+      'https://[fd00:ec2::254]/latest/meta-data',
+      'https://metadata.google.internal/computeMetadata/v1/',
+      'https://192.168.1.10/mcp',
+      'https://100.64.0.1/mcp',
+      'https://224.0.0.1/mcp',
+      'https://[::1]/mcp',
+      'https://[fe80::1]/mcp',
+      'https://[fd12:3456::1]/mcp',
+      'https://[ff02::1]/mcp',
+      'https://[::ffff:169.254.169.254]/mcp',
+    ]) {
       await expect(guarded(url)).rejects.toThrow(/is not a public address/);
     }
     expect(lookup.asked).toEqual([]);
@@ -105,6 +119,33 @@ describe('publicFetch', () => {
     await expect(guarded('https://mcp.example.com/mcp')).rejects.toThrow(
       'it answered with a redirect to http://169.254.169.254/; redirects are not followed, so connect the URL it redirects to.',
     );
+  });
+
+  it('refuses a redirect from localhost in development too, rather than following it', async () => {
+    const send = stubFetch(() => new Response(null, { status: 302, headers: { location: 'http://169.254.169.254/' } }));
+    const guarded = publicFetch({ env: { NODE_ENV: 'development' }, lookup: resolvingTo({}), fetch: send });
+
+    await expect(guarded('http://localhost:4000/mcp')).rejects.toThrow(/redirects are not followed/);
+    expect(send.mock.calls[0]?.[1]).toMatchObject({ redirect: 'manual' });
+  });
+
+  it('refuses each redirect hop of the real fetch, so a public server cannot bounce a request inward', async () => {
+    const server = http.createServer((_request, response) => {
+      response.writeHead(307, { location: 'http://169.254.169.254/latest/meta-data' });
+      response.end();
+    });
+    await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
+    try {
+      const address = server.address();
+      if (address === null || typeof address === 'string') throw new Error('the test server has no port');
+      const { port } = address;
+      const guarded = publicFetch({ env: { NODE_ENV: 'test' }, lookup: resolvingTo({}) });
+      await expect(guarded(`http://127.0.0.1:${port}/mcp`)).rejects.toThrow(
+        'it answered with a redirect to http://169.254.169.254/latest/meta-data; redirects are not followed, so connect the URL it redirects to.',
+      );
+    } finally {
+      await new Promise((done) => server.close(done));
+    }
   });
 
   it('refuses at connect time a name that resolved to a public address for the check and a private one after (DNS rebinding)', async () => {
