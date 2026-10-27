@@ -17,7 +17,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { CallToolRequestSchema, ListToolsRequestSchema, type CallToolResult, type Tool } from '@modelcontextprotocol/sdk/types.js';
 
-export type FakeMcpKind = 'issues' | 'crm';
+type FakeMcpKind = 'issues' | 'crm';
 
 export interface FakeMcpServer {
   url: string;
@@ -30,7 +30,7 @@ export interface FakeMcpServer {
   close(): Promise<void>;
 }
 
-export interface FakeMcpOptions {
+interface FakeMcpOptions {
   kind: FakeMcpKind;
   /** The token every request must carry: as a bearer, or in `header` as written. */
   token: string;

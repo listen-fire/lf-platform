@@ -21,7 +21,7 @@ const LOOPBACK_NAMES: ReadonlySet<string> = new Set(['localhost', '127.0.0.1', '
 
 type Environment = Readonly<Record<string, string | undefined>>;
 
-export interface PublicFetchOptions {
+interface PublicFetchOptions {
   /** Default: the process's. */
   env?: Environment;
   /** Default: the system resolver. */

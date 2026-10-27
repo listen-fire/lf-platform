@@ -90,6 +90,10 @@
     "system": {
       "providerKey": "SYSTEM",
       "url": "https://golden.example.test/api/public/webhook-sync/system/SUBSCRIPTION-ID"
+    },
+    "mcp": {
+      "providerKey": "MCP",
+      "url": "https://golden.example.test/api/public/webhook-sync/mcp/SUBSCRIPTION-ID"
     }
   }
 }
