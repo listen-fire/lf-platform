@@ -133,8 +133,14 @@ export function isBlockedAddress(ip: string): boolean {
 /** The names clouds give their instance metadata service. */
 const METADATA_HOSTNAMES: ReadonlySet<string> = new Set(['metadata.google.internal', 'metadata.goog', 'metadata']);
 
+/** The code module-kit's retrying fetch reads to stop at once: a refusal by
+ *  policy is the same on every attempt. Matched by value, so it needs no
+ *  module-kit release that exports it. */
+export const POLICY_REFUSAL_CODE = 'LF_POLICY_REFUSAL';
+
 /** A host refused because it is, or resolves to, an address that is not public. */
 export class NonPublicAddress extends Error {
+  readonly code = POLICY_REFUSAL_CODE;
   constructor(hostname: string, address?: string) {
     super(
       address === undefined || address === hostname

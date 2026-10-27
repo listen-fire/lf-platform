@@ -7,7 +7,7 @@ import http from 'node:http';
 
 import { Agent } from 'undici';
 
-import type { HostLookup } from '../public_address';
+import { NonPublicAddress, POLICY_REFUSAL_CODE, type HostLookup } from '../public_address';
 import { RefusedUrl, publicFetch, publicOnlyLookup, urlRefusal } from '../public_fetch';
 
 const PRODUCTION = { NODE_ENV: 'production' };
@@ -24,6 +24,15 @@ function resolvingTo(addresses: Record<string, string[]>): HostLookup & { asked:
 function stubFetch(answer: () => Response = () => new Response('{}', { status: 200 })) {
   return jest.fn<Promise<Response>, Parameters<typeof fetch>>(async () => answer());
 }
+
+describe('a refusal by policy', () => {
+  // module-kit's retrying fetch stops at once on this code instead of retrying.
+  it('carries the policy refusal code module-kit reads', () => {
+    expect(POLICY_REFUSAL_CODE).toBe('LF_POLICY_REFUSAL');
+    expect(new RefusedUrl('refused').code).toBe(POLICY_REFUSAL_CODE);
+    expect(new NonPublicAddress('10.0.0.5').code).toBe(POLICY_REFUSAL_CODE);
+  });
+});
 
 describe('publicFetch', () => {
   it('refuses a host that resolves to a private address before any request', async () => {

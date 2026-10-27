@@ -13,7 +13,7 @@ import type { LookupFunction } from 'node:net';
 
 import { Agent } from 'undici';
 
-import { NonPublicAddress, publicAddressesOf, systemLookup, type HostLookup } from './public_address';
+import { NonPublicAddress, POLICY_REFUSAL_CODE, publicAddressesOf, systemLookup, type HostLookup } from './public_address';
 
 /** Development and test reach a server on this machine; nothing else does. */
 const LOCAL_ENVIRONMENTS: ReadonlySet<string> = new Set(['development', 'test']);
@@ -33,6 +33,7 @@ interface PublicFetchOptions {
 /** A refused request: its URL is not one this fetch reaches. The message
  *  follows the caller's name for the URL ("MCP server https://…: "). */
 export class RefusedUrl extends Error {
+  readonly code = POLICY_REFUSAL_CODE;
   constructor(message: string) {
     super(message);
     this.name = 'RefusedUrl';
