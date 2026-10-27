@@ -251,20 +251,16 @@ describe('narrowEventPositions', () => {
     expect(schema.unions?.[keyOf({ ...narrowing, action: 'record.created' })]).toBeUndefined();
   });
 
-  it('a WIDE address over an action-carrying node grafts the per-action union — no walk', async () => {
+  it('a WIDE address over an action-carrying node grafts nothing — no walk, no union', async () => {
+    // The wide type is the node as projected. A union by action would hold
+    // the deleted kind, which has no live-record edges, so a walk off the
+    // wide type (the shipped Attio example, `ev-[company:Companies]->`) was
+    // refused with MOV_NARROWING.
     const { walk, run } = narrow({ addresses: [address({})] });
     const { schema } = await run;
     expect(walk.walks).toHaveLength(0);
-    // The union hangs at the node's own name; its variants keep the record
-    // edge on the META type (nothing was walked).
-    expect(schema.unions?.[EVENT]).toEqual([
-      keyOf({ action: 'record.created' }),
-      keyOf({ action: 'record.deleted' }),
-    ]);
-    expect(schema.positions[keyOf({ action: 'record.created' })].edges.record.target).toBe(
-      TABLE_META,
-    );
-    // The projected node itself is untouched.
+    expect(schema.unions).toBeUndefined();
+    expect(schema.positions[keyOf({ action: 'record.created' })]).toBeUndefined();
     expect(schema.positions[EVENT].edges.record.target).toBe(TABLE_META);
   });
 

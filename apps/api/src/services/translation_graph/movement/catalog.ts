@@ -872,9 +872,8 @@ async function assembleTeamCatalog(
               };
             }
             // Even a hop-less adapter (attio: no `narrows` keys) grafts here —
-            // an address may pin only the event node's own `action` axis, and
-            // a WIDE address over an action-carrying node grafts its per-action
-            // union so `IS` narrowing has variants to land on.
+            // an address may pin only the event node's own `action` axis. A
+            // WIDE address (no pins) is the node as projected: nothing grafts.
             if (addresses.length > 0) {
               const narrowed = await narrowEventPositions({
                 adapterType: slug,

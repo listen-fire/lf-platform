@@ -105,9 +105,10 @@ export function hopStep(input: { narrows: NonNullable<ListenConfigKey['narrows']
  * IS JUST A NODE: each grafted position is a COPY OF THE EVENT NODE the
  * address names, its `record` edge landing on the table the hop pins walk to,
  * its `requiresLiveRecord` edges dropped when the `action` pin is the deleted
- * kind. An address that leaves the node's `action` axis unpinned grafts a
- * union over its per-action narrowings — so an `IS` test (an intersection:
- * subject pins ∪ test pins) always lands on a grafted variant. Nothing is
+ * kind. An address that pins a hop but leaves the node's `action` axis open
+ * grafts a union over its per-action narrowings — so an `IS` test (an
+ * intersection: subject pins ∪ test pins) always lands on a grafted variant.
+ * An address that pins nothing is the node as projected, and grafts nothing. Nothing is
  * synthesized eagerly and nothing is named: every key is the canonical
  * address, minted on demand from what the program references.
  *
@@ -173,9 +174,12 @@ export async function narrowEventPositions(
       continue;
     }
 
-    // A WIDE address over a node with no action axis IS the node the
-    // projection already minted — nothing to graft.
-    if (Object.keys(address.narrowing).length === 0 && actionEnum === undefined) continue;
+    // An address that pins nothing is the WIDE type (`EventAddressRef`), the
+    // node the projection already minted — nothing to graft. Unioning it by
+    // action put the deleted kind in the union, whose record edges need a live
+    // record and are dropped, so a walk off the wide type was refused
+    // (MOV_NARROWING) on every adapter with an action axis.
+    if (Object.keys(address.narrowing).length === 0) continue;
 
     const addressKey = eventAddressKey({ event: address.event, narrowing: address.narrowing });
     if (
