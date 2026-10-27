@@ -5,7 +5,7 @@
 //
 // Where each figure comes from (lf reports some of them differently from the
 // platform's inspectRun):
-// - validatedUnder: `lf --version`, plus the listen-fire commit when lf ran
+// - validatedUnder: `lf --version`, plus the listen-fire main commit when lf ran
 //   from a checkout's modules (LF_SRC); a release records its version alone.
 // - saved: lf has no save step. `ok` is the fixed program's `lf check --json`;
 //   the listener is the program's own `listen to …` line, its kind the module
@@ -107,7 +107,7 @@ const data = {
   v1: program('draft.mvt'),
   v2,
   diagnostics: draft.diagnostics.map(({ file, ...d }) => ({ ...d, file: path.basename(file) })),
-  validatedUnder: lf.commit ? `${lf.version}+${lf.commit}` : lf.version,
+  validatedUnder: lf.commit ? `${lf.version} (main@${lf.commit})` : lf.version,
   saved: { ok: fixed.ok, listeners: [listener(v2)] },
   sheet: { name: jobLog.properties.title, columns },
   runs: [runOf(20, 'routine'), runOf(30, 'urgent')],
