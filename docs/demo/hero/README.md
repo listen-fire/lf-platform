@@ -1,12 +1,14 @@
-# Hero demo
+# Hero demo: capture
 
-A 60-second video of an agent writing a Listen-Fire automation over MCP, the
-checker refusing a stage Attio doesn't have, a one-token fix, and the saved
-automation then running on a real email. The run includes one small
-extraction call. Everything the video shows is captured from a real run on
-the agent dev loop, with the repository's fakes standing in for Gmail, Attio
-and Slack. The page renders from `data.js` alone, and `data.js` is built
-only from the captured responses.
+The run behind the site's 60-second demo video: an agent writing a
+listen-fire automation over MCP, the checker refusing a stage Attio doesn't
+have, a one-token fix, and the saved automation then running on a real email.
+The run includes one small extraction call. Everything the video shows is
+captured from a real run on the agent dev loop, with the repository's fakes
+standing in for Gmail, Attio and Slack.
+
+This directory only captures the run. The video is rendered in the site repo
+(`listen-fire-site/video`), from the `data.js` built here and nothing else.
 
 ## Make it
 
@@ -17,21 +19,14 @@ model call).
 cd docs/demo/hero
 ./scripts/boot.sh                       # dev loop up, team seeded, Gmail + Slack provisioned
 ./scripts/capture.sh                    # the agent's loop over MCP, then the email and its run
-node scripts/build_data.cjs             # .work/capture → data.js (refuses a failed run)
-./scripts/fetch_fonts.sh                # Inter + JetBrains Mono, local
-node scripts/render.cjs --stills 24 34 46 53   # check frames in stills/
-node scripts/render.cjs                 # listen-fire-hero.mp4, 1080p30, about 8 minutes
-node scripts/render.cjs --page operator.html   # listen-fire-operator.mp4, the plain English cut
+node scripts/build_data.cjs ../../../../listen-fire-site/video/data.js   # refuses a failed run
 ```
 
-There are two cuts of the same run. `demo.html` shows the agent's tool calls and
-the program; `operator.html` is for non-technical viewers, with no code on screen.
-Both share `demo.css` and read the same `data.js`.
+Then render in the site repo (see its `video/README.md`).
 
 On a Mac, skip `boot.sh`: run `pnpm dev:loop:agent`, then
 `pnpm dev:seed && pnpm dev:gmail setup`, with `ANTHROPIC_API_KEY` in
-`apps/api/.env`. The scripts need `jq` and `ffmpeg`, and rendering uses
-Playwright's Chromium (`npx playwright install chromium` if it is missing).
+`apps/api/.env`. The scripts need `jq`.
 Use the repository's Node (`.nvmrc`, 22.20) and its pinned pnpm (`corepack pnpm`):
 under an older Node the API fails to start, and a native module built under
 one Node version must be rebuilt for another.
@@ -50,12 +45,7 @@ the stack already up it only seeds.
   it with `MOV_ENUM_UNKNOWN_VALUE`.
 - `programs/fixed.mvt`: the one-token fix ("Sourced"), which saves and goes live.
 - `programs/founder_email.txt`: the founder's email body.
-- `demo.html` and `timeline.js`: the video. Every element is a pure function
-  of `t`, so frames capture deterministically.
-- `soundtrack.m4a`: the music under both cuts. `render.cjs` refuses to render
-  without it.
 - `scripts/`: boot, capture (`mcp.sh` calls one connector tool the way an
-  agent does), data build, fonts, render.
+  agent does), and the data build.
 
-Generated files (`.work/` with the captures and the minted API key, `data.js`,
-`fonts/`, `stills/`, `*.mp4`) are gitignored.
+`.work/` (the captures and the minted API key) is gitignored.

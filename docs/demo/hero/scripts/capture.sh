@@ -2,7 +2,7 @@
 # The hero demo's authoring loop and run, against the dev loop booted by
 # boot.sh. Plays the agent over the real automation MCP connector, then sends
 # the founder's email through the fake Gmail poll. Every response lands in
-# .work/capture/, which build_data.cjs turns into the video's data.js.
+# .work/capture/, which build_data.cjs turns into the video's data.js in the site repo.
 #
 # The run makes one real extraction call, so boot.sh must have started the
 # stack with ANTHROPIC_API_KEY set.

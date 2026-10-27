@@ -1,8 +1,15 @@
 // .work/capture/*  →  data.js, the only input the video page reads. Nothing
-// in the video's code, diagnostics or run figures is written by hand.
+// in the video's code, diagnostics or run figures is written by hand. The
+// video itself is rendered in the site repo, so data.js is written there:
+//   node scripts/build_data.cjs ../../../../listen-fire-site/video/data.js
 const fs = require('fs');
 const path = require('path');
 
+const OUT = process.argv[2];
+if (!OUT) {
+  console.error('usage: node scripts/build_data.cjs <path to listen-fire-site/video/data.js>');
+  process.exit(1);
+}
 const HERE = path.join(__dirname, '..');
 const CAP = path.join(HERE, '.work', 'capture');
 const read = (f) => JSON.parse(fs.readFileSync(path.join(CAP, f), 'utf8'));
@@ -40,5 +47,5 @@ if (data.run.status !== 'success') throw new Error(`run did not succeed: ${run.f
 if (data.diagnostics.filter((d) => d.severity === 'error').length !== 1) {
   throw new Error('the draft should be refused with exactly one error');
 }
-fs.writeFileSync(path.join(HERE, 'data.js'), `window.DEMO=${JSON.stringify(data, null, 1)};\n`);
-console.log(`data.js: ${data.run.committed} writes, ${data.run.modelCalls} model call(s), $${data.run.costUsd}, ${data.run.ms} ms`);
+fs.writeFileSync(OUT, `window.DEMO=${JSON.stringify(data, null, 1)};\n`);
+console.log(`${OUT}: ${data.run.committed} writes, ${data.run.modelCalls} model call(s), $${data.run.costUsd}, ${data.run.ms} ms`);
