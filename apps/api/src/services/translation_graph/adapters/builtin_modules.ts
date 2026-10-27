@@ -122,7 +122,7 @@ export interface ModuleLineHost {
   declaredCredential?: string;
   /** The fetch the module's provider requests go through, when its addresses
    *  come from the user rather than the module. Default: the global fetch. */
-  fetch?: () => typeof fetch;
+  fetch?: (install: BuiltinInstall, definition: ModuleDefinition) => typeof fetch;
   /** The install's kv. Default: refused, by name. */
   kv?: (install: BuiltinInstall) => ModuleKv;
   /** The install's files. Default: refused, by name. */
@@ -654,7 +654,7 @@ function platformHost(
     files: entry.files?.(install) ?? refusingFiles(unavailable('ctx.files')),
     ...(entry.identities !== undefined ? { identities: entry.identities(install.teamId) } : {}),
     browser: platformBrowser,
-    ...(entry.fetch !== undefined ? { fetch: entry.fetch() } : {}),
+    ...(entry.fetch !== undefined ? { fetch: entry.fetch(install, definition) } : {}),
   };
 }
 

@@ -1,9 +1,10 @@
 // What the platform adds to `@lf/mcp` as its host. Each connection is one MCP
 // server the team names by URL, so every request the module makes goes to an
 // address a user supplied: it goes through the platform's public-address fetch
-// (https, public addresses only, checked again when the connection opens), and
-// each request counts against the run's ceiling on calls to remote systems,
-// as a remote module's calls do.
+// (https, public addresses only, checked again when the connection opens).
+// Each request counts against the run's ceiling on calls to remote systems and
+// asks the platform's limiter first, as a remote module's calls do, so a
+// server's 429 holds the connection's next requests on every instance.
 //
 // The platform stores one of the module's two credentials: the token
 // (`mcp_token`: the server URL, the token, and optionally the header it goes
@@ -14,12 +15,15 @@
 import { z } from 'zod';
 
 import { countAdapterCall } from 'module-runtime/run_scope';
-import { MCP_MANIFEST } from '@listen-fire/mcp/manifest';
+import type { ModuleDefinition } from 'module-kit';
+import { MCP_ADAPTER_TYPE, MCP_MANIFEST } from '@listen-fire/mcp/manifest';
 import { TOKEN_CREDENTIAL } from '@listen-fire/mcp/client';
 import type { AdapterManifest } from 'movement-engine/public/adapter';
+import { limitRequest, limited, limiterSlot, throttleAfter, vendorWaitMs, type Caller } from 'movement-engine/public/limiter';
 
 import ExternalServiceType from '../../../../generated/kysely/automations/ExternalServiceType';
 import { publicFetch, urlRefusal } from '../../../../lib/net/public_fetch';
+import type { BuiltinInstall } from '../builtin_modules';
 
 /** The module's own manifest, with the credential type the platform stores
  *  an MCP connection under. */
@@ -49,11 +53,23 @@ export function mcpUrlRefusal(url: string): string | undefined {
   return urlRefusal(url, { label: LABEL });
 }
 
-/** The fetch the module's requests go through: counted, then guarded. */
-export function mcpServerFetch(): typeof fetch {
+/** How long a 429 without a usable Retry-After holds the connection. */
+const THROTTLE_MS = 1_000;
+
+/** The fetch one install's requests go through: counted, limited under the
+ *  module's declared limits (and any throttle its server answered), then guarded. */
+export function mcpServerFetch(install: BuiltinInstall, definition: Pick<ModuleDefinition, 'limits'>): typeof fetch {
   const guarded = publicFetch();
-  return (input, init) => {
+  const caller: Caller = {
+    module: MCP_ADAPTER_TYPE,
+    team: install.teamId,
+    ...(install.credentialsId !== undefined ? { install: install.credentialsId, credential: install.credentialsId } : {}),
+  };
+  const request = limitRequest(caller, definition.limits ?? []);
+  return async (input, init) => {
     countAdapterCall('remote');
-    return guarded(input, init);
+    const response = await limited(limiterSlot(), request, () => guarded(input, init));
+    if (response.status === 429) await throttleAfter(limiterSlot(), caller, vendorWaitMs(response) ?? THROTTLE_MS);
+    return response;
   };
 }
