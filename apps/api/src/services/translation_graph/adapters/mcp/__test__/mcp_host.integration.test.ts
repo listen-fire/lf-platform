@@ -117,7 +117,12 @@ import { metadata } from credentials
 probe = connect mcp using metadata
 `,
   });
-  expect(catalog.gaps.map((gap) => gap.detail).join('\n')).toBe('MCP server https://169.254.169.254/mcp: 169.254.169.254 is not a public address, so it is not reached.');
+  // @listen-fire/mcp 0.12.10 retries a thrown fetch as a network error, so the
+  // refusal arrives wrapped in its retry account; every attempt is refused
+  // the same way, before a connection opens.
+  const detail = catalog.gaps.map((gap) => gap.detail).join('\n');
+  expect(detail).toMatch(/^MCP server https:\/\/169\.254\.169\.254\/mcp: /);
+  expect(detail).toContain('169.254.169.254 is not a public address, so it is not reached.');
 });
 
 it('runs a saved, release-pinned movement through the platform: writes call the tools, the result and a read are readable', async () => {
