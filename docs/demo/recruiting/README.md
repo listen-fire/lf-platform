@@ -13,15 +13,15 @@ Rejected). When a candidate moves to Interview, the program:
 
 The run shows:
 
-- the draft refused by `lf check`: it listens for `becomes: "Interviewing"`,
+- the draft refused by `listen-fire check`: it listens for `becomes: "Interviewing"`,
   which is not one of the `Stage` choices (`MOV_ENUM_UNKNOWN_VALUE`, with a
   did-you-mean);
 - the one-word fix (`"Interview"`), which checks clean;
-- two edits to the base under `lf serve`: Tomás moves from Applied to Screen
+- two edits to the base under `listen-fire serve`: Tomás moves from Applied to Screen
   (nothing runs), and Priya moves from Screen to Interview (one run, four
   writes, no model call).
 
-It records on the open-source `lf` CLI, against the fakes for Airtable, Google
+It records on the open-source `listen-fire` CLI, against the fakes for Airtable, Google
 Drive, Slack and Gmail from the listen-fire repository.
 
 ## Make it
@@ -31,20 +31,20 @@ four services). No model key: the program has no extraction.
 
 ```bash
 cd docs/demo/recruiting
-LF_BIN=<lf binary> LF_SRC=<listen-fire checkout> LF_BRANCHES=main ./capture.sh
+LF_BIN=<listen-fire binary> LF_SRC=<listen-fire checkout> LF_BRANCHES=main ./capture.sh
 node build_data.cjs ../../../../listen-fire-site/video/recruiting/data.js
 ```
 
-- `LF_BIN` defaults to `lf` on PATH (a release). `LF_SRC`, when set, makes lf
+- `LF_BIN` defaults to `listen-fire` on PATH (a release). `LF_SRC`, when set, makes listen-fire
   serve the modules from that checkout's sources, and its commit is recorded.
   `LF_BRANCHES` names the branch it was built from.
-- The current recording is lf 0.12.10 built from listen-fire `main` at
+- The current recording is listen-fire 0.12.10 built from listen-fire `main` at
   7191d2be43, so `validatedUnder` reads `0.12.10 (main@7191d2be43)`.
 
 `capture.sh` starts from nothing every time. It makes a fresh project in
-`.work/` with `lf init`, starts the fakes on a free port, seeds them, and
+`.work/` with `listen-fire init`, starts the fakes on a free port, seeds them, and
 connects each module with stub credentials. It then checks the draft and the
-fix, starts `lf serve` (which registers the Airtable webhook), and makes the
+fix, starts `listen-fire serve` (which registers the Airtable webhook), and makes the
 two edits. Everything it starts is stopped when it exits.
 
 ## What is in it
@@ -70,17 +70,17 @@ two edits. Everything it starts is stopped when it exits.
 
 ## Where the figures come from
 
-- `validatedUnder`: `lf --version`, plus the branch and commit of `LF_SRC`.
-- `saved`: lf has no save step, so this is the fixed program's clean check plus the program's own `listen` line.
-- `modelCalls`: lf does not count model calls, so this is the number of extraction entries in the run's trace (zero).
-- `costUsd`: the run's `costMicrodollars` from `lf runs show`, divided by a million.
-- `ms`: measured by `capture.sh`, from changing the cell to `lf serve` printing the finished run. `runMs` is lf's own start to finish.
+- `validatedUnder`: `listen-fire --version`, plus the branch and commit of `LF_SRC`.
+- `saved`: listen-fire has no save step, so this is the fixed program's clean check plus the program's own `listen` line.
+- `modelCalls`: listen-fire does not count model calls, so this is the number of extraction entries in the run's trace (zero).
+- `costUsd`: the run's `costMicrodollars` from `listen-fire runs show`, divided by a million.
+- `ms`: measured by `capture.sh`, from changing the cell to `listen-fire serve` printing the finished run. `runMs` is listen-fire's own start to finish.
 - `writes`: what the fakes gained during that edit, the edit's own `Stage` change left out.
-- The edit that does not fire: `lf serve` says the delivery ran nothing, `lf deliveries` shows it with no runs, and `lf runs` does not grow.
+- The edit that does not fire: `listen-fire serve` says the delivery ran nothing, `listen-fire deliveries` shows it with no runs, and `listen-fire runs` does not grow.
 
-Two setup steps have no lf command:
+Two setup steps have no listen-fire command:
 
-- Drive only shows the app files the user picked, and lf has no picker. So
+- Drive only shows the app files the user picked, and listen-fire has no picker. So
   `capture.sh` writes the picks (the template and the folder) into the
   module's own state file (`MODULE_STATE_DIR`).
 - The fake Airtable has no UI. `deliver.cjs` changes the cell through the

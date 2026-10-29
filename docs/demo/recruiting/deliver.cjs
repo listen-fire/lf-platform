@@ -2,11 +2,11 @@
 // One edit to a candidate in the fake Airtable, as a person makes it in the
 // base: the record's cell is changed, then Airtable's webhook ping goes to
 // every webhook of the base that takes the change (the fake's control door
-// queues the change, with its previous value, and pings lf serve signed as
-// Airtable signs). Then it waits for `lf serve` to print the run it started.
+// queues the change, with its previous value, and pings listen-fire serve signed as
+// Airtable signs). Then it waits for `listen-fire serve` to print the run it started.
 // Prints { ms, runId, line, deliveries, logged }: ms runs from just before the
 // edit to the moment the run's settled line appears in the serve log; logged
-// is what lf serve printed meanwhile (colour codes stripped). With `none`, it
+// is what listen-fire serve printed meanwhile (colour codes stripped). With `none`, it
 // waits 5s past the ping's answer and prints runId null when no run appeared
 // (and fails if one did).
 const fs = require('fs');
@@ -36,7 +36,7 @@ async function main() {
     baseId: BASE, changeType: 'update', tableId: TABLE, recordId, fields: { [field]: to }, previous: { [field]: from },
   });
   const deliveries = pinged.deliveries.map(({ targetUrl, status, body }) => ({ door: new URL(targetUrl).pathname, status, body }));
-  if (deliveries.length !== 1 || deliveries[0].status !== 200) throw new Error(`the ping did not reach lf serve: ${JSON.stringify(deliveries)}`);
+  if (deliveries.length !== 1 || deliveries[0].status !== 200) throw new Error(`the ping did not reach listen-fire serve: ${JSON.stringify(deliveries)}`);
   if (expect === 'none') {
     await new Promise((r) => setTimeout(r, 5000));
     const lines = runLines();

@@ -1,5 +1,5 @@
 // The OAuth redirect relay: a provider's redirect to the platform is handed
-// to the team's `lf serve`, which answers as `deliver_public_redirect` does
+// to the team's `listen-fire serve`, which answers as `deliver_public_redirect` does
 // (crates/lf/src/oauth_signin.rs): 400 with no state, 404 when no command is
 // waiting, 200 when one is. The query carries the sign-in's code, so nothing
 // here logs it and the request logger never sees the route.
@@ -18,7 +18,7 @@ const TEAM = '11111111-1111-1111-1111-111111111111';
 const listen = (server: Server): Promise<string> =>
   new Promise((done) => server.listen(0, '127.0.0.1', () => done(`http://127.0.0.1:${(server.address() as AddressInfo).port}`)));
 
-/** A stand-in `lf serve`: its GET /oauth/callback, answering as lf does. */
+/** A stand-in `listen-fire serve`: its GET /oauth/callback, answering as listen-fire does. */
 const lfQueries: string[] = [];
 let lfAnswer: { status: number; text: string } | undefined;
 const lfServe = createServer((request: IncomingMessage, response: ServerResponse) => {
@@ -34,8 +34,8 @@ const lfServe = createServer((request: IncomingMessage, response: ServerResponse
     (state === null || state === ''
       ? { status: 400, text: 'This redirect carries no state.' }
       : state === 'waiting'
-        ? { status: 200, text: 'lf has the sign-in. Return to the terminal where `lf credential` is waiting.' }
-        : { status: 404, text: 'No `lf credential` command is waiting for this sign-in; start it again.' });
+        ? { status: 200, text: 'listen-fire has the sign-in. Return to the terminal where `listen-fire credential` is waiting.' }
+        : { status: 404, text: 'No `listen-fire credential` command is waiting for this sign-in; start it again.' });
   response.writeHead(answer.status, { 'content-type': 'text/plain' }).end(answer.text);
 });
 
@@ -95,7 +95,7 @@ describe('the OAuth redirect relay', () => {
   it('hands a waiting sign-in to lf and shows lf\'s answer', async () => {
     const answer = await relay(TEAM, 'code=c1&state=waiting');
     expect(answer.status).toBe(200);
-    expect(answer.text).toContain('lf has the sign-in.');
+    expect(answer.text).toContain('listen-fire has the sign-in.');
     expect(lfQueries).toEqual(['code=c1&state=waiting']);
     expectNothingLoggedOrPassedOn();
   });

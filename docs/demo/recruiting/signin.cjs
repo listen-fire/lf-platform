@@ -1,7 +1,7 @@
-// node signin.cjs <lf> <module> <name> <declared credential> [answer…]:
-// `lf credential add --headless`, with the browser's part played against the
+// node signin.cjs <listen-fire> <module> <name> <declared credential> [answer…]:
+// `listen-fire credential add --headless`, with the browser's part played against the
 // fake OAuth provider (the fake consents at once and redirects back with a
-// code, which is pasted to lf). The answers go to the questions lf asks
+// code, which is pasted to listen-fire). The answers go to the questions listen-fire asks
 // before signing in (a mailbox's address, optional fields left blank).
 const { spawn } = require('child_process');
 

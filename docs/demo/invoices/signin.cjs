@@ -1,8 +1,8 @@
-// node signin.cjs <lf> <module>[:<declared>] <credential> [<field>=<value>]...: `lf
+// node signin.cjs <listen-fire> <module>[:<declared>] <credential> [<field>=<value>]...: `listen-fire
 // credential add --headless` (`--credential <declared>` for a module that
 // declares several), with the browser's part played against the fake OAuth
 // provider (the fake consents at once and redirects back with a code, which
-// is pasted to lf). A credential field lf asks for (`Label (field): `) is
+// is pasted to listen-fire). A credential field listen-fire asks for (`Label (field): `) is
 // answered from the arguments, or left empty when they do not name it.
 const { spawn } = require('child_process');
 
@@ -30,7 +30,7 @@ child.stdout.on('data', async (chunk) => {
   child.stdin.write(`${back}\n`);
 });
 const giveUp = setTimeout(() => {
-  console.error(`lf credential add did not finish:\n${out}`);
+  console.error(`listen-fire credential add did not finish:\n${out}`);
   child.kill();
 }, 60_000);
 child.on('exit', (code) => {

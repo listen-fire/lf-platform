@@ -9,7 +9,7 @@
 // compare-and-swap needs no new column. A refresh holds a transaction-scoped
 // advisory lock on the credential, so two processes refreshing one credential
 // make one token call: the second finds the version moved and takes the
-// first's answer. An lf process refreshing the same row through the secrets
+// first's answer. A listen-fire process refreshing the same row through the secrets
 // module holds a lease instead (`lf_secrets_lease`, services/lf_secrets/lease.ts),
 // which outlives a transaction: a refresh here waits until no live lease names
 // the row before it runs, and lf's lock is refused while one runs here.

@@ -2,8 +2,8 @@
 // module, over three bridges:
 //   a. direct: the module's answer served in-process under one fixed tenant,
 //      spoken to by the engine's SlotClient;
-//   b. through lf's own client of a movements module
-//      (`lf --contract-movements-slot`), pointed at that same served module by
+//   b. through listen-fire's own client of a movements module
+//      (`listen-fire --contract-movements-slot`), pointed at that same served module by
 //      a scratch project, so lf's side of the wire is held to the meaning the
 //      module has;
 //   c. the real route of a running platform (LF_MOVEMENTS_SLOT_URL, with
@@ -145,7 +145,7 @@ const bridges: Bridge[] = [
   },
   {
     over: "lf's client of the module",
-    skip: LF_BIN === undefined || LF_BIN === '' ? 'LF_BIN is unset (the lf binary of the pinned release)' : null,
+    skip: LF_BIN === undefined || LF_BIN === '' ? 'LF_BIN is unset (the listen-fire binary of the pinned release)' : null,
     reach: async () => {
       const tenant = await seededTeam();
       const { served, token } = await serveModule(tenant);
@@ -339,9 +339,9 @@ describe('the movements slot over the platform module', () => {
     }
   }, 60_000);
 
-  // lf's own watch over the module: a long-running `lf serve` takes a ship and
+  // listen-fire's own watch over the module: a long-running `listen-fire serve` takes a ship and
   // an unship made on the platform without a restart, as lf prints them.
-  (LF_BIN === undefined || LF_BIN === '' ? it.skip : it)('lf serve follows a ship and an unship over the module without a restart', async () => {
+  (LF_BIN === undefined || LF_BIN === '' ? it.skip : it)('listen-fire serve follows a ship and an unship over the module without a restart', async () => {
     const tenant = await seededTeam();
     const { served, token } = await serveModule(tenant);
     const project = scratchProject(served.address.baseUrl);
@@ -365,7 +365,7 @@ describe('the movements slot over the platform module', () => {
       new Promise<number>((resolve, reject) => {
         const since = Date.now();
         if (lines.some((line) => pattern.test(line))) return resolve(0);
-        const timer = setTimeout(() => reject(new Error(`lf serve printed no ${pattern} in ${ms} ms:\n${lines.join('\n')}`)), ms);
+        const timer = setTimeout(() => reject(new Error(`listen-fire serve printed no ${pattern} in ${ms} ms:\n${lines.join('\n')}`)), ms);
         waiters.push({ pattern, found: () => (clearTimeout(timer), resolve(Date.now() - since)) });
       });
     const exited = new Promise<void>((resolve) => server.once('exit', () => resolve()));

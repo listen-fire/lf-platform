@@ -1,6 +1,6 @@
 # Releasing
 
-This repository releases the platform: the container images, under `v*` tags. The language (the crates, the `@listen-fire/*` packages, the `lf` binaries and the documentation site) is released from `listen-fire`, in the same GitHub organisation, under its own tags. The two version numbers were aligned once, at 0.12.0, and are independent from then on.
+This repository releases the platform: the container images, under `v*` tags. The language (the crates, the `@listen-fire/*` packages, the `listen-fire` binaries and the documentation site) is released from `listen-fire`, in the same GitHub organisation, under its own tags. The two version numbers were aligned once, at 0.12.0, and are independent from then on.
 
 A release of the platform installs a stated version of each `@listen-fire/*` package it consumes (set in the workspace's `package.json` files). Raise those first, regenerate the lockfile, and gate, before tagging.
 

@@ -12,7 +12,7 @@
 //   - the rewrite: only the rewritten text is refused — the old spelling's fix
 //     produced text that 5 does not read as the old text meant.
 //
-// It measures the explicit upgrade a person asks for (`lf upgrade` without
+// It measures the explicit upgrade a person asks for (`listen-fire upgrade` without
 // `--all`, the API's upgrade): how much of the old text it converts with no
 // review. Nothing upgrades on its own. The rate is pinned as a floor that only
 // moves up.

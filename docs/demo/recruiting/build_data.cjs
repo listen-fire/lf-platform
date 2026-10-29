@@ -6,16 +6,16 @@
 // The shape (window.DEMO):
 //   request         what the user asked for (programs/request.txt)
 //   v1, v2          the draft and the fixed program, as written
-//   diagnostics     the draft's `lf check --json` diagnostics (file made a basename)
-//   validatedUnder  "<lf version> (<branch>@<commit>)", see below
+//   diagnostics     the draft's `listen-fire check --json` diagnostics (file made a basename)
+//   validatedUnder  "<listen-fire version> (<branch>@<commit>)", see below
 //   saved           { ok, listeners: [{ kind, config }] }
 //   base            { name, table, fields, stages, candidates: [{ Name, Role, Stage, Interviewer }] }
 //                   the Hiring base as seeded, before either edit
 //   edits[]         one per edit to the base, in order:
 //     name, candidate, field, from, to   the edit (a candidate's Stage changed)
 //     fired         whether a run happened
-//     serve         what lf serve printed while the edit was handled
-//     delivery      { id, eventCount, runs }: lf's record of the webhook ping
+//     serve         what listen-fire serve printed while the edit was handled
+//     delivery      { id, eventCount, runs }: listen-fire's record of the webhook ping
 //     run           null when nothing fired; else { status, committed, costUsd,
 //                   modelCalls, ms, runMs, writeRecords }
 //     writes[]      { target, action, values }: what the fakes hold after the
@@ -25,25 +25,25 @@
 //   terminal        { checkDraft, checkFixed, serve }: verbatim terminal text
 //
 // Where each figure comes from:
-// - validatedUnder: `lf --version`, and the listen-fire branch LF_SRC was
+// - validatedUnder: `listen-fire --version`, and the listen-fire branch LF_SRC was
 //   built from with its commit (LF_BRANCHES=main). A release records its
 //   version alone.
-// - saved: lf has no save step. `ok` is the fixed program's `lf check --json`;
+// - saved: listen-fire has no save step. `ok` is the fixed program's `listen-fire check --json`;
 //   the listener is the program's own `listen to …` line, its kind the module
 //   the listened connection is made from.
-// - run.status, committed, costUsd, writeRecords: `lf runs show --json`
+// - run.status, committed, costUsd, writeRecords: `listen-fire runs show --json`
 //   (`status`, `writes`, `costMicrodollars` / 1e6, `writeRecords`).
-// - run.modelCalls: lf does not count model calls; this is the number of
+// - run.modelCalls: listen-fire does not count model calls; this is the number of
 //   `extraction` entries in the run's trace (the program makes none).
 // - run.ms: measured by capture.sh (deliver.cjs), from just before the cell is
-//   changed to the moment lf serve prints the settled run. run.runMs is lf's
+//   changed to the moment listen-fire serve prints the settled run. run.runMs is listen-fire's
 //   own startedAt to finishedAt.
 // - writes: the fakes' state after minus before. The fake Airtable keeps a
 //   written cell under the field's id; it is named here from the seeded
 //   table's fields. A Drive copy's source is the seeded file whose content the
 //   copy carries.
-// - A run that did not fire: no run line in the serve log, `lf deliveries`
-//   shows the ping with no runs, `lf runs` gained nothing, and the fakes
+// - A run that did not fire: no run line in the serve log, `listen-fire deliveries`
+//   shows the ping with no runs, `listen-fire runs` gained nothing, and the fakes
 //   changed only by the edit itself.
 const fs = require('fs');
 const path = require('path');
@@ -156,7 +156,7 @@ function editOf(n, name) {
   const runsAfter = read(`${n}_after_lf_runs.json`).runs;
   const deliveriesBefore = read(`${n}_before_lf_deliveries.json`).deliveries;
   const newDeliveries = addedOf(deliveriesBefore, read(`${n}_after_lf_deliveries.json`).deliveries);
-  if (newDeliveries.length !== 1) problems.push(`lf recorded ${newDeliveries.length} deliveries for the ${name} edit`);
+  if (newDeliveries.length !== 1) problems.push(`listen-fire recorded ${newDeliveries.length} deliveries for the ${name} edit`);
   const delivery = newDeliveries[0] ?? null;
   const fired = ping.runId !== null;
 
@@ -178,7 +178,7 @@ function editOf(n, name) {
       writeRecords: r.writeRecords.map(({ adapter, recordType, action, committed, values }) => ({ adapter, recordType, action, committed, values })),
     };
   } else {
-    if (runsAfter.length !== runsBefore.length) problems.push(`lf runs grew during the ${name} edit`);
+    if (runsAfter.length !== runsBefore.length) problems.push(`listen-fire runs grew during the ${name} edit`);
     if (delivery && delivery.runs.length !== 0) problems.push(`the ${name} edit's delivery started runs`);
   }
 
@@ -237,11 +237,11 @@ const problems = [
   ...(!fixed.ok ? ['the fix does not check clean'] : []),
   ...(screen.fired ? ['the Screen edit fired a run'] : []),
   ...(screen.writes.length !== 0 ? [`the Screen edit wrote ${screen.writes.length} thing(s)`] : []),
-  ...(!screen.serve.some((l) => /ran nothing/.test(l)) ? ['lf serve did not say the Screen edit ran nothing'] : []),
+  ...(!screen.serve.some((l) => /ran nothing/.test(l)) ? ['listen-fire serve did not say the Screen edit ran nothing'] : []),
   ...(!interview.fired ? ['the Interview edit did not fire'] : []),
   ...(interview.run && interview.run.status !== 'completed' ? [`the Interview run ${interview.run.status}`] : []),
   ...(kinds(interview) !== 'Airtable:update,Gmail:draft,Google:copy,Slack:post' ? [`the Interview run wrote ${kinds(interview)}`] : []),
-  ...(interview.run && interview.run.committed !== interview.writes.length ? ['lf counts different writes from the fakes'] : []),
+  ...(interview.run && interview.run.committed !== interview.writes.length ? ['listen-fire counts different writes from the fakes'] : []),
   ...(copy && (copy.target !== 'Google Drive › Scorecards' || copy.values['Copied from'] !== 'Interview scorecard') ? ['the scorecard is not a copy of the template in Scorecards'] : []),
   ...(airtable && copy && (airtable.record !== interview.candidate || airtable.values.Scorecard !== copy.values.Link) ? ["the candidate's Scorecard is not the copy's link"] : []),
   ...(post && copy && (post.target !== 'Slack #hiring' || !post.values.Message.includes(copy.values.Link) || !post.values.Message.includes(priya.Interviewer)) ? ['the #hiring post does not name the interviewer and the scorecard'] : []),
@@ -256,4 +256,4 @@ for (const e of data.edits) {
   if (!e.fired) console.log(`${e.name}: ${e.candidate} ${e.from} → ${e.to}, no run, ${e.writes.length} write(s)`);
   else console.log(`${e.name}: ${e.candidate} ${e.from} → ${e.to}, ${e.run.status}, ${e.run.committed} write(s), ${e.run.modelCalls} model call(s), $${e.run.costUsd}, ${e.run.ms} ms (run ${e.run.runMs} ms)`);
 }
-console.log(`${OUT} (validated under lf ${data.validatedUnder})`);
+console.log(`${OUT} (validated under listen-fire ${data.validatedUnder})`);

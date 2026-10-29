@@ -583,13 +583,13 @@ Four things bind to a **person** rather than to a credential, and refuse a machi
 
 The consequence, bluntly: **a single-tenant installation can register the third-party apps but cannot attach anybody's account to them.** Connecting accounts needs `core` in the unit list.
 
-### Running lf against this installation
+### Running listen-fire against this installation
 
-The platform can keep a cloud `lf`'s runs, parks, joins, callbacks, work rows and delivery receipts in its own `automations` tables, so one Postgres holds both. `lf` steps its own movements; the platform serves `lf`'s store slot over adapter protocol 2, and `lf` reads and writes the run tables through it.
+The platform can keep a cloud `listen-fire`'s runs, parks, joins, callbacks, work rows and delivery receipts in its own `automations` tables, so one Postgres holds both. `listen-fire` steps its own movements; the platform serves `listen-fire`'s store slot over adapter protocol 2, and `listen-fire` reads and writes the run tables through it.
 
-**The route.** `POST /api/v1/system/slots/store`, on the system router, mounted whenever automations is. It takes the `store_slot` action, so the caller is an API key holding the `system` scope, sent as `Authorization: Bearer lf_…` (see "Who may call the system endpoints"; an OIDC caller cannot use it, because the route acts in a tenant). **The tenant is the key owner's team**: every row `lf` writes belongs to that team, and the key never reaches another team's rows. A request with no credential is refused with `403`, an unknown key with `401`.
+**The route.** `POST /api/v1/system/slots/store`, on the system router, mounted whenever automations is. It takes the `store_slot` action, so the caller is an API key holding the `system` scope, sent as `Authorization: Bearer lf_…` (see "Who may call the system endpoints"; an OIDC caller cannot use it, because the route acts in a tenant). **The tenant is the key owner's team**: every row `listen-fire` writes belongs to that team, and the key never reaches another team's rows. A request with no credential is refused with `403`, an unknown key with `401`.
 
-**Naming the module in the `lf` project.** Add `externals/platform_store/lf-external.yaml`:
+**Naming the module in the `listen-fire` project.** Add `externals/platform_store/lf-external.yaml`:
 
 ```yaml
 name: platform_store
@@ -605,34 +605,34 @@ and in `lf.yaml`:
 core: { store: platform_store }
 ```
 
-`lf serve --doors-only` and the `lf drain` workers then share the platform's tables. The module identifies itself as `lf-platform-store`.
+`listen-fire serve --doors-only` and the `listen-fire drain` workers then share the platform's tables. The module identifies itself as `lf-platform-store`.
 
-**Settings come from the environment only.** The key is never written into the project: give `lf` `LF_SECRET__PLATFORM_STORE__EXTERNAL=platform_store` and `LF_SECRET__PLATFORM_STORE__KEY=<the system scope key>`. Where `lf` keeps its other credentials is a separate choice; "A cloud `lf` keeping its credentials here" describes keeping them in this installation.
+**Settings come from the environment only.** The key is never written into the project: give `listen-fire` `LF_SECRET__PLATFORM_STORE__EXTERNAL=platform_store` and `LF_SECRET__PLATFORM_STORE__KEY=<the system scope key>`. Where `listen-fire` keeps its other credentials is a separate choice; "A cloud `listen-fire` keeping its credentials here" describes keeping them in this installation.
 
 **The `host` marker.** Every `trigger_run` and `work` row says which host owns it, `platform` or `lf`; existing rows read `platform`. It keeps three things apart:
 
-- *Claims.* A platform worker never claims an `lf` work row and `lf` never claims a platform one, even for the same key. `lf`'s keys are stored as `lf:<team>:<key>`, so `corepack pnpm dev:inspect work` shows that prefix.
-- *Sweeps and wakes.* The platform's orphan sweep, timer and ask wakes, stamped-run settling and lease returns act on `platform` rows only. When an `lf` container dies its leases lapse and `lf` fails those runs by its own rule.
-- *The callback door.* A callback `lf` minted reads as unknown at the platform's callback door.
+- *Claims.* A platform worker never claims an `lf` work row and `listen-fire` never claims a platform one, even for the same key. `listen-fire`'s keys are stored as `lf:<team>:<key>`, so `corepack pnpm dev:inspect work` shows that prefix.
+- *Sweeps and wakes.* The platform's orphan sweep, timer and ask wakes, stamped-run settling and lease returns act on `platform` rows only. When a `listen-fire` container dies its leases lapse and `listen-fire` fails those runs by its own rule.
+- *The callback door.* A callback `listen-fire` minted reads as unknown at the platform's callback door.
 
-**What `/runs` shows.** `lf` runs are listed beside the platform's, each named by its movement. **Resume is refused for an `lf` run**, with a message saying to resume it in `lf`. **Cancel works**: it ends the run as the platform ends any run.
+**What `/runs` shows.** `listen-fire` runs are listed beside the platform's, each named by its movement. **Resume is refused for a `listen-fire` run**, with a message saying to resume it in `listen-fire`. **Cancel works**: it ends the run as the platform ends any run.
 
-**Retention.** `lf` prunes its own deliveries through the module. The platform's run prune removes only *settled* `lf` runs; a running or parked `lf` run is never pruned.
+**Retention.** `listen-fire` prunes its own deliveries through the module. The platform's run prune removes only *settled* `listen-fire` runs; a running or parked `listen-fire` run is never pruned.
 
-**Checking the wiring.** The module's conformance suite drives `lf`'s own client against the route:
+**Checking the wiring.** The module's conformance suite drives `listen-fire`'s own client against the route:
 
 ```
-LF_BIN=<path to lf> LF_STORE_SLOT_URL=<API_BASE_URL>/api/v1/system/slots/store LF_STORE_SLOT_KEY=<system scope key> \
+LF_BIN=<path to listen-fire> LF_STORE_SLOT_URL=<API_BASE_URL>/api/v1/system/slots/store LF_STORE_SLOT_KEY=<system scope key> \
   corepack pnpm --filter api test:integration --testPathPattern lf_store/__test__/store_contract
 ```
 
-`LF_BIN` is an `lf` of 0.12.0-rc.9 or later. Without it the bridge through `lf`'s client is skipped; without the URL and key, the bridge against the running route is.
+`LF_BIN` is a `listen-fire` of 0.12.0-rc.9 or later. Without it the bridge through `listen-fire`'s client is skipped; without the URL and key, the bridge against the running route is.
 
-### A cloud `lf` keeping its credentials here
+### A cloud `listen-fire` keeping its credentials here
 
-A cloud `lf` (the language's own runtime, run beside this installation) can keep its credentials in this installation's encrypted store instead of in files of its own. The accounts people connect on the connect pages are then the accounts `lf` runs with, and a token `lf` refreshes is written back here. It needs `core` in the unit list and an API key; the door is `POST <API_BASE_URL>/api/public/lf-secrets`.
+A cloud `listen-fire` (the language's own runtime, run beside this installation) can keep its credentials in this installation's encrypted store instead of in files of its own. The accounts people connect on the connect pages are then the accounts `listen-fire` runs with, and a token `listen-fire` refreshes is written back here. It needs `core` in the unit list and an API key; the door is `POST <API_BASE_URL>/api/public/lf-secrets`.
 
-In the cloud `lf` project, add the platform as a module in the project's externals folder (an `lf-external.yaml`), and point `lf.yaml` at it:
+In the cloud `listen-fire` project, add the platform as a module in the project's externals folder (an `lf-external.yaml`), and point `lf.yaml` at it:
 
 ```yaml
 # externals/platform_secrets/lf-external.yaml
@@ -660,39 +660,39 @@ LF_SECRET__PLATFORM_SECRETS__TEAM=<the team id>
 
 - The key must hold the `secrets` scope. It is grantable but never in a key's default scopes, so tick it deliberately when you mint the key.
 - The team is required. The door refuses a request whose team is not the key's team, and a key can only be used for the one team it belongs to.
-- Behind Cloud Run IAM (or any proxy that wants its own identity token), add `LF_SECRET__PLATFORM_SECRETS__OUTGOING_AUTH=google-identity`. `lf` then signs each request to the door as the service account it runs as.
+- Behind Cloud Run IAM (or any proxy that wants its own identity token), add `LF_SECRET__PLATFORM_SECRETS__OUTGOING_AUTH=google-identity`. `listen-fire` then signs each request to the door as the service account it runs as.
 
-**What `lf` sees.** Each credential's fields, never its ciphertext. A refreshed token is written back to the same row, and while `lf` is refreshing one the platform's own refresh waits for it, so the two never race for a single-use refresh token.
+**What `listen-fire` sees.** Each credential's fields, never its ciphertext. A refreshed token is written back to the same row, and while `listen-fire` is refreshing one the platform's own refresh waits for it, so the two never race for a single-use refresh token.
 
 **What is not listed.**
 - Credential shells (a connection that was started and never finished).
 - The Gmail rows that use delegation, and retired Gmail rows.
-- Rows of a type `lf` has no module for.
+- Rows of a type `listen-fire` has no module for.
 - The two keys the platform supplies to itself, `NATIVE_VALUATIONS` and `NATIVE_KNOWLEDGE`.
 
 A Google credential serves Sheets and Drive both, and is listed as `google_sheets`. Name that external for both in the cloud project.
 
-**Renames.** `lf` identifies a credential by its name. Renaming one in the platform's UI looks to `lf` like the old name being deleted and a new one added, so rename only when you mean the project to follow.
+**Renames.** `listen-fire` identifies a credential by its name. Renaming one in the platform's UI looks to `listen-fire` like the old name being deleted and a new one added, so rename only when you mean the project to follow.
 
-**Connecting accounts.** `lf connect` and `lf credential add` create ordinary rows here, which the connect pages show and understand, and an account connected on the connect pages is one `lf` can use. Both belong to the team the key names. On a core installation, a row `lf` creates has no owning person until someone attaches one.
+**Connecting accounts.** `listen-fire connect` and `listen-fire credential add` create ordinary rows here, which the connect pages show and understand, and an account connected on the connect pages is one `listen-fire` can use. Both belong to the team the key names. On a core installation, a row `listen-fire` creates has no owning person until someone attaches one.
 
-**OAuth apps stay here.** The apps you registered under "Registering your own third-party apps" are configured in this installation's environment, and their secrets never go to `lf`'s files. Give `lf` the client through `LF_SECRET__<EXTERNAL>__CLIENT_ID` and `LF_SECRET__<EXTERNAL>__CLIENT_SECRET` (the external's name, upper-cased, as in the settings above). Register this redirect URI on that OAuth app:
+**OAuth apps stay here.** The apps you registered under "Registering your own third-party apps" are configured in this installation's environment, and their secrets never go to `listen-fire`'s files. Give `listen-fire` the client through `LF_SECRET__<EXTERNAL>__CLIENT_ID` and `LF_SECRET__<EXTERNAL>__CLIENT_SECRET` (the external's name, upper-cased, as in the settings above). Register this redirect URI on that OAuth app:
 
 ```
 <API_BASE_URL>/api/public/lf-secrets/oauth/callback/<team id>
 ```
 
-then name it in `lf.yaml` with `oauth: { redirectUri: <that URI> }`. The platform does not process the callback: it forwards the query to the `lf serve` of that team, which finishes the sign-in. Tell it where `lf serve` is with `LF_OAUTH_RELAY_TARGETS` in `deploy/.env`, a JSON object from team id to the `lf serve` URL (`{"<team id>":"https://lf.example.com"}`). In production the target must be `https`, and a malformed value fails boot naming the variable. A team with no entry gets no relay, and the callback is refused. Callback URLs with `code` or `state` in them are written to the request log without their query.
+then name it in `lf.yaml` with `oauth: { redirectUri: <that URI> }`. The platform does not process the callback: it forwards the query to the `listen-fire serve` of that team, which finishes the sign-in. Tell it where `listen-fire serve` is with `LF_OAUTH_RELAY_TARGETS` in `deploy/.env`, a JSON object from team id to the `listen-fire serve` URL (`{"<team id>":"https://lf.example.com"}`). In production the target must be `https`, and a malformed value fails boot naming the variable. A team with no entry gets no relay, and the callback is refused. Callback URLs with `code` or `state` in them are written to the request log without their query.
 
 **A single-tenant installation** has no teams or accounts, and its generated key carries `*`, so that key also opens this door. Prefer a `core` installation and a key scoped to `secrets` alone.
 
-### A cloud `lf` running this installation's movements
+### A cloud `listen-fire` running this installation's movements
 
-A cloud `lf` whose store and secrets are already on this installation can also take the movements it runs from here. The platform serves `lf`'s movements slot over adapter protocol 2, read-only: `lf` lists a team's saved movements, reads them by name, and runs them. A movement is authored, checked and upgraded here, and `lf` only runs what was shipped.
+A cloud `listen-fire` whose store and secrets are already on this installation can also take the movements it runs from here. The platform serves `listen-fire`'s movements slot over adapter protocol 2, read-only: `listen-fire` lists a team's saved movements, reads them by name, and runs them. A movement is authored, checked and upgraded here, and `listen-fire` only runs what was shipped.
 
-**The route.** `POST /api/v1/system/slots/movements`, on the system router, mounted whenever automations is. It takes the `movements_slot` action, so the caller is an API key holding the `system` scope (the key the store slot uses serves). **The tenant is the key owner's team**: `lf` sees that team's movements only. An OIDC caller cannot use it, because the route acts in a tenant. A request with no credential is refused with `403`, an unknown key with `401`.
+**The route.** `POST /api/v1/system/slots/movements`, on the system router, mounted whenever automations is. It takes the `movements_slot` action, so the caller is an API key holding the `system` scope (the key the store slot uses serves). **The tenant is the key owner's team**: `listen-fire` sees that team's movements only. An OIDC caller cannot use it, because the route acts in a tenant. A request with no credential is refused with `403`, an unknown key with `401`.
 
-**Naming the module in the `lf` project.** Add `externals/platform_movements/lf-external.yaml`:
+**Naming the module in the `listen-fire` project.** Add `externals/platform_movements/lf-external.yaml`:
 
 ```yaml
 name: platform_movements
@@ -709,59 +709,59 @@ engine: 0.12.0
 core: { movements: platform_movements }
 ```
 
-`engine:` is this installation's language line (0.12.0). The key is never written into the project: give `lf` `LF_SECRET__PLATFORM_MOVEMENTS__EXTERNAL=platform_movements` and `LF_SECRET__PLATFORM_MOVEMENTS__KEY=<the system scope key>`. The module identifies itself as `lf-platform-movements`.
+`engine:` is this installation's language line (0.12.0). The key is never written into the project: give `listen-fire` `LF_SECRET__PLATFORM_MOVEMENTS__EXTERNAL=platform_movements` and `LF_SECRET__PLATFORM_MOVEMENTS__KEY=<the system scope key>`. The module identifies itself as `lf-platform-movements`.
 
 **What is listed.** A movement of the key's team is listed when all of these hold:
 
 - It is shipped. A save that never passed the checks (or that stopped for confirmation) is a draft and is absent. A shipped movement with a later unshipped edit is listed at its shipped text.
 - Its shipped version is pinned to the installed language line. Movements on the legacy pins 1 to 4 stay on the platform's own engine and are absent.
-- None of its listeners is paused, unless a listed movement imports it. `lf` has no per-listener pause, and serving a movement the loop guard stopped would silently resume it; but a pause is about firing, not about being imported, so a paused library that a listed movement imports (directly, or through other paused files) is listed so the import resolves. A paused movement nothing listed imports is absent.
+- None of its listeners is paused, unless a listed movement imports it. `listen-fire` has no per-listener pause, and serving a movement the loop guard stopped would silently resume it; but a pause is about firing, not about being imported, so a paused library that a listed movement imports (directly, or through other paused files) is listed so the import resolves. A paused movement nothing listed imports is absent.
 - Every credential it imports is one the secrets module lists for the team (`import { name } from credentials`). A movement that names another is left out, with every movement that imports it, and the api logs the names; the rest open.
-- Its name is a valid path. A name with a `\`, an empty or `..` segment, or a leading `/` could not be named by `lf`; it is left out and the api logs its name.
+- Its name is a valid path. A name with a `\`, an empty or `..` segment, or a leading `/` could not be named by `listen-fire`; it is left out and the api logs its name.
 
 The path is `<name>.mvt`, the text is the shipped text, and the version is the text's content hash, so the same text keeps its version across a re-pin. Imports resolve by name as they do here: `import { greet } from "lib/greet"` finds the movement named `lib/greet`, listed as `lib/greet.mvt`.
 
-**Read-only.** `lf upgrade` and `lf init` are refused with the platform's reason. Author and upgrade here.
+**Read-only.** `listen-fire upgrade` and `listen-fire init` are refused with the platform's reason. Author and upgrade here.
 
-**What the cloud project must hold.** An external for every adapter the listed movements import, under the platform's adapter name. A listed file that does not parse does not stop `lf` opening: `lf check` reports it and the other movements run.
+**What the cloud project must hold.** An external for every adapter the listed movements import, under the platform's adapter name. A listed file that does not parse does not stop `listen-fire` opening: `listen-fire check` reports it and the other movements run.
 
-**When `lf` sees an edit.** Within about two seconds, without a restart. `lf serve` and `lf drain` hold the slot's `movements.watch`, and the platform answers it as soon as what the team is served changes: a movement shipped, re-shipped with a new text, deleted, paused or resumed, or a credential it imports connected or no longer served. A movement leaving what is served for any of those reasons is `removed` to `lf`; one coming back is `added`. `lf` re-reads what moved, checks the new set, and swaps it in (a set that does not check is kept out and `lf` prints why). A rename is a new file to `lf`, so its listens start fresh.
+**When `listen-fire` sees an edit.** Within about two seconds, without a restart. `listen-fire serve` and `listen-fire drain` hold the slot's `movements.watch`, and the platform answers it as soon as what the team is served changes: a movement shipped, re-shipped with a new text, deleted, paused or resumed, or a credential it imports connected or no longer served. A movement leaving what is served for any of those reasons is `removed` to `listen-fire`; one coming back is `added`. `listen-fire` re-reads what moved, checks the new set, and swaps it in (a set that does not check is kept out and `listen-fire` prints why). A rename is a new file to `listen-fire`, so its listens start fresh.
 
 - **How the platform hears a change.** Database triggers on the movement, listener and credential tables notify a channel per team on each write that can change what the team is served (a ship, a delete, a pause or resume, a credential connected, emptied or renamed); a token refresh or a scheduler's checkpoint does not. While it holds a watch, each api process listens on that team's channel over one Postgres connection of its own, outside the shared pool, closed when it holds no watch. Count one more connection per api process when sizing `max_connections`.
-- **Any api instance answers.** The position a watch reports is a hash of the team and the paths and versions it was served, and that listing is stored in `automations.lf_movements_listing`. Another instance (Cloud Run runs several) answers it from there. A listing nobody has asked about for a day is deleted. A position the table does not hold for the team answers `resync`, and `lf` lists again.
-- **The hold bound is 25 seconds.** The api holds a quiet watch for at most 25 seconds, however long `lf` asks for (it asks for 30 and gives up after 40), then answers with nothing new and `lf` asks again at once. Every proxy and load balancer between `lf` and the api must let a request run longer than that. The api sets no response timeout of its own, Cloud Run's request timeout is 300 seconds unless you lower it, and the deployment guides' proxies cut idle requests at 60 seconds or more; 25 seconds leaves 5 seconds under the protocol's 30-second cap for the last listing and the answer. A proxy that cuts requests off at 25 seconds or sooner breaks the watch (`lf` reports each failed watch and retries after `LF_MOVEMENTS_REFRESH_MS`); raise its timeout to at least 30 seconds.
-- **At most four held watches per team per api process.** A fifth is answered at once with nothing new, and that `lf` asks again after `LF_MOVEMENTS_REFRESH_MS` (5 seconds by default). Each held watch re-lists the team on each wake, which is one team scan, never a connection of its own.
+- **Any api instance answers.** The position a watch reports is a hash of the team and the paths and versions it was served, and that listing is stored in `automations.lf_movements_listing`. Another instance (Cloud Run runs several) answers it from there. A listing nobody has asked about for a day is deleted. A position the table does not hold for the team answers `resync`, and `listen-fire` lists again.
+- **The hold bound is 25 seconds.** The api holds a quiet watch for at most 25 seconds, however long `listen-fire` asks for (it asks for 30 and gives up after 40), then answers with nothing new and `listen-fire` asks again at once. Every proxy and load balancer between `listen-fire` and the api must let a request run longer than that. The api sets no response timeout of its own, Cloud Run's request timeout is 300 seconds unless you lower it, and the deployment guides' proxies cut idle requests at 60 seconds or more; 25 seconds leaves 5 seconds under the protocol's 30-second cap for the last listing and the answer. A proxy that cuts requests off at 25 seconds or sooner breaks the watch (`listen-fire` reports each failed watch and retries after `LF_MOVEMENTS_REFRESH_MS`); raise its timeout to at least 30 seconds.
+- **At most four held watches per team per api process.** A fifth is answered at once with nothing new, and that `listen-fire` asks again after `LF_MOVEMENTS_REFRESH_MS` (5 seconds by default). Each held watch re-lists the team on each wake, which is one team scan, never a connection of its own.
 - The api logs `[lf-movements] watch` lines with the team and the counts of added, changed and removed files, and never a movement's text.
 
-**The team's engine.** Which engine runs a team's automations, the platform or `lf`, is a setting of the team. It is the one switch that keeps the platform and `lf` from both running a team's listeners. A member with full access switches it on the team's settings page (`/settings/team`, "Where this team's automations run"); an installation without the web app uses the CLI, `pnpm cli team-engine --team <uuid> --set lf` (or `--set platform`; without `--set` it prints the current engine). Every switch is kept in the automations audit log with who made it.
+**The team's engine.** Which engine runs a team's automations, the platform or `lf`, is a setting of the team. It is the one switch that keeps the platform and `listen-fire` from both running a team's listeners. A member with full access switches it on the team's settings page (`/settings/team`, "Where this team's automations run"); an installation without the web app uses the CLI, `pnpm cli team-engine --team <uuid> --set lf` (or `--set platform`; without `--set` it prints the current engine). Every switch is kept in the automations audit log with who made it.
 
 - A team on the platform (every team, until switched) is not served: every method but `manifest` is refused with the code `settings`.
 - For a team on `lf` the platform drops every live firing (cron, inbound webhooks and polls, Run-now) as `engine_lf`. The received event is kept, marked suppressed, and can be replayed. The editor's test runs still work. A run parked before the switch finishes here.
-- The platform registers no vendor webhook or poll for the team. At the switch, every webhook it provisioned for the team's listeners is deregistered at the vendor where the vendor's API allows (a refusal is shown on the toggle and printed by the CLI, and the subscription is retired here either way, so a delivery to it is refused); saving a movement registers none; the poll scanner skips the team. Switching back registers them again, and the first poll after it starts from the moment it runs, so nothing `lf` handled is replayed (events between stopping `lf` and that first poll are not fetched). Inbound mail, the shared Slack, Telegram and WhatsApp bots, and webhooks you created by hand on the webhooks settings page still deliver, and are dropped as `engine_lf`.
+- The platform registers no vendor webhook or poll for the team. At the switch, every webhook it provisioned for the team's listeners is deregistered at the vendor where the vendor's API allows (a refusal is shown on the toggle and printed by the CLI, and the subscription is retired here either way, so a delivery to it is refused); saving a movement registers none; the poll scanner skips the team. Switching back registers them again, and the first poll after it starts from the moment it runs, so nothing `listen-fire` handled is replayed (events between stopping `listen-fire` and that first poll are not fetched). Inbound mail, the shared Slack, Telegram and WhatsApp bots, and webhooks you created by hand on the webhooks settings page still deliver, and are dropped as `engine_lf`.
 - Switching again to the engine a team already has repeats the registration step, which retries a deregistration a vendor refused.
 - Each api and drain process keeps its copy of the lf-engined teams for at most 5 seconds, so a switch reaches every process within 5 seconds (the process that made it at once). The movements slot reads the setting on every request.
 - A team's engine is not carried by `export-team`: an imported team starts on the platform.
 
-Switching order: switch the team to `lf` first, then start the cloud `lf` at least 5 seconds later. To switch back, stop `lf` first, then switch the team back.
+Switching order: switch the team to `lf` first, then start the cloud `listen-fire` at least 5 seconds later. To switch back, stop `listen-fire` first, then switch the team back.
 
 `LF_ENGINE_TEAMS`, the environment list that was the switch in 0.12.0-rc.11, is retired. The api and the drain refuse to boot while it is set, naming it, so an upgrade never hands those teams back to the platform: once the upgrade's migration has run, switch each listed team with the CLI above, then unset it.
 
-**Checking the wiring.** The module's conformance suite drives `lf`'s own client against the route:
+**Checking the wiring.** The module's conformance suite drives `listen-fire`'s own client against the route:
 
 ```
-LF_BIN=<path to lf> LF_MOVEMENTS_SLOT_URL=<API_BASE_URL>/api/v1/system/slots/movements LF_MOVEMENTS_SLOT_KEY=<system scope key> \
+LF_BIN=<path to listen-fire> LF_MOVEMENTS_SLOT_URL=<API_BASE_URL>/api/v1/system/slots/movements LF_MOVEMENTS_SLOT_KEY=<system scope key> \
   corepack pnpm --filter api test:integration --testPathPattern lf_movements/__test__/movements_contract
 ```
 
-`LF_BIN` is an `lf` of 0.12.2 or later, which asks for `movements.watch`. Without it the bridge through `lf`'s client and the import check are skipped; without the URL and key, the bridge against the running route is. One case on each bridge holds a quiet watch for the full 25 seconds. On the dev loop, `corepack pnpm dev:lf-movements-verify` writes the movements and a scratch `lf` project, and `--contract` runs the suite against the loop's route.
+`LF_BIN` is a `listen-fire` of 0.12.2 or later, which asks for `movements.watch`. Without it the bridge through `listen-fire`'s client and the import check are skipped; without the URL and key, the bridge against the running route is. One case on each bridge holds a quiet watch for the full 25 seconds. On the dev loop, `corepack pnpm dev:lf-movements-verify` writes the movements and a scratch `listen-fire` project, and `--contract` runs the suite against the loop's route.
 
-### A cloud `lf` listening to this installation's own events
+### A cloud `listen-fire` listening to this installation's own events
 
-A movement that imports `system` (`sys = connect system`, then `listen to sys { events: ["Run Failed"] }`) listens to the platform's own events: a run that failed, and the deploy check's Validation Issue, Deprecated Version and Release Applied. Only this installation keeps those records, so it serves the `system` adapter to a cloud `lf` over adapter protocol 2. It is the same module the platform runs in process, over the same records.
+A movement that imports `system` (`sys = connect system`, then `listen to sys { events: ["Run Failed"] }`) listens to the platform's own events: a run that failed, and the deploy check's Validation Issue, Deprecated Version and Release Applied. Only this installation keeps those records, so it serves the `system` adapter to a cloud `listen-fire` over adapter protocol 2. It is the same module the platform runs in process, over the same records.
 
-**The route.** `POST /api/v1/system/adapters/system`, on the system router, mounted whenever automations is. It takes the `system_adapter` action, so the caller is an API key holding the `system` scope (the key the store and movements slots use serves). The tenant is the key owner's team. `lf` sends a team header of its own; the route ignores it. A request with no credential is refused with `403`, an unknown key with `401`. `manifest` is answered before anything else, with no listen, checkpoint or setting needed.
+**The route.** `POST /api/v1/system/adapters/system`, on the system router, mounted whenever automations is. It takes the `system_adapter` action, so the caller is an API key holding the `system` scope (the key the store and movements slots use serves). The tenant is the key owner's team. `listen-fire` sends a team header of its own; the route ignores it. A request with no credential is refused with `403`, an unknown key with `401`. `manifest` is answered before anything else, with no listen, checkpoint or setting needed.
 
-**Naming the module in the `lf` project.** Add `externals/system/lf-external.yaml`:
+**Naming the module in the `listen-fire` project.** Add `externals/system/lf-external.yaml`:
 
 ```yaml
 name: system
@@ -771,14 +771,14 @@ url: <API_BASE_URL>/api/v1/system/adapters/system
 auth: { kind: bearer, field: key }
 ```
 
-Then give it the key once with `lf connect system`. It asks for the secret (field `key`: the system scope key) and keeps it in the secrets module as the external's install, named `system`. On this installation that module is the secrets door, so the key is stored encrypted here, as a credential of type `REMOTE` named `system`. An environment variable (`LF_SECRET__SYSTEM__KEY`) does not serve: `lf` reads it as a user credential, and the checker then asks for `connect system using …`.
+Then give it the key once with `listen-fire connect system`. It asks for the secret (field `key`: the system scope key) and keeps it in the secrets module as the external's install, named `system`. On this installation that module is the secrets door, so the key is stored encrypted here, as a credential of type `REMOTE` named `system`. An environment variable (`LF_SECRET__SYSTEM__KEY`) does not serve: `listen-fire` reads it as a user credential, and the checker then asks for `connect system using …`.
 
-**What `lf` hears.**
+**What `listen-fire` hears.**
 
-- **Run Failed** comes from the run table, which holds `lf`'s runs too (written through the store slot). An `lf` run's `Automation` is its movement file (`Nightly Sync` for `Nightly Sync.mvt`), and its `Automation Id` is the listen it ran (`listen:<file>:<movement>`).
-- **Its link.** `Url` is the page of the movement of that name here (every movement the movements slot serves is one), else the automations list. A movement's activity view does not list `lf` runs, so the link does not filter to failed runs as it does for a platform run.
-- **Never its own failures.** `lf` names the listening automation in a poll by the movement its listen fires (`Run Failed` for ``listen … fire `Run Failed` ``), not by its file. The poll skips every failed `lf` run of a movement of that name, so a listener also never hears of a movement with the same name in another file.
-- **Validation Issue, Deprecated Version and Release Applied** come from the events the deploy check stores, as on the platform. Run Paused is the platform's cost limit, which `lf` runs never reach.
+- **Run Failed** comes from the run table, which holds `listen-fire`'s runs too (written through the store slot). A `listen-fire` run's `Automation` is its movement file (`Nightly Sync` for `Nightly Sync.mvt`), and its `Automation Id` is the listen it ran (`listen:<file>:<movement>`).
+- **Its link.** `Url` is the page of the movement of that name here (every movement the movements slot serves is one), else the automations list. A movement's activity view does not list `listen-fire` runs, so the link does not filter to failed runs as it does for a platform run.
+- **Never its own failures.** `listen-fire` names the listening automation in a poll by the movement its listen fires (`Run Failed` for ``listen … fire `Run Failed` ``), not by its file. The poll skips every failed `listen-fire` run of a movement of that name, so a listener also never hears of a movement with the same name in another file.
+- **Validation Issue, Deprecated Version and Release Applied** come from the events the deploy check stores, as on the platform. Run Paused is the platform's cost limit, which `listen-fire` runs never reach.
 - **When.** The first poll of each listen sets its mark and reports nothing, so going live never replays earlier events. A failure is reported once the run is more than ten seconds old, at the listen's poll interval (60 seconds unless the listen says `every`). Rehearsals are left out.
 
 ## Core
@@ -968,7 +968,7 @@ docker compose run --rm -v "$PWD/bundles:/bundles" \
 
 **Credentials arrive as shells.** Read this before importing anything with automations in it. A connection's id, name and type cross intact, so every trigger and subscription that references it still resolves — but the secret does not. It is bound by encryption to the source installation's key, and for any app you registered yourself it authenticates against the source operator's registration, so it would be worthless against yours however it were carried. Each shell is stamped as needing reconnection, and an automation that reaches for one fails by name rather than with an opaque decryption error. Afterwards you have two jobs: reconnect every connection against your own app registrations, and re-save every listening trigger so it registers a fresh subscription at the new hostname.
 
-**Not carried, and why.** The audit trail (it records writes against the source database); which engine runs the team (a team switched to a cloud `lf` arrives on the platform, since no `lf` is pointed at the target yet); the undelivered outboxes (events addressed to the source's subscribers — carrying them would fire the target's listeners for writes it never saw); live single-use capabilities and codes minted for the source origin; a pasted model key and the handle on the source operator's own app registration. One genuine gap rather than a policy choice: the table behind temporarily exposed files carries no team and no owner, so there is no expression that selects one tenant's rows out of it — it can be neither exported nor purged per team. Those rows expire on their own and their URLs are absolute at the source origin, so they are dead at cutover anyway.
+**Not carried, and why.** The audit trail (it records writes against the source database); which engine runs the team (a team switched to a cloud `listen-fire` arrives on the platform, since no `listen-fire` is pointed at the target yet); the undelivered outboxes (events addressed to the source's subscribers — carrying them would fire the target's listeners for writes it never saw); live single-use capabilities and codes minted for the source origin; a pasted model key and the handle on the source operator's own app registration. One genuine gap rather than a policy choice: the table behind temporarily exposed files carries no team and no owner, so there is no expression that selects one tenant's rows out of it — it can be neither exported nor purged per team. Those rows expire on their own and their URLs are absolute at the source origin, so they are dead at cutover anyway.
 
 **Two asymmetries worth knowing.** Currency reference data travels with the bundle even though it belongs to the installation rather than the team, because a fresh target has none and the team's own prices point at it; if the target already has its own copy, that copy wins, and a team deletion never removes it. And a person who also belongs to another team is spared by a delete, along with their contact rows — a person is not one team's property — which is one reason the executed row count is usually lower than the dry run's.
 
@@ -1035,9 +1035,9 @@ Everything here is set by you, in `deploy/.env`. Nothing in this table is genera
 | `COMPOSE_PROFILES` | only without `up.sh` | nothing optional runs, INCLUDING the bundled datastores. `postgres,redis,objectstore` is the shipped line (`minio` still works as the object store's profile); add `admin` for the operator console and `demo` for the stand-ins. Read by `docker compose` itself, from `deploy/.env` |
 | `LISTEN_FIRE_PRODUCTS` | only without `up.sh` | every unit. An unknown name fails the boot |
 | `LISTEN_FIRE_PRINCIPAL` | only without `up.sh` | `core`. Must agree with whether `core` is in the unit list, checked in both directions |
-| `LISTEN_FIRE_SCOPES` | no | `*` — the API key grants everything. Narrow it to what a key actually needs. The `secrets` scope (the door a cloud `lf` keeps its credentials behind) is granted only when named, or by `*`; see "A cloud `lf` keeping its credentials here" |
-| `LF_OAUTH_RELAY_TARGETS` | only to relay a cloud `lf`'s OAuth sign-ins | empty — the relay at `/api/public/lf-secrets/oauth/callback/<team id>` refuses every team. A JSON object from team id to that team's `lf serve` URL; `https` only in production. Boot refuses a malformed value naming the variable. See "A cloud `lf` keeping its credentials here" |
-| `LF_ENGINE_TEAMS` | never (retired) | unset. The api and the drain refuse to boot while it is set: a team's engine is now a setting (see "The team's engine" under "A cloud `lf` running this installation's movements"); switch each team it listed with `pnpm cli team-engine --team <uuid> --set lf`, then unset it |
+| `LISTEN_FIRE_SCOPES` | no | `*` — the API key grants everything. Narrow it to what a key actually needs. The `secrets` scope (the door a cloud `listen-fire` keeps its credentials behind) is granted only when named, or by `*`; see "A cloud `listen-fire` keeping its credentials here" |
+| `LF_OAUTH_RELAY_TARGETS` | only to relay a cloud `listen-fire`'s OAuth sign-ins | empty — the relay at `/api/public/lf-secrets/oauth/callback/<team id>` refuses every team. A JSON object from team id to that team's `listen-fire serve` URL; `https` only in production. Boot refuses a malformed value naming the variable. See "A cloud `listen-fire` keeping its credentials here" |
+| `LF_ENGINE_TEAMS` | never (retired) | unset. The api and the drain refuse to boot while it is set: a team's engine is now a setting (see "The team's engine" under "A cloud `listen-fire` running this installation's movements"); switch each team it listed with `pnpm cli team-engine --team <uuid> --set lf`, then unset it |
 | `LISTEN_FIRE_ACCESS` | no | `write`; `read` makes the key read-only |
 | `LISTEN_FIRE_ALLOW_ANONYMOUS` | no | `false`. `true` removes the key requirement entirely — only on an API nothing else can reach |
 | `DATABASE_URL` | only with your own database | the bundled Postgres, whose URL is generated on first boot. Setting it also takes that service out of the composition |

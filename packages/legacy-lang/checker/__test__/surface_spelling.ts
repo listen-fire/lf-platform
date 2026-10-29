@@ -1,6 +1,6 @@
 // A suite that runs one program under every language version writes it once,
 // in the spelling versions 1–4 read, and checks the version-5 run against the
-// program the upgrade tool rewrites it to (the same loop `lf upgrade` runs) —
+// program the upgrade tool rewrites it to (the same loop `listen-fire upgrade` runs) —
 // so a version-5 check always reads the version-5 surface, and the two
 // spellings must answer the same. Only the respellings are applied (the
 // `MOV_V5_*` fixes): a fix for the error a test is about never is.

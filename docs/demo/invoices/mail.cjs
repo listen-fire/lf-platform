@@ -1,6 +1,6 @@
 // node mail.cjs <fakes url> <serve log> <message.json> <pdf>: drops one
 // supplier's email into the fake Gmail mailbox, the PDF attached as its
-// bytes, then waits for `lf serve` to print the run its poll started. Prints
+// bytes, then waits for `listen-fire serve` to print the run its poll started. Prints
 // { messageId, runId, sentAt, line }: sentAt is just before the email lands,
 // so the run's finish time less it includes the wait for Gmail's next poll.
 const fs = require('fs');

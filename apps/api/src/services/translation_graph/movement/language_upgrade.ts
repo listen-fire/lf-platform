@@ -29,7 +29,7 @@
 //
 // Only the explicit upgrade REWRITES the text, by the fixes the checker offers
 // under the current version (movement-lang checker/upgrade.ts — the loop
-// `lf upgrade` runs too): the fixes marked safe (they provably keep the
+// `listen-fire upgrade` runs too): the fixes marked safe (they provably keep the
 // meaning), and every fix when asked. What is judged is the rewritten text,
 // and when the pin moves, the rewritten text is saved with it, in one save
 // under the new pin. A movement that is not clean after the rewrite keeps its

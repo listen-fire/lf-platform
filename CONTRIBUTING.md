@@ -1,6 +1,6 @@
 # Contributing to lf-platform
 
-This is the platform repository. The language (`lf`, the engine, the handbook, the modules) is the `listen-fire` repository in the same GitHub organisation; the platform installs its published packages, and a change to the language is made and released there.
+This is the platform repository. The language (`listen-fire`, the engine, the handbook, the modules) is the `listen-fire` repository in the same GitHub organisation; the platform installs its published packages, and a change to the language is made and released there.
 
 ## Setting up
 

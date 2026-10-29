@@ -1,9 +1,9 @@
-// The fake CRM (`fake_crm_adapter.ts`) as an lf external: a plain process
+// The fake CRM (`fake_crm_adapter.ts`) as a listen-fire external: a plain process
 // that serves it behind the wire protocol on PORT (0: any free port) and
 // prints `listening <port>`, the way lf starts an external it is handed in an
-// `lf-external.yaml`. It lets `lf` run movements against the reference
+// `lf-external.yaml`. It lets `listen-fire` run movements against the reference
 // protocol-v2 adapter. Its ledger is in memory:
-// it lives as long as the lf process that started it.
+// it lives as long as the listen-fire process that started it.
 
 import { FAKE_CRM_SECRET, startFakeCrmServer } from './fake_crm_adapter';
 

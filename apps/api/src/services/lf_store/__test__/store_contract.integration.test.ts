@@ -2,7 +2,7 @@
 // cases) against the platform's store module, over three bridges:
 //   a. direct: the module's answer served in-process under one fixed tenant,
 //      spoken to by the engine's RpcStoreBackend;
-//   b. through lf's own client of a store module (`lf --contract-store-slot`),
+//   b. through listen-fire's own client of a store module (`listen-fire --contract-store-slot`),
 //      pointed at that same served module by a scratch project, so lf's side
 //      of the wire is held to the meaning the module has;
 //   c. the real route of a running platform (LF_STORE_SLOT_URL, with
@@ -85,7 +85,7 @@ const bridges: Bridge[] = [
   },
   {
     over: "lf's client of the module",
-    skip: LF_BIN === undefined || LF_BIN === '' ? 'LF_BIN is unset (the lf binary of the pinned release)' : null,
+    skip: LF_BIN === undefined || LF_BIN === '' ? 'LF_BIN is unset (the listen-fire binary of the pinned release)' : null,
     reach: async () => {
       const tenant = randomUUID();
       const { served, token } = await serveModule(tenant);

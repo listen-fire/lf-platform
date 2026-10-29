@@ -6,11 +6,11 @@ Drive under `Invoices / <supplier> / <YYYY-MM>`, added as a row to the Ledger
 sheet, and anything over £5,000 is flagged in the `#finance` Slack channel.
 The run shows:
 
-- the draft refused by `lf check`: it compares the extracted currency, typed
+- the draft refused by `listen-fire check`: it compares the extracted currency, typed
   as the set `GBP | EUR | USD`, with `"£"`, which is not in the set
   (`MOV_ENUM_UNKNOWN_VALUE`); as written, nothing would ever be flagged;
 - the one-line fix (`"GBP"`), which checks clean;
-- two real runs under `lf serve`, each started by Gmail's poll, each with one
+- two real runs under `listen-fire serve`, each started by Gmail's poll, each with one
   model call that reads the PDF: £840.00 from Paperworks Stationery (filed and
   added to the ledger) and £12,600.00 from Ashdown Building Contractors (filed,
   added, and flagged).
@@ -22,20 +22,20 @@ this repo (its fakes stand in for Gmail, Google Drive, Google Sheets and Slack).
 
 ```bash
 cd docs/demo/invoices
-LF_BIN=<lf binary> LF_SRC=<listen-fire checkout> ./capture.sh
+LF_BIN=<listen-fire binary> LF_SRC=<listen-fire checkout> ./capture.sh
 node build_data.cjs ../../../../listen-fire-site/video/invoices/data.js
 ```
 
-- `LF_BIN` defaults to `lf` on PATH (a release). `LF_SRC`, when set, makes lf
+- `LF_BIN` defaults to `listen-fire` on PATH (a release). `LF_SRC`, when set, makes listen-fire
   serve the modules from that checkout's sources, and its branch and commit
   are recorded. `CHROME` names another Chrome binary.
-- The recording is from lf 0.12.10 built from listen-fire's `main`, so
+- The recording is from listen-fire 0.12.10 built from listen-fire's `main`, so
   `validatedUnder` reads `0.12.10 (main@<commit>)`.
 
 `capture.sh` starts from nothing every time. It prints the two invoices, makes
-a fresh project in `.work/` with `lf init`, starts the fakes on a free port,
+a fresh project in `.work/` with `listen-fire init`, starts the fakes on a free port,
 and connects each module to them with stub credentials. It then checks the
-draft and the fix, starts `lf serve`, waits for it to say Gmail's listen is
+draft and the fix, starts `listen-fire serve`, waits for it to say Gmail's listen is
 armed (the first poll only sets the mark), and drops two supplier emails into
 the mailbox. Everything it starts is stopped when it exits.
 
@@ -54,14 +54,14 @@ the mailbox. Everything it starts is stopped when it exits.
   Google sign-in against the fake. `mail.cjs` sends one email, notes when, and waits for its run.
 - `build_data.cjs`: the captures into the video's `data.js`; its header
   documents the shape and where each figure comes from. Each run's writes are
-  lf's own record of them (`lf runs show --json`), checked against what the
+  listen-fire's own record of them (`listen-fire runs show --json`), checked against what the
   fakes gained. It refuses to build when a run failed, the draft is not
   refused with exactly one error, a run made other than one model call, a PDF
   did not arrive in Drive intact (its bytes, hash and type `application/pdf`),
   or the wrong invoice was flagged.
 
-## Setup steps lf has no command for
+## Setup steps listen-fire has no command for
 
 - The Drive folder and the spreadsheet grants. Google only shows the app the
-  items the user picked. lf has no picker, so `capture.sh` writes each pick
+  items the user picked. listen-fire has no picker, so `capture.sh` writes each pick
   into the module's own state file (`MODULE_STATE_DIR`).

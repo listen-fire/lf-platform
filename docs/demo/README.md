@@ -10,7 +10,7 @@ Nothing a video shows is written by hand.
   real trigger events run through the fakes.
 - `field-service/`: a customer's WhatsApp message is logged to a job sheet,
   and an urgent one pages the on-call engineer in Slack. It records on the
-  open-source `lf` CLI instead, with no dev loop: the platform's shared
+  open-source `listen-fire` CLI instead, with no dev loop: the platform's shared
   WhatsApp number only carries team members' own messages, not a customer's.
   How to make it is in its own README.
 

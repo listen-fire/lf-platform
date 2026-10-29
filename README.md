@@ -2,7 +2,7 @@
 
 Listen-Fire runs small programs over the systems a team already uses. A program is a plain text file with a `.mvt` extension, written in a language called movement: it names the systems it touches, traverses them as graphs of records joined by edges, and moves data between them. The platform around it holds the connections and their credentials, receives the inbound events, runs the programs, parks them when they need a person to answer something, and resumes them when the answer arrives.
 
-This repository is the platform. The language it runs (the `lf` command, the engine, the handbook and the modules that connect systems) is a separate repository, `listen-fire`, in the same GitHub organisation; the platform consumes its published packages.
+This repository is the platform. The language it runs (the `listen-fire` command, the engine, the handbook and the modules that connect systems) is a separate repository, `listen-fire`, in the same GitHub organisation; the platform consumes its published packages.
 
 ## Listen and fire
 

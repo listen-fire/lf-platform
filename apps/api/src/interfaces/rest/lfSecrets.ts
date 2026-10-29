@@ -1,6 +1,6 @@
 // lf's secrets slot, served by the platform over a team's encrypted
 // credentials (services/lf_secrets/module.ts), and the OAuth redirect relay
-// that hands a provider's sign-in redirect to the team's `lf serve`.
+// that hands a provider's sign-in redirect to the team's `listen-fire serve`.
 //
 //   POST /api/public/lf-secrets                         adapter protocol 2's envelope
 //   GET  /api/public/lf-secrets/oauth/callback/:team    the redirect relay
@@ -181,7 +181,7 @@ const RELAY_TIMEOUT_MS = 10_000;
 
 type Env = Record<string, string | undefined>;
 
-/** Each team's `lf serve` URL, from `LF_OAUTH_RELAY_TARGETS`
+/** Each team's `listen-fire serve` URL, from `LF_OAUTH_RELAY_TARGETS`
  *  (`{ "<team id>": "https://lf.example.com" }`). Throws naming the variable. */
 function relayTargets(env: Env = process.env): Readonly<Record<string, string>> {
   const raw = env[RELAY_TARGETS_VARIABLE];
@@ -190,10 +190,10 @@ function relayTargets(env: Env = process.env): Readonly<Record<string, string>> 
   try {
     parsed = JSON.parse(raw);
   } catch {
-    throw new Error(`${RELAY_TARGETS_VARIABLE} is not JSON: expected { "<team id>": "https://<lf serve URL>" }.`);
+    throw new Error(`${RELAY_TARGETS_VARIABLE} is not JSON: expected { "<team id>": "https://<listen-fire serve URL>" }.`);
   }
   const targets = z.record(z.string(), z.string()).safeParse(parsed);
-  if (!targets.success) throw new Error(`${RELAY_TARGETS_VARIABLE} must be a JSON object of team ids to lf serve URLs.`);
+  if (!targets.success) throw new Error(`${RELAY_TARGETS_VARIABLE} must be a JSON object of team ids to listen-fire serve URLs.`);
   const production = env.NODE_ENV === 'production';
   for (const [team, target] of Object.entries(targets.data)) {
     let url: URL;

@@ -1,6 +1,6 @@
 // node deliver.cjs <door url> <app secret> <serve log> <from> <profile name> <text>
 // Sends one Meta-shaped WhatsApp delivery, signed `x-hub-signature-256` with
-// the app secret as Meta signs it, then waits for `lf serve` to print the run
+// the app secret as Meta signs it, then waits for `listen-fire serve` to print the run
 // it started. Prints { runId, ms, door }: ms runs from just before the POST to
 // the moment the run's settled line appears in the serve log.
 const fs = require('fs');

@@ -1341,7 +1341,7 @@ async function allTeamMovementSources(
 // filled snapshot replaces the skeleton — no error flicker.
 //
 // Both gather inputs from the database and live introspection, then hand them
-// to `buildCatalogSnapshot` (movement-engine) — the pure builder `lf` calls
+// to `buildCatalogSnapshot` (movement-engine) — the pure builder `listen-fire` calls
 // with what it scanned from a project, so the two cannot project a manifest
 // differently.
 // ═══════════════════════════════════════════════════════════════════════════

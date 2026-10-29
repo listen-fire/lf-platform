@@ -5,22 +5,22 @@
 //
 // Where each figure comes from (lf reports some of them differently from the
 // platform's inspectRun):
-// - validatedUnder: `lf --version`, plus the listen-fire main commit when lf ran
+// - validatedUnder: `listen-fire --version`, plus the listen-fire main commit when listen-fire ran
 //   from a checkout's modules (LF_SRC); a release records its version alone.
-// - saved: lf has no save step. `ok` is the fixed program's `lf check --json`;
+// - saved: listen-fire has no save step. `ok` is the fixed program's `listen-fire check --json`;
 //   the listener is the program's own `listen to …` line, its kind the module
 //   the listened connection is made from.
-// - runs[].status, committed, costUsd: `lf runs show --json` (`status`,
+// - runs[].status, committed, costUsd: `listen-fire runs show --json` (`status`,
 //   `writes`, `costMicrodollars` / 1e6).
-// - runs[].modelCalls: lf does not count model calls; this is the number of
+// - runs[].modelCalls: listen-fire does not count model calls; this is the number of
 //   `extraction` entries in the run's trace.
 // - runs[].urgency: the extraction's own output in the trace (Job.urgency).
 // - runs[].ms: measured by capture.sh (deliver.cjs), from just before the
-//   signed delivery is sent to the moment lf serve prints the settled run.
+//   signed delivery is sent to the moment listen-fire serve prints the settled run.
 // - runs[].writes: what the fakes hold after the run that they did not hold
 //   before it (sheet rows, Slack messages), so only that run's writes.
-// - terminal: what `lf check` printed on the draft and on the fix, and what
-//   `lf serve` printed up to being ready, verbatim but for colour codes and
+// - terminal: what `listen-fire check` printed on the draft and on the fix, and what
+//   `listen-fire serve` printed up to being ready, verbatim but for colour codes and
 //   the temporary project's path (made project-relative by capture.sh).
 const fs = require('fs');
 const path = require('path');
@@ -135,4 +135,4 @@ fs.writeFileSync(OUT, `window.DEMO=${JSON.stringify(data, null, 1)};\n`);
 for (const r of data.runs) {
   console.log(`${r.urgency}: ${r.status}, ${r.committed} write(s), ${r.modelCalls} model call(s), $${r.costUsd}, ${r.ms} ms`);
 }
-console.log(`${OUT} (validated under lf ${data.validatedUnder})`);
+console.log(`${OUT} (validated under listen-fire ${data.validatedUnder})`);

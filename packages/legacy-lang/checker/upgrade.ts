@@ -13,7 +13,7 @@
 // Whether a pin may then move is the caller's decision, on what is left.
 //
 // Every surface that rewrites shares this one loop, and each runs only when
-// asked: `lf upgrade`, the API's explicit upgrade (and the agent tool), and the
+// asked: `listen-fire upgrade`, the API's explicit upgrade (and the agent tool), and the
 // script beside this package (conformance/upgrade_text.ts). The deploy check
 // never rewrites a movement's text.
 
@@ -54,7 +54,7 @@ export interface UpgradeResult {
 
 export interface UpgradeOptions {
   /** Apply every fix offered, not only those marked safe — a person asked
-   *  for it (`lf upgrade --all`, the API's `applyAllFixes`). */
+   *  for it (`listen-fire upgrade --all`, the API's `applyAllFixes`). */
   all?: boolean;
 }
 
@@ -288,7 +288,7 @@ export function typescriptCheck(input: {
 
 // ── Showing a rewrite ───────────────────────────────────────────────────────
 
-/** A unified diff of two texts, by line (`lf upgrade --check`, the script).
+/** A unified diff of two texts, by line (`listen-fire upgrade --check`, the script).
  *  Empty when they are the same. */
 export function unifiedDiff(input: { before: string; after: string; path: string; context?: number }): string {
   if (input.before === input.after) return '';

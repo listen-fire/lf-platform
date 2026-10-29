@@ -6,8 +6,8 @@
 // data.js sets window.DEMO to:
 //   request         what the user asked for (programs/request.txt)
 //   v1, v2          the draft and the fixed program
-//   diagnostics     the draft's `lf check --json` diagnostics (file made a basename)
-//   validatedUnder  "<lf version> (<branch>@<commit>)", or the version alone for a release
+//   diagnostics     the draft's `listen-fire check --json` diagnostics (file made a basename)
+//   validatedUnder  "<listen-fire version> (<branch>@<commit>)", or the version alone for a release
 //   saved           { ok, listeners: [{ kind, config }] }
 //   sheet           { name, table, columns }   the Ledger spreadsheet's table
 //   drive           { root }                   the granted folder invoices are filed under
@@ -24,28 +24,28 @@
 //
 // Where each figure comes from (lf reports some of them differently from the
 // platform's inspectRun):
-// - validatedUnder: `lf --version`, plus the listen-fire branch and commit when
-//   lf ran from a checkout's modules (LF_SRC), and "uncommitted changes" when
+// - validatedUnder: `listen-fire --version`, plus the listen-fire branch and commit when
+//   listen-fire ran from a checkout's modules (LF_SRC), and "uncommitted changes" when
 //   the checkout had any; a release records its version alone.
-// - saved: lf has no save step. `ok` is the fixed program's `lf check --json`;
+// - saved: listen-fire has no save step. `ok` is the fixed program's `listen-fire check --json`;
 //   the listener is the program's own `listen to …` line, its kind the module
 //   the listened connection is made from.
-// - runs[].status, committed, costUsd: `lf runs show --json` (`status`,
+// - runs[].status, committed, costUsd: `listen-fire runs show --json` (`status`,
 //   `writes`, `costMicrodollars` / 1e6).
-// - runs[].modelCalls: lf does not count model calls; this is the number of
+// - runs[].modelCalls: listen-fire does not count model calls; this is the number of
 //   `extraction` entries in the run's trace.
 // - runs[].invoice: the extraction's own output in the trace (Invoice).
 // - runs[].ms: the run's `finishedAt` less the moment mail.cjs dropped the
 //   email into the fake mailbox (`sentAt`), so it includes the wait for
 //   Gmail's next poll (a minute apart). runMs: `finishedAt` less `startedAt`.
-// - runs[].writes: lf's own record of the run's writes (`writeRecords`), each
+// - runs[].writes: listen-fire's own record of the run's writes (`writeRecords`), each
 //   matched to what the fakes gained during the run, which must be exactly
-//   those writes. lf names a write's record by id; where it was written is the
+//   those writes. listen-fire names a write's record by id; where it was written is the
 //   fakes' (a Drive item's folders, a Slack message's channel). A Drive file's
 //   Bytes, SHA-256 and Type are the fake's own record of the upload; Intact
 //   says they are the PDF as printed and application/pdf.
-// - terminal: what `lf check` printed on the draft and on the fix, and what
-//   `lf serve` printed up to being ready, verbatim but for colour codes and
+// - terminal: what `listen-fire check` printed on the draft and on the fix, and what
+//   `listen-fire serve` printed up to being ready, verbatim but for colour codes and
 //   the temporary project's path (made project-relative by capture.sh).
 const fs = require('fs');
 const path = require('path');
@@ -105,7 +105,7 @@ function writesOf(n, records) {
   };
   for (const [adapter, items] of Object.entries(gained)) {
     const wrote = records.filter((r) => r.adapter === adapter).length;
-    if (items.length !== wrote) throw new Error(`run ${n}: lf records ${wrote} ${adapter} write(s), the fake gained ${items.length}`);
+    if (items.length !== wrote) throw new Error(`run ${n}: listen-fire records ${wrote} ${adapter} write(s), the fake gained ${items.length}`);
   }
   return records.map((r) => {
     if (r.action !== 'create') throw new Error(`run ${n}: an unexpected ${r.action} of ${r.adapter} ${r.recordType}`);
@@ -216,4 +216,4 @@ fs.writeFileSync(OUT, `window.DEMO=${JSON.stringify(data, null, 1)};\n`);
 for (const r of data.runs) {
   console.log(`${r.invoice.supplier} ${r.invoice.amount}: ${r.status}, ${r.committed} write(s), ${r.modelCalls} model call(s), $${r.costUsd}, ${r.ms} ms from the email (${r.runMs} ms running)`);
 }
-console.log(`${OUT} (validated under lf ${data.validatedUnder})`);
+console.log(`${OUT} (validated under listen-fire ${data.validatedUnder})`);
