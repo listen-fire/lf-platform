@@ -16,7 +16,9 @@
 // when they are on the team, or whoever claimed a public inbox's key — by the
 // same resolution the run's `@user_*` reads, so the identity a run's services
 // use and the user it reports are one person, on a fresh firing and on every
-// resume of it (each is handed the run's original event).
+// resume of it (each is handed the run's original event). The engine is handed
+// that event naming the trigger it fired through (`engineEvent`), which is
+// what lets `@user_*` resolve against the same trigger this file does.
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
@@ -39,6 +41,17 @@ interface Firing {
   triggerId: string;
   /** The event the run fired on; a resume is handed the original. */
   event: TriggerEvent;
+}
+
+/**
+ * The event as the engine is handed it: naming the trigger it fired through.
+ * The engine's `@user_*` passes that name back when it asks the host who the
+ * run acts as, and only with it does the host apply the trigger's own rules —
+ * a public inbox's claimant, a creator override. Without it `@user_*` reads
+ * the message alone: empty for a stranger whose run executes as the claimant.
+ */
+function engineEvent(firing: Firing): TriggerEvent {
+  return { ...firing.event, triggerEntryId: firing.triggerId };
 }
 
 /**
@@ -157,4 +170,4 @@ async function withTeamContext<T>(teamId: TeamId, fn: () => Promise<T>): Promise
   return ctx.runAsync(fn);
 }
 
-export { withFiringContext, withTeamContext };
+export { engineEvent, withFiringContext, withTeamContext };

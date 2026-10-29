@@ -44,7 +44,7 @@ import { assessMovementValidity, validateMovementForTeam } from './authoring';
 import { loadPinnedVersion, movementSourceHash } from './version_store';
 import { recordMovementFailureIssue, resolveMovementIssues } from './issues';
 import { clearIntrospectionCache } from './instance_cache';
-import { withFiringContext } from './firing_context';
+import { engineEvent, withFiringContext } from './firing_context';
 import { productionEngineHost } from './engine_host';
 import { tenantOfTeam } from './tenant';
 import { RunLeaseLost, takeRunLease, type HeldRunLease } from '../../movement_engine/run_lease';
@@ -337,7 +337,7 @@ async function runMovementFiringInContext(
         teamId: input.teamId,
         version: input.movement.version,
         ...(movementName !== undefined ? { movementName } : {}),
-        event: input.event,
+        event: engineEvent(input),
         firedAt: recorder.firedAt,
         triggerRunId: recorder.triggerRunId,
         ...(input.dryRun !== undefined ? { dryRun: input.dryRun } : {}),
@@ -592,7 +592,7 @@ async function resumeMovementFiringInContext(
       source: input.pinnedSource,
       languageVersion,
       ...(movementName !== undefined ? { movementName } : {}),
-      event: input.event,
+      event: engineEvent(input),
       teamId: tenantOfTeam(input.teamId),
       // The ORIGINAL firing's instant, read back off the run row by
       // `adoptOpsRun()` above: a run that waited a day on an answer still
@@ -822,7 +822,7 @@ async function fireCallbackFiringInContext(
         source: input.pinnedSource,
         languageVersion,
         ...(movementName !== undefined ? { movementName } : {}),
-        event: input.event,
+        event: engineEvent(input),
         teamId: tenantOfTeam(input.teamId),
         // The run's original firing instant (see the resume path) — a callback
         // body belongs to the run that minted it, clock included.

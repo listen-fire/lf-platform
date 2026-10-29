@@ -117,6 +117,7 @@ jest.mock('../version_store', () => ({
 // The team-Context seam a background firing runs inside — pass-through here;
 // it has its own test (./firing_context.unit.test.ts).
 jest.mock('../firing_context', () => ({
+  ...jest.requireActual('../firing_context'),
   withFiringContext: <T>(_firing: unknown, fn: () => Promise<T>) => fn(),
 }));
 
@@ -257,7 +258,9 @@ describe('runMovementFiring', () => {
       expect.objectContaining({
         source: CLEAN_SOURCE,
         movementName: 'intake',
-        event,
+        // Naming the trigger it fired through, so `@user_*` resolves against
+        // it as the run's own identity does.
+        event: { ...event, triggerEntryId: 't-1' },
         teamId: TEAM,
       }),
     );
