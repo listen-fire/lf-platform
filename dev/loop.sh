@@ -58,6 +58,23 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
+# Every pnpm the loop runs, and every one those run in turn (`pnpm dev` runs
+# `pnpm -r --parallel dev`), is the version package.json pins as its
+# packageManager, which refuses any other (ERR_PNPM_BAD_PM_VERSION). corepack
+# provides it, as for CI and CONTRIBUTING.md; a machine's own pnpm on PATH may
+# be another version. So the loop puts corepack's pnpm shims, which read the
+# pin, first on its own PATH. Nothing outside the loop changes.
+if ! command -v corepack >/dev/null 2>&1; then
+  echo "[dev:loop] needs corepack (bundled with the Node in .nvmrc) to run the pnpm package.json pins"
+  exit 1
+fi
+PNPM_SHIMS="$REPO_ROOT/.dev-loop/bin"
+mkdir -p "$PNPM_SHIMS"
+corepack enable --install-directory "$PNPM_SHIMS" pnpm
+export PATH="$PNPM_SHIMS:$PATH"
+# The pinned version downloads once without asking; the loop runs unattended.
+export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+
 PROFILE="${DEV_LOOP_PROFILE:-default}"
 SHAPE="${DEV_LOOP_SHAPE:-loop}"
 FORCE_KILL=0
