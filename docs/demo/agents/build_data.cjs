@@ -7,8 +7,8 @@
 // The shape of window.DEMO:
 //
 //   request, retryEmail, environment   what every option is told (prompts.cjs)
-//   cheatsheet       the lf cheat sheet the listen-fire author is given
-//   validatedUnder   "<lf version> (<branch>@<commit>)", read from the captures' 00_lf.json
+//   cheatsheet       the listen-fire cheat sheet the listen-fire author is given
+//   validatedUnder   "<listen-fire version> (<branch>@<commit>)", read from the captures' 00_lf.json
 //                    (both scenarios must agree)
 //   scenarios        { mcp, attio }, the same three options in each, like for like:
 //     crm              what the CRM is and how each option reaches it
@@ -29,7 +29,7 @@
 //                          host woke the agent after the automation went live; each
 //                          { why, for (the payment whose run failed and its error, or
 //                          the periodic check's error), payment, reason, modelCalls,
-//                          costUsd, ms, replays (js), reruns (lf, `lf runs rerun`,
+//                          costUsd, ms, replays (js), reruns (lf, `listen-fire runs rerun`,
 //                          each with force and lf's output), toldUser, changed,
 //                          note (its closing note), before/after (when changed) }
 //         run              { payments, median: { modelCalls, costUsd, ms }, total:
@@ -106,7 +106,7 @@ const closingNote = (steps) => [...(steps ?? [])].reverse().find((s) => s.role =
  *  .work/compare/<name>/capture): its stressors, payments and three options. */
 const CRMS = {
   mcp: 'MCP vs MCP: the CRM is an MCP server with generic tools (plan a plain string; describe_fields answers the options as data). Every option reaches it over MCP: listen-fire through @lf/mcp, JavaScript and the per-event agent through the MCP SDK client.',
-  attio: "Native connector vs REST: the CRM is Attio (plan a select attribute). listen-fire reaches it through its native connector @lf/attio, which publishes the select's options to lf check; JavaScript and the per-event agent through Attio's REST API with a plain HTTP helper.",
+  attio: "Native connector vs REST: the CRM is Attio (plan a select attribute). listen-fire reaches it through its native connector @lf/attio, which publishes the select's options to listen-fire check; JavaScript and the per-event agent through Attio's REST API with a plain HTTP helper.",
 };
 function scenario(name) {
 const C = path.join(__dirname, '.work', 'compare', name, 'capture');
@@ -252,7 +252,7 @@ function maintainOf(records, wakes) {
     const n = owner?.n ?? null;
     return {
       why: w.why,
-      for: w.why === 'lf check' ? `the periodic lf check found an error: ${whatWentWrong(w.reason)}` : `payment ${n}'s run failed: ${whatWentWrong(w.reason)}`,
+      for: w.why === 'lf check' ? `the periodic listen-fire check found an error: ${whatWentWrong(w.reason)}` : `payment ${n}'s run failed: ${whatWentWrong(w.reason)}`,
       payment: n,
       reason: clip(w.reason, 600),
       modelCalls: w.modelCalls,
@@ -431,7 +431,7 @@ function option(label, means, attempts, writeTool, extra) {
 const jsAttempts = attemptNs('js').map(jsAttempt);
 const lfAttempts = attemptNs('lf').map(lfAttempt);
 const js = option('Write a JavaScript script for a sandbox', 'The model writes a handler once; the sandbox stores each delivery and runs it.', jsAttempts, 'write_handler', () => ({ caught: [] }));
-const lfOption = option('Write a listen-fire program', 'The model writes a program once, checked by lf check; lf stores each delivery and runs it.', lfAttempts, 'write_program', (used) => ({ caught: used.caught }));
+const lfOption = option('Write a listen-fire program', 'The model writes a program once, checked by listen-fire check; listen-fire stores each delivery and runs it.', lfAttempts, 'write_program', (used) => ({ caught: used.caught }));
 agent.prices = js.prices;
 
 const problems = [
@@ -496,14 +496,14 @@ const data = {
     note: closingNote(chosenReview.steps),
   },
   labels: {
-    real: ['every model session: claude-sonnet-5-5, live (authoring, per-event, woken)', 'the JavaScript handler, run in node on every delivery against the stand-ins', 'lf check, lf serve, lf drain and every listen-fire run, with its real modules (@lf/stripe, @lf/mcp, @lf/attio, @lf/gmail, @lf/slack)', 'the daily review, a live session over the real lf runs and lf check'],
-    standIn: ['Stripe (signed invoice.payment_failed deliveries from a local sender)', "Stripe's API, for any read @lf/stripe makes beyond the event (listen-fire's fake Stripe, seeded with the same customers)", 'the MCP scenario\'s CRM (a local MCP server with generic tools: plan a plain string, the options answered as data)', 'the Attio scenario\'s CRM (fake-channels\' Attio, behind a local door that adds the token check, the call log and the injected 503 and 429)', 'Gmail and Slack (fake-channels)', 'the sandbox (node vm with crm, email, slack and kv, behind a store-then-acknowledge endpoint)', "the agent provider's host (stress.cjs: the worker, the periodic lf check, waking the agent)"],
+    real: ['every model session: claude-sonnet-5-5, live (authoring, per-event, woken)', 'the JavaScript handler, run in node on every delivery against the stand-ins', 'lf check, listen-fire serve, listen-fire drain and every listen-fire run, with its real modules (@lf/stripe, @lf/mcp, @lf/attio, @lf/gmail, @lf/slack)', 'the daily review, a live session over the real listen-fire runs and listen-fire check'],
+    standIn: ['Stripe (signed invoice.payment_failed deliveries from a local sender)', "Stripe's API, for any read @lf/stripe makes beyond the event (listen-fire's fake Stripe, seeded with the same customers)", 'the MCP scenario\'s CRM (a local MCP server with generic tools: plan a plain string, the options answered as data)', 'the Attio scenario\'s CRM (fake-channels\' Attio, behind a local door that adds the token check, the call log and the injected 503 and 429)', 'Gmail and Slack (fake-channels)', 'the sandbox (node vm with crm, email, slack and kv, behind a store-then-acknowledge endpoint)', "the agent provider's host (stress.cjs: the worker, the periodic listen-fire check, waking the agent)"],
   },
 };
 
 const problems = [
   ...SCENARIOS.flatMap((name) => built[name].problems),
-  ...(validatedUnder.length > 1 ? [`the scenarios were recorded on different lf builds: ${validatedUnder.join(' / ')}`] : []),
+  ...(validatedUnder.length > 1 ? [`the scenarios were recorded on different listen-fire builds: ${validatedUnder.join(' / ')}`] : []),
   ...(!reviewAttempts.find((a) => a.attempt === chosen)?.checkOk ? ['the chosen review revision does not check clean'] : []),
 ];
 if (problems.length > 0) throw new Error(`refusing to build data.js: ${problems.join('; ')}`);
@@ -529,4 +529,4 @@ for (const name of SCENARIOS) {
     }
   }
 }
-console.log(`${OUT} (validated under lf ${data.validatedUnder})`);
+console.log(`${OUT} (validated under listen-fire ${data.validatedUnder})`);

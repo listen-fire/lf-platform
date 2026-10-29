@@ -1,4 +1,4 @@
-# lf cheat sheet
+# listen-fire cheat sheet
 
 A short reference to the language's core forms, drawn from the handbook's
 front page and reference chapter and the modules' own chapters. It is generic:
@@ -57,7 +57,7 @@ sys-[x:Things]-> { … }                             # a block runs once per rec
 
 An MCP server's read-only tool is a type you read from the connection: its
 arguments are the `==` tests of the `WHERE`, its answer's fields are the
-record's fields. `describe_systems` (or `lf catalog`) lists every type and
+record's fields. `describe_systems` (or `listen-fire catalog`) lists every type and
 field, with each field's kind; a field of a set of values lists them.
 
 ## Writing
@@ -77,9 +77,9 @@ fail("reason")         # ends the run as failed, the reason kept in the run reco
 
 ## Checking your work
 
-- `lf check`: every diagnostic, with the code and a fix. It reads each
+- `listen-fire check`: every diagnostic, with the code and a fix. It reads each
   connection's live description, so a field, a type or a value a system does
   not have is refused before anything runs.
-- `lf run --event <file> --dry-run`: one run on an event, reads made,
+- `listen-fire run --event <file> --dry-run`: one run on an event, reads made,
   writes shown and not made.
-- `lf runs`, `lf runs show <id>`: what each run did, its event, trace and error.
+- `listen-fire runs`, `listen-fire runs show <id>`: what each run did, its event, trace and error.

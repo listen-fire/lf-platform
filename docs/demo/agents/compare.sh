@@ -8,18 +8,18 @@
 #      sandbox stores each delivery, acknowledges it, then runs the handler
 #      (receivers.cjs js, sandbox.cjs);
 #   3. listen-fire: the model writes the program (author_lf.cjs) with the
-#      connected systems described up front, the lf cheat sheet, the
-#      listen-fire-builder skill, the handbook, `lf check` and a dry run;
+#      connected systems described up front, the listen-fire cheat sheet, the
+#      listen-fire-builder skill, the handbook, `listen-fire check` and a dry run;
 #      Stripe is connected through @lf/stripe, whose door checks the Stripe
-#      signature; `lf serve --doors-only` stores and acknowledges each
-#      delivery, and the host's worker (`lf drain`) runs it. @lf/stripe's
+#      signature; `listen-fire serve --doors-only` stores and acknowledges each
+#      delivery, and the host's worker (`listen-fire drain`) runs it. @lf/stripe's
 #      reads (an invoice's customer or subscription) reach listen-fire's fake
 #      Stripe API, seeded with the same world (stripe_api.cjs).
 #
 # Every option is told the same request, retry email and operating
 # environment (prompts.cjs). For JavaScript and listen-fire a failed run is
 # not run again by itself: the host wakes the agent (wake.cjs), which decides
-# what to do. For listen-fire the host also runs `lf check` every 30 s and
+# what to do. For listen-fire the host also runs `listen-fire check` every 30 s and
 # wakes the agent on new errors. stress.cjs is the host.
 #
 # The stressors, the same for all three (day 1's 20 payments and 5 of day 2's,
@@ -49,7 +49,7 @@
 #                                        through the MCP SDK's client.
 #                                 attio  Attio (fake-channels' Attio behind
 #                                        attio_crm.cjs): plan a select
-#                                        attribute. lf through its native
+#                                        attribute. listen-fire through its native
 #                                        connector @lf/attio, JavaScript and
 #                                        the per-event agent through Attio's
 #                                        REST API with a plain HTTP helper
@@ -75,7 +75,7 @@ case "$SCENARIO" in mcp) export CRM_KIND=mcp ;; attio) export CRM_KIND=rest ;; *
 WORK="$HERE/.work/compare/$SCENARIO"
 CAP="$WORK/capture"
 TEMPLATE="$WORK/template/billing"
-LF_BIN="${LF_BIN:-lf}"
+LF_BIN="${LF_BIN:-listen-fire}"
 FAKES_SRC="${LF_SRC:-$REPO/../listen-fire}"
 STRIPE_SECRET=whsec_ledgerline_stand_in_7d1c2b
 STRIPE_API_KEY=rk_test_ledgerline_stand_in_4e9a0f
@@ -105,7 +105,7 @@ if [ -n "${LF_SRC:-}" ]; then
   export LF_SRC
 fi
 export LF_BIN
-LF_VERSION="$("$LF_BIN" --version | sed -n 's/^lf //p' | head -1)"
+LF_VERSION="$("$LF_BIN" --version | sed -n 's/^listen-fire //p' | head -1)"
 BRANCHES="[]"
 COMMIT=""
 if [ -n "${LF_SRC:-}" ]; then
@@ -196,7 +196,7 @@ rm -f "$TEMPLATE/movements/"*.mvt
 )
 [ -n "${STOP_AFTER_SETUP:-}" ] && { echo "F=$F CRM_URL=$CRM_URL PIDS=${PIDS[*]}"; trap - EXIT; exit 0; }
 
-# What every system looks like before any program exists: `lf catalog` over
+# What every system looks like before any program exists: `listen-fire catalog` over
 # a scratch program that imports every credential the project has, made from
 # the empty project's own catalog (its credentials and their adapters).
 scratch="$WORK/describe/billing"
@@ -319,7 +319,7 @@ for k in $(seq "$ATTEMPTS"); do
   SERVE_PID=$!
   PIDS+=($SERVE_PID)
   for _ in $(seq 120); do grep -q '^stripe stripe_account: ' "$log" && break; sleep 0.25; done
-  grep -q '^stripe stripe_account: ' "$log" || { echo "lf serve did not start (see $log)"; exit 1; }
+  grep -q '^stripe stripe_account: ' "$log" || { echo "listen-fire serve did not start (see $log)"; exit 1; }
   stress lf "$(sed -n 's/^stripe stripe_account: //p' "$log" | head -1)" "$CAP/lf/stress_$k" "$(jq -nc --arg p "$project" --arg prog "$PROGRAM" --arg d "$CAP/04_describe_systems.json" --arg dp "$scratch" --arg src "${LF_SRC:-$REPO/../listen-fire}" \
     '{lf: {project: $p, program: $prog, describeFile: $d, describeProject: $dp, lfSrc: $src, checkEveryMs: 30000}}')"
   mkdir -p "$CAP/lf/stress_$k/runs"

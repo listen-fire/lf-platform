@@ -5,7 +5,7 @@
 // agent, so the stand-in Stripe delivers to every option the same way. Each
 // checks Stripe's signature (401 when it does not verify).
 //
-// - js, as lf serve does with its doors: the delivery is stored (<store
+// - js, as listen-fire serve does with its doors: the delivery is stored (<store
 //   jsonl>) and acknowledged 200 before the handler runs. A repeat of an event
 //   id already stored is acknowledged and stored again (the handler is the one
 //   to dedupe, as a sandbox leaves it). The handler then runs in the sandbox

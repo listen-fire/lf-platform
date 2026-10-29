@@ -1,14 +1,14 @@
 #!/bin/bash
-# The agents demo, recorded on the open-source `lf` CLI (see README.md).
+# The agents demo, recorded on the open-source `listen-fire` CLI (see README.md).
 #
-#   1. The program: the draft refused by `lf check`, the fix checked clean,
-#      `lf serve`.
-#   2. Day 1: 20 signed Stripe deliveries through `lf serve`, and what each
+#   1. The program: the draft refused by `listen-fire check`, the fix checked clean,
+#      `listen-fire serve`.
+#   2. Day 1: 20 signed Stripe deliveries through `listen-fire serve`, and what each
 #      run did.
 #   3. The next morning: the agent's daily review, a real model session, run
 #      three times from the same state (copies of the project). The first
 #      attempt whose revision checks clean and handles the day's exceptions
-#      (a dry run of each) is put live under the running `lf serve`.
+#      (a dry run of each) is put live under the running `listen-fire serve`.
 #   4. Day 2: 20 more deliveries, through the revised program.
 #   5. The comparison: day 1's 20 events, each handled by a fresh agent with
 #      tools on the same stand-ins (reset first).
@@ -16,10 +16,10 @@
 # Every output lands in .work/capture/, which build_data.cjs turns into the
 # video's data.js in the site repo. Re-runnable: each run starts from nothing.
 #
-#   LF_BIN       the lf binary (default: `lf` on PATH, a release)
-#   LF_SRC       a listen-fire checkout. When set, lf serves the modules from
+#   LF_BIN       the listen-fire binary (default: `listen-fire` on PATH, a release)
+#   LF_SRC       a listen-fire checkout. When set, listen-fire serves the modules from
 #                its sources (LF_MODULES_DIR, and its module kit's
-#                serve-module), and its commit is recorded beside lf's
+#                serve-module), and its commit is recorded beside listen-fire's
 #                version. The fakes always come from it (default: the
 #                listen-fire checkout beside this repo).
 #   LF_BRANCHES  the listen-fire branches LF_SRC was built from (space
@@ -35,9 +35,9 @@ REPO="$(cd "$HERE/../../.." && pwd)"
 WORK="$HERE/.work"
 CAP="$WORK/capture"
 PROJECT="$WORK/billing"
-LF_BIN="${LF_BIN:-lf}"
+LF_BIN="${LF_BIN:-listen-fire}"
 FAKES_SRC="${LF_SRC:-$REPO/../listen-fire}"
-STRIPE_SECRET=whsec_ledgerline_stand_in_7d1c2b   # the stand-in Stripe endpoint's signing secret: lf checks it, deliver.cjs signs with it
+STRIPE_SECRET=whsec_ledgerline_stand_in_7d1c2b   # the stand-in Stripe endpoint's signing secret: listen-fire checks it, deliver.cjs signs with it
 CRM_TOKEN=crm-stand-in-token
 PROGRAM=movements/payment_failed.mvt
 ATTEMPTS="${ATTEMPTS:-3}"
@@ -52,13 +52,13 @@ trap cleanup EXIT INT TERM
 if [ -n "${LF_SRC:-}" ]; then
   LF_SRC="$(cd "$LF_SRC" && pwd)"
   export LF_MODULES_DIR="$LF_SRC/modules"
-  # lf hands a module process only PATH, so the path here is absolute.
+  # listen-fire hands a module process only PATH, so the path here is absolute.
   printf '#!/bin/sh\nexec node %s/packages/module-kit/bin/serve-module.cjs "$@"\n' "$LF_SRC" >"$WORK/serve-module"
   chmod +x "$WORK/serve-module"
   export LF_SERVE_MODULE="$WORK/serve-module"
 fi
 export LF_BIN
-LF_VERSION="$("$LF_BIN" --version | sed -n 's/^lf //p' | head -1)"
+LF_VERSION="$("$LF_BIN" --version | sed -n 's/^listen-fire //p' | head -1)"
 COMMIT=""
 BRANCHES="[]"
 if [ -n "${LF_SRC:-}" ]; then
@@ -129,7 +129,7 @@ jq -e '.ok' "$CAP/11_check_fixed.json" >/dev/null || { echo "the fix does not ch
 cp lf.yaml "$CAP/12_lf.yaml"
 curl -sf "$F/admin/slack/channel/state" >"$CAP/13_slack_channels.json"
 
-# lf serve, where the stand-in Stripe's deliveries reach it.
+# listen-fire serve, where the stand-in Stripe's deliveries reach it.
 PORT=$(node -e 'const s=require("net").createServer().listen(0,"127.0.0.1",()=>{console.log(s.address().port);s.close()})')
 echo "publicUrl: http://127.0.0.1:$PORT" >>lf.yaml
 SERVE_LOG="$WORK/serve.log"
@@ -137,8 +137,8 @@ SERVE_LOG="$WORK/serve.log"
 SERVE_PID=$!
 PIDS+=($SERVE_PID)
 for _ in $(seq 120); do grep -q '^webhook stripe_events: ' "$SERVE_LOG" && break; sleep 0.25; done
-grep -q '^webhook stripe_events: ' "$SERVE_LOG" || { echo "lf serve did not start (see $SERVE_LOG)"; exit 1; }
-# What lf serve prints up to being ready, before any delivery reaches it.
+grep -q '^webhook stripe_events: ' "$SERVE_LOG" || { echo "listen-fire serve did not start (see $SERVE_LOG)"; exit 1; }
+# What listen-fire serve prints up to being ready, before any delivery reaches it.
 sed '/^webhook stripe_events: /q' "$SERVE_LOG" | human >"$CAP/14_serve_ready.txt"
 HOOK="$(sed -n 's/^webhook stripe_events: //p' "$SERVE_LOG" | head -1)"
 
@@ -170,8 +170,8 @@ echo "day 1: $(grep -c ' completed' "$CAP/20_day1/serve_lines.txt") completed, $
 
 # The next morning. Each attempt starts from a copy of the project as it
 # stands after day 1 (its run store copied whole with sqlite's backup, since
-# lf serve is still running on it). The review sees the runs through the real
-# `lf runs`, and the CRM through its MCP tools.
+# listen-fire serve is still running on it). The review sees the runs through the real
+# `listen-fire runs`, and the CRM through its MCP tools.
 mkdir -p "$CAP/40_review"
 "$LF_BIN" runs | human >"$CAP/40_review/lf_runs_at_review.txt"
 FAILED_RUNS="$(jq -r 'select(.run.status == "failed") | .run.runId' "$CAP/20_day1/"*_run.json)"
@@ -200,13 +200,13 @@ done
 echo "${CHOSEN:-none}" >"$CAP/40_review/chosen.txt"
 [ -n "$CHOSEN" ] || { echo "no review attempt produced a revision that checks clean and handles the exceptions"; exit 1; }
 
-# The chosen revision, put live: lf serve picks up the edited file.
+# The chosen revision, put live: listen-fire serve picks up the edited file.
 mark=$(wc -l <"$SERVE_LOG")
 cp "$WORK/review/$CHOSEN/billing/$PROGRAM" "$PROGRAM"
 for _ in $(seq 40); do tail -n +"$((mark + 1))" "$SERVE_LOG" | grep -q 'changed' && break; sleep 0.25; done
 sleep 2
 tail -n +"$((mark + 1))" "$SERVE_LOG" | human >"$CAP/41_redeploy_serve.txt"
-grep -q 'do not check' "$CAP/41_redeploy_serve.txt" && { echo "lf serve kept the old program"; cat "$CAP/41_redeploy_serve.txt"; exit 1; }
+grep -q 'do not check' "$CAP/41_redeploy_serve.txt" && { echo "listen-fire serve kept the old program"; cat "$CAP/41_redeploy_serve.txt"; exit 1; }
 "$LF_BIN" check --json >"$CAP/42_check_revised.json" || true
 { "$LF_BIN" check 2>&1 || true; } | human >"$CAP/42_check_revised.txt"
 cp "$PROGRAM" "$CAP/43_revised.mvt"

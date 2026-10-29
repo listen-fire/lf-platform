@@ -1,5 +1,5 @@
 // The agent woken when an automation needs it: a run failed, or (listen-fire)
-// the host's periodic `lf check` found new errors. One real model session (the
+// the host's periodic `listen-fire check` found new errors. One real model session (the
 // same model as every other agent here), told the same things for both options
 // (prompts.cjs wakeSystem) and why the host woke it. Its tools:
 //
@@ -14,8 +14,8 @@
 //                                  (or crm_api_reference, its REST API's reference)
 //   lf          read_program, write_program (the live program), lf_check,
 //               lf_runs, lf_runs_show, lf_deliveries,
-//               test_run           a dry run of a run's event (`lf run --event … --dry-run`)
-//               lf_rerun           `lf runs rerun <run-id> [--force]`: the failed run
+//               test_run           a dry run of a run's event (`listen-fire run --event … --dry-run`)
+//               lf_rerun           `listen-fire runs rerun <run-id> [--force]`: the failed run
 //                                  again, now, as its next attempt (refused when
 //                                  the failed attempt committed writes, unless
 //                                  force, which makes them again)
@@ -34,7 +34,7 @@ function lfRunner(project) {
   const real = fs.realpathSync(project);
   const relative = (t) => t.split(`${real}/`).join('').split(`${project}/`).join('').split(real).join('.').split(project).join('.');
   return (args) => {
-    const ran = spawnSync(process.env.LF_BIN || 'lf', args, { cwd: project, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 180_000, maxBuffer: 64 * 1024 * 1024 });
+    const ran = spawnSync(process.env.LF_BIN || 'listen-fire', args, { cwd: project, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 180_000, maxBuffer: 64 * 1024 * 1024 });
     return `${relative(`${ran.stdout ?? ''}${ran.stderr ?? ''}`.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '')).trimEnd()}\n(exit ${ran.status})`;
   };
 }
@@ -96,18 +96,18 @@ async function wake({ kind, reason, js, lf }) {
     tools = [
       { name: 'read_program', description: `${lf.program} as it stands (live).`, input_schema: { type: 'object', properties: {} } },
       { name: 'write_program', description: `Replace the live ${lf.program} with this source, whole. The next run uses it if it checks clean.`, input_schema: { type: 'object', properties: { source: { type: 'string' } }, required: ['source'] } },
-      { name: 'lf_check', description: 'Run `lf check`.', input_schema: { type: 'object', properties: {} } },
-      { name: 'lf_runs', description: 'Run `lf runs`: the runs, most recent first.', input_schema: { type: 'object', properties: {} } },
-      { name: 'lf_runs_show', description: 'Run `lf runs show <run-id>`.', input_schema: { type: 'object', properties: { run_id: { type: 'string' } }, required: ['run_id'] } },
-      { name: 'lf_deliveries', description: 'Run `lf deliveries`: the deliveries kept, most recent first.', input_schema: { type: 'object', properties: {} } },
-      { name: 'test_run', description: "A dry run of a run's event against the program as it stands: `lf run --event … --dry-run` (reads made, writes shown, not made).", input_schema: { type: 'object', properties: { run_id: { type: 'string' } }, required: ['run_id'] } },
+      { name: 'lf_check', description: 'Run `listen-fire check`.', input_schema: { type: 'object', properties: {} } },
+      { name: 'lf_runs', description: 'Run `listen-fire runs`: the runs, most recent first.', input_schema: { type: 'object', properties: {} } },
+      { name: 'lf_runs_show', description: 'Run `listen-fire runs show <run-id>`.', input_schema: { type: 'object', properties: { run_id: { type: 'string' } }, required: ['run_id'] } },
+      { name: 'lf_deliveries', description: 'Run `listen-fire deliveries`: the deliveries kept, most recent first.', input_schema: { type: 'object', properties: {} } },
+      { name: 'test_run', description: "A dry run of a run's event against the program as it stands: `listen-fire run --event … --dry-run` (reads made, writes shown, not made).", input_schema: { type: 'object', properties: { run_id: { type: 'string' } }, required: ['run_id'] } },
       {
         name: 'lf_rerun',
         description:
-          'Run `lf runs rerun <run-id>`: a failed run is run again now, for real, as its next attempt, on its own event and with the program as it stands, from the start. lf refuses when the failed attempt already committed writes, and lists them. force: true adds `--force`, which reruns it anyway and makes those writes again.',
+          'Run `listen-fire runs rerun <run-id>`: a failed run is run again now, for real, as its next attempt, on its own event and with the program as it stands, from the start. listen-fire refuses when the failed attempt already committed writes, and lists them. force: true adds `--force`, which reruns it anyway and makes those writes again.',
         input_schema: { type: 'object', properties: { run_id: { type: 'string' }, force: { type: 'boolean' } }, required: ['run_id'] },
       },
-      { name: 'describe_systems', description: 'Every system this project is connected to, as lf describes it (`lf catalog`).', input_schema: { type: 'object', properties: {} } },
+      { name: 'describe_systems', description: 'Every system this project is connected to, as listen-fire describes it (`listen-fire catalog`).', input_schema: { type: 'object', properties: {} } },
       { name: 'handbook_search', description: "Search the language's handbook.", input_schema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
       { name: 'handbook_read', description: 'Read the handbook: "index", a chapter, or chapter#section.', input_schema: { type: 'object', properties: { route: { type: 'string' } }, required: ['route'] } },
       tell,
@@ -131,7 +131,7 @@ async function wake({ kind, reason, js, lf }) {
         case 'test_run': {
           // The run's event as its delivery keeps it (external, credential,
           // event: what the door made of it, its type included).
-          const json = (args) => JSON.parse(spawnSync(process.env.LF_BIN || 'lf', [...args, '--json'], { cwd: lf.project, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).stdout);
+          const json = (args) => JSON.parse(spawnSync(process.env.LF_BIN || 'listen-fire', [...args, '--json'], { cwd: lf.project, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).stdout);
           const { deliveryId } = json(['runs', 'show', String(input.run_id)]).run;
           const kept = [];
           (function find(x) {

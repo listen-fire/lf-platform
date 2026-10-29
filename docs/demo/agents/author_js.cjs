@@ -14,7 +14,7 @@
 //                    a store of the test runs' own
 //
 // The test run is the one a sandbox gives: the same single run on the same
-// example event the listen-fire option's `lf run --dry-run` gets.
+// example event the listen-fire option's `listen-fire run --dry-run` gets.
 const fs = require('fs');
 const path = require('path');
 const { session, PRICES } = require('./agent_tools.cjs');

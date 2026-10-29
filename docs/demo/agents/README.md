@@ -8,25 +8,25 @@ agent writes a listen-fire program for it rather than waking itself for every
 event, and is woken once a day to review what the program could not handle.
 The run shows:
 
-- the draft refused by `lf check`: it compares the plan to `"annual"`, but the
+- the draft refused by `listen-fire check`: it compares the plan to `"annual"`, but the
   CRM's MCP tool says the plan is one of `monthly | yearly`
   (`MOV_ENUM_UNKNOWN_VALUE`, read from the tool's own output schema);
-- the one-word fix (`"yearly"`), which checks clean, and `lf serve`;
+- the one-word fix (`"yearly"`), which checks clean, and `listen-fire serve`;
 - day 1: 20 signed `invoice.payment_failed` deliveries. 17 are handled with no
   model call; 3 are exceptions, failed runs, because the customer's Stripe
   billing email is not the email the CRM has;
 - the next morning: the agent's daily review, a live model session
-  (`claude-sonnet-5-5`) that reads the failed runs through the real `lf runs`,
-  queries the CRM, revises the program and runs `lf check`. It is run three
+  (`claude-sonnet-5-5`) that reads the failed runs through the real `listen-fire runs`,
+  queries the CRM, revises the program and runs `listen-fire check`. It is run three
   times from the same state; the first attempt whose revision checks clean and
   handles the three exceptions (a dry run of each) is put live under the
-  running `lf serve`, which picks up the edited file;
+  running `listen-fire serve`, which picks up the edited file;
 - day 2: 20 more deliveries through the revised program;
 - the comparison: day 1's 20 events handled instead by a fresh agent per
   event (same model, tools on the same stand-ins), its calls, tokens, cost and
   time, and every way its emails and posts differ from the program's.
 
-It records on the open-source `lf` CLI.
+It records on the open-source `listen-fire` CLI.
 
 ## Make it
 
@@ -37,7 +37,7 @@ stand in for Gmail and Slack).
 
 ```bash
 cd docs/demo/agents
-LF_BIN=<lf binary> LF_SRC=<listen-fire checkout> LF_BRANCHES=webhook-module ./capture.sh
+LF_BIN=<listen-fire binary> LF_SRC=<listen-fire checkout> LF_BRANCHES=webhook-module ./capture.sh
 node build_data.cjs ../../../../listen-fire-site/video/agents/data.js
 ```
 
@@ -52,13 +52,13 @@ node build_data.cjs ../../../../listen-fire-site/video/agents/data.js
 ## The three options (compare.sh)
 
 The video's comparison is a second recording, `compare.sh`, run after
-`capture.sh` (whose review it keeps for the closing note). It records on lf
+`capture.sh` (whose review it keeps for the closing note). It records on listen-fire
 built from listen-fire's main (a detached checkout names the branch as
 `LF_BRANCHES=main=<commit>`):
 
 ```bash
-SCENARIO=mcp   LF_BIN=<lf binary> LF_SRC=<listen-fire checkout> LF_BRANCHES=main ./compare.sh
-SCENARIO=attio LF_BIN=<lf binary> LF_SRC=<listen-fire checkout> LF_BRANCHES=main ./compare.sh
+SCENARIO=mcp   LF_BIN=<listen-fire binary> LF_SRC=<listen-fire checkout> LF_BRANCHES=main ./compare.sh
+SCENARIO=attio LF_BIN=<listen-fire binary> LF_SRC=<listen-fire checkout> LF_BRANCHES=main ./compare.sh
 node build_data.cjs ../../../../listen-fire-site/video/agents/data.js
 ```
 
@@ -84,7 +84,7 @@ each comparison is like for like (`SCENARIO`; outputs in
 - **Native connector vs REST** (`attio`): the CRM is Attio, fake-channels'
   Attio behind `attio_crm.cjs`, the customers as `people` records with `plan` a
   select attribute. listen-fire reaches it through its native connector
-  `@lf/attio`, which publishes the select's options to `lf check`; JavaScript
+  `@lf/attio`, which publishes the select's options to `listen-fire check`; JavaScript
   and the per-event agent through Attio's REST API with a plain HTTP helper
   (`crm_access.cjs`) and its reference (`programs/attio_rest.md`).
 
@@ -104,10 +104,10 @@ or acts.
   `email`, `slack`, a persistent `kv` and the runtime's timers. It can list
   the CRM's tools (or read its API reference) and test-run the handler.
 - **listen-fire** (`author_lf.cjs`): the model gets the connected systems up
-  front (`describe_systems`), the lf cheat sheet (`programs/lf_cheatsheet.md`),
+  front (`describe_systems`), the listen-fire cheat sheet (`programs/lf_cheatsheet.md`),
   the listen-fire-builder skill unchanged (the platform's
   `apps/web/skill-src` copy; listen-fire's own went with the split), the
-  handbook, `lf check` and a dry run.
+  handbook, `listen-fire check` and a dry run.
   - Stripe is connected through listen-fire's Stripe module, `@lf/stripe`
     (credential `stripe_account`: an API key and the endpoint's signing
     secret). The program listens with
@@ -122,18 +122,18 @@ or acts.
     unchanged.
 
 Delivery is the same for JavaScript and listen-fire: each delivery is stored
-and acknowledged before it runs (the sandbox endpoint; `lf serve
---doors-only` and the host's worker, `lf drain`). Every option gets the same
+and acknowledged before it runs (the sandbox endpoint; `listen-fire serve
+--doors-only` and the host's worker, `listen-fire drain`). Every option gets the same
 events, signed the same way (`Stripe-Signature`). listen-fire's go to
 `@lf/stripe`'s door (`/hooks/stripe/stripe_account`), which checks that
 signature itself. A failed run is not run
 again by itself: the host wakes the agent (`wake.cjs`), a live session that
 may inspect, fix, deliberately run it again, or tell the user. JavaScript's
 agent runs it again by replaying the stored event through the live handler;
-listen-fire's runs `lf runs rerun <run-id>` (the failed run again as its next
+listen-fire's runs `listen-fire runs rerun <run-id>` (the failed run again as its next
 attempt, on its own event and the program as it now stands; refused when the
 failed attempt committed writes, unless `--force`, which makes them again). For listen-fire the
-host also runs `lf check` every 30 s and wakes the agent on new errors.
+host also runs `listen-fire check` every 30 s and wakes the agent on new errors.
 `stress.cjs` is the host.
 
 The stressors, the same for all three (`make_events.cjs … plain`: every
@@ -192,7 +192,7 @@ The review recording (`capture.sh`) predates this: its request says "yearly"
   `receivers.cjs`, `stress.cjs`, `stripe_api.cjs`: its webhook endpoints,
   host and the Stripe API that `@lf/stripe` reads
   (`stripe_sender.cjs` is the previous round's sender). The
-  review's tools are the program file, `lf check`, `lf runs`, `lf runs show`
+  review's tools are the program file, `listen-fire check`, `listen-fire runs`, `listen-fire runs show`
   and the CRM's MCP tools. The per-event agent's tools are the CRM's MCP tools,
   sending an email and posting to Slack.
 - `signin.cjs`: Gmail's sign-in, the browser's part played against the fake.
@@ -204,16 +204,16 @@ The review recording (`capture.sh`) predates this: its request says "yearly"
 ## How it differs from the story
 
 - Exceptions are failed runs. The program ends a run it cannot handle with
-  `fail(…)`, so the run record keeps the reason and the whole event. `lf runs`
+  `fail(…)`, so the run record keeps the reason and the whole event. `listen-fire runs`
   lists the most recent 50 runs with their status, and has no filter by status
-  or date. The review reads that list, then `lf runs show` for each failed
+  or date. The review reads that list, then `listen-fire runs show` for each failed
   run.
 - The CRM id is in the subscription's metadata, which Stripe copies onto the
   invoice (`subscription_details.metadata`). An invoice event names its
   customer by id only, so the customer object's own metadata is not in it.
 - "Day 1", "the next morning" and "day 2" are minutes apart in the recording.
   Nothing in the review is told a date.
-- The redeploy is lf serve's own: it picks up the edited program file. The
+- The redeploy is listen-fire serve's own: it picks up the edited program file. The
   review sessions edit copies of the project, and the chosen revision is
   copied into the live project.
 - The per-event agent is given our retry email word for word, as the program

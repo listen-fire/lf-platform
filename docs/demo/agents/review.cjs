@@ -5,12 +5,12 @@
 //
 //   read_program      the program file
 //   write_program     replace the program file
-//   lf_check          `lf check` in the project, as printed
-//   lf_runs           `lf runs`, as printed
-//   lf_runs_show      `lf runs show <run-id>`, as printed
+//   lf_check          `listen-fire check` in the project, as printed
+//   lf_runs           `listen-fire runs`, as printed
+//   lf_runs_show      `listen-fire runs show <run-id>`, as printed
 //   crm__<tool>       the CRM's MCP tools, as its server lists them
 //
-// Every lf command runs the lf this recording runs (LF_BIN, with the module
+// Every listen-fire command runs the listen-fire this recording runs (LF_BIN, with the module
 // sources LF_MODULES_DIR and LF_SERVE_MODULE when set). What a command prints
 // is given to the model with the project's own path made relative, as from
 // inside the project. Writes the whole session (every block, every tool call
@@ -22,7 +22,7 @@ const { spawnSync } = require('child_process');
 const { crmTools, session, PRICES } = require('./agent_tools.cjs');
 
 const [project, programFile, crmUrl, crmToken, out] = process.argv.slice(2);
-const LF_BIN = process.env.LF_BIN || 'lf';
+const LF_BIN = process.env.LF_BIN || 'listen-fire';
 const request = fs.readFileSync(path.join(__dirname, 'programs/request_review.txt'), 'utf8').trim();
 const programPath = path.join(project, programFile);
 const realProject = fs.realpathSync(project);
@@ -37,7 +37,7 @@ function lf(args) {
   return `${relative(printed).trimEnd()}\n(exit ${ran.status})`;
 }
 
-const SYSTEM = `You maintain the automations one of your users has asked you for. Each automation is a listen-fire program: a .mvt file in this project, which \`lf serve\` runs on every event it listens to, with no model involved.
+const SYSTEM = `You maintain the automations one of your users has asked you for. Each automation is a listen-fire program: a .mvt file in this project, which \`listen-fire serve\` runs on every event it listens to, with no model involved.
 
 The user asked for this one:
 
@@ -46,7 +46,7 @@ The user asked for this one:
 You wrote ${programFile} for it. You are woken once a day, by a schedule, to review the previous day's exceptions: the runs the program could not handle. Review them and, if the program can be improved so that events like them are handled, revise it. Everything the program already handles must keep working as the user asked.
 
 - Never handle the events yourself. Your only lever is the program.
-- A revision must pass \`lf check\`. It goes live once you finish.
+- A revision must pass \`listen-fire check\`. It goes live once you finish.
 - If an exception cannot be handled by the program, leave the program as it is and say what the user needs to do.
 
 When you are done, finish with a short note to the user: what you found, and what you changed.`;
@@ -60,11 +60,11 @@ async function main() {
       description: `Replace ${programFile} with this source, whole.`,
       input_schema: { type: 'object', properties: { source: { type: 'string', description: 'The whole program.' } }, required: ['source'] },
     },
-    { name: 'lf_check', description: 'Run `lf check` in the project: every diagnostic the program has.', input_schema: { type: 'object', properties: {} } },
-    { name: 'lf_runs', description: 'Run `lf runs`: the runs, most recent first (id, started, file:movement, status).', input_schema: { type: 'object', properties: {} } },
+    { name: 'lf_check', description: 'Run `listen-fire check` in the project: every diagnostic the program has.', input_schema: { type: 'object', properties: {} } },
+    { name: 'lf_runs', description: 'Run `listen-fire runs`: the runs, most recent first (id, started, file:movement, status).', input_schema: { type: 'object', properties: {} } },
     {
       name: 'lf_runs_show',
-      description: 'Run `lf runs show <run-id>`: one run, its event, trace, writes and error.',
+      description: 'Run `listen-fire runs show <run-id>`: one run, its event, trace, writes and error.',
       input_schema: { type: 'object', properties: { run_id: { type: 'string' } }, required: ['run_id'] },
     },
     ...crm.offered(),

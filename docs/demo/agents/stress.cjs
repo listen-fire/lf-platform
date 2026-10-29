@@ -7,10 +7,10 @@
 // - agent: the endpoint answers once the per-event session has handled it.
 // - js: the endpoint stores and acknowledges; the host waits for the sandbox
 //   to run it (GET /idle). A run that threw wakes the agent (wake.cjs).
-// - lf: `lf serve --doors-only` stores and acknowledges; the host's worker
-//   runs it (`lf drain --until-idle`). A run that failed wakes the agent, which
-//   may run it again with `lf runs rerun`. The
-//   host also runs `lf check` every `checkEveryMs` and wakes the agent when
+// - lf: `listen-fire serve --doors-only` stores and acknowledges; the host's worker
+//   runs it (`listen-fire drain --until-idle`). A run that failed wakes the agent, which
+//   may run it again with `listen-fire runs rerun`. The
+//   host also runs `listen-fire check` every `checkEveryMs` and wakes the agent when
 //   it finds errors it had not reported before.
 //
 // Plan items may first tell the CRM stand-in to fail one call (`failCrm`,
@@ -21,7 +21,7 @@
 // Writes to <out>/: deliveries.jsonl (each item: attempts, what the fakes and
 // the CRM gained from its first send until it and any wake it caused were
 // done, the failures, the wakes), wakes.jsonl (each session whole), checks.jsonl
-// (every periodic lf check).
+// (every periodic listen-fire check).
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
@@ -83,7 +83,7 @@ const ok = (a) => a.status !== null && a.status >= 200 && a.status < 300;
 // listen-fire's host: the worker, and the periodic check.
 const lfEnv = { ...process.env };
 function lf(args) {
-  const ran = spawnSync(process.env.LF_BIN || 'lf', args, { cwd: config.lf.project, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: lfEnv, timeout: 300_000, maxBuffer: 64 * 1024 * 1024 });
+  const ran = spawnSync(process.env.LF_BIN || 'listen-fire', args, { cwd: config.lf.project, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: lfEnv, timeout: 300_000, maxBuffer: 64 * 1024 * 1024 });
   const real = fs.realpathSync(config.lf.project);
   return `${ran.stdout ?? ''}${ran.stderr ?? ''}`.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').split(`${real}/`).join('').split(`${config.lf.project}/`).join('');
 }
@@ -125,9 +125,9 @@ async function maybeCheck(force = false) {
   const record = { at: new Date().toISOString(), errors, output, woke: fresh };
   fs.appendFileSync(out('checks.jsonl'), `${JSON.stringify(record)}\n`);
   if (!fresh) return null;
-  console.log(`  lf check found ${errors} error(s)`);
+  console.log(`  listen-fire check found ${errors} error(s)`);
   const before = await snapshot();
-  const w = await wakeFor(`The host's periodic \`lf check\` found new errors:\n\n${output}`, 'lf check');
+  const w = await wakeFor(`The host's periodic \`listen-fire check\` found new errors:\n\n${output}`, 'lf check');
   const g = gained(before, await snapshot());
   fs.appendFileSync(out('deliveries.jsonl'), `${JSON.stringify({ payment: null, kind: 'check wake', check: output, wakes: [w], ...g })}\n`);
   return w;
@@ -140,10 +140,10 @@ async function main() {
   if (config.mode === 'lf') {
     const { loadHandbook, PROJECT_MODULES } = require('./handbook.cjs');
     handbook = loadHandbook(config.lf.lfSrc, PROJECT_MODULES);
-    // Read live, as the authoring agent's was when it was made: `lf catalog`
+    // Read live, as the authoring agent's was when it was made: `listen-fire catalog`
     // over the scratch program that imports every credential.
     describe = () => {
-      const ran = spawnSync(process.env.LF_BIN || 'lf', ['catalog'], { cwd: config.lf.describeProject, encoding: 'utf8', env: lfEnv, maxBuffer: 64 * 1024 * 1024 });
+      const ran = spawnSync(process.env.LF_BIN || 'listen-fire', ['catalog'], { cwd: config.lf.describeProject, encoding: 'utf8', env: lfEnv, maxBuffer: 64 * 1024 * 1024 });
       return `${ran.stdout ?? ''}${ran.stderr ?? ''}`.trim();
     };
     await maybeCheck(true);
@@ -193,7 +193,7 @@ async function main() {
     for (const f of failures) {
       const reason =
         config.mode === 'lf'
-          ? `A run failed.\n\nRun ${f.runId} (payment_failed:Payment Failed): ${f.error}\n\n\`lf runs show ${f.runId}\` has its event, trace and attempts.`
+          ? `A run failed.\n\nRun ${f.runId} (payment_failed:Payment Failed): ${f.error}\n\n\`listen-fire runs show ${f.runId}\` has its event, trace and attempts.`
           : `The handler failed on event ${f.eventId}.\n\n${f.error}\n\nThe event is stored; sandbox_log has the run.`;
       itemWakes.push(await wakeFor(reason, 'run failed'));
     }

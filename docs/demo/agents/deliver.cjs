@@ -1,7 +1,7 @@
 // node deliver.cjs <hook url> <signing secret> <serve log> <event file>:
 // sends one event as Stripe does: `created` set to now, the body signed with
 // the endpoint's secret in a `Stripe-Signature` header (`t=…,v1=…`, an
-// HMAC-SHA256 of `<t>.<body>`). Then waits for `lf serve` to print the run it
+// HMAC-SHA256 of `<t>.<body>`). Then waits for `listen-fire serve` to print the run it
 // started. Prints { runId, ms, line, answer, body }: ms runs from just before
 // the POST to the moment the run's settled line appears in the serve log, and
 // body is the exact JSON that was sent.
