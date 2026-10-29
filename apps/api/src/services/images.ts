@@ -12,6 +12,13 @@ const cloudflare = () => ({
 const cloudflareHost = 'https://api.cloudflare.com';
 
 class Images {
+  /** Image hosting is optional; callers whose upload is incidental (a
+   *  diagnostic screenshot) ask first rather than learning from a throw. */
+  isConfigured(): boolean {
+    const { accountId, accountHash, apiToken } = cloudflare();
+    return !!(accountId && accountHash && apiToken);
+  }
+
   async upload(data: ReadableStream | Blob, { idOverride }: { idOverride?: string } = {}) {
     const formData = new FormData();
     // NOTE: may cause memory issues

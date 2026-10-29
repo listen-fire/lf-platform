@@ -1,7 +1,7 @@
 // The platform's gated-document reader: `@lf/web`'s reader over the
 // platform's own services — its browser slot (Chromium on the api image),
 // its model routing and metering for the vision fallback, its prompt for
-// picking a data room's deck, its ops channel and image store for alerts.
+// picking a data room's deck, its ops channel and image or document store for alerts.
 // These are exactly the services the sources called when they lived here.
 
 import type Anthropic from '@anthropic-ai/sdk';
@@ -14,7 +14,7 @@ import { chatCallFor } from '../models/chat';
 import { Prompt } from '../prompts';
 import { sendSlackNotification } from '../slack';
 import { getEnvVar } from '../utils/environment';
-import { ImageService } from '../../services/images';
+import { keepScreenshot } from './keep_screenshot';
 import { platformBrowser } from '../../services/playwright';
 
 const VISION_MODEL = 'claude-sonnet-5';
@@ -60,10 +60,7 @@ const platformReaderHost: DocumentReaderHost = {
   async alert({ channel, text, opsTitle }) {
     await sendSlackNotification({ type: channel, text, opsTitle });
   },
-  async keepScreenshot(png) {
-    const imageId = await ImageService.upload(new Blob([png]));
-    return ImageService.getDeliveryUrl(imageId);
-  },
+  keepScreenshot,
   reportError: (err) => handleError(err),
   googleDriveApiKey: () => getEnvVar('GOOGLE_DRIVE_API_KEY', { devDefault: 'local' }),
 };
