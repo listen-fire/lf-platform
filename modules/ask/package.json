@@ -2,7 +2,7 @@
   "name": "@listen-fire/ask",
   "private": true,
   "license": "Apache-2.0",
-  "version": "0.12.11",
+  "version": "0.12.13",
   "description": "Asking a person mid-run (the ask families, their answers, the Response edge a run awaits) as a module. Loaded in process by the platform, whose asks table is its kv.",
   "engines": {
     "node": "22.23.4"

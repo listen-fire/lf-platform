@@ -17,6 +17,10 @@ versions are the git tags described in [`deploy/UPGRADING.md`](deploy/UPGRADING.
 
 <!-- add merged PRs here -->
 
+## [0.12.13] - 2026-10-29
+
+The platform release that matches the language's 0.12.13, whose command is now `listen-fire` (formerly `lf`). The language's 0.12.12 was never adopted on its own: this release takes both. It also adds public inboxes and takes Tiny's document source fixes.
+
 - `@listen-fire/web` 0.12.7 and `@listen-fire/files-s3` 0.12.7: document sources wait for each source's own ready signal rather than the page load (a DocSend deck held past 30 s by trackers is no longer lost); a failed crawl's alert survives a screenshot that can't be stored; DocSend's cookie banner stays off the gate and the slides; Papermark decks are captured page by page like DocSend; an S3 upload whose source dies aborts instead of hanging. Ported from Tiny's fork.
 - Public inboxes: a team can claim one inbound email key so it takes mail from anyone, not only from its members (a deal inbox). Mail to a claimed key goes to that team whoever sent it; the run acts as the sender when they are on the team, otherwise as whoever claimed the key. One team per key, and a claim on a key another team holds is refused. Claim through the automation connector's `claimPublicInbox`, `releasePublicInbox` and `listPublicInboxes`, the API's `/api/v1/automation/inboxes`, or the operator CLI's `public-inbox`. Every other key is routed by its sender exactly as before. See [`deploy/SELF_HOSTING.md`](deploy/SELF_HOSTING.md).
 - An email listener's run now executes as the person its message resolves to: the sender when they are on the team, otherwise, on a public inbox, whoever claimed the key. That is the user the automation already read (`@user_*`). It used to execute as the listener's author, else the team's longest-standing member with write access, so a run's services and its `@user_*` could be two people. A run whose message resolves to nobody, and every listener that is not email, acts as before.
@@ -2266,7 +2270,8 @@ Releases before v0.11 are kept one file per minor line, newest first:
 - [v0.2.x](docs/changelog/v0.2.md) (v0.2.0)
 - [v0.1.x](docs/changelog/v0.1.md) (v0.1.0 to v0.1.2)
 
-[Unreleased]: https://github.com/listen-fire/lf-platform/compare/v0.12.11...HEAD
+[Unreleased]: https://github.com/listen-fire/lf-platform/compare/v0.12.13...HEAD
+[0.12.13]: https://github.com/listen-fire/lf-platform/compare/v0.12.11...v0.12.13
 [0.12.11]: https://github.com/listen-fire/lf-platform/compare/v0.12.8...v0.12.11
 [0.12.8]: https://github.com/listen-fire/lf-platform/compare/v0.12.6...v0.12.8
 [0.12.6]: https://github.com/listen-fire/lf-platform/compare/v0.12.5...v0.12.6
