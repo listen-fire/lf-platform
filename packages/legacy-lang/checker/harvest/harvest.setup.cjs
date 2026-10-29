@@ -18,11 +18,15 @@ const OUT = process.env.HARVEST_OUT;
 const PACKAGE = path.resolve(__dirname, '../..');
 const CHECK = path.join(PACKAGE, 'checker/check.ts');
 const PARSE = path.join(PACKAGE, 'parser/parse.ts');
+const RUST_PARSE = path.join(PACKAGE, 'parser/rust_parser.ts');
 const LANGUAGE_VERSION = path.join(PACKAGE, 'language_version.ts');
-const SNAPSHOT = path.join(PACKAGE, 'service/snapshot.ts');
 const CATALOG = path.join(PACKAGE, 'checker/catalog.ts');
-const SCAN = path.join(PACKAGE, 'parser/scan.ts');
-const RUST_CHECK = path.join(PACKAGE, 'checker/rust_checker.ts');
+// The installed language's, resolved from this package (every corpus's
+// movement-lang is the one catalog version, so one module serves them all).
+const SNAPSHOT = 'movement-lang/service/snapshot';
+const SCAN = 'movement-lang/parser/scan';
+const RUST_CHECK = 'movement-lang/checker/rust_checker';
+const RELEASE_VERSION = 'movement-lang/language_version';
 
 const testFile = path.relative(PACKAGE, expect.getState().testPath || '');
 const REPLAY = path.join('checker', '__test__', 'checks_regression');
@@ -56,19 +60,28 @@ function canonical(value) {
 // ("it has: Title, Colour"), so a recorded answer is never canonicalised.
 const plain = (value) => (value === undefined ? undefined : JSON.parse(JSON.stringify(value)));
 const currentVersion = () => require(LANGUAGE_VERSION).CURRENT_LANGUAGE_VERSION;
+// The pin holds this copy's integer versions; the corpora hand them in as
+// numbers or as their text ('5').
+const integerOf = (version) => (/^\d+$/.test(String(version)) ? Number(version) : version);
+// This copy's spelling of the 0.12 surface, which a release pin's check is
+// recorded under (legacy-lang language_version.ts).
+const DIALECT = 5;
 
 // The source (and parse version) behind each Program, by identity: the record
 // carries the exact text, never a re-serialised AST.
 const parsedFrom = new WeakMap();
 
-jest.mock(PARSE, () => {
-  const actual = jest.requireActual(PARSE);
-  const parseProgram = (source, options) => {
-    const program = actual.parseProgram(source, options);
-    parsedFrom.set(program, { source, version: (options && options.languageVersion) ?? currentVersion() });
-    return program;
+// Every parse of a program for this copy's checker goes through the parser
+// router: `parseProgram` and the TypeScript engine's `parsePinned` both read
+// by it.
+jest.mock(RUST_PARSE, () => {
+  const actual = jest.requireActual(RUST_PARSE);
+  const rustParseProgram = (source, languageVersion) => {
+    const parsed = actual.rustParseProgram(source, languageVersion);
+    if (parsed.ok) parsedFrom.set(parsed.value, { source, version: integerOf(languageVersion) });
+    return parsed;
   };
-  return { ...actual, parseProgram };
+  return { ...actual, rustParseProgram };
 });
 
 // `mockCatalog` hands back its fixture entry, inline schema included; the
@@ -234,34 +247,56 @@ function snapshotOf(catalog, calls, served) {
   return { snapshot, notes: [...new Set(notes)] };
 }
 
-// A version 5 run is checked by the Rust checker on the run's snapshot
-// (checkSourceInRust), past checkProgram: its program is recorded with the
-// TypeScript's own answer on the same snapshot, so the engine's v5 programs
-// reach the corpus too.
+// A run on the Rust engine is checked by the installed language's Rust
+// checker (checkSourceInRust) under the release pin, past checkProgram: its
+// program is recorded with this copy's answer on the same snapshot, under the
+// version this copy spells that release as (5), so the engine's runs and the
+// upgrade loop's rewrites reach the corpus too. A pin this copy has no
+// spelling for (a release the installed language does not read, a move up
+// from one release to another) is recorded as skipped, by name.
 jest.mock(RUST_CHECK, () => {
   const actual = jest.requireActual(RUST_CHECK);
+  const dialectOf = (pin) => {
+    if (pin === undefined) return undefined;
+    if (/^\d+$/.test(String(pin))) return Number(pin);
+    return jest.requireActual(RELEASE_VERSION).compatible(pin) ? DIALECT : null;
+  };
   const checkSourceInRust = (source, snapshot, options) => {
     const result = actual.checkSourceInRust(source, snapshot, options);
+    const version = dialectOf(options.languageVersion);
+    const upgradingFrom = dialectOf(options.upgradingFrom);
+    if (version === null || upgradingFrom === null) {
+      records.push({ skipped: `a Rust check under ${options.languageVersion} from ${options.upgradingFrom}, which this copy has no version for`, file: testFile });
+      return result;
+    }
+    const { parseProgram, MovementParseError } = jest.requireActual(PARSE);
+    let program;
     try {
-      const { parseProgram } = jest.requireActual(PARSE);
+      program = parseProgram(source, { languageVersion: version });
+    } catch (e) {
+      // A text this copy's parse refuses is not a check record.
+      if (e instanceof MovementParseError) return result;
+      throw e;
+    }
+    try {
       const { checkProgram } = jest.requireActual(CHECK);
       const { fromCatalogSnapshot, resolveFileFromSnapshot } = require(SNAPSHOT);
       const resolveFile = resolveFileFromSnapshot(snapshot);
-      const diagnostics = checkProgram(parseProgram(source, { languageVersion: options.languageVersion }), fromCatalogSnapshot(snapshot), {
-        languageVersion: options.languageVersion,
-        ...(options.upgradingFrom !== undefined ? { upgradingFrom: options.upgradingFrom } : {}),
+      const diagnostics = checkProgram(program, fromCatalogSnapshot(snapshot), {
+        languageVersion: version,
+        ...(upgradingFrom !== undefined ? { upgradingFrom } : {}),
         ...(resolveFile ? { resolveFile } : {}),
       });
       records.push({
         source,
-        version: options.languageVersion,
-        ...(options.upgradingFrom !== undefined ? { upgradingFrom: options.upgradingFrom } : {}),
+        version,
+        ...(upgradingFrom !== undefined ? { upgradingFrom } : {}),
         snapshot: plain(snapshot),
         diagnostics: JSON.parse(canonical(diagnostics)),
         file: testFile,
       });
     } catch (e) {
-      // A text the TypeScript parse refuses is not a check record.
+      records.push({ harvestError: String(e && e.stack ? e.stack : e), file: testFile });
     }
     return result;
   };
@@ -277,12 +312,12 @@ jest.mock(CHECK, () => {
     if (insideSpelledFor()) return actual.checkProgramWithLink(program, catalog, options);
     const parsed = parsedFrom.get(program);
     if (!parsed) {
-      records.push({ skipped: 'a program parseProgram did not produce', file: testFile });
+      records.push({ skipped: 'a program the parser router did not produce', file: testFile });
       return actual.checkProgramWithLink(program, catalog, options);
     }
     const { recording, calls } = recordingCatalog(catalog);
     const files = options && options.resolveFile ? recordingResolveFile(options.resolveFile) : undefined;
-    const version = (options && options.languageVersion) ?? currentVersion();
+    const version = integerOf((options && options.languageVersion) ?? currentVersion());
     const result = actual.checkProgramWithLink(program, recording, {
       ...options,
       ...(files ? { resolveFile: files.resolveFile } : {}),
@@ -293,7 +328,7 @@ jest.mock(CHECK, () => {
         source: parsed.source,
         version,
         ...(parsed.version !== version ? { parseVersion: parsed.version } : {}),
-        ...(options && options.upgradingFrom !== undefined ? { upgradingFrom: options.upgradingFrom } : {}),
+        ...(options && options.upgradingFrom !== undefined ? { upgradingFrom: integerOf(options.upgradingFrom) } : {}),
         snapshot,
         diagnostics: JSON.parse(canonical(result.diagnostics)),
         ...(notes.length > 0 ? { note: notes.join('; ') } : {}),

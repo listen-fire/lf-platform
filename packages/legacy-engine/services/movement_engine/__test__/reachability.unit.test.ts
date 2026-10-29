@@ -31,6 +31,7 @@ import { parseProgram } from 'legacy-lang';
 import { loadChecks, loadSnapshots } from 'legacy-lang/conformance/checks_corpus';
 import { corpusFile, overCorpus, SNAPSHOT_TABLE_FILE } from 'legacy-lang/conformance/checks_pin';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
+import { installedSnapshotOf } from 'legacy-lang/checker/catalog';
 import { tenantIdOf } from 'engine-contracts';
 
 import { containerAssociation, type Adapter } from 'movement-engine/public/adapter';
@@ -190,7 +191,7 @@ async function gapOf(candidate: Candidate, movementName: string): Promise<string
       languageVersion: LANGUAGE_VERSION,
       movementName,
       event: { pipelineInputId: 'pi-reach', adapterType: 'email', triggerType: 'webhook', payload: { subject: 'Acme', text: 'hello' } },
-      catalog: candidate.catalog,
+      catalog: installedSnapshotOf(candidate.catalog),
       teamId: TEAM,
       credentialIds: credentialIdsFor(candidate.catalog, (name) => `cred-${name}`),
       host: plainHost(),

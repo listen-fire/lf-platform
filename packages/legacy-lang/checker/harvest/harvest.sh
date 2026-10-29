@@ -45,4 +45,4 @@ done
 "${FOLD[@]}" ${mode:+"$mode"} "${first[@]}" "readers=$T/readers.jsonl" "engine-readers=$T/engine-readers.jsonl"
 
 CHECKS_CORPUS=1 node "$JEST" --config jest.config.cjs checker/__test__/checks_regression checker/__test__/upgrade_corpus
-(cd ../movement-engine && CHECKS_CORPUS=1 node "$JEST" --config jest.config.cjs services/movement_engine/__test__/reachability)
+(cd ../legacy-engine && CHECKS_CORPUS=1 node "$JEST" --config jest.config.cjs services/movement_engine/__test__/reachability)

@@ -17,13 +17,13 @@
 // review. Nothing upgrades on its own. The rate is pinned as a floor that only
 // moves up.
 
-import { checkSourceInRust } from 'movement-lang/checker/rust_checker';
 import { checkProgram, diagnosticSeverity, type Diagnostic } from '../check';
 import { parseProgram } from '../../parser/parse';
 import { fromCatalogSnapshot, resolveFileFromSnapshot, type CatalogSnapshot } from 'movement-lang/service/snapshot';
 import { loadChecks, loadSnapshots, snapshotOf } from '../../conformance/checks_corpus';
 import { corpusFile, overCorpus, SNAPSHOT_TABLE_FILE } from '../../conformance/checks_pin';
 import { rustCheck, upgradeSource } from '../upgrade';
+import { installedSnapshotOf } from '../catalog';
 
 declare const process: { env: Record<string, string | undefined> };
 declare function require(id: string): unknown;
@@ -96,6 +96,15 @@ function programs(): Program[] {
 
 const isError = (d: Diagnostic): boolean => diagnosticSeverity(d) === 'error';
 
+/** What this copy's checker says of the original text under 4. */
+function underVersionFour(program: Program): Diagnostic[] {
+  const resolveFile = resolveFileFromSnapshot(program.snapshot);
+  return checkProgram(parseProgram(program.source, { languageVersion: 4 }), fromCatalogSnapshot(program.snapshot), {
+    languageVersion: 4,
+    ...(resolveFile ? { resolveFile } : {}),
+  });
+}
+
 /** The codes 5's rules give the original text, read under 4's grammar. */
 function ruleCodes(program: Program): Set<string> {
   const resolveFile = resolveFileFromSnapshot(program.snapshot);
@@ -131,16 +140,18 @@ const commentLines = (source: string): string[] => source.split('\n').filter((li
     const causes = new Map<string, number>();
     const broken: string[] = [];
     for (const program of programs()) {
+      // No release reads version 4: this copy's checker judges it, as it
+      // judges a saved version 4 movement (apps/api language_route.ts).
       let underFour: Diagnostic[];
       try {
-        underFour = checkSourceInRust(program.source, program.snapshot, { languageVersion: 4 });
+        underFour = underVersionFour(program);
       } catch {
         continue; // a source the v4 test pinned as refused
       }
       if (underFour.some(isError)) continue;
       clean += 1;
 
-      const check = rustCheck({ snapshot: program.snapshot, upgradingFrom: 4 });
+      const check = rustCheck({ snapshot: installedSnapshotOf(program.snapshot), upgradingFrom: 4 });
       const result = upgradeSource(program.source, check);
       // The loop's own promises, on every program.
       if (!result.settled) broken.push(`did not settle:\n${program.source}`);

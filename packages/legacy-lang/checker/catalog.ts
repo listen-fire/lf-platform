@@ -42,6 +42,7 @@ import type { DeclaredEffectRow } from './effects';
 import { describePosition, type PositionTypeRef } from './typing';
 import { pluginProgramNameOf, type PluginSpec, type PluginOutput, type EdgeSchema, type PositionSchema, type InstanceSchema, type Catalog } from 'movement-lang/catalog/types';
 import { type SchemaFieldType } from 'movement-lang/catalog/types';
+import type { CatalogSnapshot } from 'movement-lang/service/snapshot';
 
 
 // Every surface type is a checker type: the schema's union is `FieldType` less the record.
@@ -415,6 +416,21 @@ export interface LegacyPluginSpec extends PluginSpec {
 /** `spec`'s older output shapes, earliest first. */
 export function earlierOutputsOf(spec: LegacyPluginSpec): readonly EarlierOutput[] {
   return spec.earlierOutputs ?? [];
+}
+
+/** `snapshot` as the installed language reads it: each plugin spec without
+ *  the older output shapes only the legacy ids read. The installed language
+ *  refuses a spec with a field it does not know, so a snapshot recorded from
+ *  the platform's catalog is handed to its checker or engine this way, as
+ *  apps/api's plugin_specs.ts builds a run's snapshot for an installed pin. */
+export function installedSnapshotOf(snapshot: CatalogSnapshot): CatalogSnapshot {
+  const plugins = Object.fromEntries(
+    Object.entries(snapshot.plugins).map(([key, legacy]: [string, LegacyPluginSpec]) => {
+      const { earlierOutputs: _dropped, ...spec } = legacy;
+      return [key, spec];
+    }),
+  );
+  return { ...snapshot, plugins };
 }
 
 /** What a plain call to `spec`'s plugin hands back to a program pinned to

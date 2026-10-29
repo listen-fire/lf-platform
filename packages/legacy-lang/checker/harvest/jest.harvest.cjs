@@ -17,7 +17,7 @@ const path = require('path');
 
 const PACKAGE = path.resolve(__dirname, '../..');
 const API = path.resolve(PACKAGE, '../../apps/api');
-const ENGINE = path.resolve(PACKAGE, '../movement-engine');
+const ENGINE = path.resolve(PACKAGE, '../legacy-engine');
 // The engine's tests reach the checker through the program check, so every
 // program they check (with the catalog it was checked against) is harvested
 // the same way as this package's.
