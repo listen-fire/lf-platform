@@ -4349,6 +4349,38 @@ CREATE UNIQUE INDEX team_engine_team_id_key ON automations.team_engine USING btr
 
 CREATE TRIGGER team_engine_audit AFTER INSERT OR DELETE OR UPDATE ON automations.team_engine FOR EACH ROW EXECUTE FUNCTION automations.audit();
 
+-- ## Public inboxes — routing keys a team has opened to mail from anyone
+--
+-- The inbound door normally decides a message's team from its SENDER, because
+-- the `<local>+<key>@` part of the address is a slug anyone can guess. A row
+-- here is a team saying it answers for whatever arrives at one key, whoever
+-- sent it (a deal inbox that founders write to). Openness belongs to the
+-- address, not the program: an automation just listens on the key.
+--
+-- `key` is unique across the deployment, so two teams can never both hold one:
+-- a clash is refused when it is claimed, never discovered when mail arrives.
+-- citext, like `inbound_email_route.address`, because the door reads the key
+-- in whatever case the sender typed it. `claimed_by_user_id` is who a run acts
+-- as when the sender is not a member of the team (an opaque user id, no FK,
+-- D3), as a Gmail run acts as the mailbox's owner. `id` exists for
+-- automations.audit(), which keys on it.
+CREATE TABLE automations.public_inbox (
+    id uuid DEFAULT pg_catalog.gen_random_uuid() NOT NULL,
+    key public.citext NOT NULL,
+    team_id uuid NOT NULL, -- opaque tenant id; no foreign key (D3)
+    claimed_by_user_id uuid NOT NULL,
+    created_at timestamptz DEFAULT now() NOT NULL
+);
+
+ALTER TABLE ONLY automations.public_inbox
+    ADD CONSTRAINT public_inbox_pkey PRIMARY KEY (id);
+
+CREATE UNIQUE INDEX public_inbox_key_key ON automations.public_inbox USING btree (key);
+
+CREATE INDEX public_inbox_team_id_idx ON automations.public_inbox USING btree (team_id);
+
+CREATE TRIGGER public_inbox_audit AFTER INSERT OR DELETE OR UPDATE ON automations.public_inbox FOR EACH ROW EXECUTE FUNCTION automations.audit();
+
 -- lf's movements slot: the listing behind each `movements.watch` cursor
 -- (services/lf_movements/watch.ts). A cursor is a hash of the team and the
 -- paths and versions it is served, so a cursor one api instance minted is
