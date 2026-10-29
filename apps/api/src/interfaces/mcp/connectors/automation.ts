@@ -281,6 +281,38 @@ function automationConnectorOptions(): McpRouterOptions {
         annotations: { destructiveHint: false },
         endpoint: { method: 'POST', path: '/v1/automation/whatsapp/verify/confirm' },
       },
+      listPublicInboxes: {
+        description:
+          "List the team's public inboxes: inbound email keys that take mail from anyone, not only from the team's own members. Each has its key, the full address to give out, and who a run acts as when the sender is not on the team.",
+        inputSchema: {
+          team: z.string().optional().describe('Team id; needed only when this connection spans several teams.'),
+        },
+        title: 'List public inboxes',
+        annotations: { readOnlyHint: true },
+        endpoint: { method: 'GET', path: '/v1/automation/inboxes' },
+      },
+      claimPublicInbox: {
+        description:
+          'Open one inbound email key to mail from anyone, for this team — a deal inbox founders write to, a support address. Normally mail to the inbound address only gets through when the sender is on the team; after this, anyone who learns the address can start the automations listening on that key, so only claim a key for work you would let a stranger set off. An automation listens on it as usual (`listen to inbox { key: "…" }`); nothing in the automation changes. A run acts as the sender when they are on the team, otherwise as the user making this call. A key is held by one team at a time: a key another team holds is refused, so choose another. Needs write access on the team.',
+        inputSchema: {
+          key: z.string().describe('The key: the part of the inbound address between "+" and "@", e.g. "deals".'),
+          team: z.string().optional().describe('Team id; needed only when this connection spans several teams.'),
+        },
+        title: 'Claim a public inbox',
+        annotations: { destructiveHint: false },
+        endpoint: { method: 'POST', path: '/v1/automation/inboxes/claim' },
+      },
+      releasePublicInbox: {
+        description:
+          "Close one of the team's public inboxes again: mail to that key is then only accepted from the team's own members, as for any other key. Needs write access on the team.",
+        inputSchema: {
+          key: z.string().describe('The public inbox key to release.'),
+          team: z.string().optional().describe('Team id; needed only when this connection spans several teams.'),
+        },
+        title: 'Release a public inbox',
+        annotations: { destructiveHint: true },
+        endpoint: { method: 'POST', path: '/v1/automation/inboxes/release' },
+      },
       validateAutomation: {
         description:
           'Typecheck an automation program against the live connected systems WITHOUT saving: parse, check, and compile. Returns diagnostics (code, message, severity, line/col, offending line) and `validatedUnder` — `{ version }`, the language version it was checked against (`name` repeats it this release only). A clean validation predicts a live save. saveAutomation runs this same check first and saves nothing on errors, so you need not call this before saving — use it to explore. When changing a saved automation, pass its id as `automation` so the text is checked under the language version that automation is written in; new text is checked under the current version.',
