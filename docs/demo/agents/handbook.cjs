@@ -38,9 +38,10 @@ function loadHandbook(lfSrc, modules) {
 }
 
 // The modules a comparison project installs: the CRM's (by scenario,
-// CRM_KIND: @lf/mcp, or Attio's native @lf/attio), and the same three others.
+// CRM_KIND: @lf/mcp, or Attio's native @lf/attio), and the same three others
+// (Stripe's @lf/stripe, Gmail, Slack).
 const PROJECT_MODULES = [
-  ['webhook', 'manifest.ts', 'WEBHOOK_MANIFEST'],
+  ['stripe', 'manifest.ts', 'STRIPE_MANIFEST'],
   process.env.CRM_KIND === 'rest' ? ['attio', 'manifest.ts', 'ATTIO_MANIFEST'] : ['mcp', 'manifest.ts', 'MCP_MANIFEST'],
   ['gmail', 'manifest.ts', 'GMAIL_MANIFEST'],
   ['slack', 'manifest.ts', 'SLACK_MANIFEST'],

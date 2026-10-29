@@ -8,26 +8,24 @@ the rest.
 ## A file
 
 ```
-import { webhook, mcp, gmail, slack } from adapters    # adapter types
-import { my_hook, my_crm } from credentials           # connections, by their saved names
+import { stripe, mcp, gmail, slack } from adapters    # adapter types
+import { my_stripe, my_crm } from credentials         # connections, by their saved names
 
-hook = connect webhook using my_hook                   # connect once, at file scope
-crm  = connect mcp using my_crm
+pay = connect stripe using my_stripe                  # connect once, at file scope
+crm = connect mcp using my_crm
 
-node Event {                                           # a declared structure
-  id: <text>
-  kind: <text>
-  data: <json>
-}
+function `On Event`(e: <pay-[:Event]->>) { … }        # one typed parameter: the connection's event
 
-function `On Event`(e: <Event>) { … }                  # one typed parameter
-
-listen to hook { payload: <Event> } fire `On Event`    # the one way an automation runs
+listen to pay { events: ["…"] } fire `On Event`       # the one way an automation runs
 ```
+
+A connection's events are typed by its module: the event's fields, and its
+edges to the records it is about, are in `describe_systems` and the module's
+handbook chapter (`system:<module>`). `events` names the event types to run on.
 
 - Comments start with `#`. No semicolons. A name is bound once: `x = …` (no `let`/`const`).
 - Backticks quote a name with spaces; double quotes are always a string.
-- Types wear angle brackets: `<text>`, `<number>`, `<boolean>`, `<date>`, `<json>`, `<Event>`.
+- Types wear angle brackets: `<text>`, `<number>`, `<boolean>`, `<date>`, `<json>`, `<conn-[:Event]->>`.
   `<text | null>` for a field that may be missing.
 - `type Kind = <"a" | "b">` declares a set of values; `<Kind>` uses it.
 
@@ -35,7 +33,7 @@ listen to hook { payload: <Event> } fire `On Event`    # the one way an automati
 
 - `==` `!=` `<` `>`; `&&` `||` `!`; `c ? a : b`. `+` only adds numbers.
 - Strings interpolate: `"Hello ${p.name}"`.
-- A dot reads a field, including into a payload's nested objects: `e.data.items`.
+- A dot reads a field, including into a json field's nested objects: `r.data.items`.
 - Functions, not methods: `Text.lower(s)`, `Text.trim(s)`, `Text.split(s, " ")`,
   `Number.round(n)`, `coalesce(a, b)`, `count(xs)`, `first(xs)`, `only(xs)`.
 - No loops: a block after a path runs once per record, `map`/`filter` iterate lists.

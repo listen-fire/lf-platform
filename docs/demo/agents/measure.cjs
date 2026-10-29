@@ -8,7 +8,8 @@
 //    comments; lf: "…" with ${…} read as code, # comments; lf's backticks
 //    quote names and stay code). Every count below reads the code only,
 //    except the credential scan, which reads code and strings.
-// 2. lines: lines that hold code (blank lines and comment-only lines left out).
+// 2. lines: lines that hold code (blank lines and comment-only lines left out;
+//    every non-blank line of a multi-line string counts).
 // 3. decisionPoints: if (else-if included), case, catch, for, while, ?: (a
 //    `?` that is not `?.`, `??` or lf's `?:` write form), &&, ||, ??, and lf's
 //    AND and OR inside a walk.
@@ -44,8 +45,17 @@ function lex(kind, src) {
     let s = '';
     i++;
     const interpolates = (kind === 'js' && quote === '`') || (kind === 'lf' && quote === '"');
+    // A line of a multi-line string holds code as much as any other line: a
+    // line that is all string text (no ${…}, no closing quote) still counts.
+    let lineHolds = true;
+    const newline = () => {
+      code += lineHolds ? ' S\n' : '\n';
+      lineHolds = false;
+    };
     while (i < n && src[i] !== quote) {
       if (src[i] === '\\') {
+        if (src[i + 1] === '\n') newline();
+        else lineHolds = true;
         s += src[i] + (src[i + 1] ?? '');
         i += 2;
         continue;
@@ -64,9 +74,11 @@ function lex(kind, src) {
         code += ` ${sub.code} `;
         strings.push(...sub.strings);
         s += '${…}';
+        lineHolds = true;
         continue;
       }
-      if (src[i] === '\n') code += '\n';
+      if (src[i] === '\n') newline();
+      else if (src[i].trim() !== '') lineHolds = true;
       s += src[i];
       i++;
     }

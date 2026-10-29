@@ -496,8 +496,8 @@ const data = {
     note: closingNote(chosenReview.steps),
   },
   labels: {
-    real: ['every model session: claude-sonnet-5-5, live (authoring, per-event, woken)', 'the JavaScript handler, run in node on every delivery against the stand-ins', 'lf check, lf serve, lf drain and every listen-fire run, with its real modules (@lf/mcp, @lf/attio, @lf/gmail, @lf/slack, @lf/webhook)', 'the daily review, a live session over the real lf runs and lf check'],
-    standIn: ['Stripe (signed invoice.payment_failed deliveries from a local sender)', 'the MCP scenario\'s CRM (a local MCP server with generic tools: plan a plain string, the options answered as data)', 'the Attio scenario\'s CRM (fake-channels\' Attio, behind a local door that adds the token check, the call log and the injected 503 and 429)', 'Gmail and Slack (fake-channels)', 'the sandbox (node vm with crm, email, slack and kv, behind a store-then-acknowledge endpoint)', "the agent provider's host (stress.cjs: the worker, the periodic lf check, waking the agent)"],
+    real: ['every model session: claude-sonnet-5-5, live (authoring, per-event, woken)', 'the JavaScript handler, run in node on every delivery against the stand-ins', 'lf check, lf serve, lf drain and every listen-fire run, with its real modules (@lf/stripe, @lf/mcp, @lf/attio, @lf/gmail, @lf/slack)', 'the daily review, a live session over the real lf runs and lf check'],
+    standIn: ['Stripe (signed invoice.payment_failed deliveries from a local sender)', "Stripe's API, for any read @lf/stripe makes beyond the event (listen-fire's fake Stripe, seeded with the same customers)", 'the MCP scenario\'s CRM (a local MCP server with generic tools: plan a plain string, the options answered as data)', 'the Attio scenario\'s CRM (fake-channels\' Attio, behind a local door that adds the token check, the call log and the injected 503 and 429)', 'Gmail and Slack (fake-channels)', 'the sandbox (node vm with crm, email, slack and kv, behind a store-then-acknowledge endpoint)', "the agent provider's host (stress.cjs: the worker, the periodic lf check, waking the agent)"],
   },
 };
 

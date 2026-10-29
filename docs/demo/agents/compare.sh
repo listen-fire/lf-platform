@@ -10,8 +10,11 @@
 #   3. listen-fire: the model writes the program (author_lf.cjs) with the
 #      connected systems described up front, the lf cheat sheet, the
 #      listen-fire-builder skill, the handbook, `lf check` and a dry run;
-#      `lf serve --doors-only` stores and acknowledges each delivery, and the
-#      host's worker (`lf drain`) runs it.
+#      Stripe is connected through @lf/stripe, whose door checks the Stripe
+#      signature; `lf serve --doors-only` stores and acknowledges each
+#      delivery, and the host's worker (`lf drain`) runs it. @lf/stripe's
+#      reads (an invoice's customer or subscription) reach listen-fire's fake
+#      Stripe API, seeded with the same world (stripe_api.cjs).
 #
 # Every option is told the same request, retry email and operating
 # environment (prompts.cjs). For JavaScript and listen-fire a failed run is
@@ -53,6 +56,12 @@
 #                                        (crm_access.cjs).
 #                                 Outputs land in .work/compare/<scenario>/.
 #   ATTEMPTS                      authoring attempts per option (default 3)
+#   ONLY_LF                       re-record listen-fire alone: the scenario's
+#                                 per-event agent and JavaScript recordings
+#                                 (capture/agent, capture/js) are kept as they
+#                                 are, and everything else is made anew (the
+#                                 events are the same: make_events.cjs is
+#                                 seeded)
 #   REHEARSE_JS, REHEARSE_LF      a rehearsal of the stressors with no
 #                                 authoring: this handler and this program
 #                                 stand in for every attempt, and the
@@ -69,12 +78,19 @@ TEMPLATE="$WORK/template/billing"
 LF_BIN="${LF_BIN:-lf}"
 FAKES_SRC="${LF_SRC:-$REPO/../listen-fire}"
 STRIPE_SECRET=whsec_ledgerline_stand_in_7d1c2b
+STRIPE_API_KEY=rk_test_ledgerline_stand_in_4e9a0f
 CRM_TOKEN=crm-stand-in-token
 PROGRAM=movements/payment_failed.mvt
 ATTEMPTS="${ATTEMPTS:-3}"
 
+KEPT="$HERE/.work/compare/.kept_$SCENARIO"
+if [ -n "${ONLY_LF:-}" ]; then
+  [ -d "$CAP/agent" ] && [ -d "$CAP/js" ] || { echo "ONLY_LF keeps $CAP/agent and $CAP/js, and there are none"; exit 1; }
+  rm -rf "$KEPT" && mkdir -p "$KEPT" && mv "$CAP/agent" "$CAP/js" "$KEPT/"
+fi
 rm -rf "$WORK"
 mkdir -p "$CAP" "$WORK/fakes" "$WORK/template"
+if [ -n "${ONLY_LF:-}" ]; then mv "$KEPT/agent" "$KEPT/js" "$CAP/" && rmdir "$KEPT"; fi
 
 PIDS=()
 cleanup() { for pid in "${PIDS[@]+"${PIDS[@]}"}"; do kill "$pid" 2>/dev/null || true; done; wait 2>/dev/null || true; }
@@ -145,6 +161,17 @@ mkdir -p "$CAP/events"
 node "$HERE/make_events.cjs" 1 "$CAP/events" plain >/dev/null
 EVENTS=("$CAP/events/"*.json)
 EXAMPLE="$CAP/events/01.json"
+mkdir -p "$WORK/day2"
+node "$HERE/make_events.cjs" 2 "$WORK/day2" plain >/dev/null
+
+# Stripe's API, for whatever @lf/stripe reads beyond the event itself.
+STRIPE_READS="$WORK/stripe_reads.jsonl"
+: >"$STRIPE_READS"
+LF_SRC="${LF_SRC:-$FAKES_SRC}" node "$HERE/stripe_api.cjs" "$STRIPE_API_KEY" "$STRIPE_READS" "$CAP/events" "$WORK/day2" >"$WORK/stripe_api.log" 2>&1 &
+PIDS+=($!)
+for _ in $(seq 120); do grep -q '^listening ' "$WORK/stripe_api.log" && break; sleep 0.25; done
+grep -q '^listening ' "$WORK/stripe_api.log" || { echo "the Stripe API did not start (see $WORK/stripe_api.log)"; exit 1; }
+STRIPE_API_URL="http://127.0.0.1:$(sed -n 's/^listening //p' "$WORK/stripe_api.log")"
 
 # The listen-fire project with its connections and no program, as capture.sh
 # sets one up; each listen-fire attempt starts from a copy of it.
@@ -152,8 +179,8 @@ EXAMPLE="$CAP/events/01.json"
 rm -f "$TEMPLATE/movements/"*.mvt
 (
   cd "$TEMPLATE"
-  "$LF_BIN" connect @lf/webhook --yes >/dev/null
-  printf 'stripe\n%s\n\n\n\n' "$STRIPE_SECRET" | "$LF_BIN" credential add --module webhook stripe_events >/dev/null
+  "$LF_BIN" connect @lf/stripe --yes --base-url "$STRIPE_API_URL" >/dev/null
+  printf '%s\n%s\n' "$STRIPE_API_KEY" "$STRIPE_SECRET" | "$LF_BIN" credential add --module stripe stripe_account >/dev/null
   if [ "$SCENARIO" = attio ]; then
     printf '\n\n' | "$LF_BIN" connect @lf/attio --yes >/dev/null
     printf '%s\n%s\n' "$CRM_TOKEN" "$CRM_URL" | "$LF_BIN" credential add --module attio crm --credential attio_token >/dev/null
@@ -191,8 +218,6 @@ jq -e "$crm_described" "$CAP/04_describe_systems.json" >/dev/null || { echo "des
 
 # The stressors' plan: day 1's 20 payments (3 of them twice, a 503 before the
 # 5th and a 429 before the 15th), then the rename and 5 of day 2's payments.
-mkdir -p "$WORK/day2"
-node "$HERE/make_events.cjs" 2 "$WORK/day2" plain >/dev/null
 crm_id() { node -e 'const {customers}=require(process.argv[1]);const e=require(process.argv[2]);console.log(customers.find((c)=>c.stripe.id===e.data.object.customer).crm.crm_id)' "$HERE/programs/customers.cjs" "$1"; }
 mkdir -p "$CAP/events_after_rename"
 i=0
@@ -241,7 +266,7 @@ receiver() { # <log> <args…>: starts receivers.cjs, sets RECEIVER_PID and RECE
 }
 
 # 1. The per-event agent.
-if [ -z "${REHEARSE_JS:-}" ]; then
+if [ -z "${REHEARSE_JS:-}" ] && [ -z "${ONLY_LF:-}" ]; then
   reset
   mkdir -p "$CAP/agent"
   receiver "$WORK/agent_receiver.log" agent "$WORK/agent_memory.json" "$CAP/agent/sessions.jsonl" "$F" "$CRM_URL" "$CRM_TOKEN" "$STRIPE_SECRET"
@@ -253,7 +278,7 @@ fi
 
 # 2. JavaScript.
 mkdir -p "$CAP/js"
-for k in $(seq "$ATTEMPTS"); do
+for k in $( [ -n "${ONLY_LF:-}" ] || seq "$ATTEMPTS"); do
   reset
   if [ -n "${REHEARSE_JS:-}" ]; then cp "$REHEARSE_JS" "$CAP/js/handler_$k.js"; else
     ANTHROPIC_API_KEY="$ANTHROPIC_KEY" node "$HERE/author_js.cjs" "$F" "$CRM_URL" "$CRM_TOKEN" "$EXAMPLE" "$CAP/js/handler_$k.js" "$CAP/js/attempt_$k.json" | tee "$CAP/js/attempt_${k}_summary.txt"
@@ -293,9 +318,9 @@ for k in $(seq "$ATTEMPTS"); do
   (cd "$project" && exec "$LF_BIN" serve --port "$PORT" --doors-only) >"$log" 2>&1 &
   SERVE_PID=$!
   PIDS+=($SERVE_PID)
-  for _ in $(seq 120); do grep -q '^webhook stripe_events: ' "$log" && break; sleep 0.25; done
-  grep -q '^webhook stripe_events: ' "$log" || { echo "lf serve did not start (see $log)"; exit 1; }
-  stress lf "$(sed -n 's/^webhook stripe_events: //p' "$log" | head -1)" "$CAP/lf/stress_$k" "$(jq -nc --arg p "$project" --arg prog "$PROGRAM" --arg d "$CAP/04_describe_systems.json" --arg dp "$scratch" --arg src "${LF_SRC:-$REPO/../listen-fire}" \
+  for _ in $(seq 120); do grep -q '^stripe stripe_account: ' "$log" && break; sleep 0.25; done
+  grep -q '^stripe stripe_account: ' "$log" || { echo "lf serve did not start (see $log)"; exit 1; }
+  stress lf "$(sed -n 's/^stripe stripe_account: //p' "$log" | head -1)" "$CAP/lf/stress_$k" "$(jq -nc --arg p "$project" --arg prog "$PROGRAM" --arg d "$CAP/04_describe_systems.json" --arg dp "$scratch" --arg src "${LF_SRC:-$REPO/../listen-fire}" \
     '{lf: {project: $p, program: $prog, describeFile: $d, describeProject: $dp, lfSrc: $src, checkEveryMs: 30000}}')"
   mkdir -p "$CAP/lf/stress_$k/runs"
   for id in $(cd "$project" && "$LF_BIN" runs --json | jq -r '.runs[]?.runId // .[]?.runId'); do
@@ -308,7 +333,8 @@ for k in $(seq "$ATTEMPTS"); do
   sed -E -e $'s/\x1b\\[[0-9;?]*[A-Za-z]//g' -e "s#$real/##g" -e "s#$project/##g" "$log" >"$CAP/lf/stress_$k/serve.log"
   rename_back
 done
-for k in $(seq "$ATTEMPTS"); do [ -f "$CAP/js/handler_$k.js" ] && cp "$CAP/js/handler_$k.js" "$CAP/js/handler_${k}_final.js"; done
+for k in $( [ -n "${ONLY_LF:-}" ] || seq "$ATTEMPTS"); do [ -f "$CAP/js/handler_$k.js" ] && cp "$CAP/js/handler_$k.js" "$CAP/js/handler_${k}_final.js"; done
 unset ANTHROPIC_KEY
 cp "$CRM_CALLS" "$CAP/crm_calls.jsonl"
+cp "$STRIPE_READS" "$CAP/stripe_reads.jsonl"
 echo "captured in $CAP"

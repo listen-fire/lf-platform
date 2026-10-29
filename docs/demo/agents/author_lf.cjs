@@ -38,7 +38,13 @@ const example = JSON.parse(fs.readFileSync(exampleFile, 'utf8'));
 const programPath = path.join(project, PROGRAM);
 const realProject = fs.realpathSync(project);
 const exampleRun = path.join(path.dirname(out), `${path.basename(out, '.json')}_example_event.json`);
-fs.writeFileSync(exampleRun, JSON.stringify({ external: 'webhook', credential: 'stripe_events', event: { adapterType: 'webhook', triggerType: 'webhook', payload: example } }));
+// The example as @lf/stripe's door keeps a delivery of it (modules/stripe/inbound.ts).
+const keptExample = {
+  payload: { id: example.id, type: example.type, created: null, livemode: example.livemode === true, api_version: example.api_version ?? null, previous_attributes: null, object: example.data.object },
+  tag: 'stripe:event',
+  eventType: example.type,
+};
+fs.writeFileSync(exampleRun, JSON.stringify({ external: 'stripe', credential: 'stripe_account', event: keptExample }));
 
 const handbook = loadHandbook(LF_SRC, PROJECT_MODULES);
 
@@ -62,7 +68,7 @@ When your user asks for one, write ${PROGRAM}. It must pass \`lf check\`; it goe
 ${credentials}
 \`\`\`
 
-- stripe_events: Stripe's webhooks reach it (Stripe signing, with the endpoint's secret). \`lf serve\` prints its URL, and Stripe sends the failed-payment events there.
+- stripe_account: the user's Stripe account, through its connector: Stripe's events reach it (signed with the endpoint's secret), and it reads customers, invoices and subscriptions. \`lf serve\` prints its URL, and Stripe sends the failed-payment events there.
 - crm: the user's CRM, ${process.env.CRM_KIND === 'rest' ? 'Attio, through its connector' : 'over MCP'}.
 - billing_mail: the billing mailbox, billing@ledgerline.io.
 - team_slack: the team's Slack.

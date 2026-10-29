@@ -53,15 +53,23 @@ node build_data.cjs ../../../../listen-fire-site/video/agents/data.js
 
 The video's comparison is a second recording, `compare.sh`, run after
 `capture.sh` (whose review it keeps for the closing note). It records on lf
-built from listen-fire's main (currently 0.12.12, main@05dfcb1564;
-`validatedUnder` reads `0.12.12 (main@05dfcb1564)`; a detached checkout names
-the branch as `LF_BRANCHES=main=<commit>`):
+built from listen-fire's main (a detached checkout names the branch as
+`LF_BRANCHES=main=<commit>`):
 
 ```bash
 SCENARIO=mcp   LF_BIN=<lf binary> LF_SRC=<listen-fire checkout> LF_BRANCHES=main ./compare.sh
 SCENARIO=attio LF_BIN=<lf binary> LF_SRC=<listen-fire checkout> LF_BRANCHES=main ./compare.sh
 node build_data.cjs ../../../../listen-fire-site/video/agents/data.js
 ```
+
+- The current recording is in two parts.
+  - The per-event agent and JavaScript were recorded on 0.12.12,
+    main@05dfcb1564. They do not run lf, so the lf build does not affect them.
+  - listen-fire was re-recorded on main@8c9e723606 (0.12.12 plus
+    `@lf/stripe`), with `ONLY_LF=1`. `validatedUnder` reads that build.
+- `ONLY_LF=1` re-records listen-fire alone. It keeps the scenario's
+  `capture/agent` and `capture/js` as they are and makes everything else anew.
+  The events are the same each time, because `make_events.cjs` is seeded.
 
 It is recorded twice, in two scenarios, all three options in each, so that
 each comparison is like for like (`SCENARIO`; outputs in
@@ -100,10 +108,25 @@ or acts.
   the listen-fire-builder skill unchanged (the platform's
   `apps/web/skill-src` copy; listen-fire's own went with the split), the
   handbook, `lf check` and a dry run.
+  - Stripe is connected through listen-fire's Stripe module, `@lf/stripe`
+    (credential `stripe_account`: an API key and the endpoint's signing
+    secret). The program listens with
+    `listen to pay { events: ["invoice.payment_failed"] }` and reads typed
+    Invoice fields, amounts already in major units with their `Currency`.
+  - The module's reads beyond the event (an invoice's customer or
+    subscription) reach listen-fire's own fake Stripe API, seeded with the same
+    customers (`stripe_api.cjs`; every read is kept in
+    `capture/stripe_reads.jsonl`).
+  - Before this, listen-fire used the generic `@lf/webhook` with a
+    hand-declared Stripe payload. The JavaScript and agent options are
+    unchanged.
 
 Delivery is the same for JavaScript and listen-fire: each delivery is stored
 and acknowledged before it runs (the sandbox endpoint; `lf serve
---doors-only` and the host's worker, `lf drain`). A failed run is not run
+--doors-only` and the host's worker, `lf drain`). Every option gets the same
+events, signed the same way (`Stripe-Signature`). listen-fire's go to
+`@lf/stripe`'s door (`/hooks/stripe/stripe_account`), which checks that
+signature itself. A failed run is not run
 again by itself: the host wakes the agent (`wake.cjs`), a live session that
 may inspect, fix, deliberately run it again, or tell the user. JavaScript's
 agent runs it again by replaying the stored event through the live handler;
@@ -126,6 +149,9 @@ new title, on every record.
 
 `measure.cjs` measures each handler and program (lines, decision points,
 hand-rolled concerns, I/O sites, credentials); its method is at its top.
+A line of a multi-line JavaScript template string counts as a line. An
+earlier version dropped such a line when it had no `${…}` and no closing
+quote (the retry email's "We'll try again…" line).
 
 JavaScript and listen-fire are authored three times each from the same state,
 and every attempt goes through the stressors; the video shows the first.
@@ -163,7 +189,8 @@ The review recording (`capture.sh`) predates this: its request says "yearly"
 - `agent_tools.cjs`, `review.cjs`, `baseline.cjs`: the review and the per-event agent;
   `prompts.cjs`, `author_js.cjs`, `sandbox.cjs`, `author_lf.cjs`, `handbook.cjs`,
   `wake.cjs`, `measure.cjs`: the comparison's agents and measures;
-  `receivers.cjs`, `stress.cjs`: its webhook endpoints and host
+  `receivers.cjs`, `stress.cjs`, `stripe_api.cjs`: its webhook endpoints,
+  host and the Stripe API that `@lf/stripe` reads
   (`stripe_sender.cjs` is the previous round's sender). The
   review's tools are the program file, `lf check`, `lf runs`, `lf runs show`
   and the CRM's MCP tools. The per-event agent's tools are the CRM's MCP tools,

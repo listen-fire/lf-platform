@@ -129,10 +129,18 @@ async function wake({ kind, reason, js, lf }) {
         case 'lf_deliveries':
           return run(['deliveries']);
         case 'test_run': {
-          const shown = spawnSync(process.env.LF_BIN || 'lf', ['runs', 'show', String(input.run_id), '--json'], { cwd: lf.project, encoding: 'utf8' });
-          const event = JSON.parse(shown.stdout).run.event;
+          // The run's event as its delivery keeps it (external, credential,
+          // event: what the door made of it, its type included).
+          const json = (args) => JSON.parse(spawnSync(process.env.LF_BIN || 'lf', [...args, '--json'], { cwd: lf.project, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).stdout);
+          const { deliveryId } = json(['runs', 'show', String(input.run_id)]).run;
+          const kept = [];
+          (function find(x) {
+            if (Array.isArray(x)) x.forEach(find);
+            else if (x && typeof x === 'object') (typeof x.external === 'string' && x.event ? kept.push(x) : Object.values(x).forEach(find));
+          })(json(['deliveries', 'show', deliveryId]));
+          if (kept.length !== 1) return `run ${input.run_id}'s delivery ${deliveryId} keeps ${kept.length} events; test_run takes a run whose delivery keeps one`;
           const f = path.join(lf.scratch, `test_${input.run_id}.json`);
-          fs.writeFileSync(f, JSON.stringify({ external: 'webhook', credential: 'stripe_events', event: { adapterType: event.adapterType, triggerType: event.triggerType, payload: event.payload } }));
+          fs.writeFileSync(f, JSON.stringify({ external: kept[0].external, credential: kept[0].credential, event: kept[0].event }));
           return run(['run', '--event', f, '--dry-run']);
         }
         case 'lf_rerun': {
