@@ -10,7 +10,10 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 // eslint-disable-next-line prefer-const
-let mockTrigger: { created_by_user_id: string | null } | undefined = {
+let mockTrigger: { id: string; kind: string; config: unknown; created_by_user_id: string | null } | undefined = {
+  id: 'trigger-1',
+  kind: 'cron',
+  config: {},
   created_by_user_id: 'user-author',
 };
 // eslint-disable-next-line prefer-const
@@ -33,18 +36,38 @@ jest.mock('../../../../lib/kysely', () => {
   };
 });
 
+// Who an email's message resolves to — the resolution `@user_*` reads.
+// eslint-disable-next-line prefer-const
+let mockEmailActor: { id: string; email: string } | null = null;
+const mockResolveActingUser = jest.fn(async (input: { getCandidates: () => Promise<unknown[]> }) => {
+  await input.getCandidates();
+  return mockEmailActor;
+});
+jest.mock('../../adapters/acting_user/resolve', () => ({
+  resolveActingUser: (input: { getCandidates: () => Promise<unknown[]> }) => mockResolveActingUser(input),
+}));
+
 import type { TeamId } from '../../../../generated/kysely/core/Team';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 
 import { Context, currentContext, unsafeCurrentContext } from '../../../context';
 import { withFiringContext } from '../firing_context';
 import { userPrincipal } from '../../../principal';
 
 const TEAM = 'team-1' as TeamId;
-const firing = { teamId: TEAM, triggerId: 'trigger-1' };
+const event: TriggerEvent = {
+  pipelineInputId: 'trigger:trigger-1',
+  adapterType: 'email',
+  triggerType: 'webhook',
+  payload: { sender: 'founder@startup.com', subject: 'Our seed round' },
+};
+const firing = { teamId: TEAM, triggerId: 'trigger-1', event };
 
 beforeEach(() => {
-  mockTrigger = { created_by_user_id: 'user-author' };
+  mockTrigger = { id: 'trigger-1', kind: 'cron', config: {}, created_by_user_id: 'user-author' };
   mockMembers = [{ user_id: 'user-author', access: 'write' }];
+  mockEmailActor = null;
+  mockResolveActingUser.mockClear();
 });
 
 describe('withFiringContext', () => {
@@ -84,13 +107,59 @@ describe('withFiringContext', () => {
   });
 
   it('still runs the firing when there is nobody to act as', async () => {
-    mockTrigger = { created_by_user_id: null };
+    mockTrigger = { id: 'trigger-1', kind: 'cron', config: {}, created_by_user_id: null };
     mockMembers = [];
 
     const ran = await withFiringContext(firing, async () => 'ran');
 
     expect(ran).toBe('ran');
     expect(unsafeCurrentContext()).toBeUndefined();
+  });
+});
+
+// An email run acts as whoever its message resolves to — the sender on the
+// team, or a public inbox's claimant — never as the listener's author unless
+// the message resolves to nobody. The same person `@user_*` reports.
+describe('an email listener’s firing', () => {
+  beforeEach(() => {
+    mockTrigger = { id: 'trigger-1', kind: 'email', config: { key: 'deals' }, created_by_user_id: 'user-author' };
+    mockMembers = [
+      { user_id: 'user-author', access: 'write' },
+      { user_id: 'user-claimant', access: 'write' },
+    ];
+  });
+
+  it('acts as whoever the message resolves to, from the run’s own event', async () => {
+    mockEmailActor = { id: 'user-claimant', email: 'claimant@team.com' };
+
+    const seen = await withFiringContext(firing, async () => currentContext().user.id);
+
+    expect(seen).toBe('user-claimant');
+    expect(mockResolveActingUser).toHaveBeenCalledWith(
+      expect.objectContaining({
+        teamId: TEAM,
+        trigger: { id: 'trigger-1', kind: 'email', config: { key: 'deals' }, createdByUserId: 'user-author' },
+      }),
+    );
+  });
+
+  it('holds for a listener stored under a legacy email kind', async () => {
+    mockTrigger = { id: 'trigger-1', kind: 'CUSTOM_EMAIL', config: { key: 'deals' }, created_by_user_id: 'user-author' };
+    mockEmailActor = { id: 'user-claimant', email: 'claimant@team.com' };
+
+    await expect(withFiringContext(firing, async () => currentContext().user.id)).resolves.toBe('user-claimant');
+  });
+
+  it('falls back to the author when the message resolves to nobody', async () => {
+    await expect(withFiringContext(firing, async () => currentContext().user.id)).resolves.toBe('user-author');
+  });
+
+  it('leaves every other listener as before, without asking the message', async () => {
+    mockTrigger = { id: 'trigger-1', kind: 'cron', config: {}, created_by_user_id: 'user-author' };
+    mockEmailActor = { id: 'user-claimant', email: 'claimant@team.com' };
+
+    await expect(withFiringContext(firing, async () => currentContext().user.id)).resolves.toBe('user-author');
+    expect(mockResolveActingUser).not.toHaveBeenCalled();
   });
 });
 

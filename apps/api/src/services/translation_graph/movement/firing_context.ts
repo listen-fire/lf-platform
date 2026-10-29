@@ -11,15 +11,35 @@
 //
 // So the Context is established HERE, at the seam every firing passes through,
 // rather than in each worker — a seventh worker cannot forget it.
+//
+// An email run acts as the person the message itself resolves to — the sender
+// when they are on the team, or whoever claimed a public inbox's key — by the
+// same resolution the run's `@user_*` reads, so the identity a run's services
+// use and the user it reports are one person, on a fresh firing and on every
+// resume of it (each is handed the run's original event).
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
+import type { ActingUser } from 'movement-engine/public/adapter';
+import type { ActingUserTriggerContext } from '../adapters/acting_user_shared';
 
 import { Context, unsafeCurrentContext } from '../../context';
 import { runInSystemContext } from '../../context/utils';
 import { userPrincipal } from '../../principal';
 import { logger } from 'movement-engine/public/log';
 import { getAutomationsQb, getCoreQb } from '../../../lib/kysely';
+import { resolveActingUser } from '../adapters/acting_user/resolve';
+import { createEmailAdapter, EMAIL_ADAPTER_TYPE } from '../adapters/email';
+import { resolveAdapterSlug } from '../adapters/registry';
+
+/** What a firing is, as far as who it acts as goes. */
+interface Firing {
+  teamId: TeamId;
+  triggerId: string;
+  /** The event the run fired on; a resume is handed the original. */
+  event: TriggerEvent;
+}
 
 /**
  * Run one firing inside a Context bound to its team. A Context already in
@@ -27,7 +47,7 @@ import { getAutomationsQb, getCoreQb } from '../../../lib/kysely';
  * person who asked for it, never re-attributed to the listener's author.
  */
 async function withFiringContext<T>(
-  firing: { teamId: TeamId; triggerId: string },
+  firing: Firing,
   fn: () => Promise<T>,
 ): Promise<T> {
   if (unsafeCurrentContext() !== undefined) return fn();
@@ -60,23 +80,47 @@ async function withFiringContext<T>(
 }
 
 /**
- * Who a background firing acts as: the person who authored the listener, while
- * they are still on the team. Failing that, the team's longest-standing member
- * with write access — an authorless or inherited trigger still belongs to the
- * team, and the team is what scopes everything the run touches.
+ * Who a background firing acts as. An email listener's run acts as whoever the
+ * message resolves to (`emailActor`). Any other listener's — and an email whose
+ * message resolves to nobody — acts as the person who authored the listener,
+ * while they are still on the team. Failing that, the team's longest-standing
+ * member with write access — an authorless or inherited trigger still belongs
+ * to the team, and the team is what scopes everything the run touches.
  */
-async function firingActor(firing: {
-  teamId: TeamId;
-  triggerId: string;
-}): Promise<string | undefined> {
+async function firingActor(firing: Firing): Promise<string | undefined> {
   const trigger = await getAutomationsQb(['trigger'])
     .selectFrom('trigger')
-    .select('created_by_user_id')
+    .select(['id', 'kind', 'config', 'created_by_user_id'])
     .where('id', '=', firing.triggerId as TriggerId)
     .executeTakeFirst();
-  return teamActor({
-    teamId: firing.teamId,
-    preferredUserId: (trigger?.created_by_user_id as unknown as string | null) ?? null,
+  const createdByUserId = trigger?.created_by_user_id ?? null;
+  const sender =
+    trigger === undefined
+      ? null
+      : await emailActor({
+          teamId: firing.teamId,
+          trigger: { id: trigger.id, kind: trigger.kind, config: trigger.config, createdByUserId },
+          event: firing.event,
+        });
+  if (sender !== null) return sender.id;
+  return teamActor({ teamId: firing.teamId, preferredUserId: createdByUserId });
+}
+
+/**
+ * Who an email listener's run acts as: the resolution the run's `@user_*`
+ * reads — the message's sender when they are on the team, else whoever claimed
+ * the key as a public inbox. Null for any other listener.
+ */
+async function emailActor(input: {
+  teamId: TeamId;
+  trigger: ActingUserTriggerContext;
+  event: TriggerEvent;
+}): Promise<ActingUser | null> {
+  if (resolveAdapterSlug(input.trigger.kind) !== EMAIL_ADAPTER_TYPE) return null;
+  return resolveActingUser({
+    teamId: input.teamId,
+    trigger: input.trigger,
+    getCandidates: () => createEmailAdapter({ teamId: input.teamId }).getActorCandidates({ event: input.event }),
   });
 }
 
