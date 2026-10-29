@@ -10,15 +10,26 @@
 // Three questions, in order (carve D32):
 //
 //   1. Is it really Mailgun?     HMAC(apiKey, timestamp + token) === signature.
-//   2. Whose team is this?       The SENDER's. External senders are refused —
-//                                a `<local>+<key>@` address is a user-chosen
-//                                slug, guessable by anyone, so the recipient
-//                                cannot be the thing that authorises a metered
-//                                run.
-//   3. Which team, if several?   The routing key is unique only WITHIN a team,
-//                                so a sender who belongs to more than one team
-//                                is disambiguated by which team owns a trigger
-//                                for that key. Two owners = ambiguous = dropped.
+//   2. Whose team is this?       First, the ADDRESS's, when a team has claimed
+//                                its `<local>+<key>@` key as a public inbox
+//                                (`public_inbox.ts`): that team gets the mail,
+//                                whoever sent it. Otherwise the SENDER's, and
+//                                external senders are refused — a key is a
+//                                user-chosen slug, guessable by anyone, so an
+//                                unclaimed one cannot be the thing that
+//                                authorises a metered run.
+//   3. Which team, if several?   A public key belongs to one team (the claim
+//                                is unique), so this is only asked of a
+//                                sender: their routing key is unique only
+//                                WITHIN a team, so a sender who belongs to
+//                                more than one team is disambiguated by which
+//                                team owns a trigger for that key. Two owners
+//                                = ambiguous = dropped.
+//
+// Who the run acts as follows the same split. On a public inbox it is the
+// sender when they are a member of the claiming team, and otherwise whoever
+// claimed the key — as a Gmail run acts as the mailbox's owner. On every other
+// key it is the sender, exactly as before.
 //
 // The sender is resolved through two sources, mirroring what the columns it
 // replaced did: the Directory answers for login addresses (core-owned identity,
@@ -41,6 +52,7 @@ import { logger } from 'movement-engine/public/log';
 import { sendSlackNotification } from '../../../../lib/slack';
 import { findTriggerByInboundKey } from '../../storage/tg_table';
 import { principalDirectory } from '../../../principal';
+import { findPublicInbox, type PublicInbox } from './public_inbox';
 
 /** The trigger kinds an inbound email may dispatch. */
 const INBOUND_EMAIL_TRIGGER_KINDS = ['CUSTOM_EMAIL', 'MAILGUN', 'INBOUND_EMAIL'];
@@ -254,6 +266,69 @@ async function routeByKey(
   return matches;
 }
 
+// ── A public inbox: the address answers, whoever sent it ──────────────────
+
+/**
+ * Mail to a key a team claimed as public is that team's. The run acts as the
+ * sender when they are a member of the team — the same sender resolution as
+ * the rest of the door, narrowed to this one team, so a colleague writing to
+ * the deal inbox is still themselves — and otherwise as whoever claimed the
+ * key, while they may still act for the team. A claimant who may not has
+ * nobody to stand in for them, so the message is refused rather than run as
+ * an arbitrary member.
+ */
+async function routePublicInbox(message: RoutableMessage, inbox: PublicInbox): Promise<InboundEmailDecision> {
+  const recognised = await recogniseAddresses(message.senderCandidates);
+  const identifier = recognised[0]?.address ?? message.senderCandidates[0] ?? '';
+  const member = (await admissible(await associationsFor(recognised))).find(
+    (association) => association.teamId === inbox.teamId,
+  );
+
+  let userId = member?.userId;
+  if (userId === undefined) {
+    const claimant = await principalDirectory().userById({ id: inbox.claimedByUserId, teamId: inbox.teamId });
+    if (claimant?.hasAccess !== true) {
+      logger.warn('[InboundEmail] dropped mail to a public inbox whose claimant may no longer act for the team', {
+        sender: identifier,
+        key: inbox.key,
+        teamId: inbox.teamId,
+        claimant: inbox.claimedByUserId,
+      });
+      await sendSlackNotification({
+        type: 'SUPPORT',
+        text: `Inbound email from ${identifier} to public inbox "${inbox.key}" was not routed: whoever claimed it may no longer act for team ${inbox.teamId}. Someone on the team should claim it again.`,
+        opsTitle: `Public inbox "${inbox.key}" has no claimant who can act for its team`,
+      });
+      return { outcome: 'refused', status: 201 };
+    }
+    userId = inbox.claimedByUserId;
+    // Worth a line: the one arm where mail from outside starts a team's
+    // automation, and who it ran as is the first thing anybody asks.
+    logger.info('[InboundEmail] routed mail from outside the team to its public inbox', {
+      sender: identifier,
+      key: inbox.key,
+      teamId: inbox.teamId,
+      actsAs: userId,
+    });
+  }
+
+  const trigger = await findTriggerByInboundKey({
+    teamId: inbox.teamId,
+    kinds: INBOUND_EMAIL_TRIGGER_KINDS,
+    key: inbox.key,
+  });
+  return {
+    outcome: 'routed',
+    userId,
+    teamId: inbox.teamId,
+    route: {
+      teamId: inbox.teamId,
+      key: inbox.key,
+      trigger: trigger === null ? null : { id: trigger.id, kind: trigger.kind },
+    },
+  };
+}
+
 // ── The door ───────────────────────────────────────────────────────────────
 
 /**
@@ -261,6 +336,10 @@ async function routeByKey(
  * this is, and which of that team's triggers (if any) the address names.
  */
 async function routeInboundEmail(message: RoutableMessage): Promise<InboundEmailDecision> {
+  const key = inboundKeyFrom(message.recipients);
+  const inbox = key === null ? null : await findPublicInbox(key);
+  if (inbox !== null) return routePublicInbox(message, inbox);
+
   const recognised = await recogniseAddresses(message.senderCandidates);
   const identifier = recognised[0]?.address ?? message.senderCandidates[0] ?? '';
   let associations = await admissible(await associationsFor(recognised));
@@ -280,7 +359,6 @@ async function routeInboundEmail(message: RoutableMessage): Promise<InboundEmail
     return { outcome: 'refused', status: 201 };
   }
 
-  const key = inboundKeyFrom(message.recipients);
   const primary = associations[0];
 
   if (key === null) {

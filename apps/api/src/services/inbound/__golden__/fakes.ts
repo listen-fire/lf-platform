@@ -73,6 +73,10 @@ export function kyselyFake(): AnyRecord {
         const wanted = Array.isArray(addresses) ? addresses.map((entry) => String(entry).toLowerCase()) : [];
         return world.mailRoutes.filter((row) => wanted.includes(row.address.toLowerCase()));
       }
+      if (table === 'public_inbox' && op === 'select') {
+        const key = String(whereValue(steps, 'key')).toLowerCase();
+        return world.mailPublicInboxes.find((row) => row.key.toLowerCase() === key);
+      }
       record({ kind: 'db', op, table, steps: plain(steps) });
       return undefined;
     });

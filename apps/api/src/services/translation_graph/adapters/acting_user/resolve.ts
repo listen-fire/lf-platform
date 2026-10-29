@@ -15,7 +15,10 @@
 //   4. Creator fallback (Slack/Attio) — if
 //      `trigger.config.fallbackToCreatorIfActorUnregistered` and the
 //      trigger has a creator, authenticate as the creator.
-//   5. Otherwise → null. The dispatcher rejects.
+//   5. Public inbox (email) — a listener on a key the team claimed to take
+//      mail from anyone acts as whoever claimed it, as a Gmail run acts as
+//      the mailbox's owner (`adapters/email/public_inbox.ts`).
+//   6. Otherwise → null. The dispatcher rejects.
 //
 // The candidate thunk is invoked LAZILY (after the override short-circuit)
 // so an override-on dispatch never pays the Slack/Attio actor-email API
@@ -32,6 +35,7 @@ import {
   readCreatorFallbackConfig,
   type ActingUserTriggerContext,
 } from '../acting_user_shared';
+import { publicInboxActor } from '../email/public_inbox';
 
 export async function resolveActingUser(input: {
   teamId: TeamId;
@@ -88,6 +92,10 @@ export async function resolveActingUser(input: {
     return await loadActingUserById(input.trigger.createdByUserId);
   }
 
-  // 5. No signal — reject.
+  // 5. Public inbox — the sender is nobody on the team, by design.
+  const claimant = await publicInboxActor({ teamId: input.teamId, trigger: input.trigger });
+  if (claimant) return claimant;
+
+  // 6. No signal — reject.
   return null;
 }

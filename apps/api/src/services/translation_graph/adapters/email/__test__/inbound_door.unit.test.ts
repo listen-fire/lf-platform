@@ -23,17 +23,26 @@ interface Association {
   userId: string;
 }
 
+/** A key a team claimed as a public inbox, as the claims table holds it. */
+interface PublicInboxRow {
+  key: string;
+  teamId: string;
+  claimedByUserId: string;
+}
+
 const state: {
   routes: RouteRow[];
   associations: Record<string, Association[]>;
   access: Record<string, boolean>;
   triggers: Record<string, { id: string; kind: string }>;
+  publicInboxes: PublicInboxRow[];
   slack: { text: string }[];
 } = {
   routes: [],
   associations: {},
   access: {},
   triggers: {},
+  publicInboxes: [],
   slack: [],
 };
 
@@ -88,6 +97,14 @@ jest.mock('../../../storage/tg_table', () => ({
     state.triggers[`${teamId} ${key}`] ?? null,
 }));
 
+// Case-insensitive, as the citext column is.
+jest.mock('../public_inbox', () => ({
+  findPublicInbox: async (key: string) => {
+    const row = state.publicInboxes.find((inbox) => inbox.key.toLowerCase() === key.toLowerCase());
+    return row === undefined ? null : { ...row, createdAt: new Date(0), address: null };
+  },
+}));
+
 jest.mock('../../../../../lib/slack', () => ({
   sendSlackNotification: async (notification: { text: string }) => {
     state.slack.push(notification);
@@ -134,6 +151,7 @@ beforeEach(() => {
   state.associations = {};
   state.access = {};
   state.triggers = {};
+  state.publicInboxes = [];
   state.slack = [];
   process.env.TEST_HARNESS_TEAM_ID = 'harness';
   // The routing address is the deployment's, not a constant — these fixtures
@@ -315,6 +333,125 @@ describe('which team, when the sender belongs to several', () => {
       outcome: 'routed',
       teamId: TEAM,
       route: { key: 'unknown', trigger: null },
+    });
+  });
+});
+
+describe('a public inbox: the address answers, whoever sent it', () => {
+  /** TEAM holds `key` as a public inbox, claimed by `claimant`, who may act for it. */
+  function publicInbox(key: string, claimant = 'claimant-1'): void {
+    state.publicInboxes.push({ key, teamId: TEAM, claimedByUserId: claimant });
+    state.access[`${claimant} ${TEAM}`] = true;
+  }
+
+  it('routes a stranger to the claiming team, acting as whoever claimed the key', async () => {
+    publicInbox('deals');
+    state.triggers[`${TEAM} deals`] = { id: 'trigger-deals', kind: 'email' };
+
+    const decision = await verifyInboundEmailRequest(
+      request(signed({ sender: 'founder@brand-new-startup.com', To: 'inbox+deals@example.com' })),
+    );
+
+    expect(decision).toEqual({
+      outcome: 'routed',
+      teamId: TEAM,
+      userId: 'claimant-1',
+      route: { teamId: TEAM, key: 'deals', trigger: { id: 'trigger-deals', kind: 'email' } },
+    });
+    expect(state.slack).toEqual([]);
+    expect(logs.messages('info').join(' ')).toMatch(/public inbox/);
+  });
+
+  it('acts as the sender when they are a member of the claiming team', async () => {
+    publicInbox('deals');
+    member('ada@example.com', 'user-1');
+    state.triggers[`${TEAM} deals`] = { id: 'trigger-deals', kind: 'email' };
+
+    const decision = await verifyInboundEmailRequest(
+      request(signed({ sender: 'ada@example.com', To: 'inbox+deals@example.com' })),
+    );
+
+    expect(decision).toMatchObject({ outcome: 'routed', teamId: TEAM, userId: 'user-1' });
+  });
+
+  it('gives a member of another team the claiming team, acting as the claimant', async () => {
+    publicInbox('deals');
+    member('bob@other.com', 'user-2', OTHER_TEAM);
+    // Bob's own team listens on the same key: the claim still decides.
+    state.triggers[`${OTHER_TEAM} deals`] = { id: 'trigger-other', kind: 'email' };
+    state.triggers[`${TEAM} deals`] = { id: 'trigger-deals', kind: 'email' };
+
+    const decision = await verifyInboundEmailRequest(
+      request(signed({ sender: 'bob@other.com', To: 'inbox+deals@example.com' })),
+    );
+
+    expect(decision).toMatchObject({
+      outcome: 'routed',
+      teamId: TEAM,
+      userId: 'claimant-1',
+      route: { trigger: { id: 'trigger-deals' } },
+    });
+  });
+
+  it('matches the key in whatever case the sender typed it', async () => {
+    publicInbox('deals');
+    state.triggers[`${TEAM} deals`] = { id: 'trigger-deals', kind: 'email' };
+
+    const decision = await verifyInboundEmailRequest(
+      request(signed({ sender: 'founder@brand-new-startup.com', To: 'inbox+DEALS@example.com' })),
+    );
+
+    expect(decision).toMatchObject({ outcome: 'routed', route: { key: 'deals', trigger: { id: 'trigger-deals' } } });
+  });
+
+  it('routes a claimed key nothing listens on to its team, which quarantines it', async () => {
+    publicInbox('deals');
+
+    const decision = await verifyInboundEmailRequest(
+      request(signed({ sender: 'founder@brand-new-startup.com', To: 'inbox+deals@example.com' })),
+    );
+
+    expect(decision).toMatchObject({ outcome: 'routed', teamId: TEAM, route: { key: 'deals', trigger: null } });
+  });
+
+  it('refuses rather than act as a claimant who may no longer act for the team', async () => {
+    publicInbox('deals');
+    state.access[`claimant-1 ${TEAM}`] = false;
+
+    const decision = await verifyInboundEmailRequest(
+      request(signed({ sender: 'founder@brand-new-startup.com', To: 'inbox+deals@example.com' })),
+    );
+
+    expect(decision).toEqual({ outcome: 'refused', status: 201 });
+    expect(logs.messages('warn').join(' ')).toMatch(/claimant may no longer act/);
+    expect(state.slack[0].text).toMatch(/claim it again/);
+  });
+
+  it('still refuses a stranger writing to a key nobody claimed', async () => {
+    publicInbox('deals');
+
+    const decision = await verifyInboundEmailRequest(
+      request(signed({ sender: 'founder@brand-new-startup.com', To: 'inbox+private@example.com' })),
+    );
+
+    expect(decision).toEqual({ outcome: 'refused', status: 201 });
+    expect(state.slack[0].text).toMatch(/Unrecognised inbound email/);
+  });
+
+  it('leaves a known sender on an unclaimed key exactly where they routed before', async () => {
+    publicInbox('deals');
+    member('ada@example.com', 'user-1');
+    state.triggers[`${TEAM} notes`] = { id: 'trigger-notes', kind: 'email' };
+
+    const decision = await verifyInboundEmailRequest(
+      request(signed({ sender: 'ada@example.com', To: 'inbox+notes@example.com' })),
+    );
+
+    expect(decision).toEqual({
+      outcome: 'routed',
+      teamId: TEAM,
+      userId: 'user-1',
+      route: { teamId: TEAM, key: 'notes', trigger: { id: 'trigger-notes', kind: 'email' } },
     });
   });
 });
