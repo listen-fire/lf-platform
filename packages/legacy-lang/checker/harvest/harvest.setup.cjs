@@ -66,6 +66,11 @@ const integerOf = (version) => (/^\d+$/.test(String(version)) ? Number(version) 
 // This copy's spelling of the 0.12 surface, which a release pin's check is
 // recorded under (legacy-lang language_version.ts).
 const DIALECT = 5;
+const dialectOf = (pin) => {
+  if (pin === undefined) return undefined;
+  if (/^\d+$/.test(String(pin))) return Number(pin);
+  return jest.requireActual(RELEASE_VERSION).compatible(pin) ? DIALECT : null;
+};
 
 // The source (and parse version) behind each Program, by identity: the record
 // carries the exact text, never a re-serialised AST.
@@ -78,7 +83,9 @@ jest.mock(RUST_PARSE, () => {
   const actual = jest.requireActual(RUST_PARSE);
   const rustParseProgram = (source, languageVersion) => {
     const parsed = actual.rustParseProgram(source, languageVersion);
-    if (parsed.ok) parsedFrom.set(parsed.value, { source, version: integerOf(languageVersion) });
+    // A program parsed under a release pin is a version 5 program here, as the
+    // checks recorded under it are (the pin's schema holds integers only).
+    if (parsed.ok) parsedFrom.set(parsed.value, { source, version: dialectOf(languageVersion) ?? integerOf(languageVersion) });
     return parsed;
   };
   return { ...actual, rustParseProgram };
@@ -256,11 +263,6 @@ function snapshotOf(catalog, calls, served) {
 // from one release to another) is recorded as skipped, by name.
 jest.mock(RUST_CHECK, () => {
   const actual = jest.requireActual(RUST_CHECK);
-  const dialectOf = (pin) => {
-    if (pin === undefined) return undefined;
-    if (/^\d+$/.test(String(pin))) return Number(pin);
-    return jest.requireActual(RELEASE_VERSION).compatible(pin) ? DIALECT : null;
-  };
   const checkSourceInRust = (source, snapshot, options) => {
     const result = actual.checkSourceInRust(source, snapshot, options);
     const version = dialectOf(options.languageVersion);
