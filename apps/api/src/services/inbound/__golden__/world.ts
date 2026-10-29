@@ -90,6 +90,8 @@ export interface World {
   mailMembers: Record<string, { teamId: string; userId: string }[]>;
   mailAccess: Record<string, boolean>;
   mailKeyTriggers: Record<string, { id: string; kind: string }>;
+  /** Keys a team claimed as public inboxes: read before the sender is. */
+  mailPublicInboxes: { key: string; team_id: string; claimed_by_user_id: string; created_at: Date }[];
   /** Rows the valuations webhook_subscription table holds for the calling team. */
   valuationsRows: Record<string, unknown>[];
 }
@@ -148,6 +150,7 @@ export function freshWorld(): World {
     mailMembers: {},
     mailAccess: {},
     mailKeyTriggers: {},
+    mailPublicInboxes: [],
     valuationsRows: [],
   };
 }

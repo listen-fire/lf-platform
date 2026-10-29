@@ -899,6 +899,16 @@ Either way you also set `INBOUND_EMAIL_ADDRESS` — the address automations rece
 
 Sending needs the from-address plus a provider's credentials in full; missing any of them, production gets a loudly-failing sender rather than mail that quietly evaporates.
 
+**Who may send to it.** Mail to `<local>+<key>@` is accepted from members of a team, and goes to the sender's team: the key is a guessable slug, so it authorises nothing by itself. A team that wants one key to take mail from anyone (a deal inbox) claims it as a public inbox. Mail to a claimed key goes to that team whoever sent it. The run acts as the sender when they are a member of the team, otherwise as whoever claimed the key. Anyone who learns the address can then start the automations listening on that key; there is no rate limit or spam filter on it. A key is held by one team at a time, and a claim on a key another team holds is refused. Claim from the automation connector (`claimPublicInbox`, `releasePublicInbox`, `listPublicInboxes`), or as the operator:
+
+```
+pnpm cli public-inbox --team <uuid>                                   # list
+pnpm cli public-inbox --team <uuid> --claim deals --by ada@example.com
+pnpm cli public-inbox --team <uuid> --release deals
+```
+
+Upgrading an installation whose automations opened an address with `from: "anyone"` on the listen: the migration claims each such key for its team, so the mail keeps arriving with nothing to do. The run acts as the automation's author, or else the last person still on the team who saved it. A key two teams opened, or one with nobody on its team to act as, is left unclaimed; the migration's log line counts both. The `from` key itself stays in the automation's text and is reported as a warning.
+
 Nothing to re-authorise — but any address automations used to receive on is now a different address, so whoever mails into it has to be told.
 
 ### Cutover cannot be fully parallel-run

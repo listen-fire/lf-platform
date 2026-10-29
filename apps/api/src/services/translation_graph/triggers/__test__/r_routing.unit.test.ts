@@ -236,6 +236,22 @@ describe('R — trigger-first dispatch wiring', () => {
       expect(door).toMatch(/matches\.length > 1/);
     });
 
+    it('asks whether a team claimed the key as a public inbox before it asks who sent it', () => {
+      // A public key's team is the claim's, so the claim is read first and
+      // the sender only decides who the run acts as.
+      const route = extractFunction(door, 'routeInboundEmail');
+      expect(route.indexOf('findPublicInbox(')).toBeGreaterThan(-1);
+      expect(route.indexOf('findPublicInbox(')).toBeLessThan(route.indexOf('recogniseAddresses('));
+    });
+
+    it('lets mail to a public inbox past the sender gate, and nothing else', () => {
+      // `resolveActingUser` maps a SENDER to a team user; on a public inbox a
+      // stranger has no such mapping and finding none is the expected case.
+      expect(handler).toMatch(/findPublicInbox\(route\.key\)/);
+      expect(handler).toMatch(/inbox\?\.teamId !== teamId/);
+      expect(handler).toMatch(/resolveActingUser\(/);
+    });
+
     it('no longer falls back to the retired pipeline_input scan', () => {
       expect(handler).not.toMatch(/PipelineInputType\.CUSTOM_EMAIL/);
       expect(handler).not.toMatch(/routes_to_pipeline_input_id/);

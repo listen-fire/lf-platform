@@ -20,6 +20,7 @@ import {
 import { fetchResendEmailPayload } from '../../services/translation_graph/adapters/email/resend_inbound';
 import { readMailgunMessage, readResendEnvelope, resendEnvelopeRecipients } from '@listen-fire/email';
 import { resolveActingUser } from '../../services/translation_graph/adapters/acting_user/resolve';
+import { findPublicInbox } from '../../services/translation_graph/adapters/email/public_inbox';
 
 /**
  * The team this message belongs to — the one the DOOR already decided from the
@@ -71,34 +72,43 @@ const acceptInboundEmail = async (
   // Auth-passed-but-no-matching-trigger is quarantined below rather than
   // processed: the legacy pipeline this used to fall through to is gone.
   //
+  // A PUBLIC INBOX skips the gate: the team claimed that key to take mail from
+  // anyone, so finding no sender of the team is the expected case, not a
+  // rejection. The door already settled who the run acts as (a member who
+  // sent it, else whoever claimed the key).
+  //
   // The contract seam: every email TriggerEvent built from here on
   // carries the adapter's advertised EmailPayload fields (bodyText,
   // bodyHtml, messageId, typed attachments) merged over the raw body.
-  const emailPayload = email.payload;
-  const emailAdapter = createEmailAdapter({ teamId });
-  const authEvent: TriggerEvent = {
-    pipelineInputId: 'auth-gate',
-    adapterType: EMAIL_ADAPTER_TYPE,
-    triggerType: 'webhook',
-    payload: emailPayload,
-    occurredAt: new Date().toISOString(),
-  };
-  const actingUser = await resolveActingUser({
-    teamId,
-    getCandidates: () => emailAdapter.getActorCandidates({ event: authEvent }),
-  });
-  if (!actingUser) {
-    logger.warn('[InboundEmail] rejected unauthenticated email', {
-      teamId,
-    });
-    return res.status(401).send();
-  }
-
+  //
   // The door already decided all of this during authentication — which team
   // this email belongs to and which of that team's triggers, if any, its
   // `<local>+<key>@` address names. Asking again here would be a second,
   // possibly different, answer to the same question.
   const route = req.inboundEmailRoute;
+  const emailPayload = email.payload;
+  const inbox = route?.key ? await findPublicInbox(route.key) : null;
+  if (inbox?.teamId !== teamId) {
+    const emailAdapter = createEmailAdapter({ teamId });
+    const authEvent: TriggerEvent = {
+      pipelineInputId: 'auth-gate',
+      adapterType: EMAIL_ADAPTER_TYPE,
+      triggerType: 'webhook',
+      payload: emailPayload,
+      occurredAt: new Date().toISOString(),
+    };
+    const actingUser = await resolveActingUser({
+      teamId,
+      getCandidates: () => emailAdapter.getActorCandidates({ event: authEvent }),
+    });
+    if (!actingUser) {
+      logger.warn('[InboundEmail] rejected unauthenticated email', {
+        teamId,
+      });
+      return res.status(401).send();
+    }
+  }
+
   const intendedRecipients = email.recipients;
 
   if (route?.trigger) {

@@ -323,6 +323,12 @@ export const MANIFEST: Record<Product, TableSpec[]> = {
     { table: 'telegram_identity', tenancy: { kind: 'team_column' } },
     { table: 'telegram_token', tenancy: { kind: 'team_column' } },
     { table: 'inbound_email_route', tenancy: { kind: 'team_column' } },
+    {
+      table: 'public_inbox',
+      tenancy: { kind: 'team_column' },
+      exportExcludedBecause:
+        'a public inbox key is unique across a deployment, so carried it could clash with a team already holding it on the target; the team claims its keys again there, where a clash is refused by name',
+    },
     { table: 'team_settings', tenancy: { kind: 'team_column' } },
     {
       table: 'team_engine',

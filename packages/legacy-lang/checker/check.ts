@@ -4093,6 +4093,10 @@ interface RecordUnions {
   withheld: boolean;
 }
 
+/** Every name the email adapter is constructed by (`@listen-fire/email`'s
+ *  `EMAIL_ADAPTER_NAMES`): the neutral one and the providers'. */
+const EMAIL_ADAPTER_NAMES: readonly string[] = ['email', 'mailgun', 'resend'];
+
 class Checker {
   readonly diagnostics: Diagnostic[] = [];
   /** The parser's MOV_V5_SPELLING findings whose fix depends on a type, by
@@ -14499,6 +14503,7 @@ class Checker {
       // already refuses under 5 with the fix.
       const fromFive = since(this.languageVersion, 5);
       const polled = (vocabulary ?? []).includes('pollIntervalSeconds');
+      if (spec && this.retiredInboxSendersKey(arg, adapterName)) continue;
       const known = (vocabulary ?? []).includes(arg.name) || (fromFive && polled && arg.name === 'every');
       if (spec && !known) {
         const accepted = (vocabulary ?? []).map(k => (fromFive && k === 'pollIntervalSeconds' ? 'every' : k));
@@ -15195,6 +15200,37 @@ class Checker {
       });
     }
     return derived.length > 0 ? derived : undefined;
+  }
+
+  /**
+   * `from: "anyone"` / `from: "known"` on an email listen, under pins 1 and 2.
+   *
+   * A fork of the platform let a listen open its address to strangers with
+   * that key, and automations saved there are pinned to 1 or 2 with the key
+   * still in their text. Here the openness is the team's public inbox claim on
+   * the key (the migration that introduced the claims made one for every such
+   * listen), so the key decides nothing. Refusing it would stop those
+   * automations at every run — the engine re-checks each one — and their text
+   * is never rewritten for them, so under the pins they were written at it is
+   * accepted with a warning that says where the decision now lives. Version 3
+   * and later never had it: there it is an unknown key, as before.
+   *
+   * True when the arg was this key (and is now reported), so the caller skips it.
+   */
+  private retiredInboxSendersKey(arg: ListenDeclaration['config'][number], adapterName: string | undefined): boolean {
+    if (arg.name !== 'from' || !before(this.languageVersion, 3)) return false;
+    if (adapterName === undefined || !EMAIL_ADAPTER_NAMES.includes(adapterName)) return false;
+    const values = arg.isType ? undefined : staticStringValues(arg.value, this.languageVersion);
+    const value = values?.length === 1 && !isListSlot(arg.value, this.languageVersion) ? values[0] : undefined;
+    if (value !== 'anyone' && value !== 'known') return false;
+    this.reportWarning(
+      DiagnosticCodes.LISTEN_BAD_CONFIG,
+      value === 'anyone'
+        ? `'from: "anyone"' no longer opens this address by itself: mail from outside the team reaches this key only while the team holds it as a public inbox (claimPublicInbox, or the CLI's public-inbox --claim), and this key is otherwise ignored`
+        : `'from: "known"' is how every email listen behaves: mail is taken from the team's own members unless the team holds the key as a public inbox — the key can be removed`,
+      arg.value.span,
+    );
+    return true;
   }
 
   private checkListenShapeConformance(

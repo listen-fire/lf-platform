@@ -23,6 +23,7 @@ import type { AskId } from '../../../generated/kysely/asks/Ask';
 
 import { answerForTeam, listOpenAsksForTeam } from '../../../services/interaction/answer_surfaces';
 import { mountAutomationToolRoutes } from './knowledge_agent_tools';
+import { mountPublicInboxRoutes } from './public_inbox';
 import { teamSetForReads, teamNames, resolveToolTeam, ToolTeamError } from './team_scope';
 import { emitOpsEvent } from '../../../lib/ops/emit';
 import OpsEventType from '../../../generated/kysely/public/OpsEventType';
@@ -178,6 +179,9 @@ automationRouter.post('/reviews/:id/answer', answerAskHandler);
 
 // feedback → ops feed
 automationRouter.post('/feedback', feedbackHandler);
+
+// public inboxes — inbound keys a team has opened to mail from anyone
+mountPublicInboxRoutes(automationRouter);
 
 // movements, catalog, handbook, connect, teams — shared with the in-app agent.
 mountAutomationToolRoutes(automationRouter);

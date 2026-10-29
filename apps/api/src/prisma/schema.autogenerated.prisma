@@ -541,6 +541,18 @@ model PlatformOwnedToken {
   @@schema("automations")
 }
 
+model PublicInbox {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key             String   @unique @db.Citext
+  teamId          String   @map("team_id") @db.Uuid
+  claimedByUserId String   @map("claimed_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([teamId])
+  @@map("public_inbox")
+  @@schema("automations")
+}
+
 model RecordBinding {
   id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   teamId       String   @map("team_id") @db.Uuid
