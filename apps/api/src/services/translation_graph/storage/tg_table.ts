@@ -83,11 +83,16 @@ export async function loadTriggerById(triggerId: string): Promise<{
  * still key on legacy channel kinds ('CUSTOM_EMAIL', 'MAILGUN'); legacy
  * rows have it the other way round. Expand each requested kind to its
  * canonical slug + sibling kinds so both conventions resolve.
+ *
+ * `keyCase: 'insensitive'` compares the key the way a public inbox's claim
+ * does (citext), so a claim and a listen that spell one key in different case
+ * still meet; a listener spelled exactly as asked wins over another case.
  */
 export async function findTriggerByInboundKey(input: {
   teamId: string;
   kinds: string[];
   key: string;
+  keyCase?: 'exact' | 'insensitive';
 }): Promise<{ id: string; kind: string; credentialsId: string | null } | null> {
   if (input.kinds.length === 0) return null;
   const expanded = Array.from(
@@ -99,13 +104,17 @@ export async function findTriggerByInboundKey(input: {
       ]),
     ),
   );
-  const row = await getAutomationsQb(['trigger'])
+  const query = getAutomationsQb(['trigger'])
     .selectFrom('trigger')
     .where('team_id', '=', input.teamId as TeamId)
     .where('kind', 'in', expanded)
-    .where(sql`config->>'key'`, '=', input.key)
-    .select(['id', 'kind', 'credentials_id'])
-    .executeTakeFirst();
+    .select(['id', 'kind', 'credentials_id']);
+  const row = await (input.keyCase === 'insensitive'
+    ? query
+        .where(sql`(config->>'key')::public.citext`, '=', sql`${input.key}::public.citext`)
+        .orderBy(sql`config->>'key' = ${input.key}`, 'desc')
+    : query.where(sql`config->>'key'`, '=', input.key)
+  ).executeTakeFirst();
   if (!row) return null;
   return {
     id: row.id as unknown as string,

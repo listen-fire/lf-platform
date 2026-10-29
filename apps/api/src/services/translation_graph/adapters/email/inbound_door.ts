@@ -312,10 +312,12 @@ async function routePublicInbox(message: RoutableMessage, inbox: PublicInbox): P
     });
   }
 
+  // The claim is case-insensitive, so the listen it opens is found the same way.
   const trigger = await findTriggerByInboundKey({
     teamId: inbox.teamId,
     kinds: INBOUND_EMAIL_TRIGGER_KINDS,
     key: inbox.key,
+    keyCase: 'insensitive',
   });
   return {
     outcome: 'routed',
