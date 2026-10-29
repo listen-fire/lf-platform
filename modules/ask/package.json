@@ -17,14 +17,14 @@
   "dependencies": {
     "@listen-fire/engine": "catalog:",
     "@listen-fire/engine-contracts": "catalog:",
-    "@listen-fire/module-kit": "0.12.9",
+    "@listen-fire/module-kit": "0.12.10",
     "zod": "4.1.12"
   },
   "devDependencies": {
     "@types/jest": "29.5.14",
     "@types/node": "20.16.5",
     "engine-contracts": "catalog:",
-    "module-kit": "npm:@listen-fire/module-kit@0.12.9",
+    "module-kit": "npm:@listen-fire/module-kit@0.12.10",
     "movement-engine": "catalog:",
     "typescript": "5.5.4"
   },

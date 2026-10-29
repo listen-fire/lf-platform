@@ -17,6 +17,8 @@ versions are the git tags described in [`deploy/UPGRADING.md`](deploy/UPGRADING.
 
 <!-- add merged PRs here -->
 
+- The language core is at 0.12.13 (the catalog block), taking the language's 0.12.12 and 0.12.13 (the language's CHANGELOG). Pinned on their own latest: `anthropic`, `attio`, `judge-llm`, `postgres-limiter` and `wake-cloud-tasks` 0.12.7; `fake-channels`, `handbook` and `whatsapp` 0.12.8; `gmail` and `module-kit` 0.12.10; `mcp` 0.12.11. Every other `@listen-fire/*` package stays on its own latest, unchanged; the `fake-channels` image's `FAKE_CHANNELS_VERSION` is 0.12.8. The language's new `github` and `stripe` modules are not installed.
+
 ## [0.12.11] - 2026-10-27
 
 The platform release that matches the language's 0.12.11. The language's 0.12.10 was never adopted on its own: this release takes both (the language's CHANGELOG, 0.12.10 and 0.12.11).
