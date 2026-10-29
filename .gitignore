@@ -78,3 +78,7 @@ HEALTH.md
 # The packages' builds, never committed
 packages/*/dist/
 modules/*/dist/
+
+# The assembled checks corpus (packages/legacy-lang `pnpm checks:assemble`):
+# the pin plus the program texts the harvest found, rebuilt on every run.
+/target/

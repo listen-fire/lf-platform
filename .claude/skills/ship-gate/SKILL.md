@@ -10,7 +10,8 @@ Gates everything accumulated on local main since the last gate.
 
 ## Procedure
 
-1. Run both, in parallel, in the background (independent processes):
+1. Run these in parallel, in the background (independent processes; the two
+   checks corpus legs below are the exception: sequential, as one chain):
    - Full typecheck: `NODE_OPTIONS=--max-old-space-size=8192 pnpm -r code:type-check`
      (default heap OOMs with exit 134 — that's memory, not a hang).
      NEVER `pnpm -r tsc --noEmit` — no package defines a `tsc` script, so it
@@ -28,10 +29,18 @@ Gates everything accumulated on local main since the last gate.
      `maxWorkers: 1` for interactive runs, and a gate leg of ~240 suites at
      ~12s each takes ~50 min serially (seen 2026-10-05).
    - The checks corpus (every gate that touched the legacy language): in
-     packages/legacy-lang, `pnpm checks:corpus`. It runs the corpus-wide
-     checks that CI does not: the checker regression's full replay (0
-     drifted), the upgrade floor, and reachability. It exits non-zero on any
-     of them.
+     packages/legacy-lang, two sequential legs, each its own background
+     command (together they exceed the 600s ceiling, which is why they are
+     two): first `pnpm checks:assemble` (runs every test corpus with the
+     recorder and assembles target/checks/ at the repository root; about 8
+     minutes), then, once it has finished, `pnpm checks:replay` (reads that
+     assembled corpus). The replay runs the corpus-wide checks that CI does
+     not: the checker regression's full replay (0 drifted), the upgrade
+     floor, and reachability. Either exits non-zero on a failure.
+     `pnpm checks:corpus` runs both back to back, for a human at a terminal.
+     A drifted replay is a pin that no longer matches the checker: re-record
+     it with `pnpm harvest:checks` (an assemble that rewrites the pin) and
+     review the pin diff before committing it.
    - Two tiers of test scope:
      - **Chunk gate** (every gate): only the dirs the chunk touched, plus
        the language-version conformance corpora when the chunk touched the
