@@ -1,19 +1,19 @@
 /**
- * Dev-loop e2e harness for the platform as lf's secrets module, through lf's
+ * Dev-loop e2e harness for the platform as listen-fire's secrets module, through listen-fire's
  * own client of it.
  *
  *   DEV_LOOP_PROFILE=agent pnpm dev:lf-secrets-verify
  *
  * Prerequisites: the agent stack is up (`pnpm dev:loop:agent`) and seeded
- * (`pnpm dev:seed`), and lf >= 0.12.0-rc.9 is `LF_BIN` or on PATH. A key's
+ * (`pnpm dev:seed`), and listen-fire >= 0.12.0-rc.9 is `LF_BIN` or on PATH. A key's
  * plaintext exists only at mint, so this mints its own, as
  * `pnpm dev:lf-secrets-key` does (set `LF_SECRETS_KEY` to use one you hold).
  *
  * What it proves:
- *   1. lf, told by a temporary project that its secrets slot is the platform's
+ *   1. listen-fire, told by a temporary project that its secrets slot is the platform's
  *      door, serves the slot's common and secrets cases and the family's eleven
- *      contract cases from that door's rows (`lf --contract-secrets-slot`);
- *   2. two lf processes refreshing one stale OAuth credential together make one
+ *      contract cases from that door's rows (`listen-fire --contract-secrets-slot`);
+ *   2. two listen-fire processes refreshing one stale OAuth credential together make one
  *      token call, both read the new token, and the platform's row holds it.
  *
  * It prints pass or fail per case, and never the key or a credential field.
@@ -39,15 +39,15 @@ import { rotateLfSecretsKey } from './lib/lf_secrets_key';
 const MIN_LF = { minor: 12, rc: 9 };
 
 function lfBinary(): string {
-  const bin = process.env.LF_BIN ?? 'lf';
+  const bin = process.env.LF_BIN ?? 'listen-fire';
   const reported = execFileSync(bin, ['--version'], { encoding: 'utf8' }).trim();
   const match = /(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?/.exec(reported);
   const older = match === null || Number(match[2]) < MIN_LF.minor || (Number(match[2]) === MIN_LF.minor && match[4] !== undefined && Number(match[4]) < MIN_LF.rc);
-  if (older) throw new Error(`lf >= 0.12.0-rc.9 is required (the secrets slot's contract flag); ${bin} reports "${reported}"`);
+  if (older) throw new Error(`listen-fire >= 0.12.0-rc.9 is required (the secrets slot's contract flag); ${bin} reports "${reported}"`);
   return bin;
 }
 
-/** A project whose secrets slot is the platform's door; the settings reach lf through the environment, as the bootstrap rule has it. */
+/** A project whose secrets slot is the platform's door; the settings reach listen-fire through the environment, as the bootstrap rule has it. */
 function writeProject(doorUrl: string): string {
   const dir = mkdtempSync(join(tmpdir(), 'lf-secrets-verify-'));
   mkdirSync(join(dir, 'externals/platform_secrets'), { recursive: true });
@@ -60,7 +60,7 @@ function writeProject(doorUrl: string): string {
       `url: ${doorUrl}`,
       'auth: { kind: bearer, field: token }',
       'settings:',
-      '  - { name: team, label: the platform team whose credentials lf keeps }',
+      '  - { name: team, label: the platform team whose credentials listen-fire keeps }',
       '',
     ].join('\n'),
   );
@@ -121,13 +121,13 @@ async function main(): Promise<void> {
 
   try {
     for (const conformance of commonSlotCases('secrets', SECRETS_METHODS)) {
-      await check(`lf's client: ${conformance.name}`, () => withRunner((runner) => conformance.run(new SlotClient(runner.address, {}))));
+      await check(`listen-fire's client: ${conformance.name}`, () => withRunner((runner) => conformance.run(new SlotClient(runner.address, {}))));
     }
     for (const conformance of secretsSlotCases) {
-      await check(`lf's client: ${conformance.name}`, () => withRunner((runner) => conformance.run(new SlotClient(runner.address, {}))));
+      await check(`listen-fire's client: ${conformance.name}`, () => withRunner((runner) => conformance.run(new SlotClient(runner.address, {}))));
     }
     for (const contractCase of secretsContractCases) {
-      await check(`lf's client, as a store: ${contractCase.name}`, () =>
+      await check(`listen-fire's client, as a store: ${contractCase.name}`, () =>
         withRunner(async (runner) => {
           const handle = () => new SecretsSlotBackend(runner.address, {});
           const backend: SecretsContractBackend = {
@@ -145,7 +145,7 @@ async function main(): Promise<void> {
       );
     }
 
-    await check('two lf processes refreshing one stale OAuth credential make one token call and both read the new token', async () => {
+    await check('two listen-fire processes refreshing one stale OAuth credential make one token call and both read the new token', async () => {
       const provider = await startFakeOAuthServer({ clientId: 'verify-client', clientSecret: 'verify-client-secret' });
       const [one, two] = [await startRunner(), await startRunner()];
       try {

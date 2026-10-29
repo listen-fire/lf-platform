@@ -1,28 +1,28 @@
 #!/bin/bash
-# The field-service demo, recorded on the open-source `lf` CLI (see README.md).
-# A fresh lf project under .work/, the repository's fakes for WhatsApp, Google
+# The field-service demo, recorded on the open-source `listen-fire` CLI (see README.md).
+# A fresh listen-fire project under .work/, the repository's fakes for WhatsApp, Google
 # Sheets and Slack, the draft refused and the fix checked clean, then two
-# signed WhatsApp deliveries through `lf serve` and what their runs did.
+# signed WhatsApp deliveries through `listen-fire serve` and what their runs did.
 # Every output lands in .work/capture/, which build_data.cjs turns into the
 # video's data.js in the site repo. Re-runnable: each run starts from nothing.
 #
-#   LF_BIN  the lf binary (default: `lf` on PATH, a release)
-#   LF_SRC  a listen-fire checkout. When set, lf serves the modules from its
+#   LF_BIN  the listen-fire binary (default: `listen-fire` on PATH, a release)
+#   LF_SRC  a listen-fire checkout. When set, listen-fire serves the modules from its
 #           sources (LF_MODULES_DIR, and its module kit's serve-module), and
-#           its commit is recorded beside lf's version. The fakes always come
+#           its commit is recorded beside listen-fire's version. The fakes always come
 #           from it (default: the listen-fire checkout beside this repo).
 #
 # The runs make real model calls: ANTHROPIC_API_KEY is read from
-# apps/api/.env and handed to lf through the environment only.
+# apps/api/.env and handed to listen-fire through the environment only.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/../../.." && pwd)"
 WORK="$HERE/.work"
 CAP="$WORK/capture"
 PROJECT="$WORK/field-service"
-LF_BIN="${LF_BIN:-lf}"
+LF_BIN="${LF_BIN:-listen-fire}"
 FAKES_SRC="${LF_SRC:-$REPO/../listen-fire}"
-APP_SECRET=field-service-demo-app-secret   # the stub Meta app's secret: lf checks it, deliver.cjs signs with it
+APP_SECRET=field-service-demo-app-secret   # the stub Meta app's secret: listen-fire checks it, deliver.cjs signs with it
 
 rm -rf "$WORK"
 mkdir -p "$CAP" "$WORK/fakes"
@@ -34,12 +34,12 @@ trap cleanup EXIT INT TERM
 if [ -n "${LF_SRC:-}" ]; then
   LF_SRC="$(cd "$LF_SRC" && pwd)"
   export LF_MODULES_DIR="$LF_SRC/modules"
-  # lf hands a module process only PATH, so the path here is absolute.
+  # listen-fire hands a module process only PATH, so the path here is absolute.
   printf '#!/bin/sh\nexec node %s/packages/module-kit/bin/serve-module.cjs "$@"\n' "$LF_SRC" >"$WORK/serve-module"
   chmod +x "$WORK/serve-module"
   export LF_SERVE_MODULE="$WORK/serve-module"
 fi
-LF_VERSION="$("$LF_BIN" --version | sed -n 's/^lf //p' | head -1)"
+LF_VERSION="$("$LF_BIN" --version | sed -n 's/^listen-fire //p' | head -1)"
 COMMIT=""
 [ -n "${LF_SRC:-}" ] && COMMIT="$(git -C "$LF_SRC" rev-parse --short HEAD)"
 jq -n --arg version "$LF_VERSION" --arg commit "$COMMIT" \
@@ -73,7 +73,7 @@ printf 'stub-client\nstub-client-secret\n8976\nn\n' | "$LF_BIN" connect @lf/goog
   --oauth-authorize-url "$F/oauth/authorize" --oauth-token-url "$F/oauth/token" >/dev/null
 node "$HERE/signin.cjs" "$LF_BIN" google_sheets job_log >/dev/null
 # Under drive.file a spreadsheet reaches the module only once the user picks
-# it. lf has no picker: the pick is the module's own kv, which lf gives a
+# it. listen-fire has no picker: the pick is the module's own kv, which listen-fire gives a
 # module through MODULE_STATE_DIR (tenant "local").
 printf 'env:\n  MODULE_STATE_DIR: "{lf}"\n' >>externals/google_sheets/lf-external.yaml
 mkdir -p .lf/externals/google_sheets
@@ -91,7 +91,7 @@ jq -e '.errors == 1' "$CAP/10_check_draft.json" >/dev/null || { echo "the draft 
 jq -e '.ok' "$CAP/11_check_fixed.json" >/dev/null || { echo "the fix does not check clean"; jq . "$CAP/11_check_fixed.json"; exit 1; }
 cp lf.yaml "$CAP/12_lf.yaml"
 
-# lf serve, where the fake WhatsApp's deliveries reach it.
+# listen-fire serve, where the fake WhatsApp's deliveries reach it.
 PORT=$(node -e 'const s=require("net").createServer().listen(0,"127.0.0.1",()=>{console.log(s.address().port);s.close()})')
 echo "publicUrl: http://127.0.0.1:$PORT" >>lf.yaml
 ANTHROPIC_KEY="$(sed -n 's/^ANTHROPIC_API_KEY=//p' "$REPO/apps/api/.env" | head -1 | tr -d "\"'")"
@@ -100,10 +100,10 @@ LF_SECRET__ANTHROPIC__MODULE=@lf/anthropic LF_SECRET__ANTHROPIC__API_KEY="$ANTHR
   "$LF_BIN" serve --port "$PORT" >"$WORK/serve.log" 2>&1 &
 PIDS+=($!)
 unset ANTHROPIC_KEY
-for _ in $(seq 120); do grep -q '^lf serving on' "$WORK/serve.log" && break; sleep 0.25; done
-grep -q '^lf serving on' "$WORK/serve.log" || { echo "lf serve did not start (see $WORK/serve.log)"; exit 1; }
-# What lf serve prints up to being ready, before any delivery reaches it.
-sed '/^lf serving on/q' "$WORK/serve.log" | human >"$CAP/14_serve_ready.txt"
+for _ in $(seq 120); do grep -q '^listen-fire serving on' "$WORK/serve.log" && break; sleep 0.25; done
+grep -q '^listen-fire serving on' "$WORK/serve.log" || { echo "listen-fire serve did not start (see $WORK/serve.log)"; exit 1; }
+# What listen-fire serve prints up to being ready, before any delivery reaches it.
+sed '/^listen-fire serving on/q' "$WORK/serve.log" | human >"$CAP/14_serve_ready.txt"
 DOOR="http://127.0.0.1:$PORT/api/public/webhook-sync/whatsapp/customers"
 
 state() {

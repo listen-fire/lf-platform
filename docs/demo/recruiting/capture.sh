@@ -1,15 +1,15 @@
 #!/bin/bash
-# The recruiting demo, recorded on the open-source `lf` CLI (see README.md).
-# A fresh lf project under .work/, the repository's fakes for Airtable, Google
+# The recruiting demo, recorded on the open-source `listen-fire` CLI (see README.md).
+# A fresh listen-fire project under .work/, the repository's fakes for Airtable, Google
 # Drive, Slack and Gmail, the draft refused and the fix checked clean, then
-# two edits to the Hiring base through `lf serve` and what they did. Every
+# two edits to the Hiring base through `listen-fire serve` and what they did. Every
 # output lands in .work/capture/, which build_data.cjs turns into the video's
 # data.js in the site repo. Re-runnable: each run starts from nothing.
 #
-#   LF_BIN       the lf binary (default: `lf` on PATH, a release)
-#   LF_SRC       a listen-fire checkout. When set, lf serves the modules from
+#   LF_BIN       the listen-fire binary (default: `listen-fire` on PATH, a release)
+#   LF_SRC       a listen-fire checkout. When set, listen-fire serves the modules from
 #                its sources (LF_MODULES_DIR, and its module kit's
-#                serve-module), and its commit is recorded beside lf's
+#                serve-module), and its commit is recorded beside listen-fire's
 #                version. The fakes always come from it (default: the
 #                listen-fire checkout beside this repo).
 #   LF_BRANCHES  the listen-fire branches LF_SRC was built from, merged
@@ -24,7 +24,7 @@ REPO="$(cd "$HERE/../../.." && pwd)"
 WORK="$HERE/.work"
 CAP="$WORK/capture"
 PROJECT="$WORK/recruiting"
-LF_BIN="${LF_BIN:-lf}"
+LF_BIN="${LF_BIN:-listen-fire}"
 FAKES_SRC="${LF_SRC:-$REPO/../listen-fire}"
 MAILBOX=hannah.lowe@haldenrobotics.com
 
@@ -38,12 +38,12 @@ trap cleanup EXIT INT TERM
 if [ -n "${LF_SRC:-}" ]; then
   LF_SRC="$(cd "$LF_SRC" && pwd)"
   export LF_MODULES_DIR="$LF_SRC/modules"
-  # lf hands a module process only PATH, so the path here is absolute.
+  # listen-fire hands a module process only PATH, so the path here is absolute.
   printf '#!/bin/sh\nexec node %s/packages/module-kit/bin/serve-module.cjs "$@"\n' "$LF_SRC" >"$WORK/serve-module"
   chmod +x "$WORK/serve-module"
   export LF_SERVE_MODULE="$WORK/serve-module"
 fi
-LF_VERSION="$("$LF_BIN" --version | sed -n 's/^lf //p' | head -1)"
+LF_VERSION="$("$LF_BIN" --version | sed -n 's/^listen-fire //p' | head -1)"
 COMMIT=""
 BRANCHES="[]"
 if [ -n "${LF_SRC:-}" ]; then
@@ -94,8 +94,8 @@ printf 'stub-gmail-client\nstub-gmail-secret\n8979\n' | "$LF_BIN" connect @lf/gm
 node "$HERE/signin.cjs" "$LF_BIN" gmail hannah_mail gmail_drafts "$MAILBOX" '' '' '' '' '' '' >/dev/null
 printf '\n' | "$LF_BIN" connect @lf/slack --base-url "$F/slack" >/dev/null
 printf 'xoxb-stub\n\n\n\n' | "$LF_BIN" credential add --module slack hiring_slack >/dev/null
-# Under drive.file a file reaches the module only once the user picks it. lf
-# has no picker: the picks are the module's own kv, which lf gives a module
+# Under drive.file a file reaches the module only once the user picks it. listen-fire
+# has no picker: the picks are the module's own kv, which listen-fire gives a module
 # through MODULE_STATE_DIR (tenant "local").
 printf 'env:\n  MODULE_STATE_DIR: "{lf}"\n' >>externals/google_drive/lf-external.yaml
 mkdir -p .lf/externals/google_drive
@@ -114,15 +114,15 @@ jq -e ".ok" "$CAP/11_check_fixed.json" >/dev/null || { echo "the fix does not ch
 cp lf.yaml "$CAP/12_lf.yaml"
 [ -n "${STOP_AFTER_CHECK:-}" ] && exit 0
 
-# lf serve, where the fake Airtable's webhook pings reach it.
+# listen-fire serve, where the fake Airtable's webhook pings reach it.
 PORT=$(node -e 'const s=require("net").createServer().listen(0,"127.0.0.1",()=>{console.log(s.address().port);s.close()})')
 echo "publicUrl: http://127.0.0.1:$PORT" >>lf.yaml
 "$LF_BIN" serve --port "$PORT" >"$WORK/serve.log" 2>&1 &
 PIDS+=($!)
-for _ in $(seq 120); do grep -q '^lf serving on' "$WORK/serve.log" && break; sleep 0.25; done
-grep -q '^lf serving on' "$WORK/serve.log" || { echo "lf serve did not start (see $WORK/serve.log)"; exit 1; }
-# What lf serve prints up to being ready, before any edit reaches it.
-sed '/^lf serving on/q' "$WORK/serve.log" | human >"$CAP/14_serve_ready.txt"
+for _ in $(seq 120); do grep -q '^listen-fire serving on' "$WORK/serve.log" && break; sleep 0.25; done
+grep -q '^listen-fire serving on' "$WORK/serve.log" || { echo "listen-fire serve did not start (see $WORK/serve.log)"; exit 1; }
+# What listen-fire serve prints up to being ready, before any edit reaches it.
+sed '/^listen-fire serving on/q' "$WORK/serve.log" | human >"$CAP/14_serve_ready.txt"
 # The webhook's signing secret is left out of the capture.
 curl -sf "$F/admin/airtable/webhook/state" | jq 'map(del(.macSecretBase64))' >"$CAP/13_airtable_webhooks.json"
 curl -sf "$F/admin/slack/channel/state" >"$CAP/13_slack_channels.json"
@@ -136,7 +136,7 @@ state() {
   "$LF_BIN" deliveries --json >"$CAP/$1_lf_deliveries.json"
 }
 
-# One edit: the fakes' and lf's state before and after, the run (if any), and how long it took.
+# One edit: the fakes' and listen-fire's state before and after, the run (if any), and how long it took.
 edit() { # <n> <name> <record id> <from> <to> <expect: run|none>
   state "$1_before"
   jq -n --arg record "$3" --arg from "$4" --arg to "$5" '{record: $record, field: "Stage", from: $from, to: $to}' >"$CAP/$1_$2_edit.json"

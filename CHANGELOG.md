@@ -18,6 +18,7 @@ versions are the git tags described in [`deploy/UPGRADING.md`](deploy/UPGRADING.
 <!-- add merged PRs here -->
 
 - The language core is at 0.12.13 (the catalog block), taking the language's 0.12.12 and 0.12.13 (the language's CHANGELOG). Pinned on their own latest: `anthropic`, `attio`, `judge-llm`, `postgres-limiter` and `wake-cloud-tasks` 0.12.7; `fake-channels`, `handbook` and `whatsapp` 0.12.8; `gmail` and `module-kit` 0.12.10; `mcp` 0.12.11. Every other `@listen-fire/*` package stays on its own latest, unchanged; the `fake-channels` image's `FAKE_CHANNELS_VERSION` is 0.12.8. The language's new `github` and `stripe` modules are not installed.
+- The language's command is now `listen-fire`, formerly `lf` (the language's CHANGELOG, 0.12.13). Only the binary's name changed: `@lf/*` module names, `lf.yaml`, `.lf/`, the `LF_*` variables, the `lf` Postgres schema and the `lf` team engine are as they were. Operators running a cloud `listen-fire` beside the platform: install it again and rename `lf` in container commands and scripts. `LF_BIN`, in the conformance checks of [`deploy/SELF_HOSTING.md`](deploy/SELF_HOSTING.md) and the dev-loop verify scripts, now names a `listen-fire` binary and defaults to `listen-fire` on PATH.
 
 ## [0.12.11] - 2026-10-27
 

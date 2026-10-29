@@ -1,5 +1,5 @@
 /**
- * Dev-loop harness for the platform as a cloud lf's movements module, over the
+ * Dev-loop harness for the platform as a cloud listen-fire's movements module, over the
  * dev-loop team's real rows.
  *
  *   DEV_LOOP_PROFILE=agent pnpm dev:lf-movements-verify --save
@@ -8,22 +8,22 @@
  * Prerequisites: the agent stack is up (`pnpm dev:loop:agent`) and seeded
  * (`pnpm dev:seed`); `--contract` also needs the dev-loop team's engine
  * switched to lf (its team settings page, or `pnpm cli team-engine --team <id>
- * --set lf`), and `LF_BIN` (lf >= 0.12.0-rc.10).
+ * --set lf`), and `LF_BIN` (listen-fire >= 0.12.0-rc.10).
  *
  * `--save` does the setup:
  *   - the dev-loop team's `acme_crm` fake CRM install (its bearer is the
  *     install's own credential; `acme_crm` takes no `using`);
  *   - `lib/greet` and `tick` (a per-minute cron writing a greeting to the CRM)
  *     saved through the real `saveMovement`, both confirmed shipped;
- *   - a scratch lf project in `.dev-loop/lf-movements/project` whose store,
+ *   - a scratch listen-fire project in `.dev-loop/lf-movements/project` whose store,
  *     secrets and movements slots are the platform's and whose `acme_crm`
  *     external is the fake CRM, and `lf.env` beside it (mode 0600) holding the
- *     two keys it mints, for `set -a; . lf.env; set +a` before running lf.
+ *     two keys it mints, for `set -a; . lf.env; set +a` before running listen-fire.
  *
  * `--contract` runs the read-only movements module's cases against the loop's
- * real route (bridge c) and against lf's own client of that route
- * (`lf --contract-movements-slot` over the project), with the key from
- * `lf.env`: it mints nothing, so a running `lf serve` keeps working.
+ * real route (bridge c) and against listen-fire's own client of that route
+ * (`listen-fire --contract-movements-slot` over the project), with the key from
+ * `lf.env`: it mints nothing, so a running `listen-fire serve` keeps working.
  *
  * It prints pass or fail per case, and never a key, a credential field or a
  * movement's text.
@@ -70,11 +70,11 @@ listen to cron { schedule: "* * * * *" } fire tock
 const MIN_LF = { minor: 12, rc: 10 };
 
 function lfBinary(): string {
-  const bin = process.env.LF_BIN ?? 'lf';
+  const bin = process.env.LF_BIN ?? 'listen-fire';
   const reported = execFileSync(bin, ['--version'], { encoding: 'utf8' }).trim();
   const match = /(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?/.exec(reported);
   const older = match === null || Number(match[2]) < MIN_LF.minor || (Number(match[2]) === MIN_LF.minor && match[4] !== undefined && Number(match[4]) < MIN_LF.rc);
-  if (older) throw new Error(`lf >= 0.12.0-rc.10 is required (the movements slot's contract flag); ${bin} reports "${reported}"`);
+  if (older) throw new Error(`listen-fire >= 0.12.0-rc.10 is required (the movements slot's contract flag); ${bin} reports "${reported}"`);
   return bin;
 }
 
@@ -120,7 +120,7 @@ async function save(): Promise<void> {
       `url: ${base}/api/public/lf-secrets`,
       'auth: { kind: bearer, field: token }',
       'settings:',
-      '  - { name: team, label: the platform team whose credentials lf keeps }',
+      '  - { name: team, label: the platform team whose credentials listen-fire keeps }',
       '',
     ].join('\n'),
   );
@@ -149,7 +149,7 @@ async function save(): Promise<void> {
   for (const line of env.split('\n').filter((entry) => entry !== '')) console.log(`  ${line.replace(/(KEY|TOKEN)=.*/, '$1=<elided>')}`);
 }
 
-/** The project's settings, as `--save` wrote them: what lf is started with. */
+/** The project's settings, as `--save` wrote them: what listen-fire is started with. */
 function projectEnv(): Record<string, string> {
   return Object.fromEntries(
     readFileSync(ENV_FILE, 'utf8')
@@ -191,7 +191,7 @@ async function contract(): Promise<void> {
   });
   try {
     for (const slotCase of readOnlyModuleCases()) {
-      await check(`lf's client of the route: ${slotCase.name}`, () => slotCase.run(new SlotClient(started.address)));
+      await check(`listen-fire's client of the route: ${slotCase.name}`, () => slotCase.run(new SlotClient(started.address)));
     }
   } finally {
     await started.close();
