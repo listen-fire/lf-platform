@@ -259,8 +259,8 @@ importers:
         specifier: 0.12.7
         version: 0.12.7(@listen-fire/engine-contracts@0.12.13)
       '@listen-fire/web':
-        specifier: 0.12.6
-        version: 0.12.6(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
+        specifier: 0.12.7
+        version: 0.12.7(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
       '@listen-fire/whatsapp':
         specifier: 0.12.8
         version: 0.12.8(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
@@ -629,8 +629,8 @@ importers:
         version: 4.6.7
     optionalDependencies:
       files-s3:
-        specifier: npm:@listen-fire/files-s3@0.12.6
-        version: '@listen-fire/files-s3@0.12.6(@listen-fire/engine-contracts@0.12.13)'
+        specifier: npm:@listen-fire/files-s3@0.12.7
+        version: '@listen-fire/files-s3@0.12.7(@listen-fire/engine-contracts@0.12.13)'
       ocr-google:
         specifier: npm:@listen-fire/ocr-google@0.12.6
         version: '@listen-fire/ocr-google@0.12.6(@listen-fire/engine@0.12.13)(encoding@0.1.13)'
@@ -3124,8 +3124,8 @@ packages:
     resolution: {integrity: sha512-+ao8ucmpxs3wZWCwpan2IF2dEMEZHCMltp9bQx5nYbac1LPc0rpDQL3cez94zUknw14bE/BlDpcu8UoV9YtkEg==}
     engines: {node: '>=22.23.4 <23'}
 
-  '@listen-fire/files-s3@0.12.6':
-    resolution: {integrity: sha512-e0kw+6re5l88T2V8t93IGtJmOMzud7928y7RM7n2cWwMnaQ0BESAYptZitYlX2DY5UYJTSjJkNsiM1eZLZN99Q==}
+  '@listen-fire/files-s3@0.12.7':
+    resolution: {integrity: sha512-+E3vFVhfkMfq7T9GYeG1M+dXa7sYHHFwekR085GpBXmAYLI9rlgIMthNsk/NIAomBAiBbfaTb5IGQAwOyjCbqA==}
     engines: {node: '>=22.23.4 <23'}
 
   '@listen-fire/gmail@0.12.10':
@@ -3316,8 +3316,8 @@ packages:
     peerDependencies:
       '@listen-fire/engine-contracts': '>=0.12.0 <1.0.0'
 
-  '@listen-fire/web@0.12.6':
-    resolution: {integrity: sha512-Rk8SIqaTJKOt9u5YtD5MqFkBgQORfJ1/4uqzi3tMGC3ODsjjs0SsLkqSsQuOHMzBh8hFU033Q9nwIosNYr7jjA==}
+  '@listen-fire/web@0.12.7':
+    resolution: {integrity: sha512-H86DUx18txlF+PyS5sQH7BNOgNwW+YNiE3V2W46iyiB8r6MiNLDGeZm6ZsEUBZ3eLk2zsPJJ9YTzGl6cV5ozFg==}
     engines: {node: '>=22.23.4 <23'}
     peerDependencies:
       '@listen-fire/engine': '>=0.12.0 <1.0.0'
@@ -13835,11 +13835,11 @@ snapshots:
     transitivePeerDependencies:
       - '@napi-rs/canvas'
 
-  '@listen-fire/files-s3@0.12.6(@listen-fire/engine-contracts@0.12.13)':
+  '@listen-fire/files-s3@0.12.7(@listen-fire/engine-contracts@0.12.13)':
     dependencies:
       '@aws-sdk/client-s3': 3.649.0
       '@aws-sdk/s3-request-presigner': 3.649.0
-      '@listen-fire/module-runtime': 0.12.6(@listen-fire/engine-contracts@0.12.13)
+      '@listen-fire/module-runtime': 0.12.8(@listen-fire/engine-contracts@0.12.13)
     transitivePeerDependencies:
       - '@listen-fire/engine-contracts'
       - aws-crt
@@ -14049,13 +14049,13 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@listen-fire/web@0.12.6(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)':
+  '@listen-fire/web@0.12.7(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)':
     dependencies:
       '@listen-fire/anthropic': 0.12.7(@listen-fire/engine@0.12.13)
       '@listen-fire/engine': 0.12.13
       '@listen-fire/engine-contracts': 0.12.13
       '@listen-fire/file-text': 0.12.6
-      '@listen-fire/module-kit': 0.12.6(@listen-fire/engine-contracts@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
+      '@listen-fire/module-kit': 0.12.10(@listen-fire/engine-contracts@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
       '@listen-fire/movement-lang': 0.12.13
       html-to-text: 9.0.5
       jspdf: 4.2.1
@@ -18646,7 +18646,7 @@ snapshots:
   extract-pg-schema@5.8.0(@electric-sql/pglite@0.3.14)(better-sqlite3@11.10.0):
     dependencies:
       knex: 3.1.0(better-sqlite3@11.10.0)(pg@8.16.3)
-      knex-pglite: 0.12.1(@electric-sql/pglite@0.3.14)(knex@3.1.0(better-sqlite3@11.10.0)(pg@8.16.3))
+      knex-pglite: 0.12.1(@electric-sql/pglite@0.3.14)(knex@3.1.0(better-sqlite3@11.10.0)(pg@8.12.0))
       pg: 8.16.3
       pg-query-emscripten: 5.1.0
       ramda: 0.31.3
@@ -20335,7 +20335,7 @@ snapshots:
 
   kleur@4.1.5: {}
 
-  knex-pglite@0.12.1(@electric-sql/pglite@0.3.14)(knex@3.1.0(better-sqlite3@11.10.0)(pg@8.16.3)):
+  knex-pglite@0.12.1(@electric-sql/pglite@0.3.14)(knex@3.1.0(better-sqlite3@11.10.0)(pg@8.12.0)):
     dependencies:
       '@electric-sql/pglite': 0.3.14
       knex: 3.1.0(better-sqlite3@11.10.0)(pg@8.16.3)

@@ -152,7 +152,7 @@
     "@listen-fire/pdf": "0.12.6",
     "@listen-fire/postgres-limiter": "0.12.7",
     "@listen-fire/wake-cloud-tasks": "0.12.7",
-    "@listen-fire/web": "0.12.6",
+    "@listen-fire/web": "0.12.7",
     "@listen-fire/whatsapp": "0.12.8",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "@notionhq/client": "2.2.15",
@@ -278,7 +278,7 @@
     "@listen-fire/legacy-engine": "workspace:*"
   },
   "optionalDependencies": {
-    "files-s3": "npm:@listen-fire/files-s3@0.12.6",
+    "files-s3": "npm:@listen-fire/files-s3@0.12.7",
     "ocr-google": "npm:@listen-fire/ocr-google@0.12.6"
   }
 }
