@@ -12,18 +12,16 @@
 //   2. A message from a LINKED sender. Resolve `telegram_user_id` → EVERY
 //      `adapters.telegram_identity` row with that id → the set of `(team_id)`
 //      bindings (a user may be linked in several teams). For each such team,
-//      dispatch the message into that team via the existing per-team trigger
-//      fan-out (`captureProviderTriggerEvents` + `enqueueCapturedEvents`),
-//      run AS that user (the per-team `extractActor` resolves the binding within
-//      its own team → the team-clamped `lookupTeamUserByEmail` → ActingUser).
+//      the module's arrivals are kept as a delivery of the shared bot, judged
+//      by every Telegram listen of that team (inbound/listen_door.ts), run AS
+//      that user (the per-team `extractActor` resolves the binding within its
+//      own team → the team-clamped `lookupTeamUserByEmail` → ActingUser).
 //      Route-all across teams.
 //
-// CAPTURE-THEN-ACK. Telegram redelivers anything it doesn't get a prompt 2xx
-// for, so the movement dispatch must not sit inside the request. The message
-// branch splits around the ack: routing + durable receipts pre-ack (phase 1,
-// here), then a work row per receipt (phase 2, the returned `enqueueDeferred`,
-// which the route awaits before its 200); the movement runs when the row drains.
-// `/start` stays wholly pre-ack — see `handleStart`.
+// KEEP-THEN-ACK. Telegram redelivers anything it doesn't get a prompt 2xx
+// for, so the movement must not run inside the request. Each team's delivery
+// is kept pre-ack, with a `fire_event` row per run it starts; the movement runs
+// when the row drains. `/start` stays wholly pre-ack — see `handleStart`.
 //
 //   3. An UNLINKED sender (no identity row) that isn't `/start` → ignore
 //      silently (the spam gate). A reply-to-bot → classified but no-op in v1.
@@ -40,20 +38,16 @@
 
 import type { TeamId } from '../../generated/kysely/core/Team';
 import type { WebhookEvent } from './providers';
-import type { HarnessDelivery, SettleReport } from '../work/harness';
+import type { HarnessDelivery } from '../work/harness';
 
 import { getAutomationsQb } from '../../lib/kysely';
 import { logger } from 'movement-engine/public/log';
 import {
   parseTelegramEvents,
-  telegramEventToDiscriminable,
 } from '../translation_graph/adapters/telegram';
-import { captureProviderTriggerEvents } from './handler';
-import {
-  enqueueCapturedEvents,
-  readReceiptGroupOutcomes,
-  type CapturedTriggerEvent,
-} from '../translation_graph/triggers/dispatch_event';
+import { deliverArrivals } from '../inbound/listen_door';
+import { resolveAdapter } from '../translation_graph/adapters/resolve';
+import { notifyWork } from '../work/drain';
 import { isTestHarnessTeam } from '../../lib/recording';
 import {
   TELEGRAM_ADAPTER_TYPE,
@@ -62,7 +56,7 @@ import {
 import { bindTelegramFromStart } from '../translation_graph/adapters/telegram/handshake';
 import { handleTelegramCallbackQuery, ownsCallbackQuery } from './telegram_callback_door';
 
-/** The provider key webhook dispatch routes Telegram triggers by. */
+/** The subscription the shared bot's deliveries are kept under. */
 const TELEGRAM_PROVIDER_KEY = 'TELEGRAM';
 
 /** A parsed shared-bot inbound `Update`, classified for routing. */
@@ -90,9 +84,7 @@ export interface SharedBotResult {
   bind?: { ok: boolean; reason?: string; email?: string };
   /** For a button tap: how the answer door settled it. */
   callback?: { handled: boolean; outcome?: string };
-  /** For a linked message: the teams the message fanned out to. Pre-ack this is
-   *  the teams whose receipts were stored (routing is settled by then); the
-   *  deferred half narrows it to the teams that dispatched cleanly. */
+  /** For a linked message: the teams whose delivery was kept. */
   routedTeamIds?: string[];
   error?: string;
 }
@@ -107,10 +99,10 @@ export interface SharedBotResult {
 export interface SharedBotDelivery {
   result: SharedBotResult;
   /**
-   * Phase 2: a work row for every receipt captured in phase 1. Absent when the
-   * delivery carried nothing to run (`/start`, an ignore, an unlinked sender).
-   * Never rejects for a per-team failure — those are logged and shown as a
-   * narrowed `routedTeamIds` — but the caller still guards an unexpected throw.
+   * Pokes the drain to start the runs each team's kept delivery queued. Absent
+   * when the delivery carried nothing to run (`/start`, an ignore, an unlinked
+   * sender). A team whose delivery failed is logged and left out of
+   * `routedTeamIds`; the caller still guards an unexpected throw.
    */
   enqueueDeferred?: () => Promise<EnqueuedSharedBotDelivery>;
   /**
@@ -263,87 +255,52 @@ export async function handleSharedBotInbound(raw: unknown): Promise<SharedBotDel
     return { result: { ok: true, classification: 'unlinked_ignore' } };
   }
 
-  // Phase 1 — route-all capture. Fan the SAME event into every team that has a
-  // binding for this sender and store that team's durable receipts. Each team
-  // is independent; one team's failure doesn't abort the others.
-  const event = telegramEventToDiscriminable(inbound.event);
-  const captures: { teamId: string; receipts: CapturedTriggerEvent[] }[] = [];
+  // Route-all: the SAME arrivals kept for every team that has a binding for
+  // this sender. Each team is independent; one team's failure doesn't abort
+  // the others. The shared bot received this globally, so the delivery is the
+  // bot's install's: every Telegram listen of the team judges it, whatever
+  // connection it names (the binding rows are the gate, not a credential).
+  const delivered: string[] = [];
   for (const teamId of teamIds) {
     try {
-      const receipts = await captureProviderTriggerEvents({
-        event,
-        // No per-subscription credential — the shared built-in bot received
-        // this globally. Each matched trigger dispatches with its OWN
-        // credential (the send identity), falling back to the env built-in
-        // token when it has none.
-        subscription: { team_id: teamId, credentials_id: null, provider: TELEGRAM_PROVIDER_KEY },
-        adapterType: TELEGRAM_ADAPTER_TYPE,
-        // The shared bot receives globally — a trigger's credential is its send
-        // identity, not an inbound gate. Don't narrow candidates by credential.
-        //
-        // STILL LOAD-BEARING after Chunk 7. A connected team's `listen to
-        // telegram` trigger now pins a real (empty) TELEGRAM credential id, but
-        // the shared bot has no per-subscription credential — this dispatch
-        // passes `credentials_id: null`. Without this opt-out the candidate
-        // filter (`trigger.credentialsId !== null`) would drop every connected
-        // team's telegram trigger and nothing would fire. The empty credential
-        // is the team's CONNECT signal + the construction handle, not an inbound
-        // routing key; identity-based fan-out (the telegram_identity rows) is
-        // the real gate, so matching any credential here is correct.
-        matchAnyCredential: true,
+      const adapter = await resolveAdapter({ adapterType: TELEGRAM_ADAPTER_TYPE, teamId: teamId as TeamId });
+      if (adapter.preprocessInbound === undefined) throw new Error('the Telegram module reads no inbound updates (preprocessInbound)');
+      const { arrivals = [] } = await adapter.preprocessInbound({ raw });
+      if (arrivals.length === 0) continue;
+      const { kept } = await deliverArrivals({
+        teamId: teamId as TeamId,
+        delivered: { adapterType: TELEGRAM_ADAPTER_TYPE, credentialsId: null },
+        subscriptionId: TELEGRAM_PROVIDER_KEY,
+        externalId: updateIdOf(raw),
+        source: 'webhook',
+        arrivals,
       });
-      captures.push({ teamId, receipts });
+      if (kept.kept) delivered.push(teamId);
     } catch (err) {
-      logger.error('[TelegramSharedBot] capture failed for team', {
+      logger.error('[TelegramSharedBot] keeping the delivery failed for team', {
         teamId,
         telegramUserId: inbound.telegramUserId,
         error: err instanceof Error ? err.message : String(err),
       });
     }
   }
-
-  // Phase 2 — queue the movement runs, in the same per-team isolation.
-  const enqueueDeferred = async (): Promise<EnqueuedSharedBotDelivery> => {
-    const enqueued: typeof captures = [];
-    for (const capture of captures) {
-      try {
-        await enqueueCapturedEvents(capture.receipts);
-        enqueued.push(capture);
-      } catch (err) {
-        logger.error('[TelegramSharedBot] enqueue failed for team', {
-          teamId: capture.teamId,
-          telegramUserId: inbound.telegramUserId,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-    }
-    return {
-      teamIds: enqueued.map(({ teamId }) => teamId),
-      readOutcome: (settle) => readSharedBotOutcome({ enqueued, settle }),
-    };
-  };
-
+  const result: SharedBotResult = { ok: true, classification: 'message', routedTeamIds: delivered };
   return {
-    result: {
-      ok: true,
-      classification: 'message',
-      routedTeamIds: captures.map((c) => c.teamId),
+    result,
+    // The runs are queued with the deliveries; the drain is poked to take them.
+    enqueueDeferred: async () => {
+      notifyWork();
+      return { teamIds: delivered, readOutcome: async () => result };
     },
-    enqueueDeferred,
     ...(teamIds.some(isTestHarnessTeam) ? { awaitDeferred: true } : {}),
   };
 }
 
-/** A team dispatched cleanly unless one of its receipts failed or never ran. */
-async function readSharedBotOutcome(input: {
-  enqueued: { teamId: string; receipts: CapturedTriggerEvent[] }[];
-  settle: SettleReport;
-}): Promise<SharedBotResult> {
-  const { cleared } = await readReceiptGroupOutcomes({
-    groups: input.enqueued.map(({ teamId, receipts }) => ({ group: teamId, receipts })),
-    settle: input.settle,
-  });
-  return { ok: true, classification: 'message', routedTeamIds: cleared };
+/** Telegram's `update_id`, which its redeliveries keep: a redelivery of an
+ *  update keeps nothing twice. */
+function updateIdOf(raw: unknown): string | null {
+  const id = (raw as { update_id?: unknown } | null | undefined)?.update_id;
+  return typeof id === 'number' || typeof id === 'string' ? `telegram:${id}` : null;
 }
 
 /**

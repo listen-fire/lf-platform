@@ -9,16 +9,18 @@ import { logger } from 'movement-engine/public/log';
 import { sendSlackNotification } from '../../lib/slack';
 import { getQb } from '../../lib/kysely';
 import { TeamId } from '../../generated/kysely/core/Team';
-import { loadTriggerById } from '../../services/translation_graph/storage/tg_table';
-import { receiveTriggerEvent } from '../../services/translation_graph/triggers/dispatch_event';
+import { deliverArrivals } from '../../services/inbound/listen_door';
+import { notifyWork } from '../../services/work/drain';
 import {
   createEmailAdapter,
   normaliseInboundEmailPayload,
   EMAIL_ADAPTER_TYPE,
-  EMAIL_RECORD_TYPE_ID,
 } from '../../services/translation_graph/adapters/email';
 import { fetchResendEmailPayload } from '../../services/translation_graph/adapters/email/resend_inbound';
 import { readMailgunMessage, readResendEnvelope, resendEnvelopeRecipients } from '@listen-fire/email';
+import { EMAILS_EDGE, EMAIL_KEY_FIELD } from '@listen-fire/email/types';
+import { normalisedBody } from '@listen-fire/email/adapter';
+import { inboxKeyOf } from '@listen-fire/email/address';
 import { resolveActingUser } from '../../services/translation_graph/adapters/acting_user/resolve';
 import { findPublicInbox } from '../../services/translation_graph/adapters/email/public_inbox';
 
@@ -111,68 +113,47 @@ const acceptInboundEmail = async (
 
   const intendedRecipients = email.recipients;
 
-  if (route?.trigger) {
-    // Liveness gate: a trigger dispatches iff it is movement-derived
-    // (`movement_id` set) — the trigger row is purely the dispatch index
-    // and execution reads the canonical movement text (see
-    // `dispatchTriggerByIdEvent`; storage/authored.ts).
-    const triggerRow = await loadTriggerById(route.trigger.id);
-    if (triggerRow?.movementId != null) {
-      // The email adapter's fires edge lands STRAIGHT on `Email` (rule 1's
-      // collapse — a field-less `Email Received` node was pure indirection),
-      // so the seed IS the email: `rootRecordType` names the delivered node
-      // and the Message-Id, when present, is its durable identity — what
-      // lets the engine seed it STABLE so `e.`Subject`` reads directly.
-      // An id-less email still fires; its seed is honestly unstable.
-      const messageId =
-        typeof emailPayload['messageId'] === 'string' && emailPayload['messageId'].length > 0
-          ? emailPayload['messageId']
-          : undefined;
-      const event: TriggerEvent = {
-        pipelineInputId: `trigger:${route.trigger.id}`,
-        adapterType: route.trigger.kind.toLowerCase(),
-        triggerType: 'webhook',
-        payload: emailPayload,
-        changeType: 'create',
-        rootRecordType: EMAIL_RECORD_TYPE_ID,
-        // The Message-Id is also the DELIVERY id: both providers redeliver on
-        // anything that isn't a 2xx, and a retry that minted a second trigger
-        // event would run the movement twice on one email. The receipt's
-        // unique index on (trigger, delivery id) makes the redelivery a no-op.
-        ...(messageId !== undefined ? { idempotencyKey: messageId } : {}),
-        ...(messageId !== undefined
-          ? {
-              externalRecordRef: {
-                adapterType: EMAIL_ADAPTER_TYPE,
-                externalId: messageId,
-                recordType: EMAIL_RECORD_TYPE_ID,
-              },
-            }
-          : {}),
-        occurredAt: new Date().toISOString(),
-      };
-      // Store-then-ack: the event is durable before we answer, the
-      // sender never waits on a movement run (slow runs used to hold
-      // this response open past webhook timeouts → provider retries →
-      // duplicate processing), and the stored row is replayable.
-      try {
-        await receiveTriggerEvent({
-          triggerId: route.trigger.id,
-          event,
-          teamId,
-        });
-      } catch (err) {
-        logger.error('[InboundEmail] failed to store trigger event', {
-          triggerId: route.trigger.id,
-          error: err instanceof Error ? err.message : String(err),
-        });
-        return res.status(500).send();
-      }
-      return res.status(201).send();
-    }
+  // The email is an arrival on the team's `Emails`, keyed by the plus-suffix
+  // it was sent to, judged by every email listen of the team
+  // (inbound/listen_door.ts). Store-then-ack: the delivery and the run each
+  // listen starts are durable before we answer, and the sender never waits on
+  // a movement run. The Message-Id is the DELIVERY id: both providers
+  // redeliver on anything that isn't a 2xx, and a redelivery under it keeps
+  // nothing twice.
+  const messageId =
+    typeof emailPayload['messageId'] === 'string' && emailPayload['messageId'].length > 0 ? emailPayload['messageId'] : undefined;
+  const recipient = typeof emailPayload['recipient'] === 'string' ? emailPayload['recipient'] : undefined;
+  let fired: number;
+  try {
+    const { kept, fires } = await deliverArrivals({
+      teamId,
+      delivered: { adapterType: EMAIL_ADAPTER_TYPE, credentialsId: null },
+      subscriptionId: EMAIL_ADAPTER_TYPE,
+      externalId: messageId !== undefined ? `email:${messageId}` : null,
+      source: 'webhook',
+      arrivals: [
+        {
+          edge: EMAILS_EDGE,
+          identity: messageId ?? ctx.id,
+          landing: { recordType: 'Email', fields: { ...emailPayload, content: normalisedBody(emailPayload), [EMAIL_KEY_FIELD]: inboxKeyOf(recipient) } },
+        },
+      ],
+    });
+    if (!kept.kept) return res.status(201).send();
+    fired = fires.length;
+  } catch (err) {
+    logger.error('[InboundEmail] failed to keep the delivery', {
+      teamId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return res.status(500).send();
+  }
+  if (fired > 0) {
+    notifyWork();
+    return res.status(201).send();
   }
 
-  // Authenticated, but nothing of this team's answers to the address. The
+  // Authenticated, but no listen of this team took it. The
   // pipeline this used to fall through to is retired, so quarantine rather
   // than drop: persist the raw payload BEFORE acking, so a team that should
   // have been onboarded isn't silently losing mail and the row can be replayed

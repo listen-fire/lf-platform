@@ -1,22 +1,16 @@
 // WhatsApp dumb dispatcher — the agent-free inbound path. An inbound Meta
-// message is routed, with NO agent in the middle, to an ingestion path the
-// sender's team has wired:
-//   1. a movement `trigger` of kind INBOUND_WHATSAPP (preferred), else
-//   2. a legacy `pipeline_input` (default_for INBOUND_WHATSAPP), else
-//   3. dropped (logged).
-// Modelled on `inboundEmailHandler` (interfaces/rest/private.ts) — trigger-first,
-// pipeline_input fallback.
+// message is routed, with NO agent in the middle, to the sender's team: the
+// module's arrivals for it (a message, a reaction, a location, each on its own
+// edge) are kept as a delivery of the platform's number, judged by every
+// WhatsApp listen of the team (inbound/listen_door.ts). A message no listen
+// takes is dropped there, logged.
 //
-// The RECEIVING number gates which of those paths is even eligible
-// (`resolveWhatsappRoute`): once a movements number is configured, the
-// movements number reaches movements only (never the legacy pipeline) and the
-// primary number reaches the legacy pipeline only (never movements). Before a
-// movements number exists the single number keeps the trigger-first→legacy
-// fallback for both.
+// The RECEIVING number gates whether a movement may hear it at all
+// (`resolveWhatsappRoute`): once a movements number is configured, the primary
+// number reaches no movement.
 
 import { Readable } from 'node:stream';
 
-import type { TriggerEvent } from 'movement-engine/public/inbound';
 import type { TeamId } from '../../generated/kysely/core/Team';
 import type { MetaWhatsappMessage, WhatsappAttachment, WhatsappPayload } from '@listen-fire/whatsapp';
 
@@ -25,16 +19,17 @@ import { Context } from '../context';
 import { logger } from 'movement-engine/public/log';
 import { DocumentService } from '../document';
 import { exposeFile } from '../translation_graph/engine/files/expose';
-import { findTriggersByKind } from '../translation_graph/storage/tg_table';
-import { classifyMetaMessage, triggerAcceptsWhatsappKind } from '@listen-fire/whatsapp/inbound';
-import { resolveAdapterSlug } from '../translation_graph/adapters/registry';
-import { receiveTriggerEvent } from '../translation_graph/triggers/dispatch_event';
+import { classifyMetaMessage, whatsappInboundArrivals } from '@listen-fire/whatsapp/inbound';
+import { WHATSAPP_ADAPTER_TYPE } from '../translation_graph/adapters/whatsapp';
+import { deliverArrivals } from '../inbound/listen_door';
+import { notifyWork } from '../work/drain';
 import { getMetaWhatsappApi, movementsPhoneNumberId } from './metaApi';
 import { resolveWhatsappRoute } from './route';
 import { isVerifiedLink } from './phone_verification/logic';
 import { isTeamMember } from './membership';
 import { userPrincipal } from '../principal';
 
+/** The subscription the platform number's deliveries are kept under. */
 const WHATSAPP_KIND = 'INBOUND_WHATSAPP';
 
 /** Resolve the sending phone number to an owning team + user. The phone_number
@@ -173,59 +168,56 @@ export async function dispatchWhatsappMessage(input: {
       movementsPhoneNumberId: movementsPhoneNumberId(),
     });
 
-    // 1. Movement trigger (preferred) — skipped entirely when the number is
-    //    gated to legacy only, so the old number can never fire a movement.
-    if (route !== 'legacy-only') {
-      const triggers = (await findTriggersByKind({ teamId: resolved.teamId, kinds: [WHATSAPP_KIND] }))
-        .filter((t) => t.movementId != null);
-      if (triggers.length > 0) {
-        let dispatched = 0;
-        for (const trigger of triggers) {
-          // The listen's `events` config gates the kind — no `events` means
-          // messages only, so reactions never fire a movement that didn't opt in.
-          if (!triggerAcceptsWhatsappKind(trigger.config, classified.kind)) continue;
-          const adapterType = resolveAdapterSlug(trigger.kind);
-          const event: TriggerEvent = {
-            pipelineInputId: `trigger:${trigger.id}`,
-            // Resolve the trigger kind to the registered adapter slug
-            // (INBOUND_WHATSAPP → whatsapp); a lowercased kind doesn't resolve.
-            adapterType,
-            triggerType: 'webhook',
-            payload,
-            // The wamid is the message's durable native id — carrying it seeds
-            // a STABLE event position, so the message can parent linked writes
-            // (`write msg-[:replies]->` / `write msg-[:reactions]->`).
-            rootRecordType: classified.rootRecordType,
-            externalRecordRef: {
-              adapterType,
-              recordType: classified.rootRecordType,
-              externalId: message.id,
-            },
-            occurredAt: new Date().toISOString(),
-            // The wamid is also the DELIVERY id: Meta redelivers anything that
-            // was not acked with a 2xx, and the receipt's unique index on
-            // (trigger, delivery id) makes the redelivery a no-op.
-            idempotencyKey: message.id,
-          };
-          await receiveTriggerEvent({ teamId: resolved.teamId as TeamId, triggerId: trigger.id, event });
-          dispatched += 1;
-        }
-        // Read receipt at preprocess: a message a movement will handle shows
-        // blue ticks immediately (ruling 2026-07-07). Fire-and-forget — a
-        // receipt failure must never affect dispatch. Messages only; Meta has
-        // no receipt for reactions/locations.
-        if (classified.kind === 'message' && dispatched > 0) {
-          void getMetaWhatsappApi(businessPhoneNumberId).markMessageRead(message.id).catch(() => {});
-        }
-        return;
-      }
+    // The primary number, once a movements number exists, reaches no movement.
+    if (route === 'legacy-only') {
+      logger.info('[whatsapp-dispatch] the primary number reaches no movement — dropping', { from: message.from });
+      return;
     }
 
-    // 2. No movement trigger wired — drop. Nothing else consumes inbound
-    //    WhatsApp now that the legacy pipeline fallback is gone.
-    logger.info('[whatsapp-dispatch] no trigger for team — dropping', {
-      teamId: resolved.teamId,
-      from: message.from,
+    // The module's arrivals for this one message, as it reads a Meta delivery,
+    // with its media resolved to the team's stored documents.
+    const arrivals = whatsappInboundArrivals({
+      object: 'whatsapp_business_account',
+      entry: [
+        {
+          changes: [
+            {
+              field: 'messages',
+              value: {
+                metadata: { display_phone_number: businessNumber, phone_number_id: businessPhoneNumberId },
+                contacts: profileName !== undefined ? [{ profile: { name: profileName } }] : [],
+                messages: [message],
+              },
+            },
+          ],
+        },
+      ],
+    }).map((arrival) =>
+      classified.kind === 'message' && !('gone' in arrival)
+        ? { ...arrival, landing: { ...arrival.landing, fields: { ...arrival.landing.fields, ...payload } } }
+        : arrival,
+    );
+    const { kept, fires } = await deliverArrivals({
+      teamId: resolved.teamId as TeamId,
+      delivered: { adapterType: WHATSAPP_ADAPTER_TYPE, credentialsId: null },
+      subscriptionId: WHATSAPP_KIND,
+      // The wamid is the DELIVERY id: Meta redelivers anything that was not
+      // acked with a 2xx, and a redelivery under it keeps nothing twice.
+      externalId: `whatsapp:${message.id}`,
+      source: 'webhook',
+      arrivals,
     });
+    if (!kept.kept) return;
+    notifyWork();
+    // Read receipt at preprocess: a message a movement will handle shows blue
+    // ticks immediately (ruling 2026-07-07). Fire-and-forget — a receipt
+    // failure must never affect dispatch. Messages only; Meta has no receipt
+    // for reactions/locations.
+    if (classified.kind === 'message' && fires.length > 0) {
+      void getMetaWhatsappApi(businessPhoneNumberId).markMessageRead(message.id).catch(() => {});
+    }
+    if (fires.length === 0) {
+      logger.info('[whatsapp-dispatch] no listen took the message — dropping', { teamId: resolved.teamId, from: message.from });
+    }
   });
 }

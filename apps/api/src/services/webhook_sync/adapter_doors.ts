@@ -1,16 +1,9 @@
-// The platform's store under the two push doors a REMOTE adapter calls when it
+// The platform's store under the push doors a REMOTE adapter calls when it
 // owns its own inbound URL (the doors themselves are the shared inbound core's
-// `answerEmit` / `answerWake`)
-// (plans/cloud-native-2026-10-06/02_await_correlation_example.md, "Topology"):
-//
-//   emit(events) — new data: each event is matched against the team's triggers
-//                  for that adapter type and receipted, exactly as a webhook
-//                  delivery's events are;
-//   wake(keys)   — resume whatever is parked on these correlation keys.
-//
-// The two are unordered and independent; nothing relies on a wake arriving
-// before the dispatch it relates to. A wake for a key nothing is parked on, and
-// an emit no trigger listens for, are accepted and leave nothing behind.
+// `answerWake`; `answerEmit` refuses by name, since from 0.13 an event fires
+// no listen): what arrived on the install's listenable edges is kept as a
+// delivery of its own, judged by the team's listens on that module and
+// waking the waits parked on each record (inbound/listen_door.ts).
 //
 // The caller presents the credential its install holds (the same secret
 // Listen-Fire authenticates to it with, carried the same way the install's
@@ -23,16 +16,14 @@ import type { TeamId } from '../../generated/kysely/core/Team';
 import type { InboundHeaders, PushAuth, PushCaller, PushStore } from 'movement-engine/public/inbound';
 
 import { teamIdSchema } from '../../lib/team_id';
-import { loadRemoteAdapterSecret, resolveAdapter } from '../translation_graph/adapters/resolve';
+import { loadRemoteAdapterSecret } from '../translation_graph/adapters/resolve';
 import { RemoteAdapterManifestFile } from '../translation_graph/adapters/remote/manifest';
 import { mayBeRemoteSlug } from '../translation_graph/adapters/remote/slugs';
 import { listRemoteAdaptersOfType, type RemoteAdapterRow } from '../translation_graph/adapters/remote/store';
 import { ADAPTER_TEAM_HEADER, authHeader } from 'movement-engine/public/adapter';
-import { enqueueCapturedEvents, type CapturedTriggerEvent } from '../translation_graph/triggers/dispatch_event';
-import { enqueueAwaitWakes } from '../movement_engine/await_wake';
+import { deliverArrivals } from '../inbound/listen_door';
 import { notifyWork } from '../work/drain';
 import { logger } from 'movement-engine/public/log';
-import { captureProviderTriggerEvents } from './handler';
 import { webhookProviderKey } from './urls';
 
 /** The credential matches no install of the type (or there is none, or the
@@ -121,43 +112,22 @@ export async function authenticateAdapterDoor(input: {
   return { kind: 'authenticated', caller };
 }
 
-/** The platform's store under the push doors (the core's `answerEmit` /
- *  `answerWake`): installs and their secrets, the trigger table, the work table. */
-export const platformPushStore: PushStore<CapturedTriggerEvent> = {
+/** The platform's store under the push doors: installs and their secrets,
+ *  and a push's arrivals kept as a delivery of the install, which serves
+ *  every connection of its module. */
+export const platformPushStore: PushStore = {
   authenticate: (input) => authenticateAdapterDoor(input),
 
-  // Best effort: an event that can't be discriminated still dispatches, seeded
-  // from its payload.
-  async eventTypes(caller) {
-    try {
-      const adapter = await resolveAdapter({ adapterType: caller.adapterType, teamId: caller.teamId as TeamId });
-      return adapter.listEventTypes ? await adapter.listEventTypes() : [];
-    } catch (err) {
-      logger.warn('[AdapterDoors] listEventTypes failed; events dispatch undiscriminated', {
-        adapterType: caller.adapterType,
-        teamId: caller.teamId,
-        error: err instanceof Error ? err.message : String(err),
-      });
-      return [];
-    }
+  async keepArrivals({ adapterType, teamId, arrivals }) {
+    await deliverArrivals({
+      teamId: teamIdSchema.parse(teamId),
+      delivered: { adapterType, credentialsId: null },
+      subscriptionId: webhookProviderKey({ adapterType }),
+      externalId: null,
+      source: 'emit',
+      arrivals,
+    });
   },
-
-  capture: ({ caller, event, eventTypes }) =>
-    captureProviderTriggerEvents({
-      event,
-      subscription: {
-        team_id: caller.teamId,
-        credentials_id: caller.credentialsId,
-        provider: webhookProviderKey({ adapterType: caller.adapterType }),
-      },
-      adapterType: caller.adapterType,
-      eventTypes,
-    }),
-
-  enqueue: (captured) => enqueueCapturedEvents([...captured]),
-
-  enqueueWakes: ({ adapterType, teamId, keys }) =>
-    enqueueAwaitWakes({ adapterType, teamId: teamId as TeamId, correlationKeys: keys }),
 
   notify: () => notifyWork(),
 };

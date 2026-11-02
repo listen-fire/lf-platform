@@ -1,8 +1,8 @@
 // The Listen-Fire Slack app's Events door routes each delivery by the envelope
 // team_id → the app_id='listen-fire' install for that workspace → its Listen-Fire team +
-// credential, then dispatches with that credential (a real BYO-style dispatch:
-// the credential is both the trigger-matching key and the send identity). A
-// workspace with no install is dropped. Plus the route's signature auth, and
+// credential, reads the delivery's arrivals with that credential, and keeps
+// them as one delivery of that connection (its listens judge it, and it is
+// their send identity). A workspace with no install is dropped. Plus the route's signature auth, and
 // the durable hand-off: the route answers only once the delivery is a
 // `slack_event` row, and the routing above runs when that row drains.
 
@@ -32,28 +32,26 @@ jest.mock('../../../lib/kysely', () => {
   return { getQb: qb, getCoreQb: qb, getAutomationsQb: qb };
 });
 
-const dispatchCalls: Array<{ team: string; cred: string | null; adapter: string }> = [];
+const ARRIVAL = { edge: 'Messages', key: 'C1', identity: 'C1:1.0', landing: { recordId: 'C1:1.0', recordType: 'Slack Message', fields: { Text: 'hi' } } };
+const dispatchCalls: Array<{ team: string; cred: string | null; adapter: string; externalId: string | null; arrivals: unknown[] }> = [];
 let dispatchFails = false;
-jest.mock('../handler', () => ({
-  dispatchToProviderTriggers: jest.fn(async (input: any) => {
-    if (dispatchFails) throw new Error('trigger table unreachable');
+jest.mock('../../inbound/listen_door', () => ({
+  deliverArrivals: jest.fn(async (input: any) => {
+    if (dispatchFails) throw new Error('store unreachable');
     dispatchCalls.push({
-      team: input.subscription.team_id,
-      cred: input.subscription.credentials_id,
-      adapter: input.adapterType,
+      team: input.teamId,
+      cred: input.delivered.credentialsId,
+      adapter: input.delivered.adapterType,
+      externalId: input.externalId,
+      arrivals: input.arrivals,
     });
-  }),
-}));
-jest.mock('../../movement_engine/await_wake', () => ({
-  enqueueAwaitWakes: jest.fn(async (input: unknown) => {
-    wakeCalls.push(input);
+    return { kept: { kept: true, arrivalMark: 1 }, deliveryId: 'd1', fires: [{ runId: 'r1' }] };
   }),
 }));
 
-const wakeCalls: unknown[] = [];
-const wakeKeys = jest.fn(async (_input: { raw: unknown }) => ['C1:0.9']);
+const preprocessInbound = jest.fn(async (_input: { raw: unknown }) => ({ events: [], arrivals: [ARRIVAL] }));
 jest.mock('../../translation_graph/adapters/resolve', () => ({
-  resolveAdapter: jest.fn(async () => ({ adapterType: 'slack', wakeKeys })),
+  resolveAdapter: jest.fn(async () => ({ adapterType: 'slack', preprocessInbound })),
 }));
 
 /** The rows the route queued, in order: what the drain would run. */
@@ -94,24 +92,25 @@ beforeEach(() => {
   dispatchFails = false;
   queued.length = 0;
   holdEnqueue = undefined;
-  wakeCalls.length = 0;
-  wakeKeys.mockClear();
+  preprocessInbound.mockClear();
 });
 
 describe('handleSlackEventsInbound — team_id routing', () => {
-  it('dispatches to the workspace install (its Listen-Fire team + credential)', async () => {
+  it("keeps the module's arrivals as a delivery of the workspace install (its Listen-Fire team + credential)", async () => {
     installByIdentifier.set('teamId:T_SLACK', { id: 'cred-slack', team_id: TEAM });
-    const result = await handleSlackEventsInbound(eventCallback('T_SLACK'));
-    expect(result.classification).toBe('dispatched');
-    expect(dispatchCalls).toEqual([{ team: TEAM, cred: 'cred-slack', adapter: 'slack' }]);
+    const raw = { ...eventCallback('T_SLACK'), event_id: 'Ev1' };
+    const result = await handleSlackEventsInbound(raw);
+    expect(result).toEqual({ ok: true, classification: 'dispatched', teamId: 'T_SLACK', eventsProcessed: 1 });
+    expect(preprocessInbound).toHaveBeenCalledWith({ raw });
+    expect(dispatchCalls).toEqual([{ team: TEAM, cred: 'cred-slack', adapter: 'slack', externalId: 'slack:Ev1', arrivals: [ARRIVAL] }]);
   });
 
-  it("queues the adapter's wake keys for the delivery, beside dispatch", async () => {
+  it('keeps nothing for a delivery that brought no arrivals', async () => {
     installByIdentifier.set('teamId:T_SLACK', { id: 'cred-slack', team_id: TEAM });
-    const raw = eventCallback('T_SLACK');
-    await handleSlackEventsInbound(raw);
-    expect(wakeKeys).toHaveBeenCalledWith({ raw });
-    expect(wakeCalls).toEqual([{ adapterType: 'slack', teamId: TEAM, correlationKeys: ['C1:0.9'] }]);
+    preprocessInbound.mockResolvedValueOnce({ events: [], arrivals: [] });
+    const result = await handleSlackEventsInbound(eventCallback('T_SLACK'));
+    expect(result.classification).toBe('no_events');
+    expect(dispatchCalls).toHaveLength(0);
   });
 
   it('drops a workspace with no Listen-Fire install', async () => {
@@ -241,7 +240,7 @@ describe('the route: durable, then answered; the drain does the work', () => {
 
     await slackEventHandler.run(queued[0]?.payload, ctx(1));
 
-    expect(dispatchCalls).toEqual([{ team: TEAM, cred: 'cred-slack', adapter: 'slack' }]);
+    expect(dispatchCalls).toEqual([{ team: TEAM, cred: 'cred-slack', adapter: 'slack', externalId: 'slack:Ev2', arrivals: [ARRIVAL] }]);
   });
 
   it("keys Slack's retry onto the same row as the first delivery", async () => {
@@ -262,12 +261,12 @@ describe('the route: durable, then answered; the drain does the work', () => {
     expect(await res.json()).toEqual({ ok: false, error: 'enqueue_failed' });
   });
 
-  it('a failed dispatch fails the row so it retries, and is given up on only after many attempts', async () => {
+  it('a delivery that cannot be kept fails the row so it retries, and is given up on only after many attempts', async () => {
     installByIdentifier.set('teamId:T_SLACK', { id: 'cred-slack', team_id: TEAM });
     dispatchFails = true;
     const payload = { envelope: { ...eventCallback('T_SLACK'), event_id: 'Ev5' } };
 
-    await expect(slackEventHandler.run(payload, ctx(1))).rejects.toThrow(/incomplete/);
+    await expect(slackEventHandler.run(payload, ctx(1))).rejects.toThrow(/store unreachable/);
     await expect(slackEventHandler.run(payload, ctx(10))).resolves.toBeUndefined();
   });
 });
