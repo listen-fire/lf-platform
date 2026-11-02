@@ -177,10 +177,12 @@ export const pollEdgeHandler: WorkHandler = {
     const { teamId, digest } = pollEdgePayloadSchema.parse(payload);
     const poll = (await sharedPolls({ teamId })).find((shared) => shared.digest === digest);
     if (poll === undefined) return;
+    const startedAt = Date.now();
     const { pollAgainAt } = await pollShared(poll);
-    // The drain's clock, as listen-fire reads its host's: the interval runs
-    // from when the row was taken, so a slow poll does not drift the schedule.
-    await armPoll(poll, nextPollAt(ctx.now, poll.everyMs, pollAgainAt));
+    // Measured from when the poll ended, as listen-fire does: the drain's
+    // clock (which a test may hold) moved on by the time the poll took.
+    const polledAt = new Date(ctx.now.getTime() + (Date.now() - startedAt));
+    await armPoll(poll, nextPollAt(polledAt, poll.everyMs, pollAgainAt));
   },
 };
 

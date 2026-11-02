@@ -127,12 +127,15 @@ describe('the wake over Cloud Tasks', () => {
     if (poll === undefined) throw new Error('the listen shares no poll');
     keys.push(pollWorkKey(poll.digest));
 
-    // Polled now, every 2 minutes: due in 120 s.
+    // Polled now, every 2 minutes: due 120 s after the poll ended.
+    const started = Date.now();
     await pollEdgeHandler.run({ teamId, digest: poll.digest }, testWorkContext(new Date(clock)));
+    const took = Date.now() - started;
 
     const row = (await listWorkByKind('poll_edge')).find((each) => each.key === pollWorkKey(poll.digest));
     if (!row) throw new Error('the poll was not armed');
-    expect(row.dueAt.getTime()).toBe(clock + 120_000);
+    expect(row.dueAt.getTime()).toBeGreaterThanOrEqual(clock + 120_000);
+    expect(row.dueAt.getTime()).toBeLessThanOrEqual(clock + 120_000 + took);
     const index = Math.ceil(row.dueAt.getTime() / MINUTE);
     expect(fake.created.map((each) => [each.name, each.scheduleTime])).toEqual([
       [taskName(index), new Date(index * MINUTE).toISOString()],
