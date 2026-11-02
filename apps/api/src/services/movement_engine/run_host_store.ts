@@ -5,26 +5,44 @@
 //
 //   parks         automations.parked_run (one row per run and address)
 //   joins         automations.join_pending + join_branch_export
-//   correlations  automations.adapter_await
+//   waits         automations.arrival + arrival_identity + wait_row +
+//                 wait_seen (run_host_waits.ts)
 //   leases        the lease columns of automations.trigger_run
 //   work          automations.work, through work/store.ts (the drain claims
 //                 it richer than the core needs, so its queries live there)
 //   sources       automations.park_library_source (one row per team and hash)
+//   deliveries    automations.delivery and the rows it queues
+//                 (run_host_deliveries.ts)
 //
 // The run lease is a fence on every live-state write: a write that names the
-// token it holds lands only while the run's lease is still that token's.
-// Branded ids (a run's, a team's) are converted at this boundary only.
+// token it holds lands only while the run's lease is still that token's. A
+// park is kept in one write with what wakes it (a timer's row, a wait's
+// park); a segment's joins, parks, finished leaf, settle and owed races are
+// kept in one write (`parks.commitSegment`). Branded ids (a run's, a team's)
+// are converted at this boundary only.
 
 import { randomUUID } from 'node:crypto';
 import { hostname } from 'node:os';
 
-import { sql, type ExpressionBuilder } from 'kysely';
+import { sql } from 'kysely';
 import { z } from 'zod';
 import { RunLeaseLost } from 'movement-engine/public/errors';
+import {
+  RESUME_TIMER_WORK_KIND,
+  SETTLE_RACE_WORK_KIND,
+  settleRaceWorkKey,
+  timerWorkKey,
+  type DeliveryRowStore,
+  type LeafRow,
+  type OwedRace,
+  type ParkKind,
+  type RunHostStore,
+  type RunSettle,
+  type WaitWake,
+} from 'movement-engine/public/run-host';
+import { neverAsAny } from 'movement-engine/public/types';
 
-import type { ParkReason } from 'engine-contracts';
-import type { ClaimedWork, CorrelatedAwait, LeafRow, RunHostStore } from 'movement-engine/public/run-host';
-import type AutomationsSchema from '../../generated/kysely/automations/AutomationsSchema';
+import type { CoreParkReason, ParkReason } from 'engine-contracts';
 import type { TriggerRunId } from '../../generated/kysely/automations/TriggerRun';
 import type { JoinPendingFrameAddress } from '../../generated/kysely/automations/JoinPending';
 import type { JoinBranchExportFrameAddress, JoinBranchExportBranchAddress } from '../../generated/kysely/automations/JoinBranchExport';
@@ -33,6 +51,23 @@ import type { ParkLibrarySourceTeamId, ParkLibrarySourceHash } from '../../gener
 import { getAutomationsQb } from '../../lib/kysely';
 import { isWorkKind } from '../work/kinds';
 import { claimDueWork, completeWork, enqueueWork, enqueueWorkIfAbsent, releaseWork } from '../work/store';
+import { deliveryRowStore } from './run_host_deliveries';
+import { announceQueued, inStoreTransaction, queueRow, queueWake, storeDb, workClaimOf, type Exec, type Queued } from './run_host_queue';
+import {
+  arrivalMark,
+  keepNotesOf,
+  lockWaitEdges,
+  logArrivalsIn,
+  noteArrivalIn,
+  openWait,
+  parkWaitIn,
+  strandedWaits,
+  sweepArrivalsIn,
+  unparkWaitsAt,
+  waitArrivals,
+} from './run_host_waits';
+
+type StoreDb = ReturnType<typeof storeDb>;
 
 // ── Boundary conversions ────────────────────────────────────────────────────
 
@@ -58,20 +93,6 @@ function jsonb(value: unknown) {
 
 // ── The run lease as a fence ────────────────────────────────────────────────
 
-type ParkedRunScope = ExpressionBuilder<Pick<AutomationsSchema, 'parked_run' | 'trigger_run'>, 'parked_run'>;
-
-/** A `parked_run` predicate: the row's run is still leased under `token`. */
-function runLeasedTo(token: string) {
-  return (eb: ParkedRunScope) =>
-    eb.exists(
-      eb
-        .selectFrom('trigger_run')
-        .select('trigger_run.id')
-        .whereRef('trigger_run.id', '=', 'parked_run.run_id')
-        .where(leaseTokenIs(token)),
-    );
-}
-
 /** The run's lease is under `token`. Compared as text: a token is opaque to
  *  the core, and one that is not a uuid (a lease this backend never handed
  *  out) holds nothing rather than failing the statement. */
@@ -83,6 +104,15 @@ function leaseTokenIs(token: string) {
  *  lease to fence by) the run has no row to write against. */
 function notWritten(runId: string, fence: string | undefined): Error {
   return fence !== undefined ? new RunLeaseLost(runId) : new Error(`run ${runId} has no trigger_run row to park on`);
+}
+
+/** The run's row held for the transaction under `fence`, so the lease cannot
+ *  change hands between the check and the writes. A lost fence writes nothing. */
+async function holdRun(exec: Exec, runId: string, fence: string | undefined): Promise<void> {
+  if (fence === undefined) return;
+  const { rows } = await sql`
+    select id from automations.trigger_run where id = ${runId}::uuid and lease_token::text = ${fence}::text for update`.execute(exec);
+  if (rows.length === 0) throw new RunLeaseLost(runId);
 }
 
 // One process is one owner. The owner is only informational (the token
@@ -106,79 +136,247 @@ function leafOf(row: { address: string; park_reason: string; status: string; wak
   };
 }
 
+interface PutLeaf {
+  runId: string;
+  address: string;
+  reason: CoreParkReason;
+  wakeAt: string | null;
+  state?: unknown;
+  rewritten?: boolean;
+  fence?: string;
+}
+
+async function putLeafIn(db: StoreDb, { runId, address, reason, wakeAt, state, rewritten, fence }: PutLeaf): Promise<void> {
+  const run = triggerRunIdOf(runId);
+  const written = await db
+    .insertInto('parked_run')
+    .columns(['run_id', 'address', 'status', 'park_reason', 'wake_at', 'state'])
+    .expression((eb) => {
+      let row = eb
+        .selectFrom('trigger_run')
+        .select([
+          'trigger_run.id as run_id',
+          sql<string>`${address}::text`.as('address'),
+          sql<string>`'parked'`.as('status'),
+          sql<string>`${reason}::text`.as('park_reason'),
+          sql<Date | null>`${wakeAt}::timestamptz`.as('wake_at'),
+          jsonb(state).as('state'),
+        ])
+        .where('trigger_run.id', '=', run);
+      if (fence !== undefined) row = row.where(leaseTokenIs(fence));
+      return row;
+    })
+    .onConflict((oc) =>
+      oc.columns(['run_id', 'address']).doUpdateSet({
+        state: jsonb(state),
+        status: 'parked',
+        park_reason: reason,
+        wake_at: wakeAt,
+        // How the limit resume tells a flow that suspended again at once
+        // from the one it stepped.
+        ...(rewritten === true ? { updated_at: sql<Date>`now()` } : {}),
+      }),
+    )
+    .returning('id')
+    .executeTakeFirst();
+  if (written === undefined) throw notWritten(runId, fence);
+}
+
+/** The leaf a segment resumed is over: deleted if resuming, and the notes the
+ *  segment made kept. */
+async function finishLeafIn(exec: Exec, input: { runId: string; address: string }): Promise<void> {
+  await sql`
+    delete from automations.parked_run
+    where run_id = ${input.runId}::uuid and address = ${input.address}::text and status = 'resuming'`.execute(exec);
+  await keepNotesOf(exec, { runId: input.runId, leaf: input.address });
+}
+
+async function markParkedIn(exec: Exec, runId: string): Promise<void> {
+  await sql`
+    update automations.trigger_run set status = 'parked'
+    where id = ${runId}::uuid and status in ('running', 'parked')`.execute(exec);
+}
+
+/** The engine's settle on the run's row; `completed` is the hosted product's `success`. */
+async function settleRunIn(exec: Exec, runId: string, settle: RunSettle): Promise<void> {
+  const status = settle.status === 'completed' ? 'success' : settle.status;
+  const outcome = typeof settle.outcome === 'object' && settle.outcome !== null && !Array.isArray(settle.outcome) ? settle.outcome : {};
+  const writes = Reflect.get(outcome, 'writes');
+  const error = Reflect.get(outcome, 'error');
+  const returned = 'returned' in outcome ? JSON.stringify(Reflect.get(outcome, 'returned')) : null;
+  await sql`
+    update automations.trigger_run r set
+      status = ${status}::text,
+      nodes_written = coalesce(${Number.isInteger(writes) ? writes : null}::int, r.nodes_written),
+      failure_reason = case when ${status}::text = 'failed' then ${typeof error === 'string' ? error : null}::text else r.failure_reason end,
+      completed_at = case when ${status}::text = 'success' then ${settle.at}::timestamptz else r.completed_at end,
+      failed_at = case when ${status}::text = 'failed' then ${settle.at}::timestamptz else r.failed_at end,
+      returned = coalesce(${returned}::text::json, r.returned)
+    where r.id = ${runId}::uuid`.execute(exec);
+}
+
+/**
+ * One park's leaf and what wakes it, in the caller's transaction (which holds
+ * the run, and the edges of the waits it parks). Whatever parks at the
+ * address now, no wait parked there before is; a timer arms the run's
+ * `resume_timer` row; a wait is parked there (stranded as it parks when its
+ * record is already gone).
+ */
+async function parkIn(
+  trx: StoreDb,
+  input: { runId: string; teamId: string; address: string; state?: unknown; park: ParkKind; rewritten?: boolean },
+): Promise<Queued[]> {
+  const { runId, teamId, address, park } = input;
+  const reason: CoreParkReason = park.kind === 'wait' ? 'await' : park.kind;
+  await putLeafIn(trx, {
+    runId,
+    address,
+    reason,
+    wakeAt: park.kind === 'timer' ? park.wakeAt : null,
+    state: input.state,
+    ...(input.rewritten !== undefined ? { rewritten: input.rewritten } : {}),
+  });
+  await unparkWaitsAt(trx, { runId, address });
+  switch (park.kind) {
+    case 'timer':
+      // The leaf is the truth; the work row only says when to look.
+      return [
+        await queueRow(trx, { runId }, { kind: RESUME_TIMER_WORK_KIND, key: timerWorkKey(runId), payload: { runId }, dueAt: park.wakeAt, teamId }),
+      ];
+    case 'wait':
+      await parkWaitIn(trx, { runId, waitId: park.waitId, address });
+      return [];
+    case 'limit':
+      return [];
+    default:
+      return neverAsAny(park);
+  }
+}
+
+const OwedRacePayload = z.object({ runId: z.string(), frameAddress: z.string(), state: z.unknown() });
+
 // ── Work claims ─────────────────────────────────────────────────────────────
 
-/** A work claim's handle: the lease it took and the row version it saw, which
- *  is what tells a completion that the row was re-armed since. */
-const WorkClaim = z.object({ leaseToken: z.string(), claimedUpdatedAt: z.iso.datetime() });
-
-function claimOf(work: ClaimedWork): { id: string; leaseToken: string; claimedUpdatedAt: Date } {
-  const claim = WorkClaim.parse(JSON.parse(work.claim));
-  return { id: work.id, leaseToken: claim.leaseToken, claimedUpdatedAt: new Date(claim.claimedUpdatedAt) };
+/** A work claim's handle as the store hands it out. */
+function claimOf(row: { leaseToken: string | null; updatedAt: Date }): string {
+  return JSON.stringify({ leaseToken: row.leaseToken, claimedUpdatedAt: row.updatedAt.toISOString() });
 }
 
 // ── The families ────────────────────────────────────────────────────────────
 
 export const postgresRunHostStore: RunHostStore = {
   parks: {
-    async putLeaf({ runId, address, reason, wakeAt, state, rewritten, fence }) {
-      const run = triggerRunIdOf(runId);
-      const written = await getAutomationsQb(['parked_run', 'trigger_run'])
-        .insertInto('parked_run')
-        .columns(['run_id', 'address', 'status', 'park_reason', 'wake_at', 'state'])
-        .expression((eb) => {
-          let row = eb
-            .selectFrom('trigger_run')
-            .select([
-              'trigger_run.id as run_id',
-              sql<string>`${address}::text`.as('address'),
-              sql<string>`'parked'`.as('status'),
-              sql<string>`${reason}::text`.as('park_reason'),
-              sql<Date | null>`${wakeAt}::timestamptz`.as('wake_at'),
-              jsonb(state).as('state'),
-            ])
-            .where('trigger_run.id', '=', run);
-          if (fence !== undefined) row = row.where(leaseTokenIs(fence));
-          return row;
-        })
-        .onConflict((oc) =>
-          oc.columns(['run_id', 'address']).doUpdateSet({
-            state: jsonb(state),
-            status: 'parked',
-            park_reason: reason,
-            wake_at: wakeAt,
-            // How the limit resume tells a flow that suspended again at once
-            // from the one it stepped.
-            ...(rewritten === true ? { updated_at: sql<Date>`now()` } : {}),
-          }),
-        )
-        .returning('id')
-        .executeTakeFirst();
-      if (written === undefined) throw notWritten(runId, fence);
+    async putLeaf(input) {
+      await putLeafIn(storeDb(), input);
     },
 
+    /** One write: the leaf, what wakes it, the run marked parked. A fenced
+     *  one holds the run's row for it; a lost fence writes nothing. */
+    async commit({ runId, teamId, address, state, fence, park, rewritten }) {
+      const queued = await inStoreTransaction(async (trx) => {
+        await holdRun(trx, runId, fence);
+        if (park.kind === 'wait') await lockWaitEdges(trx, runId, [park.waitId]);
+        const rows = await parkIn(trx, { runId, teamId, address, state, park, ...(rewritten !== undefined ? { rewritten } : {}) });
+        await markParkedIn(trx, runId);
+        return rows;
+      });
+      await announceQueued(queued);
+    },
+
+    /**
+     * A segment's held writes in one: its joins, its parks, the end of the
+     * leaf it resumed (unless it parks there again), the run marked parked,
+     * its settle, the race it settled and the races it owes. Each wait it
+     * parks whose arrivals are unread, read in the write, gets a wake.
+     */
+    async commitSegment({ runId, teamId, fence, resumed, joins, parks, settle, owedRaces, settledRace }) {
+      const { wakes, queued } = await inStoreTransaction(async (trx) => {
+        await holdRun(trx, runId, fence);
+        // Locked as a log locks them, so a commit and a log never wait on each other.
+        await lockWaitEdges(
+          trx,
+          runId,
+          parks.flatMap(({ park }) => (park.kind === 'wait' ? [park.waitId] : [])),
+        );
+        for (const join of joins) await recordJoinIn(trx, { runId, frameAddress: join.frameAddress, pending: join.pending });
+        const queued: Queued[] = [];
+        for (const park of parks) queued.push(...(await parkIn(trx, { runId, teamId, address: park.address, state: park.state, park: park.park })));
+        if (resumed !== null && !parks.some((park) => park.address === resumed)) await finishLeafIn(trx, { runId, address: resumed });
+        if (parks.length > 0) await markParkedIn(trx, runId);
+        if (settle !== null) await settleRunIn(trx, runId, settle);
+        if (settledRace !== undefined && settledRace !== null) {
+          await sql`
+            delete from automations.work
+            where key = ${settleRaceWorkKey(runId, settledRace)}::text and host = (select host from automations.trigger_run where id = ${runId}::uuid)`.execute(trx);
+        }
+        for (const race of owedRaces ?? []) {
+          queued.push(
+            await queueRow(trx, { runId }, {
+              kind: SETTLE_RACE_WORK_KIND,
+              key: settleRaceWorkKey(runId, race.frameAddress),
+              payload: { runId, frameAddress: race.frameAddress, state: race.state },
+              teamId,
+            }),
+          );
+        }
+        // Read in the write: an arrival logged before it is read here, and
+        // one logged after it finds the wait parked.
+        const wakes: WaitWake[] = [];
+        for (const { address, park } of parks) {
+          if (park.kind !== 'wait') continue;
+          const { arrivals } = await waitArrivals(trx, park.waitId);
+          if (arrivals.length === 0) continue;
+          const wake = { runId, waitId: park.waitId, address };
+          queued.push(await queueWake(trx, teamId, wake));
+          wakes.push(wake);
+        }
+        return { wakes, queued };
+      });
+      await announceQueued(queued);
+      return wakes;
+    },
+
+    async owedRaces({ runId }) {
+      const { rows } = await sql<{ payload: unknown }>`
+        select payload from automations.work
+        where kind = ${SETTLE_RACE_WORK_KIND}::text and payload->>'runId' = ${runId}::text
+        order by created_at, key`.execute(storeDb());
+      return rows.map(({ payload }): OwedRace => {
+        const race = OwedRacePayload.parse(payload);
+        return { frameAddress: race.frameAddress, state: race.state };
+      });
+    },
+
+    /** Claiming the leaf also drops the notes a segment that resumed it before
+     *  made and never kept (it died), so their arrivals are read again. */
     async claimLeaf({ runId, address, reason }) {
-      let claim = getAutomationsQb(['parked_run'])
-        .updateTable('parked_run')
-        .set({ status: 'resuming', updated_at: sql`now()` })
-        .where('run_id', '=', triggerRunIdOf(runId))
-        .where('address', '=', address)
-        .where('status', '=', 'parked');
-      if (reason !== undefined) claim = claim.where('park_reason', '=', reason);
-      const row = await claim.returning(['state', 'park_reason']).executeTakeFirst();
+      const { rows } = await sql<{ park_reason: string; state: unknown }>`
+        with claimed as (
+          update automations.parked_run set status = 'resuming', updated_at = now()
+          where run_id = ${runId}::uuid and address = ${address}::text and status = 'parked'
+            and (${reason ?? null}::text is null or park_reason = ${reason ?? null}::text)
+          returning park_reason, state
+        ), dropped as (
+          delete from automations.wait_seen s using automations.wait_row w
+          where s.wait_id = w.id and w.run_id = ${runId}::uuid and s.leaf = ${address}::text and exists (select 1 from claimed)
+        )
+        select park_reason, state from claimed`.execute(storeDb());
+      const row = rows[0];
       if (row === undefined) return null;
       const claimedReason: ParkReason = row.park_reason;
       return { state: row.state, reason: claimedReason };
     },
 
+    /** The leaf's resume is over: the notes its segment made are kept. */
     async finishLeaf({ runId, address, fence }) {
-      let finish = getAutomationsQb(['parked_run', 'trigger_run'])
-        .deleteFrom('parked_run')
-        .where('run_id', '=', triggerRunIdOf(runId))
-        .where('address', '=', address)
-        .where('status', '=', 'resuming');
-      if (fence !== undefined) finish = finish.where(runLeasedTo(fence));
-      await finish.execute();
+      await inStoreTransaction(async (trx) => {
+        if (fence !== undefined) {
+          const { rows } = await sql`
+            select id from automations.trigger_run where id = ${runId}::uuid and lease_token::text = ${fence}::text for update`.execute(trx);
+          if (rows.length === 0) return;
+        }
+        await finishLeafIn(trx, { runId, address });
+      });
     },
 
     async leaves({ runId, parkedOnly, reason, dueBy }) {
@@ -208,27 +406,7 @@ export const postgresRunHostStore: RunHostStore = {
 
   joins: {
     async recordJoin({ runId, frameAddress, pending, fence }) {
-      // A re-reached frame overwrites to the same deterministic count, never
-      // double-counting.
-      const recorded = await getAutomationsQb(['join_pending', 'trigger_run'])
-        .insertInto('join_pending')
-        .columns(['run_id', 'frame_address', 'pending'])
-        .expression((eb) => {
-          let row = eb
-            .selectFrom('trigger_run')
-            .select([
-              'trigger_run.id as run_id',
-              sql<JoinPendingFrameAddress>`${frameAddress}::text`.as('frame_address'),
-              sql<number>`${pending}::integer`.as('pending'),
-            ])
-            .where('trigger_run.id', '=', triggerRunIdOf(runId));
-          if (fence !== undefined) row = row.where(leaseTokenIs(fence));
-          return row;
-        })
-        .onConflict((oc) => oc.columns(['run_id', 'frame_address']).doUpdateSet({ pending, updated_at: new Date() }))
-        .returning('run_id')
-        .executeTakeFirst();
-      if (recorded === undefined) throw notWritten(runId, fence);
+      await recordJoinIn(storeDb(), { runId, frameAddress, pending, ...(fence !== undefined ? { fence } : {}) });
     },
 
     /**
@@ -342,97 +520,78 @@ export const postgresRunHostStore: RunHostStore = {
       return rows.map((r) => r.frame_address);
     },
 
+    /** The frames, their exports, and the races owed at them: a race inside
+     *  an arm another race withdrew is settled by nobody. */
     async deleteFrames({ runId, frameAddresses }) {
       if (frameAddresses.length === 0) return;
       const run = triggerRunIdOf(runId);
-      await getAutomationsQb(['join_pending', 'join_branch_export'])
-        .transaction()
-        .execute(async (trx) => {
-          await trx
-            .deleteFrom('join_pending')
-            .where('run_id', '=', run)
-            .where('frame_address', 'in', frameAddresses.map(frameOfJoin))
-            .execute();
-          await trx
-            .deleteFrom('join_branch_export')
-            .where('run_id', '=', run)
-            .where('frame_address', 'in', frameAddresses.map(frameOfExport))
-            .execute();
-        });
+      await inStoreTransaction(async (trx) => {
+        await trx
+          .deleteFrom('join_pending')
+          .where('run_id', '=', run)
+          .where('frame_address', 'in', frameAddresses.map(frameOfJoin))
+          .execute();
+        await trx
+          .deleteFrom('join_branch_export')
+          .where('run_id', '=', run)
+          .where('frame_address', 'in', frameAddresses.map(frameOfExport))
+          .execute();
+        const owed = frameAddresses.map((frame) => settleRaceWorkKey(runId, frame));
+        await sql`
+          delete from automations.work
+          where key = any(${owed}::text[]) and host = (select host from automations.trigger_run where id = ${runId}::uuid)`.execute(trx);
+      });
     },
   },
 
-  correlations: {
-    async correlate({ runId, teamId, address, adapterType, correlationKey }) {
-      await getAutomationsQb(['adapter_await'])
-        .insertInto('adapter_await')
-        .values({ adapter_type: adapterType, correlation_key: correlationKey, run_id: triggerRunIdOf(runId), team_id: teamId, address })
-        .onConflict((oc) =>
-          oc.columns(['run_id', 'address']).doUpdateSet({
-            adapter_type: adapterType,
-            correlation_key: correlationKey,
-            updated_at: new Date(),
-          }),
-        )
-        .execute();
+  waits: {
+    mark: () => arrivalMark(storeDb()),
+
+    async log(input) {
+      const { logged, queued } = await inStoreTransaction(async (trx) => {
+        const logged = await logArrivalsIn(trx, input);
+        const queued: Queued[] = [];
+        for (const wake of logged.wakes) queued.push(await queueWake(trx, input.teamId, wake));
+        return { logged, queued };
+      });
+      await announceQueued(queued);
+      return logged;
     },
 
-    // The platform's runs only: an lf run's awaits are woken by lf.
-    async correlated({ adapterType, teamId, correlationKey }) {
-      const rows = await getAutomationsQb(['adapter_await', 'trigger_run'])
-        .selectFrom('adapter_await')
-        .innerJoin('trigger_run', 'trigger_run.id', 'adapter_await.run_id')
-        .where('trigger_run.host', '=', 'platform')
-        .where('adapter_await.adapter_type', '=', adapterType)
-        .where('adapter_await.team_id', '=', teamId)
-        .where('adapter_await.correlation_key', '=', correlationKey)
-        .select(['adapter_await.run_id', 'adapter_await.team_id', 'adapter_await.address'])
-        .orderBy('adapter_await.created_at')
-        .execute();
-      return rows.map((r): CorrelatedAwait => ({ runId: r.run_id, teamId: r.team_id, address: r.address }));
-    },
+    open: (input) => inStoreTransaction((trx) => openWait(trx, input)),
 
-    async ofRun({ runId, adapterType }) {
-      const rows = await getAutomationsQb(['adapter_await'])
-        .selectFrom('adapter_await')
-        .where('run_id', '=', triggerRunIdOf(runId))
-        .where('adapter_type', '=', adapterType)
-        .select(['run_id', 'team_id', 'address', 'correlation_key'])
-        .orderBy('address')
-        .execute();
-      return rows.map((r) => ({ runId: r.run_id, teamId: r.team_id, address: r.address, correlationKey: r.correlation_key }));
-    },
+    arrivals: ({ waitId }) => waitArrivals(storeDb(), waitId),
 
-    async drop({ runId, address }) {
-      await getAutomationsQb(['adapter_await'])
-        .deleteFrom('adapter_await')
-        .where('run_id', '=', triggerRunIdOf(runId))
-        .where('address', '=', address)
-        .execute();
-    },
+    // The platform's runs, every team's: an lf run's are its store module's to read.
+    stranded: (of) => strandedWaits(storeDb(), { host: 'platform' }, of),
 
-    async dropRun({ runId }) {
-      await getAutomationsQb(['adapter_await']).deleteFrom('adapter_await').where('run_id', '=', triggerRunIdOf(runId)).execute();
+    note: (input) => inStoreTransaction((trx) => noteArrivalIn(trx, input)),
+
+    async sweep(input) {
+      return { swept: await inStoreTransaction((trx) => sweepArrivalsIn(trx, input)) };
     },
   },
 
   leases: {
-    /** One statement: the lease is taken only while free or lapsed, and in
-     *  the same statement every leaf a dead holder left claimed (`resuming`)
-     *  goes back to `parked`, before anything reads the run's leaves. */
+    /** One statement: the lease is taken only while free or lapsed, keeping the
+     *  arrival mark as it is claimed (the sweep keeps every arrival above it
+     *  while the lease is unexpired), and in the same statement every leaf a
+     *  dead holder left claimed (`resuming`) goes back to `parked`, before
+     *  anything reads the run's leaves. */
     async claim({ runId, ttlMs }) {
       const token = randomUUID();
       const { rows } = await sql<{ id: string }>`
         WITH claimed AS (
           UPDATE automations.trigger_run
-          SET lease_owner = ${LEASE_OWNER}, lease_until = ${leaseFromNow(ttlMs)}, lease_token = ${token}
+          SET lease_owner = ${LEASE_OWNER}, lease_until = ${leaseFromNow(ttlMs)}, lease_token = ${token},
+              lease_mark = (SELECT coalesce(max(seq), 0) FROM automations.arrival)
           WHERE id = ${runId}::uuid AND (lease_until IS NULL OR lease_until < now())
           RETURNING id
         ), returned AS (
           UPDATE automations.parked_run SET status = 'parked'
           WHERE run_id IN (SELECT id FROM claimed) AND status = 'resuming'
         )
-        SELECT id FROM claimed`.execute(getAutomationsQb(['trigger_run', 'parked_run']));
+        SELECT id FROM claimed`.execute(storeDb());
       return rows.length === 0 ? null : { token };
     },
 
@@ -460,28 +619,30 @@ export const postgresRunHostStore: RunHostStore = {
         .execute();
     },
 
+    /** The run's leaves, joins, waits (with their notes) and owed races. */
     async dropRunState({ runId, fence }) {
       const run = triggerRunIdOf(runId);
-      return getAutomationsQb(['parked_run', 'join_pending', 'join_branch_export', 'trigger_run'])
-        .transaction()
-        .execute(async (trx) => {
-          if (fence !== undefined) {
-            // Held for the transaction: the lease cannot change hands between
-            // the check and the deletes.
-            const held = await trx
-              .selectFrom('trigger_run')
-              .where('id', '=', run)
-              .where(leaseTokenIs(fence))
-              .select('id')
-              .forUpdate()
-              .executeTakeFirst();
-            if (held === undefined) return false;
-          }
-          await trx.deleteFrom('parked_run').where('run_id', '=', run).execute();
-          await trx.deleteFrom('join_pending').where('run_id', '=', run).execute();
-          await trx.deleteFrom('join_branch_export').where('run_id', '=', run).execute();
-          return true;
-        });
+      return inStoreTransaction(async (trx) => {
+        if (fence !== undefined) {
+          // Held for the transaction: the lease cannot change hands between
+          // the check and the deletes.
+          const held = await trx
+            .selectFrom('trigger_run')
+            .where('id', '=', run)
+            .where(leaseTokenIs(fence))
+            .select('id')
+            .forUpdate()
+            .executeTakeFirst();
+          if (held === undefined) return false;
+        }
+        await trx.deleteFrom('parked_run').where('run_id', '=', run).execute();
+        await trx.deleteFrom('join_pending').where('run_id', '=', run).execute();
+        await trx.deleteFrom('join_branch_export').where('run_id', '=', run).execute();
+        await sql`delete from automations.wait_row where run_id = ${runId}::uuid`.execute(trx);
+        await sql`
+          delete from automations.work where kind = ${SETTLE_RACE_WORK_KIND}::text and payload->>'runId' = ${runId}::text`.execute(trx);
+        return true;
+      });
     },
   },
 
@@ -496,29 +657,24 @@ export const postgresRunHostStore: RunHostStore = {
       return enqueueWorkIfAbsent({ kind, key, payload, ...(teamId !== undefined ? { teamId } : {}), ...(dueAt !== undefined ? { dueAt: new Date(dueAt) } : {}) });
     },
 
-    async claimDue({ limit, leaseMs, dueBy, kinds }) {
+    async claimDue({ limit, leaseMs, dueBy, kinds, teamId }) {
       const rows = await claimDueWork({
         owner: LEASE_OWNER,
         limit,
         leaseMs,
         ...(dueBy !== undefined ? { now: new Date(dueBy) } : {}),
         ...(kinds !== undefined ? { kinds } : {}),
+        ...(teamId !== undefined ? { teamId } : {}),
       });
-      return rows.map((row) => ({
-        id: row.id,
-        kind: row.kind,
-        key: row.key,
-        payload: row.payload,
-        claim: JSON.stringify({ leaseToken: row.leaseToken, claimedUpdatedAt: row.updatedAt.toISOString() }),
-      }));
+      return rows.map((row) => ({ id: row.id, kind: row.kind, key: row.key, payload: row.payload, claim: claimOf(row) }));
     },
 
     async complete(work) {
-      await completeWork(claimOf(work));
+      await completeWork(workClaimOf(work));
     },
 
     async release(work) {
-      await releaseWork({ ...claimOf(work), ...(work.dueAt !== undefined ? { dueAt: new Date(work.dueAt) } : {}) });
+      await releaseWork({ ...workClaimOf(work), ...(work.dueAt !== undefined ? { dueAt: new Date(work.dueAt) } : {}) });
     },
   },
 
@@ -543,6 +699,36 @@ export const postgresRunHostStore: RunHostStore = {
     },
   },
 };
+
+/** A join recorded (a re-reached frame overwrites to the same deterministic
+ *  count, never double-counting), fenced by the run's lease when given. */
+async function recordJoinIn(db: StoreDb, input: { runId: string; frameAddress: string; pending: number; fence?: string }): Promise<void> {
+  const { runId, frameAddress, pending, fence } = input;
+  const recorded = await db
+    .insertInto('join_pending')
+    .columns(['run_id', 'frame_address', 'pending'])
+    .expression((eb) => {
+      let row = eb
+        .selectFrom('trigger_run')
+        .select([
+          'trigger_run.id as run_id',
+          sql<JoinPendingFrameAddress>`${frameAddress}::text`.as('frame_address'),
+          sql<number>`${pending}::integer`.as('pending'),
+        ])
+        .where('trigger_run.id', '=', triggerRunIdOf(runId));
+      if (fence !== undefined) row = row.where(leaseTokenIs(fence));
+      return row;
+    })
+    .onConflict((oc) => oc.columns(['run_id', 'frame_address']).doUpdateSet({ pending, updated_at: new Date() }))
+    .returning('run_id')
+    .executeTakeFirst();
+  if (recorded === undefined) throw notWritten(runId, fence);
+}
+
+/** A team's deliveries as the platform's door keeps them. */
+export function platformDeliveryRows(teamId: string): DeliveryRowStore {
+  return deliveryRowStore({ host: 'platform', teamId });
+}
 
 /** The orphan sweep's half: every `resuming` leaf whose run's lease is free or
  *  lapsed was left by a dead holder, and is parked again. Returns how many.

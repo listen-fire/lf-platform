@@ -63,7 +63,8 @@ export interface EnqueueWorkInput {
 /** Upsert by key. Against a row whose lease is live (by the database clock) the
  *  NEW due_at and payload win: a re-arm during the run, which completeWork then
  *  honours. Against an unleased row the EARLIEST due_at wins with the new payload
- *  (several leaves of one run share a key). The row's resulting due time is
+ *  (several leaves of one run share a key). A row that gave up (buried dead)
+ *  comes back, its attempts from nought. The row's resulting due time is
  *  announced to the wake after the write; a caller passing its transaction
  *  announces after commit; inside a request's context transaction the
  *  announcement waits for the commit and is dropped by a rollback. */
@@ -79,8 +80,12 @@ export async function enqueueWork(
     INSERT INTO automations.work (host, kind, key, team_id, payload, due_at, updated_at)
     VALUES ('platform', ${input.kind}, ${input.key}, ${input.teamId ?? null}, ${jsonb(input.payload)}, ${dueAt}, ${FIRST_VERSION})
     ON CONFLICT (host, key) DO UPDATE
-      SET due_at = CASE WHEN work.lease_until > now() THEN EXCLUDED.due_at ELSE LEAST(work.due_at, EXCLUDED.due_at) END,
+      SET due_at = CASE WHEN work.dead_at IS NOT NULL THEN EXCLUDED.due_at
+                        WHEN work.lease_until > now() THEN EXCLUDED.due_at ELSE LEAST(work.due_at, EXCLUDED.due_at) END,
           payload = EXCLUDED.payload,
+          attempts = CASE WHEN work.dead_at IS NULL THEN work.attempts ELSE 0 END,
+          dead_at = NULL,
+          dead_reason = NULL,
           team_id = COALESCE(EXCLUDED.team_id, work.team_id),
           updated_at = ${nextVersion('work')}
     RETURNING due_at`.execute(opts.db ?? getAutomationsQb(['work']));
@@ -159,7 +164,7 @@ export async function claimDueWork(input: {
   const { rows } = await sql<Work>`
     WITH c AS MATERIALIZED (
       SELECT id FROM automations.work
-      WHERE host = 'platform' AND due_at <= ${now} AND (lease_until IS NULL OR lease_until < now())
+      WHERE host = 'platform' AND due_at <= ${now} AND (lease_until IS NULL OR lease_until < now()) AND dead_at IS NULL
         AND kind = ANY(${kinds}::text[])
         ${ofTeam}
       ORDER BY due_at

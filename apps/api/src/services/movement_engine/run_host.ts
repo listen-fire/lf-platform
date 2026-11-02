@@ -1,7 +1,7 @@
 // The hosted product as a run host: the core's rules (movement-engine
-// run_host/) over the Postgres backend, the keepers of record-backed awaits,
-// and the product's own run records (the run's status row, its callbacks).
-// Every hosted entry into a parked run goes through the core with this host.
+// run_host/) over the Postgres backend, and the product's own run records
+// (the run's status row). Every hosted entry into a parked run goes through
+// the core with this host.
 
 import { logger } from 'movement-engine/public/log';
 import { sql } from 'kysely';
@@ -10,9 +10,6 @@ import type { LeaseOptions } from 'movement-engine/public/run-host';
 import type { RunHost, RunRecords } from 'movement-engine/public/run-host';
 
 import { getAutomationsQb } from '../../lib/kysely';
-import { awaitKeepers } from '../translation_graph/adapters/packages';
-import { callbackAwaitKeeper } from './callback_sink';
-import { revokeRunCallbacks } from './callback_store';
 import { settleRunEngineRecord } from './run_engine_record';
 import { postgresRunHostStore, triggerRunIdOf } from './run_host_store';
 
@@ -35,21 +32,12 @@ const hostedRunRecords: RunRecords = {
       .where('status', 'in', ['running', 'parked'])
       .execute();
   },
-
-  // A callback IS the run's own capability (unlike an ask, whose record
-  // outlives the run): a run that ends revokes its outstanding callbacks, so
-  // a late tap gets the closed-request answer.
-  async closeRun({ runId }) {
-    await revokeRunCallbacks(triggerRunIdOf(runId));
-  },
 };
 
-/** The hosted run host. Built at call time: the keepers come from the adapter
- *  registry, which must never be captured half-loaded in an import cycle. */
+/** The hosted run host. */
 export function hostedRunHost(): RunHost {
   return {
     store: postgresRunHostStore,
-    keepers: [...awaitKeepers(), callbackAwaitKeeper],
     runs: hostedRunRecords,
     log: logger,
   };
