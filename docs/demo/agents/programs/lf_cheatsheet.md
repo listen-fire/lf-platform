@@ -8,12 +8,12 @@ the rest.
 ## A file
 
 ```
-pay = connect `@lf/stripe` using my_stripe       # each system connected once, at file scope:
-crm = connect `@lf/mcp` using my_crm             # its module, and the saved connection it signs in with
+gh = connect `@lf/github` using my_github        # each system connected once, at file scope:
+mail = connect `@lf/gmail` using team_mail       # its module, and the saved connection it signs in with
 
-function `On Change`(c: <pay-[:InvoiceChange]->>) { … }   # one typed parameter: what the listen arrives at
+function `Assigned`(n: <gh-[:Notification]->>) { … }   # one typed parameter: what the listen arrives at
 
-listen to pay-[:Invoices]->-[c:Changes WHERE c.Kind == "…"]-> fire `On Change`   # the one way an automation runs
+listen to gh-[n:Notifications WHERE n.Reason == "assign"]-> fire `Assigned`   # the one way an automation runs
 ```
 
 Nothing is imported: a module is named where it is connected, a connection by
