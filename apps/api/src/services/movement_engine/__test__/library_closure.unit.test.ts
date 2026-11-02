@@ -93,13 +93,23 @@ function manualEvent(): TriggerEvent {
 }
 
 function root(imports: string, body: string, version: 4 | 5 = 5): string {
-  const v5 = version === 5;
+  if (version === 5) {
+    return `import { kg } from adapters
+import { kg_cred } from credentials
+${imports}
+graph = connect kg using kg_cred
+function recap(go: <manual-[:\`Invocation\`]->>) {
+${body}
+}
+listen to manual-[:Invocations]-> fire recap
+`;
+  }
   return `import { manual, kg } from adapters
 import { kg_cred } from credentials
 ${imports}
-runs = ${v5 ? 'connect manual' : 'manual()'}
-graph = ${v5 ? 'connect kg using kg_cred' : 'kg(credentials: kg_cred)'}
-${v5 ? 'function' : 'movement'} recap(go: <runs-[:Invocation]->>) {
+runs = manual()
+graph = kg(credentials: kg_cred)
+movement recap(go: <runs-[:Invocation]->>) {
 ${body}
 }
 listen to runs {} fire recap

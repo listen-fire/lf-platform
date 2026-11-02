@@ -85,9 +85,8 @@ function manualEvent(): TriggerEvent {
   };
 }
 
-const PRELUDE = `import { manual, kg } from adapters
+const PRELUDE = `import { kg } from adapters
 import { kg_cred } from credentials
-runs = connect manual
 graph = connect kg using kg_cred
 `;
 
@@ -120,10 +119,16 @@ function double(n: <number>) {
 async function runBody(body: string, options: { languageVersion?: LanguageVersion; fileLevel?: string } = {}) {
   const kg = makeKgFake();
   const v4 = options.languageVersion !== undefined && isLegacyLanguageVersion(options.languageVersion);
-  const source = `${v4 ? PRELUDE_V4 : PRELUDE}${options.fileLevel ?? (v4 ? MARK_V4 : MARK)}${v4 ? 'movement' : 'function'} recap(go: <runs-[:Invocation]->>) {
+  const source = v4
+    ? `${PRELUDE_V4}${options.fileLevel ?? MARK_V4}movement recap(go: <runs-[:Invocation]->>) {
 ${body}
 }
 listen to runs {} fire recap
+`
+    : `${PRELUDE}${options.fileLevel ?? MARK}function recap(go: <manual-[:\`Invocation\`]->>) {
+${body}
+}
+listen to manual-[:Invocations]-> fire recap
 `;
   await runMovement({
     source,

@@ -255,14 +255,14 @@ describe("a segment's opening and closing", () => {
     expect(refusal).toMatchObject({
       code: 'MOVENG_UNSUPPORTED',
       message:
-        'MOVENG_UNSUPPORTED: the host does not serve clock.now, ids.mint, which host families version 1 requires ' +
+        `MOVENG_UNSUPPORTED: the host does not serve clock.now, ids.mint, which host families version ${HOST_FAMILIES_VERSION} requires ` +
         '(the clock, ids families); no segment was opened',
     });
     expect(opened).toEqual([]);
     const { ids: _onlyIds, ...withoutIds } = host;
     await expect(
       openRunContext({ host: withoutIds as unknown as typeof host, teamId: TEAM_ID, languageVersion: '2', spend: {} }),
-    ).rejects.toThrow('the host does not serve ids.mint, which host families version 1 requires (the ids family)');
+    ).rejects.toThrow(`the host does not serve ids.mint, which host families version ${HOST_FAMILIES_VERSION} requires (the ids family)`);
     expect(opened).toEqual([]);
   });
 
@@ -304,7 +304,7 @@ describe("a segment's opening and closing", () => {
     await expect(
       host.segment.open({ teamId: TEAM_ID, languageVersion: '1', hostFamiliesVersion: HOST_FAMILIES_VERSION + 1 }),
     ).rejects.toThrow(
-      `segment.open carries host families version ${HOST_FAMILIES_VERSION + 1}, which this host does not serve (supported: 1)`,
+      `segment.open carries host families version ${HOST_FAMILIES_VERSION + 1}, which this host does not serve (supported: ${HOST_FAMILIES_VERSION})`,
     );
     expect(opened).toEqual([]);
   });
@@ -392,15 +392,14 @@ function runOnce(input: { body: string; kg: Adapter; locks: WriteLocks; closes: 
   const manual = createManualAdapter({ teamId: teamOfTenant(TEAM_ID) });
   return runMovement({
     source: [
-      'import { manual, kg } from adapters',
+      'import { kg } from adapters',
       'import { kg_cred } from credentials',
-      'runs = connect manual',
       'graph = connect kg using kg_cred',
-      'function m(go: <runs-[:Invocation]->>) {',
+      'function m(go: <manual-[:`Invocation`]->>) {',
       '  write graph-[:note]-> { unique by (`body`) body: "one" }',
       input.body,
       '}',
-      'listen to runs {} fire m',
+      'listen to manual-[:Invocations]-> fire m',
     ].join('\n'),
     event: {
       pipelineInputId: 'trigger:manual-segment',

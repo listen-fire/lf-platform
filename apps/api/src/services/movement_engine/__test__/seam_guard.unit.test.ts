@@ -15,7 +15,7 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 
 import ts from 'typescript';
-import { LANGUAGE_VERSION, type InstanceSchema } from 'movement-lang';
+import { LANGUAGE_VERSION, mockCatalogSnapshot, type InstanceSchema } from 'movement-lang';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { CapturedWrite } from 'movement-engine/public/adapter';
@@ -38,7 +38,7 @@ import { adapterErrorOf } from 'movement-engine/public/host';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import { productionEngineHost } from '../../translation_graph/movement/engine_host';
 import { inMemoryRawTextStore } from '../../translation_graph/movement/raw_text_store';
-import { makeUnstablePosition, positionData } from 'engine-contracts/catalog';
+import { makeStablePosition, makeUnstablePosition, positionData } from 'engine-contracts/catalog';
 import { InMemoryWriteLocks } from 'movement-engine/public/write-locks';
 import {
   HOST_FAMILIES,
@@ -51,7 +51,7 @@ import { resumeMovement, runMovement } from '@listen-fire/legacy-engine/dispatch
 import { MovementRunFailed, type ParkSink, type ResumeMovementInput, type RunLimitPause, type RunMovementInput } from '@listen-fire/legacy-engine/services/movement_engine/run';
 import { makeFakeParkSink, makeMemoryParkSources, makeTestHost, type TestHostOverrides } from 'movement-engine/public/testing';
 import { methodPaths, notJsonAt, roundTripHost } from './round_trip_host';
-import { HOST_FAMILIES_VERSION } from 'engine-contracts';
+import { HOST_FAMILIES_VERSION, type LoggedArrival } from 'engine-contracts';
 import { tenantOfTeam } from '../../translation_graph/movement/tenant';
 
 const ENGINE_DIR = path.resolve(__dirname, '..');
@@ -93,7 +93,6 @@ const PURE_FILES = [
 const HOST_SIDE_FILES = [
   'await_description.ts',
   'await_resume.ts',
-  'await_wake.ts',
   'cancel_gate.ts',
   'limit_pause.ts',
   'limit_resume.ts',
@@ -101,7 +100,10 @@ const HOST_SIDE_FILES = [
   'resume_step.ts',
   'run_engine_record.ts',
   'run_host.ts',
+  'run_host_deliveries.ts',
+  'run_host_queue.ts',
   'run_host_store.ts',
+  'run_host_waits.ts',
   'run_lease.ts',
   'single_flight.ts',
   'timer_resume.ts',
@@ -449,14 +451,12 @@ describe('the engine/host seam carries data', () => {
     const manual = createManualAdapter({ teamId });
     const result = await runMovement({
       source: [
-        'import { manual } from adapters',
-        'runs = connect manual',
-        '',
-        'function m(go: <runs-[:Invocation]->>) {',
+          '',
+        'function m(go: <manual-[:`Invocation`]->>) {',
         '  f = File.from("the digest", "text")',
         '  t = File.read(f)',
         '}',
-        'listen to runs {} fire m',
+        'listen to manual-[:Invocations]-> fire m',
       ].join('\n'),
       event: {
         pipelineInputId: 'trigger:manual-files',
@@ -556,15 +556,14 @@ describe('the engine/host seam carries data', () => {
     };
     const result = await runMovement({
       source: [
-        'import { manual, kg } from adapters',
+        'import { kg } from adapters',
         'import { kg_cred } from credentials',
-        'runs = connect manual',
-        'graph = connect kg using kg_cred',
+          'graph = connect kg using kg_cred',
         '',
-        'function m(go: <runs-[:Invocation]->>) {',
+        'function m(go: <manual-[:`Invocation`]->>) {',
         '  write graph-[:note]-> { unique by (`body`) body: "hello" }',
         '}',
-        'listen to runs {} fire m',
+        'listen to manual-[:Invocations]-> fire m',
       ].join('\n'),
       event: {
         pipelineInputId: 'trigger:manual-adapters',
@@ -672,16 +671,15 @@ describe('the engine/host seam carries data', () => {
     };
     const result = await runMovement({
       source: [
-        'import { manual, kg } from adapters',
+        'import { kg } from adapters',
         'import { kg_cred } from credentials',
-        'runs = connect manual',
-        'graph = connect kg using kg_cred',
+          'graph = connect kg using kg_cred',
         '',
-        'function m(go: <runs-[:Invocation]->>) {',
+        'function m(go: <manual-[:`Invocation`]->>) {',
         '  write graph-[:note]-> { unique by (`body`) body: "by ${@user_email}" }',
         '  await sleep(1d)',
         '}',
-        'listen to runs {} fire m',
+        'listen to manual-[:Invocations]-> fire m',
       ].join('\n'),
       event: {
         pipelineInputId: 'trigger:manual-families',
@@ -1117,6 +1115,12 @@ describe('the round trip', () => {
       park: {
         sink,
         sources: makeMemoryParkSources().sources,
+        waits: {
+          mark: async () => ({ mark: 0 }),
+          open: async () => ({ waitId: 'wait-1' }),
+          arrivals: async () => ({ arrivals: [] }),
+          note: async () => ({ counts: false }),
+        },
       },
       trace: [],
     });
@@ -1425,6 +1429,77 @@ describe('every family crosses as JSON', () => {
     // The source is a resource before the model is asked anything.
     await expect(h.run({ firedAt: undefined, languageVersion: '4' })).rejects.toThrow('test: no model');
     expect(minted).toEqual([1]);
+  });
+
+  // Waits (host families version 2): an await on a listenable edge reads the
+  // wait the record opened as it entered, binds what counts, and otherwise
+  // parks on the wait, woken by what arrived while it parked.
+  const chat: InstanceSchema = {
+    positions: {
+      Message: {
+        properties: { Text: 'text', Timestamp: 'text' },
+        edges: { Replies: { target: 'Message', listenable: true, sequenced: 'chronological', identity: 'Timestamp' } },
+      },
+    },
+    collections: { messages: { target: 'Message' } },
+    writableRoots: {},
+  };
+  const chatCatalog = mockCatalogSnapshot({ adapters: { chat: { constructionArgs: [], schema: chat } } });
+  const chatSource = [
+    'import { chat } from adapters',
+    'c = connect chat',
+    'function m(e: <c-[:messages]->>) {',
+    '  msg = only(c-[:messages]->)',
+    '  if (msg != null) {',
+    '    r = await msg-[:Replies]->',
+    '    if (exists(r)) { said = r.Text }',
+    '  }',
+    '}',
+  ].join('\n');
+  const reply: LoggedArrival = { seq: 42, identity: '1.5', landing: { recordId: 'r-1', recordType: 'Message', fields: { Text: 'hi', Timestamp: '1.5' } } };
+  const quietChat: Adapter = {
+    adapterType: 'chat',
+    supportedTriggers: [],
+    runtimeCapabilities: () => ({ traversal: { incoming: false, edgeProperties: false }, resources: false }),
+    listEntryPoints: async () => [],
+    describe: async () => null,
+    resolveEntity: async () => ({ candidates: [] }),
+    getFieldValue: async () => null,
+    getRelated: async (read) =>
+      read.fieldId === 'messages' ? [{ position: makeStablePosition({ adapterType: 'chat', recordType: 'Message', recordId: 'm-1' }) }] : [],
+    createRecord: async () => ({ adapterType: 'chat', externalId: 'x', data: {} }),
+    updateRecord: async (input) => ({ adapterType: 'chat', externalId: input.externalId, data: {}, association: containerAssociation(input) }),
+    deleteRecord: async () => ({}),
+    arrivals: { awaitKeys: async ({ heads }) => heads.map((head) => ({ key: `thread:${head.recordId}` })) },
+  };
+  const waitsReading = (arrivals: () => LoggedArrival[]): NonNullable<TestHostOverrides['park']>['waits'] => ({
+    mark: async () => ({ mark: 41 }),
+    open: async (input) => ({ waitId: 'key' in input ? `wait:${input.key}` : 'wait:gone' }),
+    arrivals: async () => ({ arrivals: arrivals() }),
+    note: async (input) => ({ counts: input.matched }),
+  });
+  const chatRun = (park: NonNullable<TestHostOverrides['park']>) =>
+    runMovement({
+      source: chatSource,
+      movementName: 'm',
+      event: { pipelineInputId: 'pi-waits', adapterType: 'chat', triggerType: 'webhook', payload: { Text: 'hello' }, recordId: 'm-0' },
+      teamId: tenantOfTeam(ROUND_TRIP_TEAM),
+      catalog: chatCatalog,
+      host: roundTripHost(makeTestHost({ adapters: { resolve: () => quietChat }, park }), REACHED),
+    });
+
+  familyRun('waits: an await binds the arrival its wait counts', async () => {
+    const parks = makeFakeParkSink();
+    const result = await chatRun({ sink: parks.sink, waits: waitsReading(() => [reply]) });
+    expect(result.parked).not.toBe(true);
+    expect(parks.awaitParks).toEqual([]);
+  });
+
+  familyRun('waits: an await parks on its wait, and is woken by what arrived as it parked', async () => {
+    const parks = makeFakeParkSink();
+    const result = await chatRun({ sink: parks.sink, waits: waitsReading(() => (parks.awaitParks.length > 0 ? [reply] : [])) });
+    expect(result.parked).toBe(true);
+    expect(parks.awaitParks.map((parked) => parked.waitId)).toEqual(['wait:thread:m-1']);
   });
 
   it('reached every method on the manifest', () => {
