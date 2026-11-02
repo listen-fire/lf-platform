@@ -27,8 +27,8 @@ const FIXTURES = path.resolve(__dirname, '../__fixtures__');
  *  engine's replays of them retired with its support for versions below 5
  *  (2026-10-16). */
 const FLOORS = {
-  v1: { recordings: 443 },
-  v2: { recordings: 542 },
+  v1: { recordings: 394 },
+  v2: { recordings: 488 },
 } as const;
 
 const fixtureOf = (corpus: keyof typeof FLOORS): string => path.join(FIXTURES, `engine-runs.${corpus}.json`);
@@ -60,15 +60,6 @@ const UNPORTABLE: Array<{
   matches: (recording: HostRecording, verdict: Extract<ReplayVerdict, { kind: 'diverged' | 'skipped' }>) => boolean;
   count: Record<keyof typeof FLOORS, number>;
 }> = [
-  {
-    // The test mocks the language release (v1 unsupported; v1 deprecated) for
-    // itself alone, and a recording cannot carry a module mock.
-    reason: "the test mocks the release's supported and deprecated language versions",
-    matches: (recording) =>
-      recording.failure?.code === 'MOVENG_LANGUAGE_VERSION' ||
-      JSON.stringify(recording.result ?? null).includes('"code":"MOV_LANGUAGE_VERSION_DEPRECATED"'),
-    count: { v1: 0, v2: 2 },
-  },
   {
     // An engine non-determinism not yet fixed: an extraction mints its call
     // sites' ids (`x:<node>#<n>`, part of the prompt) in the order its
@@ -138,7 +129,9 @@ async function checkHarvest(corpus: keyof typeof FLOORS): Promise<void> {
  * Recordings that encoded a behaviour since fixed as a bug, so a replay of
  * them diverges by design — each named, with how many of each corpus's
  * recordings it accounts for, asserted exactly (the corpora's triage, for
- * recordings). The recordings themselves are never edited.
+ * recordings). The recordings themselves are never edited. The harvest of
+ * 2026-11-02 (listen-fire 0.13: catalogs of contract version 3, host families
+ * version 2) recorded today's behaviour, so none encodes a fixed bug yet.
  */
 const ENCODED_A_FIXED_BUG: Array<{
   reason: string;
@@ -148,261 +141,8 @@ const ENCODED_A_FIXED_BUG: Array<{
   /** The replay diverged exactly where the fixed bug says. */
   matches: (recording: HostRecording, divergence: string, verdict: Extract<ReplayVerdict, { kind: 'diverged' }>) => boolean;
   count: Record<keyof typeof FLOORS, number>;
-}> = [
-  {
-    // PLAN-07A Task 4d: a file is only what an envelope declares one. The
-    // recording's catalog gives the plugin its `through` names no output, so
-    // its records' `file` key is declared nowhere: the plugin's fetched file
-    // is data now, and the FILE resource the recorded write carried from
-    // that key (its `data.file`) is not made. Matched on exactly that.
-    reason: "a plugin's undeclared `file` key was taken for a file (PLAN-07A Task 4d)",
-    is: (recording) =>
-      undeclaredThroughPlugins(recording).length > 0 &&
-      recording.requests.some((request) => fileResources(request.args).length > 0),
-    matches: (recording, divergence) => {
-      const at = /differs at args\.args\.resources\.(\d+)/.exec(divergence);
-      if (at === null) return false;
-      return undeclaredThroughPlugins(recording).length > 0 && recording.requests.some((request) => fileResources(request.args).includes(Number(at[1])));
-    },
-    count: { v1: 0, v2: 1 },
-  },
-  {
-    // Not a bug: a fact about the release. A run pinned to a version no
-    // release supports (99) is refused by name, and the refusal's wording
-    // belongs to the release that refuses it: it named the current version
-    // when the recording was made, and now says the pin is not a version and
-    // names the installed release. The refusal itself (MOVENG_LANGUAGE_VERSION,
-    // before any request) is unchanged; matched on exactly that.
-    reason: 'an unsupported version\'s refusal is worded by the release that refuses it',
-    is: (recording) => pinnedUnsupported(recording),
-    matches: (recording, divergence) =>
-      pinnedUnsupported(recording) &&
-      recording.requests.length === 0 &&
-      bothRefuseTheVersion(divergence),
-    count: { v1: 0, v2: 1 },
-  },
-  {
-    // B7 (shared-handle numbering): a write handle bound under two names is
-    // one handle, so a park's state now numbers it (`id` on the descriptor)
-    // and the repeated descriptor is a `handleRef` to that number. The
-    // recordings predate it. Matched on exactly that: the replayed park
-    // request is a recorded one once both sides' handle numbering is masked
-    // (ids dropped, each handleRef resolved to the descriptor it names).
-    reason: 'a park numbers a write handle bound under two names, and the repeats refer to it (B7)',
-    is: (recording) => recording.requests.some((request) => request.family === 'park.callbacks' && JSON.stringify(request.args).includes('"landings"') && JSON.stringify(request.args).includes('"kind":"handle"')),
-    matches: (recording, _divergence, verdict) => {
-      if (verdict.unmatched === undefined) return false;
-      const { path, args } = verdict.unmatched;
-      if (!path.startsWith('park.')) return false;
-      const replayed = canonicalJson(args);
-      const masked = canonicalJson(maskHandleNumbering(args));
-      return recording.requests.some((request) => {
-        if (`${request.family}.${request.method}` !== path) return false;
-        const recorded = canonicalJson(request.args);
-        return recorded !== replayed && canonicalJson(maskHandleNumbering(request.args)) === masked;
-      });
-    },
-    count: { v1: 1, v2: 1 },
-  },
-  {
-    // The park format change: body closures hold their scope by reference.
-    // A closure parks with an empty `captured` and a `scope` link (here a
-    // `scopeRef` to its movement body's scope, which the chain now numbers:
-    // `id`, `parent`), where the recordings parked a flat `captured`
-    // snapshot. Matched on exactly that: every request before the park was
-    // served (the replay's and the recording's numbers agree), only
-    // `segment.close` follows it, and the replayed park request is the
-    // recorded one once each closure's capture is normalised — the recorded
-    // snapshot's every name resolves through the replayed link to the same
-    // descriptor, a name only the link holds is a closure bound later in that
-    // same scope, and every other byte is equal.
-    reason: 'a park writes a body closure\'s scope by reference, not as a captured snapshot',
-    // A run's own park only: a resume of a snapshot-form state re-parks it
-    // as it was handed (engine-runs v1 #11, v2 #11 replay identically).
-    is: (recording) => recording.entry === 'run' && recording.requests.some((request) => request.family.startsWith('park.') && closuresIn(request.args).some((closure) => isObject(closure.captured) && Object.keys(closure.captured).length > 0 && closure.scope === undefined)),
-    matches: (recording, divergence, verdict) => {
-      if (recording.entry !== 'run' || verdict.unmatched === undefined) return false;
-      const { path, args } = verdict.unmatched;
-      if (!path.startsWith('park.')) return false;
-      const numbers = /^request #(\d+) (\S+) .* the first unserved (\S+) recorded was #(\d+) /.exec(divergence);
-      if (numbers === null || numbers[1] !== numbers[4] || numbers[2] !== path || numbers[3] !== path) return false;
-      const index = Number(numbers[4]) - 1;
-      const recorded = recording.requests[index];
-      if (recorded === undefined || `${recorded.family}.${recorded.method}` !== path) return false;
-      const after = recording.requests.slice(index + 1).map((request) => `${request.family}.${request.method}`);
-      if (after.some((request) => request !== 'segment.close')) return false;
-      return capturesAgreeByReference(recorded.args, args);
-    },
-    count: { v1: 2, v2: 2 },
-  },
-];
+}> = [];
 
-/** The closure descriptors in a park request, outside any closure's capture,
- *  in key order: the ones the two sides hold at the same places. */
-function closuresIn(root: unknown): Array<Record<string, unknown>> {
-  const found: Array<Record<string, unknown>> = [];
-  const visit = (node: unknown): void => {
-    if (Array.isArray(node)) return node.forEach(visit);
-    if (!isObject(node)) return;
-    if (node.kind === 'closure') found.push(node);
-    for (const key of Object.keys(node).sort()) {
-      if (node.kind === 'closure' && (key === 'captured' || key === 'scope')) continue;
-      visit(node[key]);
-    }
-  };
-  visit(root);
-  return found;
-}
-
-/** A park request with every closure's capture masked (`captured`, `scope`)
- *  and every scope's numbering (`id`, `parent` beside `bindings`). */
-function maskClosureCaptures(node: unknown): unknown {
-  if (Array.isArray(node)) return node.map(maskClosureCaptures);
-  if (!isObject(node)) return node;
-  const scopeEntry = node.kind === undefined && isObject(node.bindings);
-  return Object.fromEntries(
-    Object.entries(node)
-      .filter(([key]) => !(node.kind === 'closure' && (key === 'captured' || key === 'scope')) && !(scopeEntry && (key === 'id' || key === 'parent')))
-      .map(([key, value]) => [key, maskClosureCaptures(value)]),
-  );
-}
-
-/** The bindings a scope link names, outermost first and innermost winning,
- *  resolved within the park request it is in; undefined when it names a
- *  scope the request does not hold (a library's file scope included). */
-function resolveScopeLink(root: unknown, link: unknown): Record<string, unknown> | undefined {
-  const numbered = new Map<number, Record<string, unknown>>();
-  const collect = (node: unknown): void => {
-    if (Array.isArray(node)) return node.forEach(collect);
-    if (!isObject(node)) return;
-    if (typeof node.id === 'number' && isObject(node.bindings) && (node.kind === undefined || node.kind === 'scope')) numbered.set(node.id, node);
-    Object.values(node).forEach(collect);
-  };
-  collect(root);
-  const chain = isObject(root) && isObject(root.state) && Array.isArray(root.state.scopeChain) ? root.state.scopeChain : [];
-  const fileScope = isObject(chain[0]) && isObject(chain[0].bindings) ? chain[0].bindings : undefined;
-  const resolve = (at: unknown, depth: number): Record<string, unknown> | undefined => {
-    if (depth > 64 || !isObject(at)) return undefined;
-    if (at.kind === 'file') return at.file === undefined ? fileScope : undefined;
-    const scope = at.kind === 'scopeRef' && typeof at.id === 'number' ? numbered.get(at.id) : at.kind === 'scope' ? at : undefined;
-    if (scope === undefined || !isObject(scope.bindings)) return undefined;
-    const outer = scope.parent === undefined ? {} : resolve(scope.parent, depth + 1);
-    return outer === undefined ? undefined : { ...outer, ...scope.bindings };
-  };
-  return resolve(link, 0);
-}
-
-/** The recorded park request (closures as `captured` snapshots) and the
- *  replayed one (closures by `scope` link) are the same park: equal once
- *  captures are masked, and each recorded snapshot's every name resolves
- *  through the replayed closure's link to the same descriptor, a name only
- *  the link holds being a closure bound later in that same scope. */
-function capturesAgreeByReference(recordedArgs: unknown, replayedArgs: unknown): boolean {
-  if (canonicalJson(recordedArgs) === canonicalJson(replayedArgs)) return false;
-  if (canonicalJson(maskClosureCaptures(recordedArgs)) !== canonicalJson(maskClosureCaptures(replayedArgs))) return false;
-  const recorded = closuresIn(recordedArgs);
-  const replayed = closuresIn(replayedArgs);
-  if (recorded.length !== replayed.length) return false;
-  let changed = false;
-  for (const [i, before] of recorded.entries()) {
-    const after = replayed[i];
-    if (after === undefined || !isObject(before.captured) || !isObject(after.captured)) return false;
-    if (after.scope === undefined) {
-      if (canonicalJson(before) !== canonicalJson(after)) return false;
-      continue;
-    }
-    if (before.scope !== undefined || Object.keys(after.captured).length > 0) return false;
-    const resolved = resolveScopeLink(replayedArgs, after.scope);
-    if (resolved === undefined) return false;
-    for (const [name, descriptor] of Object.entries(before.captured)) {
-      if (!(name in resolved) || canonicalJson(maskClosureCaptures(descriptor)) !== canonicalJson(maskClosureCaptures(resolved[name]))) return false;
-    }
-    for (const [name, descriptor] of Object.entries(resolved)) {
-      if (name in before.captured) continue;
-      if (!isObject(descriptor) || descriptor.kind !== 'closure' || canonicalJson(descriptor.scope) !== canonicalJson(after.scope)) return false;
-    }
-    changed = true;
-  }
-  return changed;
-}
-
-/** A park state with its handle numbering masked: every descriptor loses its
- *  `id`, and every `handleRef` becomes the numbered descriptor it names. */
-function maskHandleNumbering(root: unknown): unknown {
-  const numbered = new Map<number, unknown>();
-  const collect = (node: unknown): void => {
-    if (Array.isArray(node)) return node.forEach(collect);
-    if (!isObject(node)) return;
-    if (node.kind === 'handle' && typeof node.id === 'number') numbered.set(node.id, node);
-    Object.values(node).forEach(collect);
-  };
-  collect(root);
-  const mask = (node: unknown): unknown => {
-    if (Array.isArray(node)) return node.map(mask);
-    if (!isObject(node)) return node;
-    if (node.kind === 'handleRef' && typeof node.id === 'number' && numbered.has(node.id)) return mask(numbered.get(node.id));
-    return Object.fromEntries(Object.entries(node).filter(([key]) => !(key === 'id' && node.kind === 'handle')).map(([key, value]) => [key, mask(value)]));
-  };
-  return mask(root);
-}
-
-const RECORDED_PREFIX = 'recorded the failure ';
-const REPLAY_JOINT = '; the replay failed ';
-
-/** Both sides are the MOVENG_LANGUAGE_VERSION refusal, whatever each words. */
-function bothRefuseTheVersion(divergence: string): boolean {
-  if (!divergence.startsWith(RECORDED_PREFIX)) return false;
-  const joint = divergence.indexOf(REPLAY_JOINT);
-  if (joint < 0) return false;
-  const refusal = '"code":"MOVENG_LANGUAGE_VERSION"';
-  return divergence.slice(RECORDED_PREFIX.length, joint).includes(refusal) && divergence.slice(joint + REPLAY_JOINT.length).includes(refusal);
-}
-
-/** The recording is pinned to a version this release does not support. */
-function pinnedUnsupported(recording: HostRecording): boolean {
-  const version = recording.input.languageVersion;
-  return version !== undefined && !PLATFORM_SUPPORTED_LANGUAGE_VERSIONS.has(version as LanguageVersion);
-}
-
-/** The plugins the recording's program names in its `through` stages. */
-function throughPlugins(recording: HostRecording): string[] {
-  const program = parsePinned({
-    source: recording.input.source,
-    ...(recording.input.languageVersion !== undefined ? { languageVersion: recording.input.languageVersion } : {}),
-  });
-  const names: string[] = [];
-  const visit = (node: unknown): void => {
-    if (Array.isArray(node)) {
-      node.forEach(visit);
-      return;
-    }
-    if (!isObject(node)) return;
-    if (Array.isArray(node.through)) {
-      for (const call of node.through) if (isObject(call) && typeof call.plugin === 'string') names.push(call.plugin);
-    }
-    Object.values(node).forEach(visit);
-  };
-  visit(program);
-  return names;
-}
-
-/** The plugins the recording's `through` stages name that its catalog gives
- *  no output. */
-function undeclaredThroughPlugins(recording: HostRecording): string[] {
-  return throughPlugins(recording).filter((name) => recording.input.catalog?.plugins?.[name]?.output === undefined);
-}
-
-/** Where a recorded `adapters.call` carries a FILE resource made from a
- *  record's `file` key (its `data.file`): the resources' indices. */
-function fileResources(args: unknown): number[] {
-  const call = isObject(args) && isObject(args.args) ? args.args : undefined;
-  const resources: unknown[] = call !== undefined && Array.isArray(call.resources) ? call.resources : [];
-  return resources.flatMap((resource, index) =>
-    isObject(resource) && resource.type === 'FILE' && isObject(resource.data) && isObject(resource.data.file) ? [index] : [],
-  );
-}
-
-const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const label = (recording: HostRecording, i: number): string =>
   `#${i + 1} ${recording.entry} ${JSON.stringify(recording.input.source.slice(0, 80))}`;

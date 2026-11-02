@@ -285,6 +285,7 @@ jest.mock('../../../../services/context', () => ({
 }));
 
 import { LANGUAGE_VERSION, mockCatalog, mockCatalogSnapshot } from 'movement-lang';
+import type { InstanceSchema } from 'movement-lang';
 
 import type { DerivedTriggerRow } from '../store';
 
@@ -1339,17 +1340,19 @@ describe('saveMovement — expectedRevision (agent-facing optimistic concurrency
 // A catalog with an attio adapter requiring credentials and a credential named
 // 'Dev-loop Attio' (a name that MUST be backtick-quoted in source because it
 // contains a hyphen).
+// Each company created or changed arrives on `Companies`.
+const ATTIO_SCHEMA: InstanceSchema = {
+  positions: { Company: { properties: { Name: 'text' }, edges: {} } },
+  collections: { Companies: { target: 'Company', readable: false, listenable: true } },
+  writableRoots: {},
+};
+
 function makeAttioTeamCatalog() {
   const spec = {
     adapters: {
       attio: {
         constructionArgs: [{ name: 'credentials', kind: 'credential' as const, required: true }],
-        schema: {
-          positions: { Company: { properties: { Name: 'text' }, edges: {} } },
-          // Each company created or changed arrives on `Companies`.
-          collections: { Companies: { target: 'Company', readable: false, listenable: true } },
-          writableRoots: {},
-        },
+        schema: ATTIO_SCHEMA,
       },
     },
     credentials: {

@@ -205,6 +205,10 @@ export async function recordEntry<E extends RecordedEntry, Result>({
   late?: (message: string) => void;
 }): Promise<Result> {
   const { host, ...data } = input;
+  // A recording's pin is a string (the contract's); a legacy test that pins
+  // a version by number opens its segment with the number, which no
+  // recording can carry, so its entry runs unrecorded.
+  if (typeof data.languageVersion === 'number') return run(input);
   const recordedInput = copied(
     { ...data, languageVersion: data.languageVersion ?? LANGUAGE_VERSION },
     entry,
