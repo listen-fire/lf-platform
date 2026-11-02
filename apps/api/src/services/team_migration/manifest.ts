@@ -17,6 +17,12 @@
  *
  */
 
+/** A run row (alias `t`) holding a leaf parked on a wait. */
+const PARKED_ON_A_WAIT =
+  "EXISTS (SELECT 1 FROM automations.parked_run p WHERE p.run_id = t.id AND p.park_reason = 'await' AND p.status <> 'completed')";
+const CARRIED_WAIT_REASON =
+  'carried from another deployment while it waited on an arrival: its wait is not carried, so it would never wake. Run it again';
+
 export const PRODUCTS = ['core', 'valuations', 'automations', 'knowledge', 'asks'] as const;
 export type Product = (typeof PRODUCTS)[number];
 
@@ -237,10 +243,64 @@ export const MANIFEST: Record<Product, TableSpec[]> = {
     { table: 'movement_story_token', tenancy: { kind: 'team_column' } },
     { table: 'trigger', tenancy: { kind: 'team_column' } },
     { table: 'trigger_event', tenancy: { kind: 'team_column' }, history: true },
-    { table: 'trigger_run', tenancy: { kind: 'team_column' }, history: true },
+    {
+      table: 'trigger_run',
+      tenancy: { kind: 'team_column' },
+      history: true,
+      // A run parked on a wait is carried failed, by name: its wait reads the
+      // source's arrival log from a mark that names nothing on the target.
+      rewrite: {
+        status: `CASE WHEN ${PARKED_ON_A_WAIT} THEN 'failed' ELSE t.status END`,
+        failed_at: `CASE WHEN ${PARKED_ON_A_WAIT} THEN now() ELSE t.failed_at END`,
+        failure_reason: `CASE WHEN ${PARKED_ON_A_WAIT} THEN '${CARRIED_WAIT_REASON}' ELSE t.failure_reason END`,
+      },
+    },
     {
       table: 'parked_run',
       tenancy: { kind: 'via', column: 'run_id', parent: 'automations.trigger_run' },
+      // Its run is carried failed (above): the wait's leaf is closed, never resumed.
+      rewrite: {
+        status: `CASE WHEN t.park_reason = 'await' AND t.status <> 'completed' THEN 'completed' ELSE t.status END`,
+        state: `CASE WHEN t.park_reason = 'await' AND t.status <> 'completed' THEN NULL ELSE t.state END`,
+      },
+    },
+    // listen-fire 0.13's store state. A listen's state (its resolution, its
+    // pause) and the arrivals a listen could not judge are the team's history;
+    // the arrival log, the identities kept for the re-send window, the write
+    // ledger and the waits are this deployment's live state, as `work` is.
+    { table: 'listen_state', tenancy: { kind: 'team_column' } },
+    { table: 'arrival_unjudged', tenancy: { kind: 'team_column' }, history: true },
+    {
+      table: 'arrival',
+      tenancy: { kind: 'team_column' },
+      exportExcludedBecause:
+        'the arrival log is ordered by a deployment-wide sequence; its marks name nothing on the target, whose own log starts the team afresh',
+    },
+    {
+      table: 'arrival_identity',
+      tenancy: { kind: 'team_column' },
+      exportExcludedBecause: 'identities kept for a module’s re-send window on the source’s door; a sender re-sends to the source, not the target',
+    },
+    {
+      table: 'wait_row',
+      tenancy: { kind: 'team_column' },
+      exportExcludedBecause:
+        'a wait reads the source’s arrival log from a mark that names nothing on the target; a run parked on one is carried failed instead (trigger_run above)',
+    },
+    {
+      table: 'wait_seen',
+      tenancy: { kind: 'via', column: 'wait_id', parent: 'automations.wait_row' },
+      exportExcludedBecause: 'what each source wait has noted; its waits are not carried',
+    },
+    {
+      table: 'write_ledger',
+      tenancy: { kind: 'team_column' },
+      exportExcludedBecause: 'the loop breaker’s window of recent writes by the source’s runs; it expires in minutes and names runs the target never ran',
+    },
+    {
+      table: 'release_seen',
+      tenancy: { kind: 'team_column' },
+      exportExcludedBecause: 'the releases the source deployment ran the team under; the target reports its own',
     },
     {
       table: 'join_pending',
