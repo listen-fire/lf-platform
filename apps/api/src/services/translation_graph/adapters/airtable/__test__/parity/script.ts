@@ -67,10 +67,11 @@ export async function runAirtableParityScript(adapter: Adapter, scoped: Adapter 
     await t.step('deleteRecord Companies', () => adapter.deleteRecord({ recordType: 'Companies', externalId: id, mutationContext: MUTATION }));
   }
 
-  await t.step('listEventTypes', () => adapter.listEventTypes?.() ?? null);
-  const scope = { base: BASE, table: COMPANIES };
-  const registered = await t.step('ensureEventSubscription create', () =>
-    adapter.ensureEventSubscription?.({ callbackUrl: 'https://example.test/api/public/webhook-sync/airtable/sub-1', events: ['record.created', 'record.updated'], scope } as never) ?? null,
+  // One subscription per listenable edge (adapter protocol 2.6): a table's
+  // rows on Changes, the base's table names on Tables; each names its base.
+  const changes = { edge: 'Changes', scope: BASE };
+  const registered = await t.step('ensureEventSubscription Changes', () =>
+    adapter.ensureEventSubscription?.({ ...changes, callbackUrl: 'https://example.test/api/public/webhook-sync/airtable/sub-1' }) ?? null,
   );
   const webhookId = registered?.externalId;
   if (webhookId !== undefined) {
@@ -83,17 +84,19 @@ export async function runAirtableParityScript(adapter: Adapter, scoped: Adapter 
       adapter.preprocessInbound?.({ raw: { base: { id: BASE }, webhook: { id: webhookId } }, checkpoint: 2 }) ?? null,
     );
     await t.step('preprocessInbound not a ping', () => adapter.preprocessInbound?.({ raw: { nope: true } }) ?? null);
-    await t.step('ensureEventSubscription unchanged', () =>
-      adapter.ensureEventSubscription?.({ callbackUrl: 'https://example.test/x', events: ['record.updated', 'record.created'], scope, current: { externalId: webhookId, events: ['record.created', 'record.updated'] } } as never) ?? null,
+    await t.step('ensureEventSubscription Changes held', () =>
+      adapter.ensureEventSubscription?.({ ...changes, callbackUrl: 'https://example.test/api/public/webhook-sync/airtable/sub-1', current: { externalId: webhookId } }) ?? null,
     );
-    const recreated = await t.step('ensureEventSubscription widened (recreated)', () =>
-      adapter.ensureEventSubscription?.({ callbackUrl: 'https://example.test/x', events: ['record.created', 'record.deleted'], scope, current: { externalId: webhookId, events: ['record.created'] } } as never) ?? null,
-    );
-    const live = recreated?.externalId ?? webhookId;
-    await t.step('removeEventSubscription', () => adapter.removeEventSubscription?.({ callbackUrl: 'https://example.test/x', externalId: live, scope }) ?? null);
+    // 0.13.x types the removal without its edge, though the wire carries it.
+    const removal = { ...changes, callbackUrl: 'https://example.test/api/public/webhook-sync/airtable/sub-1', externalId: webhookId };
+    await t.step('removeEventSubscription Changes', () => adapter.removeEventSubscription?.(removal) ?? null);
   }
-  await t.step('ensureEventSubscription without a table scope', () =>
-    adapter.ensureEventSubscription?.({ callbackUrl: 'https://example.test/x', events: ['record.created'], scope: { base: BASE } } as never) ?? null,
+  const tables = await t.step('ensureEventSubscription Tables', () =>
+    adapter.ensureEventSubscription?.({ edge: 'Tables', scope: BASE, callbackUrl: 'https://example.test/api/public/webhook-sync/airtable/sub-2' }) ?? null,
   );
+  if (tables?.externalId !== undefined) {
+    const removal = { edge: 'Tables', scope: BASE, callbackUrl: 'https://example.test/api/public/webhook-sync/airtable/sub-2', externalId: tables.externalId };
+    await t.step('removeEventSubscription Tables', () => adapter.removeEventSubscription?.(removal) ?? null);
+  }
   return t.entries;
 }

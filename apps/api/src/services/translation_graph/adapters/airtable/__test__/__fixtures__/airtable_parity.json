@@ -24,17 +24,32 @@
       "step": "listEntryPoints",
       "answer": [
         {
-          "typeId": "airtable:record_change",
-          "displayName": "Record Change",
-          "writable": false,
-          "readable": false,
-          "fires": true
-        },
-        {
           "typeId": "Base",
           "displayName": "Base",
+          "collectionName": "Bases",
           "writable": false,
-          "readable": true
+          "readable": true,
+          "membersChange": {
+            "relistEverySeconds": 3600
+          }
+        },
+        {
+          "typeId": "Table",
+          "displayName": "Table",
+          "writable": false,
+          "readable": false
+        },
+        {
+          "typeId": "Change",
+          "displayName": "Change",
+          "writable": false,
+          "readable": false
+        },
+        {
+          "typeId": "Row",
+          "displayName": "Row",
+          "writable": false,
+          "readable": false
         }
       ]
     },
@@ -47,17 +62,8 @@
           "fields": [],
           "references": [
             {
-              "fieldId": "airtable:record_change",
-              "name": "Record Change",
-              "targetTypeId": "airtable:record_change",
-              "cardinality": "many",
-              "readable": false,
-              "writable": false,
-              "fires": true
-            },
-            {
-              "fieldId": "Base",
-              "name": "Base",
+              "fieldId": "Bases",
+              "name": "Bases",
               "targetTypeId": "Base",
               "cardinality": "many",
               "writable": false
@@ -91,138 +97,30 @@
           }
         },
         "targetNodes": {
-          "airtable:record_change": {
-            "typeId": "airtable:record_change",
-            "displayName": "Record Change",
+          "Bases": {
+            "typeId": "Base",
+            "displayName": "Base",
+            "description": "One of this workspace's bases. Narrow to one (`-[b:Bases WHERE b.Name == \"CRM\"]->`, or the `base:` construction arg) and its tables become the edges you write rows along.",
             "fields": [
               {
-                "fieldId": "action",
-                "displayName": "action",
-                "kind": "enum",
-                "enumValues": [
-                  "record.created",
-                  "record.updated",
-                  "record.deleted"
-                ],
-                "writable": false,
-                "required": false,
-                "description": "Which kind of change this event is — the same values a listen's `events:` names."
-              },
-              {
-                "fieldId": "base",
-                "displayName": "base",
+                "fieldId": "Name",
+                "displayName": "Name",
                 "kind": "string",
                 "writable": false,
                 "required": false,
-                "description": "The base the change happened in — the id a `listen` names."
+                "description": "The base's name."
               },
               {
-                "fieldId": "table",
-                "displayName": "table",
+                "fieldId": "Id",
+                "displayName": "Id",
                 "kind": "string",
                 "writable": false,
                 "required": false,
-                "description": "The table the change happened in — the id a `listen` names."
-              },
-              {
-                "fieldId": "record",
-                "displayName": "record",
-                "kind": "string",
-                "writable": false,
-                "required": false,
-                "description": "The changed row’s id."
-              },
-              {
-                "fieldId": "Changed Fields",
-                "displayName": "Changed Fields",
-                "kind": "string",
-                "cardinality": "many",
-                "writable": false,
-                "required": false,
-                "description": "The names of the row’s fields this change touched — every field given for a created row, none for a deleted one."
+                "description": "Airtable's id for the base (app…)."
               }
             ]
-          },
-          "Base": {
-            "stub": true,
-            "typeId": "Base",
-            "displayName": "Base"
           }
         }
-      }
-    },
-    {
-      "step": "describe airtable:record_change",
-      "answer": {
-        "typeId": "airtable:record_change",
-        "displayName": "Record Change",
-        "fields": [
-          {
-            "fieldId": "action",
-            "displayName": "action",
-            "kind": "enum",
-            "enumValues": [
-              "record.created",
-              "record.updated",
-              "record.deleted"
-            ],
-            "writable": false,
-            "required": false,
-            "description": "Which kind of change this event is — the same values a listen's `events:` names."
-          },
-          {
-            "fieldId": "base",
-            "displayName": "base",
-            "kind": "string",
-            "writable": false,
-            "required": false,
-            "description": "The base the change happened in — the id a `listen` names."
-          },
-          {
-            "fieldId": "table",
-            "displayName": "table",
-            "kind": "string",
-            "writable": false,
-            "required": false,
-            "description": "The table the change happened in — the id a `listen` names."
-          },
-          {
-            "fieldId": "record",
-            "displayName": "record",
-            "kind": "string",
-            "writable": false,
-            "required": false,
-            "description": "The changed row’s id."
-          },
-          {
-            "fieldId": "Changed Fields",
-            "displayName": "Changed Fields",
-            "kind": "string",
-            "cardinality": "many",
-            "writable": false,
-            "required": false,
-            "description": "The names of the row’s fields this change touched — every field given for a created row, none for a deleted one."
-          }
-        ],
-        "references": [
-          {
-            "fieldId": "record",
-            "name": "Record",
-            "targetTypeId": "Table",
-            "cardinality": "one",
-            "description": "The row that changed.",
-            "subject": true,
-            "writable": false
-          },
-          {
-            "fieldId": "oldRecord",
-            "name": "Old Record",
-            "targetTypeId": "Table",
-            "cardinality": "one",
-            "description": "The row as it was before this change: the changed fields’ previous values. A field the change did not touch reads as null here, as it does on `Record`.",
-            "writable": false
-          }
-        ]
       }
     },
     {
@@ -230,17 +128,41 @@
       "answer": {
         "typeId": "Base",
         "displayName": "Base",
-        "description": "One of this workspace's bases. Which tables it holds depends on WHICH base — narrow to one (`-[b:Base WHERE `Name` == \"CRM\"]->`, or the `base:` construction arg) and its tables become the edges.",
+        "description": "One of this workspace's bases. Narrow to one (`-[b:Bases WHERE b.Name == \"CRM\"]->`, or the `base:` construction arg) and its tables become the edges you write rows along.",
         "fields": [
           {
             "fieldId": "Name",
             "displayName": "Name",
             "kind": "string",
             "writable": false,
-            "required": false
+            "required": false,
+            "description": "The base's name."
+          },
+          {
+            "fieldId": "Id",
+            "displayName": "Id",
+            "kind": "string",
+            "writable": false,
+            "required": false,
+            "description": "Airtable's id for the base (app…)."
           }
         ],
-        "references": []
+        "references": [
+          {
+            "fieldId": "Tables",
+            "name": "Tables",
+            "targetTypeId": "Table",
+            "cardinality": "many",
+            "direction": "outgoing",
+            "readable": true,
+            "writable": false,
+            "membersChange": "pushed",
+            "listenable": true,
+            "identity": "Id",
+            "delivery": "scope",
+            "description": "The base's tables. A table made, renamed or removed arrives here (Airtable's schema webhook, one per base)."
+          }
+        ]
       }
     },
     {
@@ -248,8 +170,160 @@
       "answer": {
         "typeId": "Table",
         "displayName": "Table",
-        "description": "A table in one of this workspace's bases. Its fields depend on WHICH (base, table) — a listen's `base:`/`table:` pins narrow it, as does walking into a base — so the unnarrowed node carries none.",
-        "fields": [],
+        "description": "A table in one of this workspace's bases. Listen on its `Changes` for what happens to its rows.",
+        "fields": [
+          {
+            "fieldId": "Name",
+            "displayName": "Name",
+            "kind": "string",
+            "writable": false,
+            "required": false,
+            "description": "The table's name."
+          },
+          {
+            "fieldId": "Id",
+            "displayName": "Id",
+            "kind": "string",
+            "writable": false,
+            "required": false,
+            "description": "Airtable's id for the table (tbl…)."
+          }
+        ],
+        "references": [
+          {
+            "fieldId": "Changes",
+            "name": "Changes",
+            "targetTypeId": "Change",
+            "cardinality": "many",
+            "direction": "outgoing",
+            "readable": false,
+            "writable": false,
+            "listenable": true,
+            "delivery": "scope",
+            "scopedBy": "Bases",
+            "identity": "Id",
+            "attributes": true,
+            "description": "What happens to the table's rows: one change per row an edit touched (created, updated or deleted), with the row before and after it (`Previous`, `Current`)."
+          }
+        ]
+      }
+    },
+    {
+      "step": "describe Change",
+      "answer": {
+        "typeId": "Change",
+        "displayName": "Change",
+        "description": "A change to a row of an Airtable table, one per row an edit touched: what happened (`Kind`), the row as the edit left it (`Current`) and as it was before (`Previous`). Compare them in a listen, each tested present before a field is read through it (`exists(c.Current) AND c.Current.Stage == \"Interview\" AND (NOT exists(c.Previous) OR c.Previous.Stage != \"Interview\")`); walk `Record` for the row as it is now.",
+        "fields": [
+          {
+            "fieldId": "Id",
+            "displayName": "Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "Names the change: the same each time Airtable reports it."
+          },
+          {
+            "fieldId": "Kind",
+            "displayName": "Kind",
+            "kind": "enum",
+            "enumValues": [
+              "created",
+              "updated",
+              "deleted"
+            ],
+            "writable": false,
+            "required": true,
+            "description": "What happened to the row."
+          },
+          {
+            "fieldId": "Current",
+            "displayName": "Current",
+            "kind": "record",
+            "record": {
+              "typeId": "Row"
+            },
+            "mayBeAbsent": true,
+            "writable": false,
+            "required": false,
+            "description": "The row as the edit left it, every field by name. Absent when the row was deleted."
+          },
+          {
+            "fieldId": "Previous",
+            "displayName": "Previous",
+            "kind": "record",
+            "record": {
+              "typeId": "Row"
+            },
+            "mayBeAbsent": true,
+            "writable": false,
+            "required": false,
+            "description": "The row as it was before the edit, every field by name. Absent when the row was created, and when it was deleted (Airtable sends no cells then)."
+          },
+          {
+            "fieldId": "Changed Fields",
+            "displayName": "Changed Fields",
+            "kind": "string",
+            "cardinality": "many",
+            "writable": false,
+            "required": true,
+            "description": "The names of the fields the edit touched: every field a created row was given, none for a deleted row."
+          },
+          {
+            "fieldId": "Base Id",
+            "displayName": "Base Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "Airtable's id for the base the row is in (app…)."
+          },
+          {
+            "fieldId": "Table Id",
+            "displayName": "Table Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "Airtable's id for the table the row is in (tbl…)."
+          },
+          {
+            "fieldId": "Record Id",
+            "displayName": "Record Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "Airtable's id for the row (rec…), a deleted row's too."
+          }
+        ],
+        "references": [
+          {
+            "fieldId": "Record",
+            "name": "Record",
+            "targetTypeId": "Row",
+            "cardinality": "one",
+            "direction": "outgoing",
+            "readable": true,
+            "writable": false,
+            "description": "The row as it is now, read from Airtable: none once it is deleted."
+          }
+        ]
+      }
+    },
+    {
+      "step": "describe Row",
+      "answer": {
+        "typeId": "Row",
+        "displayName": "Row",
+        "description": "A row of the table a change happened in.",
+        "fields": [
+          {
+            "fieldId": "Id",
+            "displayName": "Id",
+            "kind": "string",
+            "writable": false,
+            "required": false,
+            "description": "Airtable's id for the row (rec…)."
+          }
+        ],
         "references": []
       }
     },
@@ -401,7 +475,7 @@
       "answer": null
     },
     {
-      "step": "root Base LIMIT 3",
+      "step": "root Bases LIMIT 3",
       "answer": [
         {
           "position": {
@@ -411,7 +485,8 @@
               "kind": "stable",
               "recordId": "appTEST001",
               "data": {
-                "Name": "Pipeline Tracker"
+                "Name": "Pipeline Tracker",
+                "Id": "appTEST001"
               }
             }
           }
@@ -424,7 +499,8 @@
               "kind": "stable",
               "recordId": "appTEST002",
               "data": {
-                "Name": "Ops"
+                "Name": "Ops",
+                "Id": "appTEST002"
               }
             }
           }
@@ -432,7 +508,7 @@
       ]
     },
     {
-      "step": "edgesFrom Base[0]",
+      "step": "edgesFrom Bases[0]",
       "answer": {
         "descriptor": {
           "typeId": "Pipeline Tracker",
@@ -452,6 +528,20 @@
               "targetTypeId": "Contacts",
               "cardinality": "many",
               "writable": true
+            },
+            {
+              "fieldId": "Tables",
+              "name": "Tables",
+              "targetTypeId": "Table",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "readable": true,
+              "writable": false,
+              "membersChange": "pushed",
+              "listenable": true,
+              "identity": "Id",
+              "delivery": "scope",
+              "description": "The base's tables. A table made, renamed or removed arrives here (Airtable's schema webhook, one per base)."
             }
           ]
         },
@@ -493,12 +583,35 @@
             "stub": true,
             "typeId": "Contacts",
             "displayName": "Contacts"
+          },
+          "Tables": {
+            "typeId": "Table",
+            "displayName": "Table",
+            "description": "A table in one of this workspace's bases. Listen on its `Changes` for what happens to its rows.",
+            "fields": [
+              {
+                "fieldId": "Name",
+                "displayName": "Name",
+                "kind": "string",
+                "writable": false,
+                "required": false,
+                "description": "The table's name."
+              },
+              {
+                "fieldId": "Id",
+                "displayName": "Id",
+                "kind": "string",
+                "writable": false,
+                "required": false,
+                "description": "Airtable's id for the table (tbl…)."
+              }
+            ]
           }
         }
       }
     },
     {
-      "step": "Base[0] -[Companies]-> LIMIT 3",
+      "step": "Bases[0] -[Companies]-> LIMIT 3",
       "answer": [
         {
           "position": {
@@ -518,11 +631,11 @@
       ]
     },
     {
-      "step": "edgesFrom Base[0]-[Companies]->[0]",
+      "step": "edgesFrom Bases[0]-[Companies]->[0]",
       "answer": null
     },
     {
-      "step": "Base[0] -[Contacts]-> LIMIT 3",
+      "step": "Bases[0] -[Contacts]-> LIMIT 3",
       "answer": [
         {
           "position": {
@@ -544,18 +657,34 @@
       ]
     },
     {
-      "step": "edgesFrom Base[0]-[Contacts]->[0]",
+      "step": "edgesFrom Bases[0]-[Contacts]->[0]",
       "answer": null
     },
     {
       "step": "scoped listEntryPoints",
       "answer": [
         {
-          "typeId": "airtable:record_change",
-          "displayName": "Record Change",
+          "typeId": "Table",
+          "displayName": "Table",
+          "collectionName": "Tables",
           "writable": false,
-          "readable": false,
-          "fires": true
+          "readable": true,
+          "membersChange": "pushed",
+          "listenable": true,
+          "identity": "Id",
+          "delivery": "connection"
+        },
+        {
+          "typeId": "Change",
+          "displayName": "Change",
+          "writable": false,
+          "readable": false
+        },
+        {
+          "typeId": "Row",
+          "displayName": "Row",
+          "writable": false,
+          "readable": false
         },
         {
           "typeId": "Companies",
@@ -688,98 +817,86 @@
       "answer": {}
     },
     {
-      "step": "listEventTypes",
-      "answer": [
-        {
-          "tag": "record.created",
-          "positionType": "airtable:record_change",
-          "match": {
-            "path": "eventType",
-            "equals": "record.created"
-          }
-        },
-        {
-          "tag": "record.updated",
-          "positionType": "airtable:record_change",
-          "match": {
-            "path": "eventType",
-            "equals": "record.updated"
-          }
-        },
-        {
-          "tag": "record.deleted",
-          "positionType": "airtable:record_change",
-          "match": {
-            "path": "eventType",
-            "equals": "record.deleted"
-          }
-        }
-      ]
-    },
-    {
-      "step": "ensureEventSubscription create",
+      "step": "ensureEventSubscription Changes",
       "answer": {
         "externalId": "ach1",
-        "secret": "PRhtXQ/R32fgxpVuMgS7IGIUAAaJhx9w9mToD18mG1A=",
-        "expiresAt": "2026-11-03T14:57:08.384Z"
+        "secret": "/C41k8IUtJNDldPGdfJQg7i0p3xNJNcchMRCEC78U70=",
+        "expiresAt": "2026-11-09T17:23:41.300Z"
       }
     },
     {
       "step": "preprocessInbound ping",
       "answer": {
-        "events": [
+        "events": [],
+        "arrivals": [
           {
-            "payload": {
-              "action": "record.created",
-              "record": "recPARITY1",
-              "table": "tblCOMPANIES",
-              "tableName": "Companies",
-              "base": "appTEST001",
+            "edge": "Changes",
+            "key": "tblCOMPANIES",
+            "identity": "1:recPARITY1",
+            "landing": {
+              "recordId": "1:recPARITY1",
+              "recordType": "Change",
               "fields": {
-                "Name": "Pinged Co",
-                "Stage": "Seed"
-              },
-              "previous": {},
-              "Changed Fields": [
-                "Name",
-                "Stage"
-              ]
+                "Id": "1:recPARITY1",
+                "Kind": "created",
+                "Current": {
+                  "Name": "Pinged Co",
+                  "Stage": "Seed"
+                },
+                "Changed Fields": [
+                  "Name",
+                  "Stage"
+                ],
+                "Base Id": "appTEST001",
+                "Table Id": "tblCOMPANIES",
+                "Record Id": "recPARITY1",
+                "row": {
+                  "id": "recPARITY1",
+                  "baseId": "appTEST001",
+                  "tableId": "tblCOMPANIES",
+                  "table": "Companies"
+                }
+              }
             },
-            "externalId": "recPARITY1",
-            "recordType": "tblCOMPANIES",
-            "eventType": "record.created",
-            "tag": "record.created",
-            "changeType": "create",
-            "changedFields": [
-              "Name",
-              "Stage"
-            ],
-            "occurredAt": "2026-10-27T14:57:08.386Z"
+            "about": {
+              "recordType": "Companies",
+              "externalId": "recPARITY1"
+            },
+            "occurredAt": "2026-11-02T17:23:41.302Z"
           },
           {
-            "payload": {
-              "action": "record.updated",
-              "record": "recPARITY1",
-              "table": "tblCOMPANIES",
-              "tableName": "Companies",
-              "base": "appTEST001",
+            "edge": "Changes",
+            "key": "tblCOMPANIES",
+            "identity": "2:recPARITY1",
+            "landing": {
+              "recordId": "2:recPARITY1",
+              "recordType": "Change",
               "fields": {
-                "Stage": "Series A"
-              },
-              "previous": {},
-              "Changed Fields": [
-                "Stage"
-              ]
+                "Id": "2:recPARITY1",
+                "Kind": "updated",
+                "Current": {
+                  "Stage": "Series A"
+                },
+                "Previous": {},
+                "Changed Fields": [
+                  "Stage"
+                ],
+                "Base Id": "appTEST001",
+                "Table Id": "tblCOMPANIES",
+                "Record Id": "recPARITY1",
+                "row": {
+                  "id": "recPARITY1",
+                  "baseId": "appTEST001",
+                  "tableId": "tblCOMPANIES",
+                  "table": "Companies"
+                }
+              }
             },
-            "externalId": "recPARITY1",
-            "recordType": "tblCOMPANIES",
-            "eventType": "record.updated",
-            "tag": "record.updated",
-            "changeType": "update",
-            "changedFields": [
-              "Stage"
-            ],
-            "occurredAt": "2026-10-27T14:57:08.388Z"
+            "about": {
+              "recordType": "Companies",
+              "externalId": "recPARITY1"
+            },
+            "occurredAt": "2026-11-02T17:23:41.304Z"
           }
         ],
         "checkpoint": 3
@@ -788,31 +905,41 @@
     {
       "step": "preprocessInbound ping from the checkpoint",
       "answer": {
-        "events": [
+        "events": [],
+        "arrivals": [
           {
-            "payload": {
-              "action": "record.updated",
-              "record": "recPARITY1",
-              "table": "tblCOMPANIES",
-              "tableName": "Companies",
-              "base": "appTEST001",
+            "edge": "Changes",
+            "key": "tblCOMPANIES",
+            "identity": "2:recPARITY1",
+            "landing": {
+              "recordId": "2:recPARITY1",
+              "recordType": "Change",
               "fields": {
-                "Stage": "Series A"
-              },
-              "previous": {},
-              "Changed Fields": [
-                "Stage"
-              ]
+                "Id": "2:recPARITY1",
+                "Kind": "updated",
+                "Current": {
+                  "Stage": "Series A"
+                },
+                "Previous": {},
+                "Changed Fields": [
+                  "Stage"
+                ],
+                "Base Id": "appTEST001",
+                "Table Id": "tblCOMPANIES",
+                "Record Id": "recPARITY1",
+                "row": {
+                  "id": "recPARITY1",
+                  "baseId": "appTEST001",
+                  "tableId": "tblCOMPANIES",
+                  "table": "Companies"
+                }
+              }
             },
-            "externalId": "recPARITY1",
-            "recordType": "tblCOMPANIES",
-            "eventType": "record.updated",
-            "tag": "record.updated",
-            "changeType": "update",
-            "changedFields": [
-              "Stage"
-            ],
-            "occurredAt": "2026-10-27T14:57:08.388Z"
+            "about": {
+              "recordType": "Companies",
+              "externalId": "recPARITY1"
+            },
+            "occurredAt": "2026-11-02T17:23:41.304Z"
           }
         ],
         "checkpoint": 3
@@ -821,27 +948,28 @@
     {
       "step": "preprocessInbound not a ping",
       "answer": {
-        "events": []
+        "events": [],
+        "arrivals": []
       }
     },
     {
-      "step": "ensureEventSubscription unchanged",
+      "step": "ensureEventSubscription Changes held",
       "answer": null
     },
     {
-      "step": "ensureEventSubscription widened (recreated)",
+      "step": "removeEventSubscription Changes",
+      "answer": null
+    },
+    {
+      "step": "ensureEventSubscription Tables",
       "answer": {
         "externalId": "ach2",
-        "secret": "H11oDHpngPlEKUrrZtZx9uVupw8PJvSJsLKYWN1At8g=",
-        "expiresAt": "2026-11-03T14:57:08.406Z"
+        "secret": "jSqrzrnr99ZZlMvtzpL13g4CZ/0T9RthN8tZFwTpfTY=",
+        "expiresAt": "2026-11-09T17:23:41.314Z"
       }
     },
     {
-      "step": "removeEventSubscription",
-      "answer": null
-    },
-    {
-      "step": "ensureEventSubscription without a table scope",
+      "step": "removeEventSubscription Tables",
       "answer": null
     }
   ],
@@ -914,7 +1042,7 @@
       "authorization": "Bearer dev-loop-airtable-token",
       "body": null,
       "status": 200,
-      "response": "{\"records\":[{\"id\":\"rec1\",\"fields\":{\"fldName\":\"Parity Labs\",\"fldStage\":\"Seed\",\"fldNotes\":\"Made by recorded parity\"},\"createdTime\":\"2026-10-27T14:57:08.359Z\"}]}"
+      "response": "{\"records\":[{\"id\":\"rec1\",\"fields\":{\"fldName\":\"Parity Labs\",\"fldStage\":\"Seed\",\"fldNotes\":\"Made by recorded parity\"},\"createdTime\":\"2026-11-02T17:23:41.270Z\"}]}"
     },
     {
       "method": "GET",
@@ -922,7 +1050,7 @@
       "authorization": "Bearer dev-loop-airtable-token",
       "body": null,
       "status": 200,
-      "response": "{\"records\":[{\"id\":\"rec1\",\"fields\":{\"fldFullName\":\"Paula Parity\",\"fldEmail\":\"paula@paritylabs.example\",\"fldCompany\":[\"rec1\"]},\"createdTime\":\"2026-10-27T14:57:08.363Z\"}]}"
+      "response": "{\"records\":[{\"id\":\"rec1\",\"fields\":{\"fldFullName\":\"Paula Parity\",\"fldEmail\":\"paula@paritylabs.example\",\"fldCompany\":[\"rec1\"]},\"createdTime\":\"2026-11-02T17:23:41.275Z\"}]}"
     },
     {
       "method": "GET",
@@ -930,7 +1058,7 @@
       "authorization": "Bearer dev-loop-airtable-token",
       "body": null,
       "status": 200,
-      "response": "{\"records\":[{\"id\":\"rec1\",\"fields\":{\"fldName\":\"Parity Labs\",\"fldStage\":\"Seed\",\"fldNotes\":\"Made by recorded parity\"},\"createdTime\":\"2026-10-27T14:57:08.359Z\"}]}"
+      "response": "{\"records\":[{\"id\":\"rec1\",\"fields\":{\"fldName\":\"Parity Labs\",\"fldStage\":\"Seed\",\"fldNotes\":\"Made by recorded parity\"},\"createdTime\":\"2026-11-02T17:23:41.270Z\"}]}"
     },
     {
       "method": "GET",
@@ -938,7 +1066,7 @@
       "authorization": "Bearer dev-loop-airtable-token",
       "body": null,
       "status": 200,
-      "response": "{\"records\":[{\"id\":\"rec1\",\"fields\":{\"fldFullName\":\"Paula Parity\",\"fldEmail\":\"paula@paritylabs.example\",\"fldCompany\":[\"rec1\"]},\"createdTime\":\"2026-10-27T14:57:08.363Z\"}]}"
+      "response": "{\"records\":[{\"id\":\"rec1\",\"fields\":{\"fldFullName\":\"Paula Parity\",\"fldEmail\":\"paula@paritylabs.example\",\"fldCompany\":[\"rec1\"]},\"createdTime\":\"2026-11-02T17:23:41.275Z\"}]}"
     },
     {
       "method": "GET",
@@ -946,7 +1074,7 @@
       "authorization": "Bearer dev-loop-airtable-token",
       "body": null,
       "status": 200,
-      "response": "{\"id\":\"rec1\",\"fields\":{\"fldName\":\"Parity Labs\",\"fldStage\":\"Seed\",\"fldNotes\":\"Made by recorded parity\"},\"createdTime\":\"2026-10-27T14:57:08.359Z\"}"
+      "response": "{\"id\":\"rec1\",\"fields\":{\"fldName\":\"Parity Labs\",\"fldStage\":\"Seed\",\"fldNotes\":\"Made by recorded parity\"},\"createdTime\":\"2026-11-02T17:23:41.270Z\"}"
     },
     {
       "method": "PATCH",
@@ -966,7 +1094,7 @@
       "authorization": "Bearer dev-loop-airtable-token",
       "body": null,
       "status": 200,
-      "response": "{\"records\":[{\"id\":\"rec1\",\"fields\":{\"fldName\":\"Parity Labs\",\"fldStage\":\"Series A\",\"fldNotes\":\"Made by recorded parity\"},\"createdTime\":\"2026-10-27T14:57:08.359Z\"}]}"
+      "response": "{\"records\":[{\"id\":\"rec1\",\"fields\":{\"fldName\":\"Parity Labs\",\"fldStage\":\"Series A\",\"fldNotes\":\"Made by recorded parity\"},\"createdTime\":\"2026-11-02T17:23:41.270Z\"}]}"
     },
     {
       "method": "DELETE",
@@ -975,6 +1103,14 @@
       "body": null,
       "status": 200,
       "response": "{\"id\":\"rec1\",\"deleted\":true}"
+    },
+    {
+      "method": "GET",
+      "path": "/v0/bases/appTEST001/webhooks",
+      "authorization": "Bearer dev-loop-airtable-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"webhooks\":[]}"
     },
     {
       "method": "POST",
@@ -990,9 +1126,9 @@
               ],
               "changeTypes": [
                 "add",
-                "update"
-              ],
-              "recordChangeScope": "tblCOMPANIES"
+                "update",
+                "remove"
+              ]
             },
             "includes": {
               "includePreviousCellValues": true,
@@ -1002,7 +1138,7 @@
         }
       },
       "status": 200,
-      "response": "{\"id\":\"ach1\",\"macSecretBase64\":\"PRhtXQ/R32fgxpVuMgS7IGIUAAaJhx9w9mToD18mG1A=\",\"expirationTime\":\"2026-11-03T14:57:08.384Z\"}"
+      "response": "{\"id\":\"ach1\",\"macSecretBase64\":\"/C41k8IUtJNDldPGdfJQg7i0p3xNJNcchMRCEC78U70=\",\"expirationTime\":\"2026-11-09T17:23:41.300Z\"}"
     },
     {
       "method": "GET",
@@ -1010,7 +1146,7 @@
       "authorization": "Bearer dev-loop-airtable-token",
       "body": null,
       "status": 200,
-      "response": "{\"payloads\":[{\"timestamp\":\"2026-10-27T14:57:08.386Z\",\"baseTransactionNumber\":\"1\",\"changedTablesById\":{\"tblCOMPANIES\":{\"createdRecordsById\":{\"recPARITY1\":{\"cellValuesByFieldId\":{\"fldName\":\"Pinged Co\",\"fldStage\":\"Seed\"}}}}}},{\"timestamp\":\"2026-10-27T14:57:08.388Z\",\"baseTransactionNumber\":\"2\",\"changedTablesById\":{\"tblCOMPANIES\":{\"changedRecordsById\":{\"recPARITY1\":{\"current\":{\"cellValuesByFieldId\":{\"fldStage\":\"Series A\"}},\"unchanged\":{\"cellValuesByFieldId\":{}}}}}}}],\"cursor\":3,\"mightHaveMore\":false}"
+      "response": "{\"payloads\":[{\"timestamp\":\"2026-11-02T17:23:41.302Z\",\"baseTransactionNumber\":1,\"changedTablesById\":{\"tblCOMPANIES\":{\"createdRecordsById\":{\"recPARITY1\":{\"cellValuesByFieldId\":{\"fldName\":\"Pinged Co\",\"fldStage\":\"Seed\"}}}}}},{\"timestamp\":\"2026-11-02T17:23:41.304Z\",\"baseTransactionNumber\":2,\"changedTablesById\":{\"tblCOMPANIES\":{\"changedRecordsById\":{\"recPARITY1\":{\"current\":{\"cellValuesByFieldId\":{\"fldStage\":\"Series A\"}},\"unchanged\":{\"cellValuesByFieldId\":{}}}}}}}],\"cursor\":3,\"mightHaveMore\":false}"
     },
     {
       "method": "GET",
@@ -1018,7 +1154,7 @@
       "authorization": "Bearer dev-loop-airtable-token",
       "body": null,
       "status": 200,
-      "response": "{\"payloads\":[{\"timestamp\":\"2026-10-27T14:57:08.388Z\",\"baseTransactionNumber\":\"2\",\"changedTablesById\":{\"tblCOMPANIES\":{\"changedRecordsById\":{\"recPARITY1\":{\"current\":{\"cellValuesByFieldId\":{\"fldStage\":\"Series A\"}},\"unchanged\":{\"cellValuesByFieldId\":{}}}}}}}],\"cursor\":3,\"mightHaveMore\":false}"
+      "response": "{\"payloads\":[{\"timestamp\":\"2026-11-02T17:23:41.304Z\",\"baseTransactionNumber\":2,\"changedTablesById\":{\"tblCOMPANIES\":{\"changedRecordsById\":{\"recPARITY1\":{\"current\":{\"cellValuesByFieldId\":{\"fldStage\":\"Series A\"}},\"unchanged\":{\"cellValuesByFieldId\":{}}}}}}}],\"cursor\":3,\"mightHaveMore\":false}"
     },
     {
       "method": "GET",
@@ -1026,7 +1162,7 @@
       "authorization": "Bearer dev-loop-airtable-token",
       "body": null,
       "status": 200,
-      "response": "{\"webhooks\":[{\"id\":\"ach1\",\"notificationUrl\":\"https://example.test/api/public/webhook-sync/airtable/sub-1\",\"expirationTime\":\"2026-11-03T14:57:08.384Z\",\"specification\":{\"options\":{\"filters\":{\"dataTypes\":[\"tableData\"],\"changeTypes\":[\"add\",\"update\"],\"recordChangeScope\":\"tblCOMPANIES\"},\"includes\":{\"includePreviousCellValues\":true,\"includeCellValuesInFieldIds\":\"all\"}}}}]}"
+      "response": "{\"webhooks\":[{\"id\":\"ach1\",\"notificationUrl\":\"https://example.test/api/public/webhook-sync/airtable/sub-1\",\"expirationTime\":\"2026-11-09T17:23:41.300Z\",\"specification\":{\"options\":{\"filters\":{\"dataTypes\":[\"tableData\"],\"changeTypes\":[\"add\",\"update\",\"remove\"]},\"includes\":{\"includePreviousCellValues\":true,\"includeCellValuesInFieldIds\":\"all\"}}}}]}"
     },
     {
       "method": "DELETE",
@@ -1037,22 +1173,30 @@
       "response": "{\"ok\":true}"
     },
     {
+      "method": "GET",
+      "path": "/v0/bases/appTEST001/webhooks",
+      "authorization": "Bearer dev-loop-airtable-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"webhooks\":[]}"
+    },
+    {
       "method": "POST",
       "path": "/v0/bases/appTEST001/webhooks",
       "authorization": "Bearer dev-loop-airtable-token",
       "body": {
-        "notificationUrl": "https://example.test/x",
+        "notificationUrl": "https://example.test/api/public/webhook-sync/airtable/sub-2",
         "specification": {
           "options": {
             "filters": {
               "dataTypes": [
-                "tableData"
+                "tableMetadata"
               ],
               "changeTypes": [
                 "add",
+                "update",
                 "remove"
-              ],
-              "recordChangeScope": "tblCOMPANIES"
+              ]
             },
             "includes": {
               "includePreviousCellValues": true,
@@ -1062,7 +1206,7 @@
         }
       },
       "status": 200,
-      "response": "{\"id\":\"ach2\",\"macSecretBase64\":\"H11oDHpngPlEKUrrZtZx9uVupw8PJvSJsLKYWN1At8g=\",\"expirationTime\":\"2026-11-03T14:57:08.406Z\"}"
+      "response": "{\"id\":\"ach2\",\"macSecretBase64\":\"jSqrzrnr99ZZlMvtzpL13g4CZ/0T9RthN8tZFwTpfTY=\",\"expirationTime\":\"2026-11-09T17:23:41.314Z\"}"
     },
     {
       "method": "DELETE",

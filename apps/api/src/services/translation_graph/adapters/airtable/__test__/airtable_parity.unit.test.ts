@@ -4,8 +4,9 @@
 // what came back. Each implementation is replayed against the recording and
 // must make the same requests and give the same answers.
 //
-// The legacy line is gone, so the recording no longer changes: it is the
-// behaviour every module subject keeps.
+// The legacy line is gone; the module in process is the recorded subject.
+// Re-record (when the module changes on purpose, reading the diff):
+// AIRTABLE_PARITY_RECORD=1 pnpm test:unit --testPathPattern airtable_parity
 
 jest.mock('../../../../../lib/credentials', () => ({
   decryptToken: async () => (await import('../../__test__/crm_parity/legacy_row')).decryptSeededRow(),
@@ -26,7 +27,7 @@ jest.mock('../../../../credentials/secrets_postgres', () => ({
   },
 }));
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { TeamId } from '../../../../../generated/kysely/core/Team';
@@ -40,7 +41,8 @@ import { createRemoteAdapter, fetchRemoteManifest } from 'movement-engine/public
 import { airtableModule } from '@listen-fire/airtable';
 import { getAdapter } from '../../registry';
 import { BUILTIN_MODULES, type BuiltinModuleLine } from '../../builtin_modules';
-import { replayingServer, type Exchange } from '../../__test__/parity/exchange';
+import { recordingServer, replayingServer, type Exchange } from '../../__test__/parity/exchange';
+import { bootFakeCrm } from '../../__test__/crm_parity/fake_channels';
 import { freezeClock, unwrappedRemoteErrors, type TranscriptEntry } from '../../__test__/crm_parity/walk';
 import { runAirtableParityScript, type InjectChange } from './parity/script';
 
@@ -120,7 +122,43 @@ async function expectAirtableParity(subjectAt: (baseUrl: string) => Promise<Subj
   }
 }
 
-describe('airtable recorded parity', () => {
+/** The module in process, as the platform registry builds it (and a second
+ *  instance started at a base), its stored credential pointed at `baseUrl`. */
+function moduleSubject(baseUrl: string): Subject {
+  const install = freshInstall();
+  // The vault stands for the store after the line's shape has read the row.
+  vault.current = createMemoryVault({ [install.credentialsId]: storedAsFields('airtable', { ...STORED, baseUrl }) });
+  return {
+    adapter: getAdapter({ adapterType: 'airtable', ...install }),
+    scoped: getAdapter({ adapterType: 'airtable', ...install, constructionArgs: { base: 'Pipeline Tracker' } }),
+  };
+}
+
+const recording = process.env.AIRTABLE_PARITY_RECORD === '1';
+
+(recording ? it : it.skip)('records the module in process against fake-channels', async () => {
+  const fake = await bootFakeCrm('airtable');
+  const proxy = await recordingServer(fake.baseUrl);
+  const inject: InjectChange = async ({ webhookId, body }) => {
+    const answer = await fetch(`${fake.baseUrl}/v0/bases/appTEST001/webhooks/${webhookId}/payloads`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!answer.ok) throw new Error(`inject: ${answer.status} ${await answer.text()}`);
+  };
+  try {
+    const { adapter, scoped } = moduleSubject(proxy.baseUrl);
+    const transcript = await runAirtableParityScript(adapter, scoped, inject);
+    const fixture: Recording = { transcript, exchanges: proxy.exchanges() };
+    writeFileSync(FIXTURE, `${JSON.stringify(fixture, null, 2)}\n`);
+  } finally {
+    await proxy.close();
+    fake.stop();
+  }
+});
+
+(recording ? describe.skip : describe)('airtable recorded parity', () => {
   it('the recording walks the whole surface, writes, pulls a ping, and fails nowhere', () => {
     const { transcript, exchanges } = loadRecording();
     const errors = transcript.filter((entry) => {
@@ -129,21 +167,13 @@ describe('airtable recorded parity', () => {
     });
     expect(errors).toEqual([]);
     expect(exchanges.length).toBeGreaterThan(15);
-    const ping = transcript.find((entry) => entry.step === 'preprocessInbound ping')?.answer as { events: unknown[] } | undefined;
-    expect(ping?.events.length).toBeGreaterThan(0);
+    const ping = transcript.find((entry) => entry.step === 'preprocessInbound ping')?.answer as { arrivals: unknown[] } | undefined;
+    expect(ping?.arrivals.length).toBeGreaterThan(0);
   });
 
   it('the module in process, through the platform registry, replays identically', async () => {
     expect(BUILTIN_MODULES.airtable?.line).toBe('module');
-    await expectAirtableParity((baseUrl) => {
-      const install = freshInstall();
-      // The vault stands for the store after the line's shape has read the row.
-      vault.current = createMemoryVault({ [install.credentialsId]: storedAsFields('airtable', { ...STORED, baseUrl }) });
-      return {
-        adapter: getAdapter({ adapterType: 'airtable', ...install }),
-        scoped: getAdapter({ adapterType: 'airtable', ...install, constructionArgs: { base: 'Pipeline Tracker' } }),
-      };
-    });
+    await expectAirtableParity(moduleSubject);
   });
 
   it('the module served over protocol 2 replays identically (unscoped: protocol 2 carries no construction arguments)', async () => {
