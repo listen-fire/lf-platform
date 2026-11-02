@@ -4,8 +4,8 @@
 // a key). An INTRINSIC credential is one Listen-Fire owns both ends of: there's no
 // external provider to authorize and no key for the user to paste — the server
 // MINTS the credential itself. "Connecting" such an adapter is pure
-// provisioning: the user confirms, the server mints + registers the token and
-// persists the credential envelope.
+// provisioning: the user confirms, the server mints the token and persists the
+// credential envelope.
 //
 // One provisioner per intrinsic credential type, paired with the SAME minting
 // logic the in-app `addCredential` mutation runs (pipelineConfiguration.ts), so
@@ -18,9 +18,6 @@ import type { UserId } from '../../generated/kysely/core/User';
 
 import ExternalServiceType from '../../generated/kysely/automations/ExternalServiceType';
 import { ApiKeyService } from '../api_key';
-import { platformTokenRegistry } from '../translation_graph/engine/platform_token_registry_db';
-import { NATIVE_VALUATIONS_ADAPTER_TYPE } from '../translation_graph/adapters/native_valuations';
-import { KG_ADAPTER_TYPE } from '@listen-fire/kg/manifest';
 
 export interface IntrinsicProvisionArgs {
   teamId: TeamId;
@@ -34,7 +31,7 @@ export interface IntrinsicProvisionArgs {
   baseUrl?: string;
 }
 
-/** Mints + registers an Listen-Fire-owned credential and returns the envelope to
+/** Mints an Listen-Fire-owned credential and returns the envelope to
  *  persist. `provision` is the substantive, single-use action — callers consume
  *  the connect token BEFORE invoking it so a replay can't double-mint. */
 export interface IntrinsicProvisioner {
@@ -54,23 +51,15 @@ function hostOnlyBaseUrl(baseUrl?: string): string | undefined {
   return host ? host : undefined;
 }
 
-// Auto-mint an Listen-Fire-owned integration token. Three atomic steps:
-//   1. Mint an api-key with the API scope the adapter reaches through.
-//   2. Register its id in `platform_owned_token` so the firing filter drops echoes
-//      of our own writes.
-//   3. Build the credentials envelope (plaintext key + api-key id + optional
-//      baseUrl) the adapter replays and `onDelete` revokes.
-// A registry failure leaves a usable api-key floating, so we revoke it on the
-// error path rather than leak it.
+// Auto-mint an Listen-Fire-owned integration token: an api-key with the API
+// scope the adapter reaches through, in the credentials envelope (plaintext key
+// + api-key id + optional baseUrl) the adapter replays and `onDelete` revokes.
 //
 // One shape, parameterised, because the two Listen-Fire-owned systems differ in
-// nothing but which scope and which adapter the token belongs to — and a second
-// hand-copied body is how the scope and the echo-filter key drift apart.
+// nothing but which scope the token belongs to.
 function platformOwnedProvisioner(input: {
   /** The api-key scope naming the API surface this adapter reaches. */
   scope: string;
-  /** The adapter the token belongs to, as the echo filter names it. */
-  adapterType: string;
 }): IntrinsicProvisioner {
   return {
     async provision({ teamId, userId, credentialName, baseUrl }) {
@@ -80,16 +69,6 @@ function platformOwnedProvisioner(input: {
         teamId,
         createdBy: userId,
       });
-      try {
-        await platformTokenRegistry.registerToken({
-          teamId,
-          adapterType: input.adapterType,
-          tokenId: minted.id,
-        });
-      } catch (err) {
-        await ApiKeyService.revokeById(minted.id).catch(() => {});
-        throw err;
-      }
       const host = hostOnlyBaseUrl(baseUrl);
       return {
         credentials: {
@@ -102,19 +81,12 @@ function platformOwnedProvisioner(input: {
   };
 }
 
-const nativeValuationsProvisioner = platformOwnedProvisioner({
-  scope: 'valuations',
-  adapterType: NATIVE_VALUATIONS_ADAPTER_TYPE,
-});
+const nativeValuationsProvisioner = platformOwnedProvisioner({ scope: 'valuations' });
 
 // The knowledge graph is reached over HTTP with a stored credential like any
 // other system (D25) — so connecting it is the same act as connecting
-// Valuations, and the token is Listen-Fire-owned for the same reason: the graph
-// echoes our own writes back through its mutation webhook.
-const nativeKnowledgeProvisioner = platformOwnedProvisioner({
-  scope: 'knowledge',
-  adapterType: KG_ADAPTER_TYPE,
-});
+// Valuations.
+const nativeKnowledgeProvisioner = platformOwnedProvisioner({ scope: 'knowledge' });
 
 const INTRINSIC_PROVISION_BY_TYPE: Partial<Record<ExternalServiceType, IntrinsicProvisioner>> = {
   [ExternalServiceType.NATIVE_VALUATIONS]: nativeValuationsProvisioner,

@@ -3,8 +3,7 @@
  *
  *   pnpm dev:valuations setup   → idempotently provisions the integration:
  *       • api-key with the `valuations` scope (Bearer token the adapter
- *         authenticates with; also registered in platform_owned_token so loop
- *         suppression recognises our own writes echoed back),
+ *         authenticates with),
  *       • external_service_credentials of type NATIVE_VALUATIONS holding
  *         {apiKey, apiKeyId, baseUrl} — named `Dev Loop Valuations` for
  *         movement imports. A credential whose stored baseUrl no longer
@@ -42,7 +41,6 @@ import CurrencyIsoCode from '../../generated/kysely/valuations/CurrencyIsoCode';
 import { ApiKeyService } from '../../services/api_key';
 import { ensureDevLoopTeam } from './_lib';
 
-const ADAPTER_TYPE = 'native-valuations';
 const CREDENTIAL_NAME = 'Dev Loop Valuations';
 const API_KEY_NAME = 'Dev Loop Valuations Integration';
 
@@ -229,29 +227,6 @@ async function ensureExchangeRates(): Promise<string[]> {
   return created;
 }
 
-async function ensurePlatformToken(input: { teamId: TeamId; apiKeyId: string }): Promise<boolean> {
-  const qb = getAutomationsQb(['platform_owned_token']);
-  const existing = await qb
-    .selectFrom('platform_owned_token')
-    .where('team_id', '=', input.teamId)
-    .where('adapter_type', '=', ADAPTER_TYPE)
-    .where('external_token_id', '=', input.apiKeyId)
-    .where('revoked_at', 'is', null)
-    .select(['id'])
-    .executeTakeFirst();
-  if (existing) return false;
-  await qb
-    .insertInto('platform_owned_token')
-    .values({
-      team_id: input.teamId,
-      adapter_type: ADAPTER_TYPE,
-      external_token_id: input.apiKeyId,
-      description: 'Dev-loop integration api-key for the NATIVE_VALUATIONS adapter',
-    } as never)
-    .execute();
-  return true;
-}
-
 // ── REST client (the real surface, Bearer-authenticated) ───────────────────
 
 async function rest<T>(input: {
@@ -422,7 +397,6 @@ async function main() {
   if (command === 'setup') {
     const apiKey = await ensureApiKey(teamId, seedResult.userId as UserId);
     const credential = await ensureCredential({ teamId, apiKey });
-    const tokenRegistered = await ensurePlatformToken({ teamId, apiKeyId: apiKey.id });
     const currenciesCreated = await ensureCurrencyAssets();
     const exchangeRatesCreated = await ensureExchangeRates();
     console.log(
@@ -432,7 +406,6 @@ async function main() {
           baseUrl: API_HOST_BASE_URL,
           apiKey: { id: apiKey.id, created: apiKey.created },
           credential: { ...credential, name: CREDENTIAL_NAME },
-          platformTokenRegistered: tokenRegistered,
           currenciesCreated,
           exchangeRatesCreated,
         },

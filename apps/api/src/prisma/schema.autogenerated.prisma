@@ -569,20 +569,6 @@ model PhoneVerification {
   @@schema("automations")
 }
 
-model PlatformOwnedToken {
-  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  teamId          String    @map("team_id") @db.Uuid
-  adapterType     String    @map("adapter_type")
-  externalTokenId String    @map("external_token_id")
-  description     String?
-  createdAt       DateTime  @default(now()) @map("created_at")
-  revokedAt       DateTime? @map("revoked_at")
-
-  @@index([teamId, adapterType], map: "platform_owned_token_team_adapter_idx")
-  @@map("platform_owned_token")
-  @@schema("automations")
-}
-
 model PublicInbox {
   id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   key             String   @unique @db.Citext

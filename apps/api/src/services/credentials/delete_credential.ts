@@ -89,10 +89,10 @@ export async function deleteCredential({ teamId, id }: { teamId: TeamId; id: Ext
     }
   }
 
-  // Owned-token teardown (Attio / Listen-Fire Valuations) — release any
-  // external token tied to this credential before the row goes away.
+  // Owned-token teardown (Listen-Fire Valuations) — release any external
+  // token tied to this credential before the row goes away.
   const deleteLifecycle = credentialLifecycle(credential.type);
-  if (deleteLifecycle?.onDelete) {
+  if (deleteLifecycle) {
     try {
       const decrypted = await decryptToken(credential.credentials, credential.id);
       await deleteLifecycle.onDelete({

@@ -141,7 +141,7 @@ audit_triggers=`psql -v ON_ERROR_STOP=ON "$DATABASE_URL" <<-EOSQL
       'automations.park_library_source',
       'automations.system_event', 'automations.deploy_check',
       -- automations vault + channel identity: single-use links and handshake
-      -- tokens, a picker's grant records, echo-recognition tokens, and the
+      -- tokens, a picker's grant records, and the
       -- append-only send ledger. The credential rows themselves, the phone
       -- links, the routing table and the remote-adapter installs ARE audited
       -- -- a user creates and deletes those. (whatsapp_conversations /
@@ -149,7 +149,7 @@ audit_triggers=`psql -v ON_ERROR_STOP=ON "$DATABASE_URL" <<-EOSQL
       -- the legacy dealflow era.)
       'automations.audit_log',
       'automations.connect_token', 'automations.google_granted_item',
-      'automations.platform_owned_token', 'automations.telegram_identity', 'automations.telegram_token',
+      'automations.telegram_identity', 'automations.telegram_token',
       'automations.outbound_email',
       -- the secrets module's lease on a credential lf is refreshing: a
       -- runtime row that lives for one refresh.

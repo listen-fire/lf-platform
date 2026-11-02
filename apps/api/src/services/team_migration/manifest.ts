@@ -434,12 +434,6 @@ export const MANIFEST: Record<Product, TableSpec[]> = {
         'one pasted model key per team, re-pasted in ninety seconds; a shell row would say only what the connect surface already shows',
     },
     {
-      table: 'platform_owned_token',
-      tenancy: { kind: 'team_column' },
-      exportExcludedBecause:
-        'a handle on a token held by the source operator’s own third-party app registration; it names nothing on the target (ST-4, doc 10 §2e)',
-    },
-    {
       // It has a tenant now (D55(a)) — the 6.4 finding was fixed rather than
       // worked around, so a team's exposures can be counted and PURGED with it.
       // Best-effort rather than total: the column is nullable because the

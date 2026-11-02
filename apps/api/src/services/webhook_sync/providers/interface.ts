@@ -20,10 +20,7 @@ export interface WebhookEvent {
   idempotencyKey?: string;
   /**
    * Server-asserted actor that produced the change at the source system, when
-   * surfaced. Substrate for Layer 14.4 actor-based echo recognition: the
-   * inbound trigger router uses `(adapterType, actor)` to recognize echoes of
-   * Listen-Fire-driven writes and drop them at entry. When absent, correctness
-   * falls back to no-op detection (P14.1) and the circuit breaker (P14.2).
+   * surfaced.
    *
    * Adapters that observe the source surfacing actor info normalize it into
    * this uniform shape; adapters that don't leave the field undefined.

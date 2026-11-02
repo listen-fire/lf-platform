@@ -34,7 +34,6 @@ import type { default as RecordBindingTable } from './RecordBinding';
 import type { default as ParkedRunTable } from './ParkedRun';
 import type { default as LfSecretsLeaseTable } from './LfSecretsLease';
 import type { default as ModuleProcessesTable } from './ModuleProcesses';
-import type { default as PlatformOwnedTokenTable } from './PlatformOwnedToken';
 import type { default as ParkLibrarySourceTable } from './ParkLibrarySource';
 import type { default as ConnectTokenTable } from './ConnectToken';
 import type { default as ListenStateTable } from './ListenState';
@@ -116,7 +115,6 @@ export default interface AutomationsSchema {
 
   module_processes: ModuleProcessesTable;
 
-  platform_owned_token: PlatformOwnedTokenTable;
 
   park_library_source: ParkLibrarySourceTable;
 

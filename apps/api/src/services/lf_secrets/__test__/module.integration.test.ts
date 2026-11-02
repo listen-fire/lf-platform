@@ -7,7 +7,6 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { SecretsLockAnswer, SecretsListed, SecretsRecord, SecretsWriteBackAnswer } from 'engine-contracts/slots';
 import { SlotRefusal } from 'movement-engine/public/module-wire';
-import { AttioAPIClient } from '@listen-fire/attio/api_client';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { ExternalServiceCredentialsId } from '../../../generated/kysely/automations/ExternalServiceCredentials';
@@ -259,7 +258,6 @@ describe('replace', () => {
 
 describe('create', () => {
   it('an lf-created Attio row reads back through the platform\'s own store', async () => {
-    jest.spyOn(AttioAPIClient.prototype, 'identifyApiTokenId').mockResolvedValue(null);
     const ref = freshRef();
     await lf(teamA).create({ ref, external: 'attio', binding: { credential: 'attio' }, fields: { access_token: 'attio-t1' } });
     const row = await rowNamed(teamA, ref);

@@ -16,7 +16,6 @@ import type { UserId } from '../../generated/kysely/core/User';
 import { forgetAffinityWorkspace } from '@listen-fire/affinity/api_client';
 import { encryptToken } from '../../lib/credentials';
 import { getAutomationsQb } from '../../lib/kysely';
-import { credentialLifecycle } from './credential_lifecycle';
 import { defaultAppIdForType } from './app_id';
 import ExternalServiceType from '../../generated/kysely/automations/ExternalServiceType';
 import { ExternalServiceCredentialsId } from '../../generated/kysely/automations/ExternalServiceCredentials';
@@ -93,15 +92,7 @@ export async function persistCredential(input: PersistCredentialInput): Promise<
       .execute();
   }
 
-  let credentials = input.credentials;
-
-  const createLifecycle = credentialLifecycle(input.type);
-  if (createLifecycle?.onCreate) {
-    credentials = await createLifecycle.onCreate({
-      credentials,
-      teamId: input.teamId,
-    });
-  }
+  const { credentials } = input;
 
   const id = randomUUID();
   const encrypted = await encryptToken(JSON.stringify(credentials), id);

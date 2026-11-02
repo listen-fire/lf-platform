@@ -1150,8 +1150,7 @@ exercise every trigger kind your input supports. Concretely:
 1. **Provisioning** — a `pnpm dev:<input>` script that idempotently
    creates the credentials row, a movement with at least one
    `listen` per supported trigger kind (webhook / manual / mutation),
-   and any provider-specific scaffolding (webhook_subscription,
-   platform_owned_token, …). Pattern: `apps/api/src/scripts/dev/valuations.ts`
+   and any provider-specific scaffolding (webhook_subscription, …). Pattern: `apps/api/src/scripts/dev/valuations.ts`
    (in-process) or the Attio path baked into `dev:seed` (real third-party
    faked through fake-channels). Idempotent: re-running should be a no-op.
 

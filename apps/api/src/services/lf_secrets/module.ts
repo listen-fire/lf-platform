@@ -19,7 +19,6 @@ import ExternalServiceType from '../../generated/kysely/automations/ExternalServ
 import { decryptToken, encryptToken } from '../../lib/credentials';
 import { getAutomationsQb } from '../../lib/kysely';
 import { CredentialNameTakenError, persistCredential } from '../credentials/persist_credential';
-import { credentialLifecycle } from '../credentials/credential_lifecycle';
 import { deleteCredential, forgetCachedClients } from '../credentials/delete_credential';
 import { postgresSecrets, type PayloadShape } from '../credentials/secrets_postgres';
 import { lockLease, unlockLease } from './lease';
@@ -132,14 +131,7 @@ export function platformSecretsModule({ teamId, userId }: { teamId: TeamId; user
       if (isPayload(parsed)) prior = parsed;
     }
     const kept = Object.fromEntries(Object.entries(prior).filter(([key, value]) => typeof value !== 'string' && !lfSetsKey(target.shape, key, value)));
-    let next: unknown = target.shape.withFields(kept, fields);
-    const lifecycle = credentialLifecycle(row.type);
-    // A shell holds no token to release, so it is connected afresh.
-    if (row.shell) {
-      if (lifecycle?.onCreate) next = await lifecycle.onCreate({ credentials: next, teamId });
-    } else if (lifecycle?.onUpdate) {
-      next = await lifecycle.onUpdate({ credentials: next, teamId, prior });
-    }
+    const next: unknown = target.shape.withFields(kept, fields);
     await credentials()
       .updateTable('external_service_credentials')
       .set({

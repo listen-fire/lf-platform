@@ -31,7 +31,6 @@ import { granolaCredsParser } from '../../../services/credentials/connect_form_s
 import { evertraceCredsParser } from '@listen-fire/evertrace/api_client';
 import { dealroomCredsParser } from '@listen-fire/dealroom/api_client';
 import { mcpCredsParser } from '../../../services/translation_graph/adapters/mcp';
-import { credentialLifecycle } from '../../../services/credentials/credential_lifecycle';
 import { persistCredential } from '../../../services/credentials/persist_credential';
 import { deleteCredential, forgetCachedClients } from '../../../services/credentials/delete_credential';
 import { intrinsicProvisionerForType } from '../../../services/credentials/intrinsic_provision';
@@ -291,10 +290,9 @@ const credentialsRouter = (procedure: typeof trpc.procedure) => {
               type: z.literal(ExternalServiceType.MCP),
               credentials: mcpCredsParser,
             }),
-            // NATIVE_VALUATIONS updates never rotate the api-key (re-mint
-            // means a stale platform_owned_token entry — handled by
-            // delete + add). Caller can only edit name + optional baseUrl;
-            // we preserve apiKey + apiKeyId from the existing row.
+            // NATIVE_VALUATIONS updates never rotate the api-key (a re-mint
+            // is a delete + add). Caller can only edit name + optional
+            // baseUrl; we preserve apiKey + apiKeyId from the existing row.
             z.object({
               type: z.literal(ExternalServiceType.NATIVE_VALUATIONS),
               baseUrl: z.string().url().optional(),
@@ -337,16 +335,6 @@ const credentialsRouter = (procedure: typeof trpc.procedure) => {
 
         if (input.type === ExternalServiceType.GOOGLE_GMAIL) {
           credentials = await gmailCredentialToStore(credentials);
-        }
-
-        const updateLifecycle = credentialLifecycle(input.type);
-        if (updateLifecycle?.onUpdate) {
-          const decrypted = await decryptToken(existing.credentials as Buffer, input.id);
-          credentials = await updateLifecycle.onUpdate({
-            credentials,
-            teamId: ctx.user.teamId as TeamId,
-            prior: JSON.parse(decrypted),
-          });
         }
 
         const encrypted = await encryptToken(JSON.stringify(credentials), input.id);
