@@ -25,6 +25,11 @@
 // wake() answers the session (every block, tool call, usage, cost) with what it
 // did: replays (js) or reruns (lf), messages to the user, and whether it
 // changed the automation.
+//
+// In a rehearsal (REHEARSE_WAKE) no model is called: the session is scripted.
+// It calls the tools a woken agent reaches for first, on the run or event the
+// host named, and changes nothing, so a rehearsal shows what the model would
+// read and costs nothing.
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
@@ -149,9 +154,32 @@ async function wake({ kind, reason, js, lf }) {
     };
   }
   const system = wakeSystem(kind);
-  const result = await session({ system, user: reason, tools, handle, maxCalls: 40 });
+  const result = process.env.REHEARSE_WAKE ? await scripted({ kind, reason, handle }) : await session({ system, user: reason, tools, handle, maxCalls: 40 });
   const after = fs.readFileSync(file, 'utf8');
   return { reason, system, prices: PRICES, ...result, actions, changed: after !== before, before, after };
+}
+
+async function scripted({ kind, reason, handle }) {
+  const started = Date.now();
+  const runId = /Run ([0-9a-f-]{36})/.exec(reason)?.[1];
+  const eventId = /event (evt_\w+)/.exec(reason)?.[1];
+  const plan =
+    kind === 'js'
+      ? [['read_handler', {}], ...(eventId ? [['sandbox_log', { event_id: eventId }]] : [])]
+      : [['describe_systems', {}], ['lf_check', {}], ...(runId ? [['lf_runs_show', { run_id: runId }]] : [])];
+  const steps = [];
+  for (const [name, input] of plan) {
+    let output;
+    let isError = false;
+    try {
+      output = await handle(name, input);
+    } catch (error) {
+      output = String(error.message ?? error);
+      isError = true;
+    }
+    steps.push({ role: 'tool', id: `rehearsal_${steps.length}`, name, input, output, isError });
+  }
+  return { model: null, ms: Date.now() - started, modelCalls: 0, stopReason: 'rehearsal', usage: {}, costUsd: 0, calls: [], steps };
 }
 
 module.exports = { wake };

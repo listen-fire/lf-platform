@@ -5,6 +5,7 @@
 //
 // The SDKs are the platform API's own (apps/api), so the recording needs no
 // install of its own.
+const fs = require('fs');
 const path = require('path');
 const { createRequire } = require('module');
 
@@ -62,6 +63,21 @@ async function crmTools(url, token, caller) {
 }
 
 /**
+ * The spend ceiling across sessions and processes (SPEND_HARD_CAP_USD, with
+ * every call's cost appended to the SPEND_LEDGER file): a call is not made
+ * when the ledger's total plus a bound on that call (the dearest call so far,
+ * at least $0.04) could pass the ceiling. Unset, nothing is kept or stopped.
+ */
+const LEDGER = process.env.SPEND_LEDGER;
+const HARD_CAP = process.env.SPEND_HARD_CAP_USD ? Number(process.env.SPEND_HARD_CAP_USD) : null;
+const ledgerCosts = () => (LEDGER && fs.existsSync(LEDGER) ? fs.readFileSync(LEDGER, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l).costUsd) : []);
+function overCap() {
+  if (HARD_CAP === null) return false;
+  const costs = ledgerCosts();
+  return costs.reduce((a, b) => a + b, 0) + Math.max(0.04, ...costs) > HARD_CAP;
+}
+
+/**
  * One agent session: the loop until the model stops asking for tools. Every
  * model call's usage and every block it returned are recorded, with each
  * tool's input and the output it was given.
@@ -73,7 +89,12 @@ async function session({ system, user, tools, handle, maxCalls = 40, effort = 'h
   const calls = [];
   const usage = {};
   const started = Date.now();
+  let capped = false;
   for (let i = 0; i < maxCalls; i++) {
+    if (overCap()) {
+      capped = true;
+      break;
+    }
     const callStarted = Date.now();
     const response = await client.messages
       .stream({
@@ -88,6 +109,7 @@ async function session({ system, user, tools, handle, maxCalls = 40, effort = 'h
       })
       .finalMessage();
     calls.push({ ms: Date.now() - callStarted, stopReason: response.stop_reason, usage: response.usage, costUsd: costOf(response.usage) });
+    if (LEDGER) fs.appendFileSync(LEDGER, `${JSON.stringify({ at: new Date().toISOString(), costUsd: costOf(response.usage) })}\n`);
     addUsage(usage, response.usage);
     messages.push({ role: 'assistant', content: response.content });
     steps.push({
@@ -113,7 +135,7 @@ async function session({ system, user, tools, handle, maxCalls = 40, effort = 'h
     messages.push({ role: 'user', content: results });
   }
   const last = calls[calls.length - 1];
-  return { model: MODEL, ms: Date.now() - started, modelCalls: calls.length, stopReason: last?.stopReason ?? null, usage, costUsd: costOf(usage), calls, steps };
+  return { model: MODEL, ms: Date.now() - started, modelCalls: calls.length, stopReason: capped ? 'spend cap' : (last?.stopReason ?? null), usage, costUsd: costOf(usage), calls, steps };
 }
 
 module.exports = { MODEL, PRICES, costOf, connectMcp, crmTools, session };

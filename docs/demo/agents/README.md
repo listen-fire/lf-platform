@@ -75,8 +75,11 @@ node build_data.cjs ../../../../listen-fire-site/video/agents/data.js
 - `SPEND_CAP_USD` stops before a listen-fire attempt that could take the model
   spend past it: what this run's attempts have cost (authoring and every
   wake), plus `SPEND_BEFORE_USD` spent elsewhere, plus the dearest attempt so
-  far, this run's or `SPEND_ESTIMATE_USD` (0.35 by default), whichever is
+  far, this run's or `SPEND_ESTIMATE_USD` (0.25 by default), whichever is
   dearer.
+- `SPEND_HARD_CAP_USD` with `SPEND_LEDGER` (a file) is a ceiling across runs:
+  every model call's cost goes into the ledger, and a session stops before a
+  call that could take the ledger's total past the ceiling.
 
 It is recorded twice, in two scenarios, all three options in each, so that
 each comparison is like for like (`SCENARIO`; outputs in
@@ -111,10 +114,11 @@ or acts.
   `email`, `slack`, a persistent `kv` and the runtime's timers. It can list
   the CRM's tools (or read its API reference) and test-run the handler.
 - **listen-fire** (`author_lf.cjs`): the model gets the connected systems up
-  front (`describe_systems`), the listen-fire cheat sheet (`programs/lf_cheatsheet.md`),
-  the listen-fire-builder skill unchanged (the platform's
-  `apps/web/skill-src` copy; listen-fire's own went with the split), the
-  handbook, `listen-fire check` and a test run on the example event.
+  front (`describe_systems`: `listen-fire catalog`'s text, every connection
+  the project holds), the listen-fire cheat sheet (`programs/lf_cheatsheet.md`),
+  the handbook, `listen-fire check` and a test run on the example event. It
+  gets no builder skill, as JavaScript gets no equivalent. The woken agent
+  reads a run as `listen-fire runs show` prints it (text).
   - listen-fire 0.14 has no dry run of an event, so the test run is real
     (`listen-fire run --event … --ephemeral`): its writes reach the stand-ins'
     mailbox and Slack, which are cleared before the program goes live. The
@@ -169,7 +173,9 @@ quote (the retry email's "We'll try again…" line).
 JavaScript and listen-fire are authored three times each from the same state,
 and every attempt goes through the stressors; the video shows the first.
 `REHEARSE_JS` and `REHEARSE_LF` rehearse the stressors with a given handler
-and program.
+and program, with no model call: a woken agent is scripted (it reads what a
+session would read first, and changes nothing). With `ONLY_LF=1`, a
+listen-fire rehearsal leaves out the per-event agent and JavaScript too.
 
 The review recording (`capture.sh`) predates this: its request says "yearly"
 (`programs/request_review.txt`).

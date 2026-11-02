@@ -8,8 +8,9 @@
 #      sandbox stores each delivery, acknowledges it, then runs the handler
 #      (receivers.cjs js, sandbox.cjs);
 #   3. listen-fire: the model writes the program (author_lf.cjs) with the
-#      connected systems described up front, the listen-fire cheat sheet, the
-#      listen-fire-builder skill, the handbook, `listen-fire check` and a dry run;
+#      connected systems described up front (`listen-fire catalog`'s text),
+#      the listen-fire cheat sheet, the handbook, `listen-fire check` and a
+#      test run;
 #      Stripe is connected through @lf/stripe, whose door checks the Stripe
 #      signature; `listen-fire serve --doors-only` stores and acknowledges each
 #      delivery, and the host's worker (`listen-fire drain`) runs it. @lf/stripe's
@@ -63,17 +64,25 @@
 #                                 events are the same: make_events.cjs is
 #                                 seeded)
 #   REHEARSE_JS, REHEARSE_LF      a rehearsal of the stressors with no
-#                                 authoring: this handler and this program
-#                                 stand in for every attempt, and the
-#                                 per-event agent is left out (a woken agent
-#                                 still calls the model)
+#                                 model call: this handler and this program
+#                                 stand in for every attempt, the per-event
+#                                 agent is left out, and a woken agent is
+#                                 scripted (it reads what a session would
+#                                 read first, and changes nothing)
 #   SPEND_CAP_USD                 stop before a listen-fire attempt that could
 #                                 take the model spend past this: the spend so
 #                                 far (this run's authoring and wakes, plus
 #                                 SPEND_BEFORE_USD, spent elsewhere) plus the
 #                                 dearest attempt so far, this run's or
-#                                 SPEND_ESTIMATE_USD (default 0.35), whichever
+#                                 SPEND_ESTIMATE_USD (default 0.25), whichever
 #                                 is dearer
+#   SPEND_HARD_CAP_USD, SPEND_LEDGER
+#                                 a ceiling no model call may cross, across
+#                                 runs: every session appends each call's cost
+#                                 to the SPEND_LEDGER file, and stops before a
+#                                 call that could take the ledger's total past
+#                                 SPEND_HARD_CAP_USD (the dearest call so far,
+#                                 at least $0.04, as that call's bound)
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/../../.." && pwd)"
@@ -203,18 +212,17 @@ rm -f "$TEMPLATE/movements/"*.mvt
 )
 [ -n "${STOP_AFTER_SETUP:-}" ] && { echo "F=$F CRM_URL=$CRM_URL PIDS=${PIDS[*]}"; trap - EXIT; exit 0; }
 
-# What every system looks like before any program exists: `listen-fire catalog` over
-# a scratch program that connects every credential the project has, made from
-# the empty project's own catalog (its credentials and their modules).
-scratch="$WORK/describe/billing"
-mkdir -p "$(dirname "$scratch")"
-cp -R "$TEMPLATE" "$scratch"
+# What every system looks like before any program exists: `listen-fire catalog`
+# describes every connection the project holds, a movement or not. The model
+# reads its text; its JSON document (--json) is kept for the check below. It
+# runs on a copy, so no attempt starts from state the description left.
+describe_project="$WORK/describe/billing"
+mkdir -p "$(dirname "$describe_project")"
+cp -R "$TEMPLATE" "$describe_project"
 (
-  cd "$scratch"
-  "$LF_BIN" catalog | jq -r '
-    .credentials | to_entries[] | "\(.key)_connection = connect `@lf/\(.value.adapters[0])` using \(.key)"' >movements/describe.mvt
-  cp movements/describe.mvt "$CAP/04_describe_scratch.mvt"
-  "$LF_BIN" catalog >"$CAP/04_describe_systems.json"
+  cd "$describe_project"
+  "$LF_BIN" catalog >"$CAP/04_describe_systems.txt"
+  "$LF_BIN" catalog --json >"$CAP/04_describe_systems.json"
 )
 if [ "$SCENARIO" = attio ]; then crm_described='.credentials.crm'; else crm_described='.adapters.mcp.schemas.crm'; fi
 jq -e "$crm_described" "$CAP/04_describe_systems.json" >/dev/null || { echo "describe_systems has no CRM"; exit 1; }
@@ -256,7 +264,7 @@ stress() { # <mode> <url> <out dir> [extra config json]
   jq -n --arg mode "$1" --arg url "$2" --arg out "$3" --arg secret "$STRIPE_SECRET" --arg fakes "$F" --arg crm "${CRM_URL%/mcp}" --arg calls "$CRM_CALLS" \
     --slurpfile items "$ITEMS" --argjson extra "$extra" \
     '{mode: $mode, url: $url, out: $out, secret: $secret, fakes: $fakes, crm: $crm, crmCalls: $calls, items: $items[0], renameWaitMs: 45000} + $extra' >"$3.config.json"
-  ANTHROPIC_API_KEY="$ANTHROPIC_KEY" node "$HERE/stress.cjs" "$3.config.json" | tee "$3.summary.txt"
+  ANTHROPIC_API_KEY="$ANTHROPIC_KEY" REHEARSE_WAKE="${REHEARSE_LF:+1}${REHEARSE_JS:+1}" node "$HERE/stress.cjs" "$3.config.json" | tee "$3.summary.txt"
 }
 rename_back() { curl -sf -XPOST "${CRM_URL%/mcp}/admin/rename-plan" -d '{"from":"annual_plan","to":"yearly"}' >/dev/null; }
 receiver() { # <log> <args…>: starts receivers.cjs, sets RECEIVER_PID and RECEIVER_BASE
@@ -318,7 +326,7 @@ lf_spend() {
 for k in $(seq "$ATTEMPTS"); do
   if [ -n "${SPEND_CAP_USD:-}" ] && [ -z "${REHEARSE_LF:-}" ]; then
     spend="$(lf_spend)"
-    if ! jq -e --argjson cap "$SPEND_CAP_USD" --argjson before "${SPEND_BEFORE_USD:-0}" --argjson estimate "${SPEND_ESTIMATE_USD:-0.35}" \
+    if ! jq -e --argjson cap "$SPEND_CAP_USD" --argjson before "${SPEND_BEFORE_USD:-0}" --argjson estimate "${SPEND_ESTIMATE_USD:-0.25}" \
       '$before + .spent + ([.dearest, $estimate] | max) <= $cap' <<<"$spend" >/dev/null; then
       echo "lf attempt $k not started: it could take the spend past \$$SPEND_CAP_USD ($spend, \$${SPEND_BEFORE_USD:-0} before this run)"
       break
@@ -329,7 +337,7 @@ for k in $(seq "$ATTEMPTS"); do
   mkdir -p "$(dirname "$project")"
   cp -R "$TEMPLATE" "$project"
   if [ -n "${REHEARSE_LF:-}" ]; then cp "$REHEARSE_LF" "$project/$PROGRAM"; else
-    ANTHROPIC_API_KEY="$ANTHROPIC_KEY" node "$HERE/author_lf.cjs" "$project" "$EXAMPLE" "$CAP/04_describe_systems.json" "$CAP/lf/attempt_$k.json" | tee "$CAP/lf/attempt_${k}_summary.txt"
+    ANTHROPIC_API_KEY="$ANTHROPIC_KEY" node "$HERE/author_lf.cjs" "$project" "$EXAMPLE" "$CAP/04_describe_systems.txt" "$CAP/lf/attempt_$k.json" | tee "$CAP/lf/attempt_${k}_summary.txt"
   fi
   (cd "$project" && { "$LF_BIN" check --json >"$CAP/lf/attempt_${k}_check.json" || true; })
   [ -f "$project/$PROGRAM" ] && cp "$project/$PROGRAM" "$CAP/lf/program_${k}_authored.mvt"
@@ -345,7 +353,7 @@ for k in $(seq "$ATTEMPTS"); do
   PIDS+=($SERVE_PID)
   for _ in $(seq 120); do grep -q '^stripe stripe_account: ' "$log" && break; sleep 0.25; done
   grep -q '^stripe stripe_account: ' "$log" || { echo "listen-fire serve did not start (see $log)"; exit 1; }
-  stress lf "$(sed -n 's/^stripe stripe_account: //p' "$log" | head -1)" "$CAP/lf/stress_$k" "$(jq -nc --arg p "$project" --arg prog "$PROGRAM" --arg d "$CAP/04_describe_systems.json" --arg dp "$scratch" --arg src "${LF_SRC:-$REPO/../listen-fire}" \
+  stress lf "$(sed -n 's/^stripe stripe_account: //p' "$log" | head -1)" "$CAP/lf/stress_$k" "$(jq -nc --arg p "$project" --arg prog "$PROGRAM" --arg d "$CAP/04_describe_systems.txt" --arg dp "$describe_project" --arg src "${LF_SRC:-$REPO/../listen-fire}" \
     '{lf: {project: $p, program: $prog, describeFile: $d, describeProject: $dp, lfSrc: $src, checkEveryMs: 30000}}')"
   mkdir -p "$CAP/lf/stress_$k/runs"
   for id in $(cd "$project" && "$LF_BIN" runs --json | jq -r '.runs[]?.runId // .[]?.runId'); do

@@ -8,8 +8,10 @@
 //   handbook_search   the handbook's language search (@listen-fire/handbook)
 //   handbook_read     a handbook chapter or section, including each installed
 //                     module's own chapter (system:stripe, system:mcp, …)
-//   lf_catalog        `listen-fire catalog`: what each connection the program makes
-//                     holds, as listen-fire describes it (the CRM's from its MCP tools)
+//   describe_systems  `listen-fire catalog`'s text, made before any program
+//                     existed: every connection the project holds, as
+//                     listen-fire describes it (the CRM's from its MCP tools)
+//   lf_catalog        `listen-fire catalog` now, as printed (the same text)
 //   read_program      movements/payment_failed.mvt as it stands
 //   write_program     replace it
 //   lf_check          `listen-fire check`, as printed
@@ -35,9 +37,6 @@ const LF_SRC = process.env.LF_SRC || path.join(__dirname, '../../../../listen-fi
 const PROGRAM = 'movements/payment_failed.mvt';
 const { request, retryEmail, environment, cheatsheet, lfDelivery, checkLf } = require('./prompts.cjs');
 const describeSystems = fs.readFileSync(describeFile, 'utf8').trim();
-// The listen-fire-builder skill as it stands: its copy in listen-fire went with
-// the split, and the live one is the platform's (apps/web/skill-src).
-const SKILL = path.join(__dirname, '../../../apps/web/skill-src/listen-fire-builder/SKILL.md');
 const example = JSON.parse(fs.readFileSync(exampleFile, 'utf8'));
 const programPath = path.join(project, PROGRAM);
 const realProject = fs.realpathSync(project);
@@ -104,7 +103,6 @@ async function main() {
       description: "Every system this project is connected to, as listen-fire describes it (`listen-fire catalog`): each connection's types, their fields and kinds, what can be read and written.",
       input_schema: { type: 'object', properties: {} },
     },
-    { name: 'read_skill', description: 'The listen-fire-builder skill: how to build automations with Listen-Fire for a user.', input_schema: { type: 'object', properties: {} } },
     {
       name: 'handbook_search',
       description: "Search the language's handbook: built-ins, concepts, recipes. Answers up to five entries, each with the anchor handbook_read takes.",
@@ -115,7 +113,7 @@ async function main() {
       description: 'Read the handbook: "index" for its index, a chapter ("anatomy", "system:mcp"), one section ("branching#if-else"), or a front page section ("front#maybe-absent").',
       input_schema: { type: 'object', properties: { route: { type: 'string' } }, required: ['route'] },
     },
-    { name: 'lf_catalog', description: 'Run `listen-fire catalog`: the catalog the program is checked against, as JSON (each connection the program makes, its types and fields).', input_schema: { type: 'object', properties: {} } },
+    { name: 'lf_catalog', description: 'Run `listen-fire catalog`: the catalog the program is checked against (each connection the project holds, its types and fields).', input_schema: { type: 'object', properties: {} } },
     { name: 'read_program', description: `${PROGRAM} as it stands.`, input_schema: { type: 'object', properties: {} } },
     { name: 'write_program', description: `Replace ${PROGRAM} with this source, whole.`, input_schema: { type: 'object', properties: { source: { type: 'string' } }, required: ['source'] } },
     { name: 'lf_check', description: 'Run `listen-fire check`: every diagnostic the program has.', input_schema: { type: 'object', properties: {} } },
@@ -130,8 +128,6 @@ async function main() {
     switch (name) {
       case 'describe_systems':
         return describeSystems;
-      case 'read_skill':
-        return fs.readFileSync(SKILL, 'utf8');
       case 'handbook_search':
         return handbook.search(String(input.query), input.kind);
       case 'handbook_read':

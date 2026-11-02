@@ -140,8 +140,8 @@ async function main() {
   if (config.mode === 'lf') {
     const { loadHandbook, PROJECT_MODULES } = require('./handbook.cjs');
     handbook = loadHandbook(config.lf.lfSrc, PROJECT_MODULES);
-    // Read live, as the authoring agent's was when it was made: `listen-fire catalog`
-    // over the scratch program that imports every credential.
+    // Read live, as the authoring agent's was when it was made: `listen-fire catalog`'s
+    // text, every connection the project holds.
     describe = () => {
       const ran = spawnSync(process.env.LF_BIN || 'listen-fire', ['catalog'], { cwd: config.lf.describeProject, encoding: 'utf8', env: lfEnv, maxBuffer: 64 * 1024 * 1024 });
       return `${ran.stdout ?? ''}${ran.stderr ?? ''}`.trim();

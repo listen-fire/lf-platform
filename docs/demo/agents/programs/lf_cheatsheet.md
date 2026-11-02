@@ -85,3 +85,24 @@ fail("reason")         # ends the run as failed, the reason kept in the run reco
 - `listen-fire run --event <file>`: one run on an event, for real (an event has
   no dry run; `--ephemeral` keeps the run out of the project's history).
 - `listen-fire runs`, `listen-fire runs show <id>`: what each run did, its event, trace and error.
+
+## Forms you will reach for
+
+```
+crm = connect `@lf/attio` using acme
+mail = connect `@lf/gmail` using team_mail
+chat = connect `@lf/slack` using team_chat
+
+function `Renamed`(c: <crm-[:CompanyChange]->>) {     # typed by the record the listen lands on
+  co = only(c-[:Company]->)                            # a change's record may be missing
+  if (co == null) { fail("no company") }               # test it once; every read after is safe
+  write mail-[:Messages]-> { To: ["ops@example.com"], Subject: "Renamed", Body: co.Name }
+  chat-[ch:Channels WHERE ch.Name == "general"]-> {    # a channel found by name: post inside its block
+    write ch-[:Messages]-> { Message: co.Name }
+  }
+}
+
+listen to crm-[:Companies]->-[c:Changes WHERE c.Field == "Name"]-> fire `Renamed`
+```
+
+These start statements, never names: `await`, `callback`, `delete`, `edge`, `else`, `ERROR`, `export`, `extract`, `function`, `if`, `import`, `link`, `listen`, `movement`, `refresh`, `return`, `run`, `shape`, `unlink`, `write`.
