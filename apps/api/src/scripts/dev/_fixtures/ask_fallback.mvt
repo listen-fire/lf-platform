@@ -1,16 +1,12 @@
-import { manual, attio, slack, ask } from adapters
-import { `Dev Loop Attio`, `Dev Loop Slack` } from credentials
-
-runs = connect manual
-crm  = connect attio using `Dev Loop Attio`
-chat = connect slack using `Dev Loop Slack`
-asks = connect ask
+crm  = connect `@lf/attio` using `Dev Loop Attio`
+chat = connect `@lf/slack` using `Dev Loop Slack`
+asks = connect `@lf/ask`
 
 # Timeout, reminder and escalation are COMPOSED from race + sleep: one arm waits
 # for the answer and hands it back, the other posts a reminder at 10s and holds
 # the deadline to 20s. Only the arm that settles first fills its slot, so a null
 # first slot IS the timeout branch.
-function ask_fallback_demo(go: <runs-[:Invocation]->>) {
+function ask_fallback_demo(go: <manual-[:Invocations]->>) {
   q = write asks-[:Check]-> { Prompt: "Pursue this deal?" }
   chat-[ch:Channels WHERE ch.`Name` == "dealflow"]-> {
     write ch-[:Messages]-> { Message: "Pursue? answer here: ${q.Url}" }
@@ -18,7 +14,7 @@ function ask_fallback_demo(go: <runs-[:Invocation]->>) {
 
   r = race(
     () => {
-      a = await first(q-[:Response]->)
+      a = await q-[:Response]->
       return a.Answer
     },
     () => {
@@ -42,4 +38,4 @@ function ask_fallback_demo(go: <runs-[:Invocation]->>) {
   }
 }
 
-listen to runs {} fire ask_fallback_demo
+listen to manual-[:Invocations]-> fire ask_fallback_demo

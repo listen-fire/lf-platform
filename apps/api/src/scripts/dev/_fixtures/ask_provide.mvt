@@ -1,12 +1,8 @@
-import { manual, attio, slack, ask } from adapters
-import { `Dev Loop Attio`, `Dev Loop Slack` } from credentials
+crm  = connect `@lf/attio` using `Dev Loop Attio`
+chat = connect `@lf/slack` using `Dev Loop Slack`
+asks = connect `@lf/ask`
 
-runs = connect manual
-crm  = connect attio using `Dev Loop Attio`
-chat = connect slack using `Dev Loop Slack`
-asks = connect ask
-
-function ask_provide_demo(go: <runs-[:Invocation]->>) {
+function ask_provide_demo(go: <manual-[:Invocations]->>) {
   # Write the question along its family edge — the record mints a readable Url.
   q = write asks-[:Provide]-> {
     Prompt: "Approved amount?"
@@ -22,8 +18,8 @@ function ask_provide_demo(go: <runs-[:Invocation]->>) {
   }
 
   # Park until the Response lands, then read the typed answer.
-  answer = await first(q-[:Response]->)
+  answer = await q-[:Response]->
   write crm-[:Companies]-> { Domains: "amount.example", Name: "AMOUNT-${answer.Answer}" }
 }
 
-listen to runs {} fire ask_provide_demo
+listen to manual-[:Invocations]-> fire ask_provide_demo

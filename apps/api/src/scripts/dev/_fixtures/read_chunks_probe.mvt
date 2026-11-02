@@ -1,8 +1,4 @@
-import { manual, slack } from adapters
-import { `Dev Loop Slack` } from credentials
-
-runs = connect manual
-chat = connect slack using `Dev Loop Slack`
+chat = connect `@lf/slack` using `Dev Loop Slack`
 
 # Verifies READ + CHUNKS over the SAME file-extraction seam `extract from [
 # … .`File`]` already uses: reuses the born-digital attachment
@@ -19,7 +15,7 @@ node FoundShape: "the relevant information in the content" {
   }
 }
 
-function read_chunks_probe(go: <runs-[:Invocation]->>) {
+function read_chunks_probe(go: <manual-[:Invocations]->>) {
   chat-[ch:Channels WHERE ch.`Name` == "general"]-> {
     ch-[m:Messages]-> {
       m-[f:Files]-> {
@@ -37,4 +33,4 @@ function read_chunks_probe(go: <runs-[:Invocation]->>) {
   }
 }
 
-listen to runs {} fire read_chunks_probe
+listen to manual-[:Invocations]-> fire read_chunks_probe

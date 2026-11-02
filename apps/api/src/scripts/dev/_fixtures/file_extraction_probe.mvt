@@ -1,8 +1,4 @@
-import { manual, slack } from adapters
-import { `Dev Loop Slack` } from credentials
-
-runs = connect manual
-chat = connect slack using `Dev Loop Slack`
+chat = connect `@lf/slack` using `Dev Loop Slack`
 
 # Read every document posted to a channel and pull the companies out of it.
 # The probe for "the run says what it read, and what it could not read": one of
@@ -15,7 +11,7 @@ node FoundShape: "the relevant information in the content" {
   }
 }
 
-function file_extraction_probe(go: <runs-[:Invocation]->>) {
+function file_extraction_probe(go: <manual-[:Invocations]->>) {
   chat-[ch:Channels WHERE ch.`Name` == "general"]-> {
     ch-[m:Messages]-> {
       found = extractOne([m-[:Files]->.`File`], FoundShape)
@@ -29,4 +25,4 @@ function file_extraction_probe(go: <runs-[:Invocation]->>) {
   }
 }
 
-listen to runs {} fire file_extraction_probe
+listen to manual-[:Invocations]-> fire file_extraction_probe

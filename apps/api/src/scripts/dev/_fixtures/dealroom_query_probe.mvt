@@ -1,11 +1,7 @@
-import { manual, dealroom, slack } from adapters
-import { `Dev Loop Dealroom`, `Dev Loop Slack` } from credentials
+dr   = connect `@lf/dealroom` using `Dev Loop Dealroom`
+chat = connect `@lf/slack` using `Dev Loop Slack`
 
-runs = connect manual
-dr   = connect dealroom using `Dev Loop Dealroom`
-chat = connect slack using `Dev Loop Slack`
-
-function dealroom_query_probe(go: <runs-[:Invocation]->>) {
+function dealroom_query_probe(go: <manual-[:Invocations]->>) {
   chat-[ch:Channels WHERE ch.`Name` == "dealflow"]-> {
     dr-[byName:Companies WHERE byName.`Name` == "Nimbusly"]-> {
       rounds  = Text.join(byName-[r:`Funding Rounds` ORDER BY r.`Date` ASC]->.`Round`, ", ")
@@ -56,4 +52,4 @@ function dealroom_query_probe(go: <runs-[:Invocation]->>) {
   }
 }
 
-listen to runs {} fire dealroom_query_probe
+listen to manual-[:Invocations]-> fire dealroom_query_probe

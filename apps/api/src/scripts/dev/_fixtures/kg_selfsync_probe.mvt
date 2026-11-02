@@ -1,9 +1,6 @@
-import { kg } from adapters
-import { `Dev Loop Knowledge` } from credentials
+graph = connect #kg
 
-graph = connect kg using `Dev Loop Knowledge`
-
-function kg_selfsync_probe(change: <graph-[:`Record Change` WHERE `type` == "Organisation" AND `action` == "record.created"]->>) {
+function kg_selfsync_probe(change: <graph-[:`Organisation Change`]->>) {
   change-[org:Record]-> {
     write graph-[:Organisation]-> {
       Name: org.Name
@@ -12,4 +9,4 @@ function kg_selfsync_probe(change: <graph-[:`Record Change` WHERE `type` == "Org
   }
 }
 
-listen to graph { type: "Organisation", events: ["record.created"], suppress_self: true } fire kg_selfsync_probe
+listen to graph-[:Organisation]->-[c:Changes WHERE c.Kind == "created"]-> fire kg_selfsync_probe

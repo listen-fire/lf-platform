@@ -1,9 +1,6 @@
-import { kg } from adapters
-import { `Dev Loop Knowledge` } from credentials
+graph = connect #kg
 
-graph = connect kg using `Dev Loop Knowledge`
-
-function kg_listen_probe(change: <graph-[:`Record Change` WHERE `type` == "Organisation" AND `action` == "record.created"]->>) {
+function kg_listen_probe(change: <graph-[:`Organisation Change`]->>) {
   change-[org:Record]-> {
     write graph-[:Person]-> {
       Name: "Echo Of ${org.Name}"
@@ -11,4 +8,4 @@ function kg_listen_probe(change: <graph-[:`Record Change` WHERE `type` == "Organ
   }
 }
 
-listen to graph { type: "Organisation", events: ["record.created"] } fire kg_listen_probe
+listen to graph-[:Organisation]->-[c:Changes WHERE c.Kind == "created"]-> fire kg_listen_probe

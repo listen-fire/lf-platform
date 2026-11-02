@@ -1,8 +1,4 @@
-import { manual, slack } from adapters
-import { `Dev Loop Slack` } from credentials
-
-runs = connect manual
-chat = connect slack using `Dev Loop Slack`
+chat = connect `@lf/slack` using `Dev Loop Slack`
 
 # A local node declaration (piece 1 of the four under verification): a
 # structure this file owns, with no address anywhere in a real system. Its
@@ -29,7 +25,7 @@ node FoundShape: "the relevant information in the content" {
   }
 }
 
-function chunk_dedup_probe(go: <runs-[:Invocation]->>) {
+function chunk_dedup_probe(go: <manual-[:Invocations]->>) {
   deduped = node { companies: <Company> }
 
   pieces = Text.chunks(go.`Text`, { size: 110, overlap: 15 })
@@ -54,4 +50,4 @@ function chunk_dedup_probe(go: <runs-[:Invocation]->>) {
   }
 }
 
-listen to runs {} fire chunk_dedup_probe
+listen to manual-[:Invocations]-> fire chunk_dedup_probe

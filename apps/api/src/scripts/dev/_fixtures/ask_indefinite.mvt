@@ -1,12 +1,8 @@
-import { manual, attio, slack, ask } from adapters
-import { `Dev Loop Attio`, `Dev Loop Slack` } from credentials
+crm  = connect `@lf/attio` using `Dev Loop Attio`
+chat = connect `@lf/slack` using `Dev Loop Slack`
+asks = connect `@lf/ask`
 
-runs = connect manual
-crm  = connect attio using `Dev Loop Attio`
-chat = connect slack using `Dev Loop Slack`
-asks = connect ask
-
-function ask_indefinite_demo(go: <runs-[:Invocation]->>) {
+function ask_indefinite_demo(go: <manual-[:Invocations]->>) {
   # A bare await with no timeout race waits indefinitely for the answer.
   q = write asks-[:Check]-> {
     Prompt: "Pursue this deal?"
@@ -18,7 +14,7 @@ function ask_indefinite_demo(go: <runs-[:Invocation]->>) {
     }
   }
 
-  answer = await first(q-[:Response]->)
+  answer = await q-[:Response]->
   if (answer.Answer) {
     write crm-[:Companies]-> { Domains: "pursued.example", Name: "PURSUED" }
   } else {
@@ -26,4 +22,4 @@ function ask_indefinite_demo(go: <runs-[:Invocation]->>) {
   }
 }
 
-listen to runs {} fire ask_indefinite_demo
+listen to manual-[:Invocations]-> fire ask_indefinite_demo

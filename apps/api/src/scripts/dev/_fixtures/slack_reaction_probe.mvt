@@ -1,7 +1,4 @@
-import { slack } from adapters
-import { `Dev Loop Slack` } from credentials
-
-chat = connect slack using `Dev Loop Slack`
+chat = connect `@lf/slack` using `Dev Loop Slack`
 
 # React to the message that fired the run, then reply — so the run's effect is
 # visible on the message itself (the reaction) and in the channel (the reply).
@@ -10,4 +7,4 @@ function slack_reaction_probe(msg: <chat-[:Message]->>) {
   write msg-[:Replies]-> { Message: "Picked it up." }
 }
 
-listen to chat { events: ["app_mention"] } fire slack_reaction_probe
+listen to chat-[:Channels]->-[m:Messages WHERE m.`Mentions App` == true]-> fire slack_reaction_probe

@@ -1,10 +1,6 @@
-import { manual, kg } from adapters
-import { `Dev Loop Knowledge` } from credentials
+graph = connect #kg
 
-runs = connect manual
-graph = connect kg using `Dev Loop Knowledge`
-
-function kg_write_probe(go: <runs-[:Invocation]->>) {
+function kg_write_probe(go: <manual-[:Invocations]->>) {
   write graph-[:Organisation]-> {
     Name: "Probe Industries"
     Website: "https://probe.example"
@@ -12,4 +8,4 @@ function kg_write_probe(go: <runs-[:Invocation]->>) {
   }
 }
 
-listen to runs {} fire kg_write_probe
+listen to manual-[:Invocations]-> fire kg_write_probe
