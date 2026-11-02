@@ -253,8 +253,8 @@ importers:
         specifier: workspace:*
         version: link:../../modules/system
       '@listen-fire/telegram':
-        specifier: 0.13.1
-        version: 0.13.1(@listen-fire/engine-contracts@0.13.1)(@listen-fire/engine@0.13.1)(@listen-fire/movement-lang@0.13.1)(tsx@4.21.0)
+        specifier: 0.13.2
+        version: 0.13.2(@listen-fire/engine-contracts@0.13.1)(@listen-fire/engine@0.13.1)(@listen-fire/movement-lang@0.13.1)(tsx@4.21.0)
       '@listen-fire/wake-cloud-tasks':
         specifier: 0.12.7
         version: 0.12.7(@listen-fire/engine-contracts@0.13.1)
@@ -262,8 +262,8 @@ importers:
         specifier: 0.12.9
         version: 0.12.9(@listen-fire/engine-contracts@0.13.1)(@listen-fire/engine@0.13.1)(@listen-fire/movement-lang@0.13.1)(tsx@4.21.0)
       '@listen-fire/whatsapp':
-        specifier: 0.13.1
-        version: 0.13.1(@listen-fire/engine-contracts@0.13.1)(@listen-fire/engine@0.13.1)(@listen-fire/movement-lang@0.13.1)(tsx@4.21.0)
+        specifier: 0.13.2
+        version: 0.13.2(@listen-fire/engine-contracts@0.13.1)(@listen-fire/engine@0.13.1)(@listen-fire/movement-lang@0.13.1)(tsx@4.21.0)
       '@modelcontextprotocol/sdk':
         specifier: ^1.32.1
         version: 1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7)
@@ -3253,8 +3253,8 @@ packages:
       '@listen-fire/engine-contracts': '>=0.13.0 <1.0.0'
       '@listen-fire/movement-lang': '>=0.13.0 <1.0.0'
 
-  '@listen-fire/telegram@0.13.1':
-    resolution: {integrity: sha512-ftv8BqehqgUVv+xnunlM4ThQDnsu83pKrHa4KOiiKGqMexH4+H4VFM5RKbRPGDBKcKW1T2Sp1STaPjKMCPOSOQ==}
+  '@listen-fire/telegram@0.13.2':
+    resolution: {integrity: sha512-f3QtAQ34GrGfUATrYl51NxdyT1l9ikpB1/TCT8cz3JRmZ8fpAB+ROZaBjEoFJDh17vFfkvCfC7BkU/cKD9DHeQ==}
     engines: {node: '>=22.23.4 <23'}
     peerDependencies:
       '@listen-fire/engine': '>=0.12.0 <1.0.0'
@@ -3276,8 +3276,8 @@ packages:
       '@listen-fire/engine-contracts': '>=0.12.0 <1.0.0'
       '@listen-fire/movement-lang': '>=0.12.0 <1.0.0'
 
-  '@listen-fire/whatsapp@0.13.1':
-    resolution: {integrity: sha512-2PlOCZDjmzBLoKI2y0gP8i6x1xgGBjmSIcWKa9giuMonVtPUYnPWXAAhLvnrZqNrRCZh7UZi4WfHzZweUz2cUQ==}
+  '@listen-fire/whatsapp@0.13.2':
+    resolution: {integrity: sha512-U9PE4Gf459xdVWGhWYAjimpM+7htoXYaKyvWRv+oxLmfK4dwU1Wjd9tpovICDapFbHZYJX9DamdA9Y/VnUMScw==}
     engines: {node: '>=22.23.4 <23'}
     peerDependencies:
       '@listen-fire/engine': '>=0.12.0 <1.0.0'
@@ -13945,7 +13945,7 @@ snapshots:
       - supports-color
       - tsx
 
-  '@listen-fire/telegram@0.13.1(@listen-fire/engine-contracts@0.13.1)(@listen-fire/engine@0.13.1)(@listen-fire/movement-lang@0.13.1)(tsx@4.21.0)':
+  '@listen-fire/telegram@0.13.2(@listen-fire/engine-contracts@0.13.1)(@listen-fire/engine@0.13.1)(@listen-fire/movement-lang@0.13.1)(tsx@4.21.0)':
     dependencies:
       '@listen-fire/engine': 0.13.1
       '@listen-fire/engine-contracts': 0.13.1
@@ -13978,7 +13978,7 @@ snapshots:
       - '@napi-rs/canvas'
       - tsx
 
-  '@listen-fire/whatsapp@0.13.1(@listen-fire/engine-contracts@0.13.1)(@listen-fire/engine@0.13.1)(@listen-fire/movement-lang@0.13.1)(tsx@4.21.0)':
+  '@listen-fire/whatsapp@0.13.2(@listen-fire/engine-contracts@0.13.1)(@listen-fire/engine@0.13.1)(@listen-fire/movement-lang@0.13.1)(tsx@4.21.0)':
     dependencies:
       '@listen-fire/engine': 0.13.1
       '@listen-fire/engine-contracts': 0.13.1
