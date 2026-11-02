@@ -1,7 +1,6 @@
 import { RequestHandler, Request, Response } from 'express';
 import { currentPrincipal } from 'principal';
 
-import type { TriggerEvent } from 'movement-engine/public/inbound';
 
 import { currentContext } from '../../services/context';
 import { catchingRoutes } from './async_route';
@@ -14,14 +13,12 @@ import { deliverArrivals } from '../../services/inbound/listen_door';
 import { keptPage } from '../../services/inbound/captured_request';
 import { notifyWork } from '../../services/work/drain';
 import {
-  createEmailAdapter,
   normaliseInboundEmailPayload,
   EMAIL_ADAPTER_TYPE,
 } from '../../services/translation_graph/adapters/email';
 import { fetchResendEmailPayload } from '../../services/translation_graph/adapters/email/resend_inbound';
 import { readMailgunMessage, readResendEnvelope, resendEnvelopeRecipients } from '@listen-fire/email';
-import { inboundEmailArrival } from '../../services/translation_graph/adapters/email/arrival';
-import { resolveActingUser } from '../../services/translation_graph/adapters/acting_user/resolve';
+import { emailActingUser, inboundEmailArrival } from '../../services/translation_graph/adapters/email/arrival';
 import { findPublicInbox } from '../../services/translation_graph/adapters/email/public_inbox';
 
 /**
@@ -64,7 +61,8 @@ const acceptInboundEmail = async (
   // T5 — sender-auth gate. Run BEFORE plus-key routing because plus-key
   // is a routing signal, not an auth signal (anyone can email a
   // `<local>+<key>@` address). The email adapter parses sender /
-  // forwarding-recipient candidates (`getActorCandidates`); Listen-Fire's
+  // forwarding-recipient candidates (`getActorCandidates`) off the run
+  // trigger the email's arrival makes, as every run of it reads them;
   // `resolveActingUser` maps them through the sender → service-account
   // chain. Null means "no Listen-Fire team member is authenticated for this
   // dispatch" and the request is rejected. No trigger context here (this
@@ -90,19 +88,9 @@ const acceptInboundEmail = async (
   const route = req.inboundEmailRoute;
   const emailPayload = email.payload;
   const inbox = route?.key ? await findPublicInbox(route.key) : null;
+  const arrival = inboundEmailArrival({ payload: emailPayload, fallbackIdentity: ctx.id });
   if (inbox?.teamId !== teamId) {
-    const emailAdapter = createEmailAdapter({ teamId });
-    const authEvent: TriggerEvent = {
-      pipelineInputId: 'auth-gate',
-      adapterType: EMAIL_ADAPTER_TYPE,
-      triggerType: 'webhook',
-      payload: emailPayload,
-      occurredAt: new Date().toISOString(),
-    };
-    const actingUser = await resolveActingUser({
-      teamId,
-      getCandidates: () => emailAdapter.getActorCandidates({ event: authEvent }),
-    });
+    const actingUser = await emailActingUser({ teamId, arrival });
     if (!actingUser) {
       logger.warn('[InboundEmail] rejected unauthenticated email', {
         teamId,
@@ -124,7 +112,7 @@ const acceptInboundEmail = async (
     typeof emailPayload['messageId'] === 'string' && emailPayload['messageId'].length > 0 ? emailPayload['messageId'] : undefined;
   let fired: number;
   try {
-    const arrivals: Arrival[] = [inboundEmailArrival({ payload: emailPayload, fallbackIdentity: ctx.id })];
+    const arrivals: Arrival[] = [arrival];
     const { kept, fires } = await deliverArrivals({
       teamId,
       delivered: { adapterType: EMAIL_ADAPTER_TYPE, credentialsId: null },
