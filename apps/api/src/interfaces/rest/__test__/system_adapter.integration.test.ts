@@ -29,7 +29,7 @@ import { defersToSystemCaller } from '../../../services/system_auth';
 import { upsertMovementRow } from '../../../services/translation_graph/movement/store';
 import { settleRun, startRun } from '../../../services/lf_store/runs';
 import { noteUnjudged } from '../../../services/lf_store/records_door';
-import { RELEASE_APPLIED, RUN_PAUSED } from '@listen-fire/system';
+import { DEPRECATED_VERSION, RELEASE_APPLIED, RUN_PAUSED, VALIDATION_ISSUE } from '@listen-fire/system';
 import { automationUrl, automationsUrl, recordSystemEvent, webBaseUrl } from '../../../services/translation_graph/adapters/system/events';
 import { systemRouter } from '../v1/system';
 
@@ -287,6 +287,34 @@ describe('the system adapter route', () => {
     const releasePoll = await poll(teamA, { kind: 'Release Applied', cursor: { releases: { at: minutesAgo(10), version: '' } } });
     expect(fieldsOf(releasePoll)).toEqual([expect.objectContaining({ Kind: 'Release Applied', Version: '0.13.0' })]);
     expect((await poll(teamB, { kind: 'Release Applied', cursor: { releases: { at: minutesAgo(10), version: '' } } })).arrivals).toEqual([]);
+  });
+
+  it('reports what the deploy check found of a saved program: a Validation Issue and a Deprecated Version, each once', async () => {
+    const issueAt = minutesAgo(6);
+    await recordSystemEvent({
+      teamId: teamA.teamId,
+      kind: VALIDATION_ISSUE,
+      payload: { automation: 'Nightly Sync', automationId: syncMovementId, runId: '', version: '0.13.1', reason: 'Owner is not a field of Task', url: automationUrl(syncMovementId), at: issueAt },
+    });
+    await recordSystemEvent({
+      teamId: teamA.teamId,
+      kind: DEPRECATED_VERSION,
+      payload: { automation: 'Nightly Sync', automationId: syncMovementId, runId: '', version: '3', reason: 'legacy 3 is deprecated', url: automationUrl(syncMovementId), at: minutesAgo(5) },
+    });
+
+    const issues = await poll(teamA, { kind: 'Validation Issue', cursor: { validation: { at: minutesAgo(10), automationId: '' } } });
+    expect(issues.arrivals).toHaveLength(1);
+    expect(issues.arrivals[0]).toMatchObject({
+      identity: `validation_issue:${syncMovementId}:0.13.1:${issueAt}`,
+      landing: { fields: { Kind: 'Validation Issue', Automation: 'Nightly Sync', 'Automation Id': syncMovementId, Version: '0.13.1', Reason: 'Owner is not a field of Task', Url: automationUrl(syncMovementId), 'Run Id': '' } },
+    });
+    expect(issues.arrivals[0]).not.toHaveProperty('about');
+    expect(issues.cursor.validation).toEqual({ at: issueAt, automationId: syncMovementId });
+    expect((await poll(teamA, { kind: 'Validation Issue', cursor: issues.cursor })).arrivals).toEqual([]);
+
+    const deprecated = await poll(teamA, { kind: 'Deprecated Version', cursor: { deprecated: { at: minutesAgo(10), automationId: '' } } });
+    expect(fieldsOf(deprecated)).toEqual([expect.objectContaining({ Kind: 'Deprecated Version', Version: '3', Reason: 'legacy 3 is deprecated' })]);
+    expect((await poll(teamB, { kind: 'Validation Issue', cursor: { validation: { at: minutesAgo(10), automationId: '' } } })).arrivals).toEqual([]);
   });
 
   it('reports a wait whose record was deleted, by its module, edge and record', async () => {

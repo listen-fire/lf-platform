@@ -5,8 +5,9 @@
 // Most facts are read where their writers already leave them: failed runs from
 // the run table, stranded waits from the waits, unjudged arrivals from the
 // facts the listen door keeps. Only what leaves nothing else behind is written
-// here (`system_event`): a run pausing at its cost limit, and each release the
-// deploy check applies to a team.
+// here (`system_event`): a run pausing at its cost limit, each release the
+// deploy check applies to a team, and what it found of each saved program (a
+// `Validation Issue`, a `Deprecated Version`).
 //
 // The run table holds lf's runs too (`host = 'lf'`, written through the store
 // slot), so a failed lf run is reported like any other: named by the file and
@@ -23,6 +24,8 @@ import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type { TriggerId } from '../../../../generated/kysely/automations/Trigger';
 import type {
   Automation,
+  NoticeMark,
+  ProgramNotice,
   Release,
   ReleaseMark,
   RunMark,
@@ -37,7 +40,7 @@ import type {
 
 import { sql } from 'kysely';
 import { z } from 'zod';
-import { RELEASE_APPLIED, RUN_PAUSED } from '@listen-fire/system';
+import { DEPRECATED_VERSION, RELEASE_APPLIED, RUN_PAUSED, VALIDATION_ISSUE } from '@listen-fire/system';
 
 import { getAutomationsQb } from '../../../../lib/kysely';
 import { getEnvVar } from '../../../../lib/utils/environment';
@@ -266,7 +269,7 @@ async function failedRuns(teamId: TeamId, input: { after: RunMark; until: string
  *  `field`), no later than `until` when given, oldest first. */
 async function storedEvents(
   teamId: TeamId,
-  input: { kind: SystemEventKind; field: 'runId' | 'version'; after: { at: string; id: string }; until?: string; limit: number },
+  input: { kind: SystemEventKind; field: 'runId' | 'version' | 'automationId'; after: { at: string; id: string }; until?: string; limit: number },
 ): Promise<Array<{ payload: SystemEventPayload; at: string }>> {
   const { rows } = await sql<{ payload: unknown; at: string }>`
     select e.payload, ${iso('e.occurred_at')} as at
@@ -313,6 +316,27 @@ async function releases(teamId: TeamId, input: { after: ReleaseMark; limit: numb
     limit: input.limit,
   });
   return events.map(({ payload, at }) => ({ version: payload.version, at }));
+}
+
+// ── Program notices the deploy check leaves ──────────────────────────────────
+
+/** A saved program the deploy check found not to validate under the running
+ *  release (`Validation Issue`), or pinned to a deprecated language version
+ *  (`Deprecated Version`), as it recorded it (language_upgrade.ts). */
+async function programNotices(teamId: TeamId, kind: SystemEventKind, input: { after: NoticeMark; limit: number }): Promise<ProgramNotice[]> {
+  const events = await storedEvents(teamId, {
+    kind,
+    field: 'automationId',
+    after: { at: input.after.at, id: input.after.automationId },
+    limit: input.limit,
+  });
+  return events.map(({ payload, at }) => ({
+    automation: { id: payload.automationId, name: payload.automation },
+    version: payload.version,
+    reason: payload.reason,
+    at,
+    ...(payload.url !== '' ? { url: payload.url } : {}),
+  }));
 }
 
 // ── Stranded waits ───────────────────────────────────────────────────────────
@@ -383,6 +407,8 @@ export function systemRecordsFor(tenant: string): SystemRecords {
     strandedWaits: (input) => strandedWaits(teamId, input),
     releases: (input) => releases(teamId, input),
     unjudgedArrivals: (input) => unjudgedArrivals(teamId, input),
+    validationIssues: (input) => programNotices(teamId, VALIDATION_ISSUE, input),
+    deprecatedVersions: (input) => programNotices(teamId, DEPRECATED_VERSION, input),
     webBaseUrl: async () => webBaseUrl(),
   };
 }

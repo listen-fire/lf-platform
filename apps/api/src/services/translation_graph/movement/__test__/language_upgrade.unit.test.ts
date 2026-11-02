@@ -211,7 +211,8 @@ describe('the deploy check', () => {
     );
     const issue = store.events.find((e) => e.kind === VALIDATION_ISSUE.id);
     expect(issue).toEqual(
-      expect.objectContaining({ version: '1', teamId: 'team-1' }),
+      // The release it fails to validate under; its reason names its pin.
+      expect.objectContaining({ version: CUR, teamId: 'team-1', reason: expect.stringContaining('Stays on legacy 1') }),
     );
     expect(issue?.reason).toContain('line 3: extracted text is never null under this version');
   });
@@ -361,10 +362,10 @@ describe('a pin by the compatibility rule', () => {
     expect(applied).toEqual([expect.stringContaining('Stopped firing until you upgrade them, written for an earlier release: older-line.')]);
     // A pin the installed language does not read is never validated.
     expect(store.validations.map((v) => v.movement.id)).toEqual(['legacy', 'legacy', 'same-line']);
-    expect(store.events.filter((e) => e.kind === VALIDATION_ISSUE.id).map((e) => e.version)).toEqual([
-      '0.12.0',
-      '0.14.0',
-    ]);
+    // Each names the running release; its reason names the pin.
+    const issues = store.events.filter((e) => e.kind === VALIDATION_ISSUE.id);
+    expect(issues.map((e) => e.version)).toEqual([CUR, CUR]);
+    expect(issues.map((e) => e.reason)).toEqual([expect.stringContaining('0.12.0'), expect.stringContaining('0.14.0')]);
   });
 
   it('keys the release by the installed language and the legacy ids', async () => {

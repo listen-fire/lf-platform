@@ -18,9 +18,10 @@
 
 import type { PollEdgeAnswer, PollEdgeInput } from 'module-kit';
 
-import type { ReleaseMark, RunMark, SettledRun, StrandedWait, SystemRecords, UnjudgedArrival, UnjudgedMark, WaitMark } from './records';
+import type { NoticeMark, ProgramNotice, ReleaseMark, RunMark, SettledRun, StrandedWait, SystemRecords, UnjudgedArrival, UnjudgedMark, WaitMark } from './records';
 import {
   ARRIVAL_NOT_JUDGED,
+  DEPRECATED_VERSION,
   EVENT_TYPE,
   EVENTS_EDGE,
   KIND_FIELD,
@@ -29,6 +30,7 @@ import {
   RUN_PAUSED,
   SYSTEM_ADAPTER_TYPE,
   SYSTEM_EVENT_KINDS,
+  VALIDATION_ISSUE,
   WAIT_LOST_ITS_RECORD,
   type SystemEventFields,
   type SystemEventKind,
@@ -65,6 +67,8 @@ export interface SystemCursor {
   stranded?: WaitMark;
   releases?: ReleaseMark;
   unjudged?: UnjudgedMark;
+  validation?: NoticeMark;
+  deprecated?: NoticeMark;
 }
 
 /** The kinds a taken filter names (`Kind == "…"`, `Kind IN [...]`); undefined
@@ -173,6 +177,18 @@ function unjudgedEvent(unjudged: UnjudgedArrival, taken: boolean): Arrival {
   });
 }
 
+function noticeEvent(kind: SystemEventKind, notice: ProgramNotice, taken: boolean): Arrival {
+  return event({
+    kind,
+    // One per program, version and finding: a program found failing again at
+    // a later time is reported again.
+    id: `${kind.id}:${notice.automation.id}:${notice.version}:${notice.at}`,
+    at: notice.at,
+    fields: { Automation: notice.automation.name, 'Automation Id': notice.automation.id, Version: notice.version, Reason: notice.reason, Url: notice.url ?? '' },
+    taken,
+  });
+}
+
 /**
  * One poll of `Events` over the host's facts. The first poll (no cursor)
  * sets the marks and emits nothing: going live never replays what happened
@@ -198,6 +214,10 @@ export async function pollSystemEvents(records: SystemRecords, input: PollEdgeIn
   if (asked(WAIT_LOST_ITS_RECORD)) next.stranded ??= { at: until, waitId: NIL_ID };
   if (asked(RELEASE_APPLIED)) next.releases ??= { at: until, version: '' };
   if (asked(ARRIVAL_NOT_JUDGED)) next.unjudged ??= { at: until, listen: '', arrival: '', attempt: 0 };
+  // A host that cannot read a kind (it has no such method) never arms or
+  // reports it.
+  if (asked(VALIDATION_ISSUE) && records.validationIssues !== undefined) next.validation ??= { at: until, automationId: '' };
+  if (asked(DEPRECATED_VERSION) && records.deprecatedVersions !== undefined) next.deprecated ??= { at: until, automationId: '' };
   if (previous === undefined) return { arrivals: [], cursor: next };
 
   const arrivals: Arrival[] = [];
@@ -245,6 +265,19 @@ export async function pollSystemEvents(records: SystemRecords, input: PollEdgeIn
       }
       arrivals.push(unjudgedEvent(one, takenApplied));
     }
+  }
+  const noticeKinds = [
+    [VALIDATION_ISSUE, 'validation', records.validationIssues?.bind(records)],
+    [DEPRECATED_VERSION, 'deprecated', records.deprecatedVersions?.bind(records)],
+  ] as const;
+  for (const [kind, member, read] of noticeKinds) {
+    const mark = previous[member];
+    if (!asked(kind) || read === undefined || mark === undefined) continue;
+    const notices = await read({ after: mark, limit });
+    const settled = notices.slice(0, firstPast(notices, until));
+    const last = settled.at(-1);
+    if (last !== undefined) next[member] = { at: last.at, automationId: last.automation.id };
+    for (const notice of settled) arrivals.push(noticeEvent(kind, notice, takenApplied));
   }
   return { arrivals, cursor: next };
 }

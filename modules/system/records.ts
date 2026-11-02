@@ -106,6 +106,29 @@ export interface Release {
   at: string;
 }
 
+/** Where a page of program notices (validation issues, deprecated versions)
+ *  left off: its last one, by when it was found and the program's id. */
+export interface NoticeMark {
+  at: string;
+  automationId: string;
+}
+
+/** A fact about a saved program the host found by checking it, not by running
+ *  it: it does not validate under the running release (`Validation Issue`), or
+ *  it is pinned to a deprecated language version (`Deprecated Version`). */
+export interface ProgramNotice {
+  automation: Automation;
+  /** The release involved: the running release a program fails to validate
+   *  under, or the deprecated version it is pinned to. */
+  version: string;
+  /** What to repair, or which version to move to, in words. */
+  reason: string;
+  /** When the host found it, ISO 8601. */
+  at: string;
+  /** Where a person opens the program, when the host has such a page. */
+  url?: string;
+}
+
 /** The host's facts, each read a page at a time after a mark, oldest first. */
 export interface SystemRecords {
   /** Runs failed after `after` and no later than `until`. */
@@ -118,6 +141,16 @@ export interface SystemRecords {
   releases(input: { after: ReleaseMark; limit: number }): Promise<Release[]>;
   /** Arrivals a listen could not judge, found after `after`. */
   unjudgedArrivals(input: { after: UnjudgedMark; limit: number }): Promise<UnjudgedArrival[]>;
+  /** The web app's base URL an event's `Url` links into; null where the host has none. */
+  webBaseUrl(): Promise<string | null>;
+  /** Saved programs found not to validate under the running release, found
+   *  after `after`. A host that never checks saved programs (listen-fire
+   *  refuses to serve one that does not check) supplies none, and reports no
+   *  `Validation Issue`. */
+  validationIssues?(input: { after: NoticeMark; limit: number }): Promise<ProgramNotice[]>;
+  /** Saved programs found pinned to a deprecated language version, likewise,
+   *  for `Deprecated Version`. */
+  deprecatedVersions?(input: { after: NoticeMark; limit: number }): Promise<ProgramNotice[]>;
   /** The web app's base URL an event's `Url` links into; null where the host has none. */
   webBaseUrl(): Promise<string | null>;
 }

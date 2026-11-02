@@ -2,7 +2,7 @@
 // arms, what each later poll emits, and what it leaves for the next.
 
 import { DEFAULT_POLL_SETTINGS, pollSystemEvents, type SystemCursor } from '../poll';
-import type { Release, SettledRun, StrandedWait, SystemRecords, UnjudgedArrival } from '../records';
+import type { ProgramNotice, Release, SettledRun, StrandedWait, SystemRecords, UnjudgedArrival } from '../records';
 
 const T0 = Date.parse('2026-10-31T10:00:00.000Z');
 const at = (seconds: number): string => new Date(T0 + seconds * 1000).toISOString();
@@ -13,7 +13,7 @@ function failed(runId: string, seconds: number, listen: string | null = null): S
 }
 
 /** A host's facts, each list kept oldest first, read as a store reads them. */
-function records(facts: { failed?: SettledRun[]; stranded?: StrandedWait[]; releases?: Release[]; unjudged?: UnjudgedArrival[] }): SystemRecords {
+function records(facts: { failed?: SettledRun[]; stranded?: StrandedWait[]; releases?: Release[]; unjudged?: UnjudgedArrival[]; validation?: ProgramNotice[]; deprecated?: ProgramNotice[] }): SystemRecords {
   const after = <T extends { at: string }>(rows: T[] = [], mark: { at: string }, id: (row: T) => string, markId: string) =>
     rows.filter((row) => row.at > mark.at || (row.at === mark.at && id(row) > markId));
   return {
@@ -23,6 +23,8 @@ function records(facts: { failed?: SettledRun[]; stranded?: StrandedWait[]; rele
     releases: async ({ after: mark, limit }) => after(facts.releases, mark, (r) => r.version, mark.version).slice(0, limit),
     unjudgedArrivals: async ({ after: mark, limit }) =>
       after(facts.unjudged, mark, (u) => `${u.listen} ${u.arrival} ${u.attempt}`, `${mark.listen} ${mark.arrival} ${mark.attempt ?? 0}`).slice(0, limit),
+    ...(facts.validation === undefined ? {} : { validationIssues: async ({ after: mark, limit }: { after: { at: string; automationId: string }; limit: number }) => after(facts.validation, mark, (n) => n.automation.id, mark.automationId).slice(0, limit) }),
+    ...(facts.deprecated === undefined ? {} : { deprecatedVersions: async ({ after: mark, limit }: { after: { at: string; automationId: string }; limit: number }) => after(facts.deprecated, mark, (n) => n.automation.id, mark.automationId).slice(0, limit) }),
     webBaseUrl: async () => null,
   };
 }
@@ -196,5 +198,48 @@ describe('pollSystemEvents', () => {
     facts.failed.push(failed('run-a', 3), { ...failed('run-b', 4), url: 'https://elsewhere/run-b' });
     const next = await pollSystemEvents(base, { edge: 'Events', filter: RUN_FAILED_ONLY, cursor: first.cursor }, SETTINGS, T0 + 60_000);
     expect(next.arrivals.map((a) => field(a, 'Url'))).toEqual(['https://app.example/movements/ops%3Arun-a?view=activity&status=failed', 'https://elsewhere/run-b']);
+  });
+
+  it('a Validation Issue and a Deprecated Version are each reported once, past the mark, with the program, version and reason', async () => {
+    const notice = (id: string, version: string, reason: string, seconds: number, url?: string): ProgramNotice => ({ automation: { id, name: id.split(':')[1]! }, version, reason, at: at(seconds), ...(url === undefined ? {} : { url }) });
+    const facts = { validation: [notice('ops:old', '0.13.0', 'before the mark', -60)], deprecated: [] as ProgramNotice[] };
+    const host = records(facts);
+    const kinds = { type: 'compare', op: 'in', left: { type: 'property', propertyTypeId: 'Kind' }, right: { type: 'static', value: ['Validation Issue', 'Deprecated Version'] } };
+    const first = await pollSystemEvents(host, { edge: 'Events', filter: kinds }, SETTINGS, T0);
+    expect(first.arrivals).toEqual([]);
+    expect((first.cursor as SystemCursor).validation).toEqual({ at: at(-10), automationId: '' });
+    expect((first.cursor as SystemCursor).deprecated).toEqual({ at: at(-10), automationId: '' });
+
+    facts.validation.push(notice('ops:report', '0.13.0', 'Owner is not a field of Task', 5, 'https://app.example/movements/ops%3Areport'));
+    facts.deprecated.push(notice('ops:digest', '0.11.0', 'pinned to 0.11.0, which 0.13.0 deprecates; upgrade it', 6));
+    const next = await pollSystemEvents(host, { edge: 'Events', filter: kinds, cursor: first.cursor }, SETTINGS, T0 + 60_000);
+    expect(next.arrivals.map((a) => [field(a, 'Kind'), field(a, 'Automation'), field(a, 'Automation Id'), field(a, 'Version'), field(a, 'Reason'), field(a, 'Url'), field(a, 'Run Id')])).toEqual([
+      ['Validation Issue', 'report', 'ops:report', '0.13.0', 'Owner is not a field of Task', 'https://app.example/movements/ops%3Areport', ''],
+      ['Deprecated Version', 'digest', 'ops:digest', '0.11.0', 'pinned to 0.11.0, which 0.13.0 deprecates; upgrade it', '', ''],
+    ]);
+    const [issue] = next.arrivals;
+    expect(issue).toMatchObject({ edge: 'Events', identity: `validation_issue:ops:report:0.13.0:${at(5)}`, takenApplied: true, occurredAt: at(5) });
+    expect(issue).not.toHaveProperty('about');
+    expect(issue).not.toHaveProperty('notFor');
+
+    const again = await pollSystemEvents(host, { edge: 'Events', filter: kinds, cursor: next.cursor }, SETTINGS, T0 + 120_000);
+    expect(again.arrivals).toEqual([]);
+    // The same program found failing again later is a new finding.
+    facts.validation.push(notice('ops:report', '0.13.0', 'still broken', 90));
+    const later = await pollSystemEvents(host, { edge: 'Events', filter: kinds, cursor: again.cursor }, SETTINGS, T0 + 180_000);
+    expect(later.arrivals.map((a) => field(a, 'Reason'))).toEqual(['still broken']);
+  });
+
+  it('a host with no reader for a kind reports none of it, whatever a listen asks for, and keeps no mark for it', async () => {
+    const host = records({ failed: [failed('run-a', 3)] });
+    expect(host.validationIssues).toBeUndefined();
+    const first = await pollSystemEvents(host, { edge: 'Events' }, SETTINGS, T0);
+    expect(first.cursor).not.toHaveProperty('validation');
+    expect(first.cursor).not.toHaveProperty('deprecated');
+    const next = await pollSystemEvents(host, { edge: 'Events', cursor: first.cursor }, SETTINGS, T0 + 60_000);
+    expect(next.arrivals.map((a) => field(a, 'Kind'))).toEqual(['Run Failed']);
+    const onlyDeprecated = { type: 'compare', op: 'eq', left: { type: 'property', propertyTypeId: 'Kind' }, right: { type: 'static', value: 'Deprecated Version' } };
+    const asked = await pollSystemEvents(host, { edge: 'Events', filter: onlyDeprecated, cursor: next.cursor }, SETTINGS, T0 + 120_000);
+    expect(asked.arrivals).toEqual([]);
   });
 });

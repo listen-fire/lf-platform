@@ -481,7 +481,7 @@ async function checkOne(input: {
     await emitSafely(deps, () => ({
       teamId: movement.teamId,
       kind: VALIDATION_ISSUE,
-      payload: payloadFor(movement, pin, at, {
+      payload: payloadFor(movement, current, at, {
         reason:
           `Does not validate under its own language version ${describeVersion(pin)} ` +
           `after release ${deps.release.tag}: ${detail}`,
@@ -508,7 +508,7 @@ async function checkOne(input: {
     await emitSafely(deps, () => ({
       teamId: movement.teamId,
       kind: VALIDATION_ISSUE,
-      payload: payloadFor(movement, pin, at, {
+      payload: payloadFor(movement, current, at, {
         reason:
           `Stays on ${describeVersion(pin)}: under ${describeVersion(current)} ` +
           `it reports ${detail}` +
@@ -557,7 +557,7 @@ async function checkReleasePin(input: {
     await emitSafely(deps, () => ({
       teamId: movement.teamId,
       kind: VALIDATION_ISSUE,
-      payload: payloadFor(movement, pin, at, { reason: `After release ${deps.release.tag}: ${detail}` }),
+      payload: payloadFor(movement, current, at, { reason: `After release ${deps.release.tag}: ${detail}` }),
     }));
     return entryFor(movement, 'stopped', pin, releaseLanguage, detail);
   }
@@ -575,7 +575,7 @@ async function checkReleasePin(input: {
     await emitSafely(deps, () => ({
       teamId: movement.teamId,
       kind: VALIDATION_ISSUE,
-      payload: payloadFor(movement, pin, at, { reason: `After release ${deps.release.tag}: ${detail}` }),
+      payload: payloadFor(movement, current, at, { reason: `After release ${deps.release.tag}: ${detail}` }),
     }));
     return entryFor(movement, 'refused', pin, releaseLanguage, detail);
   }
@@ -594,7 +594,7 @@ async function checkReleasePin(input: {
     await emitSafely(deps, () => ({
       teamId: movement.teamId,
       kind: VALIDATION_ISSUE,
-      payload: payloadFor(movement, pin, at, {
+      payload: payloadFor(movement, current, at, {
         reason: `Does not validate under language ${pin} after release ${deps.release.tag}: ${detail}`,
       }),
     }));
@@ -644,6 +644,10 @@ async function emitSafely(
   }
 }
 
+/** One program's notice. `version` is the release involved: for a
+ *  `Validation Issue` the running release it fails to validate under, for a
+ *  `Deprecated Version` the deprecated version it is pinned to
+ *  (docs/contracts/system-events.md in listen-fire). */
 function payloadFor(
   movement: MovementRow,
   version: LanguageVersion,
