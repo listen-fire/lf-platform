@@ -45,19 +45,21 @@ describe('importIdentifier', () => {
 });
 
 describe('fieldTypeFromDescriptor', () => {
+  const AT = { owner: 'Company', positionOf: (typeId: string) => typeId };
+
   it('maps adapter field kinds to movement field types', () => {
-    expect(fieldTypeFromDescriptor({ kind: 'string' })).toBe('text');
-    expect(fieldTypeFromDescriptor({ kind: 'number' })).toBe('number');
-    expect(fieldTypeFromDescriptor({ kind: 'boolean' })).toBe('boolean');
-    expect(fieldTypeFromDescriptor({ kind: 'date' })).toBe('date');
-    expect(fieldTypeFromDescriptor({ kind: 'file' })).toBe('file');
-    expect(fieldTypeFromDescriptor({ kind: 'json' })).toBe('json');
-    expect(fieldTypeFromDescriptor({ kind: 'reference' })).toBeUndefined();
-    expect(fieldTypeFromDescriptor({ kind: 'enum', enumValues: ['a', 'b'] })).toEqual({
+    expect(fieldTypeFromDescriptor({ kind: 'string' }, AT)).toBe('text');
+    expect(fieldTypeFromDescriptor({ kind: 'number' }, AT)).toBe('number');
+    expect(fieldTypeFromDescriptor({ kind: 'boolean' }, AT)).toBe('boolean');
+    expect(fieldTypeFromDescriptor({ kind: 'date' }, AT)).toBe('date');
+    expect(fieldTypeFromDescriptor({ kind: 'file' }, AT)).toBe('file');
+    expect(fieldTypeFromDescriptor({ kind: 'json' }, AT)).toBe('json');
+    expect(fieldTypeFromDescriptor({ kind: 'reference' }, AT)).toBeUndefined();
+    expect(fieldTypeFromDescriptor({ kind: 'enum', enumValues: ['a', 'b'] }, AT)).toEqual({
       kind: 'enum',
       options: ['a', 'b'],
     });
-    expect(fieldTypeFromDescriptor({ kind: 'string', cardinality: 'many' })).toEqual({
+    expect(fieldTypeFromDescriptor({ kind: 'string', cardinality: 'many' }, AT)).toEqual({
       kind: 'list',
       of: 'text',
     });
@@ -67,23 +69,23 @@ describe('fieldTypeFromDescriptor', () => {
   // them into `text` is what let `{ listName: "Absolutely No Such List" }`
   // provision valid against an object that can join zero lists.
   it('an EMPTY enum domain projects as the empty enum, not as unconstrained text', () => {
-    expect(fieldTypeFromDescriptor({ kind: 'enum', enumValues: [] })).toEqual({
+    expect(fieldTypeFromDescriptor({ kind: 'enum', enumValues: [] }, AT)).toEqual({
       kind: 'enum',
       options: [],
     });
   });
 
   it('an enum with no enumValues at all stays text (unknown domain, not an empty one)', () => {
-    expect(fieldTypeFromDescriptor({ kind: 'enum' })).toBe('text');
+    expect(fieldTypeFromDescriptor({ kind: 'enum' }, AT)).toBe('text');
   });
 
   // `json` used to project as `text`, which made the field claim a shape it
   // does not have — a many-cardinality one then comma-joined into
   // `[object Object], …` at run time. A structured value projects as one.
   it('a json field projects as json, and a many one as a list of json', () => {
-    expect(fieldTypeFromDescriptor({ kind: 'json' })).toBe('json');
-    expect(fieldTypeFromDescriptor({ kind: 'json', cardinality: 'one' })).toBe('json');
-    expect(fieldTypeFromDescriptor({ kind: 'json', cardinality: 'many' })).toEqual({
+    expect(fieldTypeFromDescriptor({ kind: 'json' }, AT)).toBe('json');
+    expect(fieldTypeFromDescriptor({ kind: 'json', cardinality: 'one' }, AT)).toBe('json');
+    expect(fieldTypeFromDescriptor({ kind: 'json', cardinality: 'many' }, AT)).toEqual({
       kind: 'list',
       of: 'json',
     });
@@ -134,14 +136,6 @@ const emailDescriptors = new Map<string, SchemaTypeDescriptor>([
 const attioEntries: SchemaEntryPoint[] = [
   { typeId: 'attio:companies', displayName: 'Companies', writable: true, readable: true },
   { typeId: 'attio:people', displayName: 'People', writable: true, readable: true },
-  {
-    typeId: 'attio:webhook_event',
-    displayName: 'Webhook Event',
-    writable: false,
-    // Nobody enumerates webhook events — the edge's whole promise is `fires`.
-    readable: false,
-    fires: true,
-  },
 ];
 const attioDescriptors = new Map<string, SchemaTypeDescriptor>([
   [
@@ -165,19 +159,6 @@ const attioDescriptors = new Map<string, SchemaTypeDescriptor>([
       fields: [field('name', 'string', { writable: true })],
       references: [
         { fieldId: 'parent_object', targetTypeId: 'attio:companies', cardinality: 'one' },
-      ],
-    },
-  ],
-  [
-    'attio:webhook_event',
-    {
-      typeId: 'attio:webhook_event',
-      displayName: 'Webhook Event',
-      fields: [
-        { fieldId: 'action', displayName: 'action', kind: 'enum', enumValues: ['record.created', 'record.updated', 'record.deleted'], writable: false, required: false },
-      ],
-      references: [
-        { fieldId: 'Companies', targetTypeId: 'attio:companies', cardinality: 'one', requiresLiveRecord: true },
       ],
     },
   ],
@@ -223,23 +204,6 @@ const slackDescriptors = new Map<string, SchemaTypeDescriptor>([
       references: [
         { fieldId: 'messages', targetTypeId: 'slack:message', cardinality: 'many', name: 'messages', writable: true },
       ],
-    },
-  ],
-]);
-
-// Single-readable fixture: one readable entry with no explicit eventPosition —
-// exercises the heuristic fallback path (eventPosition = the sole entry).
-const singleReadableEntries: SchemaEntryPoint[] = [
-  { typeId: 'email2:message', displayName: 'Email', writable: false, readable: true },
-];
-const singleReadableDescriptors = new Map<string, SchemaTypeDescriptor>([
-  [
-    'email2:message',
-    {
-      typeId: 'email2:message',
-      displayName: 'Email',
-      fields: [field('subject', 'string')],
-      references: [],
     },
   ],
 ]);
@@ -550,7 +514,7 @@ describe('instanceSchemaFromDescriptors — colliding display names', () => {
 });
 
 // An adapter publishes ONE type under two entries whenever a readable root
-// collection and an event edge land on the same node (adapters/CLAUDE.md rule
+// collection and a listenable edge land on the same node (adapters/CLAUDE.md rule
 // 9 — Granola's meetings, Evertrace's and Dealroom's rounds). That is the entry
 // surface working as designed, so the projection keeps quiet; two DIFFERENT
 // types wearing one name still costs the author a type they cannot address, so
@@ -563,7 +527,7 @@ describe('instanceSchemaFromDescriptors — one name, two entries', () => {
     references: [],
   };
 
-  it('stays silent when both entries are the SAME type — a collection and an event edge', () => {
+  it('stays silent when both entries are the SAME type — a collection and a listenable edge', () => {
     const projected = instanceSchemaFromDescriptors({
       supportsInPlaceUpdate: false,
       adapterType: 'dealroom',
@@ -580,8 +544,7 @@ describe('instanceSchemaFromDescriptors — one name, two entries', () => {
           displayName: 'Funding Round',
           writable: false,
           readable: false,
-          fires: true,
-          firesOn: ['funding_round'],
+          listenable: true,
         },
       ],
       descriptors: new Map<string, SchemaTypeDescriptor>([['dealroom:round', roundDescriptor]]),
@@ -633,12 +596,6 @@ describe('instanceSchemaFromDescriptors', () => {
     entries: emailEntries,
     descriptors: emailDescriptors,
   });
-  const singleReadable = instanceSchemaFromDescriptors({
-    supportsInPlaceUpdate: false,
-    adapterType: 'email2',
-    entries: singleReadableEntries,
-    descriptors: singleReadableDescriptors,
-  });
   const noDescriptor = instanceSchemaFromDescriptors({
     supportsInPlaceUpdate: false,
     adapterType: 'test',
@@ -646,14 +603,8 @@ describe('instanceSchemaFromDescriptors', () => {
     descriptors: new Map(),
   });
 
-  it('readable and fires entries become positions keyed by the natural display name', () => {
-    // 'Webhook Event' carries the `fires` marker → THE EVENT IS JUST A NODE:
-    // one position, no synthesized variants, no union.
-    expect(Object.keys(attio.schema.positions).sort()).toEqual([
-      'Companies',
-      'People',
-      'Webhook Event',
-    ]);
+  it('readable entries become positions keyed by the natural display name', () => {
+    expect(Object.keys(attio.schema.positions).sort()).toEqual(['Companies', 'People']);
     expect(attio.schema.positions['Companies'].properties).toEqual({
       name: 'text',
       description: 'text',
@@ -666,8 +617,6 @@ describe('instanceSchemaFromDescriptors', () => {
     // point is a collection edge off the adapter's meta position, keyed
     // by the SAME natural display name as the position — `root-[c:Companies]->`
     // uses the name authors write (backtick-quoted) in parameter types.
-    // The event edge mints NO collection — its whole promise is `fires`
-    // (nobody enumerates the events that have happened).
     // The VALUE is where the hop lands plus what the source can do across it —
     // a root collection is an edge and declares like one (D2). These fixtures
     // pass no root descriptor, so no capability is declared and the gate stays
@@ -1174,31 +1123,6 @@ describe('instanceSchemaFromDescriptors', () => {
     expect(attio.notes).toEqual([]);
   });
 
-  it('projects the event NODE — no synthesized variants, the axis is an ordinary field', () => {
-    // The event is JUST A NODE: its change kind is its own `action` enum
-    // field, its record edge carries `requiresLiveRecord` (dropped by the
-    // graft under a deleted pin — keyed on the pin, not on a name), and the
-    // declared event surface lists the edge.
-    expect(attio.schema.unions).toBeUndefined();
-    const node = attio.schema.positions['Webhook Event'];
-    expect(node.properties['action']).toEqual({
-      kind: 'enum',
-      options: ['record.created', 'record.updated', 'record.deleted'],
-    });
-    expect(node.edges['Companies']).toMatchObject({ target: 'Companies', requiresLiveRecord: true });
-    expect(attio.schema.eventPosition).toBe('Webhook Event');
-    expect(attio.schema.eventPositions).toEqual([{ position: 'Webhook Event' }]);
-    // A fires entry never mints a root collection — nobody enumerates events.
-    expect(attio.schema.collections).not.toHaveProperty('Webhook Event');
-  });
-
-  it('an adapter with a single readable entry still derives eventPosition (fallback)', () => {
-    // granola-style: no fires marker, one readable entry → eventPosition is
-    // that entry for shape conformance, but the DECLARED event surface stays
-    // empty (a poll adapter's record must not seed as an occurrence).
-    expect(singleReadable.schema.eventPosition).toBe('Email');
-    expect(singleReadable.schema.eventPositions).toBeUndefined();
-  });
 });
 
 // ── 4. Credential import names ──────────────────────────────────────────────

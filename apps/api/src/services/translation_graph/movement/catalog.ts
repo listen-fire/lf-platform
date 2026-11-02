@@ -33,7 +33,7 @@
 
 import { LANGUAGE_VERSION, RUN_HOST_UNITS, entryPositionKeyOf, instanceSchemaKey, catalogSnapshotOf, type AdapterSpec, type Catalog, type CatalogSnapshot, type CredentialSpec, type SchemaFieldType, type InstanceSchema, type LanguageVersion, type PluginSpec, type ResolveFile } from 'movement-lang';
 import { isLegacyLanguageVersion, parseMovementExpression } from 'legacy-lang';
-import { parseTraversalPath, referencedConstructions, referencedEventAddresses, scanInstanceChains, surfaceNotEnumerated, type ConstructionRef, type InstanceChain } from 'legacy-lang';
+import { parseTraversalPath, referencedConstructions, scanInstanceChains, surfaceNotEnumerated, type ConstructionRef, type InstanceChain } from 'legacy-lang';
 
 import type { Expression } from 'movement-lang/expression/types';
 import type { TeamId } from '../../../generated/kysely/core/Team';
@@ -68,8 +68,6 @@ import { normaliseSchemaForAgent } from './agent_schema';
 import { landingOf, walkedNodeFrom, type WalkedDescribedNode, type WalkedNode } from './walk';
 import { graftGenericLandings } from './generic_landings';
 import { narrowForInspection, refineInstanceSchema } from './refinements';
-import { narrowEventPositions } from './listen_narrowing';
-import { positionConsumedHopKeys } from './listen_address';
 import { getMovementRowByName, listMovementRows } from './store';
 import { loadShippedFileByName } from './version_store';
 import {
@@ -87,24 +85,6 @@ import {
 import { closeDemandOverChains, closeDemandOverWriteVariants, demandSeed } from './demand';
 
 const textList: SchemaFieldType = { kind: 'list', of: 'text' };
-
-/**
- * The listen-config keys that ADDRESS this adapter's events, published onto the
- * instance schema so the checker can derive the type a listen fires.
- *
- * The adapter already declares which hop each config key IS
- * (`ListenConfigKey.narrows`); this is only that set, in declaration order. It
- * rides the schema rather than `AdapterSpec` because `derivedEventType` resolves
- * against an INSTANCE — and an instance is where an event type exists at all.
- *
- */
-function withEventNarrowingKeys(
-  schema: InstanceSchema,
-  listenConfig: readonly { key: string; narrows?: unknown }[],
-): InstanceSchema {
-  const keys = listenConfig.filter((k) => k.narrows !== undefined).map((k) => k.key);
-  return keys.length > 0 ? { ...schema, eventNarrowingKeys: keys } : schema;
-}
 
 /**
  * Thin per-adapter instance schemas for the M3 fixtures. STUBS — an
@@ -767,33 +747,6 @@ async function assembleTeamCatalog(
         chain.credential !== undefined ? credentialsByName[chain.credential]?.id : undefined;
       return schemaKey(chain.adapter, credentialsId) === key;
     });
-  // The event addresses the movement SIGNATURES declare, grounded in their
-  // constructions — the fourth pre-scan, beside the demand set, the selectors
-  // and the listens. A parameter type is not a hop chain and not a listen, so
-  // nothing else sees it; yet a signature's address names a position that does
-  // not exist until we walk to it (`listen_narrowing.ts`).
-  //
-  // SIGNATURES, not listens. The movement declares the type it accepts; a listen
-  // must produce one that satisfies it, which is a check, not a source of truth.
-  // Grafting off the listens is what let two listens collide on one edge.
-  const allAddresses = scanSources.flatMap((s) => referencedEventAddresses(s));
-  // Keyed with the construction's ENTRY POSITION, exactly as the schemas are:
-  // a positioned instance is a different node than the meta one, so its
-  // addresses graft onto ITS schema (relative to its position) and never onto
-  // the unpositioned pair's.
-  const addressesForKey = (key: string) =>
-    allAddresses.filter((address) => {
-      const credentialsId =
-        address.construction.credential !== undefined
-          ? credentialsByName[address.construction.credential]?.id
-          : undefined;
-      const manifest = manifestBySlug.get(address.construction.adapter);
-      const posKey = manifest
-        ? positionKeyForManifest(manifest, address.construction.constructionArgs)
-        : '';
-      return schemaKey(address.construction.adapter, credentialsId, posKey) === key;
-    });
-
   // Everything network-backed happens here, in parallel, each pairing
   // isolated by its own catch (a broken adapter leaves that instance
   // untyped instead of failing the catalog).
@@ -840,8 +793,6 @@ async function assembleTeamCatalog(
             supportsInPlaceUpdate,
             lazilyWalked: instance.lazilySurfaced,
           });
-          const addresses = addressesForKey(key);
-          const listenConfig = manifestBySlug.get(slug)?.listenConfig;
           for (let round = 0; round < 8; round++) {
             demandRounds = Math.max(demandRounds, round + 1);
             instance = await cachedAdapterInstance({ ...base, types: [...demanded] });
@@ -867,37 +818,6 @@ async function assembleTeamCatalog(
               supportsInPlaceUpdate,
               lazilyWalked: instance.lazilySurfaced,
             });
-            // A signature names the full address, so the positions it names are
-            // walked and grafted here — the event's `record` edge lands on the
-            // table the signature pins, not on the meta type `Table`.
-            //
-            // INSIDE the loop, before the closure walks: demand follows edge
-            // TARGETS, so a closure over the unnarrowed schema demands `Table`
-            // — a type no one can name — and describing it means resolving a
-            // name with no base to scope it, i.e. a `listTables` per base. That
-            // is the workspace fanout this whole model exists to kill, arrived
-            // at by chasing a target the listen had already narrowed away.
-            if (listenConfig?.length) {
-              projection = {
-                ...projection,
-                schema: withEventNarrowingKeys(projection.schema, listenConfig),
-              };
-            }
-            // Even a hop-less adapter (attio: no `narrows` keys) grafts here —
-            // an address may pin only the event node's own `action` axis. A
-            // WIDE address (no pins) is the node as projected: nothing grafts.
-            if (addresses.length > 0) {
-              const narrowed = await narrowEventPositions({
-                adapterType: slug,
-                schema: projection.schema,
-                listenConfig: listenConfig ?? [],
-                addresses,
-                entryPoints: instance.entryPoints,
-                walkTo: instance.walkTo,
-                membersAt: instance.membersAt,
-              });
-              projection = { ...projection, schema: narrowed.schema, notes: [...projection.notes, ...narrowed.notes] };
-            }
             const touched = closeDemandOverChains({ schema: projection.schema, chains });
             // …plus the variant types of every discriminated write we've now
             // described. They are named by a LITERAL in the body, never by a
@@ -909,13 +829,11 @@ async function assembleTeamCatalog(
             for (const name of touched) {
               const typeId = typeIdByName.get(name);
               // A name the meta node doesn't publish, whose position is already
-              // fully described, is one the HOST made: an event's `Record
-              // Created` variant (synthesized by the projection from the event
-              // entry) or a table a listen narrowed to (walked, then grafted).
-              // Demand exists to fill gaps and these have none — so demanding
-              // them asks the adapter to describe a name it has never heard of,
-              // and a container-shaped adapter answers that by resolving the
-              // name across the WHOLE WORKSPACE: a `listTables` per base, the
+              // fully described, is one the HOST made (a refined member, walked
+              // and grafted). Demand exists to fill gaps and these have none —
+              // so demanding them asks the adapter to describe a name it has
+              // never heard of, and a container-shaped adapter answers that by
+              // resolving the name across the WHOLE WORKSPACE: a `listTables` per base, the
               // 1+N this model exists to kill. Reached by chasing a type that
               // was already in our hands.
               if (typeId === undefined) {
@@ -1117,46 +1035,6 @@ async function assembleTeamCatalog(
               supportsInPlaceUpdate,
               lazilyWalked: instance.lazilySurfaced,
             });
-          }
-          // EVENT EDGES HANG OFF POSITIONS: a positioned instance's root IS
-          // the container, so its event edge is that container's events —
-          // narrower by construction. The POSITION CONSUMES THE LEADING
-          // ADDRESS HOPS (`airtable(…, base: "Dev Base")` consumes `base`), so
-          // the hops published to the checker (`eventNarrowingKeys`, the enum
-          // options, the graft) are the REMAINING ones: a table-only signature
-          // is a COMPLETE address here, and the same walk starts at the
-          // positioned root (whose edges are already the tables) — never
-          // wider than the unpositioned instance's own 1 + 1.
-          const manifest = manifestBySlug.get(t.slug);
-          const consumed = positionConsumedHopKeys({
-            listenConfig: manifest?.listenConfig,
-            positionValues: t.constructionArgs,
-          });
-          const listenConfig = (manifest?.listenConfig ?? []).filter(
-            (key) => key.narrows === undefined || !consumed.has(key.key),
-          );
-          const addresses = addressesForKey(schemaKey(t.slug, t.credentialsId, t.posKey));
-          if (listenConfig.some((key) => key.narrows !== undefined)) {
-            projection = {
-              ...projection,
-              schema: withEventNarrowingKeys(projection.schema, listenConfig),
-            };
-          }
-          if (addresses.length > 0) {
-            const narrowed = await narrowEventPositions({
-              adapterType: t.slug,
-              schema: projection.schema,
-              listenConfig,
-              addresses,
-              entryPoints: instance.entryPoints,
-              walkTo: instance.walkTo,
-              membersAt: instance.membersAt,
-            });
-            projection = {
-              ...projection,
-              schema: narrowed.schema,
-              notes: [...projection.notes, ...narrowed.notes],
-            };
           }
         }
         schemaByAdapterAndCred.set(
@@ -1400,7 +1278,7 @@ export interface RunCatalogSnapshot {
  * the raw snapshot also carries editor-only detail the agent doesn't need).
  * Per adapter: its construction args, whether it needs a credential, HOW it
  * connects ('oauth' | 'key-entry' | 'intrinsic' | 'handshake' | 'app-only',
- * absent ⇒ none), its listener-config keys, and — where the manifest states
+ * absent ⇒ none), and — where the manifest states
  * one — `triggerExpectation`, the plain-language truth about what a listener
  * fires on. That rides HERE (the discovery surface, before any credential
  * exists) so the author grounds trigger-surface claims at the moment they
@@ -1440,7 +1318,6 @@ export function toAgentCatalogView(input: {
               ? { triggerExpectation: spec.triggerExpectation }
               : {}),
             ...(spec.schemaShape !== undefined ? { schemaShape: spec.schemaShape } : {}),
-            listenerConfigKeys: spec.triggerConfig ?? [],
           },
         ];
       }),

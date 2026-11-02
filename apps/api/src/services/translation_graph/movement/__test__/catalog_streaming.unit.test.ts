@@ -647,7 +647,7 @@ function walkingAdapter() {
             description: 'An email connection — nothing here can be listed.',
             fields: [],
             references: [
-              { fieldId: 'email', targetTypeId: 'email', cardinality: 'one', name: 'Email', fires: true, readable: false },
+              { fieldId: 'email', targetTypeId: 'email', cardinality: 'one', name: 'Email', listenable: true, readable: false },
             ],
           },
           targetPositions: { email: position('email') },
@@ -684,7 +684,7 @@ describe('describeMovementInstance — the walk', () => {
     const result = await describeMovementInstance({ teamId: TEAM, adapter: 'email' });
     const [edge] = result.node!.edges;
     expect(edge.name).toBe('Email');
-    expect(edge.fires).toBe(true);
+    expect(edge.listenable).toBe(true);
     expect(edge.target?.stub).toBeUndefined();
     expect(Object.keys(describedTarget(edge.target).properties)).toEqual(['Subject']);
     // ...but not the landing's onward edges — that is the one thing withheld.

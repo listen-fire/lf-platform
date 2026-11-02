@@ -1,6 +1,6 @@
 // The run host's units (`manual`, `cron`) are in scope in every file on the
-// installed language, already connected: `listen to manual fire go` reads its
-// `Invocation` with no import and no `connect`. A team's run snapshot must
+// installed language, already connected: `listen to manual-[:Invocations]-> fire go`
+// reads its `Invocation` with no import and no `connect`. A team's run snapshot must
 // describe them as the handbook's catalog does, or a bare listen whose movement
 // reads `go.Text` is refused at the read. The real manifests, the real manual
 // adapter and the real assembly run; the database and the CRM are faked.
@@ -81,10 +81,10 @@ beforeEach(() => {
 const SECTION_EXAMPLE = /```[^\n]*\n([\s\S]*?)```/.exec(MANUAL_HANDBOOK_SECTION.content)?.[1] ?? '';
 
 const BARE_READING_TEXT =
-  'function echo(go: <manual-[:Invocation]->>) {\n  return go.Text\n}\nlisten to manual fire echo\n';
+  'function echo(go: <manual-[:Invocations]->>) {\n  return go.Text\n}\nlisten to manual-[:Invocations]-> fire echo\n';
 
 const CONNECT_READING_TEXT =
-  'import { manual } from adapters\nruns = connect manual\nfunction echo(go: <runs-[:Invocation]->>) {\n  return go.Text\n}\nlisten to runs fire echo\n';
+  'import { manual } from adapters\nruns = connect manual\nfunction echo(go: <runs-[:Invocations]->>) {\n  return go.Text\n}\nlisten to runs-[:Invocations]-> fire echo\n';
 
 async function verdictOf(source: string) {
   const team = await movementCatalogForTeam(TEAM, { source, languageVersion: LANGUAGE_VERSION });
@@ -99,7 +99,7 @@ async function verdictOf(source: string) {
 
 describe("a team's run snapshot and the run host's units", () => {
   it("validates the handbook's system:manual example", async () => {
-    expect(SECTION_EXAMPLE).toContain('listen as "Import companies" to manual fire');
+    expect(SECTION_EXAMPLE).toContain('listen as "Import companies" to manual-[:Invocations]-> fire');
     const verdict = await verdictOf(SECTION_EXAMPLE);
     expect(verdict.diagnostics).toEqual([]);
     expect(verdict.ok).toBe(true);

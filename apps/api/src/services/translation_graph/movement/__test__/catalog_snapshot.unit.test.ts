@@ -1,10 +1,8 @@
-// The pure catalog builder every shell shares: a remote install's listen
-// declarations reach the checker as the same vocabulary a built-in's do, so a
-// listen config the adapter would never route is refused.
+// The pure catalog builder every shell shares: a remote install reaches the
+// snapshot as a built-in does. Its listens are its listenable edges, which an
+// introspected module declares at describe time, so the snapshot carries no
+// listen vocabulary of its own.
 
-import { fromCatalogSnapshot } from 'movement-lang';
-import { checkProgram } from 'legacy-lang';
-import { parseProgram } from 'legacy-lang';
 import { buildCatalogSnapshot } from 'movement-engine/public/catalog';
 
 import { RemoteAdapterManifestFile, remoteAdapterManifest } from '../../adapters/remote/manifest';
@@ -15,48 +13,23 @@ const file = RemoteAdapterManifestFile.parse({
   baseUrl: 'https://crm.example/adapter',
   authStrategy: { kind: 'bearer' },
   supportedTriggers: ['webhook'],
+  // A file stored under 0.12: its listen keys parse and are dropped.
   subscribableEvents: ['company.created', 'company.updated'],
   listenConfig: [{ key: 'schedule', format: 'cron' }],
   runtimeCapabilities: { traversal: { incoming: false, edgeProperties: false }, resources: false },
   methods: ['describe'],
 });
 
-const snapshot = buildCatalogSnapshot({
-  adapters: [{ manifest: remoteAdapterManifest(file) }],
-  credentials: {},
-  plugins: {},
-});
-
-function codes(listen: string): string[] {
-  const source = `import { acme_crm } from adapters\ncrm = acme_crm()\nmovement welcome() {}\n${listen}\n`;
-  return checkProgram(parseProgram(source), fromCatalogSnapshot(snapshot)).map((d) => d.code);
-}
-
 describe('buildCatalogSnapshot over a remote manifest', () => {
-  it('projects the listen declarations into the listen-config vocabulary', () => {
-    expect(snapshot.adapters.acme_crm).toMatchObject({
-      constructionArgs: [],
-      canFire: true,
-      triggerConfig: ['events', 'schedule'],
-      triggerConfigOptions: { events: ['company.created', 'company.updated'] },
-      triggerConfigFormats: { schedule: 'cron' },
-      schemaShape: 'introspected',
-      schemas: {},
-    });
-  });
-
-  it('checks a declared event clean and refuses an undeclared key or event', () => {
-    expect(codes('listen to crm { events: ["company.created"] } fire welcome')).not.toContain('MOV_LISTEN_BAD_CONFIG');
-    expect(codes('listen to crm { colour: "red" } fire welcome')).toContain('MOV_LISTEN_BAD_CONFIG');
-    expect(codes('listen to crm { events: ["company.deleted"] } fire welcome')).toContain('MOV_LISTEN_BAD_CONFIG');
-  });
-
-  it('leaves a manifest that declares nothing unchecked', () => {
-    const bare = buildCatalogSnapshot({
-      adapters: [{ manifest: remoteAdapterManifest({ ...file, subscribableEvents: undefined, listenConfig: undefined }) }],
+  it('projects the install as an introspected module with no listen vocabulary of its own', () => {
+    const snapshot = buildCatalogSnapshot({
+      adapters: [{ manifest: remoteAdapterManifest(file) }],
       credentials: {},
       plugins: {},
     });
-    expect(bare.adapters.acme_crm?.triggerConfig).toBeUndefined();
+    const spec = snapshot.adapters.acme_crm;
+    expect(spec).toMatchObject({ constructionArgs: [], schemaShape: 'introspected', schemas: {} });
+    expect(spec).not.toHaveProperty('triggerConfig');
+    expect(spec).not.toHaveProperty('triggerConfigOptions');
   });
 });

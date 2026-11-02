@@ -14,7 +14,7 @@
 import { z } from 'zod';
 import { WireListenDeclarations, WireManifestProtocolVersion, WireModuleDeclarations } from 'engine-contracts';
 
-import type { AdapterManifest, ListenConfigKey } from 'movement-engine/public/adapter';
+import type { AdapterManifest } from 'movement-engine/public/adapter';
 import type { TriggerType } from 'movement-engine/public/adapter';
 
 export const RemoteAdapterManifestFile = z.object({
@@ -84,9 +84,10 @@ export const RemoteAdapterManifestFile = z.object({
    *  to "needs connecting"; `resolveAdapter` errors until it is set. */
   credentialsId: z.string().uuid().optional(),
   supportedTriggers: z.array(z.string()),
-  /** What a listen on it may say (`events: [...]` and further keys) — the same
-   *  declarations a built-in's manifest makes, so the checker refuses a listen
-   *  config this adapter would never route. */
+  /** How a saved listen in the retired settings form becomes a listen on one
+   *  of this module's listenable edges (the upgrade's rewrite), as a built-in
+   *  declares it. A manifest stored with 0.12's `subscribableEvents` or
+   *  `listenConfig` still parses: the keys are dropped. */
   ...WireListenDeclarations.shape,
   /** What a module declares beyond its methods — the credential it needs,
    *  how its provider signs webhooks, its poll, its periodic tasks, the
@@ -171,43 +172,11 @@ export function remoteAdapterManifest(file: RemoteAdapterManifestFile): AdapterM
       : {}),
     ...(file.vocabulary !== undefined ? { vocabulary: file.vocabulary } : {}),
     supportedTriggers: file.supportedTriggers as readonly TriggerType[],
-    ...(file.subscribableEvents !== undefined ? { subscribableEvents: file.subscribableEvents } : {}),
-    ...(file.defaultSubscribedEvents !== undefined
-      ? { defaultSubscribedEvents: file.defaultSubscribedEvents }
-      : {}),
-    ...(file.listenConfig !== undefined ? { listenConfig: file.listenConfig.map(listenConfigKey) } : {}),
+    ...(file.listenSettingsBecome !== undefined ? { listenSettingsBecome: file.listenSettingsBecome } : {}),
     methods: file.methods,
     ...((file.credentials ?? []).length > 0
       ? { declaredCredentials: (file.credentials ?? []).map((declared) => declared.name) }
       : {}),
     introspectedSchema: true,
-  };
-}
-
-/** The formats this release's checker validates. A record, so a format the
- *  engine adds fails this file's type-check until it is listed here. */
-const CHECKED_LISTEN_FORMATS: Record<NonNullable<ListenConfigKey['format']>, true> = {
-  cron: true,
-  timezone: true,
-  fields: true,
-  strings: true,
-  type: true,
-  field: true,
-  'field-value': true,
-};
-
-function isCheckedListenFormat(format: string): format is NonNullable<ListenConfigKey['format']> {
-  return Object.hasOwn(CHECKED_LISTEN_FORMATS, format);
-}
-
-/** The wire keeps a format this release does not know (a newer module's); the
- *  key is still a listen key, but its value goes unchecked, as the protocol
- *  says. */
-function listenConfigKey(entry: NonNullable<RemoteAdapterManifestFile['listenConfig']>[number]): ListenConfigKey {
-  return {
-    key: entry.key,
-    ...(entry.required !== undefined ? { required: entry.required } : {}),
-    ...(entry.format !== undefined && isCheckedListenFormat(entry.format) ? { format: entry.format } : {}),
-    ...(entry.narrows !== undefined ? { narrows: entry.narrows } : {}),
   };
 }

@@ -74,17 +74,23 @@ describe('RemoteAdapterManifestFile', () => {
     expect(RemoteAdapterManifestFile.safeParse({ ...base, methods: [...base.methods, 'poll'] }).success).toBe(true);
   });
 
-  it('keeps a listen key whose format this release does not know, leaving its value unchecked', () => {
+  it('carries how a retired settings listen becomes an edge listen, and drops 0.12 listen keys', () => {
+    const listenSettingsBecome = {
+      path: ['Changes'],
+      aliases: ['change'],
+      keys: { events: { hop: 0, field: 'Kind', op: 'in' as const } },
+    };
     const projected = remoteAdapterManifest(
       RemoteAdapterManifestFile.parse({
         ...base,
-        listenConfig: [
-          { key: 'schedule', required: true, format: 'cron' },
-          { key: 'window', format: 'iso-duration' },
-        ],
+        listenSettingsBecome,
+        subscribableEvents: ['company.created'],
+        listenConfig: [{ key: 'schedule', required: true, format: 'cron' }],
       }),
     );
-    expect(projected.listenConfig).toEqual([{ key: 'schedule', required: true, format: 'cron' }, { key: 'window' }]);
+    expect(projected.listenSettingsBecome).toEqual(listenSettingsBecome);
+    expect(projected).not.toHaveProperty('listenConfig');
+    expect(projected).not.toHaveProperty('subscribableEvents');
   });
 
   it('refuses a malformed declaration, as the protocol does', () => {
