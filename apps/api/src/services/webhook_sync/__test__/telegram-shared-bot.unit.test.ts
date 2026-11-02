@@ -1,30 +1,27 @@
 // Shared built-in Telegram bot routing — the capstone. Drives
-// `handleSharedBotInbound` through its four branches against in-memory models
-// of the collaborators it owns (the `telegram_identity` reverse lookup, the
-// per-team capture primitive, the work rows the dispatch half queues), plus a
-// mocked handshake +
-// built-in send:
+// `handleSharedBotInbound` through its branches against in-memory models of
+// the collaborators it owns (the `telegram_identity` reverse lookup, the
+// module's arrivals, the listen door that keeps each team's delivery), plus a
+// mocked handshake + built-in send:
 //
 //   • /start <token>     → binds via `bindTelegramFromStart`, replies through
-//                          the built-in bot, never dispatches a movement.
+//                          the built-in bot, never keeps a delivery.
 //   • linked message     → fans out to EVERY team with a binding (route-all),
-//                          capturing once per team, run-as-that-user.
-//   • unlinked message   → ignored silently (no dispatch, no send).
+//                          one delivery per team, run-as-that-user.
+//   • unlinked message   → ignored silently (no delivery, no send).
 //   • reply-to-bot       → classified, no-op in v1.
 //
 // The cross-team gate is asserted structurally: a sender bound only in team-A
-// dispatches to team-A and NEVER team-B (the identity rows are the gate). The
+// is delivered to team-A and NEVER team-B (the identity rows are the gate). The
 // downstream `lookupTeamUserByEmail` team clamp is covered by the sibling
 // telegram-acting-user test; here we prove the fan-out only ever touches teams
 // that own a binding for the sender.
 //
-// The door is also capture-then-ack: routing + receipts settle inside the
-// request, the returned `enqueueDeferred` queues a work row per receipt, and the
-// movement runs when the row drains. That split is pinned below (nothing is
-// queued before it's called; a per-team dispatch failure is data read back off
-// the receipt, not a rejection; a harness team asks the route to wait).
-
-import type { WebhookEvent } from '../providers';
+// The door is keep-then-ack: each team's delivery (and the `fire_event` rows
+// of the runs it starts) is kept inside the request, and the returned
+// `enqueueDeferred` only pokes the drain. That split is pinned below (a team
+// whose delivery cannot be kept is left out of the answer; a harness team asks
+// the route to wait).
 
 // ── telegram_identity reverse lookup: telegram_user_id → [team_id] ────────────
 interface IdentityRow { team_id: string; telegram_user_id: string }
@@ -53,65 +50,52 @@ jest.mock('../../../lib/kysely', () => ({
   }),
 }));
 
-// ── per-team CAPTURE primitive (phase 1) — record each invocation ────────────
-const captureCalls: Array<{
+// ── the module's arrivals for a message: one on its chat's `Messages` ─────
+jest.mock('../../translation_graph/adapters/resolve', () => ({
+  resolveAdapter: jest.fn(async () => ({
+    preprocessInbound: async ({ raw }: { raw: any }) => ({
+      arrivals: raw.message
+        ? [
+            {
+              edge: 'Messages',
+              key: String(raw.message.chat.id),
+              identity: String(raw.message.message_id),
+              landing: { recordId: String(raw.message.message_id), fields: { Text: raw.message.text } },
+            },
+          ]
+        : [],
+    }),
+  })),
+}));
+
+// ── the listen door — record each team's delivery; a team named in
+//    `deliverShouldThrowForTeam` cannot be kept, one in `notKeptForTeam` is
+//    refused by the store ──────────────────────────────────────────────────────
+const deliverCalls: Array<{
   teamId: string;
-  credentialsId: string | null;
-  adapterType: string;
-  matchAnyCredential?: boolean;
-  event: { externalId?: string; recordType?: string; eventType?: string; tag?: string };
+  delivered: { adapterType: string; credentialsId: string | null };
+  subscriptionId: string;
+  externalId: string | null;
+  source: string;
+  arrivals: Array<{ edge: string; identity: string }>;
 }> = [];
-let captureShouldThrowForTeam: string | null = null;
+let deliverShouldThrowForTeam: string | null = null;
+let notKeptForTeam: string | null = null;
 
-jest.mock('../handler', () => ({
-  captureProviderTriggerEvents: jest.fn(async (input: any) => {
-    captureCalls.push({
-      teamId: input.subscription.team_id,
-      credentialsId: input.subscription.credentials_id,
-      adapterType: input.adapterType,
-      matchAnyCredential: input.matchAnyCredential,
-      event: input.event,
-    });
-    if (captureShouldThrowForTeam === input.subscription.team_id) {
-      throw new Error(`capture boom for ${input.subscription.team_id}`);
-    }
-    return [
-      {
-        triggerId: `trig-${input.subscription.team_id}`,
-        teamId: input.subscription.team_id,
-        triggerEvent: { payload: input.event.payload },
-        storedEventId: `evt-${input.subscription.team_id}`,
-        duplicate: false,
-      },
-    ];
+jest.mock('../../inbound/listen_door', () => ({
+  deliverArrivals: jest.fn(async (input: any) => {
+    deliverCalls.push(input);
+    if (deliverShouldThrowForTeam === input.teamId) throw new Error(`keep boom for ${input.teamId}`);
+    return {
+      kept: notKeptForTeam === input.teamId ? { kept: false } : { kept: true },
+      deliveryId: `delivery-${input.teamId}`,
+      fires: [],
+    };
   }),
 }));
 
-// ── the DISPATCH half (phase 2) — record each queued row; a team named in
-//    `dispatchShouldThrowForTeam` reads back as a failed receipt once drained ──
-const dispatchCalls: Array<{ teamId: string; triggerId: string }> = [];
-let dispatchShouldThrowForTeam: string | null = null;
-
-jest.mock('../../translation_graph/triggers/dispatch_event', () => ({
-  enqueueCapturedEvents: jest.fn(async (receipts: any[]) => {
-    for (const receipt of receipts) {
-      dispatchCalls.push({ teamId: receipt.teamId, triggerId: receipt.triggerId });
-    }
-  }),
-  readReceiptGroupOutcomes: jest.fn(async (input: any) => {
-    const failing = `evt-${dispatchShouldThrowForTeam}`;
-    const cleared: unknown[] = [];
-    const failed: { group: unknown; error: string }[] = [];
-    for (const { group, receipts } of input.groups) {
-      if (receipts.some((r: any) => r.storedEventId === failing)) {
-        failed.push({ group, error: `boom for ${dispatchShouldThrowForTeam}` });
-      } else {
-        cleared.push(group);
-      }
-    }
-    return { cleared, failed };
-  }),
-}));
+const notifyWork = jest.fn();
+jest.mock('../../work/drain', () => ({ notifyWork: () => notifyWork() }));
 
 // ── handshake — record bind input, return a scripted result ──────────────────
 const bindCalls: Array<{ token: string; telegramUserId: string }> = [];
@@ -185,16 +169,16 @@ function privateMessage(overrides?: { senderId?: string; text?: string }) {
 
 beforeEach(() => {
   identities.length = 0;
-  captureCalls.length = 0;
-  dispatchCalls.length = 0;
+  deliverCalls.length = 0;
+  notifyWork.mockClear();
   bindCalls.length = 0;
   sentReplies.length = 0;
   callbackAcks.length = 0;
   keyboardEdits.length = 0;
   answerCalls.length = 0;
   answerOutcome = { kind: 'answered', ask: { id: 'ask-1' } };
-  captureShouldThrowForTeam = null;
-  dispatchShouldThrowForTeam = null;
+  deliverShouldThrowForTeam = null;
+  notKeptForTeam = null;
   testHarnessConfig.teamId = ORIGINAL_HARNESS_TEAM;
   bindResult = { ok: true, email: 'ada@example.com', telegramUserId: TG_USER };
 });
@@ -248,7 +232,7 @@ describe('shared-bot classification', () => {
 });
 
 describe('/start handshake branch', () => {
-  it('binds the token and replies "Linked" through the built-in bot — no dispatch', async () => {
+  it('binds the token and replies "Linked" through the built-in bot — no delivery', async () => {
     const delivery = await handleSharedBotInbound({
       message: { from: { id: 999, first_name: 'Ada' }, chat: { id: 111222 }, text: '/start tok-xyz' },
     });
@@ -265,8 +249,7 @@ describe('/start handshake branch', () => {
     // A handshake is NOT a movement message — and it is WHOLLY pre-ack: the bind
     // outcome IS the response body, so there is nothing to defer.
     expect(delivery.enqueueDeferred).toBeUndefined();
-    expect(captureCalls).toHaveLength(0);
-    expect(dispatchCalls).toHaveLength(0);
+    expect(deliverCalls).toHaveLength(0);
   });
 
   it('sends a friendly reject (and no binding effect) when the token is bad', async () => {
@@ -280,12 +263,12 @@ describe('/start handshake branch', () => {
     });
     expect(sentReplies[0].text).toContain('expired');
     expect(delivery.enqueueDeferred).toBeUndefined();
-    expect(dispatchCalls).toHaveLength(0);
+    expect(deliverCalls).toHaveLength(0);
   });
 });
 
 describe('linked-message routing (route-all)', () => {
-  it('fans out to EVERY team that has a binding for the sender', async () => {
+  it('fans out to EVERY team that has a binding for the sender, one delivery each', async () => {
     identities.push({ team_id: 'team-A', telegram_user_id: TG_USER });
     identities.push({ team_id: 'team-B', telegram_user_id: TG_USER });
 
@@ -293,79 +276,57 @@ describe('linked-message routing (route-all)', () => {
 
     expect(res).toMatchObject({ classification: 'message' });
     expect(new Set(res.routedTeamIds)).toEqual(new Set(['team-A', 'team-B']));
-    expect(captureCalls).toHaveLength(2);
-    expect(dispatchCalls).toHaveLength(2);
-    // Shared bot dispatches credential-free (built-in env token).
-    for (const call of captureCalls) {
-      expect(call.credentialsId).toBeNull();
-      expect(call.adapterType).toBe('telegram');
-      // The shared bot receives globally — never narrow by credential.
-      expect(call.matchAnyCredential).toBe(true);
-      expect(call.event.externalId).toBe('42'); // the parsed message id (normalized)
-      // Verify handleSharedBotInbound uses the TAGGED mapper telegramEventToDiscriminable
-      expect(call.event.tag).toBe('message');
+    expect(deliverCalls.map((c) => c.teamId).sort()).toEqual(['team-A', 'team-B']);
+    for (const call of deliverCalls) {
+      // The shared bot received it globally: the delivery is the bot's install's
+      // (no credential), judged by every Telegram listen of the team.
+      expect(call.delivered).toEqual({ adapterType: 'telegram', credentialsId: null });
+      expect(call.subscriptionId).toBe('TELEGRAM');
+      expect(call.source).toBe('webhook');
+      // Keyed on Telegram's update id, which a redelivery keeps.
+      expect(call.externalId).toBe('telegram:1');
+      expect(call.arrivals).toEqual([expect.objectContaining({ edge: 'Messages', identity: '42' })]);
     }
   });
 
   it('one team failing does not abort the others (route-all is independent)', async () => {
     identities.push({ team_id: 'team-A', telegram_user_id: TG_USER });
     identities.push({ team_id: 'team-B', telegram_user_id: TG_USER });
-    dispatchShouldThrowForTeam = 'team-A';
+    deliverShouldThrowForTeam = 'team-A';
 
     const res = await deliverFully(privateMessage());
 
-    // Both were attempted; only the successful team is reported as routed.
-    expect(dispatchCalls.map((c) => c.teamId).sort()).toEqual(['team-A', 'team-B']);
+    // Both were attempted; only the team whose delivery was kept is routed.
+    expect(deliverCalls.map((c) => c.teamId).sort()).toEqual(['team-A', 'team-B']);
     expect(res.routedTeamIds).toEqual(['team-B']);
   });
 
-  it('a team whose CAPTURE fails is dropped before the ack, the rest still run', async () => {
+  it('a delivery the store does not keep is not reported as routed', async () => {
     identities.push({ team_id: 'team-A', telegram_user_id: TG_USER });
     identities.push({ team_id: 'team-B', telegram_user_id: TG_USER });
-    captureShouldThrowForTeam = 'team-A';
+    notKeptForTeam = 'team-A';
 
     const delivery = await handleSharedBotInbound(privateMessage());
 
     expect(delivery.result.routedTeamIds).toEqual(['team-B']);
-    expect(await (await delivery.enqueueDeferred!()).readOutcome(SETTLED)).toMatchObject({
-      routedTeamIds: ['team-B'],
-    });
-    expect(dispatchCalls.map((c) => c.teamId)).toEqual(['team-B']);
   });
 });
 
-// ── capture-then-ack: where the split sits ───────────────────────────────────
-describe('capture-then-ack split', () => {
-  it('receipts are captured pre-ack and NOTHING is queued until the deferred half', async () => {
+// ── keep-then-ack: where the split sits ──────────────────────────────────────
+describe('keep-then-ack split', () => {
+  it('each delivery is kept pre-ack; the deferred half only pokes the drain', async () => {
     identities.push({ team_id: 'team-A', telegram_user_id: TG_USER });
 
     const delivery = await handleSharedBotInbound(privateMessage());
 
-    // The ack body is settled and the receipt is stored…
-    expect(delivery.result).toMatchObject({
-      ok: true,
-      classification: 'message',
-      routedTeamIds: ['team-A'],
-    });
-    expect(captureCalls).toHaveLength(1);
-    // …but no row is queued yet.
-    expect(dispatchCalls).toHaveLength(0);
+    expect(delivery.result).toMatchObject({ ok: true, classification: 'message', routedTeamIds: ['team-A'] });
+    expect(deliverCalls).toHaveLength(1);
+    expect(notifyWork).not.toHaveBeenCalled();
 
-    await delivery.enqueueDeferred!();
-    expect(dispatchCalls).toEqual([{ teamId: 'team-A', triggerId: 'trig-team-A' }]);
-  });
-
-  it('a failed dispatch reads back as data — it never rejects', async () => {
-    identities.push({ team_id: 'team-A', telegram_user_id: TG_USER });
-    dispatchShouldThrowForTeam = 'team-A';
-
-    const delivery = await handleSharedBotInbound(privateMessage());
-
-    await expect((await delivery.enqueueDeferred!()).readOutcome(SETTLED)).resolves.toMatchObject({
-      ok: true,
-      classification: 'message',
-      routedTeamIds: [],
-    });
+    const enqueued = await delivery.enqueueDeferred!();
+    expect(notifyWork).toHaveBeenCalledTimes(1);
+    expect(enqueued.teamIds).toEqual(['team-A']);
+    await expect(enqueued.readOutcome(SETTLED)).resolves.toEqual(delivery.result);
   });
 
   it('a production team never asks the door to wait', async () => {
@@ -384,7 +345,7 @@ describe('capture-then-ack split', () => {
 });
 
 describe('cross-team isolation gate', () => {
-  it('a sender bound only in team-A dispatches to team-A and NEVER team-B', async () => {
+  it('a sender bound only in team-A is delivered to team-A and NEVER team-B', async () => {
     identities.push({ team_id: 'team-A', telegram_user_id: TG_USER });
     // team-B has a binding for a DIFFERENT telegram user — must not be hit.
     identities.push({ team_id: 'team-B', telegram_user_id: '555' });
@@ -392,20 +353,17 @@ describe('cross-team isolation gate', () => {
     const res = await deliverFully(privateMessage());
 
     expect(res.routedTeamIds).toEqual(['team-A']);
-    expect(captureCalls).toHaveLength(1);
-    expect(dispatchCalls).toHaveLength(1);
-    expect(dispatchCalls[0].teamId).toBe('team-A');
+    expect(deliverCalls.map((c) => c.teamId)).toEqual(['team-A']);
   });
 });
 
 describe('unlinked sender', () => {
-  it('ignores silently — no dispatch, no send', async () => {
+  it('ignores silently — no delivery, no send', async () => {
     // No identity rows at all → unlinked.
     const delivery = await handleSharedBotInbound(privateMessage({ senderId: '777' }));
     expect(delivery.result).toMatchObject({ ok: true, classification: 'unlinked_ignore' });
     expect(delivery.enqueueDeferred).toBeUndefined();
-    expect(captureCalls).toHaveLength(0);
-    expect(dispatchCalls).toHaveLength(0);
+    expect(deliverCalls).toHaveLength(0);
     expect(sentReplies).toHaveLength(0);
   });
 });
@@ -433,7 +391,7 @@ describe('button tap branch', () => {
     expect(classifySharedBotInbound(tap('refresh_dashboard')).kind).toBe('ignore');
   });
 
-  it('answers, acks, and retires the keyboard — no capture, no dispatch, no deferred half', async () => {
+  it('answers, acks, and retires the keyboard — no delivery, no deferred half', async () => {
     const delivery = await handleSharedBotInbound(tap('ask_abc?answer=true'));
 
     expect(answerCalls).toEqual([{ token: 'ask_abc', answer: 'true' }]);
@@ -443,8 +401,7 @@ describe('button tap branch', () => {
       callback: { handled: true, outcome: 'answered' },
     });
     expect(delivery.enqueueDeferred).toBeUndefined();
-    expect(captureCalls).toHaveLength(0);
-    expect(dispatchCalls).toHaveLength(0);
+    expect(deliverCalls).toHaveLength(0);
     expect(callbackAcks).toEqual([
       { callbackQueryId: 'cbq_9', text: 'Thanks — your answer was recorded.' },
     ]);
@@ -474,7 +431,7 @@ describe('reply-to-bot', () => {
     });
     expect(delivery.result).toMatchObject({ classification: 'reply_to_bot' });
     expect(delivery.enqueueDeferred).toBeUndefined();
-    expect(dispatchCalls).toHaveLength(0);
+    expect(deliverCalls).toHaveLength(0);
   });
 });
 
@@ -495,7 +452,7 @@ describe('webhook secret-token authentication', () => {
   let handleSpy: jest.SpyInstance;
 
   beforeEach(() => {
-    // A bound sender so an authorized delivery would actually dispatch.
+    // A bound sender so an authorized delivery would actually be kept.
     identities.push({ team_id: 'team-A', telegram_user_id: TG_USER });
     handleSpy = jest.spyOn(telegramBuiltinService, 'handleSharedBotInbound');
   });
@@ -515,10 +472,7 @@ describe('webhook secret-token authentication', () => {
 
     expect(handleSpy).toHaveBeenCalledTimes(1);
     expect(delivery.result).toMatchObject({ classification: 'message', routedTeamIds: ['team-A'] });
-    expect(captureCalls).toHaveLength(1);
-
-    await delivery.enqueueDeferred!();
-    expect(dispatchCalls).toHaveLength(1);
+    expect(deliverCalls).toHaveLength(1);
   });
 
   it('secret SET + WRONG header → unauthorized, router NOT invoked', async () => {
@@ -530,8 +484,7 @@ describe('webhook secret-token authentication', () => {
 
     expect(delivery).toEqual({ result: { ok: false, classification: 'unauthorized' } });
     expect(handleSpy).not.toHaveBeenCalled();
-    expect(captureCalls).toHaveLength(0);
-    expect(dispatchCalls).toHaveLength(0);
+    expect(deliverCalls).toHaveLength(0);
   });
 
   it('secret SET + MISSING header → unauthorized, router NOT invoked', async () => {

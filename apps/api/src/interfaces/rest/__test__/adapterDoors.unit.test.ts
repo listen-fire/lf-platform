@@ -1,8 +1,9 @@
-// The remote adapter push doors' REST contract (emit / wake). Drives the real
-// router and the real door service over an in-process HTTP server; the install
-// store, secret decryption, trigger capture and the work queue are mocked, so
-// what's under test is authentication (the credential picks the install, and
-// the install is the team), body validation, and what each door queues.
+// The remote adapter push doors' REST contract (emit / wake / models). Drives
+// the real router and the real door service over an in-process HTTP server; the
+// install store, secret decryption, the listen door and the work queue are
+// mocked, so what's under test is authentication (the credential picks the
+// install, and the install is the team), body validation, and what each door
+// keeps.
 
 import { createServer, type Server } from 'node:http';
 
@@ -12,10 +13,7 @@ import type { AddressInfo } from 'node:net';
 
 const listRemoteAdaptersOfType = jest.fn();
 const loadRemoteAdapterSecret = jest.fn();
-const resolveAdapter = jest.fn();
-const captureProviderTriggerEvents = jest.fn();
-const enqueueCapturedEvents = jest.fn();
-const enqueueAwaitWake = jest.fn();
+const deliverArrivals = jest.fn();
 const notifyWork = jest.fn();
 
 jest.mock('node:crypto', () => {
@@ -27,20 +25,9 @@ jest.mock('../../../services/translation_graph/adapters/remote/store', () => ({
 }));
 jest.mock('../../../services/translation_graph/adapters/resolve', () => ({
   loadRemoteAdapterSecret: (...args: unknown[]) => loadRemoteAdapterSecret(...args),
-  resolveAdapter: (input: unknown) => resolveAdapter(input),
 }));
-jest.mock('../../../services/webhook_sync/handler', () => ({
-  captureProviderTriggerEvents: (input: unknown) => captureProviderTriggerEvents(input),
-}));
-jest.mock('../../../services/translation_graph/triggers/dispatch_event', () => ({
-  enqueueCapturedEvents: (input: unknown) => enqueueCapturedEvents(input),
-}));
-jest.mock('../../../services/movement_engine/await_wake', () => ({
-  enqueueAwaitWakes: async (input: { adapterType: string; teamId: string; correlationKeys: string[] }) => {
-    for (const correlationKey of input.correlationKeys) {
-      await enqueueAwaitWake({ adapterType: input.adapterType, teamId: input.teamId, correlationKey });
-    }
-  },
+jest.mock('../../../services/inbound/listen_door', () => ({
+  deliverArrivals: (input: unknown) => deliverArrivals(input),
 }));
 jest.mock('../../../services/work/drain', () => ({ notifyWork: () => notifyWork() }));
 // The platform's model client: answers, and reports what the call spent as a
@@ -95,8 +82,7 @@ beforeEach(() => {
       (adapterType === 'acme_crm' ? [TEAM_A, TEAM_B] : []).filter((row) => teamId === undefined || row.team_id === teamId),
   );
   loadRemoteAdapterSecret.mockImplementation(async (credentialsId: string) => SECRETS[credentialsId]);
-  resolveAdapter.mockResolvedValue({ listEventTypes: async () => [{ tag: 'company.created', positionType: 'Company' }] });
-  captureProviderTriggerEvents.mockResolvedValue([{ triggerId: 'trig-1', teamId: A_TEAM, storedEventId: 'evt-1' }]);
+  deliverArrivals.mockResolvedValue(undefined);
 });
 
 async function post(path: string, body: unknown, headers: Record<string, string> = {}) {
@@ -110,43 +96,43 @@ async function post(path: string, body: unknown, headers: Record<string, string>
 
 const BEARER_A = { authorization: 'Bearer secret-a' };
 const EVENT = { payload: { id: 'co-1', Name: 'Acme' }, eventType: 'company.created' };
+const ARRIVAL = { edge: 'Replies', key: 'thread:1', identity: 'msg-1', landing: { recordId: 'msg-1', fields: { Text: 'hi' } } };
+const WAKE = { arrivals: [ARRIVAL] };
 
 describe('authentication — the credential picks the install, the install is the team', () => {
   it('a bearer credential authenticates as the install it belongs to', async () => {
-    const res = await post('/acme_crm/wake', { keys: ['thread:1'] }, BEARER_A);
+    const res = await post('/acme_crm/wake', WAKE, BEARER_A);
 
     expect(res).toEqual({ status: 202, body: { accepted: 1 } });
-    expect(enqueueAwaitWake).toHaveBeenCalledWith({ adapterType: 'acme_crm', teamId: A_TEAM, correlationKey: 'thread:1' });
+    expect(deliverArrivals).toHaveBeenCalledWith(expect.objectContaining({ teamId: A_TEAM }));
     expect(timingSafeEqual).toHaveBeenCalled();
   });
 
   it("a shared-secret credential is read from the install's own header", async () => {
-    const res = await post('/acme_crm/wake', { keys: ['thread:1'] }, { 'x-crm-key': 'secret-b' });
+    const res = await post('/acme_crm/wake', WAKE, { 'x-crm-key': 'secret-b' });
 
     expect(res.status).toBe(202);
-    expect(enqueueAwaitWake).toHaveBeenCalledWith(expect.objectContaining({ teamId: B_TEAM }));
+    expect(deliverArrivals).toHaveBeenCalledWith(expect.objectContaining({ teamId: B_TEAM }));
   });
 
   it("another install's secret in the wrong carrier does not authenticate", async () => {
-    const res = await post('/acme_crm/wake', { keys: ['thread:1'] }, { authorization: 'Bearer secret-b' });
+    const res = await post('/acme_crm/wake', WAKE, { authorization: 'Bearer secret-b' });
 
     expect(res).toEqual({ status: 401, body: { error: 'unauthorized' } });
-    expect(enqueueAwaitWake).not.toHaveBeenCalled();
+    expect(deliverArrivals).not.toHaveBeenCalled();
   });
 
   it('a wrong secret is 401 with no detail, and nothing is queued', async () => {
-    const wake = await post('/acme_crm/wake', { keys: ['thread:1'] }, { authorization: 'Bearer nope' });
+    const wake = await post('/acme_crm/wake', WAKE, { authorization: 'Bearer nope' });
     const emit = await post('/acme_crm/emit', { events: [EVENT] }, { authorization: 'Bearer nope' });
 
     expect(wake).toEqual({ status: 401, body: { error: 'unauthorized' } });
     expect(emit).toEqual({ status: 401, body: { error: 'unauthorized' } });
-    expect(enqueueAwaitWake).not.toHaveBeenCalled();
-    expect(captureProviderTriggerEvents).not.toHaveBeenCalled();
-    expect(enqueueCapturedEvents).not.toHaveBeenCalled();
+    expect(deliverArrivals).not.toHaveBeenCalled();
   });
 
   it('no credential at all is 401', async () => {
-    expect((await post('/acme_crm/wake', { keys: ['thread:1'] })).status).toBe(401);
+    expect((await post('/acme_crm/wake', WAKE)).status).toBe(401);
   });
 
   it("one team's credential at another adapter type it never installed is refused", async () => {
@@ -156,10 +142,10 @@ describe('authentication — the credential picks the install, the install is th
         : [TEAM_A],
     );
 
-    const res = await post('/other_crm/wake', { keys: ['thread:1'] }, BEARER_A);
+    const res = await post('/other_crm/wake', WAKE, BEARER_A);
 
     expect(res.status).toBe(401);
-    expect(enqueueAwaitWake).not.toHaveBeenCalled();
+    expect(deliverArrivals).not.toHaveBeenCalled();
   });
 
   it('an adapter type no team installed is the same 401, so the door reveals nothing', async () => {
@@ -169,24 +155,23 @@ describe('authentication — the credential picks the install, the install is th
   });
 
   it('every install is checked, even after a match', async () => {
-    await post('/acme_crm/wake', { keys: ['thread:1'] }, BEARER_A);
+    await post('/acme_crm/wake', WAKE, BEARER_A);
 
     expect(loadRemoteAdapterSecret).toHaveBeenCalledTimes(2);
   });
 
-  it.each(['slack', 'callback', 'ask', 'KG_MUTATION'])(
+  it.each(['slack', 'manual', 'ask', 'KG_MUTATION'])(
     'a slug a built-in or the engine answers to (%s) is 401 even with a valid secret, and no install is looked up',
     async (slug) => {
       listRemoteAdaptersOfType.mockResolvedValue([{ ...TEAM_A, adapter_type: slug }]);
 
-      const wake = await post(`/${slug}/wake`, { keys: ['thread:1'] }, BEARER_A);
+      const wake = await post(`/${slug}/wake`, WAKE, BEARER_A);
       const emit = await post(`/${slug}/emit`, { events: [EVENT] }, BEARER_A);
 
       expect(wake).toEqual({ status: 401, body: { error: 'unauthorized' } });
       expect(emit).toEqual({ status: 401, body: { error: 'unauthorized' } });
       expect(listRemoteAdaptersOfType).not.toHaveBeenCalled();
-      expect(enqueueAwaitWake).not.toHaveBeenCalled();
-      expect(captureProviderTriggerEvents).not.toHaveBeenCalled();
+      expect(deliverArrivals).not.toHaveBeenCalled();
     },
   );
 
@@ -205,27 +190,27 @@ describe('authentication — the credential picks the install, the install is th
     });
 
     it('is 409 without a team named, and nothing is queued', async () => {
-      const res = await post('/acme_crm/wake', { keys: ['thread:1'] }, BEARER_A);
+      const res = await post('/acme_crm/wake', WAKE, BEARER_A);
 
       expect(res.status).toBe(409);
       expect(res.body.error).toBe('ambiguous_credential');
       expect(res.body.message).toMatch(/x-listen-fire-team/);
-      expect(enqueueAwaitWake).not.toHaveBeenCalled();
+      expect(deliverArrivals).not.toHaveBeenCalled();
     });
 
     it("reaches only the team named in x-listen-fire-team, decrypting only that team's install", async () => {
-      const res = await post('/acme_crm/wake', { keys: ['thread:1'] }, { ...BEARER_A, 'x-listen-fire-team': TEAM_C_ID });
+      const res = await post('/acme_crm/wake', WAKE, { ...BEARER_A, 'x-listen-fire-team': TEAM_C_ID });
 
       expect(res.status).toBe(202);
       expect(listRemoteAdaptersOfType).toHaveBeenCalledWith({ adapterType: 'acme_crm', teamId: TEAM_C_ID });
       expect(loadRemoteAdapterSecret).toHaveBeenCalledTimes(1);
-      expect(enqueueAwaitWake).toHaveBeenCalledWith(expect.objectContaining({ teamId: TEAM_C_ID }));
+      expect(deliverArrivals).toHaveBeenCalledWith(expect.objectContaining({ teamId: TEAM_C_ID }));
     });
 
     it('a named team with no install of the type is 401', async () => {
       const res = await post(
         '/acme_crm/wake',
-        { keys: ['thread:1'] },
+        WAKE,
         { ...BEARER_A, 'x-listen-fire-team': '00000000-0000-4000-8000-0000000000ff' },
       );
 
@@ -233,7 +218,7 @@ describe('authentication — the credential picks the install, the install is th
     });
 
     it('a team header that is not a team id is 401, and nothing is looked up', async () => {
-      const res = await post('/acme_crm/wake', { keys: ['thread:1'] }, { ...BEARER_A, 'x-listen-fire-team': 'nope' });
+      const res = await post('/acme_crm/wake', WAKE, { ...BEARER_A, 'x-listen-fire-team': 'nope' });
 
       expect(res.status).toBe(401);
       expect(listRemoteAdaptersOfType).not.toHaveBeenCalled();
@@ -251,124 +236,97 @@ describe('authentication — the credential picks the install, the install is th
       return SECRETS[credentialsId];
     });
 
-    const res = await post('/acme_crm/wake', { keys: ['thread:1'] }, BEARER_A);
+    const res = await post('/acme_crm/wake', WAKE, BEARER_A);
 
     expect(res.status).toBe(202);
-    expect(enqueueAwaitWake).toHaveBeenCalledWith(expect.objectContaining({ teamId: A_TEAM }));
+    expect(deliverArrivals).toHaveBeenCalledWith(expect.objectContaining({ teamId: A_TEAM }));
   });
 });
 
 describe('bodies', () => {
   it.each([
-    ['no keys', {}],
-    ['an empty list', { keys: [] }],
-    ['an empty key', { keys: [''] }],
-    ['a non-string key', { keys: [7] }],
-    ['more than 1000 keys', { keys: Array.from({ length: 1001 }, (_, i) => `k${i}`) }],
+    ['no arrivals', {}],
+    ['an empty list', { arrivals: [] }],
+    ['an arrival with no edge', { arrivals: [{ ...ARRIVAL, edge: '' }] }],
+    ['an arrival with no landing', { arrivals: [{ edge: 'Replies', key: 'thread:1', identity: 'msg-1' }] }],
+    ['more than 1000 arrivals', { arrivals: Array.from({ length: 1001 }, (_, i) => ({ ...ARRIVAL, identity: `m${i}` })) }],
   ])('wake refuses %s with 400', async (_label, body) => {
     const res = await post('/acme_crm/wake', body, BEARER_A);
 
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('bad_request');
-    expect(enqueueAwaitWake).not.toHaveBeenCalled();
+    expect(deliverArrivals).not.toHaveBeenCalled();
   });
 
-  it.each([
-    ['no events', {}],
-    ['an empty list', { events: [] }],
-    ['an event with a bad changeType', { events: [{ payload: {}, changeType: 'upsert' }] }],
-  ])('emit refuses %s with 400', async (_label, body) => {
-    const res = await post('/acme_crm/emit', body, BEARER_A);
+  it('a wake naming keys, as before adapter protocol 2.5, is refused naming arrivals', async () => {
+    const res = await post('/acme_crm/wake', { keys: ['thread:1'], arrivals: [ARRIVAL] }, BEARER_A);
 
     expect(res.status).toBe(400);
-    expect(captureProviderTriggerEvents).not.toHaveBeenCalled();
+    expect(JSON.stringify(res.body)).toMatch(/arrivals/);
+    expect(deliverArrivals).not.toHaveBeenCalled();
   });
 
   it('a body over 1 MB is refused 413 before anything is authenticated', async () => {
     const res = await fetch(`${baseUrl}/api/public/adapter/acme_crm/wake`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...BEARER_A },
-      body: JSON.stringify({ keys: ['x'.repeat(1024 * 1024)] }),
+      body: JSON.stringify({ arrivals: [{ ...ARRIVAL, landing: { fields: { Text: 'x'.repeat(1024 * 1024) } } }] }),
     });
 
     expect(res.status).toBe(413);
     expect(await res.json()).toEqual({ error: 'payload_too_large' });
     expect(listRemoteAdaptersOfType).not.toHaveBeenCalled();
-    expect(enqueueAwaitWake).not.toHaveBeenCalled();
+    expect(deliverArrivals).not.toHaveBeenCalled();
   });
 
   it('a body just under 1 MB is read', async () => {
-    const res = await post('/acme_crm/wake', { keys: ['x'.repeat(1024 * 1024 - 64)] }, BEARER_A);
+    const res = await post('/acme_crm/wake', { arrivals: [{ ...ARRIVAL, landing: { fields: { Text: 'x'.repeat(1024 * 1024 - 256) } } }] }, BEARER_A);
 
     expect(res.status).toBe(202);
   });
 
   it('a malformed body from an unauthenticated caller is 401, not 400', async () => {
-    expect((await post('/acme_crm/wake', { keys: [] })).status).toBe(401);
+    expect((await post('/acme_crm/wake', { arrivals: [] })).status).toBe(401);
   });
 });
 
 describe('emit', () => {
-  it("captures each event against the caller's triggers, queues the receipts, and answers the count", async () => {
-    const res = await post('/acme_crm/emit', { events: [EVENT, { ...EVENT, payload: { id: 'co-2' } }] }, BEARER_A);
-
-    expect(res).toEqual({ status: 202, body: { accepted: 2 } });
-    expect(captureProviderTriggerEvents).toHaveBeenCalledTimes(2);
-    expect(captureProviderTriggerEvents).toHaveBeenCalledWith({
-      event: EVENT,
-      subscription: { team_id: A_TEAM, credentials_id: 'cred-a', provider: 'ACME_CRM' },
-      adapterType: 'acme_crm',
-      eventTypes: [{ tag: 'company.created', positionType: 'Company' }],
-    });
-    expect(resolveAdapter).toHaveBeenCalledTimes(1);
-    expect(enqueueCapturedEvents).toHaveBeenCalledWith([
-      expect.objectContaining({ storedEventId: 'evt-1' }),
-      expect.objectContaining({ storedEventId: 'evt-1' }),
-    ]);
-    expect(notifyWork).toHaveBeenCalled();
-  });
-
-  it('an event no trigger listens for is accepted as zero, with nothing queued', async () => {
-    captureProviderTriggerEvents.mockResolvedValue([]);
-
+  it('is refused by name once authenticated: from 0.13 an event fires no listen, so nothing is kept', async () => {
     const res = await post('/acme_crm/emit', { events: [EVENT] }, BEARER_A);
 
-    expect(res).toEqual({ status: 202, body: { accepted: 0 } });
-    expect(enqueueCapturedEvents).toHaveBeenCalledWith([]);
+    expect(res.status).toBe(410);
+    expect(res.body.error).toBe('emit_retired');
+    expect(res.body.message).toMatch(/wake/);
+    expect(deliverArrivals).not.toHaveBeenCalled();
     expect(notifyWork).not.toHaveBeenCalled();
-  });
-
-  it('a capture failure still queues what was captured, then answers 500 so the caller retries', async () => {
-    captureProviderTriggerEvents
-      .mockResolvedValueOnce([{ triggerId: 'trig-1', teamId: A_TEAM, storedEventId: 'evt-1' }])
-      .mockRejectedValueOnce(new Error('db down'));
-
-    const res = await post('/acme_crm/emit', { events: [EVENT, EVENT] }, BEARER_A);
-
-    expect(res).toEqual({ status: 500, body: { error: 'capture_failed', accepted: 1, failed: 1 } });
-    expect(enqueueCapturedEvents).toHaveBeenCalledWith([expect.objectContaining({ storedEventId: 'evt-1' })]);
-  });
-
-  it("a failing listEventTypes still dispatches, undiscriminated", async () => {
-    resolveAdapter.mockRejectedValue(new Error('remote down'));
-
-    const res = await post('/acme_crm/emit', { events: [EVENT] }, BEARER_A);
-
-    expect(res.status).toBe(202);
-    expect(captureProviderTriggerEvents).toHaveBeenCalledWith(expect.objectContaining({ eventTypes: [] }));
   });
 });
 
 describe('wake', () => {
-  it('queues one wake per key for the caller’s team and adapter type, and pokes the drain', async () => {
-    const res = await post('/acme_crm/wake', { keys: ['thread:1', 'thread:2'] }, BEARER_A);
+  it("keeps the arrivals as one delivery of the caller's install, and pokes the drain", async () => {
+    const second = { ...ARRIVAL, key: 'thread:2', identity: 'msg-2' };
+    const res = await post('/acme_crm/wake', { arrivals: [ARRIVAL, second] }, BEARER_A);
 
     expect(res).toEqual({ status: 202, body: { accepted: 2 } });
-    expect(enqueueAwaitWake.mock.calls).toEqual([
-      [{ adapterType: 'acme_crm', teamId: A_TEAM, correlationKey: 'thread:1' }],
-      [{ adapterType: 'acme_crm', teamId: A_TEAM, correlationKey: 'thread:2' }],
-    ]);
+    expect(deliverArrivals).toHaveBeenCalledTimes(1);
+    expect(deliverArrivals).toHaveBeenCalledWith({
+      teamId: A_TEAM,
+      delivered: { adapterType: 'acme_crm', credentialsId: null },
+      subscriptionId: expect.any(String),
+      externalId: null,
+      source: 'emit',
+      arrivals: [ARRIVAL, second],
+    });
     expect(notifyWork).toHaveBeenCalled();
+  });
+
+  it('a delivery that cannot be kept answers 500, so the caller retries', async () => {
+    deliverArrivals.mockRejectedValue(new Error('db down'));
+
+    const res = await post('/acme_crm/wake', WAKE, BEARER_A);
+
+    expect(res).toEqual({ status: 500, body: { error: 'internal' } });
+    expect(notifyWork).not.toHaveBeenCalled();
   });
 });
 
