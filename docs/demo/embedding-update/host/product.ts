@@ -1,25 +1,26 @@
 // The demo product with the engine inside it (`@listen-fire/embed`): each
 // customer is a tenant with its own companies and fields, its own API key and
-// its own Slack workspace. A person's change to a company raises
-// `company.updated`, and every movement of that customer listening for it
-// runs here, in this process, before the change is answered.
+// its own Slack workspace. A person adding or changing a company is reported
+// to the embedded host as an arrival on the CRM, and every movement of that
+// customer whose listen takes it runs here, in this process, before the
+// person's request is answered.
 //
-// Loop safety is the product's rule: only a person's change raises an event.
-// A movement's own write to a company (the module's updateRecord) raises
-// none, so an automation that updates the record it was fired for does not
+// Loop safety is the product's rule: only a person's change is reported. A
+// movement's own write to a company (the module's updateRecord) reports
+// none, so an automation that updates the company it was fired for does not
 // fire again.
 
 import type { IncomingMessage } from 'node:http';
 
 import { createAuthoringHandler, type AuthoringHandler } from '@listen-fire/authoring-mcp';
-import { createEmbeddedHost, type EmbeddedHost, type EmbeddedRunOutcome } from '@listen-fire/embed';
+import { createEmbeddedHost, type Arrival, type ArrivalNotJudged, type EmbeddedHost, type EmbeddedRunOutcome } from '@listen-fire/embed';
 import { pricedModels, type ModelClient } from '@listen-fire/engine/public/embed';
 import { slackModule } from '@listen-fire/slack';
 
 import { authoringStore, authoringTenant } from './authoring';
-import { CompanyStore, companyCreated, companyUpdated, crmModule, type Company, type FieldDefinition } from './crm';
+import { CompanyStore, companyAdded, companyChanged, crmModule, type Company, type FieldDefinition } from './crm';
 
-/** The names a customer's movement imports its connections by. */
+/** The names a customer's movement connects its CRM and its Slack by. */
 export const CREDENTIAL = 'workspace';
 export const SLACK_CREDENTIAL = 'slack_workspace';
 
@@ -36,12 +37,15 @@ export class Product {
   readonly companies = new CompanyStore();
   private readonly crm = crmModule(this.companies);
   private readonly host: EmbeddedHost;
-  private readonly kept = authoringStore(() => new Date());
+  /** The saved movements and runs, where the authoring tools read them. */
+  readonly kept = authoringStore(() => new Date());
+  /** Each arrival a customer's listen could not judge: it ran nothing. */
+  readonly notJudged: ArrivalNotJudged[] = [];
   private readonly apiKeys = new Map<string, string>();
 
   constructor(options: { models?: ModelClient } = {}) {
     this.host = createEmbeddedHost({
-      modules: [this.crm, slackModule],
+      modules: [this.crm, { module: slackModule, package: '@lf/slack' }],
       store: this.kept.store,
       limits: LIMITS,
       ...(options.models !== undefined ? { engine: { llm: pricedModels({ client: options.models }) } } : {}),
@@ -61,19 +65,23 @@ export class Product {
   /** A person adds a company. */
   async create(tenant: string, fields: Record<string, string>): Promise<{ company: Company; runs: FiredRun[] }> {
     const company = this.companies.add(tenant, fields);
-    return { company, runs: await this.fire(tenant, companyCreated(company)) };
+    return { company, runs: await this.fire(tenant, companyAdded(company)) };
   }
 
-  /** A person changes a company. A change that changes nothing raises nothing. */
+  /** A person changes a company. A change that changes nothing reports nothing. */
   async change(tenant: string, id: string, fields: Record<string, string>): Promise<{ company: Company; runs: FiredRun[] } | undefined> {
     const change = this.companies.update(tenant, id, fields, 'person');
     if (change === undefined) return undefined;
-    const runs = Object.keys(change.fields).length > 0 ? await this.fire(tenant, companyUpdated(change)) : [];
-    return { company: this.companies.get(tenant, id) ?? change.company, runs };
+    const runs = change.changed.length > 0 ? await this.fire(tenant, companyChanged(change)) : [];
+    const company = this.companies.get(tenant, id);
+    return company === undefined ? undefined : { company: { ...company }, runs };
   }
 
-  private async fire(tenant: string, event: Parameters<EmbeddedHost['dispatch']>[1]['event']): Promise<FiredRun[]> {
-    return this.kept.runs.record(await this.host.dispatch(tenant, { adapterType: 'crm', event })).map(firedRun);
+  /** Something arrived in a customer's CRM: run each of its movements whose listen takes it. */
+  async fire(tenant: string, arrival: Arrival): Promise<FiredRun[]> {
+    const { runs, notJudged } = await this.host.dispatch(tenant, { adapterType: 'crm', arrivals: [arrival] });
+    this.notJudged.push(...notJudged);
+    return this.kept.runs.record(runs).map(firedRun);
   }
 
   /** The authoring tools over MCP at `/customers/:tenant/mcp`, the
@@ -91,7 +99,7 @@ export class Product {
       },
       instructions:
         "This is the product's own CRM: a customer's movements read and write its companies, with the fields it defined. " +
-        'company.updated fires when a person changes a company; a listen can narrow it with field and becomes.',
+        "A person's change to a company arrives on the CRM's Changes, with the company before and after it (Previous, Current).",
     });
   }
 }

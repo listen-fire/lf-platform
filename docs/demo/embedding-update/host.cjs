@@ -6,7 +6,8 @@
 // process's clock, so capture.sh can time the automation's write against the
 // person's change:
 //   request <method> <url>              each HTTP request as it arrives
-//   event <tag> <payload json>          each event the product raises
+//   arrival <edge> <fields json>        each arrival the product reports to the embedded host
+//   program saved <json>                each movement saved: its name and the plan of each listen
 //   company write <by> <id> <fields>    each change to a company, by a person or an automation
 //   model call <method>                 each call that reaches the models slot (none is expected)
 const fs = require('fs');
@@ -39,9 +40,14 @@ async function main() {
     return update(t, id, changed, by);
   };
   const fire = product.fire.bind(product);
-  product.fire = (t, event) => {
-    say(`event ${event.tag} ${JSON.stringify(event.payload)}`);
-    return fire(t, event);
+  product.fire = (t, arrival) => {
+    say(`arrival ${arrival.edge} ${JSON.stringify(arrival.landing.fields)}`);
+    return fire(t, arrival);
+  };
+  const write = product.kept.programs.write.bind(product.kept.programs);
+  product.kept.programs.write = (t, saved) => {
+    say(`program saved ${JSON.stringify({ name: saved.name, listens: saved.listens })}`);
+    return write(t, saved);
   };
   await product.addCustomer(tenant, keys.crm, fields);
   await product.connectSlack(tenant, { accessToken: keys.slack, baseUrl: `${slackUrl}/slack/` });

@@ -7,29 +7,34 @@
 //   request         what Brightline's user asked its agent, in plain words
 //   validatedUnder  "<core version> (<branch>@<commit>)" of the listen-fire checkout
 //   embed           the @listen-fire/embed version the product ran on
-//   host            the demo product's code: { files, lines, setup, connect, event, loopRule }
+//   host            the demo product's code: { files, lines, setup, connect, change, loopRule }
 //                   files:    [{ path, lines }] every file of host/
 //                   lines:    their total
 //                   setup:    { file, from, to, code } the createEmbeddedHost call
 //                   connect:  [{ file, line, code }] each host.connect call
-//                   event:    { file, from, to, code } the companyUpdated function
+//                   change:   { file, from, to, code } the companyChanged function:
+//                             a person's change as the arrival the product reports
 //                   loopRule: { file, from, to, code } the comment and updateRecord
-//                             that make an automation's write raise no event
+//                             that make an automation's write report no change
 //   customer        { tenant, name, fields, describe, slackChannels }
 //   agent           [{ tool, arguments, answer }] the agent's tool calls, in
 //                   order (getStarted's answer cut to its "## Systems" section)
 //   program         the automation's source, as saved
 //   saved           { id, revision, listeners } saveAutomation's answer
-//   created         { company, ms, runs } the person adding Halden Marine
+//   listen          { on, field, becomes } what the saved listen fires on, read
+//                   off the plan the product kept when it saved it: the edge it
+//                   ends on, and the field its WHERE holds to `becomes` on the
+//                   change's Current but not on its Previous
+//   created         { company, ms, runs, posts, arrivals } the person adding Halden Marine
 //   won             the person's PATCH Stage → Won:
-//                   { fields, record: { before, event, answered, after },
+//                   { fields, record: { before, arrival, answered, after },
 //                     ms, automationWriteMs, run: { runId, status, committed,
-//                     costUsd, modelCalls, writes }, post, events, automationWrites }
-//                   record.before: GET before the PATCH; event: the payload the
-//                   product raised; answered: the PATCH's own answer; after:
-//                   GET after it. post: the message #deals gained.
+//                     costUsd, modelCalls, writes }, post, arrivals, automationWrites }
+//                   record.before: GET before the PATCH; arrival: the change the
+//                   product reported (its fields); answered: the PATCH's own
+//                   answer; after: GET after it. post: the message #deals gained.
 //   owner           the person's PATCH Owner only: { fields, record: { before,
-//                   answered, after }, ms, runs, posts, automationWrites }
+//                   answered, after }, ms, runs, posts, arrivals, automationWrites }
 //   runsTotal       listRuns of the automation after both changes
 //   terminal        { host } what the product printed, verbatim
 //
@@ -45,8 +50,10 @@
 // - run.costUsd: the PATCH answer's `spentMicrodollars` / 1e6.
 // - run.modelCalls: `model call` lines host.cjs printed during the PATCH.
 // - run.writes: inspectRun's writes, each { system, outcome, values }.
-// - events: `event` lines the product printed during the PATCH: one, the
-//   person's change; the automation's write raised none.
+// - arrivals: `arrival` lines the product printed during the PATCH: one, the
+//   person's change; the automation's write reported none.
+// - listen: the `program saved` line host.cjs printed when the automation was
+//   saved, with the plan of its listen.
 const fs = require('fs');
 const path = require('path');
 
@@ -85,14 +92,14 @@ const product = hostLines('product.ts');
 const setupFrom = product.findIndex((l) => /createEmbeddedHost\(\{/.test(l));
 const setupTo = product.findIndex((l, i) => i > setupFrom && /^\s*\}\);\s*$/.test(l));
 const crm = hostLines('crm.ts');
-const ruleFrom = crm.findIndex((l) => /An automation's write\. It raises no event/.test(l));
+const ruleFrom = crm.findIndex((l) => /An automation's write\. It reports no change/.test(l));
 const ruleTo = crm.findIndex((l, i) => i > ruleFrom && /^\s{4}\},\s*$/.test(l));
 const host = {
   files: HOST_FILES.map((f) => ({ path: `host/${f}`, lines: hostLines(f).length })),
   lines: HOST_FILES.reduce((n, f) => n + hostLines(f).length, 0),
   setup: span('product.ts', setupFrom, setupTo),
   connect: product.flatMap((l, i) => (/this\.host\.connect\(/.test(l) ? [{ file: 'host/product.ts', line: i + 1, code: l.trim() }] : [])),
-  event: blockFrom('crm.ts', /^export function companyUpdated\(/),
+  change: blockFrom('crm.ts', /^export function companyChanged\(/),
   loopRule: span('crm.ts', ruleFrom, ruleTo),
 };
 
@@ -107,6 +114,28 @@ const agent = ['10_getStarted', '11_describe', '20_save', '21_list'].map((f) => 
   return { tool: params.name, arguments: params.arguments, answer: params.name === 'getStarted' ? systemsOf(answer) : answer };
 });
 const savedAnswer = read('20_save.txt');
+
+// What the saved listen fires on, from its plan: the field and value its WHERE
+// requires of the change's Current (`c.Current.Stage == "Won"`) and refuses
+// of its Previous (`c.Previous.Stage != "Won"`).
+const pathOf = (e) =>
+  e.type === 'traverse' && e.steps.length === 0 ? ((rest) => rest && [e.aliasRoot, ...rest])(pathOf(e.expression)) : e.type === 'edge_property' || e.type === 'property' ? [e.propertyTypeId] : null;
+const comparesOf = (e) => (e === undefined ? [] : e.type === 'logical' && e.op === 'and' ? e.operands.flatMap(comparesOf) : e.type === 'compare' ? [e] : []);
+const listenOf = (plan) => {
+  const hop = plan.hops[plan.hops.length - 1];
+  const held = comparesOf(hop.checked ?? hop.taken).flatMap((c) => {
+    const at = pathOf(c.left);
+    return at && at.length === 3 && at[0] === hop.alias && c.right.type === 'static' && typeof c.right.value === 'string' ? [{ op: c.op, row: at[1], field: at[2], value: c.right.value }] : [];
+  });
+  const now = held.find((c) => c.op === 'eq' && c.row === 'Current');
+  const before = now && held.find((c) => c.op === 'neq' && c.row === 'Previous' && c.field === now.field && c.value === now.value);
+  return before ? { on: hop.edge, field: now.field, becomes: now.value } : null;
+};
+const savedLine = raw('60_host.log')
+  .split('\n')
+  .flatMap((l) => (/^program saved (.*) at \d+\.\d+$/.exec(l) ?? []).slice(1, 2));
+const plans = savedLine.length === 1 ? JSON.parse(savedLine[0]).listens : [];
+const listen = plans.length === 1 ? listenOf(plans[0]) : null;
 
 // The product's log lines for one request, each with its time.
 const logOf = (prefix) =>
@@ -126,7 +155,13 @@ const runsOf = (prefix) => read(`${prefix}_runs.txt`).runs;
 
 const createdAnswer = read('30_create_answer.json');
 const ID = createdAnswer.body.company.id;
-const created = { company: createdAnswer.body.company, ms: createdAnswer.ms, runs: createdAnswer.body.runs.length, posts: added('30_create').length };
+const created = {
+  company: createdAnswer.body.company,
+  ms: createdAnswer.ms,
+  runs: createdAnswer.body.runs.length,
+  posts: added('30_create').length,
+  arrivals: logOf('30_create').filter((l) => l.line.startsWith('arrival ')).length,
+};
 
 const [wonChange, ownerChange] = changes.changes;
 const wonPrefix = `${wonChange.n}_${wonChange.name}`;
@@ -136,14 +171,14 @@ const wonAnswer = read(`${wonPrefix}_answer.json`);
 const wonLog = logOf(wonPrefix);
 const patchAt = wonLog.find((l) => l.line.startsWith('request PATCH '))?.at;
 const automationWrites = wonLog.filter((l) => l.line.startsWith('company write automation '));
-const events = wonLog.filter((l) => l.line.startsWith('event '));
+const arrivals = wonLog.filter((l) => l.line.startsWith('arrival '));
 const inspected = read('50_inspect.txt');
 const [wonRun] = wonAnswer.body.runs;
 const won = {
   fields: wonChange.fields,
   record: {
     before: companyOf(wonPrefix, 'before', ID),
-    event: events.length === 1 ? JSON.parse(events[0].line.replace(/^event \S+ /, '')) : null,
+    arrival: arrivals.length === 1 ? JSON.parse(arrivals[0].line.replace(/^arrival \S+ /, '')) : null,
     answered: wonAnswer.body.company,
     after: companyOf(wonPrefix, 'after', ID),
   },
@@ -158,7 +193,7 @@ const won = {
     writes: (inspected.writes ?? []).map((w) => ({ system: w.adapterType, record: w.recordType, id: w.externalId, outcome: w.outcome, values: w.writtenValues })),
   },
   post: added(wonPrefix).map((m) => ({ channel: `#${channelName(m.channel)}`, text: m.text })),
-  events: events.length,
+  arrivals: arrivals.length,
   automationWrites: automationWrites.length,
 };
 
@@ -170,7 +205,7 @@ const owner = {
   ms: ownerAnswer.ms,
   runs: ownerAnswer.body.runs.length,
   posts: added(ownerPrefix).length,
-  events: ownerLog.filter((l) => l.line.startsWith('event ')).length,
+  arrivals: ownerLog.filter((l) => l.line.startsWith('arrival ')).length,
   automationWrites: ownerLog.filter((l) => l.line.startsWith('company write automation ')).length,
 };
 
@@ -189,6 +224,7 @@ const data = {
   agent,
   program: source,
   saved: { id: savedAnswer.id, revision: savedAnswer.revision, listeners: savedAnswer.listeners },
+  listen,
   created,
   won,
   owner,
@@ -198,7 +234,6 @@ const data = {
 
 // What the program sets and posts, read off its source.
 const onboarding = /write company \{ Onboarding: "([^"]+)" \}/.exec(source)?.[1];
-const becomes = /field: "Stage", becomes: "([^"]+)"/.exec(source)?.[1];
 const same = (a, b) => a !== undefined && b !== undefined && a !== null && b !== null && Object.keys({ ...a, ...b }).every((k) => a[k] === b[k]);
 const created0 = { id: ID, ...changes.create };
 const wonExpected = { ...created0, ...wonChange.fields, Onboarding: onboarding };
@@ -207,8 +242,10 @@ const expectedPost = `Deal won: ${created0.Name} (owner: ${created0.Owner})`;
 const problems = [
   ...(savedAnswer.saved !== true ? ['the automation did not save'] : []),
   ...(onboarding === undefined || !tenant.fields.find((f) => f.name === 'Onboarding').options.includes(onboarding) ? ["the program's Onboarding is not one of the customer's options"] : []),
-  ...(becomes !== wonChange.fields.Stage ? ["the listen's becomes is not the Stage the person sets"] : []),
+  ...(listen === null ? ['the saved listen is not one change edge whose WHERE holds a field to a value it did not have before'] : []),
+  ...(listen !== null && wonChange.fields[listen.field] !== listen.becomes ? ["the listen's field and value are not what the person sets"] : []),
   ...(created.runs !== 0 || created.posts !== 0 ? ['adding the company ran something'] : []),
+  ...(created.arrivals !== 1 ? [`adding the company reported ${created.arrivals} arrivals`] : []),
   ...(!same(companyOf('30_create', 'after', ID), created0) ? ['the created company is not what was posted'] : []),
   // The Won change: one run, the same record's Onboarding set, one post, no loop.
   ...(!same(won.record.before, created0) ? ['the record before the Won change is not the created one'] : []),
@@ -218,7 +255,8 @@ const problems = [
   ...(won.run.runId !== wonRun?.runId ? ['the run inspected is not the one the Won change started'] : []),
   ...(!same(won.record.answered, wonExpected) ? ["the PATCH's answer is not the record with Stage Won and its Onboarding set"] : []),
   ...(!same(won.record.after, wonExpected) ? ['the record after the Won change is not Stage Won with its Onboarding set'] : []),
-  ...(won.events !== 1 ? [`the Won change raised ${won.events} events (a loop, or none)`] : []),
+  ...(won.arrivals !== 1 ? [`the Won change reported ${won.arrivals} arrivals (a loop, or none)`] : []),
+  ...(won.record.arrival?.Current?.Stage !== wonChange.fields.Stage || won.record.arrival?.Previous?.Stage !== created0.Stage ? ['the change reported is not the Stage before and after'] : []),
   ...(won.automationWrites !== 1 ? [`the automation wrote the company ${won.automationWrites} times`] : []),
   ...(won.automationWriteMs === null || won.automationWriteMs <= 0 ? ['no automation write after the PATCH arrived'] : []),
   ...(won.post.length !== 1 || won.post[0].channel !== '#deals' || won.post[0].text !== expectedPost ? ['#deals did not gain exactly the one post'] : []),
@@ -235,10 +273,10 @@ const problems = [
   // The Owner change: nothing runs.
   ...(owner.runs !== 0 || runsOf(ownerPrefix).length !== 1 ? ['the Owner change ran the automation'] : []),
   ...(owner.posts !== 0 || owner.automationWrites !== 0 ? ['the Owner change posted or wrote'] : []),
-  ...(owner.events !== 1 ? [`the Owner change raised ${owner.events} events`] : []),
+  ...(owner.arrivals !== 1 ? [`the Owner change reported ${owner.arrivals} arrivals`] : []),
   ...(!same(owner.record.after, ownerExpected) || !same(owner.record.answered, ownerExpected) ? ['the record after the Owner change is not just its Owner changed'] : []),
   ...(data.runsTotal !== 1 ? [`the automation ran ${data.runsTotal} times in all`] : []),
-  ...(host.setup === null || host.connect.length === 0 || host.event === null || host.loopRule === null ? ["the product's code was not found"] : []),
+  ...(host.setup === null || host.connect.length === 0 || host.change === null || host.loopRule === null ? ["the product's code was not found"] : []),
   ...(data.terminal.host === '' ? ['the host log is empty'] : []),
 ];
 if (problems.length > 0) throw new Error(`refusing to build data.js: ${problems.join('; ')}`);

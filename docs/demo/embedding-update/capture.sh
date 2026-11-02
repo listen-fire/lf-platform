@@ -74,7 +74,7 @@ mcp() { "$HERE/mcp.sh" "$CAP/$1" "$TENANT" "$2" "${3:-}"; }
 # The agent's loop over the customer's MCP endpoint: what it can reach, the
 # Company schema, the automation saved (checked against those fields first).
 mcp 10_getStarted getStarted
-mcp 11_describe describeConnection '{"system":"crm","types":["Company"]}'
+mcp 11_describe describeConnection '{"system":"crm","types":["Change","Company"]}'
 mcp 20_save saveAutomation "$(jq -Rsc --arg n "$NAME" '{name: $n, source: .}' "$HERE/programs/automation.mvt")"
 mcp 21_list listAutomations
 jq -e '.saved' "$CAP/20_save.txt" >/dev/null || { echo "the automation did not save"; cat "$CAP/20_save.txt"; exit 1; }
@@ -98,7 +98,7 @@ change() { # <prefix> <method> <path> <fields json>
   jq -c '{ms, status, runs: .body.runs}' "$CAP/$1_answer.json"
 }
 
-# A person adds Halden Marine, a qualified deal: company.created, which nothing listens for.
+# A person adds Halden Marine, a qualified deal: it arrives on the CRM's Companies, which nothing listens to.
 change 30_create POST "/customers/$TENANT/companies" "$(jq -c .create "$HERE/programs/changes.json")"
 ID="$(jq -r .body.company.id "$CAP/30_create_answer.json")"
 [ -n "$ID" ] && [ "$ID" != null ] || { echo "the company was not created"; exit 1; }

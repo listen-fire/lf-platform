@@ -13,58 +13,67 @@ shows:
   Qualified | Won`), `Owner` and `Onboarding` (`Not started | Kickoff booked
   | Live`), and its own Slack workspace (a fake);
 - the agent's loop over the customer's MCP endpoint: `getStarted`,
-  `describeConnection` (the `Company` fields), `saveAutomation` (checked
-  against those fields), `listAutomations`;
-- the automation listening for `company.updated` narrowed to `field:
-  "Stage", becomes: "Won"`, and writing to the record it was fired for
-  (`write company { Onboarding: "Kickoff booked" }`);
-- a person adding Halden Marine (`Qualified`, `Not started`): nothing runs;
+  `describeConnection` (a `Change` and the `Company` fields), `saveAutomation`
+  (checked against those fields), `listAutomations`;
+- the automation listening to the CRM's changes where Stage becomes Won
+  (`listen to app-[c:Changes WHERE c.Current.Stage == "Won" AND
+  c.Previous.Stage != "Won"]-> fire kick_off`), and writing to the company
+  the change is about (`company = only(change-[:Company]->)`, then
+  `write company { Onboarding: "Kickoff booked" }`);
+- a person adding Halden Marine (`Qualified`, `Not started`): it arrives on
+  the CRM's `Companies`, which nothing listens to, so nothing runs;
 - a person changing its Stage to Won through the product's `PATCH` route:
   one run, in the product's process, before the PATCH answers; the PATCH's
   own answer already shows `Onboarding: Kickoff booked`; `#deals` gains
   `Deal won: Halden Marine (owner: Priya Raman)`;
-- a person changing only its Owner: the product raises `company.updated`,
-  but the listen's `field` gate does not admit it, so nothing runs.
+- a person changing only its Owner: the product reports the change, but the
+  listen's WHERE does not admit it (Stage was Won before it too), so nothing
+  runs.
 
 It records on our own product (`host/`), not on the platform and not on the
-listen-fire example. The listen-fire example (`examples/embed-saas`) raises
-only `company.created`, so a change to a record needed a host of its own. No
-model is called: the automation makes no `ai` or `extract` call.
+listen-fire example. The listen-fire example (`examples/embed-saas`) reports
+only a company created, so a change to a record needed a host of its own.
+The product is written on the example's idiom: its CRM is registered bare,
+so a movement connects it as `#crm`; Slack is registered as `@lf/slack`; and
+the product hands each arrival to the embedded host's `dispatch`. No model is
+called: the automation makes no `ai` or `extract` call.
 
 ## The product
 
 `host/` is the whole product, run on a listen-fire checkout's packages:
 
 - `crm.ts`: the product's records (`CompanyStore`) and the module its
-  customers' movements reach them through. It declares `company.created` and
-  `company.updated`, and the listen keys `field` and `becomes`. An update
-  event carries the record, the changed fields' new values (`fields`) and
-  their previous ones (`previous`); the embedded host's gate reads those.
+  customers' movements reach them through. It offers two edges a listen may
+  end on, both reported by the product: `Companies` (a company a person
+  added) and `Changes` (a person's change to one). A `Change` holds the
+  company as the edit left it (`Current`) and as it was before (`Previous`),
+  each a record of the customer's `Company` fields, as Airtable's changes
+  do; its `Company` edge reads the company as it is now.
 - `product.ts`: `createEmbeddedHost`, the customer's two connections, and
-  the person's create and change, each dispatching its event.
-- `authoring.ts`: the saved movements and runs, kept where the authoring
-  tools (`@listen-fire/authoring-mcp`) read them.
+  the person's create and change, each handing its arrival to `dispatch`.
+- `authoring.ts`: the saved movements (with the plan of each listen) and
+  runs, kept where the authoring tools (`@listen-fire/authoring-mcp`) read
+  them; taken from the listen-fire example.
 - `server.ts`: the HTTP routes (`GET`, `POST`, `PATCH` on
   `/customers/:tenant/companies`, and the MCP endpoint).
 
-Loop safety is the product's rule: only a person's change raises an event.
-An automation's write goes through the module's `updateRecord`, which raises
-none, so the automation's write to the same company cannot fire it again.
-The `becomes: "Won"` gate would also refuse such an event (the write
-changes Onboarding, not Stage), but the capture proves the product's rule:
-the PATCH raises exactly one event.
+Loop safety is the product's rule: only a person's change is reported. An
+automation's write goes through the module's `updateRecord`, which reports
+nothing, so the automation's write to the same company cannot fire it again.
+The embedded host has no loop breaker of its own (docs/embedding.md). The
+listen's WHERE would also refuse such a change (the write changes
+Onboarding, not Stage), but the capture proves the product's rule: the PATCH
+reports exactly one arrival.
 
-The module marks `Company` as what a listen delivers (`fires: true` on its
-entry point). Without it, the checker cannot see which record a listen's
-event is about, and it saves a `field` or `becomes` it cannot check (a
-misspelt field or option saves clean and never fires). With it, `field:
-"Status"` is refused (`MOV_LISTEN_BAD_CONFIG`) and `becomes: "Closed Won"`
-too (`MOV_ENUM_UNKNOWN_VALUE`).
+`Current` and `Previous` are typed by the customer's own `Company`, so the
+listen's WHERE is checked against its fields when the automation is saved:
+`c.Current.Status` is refused (`MOV_UNKNOWN_PROPERTY`), and `c.Current.Stage
+== "Closed Won"` too (`MOV_ENUM_UNKNOWN_VALUE`, did you mean "Won").
 
 ## Make it
 
 Needs `jq`, `openssl`, node 22, and a listen-fire checkout with its packages
-installed (`pnpm install`), from 0.12.10 on.
+installed (`pnpm install`), from 0.14.1 on.
 
 ```bash
 cd docs/demo/embedding-update
@@ -81,10 +90,11 @@ the person's changes through the product's own routes (`change.cjs`).
 Everything it starts is stopped when it exits. It refuses a checkout with
 local changes under `examples`, `packages` or `modules`.
 
-`host.cjs` wraps three things on the running product, only to print what
+`host.cjs` wraps four things on the running product, only to print what
 they see, each line stamped with the time on the product's clock: each
-request, each event raised, and each write to a company (by a person or by
-an automation). It also fills the models slot with one that prints and
+request, each arrival reported to the embedded host, each write to a company
+(by a person or by an automation), and each movement saved, with the plan of
+its listen. It also fills the models slot with one that prints and
 refuses any call (none is made).
 
 ## What is in it
@@ -98,11 +108,14 @@ refuses any call (none is made).
 - `programs/changes.json`: the company added, and the two changes.
 - `build_data.cjs`: the captures into the video's `data.js`, its shape
   documented at its top. It refuses to build when the automation did not
-  save, its Onboarding is not one of the customer's options, adding the
-  company ran anything, the Won change did not start exactly one run, the
-  record before it is not the one added, the PATCH's answer or the record
-  after it is not Stage Won with Onboarding set, the PATCH raised other than
-  one event (a loop) or the automation wrote the company other than once,
+  save, its saved listen is not one change edge whose WHERE holds the
+  field the person sets to a value it did not have before, its Onboarding is
+  not one of the customer's options, adding the company ran anything or
+  reported other than one arrival, the Won change did not start exactly one
+  run, the record before it is not the one added, the PATCH's answer or the
+  record after it is not Stage Won with Onboarding set, the PATCH reported
+  other than one arrival (a loop) or the automation wrote the company other
+  than once,
   `#deals` did not gain exactly the expected post, the run's own writes are
   not that update and that post, the run made a model call, the Owner change
   ran, posted or wrote anything, or the automation ran more than once in all.
@@ -110,7 +123,11 @@ refuses any call (none is made).
 ## Where the figures come from
 
 - `validatedUnder`: the core's version (`packages/movement-engine`), the
-  branch the checkout is at, and its commit, as `0.12.10 (main@<commit>)`.
+  branch the checkout is at, and its commit, as `0.14.1 (main@<commit>)`.
+- `listen`: the plan the product kept when the automation was saved (the
+  `program saved` line `host.cjs` printed): the edge the listen ends on, and
+  the field and value its WHERE requires of the change's `Current` and
+  refuses of its `Previous`.
 - `ms`: measured by `change.cjs`, from sending the request to its response.
   The product runs every listening automation before it answers.
 - `automationWriteMs`: from the PATCH arriving at the product to the
@@ -119,6 +136,6 @@ refuses any call (none is made).
   `writes`); `costUsd` is the PATCH answer's `spentMicrodollars` / 1e6;
   `modelCalls` is the models slot's printed calls during the PATCH.
 - `record.before` / `record.after`: the product's own `GET` before and after
-  the PATCH. `record.answered`: the PATCH's answer. `record.event`: the
-  payload the product raised.
+  the PATCH. `record.answered`: the PATCH's answer. `record.arrival`: the
+  change the product reported (its fields).
 - `post`: the message the fake Slack gained during the PATCH.
