@@ -38,17 +38,15 @@ const NAME = 'listener-retire-probe';
 
 const BODY = `import { manual, \`${FAKE_CRM_ADAPTER_TYPE}\` as crm } from adapters
 
-runs = connect manual
-other = connect manual
 df = connect crm
 
-function probe(go: <runs-[:\`Invocation\`]->>) {
+function probe(go: <manual-[:\`Invocation\`]->>) {
   write df-[:\`${FAKE_CRM_COMPANY_TYPE}\`]-> {
     Name: "Vireo Robotics"
   }
 }
 
-function second(go: <other-[:\`Invocation\`]->>) {
+function second(go: <manual-[:\`Invocation\`]->>) {
   write df-[:\`${FAKE_CRM_COMPANY_TYPE}\`]-> {
     Name: "Second Robotics"
   }
@@ -56,14 +54,14 @@ function second(go: <other-[:\`Invocation\`]->>) {
 `;
 
 const WITH_ONE_LISTEN = `${BODY}
-listen to runs {} fire probe
+listen to manual-[:Invocations]-> fire probe
 `;
 
-const WITH_TWO_LISTENS = `${WITH_ONE_LISTEN}listen as "second lane" to other {} fire second
+const WITH_TWO_LISTENS = `${WITH_ONE_LISTEN}listen as "second lane" to manual-[:Invocations]-> fire second
 `;
 
 const RENAMED_LANE = `${BODY}
-listen as "first lane" to runs {} fire probe
+listen as "first lane" to manual-[:Invocations]-> fire probe
 `;
 
 const WITH_NO_LISTEN = BODY;

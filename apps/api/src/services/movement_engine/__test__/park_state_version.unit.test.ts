@@ -2,8 +2,8 @@
 // back (a resume, a race settlement) checks it before it
 // rehydrates anything. Each engine reads its own version: the TypeScript
 // engine (language versions 1–4) writes and reads 1, the Rust engine (5 on)
-// writes and reads 2. A version neither reads, or the other engine's, is
-// refused loudly.
+// writes and reads 3 (since listen-fire 0.13). A version neither reads, or the
+// other engine's, is refused loudly.
 
 import { pinOf } from './pin_of';
 import { tenantIdOf, type AnyParkedScopeState } from 'engine-contracts';
@@ -28,13 +28,11 @@ movement nap(go: <runs-[:Invocation]->>) {
 }
 listen to runs {} fire nap
 `,
-  5: `import { manual } from adapters
-runs = connect manual
-function nap(go: <runs-[:Invocation]->>) {
+  5: `function nap(go: <manual-[:Invocation]->>) {
   await sleep(1h)
   x = 1
 }
-listen to runs {} fire nap
+listen to manual-[:Invocations]-> fire nap
 `,
 } as const;
 
@@ -90,7 +88,7 @@ async function parkedState(languageVersion: Pin): Promise<AnyParkedScopeState> {
 const restamped = (state: AnyParkedScopeState, version: number): AnyParkedScopeState =>
   JSON.parse(JSON.stringify({ ...state, version }));
 
-const UNREAD = 'the parked state carries park state version 3, which this release does not read (supported: 1, 2)';
+const UNREAD = 'the parked state carries park state version 2, which this release does not read (supported: 1, 3)';
 
 /** Each pin, the version its engine writes, and how it refuses the other's. */
 const ENGINES = [
@@ -98,13 +96,13 @@ const ENGINES = [
     pin: 4,
     engine: 'TypeScript',
     writes: 1,
-    other: 2,
-    refusal: 'the parked state carries park state version 2, which only the Rust engine reads (the TypeScript engine reads version 1)',
+    other: 3,
+    refusal: 'the parked state carries park state version 3, which only the Rust engine reads (the TypeScript engine reads version 1)',
   },
   {
     pin: 5,
     engine: 'Rust',
-    writes: 2,
+    writes: 3,
     other: 1,
     refusal: "this run's parked state does not read (resume_state_version)",
   },
@@ -126,14 +124,14 @@ describe.each(ENGINES)('a parked state on the $engine engine (language version $
   });
 
   it('refuses a version this release does not read on a resume, before anything is rehydrated', async () => {
-    const state = restamped(await parkedState(pin), 3);
+    const state = restamped(await parkedState(pin), 2);
     const refused = runInput(pin);
     await expect(resumeMovement({ ...refused.input, state })).rejects.toThrow(UNREAD);
     expect(refused.resolved).toEqual([]);
   });
 
   it('refuses a version this release does not read on a race settlement, before anything is rehydrated', async () => {
-    const state = restamped(await parkedState(pin), 3);
+    const state = restamped(await parkedState(pin), 2);
     const refused = runInput(pin);
     await expect(settleRaceFrame({ ...refused.input, state, frameAddress: 's0' })).rejects.toThrow(UNREAD);
     expect(refused.resolved).toEqual([]);

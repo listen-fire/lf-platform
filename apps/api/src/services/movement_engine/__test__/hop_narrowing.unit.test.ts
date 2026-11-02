@@ -221,14 +221,13 @@ function manualEvent(): TriggerEvent {
 }
 
 function sourceFor(body: string): string {
-  return `import { manual, kg } from adapters
+  return `import { kg } from adapters
 import { kg_cred } from credentials
-runs = connect manual
 graph = connect kg using kg_cred
-function sweep(go: <runs-[:Invocation]->>) {
+function sweep(go: <manual-[:Invocation]->>) {
 ${body}
 }
-listen to runs {} fire sweep
+listen to manual-[:Invocations]-> fire sweep
 `;
 }
 

@@ -89,14 +89,13 @@ function manualEvent(): TriggerEvent {
 }
 
 function program(body: string[]): string {
-  return `import { manual, kg } from adapters
+  return `import { kg } from adapters
 import { kg_cred } from credentials
-runs = connect manual
 graph = connect kg using kg_cred
-function recap(go: <runs-[:Invocation]->>) {
+function recap(go: <manual-[:Invocation]->>) {
 ${body.join('\n')}
 }
-listen to runs {} fire recap
+listen to manual-[:Invocations]-> fire recap
 `;
 }
 

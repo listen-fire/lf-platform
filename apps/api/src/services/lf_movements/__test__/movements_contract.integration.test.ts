@@ -50,16 +50,15 @@ const ROUTE_KEY = process.env.LF_MOVEMENTS_SLOT_KEY;
 
 const GREET = 'export function greet(name: <text>) {\n  return "Hello, ${name}!"\n}\n';
 const GREET_NEW = 'export function greet(name: <text>) {\n  return "Hi, ${name}!"\n}\n';
-const HELLO = `import { manual } from adapters
+const HELLO = `
 import { greet } from "lib/greet"
 
-runs = connect manual
 
-function hello(go: <runs-[:\`Invocation\`]->>) {
+function hello(go: <manual-[:\`Invocation\`]->>) {
   return greet(go.\`Run by (name)\`)
 }
 
-listen to runs {} fire hello
+listen to manual-[:Invocations]-> fire hello
 `;
 
 const lfEngined = { isLfEngineTeam: () => true };

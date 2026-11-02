@@ -142,17 +142,16 @@ async function run(source: string, kg: ReturnType<typeof makeKgFake>) {
 }
 
 describe('a write handle is a block-head traversal head', () => {
-  const SOURCE = `import { manual, kg } from adapters
+  const SOURCE = `import { kg } from adapters
 import { kg_cred } from credentials
-runs = connect manual
 graph = connect kg using kg_cred
-function m(go: <runs-[:Invocation]->>) {
+function m(go: <manual-[:Invocation]->>) {
   co = write graph-[:company]-> { name: "Acme" }
   co-[c:contacts]-> {
     write graph-[:log]-> { text: c.name }
   }
 }
-listen to runs {} fire m
+listen to manual-[:Invocations]-> fire m
 `;
 
   it('traverses from the handle record id and feeds the related field into the sink', async () => {
@@ -164,17 +163,16 @@ listen to runs {} fire m
   });
 
   it("the write's resultData reaches getRelated off the handle's own start position", async () => {
-    const RESULT_DATA_SOURCE = `import { manual, kg } from adapters
+    const RESULT_DATA_SOURCE = `import { kg } from adapters
 import { kg_cred } from credentials
-runs = connect manual
 graph = connect kg using kg_cred
-function m(go: <runs-[:Invocation]->>) {
+function m(go: <manual-[:Invocation]->>) {
   co = write graph-[:company]-> { name: "Acme" }
   co-[e:ids]-> {
     write graph-[:log]-> { text: e.value }
   }
 }
-listen to runs {} fire m
+listen to manual-[:Invocations]-> fire m
 `;
     const kg = makeKgFake();
     await run(RESULT_DATA_SOURCE, kg);
@@ -185,15 +183,14 @@ listen to runs {} fire m
 });
 
 describe('a write handle is an expression traversal head', () => {
-  const SOURCE = `import { manual, kg } from adapters
+  const SOURCE = `import { kg } from adapters
 import { kg_cred } from credentials
-runs = connect manual
 graph = connect kg using kg_cred
-function m(go: <runs-[:Invocation]->>) {
+function m(go: <manual-[:Invocation]->>) {
   co = write graph-[:company]-> { name: "Acme" }
   write graph-[:log]-> { text: "contact: \${co-[:contacts]->.name}" }
 }
-listen to runs {} fire m
+listen to manual-[:Invocations]-> fire m
 `;
 
   it('reads a related field off the handle inside a string interpolation', async () => {
@@ -205,15 +202,14 @@ listen to runs {} fire m
   });
 
   it('a zero-step handle read still reads the handle field directly', async () => {
-    const SRC = `import { manual, kg } from adapters
+    const SRC = `import { kg } from adapters
 import { kg_cred } from credentials
-runs = connect manual
 graph = connect kg using kg_cred
-function m(go: <runs-[:Invocation]->>) {
+function m(go: <manual-[:Invocation]->>) {
   co = write graph-[:company]-> { name: "Acme" }
   write graph-[:log]-> { text: "id: \${co.externalId}" }
 }
-listen to runs {} fire m
+listen to manual-[:Invocations]-> fire m
 `;
     const kg = makeKgFake();
     await run(SRC, kg);

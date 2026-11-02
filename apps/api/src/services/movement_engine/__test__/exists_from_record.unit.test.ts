@@ -146,14 +146,13 @@ async function answers(
   graph = makeGraph(),
   options: { live?: boolean } = {},
 ): Promise<unknown[]> {
-  const source = `import { manual, kg } from adapters
+  const source = `import { kg } from adapters
 import { kg_cred } from credentials
-runs = connect manual
 graph = connect kg using kg_cred
-function probe(go: <runs-[:Invocation]->>) {
+function probe(go: <manual-[:Invocation]->>) {
 ${body}
 }
-listen to runs {} fire probe
+listen to manual-[:Invocations]-> fire probe
 `;
   const writes: CapturedWrite[] = [];
   await runMovement({

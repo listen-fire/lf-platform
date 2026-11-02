@@ -29,14 +29,13 @@ import { saveMovement } from '../../../movement/provision';
 import { runMovementNow } from '../../../movement/run_now';
 import { startFakeMcpServer, type FakeMcpServer } from '../../../../../scripts/dev/lib/fake_mcp';
 
-const TRIAGE = `import { manual, mcp } from adapters
+const TRIAGE = `import { mcp } from adapters
 import { linear, crm } from credentials
 
-go = connect manual
 tracker = connect mcp using linear
 customers = connect mcp using crm
 
-function triage(run: <go-[:Invocation]->>) {
+function triage(run: <manual-[:Invocation]->>) {
   issue = write tracker-[:create_issue]-> { title: "Follow up Acme", team: "ENG" }
   write customers-[:add_note]-> { customer: "acme", body: "filed: \${issue.text}" }
   tracker-[r:search_issues WHERE r.query == "Login"]-> {
@@ -44,7 +43,7 @@ function triage(run: <go-[:Invocation]->>) {
   }
 }
 
-listen to go {} fire triage
+listen to manual-[:Invocations]-> fire triage
 `;
 
 let issues: FakeMcpServer;

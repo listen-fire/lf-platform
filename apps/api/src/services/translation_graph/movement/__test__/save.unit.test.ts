@@ -162,7 +162,6 @@ jest.mock('../catalog', () => {
     adapters: {
       email: {
         constructionArgs: [{ name: 'credentials', kind: 'position', required: false }],
-        triggerConfig: ['key'],
         // From 5 a read off an event the catalog does not describe is
         // refused (MOV_EVENT_UNDESCRIBED), so the inbox's message is
         // described with the fields the fixtures read.

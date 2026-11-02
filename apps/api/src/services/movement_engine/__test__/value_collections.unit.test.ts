@@ -122,19 +122,18 @@ function manualEvent(): TriggerEvent {
   };
 }
 
-const PRELUDE = `import { manual, kg } from adapters
+const PRELUDE = `import { kg } from adapters
 import { kg_cred } from credentials
 type Thesis = <"Consumer" | "Infra" | "Health">
-runs = connect manual
 graph = connect kg using kg_cred
 `;
 
 async function runBody(body: string, rows: NodeRow[]) {
   const kg = makeKgFake(rows);
-  const source = `${PRELUDE}function recap(go: <runs-[:Invocation]->>) {
+  const source = `${PRELUDE}function recap(go: <manual-[:Invocation]->>) {
 ${body}
 }
-listen to runs {} fire recap
+listen to manual-[:Invocations]-> fire recap
 `;
   await runMovement({
     source,
@@ -456,10 +455,12 @@ describe('a record is a value, so a collection can hold one', () => {
       [
         '  rows = map(graph-[f:finding ORDER BY f.`headline`]->, (t) => { return { it: t } })',
         '  head = rows[0]',
-        '  one = head.it',
-        '  if (one != null) {',
-        '    one-[s:similar]-> {',
-        '      write graph-[:note]-> { body: s.`headline` }',
+        '  if (exists(head)) {',
+        '    one = head.it',
+        '    if (one != null) {',
+        '      one-[s:similar]-> {',
+        '        write graph-[:note]-> { body: s.`headline` }',
+        '      }',
         '    }',
         '  }',
       ].join('\n'),

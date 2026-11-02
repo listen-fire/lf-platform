@@ -33,26 +33,22 @@ jest.mock('../../credentials/credential_lifecycle', () => ({
 }));
 
 /** A movement with one manual listener: it saves clean and derives a trigger. */
-const MANUAL = (fn: string) => `import { manual } from adapters
-
-runs = connect manual
-
-function ${fn}(go: <runs-[:\`Invocation\`]->>) {
+const MANUAL = (fn: string) => `
+function ${fn}(go: <manual-[:\`Invocation\`]->>) {
 }
 
-listen to runs {} fire ${fn}
+listen to manual-[:Invocations]-> fire ${fn}
 `;
 
 /** Names an adapter the team does not have: the save gate withholds it. */
-const UNKNOWN_ADAPTER = `import { manual, no_such_adapter_anywhere } from adapters
+const UNKNOWN_ADAPTER = `import { no_such_adapter_anywhere } from adapters
 
-runs = connect manual
 elsewhere = connect no_such_adapter_anywhere
 
-function hello(go: <runs-[:\`Invocation\`]->>) {
+function hello(go: <manual-[:\`Invocation\`]->>) {
 }
 
-listen to runs {} fire hello
+listen to manual-[:Invocations]-> fire hello
 `;
 
 const lfEngined = { isLfEngineTeam: () => true };

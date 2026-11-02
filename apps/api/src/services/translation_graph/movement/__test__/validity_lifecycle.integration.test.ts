@@ -43,16 +43,15 @@ const NAME = 'validity-lifecycle-probe';
 
 const sourceWithEdge = (edge: string) => `import { manual, \`${FAKE_CRM_ADAPTER_TYPE}\` as crm } from adapters
 
-runs = connect manual
 df = connect crm
 
-function probe(go: <runs-[:\`Invocation\`]->>) {
+function probe(go: <manual-[:\`Invocation\`]->>) {
   write df-[:\`${edge}\`]-> {
     Name: "Vireo Robotics"
   }
 }
 
-listen to runs {} fire probe
+listen to manual-[:Invocations]-> fire probe
 `;
 
 describe('movement validity lifecycle (real save gate + firings + live remote socket)', () => {

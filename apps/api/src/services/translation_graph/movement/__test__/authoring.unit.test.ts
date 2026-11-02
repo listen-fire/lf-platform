@@ -78,7 +78,7 @@ const catalog: Catalog = {
     // `canFire` is explicit on a hand-built spec (mockCatalog defaults it on;
     // this fixture doesn't go through it). Email really does fire — its
     // manifest declares a webhook trigger — so a listen on it must check.
-    if (name === 'email') return { constructionArgs: [{ name: 'credentials', kind: 'position', required: false }], canFire: true, triggerConfig: ['key'] };
+    if (name === 'email') return { constructionArgs: [{ name: 'credentials', kind: 'position', required: false }], canFire: true };
     if (name === 'attio') {
       return { constructionArgs: [{ name: 'credentials', kind: 'credential', required: true }]};
     }
@@ -125,7 +125,7 @@ function intake(m: <inbox-[:message]->>) {
   }
 }
 
-listen to inbox { key: "intake" } fire intake
+listen to inbox-[e:Emails WHERE e.Key == "intake"]-> fire intake
 `;
 
 describe('diagnoseMovementSource', () => {

@@ -130,7 +130,7 @@ jest.mock('../catalog', () => {
   const { mockCatalog, mockCatalogSnapshot } = require('movement-lang');
   const spec = {
     adapters: {
-      email: { constructionArgs: [{ name: 'credentials', kind: 'position', required: false }], triggerConfig: ['key'] },
+      email: { constructionArgs: [{ name: 'credentials', kind: 'position', required: false }] },
       manual: { constructionArgs: [{ name: 'credentials', kind: 'position', required: false }] },
     },
   };
@@ -215,7 +215,7 @@ function intake(m: <inbox-[:message]->>) {
   write inbox-[:messages]-> { subject: "ack" }
 }
 
-listen to inbox { key: "deals" } fire intake
+listen to inbox-[e:Emails WHERE e.Key == "deals"]-> fire intake
 `;
 
 const DRY_LISTEN_ONLY = `${DRY_PRELUDE}
@@ -223,10 +223,10 @@ function intake(m: <inbox-[:message]->>) {
   write inbox-[:messages]-> { subject: "ack" }
 }
 
-listen to inbox { key: "deals" } fire intake
+listen to inbox-[e:Emails WHERE e.Key == "deals"]-> fire intake
 `;
 
-const WITH_MANUAL = `import { email, manual } from adapters
+const WITH_MANUAL = `import { email } from adapters
 
 inbox = connect email
 
@@ -234,25 +234,23 @@ function intake(m: <inbox-[:message]->>) {
   write inbox-[:messages]-> { subject: "ack" }
 }
 
-runs = connect manual
-function backfill(go: <runs-[:Invocation]->>) {
+function backfill(go: <manual-[:Invocation]->>) {
   write inbox-[:messages]-> { subject: "backfill" }
 }
 
-listen to inbox { key: "deals" } fire intake
-listen to runs {} fire backfill
+listen to inbox-[e:Emails WHERE e.Key == "deals"]-> fire intake
+listen to manual-[:Invocations]-> fire backfill
 `;
 
-const MANUAL_ONLY = `import { manual, email } from adapters
+const MANUAL_ONLY = `import { email } from adapters
 
 inbox = connect email
 
-runs = connect manual
-function backfill(go: <runs-[:Invocation]->>) {
+function backfill(go: <manual-[:Invocation]->>) {
   write inbox-[:messages]-> { subject: "backfill" }
 }
 
-listen to runs {} fire backfill
+listen to manual-[:Invocations]-> fire backfill
 `;
 
 beforeEach(() => {

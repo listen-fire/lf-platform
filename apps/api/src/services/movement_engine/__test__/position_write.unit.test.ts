@@ -150,16 +150,15 @@ async function run(source: string, kg: ReturnType<typeof makeKgFake>) {
 }
 
 describe('position writes update the traversed record in place', () => {
-  const SOURCE = `import { manual, kg } from adapters
+  const SOURCE = `import { kg } from adapters
 import { kg_cred } from credentials
-runs = connect manual
 graph = connect kg using kg_cred
-function reopen(go: <runs-[:Invocation]->>) {
+function reopen(go: <manual-[:Invocation]->>) {
   graph-[c:company]-> {
     write c { status: "Open" }
   }
 }
-listen to runs {} fire reopen
+listen to manual-[:Invocations]-> fire reopen
 `;
 
   it('takes the traversed node id to updateRecord and never resolves', async () => {
@@ -186,16 +185,15 @@ listen to runs {} fire reopen
 // team, 2026-07-07 — "delete takes a written handle" refused a traversal
 // alias that `write <alias>` accepted).
 describe('delete removes the traversed record in place', () => {
-  const SOURCE = `import { manual, kg } from adapters
+  const SOURCE = `import { kg } from adapters
 import { kg_cred } from credentials
-runs = connect manual
 graph = connect kg using kg_cred
-function cleanup(go: <runs-[:Invocation]->>) {
+function cleanup(go: <manual-[:Invocation]->>) {
   graph-[c:company]-> {
     delete c
   }
 }
-listen to runs {} fire cleanup
+listen to manual-[:Invocations]-> fire cleanup
 `;
 
   it('takes the traversed node id to deleteRecord and never resolves', async () => {

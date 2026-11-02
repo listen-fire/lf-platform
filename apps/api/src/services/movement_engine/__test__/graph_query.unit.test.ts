@@ -153,15 +153,9 @@ const kgSchema: InstanceSchema = {
 
 // The run-now invocation as the manual adapter describes it: from 5 a read off
 // an event the catalog does not describe is refused (MOV_EVENT_UNDESCRIBED).
-const manualSchema: InstanceSchema = {
-  positions: { Invocation: { properties: { Text: 'text' }, edges: {} } },
-  collections: {},
-  writableRoots: {},
-};
-
 const catalog = staticCatalogSnapshot({
   credentials: { acme_main: { adapters: ['attio'] }, kg_cred: { adapters: ['kg'] } },
-  instanceSchemas: { kg: kgSchema, manual: manualSchema },
+  instanceSchemas: { kg: kgSchema },
 });
 
 const COMPANIES: NodeRow[] = [
@@ -209,16 +203,15 @@ async function run(source: string, kg: ReturnType<typeof makeGraphFake>) {
 describe('kg-rooted query traversals (KG_EXISTS/KG_VALUE retired by generalisation)', () => {
   it('a kg expression read filters, orders DESC, limits, and reads the field', async () => {
     const kg = makeGraphFake({ adapterType: KG, collections: { company: COMPANIES } });
-    const source = `import { manual, kg } from adapters
+    const source = `import { kg } from adapters
 import { kg_cred } from credentials
-runs = connect manual
 graph = connect kg using kg_cred
-function report(go: <runs-[:Invocation]->>) {
+function report(go: <manual-[:Invocation]->>) {
   write graph-[:note]-> {
     text: "Top: \${Text.join(graph-[c:company WHERE c.\`stage\` == "Seed" ORDER BY c.\`revenue\` DESC LIMIT 2]->.\`name\`, ", ")}"
   }
 }
-listen to runs {} fire report
+listen to manual-[:Invocations]-> fire report
 `;
     const { writes } = await run(source, kg);
     // Seed companies by revenue desc: Globex(30), Umbrella(20), Acme(10),
@@ -234,16 +227,15 @@ listen to runs {} fire report
 
   it('a kg-rooted block head runs the body once per matching node', async () => {
     const kg = makeGraphFake({ adapterType: KG, collections: { company: COMPANIES } });
-    const source = `import { manual, kg } from adapters
+    const source = `import { kg } from adapters
 import { kg_cred } from credentials
-runs = connect manual
 graph = connect kg using kg_cred
-function sweep(go: <runs-[:Invocation]->>) {
+function sweep(go: <manual-[:Invocation]->>) {
   graph-[c:company WHERE c.\`stage\` == "Seed" ORDER BY c.\`name\`]-> {
     write graph-[:note]-> { text: c.\`name\` }
   }
 }
-listen to runs {} fire sweep
+listen to manual-[:Invocations]-> fire sweep
 `;
     const { writes } = await run(source, kg);
     expect(writes.map((w) => w.fields?.text)).toEqual(['Acme', 'Globex', 'Hooli', 'Umbrella']);
@@ -251,11 +243,10 @@ listen to runs {} fire sweep
 
   it('EXISTS over a kg root works in a condition', async () => {
     const kg = makeGraphFake({ adapterType: KG, collections: { company: COMPANIES } });
-    const source = `import { manual, kg } from adapters
+    const source = `import { kg } from adapters
 import { kg_cred } from credentials
-runs = connect manual
 graph = connect kg using kg_cred
-function gate(go: <runs-[:Invocation]->>) {
+function gate(go: <manual-[:Invocation]->>) {
   if (exists(graph-[c:company WHERE c.\`name\` == "Initech"]->)) {
     write graph-[:note]-> { text: "found" }
   }
@@ -263,7 +254,7 @@ function gate(go: <runs-[:Invocation]->>) {
     write graph-[:note]-> { text: "ghost" }
   }
 }
-listen to runs {} fire gate
+listen to manual-[:Invocations]-> fire gate
 `;
     const { writes } = await run(source, kg);
     expect(writes.map((w) => w.fields?.text)).toEqual(['found']);
@@ -271,16 +262,15 @@ listen to runs {} fire gate
 
   it('LIMIT bounds which positions a kg block iterates, ordered by the bracket', async () => {
     const kg = makeGraphFake({ adapterType: KG, collections: { company: COMPANIES } });
-    const source = `import { manual, kg } from adapters
+    const source = `import { kg } from adapters
 import { kg_cred } from credentials
-runs = connect manual
 graph = connect kg using kg_cred
-function first_two(go: <runs-[:Invocation]->>) {
+function first_two(go: <manual-[:Invocation]->>) {
   graph-[c:company ORDER BY c.\`name\` LIMIT 2]-> {
     write graph-[:note]-> { text: c.\`name\` }
   }
 }
-listen to runs {} fire first_two
+listen to manual-[:Invocations]-> fire first_two
 `;
     const { writes } = await run(source, kg);
     expect(writes.map((w) => w.fields?.text)).toEqual(['Acme', 'Globex']);
@@ -297,14 +287,13 @@ describe('a hop hands the adapter the same fetch wherever the bracket is written
   /** What the adapter was asked for, for the one `company` scan the movement makes. */
   async function pushdown(body: string) {
     const kg = makeGraphFake({ adapterType: KG, collections: { company: COMPANIES } });
-    const source = `import { manual, kg } from adapters
+    const source = `import { kg } from adapters
 import { kg_cred } from credentials
-runs = connect manual
 graph = connect kg using kg_cred
-function probe(go: <runs-[:Invocation]->>) {
+function probe(go: <manual-[:Invocation]->>) {
 ${body}
 }
-listen to runs {} fire probe
+listen to manual-[:Invocations]-> fire probe
 `;
     await run(source, kg);
     const reads = kg.reads.filter((r) => r.fieldId === 'company');
@@ -337,16 +326,15 @@ listen to runs {} fire probe
 
   it('the answers are unchanged — the fake honours none of the pushdown', async () => {
     const kg = makeGraphFake({ adapterType: KG, collections: { company: COMPANIES } });
-    const source = `import { manual, kg } from adapters
+    const source = `import { kg } from adapters
 import { kg_cred } from credentials
-runs = connect manual
 graph = connect kg using kg_cred
-function probe(go: <runs-[:Invocation]->>) {
+function probe(go: <manual-[:Invocation]->>) {
   graph-[c:${BRACKET}]-> {
     write graph-[:note]-> { text: c.\`name\` }
   }
 }
-listen to runs {} fire probe
+listen to manual-[:Invocations]-> fire probe
 `;
     const { writes } = await run(source, kg);
     // Seed companies by revenue desc: Globex(30), Umbrella(20) — the engine's
@@ -377,16 +365,15 @@ describe('an ORDER BY key may be a path off the record it ranks', () => {
       collections: { company: COMPANIES, person: PEOPLE },
       links: LINKS,
     });
-    const source = `import { manual, kg } from adapters
+    const source = `import { kg } from adapters
 import { kg_cred } from credentials
-runs = connect manual
 graph = connect kg using kg_cred
-function probe(go: <runs-[:Invocation]->>) {
+function probe(go: <manual-[:Invocation]->>) {
   graph-[c:${bracket}]-> {
     write graph-[:note]-> { text: c.\`name\` }
   }
 }
-listen to runs {} fire probe
+listen to manual-[:Invocations]-> fire probe
 `;
     const { writes } = await run(source, kg);
     const scan = kg.reads.filter((r) => r.fieldId === 'company');
@@ -416,16 +403,15 @@ listen to runs {} fire probe
       collections: { company: COMPANIES, person: PEOPLE },
       links: LINKS,
     });
-    const source = `import { manual, kg } from adapters
+    const source = `import { kg } from adapters
 import { kg_cred } from credentials
-runs = connect manual
 graph = connect kg using kg_cred
-function probe(go: <runs-[:Invocation]->>) {
+function probe(go: <manual-[:Invocation]->>) {
   write graph-[:note]-> {
     text: "\${Text.join(graph-[c:company ORDER BY c-[:owner]->.\`joined\` DESC LIMIT 2]->.\`name\`, ", ")}"
   }
 }
-listen to runs {} fire probe
+listen to manual-[:Invocations]-> fire probe
 `;
     const { writes } = await run(source, kg);
     expect(writes[0].fields?.text).toBe('Globex, Initech');
@@ -434,16 +420,15 @@ listen to runs {} fire probe
 
 describe('ONLY is a cardinality claim the run enforces', () => {
   function onlyMovement(where: string): string {
-    return `import { manual, kg } from adapters
+    return `import { kg } from adapters
 import { kg_cred } from credentials
-runs = connect manual
 graph = connect kg using kg_cred
-function pick(go: <runs-[:Invocation]->>) {
+function pick(go: <manual-[:Invocation]->>) {
   co = only(graph-[c:company WHERE c.${where}]->)
   if (co == null) { fail("nothing matched") }
   write graph-[:note]-> { text: co.\`name\` }
 }
-listen to runs {} fire pick
+listen to manual-[:Invocations]-> fire pick
 `;
   }
 
@@ -474,17 +459,16 @@ describe('an early return stops the body, so the narrowed path never sees absenc
   // from the returning arm. These prove that half: with nothing matched the
   // write below is never attempted, and with a match it runs on the value.
   function guarded(guard: string): string {
-    return `import { manual, kg } from adapters
+    return `import { kg } from adapters
 import { kg_cred } from credentials
-runs = connect manual
 graph = connect kg using kg_cred
-function pick(go: <runs-[:Invocation]->>) {
+function pick(go: <manual-[:Invocation]->>) {
   co = only(graph-[c:company WHERE c.\`name\` == "Wonka"]->)
   ${guard}
   write graph-[:note]-> { text: co.\`name\` }
   return "written"
 }
-listen to runs {} fire pick
+listen to manual-[:Invocations]-> fire pick
 `;
   }
   const guards = [
@@ -525,17 +509,16 @@ describe('instance-rooted query traversals share the same walk', () => {
       },
     });
     const kg = makeGraphFake({ adapterType: KG, collections: {} });
-    const source = `import { manual, attio, kg } from adapters
+    const source = `import { attio, kg } from adapters
 import { acme_main, kg_cred } from credentials
 crm = connect attio using acme_main
-runs = connect manual
 graph = connect kg using kg_cred
-function cheapest(go: <runs-[:Invocation]->>) {
+function cheapest(go: <manual-[:Invocation]->>) {
   write graph-[:note]-> {
     text ?: first(crm-[c:companies WHERE c.\`summary\` == "keep" ORDER BY c.\`name\` LIMIT 1]->.\`name\`)
   }
 }
-listen to runs {} fire cheapest
+listen to manual-[:Invocations]-> fire cheapest
 `;
     const writes: CapturedWrite[] = [];
     await runMovement({
@@ -580,16 +563,15 @@ describe('event-position field read inside a hop WHERE filter', () => {
       ...manualEvent(),
       payload: { firedAt: new Date(0).toISOString(), text: 'Seed' },
     };
-    const source = `import { manual, kg } from adapters
+    const source = `import { kg } from adapters
 import { kg_cred } from credentials
-runs = connect manual
 graph = connect kg using kg_cred
-function unsnooze(go: <runs-[:Invocation]->>) {
+function unsnooze(go: <manual-[:Invocation]->>) {
   graph-[c:company WHERE c.\`stage\` == go.\`Text\` ORDER BY c.\`name\`]-> {
     write graph-[:note]-> { text: c.\`name\` }
   }
 }
-listen to runs {} fire unsnooze
+listen to manual-[:Invocations]-> fire unsnooze
 `;
     const writes: CapturedWrite[] = [];
     // Before the fix this THREW `MOVENG_UNSUPPORTED: this read shape on the
@@ -618,16 +600,15 @@ listen to runs {} fire unsnooze
 // outright ("a linked write's path must start at a bound write handle…").
 // (plans/movement-absence-null-2026-07-31, piece 3.)
 describe('FIRST over a bare traversal binds the landed record', () => {
-  const SELECT_AND_WRITE = (where: string): string => `import { manual, kg } from adapters
+  const SELECT_AND_WRITE = (where: string): string => `import { kg } from adapters
 import { kg_cred } from credentials
-runs = connect manual
 graph = connect kg using kg_cred
-function note_top(go: <runs-[:Invocation]->>) {
+function note_top(go: <manual-[:Invocation]->>) {
   top = first(graph-[c:company WHERE ${where} ORDER BY c.\`name\`]->)
   if (top == null) { fail("no company matched") }
   write top-[:notes]-> { text: top.\`name\` }
 }
-listen to runs {} fire note_top
+listen to manual-[:Invocations]-> fire note_top
 `;
 
   it('a write off the picked record lands on it', async () => {
@@ -673,14 +654,13 @@ describe("a hop's WHERE reaches the adapter with the author's bound values fille
       adapterType: KG,
       collections: { company: COMPANIES, note: NOTES },
     });
-    const source = `import { manual, kg } from adapters
+    const source = `import { kg } from adapters
 import { kg_cred } from credentials
-runs = connect manual
 graph = connect kg using kg_cred
-function probe(go: <runs-[:Invocation]->>) {
+function probe(go: <manual-[:Invocation]->>) {
 ${body}
 }
-listen to runs {} fire probe
+listen to manual-[:Invocations]-> fire probe
 `;
     const { writes } = await run(source, kg);
     const filtered = kg.reads.filter((r) => r.fieldId === 'company' && r.where !== undefined);
