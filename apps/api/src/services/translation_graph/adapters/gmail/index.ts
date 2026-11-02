@@ -22,7 +22,6 @@ export {
   GMAIL_ATTACHMENT_TYPE_ID,
   GMAIL_MAILBOX_TYPE_ID,
   GMAIL_MANIFEST,
-  GMAIL_MESSAGE_EVENT_TAG,
   GMAIL_MESSAGE_TYPE_ID,
   GmailAdapter,
 } from '@listen-fire/gmail';

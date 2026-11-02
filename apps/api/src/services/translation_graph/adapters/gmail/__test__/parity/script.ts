@@ -4,33 +4,36 @@
 // every type, the mailbox's search (narrowed, limited, ordered), every field
 // of a message, its attachments and their bytes, read-back by id, every write
 // kind (a send, a reply, a send carrying a file read earlier) with their
-// refusals, then the poll: the first look, history from a mark, a listen
-// narrowed by its query, Spam widened in, an arrival carried as pending and
-// an expired mark resynced. The transcript is every answer, as JSON; two
-// implementations agree when their transcripts and the requests they made
-// are identical.
+// refusals. The poll script polls both listenable edges (`Messages`,
+// `Labelings`) as the platform's shared poll does (adapter protocol 2.6): the
+// first look, history from a mark, a listen taking its `Query`, Spam named
+// in, an arrival carried as pending, an expired mark resynced. The
+// transcript is every answer, as JSON; two implementations agree when their
+// transcripts and the requests they made are identical.
 //
 // The poll stamps the moment it looked (`lastSeenAt`, a new pending
 // arrival's `firstSeenAt`), so those read `<now>` in the transcript. Every
-// checkpoint the script hands in is fixed, so the requests never depend on
-// the clock.
+// cursor the script hands in is fixed, so the requests never depend on the
+// clock.
 //
 // Every call is made on a FRESH adapter, as a module served as a process is
 // built afresh per request. A file's owner, when a write redeems one, is a
 // fresh adapter of the same subject, found the way a run finds it.
 
 import type { Expression } from 'movement-lang/expression/types';
-import type { Adapter, DiscriminableEvent, FileRef, MutationContext, ParentLink, RelatedResult } from 'movement-engine/public/adapter';
+import type { Adapter, FileRef, MutationContext, ParentLink, RelatedResult } from 'movement-engine/public/adapter';
 import type { SourcePosition } from 'movement-engine/public/catalog';
 
 import { fileValue } from 'movement-engine/public/adapter';
 import { makeMetaPosition, makeStablePosition, positionData } from 'movement-engine/public/catalog';
 import { withFileOwners } from 'movement-engine/public/files';
 
+import type { EdgePoller } from '../../../../../poll_source/edge_poller';
+
 export interface ParitySubject {
   /** A fresh adapter for one call. */
   adapter(): Promise<Adapter> | Adapter;
-  poll(input: { config: unknown; checkpoint?: unknown }): Promise<{ events: DiscriminableEvent[]; checkpoint?: unknown }>;
+  poll: EdgePoller;
 }
 
 export interface TranscriptEntry {
@@ -117,14 +120,14 @@ const compare = (left: Expression, op: string, right: Expression): Expression =>
  *  pending arrival first seen by this look. */
 function withoutClock(answer: unknown, carried: ReadonlySet<string>): unknown {
   if (answer === null || typeof answer !== 'object') return answer;
-  const checkpoint: unknown = Reflect.get(answer, 'checkpoint');
-  if (checkpoint === null || typeof checkpoint !== 'object') return answer;
-  const pending: unknown = Reflect.get(checkpoint, 'pending');
+  const cursor: unknown = Reflect.get(answer, 'cursor');
+  if (cursor === null || typeof cursor !== 'object') return answer;
+  const pending: unknown = Reflect.get(cursor, 'pending');
   return {
     ...answer,
-    checkpoint: {
-      ...checkpoint,
-      ...('lastSeenAt' in checkpoint ? { lastSeenAt: '<now>' } : {}),
+    cursor: {
+      ...cursor,
+      ...('lastSeenAt' in cursor ? { lastSeenAt: '<now>' } : {}),
       ...(Array.isArray(pending)
         ? {
             pending: pending.map((entry: unknown) =>
@@ -138,7 +141,7 @@ function withoutClock(answer: unknown, carried: ReadonlySet<string>): unknown {
   };
 }
 
-export async function runParityScript(subject: ParitySubject): Promise<TranscriptEntry[]> {
+export async function runParityScript(subject: Pick<ParitySubject, 'adapter'>): Promise<TranscriptEntry[]> {
   const transcript: TranscriptEntry[] = [];
   const step = async <T>(name: string, call: (adapter: Adapter) => Promise<T>): Promise<T | undefined> => {
     try {
@@ -164,16 +167,6 @@ export async function runParityScript(subject: ParitySubject): Promise<Transcrip
       const resolved = await a.resolveFileRef({ ref });
       return { contentType: resolved.contentType ?? null, size: resolved.size ?? null, base64: (await bytesOf(resolved.stream)).toString('base64') };
     });
-  const poll = async (name: string, input: { config: unknown; checkpoint?: unknown }) => {
-    const carried = new Set<string>();
-    const pending: unknown = input.checkpoint !== null && typeof input.checkpoint === 'object' ? Reflect.get(input.checkpoint, 'pending') : undefined;
-    if (Array.isArray(pending)) for (const entry of pending) carried.add(String(Reflect.get(entry, 'firstSeenAt')));
-    try {
-      transcript.push({ step: name, answer: withoutClock(json(await subject.poll(input)), carried) });
-    } catch (error) {
-      transcript.push({ step: name, answer: { error: error instanceof Error ? error.message : String(error) } });
-    }
-  };
   const meta = makeMetaPosition(ADAPTER);
 
   // ── The root and every type ───────────────────────────────────────────────
@@ -182,7 +175,6 @@ export async function runParityScript(subject: ParitySubject): Promise<Transcrip
     await step(`describe ${type}`, (a) => a.describe(type));
   }
   await step('edgesFrom meta', async (a) => (await a.edgesFrom?.(meta)) ?? null);
-  await step('listEventTypes', async (a) => (await a.listEventTypes?.()) ?? null);
 
   // ── The mailbox's search ──────────────────────────────────────────────────
   const messages = await step('Messages', (a) => a.getRelated({ position: meta, fieldId: 'Messages', direction: 'outgoing' }));
@@ -286,16 +278,37 @@ export async function runParityScript(subject: ParitySubject): Promise<Transcrip
     source: { ownerAdapterType: ADAPTER, handle: 'not-a-pair' },
   } as FileRef);
 
-  // ── The poll ──────────────────────────────────────────────────────────────
-  await poll('first poll sets the mark', { config: {} });
-  await poll('poll from the mark', { config: {}, checkpoint: MARK });
-  await poll('poll narrowed by its query', { config: { query: 'from:acme.com' }, checkpoint: MARK });
-  await poll('poll with Spam widened in', { config: { labels: ['INBOX', 'SPAM'] }, checkpoint: MARK });
+  return transcript;
+}
+
+const MESSAGES = 'Messages';
+const LABELINGS = 'Labelings';
+
+export async function runPollScript(subject: ParitySubject): Promise<TranscriptEntry[]> {
+  const transcript: TranscriptEntry[] = [];
+  const poll = async (name: string, input: Parameters<EdgePoller>[0]) => {
+    const carried = new Set<string>();
+    const pending: unknown = input.cursor !== null && typeof input.cursor === 'object' ? Reflect.get(input.cursor, 'pending') : undefined;
+    if (Array.isArray(pending)) for (const entry of pending) carried.add(String(Reflect.get(entry, 'firstSeenAt')));
+    try {
+      transcript.push({ step: name, answer: withoutClock(json(await subject.poll(input)), carried) });
+    } catch (error) {
+      transcript.push({ step: name, answer: { error: error instanceof Error ? error.message : String(error) } });
+    }
+  };
+  const query = compare(property('Query'), 'eq', literal('from:acme.com'));
+
+  await poll('first poll sets the mark', { edge: MESSAGES });
+  await poll('poll from the mark', { edge: MESSAGES, cursor: MARK });
+  await poll('poll taking its Query', { edge: MESSAGES, filter: query, cursor: MARK });
+  await poll('poll with Spam named in', { edge: MESSAGES, filter: compare(property('Labels'), 'contains', literal('SPAM')), cursor: MARK });
   await poll('poll carrying a pending arrival past its grace', {
-    config: { query: 'from:acme.com' },
-    checkpoint: { ...MARK, pending: [{ id: 'msg-beta', firstSeenAt: '2026-10-09T00:00:00.000Z' }] },
+    edge: MESSAGES,
+    filter: query,
+    cursor: { ...MARK, pending: [{ id: 'msg-beta', firstSeenAt: '2026-10-09T00:00:00.000Z' }] },
   });
-  await poll('poll from an expired mark resyncs', { config: {}, checkpoint: EXPIRED_MARK });
-  await poll(`${REFUSED}poll with labels that are not a list`, { config: { labels: 'INBOX' }, checkpoint: MARK });
+  await poll('poll from an expired mark resyncs', { edge: MESSAGES, cursor: EXPIRED_MARK });
+  await poll('poll Labelings from the mark', { edge: LABELINGS, cursor: MARK });
+  await poll(`${REFUSED}poll an edge that is not polled`, { edge: 'Drafts', cursor: MARK });
   return transcript;
 }

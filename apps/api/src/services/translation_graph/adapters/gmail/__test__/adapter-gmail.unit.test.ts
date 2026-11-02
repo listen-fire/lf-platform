@@ -37,14 +37,14 @@ function adapterOver(client: GmailApiClient): GmailAdapter {
     log: { debug: quiet, info: quiet, warn: quiet, error: quiet },
   });
 }
-import { GmailPollSource, listenQuery } from '@listen-fire/gmail';
+import type { Arrival } from 'engine-contracts';
+import { GmailPollSource } from '@listen-fire/gmail';
 import { combineGmailQueries, gmailQueryFromWhere } from '@listen-fire/gmail';
 import { instanceSchemaFromDescriptors } from 'movement-engine/public/catalog';
 import { normaliseSchemaForAgent } from '../../../movement/agent_schema';
 import {
   GMAIL_ATTACHMENT_TYPE_ID,
   GMAIL_MAILBOX_TYPE_ID,
-  GMAIL_MESSAGE_EVENT_TAG,
   GMAIL_MESSAGE_TYPE_ID,
   decodeAttachmentId,
 } from '@listen-fire/gmail';
@@ -193,14 +193,8 @@ describe('the manifest', () => {
     expect(GMAIL_MANIFEST.triggerKinds).toBeUndefined();
   });
 
-  it('declares its two events and lets a listen narrow them with a Gmail query', () => {
-    expect(GMAIL_MANIFEST.subscribableEvents).toEqual(['message_received', 'label_added']);
-    expect(GMAIL_MANIFEST.listenConfig?.map((k) => k.key)).toEqual([
-      'query',
-      'labels',
-      'pollIntervalSeconds',
-    ]);
-    expect(GMAIL_MANIFEST.listenConfig?.find((k) => k.key === 'labels')?.format).toBe('strings');
+  it('says how a 0.12 settings listen (`query`, `labels`) becomes a listen on its edges', () => {
+    expect(GMAIL_MANIFEST.listenSettingsBecome).toBeDefined();
   });
 
   it('says what the connector cannot do, rather than leaving it to be found out', () => {
@@ -220,12 +214,11 @@ describe('the manifest', () => {
 describe('the entry surface', () => {
   const adapter = createGmailAdapter({ teamId: TEAM });
 
-  it('publishes a readable + writable Messages collection and a fires edge onto the same node', async () => {
+  it('publishes a readable + writable Messages collection a listen can listen on, polled', async () => {
     const entries = await adapter.listEntryPoints();
     const messages = entries.filter((e) => e.typeId === GMAIL_MESSAGE_TYPE_ID);
-    expect(messages).toHaveLength(2);
-    expect(messages[0]).toMatchObject({ readable: true, writable: true, collectionName: 'Messages' });
-    expect(messages[1]).toMatchObject({ readable: false, fires: true, firesOn: ['message_received', 'label_added'] });
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({ readable: true, writable: true, collectionName: 'Messages', listenable: true, delivery: 'polled' });
   });
 
   it('keeps Attachment unreadable from the root — it is reached through its message', async () => {
@@ -250,7 +243,7 @@ describe('describe', () => {
   it('answers for the mailbox meta node by either address', async () => {
     const byMeta = await adapter.describe(ADAPTER_META_TYPE_ID);
     const byId = await adapter.describe(GMAIL_MAILBOX_TYPE_ID);
-    expect(byMeta?.references.map((r) => r.name)).toEqual(['Messages', 'Drafts', 'Message']);
+    expect(byMeta?.references.map((r) => r.name)).toEqual(['Messages', 'Drafts', 'Labelings']);
     expect(byId?.description).toBe(byMeta?.description);
     expect(byMeta?.description).toMatch(/no labelling, no archiving, no deleting\./);
   });
@@ -266,7 +259,7 @@ describe('describe', () => {
     const descriptor = await adapter.describe(GMAIL_MESSAGE_TYPE_ID);
     expect(descriptor?.fields.map((f) => f.displayName)).toEqual([
       'Message Id', 'Thread Id', 'Subject', 'From', 'To', 'Cc', 'Date', 'Snippet',
-      'Body', 'Plain Body', 'HTML Body', 'Files', 'Labels', 'Has Attachments', 'Added Label',
+      'Body', 'Plain Body', 'HTML Body', 'Files', 'Labels', 'Has Attachments', 'Query',
     ]);
     expect(descriptor?.references.map((r) => r.name)).toEqual(['Attachments', 'Replies', 'Drafts']);
   });
@@ -341,7 +334,7 @@ describe('describe', () => {
         .map(([edge]) => `${position}-[:${edge}]->`),
     );
     expect(writable).toEqual(['Message-[:Replies]->', 'Message-[:Drafts]->']);
-    expect(Object.keys(agentSchema.positions).sort()).toEqual(['Attachment', 'Draft', 'Message']);
+    expect(Object.keys(agentSchema.positions).sort()).toEqual(['Attachment', 'Draft', 'Labeling', 'Message']);
     // The send itself hangs off the MAILBOX, not off a position — the root's
     // own collections are where a new message, or a new draft, is created.
     expect(Object.keys(agentSchema.writableRoots)).toEqual(['Message', 'Draft']);
@@ -521,16 +514,6 @@ describe('attachments', () => {
   });
 });
 
-describe('event typing', () => {
-  it('discriminates by tag alone — the poll stamps every event', async () => {
-    const types = await createGmailAdapter({ teamId: TEAM }).listEventTypes?.();
-    expect(types).toEqual([
-      { tag: GMAIL_MESSAGE_EVENT_TAG, positionType: GMAIL_MESSAGE_TYPE_ID, match: { path: 'id', equals: [] } },
-      { tag: 'gmail:label_added', positionType: GMAIL_MESSAGE_TYPE_ID, match: { path: 'id', equals: [] } },
-    ]);
-  });
-});
-
 // ── the query pushdown ──────────────────────────────────────────────────────
 
 describe('gmailQueryFromWhere', () => {
@@ -598,13 +581,27 @@ describe('gmailQueryFromWhere', () => {
 
 // ── the poll ────────────────────────────────────────────────────────────────
 
+/** A listen's WHERE on `Messages` that the poll takes as its Gmail search. */
+const queryIs = (query: string) => ({
+  type: 'compare',
+  op: 'eq',
+  left: { type: 'property', propertyTypeId: 'Query' },
+  right: { type: 'static', value: query },
+});
+const QUERY_ACME = queryIs('from:acme.com');
+
+function landingOf(arrival: Arrival): { fields: Record<string, unknown> } {
+  if ('gone' in arrival) throw new Error('a gone arrival has no landing');
+  return arrival.landing;
+}
+
 describe('the first poll', () => {
   it('takes the mailbox’s marker and delivers nothing', async () => {
     const { source, calls } = pollWith({ messages: [wireMessage({ id: 'm1' })] });
-    const result = await source.getEvents({ config: {} });
+    const result = await source.poll({ edge: 'Messages' });
 
-    expect(result.events).toEqual([]);
-    expect(result.checkpoint).toMatchObject({ historyId: '5000' });
+    expect(result.arrivals).toEqual([]);
+    expect(result.cursor).toMatchObject({ historyId: '5000' });
     expect(calls.profile).toBe(1);
     expect(calls.history).toHaveLength(0);
     expect(calls.get).toHaveLength(0);
@@ -612,32 +609,28 @@ describe('the first poll', () => {
 
   it('records when it looked, so a later resync has a floor', async () => {
     const { source } = pollWith({ messages: [] });
-    const { checkpoint } = await source.getEvents({ config: {} });
-    const lastSeenAt = (checkpoint as { lastSeenAt?: string }).lastSeenAt;
+    const { cursor } = await source.poll({ edge: 'Messages' });
+    const lastSeenAt = (cursor as { lastSeenAt?: string }).lastSeenAt;
     expect(Date.parse(lastSeenAt ?? '')).not.toBeNaN();
   });
 });
 
 describe('a normal poll', () => {
-  it('asks history for what arrived in the inbox and advances the marker', async () => {
+  // 0.13: `Messages` is the whole mailbox (Spam and Trash aside); a listen
+  // narrows it to a label with `Labels CONTAINS`.
+  it('asks history for what arrived in the mailbox and advances the marker', async () => {
     const { source, calls } = pollWith({
       messages: [wireMessage({ id: 'm1', subject: 'Q3 figures' })],
       historyAdded: [{ id: 'm1', threadId: 'thread-m1' }],
     });
-    const result = await source.getEvents({
-      config: {},
-      checkpoint: { historyId: '4000', lastSeenAt: '2026-09-21T00:00:00.000Z' },
+    const result = await source.poll({ edge: 'Messages', cursor: { historyId: '4000', lastSeenAt: '2026-09-21T00:00:00.000Z' },
     });
 
-    expect(calls.history).toEqual([{ startHistoryId: '4000', labelId: 'INBOX', types: ['messageAdded'] }]);
-    expect(result.checkpoint).toMatchObject({ historyId: '5100' });
-    expect(result.events).toHaveLength(1);
-    expect(result.events[0]).toMatchObject({
-      tag: GMAIL_MESSAGE_EVENT_TAG,
-      externalId: 'm1',
-      idempotencyKey: 'gmail:m1',
-    });
-    expect(result.events[0].payload).toMatchObject({ subject: 'Q3 figures' });
+    expect(calls.history).toEqual([{ startHistoryId: '4000', types: ['messageAdded'] }]);
+    expect(result.cursor).toMatchObject({ historyId: '5100' });
+    expect(result.arrivals).toHaveLength(1);
+    expect(result.arrivals[0]).toMatchObject({ edge: 'Messages', identity: 'm1' });
+    expect(landingOf(result.arrivals[0]).fields).toMatchObject({ Subject: 'Q3 figures' });
   });
 
   it('delivers one event per message even when history records it twice', async () => {
@@ -648,8 +641,8 @@ describe('a normal poll', () => {
         { id: 'm1', threadId: 'thread-m1' },
       ],
     });
-    const result = await source.getEvents({ config: {}, checkpoint: { historyId: '4000' } });
-    expect(result.events).toHaveLength(1);
+    const result = await source.poll({ edge: 'Messages', cursor: { historyId: '4000' } });
+    expect(result.arrivals).toHaveLength(1);
   });
 
   it('delivers oldest first', async () => {
@@ -663,14 +656,14 @@ describe('a normal poll', () => {
         { id: 'earlier', threadId: 't' },
       ],
     });
-    const result = await source.getEvents({ config: {}, checkpoint: { historyId: '4000' } });
-    expect(result.events.map((e) => e.externalId)).toEqual(['earlier', 'later']);
+    const result = await source.poll({ edge: 'Messages', cursor: { historyId: '4000' } });
+    expect(result.arrivals.map((e) => ('gone' in e ? null : e.identity))).toEqual(['earlier', 'later']);
   });
 
   it('does nothing but advance when nothing arrived', async () => {
     const { source, calls } = pollWith({ messages: [], historyAdded: [] });
-    const result = await source.getEvents({ config: {}, checkpoint: { historyId: '4000' } });
-    expect(result.events).toEqual([]);
+    const result = await source.poll({ edge: 'Messages', cursor: { historyId: '4000' } });
+    expect(result.arrivals).toEqual([]);
     expect(calls.get).toHaveLength(0);
   });
 });
@@ -685,14 +678,12 @@ describe('the author’s filter', () => {
       ],
       listResult: [{ id: 'm2', threadId: 't' }],
     });
-    const result = await source.getEvents({
-      config: { query: 'from:acme.com' },
-      checkpoint: { historyId: '4000' },
+    const result = await source.poll({ edge: 'Messages', filter: QUERY_ACME, cursor: { historyId: '4000' },
     });
 
     expect(calls.list).toHaveLength(1);
-    expect(calls.list[0].query).toBe('label:INBOX from:acme.com');
-    expect(result.events.map((e) => e.externalId)).toEqual(['m2']);
+    expect(calls.list[0].query).toBe('from:acme.com');
+    expect(result.arrivals.map((e) => ('gone' in e ? null : e.identity))).toEqual(['m2']);
     expect(calls.get).toEqual(['m2']);
   });
 
@@ -701,37 +692,37 @@ describe('the author’s filter', () => {
       messages: [wireMessage({ id: 'm1' })],
       historyAdded: [{ id: 'm1', threadId: 't' }],
     });
-    await source.getEvents({ config: {}, checkpoint: { historyId: '4000' } });
+    await source.poll({ edge: 'Messages', cursor: { historyId: '4000' } });
     expect(calls.list).toHaveLength(0);
   });
 
-  it('reads a blank filter as no filter', () => {
-    expect(listenQuery({ query: '   ' })).toBeUndefined();
-    expect(listenQuery({})).toBeUndefined();
-    expect(listenQuery({ query: ' from:x ' })).toBe('from:x');
+  it('reads a blank Query as no search', async () => {
+    const { source, calls } = pollWith({
+      messages: [wireMessage({ id: 'm1' })],
+      historyAdded: [{ id: 'm1', threadId: 't' }],
+    });
+    await source.poll({ edge: 'Messages', filter: queryIs('   '), cursor: { historyId: '4000' } });
+    expect(calls.list).toHaveLength(0);
   });
 });
 
 describe('an expired change marker', () => {
-  it('resyncs from the last seen time and says so on the event', async () => {
+  it('resyncs from the last seen time', async () => {
     const { source, calls } = pollWith({
       messages: [wireMessage({ id: 'm1' })],
       historyExpired: true,
       listResult: [{ id: 'm1', threadId: 't' }],
     });
-    const result = await source.getEvents({
-      config: {},
-      checkpoint: { historyId: '1', lastSeenAt: '2026-09-15T00:00:00.000Z' },
+    const result = await source.poll({ edge: 'Messages', cursor: { historyId: '1', lastSeenAt: '2026-09-15T00:00:00.000Z' },
     });
 
     expect(calls.list[0].query).toBe(
-      `label:INBOX after:${Date.parse('2026-09-15T00:00:00.000Z') / 1000}`,
+      `after:${Date.parse('2026-09-15T00:00:00.000Z') / 1000}`,
     );
-    expect(result.events).toHaveLength(1);
-    expect(result.events[0].payload).toMatchObject({ resynced: true });
+    expect(result.arrivals).toHaveLength(1);
     // The marker is taken fresh from the profile, so the NEXT poll is a normal
     // one rather than resyncing forever.
-    expect(result.checkpoint).toMatchObject({ historyId: '5000' });
+    expect(result.cursor).toMatchObject({ historyId: '5000' });
   });
 
   it('carries the author’s filter into the resync', async () => {
@@ -740,9 +731,7 @@ describe('an expired change marker', () => {
       historyExpired: true,
       listResult: [{ id: 'm1', threadId: 't' }],
     });
-    await source.getEvents({
-      config: { query: 'from:acme.com' },
-      checkpoint: { historyId: '1', lastSeenAt: '2026-09-15T00:00:00.000Z' },
+    await source.poll({ edge: 'Messages', filter: QUERY_ACME, cursor: { historyId: '1', lastSeenAt: '2026-09-15T00:00:00.000Z' },
     });
     expect(calls.list[0].query).toContain('from:acme.com');
   });
@@ -757,7 +746,7 @@ describe('an expired change marker', () => {
     };
     const source = new GmailPollSource(async () => asClient(failing));
     await expect(
-      source.getEvents({ config: {}, checkpoint: { historyId: '4000' } }),
+      source.poll({ edge: 'Messages', cursor: { historyId: '4000' } }),
     ).rejects.toThrow(/boom/);
   });
 });

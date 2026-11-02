@@ -1,0 +1,941 @@
+{
+  "transcript": [
+    {
+      "step": "first poll sets the mark",
+      "answer": {
+        "arrivals": [],
+        "cursor": {
+          "historyId": "1004",
+          "lastSeenAt": "<now>"
+        }
+      }
+    },
+    {
+      "step": "poll from the mark",
+      "answer": {
+        "arrivals": [
+          {
+            "edge": "Messages",
+            "identity": "msg-acme",
+            "landing": {
+              "recordId": "msg-acme",
+              "recordType": "Message",
+              "fields": {
+                "id": "msg-acme",
+                "threadId": "msg-acme",
+                "rfcMessageId": "<msg-acme@fake-gmail.local>",
+                "rfcReferences": [],
+                "subject": "Q3 figures",
+                "from": "Rita Okoye <rita@acme.com>",
+                "to": [
+                  "dev-loop@listen-fire.local"
+                ],
+                "cc": [
+                  "ops@acme.com"
+                ],
+                "date": "2026-10-10T09:00:00.000Z",
+                "snippet": "Figures attached, as promised.",
+                "bodyText": "Figures attached, as promised.",
+                "bodyHtml": null,
+                "body": "Figures attached, as promised.",
+                "labels": [
+                  "INBOX",
+                  "UNREAD"
+                ],
+                "hasAttachments": true,
+                "attachments": [
+                  {
+                    "attachmentId": "msg-acme-att-1",
+                    "filename": "figures.csv",
+                    "contentType": "text/csv",
+                    "size": 24,
+                    "messageId": "msg-acme"
+                  }
+                ],
+                "Message Id": "msg-acme",
+                "Thread Id": "msg-acme",
+                "Subject": "Q3 figures",
+                "From": "Rita Okoye <rita@acme.com>",
+                "To": [
+                  "dev-loop@listen-fire.local"
+                ],
+                "Cc": [
+                  "ops@acme.com"
+                ],
+                "Date": "2026-10-10T09:00:00.000Z",
+                "Snippet": "Figures attached, as promised.",
+                "Body": "Figures attached, as promised.",
+                "Plain Body": "Figures attached, as promised.",
+                "HTML Body": null,
+                "Labels": [
+                  "INBOX",
+                  "UNREAD"
+                ],
+                "Has Attachments": true
+              }
+            },
+            "takenApplied": true,
+            "occurredAt": "2026-10-10T09:00:00.000Z"
+          },
+          {
+            "edge": "Messages",
+            "identity": "msg-beta",
+            "landing": {
+              "recordId": "msg-beta",
+              "recordType": "Message",
+              "fields": {
+                "id": "msg-beta",
+                "threadId": "msg-beta",
+                "rfcMessageId": "<msg-beta@fake-gmail.local>",
+                "rfcReferences": [],
+                "subject": "Intro: Beta Labs",
+                "from": "sam@beta.io",
+                "to": [
+                  "dev-loop@listen-fire.local"
+                ],
+                "cc": [],
+                "date": "2026-10-11T10:30:00.000Z",
+                "snippet": "",
+                "bodyText": null,
+                "bodyHtml": "<p>Meet <b>Beta Labs</b>, building ledgers.</p>",
+                "body": "Meet Beta Labs, building ledgers.",
+                "labels": [
+                  "INBOX",
+                  "UNREAD"
+                ],
+                "hasAttachments": false,
+                "attachments": [],
+                "Message Id": "msg-beta",
+                "Thread Id": "msg-beta",
+                "Subject": "Intro: Beta Labs",
+                "From": "sam@beta.io",
+                "To": [
+                  "dev-loop@listen-fire.local"
+                ],
+                "Cc": [],
+                "Date": "2026-10-11T10:30:00.000Z",
+                "Snippet": "",
+                "Body": "Meet Beta Labs, building ledgers.",
+                "Plain Body": null,
+                "HTML Body": "<p>Meet <b>Beta Labs</b>, building ledgers.</p>",
+                "Labels": [
+                  "INBOX",
+                  "UNREAD"
+                ],
+                "Has Attachments": false
+              }
+            },
+            "takenApplied": true,
+            "occurredAt": "2026-10-11T10:30:00.000Z"
+          },
+          {
+            "edge": "Messages",
+            "identity": "msg-spam",
+            "landing": {
+              "recordId": "msg-spam",
+              "recordType": "Message",
+              "fields": {
+                "id": "msg-spam",
+                "threadId": "msg-spam",
+                "rfcMessageId": "<msg-spam@fake-gmail.local>",
+                "rfcReferences": [],
+                "subject": "Cold outreach",
+                "from": "cold@outreach.example",
+                "to": [
+                  "dev-loop@listen-fire.local"
+                ],
+                "cc": [],
+                "date": "2026-10-12T08:00:00.000Z",
+                "snippet": "Would you like to buy leads?",
+                "bodyText": "Would you like to buy leads?",
+                "bodyHtml": null,
+                "body": "Would you like to buy leads?",
+                "labels": [
+                  "SPAM"
+                ],
+                "hasAttachments": false,
+                "attachments": [],
+                "Message Id": "msg-spam",
+                "Thread Id": "msg-spam",
+                "Subject": "Cold outreach",
+                "From": "cold@outreach.example",
+                "To": [
+                  "dev-loop@listen-fire.local"
+                ],
+                "Cc": [],
+                "Date": "2026-10-12T08:00:00.000Z",
+                "Snippet": "Would you like to buy leads?",
+                "Body": "Would you like to buy leads?",
+                "Plain Body": "Would you like to buy leads?",
+                "HTML Body": null,
+                "Labels": [
+                  "SPAM"
+                ],
+                "Has Attachments": false
+              }
+            },
+            "takenApplied": true,
+            "occurredAt": "2026-10-12T08:00:00.000Z"
+          },
+          {
+            "edge": "Messages",
+            "identity": "msg-acme-2",
+            "landing": {
+              "recordId": "msg-acme-2",
+              "recordType": "Message",
+              "fields": {
+                "id": "msg-acme-2",
+                "threadId": "msg-acme",
+                "rfcMessageId": "<msg-acme-2@fake-gmail.local>",
+                "rfcReferences": [],
+                "subject": "Re: Q3 figures",
+                "from": "Rita Okoye <rita@acme.com>",
+                "to": [
+                  "dev-loop@listen-fire.local"
+                ],
+                "cc": [],
+                "date": "2026-10-13T11:00:00.000Z",
+                "snippet": "One correction to the figures.",
+                "bodyText": "One correction to the figures.",
+                "bodyHtml": null,
+                "body": "One correction to the figures.",
+                "labels": [
+                  "INBOX",
+                  "UNREAD"
+                ],
+                "hasAttachments": false,
+                "attachments": [],
+                "Message Id": "msg-acme-2",
+                "Thread Id": "msg-acme",
+                "Subject": "Re: Q3 figures",
+                "From": "Rita Okoye <rita@acme.com>",
+                "To": [
+                  "dev-loop@listen-fire.local"
+                ],
+                "Cc": [],
+                "Date": "2026-10-13T11:00:00.000Z",
+                "Snippet": "One correction to the figures.",
+                "Body": "One correction to the figures.",
+                "Plain Body": "One correction to the figures.",
+                "HTML Body": null,
+                "Labels": [
+                  "INBOX",
+                  "UNREAD"
+                ],
+                "Has Attachments": false
+              }
+            },
+            "takenApplied": true,
+            "occurredAt": "2026-10-13T11:00:00.000Z"
+          }
+        ],
+        "cursor": {
+          "historyId": "1004",
+          "lastSeenAt": "<now>"
+        }
+      }
+    },
+    {
+      "step": "poll taking its Query",
+      "answer": {
+        "arrivals": [
+          {
+            "edge": "Messages",
+            "identity": "msg-acme",
+            "landing": {
+              "recordId": "msg-acme",
+              "recordType": "Message",
+              "fields": {
+                "id": "msg-acme",
+                "threadId": "msg-acme",
+                "rfcMessageId": "<msg-acme@fake-gmail.local>",
+                "rfcReferences": [],
+                "subject": "Q3 figures",
+                "from": "Rita Okoye <rita@acme.com>",
+                "to": [
+                  "dev-loop@listen-fire.local"
+                ],
+                "cc": [
+                  "ops@acme.com"
+                ],
+                "date": "2026-10-10T09:00:00.000Z",
+                "snippet": "Figures attached, as promised.",
+                "bodyText": "Figures attached, as promised.",
+                "bodyHtml": null,
+                "body": "Figures attached, as promised.",
+                "labels": [
+                  "INBOX",
+                  "UNREAD"
+                ],
+                "hasAttachments": true,
+                "attachments": [
+                  {
+                    "attachmentId": "msg-acme-att-1",
+                    "filename": "figures.csv",
+                    "contentType": "text/csv",
+                    "size": 24,
+                    "messageId": "msg-acme"
+                  }
+                ],
+                "query": "from:acme.com",
+                "Message Id": "msg-acme",
+                "Thread Id": "msg-acme",
+                "Subject": "Q3 figures",
+                "From": "Rita Okoye <rita@acme.com>",
+                "To": [
+                  "dev-loop@listen-fire.local"
+                ],
+                "Cc": [
+                  "ops@acme.com"
+                ],
+                "Date": "2026-10-10T09:00:00.000Z",
+                "Snippet": "Figures attached, as promised.",
+                "Body": "Figures attached, as promised.",
+                "Plain Body": "Figures attached, as promised.",
+                "HTML Body": null,
+                "Labels": [
+                  "INBOX",
+                  "UNREAD"
+                ],
+                "Has Attachments": true,
+                "Query": "from:acme.com"
+              }
+            },
+            "takenApplied": true,
+            "occurredAt": "2026-10-10T09:00:00.000Z"
+          },
+          {
+            "edge": "Messages",
+            "identity": "msg-acme-2",
+            "landing": {
+              "recordId": "msg-acme-2",
+              "recordType": "Message",
+              "fields": {
+                "id": "msg-acme-2",
+                "threadId": "msg-acme",
+                "rfcMessageId": "<msg-acme-2@fake-gmail.local>",
+                "rfcReferences": [],
+                "subject": "Re: Q3 figures",
+                "from": "Rita Okoye <rita@acme.com>",
+                "to": [
+                  "dev-loop@listen-fire.local"
+                ],
+                "cc": [],
+                "date": "2026-10-13T11:00:00.000Z",
+                "snippet": "One correction to the figures.",
+                "bodyText": "One correction to the figures.",
+                "bodyHtml": null,
+                "body": "One correction to the figures.",
+                "labels": [
+                  "INBOX",
+                  "UNREAD"
+                ],
+                "hasAttachments": false,
+                "attachments": [],
+                "query": "from:acme.com",
+                "Message Id": "msg-acme-2",
+                "Thread Id": "msg-acme",
+                "Subject": "Re: Q3 figures",
+                "From": "Rita Okoye <rita@acme.com>",
+                "To": [
+                  "dev-loop@listen-fire.local"
+                ],
+                "Cc": [],
+                "Date": "2026-10-13T11:00:00.000Z",
+                "Snippet": "One correction to the figures.",
+                "Body": "One correction to the figures.",
+                "Plain Body": "One correction to the figures.",
+                "HTML Body": null,
+                "Labels": [
+                  "INBOX",
+                  "UNREAD"
+                ],
+                "Has Attachments": false,
+                "Query": "from:acme.com"
+              }
+            },
+            "takenApplied": true,
+            "occurredAt": "2026-10-13T11:00:00.000Z"
+          }
+        ],
+        "cursor": {
+          "historyId": "1004",
+          "lastSeenAt": "<now>",
+          "pending": [
+            {
+              "id": "msg-beta",
+              "firstSeenAt": "<now>"
+            },
+            {
+              "id": "msg-spam",
+              "firstSeenAt": "<now>"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "step": "poll with Spam named in",
+      "answer": {
+        "arrivals": [
+          {
+            "edge": "Messages",
+            "identity": "msg-spam",
+            "landing": {
+              "recordId": "msg-spam",
+              "recordType": "Message",
+              "fields": {
+                "id": "msg-spam",
+                "threadId": "msg-spam",
+                "rfcMessageId": "<msg-spam@fake-gmail.local>",
+                "rfcReferences": [],
+                "subject": "Cold outreach",
+                "from": "cold@outreach.example",
+                "to": [
+                  "dev-loop@listen-fire.local"
+                ],
+                "cc": [],
+                "date": "2026-10-12T08:00:00.000Z",
+                "snippet": "Would you like to buy leads?",
+                "bodyText": "Would you like to buy leads?",
+                "bodyHtml": null,
+                "body": "Would you like to buy leads?",
+                "labels": [
+                  "SPAM"
+                ],
+                "hasAttachments": false,
+                "attachments": [],
+                "Message Id": "msg-spam",
+                "Thread Id": "msg-spam",
+                "Subject": "Cold outreach",
+                "From": "cold@outreach.example",
+                "To": [
+                  "dev-loop@listen-fire.local"
+                ],
+                "Cc": [],
+                "Date": "2026-10-12T08:00:00.000Z",
+                "Snippet": "Would you like to buy leads?",
+                "Body": "Would you like to buy leads?",
+                "Plain Body": "Would you like to buy leads?",
+                "HTML Body": null,
+                "Labels": [
+                  "SPAM"
+                ],
+                "Has Attachments": false
+              }
+            },
+            "takenApplied": true,
+            "occurredAt": "2026-10-12T08:00:00.000Z"
+          }
+        ],
+        "cursor": {
+          "historyId": "1004",
+          "lastSeenAt": "<now>"
+        }
+      }
+    },
+    {
+      "step": "poll carrying a pending arrival past its grace",
+      "answer": {
+        "arrivals": [
+          {
+            "edge": "Messages",
+            "identity": "msg-acme",
+            "landing": {
+              "recordId": "msg-acme",
+              "recordType": "Message",
+              "fields": {
+                "id": "msg-acme",
+                "threadId": "msg-acme",
+                "rfcMessageId": "<msg-acme@fake-gmail.local>",
+                "rfcReferences": [],
+                "subject": "Q3 figures",
+                "from": "Rita Okoye <rita@acme.com>",
+                "to": [
+                  "dev-loop@listen-fire.local"
+                ],
+                "cc": [
+                  "ops@acme.com"
+                ],
+                "date": "2026-10-10T09:00:00.000Z",
+                "snippet": "Figures attached, as promised.",
+                "bodyText": "Figures attached, as promised.",
+                "bodyHtml": null,
+                "body": "Figures attached, as promised.",
+                "labels": [
+                  "INBOX",
+                  "UNREAD"
+                ],
+                "hasAttachments": true,
+                "attachments": [
+                  {
+                    "attachmentId": "msg-acme-att-1",
+                    "filename": "figures.csv",
+                    "contentType": "text/csv",
+                    "size": 24,
+                    "messageId": "msg-acme"
+                  }
+                ],
+                "query": "from:acme.com",
+                "Message Id": "msg-acme",
+                "Thread Id": "msg-acme",
+                "Subject": "Q3 figures",
+                "From": "Rita Okoye <rita@acme.com>",
+                "To": [
+                  "dev-loop@listen-fire.local"
+                ],
+                "Cc": [
+                  "ops@acme.com"
+                ],
+                "Date": "2026-10-10T09:00:00.000Z",
+                "Snippet": "Figures attached, as promised.",
+                "Body": "Figures attached, as promised.",
+                "Plain Body": "Figures attached, as promised.",
+                "HTML Body": null,
+                "Labels": [
+                  "INBOX",
+                  "UNREAD"
+                ],
+                "Has Attachments": true,
+                "Query": "from:acme.com"
+              }
+            },
+            "takenApplied": true,
+            "occurredAt": "2026-10-10T09:00:00.000Z"
+          },
+          {
+            "edge": "Messages",
+            "identity": "msg-acme-2",
+            "landing": {
+              "recordId": "msg-acme-2",
+              "recordType": "Message",
+              "fields": {
+                "id": "msg-acme-2",
+                "threadId": "msg-acme",
+                "rfcMessageId": "<msg-acme-2@fake-gmail.local>",
+                "rfcReferences": [],
+                "subject": "Re: Q3 figures",
+                "from": "Rita Okoye <rita@acme.com>",
+                "to": [
+                  "dev-loop@listen-fire.local"
+                ],
+                "cc": [],
+                "date": "2026-10-13T11:00:00.000Z",
+                "snippet": "One correction to the figures.",
+                "bodyText": "One correction to the figures.",
+                "bodyHtml": null,
+                "body": "One correction to the figures.",
+                "labels": [
+                  "INBOX",
+                  "UNREAD"
+                ],
+                "hasAttachments": false,
+                "attachments": [],
+                "query": "from:acme.com",
+                "Message Id": "msg-acme-2",
+                "Thread Id": "msg-acme",
+                "Subject": "Re: Q3 figures",
+                "From": "Rita Okoye <rita@acme.com>",
+                "To": [
+                  "dev-loop@listen-fire.local"
+                ],
+                "Cc": [],
+                "Date": "2026-10-13T11:00:00.000Z",
+                "Snippet": "One correction to the figures.",
+                "Body": "One correction to the figures.",
+                "Plain Body": "One correction to the figures.",
+                "HTML Body": null,
+                "Labels": [
+                  "INBOX",
+                  "UNREAD"
+                ],
+                "Has Attachments": false,
+                "Query": "from:acme.com"
+              }
+            },
+            "takenApplied": true,
+            "occurredAt": "2026-10-13T11:00:00.000Z"
+          }
+        ],
+        "cursor": {
+          "historyId": "1004",
+          "lastSeenAt": "<now>",
+          "pending": [
+            {
+              "id": "msg-beta",
+              "firstSeenAt": "<now>"
+            },
+            {
+              "id": "msg-spam",
+              "firstSeenAt": "<now>"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "step": "poll from an expired mark resyncs",
+      "answer": {
+        "arrivals": [
+          {
+            "edge": "Messages",
+            "identity": "msg-beta",
+            "landing": {
+              "recordId": "msg-beta",
+              "recordType": "Message",
+              "fields": {
+                "id": "msg-beta",
+                "threadId": "msg-beta",
+                "rfcMessageId": "<msg-beta@fake-gmail.local>",
+                "rfcReferences": [],
+                "subject": "Intro: Beta Labs",
+                "from": "sam@beta.io",
+                "to": [
+                  "dev-loop@listen-fire.local"
+                ],
+                "cc": [],
+                "date": "2026-10-11T10:30:00.000Z",
+                "snippet": "",
+                "bodyText": null,
+                "bodyHtml": "<p>Meet <b>Beta Labs</b>, building ledgers.</p>",
+                "body": "Meet Beta Labs, building ledgers.",
+                "labels": [
+                  "INBOX",
+                  "UNREAD"
+                ],
+                "hasAttachments": false,
+                "attachments": [],
+                "Message Id": "msg-beta",
+                "Thread Id": "msg-beta",
+                "Subject": "Intro: Beta Labs",
+                "From": "sam@beta.io",
+                "To": [
+                  "dev-loop@listen-fire.local"
+                ],
+                "Cc": [],
+                "Date": "2026-10-11T10:30:00.000Z",
+                "Snippet": "",
+                "Body": "Meet Beta Labs, building ledgers.",
+                "Plain Body": null,
+                "HTML Body": "<p>Meet <b>Beta Labs</b>, building ledgers.</p>",
+                "Labels": [
+                  "INBOX",
+                  "UNREAD"
+                ],
+                "Has Attachments": false
+              }
+            },
+            "takenApplied": true,
+            "occurredAt": "2026-10-11T10:30:00.000Z"
+          },
+          {
+            "edge": "Messages",
+            "identity": "msg-spam",
+            "landing": {
+              "recordId": "msg-spam",
+              "recordType": "Message",
+              "fields": {
+                "id": "msg-spam",
+                "threadId": "msg-spam",
+                "rfcMessageId": "<msg-spam@fake-gmail.local>",
+                "rfcReferences": [],
+                "subject": "Cold outreach",
+                "from": "cold@outreach.example",
+                "to": [
+                  "dev-loop@listen-fire.local"
+                ],
+                "cc": [],
+                "date": "2026-10-12T08:00:00.000Z",
+                "snippet": "Would you like to buy leads?",
+                "bodyText": "Would you like to buy leads?",
+                "bodyHtml": null,
+                "body": "Would you like to buy leads?",
+                "labels": [
+                  "SPAM"
+                ],
+                "hasAttachments": false,
+                "attachments": [],
+                "Message Id": "msg-spam",
+                "Thread Id": "msg-spam",
+                "Subject": "Cold outreach",
+                "From": "cold@outreach.example",
+                "To": [
+                  "dev-loop@listen-fire.local"
+                ],
+                "Cc": [],
+                "Date": "2026-10-12T08:00:00.000Z",
+                "Snippet": "Would you like to buy leads?",
+                "Body": "Would you like to buy leads?",
+                "Plain Body": "Would you like to buy leads?",
+                "HTML Body": null,
+                "Labels": [
+                  "SPAM"
+                ],
+                "Has Attachments": false
+              }
+            },
+            "takenApplied": true,
+            "occurredAt": "2026-10-12T08:00:00.000Z"
+          },
+          {
+            "edge": "Messages",
+            "identity": "msg-acme-2",
+            "landing": {
+              "recordId": "msg-acme-2",
+              "recordType": "Message",
+              "fields": {
+                "id": "msg-acme-2",
+                "threadId": "msg-acme",
+                "rfcMessageId": "<msg-acme-2@fake-gmail.local>",
+                "rfcReferences": [],
+                "subject": "Re: Q3 figures",
+                "from": "Rita Okoye <rita@acme.com>",
+                "to": [
+                  "dev-loop@listen-fire.local"
+                ],
+                "cc": [],
+                "date": "2026-10-13T11:00:00.000Z",
+                "snippet": "One correction to the figures.",
+                "bodyText": "One correction to the figures.",
+                "bodyHtml": null,
+                "body": "One correction to the figures.",
+                "labels": [
+                  "INBOX",
+                  "UNREAD"
+                ],
+                "hasAttachments": false,
+                "attachments": [],
+                "Message Id": "msg-acme-2",
+                "Thread Id": "msg-acme",
+                "Subject": "Re: Q3 figures",
+                "From": "Rita Okoye <rita@acme.com>",
+                "To": [
+                  "dev-loop@listen-fire.local"
+                ],
+                "Cc": [],
+                "Date": "2026-10-13T11:00:00.000Z",
+                "Snippet": "One correction to the figures.",
+                "Body": "One correction to the figures.",
+                "Plain Body": "One correction to the figures.",
+                "HTML Body": null,
+                "Labels": [
+                  "INBOX",
+                  "UNREAD"
+                ],
+                "Has Attachments": false
+              }
+            },
+            "takenApplied": true,
+            "occurredAt": "2026-10-13T11:00:00.000Z"
+          }
+        ],
+        "cursor": {
+          "historyId": "1004",
+          "lastSeenAt": "<now>"
+        }
+      }
+    },
+    {
+      "step": "poll Labelings from the mark",
+      "answer": {
+        "arrivals": [],
+        "cursor": {
+          "historyId": "1004",
+          "lastSeenAt": "<now>"
+        }
+      }
+    },
+    {
+      "step": "refused: poll an edge that is not polled",
+      "answer": {
+        "error": "@lf/gmail: no edge Drafts to poll (its listenable edges are Messages and Labelings)"
+      }
+    }
+  ],
+  "exchanges": [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/profile",
+      "authorization": "Bearer parity-gmail-access-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"emailAddress\":\"dev-loop@listen-fire.local\",\"messagesTotal\":4,\"threadsTotal\":4,\"historyId\":\"1004\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/history?startHistoryId=1000&historyTypes=messageAdded",
+      "authorization": "Bearer parity-gmail-access-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"history\":[{\"id\":\"1001\",\"messagesAdded\":[{\"message\":{\"id\":\"msg-acme\",\"threadId\":\"msg-acme\"}}]},{\"id\":\"1002\",\"messagesAdded\":[{\"message\":{\"id\":\"msg-beta\",\"threadId\":\"msg-beta\"}}]},{\"id\":\"1003\",\"messagesAdded\":[{\"message\":{\"id\":\"msg-spam\",\"threadId\":\"msg-spam\"}}]},{\"id\":\"1004\",\"messagesAdded\":[{\"message\":{\"id\":\"msg-acme-2\",\"threadId\":\"msg-acme\"}}]}],\"historyId\":\"1004\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/msg-acme?format=full",
+      "authorization": "Bearer parity-gmail-access-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"id\":\"msg-acme\",\"threadId\":\"msg-acme\",\"labelIds\":[\"INBOX\",\"UNREAD\"],\"snippet\":\"Figures attached, as promised.\",\"historyId\":\"1001\",\"internalDate\":\"1791622800000\",\"sizeEstimate\":1024,\"payload\":{\"partId\":\"\",\"mimeType\":\"multipart/mixed\",\"filename\":\"\",\"headers\":[{\"name\":\"Subject\",\"value\":\"Q3 figures\"},{\"name\":\"From\",\"value\":\"Rita Okoye <rita@acme.com>\"},{\"name\":\"To\",\"value\":\"dev-loop@listen-fire.local\"},{\"name\":\"Cc\",\"value\":\"ops@acme.com\"},{\"name\":\"Date\",\"value\":\"Sat, 10 Oct 2026 09:00:00 GMT\"},{\"name\":\"Message-Id\",\"value\":\"<msg-acme@fake-gmail.local>\"}],\"body\":{\"size\":0},\"parts\":[{\"partId\":\"0\",\"mimeType\":\"multipart/alternative\",\"filename\":\"\",\"headers\":[{\"name\":\"Content-Type\",\"value\":\"multipart/alternative\"}],\"body\":{\"size\":0},\"parts\":[{\"partId\":\"0.0\",\"mimeType\":\"text/plain\",\"filename\":\"\",\"headers\":[{\"name\":\"Content-Type\",\"value\":\"text/plain; charset=UTF-8\"}],\"body\":{\"size\":30,\"data\":\"RmlndXJlcyBhdHRhY2hlZCwgYXMgcHJvbWlzZWQu\"}}]},{\"partId\":\"1\",\"mimeType\":\"text/csv\",\"filename\":\"figures.csv\",\"headers\":[{\"name\":\"Content-Disposition\",\"value\":\"attachment; filename=\\\"figures.csv\\\"\"}],\"body\":{\"attachmentId\":\"msg-acme-att-1\",\"size\":24}}]}}"
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/msg-beta?format=full",
+      "authorization": "Bearer parity-gmail-access-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"id\":\"msg-beta\",\"threadId\":\"msg-beta\",\"labelIds\":[\"INBOX\",\"UNREAD\"],\"snippet\":\"\",\"historyId\":\"1002\",\"internalDate\":\"1791714600000\",\"sizeEstimate\":1024,\"payload\":{\"partId\":\"\",\"mimeType\":\"multipart/mixed\",\"filename\":\"\",\"headers\":[{\"name\":\"Subject\",\"value\":\"Intro: Beta Labs\"},{\"name\":\"From\",\"value\":\"sam@beta.io\"},{\"name\":\"To\",\"value\":\"dev-loop@listen-fire.local\"},{\"name\":\"Date\",\"value\":\"Sun, 11 Oct 2026 10:30:00 GMT\"},{\"name\":\"Message-Id\",\"value\":\"<msg-beta@fake-gmail.local>\"}],\"body\":{\"size\":0},\"parts\":[{\"partId\":\"0\",\"mimeType\":\"multipart/alternative\",\"filename\":\"\",\"headers\":[{\"name\":\"Content-Type\",\"value\":\"multipart/alternative\"}],\"body\":{\"size\":0},\"parts\":[{\"partId\":\"0.1\",\"mimeType\":\"text/html\",\"filename\":\"\",\"headers\":[{\"name\":\"Content-Type\",\"value\":\"text/html; charset=UTF-8\"}],\"body\":{\"size\":47,\"data\":\"PHA-TWVldCA8Yj5CZXRhIExhYnM8L2I-LCBidWlsZGluZyBsZWRnZXJzLjwvcD4\"}}]}]}}"
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/msg-spam?format=full",
+      "authorization": "Bearer parity-gmail-access-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"id\":\"msg-spam\",\"threadId\":\"msg-spam\",\"labelIds\":[\"SPAM\"],\"snippet\":\"Would you like to buy leads?\",\"historyId\":\"1003\",\"internalDate\":\"1791792000000\",\"sizeEstimate\":1024,\"payload\":{\"partId\":\"\",\"mimeType\":\"multipart/mixed\",\"filename\":\"\",\"headers\":[{\"name\":\"Subject\",\"value\":\"Cold outreach\"},{\"name\":\"From\",\"value\":\"cold@outreach.example\"},{\"name\":\"To\",\"value\":\"dev-loop@listen-fire.local\"},{\"name\":\"Date\",\"value\":\"Mon, 12 Oct 2026 08:00:00 GMT\"},{\"name\":\"Message-Id\",\"value\":\"<msg-spam@fake-gmail.local>\"}],\"body\":{\"size\":0},\"parts\":[{\"partId\":\"0\",\"mimeType\":\"multipart/alternative\",\"filename\":\"\",\"headers\":[{\"name\":\"Content-Type\",\"value\":\"multipart/alternative\"}],\"body\":{\"size\":0},\"parts\":[{\"partId\":\"0.0\",\"mimeType\":\"text/plain\",\"filename\":\"\",\"headers\":[{\"name\":\"Content-Type\",\"value\":\"text/plain; charset=UTF-8\"}],\"body\":{\"size\":28,\"data\":\"V291bGQgeW91IGxpa2UgdG8gYnV5IGxlYWRzPw\"}}]}]}}"
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/msg-acme-2?format=full",
+      "authorization": "Bearer parity-gmail-access-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"id\":\"msg-acme-2\",\"threadId\":\"msg-acme\",\"labelIds\":[\"INBOX\",\"UNREAD\"],\"snippet\":\"One correction to the figures.\",\"historyId\":\"1004\",\"internalDate\":\"1791889200000\",\"sizeEstimate\":1024,\"payload\":{\"partId\":\"\",\"mimeType\":\"multipart/mixed\",\"filename\":\"\",\"headers\":[{\"name\":\"Subject\",\"value\":\"Re: Q3 figures\"},{\"name\":\"From\",\"value\":\"Rita Okoye <rita@acme.com>\"},{\"name\":\"To\",\"value\":\"dev-loop@listen-fire.local\"},{\"name\":\"Date\",\"value\":\"Tue, 13 Oct 2026 11:00:00 GMT\"},{\"name\":\"Message-Id\",\"value\":\"<msg-acme-2@fake-gmail.local>\"}],\"body\":{\"size\":0},\"parts\":[{\"partId\":\"0\",\"mimeType\":\"multipart/alternative\",\"filename\":\"\",\"headers\":[{\"name\":\"Content-Type\",\"value\":\"multipart/alternative\"}],\"body\":{\"size\":0},\"parts\":[{\"partId\":\"0.0\",\"mimeType\":\"text/plain\",\"filename\":\"\",\"headers\":[{\"name\":\"Content-Type\",\"value\":\"text/plain; charset=UTF-8\"}],\"body\":{\"size\":30,\"data\":\"T25lIGNvcnJlY3Rpb24gdG8gdGhlIGZpZ3VyZXMu\"}}]}]}}"
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/history?startHistoryId=1000&historyTypes=messageAdded",
+      "authorization": "Bearer parity-gmail-access-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"history\":[{\"id\":\"1001\",\"messagesAdded\":[{\"message\":{\"id\":\"msg-acme\",\"threadId\":\"msg-acme\"}}]},{\"id\":\"1002\",\"messagesAdded\":[{\"message\":{\"id\":\"msg-beta\",\"threadId\":\"msg-beta\"}}]},{\"id\":\"1003\",\"messagesAdded\":[{\"message\":{\"id\":\"msg-spam\",\"threadId\":\"msg-spam\"}}]},{\"id\":\"1004\",\"messagesAdded\":[{\"message\":{\"id\":\"msg-acme-2\",\"threadId\":\"msg-acme\"}}]}],\"historyId\":\"1004\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages?q=from%3Aacme.com&maxResults=100&includeSpamTrash=true",
+      "authorization": "Bearer parity-gmail-access-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"messages\":[{\"id\":\"msg-acme-2\",\"threadId\":\"msg-acme\"},{\"id\":\"msg-acme\",\"threadId\":\"msg-acme\"}],\"resultSizeEstimate\":2}"
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/msg-acme?format=full",
+      "authorization": "Bearer parity-gmail-access-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"id\":\"msg-acme\",\"threadId\":\"msg-acme\",\"labelIds\":[\"INBOX\",\"UNREAD\"],\"snippet\":\"Figures attached, as promised.\",\"historyId\":\"1001\",\"internalDate\":\"1791622800000\",\"sizeEstimate\":1024,\"payload\":{\"partId\":\"\",\"mimeType\":\"multipart/mixed\",\"filename\":\"\",\"headers\":[{\"name\":\"Subject\",\"value\":\"Q3 figures\"},{\"name\":\"From\",\"value\":\"Rita Okoye <rita@acme.com>\"},{\"name\":\"To\",\"value\":\"dev-loop@listen-fire.local\"},{\"name\":\"Cc\",\"value\":\"ops@acme.com\"},{\"name\":\"Date\",\"value\":\"Sat, 10 Oct 2026 09:00:00 GMT\"},{\"name\":\"Message-Id\",\"value\":\"<msg-acme@fake-gmail.local>\"}],\"body\":{\"size\":0},\"parts\":[{\"partId\":\"0\",\"mimeType\":\"multipart/alternative\",\"filename\":\"\",\"headers\":[{\"name\":\"Content-Type\",\"value\":\"multipart/alternative\"}],\"body\":{\"size\":0},\"parts\":[{\"partId\":\"0.0\",\"mimeType\":\"text/plain\",\"filename\":\"\",\"headers\":[{\"name\":\"Content-Type\",\"value\":\"text/plain; charset=UTF-8\"}],\"body\":{\"size\":30,\"data\":\"RmlndXJlcyBhdHRhY2hlZCwgYXMgcHJvbWlzZWQu\"}}]},{\"partId\":\"1\",\"mimeType\":\"text/csv\",\"filename\":\"figures.csv\",\"headers\":[{\"name\":\"Content-Disposition\",\"value\":\"attachment; filename=\\\"figures.csv\\\"\"}],\"body\":{\"attachmentId\":\"msg-acme-att-1\",\"size\":24}}]}}"
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/msg-acme-2?format=full",
+      "authorization": "Bearer parity-gmail-access-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"id\":\"msg-acme-2\",\"threadId\":\"msg-acme\",\"labelIds\":[\"INBOX\",\"UNREAD\"],\"snippet\":\"One correction to the figures.\",\"historyId\":\"1004\",\"internalDate\":\"1791889200000\",\"sizeEstimate\":1024,\"payload\":{\"partId\":\"\",\"mimeType\":\"multipart/mixed\",\"filename\":\"\",\"headers\":[{\"name\":\"Subject\",\"value\":\"Re: Q3 figures\"},{\"name\":\"From\",\"value\":\"Rita Okoye <rita@acme.com>\"},{\"name\":\"To\",\"value\":\"dev-loop@listen-fire.local\"},{\"name\":\"Date\",\"value\":\"Tue, 13 Oct 2026 11:00:00 GMT\"},{\"name\":\"Message-Id\",\"value\":\"<msg-acme-2@fake-gmail.local>\"}],\"body\":{\"size\":0},\"parts\":[{\"partId\":\"0\",\"mimeType\":\"multipart/alternative\",\"filename\":\"\",\"headers\":[{\"name\":\"Content-Type\",\"value\":\"multipart/alternative\"}],\"body\":{\"size\":0},\"parts\":[{\"partId\":\"0.0\",\"mimeType\":\"text/plain\",\"filename\":\"\",\"headers\":[{\"name\":\"Content-Type\",\"value\":\"text/plain; charset=UTF-8\"}],\"body\":{\"size\":30,\"data\":\"T25lIGNvcnJlY3Rpb24gdG8gdGhlIGZpZ3VyZXMu\"}}]}]}}"
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/history?startHistoryId=1000&historyTypes=messageAdded&labelId=SPAM",
+      "authorization": "Bearer parity-gmail-access-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"history\":[{\"id\":\"1003\",\"messagesAdded\":[{\"message\":{\"id\":\"msg-spam\",\"threadId\":\"msg-spam\"}}]}],\"historyId\":\"1004\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/msg-spam?format=full",
+      "authorization": "Bearer parity-gmail-access-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"id\":\"msg-spam\",\"threadId\":\"msg-spam\",\"labelIds\":[\"SPAM\"],\"snippet\":\"Would you like to buy leads?\",\"historyId\":\"1003\",\"internalDate\":\"1791792000000\",\"sizeEstimate\":1024,\"payload\":{\"partId\":\"\",\"mimeType\":\"multipart/mixed\",\"filename\":\"\",\"headers\":[{\"name\":\"Subject\",\"value\":\"Cold outreach\"},{\"name\":\"From\",\"value\":\"cold@outreach.example\"},{\"name\":\"To\",\"value\":\"dev-loop@listen-fire.local\"},{\"name\":\"Date\",\"value\":\"Mon, 12 Oct 2026 08:00:00 GMT\"},{\"name\":\"Message-Id\",\"value\":\"<msg-spam@fake-gmail.local>\"}],\"body\":{\"size\":0},\"parts\":[{\"partId\":\"0\",\"mimeType\":\"multipart/alternative\",\"filename\":\"\",\"headers\":[{\"name\":\"Content-Type\",\"value\":\"multipart/alternative\"}],\"body\":{\"size\":0},\"parts\":[{\"partId\":\"0.0\",\"mimeType\":\"text/plain\",\"filename\":\"\",\"headers\":[{\"name\":\"Content-Type\",\"value\":\"text/plain; charset=UTF-8\"}],\"body\":{\"size\":28,\"data\":\"V291bGQgeW91IGxpa2UgdG8gYnV5IGxlYWRzPw\"}}]}]}}"
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/history?startHistoryId=1000&historyTypes=messageAdded",
+      "authorization": "Bearer parity-gmail-access-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"history\":[{\"id\":\"1001\",\"messagesAdded\":[{\"message\":{\"id\":\"msg-acme\",\"threadId\":\"msg-acme\"}}]},{\"id\":\"1002\",\"messagesAdded\":[{\"message\":{\"id\":\"msg-beta\",\"threadId\":\"msg-beta\"}}]},{\"id\":\"1003\",\"messagesAdded\":[{\"message\":{\"id\":\"msg-spam\",\"threadId\":\"msg-spam\"}}]},{\"id\":\"1004\",\"messagesAdded\":[{\"message\":{\"id\":\"msg-acme-2\",\"threadId\":\"msg-acme\"}}]}],\"historyId\":\"1004\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages?q=from%3Aacme.com&maxResults=100&includeSpamTrash=true",
+      "authorization": "Bearer parity-gmail-access-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"messages\":[{\"id\":\"msg-acme-2\",\"threadId\":\"msg-acme\"},{\"id\":\"msg-acme\",\"threadId\":\"msg-acme\"}],\"resultSizeEstimate\":2}"
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/msg-acme?format=full",
+      "authorization": "Bearer parity-gmail-access-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"id\":\"msg-acme\",\"threadId\":\"msg-acme\",\"labelIds\":[\"INBOX\",\"UNREAD\"],\"snippet\":\"Figures attached, as promised.\",\"historyId\":\"1001\",\"internalDate\":\"1791622800000\",\"sizeEstimate\":1024,\"payload\":{\"partId\":\"\",\"mimeType\":\"multipart/mixed\",\"filename\":\"\",\"headers\":[{\"name\":\"Subject\",\"value\":\"Q3 figures\"},{\"name\":\"From\",\"value\":\"Rita Okoye <rita@acme.com>\"},{\"name\":\"To\",\"value\":\"dev-loop@listen-fire.local\"},{\"name\":\"Cc\",\"value\":\"ops@acme.com\"},{\"name\":\"Date\",\"value\":\"Sat, 10 Oct 2026 09:00:00 GMT\"},{\"name\":\"Message-Id\",\"value\":\"<msg-acme@fake-gmail.local>\"}],\"body\":{\"size\":0},\"parts\":[{\"partId\":\"0\",\"mimeType\":\"multipart/alternative\",\"filename\":\"\",\"headers\":[{\"name\":\"Content-Type\",\"value\":\"multipart/alternative\"}],\"body\":{\"size\":0},\"parts\":[{\"partId\":\"0.0\",\"mimeType\":\"text/plain\",\"filename\":\"\",\"headers\":[{\"name\":\"Content-Type\",\"value\":\"text/plain; charset=UTF-8\"}],\"body\":{\"size\":30,\"data\":\"RmlndXJlcyBhdHRhY2hlZCwgYXMgcHJvbWlzZWQu\"}}]},{\"partId\":\"1\",\"mimeType\":\"text/csv\",\"filename\":\"figures.csv\",\"headers\":[{\"name\":\"Content-Disposition\",\"value\":\"attachment; filename=\\\"figures.csv\\\"\"}],\"body\":{\"attachmentId\":\"msg-acme-att-1\",\"size\":24}}]}}"
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/msg-acme-2?format=full",
+      "authorization": "Bearer parity-gmail-access-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"id\":\"msg-acme-2\",\"threadId\":\"msg-acme\",\"labelIds\":[\"INBOX\",\"UNREAD\"],\"snippet\":\"One correction to the figures.\",\"historyId\":\"1004\",\"internalDate\":\"1791889200000\",\"sizeEstimate\":1024,\"payload\":{\"partId\":\"\",\"mimeType\":\"multipart/mixed\",\"filename\":\"\",\"headers\":[{\"name\":\"Subject\",\"value\":\"Re: Q3 figures\"},{\"name\":\"From\",\"value\":\"Rita Okoye <rita@acme.com>\"},{\"name\":\"To\",\"value\":\"dev-loop@listen-fire.local\"},{\"name\":\"Date\",\"value\":\"Tue, 13 Oct 2026 11:00:00 GMT\"},{\"name\":\"Message-Id\",\"value\":\"<msg-acme-2@fake-gmail.local>\"}],\"body\":{\"size\":0},\"parts\":[{\"partId\":\"0\",\"mimeType\":\"multipart/alternative\",\"filename\":\"\",\"headers\":[{\"name\":\"Content-Type\",\"value\":\"multipart/alternative\"}],\"body\":{\"size\":0},\"parts\":[{\"partId\":\"0.0\",\"mimeType\":\"text/plain\",\"filename\":\"\",\"headers\":[{\"name\":\"Content-Type\",\"value\":\"text/plain; charset=UTF-8\"}],\"body\":{\"size\":30,\"data\":\"T25lIGNvcnJlY3Rpb24gdG8gdGhlIGZpZ3VyZXMu\"}}]}]}}"
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/history?startHistoryId=0&historyTypes=messageAdded",
+      "authorization": "Bearer parity-gmail-access-token",
+      "body": null,
+      "status": 404,
+      "response": "{\"error\":{\"code\":404,\"message\":\"Requested entity was not found.\",\"status\":\"NOT_FOUND\"}}"
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/profile",
+      "authorization": "Bearer parity-gmail-access-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"emailAddress\":\"dev-loop@listen-fire.local\",\"messagesTotal\":4,\"threadsTotal\":4,\"historyId\":\"1004\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages?q=after%3A1791676800&maxResults=100&includeSpamTrash=true",
+      "authorization": "Bearer parity-gmail-access-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"messages\":[{\"id\":\"msg-acme-2\",\"threadId\":\"msg-acme\"},{\"id\":\"msg-spam\",\"threadId\":\"msg-spam\"},{\"id\":\"msg-beta\",\"threadId\":\"msg-beta\"}],\"resultSizeEstimate\":3}"
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/msg-acme-2?format=full",
+      "authorization": "Bearer parity-gmail-access-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"id\":\"msg-acme-2\",\"threadId\":\"msg-acme\",\"labelIds\":[\"INBOX\",\"UNREAD\"],\"snippet\":\"One correction to the figures.\",\"historyId\":\"1004\",\"internalDate\":\"1791889200000\",\"sizeEstimate\":1024,\"payload\":{\"partId\":\"\",\"mimeType\":\"multipart/mixed\",\"filename\":\"\",\"headers\":[{\"name\":\"Subject\",\"value\":\"Re: Q3 figures\"},{\"name\":\"From\",\"value\":\"Rita Okoye <rita@acme.com>\"},{\"name\":\"To\",\"value\":\"dev-loop@listen-fire.local\"},{\"name\":\"Date\",\"value\":\"Tue, 13 Oct 2026 11:00:00 GMT\"},{\"name\":\"Message-Id\",\"value\":\"<msg-acme-2@fake-gmail.local>\"}],\"body\":{\"size\":0},\"parts\":[{\"partId\":\"0\",\"mimeType\":\"multipart/alternative\",\"filename\":\"\",\"headers\":[{\"name\":\"Content-Type\",\"value\":\"multipart/alternative\"}],\"body\":{\"size\":0},\"parts\":[{\"partId\":\"0.0\",\"mimeType\":\"text/plain\",\"filename\":\"\",\"headers\":[{\"name\":\"Content-Type\",\"value\":\"text/plain; charset=UTF-8\"}],\"body\":{\"size\":30,\"data\":\"T25lIGNvcnJlY3Rpb24gdG8gdGhlIGZpZ3VyZXMu\"}}]}]}}"
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/msg-spam?format=full",
+      "authorization": "Bearer parity-gmail-access-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"id\":\"msg-spam\",\"threadId\":\"msg-spam\",\"labelIds\":[\"SPAM\"],\"snippet\":\"Would you like to buy leads?\",\"historyId\":\"1003\",\"internalDate\":\"1791792000000\",\"sizeEstimate\":1024,\"payload\":{\"partId\":\"\",\"mimeType\":\"multipart/mixed\",\"filename\":\"\",\"headers\":[{\"name\":\"Subject\",\"value\":\"Cold outreach\"},{\"name\":\"From\",\"value\":\"cold@outreach.example\"},{\"name\":\"To\",\"value\":\"dev-loop@listen-fire.local\"},{\"name\":\"Date\",\"value\":\"Mon, 12 Oct 2026 08:00:00 GMT\"},{\"name\":\"Message-Id\",\"value\":\"<msg-spam@fake-gmail.local>\"}],\"body\":{\"size\":0},\"parts\":[{\"partId\":\"0\",\"mimeType\":\"multipart/alternative\",\"filename\":\"\",\"headers\":[{\"name\":\"Content-Type\",\"value\":\"multipart/alternative\"}],\"body\":{\"size\":0},\"parts\":[{\"partId\":\"0.0\",\"mimeType\":\"text/plain\",\"filename\":\"\",\"headers\":[{\"name\":\"Content-Type\",\"value\":\"text/plain; charset=UTF-8\"}],\"body\":{\"size\":28,\"data\":\"V291bGQgeW91IGxpa2UgdG8gYnV5IGxlYWRzPw\"}}]}]}}"
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/msg-beta?format=full",
+      "authorization": "Bearer parity-gmail-access-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"id\":\"msg-beta\",\"threadId\":\"msg-beta\",\"labelIds\":[\"INBOX\",\"UNREAD\"],\"snippet\":\"\",\"historyId\":\"1002\",\"internalDate\":\"1791714600000\",\"sizeEstimate\":1024,\"payload\":{\"partId\":\"\",\"mimeType\":\"multipart/mixed\",\"filename\":\"\",\"headers\":[{\"name\":\"Subject\",\"value\":\"Intro: Beta Labs\"},{\"name\":\"From\",\"value\":\"sam@beta.io\"},{\"name\":\"To\",\"value\":\"dev-loop@listen-fire.local\"},{\"name\":\"Date\",\"value\":\"Sun, 11 Oct 2026 10:30:00 GMT\"},{\"name\":\"Message-Id\",\"value\":\"<msg-beta@fake-gmail.local>\"}],\"body\":{\"size\":0},\"parts\":[{\"partId\":\"0\",\"mimeType\":\"multipart/alternative\",\"filename\":\"\",\"headers\":[{\"name\":\"Content-Type\",\"value\":\"multipart/alternative\"}],\"body\":{\"size\":0},\"parts\":[{\"partId\":\"0.1\",\"mimeType\":\"text/html\",\"filename\":\"\",\"headers\":[{\"name\":\"Content-Type\",\"value\":\"text/html; charset=UTF-8\"}],\"body\":{\"size\":47,\"data\":\"PHA-TWVldCA8Yj5CZXRhIExhYnM8L2I-LCBidWlsZGluZyBsZWRnZXJzLjwvcD4\"}}]}]}}"
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/history?startHistoryId=1000&historyTypes=labelAdded",
+      "authorization": "Bearer parity-gmail-access-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"history\":[],\"historyId\":\"1004\"}"
+    }
+  ]
+}
