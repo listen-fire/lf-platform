@@ -1,13 +1,11 @@
-// A graph listen's reconciliation + the event-subscription diff-sync.
+// A graph listen's reconciliation: a listen on a node type's `Changes`
+// provisions one kg trigger row carrying the listen's plan, keeps its identity
+// across saves, and retires it when the listen goes.
 //
-// REAL: saveMovement/provision (graph listens → KG_MUTATION-matchable
-// trigger rows carrying the listen's own config, identity preserved
-// across saves), and the REAL `listen_subscriptions.ts` diff-sync
-// (webhook_subscription rows minted per (adapter, credential) channel;
-// Adapter.ensureEventSubscription / removeEventSubscription called as
-// listens come and go). Mocked: the DB (in-memory tables), the catalog
-// assembly, the adapter registry manifests, and adapter resolution (a
-// fake recording subscription calls).
+// REAL: saveMovement/provision. Mocked: the DB (in-memory tables), the
+// catalog assembly, the adapter registry manifests, adapter resolution, and
+// the subscription sync (a subscription per listenable edge is
+// listen_subscriptions.integration's subject).
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 require('engine-contracts/expression/schemas');
@@ -109,7 +107,6 @@ jest.mock('../../../../lib/kysely', () => {
   };
 });
 
-const ATTIO_EVENTS = ['record.created', 'record.updated', 'record.deleted'];
 
 jest.mock('../../adapters/registry', () => {
   const manifests = [
@@ -276,6 +273,14 @@ jest.mock('../../adapters/resolve', () => ({
   ),
 }));
 
+// A new listener asks for the poll reconcile, and a listen paused by the loop
+// breaker is that suite's subject: neither is this one's.
+jest.mock('../listen_subscriptions', () => ({
+  syncListenSubscriptions: jest.fn(async () => ({ notes: [] })),
+}));
+jest.mock('../../../work/store', () => ({ enqueueWork: jest.fn(async () => {}) }));
+jest.mock('../../../inbound/listen_pause', () => ({ listenPauses: jest.fn(async () => new Map()) }));
+
 jest.mock('../../storage/tg_table', () => ({
   saveTriggerEntriesForTrigger: jest.fn(async () => undefined),
 }));
@@ -287,52 +292,22 @@ jest.mock('../../storage/tg_table', () => ({
 jest.mock('../catalog', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { mockCatalog, mockCatalogSnapshot } = require('movement-lang');
+  // A company's changes arrive on its `Changes` (ruling 9).
   const kgSchema = {
     positions: {
       company: {
         properties: { name: 'text', domains: { kind: 'list', of: 'text' } },
-        edges: {},
+        edges: { Changes: { target: 'company Change', readable: false, listenable: true } },
       },
+      'company Change': { properties: { Kind: 'text' }, edges: {} },
     },
-    collections: {},
-    writableRoots: {},
-  };
-  const attioSchema = {
-    positions: { record: { properties: {}, edges: {}, openProperties: true } },
-    collections: {},
+    collections: { company: { target: 'company' } },
     writableRoots: {},
   };
   const spec = {
     adapters: {
-      attio: {
-        constructionArgs: [{ name: 'credentials', kind: 'credential', required: true }],
-        triggerConfig: ['events'],
-        triggerConfigOptions: {
-          events: ['record.created', 'record.updated', 'record.deleted'],
-        },
-        schema: attioSchema,
-      },
-      email: { constructionArgs: [{ name: 'credentials', kind: 'position', required: false }], triggerConfig: ['key'] },
-      // A write-only target (the real Google Sheets / Drive / Dropbox
-      // shape): its manifest names no trigger type, so nothing that
-      // happens there can ever reach us.
-      sheets: {
-        constructionArgs: [{ name: 'credentials', kind: 'credential', required: true }],
-        canFire: false,
-        schema: attioSchema,
-      },
-      kg: {
-        constructionArgs: [],
-        triggerConfig: ['events', 'type', 'fields'],
-        triggerConfigRequired: ['type'],
-        triggerConfigOptions: {
-          events: ['record.created', 'record.updated', 'record.deleted'],
-        },
-        triggerConfigFormats: { fields: 'fields' },
-        schema: kgSchema,
-      },
+      kg: { constructionArgs: [], schema: kgSchema },
     },
-    credentials: { acme: { adapter: 'attio' }, sheet_cred: { adapter: 'sheets' } },
   };
   return {
     // The address resolver reads an instance's entry-position args off the
@@ -343,7 +318,7 @@ jest.mock('../catalog', () => {
       // The same world as the run sees it: a current pin is checked against it.
       runSnapshot: () => mockCatalogSnapshot(spec),
       resolveCredentialId: (name: string) =>
-        name === 'acme' ? 'cred-attio-1' : name === 'sheet_cred' ? 'cred-sheets-1' : undefined,
+        undefined,
       credentialsByName: {},
       resolveFile: () => undefined,
       notes: [],
@@ -365,33 +340,21 @@ const KG_SOURCE = `import { kg } from adapters
 
 graph = connect kg
 
-function on_company_change(rec: <graph-[:company]->>) {
-  x = rec.\`name\`
+function on_company_change(change: <graph-[:\`company Change\`]->>) {
+  x = change.Kind
 }
 
-listen to graph { type: "company", events: ["record.created", "record.updated"], fields: [domains] } fire on_company_change
+listen to graph-[:company]->-[c:Changes WHERE c.Kind == "updated"]-> fire on_company_change
 `;
 
-const KG_SOURCE_V2 = KG_SOURCE.replace('x = rec.`name`', 'y = rec.`name`');
+const KG_SOURCE_V2 = KG_SOURCE.replace('x = change.Kind', 'y = change.Kind');
 const KG_LIBRARY = `import { kg } from adapters
 
 graph = connect kg
 
-function on_company_change(rec: <graph-[:company]->>) {
-  x = rec.\`name\`
+function on_company_change(change: <graph-[:\`company Change\`]->>) {
+  x = change.Kind
 }
-`;
-
-const ATTIO_SOURCE = (events: string) => `import { attio } from adapters
-import { acme } from credentials
-
-crm = connect attio using acme
-
-function on_new_record(rec: <crm-[:record]->>) {
-  x = "noted"
-}
-
-listen to crm { events: [${events}] } fire on_new_record
 `;
 
 beforeEach(() => {
@@ -402,7 +365,7 @@ beforeEach(() => {
 });
 
 describe('a graph listen — trigger derivation', () => {
-  it('derives a kg-slug trigger row carrying the listen config verbatim', async () => {
+  it("derives a kg trigger row carrying the listen's plan", async () => {
     const result = await saveMovement({ teamId: TEAM, source: KG_SOURCE });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -419,38 +382,11 @@ describe('a graph listen — trigger derivation', () => {
     expect(trigger).toMatchObject({
       kind: 'kg',
       name: 'movement/on_company_change/on_company_change',
-      config: {
-        type: 'company',
-        events: ['record.created', 'record.updated'],
-        fields: ['domains'],
-      },
+      config: { listen: expect.objectContaining({ pipeline: expect.stringMatching(/^listen:on_company_change:on_company_change:[0-9a-f]{8}$/) }) },
       run_mode: 'live',
     });
     expect(trigger.movement_id).toBe(db.__tables.movement[0].id);
 
-    // The KG needs no external subscription — in-process dispatch.
-    expect(ensureCalls).toEqual([]);
-    expect(db.__tables.webhook_subscription).toEqual([]);
-  });
-
-  it('carries suppress_self into the persisted trigger', async () => {
-    const source = `import { kg } from adapters
-
-graph = connect kg
-
-function mirror(rec: <graph-[:company]->>) {
-  x = rec.\`name\`
-}
-
-listen to graph { type: "company", suppress_self: true } fire mirror
-`;
-    const result = await saveMovement({ teamId: TEAM, source });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    const [trigger] = db.__tables.trigger;
-    // The universal 2-way-sync flag rides the listen's own config, and the
-    // dispatch boundary reads it back off the persisted row.
-    expect(trigger.config).toMatchObject({ type: 'company', suppress_self: true });
   });
 
   it('an unchanged kg listen keeps its trigger id across saves (run history preserved)', async () => {
@@ -482,149 +418,5 @@ listen to graph { type: "company", suppress_self: true } fire mirror
     });
     expect(second.ok).toBe(true);
     expect(db.__tables.trigger).toHaveLength(0);
-  });
-});
-
-describe('listen events → external subscription diff-sync', () => {
-  it('a new events listen provisions the channel: row minted, ensureEventSubscription called, secret persisted', async () => {
-    const result = await saveMovement({ teamId: TEAM, source: ATTIO_SOURCE('"record.created"') });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-
-    expect(ensureCalls).toHaveLength(1);
-    expect(ensureCalls[0]).toMatchObject({
-      adapterType: 'attio',
-      credentialsId: 'cred-attio-1',
-      events: ['record.created'],
-    });
-    expect(ensureCalls[0].current).toBeUndefined();
-
-    const [row] = db.__tables.webhook_subscription;
-    expect(row).toMatchObject({
-      team_id: TEAM,
-      provider: 'ATTIO',
-      credentials_id: 'cred-attio-1',
-      provisioned_by: 'movement-listen',
-      external_webhook_id: 'wh-1',
-      webhook_secret: 'secret-1',
-      status: 'active',
-    });
-    // The callback URL is keyed by the ROW id — stable per channel.
-    expect(ensureCalls[0].callbackUrl).toContain(`/webhook-sync/attio/${row.id}`);
-  });
-
-  it('an unchanged event set re-saves without touching the source registration', async () => {
-    const first = await saveMovement({ teamId: TEAM, source: ATTIO_SOURCE('"record.created"') });
-    expect(first.ok).toBe(true);
-    if (!first.ok) return;
-    await saveMovement({
-      teamId: TEAM,
-      id: first.movementId,
-      source: ATTIO_SOURCE('"record.created"'),
-    });
-    expect(ensureCalls).toHaveLength(1);
-  });
-
-  it('a changed event set diff-syncs IN PLACE: same row, ensure called with current registration', async () => {
-    const first = await saveMovement({ teamId: TEAM, source: ATTIO_SOURCE('"record.created"') });
-    expect(first.ok).toBe(true);
-    if (!first.ok) return;
-    const rowId = db.__tables.webhook_subscription[0].id;
-
-    await saveMovement({
-      teamId: TEAM,
-      id: first.movementId,
-      source: ATTIO_SOURCE('"record.created", "record.updated"'),
-    });
-
-    expect(ensureCalls).toHaveLength(2);
-    expect(ensureCalls[1]).toMatchObject({
-      events: ['record.created', 'record.updated'],
-      current: { externalId: 'wh-1', events: ['record.created'] },
-    });
-    expect(db.__tables.webhook_subscription).toHaveLength(1);
-    expect(db.__tables.webhook_subscription[0].id).toBe(rowId);
-    expect(db.__tables.webhook_subscription[0].subscriptions).toBe(
-      JSON.stringify([
-        { event_type: 'record.created' },
-        { event_type: 'record.updated' },
-      ]),
-    );
-  });
-
-  it('retiring the last listen on a channel tears the subscription down', async () => {
-    const first = await saveMovement({ teamId: TEAM, source: ATTIO_SOURCE('"record.created"') });
-    expect(first.ok).toBe(true);
-    if (!first.ok) return;
-
-    const library = `import { attio } from adapters
-import { acme } from credentials
-
-crm = connect attio using acme
-
-function on_new_record(rec: <crm-[:record]->>) {
-  x = "noted"
-}
-`;
-    await saveMovement({ teamId: TEAM, id: first.movementId, source: library });
-
-    expect(removeCalls).toHaveLength(1);
-    expect(removeCalls[0]).toMatchObject({ adapterType: 'attio', externalId: 'wh-1' });
-    const [row] = db.__tables.webhook_subscription;
-    expect(row.status).toBe('disabled');
-    expect(row.deleted_at).toBeInstanceOf(Date);
-  });
-
-  it('a listen with no events config subscribes the full manifest vocabulary', async () => {
-    const source = `import { attio } from adapters
-import { acme } from credentials
-
-crm = connect attio using acme
-
-function on_new_record(rec: <crm-[:record]->>) {
-  x = "noted"
-}
-
-listen to crm fire on_new_record
-`;
-    const result = await saveMovement({ teamId: TEAM, source });
-    expect(result.ok).toBe(true);
-    expect(ensureCalls).toHaveLength(1);
-    expect(ensureCalls[0].events).toEqual(ATTIO_EVENTS);
-  });
-});
-
-describe('a system with no inbound surface cannot be listened to', () => {
-  // The defect this guards: Sheets declares no trigger types, yet a listener on
-  // it saved VALID and then stayed silent forever — indistinguishable, to the
-  // author, from "wired up, nothing has happened yet". The downstream
-  // event-type check can't catch it: an empty event surface reads the same as
-  // one nobody has introspected, so it stays (correctly) lenient.
-  const SHEETS_SOURCE = `import { sheets } from adapters
-import { sheet_cred } from credentials
-
-sh = connect sheets using \`sheet_cred\`
-function on_row(rec: <sh-[:record]->>) {
-  x = 1
-}
-
-listen to sh {} fire on_row
-`;
-
-  it('rejects the listen, naming the system and what to do instead', async () => {
-    const result = await saveMovement({ teamId: TEAM, source: SHEETS_SOURCE });
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    // The user-facing surface: one error, naming the instance, in the author's
-    // own terms — no adapter/manifest/trigger jargon.
-    const message = (result.errors ?? []).join('\n');
-    expect(message).toContain("'sh'");
-    expect(message).toMatch(/can't start an automation/);
-    expect(message).not.toMatch(/adapter|manifest|supportedTriggers|eventPosition/);
-  });
-
-  it('leaves a listen on a system that CAN fire alone', async () => {
-    const result = await saveMovement({ teamId: TEAM, source: ATTIO_SOURCE('"record.created"') });
-    expect(result.ok).toBe(true);
   });
 });
