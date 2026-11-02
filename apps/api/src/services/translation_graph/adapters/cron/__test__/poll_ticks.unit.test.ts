@@ -19,6 +19,9 @@ describe('the schedule a poll names', () => {
     expect(valuesOf(either, { name: 'Schedule', id: 'schedule' })).toEqual(['a', 'b']);
     expect(valuesOf(and(on('Schedule', 'a'), on('Zone', 'Europe/London')), { name: 'Zone', id: 'zone' })).toEqual(['Europe/London']);
     expect(valuesOf(on('Other', 'a'), { name: 'Zone', id: 'zone' })).toBeUndefined();
+    // As a listen's plan has it: the edge's own field.
+    const planned = { op: 'eq', left: { type: 'edge_property', fieldOnly: true, propertyTypeId: 'Schedule' }, type: 'compare', right: { type: 'static', value: '* * * * *' } };
+    expect(valuesOf(planned, { name: 'Schedule', id: 'schedule' })).toEqual(['* * * * *']);
   });
 });
 

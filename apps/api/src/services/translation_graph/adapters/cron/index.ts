@@ -250,7 +250,9 @@ export function valuesOf(filter: unknown, field: { name: string; id: string }): 
   const left: unknown = Reflect.get(filter, 'left');
   const leftType: unknown = typeof left === 'object' && left !== null ? Reflect.get(left, 'type') : undefined;
   const property: unknown = typeof left === 'object' && left !== null ? Reflect.get(left, 'propertyTypeId') : undefined;
-  if ((leftType !== 'property' && leftType !== 'edgeProperty') || (property !== field.name && property !== field.id)) return undefined;
+  // A listen's plan names the field as the edge's own (`edge_property`), as
+  // listen-fire's planner writes it.
+  if ((leftType !== 'property' && leftType !== 'edge_property' && leftType !== 'edgeProperty') || (property !== field.name && property !== field.id)) return undefined;
   const right: unknown = Reflect.get(filter, 'right');
   if (typeof right !== 'object' || right === null) return undefined;
   const literal = (element: unknown): string | undefined => {
