@@ -1,6 +1,6 @@
 import { fetchUrl as fetch_url } from plugins
 
-graph = connect #kg
+graph = connect #kg using `Dev Loop Knowledge`
 
 node Entry: "each company named in the text" {
   name: <text> "the company's name"

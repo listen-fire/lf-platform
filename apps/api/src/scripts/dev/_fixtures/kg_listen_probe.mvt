@@ -1,4 +1,4 @@
-graph = connect #kg
+graph = connect #kg using `Dev Loop Knowledge`
 
 function kg_listen_probe(change: <graph-[:`Organisation Change`]->>) {
   change-[org:Record]-> {

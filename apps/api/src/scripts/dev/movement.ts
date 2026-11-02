@@ -59,6 +59,7 @@ import {
 } from './_lib';
 import { saveMovement } from '../../services/translation_graph/movement/provision';
 import { runMovementNow } from '../../services/translation_graph/movement/run_now';
+import { registerCoreWork } from '../../services/work/register';
 import { getMovementRowByName } from '../../services/translation_graph/movement/store';
 import {
   constructionsOf,
@@ -450,6 +451,9 @@ async function main() {
     // The steps before the firing (the file upload) read the ambient Context;
     // the firing itself is queued and drained, so it acts as its own team,
     // never as whatever Context is in scope.
+    // Run now drains its queued run in this process, through the core's
+    // handlers, as the deployment's drain does.
+    registerCoreWork();
     const result = await buildAgentContext(seed.teamId, seed.userId).runAsync(() =>
       runMovementNow({
         teamId: seed.teamId,

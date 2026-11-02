@@ -138,6 +138,12 @@ export async function runMovementNow(
   if (status.status === 'failed') {
     return { ok: false, errors: [status.failureReason ?? `run ${queued.runId} failed`] };
   }
+  // Still running after this process drained: it did not run here (no
+  // fire_event handler in this process, or another worker holds it), so
+  // there is no outcome to answer with yet.
+  if (status.status === 'running') {
+    return { ok: false, errors: [`run ${queued.runId} did not settle in this process: follow it by its id`] };
+  }
   return {
     ok: true,
     movementName: queued.movementName,

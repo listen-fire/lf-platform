@@ -70,7 +70,7 @@ export const DEV_AIRTABLE_TABLE_NAME = 'Deals';
  *  ONLY and writes each new row to the fake Slack `dealflow` channel (so a run
  *  is observable via `pnpm dev:inspect slack`).
  *
- *  The listen walks to the table by its ids and ends on the table's
+ *  The listen walks to the table by name and ends on the table's
  *  `Changes`, narrowed to `created`: one change per row an edit touched,
  *  landing on the table's own change type (`Deals Change`), which the
  *  parameter names. The row is the change's `Record`, read from Airtable when
@@ -89,7 +89,7 @@ function airtable_intake(c: <at-[:\`${DEV_AIRTABLE_TABLE_NAME} Change\`]->>) {
   }
 }
 
-listen to at-[b:Bases WHERE b.Id == "${DEV_AIRTABLE_BASE_ID}"]->-[t:Tables WHERE t.Id == "${DEV_AIRTABLE_TABLE_ID}"]->-[c:Changes WHERE c.Kind == "created"]-> fire airtable_intake
+listen to at-[b:Bases WHERE b.Name == "${DEV_AIRTABLE_BASE_NAME}"]->-[t:Tables WHERE t.Name == "${DEV_AIRTABLE_TABLE_NAME}"]->-[c:Changes WHERE c.Kind == "created"]-> fire airtable_intake
 `;
 
 /** The POSITIONED twin, a separate movement file: the connection starts AT
@@ -110,7 +110,7 @@ function airtable_intake_positioned(c: <at-[:\`${DEV_AIRTABLE_TABLE_NAME} Change
   }
 }
 
-listen to at-[t:Tables WHERE t.Id == "${DEV_AIRTABLE_TABLE_ID}"]->-[c:Changes WHERE c.Kind == "created"]-> fire airtable_intake_positioned
+listen to at-[t:Tables WHERE t.Name == "${DEV_AIRTABLE_TABLE_NAME}"]->-[c:Changes WHERE c.Kind == "created"]-> fire airtable_intake_positioned
 `;
 
 

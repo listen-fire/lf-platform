@@ -31,6 +31,7 @@ import type { TeamId } from '../../generated/kysely/core/Team';
 import { ensureDevLoopRemoteAdapter, ensureDevLoopTeam } from './_lib';
 import { saveMovement } from '../../services/translation_graph/movement/provision';
 import { runMovementNow } from '../../services/translation_graph/movement/run_now';
+import { registerCoreWork } from '../../services/work/register';
 import { installRemoteAdapterFromManifest } from '../../services/translation_graph/adapters/remote/install';
 import {
   FAKE_CRM_ADAPTER_TYPE,
@@ -88,7 +89,8 @@ async function main(): Promise<void> {
       return;
     }
 
-    // 6. Fire it through normal dispatch.
+    // 6. Fire it through normal dispatch, drained in this process.
+    registerCoreWork();
     const run = await runMovementNow({
       teamId,
       movementId: saved.movementId,

@@ -1,4 +1,4 @@
-graph = connect #kg
+graph = connect #kg using `Dev Loop Knowledge`
 
 function kg_write_probe(go: <manual-[:Invocations]->>) {
   write graph-[:Organisation]-> {
