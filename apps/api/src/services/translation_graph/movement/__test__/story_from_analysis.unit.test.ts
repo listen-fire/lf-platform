@@ -70,16 +70,17 @@ describe('storyOf — the whole IR', () => {
 });
 
 describe('triggers', () => {
-  it('projects the listen with its declared event selection and address', () => {
+  it('projects the listen with the traversal it listens to', () => {
     const [trigger] = story().triggers;
     expect(trigger.instance.name).toBe('inbox');
     expect(trigger.instance.declaredAt).toBeDefined();
     expect(trigger.adapterType).toBe('mail');
-    expect(trigger.events).toEqual(['message.received']);
-    expect(trigger.narrowing).toEqual({ key: 'dealflow' });
+    expect(trigger.path).toBe('inbox-[m:message WHERE m.key == "dealflow" AND m.action == "message.received"]->');
+    // A listen's selection is its WHERE: the analysis carries no settings beside it.
+    expect(trigger.events).toBeUndefined();
+    expect(trigger.narrowing).toEqual({});
     expect(trigger.fires).toBe('intake');
     expect(trigger.firesMovement).toBe(true);
-    expect(trigger.eventTypes.length).toBeGreaterThan(0);
   });
 });
 

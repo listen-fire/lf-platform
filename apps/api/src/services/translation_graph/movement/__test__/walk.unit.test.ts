@@ -43,7 +43,7 @@ const rootHop = (): EdgesFromResult => ({
         targetTypeId: 'email',
         cardinality: 'one',
         name: 'Email',
-        fires: true,
+        listenable: true,
         readable: false,
         description: 'An email arriving.',
       },
@@ -70,10 +70,10 @@ describe('walkedNodeFrom — one call at a node', () => {
     const [edge] = walkedNodeFrom({ hop: rootHop(), at: '' }).edges;
     expect(edge.name).toBe('Email');
     // Absent `writable` is NO write promise; absent `readable` would be true,
-    // but this edge opts out explicitly. `fires` is the third promise.
+    // but this edge opts out explicitly. `listenable` is the third promise.
     expect(edge.readable).toBe(false);
     expect(edge.writable).toBe(false);
-    expect(edge.fires).toBe(true);
+    expect(edge.listenable).toBe(true);
   });
 
   it('an edge carries what it LANDS ON — the agent can write without another call', () => {

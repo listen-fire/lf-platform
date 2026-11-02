@@ -43,7 +43,7 @@ import {
   type StoryFactNodeKind,
   type StoryFactSymbol,
   type StoryFacts,
-  type SchemaFieldType,
+  type SurfaceFieldType,
 } from 'legacy-lang';
 
 const UNKNOWN_EFFECTS: StoryEffects = { reads: [], writes: [], ai: false, now: false, suspend: false, partial: true };
@@ -216,7 +216,7 @@ function shapeNamed(analysis: StoryAnalysis, program: Program, name: string): Sh
 interface Recovery {
   shapeOf: (name: string) => ShapeNode | undefined;
   /** The refinements the program declares (`type Thesis = <"A" | "B">`), by name. */
-  declaredTypes: Map<string, SchemaFieldType>;
+  declaredTypes: Map<string, SurfaceFieldType>;
 }
 
 function describedTree(analysed: AnalysedExtractNode, written: WrittenNode | undefined, recovery: Recovery): StoryExtractNode {
@@ -283,7 +283,7 @@ function writtenChild(child: ExtractNode, shapeNamed: (name: string) => ShapeNod
 }
 
 /** A primitive or declared annotation, made maybe-absent by the author's `| null`. */
-function fieldType(field: WrittenField, declaredTypes: Map<string, SchemaFieldType>): SchemaFieldType | undefined {
+function fieldType(field: WrittenField, declaredTypes: Map<string, SurfaceFieldType>): SurfaceFieldType | undefined {
   const named = parseFieldTypeName(field.type) ?? (field.type !== undefined ? declaredTypes.get(field.type) : undefined);
   if (named === undefined) return undefined;
   return field.nullable ? (maybeAbsent(named) ?? named) : named;

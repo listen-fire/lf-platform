@@ -902,26 +902,16 @@ export interface WalkedEdge {
     cardinality: 'one' | 'many';
     readable: boolean;
     writable: boolean;
-    /** Present only when true: this edge DELIVERS its target (what a listen
-     *  subscribes to) rather than letting you fetch it. */
-    fires?: true;
-    firesOn?: string[];
+    /** Present only when true: what lands on this edge is announced, so a
+     *  listen can hear it (`listen to x-[:E]->`) and a run can wait on it
+     *  (`await first(x-[:E]->)`). */
+    listenable?: true;
+    /** The landing's field that tells one arrival on this edge from another,
+     *  where the adapter names one. */
+    identity?: string;
     /** Present only when true: writing here performs an action and materialises
      *  nothing. */
     ephemeral?: true;
-    /** Present only when true: this edge is AWAITED (`await x-[:E]->`), not read —
-     *  its promise is a resolution that resumes a parked run, so it is honestly
-     *  neither `readable` nor `writable` (asks-as-adapter §A). Surfaced on the
-     *  graph-explorer / describe path so the tooling reads it as a promise; the
-     *  ENGINE consumption is a later chunk (this is declaration-only for now). */
-    awaitable?: true;
-    /** Present only when true (and only meaningful with `awaitable`): a resolution
-     *  along this edge may carry NO landing (an explicit cancel). */
-    resolvesEmpty?: true;
-    /** Present only when true (and only meaningful with `awaitable`): the source
-     *  DELIVERS an event when this edge resolves, so `await FIRST(…)` waits
-     *  without a cadence. Absent means the author states one (`until … every:`). */
-    watchable?: true;
     /** The address that walks this edge. Absent when the adapter handed over no
      *  path — the edge is real, but reaching it is by name, not by walking. */
     position?: string;

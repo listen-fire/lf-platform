@@ -3,22 +3,22 @@
 
 import { mockCatalog, mockCatalogSnapshot, type InstanceSchema } from 'movement-lang';
 
-/** The trigger side, plus the pause: a desk whose Query root awaits a Reply. */
+/** The trigger side, plus the pause: a desk whose notes a listen hears, and
+ *  whose Query root awaits a Reply. */
 const deskSchema: InstanceSchema = {
   positions: {
-    note: { properties: { text: 'text' }, edges: {} },
+    note: { properties: { text: 'text', box: 'text' }, edges: {} },
     reply: { properties: { answer: 'boolean' }, edges: {} },
   },
-  collections: { Query: { target: 'Query' } },
+  collections: { Query: { target: 'Query' }, note: { target: 'note', readable: false, listenable: true } },
   supportsInPlaceUpdate: true,
   writableRoots: {
     Query: {
       fields: { prompt: 'text' },
       resultShape: { externalId: 'text' },
-      edges: { Reply: { target: 'reply', awaitable: true, watchable: true, resolvesEmpty: true } },
+      edges: { Reply: { target: 'reply', listenable: true } },
     },
   },
-  eventPositions: [{ position: 'note', on: ['note.filed'] }],
 };
 
 /** The write side: a two-record graph with a parent edge. */
@@ -43,8 +43,6 @@ const catalogSpec: Parameters<typeof mockCatalog>[0] = {
   adapters: {
     desk_sys: {
       constructionArgs: [{ name: 'credentials', kind: 'credential', required: true }],
-      triggerConfig: ['box', 'events'],
-      triggerConfigOptions: { events: ['note.filed'] },
       schema: deskSchema,
     },
     ledger_sys: {
@@ -83,12 +81,12 @@ function intake(n: <desk-[:note]->>) {
     seen_line = line.\`Amount\`
   }
   q = write desk-[:Query]-> { prompt: "approve this?" }
-  ok = await first(q-[:Reply]->)
+  ok = await new q-[:Reply]->
   if (ok) {
     write entry { Stage: "settled" }
   }
   await sleep(2d)
 }
 
-listen to desk { box: "inbound", events: ["note.filed"] } fire intake
+listen to desk-[n:note WHERE n.box == "inbound"]-> fire intake
 `;

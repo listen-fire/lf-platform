@@ -35,7 +35,7 @@ const ENUM_OPTIONS_SHOWN = 4;
 export interface SystemDigestInput {
   /** The adapter name, as imported from `adapters`. */
   system: string;
-  spec: Pick<AdapterSpec, 'constructionArgs' | 'triggerConfig' | 'triggerConfigOptions' | 'triggerConfigRequired'>;
+  spec: Pick<AdapterSpec, 'constructionArgs'>;
   /** The credential import names that serve this system; empty when it needs none. */
   connections: string[];
   /** The root of a describe, its stubs resolved where they could be: absent
@@ -49,7 +49,7 @@ export interface SystemDigestInput {
 }
 
 export const DIGEST_LEGEND =
-  'Marks: `!` required to create · `*` identifies the record (a `unique by` candidate) · `~` read-only · [r] readable, [w] writable, [fires] a listen can fire on it · a `backticked` name is written with its backticks in code.';
+  'Marks: `!` required to create · `*` identifies the record (a `unique by` candidate) · `~` read-only · [r] readable, [w] writable, [listenable] a listen hears it · a `backticked` name is written with its backticks in code.';
 
 const moreHint = (system: string) => `describeConnection("${system}") for more`;
 
@@ -91,19 +91,6 @@ function constructionSpelling(input: Pick<SystemDigestInput, 'system' | 'spec' |
   return `\`${input.system}(${args.join(', ')})\`${others.length > 0 ? ` (other connections: ${others.join(', ')})` : ''}`;
 }
 
-/** `listen { key! }`, `listen { events: record.created|record.updated, channels }`. */
-function listenSpelling(spec: SystemDigestInput['spec']): string | null {
-  const keys = spec.triggerConfig ?? [];
-  if (keys.length === 0) return null;
-  const required = new Set(spec.triggerConfigRequired ?? []);
-  const parts = keys.map((key) => {
-    const options = spec.triggerConfigOptions?.[key];
-    const mark = required.has(key) ? '!' : '';
-    return options && options.length > 0 ? `${key}${mark}: ${options.join('|')}` : `${key}${mark}`;
-  });
-  return `listen { ${parts.join(', ')} }`;
-}
-
 /** The landing's own identity rules first; the schema's write shape for a
  *  source whose walk does not carry them. */
 function identityFields(input: {
@@ -122,11 +109,9 @@ function identityFields(input: {
 }
 
 function access(edge: WalkedEdge): string {
-  const fires = edge.fires ? [edge.firesOn && edge.firesOn.length > 0 ? `fires(${edge.firesOn.join('|')})` : 'fires'] : [];
   const flags = [
     `${edge.readable ? 'r' : ''}${edge.writable ? 'w' : ''}`,
-    ...fires,
-    ...(edge.awaitable ? ['await'] : []),
+    ...(edge.listenable ? ['listenable'] : []),
     // Writing here performs an action and stores nothing.
     ...(edge.ephemeral ? ['action'] : []),
   ].filter(Boolean);
@@ -195,12 +180,12 @@ function digestEdgeLine(input: SystemDigestInput, edge: WalkedEdge): DigestEdgeL
 
 /**
  * Which edges give up their fields first when a block is over budget: types
- * you can only read, then event payloads, and writable types last — a write is
+ * you can only read, then what a listen hears, and writable types last — a write is
  * where a wrong field name costs a failed run rather than an empty read. Within
  * a rank, the last listed goes first.
  */
 function shrinkOrder(lines: DigestEdgeLine[]): number[] {
-  const rank = ({ edge }: DigestEdgeLine) => (edge.writable ? 2 : edge.fires ? 1 : 0);
+  const rank = ({ edge }: DigestEdgeLine) => (edge.writable ? 2 : edge.listenable ? 1 : 0);
   return lines
     .map((line, index) => ({ line, index }))
     .sort((a, b) => rank(a.line) - rank(b.line) || b.index - a.index)
@@ -211,8 +196,6 @@ function shrinkOrder(lines: DigestEdgeLine[]): number[] {
 export function renderSystemDigest(input: SystemDigestInput): string {
   const header = `### ${input.system} — ${constructionSpelling(input)}`;
   const lines = [header];
-  const listen = listenSpelling(input.spec);
-  if (listen) lines.push(`- ${listen}`);
   if (!input.node) {
     lines.push(`- ${input.note ?? 'not described'} — ${moreHint(input.system)}`);
     return fitLines(lines, input.system);
@@ -364,8 +347,6 @@ export function renderConnectionDescription(input: ConnectionDescriptionInput): 
         : '';
     lines.push(`### ${input.system}${construct}`);
     if (input.about?.description) lines.push(input.about.description);
-    const listen = input.spec !== undefined ? listenSpelling(input.spec) : null;
-    if (listen) lines.push(`- ${listen}`);
     if (input.about?.triggerExpectation) lines.push(`- What a listen fires on: ${input.about.triggerExpectation}`);
     if (input.about?.identity) lines.push(`- Runs as: ${input.about.identity}`);
     if (input.about?.capability) lines.push(`- Limits: ${input.about.capability}`);

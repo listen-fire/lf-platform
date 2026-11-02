@@ -53,11 +53,7 @@ const credential = { name: 'credentials', kind: 'credential' as const, required:
 
 const ATTIO: SystemDigestInput = {
   system: 'attio',
-  spec: {
-    constructionArgs: [credential],
-    triggerConfig: ['events'],
-    triggerConfigOptions: { events: ['record.created', 'record.updated', 'record.deleted'] },
-  },
+  spec: { constructionArgs: [credential] },
   connections: ['acme'],
   node: root([
     edge('Companies', {
@@ -82,13 +78,13 @@ const ATTIO: SystemDigestInput = {
 
 const EMAIL: SystemDigestInput = {
   system: 'email',
-  spec: { constructionArgs: [], triggerConfig: ['key'], triggerConfigRequired: ['key'] },
+  spec: { constructionArgs: [] },
   connections: [],
   node: root([
     edge(
       'Email',
       { From: text({ writable: false }), Subject: text({ writable: false }), Body: text({ writable: false }) },
-      { writable: false, fires: true },
+      { writable: false, listenable: true },
     ),
   ]),
 };
@@ -105,11 +101,9 @@ function wideSystem(system: string): SystemDigestInput {
 }
 
 describe('the connections digest', () => {
-  it('spells how to construct each system and what a listen on it says', () => {
-    const block = renderSystemDigest(ATTIO);
-    expect(block).toContain('### attio — `attio(credentials: acme)`');
-    expect(block).toContain('- listen { events: record.created|record.updated|record.deleted }');
-    expect(renderSystemDigest(EMAIL)).toContain('### email — `email()`\n- listen { key! }');
+  it('spells how to construct each system', () => {
+    expect(renderSystemDigest(ATTIO)).toContain('### attio — `attio(credentials: acme)`');
+    expect(renderSystemDigest(EMAIL)).toContain('### email — `email()`');
   });
 
   it('lists record types with fields, required and identifying ones first, marked', () => {
@@ -119,7 +113,7 @@ describe('the connections digest', () => {
     );
     expect(block).toContain('- People [rw]: Email text*, Name text');
     expect(block).toContain('- Deals [rw]: fields not loaded — describe it');
-    expect(renderSystemDigest(EMAIL)).toContain('- Email [r fires]: From text, Subject text, Body text');
+    expect(renderSystemDigest(EMAIL)).toContain('- Email [r listenable]: From text, Subject text, Body text');
   });
 
   it('names a system it could not describe, and where to look', () => {
@@ -181,7 +175,7 @@ function stubTeamCatalog() {
     snapshot: {
       adapters: {
         attio: ATTIO.spec,
-        slack: { constructionArgs: [credential], triggerConfig: ['events', 'channels'] },
+        slack: { constructionArgs: [credential] },
         airtable: { constructionArgs: [credential], connect: 'oauth' },
         email: EMAIL.spec,
         ask: { constructionArgs: [] },
@@ -201,7 +195,7 @@ function stubTeamCatalog() {
       case 'slack':
         return {
           node: root([
-            edge('Messages', { Text: text({ required: true }), Channel: text({ required: true }) }, { fires: true }),
+            edge('Messages', { Text: text({ required: true }), Channel: text({ required: true }) }, { listenable: true }),
           ]),
           schema: null,
           notes: [],
@@ -231,7 +225,7 @@ describe('getStarted', () => {
               stub('Companies'),
               stub('People'),
               { ...stub('VC Deal Flow'), writable: false },
-              edge('Webhook Event', { action: text({ writable: false }) }, { writable: false, readable: false, fires: true }),
+              edge('Webhook Event', { action: text({ writable: false }) }, { writable: false, readable: false, listenable: true }),
             ]),
             schema: null,
             notes: [],
@@ -256,7 +250,7 @@ describe('getStarted', () => {
     expect(page).toContain('- People [rw]: Name text!, Email text*');
     // Not described (the source had nothing for it): still named, one hop away.
     expect(page).toContain('- `VC Deal Flow` [r]: fields not loaded — describe it');
-    expect(page).toContain('- `Webhook Event` [fires]: action text');
+    expect(page).toContain('- `Webhook Event` [listenable]: action text');
   });
 
   it('keeps the stubs, named, when describing them fails', async () => {

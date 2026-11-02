@@ -366,7 +366,7 @@ function intake(n: <desk-[:note]->>) {
   file_it(node { text: n.\`text\` })
 }
 
-listen to desk { box: "inbound", events: ["note.filed"] } fire intake
+listen to desk-[n:note WHERE n.box == "inbound"]-> fire intake
 `;
 
   function declaredView(): StoryView {
@@ -767,7 +767,7 @@ describe('projectStoryView', () => {
   });
 
   it('a pin from a line the installed language does not read is unreadable with its version problem', async () => {
-    const result = await projectStoryView({ ...row, languageVersion: '0.13.0' });
+    const result = await projectStoryView({ ...row, languageVersion: '0.14.0' });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.reason).toBe('unreadable');

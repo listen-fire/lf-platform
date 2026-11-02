@@ -33,10 +33,8 @@ const SNAPSHOT: CatalogSnapshot = {
         canFire: true,
         schema: {
           positions: { Invocation: { properties: { Text: 'text' }, edges: {} } },
-          collections: {},
+          collections: { Invocation: { target: 'Invocation', readable: false, listenable: true } },
           writableRoots: {},
-          eventPosition: 'Invocation',
-          eventPositions: [{ position: 'Invocation' }],
         },
       },
       attio: {
@@ -67,7 +65,7 @@ function hello(go: <manual-[:Invocation]->>) {
   }
 }
 
-listen to manual fire hello
+listen to manual-[:Invocation]-> fire hello
 `;
 
 const OPTIONS = { languageVersion: LANGUAGE_VERSION };
@@ -179,7 +177,7 @@ describe('the editor language service for a release pin', () => {
   });
 
   it('answers a pin nothing reads with empty answers and assembles no catalog', async () => {
-    const request = { teamId: freshTeam(), source: PROGRAM, offset: 10, languageVersion: '0.13.0' };
+    const request = { teamId: freshTeam(), source: PROGRAM, offset: 10, languageVersion: '0.14.0' };
     expect(answerOf(await completeAt(request))).toEqual({ from: 10, to: 10, items: [] });
     expect(answerOf(await hoverAt(request))).toBeNull();
     expect(answerOf(await defineAt(request))).toBeNull();
@@ -237,9 +235,9 @@ describe("the agent's completions", () => {
   });
 
   it('a pin nothing reads gets the note and no catalog', async () => {
-    const found = await agentCompletionsAt({ teamId: freshTeam(), source: PROGRAM, offset: 10, pin: '0.13.0' });
+    const found = await agentCompletionsAt({ teamId: freshTeam(), source: PROGRAM, offset: 10, pin: '0.14.0' });
     expect(found.completions).toEqual([]);
-    expect(found.note).toContain('0.13.0');
+    expect(found.note).toContain('0.14.0');
     expect(assembled).not.toHaveBeenCalled();
     expect(skeleton).not.toHaveBeenCalled();
   });

@@ -16,7 +16,7 @@
 //     the path that walks it, composed onto the path already walked. The string
 //     that explores is the string an author writes in a movement.
 
-import type { FieldType } from 'legacy-lang';
+import { fieldTypeOfSchema, type FieldType } from 'legacy-lang';
 import type { EdgesFromResult, EdgeTargetNode } from 'movement-engine/public/adapter';
 import type { SchemaFieldDescriptor, SchemaReferenceDescriptor, SchemaTypeDescriptor } from 'movement-engine/public/catalog';
 import type { UniquenessConstraints } from 'movement-engine/public/adapter-support';
@@ -86,26 +86,16 @@ export interface WalkedEdge {
   cardinality: 'one' | 'many';
   readable: boolean;
   writable: boolean;
-  /** Present only when true: this edge DELIVERS its target (what a listen
-   *  subscribes to) rather than letting you fetch it. */
-  fires?: true;
-  firesOn?: string[];
+  /** Present only when true: what lands on this edge is announced, so a
+   *  listen can hear it (`listen to x-[:E]->`) and a run can wait on it
+   *  (`await first(x-[:E]->)`). */
+  listenable?: true;
+  /** The landing's field that tells one arrival on this edge from another,
+   *  where the adapter names one. */
+  identity?: string;
   /** Present only when true: writing here performs an action and materialises
    *  nothing. */
   ephemeral?: true;
-  /** Present only when true: this edge is AWAITED (`await x-[:E]->`), not read —
-   *  its promise is a resolution that resumes a parked run, so it is honestly
-   *  neither `readable` nor `writable` (asks-as-adapter §A). Surfaced on the
-   *  graph-explorer / describe path so the tooling reads it as a promise; the
-   *  ENGINE consumption is a later chunk (this is declaration-only for now). */
-  awaitable?: true;
-  /** Present only when true (and only meaningful with `awaitable`): a resolution
-   *  along this edge may carry NO landing (an explicit cancel). */
-  resolvesEmpty?: true;
-  /** Present only when true (and only meaningful with `awaitable`): the source
-   *  DELIVERS an event when this edge resolves, so `await FIRST(…)` waits
-   *  without a cadence. Absent means the author states one (`until … every:`). */
-  watchable?: true;
   /** The address that walks this edge. Absent when the adapter handed over no
    *  path — the edge is real, but reaching it is by name, not by walking. */
   position?: string;
@@ -155,10 +145,18 @@ const namedStep = (name: string): string => `-[:\`${name}\`]->`;
 const narrowedStep = (input: { edge: string; key: string; value: string }): string =>
   `-[:${input.edge} WHERE \`${input.key}\` == ${JSON.stringify(input.value)}]->`;
 
+/** A field's type as the checker reads it. The conversion makes an owned
+ *  scalar text and a record field data, so neither the owner nor the
+ *  record's position name reaches the result, and neither is looked up. */
+function propertyTypeOf(field: SchemaFieldDescriptor): FieldType | undefined {
+  const declared = fieldTypeFromDescriptor(field, { owner: '', positionOf: (typeId) => typeId });
+  return declared !== undefined ? fieldTypeOfSchema(declared) : undefined;
+}
+
 function propertiesOf(fields: SchemaFieldDescriptor[]): Record<string, WalkedProperty> {
   const properties: Record<string, WalkedProperty> = {};
   for (const field of fields) {
-    const type = fieldTypeFromDescriptor(field);
+    const type = propertyTypeOf(field);
     // A reference field has no property type — it surfaces as an edge, which
     // is the whole point of the walk.
     if (type === undefined) continue;
@@ -305,12 +303,9 @@ export function walkedNodeFrom(input: { hop: EdgesFromResult; at: string }): Wal
       cardinality: reference.cardinality,
       readable: reference.readable ?? true,
       writable: reference.writable ?? false,
-      ...(reference.fires === true ? { fires: true as const } : {}),
-      ...(reference.firesOn !== undefined ? { firesOn: reference.firesOn } : {}),
+      ...(reference.listenable === true ? { listenable: true as const } : {}),
+      ...(reference.identity !== undefined ? { identity: reference.identity } : {}),
       ...(reference.ephemeral === true ? { ephemeral: true as const } : {}),
-      ...(reference.awaitable === true ? { awaitable: true as const } : {}),
-      ...(reference.resolvesEmpty === true ? { resolvesEmpty: true as const } : {}),
-      ...(reference.watchable === true ? { watchable: true as const } : {}),
       ...(path !== undefined ? { position: at + namedStep(name) } : {}),
       ...(reference.targetTypeIds !== undefined
         ? { landsOn: referenceTargetTypeIds(reference) }

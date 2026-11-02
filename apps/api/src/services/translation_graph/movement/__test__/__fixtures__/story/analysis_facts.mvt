@@ -29,4 +29,4 @@ function intake(n: <desk-[:note]->>) {
   return 1
 }
 
-listen to desk { box: "inbound", events: ["note.filed"] } fire intake
+listen to desk-[n:note WHERE n.box == "inbound"]-> fire intake

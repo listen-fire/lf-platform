@@ -39,7 +39,7 @@ const statementAt = (line: number) => {
 /** A hand-built analysis, for the cases the fixture program cannot pin down. */
 function synthetic(over: Partial<StoryAnalysis>): StoryAnalysis {
   return {
-    storyAnalysisVersion: 1,
+    storyAnalysisVersion: 2,
     diagnostics: [],
     scopes: [{ symbols: {} }],
     symbols: [],
@@ -223,7 +223,7 @@ describe('the story analysis as story facts', () => {
   });
 
   it('a refused pin is unreadable with its version diagnostic, never an empty picture', () => {
-    const { result } = storyFromAnalysis({ source: SOURCE, snapshot: STORY_VIEW_SNAPSHOT, pin: '0.13.0' });
+    const { result } = storyFromAnalysis({ source: SOURCE, snapshot: STORY_VIEW_SNAPSHOT, pin: '0.14.0' });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.problems).toHaveLength(1);

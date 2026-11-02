@@ -31,8 +31,6 @@ const TEAM = 'team-1' as TeamId;
 
 const ATTIO_SPEC = {
   constructionArgs: [{ name: 'credentials', kind: 'credential' as const, required: true }],
-  triggerConfig: ['events'],
-  triggerConfigOptions: { events: ['record.created', 'record.updated', 'record.deleted'] },
 };
 
 function landingOf(described: DescribedInstance): WalkedDescribedNode {
@@ -84,7 +82,7 @@ describe('describeConnection, compact', () => {
     expect(text.length).toBeLessThan(full.length / 3);
   });
 
-  it("at the root, says how to construct and listen, and describes the root's stubbed record types", async () => {
+  it("at the root, says how to construct, and describes the root's stubbed record types", async () => {
     // The fixture predates the adapter declaring its object edges writable, as
     // its entry points always did; say it as the adapter now does.
     const attioRoot = batchFull.connections[0];
@@ -99,7 +97,6 @@ describe('describeConnection, compact', () => {
     const text = await describeConnectionCompact({ teamId: TEAM, system: 'attio' });
 
     expect(text).toContain('### attio — `attio(credentials: Dev Loop Attio)`');
-    expect(text).toContain('- listen { events: record.created|record.updated|record.deleted }');
     expect(text).toContain('- What a listen fires on: ');
     expect(text).toContain('- Hint: For any owner field');
     expect(landingsMock).toHaveBeenCalledWith(expect.objectContaining({ adapter: 'attio', types: expect.arrayContaining(['Companies', 'People']) }));
@@ -107,7 +104,6 @@ describe('describeConnection, compact', () => {
     expect(text).toContain('- -[:People]-> People (many) [rw]: Name text!');
     // A stub nothing described stays named, with the hop that resolves it.
     expect(text).toContain('- -[:Deals]-> Deals (many) [rw]: fields not loaded — describe position "-[:`Deals`]->"');
-    expect(text).toContain('- -[:`Webhook Event`]-> `Webhook Event` (one) [fires]: action enum(record.created|record.updated|record.deleted)');
   });
 
   it('describes several systems at their roots, far smaller than the full batch', async () => {

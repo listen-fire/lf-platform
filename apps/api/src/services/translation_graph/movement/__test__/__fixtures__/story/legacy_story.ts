@@ -8,14 +8,14 @@ const mailSchema: InstanceSchema = {
       properties: {
         body: 'text',
         subject: 'text',
+        key: 'text',
         action: { kind: 'enum', options: ['message.received', 'message.sent'] },
       },
       edges: {},
     },
   },
-  collections: {},
+  collections: { message: { target: 'message', readable: false, listenable: true } },
   writableRoots: {},
-  eventPositions: [{ position: 'message', on: ['message.received', 'message.sent'] }],
 };
 
 const crmSchema: InstanceSchema = {
@@ -56,7 +56,7 @@ const askSchema: InstanceSchema = {
     Check: {
       fields: { prompt: 'text' },
       resultShape: { externalId: 'text', state: 'text' },
-      edges: { Response: { target: 'response', awaitable: true, watchable: true, resolvesEmpty: true } },
+      edges: { Response: { target: 'response', listenable: true } },
     },
   },
 };
@@ -65,8 +65,6 @@ export const LEGACY_STORY_SNAPSHOT = mockCatalogSnapshot({
   adapters: {
     mail: {
       constructionArgs: [{ name: 'credentials', kind: 'credential', required: true }],
-      triggerConfig: ['key', 'events'],
-      triggerConfigOptions: { events: ['message.received', 'message.sent'] },
       schema: mailSchema,
     },
     crm_sys: {
@@ -114,7 +112,7 @@ function intake(m: <inbox-[:message]->>) {
     link c -[:Owner]-> lead
   }
   a = write questions-[:Check]-> { prompt: "approve this deal?" }
-  answer = await first(a-[:Response]->)
+  answer = await new a-[:Response]->
   amount = coalesce(facts.amount, 0)
   timing = race(() => { await sleep(2d) }, () => { return true })
   if (amount > 1000) {
@@ -125,7 +123,7 @@ function intake(m: <inbox-[:message]->>) {
   note_owner(c)
 }
 
-listen to inbox { key: "dealflow", events: ["message.received"] } fire intake
+listen to inbox-[m:message WHERE m.key == "dealflow" AND m.action == "message.received"]-> fire intake
 `;
 
 export const TRAVERSALS = `import { mail, crm_sys, asksys } from adapters
@@ -158,10 +156,10 @@ function flows(m: <inbox-[:message]->>) {
     seen_reply = reply.answer
   }
 
-  outcome = race(() => { return await first(a-[:Response]->) }, () => { await sleep(1d) })
+  outcome = race(() => { return await new a-[:Response]-> }, () => { await sleep(1d) })
 }
 
-listen to inbox { key: "flows" } fire flows
+listen to inbox-[m:message WHERE m.key == "flows"]-> fire flows
 `;
 
 export const CALLBACK_SOURCE = `import { crm_sys } from adapters

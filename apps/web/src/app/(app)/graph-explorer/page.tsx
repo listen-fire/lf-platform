@@ -4,7 +4,7 @@
 // stand on its connection node, and walk — one hop per call, the SAME
 // `describeConnection` walk the authoring agent makes. Nothing loads a graph:
 // what you see is exactly what an agent standing here would see, which is the
-// whole point of the page. Promises — read / write / fires — belong to EDGES,
+// whole point of the page. Promises — read / write / listenable — belong to EDGES,
 // never nodes; a node carries only its name, properties, and edges.
 
 import { useState } from "react";
@@ -40,8 +40,8 @@ type WalkedEdge = {
   cardinality: "one" | "many";
   readable: boolean;
   writable: boolean;
-  fires?: true;
-  firesOn?: string[];
+  listenable?: true;
+  identity?: string;
   ephemeral?: true;
   position?: string;
   members?: { name: string; position: string }[];
@@ -67,7 +67,7 @@ type Step = { label: string; position: string };
 const chipClass: Record<string, string> = {
   read: "bg-emerald-100 text-emerald-800",
   write: "bg-amber-100 text-amber-800",
-  fires: "bg-violet-100 text-violet-800",
+  listenable: "bg-violet-100 text-violet-800",
   eph: "bg-gray-100 text-gray-600",
   none: "bg-gray-100 text-gray-500",
   stub: "bg-sky-100 text-sky-800",
@@ -152,10 +152,10 @@ function enumOptions(t: FieldType): string[] {
 }
 
 function EdgePromises({ e }: { e: WalkedEdge }) {
-  const any = e.fires || e.readable || e.writable;
+  const any = e.listenable || e.readable || e.writable;
   return (
     <span className="inline-flex flex-wrap gap-1">
-      {e.fires && <Chip kind="fires" label="fires" />}
+      {e.listenable && <Chip kind="listenable" label="listenable" />}
       {e.readable && <Chip kind="read" label="read" />}
       {e.writable && <Chip kind="write" label="write" />}
       {e.ephemeral && <Chip kind="eph" label="ephemeral" />}
@@ -386,7 +386,7 @@ function Properties({ properties }: { properties: Record<string, WalkedProperty>
 }
 
 function Edge({ edge, onWalk }: { edge: WalkedEdge; onWalk: (step: Step) => void }) {
-  const dotted = !edge.readable && !edge.fires;
+  const dotted = !edge.readable && !edge.listenable;
   const stubbed = edge.target?.stub === true;
   const walkable = edge.position !== undefined;
 
@@ -409,18 +409,16 @@ function Edge({ edge, onWalk }: { edge: WalkedEdge; onWalk: (step: Step) => void
       </button>
 
       {edge.description && <div className="mt-0.5 text-[11px] text-gray-400">{edge.description}</div>}
-      {edge.firesOn && edge.firesOn.length > 0 && (
-        <div className="mt-0.5 text-[11px] text-gray-400">fires on: {edge.firesOn.join(", ")}</div>
-      )}
 
       {/* Why an edge has no address is TWO different facts, and saying the
-          wrong one is worse than saying nothing. An event has no address
-          because it does not exist until it fires — that is the model, not a
-          gap. Anything else is reachable by name but not by walking. */}
+          wrong one is worse than saying nothing. What lands on a listenable
+          edge is announced to a listen; there is nothing to walk to before it
+          arrives — that is the model, not a gap. Anything else is reachable by
+          name but not by walking. */}
       {!walkable && !edge.members?.length && (
         <div className="mt-1 text-[11px] text-gray-400">
-          {edge.fires
-            ? "Delivered to a listener when it fires — you don't walk to an event."
+          {edge.listenable
+            ? "Announced to a listen when something lands on it — you don't walk to an arrival."
             : "No address — this edge is real, but it is reached by name, not by walking."}
         </div>
       )}
@@ -461,7 +459,7 @@ function Edge({ edge, onWalk }: { edge: WalkedEdge; onWalk: (step: Step) => void
  * that computed them; there is no second claim left to cross-check.
  */
 function HopHonesty({ node }: { node: WalkedNode }) {
-  const writeOnly = node.edges.filter((e) => e.writable && !e.readable && !e.fires).map((e) => e.name);
+  const writeOnly = node.edges.filter((e) => e.writable && !e.readable && !e.listenable).map((e) => e.name);
   const unwalkable = node.edges.filter((e) => e.position === undefined && !e.members?.length).map((e) => e.name);
   const stubs = node.edges.filter((e) => e.target?.stub === true).map((e) => e.target!.name);
   const unknownLanding = node.edges.filter((e) => e.target === undefined).map((e) => e.name);
@@ -470,7 +468,7 @@ function HopHonesty({ node }: { node: WalkedNode }) {
   // two exceptions are the point: an event edge and a polymorphic edge both
   // look empty to a read/write test and are neither.
   const promiseless = node.edges
-    .filter((e) => !e.readable && !e.writable && !e.fires && !e.members?.length)
+    .filter((e) => !e.readable && !e.writable && !e.listenable && !e.members?.length)
     .map((e) => e.name);
 
   const groups: [string, string[]][] = [
