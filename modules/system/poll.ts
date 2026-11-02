@@ -1,262 +1,264 @@
-// The system poll: the platform's own events, read from what the platform
-// already records. `Run Failed` comes from its runs, the other kinds from the
-// events it stores as they happen (a pause, the deploy check's three). The
-// host hands both readers in (`SystemRecords`); the poll keeps the marks,
-// picks the kinds a listen selected and shapes each event.
+// The system poll: the host's own events, made from the facts it keeps
+// (records.ts). A run is failed, and a wait stranded, by many writers, and
+// every one of them lands in the host's tables, so a poll over those tables
+// since a mark catches them all, at the price of a minute's latency, which a
+// failure notice can afford.
 //
-// WHY A POLL, NOT A PUSH. A run is marked failed by several independent writers
-// (the run recorder, Run now's settle, the interaction failure path, a cancel),
-// none of which goes through a shared queue. Hooking each one would be a seam
-// per writer and a silent gap the day a fifth appears. The run table is where
-// every one of them lands, so a poll over it since a checkpoint catches all of
-// them uniformly — at the price of a minute or two of latency, which a failure
-// notice can afford.
+// One poll per listen's kinds (adapter protocol 2.6 shares a poll between
+// the listens that take the same filter): the poll reads only the kinds the
+// listen's WHERE names, and says so (`takenApplied`). A WHERE it cannot read
+// leaves it reading every kind, and the host judges the WHERE itself.
 //
-// An automation is never told about its own failures: a handler that fails
-// while reporting a failure would otherwise report itself, forever. The host
-// hands the listening automation's id in, and its own runs are skipped (the
-// checkpoint still passes them, so they are never reconsidered). The platform
-// names the listener by its movement's id; lf names it by the movement its
-// listen fires, so a run lf recorded carries that movement too.
-//
-// Each event carries its kind's natural name as its `eventType` (adapter
-// protocol 2.3: a source labels its poll events). It is the name a listen's
-// `events:` selects with, so a host that narrows a listen's events by it
-// passes exactly what the poll chose.
+// A program is never told about its own listen's failures: a handler that
+// fails while reporting a failure would otherwise report itself, forever.
+// Each event about a run is `notFor` the listen that started that run. A
+// handler failing on ANOTHER listen's failures is a chain of runs, and the
+// host's loop breaker caps it: each event is `about` its run, which the
+// host matches to its own fact about that run.
 
-import type { DiscriminableEvent } from 'movement-engine/public/adapter';
-import type { PollAnswer, PollInput } from 'module-kit';
+import type { PollEdgeAnswer, PollEdgeInput } from 'module-kit';
 
-import { eventConfigList } from 'movement-engine/public/inbound';
+import type { ReleaseMark, RunMark, SettledRun, StrandedWait, SystemRecords, UnjudgedArrival, UnjudgedMark, WaitMark } from './records';
 import {
+  ARRIVAL_NOT_JUDGED,
+  EVENT_TYPE,
+  EVENTS_EDGE,
+  KIND_FIELD,
+  RELEASE_APPLIED,
   RUN_FAILED,
   RUN_PAUSED,
   SYSTEM_EVENT_KINDS,
+  WAIT_LOST_ITS_RECORD,
+  type SystemEventFields,
   type SystemEventKind,
-  type SystemEventPayload,
 } from './types';
 
-/** The platform's own table is cheap to read; a failure notice should not wait
- *  five minutes. Overridable per listen. */
-export const SYSTEM_POLL_INTERVAL_SECONDS = 60;
+type Arrival = PollEdgeAnswer['arrivals'][number];
 
-/** A run's failure time is stamped before its row commits, so a row can appear
- *  with a time already behind the mark. Reading only rows older than this
- *  keeps the mark behind every write still in flight. */
-const SETTLE_MS = 10_000;
+/** How often the host polls `Events` unless lf.yaml's `pollEvery` says otherwise. */
+export const SYSTEM_POLL_EVERY_SECONDS = 60;
 
-/** Rows per poll. More than this waits for the next poll rather than
- *  delivering a flood in one tick. */
-const PAGE_SIZE = 100;
+/** A fact's time is stamped before its row commits, so a row can appear with
+ *  a time already behind the mark. Reading only rows older than this keeps
+ *  the mark behind every write still in flight. */
+export const DEFAULT_SETTLE_SECONDS = 10;
 
-/** The lowest id, for a mark that has no row at its instant yet. */
+/** Rows per kind per poll: more waits for the next poll. */
+export const DEFAULT_PAGE_SIZE = 100;
+
+/** What an operator may set for the poll (the install's env: `SYSTEM_SETTLE_SECONDS`, `SYSTEM_PAGE_SIZE`). */
+export interface SystemPollSettings {
+  settleSeconds: number;
+  pageSize: number;
+}
+
+export const DEFAULT_POLL_SETTINGS: SystemPollSettings = { settleSeconds: DEFAULT_SETTLE_SECONDS, pageSize: DEFAULT_PAGE_SIZE };
+
+/** The lowest id, for a mark that has passed no row at its instant yet. */
 const NIL_ID = '00000000-0000-0000-0000-000000000000';
 
-/** Where the last poll stopped in the failed runs: the (failed at, run id) of
- *  the last run it passed. Ordered on both so runs failing in the same
- *  millisecond are neither skipped nor delivered twice. */
-export interface RunFailedMark {
-  failedAt: string;
-  runId: string;
+/** Where the last poll stopped, per source of facts. */
+export interface SystemCursor {
+  failed?: RunMark;
+  paused?: RunMark;
+  stranded?: WaitMark;
+  releases?: ReleaseMark;
+  unjudged?: UnjudgedMark;
 }
 
-/** Where the last poll stopped in the stored events, ordered the same way. */
-export interface StoredEventMark {
-  occurredAt: string;
-  id: string;
+/** The kinds a taken filter names (`Kind == "…"`, `Kind IN [...]`); undefined
+ *  for none, or for one this module cannot read (every kind is read, and the
+ *  host judges the filter). */
+export function kindsTaken(filter: unknown): SystemEventKind[] | undefined {
+  if (typeof filter !== 'object' || filter === null) return undefined;
+  const left: unknown = Reflect.get(filter, 'left');
+  const right: unknown = Reflect.get(filter, 'right');
+  const onKind = typeof left === 'object' && left !== null && Reflect.get(left, 'type') === 'property' && Reflect.get(left, 'propertyTypeId') === KIND_FIELD;
+  const value: unknown = typeof right === 'object' && right !== null && Reflect.get(right, 'type') === 'static' ? Reflect.get(right, 'value') : undefined;
+  if (Reflect.get(filter, 'type') !== 'compare' || !onKind) return undefined;
+  const op: unknown = Reflect.get(filter, 'op');
+  const names = op === 'eq' && typeof value === 'string' ? [value] : op === 'in' && Array.isArray(value) && value.every((v) => typeof v === 'string') ? (value as string[]) : undefined;
+  return names === undefined ? undefined : SYSTEM_EVENT_KINDS.filter((kind) => names.includes(kind.name));
 }
 
-export interface SystemCheckpoint {
-  runFailed?: RunFailedMark;
-  /** One mark across the stored kinds — they share one table and one order. */
-  stored?: StoredEventMark;
+function cursorOf(cursor: unknown): SystemCursor | undefined {
+  return typeof cursor === 'object' && cursor !== null ? (cursor as SystemCursor) : undefined;
 }
 
-/** One failed run, with the automation it belongs to — null for a run no
- *  automation owns (a legacy or simulated run), which the mark still passes
- *  but nothing delivers, since there is nothing to name or link. */
-export interface FailedRun {
-  runId: string;
-  automation: { id: string; name: string } | null;
-  /** The movement the run's listen fired, for a run lf recorded: an lf poll
-   *  names the listening automation by that movement alone. */
-  firedMovement?: string;
-  /** Where a person opens the run, when that is not the automation's failed
-   *  runs (an lf run is not listed there). */
-  url?: string;
-  reason: string;
-  failedAt: Date;
-}
+const EMPTY_FIELDS = {
+  Automation: '',
+  'Automation Id': '',
+  'Run Id': '',
+  Version: '',
+  Reason: '',
+  Url: '',
+  Adapter: '',
+  Edge: '',
+  'Record Id': '',
+  Listen: '',
+  'Delivery Id': '',
+  'Arrival Id': '',
+  Attempt: 0,
+} as const;
 
-/** One stored platform event. */
-export interface StoredSystemEvent {
-  id: string;
-  /** The kind's `typeId`. */
-  kind: string;
-  payload: SystemEventPayload;
-  occurredAt: Date;
-}
-
-/** What the host keeps of the platform's own events, for one tenant. */
-export interface SystemRecords {
-  /** The tenant's failed runs strictly after `after`, no later than `until`,
-   *  oldest first; rehearsals left out. */
-  failedRuns(input: { tenant: string; after: RunFailedMark; until: Date; limit: number }): Promise<FailedRun[]>;
-  /** The tenant's stored events of `kinds` (type ids) strictly after `after`,
-   *  no later than `until`, oldest first. */
-  storedEvents(input: { tenant: string; kinds: readonly string[]; after: StoredEventMark; until: Date; limit: number }): Promise<StoredSystemEvent[]>;
-  /** The web app's base URL, which an event's `Url` links into. */
-  webBaseUrl(): string;
-}
-
-/** A failed run that belongs to an automation — the only kind delivered. */
-type OwnedFailedRun = FailedRun & { automation: { id: string; name: string } };
-
-/** The kinds read from the stored events rather than the runs. */
-const STORED_KINDS: readonly SystemEventKind[] = SYSTEM_EVENT_KINDS.filter((kind) => kind !== RUN_FAILED);
-
-function runFailedMark(checkpoint: unknown): RunFailedMark | undefined {
-  const mark = (checkpoint as SystemCheckpoint | null | undefined)?.runFailed;
-  return typeof mark?.failedAt === 'string' && typeof mark.runId === 'string' ? mark : undefined;
-}
-
-function storedMark(checkpoint: unknown): StoredEventMark | undefined {
-  const mark = (checkpoint as SystemCheckpoint | null | undefined)?.stored;
-  return typeof mark?.occurredAt === 'string' && typeof mark.id === 'string' ? mark : undefined;
-}
-
-/** The kinds a listen selected — `Run Failed` alone when it selected nothing
- *  (the manifest's default). */
-function selectedKinds(config: unknown): SystemEventKind[] {
-  const selected = eventConfigList((config as { events?: unknown } | null | undefined)?.events);
-  if (selected.length === 0) return [RUN_FAILED];
-  return SYSTEM_EVENT_KINDS.filter((kind) => selected.includes(kind.displayName));
-}
-
-/** The automation's run history, filtered to its failures — the page a person
- *  opens to see this run beside the others. */
-export function failedRunsUrl(webBaseUrl: string, automationId: string): string {
-  return `${webBaseUrl.replace(/\/$/, '')}/movements/${encodeURIComponent(automationId)}?view=activity&status=failed`;
-}
-
-export function runFailedEvent(run: OwnedFailedRun, webBaseUrl: string): DiscriminableEvent {
-  const at = run.failedAt.toISOString();
-  const payload: SystemEventPayload = {
-    automation: run.automation.name,
-    automationId: run.automation.id,
-    runId: run.runId,
-    // A failed run's version is not what went wrong; the field is part of the
-    // one record shape every kind shares.
-    version: '',
-    reason: run.reason,
-    url: run.url ?? failedRunsUrl(webBaseUrl, run.automation.id),
-    at,
-  };
+function event(input: { kind: SystemEventKind; id: string; at: string; fields: Partial<SystemEventFields>; run?: string; listen?: string | null; taken: boolean }): Arrival {
+  const fields: SystemEventFields = { ...EMPTY_FIELDS, ...input.fields, 'Event Id': input.id, Kind: input.kind.name, At: input.at };
   return {
-    payload,
-    externalId: run.runId,
-    // Per-trigger receipt dedupe: a run is reported to a listener once, even if
-    // a crash between dispatch and checkpoint replays the poll.
-    idempotencyKey: `${RUN_FAILED.tag}:${run.runId}`,
-    tag: RUN_FAILED.tag,
-    eventType: RUN_FAILED.displayName,
-    occurredAt: at,
+    edge: EVENTS_EDGE,
+    identity: input.id,
+    landing: { recordId: input.id, recordType: EVENT_TYPE, fields: { ...fields } },
+    ...(input.run !== undefined ? { about: { recordType: 'Run', externalId: input.run } } : {}),
+    ...(input.listen !== undefined && input.listen !== null ? { notFor: input.listen } : {}),
+    ...(input.taken ? { takenApplied: true } : {}),
+    occurredAt: input.at,
   };
 }
 
-export function storedSystemEvent(event: StoredSystemEvent): DiscriminableEvent | null {
-  const kind = STORED_KINDS.find((k) => k.typeId === event.kind);
-  if (kind === undefined) return null;
-  return {
-    payload: event.payload,
-    externalId: event.id,
-    // Per-trigger receipt dedupe, as for a failed run.
-    idempotencyKey: `${kind.tag}:${event.id}`,
-    tag: kind.tag,
-    eventType: kind.displayName,
-    occurredAt: event.occurredAt.toISOString(),
-  };
-}
-
-/** One poll for one tenant over the host's records. */
-export async function pollSystemEvents(records: SystemRecords, tenant: string, input: PollInput): Promise<PollAnswer> {
-  const previous = (input.checkpoint ?? {}) as SystemCheckpoint;
-  const kinds = selectedKinds(input.config);
-  const until = new Date(Date.now() - SETTLE_MS);
-
-  const runFailed = kinds.includes(RUN_FAILED)
-    ? await pollRunFailed(records, { tenant, mark: runFailedMark(input.checkpoint), until, movementId: input.movementId })
-    : { events: [], mark: previous.runFailed };
-  const storedKinds = kinds.filter((kind) => kind !== RUN_FAILED);
-  const stored =
-    storedKinds.length > 0
-      ? await pollStored(records, { tenant, kinds: storedKinds, mark: storedMark(input.checkpoint), until, movementId: input.movementId })
-      : { events: [], mark: previous.stored };
-
-  return {
-    events: [...runFailed.events, ...stored.events],
-    checkpoint: {
-      ...previous,
-      ...(runFailed.mark !== undefined ? { runFailed: runFailed.mark } : {}),
-      ...(stored.mark !== undefined ? { stored: stored.mark } : {}),
-    },
-  };
-}
-
-/** Whether a failed run is the listening automation's own: by the
- *  automation's id, or, for a run lf recorded, by the movement it fired. */
-function isListenersOwn(run: OwnedFailedRun, movementId: string | undefined): boolean {
-  if (movementId === undefined) return false;
-  return run.automation.id === movementId || run.firedMovement === movementId;
-}
-
-async function pollRunFailed(
-  records: SystemRecords,
-  input: { tenant: string; mark: RunFailedMark | undefined; until: Date; movementId: string | undefined },
-): Promise<{ events: DiscriminableEvent[]; mark: RunFailedMark }> {
-  // First poll: set the mark and emit nothing. Going live never replays the
-  // failures that happened before anyone was listening.
-  if (input.mark === undefined) {
-    return { events: [], mark: { failedAt: input.until.toISOString(), runId: NIL_ID } };
-  }
-  const runs = await records.failedRuns({ tenant: input.tenant, after: input.mark, until: input.until, limit: PAGE_SIZE });
-  const last = runs[runs.length - 1];
-  const webBaseUrl = records.webBaseUrl();
-  return {
-    events: runs
-      .filter((run): run is OwnedFailedRun => run.automation !== null)
-      .filter((run) => !isListenersOwn(run, input.movementId))
-      .map((run) => runFailedEvent(run, webBaseUrl)),
-    mark: last === undefined ? input.mark : { failedAt: last.failedAt.toISOString(), runId: last.runId },
-  };
-}
-
-async function pollStored(
-  records: SystemRecords,
-  input: { tenant: string; kinds: readonly SystemEventKind[]; mark: StoredEventMark | undefined; until: Date; movementId: string | undefined },
-): Promise<{ events: DiscriminableEvent[]; mark: StoredEventMark }> {
-  // First poll: set the mark and emit nothing, as for failed runs.
-  if (input.mark === undefined) {
-    return { events: [], mark: { occurredAt: input.until.toISOString(), id: NIL_ID } };
-  }
-  // An automation IS told about its own validation issue: unlike a failure,
-  // hearing about it cannot produce another one. A pause is like a failure:
-  // a handler that paused while reporting a pause would report itself, so an
-  // automation is never told about its own runs pausing.
-  const events = await records.storedEvents({
-    tenant: input.tenant,
-    kinds: input.kinds.map((kind) => kind.typeId),
-    after: input.mark,
-    until: input.until,
-    limit: PAGE_SIZE,
+function runEvent(kind: SystemEventKind, run: SettledRun, webBaseUrl: string | null, taken: boolean): Arrival {
+  const activity = kind === RUN_FAILED ? 'view=activity&status=failed' : 'view=activity';
+  const url = run.url ?? (webBaseUrl !== null && run.automation !== null ? `${webBaseUrl.replace(/\/$/, '')}/movements/${encodeURIComponent(run.automation.id)}?${activity}` : '');
+  return event({
+    kind,
+    id: `${kind.id}:${run.runId}:${run.at}`,
+    at: run.at,
+    fields: { Automation: run.automation?.name ?? '', 'Automation Id': run.automation?.id ?? '', 'Run Id': run.runId, Reason: run.reason, Url: url },
+    run: run.runId,
+    listen: run.listen,
+    taken,
   });
-  const last = events[events.length - 1];
-  return {
-    events: events.flatMap((event) => {
-      if (event.kind === RUN_PAUSED.typeId && event.payload.automationId === input.movementId) return [];
-      const discriminable = storedSystemEvent(event);
-      return discriminable === null ? [] : [discriminable];
-    }),
-    mark: last === undefined ? input.mark : { occurredAt: last.occurredAt.toISOString(), id: last.id },
-  };
+}
+
+function waitEvent(wait: StrandedWait, taken: boolean): Arrival {
+  return event({
+    kind: WAIT_LOST_ITS_RECORD,
+    id: `${WAIT_LOST_ITS_RECORD.id}:${wait.waitId}:${wait.at}`,
+    at: wait.at,
+    fields: {
+      Automation: wait.automation?.name ?? '',
+      'Automation Id': wait.automation?.id ?? '',
+      'Run Id': wait.runId,
+      Reason: `the record it waits on was deleted: nothing will arrive on ${wait.edge}`,
+      Adapter: wait.adapter,
+      Edge: wait.edge,
+      'Record Id': wait.recordId ?? '',
+    },
+    run: wait.runId,
+    listen: wait.listen,
+    taken,
+  });
+}
+
+function unjudgedEvent(unjudged: UnjudgedArrival, taken: boolean): Arrival {
+  return event({
+    kind: ARRIVAL_NOT_JUDGED,
+    // One per listen, arrival and attempt, however often it is found: each
+    // replay that still cannot judge it is reported again.
+    id: `${ARRIVAL_NOT_JUDGED.id}:${unjudged.listen}:${unjudged.arrival}:${unjudged.attempt}`,
+    at: unjudged.at,
+    fields: {
+      Automation: unjudged.automation.name,
+      'Automation Id': unjudged.automation.id,
+      Reason: unjudged.reason,
+      Edge: unjudged.edge,
+      'Record Id': unjudged.recordId ?? '',
+      Listen: unjudged.listen,
+      'Delivery Id': unjudged.deliveryId ?? '',
+      'Arrival Id': unjudged.arrival,
+      Attempt: unjudged.attempt,
+    },
+    ...(unjudged.cause !== null ? { run: unjudged.cause } : {}),
+    listen: unjudged.listen,
+    taken,
+  });
+}
+
+/**
+ * One poll of `Events` over the host's facts. The first poll (no cursor)
+ * sets the marks and emits nothing: going live never replays what happened
+ * before anyone listened. Each later one emits each new fact of the kinds
+ * the listen asked for once, oldest first per kind, and sets the mark of a
+ * kind the cursor has none for, emitting nothing of it.
+ */
+export async function pollSystemEvents(records: SystemRecords, input: PollEdgeInput, settings: SystemPollSettings = DEFAULT_POLL_SETTINGS, now: number = Date.now()): Promise<PollEdgeAnswer> {
+  if (input.edge !== EVENTS_EDGE) throw new Error(`@lf/system: no edge ${input.edge} to poll (its one edge is ${EVENTS_EDGE})`);
+  const taken = kindsTaken(input.filter);
+  const asked = (kind: SystemEventKind) => taken === undefined || taken.includes(kind);
+  const previous = cursorOf(input.cursor);
+  const until = new Date(now - settings.settleSeconds * 1000).toISOString();
+  const limit = settings.pageSize;
+  const takenApplied = taken !== undefined;
+
+  // A source arms where it is first asked for, whenever that is: the first
+  // poll arms each of them, and a later one arms one a cursor lacks (a kind
+  // this module learned after the cursor was made).
+  const next: SystemCursor = { ...previous };
+  if (asked(RUN_FAILED)) next.failed ??= { at: until, runId: NIL_ID };
+  if (asked(RUN_PAUSED)) next.paused ??= { at: until, runId: NIL_ID };
+  if (asked(WAIT_LOST_ITS_RECORD)) next.stranded ??= { at: until, waitId: NIL_ID };
+  if (asked(RELEASE_APPLIED)) next.releases ??= { at: until, version: '' };
+  if (asked(ARRIVAL_NOT_JUDGED)) next.unjudged ??= { at: until, listen: '', arrival: '', attempt: 0 };
+  if (previous === undefined) return { arrivals: [], cursor: next };
+
+  const arrivals: Arrival[] = [];
+  const webBaseUrl = asked(RUN_FAILED) || asked(RUN_PAUSED) ? await records.webBaseUrl() : null;
+  const settledKinds = [
+    [RUN_FAILED, 'failed', records.failedRuns.bind(records)],
+    [RUN_PAUSED, 'paused', records.pausedRuns.bind(records)],
+  ] as const;
+  for (const [kind, member, read] of settledKinds) {
+    const mark = previous[member];
+    if (!asked(kind) || mark === undefined) continue;
+    const runs = await read({ after: mark, until, limit });
+    const last = runs.at(-1);
+    if (last !== undefined) next[member] = { at: last.at, runId: last.runId };
+    // A run no program owns, or a rehearsal: the mark passes it, nothing is said.
+    for (const run of runs) if (run.automation !== null && !run.rehearsal) arrivals.push(runEvent(kind, run, webBaseUrl, takenApplied));
+  }
+  if (asked(WAIT_LOST_ITS_RECORD) && previous.stranded !== undefined) {
+    // Stranded waits are read without an upper bound; one inside the settle
+    // window waits for the next poll, and so does every one after it.
+    const waits = await records.strandedWaits({ after: previous.stranded, limit });
+    const settled = waits.slice(0, firstPast(waits, until));
+    const last = settled.at(-1);
+    if (last !== undefined) next.stranded = { at: last.at, waitId: last.waitId };
+    for (const wait of settled) arrivals.push(waitEvent(wait, takenApplied));
+  }
+  if (asked(RELEASE_APPLIED) && previous.releases !== undefined) {
+    const releases = await records.releases({ after: previous.releases, limit });
+    const settled = releases.slice(0, firstPast(releases, until));
+    const last = settled.at(-1);
+    if (last !== undefined) next.releases = { at: last.at, version: last.version };
+    for (const release of settled) {
+      arrivals.push(event({ kind: RELEASE_APPLIED, id: `${RELEASE_APPLIED.id}:${release.version}`, at: release.at, fields: { Version: release.version, Reason: `release ${release.version} is running` }, taken: takenApplied }));
+    }
+  }
+  if (asked(ARRIVAL_NOT_JUDGED) && previous.unjudged !== undefined) {
+    const unjudged = await records.unjudgedArrivals({ after: previous.unjudged, limit });
+    const settled = unjudged.slice(0, firstPast(unjudged, until));
+    const last = settled.at(-1);
+    if (last !== undefined) next.unjudged = { at: last.at, listen: last.listen, arrival: last.arrival, attempt: last.attempt };
+    for (const one of settled) {
+      if (isUnjudgedReport(one)) {
+        console.warn(`@lf/system: ${one.automation.id} could not judge the Arrival Not Judged event ${one.recordId ?? ''} (${one.reason}); not reported, so no listen is told of another's report about it`);
+        continue;
+      }
+      arrivals.push(unjudgedEvent(one, takenApplied));
+    }
+  }
+  return { arrivals, cursor: next };
+}
+
+/** Whether the arrival a listen could not judge is itself one of this
+ *  module's `Arrival Not Judged` events (its record is the event, its id one
+ *  this module minted). It is never reported in turn: two listens on `Events`
+ *  that cannot judge such events would report each other's without end, once
+ *  a poll, and no run would ever start for the loop breaker to count. */
+function isUnjudgedReport(unjudged: UnjudgedArrival): boolean {
+  return unjudged.edge === EVENTS_EDGE && (unjudged.recordId ?? '').startsWith(`${ARRIVAL_NOT_JUDGED.id}:`);
+}
+
+/** The index of the first row past `until`, else the length. */
+function firstPast(rows: ReadonlyArray<{ at: string }>, until: string): number {
+  const at = rows.findIndex((row) => Date.parse(row.at) > Date.parse(until));
+  return at < 0 ? rows.length : at;
 }

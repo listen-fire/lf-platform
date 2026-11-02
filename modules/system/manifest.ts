@@ -4,7 +4,7 @@
 import type { AdapterManifest } from 'movement-engine/public/adapter';
 
 import { SYSTEM_HANDBOOK_SECTION } from './handbook_section';
-import { RUN_FAILED, SYSTEM_ADAPTER_TYPE, SYSTEM_SUBSCRIBABLE_EVENTS } from './types';
+import { DEFAULT_KIND, EVENTS_EDGE, KIND_FIELD, SYSTEM_ADAPTER_TYPE } from './types';
 
 export const SYSTEM_MANIFEST: AdapterManifest = {
   adapterType: SYSTEM_ADAPTER_TYPE,
@@ -14,24 +14,26 @@ export const SYSTEM_MANIFEST: AdapterManifest = {
     'another automation fails — post the failure to Slack, open a ticket. Built ' +
     'in; nothing to connect.',
   authoringHints:
-    'Every event carries `Automation`, `Automation Id`, `Run Id`, `Version`, ' +
-    '`Reason`, `Url` and `At`. `Run Failed` is delivered as runs fail; ' +
-    '`Validation Issue`, `Deprecated Version` and `Release Applied` as a new ' +
-    'release is deployed. An automation is never told about its own failures.',
+    'Every event arrives on `Events`; narrow it by `Kind` (`sys-[e:Events WHERE e.Kind == "Run Failed"]->`). ' +
+    'Every event carries `Automation`, `Automation Id`, `Run Id`, `Version`, `Reason`, `Url` and `At`. ' +
+    'An automation is never told about its own listen’s failures.',
   handbookSection: SYSTEM_HANDBOOK_SECTION,
   triggerExpectation:
-    'Fires on the platform’s own events, selected with `events`. `Run Failed` ' +
-    '(the default) fires once per run of ANOTHER automation in this workspace ' +
-    'that ends failed, within a couple of minutes — never for the listening ' +
-    'automation’s own runs, and never for a rehearsal. `Validation Issue` and ' +
-    '`Deprecated Version` fire once per affected automation, and `Release Applied` ' +
-    'once per workspace, each time a new release is deployed. The first poll sets ' +
-    'the mark and emits nothing, so going live never replays past events.',
+    'Fires on the platform’s own events, polled every minute by default: a run of ANOTHER automation ' +
+    'in this workspace ending failed or pausing at its cost limit (never a rehearsal), a wait whose ' +
+    'record was deleted, a listen that could not judge an arrival, a release deployed. The first poll ' +
+    'sets the mark and emits nothing, so going live never replays past events.',
   supportedTriggers: ['poll'],
-  methods: ['listEntryPoints', 'describe', 'getFieldValue', 'listEventTypes'],
-  subscribableEvents: [...SYSTEM_SUBSCRIBABLE_EVENTS],
-  defaultSubscribedEvents: [RUN_FAILED.displayName],
-  listenConfig: [{ key: 'pollIntervalSeconds', required: false }],
+  methods: ['listEntryPoints', 'describe', 'getFieldValue'],
+  // A 0.12 `listen to sys { events: ["Run Failed", "Run Paused"] }` is
+  // `listen to sys-[e:Events WHERE e.Kind IN ["Run Failed", "Run Paused"]]->`;
+  // one naming no events heard `Run Failed`.
+  listenSettingsBecome: {
+    path: [EVENTS_EDGE],
+    aliases: ['e'],
+    paramFrom: DEFAULT_KIND.name,
+    keys: { events: { hop: 0, field: KIND_FIELD, op: 'in', absent: DEFAULT_KIND.name } },
+  },
   vocabulary: {
     // A built-in owns no brand, but it still owns a mark (see the manual
     // adapter). A pulse line: the platform's own heartbeat.
@@ -40,7 +42,7 @@ export const SYSTEM_MANIFEST: AdapterManifest = {
       fill: false,
     },
     eventPhrase: {
-      default: [{ template: 'When another automation’s run fails' }],
+      default: [{ template: 'When something happens to another automation' }],
     },
   },
 };

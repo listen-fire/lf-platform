@@ -4,56 +4,44 @@
 
 import type { HandbookSection } from 'movement-engine/public/handbook';
 
+const REPORT_FAILURES = `
+import { \`@lf/system\` as system, \`@lf/slack\` as slack } from adapters
+import { team_workspace } from credentials
+
+sys  = connect system
+team = connect slack using team_workspace
+
+function report(e: <sys-[:Events]->>) {
+  alerts = only(team-[ch:Channels WHERE ch.Name == "alerts"]->)
+  if (alerts == null) { fail("no #alerts channel") }
+  write alerts-[:Messages]-> { Message: "\${e.Automation} failed: \${e.Reason} \${e.Url}" }
+}
+
+listen to sys-[e:Events WHERE e.Kind == "Run Failed"]-> fire report
+`;
+
 export const SYSTEM_HANDBOOK_SECTION: HandbookSection = {
   title: 'Platform events — when an automation fails (system)',
   content: `## Platform events — when an automation fails (system)
 
-Use \`connect system\` to run an automation when something happens to your other automations. Post a failure to Slack:
+Use \`connect system\` to run an automation when something happens to your other automations. Post each failure to Slack:
 
-\`\`\`
-import { \`@lf/system\` as system, \`@lf/slack\` as slack } from adapters
-import { team_workspace } from credentials
+\`\`\`${REPORT_FAILURES}\`\`\`
 
-sys  = connect system
-team = connect slack using team_workspace
-
-function \`Report Failure\`(failed: <sys-[:\`Run Failed\`]->>) {
-  alerts = only(team-[ch:Channels WHERE ch.Name == "alerts"]->)
-  if (alerts == null) { fail("no #alerts channel") }
-  write alerts-[:Messages]-> {
-    Message: "\${failed.Automation} failed: \${failed.Reason} \${failed.Url}"
-  }
-}
-
-listen as "Report failures" to sys { events: ["Run Failed"] } fire \`Report Failure\`
-\`\`\`
-
-- Every event carries \`Automation\`, \`Automation Id\`, \`Run Id\`, \`Version\`, \`Reason\`, \`Url\` (a link to the automation's failed runs) and \`At\`.
-- \`Run Failed\` arrives within a couple of minutes of a run ending failed, once per run. An automation is never told about its own failures, and a rehearsal failing is not reported.
-- \`Validation Issue\`, \`Deprecated Version\` and \`Release Applied\` arrive when a new release is deployed. The first two fire once per automation that stays on an older language version (\`Version\` names it, \`Reason\` says what to repair); \`Release Applied\` fires once per workspace, with the release and its counts in \`Reason\` and \`Automation\` empty. Listen to them with \`events: ["Validation Issue"]\`, and so on.
-- \`Run Paused\` arrives when a run reaches the deployment's cost limit and pauses instead of failing. \`Reason\` says what it spent and the limit, and \`Url\` links to the automation's runs. The run waits until someone resumes it, which resets its usage.
+- Every event arrives on \`Events\`. Name the kinds a listen wants with \`e.Kind == "…"\` or \`e.Kind IN [...]\`: \`Run Failed\`, \`Run Paused\`, \`Wait Lost Its Record\`, \`Arrival Not Judged\`, \`Release Applied\`, \`Validation Issue\`, \`Deprecated Version\`.
+- Every event carries \`Kind\`, \`Event Id\`, \`Automation\`, \`Automation Id\`, \`Run Id\`, \`Version\`, \`Reason\`, \`Url\` and \`At\`. A wait that lost its record also carries \`Adapter\`, \`Edge\` and \`Record Id\`; an arrival not judged carries \`Edge\`, \`Record Id\`, \`Listen\`, \`Delivery Id\`, \`Arrival Id\` and \`Attempt\`.
+- \`Run Failed\` arrives within a couple of minutes of a run ending failed, once per run. \`Url\` links to the automation's failed runs. A rehearsal failing is not reported.
+- \`Run Paused\` arrives when a run reaches the deployment's cost limit and pauses instead of failing. \`Reason\` says what it spent and the limit. The run waits until someone resumes it, which resets its usage.
+- \`Wait Lost Its Record\`: a run waits on a record that was deleted, so nothing will arrive. Race such a wait with a \`sleep\`.
+- \`Arrival Not Judged\`: a listen could not tell whether something that arrived fires it, because its WHERE reads a field the connected system could not give. That listen ran nothing; the arrival's other listens ran.
+- \`Validation Issue\`, \`Deprecated Version\` and \`Release Applied\` arrive when a new release is deployed.
+- An automation is never told about its own listen's failures or waits. A handler that fails on another automation's failures, which fails in turn, is a chain the platform pauses.
 - Going live never replays earlier events: the first look sets the mark.`,
   engineClaims: [
     {
-      construct: 'system-channel listeners (runs over the Run Failed position)',
+      construct: 'system-channel listeners (runs over the Events edge, narrowed by Kind)',
       status: 'runs',
-      probe: `
-import { \`@lf/system\` as system, \`@lf/slack\` as slack } from adapters
-import { team_workspace } from credentials
-
-sys  = connect system
-team = connect slack using team_workspace
-
-function \`Report Failure\`(failed: <sys-[:\`Run Failed\`]->>) {
-  alerts = only(team-[ch:Channels WHERE ch.Name == "alerts"]->)
-  if (alerts == null) { fail("no #alerts channel") }
-  write alerts-[:Messages]-> {
-    Message: "\${failed.Automation} failed: \${failed.Reason} \${failed.Url}"
-  }
-}
-
-listen as "Report failures" to sys { events: ["Run Failed"] } fire \`Report Failure\`
-`,
+      probe: REPORT_FAILURES,
     },
   ],
 };

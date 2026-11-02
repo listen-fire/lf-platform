@@ -1,117 +1,97 @@
-// The system adapter's read surface: the platform itself as a system an
-// automation can listen to.
-//
-//   sys = system()
-//   listen to sys { events: ["Run Failed"] } fire `Report Failure`
-//
-// Read-only and credential-free: nothing is written here and nothing is
-// enumerated — the platform's events are DELIVERED, one fires edge per kind,
-// each landing on a record with the same fields (types.ts). Event production
-// lives on the poll (poll.ts), over the records the host hands it.
+// The system adapter's read surface: the host itself as a source a program
+// listens to. Read-only and credential-free: nothing is written or listed
+// here. Its events are delivered on one root edge, `Events`, polled
+// (poll.ts), each landing on an `Event` whose `Kind` a listen narrows.
 
-import type { Adapter, EdgesFromResult, EventType } from 'movement-engine/public/adapter';
-import type {
-  SchemaEntryPoint,
-  SchemaReferenceDescriptor,
-  SchemaTypeDescriptor,
-  SourcePosition,
-} from 'movement-engine/public/catalog';
+import type { Adapter, EdgesFromResult } from 'movement-engine/public/adapter';
+import type { SchemaEntryPoint, SchemaTypeDescriptor, SourcePosition } from 'movement-engine/public/catalog';
 
 import { uniformWalk } from 'module-kit/adapter/hop';
-import { META_RECORD_TYPE, positionData } from 'movement-engine/public/catalog';
 import { BaseAdapter } from 'module-kit/adapter/base';
+import { META_RECORD_TYPE, positionData } from 'movement-engine/public/catalog';
 import { SYSTEM_MANIFEST } from './manifest';
-import { SYSTEM_ADAPTER_TYPE, SYSTEM_EVENT_KINDS, type SystemEventKind } from './types';
-/** The one record shape every kind lands on. */
-function systemEventDescriptor(kind: SystemEventKind): SchemaTypeDescriptor {
-  return {
-    typeId: kind.typeId,
-    displayName: kind.displayName,
-    description: kind.description,
-    fields: [
-      { fieldId: 'automation', displayName: 'Automation', kind: 'string', writable: false, required: true, description: 'The name of the automation the event is about.' },
-      { fieldId: 'automationId', displayName: 'Automation Id', kind: 'string', writable: false, required: true, description: 'That automation’s id.' },
-      { fieldId: 'runId', displayName: 'Run Id', kind: 'string', writable: false, required: true, description: 'The run the event is about; empty when it concerns no run.' },
-      { fieldId: 'version', displayName: 'Version', kind: 'string', writable: false, required: true, description: 'The name of the language version involved; empty when none is.' },
-      { fieldId: 'reason', displayName: 'Reason', kind: 'string', writable: false, required: true, description: 'What happened, in words — for a failed run, why it failed.' },
-      { fieldId: 'url', displayName: 'Url', kind: 'string', writable: false, required: true, description: 'A link into the app: the automation’s failed runs, or the automation itself.' },
-      { fieldId: 'at', displayName: 'At', kind: 'date', writable: false, required: true, description: 'When it happened (UTC).' },
-    ],
-    references: [],
-  };
-}
+import { SYSTEM_POLL_EVERY_SECONDS } from './poll';
+import { EVENT_TYPE, EVENTS_EDGE, KIND_FIELD, SYSTEM_ADAPTER_TYPE, SYSTEM_EVENT_FIELDS, SYSTEM_EVENT_KINDS } from './types';
 
-/** The root's edge for one kind: fired along, never read or written. */
-function firesEdge(kind: SystemEventKind): SchemaReferenceDescriptor {
-  return {
-    fieldId: kind.typeId,
-    targetTypeId: kind.typeId,
-    cardinality: 'one',
-    direction: 'outgoing',
-    name: kind.displayName,
-    fires: true,
-    firesOn: [kind.displayName],
-    readable: false,
+/** The one record shape every kind lands on. */
+const EVENT_DESCRIPTOR: SchemaTypeDescriptor = {
+  typeId: EVENT_TYPE,
+  displayName: EVENT_TYPE,
+  description: 'Something that happened to the host’s runs, waits or releases. `Kind` says which.',
+  fields: SYSTEM_EVENT_FIELDS.map((field) => ({
+    fieldId: field.name,
+    displayName: field.name,
+    kind: field.kind,
     writable: false,
-    description: kind.description,
-  };
-}
+    required: true,
+    description: field.description,
+    ...(field.name === KIND_FIELD ? { enumValues: SYSTEM_EVENT_KINDS.map((kind) => kind.name), capability: { filterOperators: ['eq', 'in'] } } : {}),
+  })),
+  references: [],
+};
+
+/** The root's one edge: listened to, never read or written. */
+const EVENTS_ENTRY: SchemaEntryPoint = {
+  typeId: EVENT_TYPE,
+  displayName: EVENT_TYPE,
+  collectionName: EVENTS_EDGE,
+  readable: false,
+  writable: false,
+  listenable: true,
+  delivery: 'polled',
+  pollEverySeconds: SYSTEM_POLL_EVERY_SECONDS,
+  cursor: true,
+  identity: 'Event Id',
+  // Each event about a run says so (`about` the host's `Run`): the host's
+  // loop breaker continues that run's chain.
+  attributes: true,
+  capability: { filter: 'native', supportsLimit: false },
+};
+
+/** The host itself: nothing listed, one edge listened to. */
+const ROOT: SchemaTypeDescriptor = {
+  typeId: META_RECORD_TYPE,
+  displayName: 'Listen-Fire',
+  description: 'The host itself. Nothing here can be listed: its events are delivered on `Events`, which a listen narrows by `Kind`.',
+  fields: [],
+  references: [
+    {
+      fieldId: EVENT_TYPE,
+      targetTypeId: EVENT_TYPE,
+      cardinality: 'many',
+      direction: 'outgoing',
+      name: EVENTS_EDGE,
+      listenable: true,
+      readable: false,
+      writable: false,
+      description: 'Each thing that happens to the host’s runs, waits or releases, as it is found.',
+    },
+  ],
+};
 
 export class SystemAdapter extends BaseAdapter implements Adapter {
   readonly adapterType = SYSTEM_ADAPTER_TYPE;
   readonly supportedTriggers = SYSTEM_MANIFEST.supportedTriggers;
+
   async listEntryPoints(): Promise<SchemaEntryPoint[]> {
-    // Nothing enumerates the platform's events — each is DELIVERED — so every
-    // entry is a fires edge and none is readable or writable.
-    return SYSTEM_EVENT_KINDS.map((kind) => ({
-      typeId: kind.typeId,
-      displayName: kind.displayName,
-      writable: false,
-      readable: false,
-      fires: true,
-      firesOn: [kind.displayName],
-    }));
+    return [EVENTS_ENTRY];
   }
 
-  private static readonly ROOT: SchemaTypeDescriptor = {
-    typeId: META_RECORD_TYPE,
-    displayName: 'Listen-Fire',
-    description:
-      'The platform itself. Nothing here can be listed or written — its events ' +
-      'are delivered, and each edge leaving here is one a listen subscribes to.',
-    fields: [],
-    references: SYSTEM_EVENT_KINDS.map(firesEdge),
-  };
-
   async edgesFrom(position: SourcePosition): Promise<EdgesFromResult | null> {
-    return uniformWalk({
-      adapterType: SYSTEM_ADAPTER_TYPE,
-      at: position,
-      root: SystemAdapter.ROOT,
-      describe: (typeId) => this.describe(typeId),
-    });
+    return uniformWalk({ adapterType: SYSTEM_ADAPTER_TYPE, at: position, root: ROOT, describe: (typeId) => this.describe(typeId) });
   }
 
   async describe(typeRef: string): Promise<SchemaTypeDescriptor | null> {
     const typeId = await this.resolveTypeRef(typeRef);
-    const kind = SYSTEM_EVENT_KINDS.find((k) => k.typeId === typeId);
-    return kind ? systemEventDescriptor(kind) : null;
+    return typeId === EVENT_TYPE ? EVENT_DESCRIPTOR : null;
   }
 
   async getFieldValue(input: { position: SourcePosition; fieldId: string }): Promise<unknown> {
     if (input.position.adapterType !== SYSTEM_ADAPTER_TYPE) {
-      throw new Error(
-        `SystemAdapter.getFieldValue received a position from a different adapter ('${input.position.adapterType}').`,
-      );
+      throw new Error(`SystemAdapter.getFieldValue received a position from a different adapter ('${input.position.adapterType}').`);
     }
     const fieldId = await this.resolveFieldId(input.position, input.fieldId);
     const data = (positionData(input.position) ?? {}) as Record<string, unknown>;
     return data[fieldId] ?? null;
-  }
-
-  /** The poll source tags every event it produces, so discrimination is by tag
-   *  alone — which edge a listen is on, never a sniff of the payload. */
-  async listEventTypes(): Promise<EventType[]> {
-    return SYSTEM_EVENT_KINDS.map((kind) => ({ tag: kind.tag, positionType: kind.typeId }));
   }
 }
