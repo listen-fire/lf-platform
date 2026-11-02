@@ -11,7 +11,6 @@ exports[`all and race in the Rust engine fails with the earliest arm’s failure
       },
     ],
   ],
-  "awaited": [],
   "bodies": [
     {
       "body": "kept",
@@ -49,7 +48,6 @@ exports[`all and race in the Rust engine parks a race all of whose arms wait, as
       },
     ],
   ],
-  "awaited": [],
   "bodies": [],
   "events": [
     [
@@ -111,7 +109,6 @@ exports[`all and race in the Rust engine parks an \`all\` whose arms sleep, keep
       },
     ],
   ],
-  "awaited": [],
   "bodies": [],
   "events": [
     [
@@ -202,7 +199,6 @@ exports[`all and race in the Rust engine runs an \`all\`’s arms and binds its 
       },
     ],
   ],
-  "awaited": [],
   "bodies": [
     {
       "body": "arm 0",
@@ -279,7 +275,6 @@ exports[`all and race in the Rust engine runs named closures as arms 1`] = `
       },
     ],
   ],
-  "awaited": [],
   "bodies": [
     {
       "body": "7 8",
@@ -318,7 +313,6 @@ exports[`all and race in the Rust engine settles a race on every arm that finish
       },
     ],
   ],
-  "awaited": [],
   "bodies": [
     {
       "body": "first/second",
@@ -361,7 +355,6 @@ exports[`all and race in the Rust engine stops listening on the arms still parke
       },
     ],
   ],
-  "awaited": [],
   "bodies": [
     {
       "payload": {
@@ -436,7 +429,6 @@ exports[`binding kinds parked and resumed parks a positions and resumes it 1`] =
       },
     ],
   ],
-  "awaited": [],
   "bodies": [],
   "events": [
     [
@@ -468,7 +460,6 @@ exports[`binding kinds parked and resumed parks a positions and resumes it 1`] =
 exports[`binding kinds parked and resumed parks a positions and resumes it 2`] = `
 {
   "appends": [],
-  "awaited": [],
   "bodies": [
     {
       "payload": {
@@ -504,7 +495,6 @@ exports[`binding kinds parked and resumed parks a recordValue and resumes it 1`]
       },
     ],
   ],
-  "awaited": [],
   "bodies": [],
   "events": [
     [
@@ -531,7 +521,6 @@ exports[`binding kinds parked and resumed parks a recordValue and resumes it 1`]
 exports[`binding kinds parked and resumed parks a recordValue and resumes it 2`] = `
 {
   "appends": [],
-  "awaited": [],
   "bodies": [
     {
       "payload": {
@@ -559,86 +548,6 @@ exports[`binding kinds parked and resumed parks a recordValue and resumes it 2`]
 }
 `;
 
-exports[`binding kinds parked and resumed parks a shapePosition and resumes it 1`] = `
-{
-  "appends": [
-    [
-      {
-        "kind": "gate",
-        "outcome": false,
-      },
-    ],
-  ],
-  "awaited": [],
-  "bodies": [],
-  "events": [
-    [
-      "mint",
-      {
-        "address": "s0",
-        "params": [
-          {
-            "name": "note",
-            "type": "text",
-          },
-        ],
-        "singleUse": true,
-      },
-    ],
-    [
-      "calls",
-      "cb_1",
-    ],
-    [
-      "commitTimerPark",
-      {
-        "address": "s2",
-        "wakeAt": "2026-01-01T01:00:00.000Z",
-      },
-    ],
-  ],
-  "parked": true,
-  "parkedAddress": "s2",
-  "trace": [
-    {
-      "kind": "gate",
-      "outcome": false,
-    },
-  ],
-  "wakes": [],
-  "writes": [],
-}
-`;
-
-exports[`binding kinds parked and resumed parks a shapePosition and resumes it 2`] = `
-{
-  "appends": [],
-  "awaited": [],
-  "bodies": [
-    {
-      "payload": {
-        "b": "yes",
-      },
-    },
-  ],
-  "events": [],
-  "trace": [],
-  "wakes": [],
-  "writes": [
-    {
-      "externalId": "note-1",
-      "outcome": "create",
-      "recordType": "note",
-      "writtenValues": {
-        "payload": {
-          "b": "yes",
-        },
-      },
-    },
-  ],
-}
-`;
-
 exports[`binding kinds parked and resumed parks a sourcePosition and resumes it 1`] = `
 {
   "appends": [
@@ -649,7 +558,6 @@ exports[`binding kinds parked and resumed parks a sourcePosition and resumes it 
       },
     ],
   ],
-  "awaited": [],
   "bodies": [],
   "events": [
     [
@@ -676,7 +584,6 @@ exports[`binding kinds parked and resumed parks a sourcePosition and resumes it 
 exports[`binding kinds parked and resumed parks a sourcePosition and resumes it 2`] = `
 {
   "appends": [],
-  "awaited": [],
   "bodies": [
     {
       "payload": {
@@ -695,93 +602,6 @@ exports[`binding kinds parked and resumed parks a sourcePosition and resumes it 
       "writtenValues": {
         "payload": {
           "b": "a",
-        },
-      },
-    },
-  ],
-}
-`;
-
-exports[`parks resumed awaits an edge of a record it walked to, asking by that record's own id and data 1`] = `
-{
-  "appends": [
-    [
-      {
-        "kind": "gate",
-        "outcome": false,
-      },
-    ],
-  ],
-  "awaited": [
-    {
-      "edge": "Response",
-      "headData": {
-        "Prompt": "q",
-      },
-      "recordId": "check-7",
-    },
-    {
-      "edge": "Response",
-      "headData": {
-        "Prompt": "q",
-      },
-      "recordId": "check-7",
-    },
-  ],
-  "bodies": [],
-  "events": [
-    [
-      "commitAwaitPark",
-      {
-        "adapterType": "kg",
-        "address": "s1",
-        "correlationKey": "ck:check-7",
-      },
-    ],
-  ],
-  "parked": true,
-  "parkedAddress": "s1",
-  "trace": [
-    {
-      "kind": "gate",
-      "outcome": false,
-    },
-  ],
-  "wakes": [],
-  "writes": [],
-}
-`;
-
-exports[`parks resumed awaits an edge of a record it walked to, asking by that record's own id and data 2`] = `
-{
-  "appends": [],
-  "awaited": [
-    {
-      "edge": "Response",
-      "headData": {
-        "Prompt": "q",
-      },
-      "recordId": "check-7",
-    },
-  ],
-  "bodies": [
-    {
-      "payload": {
-        "a": true,
-      },
-    },
-  ],
-  "events": [],
-  "trace": [],
-  "wakes": [],
-  "writes": [
-    {
-      "externalId": "note-1",
-      "outcome": "create",
-      "recordType": "note",
-      "writtenValues": {
-        "payload": {
-          "a": true,
         },
       },
     },
@@ -808,7 +628,6 @@ exports[`parks resumed defers a race’s settlement under a batch resume, then s
       },
     ],
   ],
-  "awaited": [],
   "bodies": [],
   "events": [
     [
@@ -874,7 +693,6 @@ exports[`parks resumed defers a race’s settlement under a batch resume, then s
       },
     ],
   ],
-  "awaited": [],
   "bodies": [],
   "events": [
     [
@@ -924,7 +742,6 @@ exports[`parks resumed defers a race’s settlement under a batch resume, then s
 exports[`parks resumed defers a race’s settlement under a batch resume, then settles it once 3`] = `
 {
   "appends": [],
-  "awaited": [],
   "bodies": [],
   "deferredRaceFrames": [
     "s0",
@@ -992,7 +809,6 @@ exports[`parks resumed defers a race’s settlement under a batch resume, then s
 exports[`parks resumed defers a race’s settlement under a batch resume, then settles it once 4`] = `
 {
   "appends": [],
-  "awaited": [],
   "bodies": [
     {
       "payload": {
@@ -1040,425 +856,6 @@ exports[`parks resumed defers a race’s settlement under a batch resume, then s
 }
 `;
 
-exports[`parks resumed goes on past a landing that has landed, and past one settled empty 1`] = `
-{
-  "appends": [],
-  "awaited": [
-    {
-      "edge": "Response",
-      "headData": {},
-      "recordId": "note-1",
-    },
-  ],
-  "bodies": [
-    {
-      "Prompt": "q",
-    },
-    {
-      "body": "after",
-    },
-  ],
-  "events": [],
-  "trace": [],
-  "wakes": [],
-  "writes": [
-    {
-      "externalId": "note-1",
-      "outcome": "create",
-      "recordType": "Check",
-      "writtenValues": {
-        "Prompt": "q",
-      },
-    },
-    {
-      "externalId": "note-2",
-      "outcome": "create",
-      "recordType": "note",
-      "writtenValues": {
-        "body": "after",
-      },
-    },
-  ],
-}
-`;
-
-exports[`parks resumed goes on past a landing that has landed, and past one settled empty 2`] = `
-{
-  "appends": [],
-  "awaited": [
-    {
-      "edge": "Response",
-      "headData": {},
-      "recordId": "note-1",
-    },
-  ],
-  "bodies": [
-    {
-      "Prompt": "q",
-    },
-    {
-      "body": "after",
-    },
-  ],
-  "events": [],
-  "trace": [],
-  "wakes": [],
-  "writes": [
-    {
-      "externalId": "note-1",
-      "outcome": "create",
-      "recordType": "Check",
-      "writtenValues": {
-        "Prompt": "q",
-      },
-    },
-    {
-      "externalId": "note-2",
-      "outcome": "create",
-      "recordType": "note",
-      "writtenValues": {
-        "body": "after",
-      },
-    },
-  ],
-}
-`;
-
-exports[`parks resumed parks an await on a landing still pending, under the key the adapter names 1`] = `
-{
-  "appends": [
-    [
-      {
-        "kind": "gate",
-        "outcome": false,
-      },
-    ],
-  ],
-  "awaited": [
-    {
-      "edge": "Response",
-      "headData": {},
-      "recordId": "note-1",
-    },
-    {
-      "edge": "Response",
-      "headData": {},
-      "recordId": "note-1",
-    },
-  ],
-  "bodies": [
-    {
-      "Prompt": "q",
-    },
-  ],
-  "events": [
-    [
-      "commitAwaitPark",
-      {
-        "adapterType": "kg",
-        "address": "s1",
-        "correlationKey": "ck:note-1",
-      },
-    ],
-  ],
-  "parked": true,
-  "parkedAddress": "s1",
-  "trace": [
-    {
-      "kind": "gate",
-      "outcome": false,
-    },
-  ],
-  "wakes": [],
-  "writes": [
-    {
-      "externalId": "note-1",
-      "outcome": "create",
-      "recordType": "Check",
-      "writtenValues": {
-        "Prompt": "q",
-      },
-    },
-  ],
-}
-`;
-
-exports[`parks resumed re-enters a parked landing await: landed, it goes on; still pending, it parks again 1`] = `
-{
-  "appends": [
-    [
-      {
-        "kind": "gate",
-        "outcome": false,
-      },
-    ],
-  ],
-  "awaited": [
-    {
-      "edge": "Response",
-      "headData": {},
-      "recordId": "note-1",
-    },
-    {
-      "edge": "Response",
-      "headData": {},
-      "recordId": "note-1",
-    },
-  ],
-  "bodies": [
-    {
-      "Prompt": "q",
-    },
-  ],
-  "events": [
-    [
-      "commitAwaitPark",
-      {
-        "adapterType": "kg",
-        "address": "s1",
-        "correlationKey": "ck:note-1",
-      },
-    ],
-  ],
-  "parked": true,
-  "parkedAddress": "s1",
-  "trace": [
-    {
-      "kind": "gate",
-      "outcome": false,
-    },
-  ],
-  "wakes": [],
-  "writes": [
-    {
-      "externalId": "note-1",
-      "outcome": "create",
-      "recordType": "Check",
-      "writtenValues": {
-        "Prompt": "q",
-      },
-    },
-  ],
-}
-`;
-
-exports[`parks resumed re-enters a parked landing await: landed, it goes on; still pending, it parks again 2`] = `
-{
-  "appends": [],
-  "awaited": [
-    {
-      "edge": "Response",
-      "headData": {},
-      "recordId": "note-1",
-    },
-  ],
-  "bodies": [
-    {
-      "body": "after",
-    },
-  ],
-  "events": [],
-  "trace": [],
-  "wakes": [],
-  "writes": [
-    {
-      "externalId": "note-1",
-      "outcome": "create",
-      "recordType": "note",
-      "writtenValues": {
-        "body": "after",
-      },
-    },
-  ],
-}
-`;
-
-exports[`parks resumed re-enters a parked landing await: landed, it goes on; still pending, it parks again 3`] = `
-{
-  "appends": [
-    [
-      {
-        "kind": "gate",
-        "outcome": false,
-      },
-    ],
-  ],
-  "awaited": [
-    {
-      "edge": "Response",
-      "headData": {},
-      "recordId": "note-1",
-    },
-    {
-      "edge": "Response",
-      "headData": {},
-      "recordId": "note-1",
-    },
-  ],
-  "bodies": [
-    {
-      "Prompt": "q",
-    },
-  ],
-  "events": [
-    [
-      "commitAwaitPark",
-      {
-        "adapterType": "kg",
-        "address": "s1",
-        "correlationKey": "ck:note-1",
-      },
-    ],
-  ],
-  "parked": true,
-  "parkedAddress": "s1",
-  "trace": [
-    {
-      "kind": "gate",
-      "outcome": false,
-    },
-  ],
-  "wakes": [],
-  "writes": [
-    {
-      "externalId": "note-1",
-      "outcome": "create",
-      "recordType": "Check",
-      "writtenValues": {
-        "Prompt": "q",
-      },
-    },
-  ],
-}
-`;
-
-exports[`parks resumed re-enters a parked landing await: landed, it goes on; still pending, it parks again 4`] = `
-{
-  "appends": [
-    [
-      {
-        "kind": "gate",
-        "outcome": false,
-      },
-    ],
-  ],
-  "awaited": [
-    {
-      "edge": "Response",
-      "headData": {},
-      "recordId": "note-1",
-    },
-    {
-      "edge": "Response",
-      "headData": {},
-      "recordId": "note-1",
-    },
-  ],
-  "bodies": [],
-  "events": [
-    [
-      "commitAwaitPark",
-      {
-        "adapterType": "kg",
-        "address": "s1",
-        "correlationKey": "ck:note-1",
-      },
-    ],
-  ],
-  "parked": true,
-  "parkedAddress": "s1",
-  "trace": [
-    {
-      "kind": "gate",
-      "outcome": false,
-    },
-  ],
-  "wakes": [],
-  "writes": [],
-}
-`;
-
-exports[`parks resumed re-enters an await on a callback once it has been called 1`] = `
-{
-  "appends": [
-    [
-      {
-        "kind": "gate",
-        "outcome": false,
-      },
-    ],
-  ],
-  "awaited": [],
-  "bodies": [],
-  "events": [
-    [
-      "mint",
-      {
-        "address": "s0",
-        "params": [],
-        "singleUse": true,
-      },
-    ],
-    [
-      "calls",
-      "cb_1",
-    ],
-    [
-      "commitAwaitPark",
-      {
-        "adapterType": "callback",
-        "address": "s1",
-        "correlationKey": "cb_1",
-      },
-    ],
-    [
-      "calls",
-      "cb_1",
-    ],
-  ],
-  "parked": true,
-  "parkedAddress": "s1",
-  "trace": [
-    {
-      "kind": "gate",
-      "outcome": false,
-    },
-  ],
-  "wakes": [],
-  "writes": [],
-}
-`;
-
-exports[`parks resumed re-enters an await on a callback once it has been called 2`] = `
-{
-  "appends": [],
-  "awaited": [],
-  "bodies": [
-    {
-      "body": "continued",
-    },
-  ],
-  "events": [
-    [
-      "calls",
-      "cb_1",
-    ],
-  ],
-  "trace": [],
-  "wakes": [],
-  "writes": [
-    {
-      "externalId": "note-1",
-      "outcome": "create",
-      "recordType": "note",
-      "writtenValues": {
-        "body": "continued",
-      },
-    },
-  ],
-}
-`;
-
 exports[`parks resumed re-enters an until that still does not hold, and parks it again 1`] = `
 {
   "appends": [
@@ -1469,7 +866,6 @@ exports[`parks resumed re-enters an until that still does not hold, and parks it
       },
     ],
   ],
-  "awaited": [],
   "bodies": [],
   "events": [
     [
@@ -1503,7 +899,6 @@ exports[`parks resumed re-enters an until that still does not hold, and parks it
       },
     ],
   ],
-  "awaited": [],
   "bodies": [],
   "events": [
     [
@@ -1546,7 +941,6 @@ exports[`parks resumed resumes a block’s parked iterations, the last closing t
       },
     ],
   ],
-  "awaited": [],
   "bodies": [],
   "events": [
     [
@@ -1596,7 +990,6 @@ exports[`parks resumed resumes a block’s parked iterations, the last closing t
 exports[`parks resumed resumes a block’s parked iterations, the last closing the join 2`] = `
 {
   "appends": [],
-  "awaited": [],
   "bodies": [
     {
       "body": "after a",
@@ -1639,7 +1032,6 @@ exports[`parks resumed resumes a block’s parked iterations, the last closing t
 exports[`parks resumed resumes a block’s parked iterations, the last closing the join 3`] = `
 {
   "appends": [],
-  "awaited": [],
   "bodies": [
     {
       "body": "after b",
@@ -1706,7 +1098,6 @@ exports[`parks resumed resumes a collection op’s parked members, in member ord
       },
     ],
   ],
-  "awaited": [],
   "bodies": [],
   "events": [
     [
@@ -1801,7 +1192,6 @@ exports[`parks resumed resumes a collection op’s parked members, in member ord
       },
     ],
   ],
-  "awaited": [],
   "bodies": [],
   "events": [
     [
@@ -1896,7 +1286,6 @@ exports[`parks resumed resumes a collection op’s parked members, in member ord
       },
     ],
   ],
-  "awaited": [],
   "bodies": [
     {
       "body": "member",
@@ -2054,7 +1443,6 @@ exports[`parks resumed resumes a park inside a callee through its call frame 1`]
       },
     ],
   ],
-  "awaited": [],
   "bodies": [],
   "events": [
     [
@@ -2081,7 +1469,6 @@ exports[`parks resumed resumes a park inside a callee through its call frame 1`]
 exports[`parks resumed resumes a park inside a callee through its call frame 2`] = `
 {
   "appends": [],
-  "awaited": [],
   "bodies": [
     {
       "body": "hi",
@@ -2129,7 +1516,6 @@ exports[`parks resumed resumes an \`all\`’s parked arm, closing the join with 
       },
     ],
   ],
-  "awaited": [],
   "bodies": [],
   "events": [
     [
@@ -2212,7 +1598,6 @@ exports[`parks resumed resumes an \`all\`’s parked arm, closing the join with 
 exports[`parks resumed resumes an \`all\`’s parked arm, closing the join with the finished arm’s slot 2`] = `
 {
   "appends": [],
-  "awaited": [],
   "bodies": [
     {
       "payload": {
@@ -2303,57 +1688,6 @@ exports[`parks resumed resumes an \`all\`’s parked arm, closing the join with 
 }
 `;
 
-exports[`parks resumed runs a fired callback’s body from the state it captured 1`] = `
-{
-  "appends": [],
-  "awaited": [],
-  "bodies": [],
-  "events": [
-    [
-      "mint",
-      {
-        "address": "s1",
-        "params": [
-          {
-            "name": "note",
-            "type": "text",
-          },
-        ],
-        "singleUse": true,
-      },
-    ],
-  ],
-  "trace": [],
-  "wakes": [],
-  "writes": [],
-}
-`;
-
-exports[`parks resumed runs a fired callback’s body from the state it captured 2`] = `
-{
-  "appends": [],
-  "awaited": [],
-  "bodies": [
-    {
-      "body": "hello: yes",
-    },
-  ],
-  "events": [],
-  "trace": [],
-  "wakes": [],
-  "writes": [
-    {
-      "externalId": "note-1",
-      "outcome": "create",
-      "recordType": "note",
-      "writtenValues": {
-        "body": "hello: yes",
-      },
-    },
-  ],
-}
-`;
-
 exports[`parks resumed settles a race on the arm that woke, cancelling the other 1`] = `
 {
   "appends": [
@@ -2373,7 +1707,6 @@ exports[`parks resumed settles a race on the arm that woke, cancelling the other
       },
     ],
   ],
-  "awaited": [],
   "bodies": [],
   "events": [
     [
@@ -2439,7 +1772,6 @@ exports[`parks resumed settles a race on the arm that woke, cancelling the other
       },
     ],
   ],
-  "awaited": [],
   "bodies": [],
   "events": [
     [
@@ -2489,7 +1821,6 @@ exports[`parks resumed settles a race on the arm that woke, cancelling the other
 exports[`parks resumed settles a race on the arm that woke, cancelling the other 3`] = `
 {
   "appends": [],
-  "awaited": [],
   "bodies": [
     {
       "payload": {
@@ -2607,7 +1938,6 @@ exports[`parks resumed suspends inside a block’s iteration, and re-enters it t
       },
     ],
   ],
-  "awaited": [],
   "bodies": [
     {
       "body": "a",
@@ -2658,7 +1988,6 @@ exports[`parks resumed suspends inside a block’s iteration, and re-enters it t
 exports[`parks resumed suspends inside a block’s iteration, and re-enters it there 2`] = `
 {
   "appends": [],
-  "awaited": [],
   "bodies": [
     {
       "body": "b",
@@ -2725,7 +2054,6 @@ exports[`parks resumed suspends inside a callee past its statement’s first cal
       },
     ],
   ],
-  "awaited": [],
   "bodies": [
     {
       "body": "a",
@@ -2775,7 +2103,6 @@ exports[`parks resumed suspends inside a callee past its statement’s first cal
 exports[`parks resumed suspends inside a callee past its statement’s first call: the call frame keeps that call, and the re-entry replays it 2`] = `
 {
   "appends": [],
-  "awaited": [],
   "bodies": [
     {
       "body": "end",
@@ -2797,10 +2124,9 @@ exports[`parks resumed suspends inside a callee past its statement’s first cal
 }
 `;
 
-exports[`until and callbacks in the Rust engine goes on past an until whose condition holds, and parks on one that does not 1`] = `
+exports[`until in the Rust engine goes on past an until whose condition holds, and parks on one that does not 1`] = `
 {
   "appends": [],
-  "awaited": [],
   "bodies": [
     {
       "payload": {
@@ -2826,7 +2152,7 @@ exports[`until and callbacks in the Rust engine goes on past an until whose cond
 }
 `;
 
-exports[`until and callbacks in the Rust engine goes on past an until whose condition holds, and parks on one that does not 2`] = `
+exports[`until in the Rust engine goes on past an until whose condition holds, and parks on one that does not 2`] = `
 {
   "appends": [
     [
@@ -2836,7 +2162,6 @@ exports[`until and callbacks in the Rust engine goes on past an until whose cond
       },
     ],
   ],
-  "awaited": [],
   "bodies": [],
   "events": [
     [
@@ -2849,183 +2174,6 @@ exports[`until and callbacks in the Rust engine goes on past an until whose cond
   ],
   "parked": true,
   "parkedAddress": "s2",
-  "trace": [
-    {
-      "kind": "gate",
-      "outcome": false,
-    },
-  ],
-  "wakes": [],
-  "writes": [],
-}
-`;
-
-exports[`until and callbacks in the Rust engine mints a callback with its captured scope, and reads its id and url 1`] = `
-{
-  "appends": [],
-  "awaited": [],
-  "bodies": [
-    {
-      "body": "cb_1",
-      "payload": {
-        "url": "https://api.test/api/cb/cb_2",
-      },
-    },
-  ],
-  "events": [
-    [
-      "mint",
-      {
-        "address": "s1",
-        "params": [
-          {
-            "name": "note",
-            "type": "text",
-          },
-        ],
-        "singleUse": true,
-      },
-    ],
-    [
-      "mint",
-      {
-        "address": "s2",
-        "expiresAt": "2026-01-03T00:00:00.000Z",
-        "params": [],
-        "singleUse": false,
-      },
-    ],
-  ],
-  "trace": [],
-  "wakes": [],
-  "writes": [
-    {
-      "externalId": "note-1",
-      "outcome": "create",
-      "recordType": "note",
-      "writtenValues": {
-        "body": "cb_1",
-        "payload": {
-          "url": "https://api.test/api/cb/cb_2",
-        },
-      },
-    },
-  ],
-}
-`;
-
-exports[`until and callbacks in the Rust engine reads the calls so far as a block head, and awaits the next 1`] = `
-{
-  "appends": [
-    [
-      {
-        "kind": "block",
-        "positions": 1,
-        "root": "cb-[c:Called]->",
-      },
-    ],
-  ],
-  "awaited": [],
-  "bodies": [
-    {
-      "body": "yes at 2026-10-05T10:00:00.000Z",
-    },
-    {
-      "body": "yes",
-    },
-  ],
-  "events": [
-    [
-      "mint",
-      {
-        "address": "s0",
-        "params": [
-          {
-            "name": "note",
-            "type": "text",
-          },
-        ],
-        "singleUse": true,
-      },
-    ],
-    [
-      "calls",
-      "cb_1",
-    ],
-    [
-      "calls",
-      "cb_1",
-    ],
-  ],
-  "trace": [
-    {
-      "kind": "block",
-      "positions": 1,
-      "root": "cb-[c:Called]->",
-    },
-  ],
-  "wakes": [],
-  "writes": [
-    {
-      "externalId": "note-1",
-      "outcome": "create",
-      "recordType": "note",
-      "writtenValues": {
-        "body": "yes at 2026-10-05T10:00:00.000Z",
-      },
-    },
-    {
-      "externalId": "note-2",
-      "outcome": "create",
-      "recordType": "note",
-      "writtenValues": {
-        "body": "yes",
-      },
-    },
-  ],
-}
-`;
-
-exports[`until and callbacks in the Rust engine reads the calls so far as a block head, and awaits the next 2`] = `
-{
-  "appends": [
-    [
-      {
-        "kind": "gate",
-        "outcome": false,
-      },
-    ],
-  ],
-  "awaited": [],
-  "bodies": [],
-  "events": [
-    [
-      "mint",
-      {
-        "address": "s0",
-        "params": [],
-        "singleUse": true,
-      },
-    ],
-    [
-      "calls",
-      "cb_1",
-    ],
-    [
-      "commitAwaitPark",
-      {
-        "adapterType": "callback",
-        "address": "s1",
-        "correlationKey": "cb_1",
-      },
-    ],
-    [
-      "calls",
-      "cb_1",
-    ],
-  ],
-  "parked": true,
-  "parkedAddress": "s1",
   "trace": [
     {
       "kind": "gate",
