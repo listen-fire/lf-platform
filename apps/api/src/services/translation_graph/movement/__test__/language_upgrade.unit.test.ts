@@ -491,7 +491,7 @@ describe('which checks are upgrade checks', () => {
   });
 });
 
-describe('an explicit upgrade: errors block, meaning-changed warnings are acknowledged', () => {
+describe('an explicit upgrade: errors block, meaning-changed warnings hold the pin until checked', () => {
   const upgradeWith = async (diagnostics: AuthoringDiagnostic[]) => {
     jest.mocked(getMovementRow).mockResolvedValueOnce(movement({ id: 'old' }));
     return upgradeMovement({
@@ -507,21 +507,39 @@ describe('an explicit upgrade: errors block, meaning-changed warnings are acknow
     expect(result).toEqual(expect.objectContaining({ status: 'needs_acknowledgement', diagnostics: [] }));
   });
 
-  it('a meaning-changed warning is listed and awaits acknowledgement', async () => {
+  it('a meaning-changed warning holds the pin, even acknowledged, as `listen-fire upgrade` does', async () => {
     const warning = meaningChanged('changed meaning');
-    const result = await upgradeWith([warning, diagnostic('warning', 'a cost note')]);
-    expect(result).toEqual(
-      expect.objectContaining({ status: 'needs_acknowledgement', diagnostics: [warning] }),
-    );
+    jest.mocked(getMovementRow).mockResolvedValueOnce(movement({ id: 'old' }));
+    const result = await upgradeMovement({
+      teamId: 'team-1',
+      id: 'old',
+      acknowledge: true,
+      validate: async () => ({ diagnostics: [warning, diagnostic('warning', 'a cost note')], gaps: [] }),
+    });
+    expect(result).toEqual(expect.objectContaining({ status: 'blocked', diagnostics: [warning] }));
   });
 
-  it('a meaning-changed warning moves up once acknowledged', async () => {
+  it('a meaning-changed warning, once checked, is listed and awaits acknowledgement when every fix is asked for', async () => {
+    const warning = meaningChanged('changed meaning');
+    jest.mocked(getMovementRow).mockResolvedValueOnce(movement({ id: 'old' }));
+    const result = await upgradeMovement({
+      teamId: 'team-1',
+      id: 'old',
+      acknowledge: false,
+      applyAllFixes: true,
+      validate: async () => ({ diagnostics: [warning], gaps: [] }),
+    });
+    expect(result).toEqual(expect.objectContaining({ status: 'needs_acknowledgement', diagnostics: [warning] }));
+  });
+
+  it('a meaning-changed warning moves up once checked and acknowledged (`--all`)', async () => {
     jest.mocked(assessMovementValidity).mockReturnValueOnce({ status: 'valid', reason: null } as never);
     jest.mocked(getMovementRow).mockResolvedValueOnce(movement({ id: 'old' }));
     const result = await upgradeMovement({
       teamId: 'team-1',
       id: 'old',
       acknowledge: true,
+      applyAllFixes: true,
       validate: async () => ({ diagnostics: [meaningChanged('changed meaning')], gaps: [] }),
     });
     expect(result.status).toBe('upgraded');
@@ -873,20 +891,21 @@ describe('an upgrade from an older release line, over the installed checker', ()
     .replace('await first(m-[:Replies]->)', 'await m-[:Replies]->')
     .replace('listen to gh { events: ["mention", "assign"] } fire triage', 'listen to gh-[n:Notifications WHERE n.Reason IN ["mention", "assign"]]-> fire triage');
 
-  it('applies the safe rewrites, lists the note with nothing to rewrite, and moves the pin once acknowledged', async () => {
+  it('applies the safe rewrites, holds the pin on the note with nothing to rewrite, and moves it once checked and acknowledged', async () => {
     jest.mocked(getMovementRow).mockResolvedValue(movement({ id: 'triage', languageVersion: '0.12.13', source: PINNED_0_12 }));
     jest.mocked(assessMovementValidity).mockReturnValue({ status: 'valid', reason: null } as never);
     const { advanced, advance } = advanceSpy();
 
-    const shown = await upgradeMovement({ teamId: 'team-1', id: 'triage', acknowledge: false, validate: realValidate, advance });
-    expect(shown.status).toBe('needs_acknowledgement');
-    if (shown.status === 'not_found') throw new Error('unreachable');
-    expect(shown.upgradedSource).toBe(UPGRADED);
-    // A wait no `sleep` races may never resolve: said, nothing to rewrite, not holding the pin.
-    expect(shown.diagnostics.map((d) => [d.code, d.upgrade, d.fix])).toEqual([['MOV_AWAIT_MAY_HANG', true, undefined]]);
+    const held = await upgradeMovement({ teamId: 'team-1', id: 'triage', acknowledge: true, validate: realValidate, advance });
+    expect(held.status).toBe('blocked');
+    if (held.status === 'not_found') throw new Error('unreachable');
+    expect(held.upgradedSource).toBe(UPGRADED);
+    // A wait no `sleep` races may never resolve: said, nothing to rewrite,
+    // holding the pin until the author has checked it.
+    expect(held.diagnostics.map((d) => [d.code, d.upgrade, d.fix])).toEqual([['MOV_AWAIT_MAY_HANG', true, undefined]]);
     expect(advanced).toEqual([]);
 
-    const moved = await upgradeMovement({ teamId: 'team-1', id: 'triage', acknowledge: true, validate: realValidate, advance });
+    const moved = await upgradeMovement({ teamId: 'team-1', id: 'triage', acknowledge: true, applyAllFixes: true, validate: realValidate, advance });
     expect(moved.status).toBe('upgraded');
     expect(advanced).toEqual([{ to: CUR, source: UPGRADED }]);
   });

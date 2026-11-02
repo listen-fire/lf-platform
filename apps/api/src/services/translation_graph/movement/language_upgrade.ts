@@ -34,8 +34,10 @@
 // and every fix when asked. What is judged is the rewritten text, and when the
 // pin moves, the rewritten text is saved with it, in one save under the new
 // pin. An error holds the pin, and so does a meaning-changed diagnostic whose
-// rewrite was not applied (it is not proved to keep the meaning); one with
-// nothing to rewrite is listed and acknowledged. A movement held keeps its
+// rewrite was not applied (it is not proved to keep the meaning), and one with
+// nothing to rewrite (the program may now do something else: a field whose
+// meaning changed, an awaited value captured, a wait that may hang), until the
+// author has checked it and asks for every fix. A movement held keeps its
 // text and its pin; what is left is reported against the rewritten text
 // (`upgradedSource`), each with its source line.
 //
@@ -104,15 +106,16 @@ export function blockingDiagnostics(diagnostics: AuthoringDiagnostic[]): Authori
   return diagnostics.filter((d) => d.severity === 'error' || d.upgrade === true);
 }
 
-/** What `upgradeMovement` refuses outright: an error, and a move-up
- *  diagnostic whose rewrite was left unapplied (not proved to keep the
- *  meaning; `applyAllFixes` takes it), as `listen-fire upgrade` holds the pin.
- *  A move-up warning with nothing to rewrite is not here: it fires on every use
- *  of a construct whose meaning changed whether or not the author edits, so
- *  the explicit upgrade lets the author acknowledge it, or the pin could never
- *  move. */
-function holdsThePin(diagnostics: AuthoringDiagnostic[]): AuthoringDiagnostic[] {
-  return diagnostics.filter((d) => d.severity === 'error' || (d.upgrade === true && d.fix !== undefined));
+/** What `upgradeMovement` refuses outright, as `listen-fire upgrade` holds
+ *  the pin: an error; a move-up diagnostic whose rewrite was left unapplied
+ *  (not proved to keep the meaning); and a move-up warning with nothing to
+ *  rewrite, which says the program may now do something else, since moving
+ *  the pin is what puts it live under the new meaning. `all` (the author
+ *  asked for every fix, having checked them: `listen-fire upgrade --all`)
+ *  applied the first kind and lets the second pass, so an error alone holds
+ *  it then. */
+function holdsThePin(diagnostics: AuthoringDiagnostic[], all: boolean): AuthoringDiagnostic[] {
+  return diagnostics.filter((d) => d.severity === 'error' || (d.upgrade === true && (d.fix !== undefined || !all)));
 }
 
 /** The warnings under the newer version that do NOT block the move — shown
@@ -851,7 +854,8 @@ export async function upgradeMovement(input: {
   id: string;
   acknowledge: boolean;
   /** Apply every fix offered, also those not proved to keep the meaning
-   *  (listed on the diagnostics otherwise). */
+   *  (listed on the diagnostics otherwise), and move past the warnings that
+   *  the program may now do something else, once the author checked them. */
   applyAllFixes?: boolean;
   validate?: ValidateUnder;
   advance?: Advance;
@@ -884,7 +888,7 @@ export async function upgradeMovement(input: {
   const diagnostics = blockingDiagnostics(validation.diagnostics);
   const shown = { ...base, ...(rewrite.changed ? { upgradedSource: rewrite.source } : {}) };
   await recordUpgradeCheck({ id: movement.id, diagnostics, checkedAgainst: to });
-  if (holdsThePin(diagnostics).length > 0) return { status: 'blocked', ...shown, diagnostics };
+  if (holdsThePin(diagnostics, input.applyAllFixes === true).length > 0) return { status: 'blocked', ...shown, diagnostics };
   if (validation.gaps.length > 0) return { status: 'unverified', ...shown, diagnostics };
   if (!input.acknowledge) return { status: 'needs_acknowledgement', ...shown, diagnostics };
 
