@@ -240,8 +240,9 @@ function configKeyOf(
   return null;
 }
 
-/** Where a person sends mail for this listen, when it hears the shared inbox. */
-function inboundAddressOf(config: Record<string, unknown>): string | null {
+/** Where a person sends mail for this listen, when it hears the shared inbox:
+ *  what the listeners panel and the story's trigger sentence both say. */
+export function inboundAddressOf(config: Record<string, unknown>): string | null {
   const planned = listenConfigSchema.safeParse(config);
   return planned.success ? inboxAddressesOf(planned.data.listen.plan, planned.data.listen.fieldIds) : null;
 }

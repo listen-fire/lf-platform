@@ -39,7 +39,7 @@ jest.mock('legacy-lang', () => {
   };
 });
 jest.mock('../catalog', () => ({ movementCatalogForTeam: jest.fn() }));
-jest.mock('../store', () => ({ getMovementRow: jest.fn() }));
+jest.mock('../store', () => ({ getMovementRow: jest.fn(), listDerivedTriggerRows: jest.fn(async () => []) }));
 
 import { LANGUAGE_VERSION } from 'movement-lang';
 import { STORY_VIEW_CATALOG, STORY_VIEW_SNAPSHOT, STORY_VIEW_SOURCE } from './__fixtures__/story/story_view';
@@ -52,6 +52,7 @@ import {
   projectStoryView,
   joinStoryView,
   storyVocabularyOf,
+  type StoryProvisionedListener,
   type StoryVocabulary,
   type StoryView,
 } from '../story_view';
@@ -521,6 +522,54 @@ describe('triggers', () => {
       vocabulary: { ...vocabulary, eventPhrase: () => null },
     });
     expect(v.triggers[0]!.sentence).toBe('When something happens in Front Desk');
+  });
+
+  // A phrasing that PREFERS the provisioned address and falls back to the
+  // config the script itself carries: the ordered shape every adapter's
+  // templates take.
+  const addressFirst: StoryVocabulary = {
+    ...vocabulary,
+    eventPhrase(adapterType, config) {
+      if (adapterType !== 'desk_sys') return null;
+      if (typeof config.address === 'string') return `When you send a note to ${config.address}`;
+      return typeof config.box === 'string' ? `When a note is filed in ${config.box}` : null;
+    },
+  };
+
+  const withListeners = (listeners: StoryProvisionedListener[]): StoryView =>
+    joinStoryView({
+      movement: { id: 'mv-1', name: 'Intake', validity: { status: 'valid', problems: [] } },
+      story: ir(),
+      vocabulary: addressFirst,
+      listeners,
+    });
+
+  it('fills a phrase slot from what the PLATFORM provisioned, not from the script', () => {
+    const v = withListeners([{ kind: 'desk_sys', movementName: 'intake', inboundAddress: 'desk+inbound@example.com' }]);
+    expect(v.triggers[0]!.sentence).toBe('When you send a note to desk+inbound@example.com');
+  });
+
+  // The fixture's listen narrows nothing the 0.13 story carries, so what
+  // the script alone supports is the system's generic sentence.
+  const SCRIPT_ALONE = 'When something happens in Front Desk';
+
+  it('says only what the script supports when nothing is provisioned yet', () => {
+    expect(withListeners([]).triggers[0]!.sentence).toBe(SCRIPT_ALONE);
+  });
+
+  it('takes nothing from a listener on another channel, or for another movement', () => {
+    const wrongChannel = withListeners([{ kind: 'ledger_sys', movementName: 'intake', inboundAddress: 'ledger+inbound@example.com' }]);
+    const wrongMovement = withListeners([{ kind: 'desk_sys', movementName: 'archive', inboundAddress: 'desk+archive@example.com' }]);
+    expect(wrongChannel.triggers[0]!.sentence).toBe(SCRIPT_ALONE);
+    expect(wrongMovement.triggers[0]!.sentence).toBe(SCRIPT_ALONE);
+  });
+
+  it('takes nothing when two listeners on the channel fire the movement: it cannot tell which is this listen', () => {
+    const v = withListeners([
+      { kind: 'desk_sys', movementName: 'intake', inboundAddress: 'desk+inbound@example.com' },
+      { kind: 'desk_sys', movementName: 'intake', inboundAddress: 'desk+archive@example.com' },
+    ]);
+    expect(v.triggers[0]!.sentence).toBe(SCRIPT_ALONE);
   });
 
   it("the graph's trigger is phrased by its own declared event phrase", () => {

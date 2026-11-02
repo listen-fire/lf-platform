@@ -48,8 +48,10 @@ import { routeOf } from './language_route';
 import { storyFromAnalysis } from './story_from_analysis';
 import {
   getMovementRow,
+  listDerivedTriggerRows,
   type MovementValidityStatus,
 } from './store';
+import { inboundAddressOf } from './provision';
 import { movementSourceHash } from './version_store';
 
 // ── The view ────────────────────────────────────────────────────────────────
@@ -103,8 +105,13 @@ export function joinStoryView(input: {
   movement: StoryViewMovement;
   story: StoryIR;
   vocabulary: StoryVocabulary;
+  /** What the platform PROVISIONED for this file's listens. Absent for a story
+   *  projected from source alone: the sentence then says only what the script
+   *  itself can support. */
+  listeners?: StoryProvisionedListener[];
 }): StoryView {
   const { story, vocabulary } = input;
+  const listeners = input.listeners ?? [];
 
   const systemOf = (adapterType?: string): StoryViewSystem | null => {
     if (adapterType === undefined) return null;
@@ -125,7 +132,7 @@ export function joinStoryView(input: {
     const system = systemOf(trigger.adapterType);
     return {
       id: trigger.id,
-      sentence: triggerSentence({ trigger, system, vocabulary }),
+      sentence: triggerSentence({ trigger, system, vocabulary, provisioned: provisionedFor(trigger, listeners) }),
       system,
       ...(trigger.path !== undefined ? { path: trigger.path } : {}),
       ...(trigger.lane !== undefined ? { lane: trigger.lane } : {}),
@@ -366,21 +373,61 @@ function eachChip(story: StoryIR, visit: (chip: Chip) => void): void {
 }
 
 /**
+ * What the platform made when this file went live, per `listen`. The script
+ * cannot know any of it: an inbound address exists because a listen on the
+ * shared inbox was provisioned with the keys its WHERE names, and a movement
+ * that has never been saved has none.
+ */
+export interface StoryProvisionedListener {
+  /** The channel: the source adapter slug. */
+  kind: string;
+  /** The movement this listener fires. */
+  movementName: string | null;
+  /** Where mail for this listener is sent (`inbox+deals@…`), or null. */
+  inboundAddress: string | null;
+}
+
+/**
+ * The listener a story trigger was provisioned as: the one on the trigger's
+ * channel that fires its movement. Two listens on one channel firing one
+ * movement cannot be told apart this way, so neither lends its address: the
+ * sentence then says what the script alone supports, never another listen's
+ * address.
+ */
+function provisionedFor(
+  trigger: StoryIR['triggers'][number],
+  listeners: StoryProvisionedListener[],
+): StoryProvisionedListener | undefined {
+  if (trigger.adapterType === undefined) return undefined;
+  const matching = listeners.filter(
+    (listener) => listener.kind === trigger.adapterType && listener.movementName === trigger.fires,
+  );
+  return matching.length === 1 ? matching[0] : undefined;
+}
+
+/**
  * The trigger's sentence: the adapter's own declared phrasing where it has
  * one, otherwise a generic composition from its declared display name. The
- * listen's config — its event selection plus its narrowing keys, exactly as
- * the author wrote them — is what the templates' `{slot}` tokens fill from,
+ * listen's config (its event selection plus its narrowing keys, exactly as
+ * the author wrote them) is what the templates' `{slot}` tokens fill from,
  * which is the same feed a persisted trigger row gives `describeSource`.
+ *
+ * The provisioned address joins the same slots: email's templates say
+ * "send an email to {address}" when there is one, and fall through to the
+ * phrasing true of the script alone when there is none.
  */
 function triggerSentence(input: {
   trigger: StoryIR['triggers'][number];
   system: StoryViewSystem | null;
   vocabulary: StoryVocabulary;
+  provisioned: StoryProvisionedListener | undefined;
 }): string {
   const { trigger, system } = input;
+  const address = input.provisioned?.inboundAddress ?? null;
   const config: Record<string, unknown> = {
     ...trigger.narrowing,
     ...(trigger.events !== undefined ? { events: trigger.events } : {}),
+    ...(address !== null ? { address } : {}),
   };
   const declared =
     trigger.adapterType !== undefined
@@ -621,6 +668,11 @@ export async function projectStoryView(row: {
       movement: { ...movement, validity: result.story.movement.validity },
       story: result.story,
       vocabulary: storyVocabularyOf(teamCatalog),
+      listeners: (await listDerivedTriggerRows(row.id)).map((listener) => ({
+        kind: listener.kind,
+        movementName: listener.firedMovementName,
+        inboundAddress: inboundAddressOf(listener.config),
+      })),
     }),
   };
 }
