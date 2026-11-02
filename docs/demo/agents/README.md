@@ -66,15 +66,17 @@ node build_data.cjs ../../../../listen-fire-site/video/agents/data.js
 - The current recording is in two parts.
   - The per-event agent and JavaScript were recorded on 0.12.12,
     main@05dfcb1564. They do not run lf, so the lf build does not affect them.
-  - listen-fire was re-recorded on main@8c9e723606 (0.12.12 plus
-    `@lf/stripe`), with `ONLY_LF=1`. `validatedUnder` reads that build.
+  - listen-fire was re-recorded on 0.14.1 (main@110878fa5c) with `ONLY_LF=1`
+    and `SPEND_CAP_USD`: three attempts in `mcp`, one in `attio` (the cap
+    stopped the second). `validatedUnder` reads that build.
 - `ONLY_LF=1` re-records listen-fire alone. It keeps the scenario's
   `capture/agent` and `capture/js` as they are and makes everything else anew.
   The events are the same each time, because `make_events.cjs` is seeded.
 - `SPEND_CAP_USD` stops before a listen-fire attempt that could take the model
   spend past it: what this run's attempts have cost (authoring and every
   wake), plus `SPEND_BEFORE_USD` spent elsewhere, plus the dearest attempt so
-  far (`SPEND_ESTIMATE_USD` before any, 0.35 by default).
+  far, this run's or `SPEND_ESTIMATE_USD` (0.35 by default), whichever is
+  dearer.
 
 It is recorded twice, in two scenarios, all three options in each, so that
 each comparison is like for like (`SCENARIO`; outputs in

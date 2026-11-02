@@ -71,8 +71,9 @@
 #                                 take the model spend past this: the spend so
 #                                 far (this run's authoring and wakes, plus
 #                                 SPEND_BEFORE_USD, spent elsewhere) plus the
-#                                 dearest attempt so far (SPEND_ESTIMATE_USD,
-#                                 default 0.35, before any)
+#                                 dearest attempt so far, this run's or
+#                                 SPEND_ESTIMATE_USD (default 0.35), whichever
+#                                 is dearer
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/../../.." && pwd)"
@@ -318,7 +319,7 @@ for k in $(seq "$ATTEMPTS"); do
   if [ -n "${SPEND_CAP_USD:-}" ] && [ -z "${REHEARSE_LF:-}" ]; then
     spend="$(lf_spend)"
     if ! jq -e --argjson cap "$SPEND_CAP_USD" --argjson before "${SPEND_BEFORE_USD:-0}" --argjson estimate "${SPEND_ESTIMATE_USD:-0.35}" \
-      '$before + .spent + (if .dearest > 0 then .dearest else $estimate end) <= $cap' <<<"$spend" >/dev/null; then
+      '$before + .spent + ([.dearest, $estimate] | max) <= $cap' <<<"$spend" >/dev/null; then
       echo "lf attempt $k not started: it could take the spend past \$$SPEND_CAP_USD ($spend, \$${SPEND_BEFORE_USD:-0} before this run)"
       break
     fi
