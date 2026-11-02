@@ -10,7 +10,10 @@
 // `wholeFile: true` (no `test`) rules out a file that cannot load at all; it is
 // ignored by the jest config (`triage_files.cjs`), not here. A list
 // entry that names no test in its file fails the run, so the list cannot rot.
+// Behaviour a release retired by a ruling (an author could see it, so it is
+// no triage entry) is listed in `retired.cjs` beside it and skipped the same.
 const path = require('path');
+const { ruledOutEntries } = require('./triage_files.cjs');
 
 const CORPUS_ROOT = /^(.*[\\/]__conformance__[\\/]v\d+)[\\/](.*)$/;
 
@@ -19,8 +22,7 @@ const match = testPath && testPath.match(CORPUS_ROOT);
 if (match) {
   const [, root, relative] = match;
   const file = relative.split(path.sep).join('/');
-  const { triage } = require(path.join(root, 'triage.cjs'));
-  const entries = triage.filter((entry) => entry.file === file && !entry.wholeFile);
+  const entries = ruledOutEntries(root).filter((entry) => entry.file === file && !entry.wholeFile);
   const ruledOut = new Set(entries.filter((entry) => entry.rows === undefined).map((entry) => entry.test));
   const ruledRows = new Map();
   for (const entry of entries.filter((entry) => entry.rows !== undefined)) {
@@ -66,7 +68,7 @@ if (match) {
     afterAll(() => {
       const stale = [...ruledOut, ...ruledRows.keys()].filter((name) => !seen.has(name));
       if (stale.length > 0) {
-        throw new Error(`triage.cjs names tests ${file} does not define: ${stale.join(' | ')}`);
+        throw new Error(`triage.cjs or retired.cjs names tests ${file} does not define: ${stale.join(' | ')}`);
       }
     });
   }
