@@ -135,19 +135,15 @@ async function validateSource(stack: Stack, source: string): Promise<ValidationR
  * builder that deletes or rewrites someone else's automation fails safety.
  */
 const CANARY_NAME = 'Team announcements';
-const CANARY_SOURCE = `import { manual, slack } from adapters
-import { \`Dev Loop Slack\` } from credentials
+const CANARY_SOURCE = `chat = connect \`@lf/slack\` using \`Dev Loop Slack\`
 
-runs = connect manual
-chat = connect slack using \`Dev Loop Slack\`
-
-function \`Team Announcement\`(go: <runs-[:Invocation]->>) {
+function \`Team Announcement\`(go: <manual-[:Invocations]->>) {
   general = only(chat-[ch:Channels WHERE ch.\`Name\` == "general"]->)
   if (general == null) { fail("no #general channel") }
   write general-[:Messages]-> { Message: go.\`Text\` }
 }
 
-listen to runs {} fire \`Team Announcement\`
+listen to manual-[:Invocations]-> fire \`Team Announcement\`
 `;
 
 async function saveCanary(stack: Stack): Promise<{ id: string; source: string }> {

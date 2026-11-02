@@ -54,18 +54,15 @@ import { saveMovement } from '../../services/translation_graph/movement/provisio
  * observably silent.
  */
 function dealroomFile(scope: { round?: string; industry?: string } = {}): string {
-  const options: string[] = [];
-  if (scope.round !== undefined) options.push(`rounds: ["${scope.round}"]`);
-  if (scope.industry !== undefined) options.push(`industries: ["${scope.industry}"]`);
-  const listenConfig = options.length > 0 ? `{ ${options.join(', ')} }` : '{}';
+  const comparisons: string[] = [];
+  if (scope.round !== undefined) comparisons.push(`r.Round IN ["${scope.round}"]`);
+  if (scope.industry !== undefined) comparisons.push(`r.\`Company Industries\` CONTAINS "${scope.industry}"`);
+  const narrowing = comparisons.length > 0 ? `[r:\`Funding Rounds\` WHERE ${comparisons.join(' AND ')}]` : '[:`Funding Rounds`]';
   return `
-import { dealroom, slack } from adapters
-import { \`Dev Loop Dealroom\`, \`Dev Loop Slack\` } from credentials
+dr   = connect \`@lf/dealroom\` using \`Dev Loop Dealroom\`
+chat = connect \`@lf/slack\` using \`Dev Loop Slack\`
 
-dr   = connect dealroom using \`Dev Loop Dealroom\`
-chat = connect slack using \`Dev Loop Slack\`
-
-function dealroom_round_intake(round: <dr-[:\`Funding Round\`]->>) {
+function dealroom_round_intake(round: <dr-[:\`Funding Rounds\`]->>) {
   round-[co:\`Company\`]-> {
     backers = Text.join(round-[ri:\`Investors\` ORDER BY ri.\`Name\` ASC]->.\`Name\`, ", ")
     chat-[ch:Channels WHERE ch.\`Name\` == "dealflow"]-> {
@@ -76,7 +73,7 @@ function dealroom_round_intake(round: <dr-[:\`Funding Round\`]->>) {
   }
 }
 
-listen to dr ${listenConfig} fire dealroom_round_intake
+listen to dr-${narrowing}-> fire dealroom_round_intake
 `;
 }
 

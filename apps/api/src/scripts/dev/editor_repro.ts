@@ -34,13 +34,10 @@ import { ensureDevLoopTeam } from './_lib';
 import type { TeamId } from '../../generated/kysely/core/Team';
 
 const DEFAULT_SOURCE = `
-import { email, attio } from adapters
-import { \`Dev Loop Attio\` } from credentials
+inbox = connect \`@lf/email\`
+crm   = connect \`@lf/attio\` using \`Dev Loop Attio\`
 
-inbox = connect email
-crm   = connect attio using \`Dev Loop Attio\`
-
-function editor_repro(m: <inbox-[:Email]->>) {
+function editor_repro(m: <inbox-[:Emails]->>) {
   co = write crm-[:Companies]-> {
     unique by (\`Name\`)
     Name:        m.\`Subject\`
@@ -49,7 +46,7 @@ function editor_repro(m: <inbox-[:Email]->>) {
   fail("\${co.externalId}")
 }
 
-listen to inbox { key: "editor-repro" } fire editor_repro
+listen to inbox-[e:Emails WHERE e.Key == "editor-repro"]-> fire editor_repro
 `;
 
 async function main() {

@@ -72,19 +72,16 @@ import { saveMovement } from '../../services/translation_graph/movement/provisio
  * own filters match.
  */
 function evertraceFile(scope: { list?: string; search?: string } = {}): string {
-  const listConfig =
+  const entries =
     scope.list !== undefined
-      ? `{ events: ["list_entry"], list: "${scope.list}" }`
-      : '{ events: ["list_entry"] }';
-  const signalConfig = scope.search !== undefined ? `{ search: "${scope.search}" }` : '{}';
+      ? `[e:\`List Entries\` WHERE e.\`List Name\` == "${scope.list}"]`
+      : '[:`List Entries`]';
+  const signals = scope.search !== undefined ? `[s:Signals WHERE s.\`Saved Search\` == "${scope.search}"]` : '[:Signals]';
   return `
-import { evertrace, slack } from adapters
-import { \`Dev Loop Evertrace\`, \`Dev Loop Slack\` } from credentials
+et   = connect \`@lf/evertrace\` using \`Dev Loop Evertrace\`
+chat = connect \`@lf/slack\` using \`Dev Loop Slack\`
 
-et   = connect evertrace using \`Dev Loop Evertrace\`
-chat = connect slack using \`Dev Loop Slack\`
-
-function evertrace_intake(sig: <et-[:\`Signal\`]->>) {
+function evertrace_intake(sig: <et-[:Signals]->>) {
   chat-[ch:Channels WHERE ch.\`Name\` == "dealflow"]-> {
     write ch-[:Messages]-> {
       Message: "Evertrace signal: \${sig.\`First Name\`} \${sig.\`Last Name\`} (\${sig.\`Score\`})"
@@ -92,7 +89,7 @@ function evertrace_intake(sig: <et-[:\`Signal\`]->>) {
   }
 }
 
-function evertrace_list_intake(entry: <et-[:\`List Entry\`]->>) {
+function evertrace_list_intake(entry: <et-[:\`List Entries\`]->>) {
   entry-[sig:\`Signal\`]-> {
     entry-[lst:\`List\`]-> {
       chat-[ch:Channels WHERE ch.\`Name\` == "dealflow"]-> {
@@ -104,8 +101,8 @@ function evertrace_list_intake(entry: <et-[:\`List Entry\`]->>) {
   }
 }
 
-listen to et ${signalConfig} fire evertrace_intake
-listen to et ${listConfig} fire evertrace_list_intake
+listen to et-${signals}-> fire evertrace_intake
+listen to et-${entries}-> fire evertrace_list_intake
 `;
 }
 

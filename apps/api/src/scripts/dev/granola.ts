@@ -57,13 +57,10 @@ import { saveMovement } from '../../services/translation_graph/movement/provisio
  * attendee. A run is observable via `pnpm dev:inspect slack`.
  */
 const GRANOLA_MOVEMENT = `
-import { granola, slack } from adapters
-import { \`Dev Loop Granola\`, \`Dev Loop Slack\` } from credentials
+gr   = connect \`@lf/granola\` using \`Dev Loop Granola\`
+chat = connect \`@lf/slack\` using \`Dev Loop Slack\`
 
-gr   = connect granola using \`Dev Loop Granola\`
-chat = connect slack using \`Dev Loop Slack\`
-
-function granola_intake(note: <gr-[:\`Meeting Note\`]->>) {
+function granola_intake(note: <gr-[:Meetings]->>) {
   chat-[ch:Channels WHERE ch.\`Name\` == "dealflow"]-> {
     write ch-[:Messages]-> {
       Message: "Granola note: \${note.\`Title\`} — owner \${note.\`Note Owner Email\`}"
@@ -78,7 +75,7 @@ function granola_intake(note: <gr-[:\`Meeting Note\`]->>) {
   }
 }
 
-listen to gr {} fire granola_intake
+listen to gr-[:Meetings]-> fire granola_intake
 `;
 
 /** Idempotent mock credential of a given type/name (any token works — the

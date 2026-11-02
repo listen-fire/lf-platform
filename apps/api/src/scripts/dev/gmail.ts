@@ -104,19 +104,16 @@ function movementBody(mode: WriteMode): string {
 }
 
 function gmailFile(scope: { query?: string; mode: WriteMode }): string {
-  const listenConfig = scope.query !== undefined ? `{ query: "${scope.query}" }` : '{}';
+  const narrowing = scope.query !== undefined ? `[m:Messages WHERE m.Query == "${scope.query}"]` : '[:Messages]';
   return `
-import { gmail, slack } from adapters
-import { \`Dev Loop Gmail\`, \`Dev Loop Slack\` } from credentials
+mail = connect \`@lf/gmail\` using \`Dev Loop Gmail\`
+chat = connect \`@lf/slack\` using \`Dev Loop Slack\`
 
-mail = connect gmail using \`Dev Loop Gmail\`
-chat = connect slack using \`Dev Loop Slack\`
-
-function gmail_message_intake(msg: <mail-[:\`Message\`]->>) {
+function gmail_message_intake(msg: <mail-[:Messages]->>) {
 ${movementBody(scope.mode)}
 }
 
-listen to mail ${listenConfig} fire gmail_message_intake
+listen to mail-${narrowing}-> fire gmail_message_intake
 `;
 }
 

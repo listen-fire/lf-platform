@@ -58,23 +58,22 @@ const CREDENTIAL_BEARER_FIELD = 'secret';
 
 const GREET = 'export function greet(name: <text>) {\n  return "Hello, ${name}!"\n}\n';
 
-const TICK = `import { acme_crm } from adapters
-import { greet } from "lib/greet"
-crm = connect acme_crm
-function tock(t: <cron-[:Tick]->>) {
+const TICK = `import { greet } from "lib/greet"
+crm = connect #acme_crm
+function tock(t: <cron-[:Ticks]->>) {
   write crm-[:Company]-> { Name: greet("\${t.\`Fired at\`}") }
 }
-listen to cron { schedule: "* * * * *" } fire tock
+listen to cron-[t:Ticks WHERE t.Schedule == "* * * * *"]-> fire tock
 `;
 
-const MIN_LF = { minor: 12, rc: 10 };
+const MIN_LF = { minor: 13, rc: 0 };
 
 function lfBinary(): string {
   const bin = process.env.LF_BIN ?? 'listen-fire';
   const reported = execFileSync(bin, ['--version'], { encoding: 'utf8' }).trim();
   const match = /(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?/.exec(reported);
   const older = match === null || Number(match[2]) < MIN_LF.minor || (Number(match[2]) === MIN_LF.minor && match[4] !== undefined && Number(match[4]) < MIN_LF.rc);
-  if (older) throw new Error(`listen-fire >= 0.12.0-rc.10 is required (the movements slot's contract flag); ${bin} reports "${reported}"`);
+  if (older) throw new Error(`listen-fire >= 0.13.0 is required (its programs are 0.13's); ${bin} reports "${reported}"`);
   return bin;
 }
 
