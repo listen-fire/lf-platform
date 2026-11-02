@@ -9,6 +9,7 @@ export const CORE_WORK_KINDS = [
   'poll_edge', // payload: { teamId: string; digest: string } (poll_source/worker.ts): one shared poll of a listenable edge
   'wake_await', // payload: { adapterType: string; teamId: string; correlationKey: string }
   'poll_reconcile', // periodic, payload {}
+  'listen_subscription_retry', // periodic, payload {} (movement/listen_subscriptions.ts): subscriptions a source refused, asked for again
   'timer_sweep', // periodic, payload {}
   'run_orphan_sweep', // periodic, payload {}
 ] as const;

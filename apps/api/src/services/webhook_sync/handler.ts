@@ -24,6 +24,7 @@ import { getAutomationsQb } from '../../lib/kysely';
 import { getWebhookProvider } from './providers';
 import { logger } from 'movement-engine/public/log';
 import { deliverArrivals } from '../inbound/listen_door';
+import { listensOfSubscription } from '../translation_graph/movement/listen_subscriptions';
 import { TELEGRAM_ADAPTER_TYPE, TelegramAdapter } from '../translation_graph/adapters/telegram';
 import { handleTelegramCallbackQuery, ownsCallbackQuery } from './telegram_callback_door';
 import {
@@ -209,6 +210,17 @@ function subscriptionRow(subscription: InboundSubscription, source: OpenedSource
   return { team_id: subscription.teamId, credentials_id: source.credentialsId, provider: subscription.providerKey };
 }
 
+/** What a subscription row holds subscribed (an edge's subscription since
+ *  0.13; see listen_subscriptions.ts). */
+async function subscriptionsCellOf(id: string): Promise<unknown> {
+  const row = await getAutomationsQb(['webhook_subscription'])
+    .selectFrom('webhook_subscription')
+    .where('id', '=', id as WebhookSubscriptionId)
+    .select('subscriptions')
+    .executeTakeFirst();
+  return row?.subscriptions ?? null;
+}
+
 export const platformInboundStore: InboundStore<CapturedReceipts> = {
   async findSubscription(id) {
     const row = await getAutomationsQb(['webhook_subscription'])
@@ -265,6 +277,11 @@ export const platformInboundStore: InboundStore<CapturedReceipts> = {
   },
 
   async keepDelivery({ subscription, source, arrivals, checkpoint }) {
+    const listens = await listensOfSubscription({
+      teamId: subscription.teamId as TeamId,
+      adapterType: source.adapterType,
+      subscriptions: await subscriptionsCellOf(subscription.id),
+    });
     const { kept } = await deliverArrivals({
       teamId: subscription.teamId as TeamId,
       delivered: { adapterType: source.adapterType, credentialsId: source.credentialsId },
@@ -273,6 +290,7 @@ export const platformInboundStore: InboundStore<CapturedReceipts> = {
       source: 'webhook',
       arrivals,
       ...(checkpoint !== undefined ? { checkpoint } : {}),
+      ...(listens !== undefined ? { listens } : {}),
     });
     return kept.kept ? { kept: true, arrivalMark: kept.arrivalMark } : { kept: false };
   },

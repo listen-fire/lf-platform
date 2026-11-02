@@ -89,15 +89,15 @@ export interface SavedListen extends ListenConfig {
   credentialsId: string | null;
 }
 
-/** The listens `teamId` saved on `adapterType`'s module (in one file, when
- *  `movementId` names it). A trigger row of another shape (a pin 1 to 4
- *  listener) is not a listen and is skipped. */
-export async function savedListens(input: { teamId: TeamId; adapterType: string; movementId?: MovementId }): Promise<SavedListen[]> {
+/** The listens `teamId` saved (on `adapterType`'s module, when it names one;
+ *  in one file, when `movementId` does). A trigger row of another shape (a
+ *  pin 1 to 4 listener) is not a listen and is skipped. */
+export async function savedListens(input: { teamId: TeamId; adapterType?: string; movementId?: MovementId }): Promise<SavedListen[]> {
   let query = getAutomationsQb(['trigger', 'movement'])
     .selectFrom('trigger')
     .innerJoin('movement', 'movement.id', 'trigger.movement_id')
-    .where('trigger.team_id', '=', input.teamId)
-    .where('trigger.kind', '=', input.adapterType);
+    .where('trigger.team_id', '=', input.teamId);
+  if (input.adapterType !== undefined) query = query.where('trigger.kind', '=', input.adapterType);
   if (input.movementId !== undefined) query = query.where('trigger.movement_id', '=', input.movementId);
   const rows = await query
     .select(['trigger.id as id', 'trigger.config as config', 'trigger.credentials_id as credentialsId', 'movement.name as file'])

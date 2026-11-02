@@ -3,10 +3,11 @@
 // register their own kinds (`registerWorkKinds`, drain.ts); the deployment
 // that runs the drain composes them (startup/automations.ts).
 
-import { SECOND } from '../../constants';
+import { MINUTE, SECOND } from '../../constants';
 import { registerAwaitWork } from '../movement_engine/await_resume';
 import { registerTimerWork } from '../movement_engine/timer_resume';
 import { registerPollWork } from '../poll_source/worker';
+import { registerListenSubscriptionWork } from '../translation_graph/movement/listen_subscriptions';
 import { registerRunOrphanSweepWork } from '../translation_graph/runs/trigger_run';
 import { registerFireEventWork } from '../inbound/fire_event';
 import { periodicUnitWorkKinds, type CoreWorkKind } from './kinds';
@@ -14,6 +15,7 @@ import { ensurePeriodicWork, removeRetiredWork } from './store';
 
 const CORE_PERIODIC_WORK: ReadonlyArray<{ kind: CoreWorkKind; intervalMs: number }> = [
   { kind: 'poll_reconcile', intervalMs: 30 * SECOND },
+  { kind: 'listen_subscription_retry', intervalMs: 5 * MINUTE },
   { kind: 'timer_sweep', intervalMs: 30 * SECOND },
   { kind: 'run_orphan_sweep', intervalMs: 30 * SECOND },
 ];
@@ -48,6 +50,7 @@ async function ensureAutomationsPeriodicWork(): Promise<void> {
 function registerCoreWork(): void {
   registerTimerWork();
   registerPollWork();
+  registerListenSubscriptionWork();
   registerFireEventWork();
   registerAwaitWork();
   registerRunOrphanSweepWork();
