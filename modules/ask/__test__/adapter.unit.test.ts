@@ -1,6 +1,6 @@
 // The ask adapter's record duties: the family write (`-[:Check]->` …), the
 // cancellation update (`{ Cancelled: true }`), and the promise-honest
-// descriptor surface (families writable-not-readable; the awaitable
+// descriptor surface (families writable-not-readable; the listenable
 // `Response` edge). The records are mocked so this pins the ADAPTER's
 // routing/validation; the lattice itself is proven over a kv in
 // `records.unit.test.ts`, and against the platform's asks table (with the wake
@@ -23,10 +23,14 @@ jest.mock('../records', () => {
 });
 
 import type { WriteInput, UpdateInput } from 'movement-engine/public/adapter';
+import type { AskFamily } from '../types';
 
 import { makeStablePosition, makeUnstablePosition } from 'movement-engine/public/catalog';
 import { UPDATE_NOT_FOUND } from 'module-kit/adapter/not_found';
-import { AskAdapter } from '../adapter';
+import { introspectAdapter } from 'movement-engine/public/embed';
+import { AskAdapter, responseArrival } from '../adapter';
+import { ASK_MANIFEST } from '../manifest';
+import { askModule } from '../index';
 import { AskResponseRefused, type AskRecords } from '../records';
 
 const RECORDS: AskRecords = {
@@ -77,46 +81,45 @@ beforeEach(() => {
   answerAskMock.mockReset();
 });
 
-describe('the awaitable capability — the state lattice IS the resolution', () => {
-  const point = { recordId: 'ask-1', edge: 'Response' };
+describe('the listenable Response — an ask is waited on by its id, and its answer arrives there', () => {
+  const answered = (input: { family?: AskFamily; answer: unknown }) => ({ id: 'ask-1', family: input.family ?? 'Check', answer: input.answer, state: 'answered' as const });
 
-  it('an OPEN ask resolves PENDING, keyed by the ask id (the engine parks on it)', async () => {
-    getAskMock.mockResolvedValue({ ...STORED, state: 'open' });
-    expect(await adapter().awaitable!.resolveAwait(point)).toEqual({ status: 'pending', correlationKey: 'ask-1' });
+  it('a wait on an ask\'s Response is keyed by the ask id, read from the heads alone', async () => {
+    const keys = await adapter().arrivals.awaitKeys({ edge: 'Response', heads: [{ recordId: 'ask-1' }, { recordId: 'ask-2', recordType: 'Check' }] });
+    expect(keys).toEqual([{ key: 'ask-1' }, { key: 'ask-2' }]);
+    expect(getAskMock).not.toHaveBeenCalled();
   });
 
-  it('an ANSWERED ask resolves LANDED, carrying the typed answer under the DECLARED field name', async () => {
-    getAskMock.mockResolvedValue({ ...STORED, state: 'answered', answer: true });
-    const res = await adapter().awaitable!.resolveAwait(point);
+  it('refuses a wait on any other edge', async () => {
+    await expect(adapter().arrivals.awaitKeys({ edge: 'Check', heads: [{ recordId: 'ask-1' }] })).rejects.toThrow(/not a listenable edge/);
+  });
+
+  it('an ANSWERED ask arrives on its Response under its id, carrying the typed answer under the DECLARED field name', () => {
     // The landing dict is keyed by the Response descriptor's declared field
     // name ('Answer' === displayName), so `got.Answer` — the name the checker
-    // typed and the author wrote — reaches the value end-to-end. A lowercase
-    // `answer` here was the founding surface-vs-store disagreement in miniature.
-    // `recordType` names the landing's type — the ask's OWN family's Response
-    // type ('Check Response'), so the engine binds a position the ask's
+    // typed and the author wrote — reaches the value end-to-end. `recordType`
+    // names the landing's type — the ask's OWN family's Response type
+    // ('Check Response'), so the engine binds a position the ask's
     // getFieldValue reads by the declared name.
-    expect(res).toEqual({
-      status: 'landed',
-      correlationKey: 'ask-1',
-      landings: [{ recordId: 'ask-1', recordType: 'Check Response', fields: { Answer: true } }],
+    expect(responseArrival(answered({ answer: true }))).toEqual({
+      edge: 'Response',
+      key: 'ask-1',
+      identity: 'ask-1',
+      landing: { recordId: 'ask-1', recordType: 'Check Response', fields: { Answer: true } },
     });
   });
 
-  it('a different family lands on ITS OWN Response type', async () => {
-    getAskMock.mockResolvedValue({ ...STORED, family: 'Draft', state: 'answered', answer: { note: 'x' } });
-    const res = await adapter().awaitable!.resolveAwait(point);
-    expect(res).toEqual({
-      status: 'landed',
-      correlationKey: 'ask-1',
-      landings: [{ recordId: 'ask-1', recordType: 'Draft Response', fields: { Answer: { note: 'x' } } }],
+  it('a different family lands on ITS OWN Response type', () => {
+    expect(responseArrival(answered({ family: 'Draft', answer: { note: 'x' } })).landing).toEqual({
+      recordId: 'ask-1',
+      recordType: 'Draft Response',
+      fields: { Answer: { note: 'x' } },
     });
   });
 
-  it('the landed answer reads back through getFieldValue under the DECLARED name', async () => {
-    getAskMock.mockResolvedValue({ ...STORED, state: 'answered', answer: 'shipped' });
-    const res = await adapter().awaitable!.resolveAwait(point);
-    const landing = (res as { landings: Array<{ fields: Record<string, unknown> }> }).landings[0];
-    const position = makeUnstablePosition({ adapterType: 'ask', recordType: 'Check Response', data: landing.fields });
+  it('the arrived answer reads back through getFieldValue under the DECLARED name', async () => {
+    const arrival = responseArrival(answered({ answer: 'shipped' }));
+    const position = makeUnstablePosition({ adapterType: 'ask', recordType: 'Check Response', data: arrival.landing.fields });
     // The engine binds the landing as an unstable Response position; `got.Answer`
     // resolves through the adapter's read seam to the real typed answer.
     expect(await adapter().getFieldValue({ position, fieldId: 'Answer' })).toBe('shipped');
@@ -127,13 +130,9 @@ describe('the awaitable capability — the state lattice IS the resolution', () 
     // (`askResponseDescriptorFor`); this is the read that has to honour it.
     // `Answer` stays the stored carrier — these are views onto it.
     const answer = { Budget: '50k', Timeline: 'Q3' };
-    getAskMock.mockResolvedValue({
-      ...STORED, family: 'Form', options: ['Budget', 'Timeline'], state: 'answered', answer,
-    });
-    const res = await adapter().awaitable!.resolveAwait(point);
-    const landing = (res as { landings: Array<{ fields: Record<string, unknown> }> }).landings[0];
+    const arrival = responseArrival(answered({ family: 'Form', answer }));
     const position = makeUnstablePosition({
-      adapterType: 'ask', recordType: 'Form Response', data: landing.fields,
+      adapterType: 'ask', recordType: 'Form Response', data: arrival.landing.fields,
     });
     const read = (fieldId: string) => adapter().getFieldValue({ position, fieldId });
     expect(await read('Budget')).toBe('50k');
@@ -155,14 +154,16 @@ describe('the awaitable capability — the state lattice IS the resolution', () 
     expect(await adapter().getFieldValue({ position, fieldId: 'State' })).toBe('California');
   });
 
-  it('an EXPIRED ask resolves EMPTY (resolvesEmpty — the explicit cancel, F6)', async () => {
-    getAskMock.mockResolvedValue({ ...STORED, state: 'expired' });
-    expect(await adapter().awaitable!.resolveAwait(point)).toEqual({ status: 'empty' });
+});
+
+describe('the engine\'s describe check', () => {
+  it('passes: no key 0.13 retired, and the listenable Response readable as declared', async () => {
+    const { notes } = await introspectAdapter(adapter(), ASK_MANIFEST);
+    expect(notes).toEqual([]);
   });
 
-  it('a deleted ask resolves EMPTY rather than parking forever', async () => {
-    getAskMock.mockResolvedValue(null);
-    expect(await adapter().awaitable!.resolveAwait(point)).toEqual({ status: 'empty' });
+  it('states adapter protocol 2.6, whose arrivals name their record type', () => {
+    expect(askModule.protocolMinor).toBe(6);
   });
 });
 
@@ -200,11 +201,9 @@ describe('describe', () => {
     // synchronously, with `await` as the read that waits.
     const response = d!.references.find((r) => r.name === 'Response');
     expect(response).toMatchObject({
-      awaitable: true,
-      // Answering resumes the run in the same request, so it is announced —
-      // which is what lets an author write a bare `await` on it.
-      watchable: true,
-      resolvesEmpty: true,
+      // The answer door reports each answer as an arrival here, which is what
+      // lets an author write a bare `await` on it.
+      listenable: true,
       readable: true,
       writable: true,
       targetTypeId: 'Check Response',

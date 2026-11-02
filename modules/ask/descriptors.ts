@@ -11,8 +11,8 @@ import type {
 
 import { ASK_ANSWER_TYPES, ASK_FAMILIES, isAskAnswerType, isAskFamily, type AskAnswerType, type AskFamily } from './types';
 
-/** The awaitable edge's name — literal in both `responseEdge()` and
- *  `resolveAwait`'s dispatch, so it's one constant rather than two agreeing
+/** The listenable edge's name — literal in both `responseEdge()` and
+ *  `awaitKeys`'s dispatch, so it's one constant rather than two agreeing
  *  string literals. Unlike the LANDING type (per-family, below), the edge
  *  itself is the same name on every family — `await x-[:Response]->` reads
  *  the same regardless of which family `x` is. */
@@ -23,7 +23,7 @@ export const RESPONSE_EDGE_NAME = 'Response';
  *  rather than re-stating the descriptor's `fieldId` as a literal. */
 export const RESPONSE_EDGE_FIELD_ID = 'response';
 
-/** The per-family Response type id — where a resolution along the awaitable
+/** The per-family Response type id — where an arrival along the listenable
  *  `Response` edge lands. Each family gets its OWN type (chunk A, asks-as-
  *  adapter layer 5): the answer's real shape is the family's, so the landing
  *  type must be too — `Check Response` isn't `Choose Response`. Published so
@@ -113,9 +113,10 @@ function recordSurfaceFields(): SchemaFieldDescriptor[] {
  *    Response record. `readable: false` used to make a bare read observably
  *    refused, which was the right call while `await` was the ONLY way in — now
  *    it would be a capability we simply declined to publish.
- *  - **awaitable**: `await` is demoted to "the read that waits" — the same edge,
- *    read with wait-until-at-least-one-exists behaviour. `resolvesEmpty` says an
- *    explicit cancel resolves awaiters EMPTY rather than parking them forever.
+ *  - **listenable**: `await` is "the read that waits" — the same edge, read
+ *    with wait-until-at-least-one-exists behaviour. The answer arrives as an
+ *    arrival on the ask's own `Response` (`responseArrival`), keyed by the
+ *    ask's id (`awaitKeys`).
  *
  * Targets the FAMILY's own Response type — every family shares the edge's name
  * (`Response`) but not its landing type.
@@ -127,12 +128,9 @@ function responseEdge(family: AskFamily): SchemaReferenceDescriptor {
     targetTypeId: responseTypeId(family),
     cardinality: 'one',
     direction: 'outgoing',
-    awaitable: true,
-    // Answering or cancelling an ask queues the wake for the run parked on it
-    // (the answer and cancel doors), with the closed sweep behind both — the
-    // wake is delivered, so an await here needs no cadence.
-    watchable: true,
-    resolvesEmpty: true,
+    // The host's answer door reports each answer as an arrival on the ask's
+    // Response, so a run awaiting it wakes; nothing is polled.
+    listenable: true,
     readable: true,
     writable: true,
     // Answers are read back in the order they landed — the store appends and

@@ -1,4 +1,4 @@
-// The ask adapter. An ORDINARY adapter that happens to hold the awaitable
+// The ask adapter. An ORDINARY adapter that happens to hold a listenable edge
 // capability; its entire specialness is its record semantics. An author
 // constructs `ask()` like any adapter and writes a question along a family
 // edge —
@@ -25,9 +25,10 @@
 
 import type {
   Adapter,
-  AwaitableCapability,
-  AwaitPoint,
-  AwaitResolution,
+  Arrival,
+  ArrivalsCapability,
+  AwaitHead,
+  AwaitKey,
   DeleteInput,
   DeleteResult,
   EdgesFromResult,
@@ -67,6 +68,7 @@ import {
   isAskAnswerType,
   isAskFamily,
   type AskAnswerType,
+  type AskRecord,
   type AskRowSpec,
 } from './types';
 
@@ -144,8 +146,8 @@ export class AskAdapter extends BaseAdapter implements Adapter {
   /**
    * The READ side of the Response edge, synchronously (callback-primitive layer
    * 3). An unanswered — or cancelled — request yields NOTHING; an answered one
-   * yields its Response record, the same landing `resolveAwait` hands the engine
-   * when it wakes a parked run. `await` differs only in waiting for it.
+   * yields its Response record, the same landing its arrival carries
+   * (`responseArrival`) when it wakes a parked run. `await` differs only in waiting for it.
    */
   async getRelated(input: GetRelatedInput): Promise<RelatedResult[]> {
     // The natural edge name in, this adapter's own reference id out — the
@@ -169,8 +171,7 @@ export class AskAdapter extends BaseAdapter implements Adapter {
     }
     const ask = await getAsk(this.records, input.position.identity.recordId);
     // Gone, still open, or cancelled — there is no answer to hand back. This is
-    // the read half of `resolvesEmpty`, and the reason the landing's fields type
-    // as possibly-absent.
+    // the reason the landing's fields type as possibly-absent.
     if (!ask || ask.state !== 'answered') return [];
     return [
       {
@@ -434,50 +435,37 @@ export class AskAdapter extends BaseAdapter implements Adapter {
   }
 
   /**
-   * The AWAITABLE capability (asks-as-adapter §A) — the engine consumption of
-   * the `Response` edge's `awaitable`/`resolvesEmpty` flags. A pending ask
-   * correlates on its own id; the state lattice IS the resolution:
-   *   - open      → `pending`  (park, armed, keyed by the ask id)
-   *   - answered  → `landed`   (the Response node carrying the typed answer)
-   *   - expired   → `empty`    (resolvesEmpty — an explicit cancel settles the
-   *                             awaiter empty immediately, F6)
-   * The adapter reports what has arrived; the engine applies the await's WHERE
-   * and owns the park/resume. F17 — the lattice's optimistic guards already
-   * serialise cancel-vs-answer into one consistent record state.
+   * The key a run's wait on an ask's `Response` is held under: the ask's own
+   * id, which the answer's arrival names too (`responseArrival`). Computed
+   * from the heads alone, as adapter protocol 2.5 asks: no read of the store.
    */
-  readonly awaitable: AwaitableCapability = {
-    resolveAwait: async (point: AwaitPoint): Promise<AwaitResolution> => {
-      if (point.edge !== RESPONSE_EDGE_NAME) {
-        // The only awaitable edge is Response; anything else is a caller bug.
-        throw new Error(`AskAdapter.resolveAwait: '${point.edge}' is not an awaitable edge.`);
+  readonly arrivals: ArrivalsCapability = {
+    awaitKeys: async ({ edge, heads }: { edge: string; heads: AwaitHead[] }): Promise<AwaitKey[]> => {
+      if (edge !== RESPONSE_EDGE_NAME) {
+        // The only listenable edge is Response; anything else is a caller bug.
+        throw new Error(`AskAdapter.awaitKeys: '${edge}' is not a listenable edge (the only one is '${RESPONSE_EDGE_NAME}').`);
       }
-      const ask = await getAsk(this.records, point.recordId);
-      if (!ask) {
-        // The ask row is gone (deleted). Nothing will ever resolve it — settle
-        // empty so the awaiter completes rather than parking forever.
-        return { status: 'empty' };
-      }
-      switch (ask.state) {
-        case 'open':
-          return { status: 'pending', correlationKey: ask.id };
-        case 'expired':
-          return { status: 'empty' };
-        case 'answered':
-          return {
-            status: 'landed',
-            correlationKey: ask.id,
-            landings: [
-              {
-                recordId: ask.id,
-                // The landing's TYPE is the ask's OWN family's Response type —
-                // the engine binds this as the position's recordType, so a
-                // read of `r.Answer` dispatches to the right descriptor.
-                recordType: responseTypeId(ask.family),
-                fields: { [RESPONSE_ANSWER_FIELD]: ask.answer },
-              },
-            ],
-          };
-      }
+      return heads.map((head) => ({ key: head.recordId }));
+    },
+  };
+}
+
+/**
+ * The arrival an answered ask reports on its `Response`: the host's answer
+ * door logs it, and a run waiting on the ask (keyed by its id, `awaitKeys`)
+ * wakes and reads the typed answer. The landing's type is the ask's OWN
+ * family's Response type, so a read of `r.Answer` dispatches to the right
+ * descriptor. An ask is answered once, so its id names the arrival.
+ */
+export function responseArrival(ask: Pick<AskRecord, 'id' | 'family' | 'answer'> & { state: 'answered' }): Exclude<Arrival, { gone: true }> {
+  return {
+    edge: RESPONSE_EDGE_NAME,
+    key: ask.id,
+    identity: ask.id,
+    landing: {
+      recordId: ask.id,
+      recordType: responseTypeId(ask.family),
+      fields: { [RESPONSE_ANSWER_FIELD]: ask.answer },
     },
   };
 }

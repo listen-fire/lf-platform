@@ -26,7 +26,7 @@ export const ASK_MANIFEST: AdapterManifest = {
     '`write a { Cancelled: true }`.',
   supportedTriggers: [],
   methods: [
-    'listEntryPoints', 'describe', 'getFieldValue', 'getRelated', 'createRecord', 'updateRecord',
+    'listEntryPoints', 'describe', 'getFieldValue', 'getRelated', 'createRecord', 'updateRecord', 'awaitKeys',
   ],
 };
 

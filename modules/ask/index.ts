@@ -6,8 +6,9 @@
 //     raised before ask was a module answer and wake exactly as before);
 //   - its answer door (a link page, a chat button) is where a person answers,
 //     at the link `answerUrl` names, and it answers through `answerAsk` here;
-//   - it wakes a run parked on an ask when the ask settles, by the ask's id —
-//     the core's park/await contract, nothing ask-shaped.
+//   - it reports an answered ask's arrival (`responseArrival`) on the ask's
+//     `Response`, which a waiting run is keyed on by the ask's id
+//     (`awaitKeys`) — the core's wait contract, nothing ask-shaped.
 //
 // Credential-free and constructed with no arguments (`asks = ask()`), like
 // `cron` and `manual`; nothing to connect.
@@ -36,6 +37,9 @@ export function askModuleWith(host: AskHost): AdapterModuleDefinition {
     kind: 'adapter',
     name: '@lf/ask',
     manifest: ASK_MANIFEST,
+    // Adapter protocol 2.6: an answer's arrival states its landing's record
+    // type (`responseArrival`).
+    protocolMinor: 6,
     credentials: [],
     create: (ctx) => new AskAdapter({ kv: ctx.kv, answerUrl }),
   });
