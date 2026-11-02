@@ -1,9 +1,6 @@
-import { `@lf/whatsapp` as whatsapp, `@lf/google_sheets` as sheets, `@lf/slack` as slack } from adapters
-import { customers, job_log, ops_slack } from credentials
-
-inbox = connect whatsapp using customers
-log   = connect sheets using job_log { spreadsheet: "Job log" }
-team  = connect slack using ops_slack
+inbox = connect `@lf/whatsapp` using customers
+log   = connect `@lf/google-sheets` using job_log { spreadsheet: "Job log" }
+team  = connect `@lf/slack` using ops_slack
 
 type Urgency = <"urgent" | "routine">
 
@@ -13,7 +10,7 @@ node Job: "the job this customer is asking us to do" {
   urgency: <Urgency> "urgent if damage is happening now or anyone is in danger, so someone must come today; otherwise routine"
 }
 
-function `Job Intake`(msg: <inbox-[:Message]->>) {
+function `Job Intake`(msg: <inbox-[:Messages]->>) {
   job = extractOne([msg.Body], Job, { tier: "quick" })
   if (job == null) { fail("no job in the message from ${msg.From}") }
   address = coalesce(job.address, "not given")
@@ -32,4 +29,4 @@ function `Job Intake`(msg: <inbox-[:Message]->>) {
   }
 }
 
-listen to inbox { events: ["message"] } fire `Job Intake`
+listen to inbox-[:Messages]-> fire `Job Intake`

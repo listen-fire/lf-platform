@@ -65,13 +65,13 @@ REAL_PROJECT="$(pwd -P)"
 human() {
   sed -E -e $'s/\x1b\\[[0-9;?]*[A-Za-z]//g' -e "s#$REAL_PROJECT/##g" -e "s#$PROJECT/##g" -e "s#$REAL_PROJECT#.#g" -e "s#$PROJECT#.#g"
 }
-printf '%s\n' "$APP_SECRET" | "$LF_BIN" connect @lf/whatsapp --base-url "$F/whatsapp/graph" >/dev/null
-printf 'stub-meta-token\n100200300\n\n\n\n\n' | "$LF_BIN" credential add --module whatsapp customers >/dev/null
-printf '\n' | "$LF_BIN" connect @lf/slack --base-url "$F/slack" >/dev/null
-printf 'xoxb-stub\n\n\n\n' | "$LF_BIN" credential add --module slack ops_slack >/dev/null
-printf 'stub-client\nstub-client-secret\n8976\nn\n' | "$LF_BIN" connect @lf/google-sheets --base-url "$F/sheets" \
+"$LF_BIN" connect @lf/whatsapp --yes --webhook-secret "$APP_SECRET" --base-url "$F/whatsapp/graph" >/dev/null
+printf 'stub-meta-token\n100200300\n\n\n\n\n' | "$LF_BIN" credential add --module @lf/whatsapp customers >/dev/null
+"$LF_BIN" connect @lf/slack --yes >/dev/null
+printf 'xoxb-stub\n\n\n%s\n' "$F/slack/" | "$LF_BIN" credential add --module @lf/slack ops_slack >/dev/null
+"$LF_BIN" connect @lf/google-sheets --yes --base-url "$F/sheets" --client-id stub-client --client-secret stub-client-secret --redirect-port 0 \
   --oauth-authorize-url "$F/oauth/authorize" --oauth-token-url "$F/oauth/token" >/dev/null
-node "$HERE/signin.cjs" "$LF_BIN" google_sheets job_log >/dev/null
+node "$HERE/signin.cjs" "$LF_BIN" @lf/google-sheets job_log >/dev/null
 # Under drive.file a spreadsheet reaches the module only once the user picks
 # it. listen-fire has no picker: the pick is the module's own kv, which listen-fire gives a
 # module through MODULE_STATE_DIR (tenant "local").
@@ -90,6 +90,7 @@ cp "$HERE/programs/fixed.mvt" movements/job_intake.mvt
 jq -e '.errors == 1' "$CAP/10_check_draft.json" >/dev/null || { echo "the draft was not refused with exactly one error"; exit 1; }
 jq -e '.ok' "$CAP/11_check_fixed.json" >/dev/null || { echo "the fix does not check clean"; jq . "$CAP/11_check_fixed.json"; exit 1; }
 cp lf.yaml "$CAP/12_lf.yaml"
+[ -n "${STOP_AFTER_CHECK:-}" ] && exit 0
 
 # listen-fire serve, where the fake WhatsApp's deliveries reach it.
 PORT=$(node -e 'const s=require("net").createServer().listen(0,"127.0.0.1",()=>{console.log(s.address().port);s.close()})')

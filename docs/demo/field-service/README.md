@@ -33,11 +33,8 @@ node build_data.cjs ../../../../listen-fire-site/video/field-service/data.js
 
 - `LF_BIN` defaults to `listen-fire` on PATH (a release). `LF_SRC`, when set, makes listen-fire
   serve the modules from that checkout's sources, and its commit is recorded.
-- The current recording is from listen-fire's `airtable-enums` branch (listen-fire
-  0.12.9 plus the commits that let listen-fire reach a sheet's tables through
-  `spreadsheet:`). Released 0.12.9 refuses the program, so `validatedUnder`
-  reads `0.12.9+<commit>`. Once a release has those commits, re-record with
-  `./capture.sh` and no variables.
+- The current recording is listen-fire 0.14.1 built from listen-fire `main` at
+  110878fa5c, so `validatedUnder` reads `0.14.1 (main@110878fa5c)`.
 
 `capture.sh` starts from nothing every time. It makes a fresh project in
 `.work/` with `listen-fire init`, starts the fakes on a free port, and connects each

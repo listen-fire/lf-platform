@@ -3,7 +3,7 @@
 // video itself is rendered in the site repo, so data.js is written there:
 //   node build_data.cjs ../../../../listen-fire-site/video/field-service/data.js
 //
-// Where each figure comes from (lf reports some of them differently from the
+// Where each figure comes from (listen-fire reports some of them differently from the
 // platform's inspectRun):
 // - validatedUnder: `listen-fire --version`, plus the listen-fire main commit when listen-fire ran
 //   from a checkout's modules (LF_SRC); a release records its version alone.
@@ -41,15 +41,14 @@ const draft = read('10_check_draft.json');
 const fixed = read('11_check_fixed.json');
 const v2 = program('fixed.mvt');
 
-// The listen, read off the program: `listen to <conn> { … } fire …`, and the
-// connection's `<conn> = connect <adapter>` with the adapter's import.
+// The listen, read off the program: `listen to <conn>-[…]-> fire …`, and the
+// module of the connection's `<conn> = connect \`@lf/<module>\``.
 function listener(source) {
-  const listen = /^listen to (\w+)\s*(\{.*\})?\s*fire /m.exec(source);
-  if (!listen) throw new Error('the fixed program has no listen');
-  const adapter = new RegExp(`^${listen[1]}\\s*=\\s*connect (\\w+)`, 'm').exec(source)[1];
-  const module = new RegExp('`@lf/(\\w+)` as ' + adapter + '\\b').exec(source)[1];
-  const config = listen[2] ? JSON.parse(listen[2].replace(/(\w+)\s*:/g, '"$1":')) : {};
-  return { kind: module, config };
+  const listen = /^listen to (\w+)-\[.*\]-> fire .+$/m.exec(source);
+  if (!listen) throw new Error('the fixed program has no listen over a traversal');
+  const connect = new RegExp(`^${listen[1]}\\s*=\\s*connect \`@lf/([\\w-]+)\``, 'm').exec(source);
+  if (!connect) throw new Error(`the fixed program does not connect ${listen[1]}`);
+  return { kind: connect[1], listen: listen[0] };
 }
 
 const jobLog = JSON.parse(program('job_log.json')).entities[0].data;
@@ -87,7 +86,8 @@ function runOf(n, name) {
   const trace = run.trace ?? [];
   const extractions = trace.filter((t) => t.kind === 'extraction');
   const job = extractions.flatMap((t) => t.entities?.Job ?? [])[0];
-  if (run.event?.payload?.from !== message.from || run.event?.payload?.body !== message.text) {
+  const arrived = run.event?.arrival?.landing?.fields ?? {};
+  if (arrived.From !== message.from || arrived.Body !== message.text) {
     throw new Error(`run ${run.runId} did not come from the ${name} delivery`);
   }
   return {
@@ -96,7 +96,7 @@ function runOf(n, name) {
     costUsd: run.costMicrodollars / 1e6,
     modelCalls: extractions.length,
     ms: delivery.ms,
-    message: { from: run.event.payload.from, text: run.event.payload.body },
+    message: { from: arrived.From, text: arrived.Body },
     urgency: job?.fields?.urgency ?? null,
     writes: writesOf(n),
   };
