@@ -1,26 +1,38 @@
 /**
- * A scheduled movement fetches pages. Live proof that it does.
+ * A background run acts as its own team. Live proof that it does.
  *
- * The bug this pins: the background workers (the clock, the pollers, the two
- * resume workers) called into a firing with NO ambient Context, so the step
- * that stores a fetched page — which scopes itself by the acting identity —
- * threw `Async local storage undefined` inside the plugin. The plugin's catch
- * turned that into a warning and returned nothing, so `fetch_url` contributed
- * nothing on every scheduled run and nothing said so.
+ * Two bugs, one seam:
  *
- * The whole point of this script is HOW it fires: it calls the dispatch seam
- * bare, with no Context of its own, exactly as a worker does. The seeding does
- * touch the database, but no part of it establishes a Context the firing could
- * inherit.
+ * 1. The background workers called into a firing with NO ambient Context, so
+ *    the step that stores a fetched page (it scopes itself by the acting
+ *    identity) threw `Async local storage undefined` inside the plugin, and a
+ *    scheduled movement fetched nothing.
+ * 2. The opposite: a Node timer carries the identity in scope where it was
+ *    created, so a drain pass scheduled from a request ran as that request's
+ *    team, and so did every pass after it. A webhook on the public routes woke
+ *    the loop, a team's email run was then drained as the public team, and the
+ *    deck it fetched was stored as a document of the public team. Attaching it
+ *    to the team's own record then failed: "the file names the stored document
+ *    …, which is not this team's".
+ *
+ * So this script runs a team's movement the way production does: queued, then
+ * drained by the real drain loop, and the pass that runs it is woken from
+ * inside a request of ANOTHER team, then of the public team. The movement
+ * fetches a deck link that the local server serves as a PDF. The claims: the
+ * deck's document row and its fetched-URL resource are the run's team's, the
+ * attach's read of the deck (a module's `ctx.files`, the team check included)
+ * succeeds, and nothing in the run says the file is outside the team.
  *
  *   npx ts-node --project tsconfig.dev.json --transpile-only \
  *     -r dotenv/config -r tsconfig-paths/register \
  *     src/scripts/dev/verify_background_run_context.ts
  *
- * The page is served from a local HTTP server started here, and the outbound
- * unlocker call is answered from it — so the fetch, the persistence, and the
- * extraction behind them are all the real thing, and only the third party is
- * not. Nothing outside this process is started or stopped.
+ * Stand-ins, and only these: the deck's host (a local server), the gated
+ * document reader (a browser, in production; here it reads the local deck),
+ * and the object store when this process has none configured (an in-process
+ * one shaped like files-s3). No model is called, and no dev loop is needed:
+ * the script seeds two fresh teams in whatever database it is pointed at.
+ * Nothing outside this process is started or stopped.
  */
 import './_profile_loader';
 
@@ -30,41 +42,34 @@ import '../../services/translation_graph/engine/transforms/register-bundled';
 
 import * as http from 'node:http';
 import { randomUUID } from 'node:crypto';
+import { Readable } from 'node:stream';
 
 import type { AddressInfo } from 'node:net';
-
-import { ensureDevLoopTeam } from './_lib';
-import { logger } from 'movement-engine/public/log';
-import { getAutomationsQb, getKnowledgeQb } from '../../lib/kysely';
-import { saveMovement } from '../../services/translation_graph/movement/provision';
-import { dispatchTriggerByIdEvent } from '../../services/translation_graph/triggers/router';
-import { unsafeCurrentContext } from '../../services/context';
-
+import type { DocumentProvider } from '../../adapters/document/interface';
 import type { TeamId } from '../../generated/kysely/core/Team';
-import type { TriggerId } from '../../generated/kysely/automations/Trigger';
-import type { TriggerEvent } from 'movement-engine/public/inbound';
+import type { UserId } from '../../generated/kysely/core/User';
+import type { TriggerRunId } from '../../generated/kysely/automations/TriggerRun';
 
-// ── The page the movement loads ───────────────────────────────────────────
+import { services } from '../../adapters/registry';
+import { UnconfiguredDocumentProvider } from '../../adapters/document/unconfigured';
+import { DocumentSourceService } from '../../lib/document_sources';
+import { logger } from 'movement-engine/public/log';
+import { documentStoreFileRef } from 'movement-engine/public/files';
+import { getAutomationsQb, getCoreQb, getKnowledgeQb } from '../../lib/kysely';
+import { Context, unsafeCurrentContext } from '../../services/context';
+import { userPrincipal } from '../../services/principal';
+import { PUBLIC_TEAM_ID } from '../../startup/core';
+import { platformModuleFiles } from '../../services/translation_graph/engine/files/module_files';
+import { saveMovement } from '../../services/translation_graph/movement/provision';
+import { runMovementAsync } from '../../services/translation_graph/movement/run_now';
+import { registerDispatchWork } from '../../services/translation_graph/triggers/dispatch_event';
+import { notifyWork, startDrainLoop } from '../../services/work/drain';
 
-/** Long enough to clear the scraper's thin-content floor, and carrying one
- *  fact nothing else in the run knows — so a field holding it is proof the
- *  fetched bytes reached the extraction behind the plugin. */
-const MOTTO = 'Rings forged at scale since the Second Age';
-const PAGE = `<!doctype html>
-<html><head><title>Gondor Forge</title></head><body>
-<h1>Gondor Forge</h1>
-<p>${MOTTO}</p>
-<p>Gondor Forge builds smelting equipment for the great houses of the west. We
-have supplied the citadel, the harbour works and the northern watchtowers for
-longer than anyone still working here can remember. Our foundry runs on the
-same principles it always has: heat, patience, and an unreasonable interest in
-the grain of a finished piece.</p>
-<p>Our customers are industrial buyers who need one thing done exactly right,
-repeatedly, for years. We do not sell software, we do not sell services, and we
-have never once shipped a product we would not use ourselves.</p>
-</body></html>`;
+// ── The deck the movement fetches ─────────────────────────────────────────
 
-// ── Capturing the log the bug used to hide in ─────────────────────────────
+const DECK = Buffer.from('%PDF-1.4\n% a deck with no text layer\n%%EOF\n');
+
+// ── Capturing the log the bugs used to hide in ────────────────────────────
 
 const captured: string[] = [];
 
@@ -87,84 +92,183 @@ function safeJson(value: unknown): string {
   }
 }
 
-// ── Standing in for the unlocker, and only for it ─────────────────────────
+// ── Standing in for the gated reader and the object store ─────────────────
 
-/** Answer the Web Unlocker's POST from the local server, for the local
- *  address only. Every other request leaves the process untouched. */
-function answerUnlockerLocally(origin: string): void {
-  const send = globalThis.fetch;
-  globalThis.fetch = async (
-    input: Parameters<typeof send>[0],
-    init?: Parameters<typeof send>[1],
-  ) => {
-    const target = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-    if (target.startsWith('https://api.brightdata.com/request')) {
-      const body = JSON.parse(String(init?.body ?? '{}')) as { url?: string };
-      if (typeof body.url === 'string' && body.url.startsWith(origin)) {
-        const page = await send(body.url);
-        return new Response(await page.text(), {
-          status: 200,
-          headers: { 'content-type': 'text/html' },
-        });
-      }
-    }
-    return send(input, init);
+/** A DocSend link opens in a browser in production; the local deck is read
+ *  here instead. Every other address goes to the real reader. */
+function readLocalDecks(origin: string): void {
+  const real = {
+    isSupportedUrl: DocumentSourceService.isSupportedUrl.bind(DocumentSourceService),
+    outputFormat: DocumentSourceService.outputFormat.bind(DocumentSourceService),
+    getUrlAsPdfStream: DocumentSourceService.getUrlAsPdfStream.bind(DocumentSourceService),
   };
+  const local = (url: string) => url.startsWith(origin);
+  DocumentSourceService.isSupportedUrl = (url) => local(url) || real.isSupportedUrl(url);
+  DocumentSourceService.outputFormat = (url) => (local(url) ? 'DOCUMENT' : real.outputFormat(url));
+  DocumentSourceService.getUrlAsPdfStream = async (url, options) => {
+    if (!local(url)) return real.getUrlAsPdfStream(url, options);
+    const response = await fetch(url);
+    return { name: 'DocSend.pdf', data: Readable.from([Buffer.from(await response.arrayBuffer())]) } as never;
+  };
+}
+
+/** The configured object store when there is one; otherwise an in-process
+ *  store shaped like files-s3 (a random folder per upload). */
+function ensureObjectStore(): string {
+  if (!(services.document instanceof UnconfiguredDocumentProvider)) return 'the configured object store';
+  const objects = new Map<string, Buffer>();
+  const BUCKET = 's3://listen-fire/';
+  const stored = (objectUri: string) => {
+    const bytes = objects.get(objectUri);
+    if (bytes === undefined) throw new Error(`no object ${objectUri}`);
+    return bytes;
+  };
+  const store = {
+    upload: async (readable: Readable, { filename, keyPrefix }: { filename: string; keyPrefix?: string }) => {
+      const chunks: Buffer[] = [];
+      for await (const chunk of readable) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      const objectUri = `${BUCKET}${keyPrefix !== undefined ? `${keyPrefix}/` : ''}${randomUUID()}/${filename}`;
+      objects.set(objectUri, Buffer.concat(chunks));
+      return { objectUri, checksum: randomUUID() };
+    },
+    getFileNodeStream: async ({ objectUri }: { objectUri: string }) => {
+      const bytes = stored(objectUri);
+      return Object.assign(Readable.from([bytes]), { size: bytes.byteLength, contentType: 'application/pdf' });
+    },
+    getFile: async ({ objectUri }: { objectUri: string }) => {
+      const bytes = stored(objectUri);
+      return { webStream: new Blob([bytes]).stream(), ContentLength: bytes.byteLength, ContentType: 'application/pdf' };
+    },
+    getDownloadUrl: async ({ objectUri }: { objectUri: string }) => objectUri,
+    keyOf: (objectUri: string) => (objectUri.startsWith(BUCKET) ? objectUri.slice(BUCKET.length) : undefined),
+  };
+  // Implements every member of the published provider the platform reaches.
+  services.document = store as unknown as DocumentProvider;
+  return 'an in-process object store (none is configured here)';
 }
 
 // ── The movement ──────────────────────────────────────────────────────────
 
 const MOVEMENT_NAME = 'background_run_context_probe';
 
-const program = (website: string) => `
+// The manual invocation's text is the deck link itself, so no model is needed
+// to find it.
+const PROGRAM = `
 import { manual } from adapters
 import { fetchUrl } from plugins
 
 runs = connect manual
 
-node Company: "each company named in this message" {
-  name:    <text> "the company's name"
-  website: <text> "the company's web address, if the message gives one"
-}
-
-node Page: "the company's own page" {
-  motto: <text> "the company's motto, exactly as its own page words it"
-}
-
 function ${MOVEMENT_NAME}(go: <runs-[:Invocation]->>) {
-  companies = extract([go.\`Text\`], Company)
-  mottos = map(companies, (c) => {
-    page = fetchUrl(c.website, { email: "x@y.z" })
-    return extractOne([page], Page)
-  })
+  deck = fetchUrl(go.\`Text\`, { email: "x@y.z" })
 }
 
 listen to runs {} fire ${MOVEMENT_NAME}
 `;
 
-const message = (website: string) =>
-  `One from this morning: Gondor Forge (${website}) — industrial smelting equipment.`;
+// ── The run's team, and another for the request that wakes the loop ───────
 
-// ── The run's trace, as the row carries it ────────────────────────────────
+/** A fresh team with one write member: the probe needs no fake channels, so
+ *  it seeds only what a manual run and a fetch touch. */
+async function seedTeam(label: string): Promise<{ teamId: string; userId: string }> {
+  const teamId = randomUUID() as TeamId;
+  const userId = randomUUID() as UserId;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await getCoreQb(['team']).insertInto('team').values({ id: teamId, name: `bg-probe-${label}-${teamId.slice(0, 8)}` } as any).execute();
+  await getCoreQb(['user'])
+    .insertInto('user')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .values({ id: userId, default_team_id: teamId, username: `bg-probe-${userId.slice(0, 8)}`, granted_access_at: new Date() } as any)
+    .execute();
+  await getCoreQb(['team_membership'])
+    .insertInto('team_membership')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .values({ user_id: userId, team_id: teamId, access: 'write' } as any)
+    .execute();
+  return { teamId, userId };
+}
 
-type PluginTrace = { plugin: string; node?: string; chars?: number; outcome?: string };
+// ── One run, woken from somebody else's request ───────────────────────────
 
-function pluginTraceOf(steps: unknown): PluginTrace[] {
-  const out: PluginTrace[] = [];
-  const walk = (value: unknown): void => {
-    if (Array.isArray(value)) {
-      for (const item of value) walk(item);
-      return;
+interface Probe {
+  label: string;
+  runStatus: string;
+  failureReason: string | null;
+  resourceTeam: string | null;
+  documentTeam: string | null;
+  attached: string;
+}
+
+async function runWokenBy(input: {
+  label: string;
+  teamId: string;
+  movementId: string;
+  deckUrl: string;
+  kicker: { teamId: string; userId: string };
+}): Promise<Probe> {
+  // Queued while no loop runs in this process, so the only pass that can run
+  // it is the one the other team's request wakes.
+  const queued = await runMovementAsync({ teamId: input.teamId, movementId: input.movementId, text: input.deckUrl });
+  if (!queued.ok) throw new Error(`the run was not queued: ${queued.errors.join('; ')}`);
+
+  const stop = startDrainLoop({ owner: `verify-bg:${randomUUID().slice(0, 8)}`, everyMs: 60_000 });
+  try {
+    const request = new Context();
+    request.bindPrincipal(userPrincipal(input.kicker));
+    await request.runAsync(async () => notifyWork());
+
+    const deadline = Date.now() + 120_000;
+    let run: { status: string; failure_reason: string | null } | undefined;
+    for (;;) {
+      run = await getAutomationsQb(['trigger_run'])
+        .selectFrom('trigger_run')
+        .select(['status', 'failure_reason'])
+        .where('id', '=', queued.runId as TriggerRunId)
+        .executeTakeFirst();
+      if (run !== undefined && run.status !== 'running') break;
+      if (Date.now() > deadline) throw new Error(`run ${queued.runId} never finished`);
+      await new Promise((resolve) => setTimeout(resolve, 250));
     }
-    if (value === null || typeof value !== 'object') return;
-    const entry = value as Record<string, unknown>;
-    if (entry.kind === 'plugin' && typeof entry.plugin === 'string') {
-      out.push(entry as PluginTrace);
+
+    const resource = await getKnowledgeQb(['resource'])
+      .selectFrom('resource')
+      .select(['team_id', 'document_id'])
+      .where('url', '=', input.deckUrl)
+      .executeTakeFirst();
+    const document =
+      resource?.document_id == null
+        ? undefined
+        : await getKnowledgeQb(['document'])
+            .selectFrom('document')
+            .select(['id', 'team_id', 'object_uri', 'description'])
+            .where('id', '=', resource.document_id)
+            .executeTakeFirst();
+
+    // The attach's read: the file value the run's record carries for the
+    // stored deck (as `hostedWebTools.fileValues` builds it), read as the
+    // team's module reads a file handed to it.
+    let attached = 'no document to attach';
+    if (document !== undefined) {
+      const file = documentStoreFileRef({ objectUri: document.object_uri, name: document.description });
+      try {
+        const bytes = await platformModuleFiles({ teamId: input.teamId as TeamId, module: '@lf/native-valuations' }).read(file);
+        attached = `read ${bytes.byteLength} bytes`;
+      } catch (error) {
+        attached = `refused: ${error instanceof Error ? error.message : String(error)}`;
+      }
     }
-    for (const child of Object.values(entry)) walk(child);
-  };
-  walk(steps);
-  return out;
+
+    return {
+      label: input.label,
+      runStatus: run.status,
+      failureReason: run.failure_reason,
+      resourceTeam: resource?.team_id ?? null,
+      documentTeam: document?.team_id ?? null,
+      attached,
+    };
+  } finally {
+    await stop();
+  }
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────
@@ -173,131 +277,71 @@ async function main() {
   captureLogs();
 
   const server = http.createServer((_req, res) => {
-    res.writeHead(200, { 'content-type': 'text/html' });
-    res.end(PAGE);
+    res.writeHead(200, { 'content-type': 'application/pdf' });
+    res.end(DECK);
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  answerUnlockerLocally(origin);
-  console.log(`serving the page at ${origin}`);
+  readLocalDecks(origin);
+  console.log(`serving the deck at ${origin}; storing in ${ensureObjectStore()}`);
 
   try {
     // ── Seeding. No Context is established here, and none is needed. ──────
-    const seed = await ensureDevLoopTeam();
-    const teamId = seed.teamId as TeamId;
-
-    const saved = await saveMovement({
-      teamId: seed.teamId,
-      userId: seed.userId,
-      source: program(origin),
-    });
-    if (!saved.ok) {
+    const seed = await seedTeam('run');
+    const other = await seedTeam('other');
+    const saved = await saveMovement({ teamId: seed.teamId, userId: seed.userId, source: PROGRAM });
+    if (!saved.ok || saved.movementId === undefined) {
       console.error(JSON.stringify(saved, null, 2));
       throw new Error('the probe movement did not save');
     }
-    const listener = saved.listeners[0];
-    if (!listener) throw new Error('the probe movement declared no listener');
-
-    const trigger = await getAutomationsQb(['trigger'])
-      .selectFrom('trigger')
-      .select(['id', 'team_id', 'created_by_user_id'])
-      .where('id', '=', listener.triggerId as TriggerId)
-      .executeTakeFirstOrThrow();
-    console.log(
-      `trigger ${trigger.id} on team ${trigger.team_id}, authored by ` +
-        `${trigger.created_by_user_id ?? '(nobody — the seam falls back to a team member)'}`,
-    );
-
-    // ── The firing. Bare: this is the whole test. ─────────────────────────
     if (unsafeCurrentContext() !== undefined) {
-      throw new Error('a Context is in scope — this script must fire without one');
+      throw new Error('a Context is in scope — this script must queue and drain without one');
     }
+    registerDispatchWork();
 
-    const event: TriggerEvent = {
-      pipelineInputId: `trigger:${listener.triggerId}`,
-      adapterType: 'manual',
-      triggerType: 'webhook',
-      payload: {
-        firedAt: new Date().toISOString(),
-        submissionId: randomUUID(),
-        text: message(origin),
-      },
-    };
-
-    const outcome = await dispatchTriggerByIdEvent({
-      triggerId: listener.triggerId,
-      teamId,
-      event,
-    });
-    console.log('\ndispatch:', JSON.stringify(outcome));
-
-    // ── What the run says happened ────────────────────────────────────────
-    const run = await getAutomationsQb(['trigger_run'])
-      .selectFrom('trigger_run')
-      .select(['id', 'status', 'steps', 'failure_reason'])
-      .where('trigger_id', '=', listener.triggerId as TriggerId)
-      .orderBy('created_at', 'desc')
-      .executeTakeFirstOrThrow();
-    const plugins = pluginTraceOf(run.steps);
-    console.log(`run ${run.id} ${run.status}${run.failure_reason ? `: ${run.failure_reason}` : ''}`);
-    for (const entry of plugins) {
-      console.log(
-        `  plugin ${entry.plugin} on ${entry.node ?? '?'}: ` +
-          `outcome ${entry.outcome ?? '(none)'}${entry.chars ? `, ${entry.chars} chars` : ''}`,
+    const probes: Probe[] = [];
+    for (const [label, kicker] of [
+      ['another team', other],
+      ['the public team', { teamId: PUBLIC_TEAM_ID, userId: process.env.PUBLIC_USER_ID ?? randomUUID() }],
+    ] as const) {
+      probes.push(
+        await runWokenBy({
+          label,
+          teamId: seed.teamId,
+          movementId: saved.movementId,
+          deckUrl: `${origin}/${randomUUID()}/deck`,
+          kicker,
+        }),
       );
     }
-
-    // ── The page, as it was stored ────────────────────────────────────────
-    const page = await getKnowledgeQb(['raw_text'])
-      .selectFrom('raw_text')
-      .select(['id', 'team_id', 'content'])
-      .where('content', 'like', `%${MOTTO}%`)
-      .orderBy('created_at', 'desc')
-      .executeTakeFirst();
-    console.log(
-      `\nraw_text for the fetched page: ${page ? `${page.id} on team ${page.team_id}` : '(none)'}`,
-    );
 
     // ── The claims ────────────────────────────────────────────────────────
     const failures: string[] = [];
-
-    const storageError = captured.filter((line) => line.includes('Async local storage undefined'));
-    if (storageError.length > 0) {
-      failures.push(
-        `the run still hit the missing Context ${storageError.length}×: ${storageError[0]?.slice(0, 300)}`,
-      );
-    }
-
-    const fetch_url = plugins.find((entry) => entry.plugin === 'fetch_url');
-    if (!fetch_url) failures.push('the trace has no fetch_url entry');
-    else {
-      if (fetch_url.outcome !== 'fetched') {
-        failures.push(`fetch_url reported outcome ${fetch_url.outcome ?? '(none)'}, not fetched`);
+    for (const probe of probes) {
+      console.log(`\nwoken by ${probe.label}: ${JSON.stringify(probe)}`);
+      const where = `woken by ${probe.label}`;
+      if (probe.runStatus === 'failed') failures.push(`${where}: the run failed: ${probe.failureReason}`);
+      if (probe.resourceTeam !== seed.teamId) {
+        failures.push(`${where}: the fetched-URL resource is on team ${probe.resourceTeam}, not the run's ${seed.teamId}`);
       }
-      if (!fetch_url.chars || fetch_url.chars <= 0) {
-        failures.push('fetch_url fed no characters to the extraction behind it');
+      if (probe.documentTeam !== seed.teamId) {
+        failures.push(`${where}: the deck's document row is on team ${probe.documentTeam}, not the run's ${seed.teamId}`);
+      }
+      if (probe.attached !== `read ${DECK.byteLength} bytes`) {
+        failures.push(`${where}: the attach could not read the deck: ${probe.attached}`);
       }
     }
-
-    if (!page) failures.push('the fetched page was never stored');
-    else if ((page.team_id as unknown as string) !== seed.teamId) {
-      failures.push(`the page was stored on team ${page.team_id}, not the trigger's ${seed.teamId}`);
-    }
-
-    // The fetched bytes reaching the STAGE is a different claim from their
-    // being stored. The motto appears nowhere in the message that fired, so
-    // the extracted entity on the run's own record carrying it is the proof.
-    const extracted = safeJson(run.steps);
-    if (!extracted.includes(MOTTO.slice(0, 24))) {
-      failures.push('no extracted entity carries the page’s own words — the fetch never reached the stage');
-    }
+    const outsideTeam = captured.filter((line) => line.includes('FILE_OUTSIDE_TEAM') || line.includes("which is not this team's"));
+    if (outsideTeam.length > 0) failures.push(`the run reported a file outside its team: ${outsideTeam[0]?.slice(0, 300)}`);
+    const noContext = captured.filter((line) => line.includes('Async local storage undefined'));
+    if (noContext.length > 0) failures.push(`the run hit the missing Context ${noContext.length}×: ${noContext[0]?.slice(0, 300)}`);
 
     console.log('');
     if (failures.length > 0) {
       for (const failure of failures) console.error(`FAIL ${failure}`);
       throw new Error(`${failures.length} claim(s) failed`);
     }
-    console.log('OK — a firing with no ambient Context fetched, stored and extracted the page');
+    console.log('OK — a run drained by a pass another team woke stored and attached its deck as its own team');
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
