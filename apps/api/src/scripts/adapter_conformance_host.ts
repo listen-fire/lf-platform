@@ -1,6 +1,6 @@
 // The host double of the adapter conformance CLI: a tiny HTTP server standing
 // in for Listen-Fire's side of an adapter install. It serves the two push
-// doors a vendor calls (`emit`, `wake`) and a subscription callback, and
+// door a vendor calls (`wake`, which carries arrivals) and a subscription callback, and
 // records what arrived. It checks what a vendor controls — the credential it
 // presents and the shape of the body — against the real door's own schemas.
 // It cannot check what the real host does with a push.
@@ -8,9 +8,9 @@
 import http from 'node:http';
 
 import { z } from 'zod';
-import { AdapterEmitBody, AdapterWakeBody } from 'engine-contracts';
+import { AdapterWakeBody } from 'engine-contracts';
 
-export type DoorName = 'emit' | 'wake';
+export type DoorName = 'wake';
 
 export interface ReceivedPush {
   /** Null when the push arrived at a path that is neither door. */
@@ -98,12 +98,12 @@ export async function startHostDouble(options: {
         send(res, 200, { ok: true });
         return;
       }
-      const door = (['emit', 'wake'] as const).find(
+      const door = (['wake'] as const).find(
         (name) => path === `/api/public/adapter/${adapterType}/${name}`,
       );
       if (req.method !== 'POST' || door === undefined) {
         record({ door: null, path, accepted: false, problem: `${req.method} ${path} is not a door` });
-        send(res, 404, { error: 'not_found', message: `the host double serves /api/public/adapter/${adapterType}/{emit,wake}` });
+        send(res, 404, { error: 'not_found', message: `the host double serves /api/public/adapter/${adapterType}/wake` });
         return;
       }
       if (!credentialPresented(req.headers, expectedCredential)) {
@@ -125,7 +125,7 @@ export async function startHostDouble(options: {
         send(res, 400, { error: 'bad_request', issues: [{ path: '', message: 'the body is not JSON' }] });
         return;
       }
-      const parsed = door === 'emit' ? AdapterEmitBody.safeParse(json) : AdapterWakeBody.safeParse(json);
+      const parsed = AdapterWakeBody.safeParse(json);
       if (!parsed.success) {
         const issues = parsed.error.issues.map((issue) => ({ path: issue.path.join('.'), message: issue.message }));
         const first = issues[0];

@@ -5,8 +5,8 @@
 // requests too). Each implementation is replayed against the recording and
 // must make the same requests and model calls and give the same answers.
 //
-// Re-record (only when the legacy line changes on purpose, reading the diff):
-// AFFINITY_PARITY_RECORD=1 pnpm test:unit --testPathPattern affinity_parity
+// The legacy line is gone, so the recording no longer changes: it is the
+// behaviour every module subject keeps.
 
 jest.mock('../../../../../lib/credentials', () => ({
   decryptToken: async () => (await import('../../__test__/crm_parity/legacy_row')).decryptSeededRow(),
@@ -32,7 +32,7 @@ jest.mock('../../../../credentials/secrets_postgres', () => ({
   },
 }));
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { AddressInfo } from 'node:net';
@@ -43,12 +43,10 @@ import { serveModule } from 'module-kit';
 import { createMemoryVault, createSecretsFamily } from 'movement-engine/public/secrets';
 import { createRemoteAdapter, fetchRemoteManifest } from 'movement-engine/public/modules';
 import { affinityModule } from '@listen-fire/affinity';
-import { createAffinityAdapter } from '..';
 import { getAdapter } from '../../registry';
 import { BUILTIN_MODULES } from '../../builtin_modules';
-import { recordingServer, replayingServer, type Exchange } from '../../__test__/parity/exchange';
-import { bootFakeCrm } from '../../__test__/crm_parity/fake_channels';
-import { cannedChat, cannedStructured, legacyRow, modelCalls, type ModelCall } from '../../__test__/crm_parity/legacy_row';
+import { replayingServer, type Exchange } from '../../__test__/parity/exchange';
+import { cannedChat, cannedStructured, modelCalls, type ModelCall } from '../../__test__/crm_parity/legacy_row';
 import { freezeClock, unwrappedRemoteErrors, type TranscriptEntry } from '../../__test__/crm_parity/walk';
 import type { Adapter } from 'movement-engine/public/adapter';
 import { runAffinityParityScript } from './parity/script';
@@ -75,33 +73,9 @@ interface Recording {
   modelCalls: ModelCall[];
 }
 
-/** The legacy line, its credential row pointed at `baseUrl`. */
-function legacySubject(baseUrl: string): Adapter {
-  const install = freshInstall();
-  legacyRow.payload = { apiKey: API_KEY, baseUrl };
-  legacyRow.id = install.credentialsId;
-  return createAffinityAdapter(install);
-}
-
 jest.setTimeout(120_000);
 beforeAll(freezeClock);
 afterAll(() => jest.useRealTimers());
-
-const recording = process.env.AFFINITY_PARITY_RECORD === '1';
-
-(recording ? it : it.skip)('records the legacy adapter against fake-channels', async () => {
-  const fake = await bootFakeCrm('affinity');
-  const proxy = await recordingServer(fake.baseUrl);
-  try {
-    modelCalls.length = 0;
-    const transcript = await runAffinityParityScript(legacySubject(proxy.baseUrl));
-    const fixture: Recording = { transcript, exchanges: proxy.exchanges(), modelCalls: [...modelCalls] };
-    writeFileSync(FIXTURE, `${JSON.stringify(fixture, null, 2)}\n`);
-  } finally {
-    await proxy.close();
-    fake.stop();
-  }
-});
 
 function loadRecording(): Recording {
   return JSON.parse(readFileSync(FIXTURE, 'utf8')) as Recording;
@@ -122,7 +96,7 @@ async function expectAffinityParity(subjectAt: (baseUrl: string) => Promise<Adap
   }
 }
 
-(recording ? describe.skip : describe)('affinity recorded parity', () => {
+describe('affinity recorded parity', () => {
   it('the recording walks the whole surface, writes, and fails nowhere it should not', () => {
     const { transcript, exchanges, modelCalls: calls } = loadRecording();
     const errors = transcript.filter((entry) => {
@@ -138,10 +112,6 @@ async function expectAffinityParity(subjectAt: (baseUrl: string) => Promise<Adap
     expect(exchanges.length).toBeGreaterThan(30);
     expect(exchanges.some((e) => e.method === 'POST')).toBe(true);
     expect(calls.length).toBeGreaterThan(0);
-  });
-
-  it('the legacy line replays identically', async () => {
-    await expectAffinityParity(legacySubject);
   });
 
   it('the module in process, through the platform registry, replays identically', async () => {

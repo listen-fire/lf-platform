@@ -48,7 +48,7 @@ export interface ConformanceOptions {
   secret: string;
   /** The type the CLI creates, updates and deletes records of, and the fields it creates them with. */
   scratch?: { typeId: string; fields: Record<string, unknown> };
-  /** A webhook body the server sends, handed to `preprocessInbound` and `wakeKeys`. */
+  /** A webhook body the server sends, handed to `preprocessInbound`. */
   sampleDelivery?: unknown;
   hostPort?: number;
   /** The address the host double binds; 127.0.0.1 unless your server runs on another machine. */
@@ -293,7 +293,7 @@ export async function runConformance(options: ConformanceOptions): Promise<Check
   try {
     const descriptors = await checkSchema({ report, adapter });
     await checkRecords({ report, adapter, advertised, descriptors, scratch, scratchRecords, adapterType });
-    await checkSubscriptions({ report, adapter, advertised, host });
+    await checkSubscriptions({ report, adapter, advertised, descriptors, host });
     await checkDelivery({ report, adapter, advertised, sampleDelivery });
     await checkDoors({ report, host, adapterType, waitForPushSeconds, onWaitingForPush: options.onWaitingForPush });
   } finally {
@@ -409,7 +409,6 @@ async function checkRecords(input: {
     'getFieldValue',
     'files-declared',
     'updateRecord',
-    'resolveAwait',
     'deleteRecord',
   ];
   if (scratch === undefined) {
@@ -562,21 +561,6 @@ async function checkRecords(input: {
     return `updated ${first.externalId}`;
   });
 
-  if (!advertised.has('resolveAwait') || adapter.awaitable === undefined) {
-    report.skip('resolveAwait', 'not listed in the manifest methods');
-  } else {
-    const edge = descriptors.get(scratch.typeId)?.references.find((reference) => reference.awaitable === true);
-    if (edge === undefined) {
-      report.skip('resolveAwait', `${scratch.typeId} declares no awaitable edge`);
-    } else {
-      const awaitable = adapter.awaitable;
-      await report.run('resolveAwait', async () => {
-        const resolution = await awaitable.resolveAwait({ recordId: first.externalId, edge: edge.fieldId });
-        return `${edge.fieldId} resolves ${resolution.status}`;
-      });
-    }
-  }
-
   await report.run('deleteRecord', async () => {
     await adapter.deleteRecord({ recordType: scratch.typeId, externalId: first.externalId, mutationContext });
     scratchRecords.shift();
@@ -588,20 +572,28 @@ async function checkSubscriptions(input: {
   report: Report;
   adapter: RemoteAdapter;
   advertised: ReadonlySet<string>;
+  descriptors: ReadonlyMap<string, SchemaTypeDescriptor>;
   host: HostDouble;
 }): Promise<void> {
-  const { report, adapter, advertised, host } = input;
+  const { report, adapter, advertised, descriptors, host } = input;
   if (!advertised.has('ensureEventSubscription') || !adapter.ensureEventSubscription) {
     report.skip('ensureEventSubscription', 'not listed in the manifest methods');
     report.skip('removeEventSubscription', 'not listed in the manifest methods');
+    return;
+  }
+  // A subscription is per listenable edge (adapter protocol 2.6).
+  const edge = [...descriptors.values()].flatMap((type) => type.references).find((reference) => reference.listenable === true)?.fieldId;
+  if (edge === undefined) {
+    report.skip('ensureEventSubscription', 'the schema declares no listenable edge');
+    report.skip('removeEventSubscription', 'the schema declares no listenable edge');
     return;
   }
   const ensure = adapter.ensureEventSubscription.bind(adapter);
   let externalId: string | undefined;
   await report.run('ensureEventSubscription', async () => {
     const callbackUrl = host.callbackUrl;
-    const one = await ensure({ events: [], callbackUrl });
-    const two = await ensure({ events: [], callbackUrl });
+    const one = await ensure({ edge, callbackUrl });
+    const two = await ensure({ edge, callbackUrl });
     if (one?.secret === undefined || one.secret === '') {
       throw new Error('ensureEventSubscription returned no secret; a subscription must return the secret its deliveries are signed with');
     }
@@ -612,7 +604,7 @@ async function checkSubscriptions(input: {
       throw new Error(`externalId changed between two calls for the same callback (${one.externalId} then ${two.externalId}); it must be idempotent`);
     }
     externalId = one.externalId;
-    return `secret returned; externalId ${externalId ?? '(none)'} stable across two calls`;
+    return `${edge}: secret returned; externalId ${externalId ?? '(none)'} stable across two calls`;
   });
   // Removal runs even when the ensure check failed: a half-registered
   // callback is still the vendor's to clean up.
@@ -622,7 +614,7 @@ async function checkSubscriptions(input: {
   }
   const remove = adapter.removeEventSubscription.bind(adapter);
   await report.run('removeEventSubscription', async () => {
-    await remove({ callbackUrl: host.callbackUrl, ...(externalId !== undefined ? { externalId } : {}) });
+    await remove({ edge, callbackUrl: host.callbackUrl, ...(externalId !== undefined ? { externalId } : {}) });
     return 'removed';
   });
 }
@@ -658,18 +650,6 @@ async function checkDelivery(input: {
     });
   }
 
-  if (!advertised.has('wakeKeys') || !adapter.wakeKeys) {
-    report.skip('wakeKeys', 'not listed in the manifest methods');
-  } else if (sampleDelivery === undefined) {
-    report.skip('wakeKeys', flagNotice);
-  } else {
-    const wakeKeys = adapter.wakeKeys.bind(adapter);
-    await report.run('wakeKeys', async () => {
-      const keys = await wakeKeys({ raw: sampleDelivery });
-      if (keys.some((key) => key === '')) throw new Error('wakeKeys returned an empty key');
-      return `${keys.length} key${keys.length === 1 ? '' : 's'}${keys.length > 0 ? `: ${keys.join(', ')}` : ''}`;
-    });
-  }
 }
 
 async function checkDoors(input: {
@@ -680,7 +660,7 @@ async function checkDoors(input: {
   onWaitingForPush: ConformanceOptions['onWaitingForPush'];
 }): Promise<void> {
   const { report, host, adapterType, waitForPushSeconds, onWaitingForPush } = input;
-  const doors = ['emit', 'wake'] as const;
+  const doors = ['wake'] as const;
   const doorUrl = (door: string): string => `${host.url}/api/public/adapter/${adapterType}/${door}`;
   if (waitForPushSeconds <= 0) {
     for (const door of doors) {

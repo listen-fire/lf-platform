@@ -111,7 +111,7 @@ export async function walkSurface(
 
   const firsts = new Map<string, SourcePosition>();
   const collections = entries
-    .filter((e) => e.readable && e.fires !== true)
+    .filter((e) => e.readable)
     .filter((e) => !(options.skipCollections ?? []).includes(e.collectionName ?? e.displayName))
     .slice(0, options.maxCollections ?? 12);
   for (const entry of collections) {

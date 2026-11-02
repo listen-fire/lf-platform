@@ -20,7 +20,7 @@
  *   --secret-env <VAR>            the env var holding the secret (default ADAPTER_CONFORMANCE_SECRET)
  *   --scratch-type <typeId>       a type the CLI may create, update and delete records of
  *   --scratch-fields '<json>'     the fields to create each scratch record with
- *   --sample-delivery '<json>'    a webhook body your server sends, for preprocessInbound and wakeKeys
+ *   --sample-delivery '<json>'    a webhook body your server sends, for preprocessInbound
  *   --host-port <n>               fixed port for the host double (default: ephemeral)
  *   --host-bind <address>         address the host double binds (default 127.0.0.1; use one your server can reach)
  *   --wait-for-push <seconds>     wait this long for your server to push to the doors (default 0: skip)
@@ -138,7 +138,7 @@ async function main(): Promise<void> {
   const results = await runConformance({
     ...options,
     onHostReady: ({ hostUrl, adapterType }) => {
-      process.stderr.write(`host double listening at ${hostUrl} (push to ${hostUrl}/api/public/adapter/${adapterType}/{emit,wake})\n`);
+      process.stderr.write(`host double listening at ${hostUrl} (push to ${hostUrl}/api/public/adapter/${adapterType}/wake)\n`);
     },
   });
   process.stdout.write(`${args.json ? JSON.stringify(results, null, 2) : formatReport(results)}\n`);

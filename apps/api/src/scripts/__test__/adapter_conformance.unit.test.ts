@@ -132,14 +132,11 @@ describe('adapter conformance CLI', () => {
         'getFieldValue',
         'files-declared',
         'updateRecord',
-        'resolveAwait',
         'deleteRecord',
         'ensureEventSubscription',
         'removeEventSubscription',
         'listEventTypes',
         'preprocessInbound',
-        'wakeKeys',
-        'door-emit',
         'door-wake',
         'scratch-cleanup',
       ]);
@@ -211,11 +208,9 @@ describe('adapter conformance CLI', () => {
           await fetch(`${hostUrl}/api/public/adapter/${adapterType}/emitt`, { method: 'POST', body: '{}' });
         },
       });
-      for (const door of ['door-emit', 'door-wake']) {
-        const check = byName(results, door);
-        expect(check.status).toBe('FAIL');
-        expect(check.detail).toMatch(/pushes arrived at other paths: \/api\/public\/adapter\/[^/]+\/emitt$/);
-      }
+      const check = byName(results, 'door-wake');
+      expect(check.status).toBe('FAIL');
+      expect(check.detail).toMatch(/pushes arrived at other paths: \/api\/public\/adapter\/[^/]+\/emitt$/);
     } finally {
       await crm.close();
     }
