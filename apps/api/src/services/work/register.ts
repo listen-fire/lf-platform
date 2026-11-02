@@ -6,7 +6,6 @@
 import { SECOND } from '../../constants';
 import { registerAwaitWork } from '../movement_engine/await_resume';
 import { registerTimerWork } from '../movement_engine/timer_resume';
-import { registerCronWork } from '../movement_scheduler/worker';
 import { registerPollWork } from '../poll_source/worker';
 import { registerRunOrphanSweepWork } from '../translation_graph/runs/trigger_run';
 import { registerFireEventWork } from '../inbound/fire_event';
@@ -14,7 +13,6 @@ import { periodicUnitWorkKinds, type CoreWorkKind } from './kinds';
 import { ensurePeriodicWork, removeRetiredWork } from './store';
 
 const CORE_PERIODIC_WORK: ReadonlyArray<{ kind: CoreWorkKind; intervalMs: number }> = [
-  { kind: 'cron_reconcile', intervalMs: 30 * SECOND },
   { kind: 'poll_reconcile', intervalMs: 30 * SECOND },
   { kind: 'timer_sweep', intervalMs: 30 * SECOND },
   { kind: 'run_orphan_sweep', intervalMs: 30 * SECOND },
@@ -23,7 +21,16 @@ const CORE_PERIODIC_WORK: ReadonlyArray<{ kind: CoreWorkKind; intervalMs: number
 /** Kinds a past build ran and this one does not. Their periodic rows would
  *  otherwise sit in the table forever, claimed and released for want of a
  *  handler, so they are deleted where the periodic rows are ensured. */
-const RETIRED_WORK_KINDS: readonly string[] = ['await_resume_sweep', 'ask_expiry_sweep', 'fire_callback', 'dispatch_event'];
+const RETIRED_WORK_KINDS: readonly string[] = [
+  'await_resume_sweep',
+  'ask_expiry_sweep',
+  'fire_callback',
+  'dispatch_event',
+  // A schedule is a polled edge since 0.13 (`poll_edge`), as every poll is.
+  'fire_cron',
+  'cron_reconcile',
+  'poll_source',
+];
 
 /** Upsert every periodic row — the core's and each registered unit's — and
  *  delete the retired kinds' rows. Idempotent; the drain loop retries it until
@@ -40,7 +47,6 @@ async function ensureAutomationsPeriodicWork(): Promise<void> {
 /** Register every core kind's handler. */
 function registerCoreWork(): void {
   registerTimerWork();
-  registerCronWork();
   registerPollWork();
   registerFireEventWork();
   registerAwaitWork();

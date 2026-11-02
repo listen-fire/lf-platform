@@ -69,6 +69,12 @@ export const listenConfigSchema = z.object({
     awaits: z.object({ own: z.array(z.string()), carried: z.array(z.array(z.string())) }),
     fieldIds: z.record(z.string(), z.record(z.string(), z.string())),
     landing: landingSchema.optional(),
+    /** How its last edge's arrivals reach the host, as its module declares
+     *  it: pushed to the connection or per scope, or polled every
+     *  `pollEverySeconds` (poll_source/worker.ts). Absent when undeclared. */
+    delivery: z
+      .object({ kind: z.enum(['connection', 'scope', 'polled']), pollEverySeconds: z.number().positive().optional() })
+      .optional(),
   }),
 });
 export type ListenConfig = z.infer<typeof listenConfigSchema>['listen'];
@@ -463,9 +469,13 @@ export async function deliverArrivals(input: {
   arrivals: readonly Arrival[];
   checkpoint?: unknown;
   request?: unknown;
+  /** The listens that judge it, when not every listen of the team on the
+   *  module: a poll's are the listens sharing it, since an arrival its module
+   *  says it filtered (`takenApplied`) is judged without the filter. */
+  listens?: readonly SavedListen[];
 }): Promise<{ kept: KeptDelivery; deliveryId: string; fires: FireRow[] }> {
   const now = new Date();
-  const listens = await savedListens({ teamId: input.teamId, adapterType: input.delivered.adapterType });
+  const listens = input.listens ?? (await savedListens({ teamId: input.teamId, adapterType: input.delivered.adapterType }));
   const judged = judgeArrivals({ listens, delivery: input.delivered, arrivals: input.arrivals, now });
   const kept = await keepJudgedDelivery({
     teamId: input.teamId,

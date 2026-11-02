@@ -1,42 +1,19 @@
-// Cron adapter — the time intrinsic. Time collapses into adapters
-// (3_syntax_sketch.md "Composition, time, queries, failure"): a movement
-// that should run on a schedule constructs a cron instance and listens to
-// it —
+// Cron adapter — the time unit. A movement that should run on a schedule
+// listens to the unit's one edge, its `Ticks`, naming the schedule (and,
+// optionally, the IANA zone it is read in; absent, UTC):
 //
-//   timer = cron()
-//   listen to timer { schedule: "0 9 * * 1" } fire digest
+//   listen to cron-[t:Ticks WHERE t.Schedule == "0 9 * * 1" AND t.Zone == "Europe/London"]-> fire digest
 //
-// The schedule is ordinary listen routing config (validated like any
-// adapter's — five-field cron, see movement-lang/cron); the fired
-// movement's parameter is the Tick position (`t: <timer-[:Tick]->>`). An
-// optional `timezone` (IANA id, e.g. `Europe/London`) interprets the
-// schedule as local wall-clock time with DST handled automatically —
-//
-//   listen to timer { schedule: "0 9 * * 1", timezone: "Europe/London" }
-//
-// Absent ⇒ UTC.
-//
-// Source-only and credential-free: there is no external system. Events
-// are emitted by the platform's own movement scheduler
-// (services/movement_scheduler/worker.ts), which scans the cron-derived
-// trigger rows and dispatches a tick through the normal trigger path —
-// uniform dispatch, uniform trigger_run recording.
-//
-// `ensureEventSubscription` exists so cron provisioning rides the SAME
-// listen-reconciliation seam external webhooks ride (listen_subscriptions
-// diff-syncs a subscription row per channel). It is a documented
-// platform-internal registration: nothing external is called — the
-// subscription row simply records that the platform's scheduler is the
-// registered event source for this channel.
+// `Ticks` is a polled listenable edge (adapter protocol 2.6): the edge poll
+// worker (services/poll_source/worker.ts) polls it once per schedule and
+// zone the listens name, and the unit answers the poll itself (`pollTicks`):
+// every occurrence since the cursor, one arrival each. Source-only and
+// credential-free: there is no external system. listen-fire's own cron unit
+// answers the same (crates/lf/src/units.rs `poll_ticks`).
 
 import type { TeamId } from '../../../../generated/kysely/core/Team';
-import type {
-  Adapter,
-  AdapterManifest,
-  EdgesFromResult,
-  EnsureEventSubscriptionInput,
-  EventSubscriptionRegistration,
-} from 'movement-engine/public/adapter';
+import type { Adapter, AdapterManifest, EdgesFromResult } from 'movement-engine/public/adapter';
+import type { PollEdgeAnswer, PollEdgeInput } from 'module-kit';
 import type {
   SchemaEntryPoint,
   SchemaTypeDescriptor,
@@ -47,6 +24,7 @@ import { uniformWalk } from 'module-kit/adapter/hop';
 import { CRON_HANDBOOK_SECTION } from './handbook_section';
 import { META_RECORD_TYPE, positionData } from 'movement-engine/public/catalog';
 import { BaseAdapter } from 'module-kit/adapter/base';
+import { CronParseError, nextCronOccurrence, parseCron } from 'legacy-lang/cron';
 
 /** Stable adapter identifier — the trigger `kind` of cron-derived rows. */
 export const CRON_ADAPTER_TYPE = 'cron';
@@ -61,49 +39,52 @@ export const CRON_TICK_TYPE_ID = 'tick';
  *  through the resolver; the typeId stays stable. */
 export const CRON_TICK_DISPLAY_NAME = 'Tick';
 
-/** The one subscribable event — what the platform scheduler emits. */
-export const CRON_TICK_EVENT = 'tick';
+/** The unit's one edge: a schedule's ticks, polled. */
+export const CRON_TICKS_EDGE = 'Ticks';
 
-/** What a scheduler firing carries as the trigger event's payload. */
+/** How often `Ticks` is polled: a tick fires within this of its time. */
+export const CRON_POLL_EVERY_SECONDS = 60;
+
+/** The zone a schedule is read in when a listen names none. */
+const DEFAULT_ZONE = 'UTC';
+
+/** What a tick's landing carries, by field id. */
 export interface CronTickPayload {
   /** The scheduled occurrence this tick fired for (ISO, UTC). */
   firedAt: string;
-  /** The listener's schedule, for display/debugging. */
+  /** The listen's schedule. */
   schedule: string;
+  /** The zone the schedule was read in. */
+  zone: string;
 }
 
-/**
- * Static manifest. Source-only, credential-free. `listenConfig` declares
- * the `schedule` routing key (required, cron-format-validated at check
- * time); `subscribableEvents` + `ensureEventSubscription` put the channel
- * on the same listen-reconciliation seam as external webhooks.
- */
+/** Static manifest. Source-only, credential-free. A 0.12 settings listen
+ *  (`listen to timer { schedule, timezone }`) is written as a traversal on
+ *  `Ticks` by `listenSettingsBecome`. */
 export const CRON_MANIFEST: AdapterManifest = {
   adapterType: CRON_ADAPTER_TYPE,
   displayName: 'Schedule',
   description:
-    'Time as a source. A schedule emits an event when it comes due, and a ' +
-    'movement listening to it runs — weekly digests, nightly mirrors. Built ' +
+    'Time as a source. A schedule ticks when it comes due, and a movement ' +
+    'listening to its ticks runs — weekly digests, nightly mirrors. Built ' +
     'in; nothing to connect.',
   supportedTriggers: ['webhook'],
-  methods: [
-    'listEntryPoints', 'describe', 'getFieldValue',
-    'ensureEventSubscription', 'removeEventSubscription',
-  ],
-  subscribableEvents: [CRON_TICK_EVENT],
-  listenConfig: [
-    { key: 'schedule', required: true, format: 'cron' },
-    // Optional IANA timezone the schedule is interpreted in (wall-clock).
-    // Absent ⇒ UTC. Handles DST automatically (e.g. Europe/London → 09:00
-    // local across BST/GMT).
-    { key: 'timezone', required: false, format: 'timezone' },
-  ],
-  // Self-alias: the subscription row's provider key stays the lowercase
-  // slug (there is no legacy uppercase channel for an intrinsic adapter).
+  methods: ['listEntryPoints', 'describe', 'getFieldValue'],
+  // Self-alias: the provider key stays the lowercase slug (there is no
+  // legacy uppercase channel for an intrinsic adapter).
   triggerKinds: [CRON_ADAPTER_TYPE],
+  listenSettingsBecome: {
+    path: [CRON_TICKS_EDGE],
+    aliases: ['t'],
+    paramFrom: CRON_TICK_DISPLAY_NAME,
+    keys: {
+      schedule: { hop: 0, field: 'Schedule', op: 'eq' },
+      timezone: { hop: 0, field: 'Zone', op: 'eq' },
+    },
+  },
   triggerExpectation:
-    'Fires on the schedule configured on the listener (a cron expression) — ' +
-    'nothing external triggers it, and the event carries only the tick time. ' +
+    'Fires on the schedule its listen names (a cron expression) — nothing ' +
+    'external triggers it, and the tick carries only its time and schedule. ' +
     'Present it as periodic work, never as reacting to data changes.',
   handbookSection: CRON_HANDBOOK_SECTION,
   vocabulary: {
@@ -141,13 +122,17 @@ export class CronAdapter extends BaseAdapter implements Adapter {
         typeId: CRON_TICK_TYPE_ID,
         displayName: CRON_TICK_DISPLAY_NAME,
         writable: false,
-        // Nothing enumerates ticks — they are DELIVERED. `readable: true` was
-        // the encoding's forced lie (it minted a `timer-[t:tick]->` root
-        // collection nothing could serve); the event edge marker is what the
-        // honest spelling was blocked on. No change-kind axis, so no `action`
-        // field: a tick is just a node a listen delivers.
+        // Nothing enumerates ticks: each is an arrival on `Ticks`, polled.
         readable: false,
-        fires: true,
+        collectionName: CRON_TICKS_EDGE,
+        listenable: true,
+        // Every schedule's ticks: only a filter on its schedule bounds it.
+        bounded: false,
+        boundedBy: ['Schedule'],
+        delivery: 'polled',
+        pollEverySeconds: CRON_POLL_EVERY_SECONDS,
+        cursor: true,
+        capability: { filter: 'native', supportsLimit: false },
       },
     ];
   }
@@ -170,10 +155,10 @@ export class CronAdapter extends BaseAdapter implements Adapter {
         targetTypeId: CRON_TICK_TYPE_ID,
         cardinality: 'one',
         direction: 'outgoing',
-        name: CRON_TICK_DISPLAY_NAME,
-        fires: true,
+        name: CRON_TICKS_EDGE,
+        listenable: true,
         readable: false,
-        description: 'The schedule firing — what a listen delivers.',
+        description: "A schedule's ticks — what a listen is fired by.",
       },
     ],
   };
@@ -193,10 +178,30 @@ export class CronAdapter extends BaseAdapter implements Adapter {
     return {
       typeId: CRON_TICK_TYPE_ID,
       displayName: CRON_TICK_DISPLAY_NAME,
-      description: 'One scheduled firing — when it was due, and on which schedule.',
+      description: 'One scheduled firing — when it was due, on which schedule, in which zone.',
       fields: [
         { fieldId: 'firedAt', displayName: 'Fired at', kind: 'date', writable: false, required: true, description: 'The scheduled occurrence this tick fired for (UTC).' },
-        { fieldId: 'schedule', displayName: 'Schedule', kind: 'string', writable: false, required: true, description: 'The cron schedule that produced this tick.' },
+        // Scalars only the unit reads, compared by `==` or `IN`.
+        {
+          fieldId: 'schedule',
+          displayName: 'Schedule',
+          kind: 'owned',
+          owned: { name: 'Cron', format: 'cron' },
+          writable: false,
+          required: true,
+          capability: { filterOperators: ['eq', 'in'] },
+          description: 'The cron schedule that produced this tick (five fields).',
+        },
+        {
+          fieldId: 'zone',
+          displayName: 'Zone',
+          kind: 'owned',
+          owned: { name: 'Zone', format: 'timeZone' },
+          writable: false,
+          required: true,
+          capability: { filterOperators: ['eq', 'in'] },
+          description: 'The IANA zone the schedule is read in (UTC when the listen names none).',
+        },
       ],
       references: [],
     };
@@ -217,24 +222,138 @@ export class CronAdapter extends BaseAdapter implements Adapter {
     return (payload as Record<string, unknown>)[fieldId] ?? null;
   }
 
-  /**
-   * Platform-internal registration — there is no external system to call.
-   * The platform's own movement scheduler is the event source for every
-   * cron channel; this method exists so cron listens ride the same
-   * reconciliation seam as external webhook subscriptions, and the
-   * returned marker lands on the subscription row to say so honestly.
-   */
-  async ensureEventSubscription(
-    _input: EnsureEventSubscriptionInput,
-  ): Promise<EventSubscriptionRegistration> {
-    return { externalId: 'platform:movement-scheduler' };
+  /** A poll of `Ticks` (adapter protocol 2.6), answered by the unit itself. */
+  async poll(input: PollEdgeInput): Promise<PollEdgeAnswer> {
+    return pollTicks(input, { now: new Date(), everyMs: CRON_POLL_EVERY_SECONDS * 1000 }).answer;
   }
+}
 
-  /** The scheduler stops firing when the trigger rows retire — nothing
-   *  external to deregister. */
-  async removeEventSubscription(): Promise<void> {
-    // Documented no-op (see ensureEventSubscription).
+type Arrival = PollEdgeAnswer['arrivals'][number];
+
+/** The literals `filter` compares `field` with by `==` or `IN`, or an OR of
+ *  `==`; undefined when it names none (the checker refuses any other form
+ *  on a field only the unit reads). The field is named as the program
+ *  writes it, or by its id. */
+export function valuesOf(filter: unknown, field: { name: string; id: string }): string[] | undefined {
+  if (typeof filter !== 'object' || filter === null) return undefined;
+  const type: unknown = Reflect.get(filter, 'type');
+  const op: unknown = Reflect.get(filter, 'op');
+  if (type === 'logical') {
+    const operands: unknown = Reflect.get(filter, 'operands');
+    if (!Array.isArray(operands)) return undefined;
+    const each = operands.map((operand) => valuesOf(operand, field));
+    if (op === 'and') return each.find((values) => values !== undefined);
+    if (op === 'or') return each.every((values) => values !== undefined) ? each.flatMap((values) => values ?? []) : undefined;
+    return undefined;
   }
+  if (type !== 'compare') return undefined;
+  const left: unknown = Reflect.get(filter, 'left');
+  const leftType: unknown = typeof left === 'object' && left !== null ? Reflect.get(left, 'type') : undefined;
+  const property: unknown = typeof left === 'object' && left !== null ? Reflect.get(left, 'propertyTypeId') : undefined;
+  if ((leftType !== 'property' && leftType !== 'edgeProperty') || (property !== field.name && property !== field.id)) return undefined;
+  const right: unknown = Reflect.get(filter, 'right');
+  if (typeof right !== 'object' || right === null) return undefined;
+  const literal = (element: unknown): string | undefined => {
+    if (typeof element === 'string') return element;
+    if (typeof element !== 'object' || element === null || Reflect.get(element, 'type') !== 'static') return undefined;
+    const value: unknown = Reflect.get(element, 'value');
+    return typeof value === 'string' ? value : undefined;
+  };
+  const listed = (elements: unknown[]): string[] | undefined => {
+    const values = elements.map((element) => {
+      const inner: unknown = typeof element === 'object' && element !== null && 'expression' in element ? Reflect.get(element, 'expression') : element;
+      return literal(inner);
+    });
+    return values.every((value): value is string => value !== undefined) ? values : undefined;
+  };
+  if (op === 'eq') {
+    const value = literal(right);
+    return value === undefined ? undefined : [value];
+  }
+  if (op === 'in') {
+    const value: unknown = Reflect.get(right, 'value');
+    if (Reflect.get(right, 'type') === 'static' && Array.isArray(value)) return listed(value);
+    const elements: unknown = Reflect.get(right, 'elements');
+    if (Array.isArray(elements)) return listed(elements);
+  }
+  return undefined;
+}
+
+/** What a poll of `Ticks` answered, and a line for each schedule and zone it
+ *  could not read (that pair fires nothing; the rest of the poll still does). */
+export interface Ticked {
+  answer: PollEdgeAnswer;
+  unread: string[];
+}
+
+/** No more than this many occurrences of one schedule are walked to find the
+ *  latest of a backlog. */
+const BACKLOG_WALK_LIMIT = 100_000;
+
+/**
+ * The unit's answer to a poll of `Ticks`: every occurrence since the cursor of
+ * each schedule and zone the filter names, one arrival each. An occurrence
+ * older than one poll interval before now was missed while nothing polled (a
+ * backlog): of those only the latest fires, once. One instant fires once
+ * however many spellings name it. Its identity is the occurrence, so however
+ * many workers find it due, a listen runs it once. The first poll (no cursor)
+ * only sets the cursor. The cursor is the instant it polled to. The unit
+ * applies the filter itself (`takenApplied`).
+ */
+export function pollTicks(input: PollEdgeInput, clock: { now: Date; everyMs: number }): Ticked {
+  const nowMs = clock.now.getTime();
+  const cursor = typeof input.cursor === 'string' ? Date.parse(input.cursor) : Number.NaN;
+  if (input.edge !== CRON_TICKS_EDGE) throw new Error(`cron: no edge ${input.edge} to poll (its one edge is ${CRON_TICKS_EDGE})`);
+  if (Number.isNaN(cursor)) return { answer: { arrivals: [], cursor: clock.now.toISOString() }, unread: [] };
+  const schedules = valuesOf(input.filter, { name: 'Schedule', id: 'schedule' });
+  if (schedules === undefined) throw new Error(`cron: a poll of ${CRON_TICKS_EDGE} names no schedule it can read`);
+  const zones = valuesOf(input.filter, { name: 'Zone', id: 'zone' }) ?? [DEFAULT_ZONE];
+  const backlogUntil = nowMs - clock.everyMs;
+  const due = new Map<number, { schedule: string; zone: string }>();
+  const unread: string[] = [];
+  for (const schedule of schedules) {
+    for (const zone of zones) {
+      let parsed;
+      try {
+        parsed = parseCron(schedule, { timezone: zone });
+      } catch (error) {
+        if (!(error instanceof CronParseError)) throw error;
+        unread.push(`cron: schedule "${schedule}" in ${zone} fires nothing: ${error.message}`);
+        continue;
+      }
+      const at: number[] = [];
+      let from = cursor;
+      if (cursor < backlogUntil) {
+        let latest: number | undefined;
+        for (let walked = 0; walked < BACKLOG_WALK_LIMIT; walked++) {
+          const next = nextCronOccurrence(parsed, new Date(from));
+          if (next === null || next.getTime() > backlogUntil) break;
+          latest = next.getTime();
+          from = latest;
+        }
+        if (latest !== undefined) at.push(latest);
+        from = Math.max(from, backlogUntil);
+      }
+      for (let next = nextCronOccurrence(parsed, new Date(from)); next !== null && next.getTime() <= nowMs; next = nextCronOccurrence(parsed, next)) {
+        at.push(next.getTime());
+      }
+      for (const instant of at) if (!due.has(instant)) due.set(instant, { schedule, zone });
+    }
+  }
+  const arrivals: Arrival[] = [...due.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([instant, { schedule, zone }]) => {
+      const firedAt = new Date(instant).toISOString();
+      const fields: CronTickPayload = { firedAt, schedule, zone };
+      return {
+        edge: CRON_TICKS_EDGE,
+        identity: `tick:${schedule}:${zone}:${firedAt}`,
+        landing: { recordType: CRON_TICK_DISPLAY_NAME, fields: { ...fields } },
+        occurredAt: firedAt,
+        takenApplied: true,
+      };
+    });
+  return { answer: { arrivals, cursor: clock.now.toISOString() }, unread };
 }
 
 /** Factory matching the registry's AdapterFactory signature. */

@@ -78,8 +78,7 @@ import { unsafeCurrentContext } from '../../../services/context';
 import { logger } from 'movement-engine/public/log';
 import { recordUserMilestone, recordTeamMilestone } from '../../../lib/journey';
 import { getAutomationsQb } from '../../../lib/kysely';
-import { inboundAddressFor, isPollSource } from '../adapters/registry';
-import { CRON_ADAPTER_TYPE } from '../adapters/cron';
+import { inboundAddressFor } from '../adapters/registry';
 import { enqueueWork } from '../../work/store';
 import type { WorkKind } from '../../work/kinds';
 import { syncListenSubscriptions } from './listen_subscriptions';
@@ -378,11 +377,11 @@ export function planListenerReconciliation(input: {
   return { matches, retired: remaining };
 }
 
-/** The periodic reconcile that arms a listener of this kind, if it is a
- *  schedule: a cron fires from the clock, a poll source from its interval. */
-function reconcileKindFor(kind: string): Extract<WorkKind, 'cron_reconcile' | 'poll_reconcile'> | undefined {
-  if (kind === CRON_ADAPTER_TYPE) return 'cron_reconcile';
-  return isPollSource(kind) ? 'poll_reconcile' : undefined;
+/** The periodic reconcile that arms a listener's poll: any listen's last
+ *  edge may be polled (a schedule's `Ticks` is), so every new, changed or
+ *  retired listener asks for it; it is idempotent. */
+function reconcileKindFor(_kind: string): Extract<WorkKind, 'poll_reconcile'> {
+  return 'poll_reconcile';
 }
 
 async function reconcileDerivedTriggers(input: {
@@ -398,8 +397,7 @@ async function reconcileDerivedTriggers(input: {
   // retired cron or poll. An unchanged listener is armed already.
   const reconciles = new Set<WorkKind>();
   const noteSchedule = (kind: string): void => {
-    const reconcile = reconcileKindFor(kind);
-    if (reconcile !== undefined) reconciles.add(reconcile);
+    reconciles.add(reconcileKindFor(kind));
   };
   const existing = await listDerivedTriggerRows(input.movementRow.id);
   const plan = planListenerReconciliation({

@@ -1,343 +1,265 @@
-// Poll-source worker — the platform half of the PollSource seam
-// (plans/2026-06-19-granola-adapter). Two work handlers, siblings of the cron
-// pair in `movement_scheduler/worker.ts`.
+// Shared polls of listenable edges (adapter protocol 2.6). Every listen whose
+// last edge is declared polled, on the same connection (module, credential
+// and construction), with the same filter the module takes on that edge,
+// shares one poll: one `poll_edge` work row, one cursor, one call to the
+// module per interval. What a poll returns is kept as a delivery of its own
+// (inbound/listen_door.ts), judged by the listens sharing the poll only: an
+// arrival its module filtered (`takenApplied`) is judged without that
+// filter, so another listen on the edge must never hear it. A schedule is
+// such a poll too: the cron unit's `Ticks`, its schedule in the filter.
 //
-// Every movement-derived trigger whose `kind` resolves to a registered
-// PollSource owns one `poll_source:<triggerId>` work row, due once its
-// `poll_last_at` is older than the effective interval
-// (`config.every` or `config.pollIntervalSeconds`, else the source default, P4). A due row pulls the
-// source's new events, INJECTS each into the same dispatch path a webhook uses
-// (`dispatchTriggerByIdEvent` — the one event pipeline), and re-arms itself one
-// interval later. The opaque `poll_checkpoint` advances only after a successful
-// pull; a failed pull throws, so the drain retries that row alone with backoff
-// and one broken source never starves the rest. The periodic `poll_reconcile`
-// keeps exactly one row per poll-source trigger.
+// A first poll only arms: its cursor is kept and nothing fires, since what
+// was there before the listen is not news. The cursor advances with the
+// delivery, in one write, so a poll whose delivery fails is polled again
+// from the same cursor. A failed poll throws, and the drain retries that row
+// alone with backoff. The periodic `poll_reconcile` keeps one row per key.
 //
-// A team whose engine is lf is not polled: a cloud lf polls for it. Its
-// triggers are no candidates, so their rows are not re-armed and the reconcile
-// removes them. A switch back to the platform forgets their progress
-// (`forgetPollProgress`), so the first poll after it sets a fresh mark and
-// emits nothing, as a first poll does, rather than replaying everything lf
-// already handled since the platform last polled.
+// The platform's listens are never resolved (a `resolved` hop is refused at
+// save), so no poll is scoped by a record an earlier hop landed on.
+//
+// A team whose engine is lf is not polled: a cloud lf polls for it. A switch
+// back to the platform forgets its cursors (`forgetPollProgress`), so the
+// next poll of each is a first poll and replays nothing lf already handled.
+
+import { createHash } from 'node:crypto';
 
 import { sql } from 'kysely';
-import { durationToMs, isValidDuration } from 'legacy-lang';
 import { z } from 'zod';
 
 import type { TeamId } from '../../generated/kysely/core/Team';
-import type { Trigger, TriggerId } from '../../generated/kysely/automations/Trigger';
-import type { DiscriminableEvent, EventType } from 'movement-engine/public/adapter';
 import type { WorkHandler } from '../work/kinds';
 
 import { SECOND } from '../../constants';
 import { getAutomationsQb } from '../../lib/kysely';
+import { teamIdSchema } from '../../lib/team_id';
 import { logger } from 'movement-engine/public/log';
-import {
-  getAdapter,
-  getPollSource,
-  hasAdapter,
-  isPollSource,
-  resolveAdapterSlug,
-} from '../translation_graph/adapters/registry';
-import { dispatchDiscriminableEvent } from '../translation_graph/triggers/dispatch_event';
-import { registerWorkHandler } from '../work/drain';
-import { enqueueWork, listWorkByKind, removeWork } from '../work/store';
+import { deliverArrivals, listenConfigSchema, type SavedListen } from '../inbound/listen_door';
 import { lfEngineTeams } from '../lf_engine/team_engine';
+import { notifyWork, registerWorkHandler } from '../work/drain';
+import { enqueueWork, listWorkByKind, removeWork } from '../work/store';
+import { edgePollerOf } from './edge_poller';
 
-/** One row per poll-source trigger, due at its next poll. */
-export function pollWorkKey(triggerId: string): string {
-  return `poll_source:${triggerId}`;
+/** The interval of a polled edge that declares none. */
+const DEFAULT_POLL_EVERY_SECONDS = 60;
+
+/** What the listens sharing one poll share. */
+export interface PollKey {
+  teamId: TeamId;
+  adapterType: string;
+  credentialsId: string | null;
+  constructionArgs: Record<string, string> | undefined;
+  edge: string;
+  /** The part of the last hop's filter the module takes; undefined for none. */
+  taken: unknown;
 }
 
-const pollSourcePayloadSchema = z.object({
-  triggerId: z.custom<TriggerId>((value) => z.uuid().safeParse(value).success),
-});
-
-function jsonb(value: unknown): unknown {
-  return sql`${JSON.stringify(value)}::jsonb` as unknown;
+/** One key, the listens sharing it, and how often it is polled. */
+export interface SharedPoll {
+  key: PollKey;
+  digest: string;
+  listens: SavedListen[];
+  everyMs: number;
 }
 
-interface PollTriggerRow {
-  id: string;
-  teamId: string;
-  kind: string;
-  config: unknown;
-  credentialsId: string | undefined;
-  movementId: string | null;
-  checkpoint: unknown;
-  lastPolledAt: Date | null;
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
+  if (typeof value === 'object' && value !== null) {
+    const entries = Object.entries(value)
+      .filter(([, v]) => v !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`).join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'null';
 }
 
-function activeTriggers() {
-  return getAutomationsQb(['trigger'])
-    .selectFrom('trigger')
-    .where('movement_id', 'is not', null)
-    .where('run_mode', '!=', 'off')
-    .select([
-      'id',
-      'team_id',
-      'kind',
-      'config',
-      'credentials_id',
-      'movement_id',
-      'poll_checkpoint',
-      'poll_last_at',
-    ]);
+/** 16 hex digits of the sha256 of the key: what its row, its cursor and its
+ *  deliveries are named by. */
+export function pollDigest(key: PollKey): string {
+  return createHash('sha256').update(canonical(key)).digest('hex').slice(0, 16);
 }
 
-function toPollTriggerRow(
-  r: Pick<
-    Trigger,
-    | 'id'
-    | 'team_id'
-    | 'kind'
-    | 'config'
-    | 'credentials_id'
-    | 'movement_id'
-    | 'poll_checkpoint'
-    | 'poll_last_at'
-  >,
-): PollTriggerRow {
+export function pollWorkKey(digest: string): string {
+  return `poll_edge:${digest}`;
+}
+
+/** Where a shared poll's cursor is kept, and the subscription its
+ *  deliveries are kept under. */
+export function pollSubscriptionId(digest: string): string {
+  return `edge-poll:${digest}`;
+}
+
+/** The key `listen` is polled under; null for a listen whose last edge is
+ *  not polled. */
+export function pollKeyOf(listen: SavedListen): PollKey | null {
+  const last = listen.plan.hops.at(-1);
+  if (last === undefined || listen.delivery?.kind !== 'polled') return null;
   return {
-    id: r.id as unknown as string,
-    teamId: r.team_id as unknown as string,
-    kind: r.kind,
-    config: r.config,
-    credentialsId: (r.credentials_id as unknown as string | null) ?? undefined,
-    movementId: (r.movement_id as unknown as string | null) ?? null,
-    checkpoint: r.poll_checkpoint ?? undefined,
-    lastPolledAt: r.poll_last_at,
+    teamId: listen.teamId,
+    adapterType: listen.plan.adapter,
+    credentialsId: listen.credentialsId,
+    constructionArgs: listen.constructionArgs,
+    edge: last.edge,
+    taken: last.taken,
   };
 }
 
-async function loadCandidates(): Promise<PollTriggerRow[]> {
-  const [rows, lfTeams] = await Promise.all([activeTriggers().execute(), lfEngineTeams()]);
-  return rows
-    .filter((r) => isPollSource(r.kind) && !lfTeams.has(r.team_id))
-    .map(toPollTriggerRow);
-}
-
-async function loadCandidate(triggerId: string): Promise<PollTriggerRow | null> {
-  const row = await activeTriggers()
-    .where('id', '=', triggerId as TriggerId)
-    .executeTakeFirst();
-  if (!row || !isPollSource(row.kind)) return null;
-  return (await lfEngineTeams()).has(row.team_id) ? null : toPollTriggerRow(row);
-}
-
-/**
- * Forget how far the platform polled for a team's listeners, so the next poll
- * of each is a first poll: it sets the mark to now and emits nothing. Run when
- * the team comes back from lf, which handled the events since.
- */
-export async function forgetPollProgress(teamId: TeamId): Promise<void> {
-  const rows = await getAutomationsQb(['trigger'])
+/** The listens on polled edges, of one team or of every team the platform
+ *  polls for, grouped by the poll they share. */
+export async function sharedPolls(input: { teamId?: TeamId } = {}): Promise<SharedPoll[]> {
+  let query = getAutomationsQb(['trigger', 'movement'])
     .selectFrom('trigger')
-    .where('team_id', '=', teamId)
-    .where('movement_id', 'is not', null)
-    .select(['id', 'kind'])
-    .execute();
-  const ids = rows.filter((r) => isPollSource(r.kind)).map((r) => r.id);
-  if (ids.length === 0) return;
-  await getAutomationsQb(['trigger'])
-    .updateTable('trigger')
-    .set({ poll_checkpoint: null, poll_last_at: null })
-    .where('id', 'in', ids)
-    .execute();
-}
-
-/**
- * The cadence to gate on: the listen's own interval or the source default.
- * From language 0.12 the listen spells it `every: 5m`; versions 1-4 spell
- * it `pollIntervalSeconds: 300`. The trigger row carries whichever it was
- * written as, and a run of versions 1-4 can never have written `every`.
- */
-function effectiveIntervalMs(config: unknown, sourceDefaultSeconds: number): number {
-  const settings = (config ?? {}) as { every?: unknown; pollIntervalSeconds?: unknown };
-  if (typeof settings.every === 'string' && isValidDuration(settings.every.trim())) {
-    const ms = durationToMs(settings.every.trim());
-    if (ms > 0) return ms;
+    .innerJoin('movement', 'movement.id', 'trigger.movement_id')
+    .where('trigger.run_mode', '!=', 'off')
+    .where(sql<boolean>`trigger.config->'listen'->'delivery'->>'kind' = 'polled'`);
+  if (input.teamId !== undefined) query = query.where('trigger.team_id', '=', input.teamId);
+  const [rows, lfTeams] = await Promise.all([
+    query
+      .select(['trigger.id as id', 'trigger.team_id as teamId', 'trigger.config as config', 'trigger.credentials_id as credentialsId', 'movement.name as file'])
+      .execute(),
+    lfEngineTeams(),
+  ]);
+  const polls = new Map<string, SharedPoll>();
+  for (const row of rows) {
+    if (lfTeams.has(row.teamId)) continue;
+    const parsed = listenConfigSchema.safeParse(row.config);
+    if (!parsed.success) continue;
+    const listen: SavedListen = { ...parsed.data.listen, triggerId: row.id, teamId: teamIdSchema.parse(row.teamId), file: row.file, credentialsId: row.credentialsId ?? null };
+    const key = pollKeyOf(listen);
+    if (key === null) continue;
+    const digest = pollDigest(key);
+    const everyMs = (listen.delivery?.pollEverySeconds ?? DEFAULT_POLL_EVERY_SECONDS) * SECOND;
+    const shared = polls.get(digest);
+    if (shared === undefined) polls.set(digest, { key, digest, listens: [listen], everyMs });
+    else {
+      shared.listens.push(listen);
+      shared.everyMs = Math.min(shared.everyMs, everyMs);
+    }
   }
-  const override = settings.pollIntervalSeconds;
-  const seconds = typeof override === 'number' && override > 0 ? override : sourceDefaultSeconds;
-  return seconds * SECOND;
+  return [...polls.values()];
 }
 
-/** The trigger's poll cadence, or null when its source is no longer registered. */
-function pollIntervalMs(row: PollTriggerRow): number | null {
-  const source = getPollSource({
-    adapterType: row.kind,
-    teamId: row.teamId as TeamId,
-    credentialsId: row.credentialsId,
+async function cursorOf(teamId: TeamId, subscriptionId: string): Promise<{ cursor: unknown } | null> {
+  const { rows } = await sql<{ checkpoint: unknown }>`
+    select checkpoint from automations.inbound_checkpoint
+    where team_id = ${teamId}::uuid and subscription_id = ${subscriptionId}::text`.execute(getAutomationsQb(['inbound_checkpoint']));
+  const row = rows[0];
+  return row === undefined ? null : { cursor: row.checkpoint };
+}
+
+async function keepCursor(teamId: TeamId, subscriptionId: string, cursor: unknown): Promise<void> {
+  await sql`
+    insert into automations.inbound_checkpoint (team_id, subscription_id, checkpoint)
+    values (${teamId}::uuid, ${subscriptionId}::text, ${JSON.stringify(cursor ?? null)}::text::jsonb)
+    on conflict (team_id, subscription_id) do update set checkpoint = excluded.checkpoint, updated_at = now()`.execute(
+    getAutomationsQb(['inbound_checkpoint']),
+  );
+}
+
+/** Poll one shared key once: a first poll arms; a later one keeps what
+ *  arrived as a delivery judged by the key's listens, its cursor with it. */
+export async function pollShared(poll: SharedPoll): Promise<{ arrivals: number; armed: boolean }> {
+  const { key, digest } = poll;
+  const subscriptionId = pollSubscriptionId(digest);
+  const poller = await edgePollerOf({
+    adapterType: key.adapterType,
+    teamId: key.teamId,
+    ...(key.credentialsId !== null ? { credentialsId: key.credentialsId } : {}),
+    ...(key.constructionArgs !== undefined ? { constructionArgs: key.constructionArgs } : {}),
   });
-  return source ? effectiveIntervalMs(row.config, source.pollIntervalSeconds) : null;
-}
-
-async function armPoll(row: PollTriggerRow, dueAt: Date): Promise<void> {
-  await enqueueWork({
-    kind: 'poll_source',
-    key: pollWorkKey(row.id),
-    teamId: row.teamId,
-    payload: { triggerId: row.id },
-    dueAt,
+  if (poller === null) throw new Error(`${key.adapterType} declares ${key.edge} polled, but answers no poll`);
+  const before = await cursorOf(key.teamId, subscriptionId);
+  const polled = await poller({
+    edge: key.edge,
+    ...(key.taken !== undefined ? { filter: key.taken } : {}),
+    ...(before !== null && before.cursor !== null ? { cursor: before.cursor } : {}),
   });
+  if (before === null || polled.arrivals.length === 0) {
+    await keepCursor(key.teamId, subscriptionId, polled.cursor);
+    return { arrivals: 0, armed: before === null };
+  }
+  await deliverArrivals({
+    teamId: key.teamId,
+    delivered: { adapterType: key.adapterType, credentialsId: key.credentialsId },
+    subscriptionId,
+    externalId: null,
+    source: 'poll',
+    arrivals: polled.arrivals,
+    checkpoint: polled.cursor ?? null,
+    listens: poll.listens,
+  });
+  notifyWork();
+  return { arrivals: polled.arrivals.length, armed: false };
 }
 
-/** Polls one source, then arms its row one interval later. */
-export const pollSourceHandler: WorkHandler = {
+const pollEdgePayloadSchema = z.object({ teamId: teamIdSchema, digest: z.string() });
+
+async function armPoll(poll: SharedPoll, dueAt: Date): Promise<void> {
+  await enqueueWork({ kind: 'poll_edge', key: pollWorkKey(poll.digest), teamId: poll.key.teamId, payload: { teamId: poll.key.teamId, digest: poll.digest }, dueAt });
+}
+
+/** Polls one key, then arms its row one interval later. A key no listen
+ *  shares any more is not re-armed (the reconcile removes its row). */
+export const pollEdgeHandler: WorkHandler = {
   async run(payload, ctx) {
-    const { triggerId } = pollSourcePayloadSchema.parse(payload);
-    const row = await loadCandidate(triggerId);
-    if (!row) return;
-    await pollOne(row, ctx.now);
-    const intervalMs = pollIntervalMs(row);
-    if (intervalMs === null) return;
-    await armPoll(row, new Date(ctx.now.getTime() + intervalMs));
+    const { teamId, digest } = pollEdgePayloadSchema.parse(payload);
+    const poll = (await sharedPolls({ teamId })).find((shared) => shared.digest === digest);
+    if (poll === undefined) return;
+    await pollShared(poll);
+    await armPoll(poll, new Date(ctx.now.getTime() + poll.everyMs));
   },
 };
 
-/** The periodic `poll_reconcile`: one `poll_source` row per poll-source trigger,
- *  and none for a trigger that was paused or deleted. */
+/** The periodic `poll_reconcile`: one `poll_edge` row per shared poll, and
+ *  none for a key no listen shares any more. */
 export const pollReconcileHandler: WorkHandler = {
   async run(_payload, ctx) {
-    const { now } = ctx;
-    const [candidates, rows] = await Promise.all([
-      loadCandidates(),
-      listWorkByKind('poll_source'),
-    ]);
-    // A leased row's handler re-arms it after its pull; an enqueue now would
-    // replace that time with one computed before the pull.
-    const leasedKeys = new Set(
-      rows
-        .filter((row) => row.leaseUntil !== null && row.leaseUntil > now)
-        .map((row) => row.key),
-    );
-    const rowByKey = new Map(rows.map((row) => [row.key, row]));
-    const activeKeys = new Set<string>();
-    for (const candidate of candidates) {
-      const key = pollWorkKey(candidate.id);
-      activeKeys.add(key);
-      if (leasedKeys.has(key)) continue;
+    const [polls, rows] = await Promise.all([sharedPolls(), listWorkByKind('poll_edge')]);
+    const armed = new Set(rows.map((row) => row.key));
+    const active = new Set<string>();
+    for (const poll of polls) {
+      const key = pollWorkKey(poll.digest);
+      active.add(key);
+      // An armed row keeps its time: its handler arms it after each poll, and
+      // a failed one holds its backoff.
+      if (armed.has(key)) continue;
       try {
-        const intervalMs = pollIntervalMs(candidate);
-        if (intervalMs === null) continue;
-        const dueAt = candidate.lastPolledAt
-          ? new Date(candidate.lastPolledAt.getTime() + intervalMs)
-          : now;
-        // A row with attempts left over was released by the drain after a failed
-        // pull and holds its backoff time. `poll_last_at` does not advance on a
-        // failure, so last poll + interval is long past and would pull the retry
-        // forward to now on every reconcile.
-        const existing = rowByKey.get(key);
-        const backedOff = existing !== undefined && existing.attempts > 0;
-        await armPoll(
-          candidate,
-          backedOff && existing.dueAt > dueAt ? existing.dueAt : dueAt,
-        );
+        await armPoll(poll, ctx.now);
       } catch (err) {
-        logger.error('[PollSource] reconcile failed for trigger', {
-          triggerId: candidate.id,
+        logger.error('[EdgePolls] reconcile failed for a shared poll', {
+          teamId: poll.key.teamId,
+          adapterType: poll.key.adapterType,
+          edge: poll.key.edge,
           error: err instanceof Error ? err.message : String(err),
         });
       }
     }
     for (const row of rows) {
-      if (!activeKeys.has(row.key)) await removeWork({ key: row.key });
+      if (!active.has(row.key)) await removeWork({ key: row.key });
     }
   },
 };
 
 export function registerPollWork(): void {
-  registerWorkHandler('poll_source', pollSourceHandler);
+  registerWorkHandler('poll_edge', pollEdgeHandler);
   registerWorkHandler('poll_reconcile', pollReconcileHandler);
 }
 
-async function pollOne(
-  row: PollTriggerRow,
-  now: Date,
-  opts: { force?: boolean; surfaceErrors?: boolean } = {},
-): Promise<{ eventCount: number }> {
-  const source = getPollSource({
-    adapterType: row.kind,
-    teamId: row.teamId as TeamId,
-    credentialsId: row.credentialsId,
-  });
-  if (!source) return { eventCount: 0 }; // de-registered between load and here
-
-  if (
-    !opts.force &&
-    row.lastPolledAt &&
-    now.getTime() - row.lastPolledAt.getTime() < effectiveIntervalMs(row.config, source.pollIntervalSeconds)
-  ) {
-    return { eventCount: 0 }; // not due
-  }
-
-  const result = await source.getEvents({
-    config: row.config,
-    checkpoint: row.checkpoint,
-    ...(row.movementId !== null ? { movementId: row.movementId } : {}),
-  });
-
-  // The Adapter (same slug) supplies the event-type union for discrimination.
-  const adapter = hasAdapter(row.kind)
-    ? getAdapter({
-        adapterType: row.kind,
-        teamId: row.teamId as TeamId,
-        credentialsId: row.credentialsId,
-      })
-    : null;
-  const eventTypes = adapter?.listEventTypes ? await adapter.listEventTypes() : [];
-
-  for (const event of result.events) {
-    await dispatchPolledEvent({ row, event, eventTypes, now, surfaceErrors: opts.surfaceErrors });
-  }
-
-  // Advance the checkpoint + interval mark ONLY after a successful pull.
-  await getAutomationsQb(['trigger'])
-    .updateTable('trigger')
-    .set({ poll_checkpoint: jsonb(result.checkpoint ?? null) as never, poll_last_at: now })
-    .where('id', '=', row.id as TriggerId)
-    .execute();
-
-  return { eventCount: result.events.length };
-}
-
-async function dispatchPolledEvent(input: {
-  row: PollTriggerRow;
-  event: DiscriminableEvent;
-  eventTypes: readonly EventType[];
-  now: Date;
-  surfaceErrors?: boolean;
-}): Promise<void> {
-  const { row, event, eventTypes, now } = input;
-  await dispatchDiscriminableEvent({
-    triggerId: row.id as TriggerId,
-    movementId: row.movementId,
-    event,
-    adapterType: resolveAdapterSlug(row.kind),
-    triggerType: 'poll',
-    eventTypes,
-    teamId: row.teamId as TeamId,
-    now,
-    ...(input.surfaceErrors ? { surfaceErrors: true } : {}),
-  });
+/** Forget the team's poll cursors, so the next poll of each is a first poll.
+ *  Run when the team comes back from lf, which handled what arrived since. */
+export async function forgetPollProgress(teamId: TeamId): Promise<void> {
+  await sql`
+    delete from automations.inbound_checkpoint
+    where team_id = ${teamId}::uuid and subscription_id like 'edge-poll:%'`.execute(getAutomationsQb(['inbound_checkpoint']));
 }
 
 /**
- * Force ONE poll trigger to pull + dispatch NOW, bypassing the interval gate —
- * the in-process entry `dev:inject granola` rides (mirrors how `dev:inject cron`
- * fires a cron trigger off-schedule). Same `pollOne` path the handler runs, so it
- * exercises the real getEvents → discriminate → dispatch → run pipeline. Surfaces
- * the engine error inline (like the test-harness webhook injects) instead of just
- * logging it, so a failing movement run reports its smoking-gun message.
+ * Poll every key the listen `triggerId` shares NOW, past its interval: the
+ * in-process entry `dev:inject` rides to make a polled source fire off its
+ * schedule. The same `pollShared` the handler runs.
  */
-export async function pollTriggerNow(input: {
-  triggerId: string;
-  now?: Date;
-}): Promise<{ found: boolean; eventCount: number }> {
-  const now = input.now ?? new Date();
-  const row = await loadCandidate(input.triggerId);
-  if (!row) return { found: false, eventCount: 0 };
-  const { eventCount } = await pollOne(row, now, { force: true, surfaceErrors: true });
-  return { found: true, eventCount };
+export async function pollTriggerNow(input: { triggerId: string }): Promise<{ found: boolean; eventCount: number }> {
+  const polls = (await sharedPolls()).filter((poll) => poll.listens.some((listen) => listen.triggerId === input.triggerId));
+  let eventCount = 0;
+  for (const poll of polls) eventCount += (await pollShared(poll)).arrivals;
+  return { found: polls.length > 0, eventCount };
 }

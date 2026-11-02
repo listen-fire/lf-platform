@@ -6,10 +6,8 @@
 export const CORE_WORK_KINDS = [
   'fire_event', // payload: FireRow (inbound/listen_door.ts): one run a kept delivery queued
   'resume_timer', // payload: { runId: string }
-  'fire_cron', // payload: { triggerId: string }
-  'poll_source', // payload: { triggerId: string }
+  'poll_edge', // payload: { teamId: string; digest: string } (poll_source/worker.ts): one shared poll of a listenable edge
   'wake_await', // payload: { adapterType: string; teamId: string; correlationKey: string }
-  'cron_reconcile', // periodic, payload {}
   'poll_reconcile', // periodic, payload {}
   'timer_sweep', // periodic, payload {}
   'run_orphan_sweep', // periodic, payload {}

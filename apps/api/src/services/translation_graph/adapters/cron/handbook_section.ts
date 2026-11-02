@@ -8,35 +8,34 @@ export const CRON_HANDBOOK_SECTION: HandbookSection = {
   title: 'Schedules — time-triggered runs (cron)',
   content: `## Schedules — time-triggered runs (cron)
 
-Listen to \`cron\` to run an automation on a schedule. It is the host's own — no import, no \`connect\`:
+Listen to \`cron\`'s \`Ticks\` to run an automation on a schedule. It is the host's own — no import, no \`connect\`:
 
 \`\`\`
-function \`Weekly Digest\`(t: <cron-[:Tick]->>) { … }
+function \`Weekly Digest\`(t: <cron-[:Ticks]->>) { … }
 
-listen as "Weekly digest" to cron { schedule: "0 9 * * 1" } fire \`Weekly Digest\`
+listen as "Weekly digest" to cron-[t:Ticks WHERE t.Schedule == "0 9 * * 1"]-> fire \`Weekly Digest\`
 \`\`\`
 
-- \`schedule\` (required): five-field cron — \`"0 9 * * 1"\` is 09:00 every Monday. UTC by default; add \`timezone: "Europe/London"\` (an IANA name, daylight-saving aware) for wall-clock time.
-- The \`Tick\` carries \`Fired at\` and \`Schedule\`.
+- \`Schedule\` (required): five-field cron — \`"0 9 * * 1"\` is 09:00 every Monday. UTC by default; add \`AND t.Zone == "Europe/London"\` (an IANA name, daylight-saving aware) for wall-clock time. \`IN [...]\` names several.
+- A \`Tick\` carries \`Fired at\`, \`Schedule\` and \`Zone\`.
 - Occurrences missed while the platform was down collapse into one tick — a digest that missed three Mondays sends one. A newly saved schedule waits for its next occurrence; it never fires retroactively.`,
   engineClaims: [
     {
       construct: 'cron-channel listeners (scheduled movements over the Tick position)',
       status: 'runs',
       probe: `
-import { \`@lf/cron\` as cron, \`@lf/slack\` as slack } from adapters
+import { \`@lf/slack\` as slack } from adapters
 import { team_workspace } from credentials
 
-timer = connect cron
 team  = connect slack using team_workspace
 
-function \`Weekly Digest\`(t: <timer-[:Tick]->>) {
+function \`Weekly Digest\`(t: <cron-[:Ticks]->>) {
   updates = only(team-[ch:Channels WHERE ch.Name == "updates"]->)
   if (updates == null) { fail("no #updates channel") }
   write updates-[:Messages]-> { Message: "Digest for \${t.\`Fired at\`}" }
 }
 
-listen to timer { schedule: "0 9 * * 1" } fire \`Weekly Digest\`
+listen to cron-[t:Ticks WHERE t.Schedule == "0 9 * * 1"]-> fire \`Weekly Digest\`
 `,
     },
   ],

@@ -1,13 +1,12 @@
-// Evertrace's legacy line: the module's adapter and poll (@lf/evertrace), over
+// Evertrace's legacy line: the module's adapter (@lf/evertrace), over
 // the credential path the platform used before modules (client.ts). Kept so
 // the `BUILTIN_MODULES` line for Evertrace can go back to `legacy` in one edit
 // while the module line is new; remove it with the line once the module line
 // has soaked.
 
 import type { TeamId } from '../../../../generated/kysely/core/Team';
-import type { PollSource } from '../../poll_source';
 
-import { EVERTRACE_POLL_INTERVAL_SECONDS, EvertraceAdapter, pollEvertrace, type EvertraceClientSource } from '@listen-fire/evertrace';
+import { EvertraceAdapter, type EvertraceClientSource } from '@listen-fire/evertrace';
 import { logger } from 'movement-engine/public/log';
 import { resolveEvertraceClient } from './client';
 
@@ -26,12 +25,4 @@ function legacyClient(input: { teamId: TeamId; credentialsId?: string }): Evertr
 
 export function createEvertraceAdapter(input: { teamId: TeamId; credentialsId?: string }): EvertraceAdapter {
   return new EvertraceAdapter(legacyClient(input));
-}
-
-export function createEvertracePollSource(input: { teamId: TeamId; credentialsId?: string }): PollSource {
-  const client = legacyClient(input);
-  return {
-    pollIntervalSeconds: EVERTRACE_POLL_INTERVAL_SECONDS,
-    getEvents: async (poll) => pollEvertrace(await client(), poll, { log: logger }),
-  };
 }

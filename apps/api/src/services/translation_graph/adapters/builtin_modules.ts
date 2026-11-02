@@ -17,7 +17,6 @@
 import type { Adapter, AdapterManifest } from 'movement-engine/public/adapter';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { WorkKindRegistration } from '../../work/drain';
-import type { PollSource } from '../poll_source';
 
 import {
   adapterInProcess,
@@ -36,6 +35,8 @@ import {
   type ModuleKv,
   type ModuleIdentities,
   type PluginModuleDefinition,
+  type PollEdgeAnswer,
+  type PollEdgeInput,
 } from 'module-kit';
 import {
   createSecretsFamily,
@@ -711,32 +712,16 @@ export function moduleOnlyAdapterFactory(adapterType: string): (input: BuiltinIn
   };
 }
 
-/** A registry poll source for a built-in: the module's declared poll when its
- *  line says so, else the legacy poll source. */
-export function builtinPollSourceFactory(
+/** The edge poll of a built-in on a module line (adapter protocol 2.6's
+ *  `poll({ edge, filter?, scope?, cursor? })`), for one install; undefined
+ *  for a built-in on no module line, or a module that polls no edge. */
+export function builtinModulePoll(
   adapterType: string,
-  legacy: (input: BuiltinInstall) => PollSource,
-): (input: BuiltinInstall) => PollSource {
+  install: BuiltinInstall,
+): ((input: PollEdgeInput) => Promise<PollEdgeAnswer>) | undefined {
   const entry = moduleLineOf(adapterType);
-  if (entry === undefined) return legacy;
-  return (install) => {
-    const definition = entry.load();
-    const declared = definition.poll;
-    const loaded = loadBuiltinModule(entry, install);
-    const poll = loaded.poll;
-    if (declared === undefined || poll === undefined) {
-      throw new Error(`module ${definition.name} declares no poll; it is not a polled source`);
-    }
-    return {
-      pollIntervalSeconds: declared.intervalSeconds,
-      getEvents: (input) =>
-        poll({
-          config: input.config,
-          ...(input.checkpoint !== undefined ? { checkpoint: input.checkpoint } : {}),
-          ...(input.movementId !== undefined ? { movementId: input.movementId } : {}),
-        }),
-    };
-  };
+  if (entry === undefined || entry.load().poll === undefined) return undefined;
+  return loadBuiltinModule(entry, install).poll;
 }
 
 /**

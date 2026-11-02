@@ -3,7 +3,6 @@
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { Adapter, AdapterManifest, BrandIcon } from 'movement-engine/public/adapter';
-import type { PollSource, PollSourceFactory } from '../poll_source';
 import type { ConfigBlock, TextBlock } from 'movement-engine/public/adapter-config';
 
 import ExternalServiceType from '../../../generated/kysely/automations/ExternalServiceType';
@@ -45,12 +44,11 @@ import { EVERTRACE_ADAPTER_TYPE } from '@listen-fire/evertrace/types';
 import { EVERTRACE_MANIFEST } from '@listen-fire/evertrace/manifest';
 import { DEALROOM_ADAPTER_TYPE } from '@listen-fire/dealroom/types';
 import { DEALROOM_MANIFEST } from '@listen-fire/dealroom/manifest';
-import { KG_PLATFORM_MANIFEST, builtinAdapterFactory, builtinPollSourceFactory, moduleOnlyAdapterFactory } from './builtin_modules';
+import { KG_PLATFORM_MANIFEST, builtinAdapterFactory, moduleOnlyAdapterFactory } from './builtin_modules';
 import { GMAIL_ADAPTER_TYPE, GMAIL_MANIFEST, createGmailAdapter } from './gmail';
-import { createGmailPollSource } from './gmail/poll';
 import { ASK_ADAPTER_TYPE } from '@listen-fire/ask/types';
 import { ASK_MANIFEST } from '@listen-fire/ask/manifest';
-import { SYSTEM_ADAPTER_TYPE, SYSTEM_MANIFEST, createSystemAdapter, createSystemPollSource } from './system';
+import { SYSTEM_ADAPTER_TYPE, SYSTEM_MANIFEST, createSystemAdapter } from './system';
 import { MCP_ADAPTER_TYPE } from '@listen-fire/mcp/manifest';
 import { MCP_PLATFORM_MANIFEST } from './mcp';
 import { MCP_CONNECTIONS_ENABLED, MCP_DISABLED_MESSAGE } from './mcp/enabled';
@@ -161,14 +159,14 @@ const ADAPTER_FACTORIES: Record<string, AdapterFactory> = {
     return createDropboxAdapter({ teamId, credentialsId });
   }),
   // Cron adapter — time as a source. Credential-free intrinsic; the
-  // platform's movement scheduler emits its tick events (see
-  // services/movement_scheduler/worker.ts).
+  // edge poll worker polls its `Ticks` (see
+  // services/poll_source/worker.ts).
   [CRON_ADAPTER_TYPE]: ({ teamId }) => createCronAdapter({ teamId }),
   // Manual adapter — on-demand runs. Credential-free intrinsic; "Run now"
   // injects an invocation event on the channel (movement/run_now.ts).
   [MANUAL_ADAPTER_TYPE]: ({ teamId }) => createManualAdapter({ teamId }),
-  // Granola — polled source (meeting notes). A module (@lf/granola); its poll
-  // is the module's declared one (POLL_SOURCE_FACTORIES below). Its line in
+  // Granola — polled source (meeting notes). A module (@lf/granola); its edge
+  // poll is the module's (poll_source/edge_poller.ts). Its line in
   // BUILTIN_MODULES says module or legacy; either is loaded on first use.
   [GRANOLA_ADAPTER_TYPE]: builtinAdapterFactory(GRANOLA_ADAPTER_TYPE, ({ teamId, credentialsId }) => {
     const { createGranolaAdapter }: typeof import('./granola') = require('./granola');
@@ -176,8 +174,8 @@ const ADAPTER_FACTORIES: Record<string, AdapterFactory> = {
   }),
   // Evertrace — polled source (signals) AND write target (saved searches,
   // lists, list memberships, and the screened/viewed facts on a signal). A
-  // module (@lf/evertrace); its poll is the module's declared one
-  // (POLL_SOURCE_FACTORIES below). Its line in BUILTIN_MODULES says module or
+  // module (@lf/evertrace); its edge poll is the module's
+  // (poll_source/edge_poller.ts). Its line in BUILTIN_MODULES says module or
   // legacy; either is loaded on first use.
   [EVERTRACE_ADAPTER_TYPE]: builtinAdapterFactory(EVERTRACE_ADAPTER_TYPE, ({ teamId, credentialsId }) => {
     const { createEvertraceAdapter }: typeof import('./evertrace') = require('./evertrace');
@@ -185,7 +183,7 @@ const ADAPTER_FACTORIES: Record<string, AdapterFactory> = {
   }),
   // Dealroom — polled source (new funding rounds) and read-only otherwise: the
   // API has no record-writing endpoint at all. A module (@lf/dealroom); its
-  // poll is the module's declared one (POLL_SOURCE_FACTORIES below).
+  // edge poll is the module's (poll_source/edge_poller.ts).
   // Its line in BUILTIN_MODULES says module or legacy; either is loaded on
   // first use.
   [DEALROOM_ADAPTER_TYPE]: builtinAdapterFactory(DEALROOM_ADAPTER_TYPE, ({ teamId, credentialsId }) => {
@@ -194,8 +192,8 @@ const ADAPTER_FACTORIES: Record<string, AdapterFactory> = {
   }),
   // Gmail — one connected Workspace mailbox, polled, read and written: a
   // movement can search it, run when mail arrives, and send or reply as the
-  // mailbox. Event production lives on its PollSource (POLL_SOURCE_FACTORIES
-  // below). Distinct from the `email` adapter, which only ever sees mail
+  // mailbox. Its arrivals come from its module's edge poll
+  // (poll_source/edge_poller.ts). Distinct from the `email` adapter, which only ever sees mail
   // FORWARDED to the deployment's inbound address.
   // Its line in BUILTIN_MODULES says module or legacy.
   [GMAIL_ADAPTER_TYPE]: builtinAdapterFactory(GMAIL_ADAPTER_TYPE, ({ teamId, credentialsId }) =>
@@ -206,7 +204,7 @@ const ADAPTER_FACTORIES: Record<string, AdapterFactory> = {
   [ASK_ADAPTER_TYPE]: moduleOnlyAdapterFactory(ASK_ADAPTER_TYPE),
   // System — the platform itself as a source (a run failed, …). Credential-
   // free and read-only; event production lives on its poll, which reads the
-  // platform's records (POLL_SOURCE_FACTORIES below). A module (@lf/system);
+  // platform's records (poll_source/edge_poller.ts). A module (@lf/system);
   // its BUILTIN_MODULES line picks module or legacy.
   [SYSTEM_ADAPTER_TYPE]: builtinAdapterFactory(SYSTEM_ADAPTER_TYPE, createSystemAdapter),
   // Any MCP server a team connects — the `@lf/mcp` module, one server per
@@ -214,52 +212,6 @@ const ADAPTER_FACTORIES: Record<string, AdapterFactory> = {
   // deployment turns MCP on.
   ...(MCP_CONNECTIONS_ENABLED ? { [MCP_ADAPTER_TYPE]: moduleOnlyAdapterFactory(MCP_ADAPTER_TYPE) } : {}),
 };
-
-/**
- * PollSource factories — parallel to `ADAPTER_FACTORIES`, keyed by adapter slug.
- * A slug may appear in one map, the other, or both: `Adapter` (read/write) and
- * `PollSource` (scheduled event production) are independent capabilities of a
- * package. The poll-source worker resolves a source here.
- *
- */
-const POLL_SOURCE_FACTORIES: Record<string, PollSourceFactory> = {
-  [GRANOLA_ADAPTER_TYPE]: builtinPollSourceFactory(GRANOLA_ADAPTER_TYPE, ({ teamId, credentialsId }) => {
-    const { createGranolaPollSource }: typeof import('./granola') = require('./granola');
-    return createGranolaPollSource({ teamId, credentialsId });
-  }),
-  [EVERTRACE_ADAPTER_TYPE]: builtinPollSourceFactory(EVERTRACE_ADAPTER_TYPE, ({ teamId, credentialsId }) => {
-    const { createEvertracePollSource }: typeof import('./evertrace') = require('./evertrace');
-    return createEvertracePollSource({ teamId, credentialsId });
-  }),
-  [DEALROOM_ADAPTER_TYPE]: builtinPollSourceFactory(DEALROOM_ADAPTER_TYPE, ({ teamId, credentialsId }) => {
-    const { createDealroomPollSource }: typeof import('./dealroom') = require('./dealroom');
-    return createDealroomPollSource({ teamId, credentialsId });
-  }),
-  [GMAIL_ADAPTER_TYPE]: builtinPollSourceFactory(GMAIL_ADAPTER_TYPE, ({ teamId, credentialsId }) =>
-    createGmailPollSource({ teamId, credentialsId }),
-  ),
-  [SYSTEM_ADAPTER_TYPE]: builtinPollSourceFactory(SYSTEM_ADAPTER_TYPE, createSystemPollSource),
-};
-
-/** Whether a slug (or trigger-kind alias) has a registered PollSource. */
-export function isPollSource(adapterType: string): boolean {
-  return Object.prototype.hasOwnProperty.call(
-    POLL_SOURCE_FACTORIES,
-    resolveAdapterSlug(adapterType),
-  );
-}
-
-/** Resolve a PollSource for the given type, or null when none is registered. */
-export function getPollSource(input: {
-  adapterType: string;
-  teamId: TeamId;
-  credentialsId?: string;
-}): PollSource | null {
-  const factory = POLL_SOURCE_FACTORIES[resolveAdapterSlug(input.adapterType)];
-  return factory
-    ? factory({ teamId: input.teamId, credentialsId: input.credentialsId })
-    : null;
-}
 
 /**
  * Static adapter manifests — the construction-free, no-network source of truth

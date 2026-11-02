@@ -104,18 +104,18 @@ describe('what enqueueWork tells the wake', () => {
   it("enqueueWork announces the row's resulting due time: an earlier unleased due wins", async () => {
     const { slot, told } = recordingSlot();
     installWake(slot);
-    const key = freshKey('poll_source');
+    const key = freshKey('poll_edge');
     const base = Date.now() + 10 * 60_000;
     const at = (minutes: number) => new Date(base + minutes * 60_000);
 
-    await enqueueWork({ kind: 'poll_source', key, teamId, payload: {}, dueAt: at(10) });
-    await enqueueWork({ kind: 'poll_source', key, teamId, payload: {}, dueAt: at(20) });
-    await enqueueWork({ kind: 'poll_source', key, teamId, payload: {}, dueAt: at(5) });
+    await enqueueWork({ kind: 'poll_edge', key, teamId, payload: {}, dueAt: at(10) });
+    await enqueueWork({ kind: 'poll_edge', key, teamId, payload: {}, dueAt: at(20) });
+    await enqueueWork({ kind: 'poll_edge', key, teamId, payload: {}, dueAt: at(5) });
 
     expect(told).toEqual([
-      { call: 'at', kind: 'poll_source', at: at(10) },
-      { call: 'at', kind: 'poll_source', at: at(10) },
-      { call: 'at', kind: 'poll_source', at: at(5) },
+      { call: 'at', kind: 'poll_edge', at: at(10) },
+      { call: 'at', kind: 'poll_edge', at: at(10) },
+      { call: 'at', kind: 'poll_edge', at: at(5) },
     ]);
   });
 
@@ -170,61 +170,61 @@ describe('a work row written in a request transaction', () => {
   }
 
   it('is announced after the transaction commits, and the drain it starts finds the row', async () => {
-    const key = freshKey('fire_cron');
+    const key = freshKey('poll_edge');
     const { told, seen } = slotThatReadsTheRow(key);
     const ctx = requestContext();
 
     await ctx.runAsync(async () => {
       await ctx.enterTransaction();
-      await enqueueWork({ kind: 'fire_cron', key, teamId, payload: {} });
+      await enqueueWork({ kind: 'poll_edge', key, teamId, payload: {} });
       expect(told).toEqual([]);
     });
 
     await settleWakes(WAKE_WAIT_MS);
-    expect(told).toEqual([{ call: 'now', kind: 'fire_cron' }]);
+    expect(told).toEqual([{ call: 'now', kind: 'poll_edge' }]);
     expect(seen).toEqual([true]);
   });
 
   it('is announced by nothing when the transaction rolls back', async () => {
-    const key = freshKey('fire_cron');
+    const key = freshKey('poll_edge');
     const { told } = slotThatReadsTheRow(key);
     const ctx = requestContext();
 
     await expect(
       ctx.runAsync(async () => {
         await ctx.enterTransaction();
-        await enqueueWork({ kind: 'fire_cron', key, teamId, payload: {} });
+        await enqueueWork({ kind: 'poll_edge', key, teamId, payload: {} });
         throw new Error('the request failed');
       }),
     ).rejects.toThrow('the request failed');
 
     await settleWakes(WAKE_WAIT_MS);
     expect(told).toEqual([]);
-    expect(await listWorkByKind('fire_cron')).toEqual([]);
+    expect(await listWorkByKind('poll_edge')).toEqual([]);
   });
 });
 
 describe('a shipped schedule asking for a reconcile', () => {
   it('while the periodic row is leased gets its own row due now, which does not re-arm', async () => {
     // Other suites' rows of this kind must not be claimed in their place.
-    await getAutomationsQb(['work']).deleteFrom('work').where('host', '=', 'platform').where('kind', '=', 'cron_reconcile').execute();
-    await ensurePeriodicWork({ kind: 'cron_reconcile', key: 'cron_reconcile', intervalMs: 3_600_000, dueAt: new Date(Date.now() - 1000) });
-    const [periodic] = await claimDueWork({ owner: 'ship-test', limit: 1, leaseMs: 60_000, kinds: ['cron_reconcile'] });
-    expect(periodic.key).toBe('cron_reconcile');
+    await getAutomationsQb(['work']).deleteFrom('work').where('host', '=', 'platform').where('kind', '=', 'timer_sweep').execute();
+    await ensurePeriodicWork({ kind: 'timer_sweep', key: 'timer_sweep', intervalMs: 3_600_000, dueAt: new Date(Date.now() - 1000) });
+    const [periodic] = await claimDueWork({ owner: 'ship-test', limit: 1, leaseMs: 60_000, kinds: ['timer_sweep'] });
+    expect(periodic.key).toBe('timer_sweep');
 
-    await enqueueWork({ kind: 'cron_reconcile', key: 'cron_reconcile:shipped' });
+    await enqueueWork({ kind: 'timer_sweep', key: 'cron_reconcile:shipped' });
 
-    const rows = await listWorkByKind('cron_reconcile');
+    const rows = await listWorkByKind('timer_sweep');
     const shipped = rows.find((row) => row.key === 'cron_reconcile:shipped');
     expect(shipped?.intervalMs).toBeNull();
     expect(shipped?.dueAt.getTime()).toBeLessThanOrEqual(Date.now());
-    const [claimed] = await claimDueWork({ owner: 'ship-test', limit: 1, leaseMs: 60_000, kinds: ['cron_reconcile'] });
+    const [claimed] = await claimDueWork({ owner: 'ship-test', limit: 1, leaseMs: 60_000, kinds: ['timer_sweep'] });
     expect(claimed.key).toBe('cron_reconcile:shipped');
 
     await completeWork({ id: claimed.id, leaseToken: claimed.leaseToken!, claimedUpdatedAt: claimed.updatedAt });
-    const after = await listWorkByKind('cron_reconcile');
-    expect(after.map((row) => row.key)).toEqual(['cron_reconcile']);
-    await removeWork({ key: 'cron_reconcile' });
+    const after = await listWorkByKind('timer_sweep');
+    expect(after.map((row) => row.key)).toEqual(['timer_sweep']);
+    await removeWork({ key: 'timer_sweep' });
   });
 });
 
@@ -236,13 +236,13 @@ describe('what the drain tells the wake', () => {
         throw new Error('the handler failed');
       },
     });
-    registerWorkHandler('fire_cron', {
+    registerWorkHandler('poll_edge', {
       async run() {
         throw new WorkDeferred('the run is busy elsewhere');
       },
     });
     await enqueueWork({ kind: 'resume_timer', key: freshKey('resume_timer'), teamId, payload: {} });
-    await enqueueWork({ kind: 'fire_cron', key: freshKey('fire_cron'), teamId, payload: {} });
+    await enqueueWork({ kind: 'poll_edge', key: freshKey('poll_edge'), teamId, payload: {} });
     installWake(slot);
 
     const before = Date.now();
@@ -251,7 +251,7 @@ describe('what the drain tells the wake', () => {
     expect(result).toMatchObject({ claimed: 2, failed: 1, deferred: 1 });
 
     const released = told.find((each) => each.kind === 'resume_timer');
-    const deferred = told.find((each) => each.kind === 'fire_cron');
+    const deferred = told.find((each) => each.kind === 'poll_edge');
     expect(told).toHaveLength(2);
     // The first attempt's backoff is 1 s; the first deferral's is 2 s.
     expect(released?.call).toBe('at');
@@ -269,7 +269,7 @@ describe('what the drain tells the wake', () => {
       .execute();
     expect(Object.fromEntries(rows.map((row) => [row.kind, row.due_at.getTime()]))).toEqual({
       resume_timer: released?.at?.getTime(),
-      fire_cron: deferred?.at?.getTime(),
+      poll_edge: deferred?.at?.getTime(),
     });
   });
 });

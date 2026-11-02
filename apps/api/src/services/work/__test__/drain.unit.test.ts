@@ -93,8 +93,8 @@ describe('drainWork', () => {
     const run = jest.fn(async () => {});
     registerWorkHandler('resume_timer', { run, recover });
     const fallback = jest.fn(async () => {});
-    registerWorkHandler('fire_cron', { run: fallback });
-    pending = [row({ attempts: 2, key: 'a' }), row({ attempts: 2, key: 'b', kind: 'fire_cron' })];
+    registerWorkHandler('poll_edge', { run: fallback });
+    pending = [row({ attempts: 2, key: 'a' }), row({ attempts: 2, key: 'b', kind: 'poll_edge' })];
 
     const result = await drainWork({ owner: 'me' });
 
@@ -160,7 +160,7 @@ describe('drainWork', () => {
   });
 
   it('a known kind with no registered handler is released with a warning', async () => {
-    pending = [row({ kind: 'poll_source' })];
+    pending = [row({ kind: 'poll_edge' })];
 
     const result = await drainWork({ owner: 'me' });
 
@@ -171,7 +171,7 @@ describe('drainWork', () => {
     expect(logs.warn()).toContainEqual(
       expect.objectContaining({
         message: expect.any(String),
-        meta: expect.objectContaining({ kind: 'poll_source' }),
+        meta: expect.objectContaining({ kind: 'poll_edge' }),
       }),
     );
     expect(result.failed).toBe(1);
@@ -227,7 +227,7 @@ describe('drainWork', () => {
 
   it('a kind with no handler is released with backoff too', async () => {
     const clock = new Date('2030-01-01T00:00:00.000Z');
-    pending = [row({ kind: 'poll_source', attempts: 1 })];
+    pending = [row({ kind: 'poll_edge', attempts: 1 })];
 
     await drainWork({ owner: 'me', now: () => clock });
 
@@ -334,12 +334,12 @@ describe('startDrainLoop', () => {
 
   it('a never-finishing row does not stop the next pass claiming and completing another', async () => {
     registerWorkHandler('resume_timer', { run: () => new Promise<void>(() => {}) });
-    registerWorkHandler('fire_cron', { run: async () => {} });
+    registerWorkHandler('poll_edge', { run: async () => {} });
     pending = [row({ key: 'stuck' })];
     stopLoop = startDrainLoop({ owner: 'me', everyMs: 1_000 });
 
     await jest.advanceTimersByTimeAsync(1_000);
-    pending = [row({ key: 'next', kind: 'fire_cron' })];
+    pending = [row({ key: 'next', kind: 'poll_edge' })];
     await jest.advanceTimersByTimeAsync(1_000);
 
     expect(claim).toHaveBeenCalledTimes(2);

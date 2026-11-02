@@ -320,8 +320,8 @@ describe('work store', () => {
   });
 
   it('completeWork reschedules a periodic row at now + interval and clears its lease', async () => {
-    const key = freshKey('cron_reconcile');
-    await ensurePeriodicWork({ kind: 'cron_reconcile', key, intervalMs: 60_000, dueAt: at(0) });
+    const key = freshKey('timer_sweep');
+    await ensurePeriodicWork({ kind: 'timer_sweep', key, intervalMs: 60_000, dueAt: at(0) });
     const claimed = await claimOne({ owner: 'drainer-1' });
 
     await completeWork({
@@ -330,7 +330,7 @@ describe('work store', () => {
       now: at(2_000),
     });
 
-    expect(await rowByKey(key, 'cron_reconcile')).toMatchObject({
+    expect(await rowByKey(key, 'timer_sweep')).toMatchObject({
       attempts: 0,
       dueAt: at(62_000),
       leaseOwner: null,
@@ -340,18 +340,18 @@ describe('work store', () => {
   });
 
   it('a periodic row re-armed during its run still reschedules at now + interval', async () => {
-    const key = freshKey('cron_reconcile');
-    await ensurePeriodicWork({ kind: 'cron_reconcile', key, intervalMs: 60_000, dueAt: at(0) });
+    const key = freshKey('timer_sweep');
+    await ensurePeriodicWork({ kind: 'timer_sweep', key, intervalMs: 60_000, dueAt: at(0) });
     const claimed = await claimOne({ owner: 'drainer-1' });
 
-    await enqueueWork({ kind: 'cron_reconcile', key, dueAt: at(5_000) });
+    await enqueueWork({ kind: 'timer_sweep', key, dueAt: at(5_000) });
     await completeWork({
       ...claimOf(claimed),
       claimedUpdatedAt: claimed.updatedAt,
       now: at(2_000),
     });
 
-    expect(await rowByKey(key, 'cron_reconcile')).toMatchObject({
+    expect(await rowByKey(key, 'timer_sweep')).toMatchObject({
       attempts: 0,
       dueAt: at(62_000),
       leaseOwner: null,
@@ -449,32 +449,32 @@ describe('work store', () => {
   });
 
   it('ensurePeriodicWork is idempotent and keeps an existing due_at', async () => {
-    const key = freshKey('cron_reconcile');
-    await ensurePeriodicWork({ kind: 'cron_reconcile', key, intervalMs: 60_000, dueAt: at(0) });
+    const key = freshKey('timer_sweep');
+    await ensurePeriodicWork({ kind: 'timer_sweep', key, intervalMs: 60_000, dueAt: at(0) });
     await ensurePeriodicWork({
-      kind: 'cron_reconcile',
+      kind: 'timer_sweep',
       key,
       intervalMs: 60_000,
       dueAt: at(90_000),
     });
 
-    const rows = (await listWorkByKind('cron_reconcile')).filter((r) => r.key === key);
+    const rows = (await listWorkByKind('timer_sweep')).filter((r) => r.key === key);
     expect(rows).toHaveLength(1);
     expect(rows[0]?.dueAt).toEqual(at(0));
   });
 
   it('every write stamps updated_at to the millisecond', async () => {
     const oneShot = freshKey('resume_timer');
-    const periodic = freshKey('cron_reconcile');
+    const periodic = freshKey('timer_sweep');
     await enqueueWork({ kind: 'resume_timer', key: oneShot, dueAt: at(60_000) });
     await ensurePeriodicWork({
-      kind: 'cron_reconcile',
+      kind: 'timer_sweep',
       key: periodic,
       intervalMs: 60_000,
       dueAt: at(60_000),
     });
     await ensurePeriodicWork({
-      kind: 'cron_reconcile',
+      kind: 'timer_sweep',
       key: periodic,
       intervalMs: 30_000,
       dueAt: at(60_000),
