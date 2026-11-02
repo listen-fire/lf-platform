@@ -81,6 +81,9 @@ export async function walkFrom(t: Transcript, adapter: Adapter, position: Source
     await t.step(`${label}.${field.displayName}`, () => adapter.getFieldValue({ position, fieldId: field.displayName }));
   }
   for (const reference of descriptor?.references ?? []) {
+    // A listenable edge is heard, not read: what arrives on it is the
+    // subscription steps' to record.
+    if (reference.listenable === true) continue;
     // …and edges by their name.
     const edge = reference.name ?? reference.fieldId;
     const members = await t.step(`${label} -[${edge}]-> LIMIT 3`, () =>
@@ -111,7 +114,7 @@ export async function walkSurface(
 
   const firsts = new Map<string, SourcePosition>();
   const collections = entries
-    .filter((e) => e.readable)
+    .filter((e) => e.readable && e.listenable !== true)
     .filter((e) => !(options.skipCollections ?? []).includes(e.collectionName ?? e.displayName))
     .slice(0, options.maxCollections ?? 12);
   for (const entry of collections) {

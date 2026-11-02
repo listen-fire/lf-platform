@@ -9,6 +9,7 @@
 import type { Adapter } from 'movement-engine/public/adapter';
 
 import { makeMetaPosition } from 'movement-engine/public/catalog';
+import { arrivalTriggerOf } from 'movement-engine/public/inbound';
 
 import { MUTATION, Transcript, cmp, prop, value, walkSurface, type TranscriptEntry } from '../crm_parity/walk';
 
@@ -61,33 +62,23 @@ export async function runAttioParityScript(adapter: Adapter): Promise<Transcript
 
   for (const [name, raw] of INBOUND) {
     const answer = await t.step(`preprocessInbound ${name}`, () => adapter.preprocessInbound?.({ raw }) ?? null);
-    const event = answer?.events[0];
-    if (event !== undefined) {
-      // The trigger event a run starts from, in the shape the wire carries.
-      const trigger = {
-        ...event,
-        id: `trigger-${name}`,
-        pipelineInputId: 'pipeline-input-parity',
-        adapterType: 'attio',
-        triggerType: 'webhook' as const,
-        ...(event.externalId !== undefined ? { recordId: event.externalId } : {}),
-      };
+    const arrival = answer?.arrivals[0];
+    if (arrival !== undefined && 'landing' in arrival) {
+      // The run trigger the arrival makes; who acted rides on it.
+      const trigger = arrivalTriggerOf({ pipelineInputId: 'pipeline-input-parity', adapterType: 'attio', now: new Date('2026-10-01T09:00:00.000Z'), arrival });
       await t.step(`extractActor ${name}`, () => adapter.extractActor?.({ event: trigger }) ?? null);
       await t.step(`getActorCandidates ${name}`, () => adapter.getActorCandidates?.({ event: trigger }) ?? null);
     }
   }
-  await t.step('listEventTypes', () => adapter.listEventTypes?.() ?? null);
 
+  // One subscription per listenable edge (adapter protocol 2.6).
   const registered = await t.step('ensureEventSubscription create', () =>
-    adapter.ensureEventSubscription?.({ callbackUrl: 'https://example.test/api/public/webhook-sync/attio/sub-1', events: ['record.created', 'record.updated'] } as never) ?? null,
+    adapter.ensureEventSubscription?.({ edge: 'Changes', callbackUrl: 'https://example.test/api/public/webhook-sync/attio/sub-1' }) ?? null,
   );
   const externalId = registered?.externalId;
   if (externalId !== undefined) {
-    await t.step('ensureEventSubscription unchanged', () =>
-      adapter.ensureEventSubscription?.({ callbackUrl: 'https://example.test/x', events: ['record.updated', 'record.created'], current: { externalId, events: ['record.created', 'record.updated'] } } as never) ?? null,
-    );
-    await t.step('ensureEventSubscription widened', () =>
-      adapter.ensureEventSubscription?.({ callbackUrl: 'https://example.test/x', events: ['record.created', 'record.deleted'], current: { externalId, events: ['record.created'] } } as never) ?? null,
+    await t.step('ensureEventSubscription held', () =>
+      adapter.ensureEventSubscription?.({ edge: 'Changes', callbackUrl: 'https://example.test/x', current: { externalId } }) ?? null,
     );
     await t.step('removeEventSubscription', () => adapter.removeEventSubscription?.({ callbackUrl: 'https://example.test/x', externalId }) ?? null);
   }

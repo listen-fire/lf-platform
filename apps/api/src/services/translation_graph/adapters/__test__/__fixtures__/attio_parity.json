@@ -83,13 +83,6 @@
           "readable": false
         },
         {
-          "typeId": "attio:webhook_event",
-          "displayName": "Webhook Event",
-          "writable": false,
-          "readable": false,
-          "fires": true
-        },
-        {
           "typeId": "attio:list-membership:companies",
           "displayName": "Companies List",
           "writable": false,
@@ -110,6 +103,30 @@
         {
           "typeId": "attio:list-membership:funds",
           "displayName": "Funds List",
+          "writable": false,
+          "readable": false
+        },
+        {
+          "typeId": "CompanyChange",
+          "displayName": "CompanyChange",
+          "writable": false,
+          "readable": false
+        },
+        {
+          "typeId": "PersonChange",
+          "displayName": "PersonChange",
+          "writable": false,
+          "readable": false
+        },
+        {
+          "typeId": "DealChange",
+          "displayName": "DealChange",
+          "writable": false,
+          "readable": false
+        },
+        {
+          "typeId": "FundChange",
+          "displayName": "FundChange",
           "writable": false,
           "readable": false
         }
@@ -186,16 +203,6 @@
                 "order": "bounded",
                 "supportsLimit": true
               }
-            },
-            {
-              "fieldId": "attio:webhook_event",
-              "targetTypeId": "attio:webhook_event",
-              "cardinality": "one",
-              "direction": "outgoing",
-              "name": "Webhook Event",
-              "fires": true,
-              "readable": false,
-              "description": "A record being created, updated or deleted — what a listen delivers."
             }
           ]
         },
@@ -247,14 +254,6 @@
               "kind": "unstable",
               "data": {}
             }
-          },
-          "attio:webhook_event": {
-            "adapterType": "attio",
-            "recordType": "attio:webhook_event",
-            "identity": {
-              "kind": "unstable",
-              "data": {}
-            }
           }
         },
         "targetNodes": {
@@ -287,88 +286,6 @@
             "stub": true,
             "typeId": "VC Deal Flow",
             "displayName": "VC Deal Flow"
-          },
-          "attio:webhook_event": {
-            "typeId": "attio:webhook_event",
-            "displayName": "Webhook Event",
-            "fields": [
-              {
-                "fieldId": "action",
-                "displayName": "action",
-                "kind": "enum",
-                "enumValues": [
-                  "record.created",
-                  "record.updated",
-                  "record.deleted"
-                ],
-                "writable": false,
-                "required": false,
-                "description": "Which kind of change this event is — the same values a listen's `events:` names."
-              },
-              {
-                "fieldId": "Workspace",
-                "displayName": "Workspace",
-                "kind": "string",
-                "writable": false,
-                "required": false
-              },
-              {
-                "fieldId": "Object",
-                "displayName": "Object",
-                "kind": "string",
-                "writable": false,
-                "required": false
-              },
-              {
-                "fieldId": "Record",
-                "displayName": "Record",
-                "kind": "string",
-                "writable": false,
-                "required": false
-              },
-              {
-                "fieldId": "List",
-                "displayName": "List",
-                "kind": "string",
-                "writable": false,
-                "required": false
-              },
-              {
-                "fieldId": "Entry",
-                "displayName": "Entry",
-                "kind": "string",
-                "writable": false,
-                "required": false
-              },
-              {
-                "fieldId": "Task",
-                "displayName": "Task",
-                "kind": "string",
-                "writable": false,
-                "required": false
-              },
-              {
-                "fieldId": "Note",
-                "displayName": "Note",
-                "kind": "string",
-                "writable": false,
-                "required": false
-              },
-              {
-                "fieldId": "Comment",
-                "displayName": "Comment",
-                "kind": "string",
-                "writable": false,
-                "required": false
-              },
-              {
-                "fieldId": "Attribute",
-                "displayName": "Attribute",
-                "kind": "string",
-                "writable": false,
-                "required": false
-              }
-            ]
           }
         }
       }
@@ -542,6 +459,22 @@
             "writable": true
           },
           {
+            "fieldId": "attio:changes",
+            "name": "Changes",
+            "targetTypeId": "CompanyChange",
+            "cardinality": "many",
+            "direction": "outgoing",
+            "readable": false,
+            "listenable": true,
+            "delivery": "connection",
+            "identity": "Id",
+            "attributes": true,
+            "carries": [
+              "Companies"
+            ],
+            "description": "What happens to a company in Attio, each change once: created, an attribute updated (`Field` names it), deleted."
+          },
+          {
             "fieldId": "Lists",
             "targetTypeId": "attio:list-membership:companies",
             "cardinality": "many",
@@ -682,6 +615,22 @@
             "targetTypeId": "attio:comment",
             "cardinality": "many",
             "writable": true
+          },
+          {
+            "fieldId": "attio:changes",
+            "name": "Changes",
+            "targetTypeId": "PersonChange",
+            "cardinality": "many",
+            "direction": "outgoing",
+            "readable": false,
+            "listenable": true,
+            "delivery": "connection",
+            "identity": "Id",
+            "attributes": true,
+            "carries": [
+              "People"
+            ],
+            "description": "What happens to a person in Attio, each change once: created, an attribute updated (`Field` names it), deleted."
           },
           {
             "fieldId": "Lists",
@@ -845,6 +794,22 @@
             "writable": true
           },
           {
+            "fieldId": "attio:changes",
+            "name": "Changes",
+            "targetTypeId": "DealChange",
+            "cardinality": "many",
+            "direction": "outgoing",
+            "readable": false,
+            "listenable": true,
+            "delivery": "connection",
+            "identity": "Id",
+            "attributes": true,
+            "carries": [
+              "Deals"
+            ],
+            "description": "What happens to a deal in Attio, each change once: created, an attribute updated (`Field` names it), deleted."
+          },
+          {
             "fieldId": "Lists",
             "targetTypeId": "attio:list-membership:deals",
             "cardinality": "many",
@@ -982,6 +947,22 @@
             "targetTypeId": "attio:comment",
             "cardinality": "many",
             "writable": true
+          },
+          {
+            "fieldId": "attio:changes",
+            "name": "Changes",
+            "targetTypeId": "FundChange",
+            "cardinality": "many",
+            "direction": "outgoing",
+            "readable": false,
+            "listenable": true,
+            "delivery": "connection",
+            "identity": "Id",
+            "attributes": true,
+            "carries": [
+              "Funds"
+            ],
+            "description": "What happens to a fund in Attio, each change once: created, an attribute updated (`Field` names it), deleted."
           },
           {
             "fieldId": "Lists",
@@ -1417,149 +1398,6 @@
       }
     },
     {
-      "step": "describe attio:webhook_event",
-      "answer": {
-        "typeId": "attio:webhook_event",
-        "displayName": "Webhook Event",
-        "fields": [
-          {
-            "fieldId": "action",
-            "displayName": "action",
-            "kind": "enum",
-            "enumValues": [
-              "record.created",
-              "record.updated",
-              "record.deleted"
-            ],
-            "writable": false,
-            "required": false,
-            "description": "Which kind of change this event is — the same values a listen's `events:` names."
-          },
-          {
-            "fieldId": "Workspace",
-            "displayName": "Workspace",
-            "kind": "string",
-            "writable": false,
-            "required": false
-          },
-          {
-            "fieldId": "Object",
-            "displayName": "Object",
-            "kind": "string",
-            "writable": false,
-            "required": false
-          },
-          {
-            "fieldId": "Record",
-            "displayName": "Record",
-            "kind": "string",
-            "writable": false,
-            "required": false
-          },
-          {
-            "fieldId": "List",
-            "displayName": "List",
-            "kind": "string",
-            "writable": false,
-            "required": false
-          },
-          {
-            "fieldId": "Entry",
-            "displayName": "Entry",
-            "kind": "string",
-            "writable": false,
-            "required": false
-          },
-          {
-            "fieldId": "Task",
-            "displayName": "Task",
-            "kind": "string",
-            "writable": false,
-            "required": false
-          },
-          {
-            "fieldId": "Note",
-            "displayName": "Note",
-            "kind": "string",
-            "writable": false,
-            "required": false
-          },
-          {
-            "fieldId": "Comment",
-            "displayName": "Comment",
-            "kind": "string",
-            "writable": false,
-            "required": false
-          },
-          {
-            "fieldId": "Attribute",
-            "displayName": "Attribute",
-            "kind": "string",
-            "writable": false,
-            "required": false
-          }
-        ],
-        "references": [
-          {
-            "fieldId": "Companies",
-            "targetTypeId": "Companies",
-            "cardinality": "one",
-            "requiresLiveRecord": true
-          },
-          {
-            "fieldId": "People",
-            "targetTypeId": "People",
-            "cardinality": "one",
-            "requiresLiveRecord": true
-          },
-          {
-            "fieldId": "Deals",
-            "targetTypeId": "Deals",
-            "cardinality": "one",
-            "requiresLiveRecord": true
-          },
-          {
-            "fieldId": "Funds",
-            "targetTypeId": "Funds",
-            "cardinality": "one",
-            "requiresLiveRecord": true
-          },
-          {
-            "fieldId": "List",
-            "targetTypeId": "attio:list",
-            "cardinality": "one"
-          },
-          {
-            "fieldId": "Pipeline",
-            "targetTypeId": "Pipeline",
-            "cardinality": "one",
-            "requiresLiveRecord": true
-          },
-          {
-            "fieldId": "VC Deal Flow",
-            "targetTypeId": "VC Deal Flow",
-            "cardinality": "one",
-            "requiresLiveRecord": true
-          },
-          {
-            "fieldId": "Task",
-            "targetTypeId": "attio:task",
-            "cardinality": "one"
-          },
-          {
-            "fieldId": "Note",
-            "targetTypeId": "attio:note",
-            "cardinality": "one"
-          },
-          {
-            "fieldId": "Comment",
-            "targetTypeId": "attio:comment",
-            "cardinality": "one"
-          }
-        ]
-      }
-    },
-    {
       "step": "describe attio:list-membership:companies",
       "answer": {
         "typeId": "attio:list-membership:companies",
@@ -1717,6 +1555,280 @@
           "discriminant": "listName",
           "variantTypes": {}
         }
+      }
+    },
+    {
+      "step": "describe CompanyChange",
+      "answer": {
+        "typeId": "CompanyChange",
+        "displayName": "CompanyChange",
+        "description": "A change to a company in Attio: what happened (`Kind`) and, on an update, which attribute (`Field`). Walk `Company` for the company as it is now.",
+        "fields": [
+          {
+            "fieldId": "Id",
+            "displayName": "Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "cardinality": "one",
+            "description": "Names the change: the same on every redelivery of it."
+          },
+          {
+            "fieldId": "Kind",
+            "displayName": "Kind",
+            "kind": "enum",
+            "writable": false,
+            "required": true,
+            "cardinality": "one",
+            "enumValues": [
+              "created",
+              "updated",
+              "deleted"
+            ],
+            "description": "What happened to the company."
+          },
+          {
+            "fieldId": "Field",
+            "displayName": "Field",
+            "kind": "enum",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "enumValues": [
+              "Name",
+              "Domains",
+              "Description",
+              "Categories",
+              "Team Size",
+              "Team"
+            ],
+            "description": "On an update, the attribute that changed, by its title (`Stage`)."
+          },
+          {
+            "fieldId": "Record",
+            "displayName": "Record",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "cardinality": "one",
+            "description": "The company's record id."
+          }
+        ],
+        "references": [
+          {
+            "fieldId": "Company",
+            "name": "Company",
+            "targetTypeId": "Companies",
+            "cardinality": "one",
+            "direction": "outgoing",
+            "requiresLiveRecord": true,
+            "description": "The company that changed, read from Attio."
+          }
+        ]
+      }
+    },
+    {
+      "step": "describe PersonChange",
+      "answer": {
+        "typeId": "PersonChange",
+        "displayName": "PersonChange",
+        "description": "A change to a person in Attio: what happened (`Kind`) and, on an update, which attribute (`Field`). Walk `Person` for the person as it is now.",
+        "fields": [
+          {
+            "fieldId": "Id",
+            "displayName": "Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "cardinality": "one",
+            "description": "Names the change: the same on every redelivery of it."
+          },
+          {
+            "fieldId": "Kind",
+            "displayName": "Kind",
+            "kind": "enum",
+            "writable": false,
+            "required": true,
+            "cardinality": "one",
+            "enumValues": [
+              "created",
+              "updated",
+              "deleted"
+            ],
+            "description": "What happened to the person."
+          },
+          {
+            "fieldId": "Field",
+            "displayName": "Field",
+            "kind": "enum",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "enumValues": [
+              "Name",
+              "Email",
+              "Job Title",
+              "Company"
+            ],
+            "description": "On an update, the attribute that changed, by its title (`Stage`)."
+          },
+          {
+            "fieldId": "Record",
+            "displayName": "Record",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "cardinality": "one",
+            "description": "The person's record id."
+          }
+        ],
+        "references": [
+          {
+            "fieldId": "Person",
+            "name": "Person",
+            "targetTypeId": "People",
+            "cardinality": "one",
+            "direction": "outgoing",
+            "requiresLiveRecord": true,
+            "description": "The person that changed, read from Attio."
+          }
+        ]
+      }
+    },
+    {
+      "step": "describe DealChange",
+      "answer": {
+        "typeId": "DealChange",
+        "displayName": "DealChange",
+        "description": "A change to a deal in Attio: what happened (`Kind`) and, on an update, which attribute (`Field`). Walk `Deal` for the deal as it is now.",
+        "fields": [
+          {
+            "fieldId": "Id",
+            "displayName": "Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "cardinality": "one",
+            "description": "Names the change: the same on every redelivery of it."
+          },
+          {
+            "fieldId": "Kind",
+            "displayName": "Kind",
+            "kind": "enum",
+            "writable": false,
+            "required": true,
+            "cardinality": "one",
+            "enumValues": [
+              "created",
+              "updated",
+              "deleted"
+            ],
+            "description": "What happened to the deal."
+          },
+          {
+            "fieldId": "Field",
+            "displayName": "Field",
+            "kind": "enum",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "enumValues": [
+              "Name",
+              "Stage",
+              "Value",
+              "Company"
+            ],
+            "description": "On an update, the attribute that changed, by its title (`Stage`)."
+          },
+          {
+            "fieldId": "Record",
+            "displayName": "Record",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "cardinality": "one",
+            "description": "The deal's record id."
+          }
+        ],
+        "references": [
+          {
+            "fieldId": "Deal",
+            "name": "Deal",
+            "targetTypeId": "Deals",
+            "cardinality": "one",
+            "direction": "outgoing",
+            "requiresLiveRecord": true,
+            "description": "The deal that changed, read from Attio."
+          }
+        ]
+      }
+    },
+    {
+      "step": "describe FundChange",
+      "answer": {
+        "typeId": "FundChange",
+        "displayName": "FundChange",
+        "description": "A change to a fund in Attio: what happened (`Kind`) and, on an update, which attribute (`Field`). Walk `Fund` for the fund as it is now.",
+        "fields": [
+          {
+            "fieldId": "Id",
+            "displayName": "Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "cardinality": "one",
+            "description": "Names the change: the same on every redelivery of it."
+          },
+          {
+            "fieldId": "Kind",
+            "displayName": "Kind",
+            "kind": "enum",
+            "writable": false,
+            "required": true,
+            "cardinality": "one",
+            "enumValues": [
+              "created",
+              "updated",
+              "deleted"
+            ],
+            "description": "What happened to the fund."
+          },
+          {
+            "fieldId": "Field",
+            "displayName": "Field",
+            "kind": "enum",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "enumValues": [
+              "Name",
+              "Vintage",
+              "GPs",
+              "Advisors"
+            ],
+            "description": "On an update, the attribute that changed, by its title (`Stage`)."
+          },
+          {
+            "fieldId": "Record",
+            "displayName": "Record",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "cardinality": "one",
+            "description": "The fund's record id."
+          }
+        ],
+        "references": [
+          {
+            "fieldId": "Fund",
+            "name": "Fund",
+            "targetTypeId": "Funds",
+            "cardinality": "one",
+            "direction": "outgoing",
+            "requiresLiveRecord": true,
+            "description": "The fund that changed, read from Attio."
+          }
+        ]
       }
     },
     {
@@ -2109,6 +2221,22 @@
               "writable": true
             },
             {
+              "fieldId": "attio:changes",
+              "name": "Changes",
+              "targetTypeId": "CompanyChange",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "readable": false,
+              "listenable": true,
+              "delivery": "connection",
+              "identity": "Id",
+              "attributes": true,
+              "carries": [
+                "Companies"
+              ],
+              "description": "What happens to a company in Attio, each change once: created, an attribute updated (`Field` names it), deleted."
+            },
+            {
               "fieldId": "Lists",
               "targetTypeId": "attio:list-membership:companies",
               "cardinality": "many",
@@ -2172,6 +2300,14 @@
           "Comments": {
             "adapterType": "attio",
             "recordType": "attio:comment",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "attio:changes": {
+            "adapterType": "attio",
+            "recordType": "CompanyChange",
             "identity": {
               "kind": "unstable",
               "data": {}
@@ -2469,6 +2605,62 @@
                 "kind": "date",
                 "writable": false,
                 "required": false
+              }
+            ]
+          },
+          "attio:changes": {
+            "typeId": "CompanyChange",
+            "displayName": "CompanyChange",
+            "description": "A change to a company in Attio: what happened (`Kind`) and, on an update, which attribute (`Field`). Walk `Company` for the company as it is now.",
+            "fields": [
+              {
+                "fieldId": "Id",
+                "displayName": "Id",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "cardinality": "one",
+                "description": "Names the change: the same on every redelivery of it."
+              },
+              {
+                "fieldId": "Kind",
+                "displayName": "Kind",
+                "kind": "enum",
+                "writable": false,
+                "required": true,
+                "cardinality": "one",
+                "enumValues": [
+                  "created",
+                  "updated",
+                  "deleted"
+                ],
+                "description": "What happened to the company."
+              },
+              {
+                "fieldId": "Field",
+                "displayName": "Field",
+                "kind": "enum",
+                "writable": false,
+                "required": false,
+                "cardinality": "one",
+                "enumValues": [
+                  "Name",
+                  "Domains",
+                  "Description",
+                  "Categories",
+                  "Team Size",
+                  "Team"
+                ],
+                "description": "On an update, the attribute that changed, by its title (`Stage`)."
+              },
+              {
+                "fieldId": "Record",
+                "displayName": "Record",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "cardinality": "one",
+                "description": "The company's record id."
               }
             ]
           },
@@ -2851,6 +3043,22 @@
               "writable": true
             },
             {
+              "fieldId": "attio:changes",
+              "name": "Changes",
+              "targetTypeId": "PersonChange",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "readable": false,
+              "listenable": true,
+              "delivery": "connection",
+              "identity": "Id",
+              "attributes": true,
+              "carries": [
+                "People"
+              ],
+              "description": "What happens to a person in Attio, each change once: created, an attribute updated (`Field` names it), deleted."
+            },
+            {
               "fieldId": "Lists",
               "targetTypeId": "attio:list-membership:people",
               "cardinality": "many",
@@ -2906,6 +3114,14 @@
           "Comments": {
             "adapterType": "attio",
             "recordType": "attio:comment",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "attio:changes": {
+            "adapterType": "attio",
+            "recordType": "PersonChange",
             "identity": {
               "kind": "unstable",
               "data": {}
@@ -3184,6 +3400,60 @@
                 "kind": "date",
                 "writable": false,
                 "required": false
+              }
+            ]
+          },
+          "attio:changes": {
+            "typeId": "PersonChange",
+            "displayName": "PersonChange",
+            "description": "A change to a person in Attio: what happened (`Kind`) and, on an update, which attribute (`Field`). Walk `Person` for the person as it is now.",
+            "fields": [
+              {
+                "fieldId": "Id",
+                "displayName": "Id",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "cardinality": "one",
+                "description": "Names the change: the same on every redelivery of it."
+              },
+              {
+                "fieldId": "Kind",
+                "displayName": "Kind",
+                "kind": "enum",
+                "writable": false,
+                "required": true,
+                "cardinality": "one",
+                "enumValues": [
+                  "created",
+                  "updated",
+                  "deleted"
+                ],
+                "description": "What happened to the person."
+              },
+              {
+                "fieldId": "Field",
+                "displayName": "Field",
+                "kind": "enum",
+                "writable": false,
+                "required": false,
+                "cardinality": "one",
+                "enumValues": [
+                  "Name",
+                  "Email",
+                  "Job Title",
+                  "Company"
+                ],
+                "description": "On an update, the attribute that changed, by its title (`Stage`)."
+              },
+              {
+                "fieldId": "Record",
+                "displayName": "Record",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "cardinality": "one",
+                "description": "The person's record id."
               }
             ]
           },
@@ -3476,6 +3746,22 @@
               "writable": true
             },
             {
+              "fieldId": "attio:changes",
+              "name": "Changes",
+              "targetTypeId": "FundChange",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "readable": false,
+              "listenable": true,
+              "delivery": "connection",
+              "identity": "Id",
+              "attributes": true,
+              "carries": [
+                "Funds"
+              ],
+              "description": "What happens to a fund in Attio, each change once: created, an attribute updated (`Field` names it), deleted."
+            },
+            {
               "fieldId": "Lists",
               "targetTypeId": "attio:list-membership:funds",
               "cardinality": "many",
@@ -3523,6 +3809,14 @@
           "Comments": {
             "adapterType": "attio",
             "recordType": "attio:comment",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "attio:changes": {
+            "adapterType": "attio",
+            "recordType": "FundChange",
             "identity": {
               "kind": "unstable",
               "data": {}
@@ -3757,6 +4051,60 @@
                 "kind": "date",
                 "writable": false,
                 "required": false
+              }
+            ]
+          },
+          "attio:changes": {
+            "typeId": "FundChange",
+            "displayName": "FundChange",
+            "description": "A change to a fund in Attio: what happened (`Kind`) and, on an update, which attribute (`Field`). Walk `Fund` for the fund as it is now.",
+            "fields": [
+              {
+                "fieldId": "Id",
+                "displayName": "Id",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "cardinality": "one",
+                "description": "Names the change: the same on every redelivery of it."
+              },
+              {
+                "fieldId": "Kind",
+                "displayName": "Kind",
+                "kind": "enum",
+                "writable": false,
+                "required": true,
+                "cardinality": "one",
+                "enumValues": [
+                  "created",
+                  "updated",
+                  "deleted"
+                ],
+                "description": "What happened to the fund."
+              },
+              {
+                "fieldId": "Field",
+                "displayName": "Field",
+                "kind": "enum",
+                "writable": false,
+                "required": false,
+                "cardinality": "one",
+                "enumValues": [
+                  "Name",
+                  "Vintage",
+                  "GPs",
+                  "Advisors"
+                ],
+                "description": "On an update, the attribute that changed, by its title (`Stage`)."
+              },
+              {
+                "fieldId": "Record",
+                "displayName": "Record",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "cardinality": "one",
+                "description": "The fund's record id."
               }
             ]
           },
@@ -4028,6 +4376,22 @@
               "writable": true
             },
             {
+              "fieldId": "attio:changes",
+              "name": "Changes",
+              "targetTypeId": "PersonChange",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "readable": false,
+              "listenable": true,
+              "delivery": "connection",
+              "identity": "Id",
+              "attributes": true,
+              "carries": [
+                "People"
+              ],
+              "description": "What happens to a person in Attio, each change once: created, an attribute updated (`Field` names it), deleted."
+            },
+            {
               "fieldId": "Lists",
               "targetTypeId": "attio:list-membership:people",
               "cardinality": "many",
@@ -4083,6 +4447,14 @@
           "Comments": {
             "adapterType": "attio",
             "recordType": "attio:comment",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "attio:changes": {
+            "adapterType": "attio",
+            "recordType": "PersonChange",
             "identity": {
               "kind": "unstable",
               "data": {}
@@ -4361,6 +4733,60 @@
                 "kind": "date",
                 "writable": false,
                 "required": false
+              }
+            ]
+          },
+          "attio:changes": {
+            "typeId": "PersonChange",
+            "displayName": "PersonChange",
+            "description": "A change to a person in Attio: what happened (`Kind`) and, on an update, which attribute (`Field`). Walk `Person` for the person as it is now.",
+            "fields": [
+              {
+                "fieldId": "Id",
+                "displayName": "Id",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "cardinality": "one",
+                "description": "Names the change: the same on every redelivery of it."
+              },
+              {
+                "fieldId": "Kind",
+                "displayName": "Kind",
+                "kind": "enum",
+                "writable": false,
+                "required": true,
+                "cardinality": "one",
+                "enumValues": [
+                  "created",
+                  "updated",
+                  "deleted"
+                ],
+                "description": "What happened to the person."
+              },
+              {
+                "fieldId": "Field",
+                "displayName": "Field",
+                "kind": "enum",
+                "writable": false,
+                "required": false,
+                "cardinality": "one",
+                "enumValues": [
+                  "Name",
+                  "Email",
+                  "Job Title",
+                  "Company"
+                ],
+                "description": "On an update, the attribute that changed, by its title (`Stage`)."
+              },
+              {
+                "fieldId": "Record",
+                "displayName": "Record",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "cardinality": "one",
+                "description": "The person's record id."
               }
             ]
           },
@@ -4658,6 +5084,22 @@
               "writable": true
             },
             {
+              "fieldId": "attio:changes",
+              "name": "Changes",
+              "targetTypeId": "PersonChange",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "readable": false,
+              "listenable": true,
+              "delivery": "connection",
+              "identity": "Id",
+              "attributes": true,
+              "carries": [
+                "People"
+              ],
+              "description": "What happens to a person in Attio, each change once: created, an attribute updated (`Field` names it), deleted."
+            },
+            {
               "fieldId": "Lists",
               "targetTypeId": "attio:list-membership:people",
               "cardinality": "many",
@@ -4713,6 +5155,14 @@
           "Comments": {
             "adapterType": "attio",
             "recordType": "attio:comment",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "attio:changes": {
+            "adapterType": "attio",
+            "recordType": "PersonChange",
             "identity": {
               "kind": "unstable",
               "data": {}
@@ -4994,6 +5444,60 @@
               }
             ]
           },
+          "attio:changes": {
+            "typeId": "PersonChange",
+            "displayName": "PersonChange",
+            "description": "A change to a person in Attio: what happened (`Kind`) and, on an update, which attribute (`Field`). Walk `Person` for the person as it is now.",
+            "fields": [
+              {
+                "fieldId": "Id",
+                "displayName": "Id",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "cardinality": "one",
+                "description": "Names the change: the same on every redelivery of it."
+              },
+              {
+                "fieldId": "Kind",
+                "displayName": "Kind",
+                "kind": "enum",
+                "writable": false,
+                "required": true,
+                "cardinality": "one",
+                "enumValues": [
+                  "created",
+                  "updated",
+                  "deleted"
+                ],
+                "description": "What happened to the person."
+              },
+              {
+                "fieldId": "Field",
+                "displayName": "Field",
+                "kind": "enum",
+                "writable": false,
+                "required": false,
+                "cardinality": "one",
+                "enumValues": [
+                  "Name",
+                  "Email",
+                  "Job Title",
+                  "Company"
+                ],
+                "description": "On an update, the attribute that changed, by its title (`Stage`)."
+              },
+              {
+                "fieldId": "Record",
+                "displayName": "Record",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "cardinality": "one",
+                "description": "The person's record id."
+              }
+            ]
+          },
           "Lists": {
             "typeId": "attio:list-membership:people",
             "displayName": "People List",
@@ -5192,12 +5696,14 @@
       "answer": {
         "name": [
           {
-            "value": "Parity Labs"
+            "value": "Parity Labs",
+            "active_from": "2026-11-02T17:22:45.721Z"
           }
         ],
         "domains": [
           {
-            "domain": "paritylabs.example"
+            "domain": "paritylabs.example",
+            "active_from": "2026-11-02T17:22:45.721Z"
           }
         ]
       }
@@ -5244,12 +5750,14 @@
       "answer": {
         "name": [
           {
-            "value": "Paula Parity"
+            "value": "Paula Parity",
+            "active_from": "2026-11-02T17:22:45.730Z"
           }
         ],
         "email_addresses": [
           {
-            "email_address": "paula@paritylabs.example"
+            "email_address": "paula@paritylabs.example",
+            "active_from": "2026-11-02T17:22:45.730Z"
           }
         ]
       }
@@ -5267,28 +5775,45 @@
     {
       "step": "preprocessInbound record.created by a member",
       "answer": {
-        "events": [
+        "events": [],
+        "arrivals": [
           {
-            "payload": {
-              "event_type": "record.created",
-              "action": "record.created",
-              "id": {
-                "record_id": "company-northwind",
-                "object_id": "companies"
-              },
-              "actor": {
-                "id": "1",
-                "type": "workspace-member"
+            "edge": "Changes",
+            "key": "company-northwind",
+            "identity": "companies:company-northwind:created",
+            "landing": {
+              "recordId": "companies:company-northwind:created",
+              "recordType": "CompanyChange",
+              "fields": {
+                "Id": "companies:company-northwind:created",
+                "Kind": "created",
+                "Record": "company-northwind",
+                "actor": {
+                  "id": "1",
+                  "type": "workspace-member"
+                }
               }
             },
-            "externalId": "company-northwind",
-            "recordType": "companies",
-            "eventType": "record.created",
-            "changeType": "create",
-            "idempotencyKey": "attio:record.created:companies:company-northwind",
+            "parents": [
+              {
+                "recordId": "company-northwind",
+                "recordType": "Companies",
+                "fields": {
+                  "Name": "Northwind Advisory",
+                  "Domains": "northwind.test",
+                  "Description": "Advises the fund on structuring."
+                }
+              }
+            ],
+            "about": {
+              "recordType": "Companies",
+              "externalId": "company-northwind"
+            },
             "actor": {
-              "type": "user",
-              "id": "1"
+              "identifier": "1",
+              "scheme": "opaque",
+              "adapterType": "attio",
+              "label": "1"
             }
           }
         ]
@@ -5320,31 +5845,46 @@
     {
       "step": "preprocessInbound record.updated by the api",
       "answer": {
-        "events": [
+        "events": [],
+        "arrivals": [
           {
-            "payload": {
-              "event_type": "record.updated",
-              "action": "record.updated",
-              "id": {
-                "record_id": "company-northwind",
-                "object_id": "companies"
-              },
-              "actor": {
-                "id": "token-1",
-                "type": "api-token"
+            "edge": "Changes",
+            "key": "company-northwind",
+            "identity": "companies:company-northwind:updated:attr-1:6fbdb52d0f7e56a7",
+            "landing": {
+              "recordId": "companies:company-northwind:updated:attr-1:6fbdb52d0f7e56a7",
+              "recordType": "CompanyChange",
+              "fields": {
+                "Id": "companies:company-northwind:updated:attr-1:6fbdb52d0f7e56a7",
+                "Kind": "updated",
+                "Record": "company-northwind",
+                "actor": {
+                  "id": "token-1",
+                  "type": "api-token"
+                }
               }
             },
-            "externalId": "company-northwind",
-            "recordType": "companies",
-            "eventType": "record.updated",
-            "changeType": "update",
-            "actor": {
-              "type": "api-token",
-              "id": "token-1"
+            "parents": [
+              {
+                "recordId": "company-northwind",
+                "recordType": "Companies",
+                "fields": {
+                  "Name": "Northwind Advisory",
+                  "Domains": "northwind.test",
+                  "Description": "Advises the fund on structuring."
+                }
+              }
+            ],
+            "about": {
+              "recordType": "Companies",
+              "externalId": "company-northwind"
             },
-            "changedFields": [
-              "attr-1"
-            ]
+            "actor": {
+              "identifier": "token-1",
+              "scheme": "opaque",
+              "adapterType": "attio",
+              "label": "token-1"
+            }
           }
         ]
       }
@@ -5365,62 +5905,20 @@
     {
       "step": "preprocessInbound not a delivery",
       "answer": {
-        "events": []
+        "events": [],
+        "arrivals": []
       }
-    },
-    {
-      "step": "listEventTypes",
-      "answer": [
-        {
-          "tag": "Companies",
-          "positionType": "Companies",
-          "match": {
-            "path": "id.object_id",
-            "equals": "companies"
-          }
-        },
-        {
-          "tag": "People",
-          "positionType": "People",
-          "match": {
-            "path": "id.object_id",
-            "equals": "people"
-          }
-        },
-        {
-          "tag": "Deals",
-          "positionType": "Deals",
-          "match": {
-            "path": "id.object_id",
-            "equals": "deals"
-          }
-        },
-        {
-          "tag": "Funds",
-          "positionType": "Funds",
-          "match": {
-            "path": "id.object_id",
-            "equals": "funds"
-          }
-        }
-      ]
     },
     {
       "step": "ensureEventSubscription create",
       "answer": {
-        "externalId": "fake",
-        "secret": "fake-secret"
+        "externalId": "fake-webhook-1",
+        "secret": "54b632b39b847ff887b750b472b4b9dee3eeba59bda7b2cf"
       }
     },
     {
-      "step": "ensureEventSubscription unchanged",
+      "step": "ensureEventSubscription held",
       "answer": null
-    },
-    {
-      "step": "ensureEventSubscription widened",
-      "answer": {
-        "externalId": "fake"
-      }
     },
     {
       "step": "removeEventSubscription",
@@ -5517,6 +6015,38 @@
       "response": "{\"data\":[{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"vc_deal_flow\",\"attribute_id\":\"stage\",\"status_id\":\"sourced\"},\"title\":\"Sourced\",\"is_archived\":false},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"vc_deal_flow\",\"attribute_id\":\"stage\",\"status_id\":\"diligence\"},\"title\":\"Diligence\",\"is_archived\":false},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"vc_deal_flow\",\"attribute_id\":\"stage\",\"status_id\":\"term_sheet\"},\"title\":\"Term Sheet\",\"is_archived\":false},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"vc_deal_flow\",\"attribute_id\":\"stage\",\"status_id\":\"passed\"},\"title\":\"Passed\",\"is_archived\":false}]}"
     },
     {
+      "method": "GET",
+      "path": "/v2/objects/companies/attributes?limit=500&offset=0",
+      "authorization": "Bearer dev-loop-attio-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"data\":[{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"attribute_id\":\"name\"},\"api_slug\":\"name\",\"title\":\"Name\",\"description\":null,\"type\":\"text\",\"is_multiselect\":false,\"is_unique\":false,\"is_required\":true,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"attribute_id\":\"domains\"},\"api_slug\":\"domains\",\"title\":\"Domains\",\"description\":null,\"type\":\"domain\",\"is_multiselect\":false,\"is_unique\":true,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"attribute_id\":\"description\"},\"api_slug\":\"description\",\"title\":\"Description\",\"description\":null,\"type\":\"text\",\"is_multiselect\":false,\"is_unique\":false,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"attribute_id\":\"categories\"},\"api_slug\":\"categories\",\"title\":\"Categories\",\"description\":null,\"type\":\"select\",\"is_multiselect\":true,\"is_unique\":false,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"attribute_id\":\"team_size\"},\"api_slug\":\"team_size\",\"title\":\"Team Size\",\"description\":null,\"type\":\"number\",\"is_multiselect\":false,\"is_unique\":false,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"attribute_id\":\"team\"},\"api_slug\":\"team\",\"title\":\"Team\",\"description\":null,\"type\":\"record-reference\",\"is_multiselect\":true,\"is_unique\":false,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"people\",\"attribute_id\":\"name\"}},\"config\":{}}]}"
+    },
+    {
+      "method": "GET",
+      "path": "/v2/objects/people/attributes?limit=500&offset=0",
+      "authorization": "Bearer dev-loop-attio-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"data\":[{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"people\",\"attribute_id\":\"name\"},\"api_slug\":\"name\",\"title\":\"Name\",\"description\":null,\"type\":\"personal-name\",\"is_multiselect\":false,\"is_unique\":false,\"is_required\":true,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"people\",\"attribute_id\":\"email_addresses\"},\"api_slug\":\"email_addresses\",\"title\":\"Email\",\"description\":null,\"type\":\"email-address\",\"is_multiselect\":false,\"is_unique\":true,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"people\",\"attribute_id\":\"job_title\"},\"api_slug\":\"job_title\",\"title\":\"Job Title\",\"description\":null,\"type\":\"text\",\"is_multiselect\":false,\"is_unique\":false,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"people\",\"attribute_id\":\"parent_object\"},\"api_slug\":\"parent_object\",\"title\":\"Company\",\"description\":null,\"type\":\"record-reference\",\"is_multiselect\":false,\"is_unique\":false,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"attribute_id\":\"name\"}},\"config\":{}}]}"
+    },
+    {
+      "method": "GET",
+      "path": "/v2/objects/deals/attributes?limit=500&offset=0",
+      "authorization": "Bearer dev-loop-attio-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"data\":[{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"deals\",\"attribute_id\":\"name\"},\"api_slug\":\"name\",\"title\":\"Name\",\"description\":null,\"type\":\"text\",\"is_multiselect\":false,\"is_unique\":false,\"is_required\":true,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"deals\",\"attribute_id\":\"stage\"},\"api_slug\":\"stage\",\"title\":\"Stage\",\"description\":null,\"type\":\"status\",\"is_multiselect\":false,\"is_unique\":false,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"deals\",\"attribute_id\":\"value\"},\"api_slug\":\"value\",\"title\":\"Value\",\"description\":null,\"type\":\"number\",\"is_multiselect\":false,\"is_unique\":false,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"deals\",\"attribute_id\":\"associated_company\"},\"api_slug\":\"associated_company\",\"title\":\"Company\",\"description\":null,\"type\":\"record-reference\",\"is_multiselect\":false,\"is_unique\":false,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"attribute_id\":\"name\"}},\"config\":{}}]}"
+    },
+    {
+      "method": "GET",
+      "path": "/v2/objects/funds/attributes?limit=500&offset=0",
+      "authorization": "Bearer dev-loop-attio-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"data\":[{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"funds\",\"attribute_id\":\"name\"},\"api_slug\":\"name\",\"title\":\"Name\",\"description\":null,\"type\":\"text\",\"is_multiselect\":false,\"is_unique\":false,\"is_required\":true,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"funds\",\"attribute_id\":\"vintage\"},\"api_slug\":\"vintage\",\"title\":\"Vintage\",\"description\":null,\"type\":\"number\",\"is_multiselect\":false,\"is_unique\":false,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"funds\",\"attribute_id\":\"gps\"},\"api_slug\":\"gps\",\"title\":\"GPs\",\"description\":null,\"type\":\"record-reference\",\"is_multiselect\":true,\"is_unique\":false,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{\"record_reference\":{\"allowed_object_ids\":[\"people\"]}}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"funds\",\"attribute_id\":\"advisors\"},\"api_slug\":\"advisors\",\"title\":\"Advisors\",\"description\":null,\"type\":\"record-reference\",\"is_multiselect\":true,\"is_unique\":false,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{\"record_reference\":{\"allowed_object_ids\":[\"people\",\"companies\"]}}}]}"
+    },
+    {
       "method": "POST",
       "path": "/v2/objects/companies/records/query",
       "authorization": "Bearer dev-loop-attio-token",
@@ -5526,6 +6056,14 @@
       },
       "status": 200,
       "response": "{\"data\":[{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"record_id\":\"company-northwind\"},\"values\":{\"name\":[{\"value\":\"Northwind Advisory\"}],\"domains\":[{\"domain\":\"northwind.test\"}],\"description\":[{\"value\":\"Advises the fund on structuring.\"}]}}]}"
+    },
+    {
+      "method": "GET",
+      "path": "/v2/objects/companies/attributes?limit=500&offset=0",
+      "authorization": "Bearer dev-loop-attio-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"data\":[{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"attribute_id\":\"name\"},\"api_slug\":\"name\",\"title\":\"Name\",\"description\":null,\"type\":\"text\",\"is_multiselect\":false,\"is_unique\":false,\"is_required\":true,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"attribute_id\":\"domains\"},\"api_slug\":\"domains\",\"title\":\"Domains\",\"description\":null,\"type\":\"domain\",\"is_multiselect\":false,\"is_unique\":true,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"attribute_id\":\"description\"},\"api_slug\":\"description\",\"title\":\"Description\",\"description\":null,\"type\":\"text\",\"is_multiselect\":false,\"is_unique\":false,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"attribute_id\":\"categories\"},\"api_slug\":\"categories\",\"title\":\"Categories\",\"description\":null,\"type\":\"select\",\"is_multiselect\":true,\"is_unique\":false,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"attribute_id\":\"team_size\"},\"api_slug\":\"team_size\",\"title\":\"Team Size\",\"description\":null,\"type\":\"number\",\"is_multiselect\":false,\"is_unique\":false,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"attribute_id\":\"team\"},\"api_slug\":\"team\",\"title\":\"Team\",\"description\":null,\"type\":\"record-reference\",\"is_multiselect\":true,\"is_unique\":false,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"people\",\"attribute_id\":\"name\"}},\"config\":{}}]}"
     },
     {
       "method": "GET",
@@ -5627,6 +6165,14 @@
     },
     {
       "method": "GET",
+      "path": "/v2/objects/people/attributes?limit=500&offset=0",
+      "authorization": "Bearer dev-loop-attio-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"data\":[{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"people\",\"attribute_id\":\"name\"},\"api_slug\":\"name\",\"title\":\"Name\",\"description\":null,\"type\":\"personal-name\",\"is_multiselect\":false,\"is_unique\":false,\"is_required\":true,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"people\",\"attribute_id\":\"email_addresses\"},\"api_slug\":\"email_addresses\",\"title\":\"Email\",\"description\":null,\"type\":\"email-address\",\"is_multiselect\":false,\"is_unique\":true,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"people\",\"attribute_id\":\"job_title\"},\"api_slug\":\"job_title\",\"title\":\"Job Title\",\"description\":null,\"type\":\"text\",\"is_multiselect\":false,\"is_unique\":false,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"people\",\"attribute_id\":\"parent_object\"},\"api_slug\":\"parent_object\",\"title\":\"Company\",\"description\":null,\"type\":\"record-reference\",\"is_multiselect\":false,\"is_unique\":false,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"attribute_id\":\"name\"}},\"config\":{}}]}"
+    },
+    {
+      "method": "GET",
       "path": "/v2/objects/companies/attributes?limit=500&offset=0",
       "authorization": "Bearer dev-loop-attio-token",
       "body": null,
@@ -5713,6 +6259,14 @@
     },
     {
       "method": "GET",
+      "path": "/v2/objects/funds/attributes?limit=500&offset=0",
+      "authorization": "Bearer dev-loop-attio-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"data\":[{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"funds\",\"attribute_id\":\"name\"},\"api_slug\":\"name\",\"title\":\"Name\",\"description\":null,\"type\":\"text\",\"is_multiselect\":false,\"is_unique\":false,\"is_required\":true,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"funds\",\"attribute_id\":\"vintage\"},\"api_slug\":\"vintage\",\"title\":\"Vintage\",\"description\":null,\"type\":\"number\",\"is_multiselect\":false,\"is_unique\":false,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"funds\",\"attribute_id\":\"gps\"},\"api_slug\":\"gps\",\"title\":\"GPs\",\"description\":null,\"type\":\"record-reference\",\"is_multiselect\":true,\"is_unique\":false,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{\"record_reference\":{\"allowed_object_ids\":[\"people\"]}}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"funds\",\"attribute_id\":\"advisors\"},\"api_slug\":\"advisors\",\"title\":\"Advisors\",\"description\":null,\"type\":\"record-reference\",\"is_multiselect\":true,\"is_unique\":false,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{\"record_reference\":{\"allowed_object_ids\":[\"people\",\"companies\"]}}}]}"
+    },
+    {
+      "method": "GET",
       "path": "/v2/objects/people/attributes?limit=500&offset=0",
       "authorization": "Bearer dev-loop-attio-token",
       "body": null,
@@ -5750,6 +6304,14 @@
       "body": null,
       "status": 200,
       "response": "{\"data\":{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"people\",\"record_id\":\"person-bo\"},\"values\":{\"name\":[{\"full_name\":\"Bo Reeves\",\"first_name\":\"Bo\",\"last_name\":\"Reeves\"}],\"email_addresses\":[{\"email_address\":\"bo@example.test\"}],\"job_title\":[{\"value\":\"General Partner\"}]}}}"
+    },
+    {
+      "method": "GET",
+      "path": "/v2/objects/people/attributes?limit=500&offset=0",
+      "authorization": "Bearer dev-loop-attio-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"data\":[{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"people\",\"attribute_id\":\"name\"},\"api_slug\":\"name\",\"title\":\"Name\",\"description\":null,\"type\":\"personal-name\",\"is_multiselect\":false,\"is_unique\":false,\"is_required\":true,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"people\",\"attribute_id\":\"email_addresses\"},\"api_slug\":\"email_addresses\",\"title\":\"Email\",\"description\":null,\"type\":\"email-address\",\"is_multiselect\":false,\"is_unique\":true,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"people\",\"attribute_id\":\"job_title\"},\"api_slug\":\"job_title\",\"title\":\"Job Title\",\"description\":null,\"type\":\"text\",\"is_multiselect\":false,\"is_unique\":false,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"people\",\"attribute_id\":\"parent_object\"},\"api_slug\":\"parent_object\",\"title\":\"Company\",\"description\":null,\"type\":\"record-reference\",\"is_multiselect\":false,\"is_unique\":false,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"attribute_id\":\"name\"}},\"config\":{}}]}"
     },
     {
       "method": "GET",
@@ -5822,6 +6384,14 @@
       "body": null,
       "status": 200,
       "response": "{\"data\":{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"record_id\":\"company-northwind\"},\"values\":{\"name\":[{\"value\":\"Northwind Advisory\"}],\"domains\":[{\"domain\":\"northwind.test\"}],\"description\":[{\"value\":\"Advises the fund on structuring.\"}]}}}"
+    },
+    {
+      "method": "GET",
+      "path": "/v2/objects/people/attributes?limit=500&offset=0",
+      "authorization": "Bearer dev-loop-attio-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"data\":[{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"people\",\"attribute_id\":\"name\"},\"api_slug\":\"name\",\"title\":\"Name\",\"description\":null,\"type\":\"personal-name\",\"is_multiselect\":false,\"is_unique\":false,\"is_required\":true,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"people\",\"attribute_id\":\"email_addresses\"},\"api_slug\":\"email_addresses\",\"title\":\"Email\",\"description\":null,\"type\":\"email-address\",\"is_multiselect\":false,\"is_unique\":true,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"people\",\"attribute_id\":\"job_title\"},\"api_slug\":\"job_title\",\"title\":\"Job Title\",\"description\":null,\"type\":\"text\",\"is_multiselect\":false,\"is_unique\":false,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"people\",\"attribute_id\":\"parent_object\"},\"api_slug\":\"parent_object\",\"title\":\"Company\",\"description\":null,\"type\":\"record-reference\",\"is_multiselect\":false,\"is_unique\":false,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"attribute_id\":\"name\"}},\"config\":{}}]}"
     },
     {
       "method": "GET",
@@ -5999,7 +6569,7 @@
         }
       },
       "status": 200,
-      "response": "{\"data\":{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"record_id\":\"1\"},\"values\":{\"name\":[{\"value\":\"Parity Labs\"}],\"domains\":[{\"domain\":\"paritylabs.example\"}]}}}"
+      "response": "{\"data\":{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"record_id\":\"1\"},\"created_at\":\"2026-11-02T17:22:45.721Z\",\"values\":{\"name\":[{\"value\":\"Parity Labs\",\"active_from\":\"2026-11-02T17:22:45.721Z\"}],\"domains\":[{\"domain\":\"paritylabs.example\",\"active_from\":\"2026-11-02T17:22:45.721Z\"}]}}}"
     },
     {
       "method": "GET",
@@ -6007,7 +6577,7 @@
       "authorization": "Bearer dev-loop-attio-token",
       "body": null,
       "status": 200,
-      "response": "{\"data\":{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"record_id\":\"1\"},\"values\":{\"name\":[{\"value\":\"Parity Labs\"}],\"domains\":[{\"domain\":\"paritylabs.example\"}]}}}"
+      "response": "{\"data\":{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"record_id\":\"1\"},\"created_at\":\"2026-11-02T17:22:45.721Z\",\"values\":{\"name\":[{\"value\":\"Parity Labs\",\"active_from\":\"2026-11-02T17:22:45.721Z\"}],\"domains\":[{\"domain\":\"paritylabs.example\",\"active_from\":\"2026-11-02T17:22:45.721Z\"}]}}}"
     },
     {
       "method": "GET",
@@ -6029,7 +6599,7 @@
         }
       },
       "status": 200,
-      "response": "{\"data\":{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"record_id\":\"1\"},\"values\":{\"name\":[{\"value\":\"Parity Labs\"}],\"domains\":[{\"domain\":\"paritylabs.example\"}],\"description\":[{\"value\":\"Made by recorded parity\"}]}}}"
+      "response": "{\"data\":{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"record_id\":\"1\"},\"created_at\":\"2026-11-02T17:22:45.721Z\",\"values\":{\"name\":[{\"value\":\"Parity Labs\",\"active_from\":\"2026-11-02T17:22:45.721Z\"}],\"domains\":[{\"domain\":\"paritylabs.example\",\"active_from\":\"2026-11-02T17:22:45.721Z\"}],\"description\":[{\"value\":\"Made by recorded parity\",\"active_from\":\"2026-11-02T17:22:45.725Z\"}]}}}"
     },
     {
       "method": "GET",
@@ -6070,7 +6640,7 @@
         }
       },
       "status": 200,
-      "response": "{\"data\":{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"people\",\"record_id\":\"1\"},\"values\":{\"name\":[{\"value\":\"Paula Parity\"}],\"email_addresses\":[{\"email_address\":\"paula@paritylabs.example\"}]}}}"
+      "response": "{\"data\":{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"people\",\"record_id\":\"1\"},\"created_at\":\"2026-11-02T17:22:45.730Z\",\"values\":{\"name\":[{\"value\":\"Paula Parity\",\"active_from\":\"2026-11-02T17:22:45.730Z\"}],\"email_addresses\":[{\"email_address\":\"paula@paritylabs.example\",\"active_from\":\"2026-11-02T17:22:45.730Z\"}]}}}"
     },
     {
       "method": "POST",
@@ -6094,7 +6664,7 @@
       "authorization": "Bearer dev-loop-attio-token",
       "body": null,
       "status": 200,
-      "response": "{\"data\":{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"people\",\"record_id\":\"1\"},\"values\":{\"name\":[{\"value\":\"Paula Parity\"}],\"email_addresses\":[{\"email_address\":\"paula@paritylabs.example\"}]}}}"
+      "response": "{\"data\":{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"people\",\"record_id\":\"1\"},\"created_at\":\"2026-11-02T17:22:45.730Z\",\"values\":{\"name\":[{\"value\":\"Paula Parity\",\"active_from\":\"2026-11-02T17:22:45.730Z\"}],\"email_addresses\":[{\"email_address\":\"paula@paritylabs.example\",\"active_from\":\"2026-11-02T17:22:45.730Z\"}]}}}"
     },
     {
       "method": "DELETE",
@@ -6106,11 +6676,43 @@
     },
     {
       "method": "GET",
+      "path": "/v2/objects/companies/attributes?limit=500&offset=0",
+      "authorization": "Bearer dev-loop-attio-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"data\":[{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"attribute_id\":\"name\"},\"api_slug\":\"name\",\"title\":\"Name\",\"description\":null,\"type\":\"text\",\"is_multiselect\":false,\"is_unique\":false,\"is_required\":true,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"attribute_id\":\"domains\"},\"api_slug\":\"domains\",\"title\":\"Domains\",\"description\":null,\"type\":\"domain\",\"is_multiselect\":false,\"is_unique\":true,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"attribute_id\":\"description\"},\"api_slug\":\"description\",\"title\":\"Description\",\"description\":null,\"type\":\"text\",\"is_multiselect\":false,\"is_unique\":false,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"attribute_id\":\"categories\"},\"api_slug\":\"categories\",\"title\":\"Categories\",\"description\":null,\"type\":\"select\",\"is_multiselect\":true,\"is_unique\":false,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"attribute_id\":\"team_size\"},\"api_slug\":\"team_size\",\"title\":\"Team Size\",\"description\":null,\"type\":\"number\",\"is_multiselect\":false,\"is_unique\":false,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"attribute_id\":\"team\"},\"api_slug\":\"team\",\"title\":\"Team\",\"description\":null,\"type\":\"record-reference\",\"is_multiselect\":true,\"is_unique\":false,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"people\",\"attribute_id\":\"name\"}},\"config\":{}}]}"
+    },
+    {
+      "method": "GET",
+      "path": "/v2/objects/companies/records/company-northwind",
+      "authorization": "Bearer dev-loop-attio-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"data\":{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"record_id\":\"company-northwind\"},\"values\":{\"name\":[{\"value\":\"Northwind Advisory\"}],\"domains\":[{\"domain\":\"northwind.test\"}],\"description\":[{\"value\":\"Advises the fund on structuring.\"}]}}}"
+    },
+    {
+      "method": "GET",
       "path": "/v2/workspace_members/1",
       "authorization": "Bearer dev-loop-attio-token",
       "body": null,
       "status": 200,
       "response": "{\"data\":{\"id\":{\"workspace_id\":\"test\",\"workspace_member_id\":\"1\"},\"first_name\":\"Test\",\"last_name\":\"User\",\"email_address\":\"test@example.com\",\"avatar_url\":null}}"
+    },
+    {
+      "method": "GET",
+      "path": "/v2/objects/companies/attributes?limit=500&offset=0",
+      "authorization": "Bearer dev-loop-attio-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"data\":[{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"attribute_id\":\"name\"},\"api_slug\":\"name\",\"title\":\"Name\",\"description\":null,\"type\":\"text\",\"is_multiselect\":false,\"is_unique\":false,\"is_required\":true,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"attribute_id\":\"domains\"},\"api_slug\":\"domains\",\"title\":\"Domains\",\"description\":null,\"type\":\"domain\",\"is_multiselect\":false,\"is_unique\":true,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"attribute_id\":\"description\"},\"api_slug\":\"description\",\"title\":\"Description\",\"description\":null,\"type\":\"text\",\"is_multiselect\":false,\"is_unique\":false,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"attribute_id\":\"categories\"},\"api_slug\":\"categories\",\"title\":\"Categories\",\"description\":null,\"type\":\"select\",\"is_multiselect\":true,\"is_unique\":false,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"attribute_id\":\"team_size\"},\"api_slug\":\"team_size\",\"title\":\"Team Size\",\"description\":null,\"type\":\"number\",\"is_multiselect\":false,\"is_unique\":false,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":null,\"config\":{}},{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"attribute_id\":\"team\"},\"api_slug\":\"team\",\"title\":\"Team\",\"description\":null,\"type\":\"record-reference\",\"is_multiselect\":true,\"is_unique\":false,\"is_required\":false,\"is_writable\":true,\"is_system_attribute\":false,\"relationship\":{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"people\",\"attribute_id\":\"name\"}},\"config\":{}}]}"
+    },
+    {
+      "method": "GET",
+      "path": "/v2/objects/companies/records/company-northwind",
+      "authorization": "Bearer dev-loop-attio-token",
+      "body": null,
+      "status": 200,
+      "response": "{\"data\":{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"record_id\":\"company-northwind\"},\"values\":{\"name\":[{\"value\":\"Northwind Advisory\"}],\"domains\":[{\"domain\":\"northwind.test\"}],\"description\":[{\"value\":\"Advises the fund on structuring.\"}]}}}"
     },
     {
       "method": "POST",
@@ -6127,23 +6729,6 @@
             {
               "event_type": "record.updated",
               "filter": null
-            }
-          ]
-        }
-      },
-      "status": 200,
-      "response": "{\"data\":{\"id\":{\"workspace_id\":\"test\",\"webhook_id\":\"fake\"},\"status\":\"active\",\"secret\":\"fake-secret\"}}"
-    },
-    {
-      "method": "PATCH",
-      "path": "/v2/webhooks/fake",
-      "authorization": "Bearer dev-loop-attio-token",
-      "body": {
-        "data": {
-          "subscriptions": [
-            {
-              "event_type": "record.created",
-              "filter": null
             },
             {
               "event_type": "record.deleted",
@@ -6153,11 +6738,11 @@
         }
       },
       "status": 200,
-      "response": "{\"data\":{\"id\":{\"workspace_id\":\"test\",\"webhook_id\":\"fake\"},\"status\":\"active\",\"subscriptions\":[{\"event_type\":\"record.created\",\"filter\":null},{\"event_type\":\"record.deleted\",\"filter\":null}]}}"
+      "response": "{\"data\":{\"id\":{\"workspace_id\":\"test\",\"webhook_id\":\"fake-webhook-1\"},\"target_url\":\"https://example.test/api/public/webhook-sync/attio/sub-1\",\"subscriptions\":[{\"event_type\":\"record.created\",\"filter\":null},{\"event_type\":\"record.updated\",\"filter\":null},{\"event_type\":\"record.deleted\",\"filter\":null}],\"status\":\"active\",\"secret\":\"54b632b39b847ff887b750b472b4b9dee3eeba59bda7b2cf\",\"created_at\":\"2026-11-02T17:22:45.743Z\"}}"
     },
     {
       "method": "DELETE",
-      "path": "/v2/webhooks/fake",
+      "path": "/v2/webhooks/fake-webhook-1",
       "authorization": "Bearer dev-loop-attio-token",
       "body": null,
       "status": 200,
