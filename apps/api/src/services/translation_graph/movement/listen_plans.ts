@@ -3,7 +3,6 @@
 // checking the program again (inbound/listen_door.ts), and the edge poll
 // worker knows which listens it polls for (poll_source/worker.ts).
 
-import { checkAnswerInRust } from 'movement-engine/public/movement-engine';
 import {
   fieldIdsOf,
   landingNode,
@@ -14,6 +13,7 @@ import {
 } from 'movement-engine/public/inbound';
 
 import { memberPlans, type ListenPlan } from 'engine-contracts';
+import { checkAnswerInRust } from 'movement-lang';
 import type { CatalogSnapshot, EdgeListening, InstanceSchema, LanguageVersion, Program } from 'movement-lang';
 import type { ListenConfig } from '../../inbound/listen_door';
 import { keylessInboxListen } from '../adapters/email/listen_keys';
@@ -73,7 +73,9 @@ export function plannedListensOfSource(input: {
   snapshot: CatalogSnapshot;
   pin: LanguageVersion;
 }): { listens: ListenConfig[]; refused: string[] } {
-  const answer = checkAnswerInRust({ source: input.source, catalog: input.snapshot, languageVersion: input.pin });
+  // Not refused on the program's errors: a save whose author consented to
+  // them ships, and its listens fire (and its runs fail) as written.
+  const answer = checkAnswerInRust(input.source, input.snapshot, { languageVersion: input.pin });
   const planned = plannedListensOf({ file: input.file, program: input.program, plans: listenPlansOf(answer) });
   const listens: ListenConfig[] = [];
   const refused: string[] = [];

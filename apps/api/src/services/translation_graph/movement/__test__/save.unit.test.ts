@@ -149,6 +149,10 @@ jest.mock('../../../../lib/kysely', () => {
 jest.mock('../catalog', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { mockCatalog, mockCatalogSnapshot } = require('movement-lang');
+  // The run host's manual and cron units, as a team's catalog describes them.
+  const { unitInstanceSchema } = jest.requireActual('../../adapters/unit_surface');
+  const { MANUAL_ADAPTER_TYPE, MANUAL_SURFACE } = jest.requireActual('../../adapters/manual');
+  const { CRON_ADAPTER_TYPE, CRON_SURFACE } = jest.requireActual('../../adapters/cron');
   const LIB_SOURCE = [
     'export node Lead {',
     '  name: <text>',
@@ -172,6 +176,8 @@ jest.mock('../catalog', () => {
           writableRoots: {},
         },
       },
+      manual: { constructionArgs: [], schema: unitInstanceSchema(MANUAL_ADAPTER_TYPE, MANUAL_SURFACE) },
+      cron: { constructionArgs: [], schema: unitInstanceSchema(CRON_ADAPTER_TYPE, CRON_SURFACE) },
     },
     plugins: {
       fetch_pages: { args: ['urls'], output: { kind: 'value', type: 'text' } },
@@ -423,7 +429,7 @@ function intake(m: <inbox-[:message]->>) {
 }
 
 listen as "Alice's lane" to inbox-[e:Emails WHERE e.Key == "alice"]-> fire intake
-listen as "Bob's lane"   to inbox { key: "bob"   } fire intake
+listen as "Bob's lane" to inbox-[e:Emails WHERE e.Key == "bob"]-> fire intake
 `;
 
 beforeEach(() => {
@@ -451,7 +457,7 @@ describe('saveMovement — listener derivation', () => {
     expect(result.listeners).toHaveLength(1);
     expect(result.listeners[0]).toMatchObject({
       kind: 'email',
-      configKey: 'deals',
+      configKey: 'listen:intake:intake:4edc7284',
       inboundAddress: 'inbox+deals@example.com',
       movementName: 'intake',
       runMode: 'live',
@@ -475,7 +481,7 @@ describe('saveMovement — listener derivation', () => {
       name: 'movement/intake/intake',
       fired_movement_name: 'intake',
       kind: 'email',
-      config: { key: 'deals' },
+      config: { listen: expect.objectContaining({ pipeline: 'listen:intake:intake:4edc7284' }) },
       movement_id: row.id,
       run_mode: 'live',
     });
@@ -508,7 +514,7 @@ describe('saveMovement — listener derivation', () => {
     expect(detail?.listeners[0]).toMatchObject({
       triggerId: saved.listeners[0].triggerId,
       kind: 'email',
-      configKey: 'deals',
+      configKey: 'listen:intake:intake:4edc7284',
       inboundAddress: 'inbox+deals@example.com',
       movementName: 'intake',
       runMode: 'live',
@@ -523,8 +529,8 @@ describe('saveMovement — listener derivation', () => {
 
     expect(result.listeners).toHaveLength(2);
     expect(result.listeners.map((l) => [l.configKey, l.movementName])).toEqual([
-      ['deals', 'intake'],
-      ['intros', 'digest'],
+      ['listen:intake:intake:4edc7284', 'intake'],
+      ['listen:intake:digest:568e08eb', 'digest'],
     ]);
     expect(triggerRows().map((t) => t.name).sort()).toEqual([
       'movement/intake/digest',
@@ -571,16 +577,17 @@ describe('saveMovement — listener derivation', () => {
     const first = await saveMovement({ teamId: TEAM, source: SOURCE_V1 });
     if (!first.ok) throw new Error('first save should be live');
 
-    const rekeyed = SOURCE_V1.replace('key: "deals"', 'key: "renamed-deals"');
+    const rekeyed = SOURCE_V1.replace('e.Key == "deals"', 'e.Key == "renamed-deals"');
     const second = await saveMovement({ teamId: TEAM, id: first.movementId, source: rekeyed });
     expect(second.ok).toBe(true);
     if (!second.ok) return;
 
     expect(second.listeners[0].triggerId).toBe(first.listeners[0].triggerId);
     expect(second.listeners[0].reused).toBe(true);
-    expect(second.listeners[0].configKey).toBe('renamed-deals');
+    expect(second.listeners[0].configKey).toBe('listen:intake:intake:1b467934');
+    expect(second.listeners[0].inboundAddress).toBe('inbox+renamed-deals@example.com');
     const [trigger] = triggerRows();
-    expect(trigger.config).toEqual({ key: 'renamed-deals' });
+    expect(trigger.config).toEqual({ listen: expect.objectContaining({ pipeline: 'listen:intake:intake:1b467934' }) });
   });
 
   it('removed listens retire their rows', async () => {
@@ -597,7 +604,7 @@ describe('saveMovement — listener derivation', () => {
     if (!second.ok) return;
 
     expect(second.listeners).toHaveLength(1);
-    expect(second.listeners[0].configKey).toBe('deals');
+    expect(second.listeners[0].configKey).toBe('listen:intake:intake:4edc7284');
     expect(second.listeners[0].triggerId).toBe(first.listeners[0].triggerId);
     expect(triggerRows()).toHaveLength(1);
   });
@@ -678,7 +685,7 @@ describe('saveMovement — listener derivation', () => {
     triggerRows()[0].run_mode = 'off';
 
     // Re-save with a config change — the row updates in place…
-    const rekeyed = SOURCE_V1.replace('key: "deals"', 'key: "other"');
+    const rekeyed = SOURCE_V1.replace('e.Key == "deals"', 'e.Key == "other"');
     const second = await saveMovement({ teamId: TEAM, id: first.movementId, source: rekeyed });
     expect(second.ok).toBe(true);
     if (!second.ok) return;
@@ -709,8 +716,8 @@ describe('saveMovement — listener derivation', () => {
     expect(triggerRows()).toHaveLength(1);
   });
 
-  it('a bare manual listen on the installed language ships and derives one manual listener', async () => {
-    const source = 'function echo(run: <manual-[:Invocation]->>) {\n  return 1\n}\nlisten to manual fire echo\n';
+  it('a manual listen on the installed language ships and derives one manual listener', async () => {
+    const source = 'function echo(run: <manual-[:Invocations]->>) {\n  return 1\n}\nlisten to manual-[:Invocations]-> fire echo\n';
     const result = await saveMovement({ teamId: TEAM, source });
     if (!result.ok) throw new Error(`save failed: ${(result.errors ?? []).join('; ')}`);
     expect(result.validity.status).toBe('valid');
@@ -852,19 +859,22 @@ listen to inbox-[e:Emails WHERE e.Key == "deals"]-> fire intake
 // (so it can never outrun the user's `first_mcp_call`, stamped earlier in
 // the same request by the auth middleware); the team's counts ANY route,
 // unconditionally, so a web-UI save still lights up the account.
+// Any listen's last edge may be polled (a schedule's `Ticks` is), so every
+// new, changed or retired listener asks for the poll reconcile now.
 describe('saveMovement — a shipped schedule is armed promptly', () => {
   const cronSource = (schedule: string) =>
-    `function tick(t: <cron-[:Tick]->>) {\n  return 1\n}\nlisten to cron { schedule: "${schedule}" } fire tick\n`;
+    `function tick(t: <cron-[:Ticks]->>) {\n  return 1\n}\nlisten to cron-[t:Ticks WHERE t.Schedule == "${schedule}"]-> fire tick\n`;
   const reconcileCalls = () => workStore.enqueueWork.mock.calls.map(([input]) => input);
+  const ASKED = [{ kind: 'poll_reconcile', key: 'poll_reconcile:shipped' }];
 
   beforeEach(() => {
     registryMock.isPollSource.mockImplementation(() => false);
   });
 
-  it('a new cron listener asks for a cron reconcile due now', async () => {
+  it('a new cron listener asks for a poll reconcile due now', async () => {
     const result = await saveMovement({ teamId: TEAM, source: cronSource('0 9 * * *') });
     expect(result.ok).toBe(true);
-    expect(reconcileCalls()).toEqual([{ kind: 'cron_reconcile', key: 'cron_reconcile:shipped' }]);
+    expect(reconcileCalls()).toEqual(ASKED);
   });
 
   it('a changed schedule asks again; an unchanged re-save does not', async () => {
@@ -876,7 +886,7 @@ describe('saveMovement — a shipped schedule is armed promptly', () => {
     expect(reconcileCalls()).toEqual([]);
 
     await saveMovement({ teamId: TEAM, id: first.movementId, source: cronSource('0 10 * * *') });
-    expect(reconcileCalls()).toEqual([{ kind: 'cron_reconcile', key: 'cron_reconcile:shipped' }]);
+    expect(reconcileCalls()).toEqual(ASKED);
   });
 
   it('removing the cron listener asks too, so its work row goes', async () => {
@@ -885,18 +895,16 @@ describe('saveMovement — a shipped schedule is armed promptly', () => {
     workStore.enqueueWork.mockClear();
 
     await saveMovement({ teamId: TEAM, id: first.movementId, source: NO_LISTEN });
-    expect(reconcileCalls()).toEqual([{ kind: 'cron_reconcile', key: 'cron_reconcile:shipped' }]);
+    expect(reconcileCalls()).toEqual(ASKED);
   });
 
-  it('a new poll listener asks for a poll reconcile due now', async () => {
-    registryMock.isPollSource.mockImplementation((slug: string) => slug === 'email');
+  it('a new listener on any other edge asks too', async () => {
     const result = await saveMovement({ teamId: TEAM, source: SOURCE_V1 });
     expect(result.ok).toBe(true);
-    expect(reconcileCalls()).toEqual([{ kind: 'poll_reconcile', key: 'poll_reconcile:shipped' }]);
+    expect(reconcileCalls()).toEqual(ASKED);
   });
 
-  it('a movement without schedules asks for nothing', async () => {
-    await saveMovement({ teamId: TEAM, source: SOURCE_V1 });
+  it('a file without listens asks for nothing', async () => {
     await saveMovement({ teamId: TEAM, source: NO_LISTEN });
     expect(reconcileCalls()).toEqual([]);
   });
@@ -965,7 +973,7 @@ describe('listMovements / deleteMovement', () => {
       kind: 'email',
     });
     expect(list[0].listeners).toHaveLength(2);
-    expect(list[0].listeners.map((l) => l.configKey).sort()).toEqual(['deals', 'intros']);
+    expect(list[0].listeners.map((l) => l.configKey).sort()).toEqual(['listen:intake:digest:568e08eb', 'listen:intake:intake:4edc7284']);
 
     const deleted = await deleteMovement({ teamId: TEAM, id: saved.movementId });
     expect(deleted).toBe(true);
@@ -1334,7 +1342,15 @@ describe('saveMovement — expectedRevision (agent-facing optimistic concurrency
 function makeAttioTeamCatalog() {
   const spec = {
     adapters: {
-      attio: { constructionArgs: [{ name: 'credentials', kind: 'credential' as const, required: true }]},
+      attio: {
+        constructionArgs: [{ name: 'credentials', kind: 'credential' as const, required: true }],
+        schema: {
+          positions: { Company: { properties: { Name: 'text' }, edges: {} } },
+          // Each company created or changed arrives on `Companies`.
+          collections: { Companies: { target: 'Company', readable: false, listenable: true } },
+          writableRoots: {},
+        },
+      },
     },
     credentials: {
       'Dev-loop Attio': { adapter: 'attio' },
@@ -1360,11 +1376,11 @@ const DIRECT_BACKTICK_SOURCE = [
   '',
   'crm = connect attio using `Dev-loop Attio`',
   '',
-  'function intake(m: <crm-[:company]->>) {',
+  'function intake(m: <crm-[:Companies]->>) {',
   '  # process',
   '}',
   '',
-  'listen to crm {} fire intake',
+  'listen to crm-[:Companies]-> fire intake',
 ].join('\n');
 
 // Source using the ALIASED form — the existing working path.
@@ -1374,11 +1390,11 @@ const ALIASED_SOURCE = [
   '',
   'crm = connect attio using crm_cred',
   '',
-  'function intake(m: <crm-[:company]->>) {',
+  'function intake(m: <crm-[:Companies]->>) {',
   '  # process',
   '}',
   '',
-  'listen to crm {} fire intake',
+  'listen to crm-[:Companies]-> fire intake',
 ].join('\n');
 
 describe('saveMovement — backtick credential args (provision-path)', () => {
@@ -1441,20 +1457,18 @@ describe('the language version pin', () => {
   it('a re-save keeps an older pin and validates under it', async () => {
     const first = await saveMovement({ teamId: TEAM, source: SOURCE_V1 });
     if (!first.ok) throw new Error('first save failed');
-    // A movement saved before the current version existed.
-    db.__tables.movement[0].language_version = '1';
+    // A movement saved on an earlier release this one reads (its compatibility key).
+    db.__tables.movement[0].language_version = '0.13.0';
 
-    // The edit is written as version 1 reads it (the old spelling).
-    const sourceV1Spelling = SOURCE_V2.replace('inbox = connect email', 'inbox = email()').replace('function intake', 'movement intake');
-    const again = await saveMovement({ teamId: TEAM, id: first.movementId, source: sourceV1Spelling });
+    const again = await saveMovement({ teamId: TEAM, id: first.movementId, source: SOURCE_V2 });
     expect(again.ok).toBe(true);
     const [row] = db.__tables.movement;
-    expect(row.source).toBe(sourceV1Spelling);
-    expect(row.language_version).toBe('1');
-    expect(row.validity_checked_against).toBe('1');
+    expect(row.source).toBe(SOURCE_V2);
+    expect(row.language_version).toBe('0.13.0');
+    expect(row.validity_checked_against).toBe('0.13.0');
 
     const detail = await getMovement({ teamId: TEAM, id: first.movementId });
-    expect(detail).toMatchObject({ languageVersion: '1', validityCheckedAgainst: '1' });
+    expect(detail).toMatchObject({ languageVersion: '0.13.0', validityCheckedAgainst: '0.13.0' });
   });
 
   it('a movement pinned to a version this release does not support is refused, not saved as current', async () => {
