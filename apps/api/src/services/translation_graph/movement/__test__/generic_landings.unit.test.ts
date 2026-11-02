@@ -12,8 +12,8 @@
 // movement-lang's own jest is broken locally, so the language layer runs through
 // apps/api's ts-jest (per repo convention).
 
-import { fromCatalogSnapshot, type CatalogSnapshot, type InstanceSchema, LANGUAGE_VERSION } from 'movement-lang';
-import { checkProgram, genericLandingKey, scanInstanceChains } from 'legacy-lang';
+import { checkSourceInRust, type CatalogSnapshot, type InstanceSchema, LANGUAGE_VERSION } from 'movement-lang';
+import { genericLandingKey, scanInstanceChains } from 'legacy-lang';
 import { parseProgram } from 'legacy-lang';
 
 import type { TeamId } from '../../../../generated/kysely/core/Team';
@@ -67,10 +67,7 @@ async function codesFor(body: string): Promise<string[]> {
     credentials: {},
     plugins: {},
   };
-  return checkProgram(
-    parseProgram(`${PRELUDE}\nfunction m() {\n${body}\n}`),
-    fromCatalogSnapshot(snapshot),
-  )
+  return checkSourceInRust(`${PRELUDE}\nfunction m() {\n${body}\n}`, snapshot, { languageVersion: LANGUAGE_VERSION })
     .filter((d) => (d.severity ?? 'error') === 'error')
     .map((d) => d.code);
 }
@@ -84,10 +81,7 @@ async function allCodesFor(body: string): Promise<Array<{ code: string; severity
     credentials: {},
     plugins: {},
   };
-  return checkProgram(
-    parseProgram(`${PRELUDE}\nfunction m() {\n${body}\n}`),
-    fromCatalogSnapshot(snapshot),
-  ).map((d) => ({ code: d.code, severity: d.severity ?? 'error' }));
+  return checkSourceInRust(`${PRELUDE}\nfunction m() {\n${body}\n}`, snapshot, { languageVersion: LANGUAGE_VERSION }).map((d) => ({ code: d.code, severity: d.severity ?? 'error' }));
 }
 
 const CHOOSE = `  c = write qa-[:Choose]-> { Prompt: "Which round?", Options: ["Seed", "Series A"] }`;
@@ -246,7 +240,7 @@ describe('the host grafts the Response type an ask\'s own literals fix', () => {
 
 describe('the checker reads the graft back off the awaited Response', () => {
   it("a Choose ask's answer is its own options — a member is clean, a typo is the enum error", async () => {
-    const AWAIT = `${CHOOSE}\n  r = await first(c-[:Response]->)`;
+    const AWAIT = `${CHOOSE}\n  r = await c-[:Response]->`;
     expect(await codesFor(`${AWAIT}\n  if (r.Answer) { }`)).toEqual([]);
     expect(await codesFor(`${AWAIT}\n  if (r.Answer == "Seed") { }`)).not.toContain(
       'MOV_ENUM_UNKNOWN_VALUE',
@@ -258,7 +252,7 @@ describe('the checker reads the graft back off the awaited Response', () => {
 
   it('a Provide<number> answer really is a number (comparing it to text is the category error)', async () => {
     const AWAIT =
-      '  p = write qa-[:Provide]-> { Prompt: "How much?", `Answer Type`: "number" }\n  r = await first(p-[:Response]->)';
+      '  p = write qa-[:Provide]-> { Prompt: "How much?", `Answer Type`: "number" }\n  r = await p-[:Response]->';
     expect(await codesFor(`${AWAIT}\n  if (r.Answer) { }`)).toEqual([]);
     expect(await codesFor(`${AWAIT}\n  if (r.Answer == "a lot") { }`)).toContain(
       'MOV_COMPARE_TYPE_MISMATCH',
@@ -273,7 +267,7 @@ describe('the checker reads the graft back off the awaited Response', () => {
   });
 
   it("a Form's declared fields are read like any record's fields — backticked when spaced", async () => {
-    const AWAIT = `${FORM}\n  r = await first(q-[:Response]->)`;
+    const AWAIT = `${FORM}\n  r = await q-[:Response]->`;
     expect(await codesFor(`${AWAIT}\n  if (r.Budget) { }`)).toEqual([]);
     expect(await codesFor(`${AWAIT}\n  if (r.Budget == "50k") { }`)).toEqual([]);
     // The opaque object stays readable for compat — one landing, both surfaces.
@@ -282,13 +276,13 @@ describe('the checker reads the graft back off the awaited Response', () => {
     expect(await codesFor(`${AWAIT}\n  if (r.Answer) { }`)).not.toContain('MOV_UNKNOWN_PROPERTY');
     expect(await codesFor(`${AWAIT}\n  if (r.Deadline) { }`)).toContain('MOV_UNKNOWN_PROPERTY');
     const SPACED =
-      '  q = write qa-[:Form]-> { Prompt: "Details?", Fields: ["Deal Size"] }\n  r = await first(q-[:Response]->)';
+      '  q = write qa-[:Form]-> { Prompt: "Details?", Fields: ["Deal Size"] }\n  r = await q-[:Response]->';
     expect(await codesFor(`${SPACED}\n  if (r.\`Deal Size\`) { }`)).toEqual([]);
   });
 
   it('NON-literal Fields leave the answer opaque json — the field names are still unknown here', async () => {
     const codes = await codesFor(
-      `  f = "Budget"\n  q = write qa-[:Form]-> { Prompt: "Details?", Fields: [f] }\n  r = await first(q-[:Response]->)\n  if (r.Budget) { }`,
+      `  f = "Budget"\n  q = write qa-[:Form]-> { Prompt: "Details?", Fields: [f] }\n  r = await q-[:Response]->\n  if (r.Budget) { }`,
     );
     expect(codes).toContain('MOV_UNKNOWN_PROPERTY');
   });
@@ -313,7 +307,7 @@ describe('the checker reads the graft back off the awaited Response', () => {
 
   it('NON-LITERAL Options stay the base text answer, and say nothing about it', async () => {
     const codes = await codesFor(
-      `  o = "Seed"\n  c = write qa-[:Choose]-> { Prompt: "Which?", Options: [o] }\n  r = await first(c-[:Response]->)\n  if (r.Answer == "anything") { }`,
+      `  o = "Seed"\n  c = write qa-[:Choose]-> { Prompt: "Which?", Options: [o] }\n  r = await c-[:Response]->\n  if (r.Answer == "anything") { }`,
     );
     expect(codes).not.toContain('MOV_ENUM_UNKNOWN_VALUE');
     expect(codes).not.toContain('MOV_WRITE_GENERIC_NOT_LITERAL');

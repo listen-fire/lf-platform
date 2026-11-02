@@ -17,9 +17,7 @@
 // movement-lang's own jest is broken locally, so the language layer is exercised
 // through apps/api's ts-jest (per repo convention).
 
-import { fromCatalogSnapshot, type CatalogSnapshot, type InstanceSchema } from 'movement-lang';
-import { checkProgram } from 'legacy-lang';
-import { parseProgram } from 'legacy-lang';
+import { LANGUAGE_VERSION, checkSourceInRust, type CatalogSnapshot, type InstanceSchema } from 'movement-lang';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { SchemaTypeDescriptor } from 'engine-contracts/catalog';
@@ -55,15 +53,12 @@ const PRELUDE = `import { questions } from adapters\nqa = connect questions\n`;
 
 async function errorsFor(body: string): Promise<string[]> {
   const { snapshot } = await askSnapshot();
-  return checkProgram(
-    parseProgram(`${PRELUDE}\nfunction m() {\n${body}\n}`),
-    fromCatalogSnapshot(snapshot),
-  )
+  return checkSourceInRust(`${PRELUDE}\nfunction m() {\n${body}\n}`, snapshot, { languageVersion: LANGUAGE_VERSION })
     .filter((d) => (d.severity ?? 'error') === 'error')
     .map((d) => d.code);
 }
 
-const AWAIT = `  a = write qa-[:Check]-> { Prompt: "Ship it?" }\n  r = await first(a-[:Response]->)`;
+const AWAIT = `  a = write qa-[:Check]-> { Prompt: "Ship it?" }\n  r = await a-[:Response]->`;
 
 describe('the awaited ask landing is checked like any position', () => {
   // Language 0.12 (rc.8 catalog) adds description and fieldDocs to a projected position; these assert the properties and edges only.
@@ -107,24 +102,22 @@ describe('the awaited ask landing is checked like any position', () => {
 
   it('a Select ask lands Answer as list<text>; reading it is clean', async () => {
     const codes = await errorsFor(
-      `  s = write qa-[:Select]-> { Prompt: "Pick", Options: ["a", "b"] }\n  r = await first(s-[:Response]->)\n  x = r.Answer`,
+      `  s = write qa-[:Select]-> { Prompt: "Pick", Options: ["a", "b"] }\n  r = await s-[:Response]->\n  x = r.Answer`,
     );
     expect(codes).toEqual([]);
   });
 
   it('a Draft ask lands Answer as json — comparing it is MOV_JSON_OPAQUE (json is opaque, not a lie of scalar)', async () => {
     const codes = await errorsFor(
-      `  d = write qa-[:Draft]-> { Prompt: "Draft the memo" }\n  r = await FIRST(d-[:Response]->)\n  if r.Answer == "x" { }`,
+      `  d = write qa-[:Draft]-> { Prompt: "Draft the memo" }\n  r = await d-[:Response]->\n  if r.Answer == "x" { }`,
     );
     expect(codes).toContain('MOV_JSON_OPAQUE');
   });
 
-  it('resolvesEmpty still wraps the awaited scalar maybe-absent (unchanged by the per-family split)', async () => {
-    // The resolvesEmpty/awaitable flags on the Response edge are untouched by
-    // this chunk's per-family retarget — pin that they're still there.
+  it('the Response edge is listenable, landing each family on its own response type', async () => {
     const d = await new AskAdapter(platformAskRecords('team-1' as TeamId)).describe('Check');
     const response = d!.references.find((r) => r.name === 'Response');
-    expect(response).toMatchObject({ resolvesEmpty: true, awaitable: true, targetTypeId: 'Check Response' });
+    expect(response).toMatchObject({ listenable: true, targetTypeId: 'Check Response' });
   });
 });
 

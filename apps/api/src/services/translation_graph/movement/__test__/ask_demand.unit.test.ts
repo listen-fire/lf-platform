@@ -15,8 +15,8 @@
 // never seen an `await` at all — so EVERY ask family's base answer read
 // `MOV_UNDESCRIBED_POSITION`.
 
-import { fromCatalogSnapshot, type CatalogSnapshot, type InstanceSchema, LANGUAGE_VERSION } from 'movement-lang';
-import { checkProgram, scanInstanceChains } from 'legacy-lang';
+import { checkSourceInRust, type CatalogSnapshot, type InstanceSchema, LANGUAGE_VERSION } from 'movement-lang';
+import { scanInstanceChains } from 'legacy-lang';
 import { parseProgram } from 'legacy-lang';
 
 import type { TeamId } from '../../../../generated/kysely/core/Team';
@@ -90,14 +90,14 @@ async function codesFor(body: string): Promise<string[]> {
     credentials: {},
     plugins: {},
   };
-  return checkProgram(parseProgram(programFor(body)), fromCatalogSnapshot(snapshot))
+  return checkSourceInRust(programFor(body), snapshot, { languageVersion: LANGUAGE_VERSION })
     .filter((d) => (d.severity ?? 'error') === 'error')
     .map((d) => d.code);
 }
 
 describe('an awaited landing is demanded because the program AWAITS it', () => {
   it("a bare Check's answer is a boolean the checker can read and test", async () => {
-    const CHECK = '  a = write qa-[:Check]-> { Prompt: "Ship it?" }\n  cr = await first(a-[:Response]->)';
+    const CHECK = '  a = write qa-[:Check]-> { Prompt: "Ship it?" }\n  cr = await a-[:Response]->';
     expect(await codesFor(`${CHECK}\n  if (cr.Answer) { }`)).toEqual([]);
     // The proof it is TYPED, not merely tolerated: the base landing is a
     // boolean, so arithmetic on it is the category error — never the "nobody
@@ -119,7 +119,7 @@ describe('an awaited landing is demanded because the program AWAITS it', () => {
     };
     for (const [family, body] of Object.entries(bodies)) {
       const codes = await codesFor(
-        `  a = write qa-[:${family}]-> ${body}\n  r = await first(a-[:Response]->)\n  x = r.Answer`,
+        `  a = write qa-[:${family}]-> ${body}\n  r = await a-[:Response]->\n  x = r.Answer`,
       );
       expect({ family, codes }).toEqual({ family, codes: [] });
     }
@@ -128,7 +128,7 @@ describe('an awaited landing is demanded because the program AWAITS it', () => {
   it('a dynamic-options Choose lands the BASE text answer — undecidable, not undescribed', async () => {
     const codes = await codesFor(
       '  o = "Seed"\n  c = write qa-[:Choose]-> { Prompt: "Which?", Options: [o] }\n' +
-        '  r = await first(c-[:Response]->)\n  answer = coalesce(r.Answer, "")\n' +
+        '  r = await c-[:Response]->\n  answer = coalesce(r.Answer, "")\n' +
         '  if (answer == "anything at all") { }',
     );
     expect(codes).toEqual([]);
@@ -137,7 +137,7 @@ describe('an awaited landing is demanded because the program AWAITS it', () => {
   it('the construction-site graft still wins where the write fixes the type', async () => {
     const CHOOSE =
       '  c = write qa-[:Choose]-> { Prompt: "Which?", Options: ["Seed", "Series A"] }\n' +
-      '  r = await first(c-[:Response]->)';
+      '  r = await c-[:Response]->';
     expect(await codesFor(`${CHOOSE}\n  if (r.Answer) { }`)).toEqual([]);
     expect(await codesFor(`${CHOOSE}\n  if r.Answer == "Seed" { }`)).not.toContain(
       'MOV_ENUM_UNKNOWN_VALUE',
@@ -150,7 +150,7 @@ describe('an awaited landing is demanded because the program AWAITS it', () => {
   it("a race arm's await is demanded too — an arm is program the run executes", async () => {
     const codes = await codesFor(
       '  r = race(\n' +
-        '    () => {\n      a = write qa-[:Check]-> { Prompt: "Ship it?" }\n      return await first(a-[:Response]->)\n    },\n' +
+        '    () => {\n      a = write qa-[:Check]-> { Prompt: "Ship it?" }\n      return await a-[:Response]->\n    },\n' +
         '    () => { await sleep(2d) },\n' +
         '  )',
     );
