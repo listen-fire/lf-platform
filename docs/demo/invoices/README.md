@@ -29,8 +29,8 @@ node build_data.cjs ../../../../listen-fire-site/video/invoices/data.js
 - `LF_BIN` defaults to `listen-fire` on PATH (a release). `LF_SRC`, when set, makes listen-fire
   serve the modules from that checkout's sources, and its branch and commit
   are recorded. `CHROME` names another Chrome binary.
-- The recording is from listen-fire 0.12.10 built from listen-fire's `main`, so
-  `validatedUnder` reads `0.12.10 (main@<commit>)`.
+- The recording is from listen-fire 0.14.1 built from listen-fire's `main`, so
+  `validatedUnder` reads `0.14.1 (main@110878fa5c)`.
 
 `capture.sh` starts from nothing every time. It prints the two invoices, makes
 a fresh project in `.work/` with `listen-fire init`, starts the fakes on a free port,

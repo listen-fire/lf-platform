@@ -1,10 +1,7 @@
-import { `@lf/gmail` as gmail, `@lf/google_drive` as drive, `@lf/google_sheets` as sheets, `@lf/slack` as slack } from adapters
-import { finance_inbox, finance_drive, ledger, finance_slack } from credentials
-
-inbox  = connect gmail using finance_inbox
-files  = connect drive using finance_drive
-books  = connect sheets using ledger { spreadsheet: "Ledger" }
-team   = connect slack using finance_slack
+inbox  = connect `@lf/gmail` using finance_inbox
+files  = connect `@lf/google-drive` using finance_drive
+books  = connect `@lf/google-sheets` using ledger { spreadsheet: "Ledger" }
+team   = connect `@lf/slack` using finance_slack
 
 type CurrencyCode = <"GBP" | "EUR" | "USD">
 
@@ -17,7 +14,7 @@ node Invoice: "the supplier's invoice in this email" {
   currency: <CurrencyCode> "the currency of the total"
 }
 
-function `File Invoice`(msg: <inbox-[:Message]->>) {
+function `File Invoice`(msg: <inbox-[:Messages]->>) {
   pdfs = msg-[a:Attachments WHERE a.`Content Type` == "application/pdf"]->
   pdf = first(pdfs)
   if (pdf == null) { fail("no PDF attached to \"${msg.Subject}\" from ${msg.From}") }
@@ -50,4 +47,4 @@ function `File Invoice`(msg: <inbox-[:Message]->>) {
   }
 }
 
-listen to inbox { events: ["message_received"] } fire `File Invoice`
+listen to inbox-[:Messages]-> fire `File Invoice`

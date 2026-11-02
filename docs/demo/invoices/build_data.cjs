@@ -8,7 +8,7 @@
 //   v1, v2          the draft and the fixed program
 //   diagnostics     the draft's `listen-fire check --json` diagnostics (file made a basename)
 //   validatedUnder  "<listen-fire version> (<branch>@<commit>)", or the version alone for a release
-//   saved           { ok, listeners: [{ kind, config }] }
+//   saved           { ok, listeners: [{ kind, listen }] }
 //   sheet           { name, table, columns }   the Ledger spreadsheet's table
 //   drive           { root }                   the granted folder invoices are filed under
 //   pdfs            [{ name, bytes, sha256 }]  the invoices as printed, before they were mailed
@@ -22,7 +22,7 @@
 //                   Ledger rows, Slack messages
 //   terminal        { checkDraft, checkFixed, serve }
 //
-// Where each figure comes from (lf reports some of them differently from the
+// Where each figure comes from (listen-fire reports some of them differently from the
 // platform's inspectRun):
 // - validatedUnder: `listen-fire --version`, plus the listen-fire branch and commit when
 //   listen-fire ran from a checkout's modules (LF_SRC), and "uncommitted changes" when
@@ -67,15 +67,14 @@ const fixed = read('11_check_fixed.json');
 const v2 = program('fixed.mvt');
 const pdfs = read('02_pdfs.json');
 
-// The listen, read off the program: `listen to <conn> { … } fire …`, and the
-// connection's `<conn> = connect <adapter>` with the adapter's import.
+// The listen, read off the program: `listen to <conn>-[…]-> fire …`, and the
+// module of the connection's `<conn> = connect \`@lf/<module>\``.
 function listener(source) {
-  const listen = /^listen to (\w+)\s*(\{.*\})?\s*fire /m.exec(source);
-  if (!listen) throw new Error('the fixed program has no listen');
-  const adapter = new RegExp(`^${listen[1]}\\s*=\\s*connect (\\w+)`, 'm').exec(source)[1];
-  const module = new RegExp('`@lf/(\\w+)` as ' + adapter + '\\b').exec(source)[1];
-  const config = listen[2] ? JSON.parse(listen[2].replace(/(\w+)\s*:/g, '"$1":')) : {};
-  return { kind: module, config };
+  const listen = /^listen to (\w+)-\[.*\]-> fire .+$/m.exec(source);
+  if (!listen) throw new Error('the fixed program has no listen over a traversal');
+  const connect = new RegExp(`^${listen[1]}\\s*=\\s*connect \`@lf/([\\w-]+)\``, 'm').exec(source);
+  if (!connect) throw new Error(`the fixed program does not connect ${listen[1]}`);
+  return { kind: connect[1], listen: listen[0] };
 }
 
 const ledger = JSON.parse(program('ledger.json')).entities[0].data;
@@ -135,7 +134,8 @@ function writesOf(n, records) {
         return { target: `${ledger.properties.title} › ${table.name}`, action: 'append', values };
       }
       case 'slack': {
-        const m = gained.slack.find((g) => g.id === r.recordId);
+        // A Slack message's record is named by its channel and timestamp.
+        const m = gained.slack.find((g) => `${g.channel}:${g.ts}` === r.recordId);
         if (!m) throw new Error(`run ${n}: Slack has no message ${r.recordId}`);
         const channel = channels.find((c) => c.id === m.channel);
         return { target: `Slack #${channel ? channel.name : m.channel}`, action: 'post', values: { Message: m.text } };
@@ -153,7 +153,7 @@ function runOf(n, name) {
   const trace = run.trace ?? [];
   const extractions = trace.filter((t) => t.kind === 'extraction');
   const invoice = extractions.flatMap((t) => t.entities?.Invoice ?? [])[0];
-  const payload = run.event?.payload ?? {};
+  const payload = run.event?.arrival?.landing?.fields ?? {};
   if (payload.id !== delivery.messageId || payload.subject !== email.subject) {
     throw new Error(`run ${run.runId} did not come from the ${name} invoice's email`);
   }

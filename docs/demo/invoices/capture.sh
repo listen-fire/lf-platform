@@ -89,7 +89,7 @@ human() {
   sed -E -e $'s/\x1b\\[[0-9;?]*[A-Za-z]//g' -e "s#$REAL_PROJECT/##g" -e "s#$PROJECT/##g" -e "s#$REAL_PROJECT#.#g" -e "s#$PROJECT#.#g"
 }
 google() { # <module> <api root>: an OAuth app at the fake provider
-  printf 'stub-client\nstub-client-secret\n8976\nn\n' | "$LF_BIN" connect "@lf/$1" --base-url "$2" \
+  "$LF_BIN" connect "@lf/$1" --yes --base-url "$2" --client-id stub-client --client-secret stub-client-secret --redirect-port 0 \
     --oauth-authorize-url "$F/oauth/authorize" --oauth-token-url "$F/oauth/token" >/dev/null
 }
 # Gmail and Drive are served at the fakes' root, as googleapis resolves paths
@@ -97,11 +97,11 @@ google() { # <module> <api root>: an OAuth app at the fake provider
 google gmail "$F"
 google google-drive "$F"
 google google-sheets "$F/sheets"
-printf '\n' | "$LF_BIN" connect @lf/slack --base-url "$F/slack" >/dev/null
-node "$HERE/signin.cjs" "$LF_BIN" gmail:gmail finance_inbox mailbox=accounts@fenwickshaw.co.uk >/dev/null
-node "$HERE/signin.cjs" "$LF_BIN" google_drive finance_drive >/dev/null
-node "$HERE/signin.cjs" "$LF_BIN" google_sheets ledger >/dev/null
-printf 'xoxb-stub\n\n\n\n' | "$LF_BIN" credential add --module slack finance_slack >/dev/null
+"$LF_BIN" connect @lf/slack --yes >/dev/null
+node "$HERE/signin.cjs" "$LF_BIN" @lf/gmail:gmail finance_inbox mailbox=accounts@fenwickshaw.co.uk >/dev/null
+node "$HERE/signin.cjs" "$LF_BIN" @lf/google-drive finance_drive >/dev/null
+node "$HERE/signin.cjs" "$LF_BIN" @lf/google-sheets ledger >/dev/null
+printf 'xoxb-stub\n\n\n%s\n' "$F/slack/" | "$LF_BIN" credential add --module @lf/slack finance_slack >/dev/null
 # Under drive.file a spreadsheet or folder reaches the module only once the
 # user picks it. listen-fire has no picker: the pick is the module's own kv, which listen-fire
 # gives a module through MODULE_STATE_DIR (tenant "local").
@@ -124,6 +124,7 @@ cp "$HERE/programs/fixed.mvt" movements/file_invoice.mvt
 jq -e '.errors == 1' "$CAP/10_check_draft.json" >/dev/null || { echo "the draft was not refused with exactly one error"; exit 1; }
 jq -e '.ok' "$CAP/11_check_fixed.json" >/dev/null || { echo "the fix does not check clean"; jq . "$CAP/11_check_fixed.json"; exit 1; }
 cp lf.yaml "$CAP/12_lf.yaml"
+[ -n "${STOP_AFTER_CHECK:-}" ] && exit 0
 
 # listen-fire serve, which polls the mailbox.
 PORT=$(node -e 'const s=require("net").createServer().listen(0,"127.0.0.1",()=>{console.log(s.address().port);s.close()})')
