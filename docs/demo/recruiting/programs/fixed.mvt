@@ -1,12 +1,9 @@
-import { `@lf/airtable` as airtable, `@lf/google_drive` as drive, `@lf/slack` as slack, `@lf/gmail` as gmail } from adapters
-import { hannah_airtable, hannah_drive, hiring_slack, hannah_mail } from credentials
+hiring = connect `@lf/airtable` using hannah_airtable { base: "Hiring" }
+docs   = connect `@lf/google-drive` using hannah_drive
+team   = connect `@lf/slack` using hiring_slack
+mail   = connect `@lf/gmail` using hannah_mail
 
-hiring = connect airtable using hannah_airtable { base: "Hiring" }
-docs   = connect drive using hannah_drive
-team   = connect slack using hiring_slack
-mail   = connect gmail using hannah_mail
-
-function schedule_interview(change: <hiring-[:`Record Change` WHERE `table` == "tblCAND01"]->>) {
+function schedule_interview(change: <hiring-[:`Candidates Change`]->>) {
   candidate = only(change-[:Record]->)
   if (candidate == null) { fail("the changed candidate is not in Candidates") }
 
@@ -29,4 +26,4 @@ function schedule_interview(change: <hiring-[:`Record Change` WHERE `table` == "
   }
 }
 
-listen to hiring { base: "appHIRE01", table: "tblCAND01", events: ["record.updated"], field: "Stage", becomes: "Interview" } fire schedule_interview
+listen to hiring-[t:Tables WHERE t.Name == "Candidates"]->-[c:Changes WHERE exists(c.Current) AND c.Current.Stage == "Interview" AND (NOT exists(c.Previous) OR c.Previous.Stage != c.Current.Stage)]-> fire schedule_interview

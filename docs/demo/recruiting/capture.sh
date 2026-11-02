@@ -84,16 +84,16 @@ REAL_PROJECT="$(pwd -P)"
 human() {
   sed -E -e $'s/\x1b\\[[0-9;?]*[A-Za-z]//g' -e "s#$REAL_PROJECT/##g" -e "s#$PROJECT/##g" -e "s#$REAL_PROJECT#.#g" -e "s#$PROJECT#.#g"
 }
-oauth() { echo --oauth-authorize-url "$F/oauth/authorize" --oauth-token-url "$F/oauth/token"; }
-printf 'stub-airtable-client\nstub-airtable-secret\n8978\n' | "$LF_BIN" connect @lf/airtable --yes --base-url "$F/airtable" $(oauth) >/dev/null
+oauth() { echo --yes --oauth-authorize-url "$F/oauth/authorize" --oauth-token-url "$F/oauth/token" --redirect-port 0; }
+"$LF_BIN" connect @lf/airtable --base-url "$F/airtable" $(oauth) --client-id stub-airtable-client --client-secret stub-airtable-secret >/dev/null
 node "$HERE/signin.cjs" "$LF_BIN" @lf/airtable hannah_airtable airtable '' '' >/dev/null
-printf 'stub-drive-client\nstub-drive-secret\n8977\n' | "$LF_BIN" connect @lf/google-drive --yes --base-url "$F" $(oauth) >/dev/null
+"$LF_BIN" connect @lf/google-drive --base-url "$F" $(oauth) --client-id stub-drive-client --client-secret stub-drive-secret >/dev/null
 node "$HERE/signin.cjs" "$LF_BIN" @lf/google-drive hannah_drive google '' '' >/dev/null
-printf 'stub-gmail-client\nstub-gmail-secret\n8979\n' | "$LF_BIN" connect @lf/gmail --yes --base-url "$F" $(oauth) >/dev/null
+"$LF_BIN" connect @lf/gmail --base-url "$F" $(oauth) --client-id stub-gmail-client --client-secret stub-gmail-secret >/dev/null
 # Drafts are opt-in at sign-in: the gmail_drafts credential asks for Gmail's compose scope.
-node "$HERE/signin.cjs" "$LF_BIN" gmail hannah_mail gmail_drafts "$MAILBOX" '' '' '' '' '' '' >/dev/null
-printf '\n' | "$LF_BIN" connect @lf/slack --base-url "$F/slack" >/dev/null
-printf 'xoxb-stub\n\n\n\n' | "$LF_BIN" credential add --module slack hiring_slack >/dev/null
+node "$HERE/signin.cjs" "$LF_BIN" @lf/gmail hannah_mail gmail_drafts "$MAILBOX" '' '' '' '' '' '' >/dev/null
+"$LF_BIN" connect @lf/slack --yes >/dev/null
+printf 'xoxb-stub\n\n\n%s\n' "$F/slack/" | "$LF_BIN" credential add --module @lf/slack hiring_slack >/dev/null
 # Under drive.file a file reaches the module only once the user picks it. listen-fire
 # has no picker: the picks are the module's own kv, which listen-fire gives a module
 # through MODULE_STATE_DIR (tenant "local").

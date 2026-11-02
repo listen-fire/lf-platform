@@ -13,9 +13,9 @@ Rejected). When a candidate moves to Interview, the program:
 
 The run shows:
 
-- the draft refused by `listen-fire check`: it listens for `becomes: "Interviewing"`,
-  which is not one of the `Stage` choices (`MOV_ENUM_UNKNOWN_VALUE`, with a
-  did-you-mean);
+- the draft refused by `listen-fire check`: its listen, over the Candidates'
+  `Changes`, compares `Stage` with `"Interviewing"`, which is not one of the
+  `Stage` choices (`MOV_ENUM_UNKNOWN_VALUE`, with a did-you-mean);
 - the one-word fix (`"Interview"`), which checks clean;
 - two edits to the base under `listen-fire serve`: Tomás moves from Applied to Screen
   (nothing runs), and Priya moves from Screen to Interview (one run, four
@@ -38,8 +38,8 @@ node build_data.cjs ../../../../listen-fire-site/video/recruiting/data.js
 - `LF_BIN` defaults to `listen-fire` on PATH (a release). `LF_SRC`, when set, makes listen-fire
   serve the modules from that checkout's sources, and its commit is recorded.
   `LF_BRANCHES` names the branch it was built from.
-- The current recording is listen-fire 0.12.10 built from listen-fire `main` at
-  7191d2be43, so `validatedUnder` reads `0.12.10 (main@7191d2be43)`.
+- The current recording is listen-fire 0.14.1 built from listen-fire `main` at
+  110878fa5c, so `validatedUnder` reads `0.14.1 (main@110878fa5c)`.
 
 `capture.sh` starts from nothing every time. It makes a fresh project in
 `.work/` with `listen-fire init`, starts the fakes on a free port, seeds them, and
@@ -76,7 +76,7 @@ two edits. Everything it starts is stopped when it exits.
 - `costUsd`: the run's `costMicrodollars` from `listen-fire runs show`, divided by a million.
 - `ms`: measured by `capture.sh`, from changing the cell to `listen-fire serve` printing the finished run. `runMs` is listen-fire's own start to finish.
 - `writes`: what the fakes gained during that edit, the edit's own `Stage` change left out.
-- The edit that does not fire: `listen-fire serve` says the delivery ran nothing, `listen-fire deliveries` shows it with no runs, and `listen-fire runs` does not grow.
+- The edit that does not fire: the listen's `WHERE` rejects the change (Stage did not become Interview), so `listen-fire deliveries` shows the ping with no runs and `listen-fire runs` does not grow.
 
 Two setup steps have no listen-fire command:
 

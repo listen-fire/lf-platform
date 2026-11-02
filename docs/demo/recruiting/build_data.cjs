@@ -8,7 +8,7 @@
 //   v1, v2          the draft and the fixed program, as written
 //   diagnostics     the draft's `listen-fire check --json` diagnostics (file made a basename)
 //   validatedUnder  "<listen-fire version> (<branch>@<commit>)", see below
-//   saved           { ok, listeners: [{ kind, config }] }
+//   saved           { ok, listeners: [{ kind, listen }] }
 //   base            { name, table, fields, stages, candidates: [{ Name, Role, Stage, Interviewer }] }
 //                   the Hiring base as seeded, before either edit
 //   edits[]         one per edit to the base, in order:
@@ -42,9 +42,9 @@
 //   written cell under the field's id; it is named here from the seeded
 //   table's fields. A Drive copy's source is the seeded file whose content the
 //   copy carries.
-// - A run that did not fire: no run line in the serve log, `listen-fire deliveries`
-//   shows the ping with no runs, `listen-fire runs` gained nothing, and the fakes
-//   changed only by the edit itself.
+// - A run that did not fire: no run line in the serve log, the door took the ping in,
+//   `listen-fire deliveries` shows it with no runs, `listen-fire runs` gained nothing,
+//   and the fakes changed only by the edit itself.
 const fs = require('fs');
 const path = require('path');
 
@@ -65,12 +65,11 @@ const fixed = read('11_check_fixed.json');
 const v2 = program('fixed.mvt');
 
 function listener(source) {
-  const listen = /^listen to (\w+)\s*(\{.*\})?\s*fire /m.exec(source);
-  if (!listen) throw new Error('the fixed program has no listen');
-  const adapter = new RegExp(`^${listen[1]}\\s*=\\s*connect (\\w+)`, 'm').exec(source)[1];
-  const module = new RegExp('`@lf/(\\w+)` as ' + adapter + '\\b').exec(source)[1];
-  const config = listen[2] ? JSON.parse(listen[2].replace(/(\w+)\s*:/g, '"$1":')) : {};
-  return { kind: module, config };
+  const listen = /^listen to (\w+)-\[.*\]-> fire \w+\s*$/m.exec(source);
+  if (!listen) throw new Error('the fixed program has no listen over a traversal');
+  const connect = new RegExp(`^${listen[1]}\\s*=\\s*connect \`@lf/([\\w-]+)\``, 'm').exec(source);
+  if (!connect) throw new Error(`the fixed program does not connect ${listen[1]}`);
+  return { kind: connect[1], listen: listen[0] };
 }
 
 function validatedUnder() {
@@ -163,8 +162,8 @@ function editOf(n, name) {
   let run = null;
   if (fired) {
     const r = read(`${n}_${name}_run.json`).run;
-    const payload = r.event?.payload ?? {};
-    if (payload.record !== edit.record || payload.previous?.[edit.field] !== edit.from || payload.fields?.[edit.field] !== edit.to) {
+    const change = r.event?.arrival?.landing?.fields ?? {};
+    if (change['Record Id'] !== edit.record || change.Previous?.[edit.field] !== edit.from || change.Current?.[edit.field] !== edit.to) {
       problems.push(`run ${r.runId} did not come from the ${name} edit`);
     }
     if (!delivery || delivery.id !== r.deliveryId) problems.push(`run ${r.runId} is not the ${name} edit's delivery's run`);
@@ -179,7 +178,9 @@ function editOf(n, name) {
     };
   } else {
     if (runsAfter.length !== runsBefore.length) problems.push(`listen-fire runs grew during the ${name} edit`);
-    if (delivery && delivery.runs.length !== 0) problems.push(`the ${name} edit's delivery started runs`);
+    if (!delivery) problems.push(`listen-fire recorded no delivery for the ${name} edit`);
+    else if (delivery.runs.length !== 0) problems.push(`the ${name} edit's delivery started runs`);
+    if (ping.deliveries[0]?.body !== '{"ok":true,"eventsProcessed":1}') problems.push(`the ${name} edit's ping was not taken in`);
   }
 
   return {
@@ -237,7 +238,6 @@ const problems = [
   ...(!fixed.ok ? ['the fix does not check clean'] : []),
   ...(screen.fired ? ['the Screen edit fired a run'] : []),
   ...(screen.writes.length !== 0 ? [`the Screen edit wrote ${screen.writes.length} thing(s)`] : []),
-  ...(!screen.serve.some((l) => /ran nothing/.test(l)) ? ['listen-fire serve did not say the Screen edit ran nothing'] : []),
   ...(!interview.fired ? ['the Interview edit did not fire'] : []),
   ...(interview.run && interview.run.status !== 'completed' ? [`the Interview run ${interview.run.status}`] : []),
   ...(kinds(interview) !== 'Airtable:update,Gmail:draft,Google:copy,Slack:post' ? [`the Interview run wrote ${kinds(interview)}`] : []),
