@@ -19,8 +19,9 @@ import {
   type PositionSchema,
   surfaceNotEnumerated,
   type FieldType,
+  fieldTypesOfSchema,
   type InstanceSchema,
-  type SchemaFieldType,
+  type SurfaceFieldType,
 } from './catalog';
 import { fieldAssignable, maybeAbsent, stripAbsent } from './typing';
 import type { LanguageVersion } from 'movement-lang/language_version';
@@ -42,13 +43,13 @@ export function shapeToSchema(
   /** Resolves an annotation naming an author-declared refinement
    *  (`type Thesis = <"A" | "B">`). Both sides pass it, so the schema stays
    *  the same one on either side of the save. */
-  resolveDeclaredType?: (name: string) => SchemaFieldType | undefined,
+  resolveDeclaredType?: (name: string) => SurfaceFieldType | undefined,
 ): InstanceSchema {
   const schema: InstanceSchema = { positions: {}, collections: {}, writableRoots: {} };
   const add = (node: ShapeNode, key: string): void => {
     // Without a prototype: a field or node named `__proto__` (an ordinary name
     // from version 5) is held as its own key, not set as the prototype.
-    const properties: Record<string, SchemaFieldType> = Object.create(null);
+    const properties: Record<string, SurfaceFieldType> = Object.create(null);
     for (const field of node.fields) {
       // Unknown surface type names degrade to text rather than dropping the
       // field (a dropped field would false-positive every write to it).
@@ -173,7 +174,7 @@ export function schemaSurface(
   const declared = schema.positions[position];
   if (!declared || surfaceNotEnumerated(declared)) return undefined;
   return {
-    properties: declared.properties,
+    properties: fieldTypesOfSchema(declared.properties, schema),
     edges: Object.fromEntries(
       Object.entries(declared.edges).map(([name, edge]) => [
         name,
@@ -226,7 +227,7 @@ export function surfaceMisfit(
   const schema = required.schema.positions[required.position];
   if (!schema || surfaceNotEnumerated(schema)) return undefined;
   if (supplied === undefined) return undefined;
-  for (const [name, want] of Object.entries(schema.properties)) {
+  for (const [name, want] of Object.entries(fieldTypesOfSchema(schema.properties, required.schema))) {
     if (!Object.hasOwn(supplied.properties, name)) {
       if (options.absentMayBeMissing === true && typeof want === 'object' && want.kind === 'maybeAbsent') continue;
       return `it has no ${path}\`${name}\``;

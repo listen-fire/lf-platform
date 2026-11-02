@@ -29,12 +29,15 @@ import {
   credentialArgOf,
   describeFieldType,
   type FieldType,
+  fieldTypesOfSchema,
   type InstanceSchema,
   pluginProgramNameOf,
 } from '../checker/catalog';
 import {
+  declaredFieldType,
   describePosition,
   describeReturnShape,
+  instanceOfType,
   isEnumType,
   positionSchemaOfRef,
   type PositionTypeRef,
@@ -390,21 +393,10 @@ export function getMovementCompletions(
     }
     return done(items);
   }
-  const listenConfig = /^\s*listen\s+to\s+([A-Za-z_]\w*)\s*\{[^}]*$/.exec(lineBefore);
-  if (listenConfig && /[{,]\s*[A-Za-z_]?\w*$/.test(lineBefore)) {
-    const instance = scope.get(listenConfig[1]);
-    const vocabulary =
-      instance?.adapter !== undefined
-        ? snapshot.adapters[instance.adapter]?.triggerConfig
-        : undefined;
-    return done(
-      (vocabulary ?? []).map(key => ({
-        label: key,
-        insert: `${key}: `,
-        kind: 'value' as const,
-        detail: `${instance?.adapter} listener config`,
-      })),
-    );
+  // Inside `listen to x { … }` nothing is offered: a 0.13 catalog does not
+  // say which keys a settings listen takes.
+  if (/^\s*listen\s+to\s+[A-Za-z_]\w*\s*\{[^}]*$/.test(lineBefore) && /[{,]\s*[A-Za-z_]?\w*$/.test(lineBefore)) {
+    return done([]);
   }
   if (/^\s*listen\s+to\s+\w+\s*(?:\{[^{}]*\})?\s+[A-Za-z_]?\w*$/.test(lineBefore)) {
     return done([
@@ -1078,7 +1070,8 @@ function filterableFieldItems(input: {
     const ops = caps[name]?.filterOperators;
     return ops !== undefined && ops.length > 0;
   };
-  return Object.entries(targetSchema.properties)
+  const targetInstance = instanceOfType(input.target);
+  return Object.entries(fieldTypesOfSchema(targetSchema.properties, targetInstance?.schema))
     .filter(([name]) => offerable(name))
     .map(([name, type]): MovementCompletionItem => ({
       label: name,
@@ -1099,20 +1092,20 @@ function propertyItems(position: PositionTypeRef): MovementCompletionItem[] {
     case 'handle': {
       const items = Object.entries(position.resultShape).map(([n, t]) => item(n, t));
       const schema = positionSchemaOfRef(position);
-      for (const [n, t] of Object.entries(schema?.properties ?? {})) {
+      for (const [n, t] of Object.entries(fieldTypesOfSchema(schema?.properties ?? {}, position.instance.schema))) {
         if (!(n in position.resultShape)) items.push(item(n, t));
       }
       return items;
     }
     case 'position': {
       const schema = positionSchemaOfRef(position);
-      return Object.entries(schema?.properties ?? {}).map(([n, t]) => item(n, t));
+      return Object.entries(fieldTypesOfSchema(schema?.properties ?? {}, position.instance.schema)).map(([n, t]) => item(n, t));
     }
     case 'union': {
       const items = new Map<string, MovementCompletionItem>();
       for (const variant of position.variants) {
         const schema = position.instance.schema.positions[variant];
-        for (const [n, t] of Object.entries(schema?.properties ?? {})) {
+        for (const [n, t] of Object.entries(fieldTypesOfSchema(schema?.properties ?? {}, position.instance.schema))) {
           if (!items.has(n)) items.set(n, item(n, t, `${describeFieldType(t)} (on ${variant})`));
         }
       }
@@ -1425,17 +1418,6 @@ function configKeyHover(
     return undefined;
   }
 
-  // Listen config: `listen to <instance> { … <key>:`
-  const listen = /listen\s+to\s+([A-Za-z_]\w*)\s*\{[^}]*$/.exec(before);
-  if (listen) {
-    const inst = scope.get(listen[1]);
-    const spec = inst?.adapter !== undefined ? snapshot.adapters[inst.adapter] : undefined;
-    if (spec?.triggerConfig?.includes(word.text)) {
-      const fmt = spec.triggerConfigFormats?.[word.text];
-      const required = spec.triggerConfigRequired?.includes(word.text);
-      return hint(`${word.text} — ${inst?.adapter} listener config${fmt ? ` (${fmt})` : ''}${required ? ' — required' : ''}`);
-    }
-  }
   return undefined;
 }
 
@@ -1504,16 +1486,16 @@ function importContextHover(
 function fieldTypeOnPosition(position: PositionTypeRef, field: string): FieldType | undefined {
   switch (position.kind) {
     case 'position':
-      return positionSchemaOfRef(position)?.properties[field];
+      return declaredFieldType(position.instance, position.position, field);
     case 'handle':
-      return position.resultShape[field] ?? positionSchemaOfRef(position)?.properties[field];
+      return position.resultShape[field] ?? declaredFieldType(position.instance, position.position, field);
     case 'local':
       return position.reads[field];
     case 'extract':
       return position.node.properties.get(field)?.explicit;
     case 'union': {
       for (const variant of position.variants) {
-        const t = position.instance.schema.positions[variant]?.properties[field];
+        const t = declaredFieldType(position.instance, variant, field);
         if (t !== undefined) return t;
       }
       return undefined;
@@ -1832,7 +1814,7 @@ function hoverTypeDetail(posType: PositionTypeRef): string[] | undefined {
     case 'position': {
       const schema = positionSchemaOfRef(posType);
       if (!schema) return undefined;
-      const fields = Object.entries(schema.properties).map(
+      const fields = Object.entries(fieldTypesOfSchema(schema.properties, posType.instance.schema)).map(
         ([n, t]) => `${n} (${describeFieldType(t)})`,
       );
       return [

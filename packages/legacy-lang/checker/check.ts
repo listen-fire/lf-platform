@@ -133,7 +133,6 @@ export type { ReturnShape } from './typing';
  *  than once a minute is refused. */
 const UNTIL_CADENCE_FLOOR_MS = 60_000;
 import { scanName, unwrapCredentialArg } from 'movement-lang/parser/scan';
-import { cronScheduleError, cronTimezoneError } from '../cron';
 import {
   BridgeError,
   splitUniquenessConjuncts,
@@ -194,9 +193,13 @@ import {
   credentialArgOf,
   describeFieldType,
   type SchemaFieldType,
+  type SurfaceFieldType,
   EVENT_ACTION_FIELD,
-  RECORD_DELETED_ACTION,
   FieldType,
+  fieldTypeOfSchema,
+  fieldTypesOfSchema,
+  surfaceTypeOfSchema,
+  surfaceTypesOfSchema,
   InstanceSchema,
   declaredTypeOf,
   parseFieldTypeName,
@@ -224,7 +227,8 @@ import {
   unionKey,
   unionVariants,
   variantOf,
-  WritableRootSchema,
+  type CheckerWritableRoot,
+  writableRootOfSchema,
 } from './catalog';
 import {
   LinkDiagnosticCodes,
@@ -236,12 +240,8 @@ import {
 } from './link';
 import {
   type EventAddress,
-  eventAddressDisplay,
   eventAddressKey,
   eventAddressOfHops,
-  eventAddressSource,
-  narrowingPrefixKey,
-  listenNarrowing,
 } from './event_address';
 import {
   inheritDeclaration,
@@ -294,6 +294,7 @@ import {
   ExpressionTyping,
   type ExpressionEffect,
   ExtractNodeType,
+  declaredFieldType,
   instanceOfType,
   fieldAssignable,
   fieldTypeCompatible,
@@ -1092,7 +1093,7 @@ export interface RecordedTarget {
  */
 export interface RecordedWrite {
   span: Span;
-  root?: WritableRootSchema;
+  root?: CheckerWritableRoot;
   /** Plain-language target name, e.g. `crm.company`. */
   description: string;
   declaredFields: Set<string>;
@@ -1195,7 +1196,7 @@ export interface RecordedAwait {
 }
 
 export type RecordedAwaitSource =
-  /** `await a-[:Response]->` — the awaited edge, resolved. `awaitable` is the
+  /** `await a-[:Response]->` — the awaited edge, resolved. `listenable` is the
    *  edge's own promise; an ASK is exactly this over a write handle. */
   | {
       kind: 'traversal';
@@ -1204,8 +1205,7 @@ export type RecordedAwaitSource =
       /** The final edge's declared name. */
       edge?: string;
       /** Absent ⇒ the edge wasn't typed; nobody looked, so nothing is claimed. */
-      awaitable?: boolean;
-      resolvesEmpty?: boolean;
+      listenable?: boolean;
     }
   | { kind: 'sleep'; duration: string }
   | { kind: 'until'; every?: string };
@@ -1491,7 +1491,7 @@ type BoundParam = DeclaredParams[number];
 /** What a plugin declares each named argument takes, by name — absent for an
  *  argument it declares no type for. */
 interface PluginArgTypes {
-  declared: Readonly<Record<string, SchemaFieldType>>;
+  declared: Readonly<Record<string, SurfaceFieldType>>;
 }
 
 interface ArgFit {
@@ -1600,11 +1600,12 @@ function scalarLiteralType(raw: string): FieldType | undefined {
  * are the fields; nothing about it promises similarity or native identity,
  * because only a write shape carries those.
  */
-function readableMatchRoot(position: PositionSchema | undefined): WritableRootSchema | undefined {
+function readableMatchRoot(position: PositionSchema | undefined, instance: InstanceSchema): CheckerWritableRoot | undefined {
   if (position === undefined) return undefined;
+  const fields = fieldTypesOfSchema(position.properties, instance);
   return {
-    fields: position.properties,
-    resultShape: { externalId: 'text', url: 'text', ...position.properties },
+    fields,
+    resultShape: { externalId: 'text', url: 'text', ...fields },
   };
 }
 
@@ -1746,12 +1747,6 @@ function movementNamesInScope(scope: Scope): string[] {
  */
 export const DRY_RUN_ARG = 'dry_run';
 const BOOLEAN_LITERAL = /^(true|false)$/i;
-
-/** A listen `key` a fix-it can offer for a movement: its name as a slug, the
- *  shape an address's plus-suffix takes (`Log Sender` → `log-sender`). */
-function suggestedListenKey(movement: string): string {
-  return movement.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'intake';
-}
 
 const SYNTHETIC_SPAN: Span = { start: { line: 1, col: 1 }, end: { line: 1, col: 1 } };
 
@@ -2129,7 +2124,7 @@ function handleInPluginArgMessage(input: { callee: string; name: string; held: H
 
 /** A plugin argument of a declared value type (text, a file, …) holding a
  *  record or a file the type does not take, where it sits. */
-function handleInTypedPluginArgMessage(input: { callee: string; name: string; declared: SchemaFieldType; held: HeldHandle }): string {
+function handleInTypedPluginArgMessage(input: { callee: string; name: string; declared: SurfaceFieldType; held: HeldHandle }): string {
   const { callee, name, declared, held } = input;
   const direct = held.steps.length === 0;
   const where = direct ? 'this' : `'${name}${spellHeldSteps(held.steps)}'`;
@@ -2161,7 +2156,7 @@ function fileBelowWhole(type: FieldType | undefined): HeldHandle | undefined {
  *  type, the engine objects that type takes are passed over, so what the walk
  *  finds is one it does not. Structured data (or no declared type) keeps the
  *  walk that finds every object, the record handed whole included. */
-function pluginArgSlotOptions(declared: SchemaFieldType | undefined): { heldTakes?: ReadonlySet<HandleKind> } {
+function pluginArgSlotOptions(declared: SurfaceFieldType | undefined): { heldTakes?: ReadonlySet<HandleKind> } {
   if (declared === undefined || declared === 'json') return {};
   return { heldTakes: handleKindsTaken(declared) };
 }
@@ -2382,29 +2377,6 @@ function isListSlot(slot: ExprSlot, languageVersion: LanguageVersion): boolean {
     if (e instanceof BridgeError) return false;
     throw e;
   }
-}
-
-/**
- * A config value that is a bare name or a list of bare names
- * (`fields: [domains]`) — the bridge parses a bare name as a root-less
- * `property` node, so a clean list of those yields the names. Undefined
- * for anything else.
- */
-function bareNameValues(slot: ExprSlot, languageVersion: LanguageVersion): string[] | undefined {
-  const trimmed = slot.raw.trim();
-  if (BARE_IDENT.test(trimmed)) return [trimmed];
-  let parsed: Expression;
-  try {
-    parsed = expressionOfSlot(slot, languageVersion);
-  } catch (e) {
-    if (e instanceof BridgeError) return undefined;
-    throw e;
-  }
-  if (parsed.type !== 'list') return undefined;
-  const names = parsed.elements.map(element =>
-    element.type === 'property' ? element.propertyTypeId : undefined,
-  );
-  return names.every((n): n is string => n !== undefined) ? names : undefined;
 }
 
 /**
@@ -2745,7 +2717,7 @@ function conformsToDeclaredNode(
 
 /** Resolves one extract field's explicit annotation to the SURFACE type it
  *  names — a primitive, a declared option set, or another field's. */
-type ExtractTypeResolver = (field: ExtractField) => SchemaFieldType | undefined;
+type ExtractTypeResolver = (field: ExtractField) => SurfaceFieldType | undefined;
 
 /** A node declaration an extraction node takes as its shape, with the schema
  *  its field types were resolved into where it was declared. */
@@ -2897,7 +2869,7 @@ function shapeExtractGraph(
   key: string,
   schema: InstanceSchema,
 ): ExtractNodeType {
-  const properties = schema.positions[key]?.properties ?? {};
+  const properties = surfaceTypesOfSchema(schema.positions[key]?.properties ?? {});
   const graph: ExtractNodeType = {
     name,
     ...(shape.description !== undefined
@@ -3075,7 +3047,7 @@ function declaredLocalGraph(
   return {
     kind: 'local',
     label: `a ${describeShapeNode(position)} graph`,
-    reads: { ...declared?.properties },
+    reads: fieldTypesOfSchema(declared?.properties ?? {}, instance.schema),
     edges,
   };
 }
@@ -3246,7 +3218,7 @@ function mayHoldMap(type: FieldType): boolean {
  *  not such a record. */
 function runBuiltWriteShape(
   type: PositionTypeRef,
-): { fields: Record<string, SchemaFieldType>; declared: boolean } | undefined {
+): { fields: Record<string, FieldType>; declared: boolean } | undefined {
   // An extracted record is one this run built: it carries the fields the
   // extraction declared, typed by this program, and updates in place.
   if (type.kind === 'local' && type.extracted !== undefined) {
@@ -3262,7 +3234,7 @@ function runBuiltWriteShape(
   const schema = positionSchemaOfRef(landing);
   const instance = instanceOfType(landing);
   if (schema === undefined || instance === undefined) return undefined;
-  return { fields: schema.properties, declared: isDeclaredNode(instance) };
+  return { fields: fieldTypesOfSchema(schema.properties, instance.schema), declared: isDeclaredNode(instance) };
 }
 
 /** A declared node's records as they land on an appendable edge of a node the
@@ -3353,7 +3325,7 @@ function extractedRecordType(node: ExtractNodeType): Extract<PositionTypeRef, { 
   // Without a prototype: a field or node named `__proto__` (an ordinary name
   // from version 5) is held as its own key, not read off Object.prototype.
   const reads: Record<string, FieldType | undefined> = Object.create(null);
-  const fields: Record<string, SchemaFieldType> = Object.create(null);
+  const fields: Record<string, SurfaceFieldType> = Object.create(null);
   for (const [name, field] of node.properties) {
     fields[name] = field.explicit ?? 'text';
     reads[name] = readsAsPresentText(field)
@@ -3551,48 +3523,6 @@ function positionFromAddress(instance: InstanceRef, hopsRaw: string, languageVer
   return resolved;
 }
 
-/**
- * The record an event position is ABOUT — the edge the adapter marked
- * `subject`, and where it lands.
- *
- * `undefined` for anything that is not an event node with such an edge: a
- * position that fires the record itself, and a delete-narrowed event (whose
- * `requiresLiveRecord` edges the host drops — the record is gone, so there is
- * nothing one hop away). Both cases mean "this position IS the subject",
- * which is what every caller falls back to.
- *
- * The marker is DECLARED by the adapter and only compared here; nothing reads
- * the edge's name, because a name is a display string an adapter may spell as
- * it likes.
- *
- */
-function subjectOf(
-  instance: InstanceRef,
-  event: PositionSchema,
-): { edge: string; target: string; position: PositionSchema } | undefined {
-  for (const [edge, schema] of Object.entries(event.edges)) {
-    if (schema.subject !== true) continue;
-    const position = instance.schema.positions[schema.target];
-    if (position === undefined) continue;
-    return { edge, target: schema.target, position };
-  }
-  return undefined;
-}
-
-/** Renders a derived event type for a diagnostic — a config-scoped union
- *  reads as its variant list (the per-action displays), a single
- *  action as the variant name. Always the DISPLAY, never the key a narrowed
- *  event address is identified by. */
-function describeEventType(type: PositionTypeRef): string {
-  if (type.kind === 'union') {
-    return type.display ?? type.variants.map((v) => displayNameOf(type.instance, v)).join(' | ');
-  }
-  if (type.kind === 'position') {
-    return type.display ?? displayNameOf(type.instance, type.position);
-  }
-  return describePosition(type);
-}
-
 // ── The checker ──
 
 /**
@@ -3649,7 +3579,7 @@ function unwrapMaybeEmpty(type: PositionTypeRef): PositionTypeRef {
 }
 
 /** A field type that holds a file — one, or a list or tuple of them. */
-function holdsFile(type: SchemaFieldType): boolean {
+function holdsFile(type: FieldType): boolean {
   const variant = variantOf(type);
   switch (variant.kind) {
     case 'file':
@@ -3659,7 +3589,9 @@ function holdsFile(type: SchemaFieldType): boolean {
     case 'maybeAbsent':
       return holdsFile(variant.of);
     case 'tuple':
+    case 'union':
       return variant.of.some(member => member !== null && holdsFile(member));
+    case 'record':
     case 'text':
     case 'number':
     case 'boolean':
@@ -3695,7 +3627,7 @@ function fileEdgesOf(schema: InstanceSchema, positions: readonly string[]): stri
       }
       const landings = schema.unions?.[edge.target] ?? [edge.target];
       const holds = landings.some(landing =>
-        Object.values(schema.positions[landing]?.properties ?? {}).some(holdsFile));
+        Object.values(fieldTypesOfSchema(schema.positions[landing]?.properties ?? {}, schema)).some(holdsFile));
       if (holds) filed.add(name);
     }
   }
@@ -4021,7 +3953,7 @@ function describePluginOutput(output: PluginOutput): string {
   const fields = (of: Record<string, SchemaFieldType>): string => Object.keys(of).map(f => `\`${f}\``).join(', ');
   switch (output.kind) {
     case 'value':
-      return `one ${describeFieldType(output.type)}`;
+      return `one ${describeFieldType(fieldTypeOfSchema(output.type))}`;
     case 'record':
       return `one record (${fields(output.fields)})`;
     case 'records':
@@ -4214,8 +4146,6 @@ class Checker {
     adapter?: string;
     /** The parameter's position — the type the listen's address must land on. */
     position?: string;
-    /** The instance's event-address hops, for filling the suggested config. */
-    narrowingKeys?: string[];
     span: Span;
   }> = [];
 
@@ -4334,32 +4264,11 @@ class Checker {
   private reportMissingListens(): void {
     if (this.listenCount > 0) return;
     for (const d of this.dispatchables) {
-      const spec = d.adapter !== undefined ? this.catalog.adapter(d.adapter) : undefined;
-      const vocabulary = spec?.triggerConfig;
-      // A ready-to-paste line means filling the keys a listen MUST carry.
-      // Where a required key is the last hop of the event address, the
-      // parameter's own position IS the value that address lands on — which
-      // is how a graph listen gets `{ type: "Company" }` suggested without
-      // anything here knowing what a graph is.
-      const required = spec?.triggerConfigRequired ?? [];
-      const addressTail = d.narrowingKeys?.[d.narrowingKeys.length - 1];
-      const config =
-        spec?.triggerConfigFormats?.['schedule'] === 'cron' ? ' { schedule: "0 9 * * 1" }'
-        : required.length > 0
-          ? ` { ${required
-              .map(key =>
-                key === addressTail && d.position !== undefined
-                  ? `${key}: "${d.position}"`
-                  : key === 'key'
-                    ? `key: "${suggestedListenKey(d.movement)}"`
-                    : `${key}: "…"`,
-              )
-              .join(', ')} }`
-        : vocabulary?.includes('key') ? ` { key: "${suggestedListenKey(d.movement)}" }`
-        : '';
+      // A 0.13 catalog says nothing of the keys a settings listen carries, so
+      // the line suggested is the bare listen.
       this.reportInfo(
         DiagnosticCodes.LISTEN_MISSING,
-        `'${d.movement}' has no listener, so nothing dispatches it — add a listen statement, e.g. listen to ${d.instanceName}${config} fire ${d.movement}`,
+        `'${d.movement}' has no listener, so nothing dispatches it — add a listen statement, e.g. listen to ${d.instanceName} fire ${d.movement}`,
         d.span,
       );
     }
@@ -4485,7 +4394,7 @@ class Checker {
   /** The refinement a name declares (`type Thesis = <"A" | "B">`), when it
    *  declares one — resolved like every other name, so a type is shadowed,
    *  imported and duplicated by the same rules. */
-  private declaredTypeIn(name: string, scope: Scope): SchemaFieldType | undefined {
+  private declaredTypeIn(name: string, scope: Scope): SurfaceFieldType | undefined {
     const resolution = scope.resolve(name);
     if (resolution.kind !== 'found' || resolution.symbol.kind !== 'type') return undefined;
     // A `type` declaration is a closed option set (`declaredTypeOf`), which is
@@ -4855,7 +4764,7 @@ class Checker {
     // so `` `action` == "record.deletd" `` is `enum == "a literal that isn't
     // in the enum"` like any other. Independent of the hop pins below.
     const actionPin = address.narrowing[EVENT_ACTION_FIELD];
-    const actionType = instance.schema.positions[address.event]?.properties[EVENT_ACTION_FIELD];
+    const actionType = declaredFieldType(instance, address.event, EVENT_ACTION_FIELD);
     if (actionPin !== undefined && isEnumType(actionType)) {
       const diagnostic = checkEnumLiteral(actionPin, actionType);
       if (diagnostic) {
@@ -4867,47 +4776,8 @@ class Checker {
         }
       }
     }
-    this.checkHopPins(instance, address.narrowing, () => span);
   }
 
-  /**
-   * The hop pins of an event address, each against what the adapter published
-   * as legal UNDER THE PINS SO FAR (`eventNarrowingValues`, keyed by prefix).
-   * A typo'd hop is `enum == "a literal that isn't in the enum"` — the same
-   * `checkEnumLiteral` with the same did-you-mean every other enum comparison
-   * rides, never a downstream read error.
-   *
-   * Shared by the two places an address is WRITTEN: a signature's type ref,
-   * and a listen's config. They are the same address in two spellings, so a
-   * typo has to die the same way in both — it did not, until D25 made the
-   * graph's `type:` an ordinary hop and the asymmetry became visible.
-   */
-  private checkHopPins(
-    instance: InstanceRef,
-    pins: Record<string, string | undefined>,
-    spanFor: (key: string) => Span,
-  ): void {
-    const keys = instance.schema.eventNarrowingKeys;
-    const values = instance.schema.eventNarrowingValues;
-    if (keys === undefined || values === undefined) return;
-    const pinned: Record<string, string> = {};
-    for (const key of keys) {
-      const value = pins[key];
-      if (value === undefined) return; // the address pins nothing further
-      const options = values[narrowingPrefixKey(pinned)]?.[key];
-      if (options === undefined) return; // nobody published what's legal here
-      const diagnostic = checkEnumLiteral(value, { kind: 'enum', options });
-      if (diagnostic) {
-        if (diagnostic.severity === 'warning') {
-          this.reportWarning(diagnostic.code, diagnostic.message, spanFor(key));
-        } else {
-          this.report(diagnostic.code, diagnostic.message, spanFor(key));
-        }
-        return;
-      }
-      pinned[key] = value;
-    }
-  }
 
   /** MOV_UNKNOWN_POSITION, listing the schema's actual position types. */
   private reportUnknownPosition(
@@ -7905,35 +7775,26 @@ class Checker {
       ...(lastStep?.type === 'edge' ? { edge: lastStep.edgeTypeId } : {}),
       // An undescribed edge claims nothing — the flags stay ABSENT rather than
       // defaulting to false, so "we didn't look" reads differently from "no".
-      ...(finalEdge !== undefined
-        ? { awaitable: finalEdge.awaitable === true, resolvesEmpty: finalEdge.resolvesEmpty === true }
-        : {}),
+      ...(finalEdge !== undefined ? { listenable: finalEdge.listenable === true } : {}),
     });
-    // Only error when the final edge is KNOWN and non-awaitable; an undescribed
+    // Only error when the final edge is KNOWN and not listenable; an undescribed
     // or untyped edge stays silent (the checker's honesty rule — unknown is not
-    // a claim).
-    if (finalEdge !== undefined && finalEdge.awaitable !== true) {
+    // a claim). A listenable edge is one whose source announces arrivals, so a
+    // bare `await FIRST(…)` on one always has something to wake it: 0.12's
+    // `awaitable` edge that was not `watchable` (MOV_AWAIT_NEEDS_CADENCE) has
+    // no spelling in a 0.13 catalog, where `listenable` took the place of both.
+    if (finalEdge !== undefined && finalEdge.listenable !== true) {
       this.report(
         DiagnosticCodes.AWAIT_NOT_AWAITABLE,
         `'FIRST(${rawPath(source.head)})' can't be awaited — 'await' waits on an edge whose resolution resumes the run (an ask's Response). This is an ordinary edge; read it live, without 'await'.`,
         source.head.span,
       );
-    } else if (finalEdge?.awaitable === true && finalEdge.watchable !== true) {
-      // A bare `await FIRST(…)` states no cadence, which is only honest where
-      // the source WAKES the run. Where it doesn't, the cadence is the author's
-      // and the language has one spelling for it.
-      const edgeName = lastStep?.type === 'edge' ? lastStep.edgeTypeId : undefined;
-      this.report(
-        DiagnosticCodes.AWAIT_NEEDS_CADENCE,
-        `${edgeName !== undefined ? `'-[:${edgeName}]->'` : 'This edge'} resolves, but nothing tells the run when — this source sends no event, so a bare 'await' would wait forever. Say how often to look: \`${this.code(`await until(() => { return EXISTS(${rawPath(source.head)}) }, every: 15m)`)}\`.`,
-        source.head.span,
-      );
     }
-    // F19/F20: an edge that declares `resolvesEmpty` (an ask `Response` a cancel
-    // can settle empty) lands a MAYBE-EMPTY node — its field reads type
-    // `T | absent`. A traversal-as-gate INTO it (`r-[x:E]-> { … }`) discharges
-    // that (the block runs zero times when empty). Slack `Replies` (a reply
-    // always has content) does not declare it, so its landing is plain.
+    // F19/F20: an edge that declares `resolvesEmpty` lands a MAYBE-EMPTY node —
+    // its field reads type `T | absent`. A traversal-as-gate INTO it
+    // (`r-[x:E]-> { … }`) discharges that (the block runs zero times when
+    // empty). No 0.13 module declares it (a deleted record leaves the wait
+    // waiting); the checker's own callback `Called` edge does.
     if (landed !== undefined && finalEdge?.resolvesEmpty === true) {
       return { posType: { kind: 'maybeEmpty', of: landed } };
     }
@@ -8369,7 +8230,7 @@ class Checker {
       const system = `'${type.instance.name}'`;
       // The record itself holds a file (an email's attachment): read it.
       const ownFiles = [...new Set(positions.flatMap(position =>
-        Object.entries(schema.positions[position]?.properties ?? {})
+        Object.entries(fieldTypesOfSchema(schema.positions[position]?.properties ?? {}, schema))
           .filter(([, field]) => holdsFile(field))
           .map(([field]) => field)))];
       instead = ownFiles.length > 0
@@ -9843,7 +9704,7 @@ class Checker {
     target: Extract<WriteExpression['target'], { kind: 'position' }>,
     scope: Scope,
   ): {
-    root?: WritableRootSchema;
+    root?: CheckerWritableRoot;
     handle?: PositionTypeRef;
     description: string;
     /** The record is on an edge of a node this run built. */
@@ -9906,7 +9767,8 @@ class Checker {
     }
     const recordType =
       posType.kind === 'union' ? posType.union : posType.position;
-    const root = recordType !== undefined ? posType.instance.schema.writableRoots[recordType] : undefined;
+    const declared = recordType !== undefined ? posType.instance.schema.writableRoots[recordType] : undefined;
+    const root = declared !== undefined ? writableRootOfSchema(declared, posType.instance.schema) : undefined;
     return { root, handle: posType, description: describePosition(posType) };
   }
 
@@ -9928,10 +9790,10 @@ class Checker {
    *    reports MOV_ENUM_UNKNOWN_VALUE (the typo); nothing to select.
    */
   private selectWriteVariant(
-    root: WritableRootSchema | undefined,
+    root: CheckerWritableRoot | undefined,
     body: { fields: FieldEntry[] },
     rootDescription: string,
-  ): { root: WritableRootSchema | undefined; description: string; variant?: WritableRootSchema } {
+  ): { root: CheckerWritableRoot | undefined; description: string; variant?: CheckerWritableRoot } {
     const discriminated = root?.discriminated;
     if (root === undefined || discriminated === undefined) {
       return { root, description: rootDescription };
@@ -9973,7 +9835,7 @@ class Checker {
    */
   private handleOfVariant(
     handle: PositionTypeRef | undefined,
-    variant: WritableRootSchema,
+    variant: CheckerWritableRoot,
   ): PositionTypeRef | undefined {
     if (handle === undefined || handle.kind !== 'handle') return handle;
     const position = variant.position;
@@ -9997,7 +9859,7 @@ class Checker {
   }
 
   /**
-   * An UNTAGGED write union (`WritableRootSchema.writeUnion`): the fields the
+   * An UNTAGGED write union (`CheckerWritableRoot.writeUnion`): the fields the
    * body MAPS must be a subset of at least one variant. Plain assignability —
    * nothing discriminates the variants, so there is nothing to select and
    * nothing to narrow; a body that fits several (only shared fields set) is
@@ -10009,7 +9871,7 @@ class Checker {
    */
   private checkWriteUnion(input: {
     write: WriteExpression;
-    root: WritableRootSchema | undefined;
+    root: CheckerWritableRoot | undefined;
     rootDescription: string;
   }): void {
     const { root, write, rootDescription } = input;
@@ -10058,7 +9920,7 @@ class Checker {
   private applyGenericLandings(
     handle: PositionTypeRef | undefined,
     write: WriteExpression,
-    root: WritableRootSchema | undefined,
+    root: CheckerWritableRoot | undefined,
     rootDescription: string,
   ): PositionTypeRef | undefined {
     if (handle === undefined || handle.kind !== 'handle') return handle;
@@ -10270,7 +10132,7 @@ class Checker {
         : { ...authored, fields: expandWriteSpreads(authored, s => this.spreadFields(s, scope)) };
     if (this.refuseShapeWrite(write, scope)) return undefined;
     const isBound = options?.isBound === true;
-    let root: WritableRootSchema | undefined;
+    let root: CheckerWritableRoot | undefined;
     let rootDescription = 'the write target';
     let handle: PositionTypeRef | undefined;
     /** The target is an edge of a node this run built — the run's own graph. */
@@ -10558,7 +10420,7 @@ class Checker {
    */
   private positionWriteResult(
     target: PositionTypeRef | undefined,
-    root: WritableRootSchema | undefined,
+    root: CheckerWritableRoot | undefined,
   ): PositionTypeRef | undefined {
     if (before(this.languageVersion, 4)) return target;
     // The result vouches for none of the fields the body set: what a later
@@ -10568,7 +10430,7 @@ class Checker {
       return { ...rest, written: true };
     }
     if (target?.kind !== 'position') return target;
-    const properties = positionSchemaOfRef(target)?.properties ?? {};
+    const properties = fieldTypesOfSchema(positionSchemaOfRef(target)?.properties ?? {}, target.instance.schema);
     return {
       kind: 'handle',
       instance: target.instance,
@@ -10650,7 +10512,7 @@ class Checker {
    */
   private checkIdentity(input: {
     uniqueBy: UniqueClause[];
-    root: WritableRootSchema | undefined;
+    root: CheckerWritableRoot | undefined;
     rootDescription: string;
     scope: Scope;
     /** The record lands on an edge of a node this run built — no parent a
@@ -10752,7 +10614,7 @@ class Checker {
    */
   private checkIdentityNarrowing(input: {
     parsed: Expression;
-    root: WritableRootSchema | undefined;
+    root: CheckerWritableRoot | undefined;
     scope: Scope;
     text: string;
     span: Span;
@@ -10881,7 +10743,7 @@ class Checker {
    * matched by similarity here", and the message names which case it is.
    */
   private checkFuzzyComponent(input: {
-    root: WritableRootSchema;
+    root: CheckerWritableRoot;
     rootDescription: string;
     /** The record fields the component names (bound handles excluded). */
     fields: string[];
@@ -10939,7 +10801,7 @@ class Checker {
   ): PositionTypeRef | undefined {
     const rooted = this.bindTargetRoots(match.target, scope);
     if (rooted.scope !== scope) return this.checkMatch({ ...match, target: rooted.target }, rooted.scope, options);
-    let root: WritableRootSchema | undefined;
+    let root: CheckerWritableRoot | undefined;
     let rootDescription = 'the match target';
     let handle: PositionTypeRef | undefined;
     let local = false;
@@ -11083,7 +10945,7 @@ class Checker {
 
   /**
    * Authored `unique by` vs the target's declared native identity
-   * (`WritableRootSchema.nativeUniqueness` — what the adapter enforces
+   * (`CheckerWritableRoot.nativeUniqueness` — what the adapter enforces
    * regardless of authoring):
    *
    *   - REDUNDANT (info): an authored field-only clause whose field set
@@ -11102,7 +10964,7 @@ class Checker {
    */
   private checkNativeUniqueness(
     uniqueBy: UniqueClause[],
-    root: WritableRootSchema | undefined,
+    root: CheckerWritableRoot | undefined,
     rootDescription: string,
   ): void {
     const native = root?.nativeUniqueness;
@@ -11149,7 +11011,7 @@ class Checker {
     span: Span,
     subject?: string,
   ): {
-    root?: WritableRootSchema;
+    root?: CheckerWritableRoot;
     handle?: PositionTypeRef;
     description?: string;
     local?: true;
@@ -11177,13 +11039,14 @@ class Checker {
     if (schema === undefined || landing === undefined) return { local: true, description };
     const nested = edge.structural === true ? this.nestedLocalEdges(landing, schema) : undefined;
     const landingInstance = instanceOfType(landing);
+    const fields = fieldTypesOfSchema(schema.properties, landingInstance?.schema);
     return {
       local: true,
       ...(landingInstance !== undefined && isDeclaredNode(landingInstance) ? { declared: true as const } : {}),
       description,
       root: {
-        fields: schema.properties,
-        resultShape: schema.properties,
+        fields,
+        resultShape: fields,
         fuzzyResolution: true,
       },
       // The landing the write appends belongs to no graph, so the handle is a
@@ -11196,7 +11059,7 @@ class Checker {
         kind: 'local',
         label: `a '${edgeName}' landing`,
         runBuilt: { landing },
-        reads: schema.properties,
+        reads: fields,
         ...(nested !== undefined ? { edges: nested } : {}),
       },
     };
@@ -11290,7 +11153,7 @@ class Checker {
     },
     scope: Scope,
   ): {
-    root?: WritableRootSchema;
+    root?: CheckerWritableRoot;
     handle?: PositionTypeRef;
     description?: string;
     /** The path landed on an edge of a node THIS RUN BUILT — no system behind
@@ -11554,10 +11417,13 @@ class Checker {
       });
     }
 
+    const declaredRoot = instance.schema.writableRoots[written] ?? instance.schema.createShapes?.[written];
     const root =
-      instance.schema.writableRoots[written] ??
-      instance.schema.createShapes?.[written] ??
-      (input.purpose === 'match' ? readableMatchRoot(instance.schema.positions[written]) : undefined);
+      declaredRoot !== undefined
+        ? writableRootOfSchema(declaredRoot, instance.schema)
+        : input.purpose === 'match'
+          ? readableMatchRoot(instance.schema.positions[written], instance.schema)
+          : undefined;
     // No second gate. Layer 13 collapsed the two promises into one: reaching
     // here means the edge declared `writable: true`, which IS the permission to
     // write along it — there is no separate create fact to re-check, and no
@@ -11565,7 +11431,7 @@ class Checker {
     // was already rejected above, rather than inheriting one from its target).
     // The link-vs-create distinction is PARKED: an edge that can only link
     // over-promises create and fails loudly at run time.
-    const resultShape = root?.resultShape ?? instance.schema.positions[written]?.properties ?? {};
+    const resultShape = root?.resultShape ?? fieldTypesOfSchema(instance.schema.positions[written]?.properties ?? {}, instance.schema);
     const handle: PositionTypeRef = {
       kind: 'handle',
       instance,
@@ -11608,9 +11474,9 @@ class Checker {
     scope: Scope,
     parents: Array<{ type?: string; edge: string }>,
     options: { purpose: 'write' | 'match'; isBound?: boolean; bindName?: string },
-  ): { root?: WritableRootSchema; handle?: PositionTypeRef; description?: string } {
+  ): { root?: CheckerWritableRoot; handle?: PositionTypeRef; description?: string } {
     let agreed:
-      | { root?: WritableRootSchema; handle?: PositionTypeRef; description?: string; instanceToken: object; written: string; pathIndex: number }
+      | { root?: CheckerWritableRoot; handle?: PositionTypeRef; description?: string; instanceToken: object; written: string; pathIndex: number }
       | undefined;
     let mismatched = false;
     for (let i = 0; i < target.paths.length; i++) {
@@ -11665,7 +11531,7 @@ class Checker {
    */
   private checkRequiredEdges(input: {
     write: WriteExpression;
-    root: WritableRootSchema | undefined;
+    root: CheckerWritableRoot | undefined;
     rootDescription: string;
     parents: Array<{ type?: string; edge: string }>;
     /** The graph the write lands in — the required edges' `from` types are ITS
@@ -11726,7 +11592,7 @@ class Checker {
    */
   private checkRequiredFields(input: {
     write: WriteExpression;
-    root: WritableRootSchema | undefined;
+    root: CheckerWritableRoot | undefined;
     rootDescription: string;
     parents: Array<{ type?: string; edge: string }>;
   }): void {
@@ -12378,7 +12244,7 @@ class Checker {
       } else if (callee.kind === 'plugin') {
         // One function sort: a plugin is a function whose body isn't visible.
         value = this.checkPluginApplication(statement, callee, scope);
-        pluginArgTypes = { declared: this.plainPluginSpec(callee.importedName ?? statement.callee)?.argTypes ?? {} };
+        pluginArgTypes = { declared: surfaceTypesOfSchema(this.plainPluginSpec(callee.importedName ?? statement.callee)?.argTypes ?? {}) };
       } else if (closure !== undefined) {
         // A closure bound to a name is a function: its signature is its
         // parameters, its value what its body returns, and calling it does
@@ -13259,7 +13125,7 @@ class Checker {
     span: Span,
   ): void {
     const declared = required.schema.positions[required.position];
-    for (const [name, want] of Object.entries(declared?.properties ?? {})) {
+    for (const [name, want] of Object.entries(fieldTypesOfSchema(declared?.properties ?? {}, required.schema))) {
       if (Object.hasOwn(supplied, name) || isMaybeAbsentType(want)) continue;
       this.report(
         DiagnosticCodes.GRAPH_FIELD_MISSING,
@@ -13278,7 +13144,8 @@ class Checker {
   ): void {
     const declared = required.schema.positions[required.position];
     if (declared === undefined) return;
-    const want = declared.properties[name];
+    const declaredWant = declared.properties[name];
+    const want = declaredWant !== undefined ? fieldTypeOfSchema(declaredWant, required.schema) : undefined;
     if (want === undefined) {
       this.reportGraphUnknown(name, required, span, 'field');
       return;
@@ -14177,9 +14044,6 @@ class Checker {
           instanceName: paramTypeRef.graph,
           ...(graphSymbol.adapter !== undefined ? { adapter: graphSymbol.adapter } : {}),
           ...(paramTypeRef.position !== undefined ? { position: paramTypeRef.position } : {}),
-          ...(graphSymbol.schema?.eventNarrowingKeys !== undefined
-            ? { narrowingKeys: [...graphSymbol.schema.eventNarrowingKeys] }
-            : {}),
           span: { start: statement.span.start, end: statement.span.start },
         });
       }
@@ -14443,88 +14307,27 @@ class Checker {
       }
     }
 
-    // The literal config values that select which events fire — the
-    // adapter's `events: [...]`, captured from the option-bearing config
-    // below. They drive the derived event type (see derivedEventTypes).
-    let selectedConfigValues: string[] | undefined;
-    // Every SINGLE-literal config value the listen states, by key — the address
-    // it subscribes to (`base: "appDevLoop"`), which is what narrows the type it
-    // fires. A non-literal (a list, an expression) is not an address and simply
+    // Every SINGLE-literal config value the listen states, by key — the
+    // address it subscribes to (`base: "appDevLoop"`), recorded for the story.
+    // A non-literal (a list, an expression) is not an address and simply
     // isn't here.
-    const listenConfigValues: Record<string, string | undefined> = {};
-    // A `'fields'`-format key's bare names, held until the address has landed.
-    let fieldsFilter: { names: string[]; span: Span } | undefined;
+    //
+    // A 0.13 catalog says nothing else about a settings listen: catalog
+    // snapshot version 3 dropped the listen vocabulary, its required keys,
+    // event options and value formats, and the event positions a listen
+    // fired (`triggerConfig…`, `defaultEvents`, `eventPositions`). So which
+    // keys an adapter takes, what each value must be, and the type the listen
+    // fires are unknown here, and unknown stays silent, as for an adapter that
+    // did not resolve. A value is not typed as an expression either: some keys
+    // took bare field names (`fields: [domains]`), which only the dropped
+    // formats said.
+    const listenConfigValues: Record<string, string> = {};
     const adapterName =
       instanceSymbol?.kind === 'instance' ? instanceSymbol.adapter : undefined;
     const spec = adapterName !== undefined ? this.catalog.adapter(adapterName) : undefined;
-    const vocabulary = spec?.triggerConfig;
-    // Keys the adapter REQUIRES (the cron `schedule`) — a listen
-    // missing one would provision a listener that can never fire.
-    //
-    // THE POSITION SUPPLIES THE LEADING HOPS: a required key is also
-    // satisfied when the instance's construction pins a POSITION arg of the
-    // same name (`at = airtable(credentials: c, base: "Dev Base")` supplies
-    // `base`, so its listens name only `table`). A listen's address is
-    // relative to the instance's position, not absolute from the meta node.
-    for (const required of spec?.triggerConfigRequired ?? []) {
-      if (statement.config.some(arg => arg.name === required)) continue;
-      const positionSupplies =
-        spec?.constructionArgs.some(a => a.kind === 'position' && a.name === required) === true
-        && instanceSymbol?.kind === 'instance'
-        && typeof instanceSymbol.constructionArgs?.[required] === 'string'
-        && instanceSymbol.constructionArgs[required].trim() !== '';
-      if (positionSupplies) continue;
-      const example =
-        spec?.triggerConfigFormats?.[required] === 'cron' ? '"0 9 * * 1"'
-        : required === 'key' ? `"${suggestedListenKey(statement.movement)}"`
-        : '"…"';
-      const why = spec?.triggerConfigRequiredWhy?.[required];
-      const rewritten = `listen to ${spellName(statement.instance)} { ${required}: ${example} } fire ${spellName(statement.movement)}`;
-      // A fix only for the routing key, whose value is derived (a schedule is
-      // the author's to choose), and only when nothing else was written in the
-      // statement — rewriting it would otherwise drop the author's own config.
-      const exact =
-        required === 'key' && statement.config.length === 0 && statement.alias === undefined && statement.construct === undefined;
-      this.reportWithFix({
-        code: DiagnosticCodes.LISTEN_BAD_CONFIG,
-        message: `a '${adapterName}' listener requires a '${required}' config${why !== undefined ? ` (${why})` : ''} — e.g. ${rewritten}`,
-        span: statement.span,
-        ...(exact ? { fix: { edits: [{ span: statement.span, text: rewritten }] } } : {}),
-      });
-    }
     for (const arg of statement.config) {
       if (arg.name === SUPPRESS_SELF_KEY) continue; // universal key, validated above
-      // Reject any config key the adapter doesn't accept. A resolved adapter
-      // with NO declared config vocabulary accepts NONE — an unknown key is an
-      // error, not silently passed. (An unresolved adapter — no `spec` — stays
-      // silent: the unknown-stays-silent contract.)
-      // From version 5 a source's poll interval is spelled `every`; the
-      // manifests still declare it as `pollIntervalSeconds`, which the parser
-      // already refuses under 5 with the fix.
-      const fromFive = since(this.languageVersion, 5);
-      const polled = (vocabulary ?? []).includes('pollIntervalSeconds');
       if (spec && this.retiredInboxSendersKey(arg, adapterName)) continue;
-      const known = (vocabulary ?? []).includes(arg.name) || (fromFive && polled && arg.name === 'every');
-      if (spec && !known) {
-        const accepted = (vocabulary ?? []).map(k => (fromFive && k === 'pollIntervalSeconds' ? 'every' : k));
-        this.report(
-          DiagnosticCodes.LISTEN_BAD_CONFIG,
-          `'${adapterName}' listeners do not accept a config key '${arg.name}'${accepted.length ? ` — they accept: ${accepted.join(', ')}` : ' — they take no config'}`,
-          arg.value.span,
-        );
-        continue;
-      }
-      if (fromFive && polled && arg.name === 'every') {
-        const written = arg.value.raw.trim();
-        if (!isValidDuration(written) || durationToMs(written) === 0) {
-          this.report(
-            DiagnosticCodes.LISTEN_BAD_CONFIG,
-            `'${written}' is not a valid poll interval — use a unit-suffixed duration like 30s, 5m, 1h`,
-            arg.value.span,
-          );
-        }
-        continue;
-      }
       if (arg.isType) {
         // No listen config takes a type. The graph's `type: <company>` was
         // the last one, and it is a quoted value now like every other pin —
@@ -14541,196 +14344,8 @@ class Checker {
       if (literal?.length === 1 && !isListSlot(arg.value, this.languageVersion)) {
         listenConfigValues[arg.name] = literal[0];
       }
-      const options = spec?.triggerConfigOptions?.[arg.name];
-      if (options !== undefined) {
-        const values = staticStringValues(arg.value, this.languageVersion);
-        if (values === undefined || !isListSlot(arg.value, this.languageVersion)) {
-          // Event selections are always a list of quoted strings — even a
-          // single event — so the authored shape is uniform and every reader
-          // sees an array.
-          const example = options.length > 0 ? `"${options[0]}"` : '"…"';
-          this.report(
-            DiagnosticCodes.LISTEN_BAD_CONFIG,
-            `'${arg.name}' is a list of events${options.length > 0 ? ` — one of: ${options.join(', ')}` : ''} — e.g. ${arg.name}: [${example}]`,
-            arg.value.span,
-          );
-        } else {
-          // The selected events — the source of the listener's event type.
-          selectedConfigValues = values;
-          for (const value of values) {
-            if (!options.includes(value)) {
-              this.report(
-                DiagnosticCodes.LISTEN_BAD_CONFIG,
-                `'${value}' is not an event '${adapterName}' can subscribe to — one of: ${options.join(', ')}`,
-                arg.value.span,
-              );
-            }
-          }
-        }
-      }
-      // Static value formats — the SAME parser/probe the platform scheduler
-      // runs, so check time and fire time can never disagree about what is
-      // valid.
-      const format = spec?.triggerConfigFormats?.[arg.name];
-      if (format === 'cron') {
-        // The cron adapter's `schedule`.
-        const values = staticStringValues(arg.value, this.languageVersion);
-        if (values === undefined || values.length !== 1) {
-          this.report(
-            DiagnosticCodes.LISTEN_BAD_CONFIG,
-            `'${arg.name}' takes one quoted cron expression — e.g. ${arg.name}: "0 9 * * 1" (minute hour day-of-month month day-of-week, UTC unless a timezone is set)`,
-            arg.value.span,
-          );
-        } else {
-          const scheduleError = cronScheduleError(values[0]);
-          if (scheduleError !== null) {
-            this.report(
-              DiagnosticCodes.LISTEN_BAD_CONFIG,
-              `'${values[0]}' is not a valid schedule — ${scheduleError}. Five fields: minute hour day-of-month month day-of-week, e.g. "0 9 * * 1" is 09:00 every Monday`,
-              arg.value.span,
-            );
-          }
-        }
-      } else if (format === 'timezone') {
-        // The cron adapter's optional `timezone` — an IANA id.
-        const values = staticStringValues(arg.value, this.languageVersion);
-        if (values === undefined || values.length !== 1) {
-          this.report(
-            DiagnosticCodes.LISTEN_BAD_CONFIG,
-            `'${arg.name}' takes one quoted IANA time zone — e.g. ${arg.name}: "Europe/London"`,
-            arg.value.span,
-          );
-        } else {
-          const tzError = cronTimezoneError(values[0]);
-          if (tzError !== null) {
-            this.report(
-              DiagnosticCodes.LISTEN_BAD_CONFIG,
-              `${tzError}. The schedule then fires at that local wall-clock time, with daylight-savings handled for you`,
-              arg.value.span,
-            );
-          }
-        }
-      } else if (format === 'strings') {
-        // A list of the source system's own names (Gmail's `labels`). Only
-        // the shape is ours to check; the names are the system's.
-        const values = staticStringValues(arg.value, this.languageVersion);
-        if (
-          values === undefined ||
-          !isListSlot(arg.value, this.languageVersion) ||
-          values.length === 0 ||
-          values.some(value => value.trim() === '')
-        ) {
-          this.report(
-            DiagnosticCodes.LISTEN_BAD_CONFIG,
-            `'${arg.name}' is a non-empty list of quoted, non-empty names — e.g. ${arg.name}: ["…"]`,
-            arg.value.span,
-          );
-          continue;
-        }
-      } else if (format === 'fields') {
-        // The changed-attribute filter — bare property names of whatever the
-        // listen's address lands on. The SHAPE is checkable here; the NAMES
-        // need the landed position, so they are held for the check below.
-        const names = bareNameValues(arg.value, this.languageVersion);
-        if (names === undefined) {
-          this.report(
-            DiagnosticCodes.LISTEN_BAD_CONFIG,
-            `'${arg.name}' is a list of the watched type's properties, bare — e.g. ${arg.name}: [domains]`,
-            arg.value.span,
-          );
-        } else {
-          fieldsFilter = { names, span: arg.value.span };
-        }
-        continue; // bare names are not an expression slot
-      }
-      this.checkExprSlot(arg.value, scope);
     }
-
-    if (recorded) {
-      for (const [key, value] of Object.entries(listenConfigValues)) {
-        if (value !== undefined) recorded.narrowing[key] = value;
-      }
-      if (selectedConfigValues !== undefined) recorded.events = [...selectedConfigValues];
-    }
-
-    // The type(s) this listen fires, derived from its config alone. Computed
-    // HERE — before `fire` is resolved — because a listen that fires nothing
-    // is still a listen the author wrote: the story renders what it watches,
-    // and a `fields:` filter is checkable whether or not the movement is.
-    const instanceRef =
-      instanceSymbol !== undefined ? instanceRefOf(instanceSymbol) : undefined;
-    // A listen with no `events:` selection is subscribed to the adapter's own
-    // dispatch DEFAULT (whatsapp: messages only), not necessarily everything.
-    const listenSpec =
-      instanceSymbol?.kind === 'instance' && instanceSymbol.adapter !== undefined
-        ? this.catalog.adapter(instanceSymbol.adapter)
-        : undefined;
-    const subscribed = selectedConfigValues ?? listenSpec?.defaultEvents;
-    if (recorded && subscribed !== undefined) recorded.events = [...subscribed];
-    // A typo'd hop dies HERE, at the pin the author wrote, with a did-you-mean
-    // — not downstream as a parameter mismatch against a signature that may
-    // carry the same typo, and not silently when the address is wide.
-    if (instanceRef !== undefined) {
-      this.checkHopPins(
-        instanceRef,
-        listenConfigValues,
-        key =>
-          statement.config.find(arg => arg.name === key)?.value.span ?? statement.span,
-      );
-    }
-    const eventTypes =
-      instanceRef !== undefined
-        ? this.derivedEventTypes(instanceRef, subscribed, listenConfigValues)
-        : undefined;
-    if (recorded && eventTypes !== undefined) {
-      recorded.eventTypes = eventTypes.map(ref =>
-        ref.kind === 'union'
-          ? { key: ref.union, ...(ref.display !== undefined ? { display: ref.display } : {}) }
-          : ref.kind === 'position'
-            ? { key: ref.position, ...(ref.display !== undefined ? { display: ref.display } : {}) }
-            : { key: describePosition(ref) },
-      );
-    }
-
-    // `fields: [domains]` — the names, now that the address has landed. One
-    // landed type is the checkable case: where a listen fires several, a name
-    // valid on any of them is valid (the filter is applied per event).
-    //
-    // The names belong to whatever the listen is FILTERING, and the two event
-    // shapes disagree about what that is. Where the landed position declares a
-    // SUBJECT edge — the hop from an event to the record it is about — the
-    // record is one hop away and its properties are what `fields:` names; the
-    // event node's own `action`/`type` are not filterable fields, they are the
-    // address. Where no subject edge is declared the listen fires the record
-    // itself and the landed position is already the right surface.
-    //
-    // The marker is the adapter's, not this checker's: recognising an edge by
-    // its name would be parsing a display string an adapter is free to spell
-    // differently.
-    if (fieldsFilter !== undefined && instanceRef !== undefined && eventTypes !== undefined) {
-      const known = new Set<string>();
-      let described = false;
-      for (const type of eventTypes) {
-        const key = type.kind === 'position' ? type.position : undefined;
-        const landed = key !== undefined ? instanceRef.schema.positions[key] : undefined;
-        if (landed === undefined) continue;
-        const position = subjectOf(instanceRef, landed)?.position ?? landed;
-        if (position.undescribed === true) continue;
-        described = true;
-        for (const name of Object.keys(position.properties)) known.add(name);
-      }
-      if (described) {
-        for (const name of fieldsFilter.names) {
-          if (known.has(name)) continue;
-          this.report(
-            DiagnosticCodes.LISTEN_BAD_CONFIG,
-            `'${name}' is not a property of what this listener watches`
-              + `${known.size > 0 ? ` — one of: ${[...known].sort().join(', ')}` : ''}`,
-            fieldsFilter.span,
-          );
-        }
-      }
-    }
+    if (recorded) Object.assign(recorded.narrowing, listenConfigValues);
 
     const configIdentity = statement.config
       .map(arg => `${arg.name}=${arg.value.raw.trim()}`)
@@ -14827,7 +14442,7 @@ class Checker {
 
     // Shape-typed params keep the structural conformance path (unchanged).
     if (paramGraph.symbol.kind === 'shape' && instanceSymbol?.kind === 'instance') {
-      this.checkListenShapeConformance(paramGraph.symbol, instanceSymbol, param, statement);
+      this.checkListenShapeConformance(paramGraph.symbol, param, statement);
       return;
     }
 
@@ -14843,58 +14458,9 @@ class Checker {
       );
       return;
     }
+    // The type the listen fires is not known here (a 0.13 catalog has no event
+    // positions), so the parameter is held to the listened instance alone.
 
-    // Derived above, before the fired movement resolved: the type(s) this
-    // listen fires — the event node each selected kind is delivered on, at
-    // the address the config states, with the `events:` selection as `action`
-    // pins where the node declares that axis. The parameter must satisfy
-    // EVERY one (a listen calls the movement on every matching event, so each
-    // delivered type is an argument). Same assignability primitive as any
-    // call. An adapter that declares no event edges stays leniently
-    // unchecked.
-    if (instanceRef === undefined || eventTypes === undefined) return;
-    const paramType = this.positionFromTypeRef(paramGraph.symbol, declared);
-    if (paramType === undefined) return; // unknown position already reported at the decl
-    const mismatch = eventTypes.find((t) => positionsMatch(t, paramType) === false);
-    if (mismatch !== undefined) {
-      // The parameter as the AUTHOR WROTE IT — never the key it resolved to.
-      // A signature and a listen disagreeing is a disagreement about an
-      // address, so both sides must read as addresses.
-      const wrote = `<${declared.graph}${declared.hopsRaw ?? ''}>`;
-      // The signature names the RECORD this event is about — the shape every
-      // movement written against an ambient graph has, and the one case where
-      // "what to change" is fully determined. Say it, exactly.
-      const rewrite = this.recordSignatureRewrite({
-        instance: instanceRef,
-        instanceName: statement.instance,
-        fires: mismatch,
-        paramName: param.name,
-        paramType,
-      });
-      if (rewrite !== undefined) {
-        this.report(
-          DiagnosticCodes.LISTEN_PARAM_MISMATCH,
-          `'${statement.movement}' takes '${param.name}: ${wrote}', but this listener fires `
-            + `${describeEventType(mismatch)} — the EVENT, not the record it is about. `
-            + `Type the parameter against the event and reach the record in one hop: `
-            + `'${statement.movement}(${rewrite.eventParam}: ${rewrite.signature})', `
-            + `then wrap the body in '${rewrite.binding}'.`,
-          statement.span,
-        );
-        return;
-      }
-      const example = this.eventTraversalExample(instanceRef, param.name, statement.instance);
-      this.report(
-        DiagnosticCodes.LISTEN_PARAM_MISMATCH,
-        `'${statement.movement}' takes '${param.name}: ${wrote}' (${describePosition(paramType)}), but `
-          + `this listener fires ${describeEventType(mismatch)}. Every listen firing a movement must `
-          + `satisfy its signature — either narrow this listen to what '${statement.movement}' accepts, `
-          + `or widen the signature`
-          + (example === undefined ? '.' : ` — e.g. \`${example}\` `)
-          + (example === undefined ? '' : `(a delete event has no record to read).`),
-        statement.span,
-      );
-    }
   }
 
   /**
@@ -15003,206 +14569,6 @@ class Checker {
   }
 
   /**
-   * The EXACT rewrite for a signature typed against the record when the listen
-   * fires the event — the shape every movement written against an ambient
-   * graph has, once the graph publishes an event entry like every other
-   * adapter (D40(a)).
-   *
-   * It fires only when the diagnosis is certain: the fired event declares a
-   * SUBJECT edge, and that edge lands on the very position the signature
-   * named. Then the new signature is the address this listen actually fires
-   * and the body regains the author's own name one hop along. Anything less
-   * certain falls through to the general advice — a rewrite that doesn't
-   * compile is worse than none, which is the same rule `eventTraversalExample`
-   * follows.
-   *
-   * Every identifier comes from the schema: the event's name and pins from the
-   * address, the hop from the edge the adapter marked. Nothing is spelled here,
-   * so a fixture shaped like one adapter cannot make a hardcoded string look
-   * derived.
-   *
-   */
-  private recordSignatureRewrite(input: {
-    instance: InstanceRef;
-    instanceName: string;
-    fires: PositionTypeRef;
-    paramName: string;
-    paramType: PositionTypeRef;
-  }): { signature: string; binding: string; eventParam: string } | undefined {
-    const { fires, paramType } = input;
-    if (fires.kind !== 'position' && fires.kind !== 'union') return undefined;
-    if (fires.address === undefined) return undefined;
-    if (paramType.kind !== 'position') return undefined;
-    const landed = fires.kind === 'union' ? fires.variants : [fires.position];
-    for (const key of landed) {
-      const position = input.instance.schema.positions[key];
-      if (position === undefined) continue;
-      const subject = subjectOf(input.instance, position);
-      if (subject === undefined || subject.target !== paramType.position) continue;
-      // The author's name still means the record, so it keeps it; the event
-      // needs one of its own, and only has to differ from the name in hand.
-      const eventParam = input.paramName === 'event' ? 'change' : 'event';
-      return {
-        signature: eventAddressSource(input.instanceName, fires.address, this.languageVersion),
-        // The BLOCK traversal, because that is the form the language has: a
-        // bare `x = a-[:E]->` binding does not parse, and a suggestion that
-        // does not compile sends the author somewhere that isn't there.
-        binding: `${eventParam}-[${input.paramName}:${subject.edge}]-> { … }`,
-        eventParam,
-      };
-    }
-    return undefined;
-  }
-
-  /**
-   * A worked example of reaching the record, built from THIS instance's own
-   * event surface.
-   *
-   * It used to be hardcoded to Attio's shape (`e-[r:Companies]-> { … r.Name }`),
-   * which is a real edge there and a fiction anywhere else — an Airtable author
-   * reads it and goes looking for a `Companies` edge on an event whose only edge
-   * is `record`. A suggestion that doesn't execute in the instance it's aimed at
-   * is worse than no suggestion: it sends the author somewhere that isn't there,
-   * which is the same failure `AdapterNameDriftError` makes in
-   * `7_readable_means_readable.md`.
-   *
-   * So take a live action's variant, an edge it really has, and a field really
-   * on that edge's target. Anything we can't name, we don't claim: no example
-   * beats a wrong one.
-   */
-  private eventTraversalExample(
-    instance: InstanceRef,
-    paramName: string,
-    instanceName: string,
-  ): string | undefined {
-    const schema = instance.schema;
-    for (const { position: eventName } of schema.eventPositions ?? []) {
-      const position = schema.positions[eventName];
-      if (position === undefined) continue;
-      const actionType = position.properties[EVENT_ACTION_FIELD];
-      const actions = isEnumType(actionType) ? actionType.options : [];
-      const action = actions.find((a) => a !== RECORD_DELETED_ACTION);
-      if (action === undefined) continue; // no change-kind axis — nothing to narrow by
-      const edge = Object.keys(position.edges).find(
-        (e) => position.edges[e].requiresLiveRecord !== true || action !== RECORD_DELETED_ACTION,
-      );
-      if (edge === undefined) continue;
-      const target = position.edges[edge].target;
-      const field = Object.keys(schema.positions[target]?.properties ?? {})[0];
-      const read = field === undefined ? '…' : `… r.\`${field}\``;
-      return (
-        `${spellIf(`${paramName} IS ${eventAddressSource(instanceName, { event: eventName, narrowing: { [EVENT_ACTION_FIELD]: action } }, this.languageVersion)}`, this.languageVersion)} `
-        + `{ ${paramName}-[r:${edge}]-> { ${read} } }`
-      );
-    }
-    return undefined;
-  }
-
-  /**
-   * The type(s) a listen produces, as a function of its config. Returns the
-   * PositionTypeRefs the param is matched against (one per delivered event
-   * node), or undefined when the instance declares no event edges (lenient:
-   * caller skips the check).
-   *
-   * THE EVENT IS JUST A NODE. Each `events:` value is delivered along one of
-   * the instance's declared event edges (`eventPositions[].on`); the type it
-   * fires is that node at the address the config states — the hop pins from
-   * `eventNarrowingKeys`, plus the value itself as an `action` pin where the
-   * node declares that axis (an ordinary enum field — ONE namespace, the
-   * retired `configValueToAction` translation table has nothing to translate).
-   * A selection covering the node's whole action enum — or no selection at
-   * all — is the unnarrowed node: not a mechanism, a wider type.
-   *
-   * Position-per-listen falls out: two listens, two addresses, two keys, two
-   * types — no per-listen mechanism anywhere.
-   *
-   */
-  private derivedEventTypes(
-    instance: InstanceRef,
-    selectedConfigValues: string[] | undefined,
-    listenConfigValues: Record<string, string | undefined>,
-  ): PositionTypeRef[] | undefined {
-    const eventPositions = instance.schema.eventPositions;
-    if (eventPositions === undefined || eventPositions.length === 0) return undefined;
-
-    // The address this listen's config states. A listen that doesn't name the
-    // whole address narrows nothing — the wide event type stands, so an
-    // adapter with no addressable events is untouched.
-    const narrowing =
-      listenNarrowing({ keys: instance.schema.eventNarrowingKeys, config: listenConfigValues })
-      ?? {};
-
-    const refFor = (event: string, pins: Record<string, string>): PositionTypeRef => {
-      const narrowed = Object.keys(pins).length > 0;
-      const address: EventAddress = { event, narrowing: pins };
-      const key = eventAddressKey(address);
-      // Resolve through the schema where the position/union is grafted (so the
-      // ref's KIND mirrors what the param resolves to); construct the ref
-      // directly where it isn't — a listen's address is a real type even where
-      // no signature named it, so the ref carries its own display.
-      const resolved = positionRefIn(instance, key);
-      const base: PositionTypeRef =
-        resolved !== undefined && (resolved.kind === 'position' || resolved.kind === 'union')
-          ? resolved
-          : { kind: 'position', instance, position: key };
-      if (base.kind !== 'position' && base.kind !== 'union') return base;
-      return {
-        ...base,
-        address,
-        ...(narrowed ? { narrowsEvent: event, display: eventAddressDisplay(address) } : {}),
-      };
-    };
-
-    const derived: PositionTypeRef[] = [];
-    for (const { position: event, on } of eventPositions) {
-      // The `events:` values this edge delivers, of those the listen selected.
-      // No selection ⇒ the edge fires on all its kinds.
-      const deliveredHere =
-        selectedConfigValues === undefined
-          ? undefined
-          : selectedConfigValues.filter((v) => (on === undefined ? true : on.includes(v)));
-      if (deliveredHere !== undefined && deliveredHere.length === 0) continue;
-
-      const actionType = instance.schema.positions[event]?.properties[EVENT_ACTION_FIELD];
-      const actionEnum = isEnumType(actionType) ? actionType.options : undefined;
-
-      if (actionEnum === undefined || deliveredHere === undefined) {
-        derived.push(refFor(event, narrowing));
-        continue;
-      }
-      const pinnable = [...new Set(deliveredHere.filter((v) => actionEnum.includes(v)))];
-      if (pinnable.length === 0 || actionEnum.every((v) => pinnable.includes(v))) {
-        // Nothing this node's axis recognises (checked as listen config
-        // separately), or the whole axis — the unnarrowed node either way.
-        derived.push(refFor(event, narrowing));
-        continue;
-      }
-      if (pinnable.length === 1) {
-        derived.push(refFor(event, { ...narrowing, [EVENT_ACTION_FIELD]: pinnable[0] }));
-        continue;
-      }
-      // A config-scoped union over the selected action pins (NOT the full
-      // static union), keyed by the node's own address so a param naming the
-      // node matches while a too-narrow single-action param does not.
-      const unionAddress: EventAddress = { event, narrowing };
-      derived.push({
-        kind: 'union',
-        instance,
-        union: eventAddressKey(unionAddress),
-        variants: pinnable.map((v) =>
-          eventAddressKey({ event, narrowing: { ...narrowing, [EVENT_ACTION_FIELD]: v } }),
-        ),
-        address: unionAddress,
-        narrowsEvent: event,
-        ...(Object.keys(narrowing).length > 0
-          ? { display: eventAddressDisplay(unionAddress) }
-          : {}),
-      });
-    }
-    return derived.length > 0 ? derived : undefined;
-  }
-
-  /**
    * `from: "anyone"` / `from: "known"` on an email listen, under pins 1 and 2.
    *
    * A fork of the platform let a listen open its address to strangers with
@@ -15235,115 +14601,25 @@ class Checker {
 
   private checkListenShapeConformance(
     shapeSymbol: ScopeSymbol,
-    instanceSymbol: ScopeSymbol,
     param: MovementDeclaration['params'][number],
     statement: ListenDeclaration,
   ): void {
     const shapeSchema = shapeSymbol.schema;
-    const instanceSchema = instanceSymbol.schema;
     // The declaration IS its root node, so that is what the lane must conform to.
     const shapeNodeName = shapeSymbol.name;
     if (!shapeSchema) return;
     const shapeNode = shapeSchema.positions[shapeNodeName];
     if (!shapeNode) return; // unknown root — reported at the param decl
 
-    // The instance's event position; unknown ⇒ unverifiable ⇒ info, not error.
-    const eventPos = instanceSchema?.eventPosition;
-    const instancePos = eventPos ? instanceSchema!.positions[eventPos] : undefined;
-    if (!instancePos) {
-      this.reportInfo(
-        DiagnosticCodes.LISTEN_SHAPE_MISMATCH,
-        `'${statement.instance}' isn't connected (or its event schema is unknown) — conformance to the declaration '${typeNameOf(param.type)?.graph ?? param.name}' is unchecked for this lane`,
-        statement.span,
-      );
-      return;
-    }
-
-    if (surfaceNotEnumerated(instancePos)) {
-      this.reportInfo(
-        DiagnosticCodes.LISTEN_SHAPE_MISMATCH,
-        `'${statement.instance}'s event schema can't be introspected — conformance to the declaration '${typeNameOf(param.type)?.graph ?? param.name}' is unchecked for this lane`,
-        statement.span,
-      );
-      return;
-    }
-
-    this.conformShapeNode({
-      shapeSchema,
-      shapeNodeName,
-      instanceSchema: instanceSchema!,
-      instancePosName: eventPos!,
-      statement,
-      param,
-      visited: new Set(),
-      path: '',
-    });
+    // A settings listen's event position is not in a 0.13 catalog (catalog
+    // snapshot version 3 dropped `eventPosition`), so conformance is
+    // unverifiable: an info, not an error.
+    this.reportInfo(
+      DiagnosticCodes.LISTEN_SHAPE_MISMATCH,
+      `'${statement.instance}' isn't connected (or its event schema is unknown) — conformance to the declaration '${typeNameOf(param.type)?.graph ?? param.name}' is unchecked for this lane`,
+      statement.span,
+    );
   }
-
-  private conformShapeNode(input: {
-    shapeSchema: InstanceSchema;
-    shapeNodeName: string;
-    instanceSchema: InstanceSchema;
-    instancePosName: string;
-    statement: ListenDeclaration;
-    param: MovementDeclaration['params'][number];
-    visited: Set<string>;
-    path: string;
-  }): void {
-    const visitKey = `${input.shapeNodeName}::${input.instancePosName}`;
-    if (input.visited.has(visitKey)) return;
-    input.visited.add(visitKey);
-
-    const shapeNode = input.shapeSchema.positions[input.shapeNodeName];
-    const instancePos = input.instanceSchema.positions[input.instancePosName];
-    if (!shapeNode || !instancePos) return;
-    if (surfaceNotEnumerated(instancePos)) return;
-
-    for (const [fieldName, shapeType] of Object.entries(shapeNode.properties)) {
-      const sourceType = instancePos.properties[fieldName];
-      if (sourceType === undefined) {
-        this.report(
-          DiagnosticCodes.LISTEN_SHAPE_MISMATCH,
-          input.path === ''
-            ? `'${input.statement.instance}' has no field \`${fieldName}\` that the declaration '${input.shapeNodeName}' requires — this lane can't fire '${input.statement.movement}'`
-            : `'${input.statement.instance}' ${input.path}has no field \`${fieldName}\` that the declaration '${input.shapeNodeName}' requires`,
-          input.statement.span,
-        );
-        continue;
-      }
-      if (!fieldAssignable(sourceType, shapeType)) {
-        this.report(
-          DiagnosticCodes.LISTEN_SHAPE_MISMATCH,
-          input.path === ''
-            ? `'${input.statement.instance}'.\`${fieldName}\` (${describeFieldType(sourceType)}) doesn't fit declared field \`${fieldName}\` (${describeFieldType(shapeType)})`
-            : `'${input.statement.instance}' ${input.path}\`${fieldName}\` (${describeFieldType(sourceType)}) doesn't fit declared field \`${fieldName}\` (${describeFieldType(shapeType)})`,
-          input.statement.span,
-        );
-      }
-    }
-
-    for (const [edgeName, shapeEdge] of Object.entries(shapeNode.edges)) {
-      const instanceEdge = instancePos.edges[edgeName];
-      if (!instanceEdge) {
-        this.report(
-          DiagnosticCodes.LISTEN_SHAPE_MISMATCH,
-          input.path === ''
-            ? `'${input.statement.instance}' has no relationship '${edgeName}' that the declaration '${input.shapeNodeName}' requires`
-            : `'${input.statement.instance}' ${input.path}has no relationship '${edgeName}' that the declaration '${input.shapeNodeName}' requires`,
-          input.statement.span,
-        );
-        continue;
-      }
-      this.conformShapeNode({
-        ...input,
-        shapeNodeName: shapeEdge.target,
-        instancePosName: instanceEdge.target,
-        path: `${input.path}${edgeName} → `,
-      });
-    }
-  }
-
-  // ── Extraction ──
 
   /** Checks the tree and returns the inferred result graph's root type (check 9). */
   private checkExtract(
@@ -15600,7 +14876,7 @@ class Checker {
   private resolveExtractFieldType(
     field: Pick<ExtractField, 'type' | 'span'>,
     scope: Scope,
-  ): SchemaFieldType | undefined {
+  ): SurfaceFieldType | undefined {
     if (field.type === undefined) return undefined;
     return this.resolveNamedType(field.type, field.span, scope);
   }
@@ -15613,7 +14889,7 @@ class Checker {
    * thing, and nothing downstream can tell a written option set from a
    * fetched one.
    */
-  private resolveNamedType(written: string, span: Span, scope: Scope): SchemaFieldType | undefined {
+  private resolveNamedType(written: string, span: Span, scope: Scope): SurfaceFieldType | undefined {
     const segments = borrowedTypeSegments(written);
     if (segments === undefined) {
       const primitive = parseFieldTypeName(written);
@@ -15895,7 +15171,8 @@ class Checker {
       this.reportPluginBadArg(plugin.plugin, spec, arg.name, arg.value.span);
       // Held to what the plugin takes exactly as a plain call's argument is:
       // a stage is the same call, and the engine hands it the same value.
-      const declared = spec?.argTypes?.[arg.name];
+      const declaredArg = spec?.argTypes?.[arg.name];
+      const declared = declaredArg !== undefined ? surfaceTypeOfSchema(declaredArg) : undefined;
       const { valueType, held, mayHold } = this.checkExprSlot(arg.value, scope, { fields, ...pluginArgSlotOptions(declared) });
       this.checkPluginArgValue({
         callee: plugin.plugin,
@@ -16061,7 +15338,8 @@ class Checker {
       this.reportPluginBadArg(statement.callee, spec, arg.name, callArgSpan(arg), {
         plain: true,
       });
-      this.reportPluginArgType(statement.callee, spec?.argTypes?.[arg.name], arg, scope);
+      const declaredArg = spec?.argTypes?.[arg.name];
+      this.reportPluginArgType(statement.callee, declaredArg !== undefined ? surfaceTypeOfSchema(declaredArg) : undefined, arg, scope);
     }
     // The call's value is what the plugin DECLARED it hands back, on the plane
     // that declaration lives on. Undeclared (or refused above) leaves it
@@ -16070,20 +15348,20 @@ class Checker {
     if (stageOnly || spec?.output === undefined) return UNKNOWN_RETURN;
     this.reportPluginOutputChanged(statement, spec);
     const output = pluginOutputUnder(spec, this.languageVersion) ?? spec.output;
-    const found = (fields: Record<string, SchemaFieldType>): PositionTypeRef => ({
+    const found = (fields: Record<string, SurfaceFieldType>): PositionTypeRef => ({
       kind: 'local',
       label: `what '${statement.callee}' found`,
       reads: { ...fields },
     });
     switch (output.kind) {
       case 'value':
-        return { returns: true, fieldType: output.type };
+        return { returns: true, fieldType: surfaceTypeOfSchema(output.type) };
       case 'record':
-        return { returns: true, posType: found(output.fields) };
+        return { returns: true, posType: found(surfaceTypesOfSchema(output.fields)) };
       case 'records':
         // One record per thing found, in the order the plugin found them — a
         // sequence, like a hop's landings, so FIRST and AT mean something.
-        return { returns: true, fieldType: listOf(recordOf(found(output.fields)), 'ordered') };
+        return { returns: true, fieldType: listOf(recordOf(found(surfaceTypesOfSchema(output.fields))), 'ordered') };
       default:
         return neverAsAny(output);
     }
@@ -16102,7 +15380,7 @@ class Checker {
    */
   private reportPluginArgType(
     callee: string,
-    declared: SchemaFieldType | undefined,
+    declared: SurfaceFieldType | undefined,
     arg: CallArg,
     scope: Scope,
   ): void {
@@ -16154,7 +15432,7 @@ class Checker {
   /** A plugin argument's value against the type the plugin declares for it. */
   private checkPluginArgValue(at: {
     callee: string;
-    declared: SchemaFieldType | undefined;
+    declared: SurfaceFieldType | undefined;
     name: string;
     record: PositionTypeRef | undefined;
     valueType: FieldType | undefined;
@@ -16255,7 +15533,7 @@ class Checker {
    */
   private refusePluginRecordInPlace(
     callee: string,
-    declared: SchemaFieldType | undefined,
+    declared: SurfaceFieldType | undefined,
     arg: Extract<CallArg, { kind: 'write' | 'node' }>,
   ): void {
     const takes =

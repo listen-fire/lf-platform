@@ -64,10 +64,11 @@ import {
   edgeIsWritable,
   EVENT_ACTION_FIELD,
   FieldType,
+  fieldTypeOfSchema,
   InstanceSchema,
   PositionSchema,
   refinementKey,
-  type SchemaFieldType,
+  type SurfaceFieldType,
   surfaceNotEnumerated,
   type TupleRest,
   variantOf,
@@ -146,7 +147,7 @@ export const TypedDiagnosticCodes = {
    *  Traversing it would silently yield nothing, so the read is an error;
    *  writes along the edge are untouched. */
   WRITE_ONLY_EDGE: 'MOV_WRITE_ONLY_EDGE',
-  /** A BARE traversal walks an AWAITABLE edge (`EdgeSchema.awaitable: true`) —
+  /** A BARE traversal walks an AWAITABLE edge (`EdgeSchema.listenable: true`) —
    *  a promise in type-space (an ask's `Response`). Reading it live would
    *  yield nothing until it resolves; the author meant to `await` it. The TS
    *  analogue: property access on an un-awaited Promise. Carries a did-you-mean
@@ -907,14 +908,23 @@ export type PositionTypeRef =
       /** A record `extract(…)` / `extractOne(…)` handed back: one the run
        *  built, updatable in place like a landing — `fields` is what
        *  `write r { … }` may set, the fields the extraction declared. */
-      extracted?: { fields: Record<string, SchemaFieldType> };
+      extracted?: { fields: Record<string, SurfaceFieldType> };
     };
 
-/** One edge of a checker-local node: the same `EdgeSchema` promises every other
- *  edge carries (awaitable, resolvesEmpty, …), plus the landing itself — a
+/**
+ * An edge's promises as the checker reads them: the catalog's, plus
+ * `resolvesEmpty` (an awaited landing that may settle empty, typed
+ * `T | absent`). 0.13 retired it from modules, since a deleted record leaves
+ * the wait waiting on every edge; only the checker's own callback `Called`
+ * edge still declares it.
+ */
+export type CheckerEdgeSchema = EdgeSchema & { resolvesEmpty?: true };
+
+/** One edge of a checker-local node: the same promises every other edge
+ *  carries (listenable, resolvesEmpty, …), plus the landing itself — a
  *  local node has no instance to resolve a target NAME against. */
 export interface LocalEdge {
-  schema: EdgeSchema;
+  schema: CheckerEdgeSchema;
   /** The landing. ABSENT means the construct declared this edge and could not
    *  type where it lands — the arrow-plane twin of `reads[name] === undefined`,
    *  and the same load-bearing distinction: traversing it is unknown, not an
@@ -1073,7 +1083,7 @@ export type CallbackParams = ReadonlyArray<{ name: string; type: FieldType | und
  * signature. Fully static: the landing is derived here, at the construction
  * site, exactly as a write handle's result shape is.
  *
- * `Called` is `awaitable` (so `await cb-[:Called]->` waits for a fire and
+ * `Called` is `listenable` (so `await cb-[:Called]->` waits for a fire and
  * `resolvesEmpty` types the landing `T | absent`) AND readable, since a bare
  * traversal reads the calls so far — zero of them before anything fires, which
  * is an empty traversal, not a special state. A repeatable callback simply
@@ -1094,10 +1104,9 @@ export function callbackType(params: CallbackParams): PositionTypeRef {
       [CALLBACK_CALLED_EDGE]: {
         schema: {
           target: CALLBACK_CALLED_EDGE,
-          awaitable: true,
           // A tap ARRIVES: the platform posts the callback and the run is woken
           // where it parked (`callback_fire`), so nothing has to look on a timer.
-          watchable: true,
+          listenable: true,
           resolvesEmpty: true,
           // The call ledger is APPENDED to as each fire lands
           // (`callback_store.ts`: `calls || [call]`), and the read hands back
@@ -1166,7 +1175,7 @@ export interface ExtractFieldInfo {
    *  targets is demoted to a suggestion (explicit over implicit). A written
    *  annotation names a SURFACE type — a primitive, a declared option set, or
    *  another field's — so it is never a record. */
-  explicit?: SchemaFieldType;
+  explicit?: SurfaceFieldType;
   /** The raw annotation token (`<…>` text) IF the author wrote one — kept
    *  even when it didn't resolve to a type here (missing schema / bad borrow),
    *  so we never suggest annotating a field that's already annotated. */
@@ -1429,7 +1438,7 @@ const EXTRACT_ONE_FUNCTION_ID = 'extractone';
  *  layer nests inside it — so a SURFACE type in is a surface type out.
  *  Overloads rather than a type parameter, which would infer the one literal
  *  argument's own type instead. */
-export function maybeAbsent(type: SchemaFieldType | undefined): SchemaFieldType | undefined;
+export function maybeAbsent(type: SurfaceFieldType | undefined): SurfaceFieldType | undefined;
 export function maybeAbsent(type: FieldType | undefined): FieldType | undefined;
 export function maybeAbsent(type: FieldType | undefined): FieldType | undefined {
   if (type === undefined) return undefined;
@@ -1463,7 +1472,7 @@ export function maybeAbsent(type: FieldType | undefined): FieldType | undefined 
 
 /** The present component of a possibly-absent type — `T | absent → T`, `T → T`.
  *  A surface type in is a surface type out, as with `maybeAbsent`. */
-export function stripAbsent(type: SchemaFieldType): SchemaFieldType;
+export function stripAbsent(type: SurfaceFieldType): SurfaceFieldType;
 export function stripAbsent(type: FieldType): FieldType;
 export function stripAbsent(type: FieldType): FieldType {
   const variant = variantOf(type);
@@ -4075,6 +4084,14 @@ export function instanceOfRef(type: PositionTypeRef | undefined): InstanceRef | 
   }
 }
 
+/** A field's declared type on one position of an instance, as the checker
+ *  holds it (`fieldTypeOfSchema`); undefined where the position declares no
+ *  such field. */
+export function declaredFieldType(instance: InstanceRef, position: string | undefined, field: string): FieldType | undefined {
+  const declared = position === undefined ? undefined : instance.schema.positions[position]?.properties[field];
+  return declared === undefined ? undefined : fieldTypeOfSchema(declared, instance.schema);
+}
+
 /** The underlying position schema of a position/handle ref (undefined for the rest). */
 export function positionSchemaOfRef(type: PositionTypeRef): PositionSchema | undefined {
   if (type.kind === 'position') return type.instance.schema.positions[type.position];
@@ -4204,18 +4221,18 @@ export function lookupPropertyType(
   if (position === undefined) return undefined;
   switch (position.kind) {
     case 'position': {
-      const declared = positionSchemaOfRef(position)?.properties[propertyId];
+      const declared = declaredFieldType(position.instance, position.position, propertyId);
       return declared !== undefined && position.present?.has(propertyId) ? stripAbsent(declared) : declared;
     }
     case 'handle': {
       const fromShape = position.resultShape[propertyId];
       if (fromShape !== undefined) return fromShape;
-      return positionSchemaOfRef(position)?.properties[propertyId];
+      return declaredFieldType(position.instance, position.position, propertyId);
     }
     case 'union': {
       const types = position.variants
-        .map(v => position.instance.schema.positions[v]?.properties[propertyId])
-        .filter((t): t is SchemaFieldType => t !== undefined);
+        .map(v => declaredFieldType(position.instance, v, propertyId))
+        .filter((t): t is FieldType => t !== undefined);
       if (types.length !== position.variants.length) return undefined;
       return types.every(t => fieldTypeEquals(t, types[0])) ? types[0] : undefined;
     }
@@ -4817,7 +4834,7 @@ export class ExpressionTyping {
    *  — undefined when the final hop's source/edge was untyped. Read by the
    *  `await` checker to decide MOV_NOT_AWAITABLE and whether the resolution
    *  `resolvesEmpty`. */
-  lastEdgeSchema: EdgeSchema | undefined = undefined;
+  lastEdgeSchema: CheckerEdgeSchema | undefined = undefined;
 
   /** Where each hop of the most recent `walkSteps` landed, POSITIONALLY against
    *  its steps. Recorded for the same reason `lastEdgeSchema` is: the walk is
@@ -4974,7 +4991,8 @@ export class ExpressionTyping {
        */
       onEffect?: (effect: ExpressionEffect) => void;
       /**
-       * A BARE read of an edge the source pushes events for (`watchable`).
+       * A BARE read of an edge the source pushes events for (`listenable`, which
+       * took the place of 0.12's `watchable`).
        * Not an effect — watchability is a delivery fact, not something running
        * the expression does — so it rides its own hook. The `until` checker is
        * the only listener: polling for something that arrives on its own is
@@ -7858,7 +7876,7 @@ export class ExpressionTyping {
         // real fix is `await`, not "this is write-only" — which is why this
         // precedes the readable check. Still land the target type so downstream
         // reads don't cascade a second error.
-        if (edgeSchema.awaitable === true) {
+        if (edgeSchema.listenable === true) {
           if (this.awaited) {
             if (filter !== undefined && !isPurePredicate(filter)) {
               // An `await`'s WHERE feeds the engine's rehydration-free evaluation
@@ -7879,7 +7897,7 @@ export class ExpressionTyping {
           }
           // Read bare, and the source would have TOLD us. Whoever asked (the
           // `until` checker) decides whether that is worth saying.
-          if (edgeSchema.watchable === true) this.options.onWatchableRead?.(edge);
+          this.options.onWatchableRead?.(edge);
         }
         if (!edgeIsReadable(edgeSchema)) {
           this.reportWriteOnlyEdge(from, edge, edgeSchema);
@@ -7938,7 +7956,7 @@ export class ExpressionTyping {
           const address = from.address;
           const actionType =
             address !== undefined
-              ? from.instance.schema.positions[address.event]?.properties[EVENT_ACTION_FIELD]
+              ? declaredFieldType(from.instance, address.event, EVENT_ACTION_FIELD)
               : undefined;
           if (address !== undefined && actionType !== undefined && isEnumType(actionType)) {
             for (const option of actionType.options) {
@@ -8004,7 +8022,7 @@ export class ExpressionTyping {
         // own way of saying "not yet"). So no MOV_AWAIT_REQUIRED here; only the
         // await's rehydration-free WHERE constraint still applies.
         if (
-          local.schema.awaitable === true
+          local.schema.listenable === true
           && this.awaited
           && filter !== undefined
           && !isPurePredicate(filter)
@@ -8187,7 +8205,7 @@ export class ExpressionTyping {
           return declared;
         }
         const schema = positionSchemaOfRef(position);
-        const fromPosition = schema?.properties[propertyId];
+        const fromPosition = declaredFieldType(position.instance, position.position, propertyId);
         if (fromPosition !== undefined) {
           this.refuseUnsentFile(position, propertyId, fromPosition);
           // Reading the POSITION's surface through the handle, so the
@@ -8228,7 +8246,7 @@ export class ExpressionTyping {
       case 'position': {
         const schema = positionSchemaOfRef(position);
         if (!schema) return undefined;
-        const declared = schema.properties[propertyId];
+        const declared = declaredFieldType(position.instance, position.position, propertyId);
         if (declared !== undefined) {
           this.reportAmbiguousProperty(position, schema, propertyId);
           return position.present?.has(propertyId) ? stripAbsent(declared) : declared;
@@ -8297,7 +8315,7 @@ export class ExpressionTyping {
           );
           return undefined;
         }
-        const types = carrying.map(v => position.instance.schema.positions[v]!.properties[propertyId]!);
+        const types = carrying.map(v => declaredFieldType(position.instance, v, propertyId)!);
         return types.every(t => fieldTypeEquals(t, types[0])) ? types[0] : undefined;
       }
       case 'maybeEmpty':

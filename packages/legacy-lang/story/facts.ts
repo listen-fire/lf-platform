@@ -69,7 +69,7 @@ export interface StoryFactValuePath extends StoryFactWalk {
 }
 
 export type StoryFactAwaitSource =
-  | { kind: 'traversal'; root?: string; edge?: string; awaitable?: boolean }
+  | { kind: 'traversal'; root?: string; edge?: string; listenable?: boolean }
   | { kind: 'sleep'; duration: string }
   | { kind: 'until'; every?: string };
 
@@ -88,9 +88,14 @@ export type StoryFactNode<S> = { span: Span; scope: S } & (
       adapterType?: string;
       fires: string;
       firesMovement: boolean;
+      /** A `listen to <traversal>`: the traversal as written. A settings
+       *  listen (`listen to x { … }`) has none. */
+      path?: string;
+      /** A settings listen's selection, address and derived event types; the
+       *  story analysis (version 2) carries none of the three. */
       events?: string[];
-      narrowing: Record<string, string>;
-      eventTypes: Array<{ key: string; display?: string }>;
+      narrowing?: Record<string, string>;
+      eventTypes?: Array<{ key: string; display?: string }>;
     }
   | { kind: 'link'; from: string; edge: string }
   | { kind: 'unlink' }

@@ -39,15 +39,41 @@ import type { DeclaredEffectRow } from './effects';
 // and it is the honest one: neither plane is beneath the other, and there is
 // one type universe rather than a copy of position types kept here. Nothing is
 // read at module load, so the two initialise in either order.
-import { describePosition, type PositionTypeRef } from './typing';
-import { pluginProgramNameOf, type PluginSpec, type PluginOutput, type EdgeSchema, type PositionSchema, type InstanceSchema, type Catalog } from 'movement-lang/catalog/types';
-import { type SchemaFieldType } from 'movement-lang/catalog/types';
+import { describePosition, fieldTypeEquals, type PositionTypeRef } from './typing';
+import { pluginProgramNameOf, type PluginSpec, type PluginOutput, type EdgeSchema, type PositionSchema, type InstanceSchema, type WritableRootSchema, type Catalog } from 'movement-lang/catalog/types';
+import { type SchemaFieldType, type SchemaPositionRef } from 'movement-lang/catalog/types';
 import type { CatalogSnapshot } from 'movement-lang/service/snapshot';
 
 
-// Every surface type is a checker type: the schema's union is `FieldType` less the record.
-const _schemaTypeIsFieldType: SchemaFieldType extends FieldType ? true : never = true;
-void _schemaTypeIsFieldType;
+/**
+ * A surface type as this checker spells one: the catalog's `SchemaFieldType`
+ * as 0.12 had it, before 0.13 added `owned` and `record`. What the checker
+ * itself writes as a surface (a `type` declaration, an extract annotation, a
+ * shape's field) is one of these; a type read off a catalog schema is
+ * converted to the checker's own by `fieldTypeOfSchema`.
+ *
+ * Spelled out rather than `Exclude`d, since `Exclude` leaves a `list` of
+ * either kind behind.
+ */
+export type SurfaceFieldType =
+  | 'text'
+  | 'number'
+  | 'boolean'
+  | 'date'
+  | 'datetime'
+  | 'file'
+  | 'json'
+  | 'absent'
+  | 'never'
+  | { kind: 'list'; of: SurfaceFieldType; unordered?: true }
+  | { kind: 'tuple'; of: Array<SurfaceFieldType | null> }
+  | { kind: 'dict'; of: SurfaceFieldType }
+  | { kind: 'enum'; options: string[]; open?: { allowPattern?: string } }
+  | { kind: 'maybeAbsent'; of: SurfaceFieldType };
+
+// Every surface type is a checker type: the surface's union is `FieldType` less the record.
+const _surfaceTypeIsFieldType: SurfaceFieldType extends FieldType ? true : never = true;
+void _surfaceTypeIsFieldType;
 
 
 /**
@@ -611,6 +637,172 @@ export interface TupleRest {
 }
 
 /**
+ * A catalog schema's field type as this checker holds it.
+ *
+ * Two of 0.13's surface kinds have no spelling in the language versions this
+ * checker reads, so each is converted to the type its values have:
+ *
+ * - `owned` (a named scalar its module parses: a cron schedule, a mailbox
+ *   key) is the text it is written as.
+ * - `record` holds a record's fields as the field's value (`c.Current`). It is
+ *   typed through `instance`, the instance whose schema declares the field,
+ *   as a dict shaped by that position's fields: a value, never a record to
+ *   walk or write (platform-adoption-0.13.md, "Language"). A union of
+ *   positions holds the fields its members share with one type. Without the
+ *   instance, or for a position it does not declare, the field is `json`:
+ *   data that reads nothing, as the language's own checker types it. A
+ *   position met again inside its own fields holds a dict of unnamed fields,
+ *   so a self-referring schema still ends.
+ *
+ * Every other kind is its own spelling here. Conversions are kept per
+ * instance, so a field read many times converts once.
+ */
+export function fieldTypeOfSchema(declared: SchemaFieldType, instance?: InstanceSchema): FieldType {
+  if (typeof declared === 'string') return declared;
+  const key = instance ?? NO_INSTANCE;
+  let converted = convertedFieldTypes.get(key);
+  if (converted === undefined) {
+    converted = new WeakMap();
+    convertedFieldTypes.set(key, converted);
+  }
+  const known = converted.get(declared);
+  if (known !== undefined) return known;
+  const type = convertSchemaFieldType(declared, instance, new Set());
+  converted.set(declared, type);
+  return type;
+}
+
+/** `fieldTypeOfSchema` over each field of a schema's field map. */
+export function fieldTypesOfSchema(
+  declared: Readonly<Record<string, SchemaFieldType>>,
+  instance?: InstanceSchema,
+): Record<string, FieldType> {
+  const fields: Record<string, FieldType> = {};
+  for (const [name, type] of Object.entries(declared)) fields[name] = fieldTypeOfSchema(type, instance);
+  return fields;
+}
+
+/**
+ * A catalog schema's field type where the checker holds a surface (an
+ * extraction's field, a plugin's output): `fieldTypeOfSchema` without the
+ * instance's shape, which a surface cannot spell. An `owned` scalar is text;
+ * a `record` field is a dict of data.
+ */
+export function surfaceTypeOfSchema(declared: SchemaFieldType): SurfaceFieldType {
+  if (typeof declared === 'string') return declared;
+  switch (declared.kind) {
+    case 'list':
+      return { kind: 'list', of: surfaceTypeOfSchema(declared.of), ...(declared.unordered ? { unordered: true } : {}) };
+    case 'tuple':
+      return { kind: 'tuple', of: declared.of.map(slot => (slot === null ? null : surfaceTypeOfSchema(slot))) };
+    case 'dict':
+      return { kind: 'dict', of: surfaceTypeOfSchema(declared.of) };
+    case 'enum':
+      return declared;
+    case 'maybeAbsent':
+      return { kind: 'maybeAbsent', of: surfaceTypeOfSchema(declared.of) };
+    case 'owned':
+      return 'text';
+    case 'record':
+      return { kind: 'dict', of: 'json' };
+    default:
+      return neverAsAny(declared);
+  }
+}
+
+/** `surfaceTypeOfSchema` over each field of a schema's field map. */
+export function surfaceTypesOfSchema(declared: Readonly<Record<string, SchemaFieldType>>): Record<string, SurfaceFieldType> {
+  const fields: Record<string, SurfaceFieldType> = {};
+  for (const [name, type] of Object.entries(declared)) fields[name] = surfaceTypeOfSchema(type);
+  return fields;
+}
+
+/** A writable root as the checker reads it: its fields and its result typed
+ *  by `fieldTypeOfSchema`, through the instance that declares it. */
+export interface CheckerWritableRoot extends Omit<WritableRootSchema, 'fields' | 'resultShape' | 'discriminated'> {
+  fields: Record<string, FieldType>;
+  resultShape: Record<string, FieldType>;
+  discriminated?: { discriminant: string; variants: Record<string, CheckerWritableRoot> };
+}
+
+/** `root`, one of `instance`'s writable roots or create shapes, as the checker reads it. */
+export function writableRootOfSchema(root: WritableRootSchema, instance: InstanceSchema): CheckerWritableRoot {
+  const known = convertedRoots.get(root);
+  if (known !== undefined) return known;
+  const { fields, resultShape, discriminated, ...rest } = root;
+  const converted: CheckerWritableRoot = {
+    ...rest,
+    fields: fieldTypesOfSchema(fields, instance),
+    resultShape: fieldTypesOfSchema(resultShape, instance),
+    ...(discriminated !== undefined
+      ? {
+          discriminated: {
+            discriminant: discriminated.discriminant,
+            variants: Object.fromEntries(
+              Object.entries(discriminated.variants).map(([name, variant]) => [name, writableRootOfSchema(variant, instance)]),
+            ),
+          },
+        }
+      : {}),
+  };
+  convertedRoots.set(root, converted);
+  return converted;
+}
+
+const convertedRoots = new WeakMap<WritableRootSchema, CheckerWritableRoot>();
+
+const NO_INSTANCE = {};
+const convertedFieldTypes = new WeakMap<object, WeakMap<object, FieldType>>();
+
+function convertSchemaFieldType(declared: SchemaFieldType, instance: InstanceSchema | undefined, expanding: ReadonlySet<string>): FieldType {
+  if (typeof declared === 'string') return declared;
+  const convert = (of: SchemaFieldType) => convertSchemaFieldType(of, instance, expanding);
+  switch (declared.kind) {
+    case 'list':
+      return { kind: 'list', of: convert(declared.of), ...(declared.unordered ? { unordered: true } : {}) };
+    case 'tuple':
+      return { kind: 'tuple', of: declared.of.map(slot => (slot === null ? null : convert(slot))) };
+    case 'dict':
+      return { kind: 'dict', of: convert(declared.of) };
+    case 'enum':
+      return declared;
+    case 'maybeAbsent':
+      return { kind: 'maybeAbsent', of: convert(declared.of) };
+    case 'owned':
+      return 'text';
+    case 'record':
+      return heldRecordFields(declared.position, instance, expanding);
+    default:
+      return neverAsAny(declared);
+  }
+}
+
+function heldRecordFields(
+  position: SchemaPositionRef,
+  instance: InstanceSchema | undefined,
+  expanding: ReadonlySet<string>,
+): FieldType {
+  if (instance === undefined) return 'json';
+  const members = position.kind === 'position' ? [position.position] : instance.unions?.[position.union];
+  if (members === undefined || members.length === 0) return 'json';
+  const schemas = members.map(member => instance.positions[member]);
+  if (schemas.some(schema => schema === undefined)) return 'json';
+  if (members.some(member => expanding.has(member))) return { kind: 'dict', of: 'json' };
+  const inner = new Set([...expanding, ...members]);
+  const [first, ...rest] = schemas.map(schema => schema!.properties);
+  const shape: Record<string, FieldType> = {};
+  for (const [name, declared] of Object.entries(first)) {
+    const type = convertSchemaFieldType(declared, instance, inner);
+    const shared = rest.every(other => {
+      const theirs = other[name];
+      return theirs !== undefined && fieldTypeEquals(convertSchemaFieldType(theirs, instance, inner), type);
+    });
+    if (shared) shape[name] = type;
+  }
+  return { kind: 'dict', of: 'json', shape };
+}
+
+/**
  * A field type spelled as ONE tagged variant — the scalars given the `kind`
  * the collections already carry.
  *
@@ -621,8 +813,8 @@ export interface TupleRest {
  * type parameter, so this is not a second list to keep in step — add a variant
  * to `FieldType` and every `switch` over a variant stops compiling at once.
  *
- * Generic in the type it normalises so a `SchemaFieldType` stays one: its
- * `list` still holds a `SchemaFieldType`, and its switch still has no `record`
+ * Generic in the type it normalises so a `SurfaceFieldType` stays one: its
+ * `list` still holds a `SurfaceFieldType`, and its switch still has no `record`
  * case to answer.
  */
 export type FieldTypeVariant<T extends FieldType = FieldType> =
@@ -661,14 +853,14 @@ export function variantOf<T extends FieldType>(type: T): FieldTypeVariant<T> {
   return (typeof wide === 'string' ? SCALAR_VARIANTS[wide] : wide) as FieldTypeVariant<T>;
 }
 
-/** Maps a surface type name (shape declarations, extract annotations) to a SchemaFieldType. */
+/** Maps a surface type name (shape declarations, extract annotations) to a SurfaceFieldType. */
 /**
  * The type a `type Thesis = <"A" | "B">` declaration names — a CLOSED enum,
  * identical in shape to an option set borrowed from a live field, so nothing
  * downstream (extraction prompt, literal check, did-you-mean) can tell a
  * written refinement from a fetched one.
  */
-export function declaredTypeOf(decl: TypeDeclaration): SchemaFieldType {
+export function declaredTypeOf(decl: TypeDeclaration): SurfaceFieldType {
   return { kind: 'enum', options: decl.options };
 }
 
@@ -677,15 +869,15 @@ export function declaredTypeOf(decl: TypeDeclaration): SchemaFieldType {
  * declaration, so this flat map and the checker's scope resolution answer the
  * same question — the engine, which has no scopes, asks it this way.
  */
-export function declaredTypesIn(program: Program): Map<string, SchemaFieldType> {
-  const declared = new Map<string, SchemaFieldType>();
+export function declaredTypesIn(program: Program): Map<string, SurfaceFieldType> {
+  const declared = new Map<string, SurfaceFieldType>();
   for (const statement of program.statements) {
     if (statement.kind === 'type') declared.set(statement.name, declaredTypeOf(statement));
   }
   return declared;
 }
 
-export function parseFieldTypeName(name: string | undefined): SchemaFieldType | undefined {
+export function parseFieldTypeName(name: string | undefined): SurfaceFieldType | undefined {
   switch (name) {
     case 'text':
     case 'number':
@@ -725,11 +917,11 @@ export function borrowedTypeSegments(name: string | undefined): string[] | undef
 export function borrowableFieldsOf(
   schema: InstanceSchema,
   rootName: string,
-): Record<string, SchemaFieldType> | undefined {
+): Record<string, SurfaceFieldType> | undefined {
   const writable = schema.writableRoots[rootName]?.fields;
   const readable = schema.positions[rootName]?.properties;
   if (!writable && !readable) return undefined;
-  return { ...(readable ?? {}), ...(writable ?? {}) };
+  return surfaceTypesOfSchema({ ...(readable ?? {}), ...(writable ?? {}) });
 }
 
 /** Resolve `<root>.<field>` of a borrowed path against a schema. */
@@ -737,7 +929,7 @@ export function resolveBorrowedField(
   schema: InstanceSchema,
   rootName: string,
   fieldName: string,
-): SchemaFieldType | undefined {
+): SurfaceFieldType | undefined {
   return borrowableFieldsOf(schema, rootName)?.[fieldName];
 }
 

@@ -56,7 +56,7 @@ import {
   typeNameOf,
 } from 'movement-lang/parser/ast';
 import { MovementParseError, parseProgram } from '../parser/parse';
-import { parseFieldTypeName, type Catalog, type SchemaFieldType } from '../checker/catalog';
+import { parseFieldTypeName, type Catalog, type SurfaceFieldType } from '../checker/catalog';
 import type { ResolveFile } from '../checker/link';
 import { CURRENT_LANGUAGE_VERSION, assertLegacyPresentationPin, type LanguageVersion } from '../language_version';
 import { maybeAbsent } from '../checker/typing';
@@ -330,6 +330,9 @@ export interface StoryTrigger {
   id: string;
   instance: StoryRef;
   adapterType?: string;
+  /** A `listen to <traversal>`: the traversal as written. Absent on a
+   *  settings listen. */
+  path?: string;
   /** The event kinds subscribed to. Absent ⇒ nobody published a selection. */
   events?: string[];
   /** The address this listener subscribes to — declared keys, declared values. */
@@ -384,7 +387,7 @@ export interface StoryEdge {
 export interface StoryExtractNode {
   name: string;
   description?: string;
-  fields: Array<{ name: string; description?: string; type?: SchemaFieldType; at: Span }>;
+  fields: Array<{ name: string; description?: string; type?: SurfaceFieldType; at: Span }>;
   children: StoryExtractNode[];
 }
 
@@ -480,7 +483,7 @@ export interface StoryShapeNode {
   position: string;
   /** `type` is absent where the annotation is not one of the language's own
    *  field types — nothing is guessed about what such a field holds. */
-  fields: Array<{ name: string; type?: SchemaFieldType }>;
+  fields: Array<{ name: string; type?: SurfaceFieldType }>;
   children: StoryShapeNode[];
 }
 
@@ -948,9 +951,10 @@ class Projection<S> {
       id: triggerId(node.span),
       instance: this.ref(node.instance, node.scope),
       ...(node.adapterType !== undefined ? { adapterType: node.adapterType } : {}),
+      ...(node.path !== undefined ? { path: node.path } : {}),
       ...(node.events !== undefined ? { events: [...node.events] } : {}),
       narrowing: { ...node.narrowing },
-      eventTypes: node.eventTypes.map((t) => ({ ...t })),
+      eventTypes: (node.eventTypes ?? []).map((t) => ({ ...t })),
       fires: node.fires,
       firesMovement: node.firesMovement,
       ...(listen?.alias !== undefined ? { lane: listen.alias } : {}),
@@ -1939,7 +1943,7 @@ class Projection<S> {
 
   /**
    * An `await` is an ASK's pause when the edge it waits on is the resolution of
-   * a record WE raised — structurally: an awaitable edge off a binding that
+   * a record WE raised — structurally: a listenable edge off a binding that
    * holds one of our records. Nothing about which adapter, and nothing about
    * what the record is called.
    */
@@ -1964,7 +1968,7 @@ class Projection<S> {
       };
     }
     const record = source.root !== undefined ? this.recordByBinding.get(source.root) : undefined;
-    if (source.awaitable === true && record !== undefined) {
+    if (source.listenable === true && record !== undefined) {
       this.edges.push({
         from: { kind: 'record', id: record },
         to:
