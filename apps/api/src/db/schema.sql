@@ -3304,7 +3304,12 @@ CREATE TABLE automations.trigger_run (
     returned json,
     -- The automations.delivery whose event started this run (lf only). No
     -- foreign key: retention forgets deliveries that settled runs still name.
-    delivery_id uuid
+    delivery_id uuid,
+    -- The arrival mark (the latest automations.arrival seq) taken as the run
+    -- lease was claimed, in the claim's write. While the lease is unexpired the
+    -- arrival sweep forgets nothing above the lowest such mark, so the step the
+    -- lease covers misses no arrival.
+    lease_mark bigint
 );
 
 ALTER TABLE ONLY automations.trigger_run
@@ -3317,6 +3322,10 @@ CREATE INDEX trigger_run_running_idx ON automations.trigger_run USING btree (id)
 CREATE INDEX trigger_run_created_at_idx ON automations.trigger_run USING btree (created_at);
 CREATE INDEX trigger_run_delivery_id_idx ON automations.trigger_run USING btree (delivery_id);
 CREATE INDEX trigger_run_host_team_idx ON automations.trigger_run USING btree (host, team_id, started_at);
+-- The sweep's floor: the marks of the leases still unexpired.
+CREATE INDEX trigger_run_lease_mark_idx ON automations.trigger_run USING btree (lease_until) WHERE (lease_mark IS NOT NULL);
+-- The failed runs a records door pages, oldest failure first.
+CREATE INDEX trigger_run_failed_idx ON automations.trigger_run USING btree (team_id, failed_at, id) WHERE (status = 'failed'::text);
 
 -- The run's version pin, an in-schema FK once more: a run resumes by re-parsing
 -- the version it pinned, so a deleted version must not leave a run pointing at
@@ -3526,6 +3535,8 @@ CREATE TABLE automations.work (
 );
 CREATE INDEX work_due_idx ON automations.work (due_at);
 CREATE INDEX work_team_idx ON automations.work (team_id) WHERE team_id IS NOT NULL;
+-- The races a run owes (`settle_race` rows), found by their run.
+CREATE INDEX work_settle_race_run_idx ON automations.work ((payload->>'runId')) WHERE kind = 'settle_race';
 
 -- Expiring key-value store for the API's caches and counters (favicons, MCP OAuth
 -- flow state, loop guard buckets) when no Redis is configured. A row past its
@@ -3579,8 +3590,8 @@ CREATE TABLE automations.module_processes (
 );
 
 -- delivery — written only by the lf store module. A delivery's receipt, kept at
--- lf's door in its one write: the events it produced (never its raw body,
--- headers or signature). A provider's own delivery id, when the door has one,
+-- lf's door in its one write: the events it produced, and the request it came
+-- as, redacted (`request`, never a signature). A provider's own delivery id, when the door has one,
 -- keeps a redelivery out at its subscription. trigger_run.delivery_id names the
 -- delivery whose event started a run. The platform's own receipts stay in
 -- trigger_event, which is per trigger and has no team.
@@ -3590,14 +3601,193 @@ CREATE TABLE automations.delivery (
     subscription_id text NOT NULL,
     external_id text,
     received_at timestamptz NOT NULL,
-    source text NOT NULL CONSTRAINT delivery_source_check CHECK (source IN ('webhook', 'hook', 'emit', 'cli')),
+    -- `poll`: a poll of a listenable edge that fired a listen, kept as a
+    -- delivery of its own (its arrivals and its runs' waits, no events).
+    source text NOT NULL CONSTRAINT delivery_source_check CHECK (source IN ('webhook', 'hook', 'emit', 'cli', 'poll')),
     inline boolean NOT NULL,
     replay_of uuid,
     events jsonb NOT NULL,
-    event_count integer NOT NULL
+    event_count integer NOT NULL,
+    -- The request the delivery was received as, so a listen can be put through
+    -- it again: its body and query without the fields its module redacts, only
+    -- the headers its module declares it reads, and the ids of the arrivals it
+    -- brought. Sensitive (a message's text, a person's address): read only by
+    -- one explicit read of the delivery, and forgotten with the delivery or by
+    -- the delivery sweep past retention, whichever is first.
+    request jsonb
 );
 CREATE UNIQUE INDEX delivery_external_idx ON automations.delivery (team_id, subscription_id, external_id) WHERE external_id IS NOT NULL;
 CREATE INDEX delivery_received_idx ON automations.delivery (team_id, received_at);
+
+-- ── The store's waits, arrivals, ledger and listen states (listen-fire 0.13) ─
+-- The tables of listen-fire 0.13's store slot that both hosts write: the
+-- platform's run host in process (services/movement_engine/run_host_store.ts)
+-- and a cloud lf through the store module. Their shapes are @lf/postgres-store's
+-- (crates/lf/src/pg_store_schema_{9,…,16}.sql in the language repository), so
+-- the engine's contract cases hold both stores to one meaning. Machine churn
+-- nobody edits: not audited, like cache_entry.
+
+-- arrival — every arrival a module reports, logged under a store-wide
+-- increasing seq; a wait reads those logged on its record's edge after its
+-- mark. No foreign key: the log outlives the waits that read it, and is swept
+-- once no live wait reads an entry and no unexpired lease's mark is below it.
+-- `json`, not `jsonb`: a landing reads back in the key order it was written in.
+CREATE TABLE automations.arrival (
+    seq bigserial PRIMARY KEY,
+    team_id uuid NOT NULL,
+    adapter_type text NOT NULL,
+    edge text NOT NULL,
+    key text NOT NULL,
+    identity text,
+    version text,
+    landing json,
+    gone boolean NOT NULL,
+    logged_at timestamptz NOT NULL
+);
+CREATE INDEX arrival_key_idx ON automations.arrival (team_id, adapter_type, edge, key, seq);
+CREATE INDEX arrival_logged_idx ON automations.arrival (logged_at);
+
+-- arrival_identity — each arrival's identity and version, kept apart from its
+-- log entry for its module's re-send window, so a sender's retry after the
+-- sweep forgot the entry is still a repeat.
+CREATE TABLE automations.arrival_identity (
+    team_id uuid NOT NULL,
+    adapter_type text NOT NULL,
+    edge text NOT NULL,
+    key text NOT NULL,
+    identity text NOT NULL,
+    version text,
+    kept_until timestamptz NOT NULL
+);
+CREATE INDEX arrival_identity_of_idx ON automations.arrival_identity (team_id, adapter_type, edge, key, identity);
+CREATE INDEX arrival_identity_until_idx ON automations.arrival_identity (kept_until);
+
+-- wait_row — a run's wait on one edge of one record (`key`; null for a record
+-- already gone, one such wait per run and edge), reading the arrivals logged
+-- after `since`. `address` is the leaf it is parked at, while parked;
+-- `stranded_at` when the store found its record deleted while it was parked.
+-- A wait a delivery opened for a run it queued names that run's `fire_event`
+-- row (`fire_key`): it exists before its run does, so it has no foreign key to
+-- the run. A wait goes with its run (the trigger below), or with its
+-- `fire_event` row when the run never started.
+CREATE TABLE automations.wait_row (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    run_id uuid NOT NULL,
+    team_id uuid NOT NULL,
+    adapter_type text NOT NULL,
+    edge text NOT NULL,
+    key text,
+    since bigint NOT NULL,
+    address text,
+    created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    stranded_at timestamptz,
+    fire_key text,
+    -- The record's id as the engine names it: a stranded wait says which record it lost.
+    record_id text,
+    CONSTRAINT wait_row_edge_unique UNIQUE (run_id, team_id, adapter_type, edge, key)
+);
+CREATE INDEX wait_row_key_idx ON automations.wait_row (team_id, adapter_type, edge, key);
+CREATE UNIQUE INDEX wait_row_keyless_unique ON automations.wait_row (run_id, team_id, adapter_type, edge) WHERE key IS NULL;
+CREATE INDEX wait_row_stranded_idx ON automations.wait_row (stranded_at, id) WHERE stranded_at IS NOT NULL;
+CREATE INDEX wait_row_fire_key_idx ON automations.wait_row (fire_key) WHERE fire_key IS NOT NULL;
+CREATE INDEX wait_row_run_id_idx ON automations.wait_row (run_id);
+
+-- A run's waits are deleted with it, as its leaves and joins are by their
+-- foreign keys: a wait whose run is gone would otherwise pin the arrival
+-- sweep for its record for ever.
+CREATE FUNCTION automations.delete_waits_of_run() RETURNS pg_catalog.trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  DELETE FROM automations.wait_row WHERE run_id = OLD.id;
+  RETURN OLD;
+END;
+$$;
+
+CREATE TRIGGER trigger_run_deletes_its_waits
+    AFTER DELETE ON automations.trigger_run
+    FOR EACH ROW
+    EXECUTE FUNCTION automations.delete_waits_of_run();
+
+-- wait_seen — each arrival a wait judged, by identity and version, and whether
+-- its record matched then. `leaf` is the leaf whose resuming segment noted it,
+-- until that segment's progress is kept (its leaf finished, or parked again):
+-- null once kept, and dropped when the leaf is claimed again.
+CREATE TABLE automations.wait_seen (
+    id bigserial PRIMARY KEY,
+    wait_id uuid NOT NULL REFERENCES automations.wait_row(id) ON DELETE CASCADE,
+    identity text NOT NULL,
+    version text,
+    matched boolean NOT NULL,
+    leaf text
+);
+CREATE INDEX wait_seen_identity_idx ON automations.wait_seen (wait_id, identity);
+
+-- One transaction-scoped lock per record's edge: logging an arrival there and
+-- parking a wait there take turns, so either the log sees the park (and wakes
+-- it) or the park's transaction commits after the log's (and the run's re-read
+-- after parking sees the arrival).
+CREATE FUNCTION automations.lock_wait_key(team uuid, adapter_type text, edge text, key text) RETURNS void
+    LANGUAGE sql
+    AS $$ SELECT pg_advisory_xact_lock(hashtextextended(concat_ws(chr(31), team::text, adapter_type, edge, key), 0)) $$;
+
+-- listen_state — what a listen whose earlier hops the host resolves was last
+-- resolved to (`state`: heads, resolvedAt, failure, paused, held, parents),
+-- and the hold of the one resolve listing it now.
+CREATE TABLE automations.listen_state (
+    team_id uuid NOT NULL,
+    pipeline text NOT NULL,
+    state jsonb NOT NULL,
+    lease_token uuid,
+    lease_until timestamptz,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (team_id, pipeline)
+);
+
+-- write_ledger — each record write a run sent, with the run's place in its
+-- chain of writes and arrivals, kept for the loop breaker's window: an arrival
+-- on a record a run wrote soon before was caused by that run.
+CREATE TABLE automations.write_ledger (
+    team_id uuid NOT NULL,
+    adapter text NOT NULL,
+    record_type text NOT NULL,
+    external_id text NOT NULL,
+    run_id text NOT NULL,
+    depth integer NOT NULL,
+    at timestamptz NOT NULL
+);
+CREATE INDEX write_ledger_record_idx ON automations.write_ledger (team_id, adapter, record_type, external_id, at);
+CREATE INDEX write_ledger_at_idx ON automations.write_ledger (team_id, at);
+
+-- release_seen — each listen-fire release the store was opened under, once,
+-- with when it was first seen: what the records door reports as a release.
+CREATE TABLE automations.release_seen (
+    team_id uuid NOT NULL,
+    version text NOT NULL,
+    seen_at timestamptz NOT NULL,
+    PRIMARY KEY (team_id, version)
+);
+CREATE INDEX release_seen_at_idx ON automations.release_seen (team_id, seen_at, version);
+
+-- arrival_unjudged — each listen that could not judge an arrival, once per
+-- listen, arrival (its receipt key) and attempt (0 as delivered, one more per
+-- replay), read oldest first by the records door (`Arrival Not Judged`).
+CREATE TABLE automations.arrival_unjudged (
+    team_id uuid NOT NULL,
+    pipeline text NOT NULL,
+    arrival text NOT NULL,
+    attempt integer NOT NULL,
+    file text NOT NULL,
+    movement text NOT NULL,
+    delivery_id text,
+    edge text NOT NULL,
+    record_id text,
+    reason text NOT NULL,
+    cause text,
+    noted_at timestamptz NOT NULL,
+    PRIMARY KEY (team_id, pipeline, arrival, attempt)
+);
+CREATE INDEX arrival_unjudged_at_idx ON automations.arrival_unjudged (team_id, noted_at, pipeline, arrival, attempt);
 
 -- join_pending — the per-frame PENDING-COUNT (§5.4): for each parallel / fan-out
 -- JOIN frame with ≥1 parked descendant, the number of its child branches still
