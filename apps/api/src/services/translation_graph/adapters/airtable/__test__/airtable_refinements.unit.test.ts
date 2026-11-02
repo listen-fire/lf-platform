@@ -3,6 +3,7 @@
 // module's own test double.
 
 import { scanInstanceChains } from 'legacy-lang';
+import { LANGUAGE_VERSION } from 'movement-lang';
 
 import type { AirtableAdapter } from '@listen-fire/airtable';
 
@@ -30,14 +31,14 @@ describe('the table write promise reaches the CHECKER projection, through the ho
     return { entries, projection };
   }
 
-  const source = `import { airtable } from adapters
-import { airtable_cred } from credentials
-air = airtable(credentials: airtable_cred)
-movement m(x: <air-[:\`Record Change\`]->>) {
-  air-[b:Base WHERE \`Name\` == "CRM"]-> {
+  const source = `air = connect \`@lf/airtable\` using airtable_cred
+function put(go: <manual-[:Invocations]->>) {
+  air-[b:Bases WHERE b.Name == "CRM"]-> {
     write b-[:\`Deals\`]-> { Name: "X" }
   }
-}`;
+}
+listen to manual-[:Invocations]-> fire put
+`;
 
   it('a narrowed base\'s table edge is writable at the checker', async () => {
     const { adapter } = makeMultiBaseAdapter({
@@ -66,7 +67,7 @@ movement m(x: <air-[:\`Record Change\`]->>) {
             return { name: data.Name, data };
           }),
       },
-      chains: scanInstanceChains(source),
+      chains: scanInstanceChains(source, { languageVersion: LANGUAGE_VERSION }),
     });
 
     const refined = schema.positions['Base "CRM"'];

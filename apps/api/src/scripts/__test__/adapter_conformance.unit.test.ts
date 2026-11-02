@@ -135,7 +135,6 @@ describe('adapter conformance CLI', () => {
         'deleteRecord',
         'ensureEventSubscription',
         'removeEventSubscription',
-        'listEventTypes',
         'preprocessInbound',
         'door-wake',
         'scratch-cleanup',

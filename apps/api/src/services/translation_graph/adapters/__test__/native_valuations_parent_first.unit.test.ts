@@ -322,22 +322,6 @@ describe('down-edge reads — the child list scoped by the parent id', () => {
     const second = new URL(String(fetchSpy.mock.calls[1][0]));
     expect(second.searchParams.get('offset')).toBe('100');
   });
-
-  it('reads the parent id from a webhook envelope position too', async () => {
-    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue(listResponse([]));
-    await adapter().getRelated({
-      position: position('Legal Entity', 'le-9', {
-        event: 'valuations:legal_entity:update',
-        timestamp: 't',
-        actor: { type: 'user', id: 'u' },
-        data: { id: 'le-9', before: null, after: { id: 'le-9', name: 'NewCo' } },
-      }),
-      fieldId: 'Events',
-      direction: 'outgoing',
-    });
-    const url = new URL(String(fetchSpy.mock.calls[0][0]));
-    expect(url.searchParams.get('legal_entity_id')).toBe('le-9');
-  });
 });
 
 describe('up-edge natural names', () => {

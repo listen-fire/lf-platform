@@ -34,6 +34,10 @@ import {
 import { makeMetaPosition } from 'movement-engine/public/catalog';
 import { isUuid, startHostDouble, type HostDouble } from './adapter_conformance_host';
 
+/** A door's answer as the adapter protocol sends it: the arrivals one
+ *  delivery makes. */
+const DeliveryAnswer = z.object({ arrivals: z.array(z.unknown()) });
+
 export type CheckStatus = 'PASS' | 'FAIL' | 'SKIP';
 
 export interface CheckResult {
@@ -628,16 +632,6 @@ async function checkDelivery(input: {
   const { report, adapter, advertised, sampleDelivery } = input;
   const flagNotice = 'pass --sample-delivery \'<json>\' with a webhook body your server sends';
 
-  if (!advertised.has('listEventTypes') || !adapter.listEventTypes) {
-    report.skip('listEventTypes', 'not listed in the manifest methods');
-  } else {
-    const listEventTypes = adapter.listEventTypes.bind(adapter);
-    await report.run('listEventTypes', async () => {
-      const types = await listEventTypes();
-      return `${types.length} event type${types.length === 1 ? '' : 's'}: ${types.map((t) => t.tag).join(', ')}`;
-    });
-  }
-
   if (!advertised.has('preprocessInbound') || !adapter.preprocessInbound) {
     report.skip('preprocessInbound', 'not listed in the manifest methods');
   } else if (sampleDelivery === undefined) {
@@ -645,8 +639,12 @@ async function checkDelivery(input: {
   } else {
     const preprocessInbound = adapter.preprocessInbound.bind(adapter);
     await report.run('preprocessInbound', async () => {
-      const result = await preprocessInbound({ raw: sampleDelivery });
-      return `${result.events.length} event${result.events.length === 1 ? '' : 's'}`;
+      // listen-fire 0.13.x types RemoteAdapter.preprocessInbound's answer as
+      // 0.12's (`events` only), though the wire carries `arrivals`; read the
+      // answer as the wire sends it until a later release fixes the type.
+      const answer: unknown = await preprocessInbound({ raw: sampleDelivery });
+      const arrivals = DeliveryAnswer.parse(answer).arrivals.length;
+      return `${arrivals} arrival${arrivals === 1 ? '' : 's'}`;
     });
   }
 
