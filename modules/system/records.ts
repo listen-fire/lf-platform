@@ -81,7 +81,14 @@ export interface UnjudgedArrival {
   /** The kept delivery it came in; null when the host kept none. */
   deliveryId: string | null;
   edge: string;
+  /** The module the arrival came from; null on a fact kept before the host
+   *  kept it (store migration 17). */
+  adapter: string | null;
   recordId: string | null;
+  /** What landed, as its module reported it (`{ recordType, fields }`); null
+   *  on a fact kept before the host kept it. This module knows its own
+   *  `Arrival Not Judged` events by it. */
+  landing: unknown;
   reason: string;
   /** The run whose write caused the arrival, when one did: the event is
    *  about it, so a run the event fires continues its chain. */

@@ -27,6 +27,7 @@ import {
   RELEASE_APPLIED,
   RUN_FAILED,
   RUN_PAUSED,
+  SYSTEM_ADAPTER_TYPE,
   SYSTEM_EVENT_KINDS,
   WAIT_LOST_ITS_RECORD,
   type SystemEventFields,
@@ -249,12 +250,18 @@ export async function pollSystemEvents(records: SystemRecords, input: PollEdgeIn
 }
 
 /** Whether the arrival a listen could not judge is itself one of this
- *  module's `Arrival Not Judged` events (its record is the event, its id one
- *  this module minted). It is never reported in turn: two listens on `Events`
- *  that cannot judge such events would report each other's without end, once
- *  a poll, and no run would ever start for the loop breaker to count. */
+ *  module's `Arrival Not Judged` events: it came from this module, and what
+ *  landed is an event of that kind. It is never reported in turn: two
+ *  listens on `Events` that cannot judge such events would report each
+ *  other's without end, once a poll, and no run would ever start for the
+ *  loop breaker to count. Read off the kept landing, never off its id: an id
+ *  is the module's to mint, and any record of another module may look like
+ *  one. */
 function isUnjudgedReport(unjudged: UnjudgedArrival): boolean {
-  return unjudged.edge === EVENTS_EDGE && (unjudged.recordId ?? '').startsWith(`${ARRIVAL_NOT_JUDGED.id}:`);
+  if (unjudged.adapter !== SYSTEM_ADAPTER_TYPE || unjudged.edge !== EVENTS_EDGE) return false;
+  const landing = unjudged.landing;
+  const fields: unknown = typeof landing === 'object' && landing !== null ? Reflect.get(landing, 'fields') : undefined;
+  return typeof fields === 'object' && fields !== null && Reflect.get(fields, KIND_FIELD) === ARRIVAL_NOT_JUDGED.name;
 }
 
 /** The index of the first row past `until`, else the length. */

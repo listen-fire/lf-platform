@@ -79,7 +79,9 @@ describe('pollSystemEvents', () => {
       automation: { id: 'chat:heard', name: 'heard' },
       deliveryId: 'delivery-1',
       edge: 'Messages',
+      adapter: 'slack',
       recordId: 'C1:1700.1',
+      landing: { recordType: 'Message', fields: { Text: 'hi' } },
       reason: "slack could not read Name of the Channels record the arrival carries, which this listen's filter reads",
       cause: null,
       at: at(2),
@@ -117,13 +119,19 @@ describe('pollSystemEvents', () => {
 
     // A listen on Events that cannot judge an Arrival Not Judged event is not
     // reported in turn: two such listens would report each other's without end.
+    // Known by what landed and the module it came from, never by its id.
     const report = 'arrival_not_judged:listen:chat:other:00ff00ff:Messages:C1:C1:1700.1::0';
+    const reportLanding = { recordType: 'Event', fields: { Kind: 'Arrival Not Judged', 'Event Id': report } };
     const warned = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
     try {
-      unjudged.push({ ...heard, edge: 'Events', recordId: report, arrival: `Events::${report}:`, at: at(130) });
+      unjudged.push({ ...heard, edge: 'Events', adapter: 'system', recordId: report, landing: reportLanding, arrival: `Events::${report}:`, at: at(130) });
+      // Another module's record whose id looks like a report is reported as any other.
+      unjudged.push({ ...heard, edge: 'Events', adapter: 'acme', recordId: report, landing: { recordType: 'Event', fields: { Kind: 'Arrival Not Judged' } }, arrival: `Events::${report}:acme`, at: at(131) });
+      // This module's own event of another kind is reported too.
+      unjudged.push({ ...heard, edge: 'Events', adapter: 'system', recordId: 'run_failed:r-1:x', landing: { recordType: 'Event', fields: { Kind: 'Run Failed' } }, arrival: 'Events::run_failed:r-1:x:', at: at(132) });
       const looped = await pollSystemEvents(host, { edge: 'Events', filter: kind, cursor: replayed.cursor }, SETTINGS, T0 + 240_000);
-      expect(looped.arrivals).toEqual([]);
-      expect((looped.cursor as SystemCursor).unjudged).toMatchObject({ at: at(130) });
+      expect(looped.arrivals.map((a) => field(a, 'Arrival Id'))).toEqual([`Events::${report}:acme`, 'Events::run_failed:r-1:x:']);
+      expect((looped.cursor as SystemCursor).unjudged).toMatchObject({ at: at(132) });
       expect(warned).toHaveBeenCalledWith(expect.stringContaining(`could not judge the Arrival Not Judged event ${report}`));
     } finally {
       warned.mockRestore();
