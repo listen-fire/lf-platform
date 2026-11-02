@@ -53,6 +53,8 @@ import type { TeamId } from '../../generated/kysely/core/Team';
 
 import { findTriggersByKind } from '../../services/translation_graph/storage/tg_table';
 import { pollTriggerNow } from '../../services/poll_source/worker';
+import { replayThroughListen } from '../../services/inbound/listen_replay';
+import type { TriggerId } from '../../generated/kysely/automations/Trigger';
 import { EVERTRACE_API_VERSION } from '@listen-fire/evertrace/api_client';
 import { dispatchTriggerByIdEvent } from '../../services/translation_graph/triggers/router';
 import { queueKnowledgeChange } from '../../services/webhook_sync/knowledge_changes';
@@ -2274,6 +2276,24 @@ async function main() {
       }
     }
     printResult(await injectRaw({ url: flags.url, method: flags.method, body }), PRETTY);
+    return;
+  }
+
+  if (subcommand === 'replay') {
+    if (!flags.listen || !flags.delivery) {
+      console.error('Usage: pnpm dev:inject replay --listen <trigger id> --delivery <delivery id> [--force] [--settle]');
+      process.exit(2);
+    }
+    const seed = await ensureDevLoopTeam();
+    const outcome = await replayThroughListen({
+      teamId: seed.teamId as TeamId,
+      triggerId: flags.listen as TriggerId,
+      deliveryId: flags.delivery,
+      force: 'force' in flags,
+    });
+    // `--settle` drains the team's work, so the run the replay queued has run.
+    if ('settle' in flags && outcome.outcome === 'replayed' && outcome.runIds.length > 0) await awaitTeamWorkSettled({ teamId: seed.teamId, timeoutMs: 60_000 });
+    printResult(outcome, PRETTY);
     return;
   }
 

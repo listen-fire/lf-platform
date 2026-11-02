@@ -356,7 +356,12 @@ export async function keepJudgedDelivery(input: {
   checkpoint?: unknown;
   /** The request it was received as (redacted), for a replay. */
   request?: unknown;
+  /** A replay of this delivery through one listen: its arrivals were logged
+   *  with the delivery it replays, so none is logged again, and a listen
+   *  that still cannot judge one is a fact of the delivery replayed. */
   replayOf?: string;
+  /** A replay forced past its listen's receipt. */
+  forced?: boolean;
   now: Date;
 }): Promise<{ kept: KeptDelivery; deliveryId: string; fires: FireRow[] }> {
   const { teamId, judged, now } = input;
@@ -370,6 +375,7 @@ export async function keepJudgedDelivery(input: {
     runId: run.runId,
     receipt: run.receipt,
     deliveryId,
+    ...(input.forced === true ? { forced: true } : {}),
   }));
   const resendSeconds = getAdapterManifest(input.adapterType)?.resendWindowSeconds;
   const kept = await deliveryRowStore({ host: 'platform', teamId }).keepDelivery({
@@ -389,12 +395,12 @@ export async function keepJudgedDelivery(input: {
     arrivals: {
       teamId,
       adapterType: input.adapterType,
-      arrivals: newArrivalsOf(input.arrivals),
+      arrivals: input.replayOf !== undefined ? [] : newArrivalsOf(input.arrivals),
       at: now.toISOString(),
       resendWindowMs: resendSeconds !== undefined ? resendSeconds * 1000 : DEFAULT_RESEND_WINDOW_MS,
     },
     waits,
-    unjudged: judged.unjudged.map((fact) => ({ ...fact, deliveryId })),
+    unjudged: judged.unjudged.map((fact) => ({ ...fact, deliveryId: input.replayOf ?? deliveryId })),
   });
   if (kept.kept) for (const line of judged.lines) logger.warn(`[ListenDoor] ${line}`);
   return { kept, deliveryId, fires };

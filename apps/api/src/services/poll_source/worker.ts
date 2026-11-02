@@ -27,6 +27,7 @@ import { getAutomationsQb } from '../../lib/kysely';
 import { teamIdSchema } from '../../lib/team_id';
 import { logger } from 'movement-engine/public/log';
 import { deliverArrivals, listenConfigSchema, type SavedListen } from '../inbound/listen_door';
+import { keptPage } from '../inbound/captured_request';
 import { lfEngineTeams } from '../lf_engine/team_engine';
 import { notifyWork, registerWorkHandler } from '../work/drain';
 import { enqueueWork, listWorkByKind, removeWork } from '../work/store';
@@ -136,6 +137,7 @@ export async function pollShared(poll: SharedPoll): Promise<{ arrivals: number; 
     source: 'poll',
     arrivals: polled.arrivals,
     checkpoint: polled.cursor ?? null,
+    request: keptPage({ adapterType: key.adapterType, credentialsId: key.credentialsId, arrivals: polled.arrivals }),
     listens: poll.listens,
   });
   notifyWork();

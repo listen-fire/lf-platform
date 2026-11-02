@@ -40,7 +40,8 @@ import { webhookProviderKey } from './urls';
 import { listRemoteAdapters, parseStoredManifest } from '../translation_graph/adapters/remote/store';
 import { mayBeRemoteSlug } from '../translation_graph/adapters/remote/slugs';
 import { LEGACY_INTERCEPTS, builtInVerifierFor } from '../inbound/legacy_signature_headers';
-import { builtinModuleInboundVerifier } from '../translation_graph/adapters/builtin_modules';
+import { builtinModuleInboundVerifier, builtinModuleRequestKeeping } from '../translation_graph/adapters/builtin_modules';
+import { capturedRequest } from '../inbound/captured_request';
 
 /** What capture keeps of one event: nothing. Every listen is judged on the
  *  delivery's arrivals as it is kept (`keepDelivery`), so no event is matched
@@ -276,25 +277,44 @@ export const platformInboundStore: InboundStore<CapturedReceipts> = {
     return [];
   },
 
-  async keepDelivery({ subscription, source, arrivals, checkpoint }) {
-    const listens = await listensOfSubscription({
-      teamId: subscription.teamId as TeamId,
-      adapterType: source.adapterType,
-      subscriptions: await subscriptionsCellOf(subscription.id),
-    });
-    const { kept } = await deliverArrivals({
-      teamId: subscription.teamId as TeamId,
-      delivered: { adapterType: source.adapterType, credentialsId: source.credentialsId },
-      subscriptionId: subscription.id,
-      externalId: null,
-      source: 'webhook',
-      arrivals,
-      ...(checkpoint !== undefined ? { checkpoint } : {}),
-      ...(listens !== undefined ? { listens } : {}),
-    });
-    return kept.kept ? { kept: true, arrivalMark: kept.arrivalMark } : { kept: false };
-  },
+  keepDelivery: (input) => keepWebhookDelivery(input, null),
 };
+
+/** A webhook delivery's one write, with the request it came as when the door
+ *  has it (kept redacted, so a listen can be put through it again). */
+async function keepWebhookDelivery(
+  { subscription, source, arrivals, checkpoint }: Parameters<InboundStore<CapturedReceipts>['keepDelivery']>[0],
+  received: { rawBody: Buffer; headers: InboundHeaders } | null,
+): Promise<{ kept: boolean; arrivalMark?: number }> {
+  const listens = await listensOfSubscription({
+    teamId: subscription.teamId as TeamId,
+    adapterType: source.adapterType,
+    subscriptions: await subscriptionsCellOf(subscription.id),
+  });
+  const { kept } = await deliverArrivals({
+    teamId: subscription.teamId as TeamId,
+    delivered: { adapterType: source.adapterType, credentialsId: source.credentialsId },
+    subscriptionId: subscription.id,
+    externalId: null,
+    source: 'webhook',
+    arrivals,
+    ...(checkpoint !== undefined ? { checkpoint } : {}),
+    ...(listens !== undefined ? { listens } : {}),
+    ...(received !== null
+      ? {
+          request: capturedRequest({
+            keeping: builtinModuleRequestKeeping(source.adapterType),
+            headers: received.headers,
+            rawBody: received.rawBody,
+            // The cursor it was read against, so a replay reads it the same way.
+            ...(subscription.checkpoint !== undefined && subscription.checkpoint !== null ? { checkpoint: subscription.checkpoint } : {}),
+            arrivals,
+          }),
+        }
+      : {}),
+  });
+  return kept.kept ? { kept: true, arrivalMark: kept.arrivalMark } : { kept: false };
+}
 
 interface HandleResult {
   ok: boolean;
@@ -316,7 +336,9 @@ async function handleInboundWebhook(options: {
   rawBody: Buffer;
   headers: InboundHeaders;
 }): Promise<HandleResult> {
-  const result = await receiveDelivery(platformInboundStore, {
+  const received = { rawBody: options.rawBody, headers: options.headers };
+  const store: InboundStore<CapturedReceipts> = { ...platformInboundStore, keepDelivery: (input) => keepWebhookDelivery(input, received) };
+  const result = await receiveDelivery(store, {
     providerKey: options.provider,
     subscriptionId: options.subscriptionId,
     rawBody: options.rawBody,

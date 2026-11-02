@@ -27,6 +27,7 @@ import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
 import type { MovementId } from '../../../generated/kysely/automations/Movement';
 
 import { currentContext } from '../../../services/context';
+import { replayThroughListen, type ReplayOutcome } from '../../../services/inbound/listen_replay';
 import { mq } from '../../../lib/message_queue';
 import { trpc } from '../trpc';
 import { getAutomationsQb, getKnowledgeQb } from '../../../lib/kysely';
@@ -989,6 +990,24 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
           });
         },
       ),
+
+    /**
+     * Put one kept delivery through one listen again (ruling 4: any team
+     * member may), the way out of an `Arrival Not Judged` fact once the
+     * provider answers again. `force` runs a listen that ran the arrival
+     * before again, under a receipt of its own.
+     */
+    replayDelivery: userProcedure
+      .input(z.object({ triggerId: z.string().min(1), deliveryId: z.string().min(1), force: z.boolean().optional() }))
+      .mutation(async ({ input }): Promise<ReplayOutcome> => {
+        const ctx = currentContext();
+        return replayThroughListen({
+          teamId: ctx.user.teamId as TeamId,
+          triggerId: input.triggerId as TriggerId,
+          deliveryId: input.deliveryId,
+          ...(input.force !== undefined ? { force: input.force } : {}),
+        });
+      }),
   });
 };
 

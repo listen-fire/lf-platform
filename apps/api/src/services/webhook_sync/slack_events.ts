@@ -31,6 +31,8 @@ import { teamIdSchema } from '../../lib/team_id';
 import { resolveAdapter } from '../translation_graph/adapters/resolve';
 import { SLACK_ADAPTER_TYPE } from '../translation_graph/adapters/slack';
 import { deliverArrivals } from '../inbound/listen_door';
+import { capturedRequest } from '../inbound/captured_request';
+import { builtinModuleRequestKeeping } from '../translation_graph/adapters/builtin_modules';
 import { SLACK_APP_ID } from '../credentials/app_id';
 import ExternalServiceType from '../../generated/kysely/automations/ExternalServiceType';
 
@@ -105,6 +107,14 @@ export async function handleSlackEventsInbound(raw: unknown): Promise<SlackEvent
     externalId: eventId.success ? `slack:${eventId.data.event_id}` : null,
     source: 'webhook',
     arrivals,
+    // Kept as Slack sent it, as JSON, so a listen can be put through it again
+    // (listen_replay.ts); the work row keeps the envelope, not its bytes.
+    request: capturedRequest({
+      keeping: builtinModuleRequestKeeping(SLACK_ADAPTER_TYPE),
+      headers: { 'content-type': 'application/json' },
+      rawBody: Buffer.from(JSON.stringify(raw), 'utf8'),
+      arrivals,
+    }),
   });
   if (kept.kept) notifyWork();
   return { ok: true, classification: 'dispatched', teamId, eventsProcessed: kept.kept ? fires.length : 0 };

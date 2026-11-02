@@ -742,6 +742,25 @@ export function builtinModuleInboundVerifier(providerKey: string): InboundVerifi
 }
 
 /**
+ * What a built-in module declares of the requests a delivery keeps (adapter
+ * protocol 2.6): the headers its inbound handling reads, and the body and
+ * query fields that may carry a credential. Undefined for an adapter that is
+ * no module line, or declares no inbound: its requests keep no header.
+ */
+export function builtinModuleRequestKeeping(adapterType: string): { captureHeaders?: readonly string[]; redactFields?: readonly string[] } | undefined {
+  for (const entry of adapterModuleLines()) {
+    if (entry.manifest.adapterType !== adapterType) continue;
+    const declared = entry.load().inbound;
+    if (declared === undefined) return undefined;
+    return {
+      ...(declared.captureHeaders !== undefined ? { captureHeaders: declared.captureHeaders } : {}),
+      ...(declared.redactFields !== undefined ? { redactFields: declared.redactFields } : {}),
+    };
+  }
+  return undefined;
+}
+
+/**
  * Whether a built-in's inbound declares that its provider issues the webhook
  * secret at registration (`secretIssuedBy: 'provider'`): its registration
  * must then return one, as a remote's must.

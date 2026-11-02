@@ -18,6 +18,7 @@
  *   pnpm dev:inspect tg-runs               → recent translation-graph runs
  *   pnpm dev:inspect tg-runs <runId>       → full detail of one tg_run row
  *   pnpm dev:inspect work                  → automations work rows (every team's): kind, key, due, lease, attempts
+ *   pnpm dev:inspect inbound               → the team's listens, its recent deliveries (kept request or not, replay of) and Arrival Not Judged facts
  *   pnpm dev:inspect all --pretty          → everything, human-readable
  *
  *   --reset              clear all fake-channels state (admin endpoint)
@@ -66,6 +67,7 @@ type Domain =
   | 'crm'
   | 'tg-runs'
   | 'work'
+  | 'inbound'
   | 'all';
 
 const ALL_DOMAINS: Exclude<Domain, 'all'>[] = [
@@ -87,6 +89,7 @@ const ALL_DOMAINS: Exclude<Domain, 'all'>[] = [
   'crm',
   'tg-runs',
   'work',
+  'inbound',
 ];
 
 async function http<T = unknown>(path: string, method: 'GET' | 'POST' | 'DELETE' = 'GET'): Promise<T> {
@@ -694,6 +697,26 @@ async function reset() {
   console.error('[inspect] reset complete');
 }
 
+/** The team's listens (trigger rows a 0.13 save projected), its recent
+ *  deliveries and the arrivals a listen could not judge: what a replay
+ *  (`dev:inject replay --listen <id> --delivery <id>`) names. */
+async function inspectInbound() {
+  const seed = await ensureDevLoopTeam();
+  const teamId = seed.teamId as TeamId;
+  const exec = getAutomationsQb(['trigger', 'delivery', 'arrival_unjudged', 'movement']);
+  const { rows: listens } = await sql<{ id: string; kind: string; file: string; pipeline: string | null; movement: string | null }>`
+    select t.id::text as id, t.kind, m.name as file, t.config->'listen'->>'pipeline' as pipeline, t.config->'listen'->'plan'->>'movement' as movement
+    from automations.trigger t join automations.movement m on m.id = t.movement_id
+    where t.team_id = ${teamId}::uuid and t.config ? 'listen' order by t.created_at`.execute(exec);
+  const { rows: deliveries } = await sql<{ id: string; subscription_id: string; source: string; received_at: string; replay_of: string | null; kept_request: boolean }>`
+    select id::text as id, subscription_id, source, received_at::text as received_at, replay_of::text as replay_of, request is not null as kept_request
+    from automations.delivery where team_id = ${teamId}::uuid order by received_at desc limit 20`.execute(exec);
+  const { rows: unjudged } = await sql<{ pipeline: string; arrival: string; attempt: number; delivery_id: string | null; edge: string; reason: string; noted_at: string }>`
+    select pipeline, arrival, attempt, delivery_id, edge, reason, noted_at::text as noted_at
+    from automations.arrival_unjudged where team_id = ${teamId}::uuid order by noted_at desc limit 20`.execute(exec);
+  return { service: 'inbound', teamId, listens, deliveries, unjudged };
+}
+
 async function main() {
   const args = process.argv
     .slice(2)
@@ -732,6 +755,7 @@ async function main() {
     results.push(await inspectFakeCrm());
     results.push(await inspectTgRuns());
     results.push(await inspectWork());
+    results.push(await inspectInbound());
   } else if (domain === 'email') {
     results.push(await inspectEmail());
   } else if (domain === 'whatsapp') {
@@ -752,6 +776,8 @@ async function main() {
     results.push(await inspectTgRuns(sub));
   } else if (domain === 'work') {
     results.push(await inspectWork());
+  } else if (domain === 'inbound') {
+    results.push(await inspectInbound());
   } else if (domain === 'airtable') {
     results.push(await inspectAirtable());
   } else if (domain === 'granola') {
