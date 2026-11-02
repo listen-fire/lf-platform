@@ -3,7 +3,8 @@
 // same-email user in another team is unreachable from teamA's binding.
 //
 // Path under test:
-//   TelegramAdapter.getActorCandidates  (telegram_user_id → email, team-scoped)
+//   TelegramAdapter.preprocessInbound   (telegram_user_id → email, team-scoped, on the arrival)
+//   TelegramAdapter.getActorCandidates  (the arrival's actor)
 //     → resolveActingUser               (originator → scheme: 'email')
 //       → lookupTeamUserByEmail         (HARD-CLAMPED: u.team_id = teamId)
 //         → ActingUser
@@ -14,7 +15,7 @@
 // rather than asserting it abstractly.
 
 import type { TeamId } from '../../../../../generated/kysely/core/Team';
-import type { TriggerEvent } from 'movement-engine/public/inbound';
+import { arrivalTriggerOf, type TriggerEvent } from 'movement-engine/public/inbound';
 
 jest.mock('../../../../../lib/recording', () => ({
   isTestHarnessTeam: () => false,
@@ -119,13 +120,24 @@ const TEAM_B = 'team-B' as TeamId;
 const TG_USER = '123';
 const EMAIL = 'shared@example.com';
 
-function event(): TriggerEvent {
-  return {
-    pipelineInputId: 'trigger:t-1',
-    adapterType: TELEGRAM_ADAPTER_TYPE,
-    triggerType: 'webhook',
-    payload: { message_id: '42', sender_id: TG_USER, sender_first_name: 'Ada', sender_username: 'adas' },
-  };
+/** The run trigger a message from `TG_USER` makes on `adapter`'s team: the
+ *  door looks the sender's binding up and names who acted on the arrival. */
+async function event(adapter: TelegramAdapter): Promise<TriggerEvent> {
+  const { arrivals } = await adapter.preprocessInbound({
+    raw: {
+      update_id: 1,
+      message: {
+        message_id: 42,
+        date: 1_762_084_800,
+        chat: { id: 777, type: 'private' },
+        from: { id: Number(TG_USER), is_bot: false, first_name: 'Ada', username: 'adas' },
+        text: 'hi',
+      },
+    },
+  });
+  const [arrival] = arrivals;
+  if (arrival === undefined || 'gone' in arrival) throw new Error('the update made no arrival');
+  return arrivalTriggerOf({ pipelineInputId: 'trigger:t-1', adapterType: TELEGRAM_ADAPTER_TYPE, now: new Date('2026-11-02T12:00:00Z'), arrival });
 }
 
 beforeEach(() => {
@@ -141,7 +153,7 @@ describe('Telegram acting-user chain (resolved email → team-clamped user)', ()
     const adapter = new TelegramAdapter(TEAM_A, 'cred-1');
     const user = await resolveActingUser({
       teamId: TEAM_A,
-      getCandidates: () => adapter.getActorCandidates({ event: event() }),
+      getCandidates: async () => adapter.getActorCandidates({ event: await event(adapter) }),
     });
 
     expect(user).toEqual({ id: 'user-A', email: EMAIL, name: 'ada' });
@@ -156,7 +168,7 @@ describe('Telegram acting-user chain (resolved email → team-clamped user)', ()
     const teamBAdapter = new TelegramAdapter(TEAM_B, 'cred-1');
     const viaTeamB = await resolveActingUser({
       teamId: TEAM_B,
-      getCandidates: () => teamBAdapter.getActorCandidates({ event: event() }),
+      getCandidates: async () => teamBAdapter.getActorCandidates({ event: await event(teamBAdapter) }),
     });
     expect(viaTeamB).toBeNull();
 
@@ -165,7 +177,7 @@ describe('Telegram acting-user chain (resolved email → team-clamped user)', ()
     const teamAAdapter = new TelegramAdapter(TEAM_A, 'cred-1');
     const viaTeamA = await resolveActingUser({
       teamId: TEAM_A,
-      getCandidates: () => teamAAdapter.getActorCandidates({ event: event() }),
+      getCandidates: async () => teamAAdapter.getActorCandidates({ event: await event(teamAAdapter) }),
     });
     expect(viaTeamA).toBeNull();
   });
@@ -175,7 +187,7 @@ describe('Telegram acting-user chain (resolved email → team-clamped user)', ()
     const adapter = new TelegramAdapter(TEAM_A, 'cred-1');
     const user = await resolveActingUser({
       teamId: TEAM_A,
-      getCandidates: () => adapter.getActorCandidates({ event: event() }),
+      getCandidates: async () => adapter.getActorCandidates({ event: await event(adapter) }),
     });
     expect(user).toBeNull();
   });

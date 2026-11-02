@@ -9,12 +9,13 @@
 //      granted access.
 //   2. Otherwise → null. Dispatcher rejects.
 //
-// `extractActor` is a pure parse: it reads the sender phone into an
-// `ActorIdentity` (with the WhatsApp profile name as label) regardless of
-// whether the number maps to a Listen-Fire user.
+// Who acted rides on the arrival (adapter protocol 2.7): the module's door
+// names the sender by phone, with the WhatsApp profile name as label.
+// `extractActor` hands that back regardless of whether the number maps to a
+// Listen-Fire user.
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
-import type { TriggerEvent } from 'movement-engine/public/inbound';
+import { arrivalTriggerOf, type TriggerEvent } from 'movement-engine/public/inbound';
 import type { ActingUserTriggerContext } from '../adapters/acting_user_shared';
 
 // DB mock: each `where` chain ends in an `executeTakeFirst` that returns
@@ -67,14 +68,31 @@ function identify(input: {
   });
 }
 
-function makeEvent(payload: Record<string, unknown>): TriggerEvent {
-  return {
+/** The run trigger a WhatsApp message makes, naming the sender as the
+ *  module's door names them: the phone without its `whatsapp:` prefix, the
+ *  profile name as label. */
+function whatsappFired(sender?: { phone: string; name?: string }): TriggerEvent {
+  return arrivalTriggerOf({
     pipelineInputId: 'pi-1',
     adapterType: 'whatsapp',
-    triggerType: 'webhook',
-    triggerEntryId: 'te-1',
-    payload,
-  };
+    now: new Date('2026-11-02T12:00:00Z'),
+    arrival: {
+      edge: 'Messages',
+      identity: 'wamid.1',
+      landing: { recordId: 'wamid.1', fields: { Text: 'hi' } },
+      ...(sender !== undefined
+        ? {
+            actor: {
+              identifier: sender.phone,
+              scheme: 'phone',
+              adapterType: 'whatsapp',
+              ...(sender.name !== undefined ? { name: sender.name } : {}),
+              label: sender.name ?? sender.phone,
+            },
+          }
+        : {}),
+    },
+  });
 }
 
 beforeEach(() => {
@@ -88,7 +106,7 @@ describe('WhatsappAdapter acting-user — creator override (T6)', () => {
     setDbRow({ id: 'creator-1', email: 'creator@example.com', username: 'creator' });
     const user = await identify({
       adapter,
-      event: makeEvent({ From: 'whatsapp:+15551234567' }),
+      event: whatsappFired({ phone: '+15551234567' }),
       trigger: {
         id: 't-1',
         kind: 'TWILIO',
@@ -103,7 +121,7 @@ describe('WhatsappAdapter acting-user — creator override (T6)', () => {
     const adapter = new WhatsappAdapter(TEAM_ID);
     const user = await identify({
       adapter,
-      event: makeEvent({ From: 'whatsapp:+15551234567' }),
+      event: whatsappFired({ phone: '+15551234567' }),
       trigger: {
         id: 't-1',
         kind: 'TWILIO',
@@ -122,7 +140,7 @@ describe('WhatsappAdapter acting-user', () => {
     setDbRow({ id: 'u-1', email: 'ada@example.com', username: 'ada' });
     const user = await identify({
       adapter,
-      event: makeEvent({ From: 'whatsapp:+15551234567', ProfileName: 'Ada' }),
+      event: whatsappFired({ phone: '+15551234567', name: 'Ada' }),
     });
     expect(user).toEqual({
       id: 'u-1',
@@ -131,24 +149,13 @@ describe('WhatsappAdapter acting-user', () => {
     });
   });
 
-  it('resolves the phone from the TG-side `from` field (prefix already stripped)', async () => {
-    const adapter = new WhatsappAdapter(TEAM_ID);
-    setDbRow({ user_id: 'u-2' });
-    setDbRow({ id: 'u-2', email: 'ada@example.com', username: 'ada' });
-    const user = await identify({
-      adapter,
-      event: makeEvent({ from: '+15551234567' }),
-    });
-    expect(user?.id).toBe('u-2');
-  });
-
   it('falls back to username for display email when the user has no primary email', async () => {
     const adapter = new WhatsappAdapter(TEAM_ID);
     setDbRow({ user_id: 'u-3' });
     setDbRow({ id: 'u-3', email: null, username: 'svcuser' });
     const user = await identify({
       adapter,
-      event: makeEvent({ From: 'whatsapp:+15559999999' }),
+      event: whatsappFired({ phone: '+15559999999' }),
     });
     expect(user).toEqual({ id: 'u-3', email: 'svcuser', name: 'svcuser' });
   });
@@ -160,7 +167,7 @@ describe('WhatsappAdapter acting-user', () => {
     setDbRow(null);
     const user = await identify({
       adapter,
-      event: makeEvent({ From: 'whatsapp:+15550000000' }),
+      event: whatsappFired({ phone: '+15550000000' }),
     });
     expect(user).toBeNull();
   });
@@ -176,7 +183,7 @@ describe('WhatsappAdapter acting-user', () => {
     setDbRow({ id: 'u-1', email: 'ada@example.com', username: 'ada' });
     await identify({
       adapter,
-      event: makeEvent({ From: 'whatsapp:+15551234567' }),
+      event: whatsappFired({ phone: '+15551234567' }),
     });
     expect(whereCalls).toContainEqual(['u.granted_access_at', 'is not', null]);
   });
@@ -186,23 +193,23 @@ describe('WhatsappAdapter acting-user', () => {
     setDbRow(null);
     const user = await identify({
       adapter,
-      event: makeEvent({ From: 'whatsapp:+15550000000' }),
+      event: whatsappFired({ phone: '+15550000000' }),
     });
     expect(user).toBeNull();
   });
 
-  it('returns null when the payload carries no sender', async () => {
+  it('returns null when the arrival names no sender', async () => {
     const adapter = new WhatsappAdapter(TEAM_ID);
-    const user = await identify({ adapter, event: makeEvent({}) });
+    const user = await identify({ adapter, event: whatsappFired() });
     expect(user).toBeNull();
   });
 });
 
 describe('WhatsappAdapter.getActorCandidates', () => {
-  it('emits a single phone-scheme originator with the whatsapp: prefix stripped', async () => {
+  it('emits the arrival\'s sender as the one phone-scheme originator', async () => {
     const adapter = new WhatsappAdapter(TEAM_ID);
     const candidates = await adapter.getActorCandidates({
-      event: makeEvent({ From: 'whatsapp:+15551234567' }),
+      event: whatsappFired({ phone: '+15551234567' }),
     });
     expect(candidates).toEqual([
       {
@@ -214,16 +221,16 @@ describe('WhatsappAdapter.getActorCandidates', () => {
 
   it('emits no candidates when there is no sender', async () => {
     const adapter = new WhatsappAdapter(TEAM_ID);
-    const candidates = await adapter.getActorCandidates({ event: makeEvent({}) });
+    const candidates = await adapter.getActorCandidates({ event: whatsappFired() });
     expect(candidates).toEqual([]);
   });
 });
 
 describe('WhatsappAdapter.extractActor', () => {
-  it('returns the raw sender phone with the profile name as label', async () => {
+  it('returns the sender the arrival names, with the profile name as label', async () => {
     const adapter = new WhatsappAdapter(TEAM_ID);
     const actor = await adapter.extractActor({
-      event: makeEvent({ From: 'whatsapp:+15551234567', ProfileName: 'Ada Okafor' }),
+      event: whatsappFired({ phone: '+15551234567', name: 'Ada Okafor' }),
     });
     expect(actor).toEqual({
       identifier: '+15551234567',
@@ -234,23 +241,9 @@ describe('WhatsappAdapter.extractActor', () => {
     });
   });
 
-  it('falls back to the phone as label when there is no profile name', async () => {
+  it('returns null when the arrival names no sender', async () => {
     const adapter = new WhatsappAdapter(TEAM_ID);
-    const actor = await adapter.extractActor({
-      event: makeEvent({ From: 'whatsapp:+15551234567' }),
-    });
-    expect(actor).toEqual({
-      identifier: '+15551234567',
-      scheme: 'phone',
-      adapterType: 'whatsapp',
-      name: undefined,
-      label: '+15551234567',
-    });
-  });
-
-  it('returns null when the event carries no sender', async () => {
-    const adapter = new WhatsappAdapter(TEAM_ID);
-    const actor = await adapter.extractActor({ event: makeEvent({}) });
+    const actor = await adapter.extractActor({ event: whatsappFired() });
     expect(actor).toBeNull();
   });
 });
