@@ -19,7 +19,10 @@ import type { TeamId } from '../../generated/kysely/core/Team';
 import type { MutationEventEnvelope } from '../../lib/knowledge/store/events';
 
 import { KG_ADAPTER_TYPE } from '@listen-fire/kg/manifest';
+import ExternalServiceType from '../../generated/kysely/automations/ExternalServiceType';
 import { SECOND } from '../../constants';
+import { getAutomationsQb } from '../../lib/kysely';
+import { logger } from 'movement-engine/public/log';
 import { drainOnce } from '../knowledge/mutation_outbox/worker';
 import { notifyWork, registerWorkKinds } from '../work/drain';
 import { resolveAdapter } from '../translation_graph/adapters/resolve';
@@ -53,7 +56,14 @@ export async function queueKnowledgeChange(input: {
   outboxId: string;
 }): Promise<{ queued: number }> {
   const teamId = input.teamId as TeamId;
-  const adapter = await resolveAdapter({ adapterType: KG_ADAPTER_TYPE, teamId });
+  // The module reads the changed record through the team's connection to the
+  // graph. A team with none has no listen on the graph to hear the change.
+  const connection = await knowledgeConnectionOf(teamId);
+  if (connection === undefined) {
+    logger.info('[knowledge] a change on a team with no connection to its graph is heard by no listen', { teamId, outboxId: input.outboxId });
+    return { queued: 0 };
+  }
+  const adapter = await resolveAdapter({ adapterType: KG_ADAPTER_TYPE, teamId, credentialsId: connection });
   if (adapter.preprocessInbound === undefined) {
     throw new Error('the knowledge graph module reads no inbound events (preprocessInbound)');
   }
@@ -77,6 +87,18 @@ export async function queueKnowledgeChange(input: {
   if (!kept.kept) return { queued: 0 };
   notifyWork();
   return { queued: fires.length };
+}
+
+/** The team's connection to its graph: its first, where it has made more. */
+async function knowledgeConnectionOf(teamId: TeamId): Promise<string | undefined> {
+  const row = await getAutomationsQb(['external_service_credentials'])
+    .selectFrom('external_service_credentials')
+    .where('team_id', '=', teamId)
+    .where('type', '=', ExternalServiceType.NATIVE_KNOWLEDGE)
+    .orderBy('created_at', 'asc')
+    .select(['id'])
+    .executeTakeFirst();
+  return row?.id;
 }
 
 /** The periodic kind that carries the outbox into the queue (registered only

@@ -14,6 +14,18 @@ jest.mock('../../translation_graph/adapters/resolve', () => ({ resolveAdapter: j
 jest.mock('../../inbound/listen_door', () => ({ deliverArrivals: jest.fn() }));
 jest.mock('../../work/drain', () => ({ registerWorkKinds: jest.fn(), notifyWork: jest.fn() }));
 jest.mock('../../knowledge/mutation_outbox/worker', () => ({ drainOnce: jest.fn() }));
+// The team's connection to its graph, as the credentials table answers it.
+const connection: { row: { id: string } | undefined } = { row: { id: 'cred-kg' } };
+jest.mock('../../../lib/kysely', () => {
+  const query = {
+    selectFrom: () => query,
+    where: () => query,
+    orderBy: () => query,
+    select: () => query,
+    executeTakeFirst: async () => connection.row,
+  };
+  return { getAutomationsQb: () => query };
+});
 
 import { kgManifest } from '@listen-fire/kg';
 
@@ -38,6 +50,7 @@ const preprocessInbound = jest.fn(async (_input: { raw: unknown }) => ({ events:
 
 beforeEach(() => {
   jest.clearAllMocks();
+  connection.row = { id: 'cred-kg' };
   arrivals = [CHANGE];
   resolveAdapter.mockResolvedValue({ adapterType: 'kg', preprocessInbound });
   deliverArrivals.mockResolvedValue({ kept: { kept: true, arrivalMark: 1 }, deliveryId: 'd1', fires: [{ runId: 'r1' }] });
@@ -48,6 +61,7 @@ describe('queueKnowledgeChange: a graph change through the inbound path', () => 
     const result = await queueKnowledgeChange({ teamId: TEAM, envelope: ENVELOPE as never, outboxId: 'ob-1' });
 
     expect(result).toEqual({ queued: 1 });
+    expect(resolveAdapter).toHaveBeenCalledWith({ adapterType: 'kg', teamId: TEAM, credentialsId: 'cred-kg' });
     expect(preprocessInbound).toHaveBeenCalledWith({ raw: ENVELOPE });
     expect(deliverArrivals).toHaveBeenCalledWith({
       teamId: TEAM,
@@ -63,6 +77,14 @@ describe('queueKnowledgeChange: a graph change through the inbound path', () => 
       }),
     });
     expect(notifyWork).toHaveBeenCalledTimes(1);
+  });
+
+  it('a change on a team with no connection to its graph keeps nothing, and reads nothing', async () => {
+    connection.row = undefined;
+
+    expect(await queueKnowledgeChange({ teamId: TEAM, envelope: ENVELOPE as never, outboxId: 'ob-4' })).toEqual({ queued: 0 });
+    expect(resolveAdapter).not.toHaveBeenCalled();
+    expect(deliverArrivals).not.toHaveBeenCalled();
   });
 
   it('a change the module reports no arrival for keeps nothing', async () => {
