@@ -1,0 +1,801 @@
+{
+  "transcript": [
+    {
+      "step": "poll first look (Signals)",
+      "answer": {
+        "arrivals": [],
+        "cursor": {
+          "createdAfter": 1790000000000
+        }
+      }
+    },
+    {
+      "step": "poll first look (List Entries)",
+      "answer": {
+        "arrivals": [],
+        "cursor": {
+          "createdAfter": 1790000000000
+        }
+      }
+    },
+    {
+      "step": "poll Signals from the start",
+      "answer": {
+        "arrivals": [
+          {
+            "edge": "Signals",
+            "identity": "sig_4",
+            "landing": {
+              "recordId": "sig_4",
+              "recordType": "Signal",
+              "fields": {
+                "Id": "sig_4",
+                "id": "sig_4",
+                "Name": "Kenji Sato",
+                "fullName": "Kenji Sato",
+                "First Name": "Kenji",
+                "firstName": "Kenji",
+                "Last Name": "Sato",
+                "lastName": "Sato",
+                "Email": null,
+                "email": null,
+                "LinkedIn ID": "kenji-sato",
+                "linkedinIdStr": "kenji-sato",
+                "GitHub": null,
+                "githubSlug": null,
+                "Twitter": null,
+                "twitterId": null,
+                "Image URL": null,
+                "imageUrl": null,
+                "City": "Tokyo",
+                "city": "Tokyo",
+                "Country": "Japan",
+                "country": "Japan",
+                "Region": null,
+                "regionName": null,
+                "Nationality": "Japanese",
+                "nationality": "Japanese",
+                "Gender": "man",
+                "gender": "man",
+                "Age": "40 to 44",
+                "age": "40 to 44",
+                "Description": null,
+                "description": null,
+                "Summary": "Filed a new patent in battery chemistry.",
+                "summary": "Filed a new patent in battery chemistry.",
+                "Score": 7,
+                "score": 7,
+                "Source": "patent-office",
+                "source": "patent-office",
+                "Stealth Sign": null,
+                "stealthSign": null,
+                "Stealth Reason": null,
+                "stealthReason": null,
+                "Profile Accuracy": "high",
+                "profileAccuracy": "high",
+                "Discovered At": "2026-10-26T10:09:39.033Z",
+                "discoveredAt": "2026-10-26T10:09:39.033Z",
+                "Created At": "2026-10-26T10:09:39.033Z",
+                "createdAt": "2026-10-26T10:09:39.033Z",
+                "Tags": [
+                  "New Patent"
+                ],
+                "tags": [
+                  "New Patent"
+                ],
+                "Saved Search": null,
+                "savedSearch": null,
+                "In A List": false,
+                "listPresence": false,
+                "Screened": false,
+                "screened": false,
+                "Viewed": false,
+                "viewed": false
+              }
+            },
+            "takenApplied": true,
+            "occurredAt": "2026-10-26T10:09:39.033Z"
+          },
+          {
+            "edge": "Signals",
+            "identity": "sig_3",
+            "landing": {
+              "recordId": "sig_3",
+              "recordType": "Signal",
+              "fields": {
+                "Id": "sig_3",
+                "id": "sig_3",
+                "Name": "Ana Costa",
+                "fullName": "Ana Costa",
+                "First Name": "Ana",
+                "firstName": "Ana",
+                "Last Name": "Costa",
+                "lastName": "Costa",
+                "Email": null,
+                "email": null,
+                "LinkedIn ID": "ana-costa",
+                "linkedinIdStr": "ana-costa",
+                "GitHub": null,
+                "githubSlug": null,
+                "Twitter": null,
+                "twitterId": null,
+                "Image URL": null,
+                "imageUrl": null,
+                "City": "Lisbon",
+                "city": "Lisbon",
+                "Country": "Portugal",
+                "country": "Portugal",
+                "Region": null,
+                "regionName": null,
+                "Nationality": "Portuguese",
+                "nationality": "Portuguese",
+                "Gender": "woman",
+                "gender": "woman",
+                "Age": "25 to 29",
+                "age": "25 to 29",
+                "Description": null,
+                "description": null,
+                "Summary": null,
+                "summary": null,
+                "Score": 5,
+                "score": 5,
+                "Source": "linkedin",
+                "source": "linkedin",
+                "Stealth Sign": null,
+                "stealthSign": null,
+                "Stealth Reason": null,
+                "stealthReason": null,
+                "Profile Accuracy": "medium",
+                "profileAccuracy": "medium",
+                "Discovered At": "2026-10-28T10:09:39.033Z",
+                "discoveredAt": "2026-10-28T10:09:39.033Z",
+                "Created At": "2026-10-28T10:09:39.033Z",
+                "createdAt": "2026-10-28T10:09:39.033Z",
+                "Tags": [
+                  "Left Position"
+                ],
+                "tags": [
+                  "Left Position"
+                ],
+                "Saved Search": null,
+                "savedSearch": null,
+                "In A List": false,
+                "listPresence": false,
+                "Screened": false,
+                "screened": false,
+                "Viewed": false,
+                "viewed": false
+              }
+            },
+            "takenApplied": true,
+            "occurredAt": "2026-10-28T10:09:39.033Z"
+          },
+          {
+            "edge": "Signals",
+            "identity": "sig_2",
+            "landing": {
+              "recordId": "sig_2",
+              "recordType": "Signal",
+              "fields": {
+                "Id": "sig_2",
+                "id": "sig_2",
+                "Name": "Marcus Webb",
+                "fullName": "Marcus Webb",
+                "First Name": "Marcus",
+                "firstName": "Marcus",
+                "Last Name": "Webb",
+                "lastName": "Webb",
+                "Email": null,
+                "email": null,
+                "LinkedIn ID": "marcus-webb",
+                "linkedinIdStr": "marcus-webb",
+                "GitHub": null,
+                "githubSlug": null,
+                "Twitter": null,
+                "twitterId": null,
+                "Image URL": null,
+                "imageUrl": null,
+                "City": "London",
+                "city": "London",
+                "Country": "United Kingdom",
+                "country": "United Kingdom",
+                "Region": null,
+                "regionName": null,
+                "Nationality": "British",
+                "nationality": "British",
+                "Gender": "man",
+                "gender": "man",
+                "Age": "35 to 39",
+                "age": "35 to 39",
+                "Description": null,
+                "description": null,
+                "Summary": null,
+                "summary": null,
+                "Score": 6,
+                "score": 6,
+                "Source": "linkedin",
+                "source": "linkedin",
+                "Stealth Sign": "title change",
+                "stealthSign": "title change",
+                "Stealth Reason": "New LinkedIn headline: \"Building something new.\"",
+                "stealthReason": "New LinkedIn headline: \"Building something new.\"",
+                "Profile Accuracy": "medium",
+                "profileAccuracy": "medium",
+                "Discovered At": "2026-10-30T10:09:39.033Z",
+                "discoveredAt": "2026-10-30T10:09:39.033Z",
+                "Created At": "2026-10-30T10:09:39.033Z",
+                "createdAt": "2026-10-30T10:09:39.033Z",
+                "Tags": [
+                  "Stealth Position"
+                ],
+                "tags": [
+                  "Stealth Position"
+                ],
+                "Saved Search": null,
+                "savedSearch": null,
+                "In A List": false,
+                "listPresence": false,
+                "Screened": false,
+                "screened": false,
+                "Viewed": false,
+                "viewed": false
+              }
+            },
+            "takenApplied": true,
+            "occurredAt": "2026-10-30T10:09:39.033Z"
+          },
+          {
+            "edge": "Signals",
+            "identity": "sig_1",
+            "landing": {
+              "recordId": "sig_1",
+              "recordType": "Signal",
+              "fields": {
+                "Id": "sig_1",
+                "id": "sig_1",
+                "Name": "Priya Narayanan",
+                "fullName": "Priya Narayanan",
+                "First Name": "Priya",
+                "firstName": "Priya",
+                "Last Name": "Narayanan",
+                "lastName": "Narayanan",
+                "Email": null,
+                "email": null,
+                "LinkedIn ID": "priya-narayanan",
+                "linkedinIdStr": "priya-narayanan",
+                "GitHub": null,
+                "githubSlug": null,
+                "Twitter": null,
+                "twitterId": null,
+                "Image URL": null,
+                "imageUrl": null,
+                "City": "San Francisco",
+                "city": "San Francisco",
+                "Country": "United States",
+                "country": "United States",
+                "Region": null,
+                "regionName": null,
+                "Nationality": "American",
+                "nationality": "American",
+                "Gender": "woman",
+                "gender": "woman",
+                "Age": "30 to 34",
+                "age": "30 to 34",
+                "Description": null,
+                "description": null,
+                "Summary": "Left stealth to found a robotics company.",
+                "summary": "Left stealth to found a robotics company.",
+                "Score": 8,
+                "score": 8,
+                "Source": "linkedin",
+                "source": "linkedin",
+                "Stealth Sign": null,
+                "stealthSign": null,
+                "Stealth Reason": null,
+                "stealthReason": null,
+                "Profile Accuracy": "high",
+                "profileAccuracy": "high",
+                "Discovered At": "2026-11-01T10:09:39.033Z",
+                "discoveredAt": "2026-11-01T10:09:39.033Z",
+                "Created At": "2026-11-01T10:09:39.033Z",
+                "createdAt": "2026-11-01T10:09:39.033Z",
+                "Tags": [
+                  "New Company"
+                ],
+                "tags": [
+                  "New Company"
+                ],
+                "Saved Search": null,
+                "savedSearch": null,
+                "In A List": true,
+                "listPresence": true,
+                "Screened": false,
+                "screened": false,
+                "Viewed": false,
+                "viewed": false
+              }
+            },
+            "takenApplied": true,
+            "occurredAt": "2026-11-01T10:09:39.033Z"
+          }
+        ],
+        "cursor": {
+          "createdAfter": 1793527779033
+        }
+      }
+    },
+    {
+      "step": "poll Signals past the newest",
+      "answer": {
+        "arrivals": [],
+        "cursor": {
+          "createdAfter": 4000000000000
+        }
+      }
+    },
+    {
+      "step": "poll Signals of a saved search (title)",
+      "answer": {
+        "arrivals": [
+          {
+            "edge": "Signals",
+            "identity": "sig_2",
+            "landing": {
+              "recordId": "sig_2",
+              "recordType": "Signal",
+              "fields": {
+                "Id": "sig_2",
+                "id": "sig_2",
+                "Name": "Marcus Webb",
+                "fullName": "Marcus Webb",
+                "First Name": "Marcus",
+                "firstName": "Marcus",
+                "Last Name": "Webb",
+                "lastName": "Webb",
+                "Email": null,
+                "email": null,
+                "LinkedIn ID": "marcus-webb",
+                "linkedinIdStr": "marcus-webb",
+                "GitHub": null,
+                "githubSlug": null,
+                "Twitter": null,
+                "twitterId": null,
+                "Image URL": null,
+                "imageUrl": null,
+                "City": "London",
+                "city": "London",
+                "Country": "United Kingdom",
+                "country": "United Kingdom",
+                "Region": null,
+                "regionName": null,
+                "Nationality": "British",
+                "nationality": "British",
+                "Gender": "man",
+                "gender": "man",
+                "Age": "35 to 39",
+                "age": "35 to 39",
+                "Description": null,
+                "description": null,
+                "Summary": null,
+                "summary": null,
+                "Score": 6,
+                "score": 6,
+                "Source": "linkedin",
+                "source": "linkedin",
+                "Stealth Sign": "title change",
+                "stealthSign": "title change",
+                "Stealth Reason": "New LinkedIn headline: \"Building something new.\"",
+                "stealthReason": "New LinkedIn headline: \"Building something new.\"",
+                "Profile Accuracy": "medium",
+                "profileAccuracy": "medium",
+                "Discovered At": "2026-10-30T10:09:39.033Z",
+                "discoveredAt": "2026-10-30T10:09:39.033Z",
+                "Created At": "2026-10-30T10:09:39.033Z",
+                "createdAt": "2026-10-30T10:09:39.033Z",
+                "Tags": [
+                  "Stealth Position"
+                ],
+                "tags": [
+                  "Stealth Position"
+                ],
+                "Saved Search": "Stealth founders",
+                "savedSearch": "Stealth founders",
+                "In A List": false,
+                "listPresence": false,
+                "Screened": false,
+                "screened": false,
+                "Viewed": false,
+                "viewed": false
+              }
+            },
+            "takenApplied": true,
+            "occurredAt": "2026-10-30T10:09:39.033Z"
+          }
+        ],
+        "cursor": {
+          "createdAfter": 1793354979033
+        }
+      }
+    },
+    {
+      "step": "poll Signals of a saved search (id, scalar and exclude rows)",
+      "answer": {
+        "arrivals": [
+          {
+            "edge": "Signals",
+            "identity": "sig_1",
+            "landing": {
+              "recordId": "sig_1",
+              "recordType": "Signal",
+              "fields": {
+                "Id": "sig_1",
+                "id": "sig_1",
+                "Name": "Priya Narayanan",
+                "fullName": "Priya Narayanan",
+                "First Name": "Priya",
+                "firstName": "Priya",
+                "Last Name": "Narayanan",
+                "lastName": "Narayanan",
+                "Email": null,
+                "email": null,
+                "LinkedIn ID": "priya-narayanan",
+                "linkedinIdStr": "priya-narayanan",
+                "GitHub": null,
+                "githubSlug": null,
+                "Twitter": null,
+                "twitterId": null,
+                "Image URL": null,
+                "imageUrl": null,
+                "City": "San Francisco",
+                "city": "San Francisco",
+                "Country": "United States",
+                "country": "United States",
+                "Region": null,
+                "regionName": null,
+                "Nationality": "American",
+                "nationality": "American",
+                "Gender": "woman",
+                "gender": "woman",
+                "Age": "30 to 34",
+                "age": "30 to 34",
+                "Description": null,
+                "description": null,
+                "Summary": "Left stealth to found a robotics company.",
+                "summary": "Left stealth to found a robotics company.",
+                "Score": 8,
+                "score": 8,
+                "Source": "linkedin",
+                "source": "linkedin",
+                "Stealth Sign": null,
+                "stealthSign": null,
+                "Stealth Reason": null,
+                "stealthReason": null,
+                "Profile Accuracy": "high",
+                "profileAccuracy": "high",
+                "Discovered At": "2026-11-01T10:09:39.033Z",
+                "discoveredAt": "2026-11-01T10:09:39.033Z",
+                "Created At": "2026-11-01T10:09:39.033Z",
+                "createdAt": "2026-11-01T10:09:39.033Z",
+                "Tags": [
+                  "New Company"
+                ],
+                "tags": [
+                  "New Company"
+                ],
+                "Saved Search": "srch_2",
+                "savedSearch": "srch_2",
+                "In A List": true,
+                "listPresence": true,
+                "Screened": false,
+                "screened": false,
+                "Viewed": false,
+                "viewed": false
+              }
+            },
+            "takenApplied": true,
+            "occurredAt": "2026-11-01T10:09:39.033Z"
+          }
+        ],
+        "cursor": {
+          "createdAfter": 1793527779033
+        }
+      }
+    },
+    {
+      "step": "poll Signals of an unknown search",
+      "answer": {
+        "error": "Evertrace: no saved search called \"Nope\" in this Evertrace workspace (saw: Stealth founders, Strong outside Japan)."
+      }
+    },
+    {
+      "step": "poll List Entries from the start",
+      "answer": {
+        "arrivals": [
+          {
+            "edge": "List Entries",
+            "identity": "list_1:entry_1",
+            "landing": {
+              "recordId": "list_1:entry_1",
+              "recordType": "List Entry",
+              "fields": {
+                "Id": "list_1:entry_1",
+                "entryKey": "list_1:entry_1",
+                "Added At": "2026-11-02T10:09:39.033Z",
+                "createdAt": "2026-11-02T10:09:39.033Z",
+                "List Id": "list_1",
+                "listId": "list_1",
+                "List Name": "Pipeline",
+                "listName": "Pipeline"
+              }
+            },
+            "about": {
+              "recordType": "Signal",
+              "externalId": "sig_1"
+            },
+            "takenApplied": true,
+            "occurredAt": "2026-11-02T10:09:39.033Z"
+          }
+        ],
+        "cursor": {
+          "createdAfter": 1793614179033
+        }
+      }
+    },
+    {
+      "step": "poll List Entries of one list",
+      "answer": {
+        "arrivals": [
+          {
+            "edge": "List Entries",
+            "identity": "list_1:entry_1",
+            "landing": {
+              "recordId": "list_1:entry_1",
+              "recordType": "List Entry",
+              "fields": {
+                "Id": "list_1:entry_1",
+                "entryKey": "list_1:entry_1",
+                "Added At": "2026-11-02T10:09:39.033Z",
+                "createdAt": "2026-11-02T10:09:39.033Z",
+                "List Id": "list_1",
+                "listId": "list_1",
+                "List Name": "Pipeline",
+                "listName": "Pipeline"
+              }
+            },
+            "about": {
+              "recordType": "Signal",
+              "externalId": "sig_1"
+            },
+            "takenApplied": true,
+            "occurredAt": "2026-11-02T10:09:39.033Z"
+          }
+        ],
+        "cursor": {
+          "createdAfter": 1793614179033
+        }
+      }
+    },
+    {
+      "step": "poll List Entries of an unknown list",
+      "answer": {
+        "error": "EvertracePollSource: no list called \"Nope\" in this Evertrace workspace (saw: Pipeline, Watchlist)."
+      }
+    },
+    {
+      "step": "poll List Entries past the newest",
+      "answer": {
+        "arrivals": [],
+        "cursor": {
+          "createdAfter": 4000000000000
+        }
+      }
+    },
+    {
+      "step": "poll an edge that is not polled",
+      "answer": {
+        "error": "@lf/evertrace: no edge Companies to poll (its listenable edges are Signals and List Entries)"
+      }
+    }
+  ],
+  "exchanges": [
+    {
+      "method": "POST",
+      "path": "/signals",
+      "authorization": "Bearer dev-loop-evertrace-key",
+      "headers": {
+        "x-api-version": "2026-03-11"
+      },
+      "body": {
+        "created_after": "1",
+        "page": "1",
+        "limit": "100"
+      },
+      "status": 200,
+      "response": "{\"data\":[{\"id\":\"sig_1\",\"score\":8,\"source\":\"linkedin\",\"firstName\":\"Priya\",\"lastName\":\"Narayanan\",\"imageUrl\":null,\"nationality\":\"American\",\"description\":null,\"city\":\"San Francisco\",\"country\":\"United States\",\"gender\":\"woman\",\"githubSlug\":null,\"linkedinIdIm\":null,\"linkedinIdStr\":\"priya-narayanan\",\"signalHash\":\"hash_sig_1\",\"profileAccuracy\":\"high\",\"age\":\"30 to 34\",\"discoveredAt\":1793527779033,\"twitterId\":null,\"email\":null,\"stealthSign\":null,\"stealthReason\":null,\"summary\":\"Left stealth to found a robotics company.\",\"createdAt\":1793527779033,\"taggings\":[{\"id\":\"tg_1\",\"key\":\"New Company\",\"namespace\":\"signal_type\",\"signalId\":\"sig_1\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033}],\"experiences\":[{\"id\":\"exp_1\",\"signalId\":\"sig_1\",\"experienceEntityId\":\"exe_1\",\"title\":\"Founder & CEO\",\"location\":\"San Francisco\",\"companyName\":\"Northwind Robotics\",\"indexOrder\":0,\"startDate\":\"2026-06\",\"endDate\":null,\"createdAt\":1793614179033,\"updatedAt\":1793614179033,\"entity\":{\"id\":\"exe_1\",\"source\":\"evertrace\",\"name\":\"Northwind Robotics\",\"websiteUrl\":\"https://northwind.robotics\",\"customerSegment\":\"B2B\",\"sourceUrl\":null,\"logoUrl\":null,\"employeeCount\":42,\"createdAt\":1776334179033,\"updatedAt\":1792750179033}}],\"educations\":[{\"id\":\"edu_1\",\"signalId\":\"sig_1\",\"educationEntityId\":\"ede_1\",\"degree\":\"BS Computer Science\",\"schoolName\":\"Stanford University\",\"indexOrder\":0,\"startDate\":\"2014\",\"endDate\":\"2018\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033,\"entity\":{\"id\":\"ede_1\",\"name\":\"Stanford University\",\"sourceUrl\":null,\"logoUrl\":null,\"studentCount\":17000,\"createdAt\":1534414179033,\"updatedAt\":1534414179033}}],\"region\":null,\"unipileMessagesCount\":0,\"unipileInvitationsCount\":0,\"screenings\":[],\"views\":[],\"listPresence\":true},{\"id\":\"sig_2\",\"score\":6,\"source\":\"linkedin\",\"firstName\":\"Marcus\",\"lastName\":\"Webb\",\"imageUrl\":null,\"nationality\":\"British\",\"description\":null,\"city\":\"London\",\"country\":\"United Kingdom\",\"gender\":\"man\",\"githubSlug\":null,\"linkedinIdIm\":null,\"linkedinIdStr\":\"marcus-webb\",\"signalHash\":\"hash_sig_2\",\"profileAccuracy\":\"medium\",\"age\":\"35 to 39\",\"discoveredAt\":1793354979033,\"twitterId\":null,\"email\":null,\"stealthSign\":\"title change\",\"stealthReason\":\"New LinkedIn headline: \\\"Building something new.\\\"\",\"summary\":null,\"createdAt\":1793354979033,\"taggings\":[{\"id\":\"tg_2\",\"key\":\"Stealth Position\",\"namespace\":\"signal_type\",\"signalId\":\"sig_2\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033}],\"experiences\":[{\"id\":\"exp_2\",\"signalId\":\"sig_2\",\"experienceEntityId\":null,\"title\":\"Stealth\",\"location\":\"London\",\"companyName\":null,\"indexOrder\":0,\"startDate\":\"2026-05\",\"endDate\":null,\"createdAt\":1793614179033,\"updatedAt\":1793614179033,\"entity\":null}],\"educations\":[{\"id\":\"edu_2\",\"signalId\":\"sig_2\",\"educationEntityId\":\"ede_2\",\"degree\":\"MBA\",\"schoolName\":\"MIT\",\"indexOrder\":0,\"startDate\":\"2012\",\"endDate\":\"2014\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033,\"entity\":{\"id\":\"ede_2\",\"name\":\"MIT\",\"sourceUrl\":null,\"logoUrl\":null,\"studentCount\":11000,\"createdAt\":1534414179033,\"updatedAt\":1534414179033}}],\"region\":null,\"unipileMessagesCount\":0,\"unipileInvitationsCount\":0,\"screenings\":[],\"views\":[],\"listPresence\":false},{\"id\":\"sig_3\",\"score\":5,\"source\":\"linkedin\",\"firstName\":\"Ana\",\"lastName\":\"Costa\",\"imageUrl\":null,\"nationality\":\"Portuguese\",\"description\":null,\"city\":\"Lisbon\",\"country\":\"Portugal\",\"gender\":\"woman\",\"githubSlug\":null,\"linkedinIdIm\":null,\"linkedinIdStr\":\"ana-costa\",\"signalHash\":\"hash_sig_3\",\"profileAccuracy\":\"medium\",\"age\":\"25 to 29\",\"discoveredAt\":1793182179033,\"twitterId\":null,\"email\":null,\"stealthSign\":null,\"stealthReason\":null,\"summary\":null,\"createdAt\":1793182179033,\"taggings\":[{\"id\":\"tg_3\",\"key\":\"Left Position\",\"namespace\":\"signal_type\",\"signalId\":\"sig_3\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033}],\"experiences\":[{\"id\":\"exp_3\",\"signalId\":\"sig_3\",\"experienceEntityId\":\"exe_2\",\"title\":\"Former VP Engineering\",\"location\":\"Lisbon\",\"companyName\":\"Bluepeak Systems\",\"indexOrder\":0,\"startDate\":\"2022-01\",\"endDate\":\"2026-08\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033,\"entity\":{\"id\":\"exe_2\",\"source\":\"evertrace\",\"name\":\"Bluepeak Systems\",\"websiteUrl\":\"https://bluepeak.systems\",\"customerSegment\":\"B2B\",\"sourceUrl\":null,\"logoUrl\":null,\"employeeCount\":11,\"createdAt\":1759054179033,\"updatedAt\":1791022179033}}],\"educations\":[],\"region\":null,\"unipileMessagesCount\":0,\"unipileInvitationsCount\":0,\"screenings\":[],\"views\":[],\"listPresence\":false},{\"id\":\"sig_4\",\"score\":7,\"source\":\"patent-office\",\"firstName\":\"Kenji\",\"lastName\":\"Sato\",\"imageUrl\":null,\"nationality\":\"Japanese\",\"description\":null,\"city\":\"Tokyo\",\"country\":\"Japan\",\"gender\":\"man\",\"githubSlug\":null,\"linkedinIdIm\":null,\"linkedinIdStr\":\"kenji-sato\",\"signalHash\":\"hash_sig_4\",\"profileAccuracy\":\"high\",\"age\":\"40 to 44\",\"discoveredAt\":1793009379033,\"twitterId\":null,\"email\":null,\"stealthSign\":null,\"stealthReason\":null,\"summary\":\"Filed a new patent in battery chemistry.\",\"createdAt\":1793009379033,\"taggings\":[{\"id\":\"tg_4\",\"key\":\"New Patent\",\"namespace\":\"signal_type\",\"signalId\":\"sig_4\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033}],\"experiences\":[],\"educations\":[],\"region\":null,\"unipileMessagesCount\":0,\"unipileInvitationsCount\":0,\"screenings\":[],\"views\":[],\"listPresence\":false}],\"meta\":{\"page\":1,\"limit\":100}}"
+    },
+    {
+      "method": "POST",
+      "path": "/signals",
+      "authorization": "Bearer dev-loop-evertrace-key",
+      "headers": {
+        "x-api-version": "2026-03-11"
+      },
+      "body": {
+        "created_after": "4000000000000",
+        "page": "1",
+        "limit": "100"
+      },
+      "status": 200,
+      "response": "{\"data\":[],\"meta\":{\"page\":1,\"limit\":100}}"
+    },
+    {
+      "method": "GET",
+      "path": "/searches",
+      "authorization": "Bearer dev-loop-evertrace-key",
+      "headers": {
+        "x-api-version": "2026-03-11"
+      },
+      "body": null,
+      "status": 200,
+      "response": "[{\"id\":\"srch_1\",\"workspaceId\":\"ws_dev_loop\",\"emoji\":\"🕵️\",\"title\":\"Stealth founders\",\"createdBy\":\"usr_1\",\"updatedBy\":\"usr_1\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033,\"visitedAt\":1793614179033,\"visitedBy\":\"usr_1\",\"orderIndex\":\"0\",\"sharees\":[],\"filters\":[{\"id\":\"sfr_1\",\"searchId\":\"srch_1\",\"key\":\"status\",\"operator\":\"in\",\"value\":\"[\\\"Stealth Position\\\"]\",\"workspaceId\":\"ws_dev_loop\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033}]},{\"id\":\"srch_2\",\"workspaceId\":\"ws_dev_loop\",\"emoji\":\"🌍\",\"title\":\"Strong outside Japan\",\"createdBy\":\"usr_1\",\"updatedBy\":\"usr_1\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033,\"visitedAt\":1793614179033,\"visitedBy\":\"usr_1\",\"orderIndex\":\"1\",\"sharees\":[],\"filters\":[{\"id\":\"sfr_2\",\"searchId\":\"srch_2\",\"key\":\"score\",\"operator\":\"gte\",\"value\":\"7\",\"workspaceId\":\"ws_dev_loop\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033},{\"id\":\"sfr_3\",\"searchId\":\"srch_2\",\"key\":\"country\",\"operator\":\"not_in\",\"value\":\"Japan\",\"workspaceId\":\"ws_dev_loop\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033}]}]"
+    },
+    {
+      "method": "POST",
+      "path": "/signals",
+      "authorization": "Bearer dev-loop-evertrace-key",
+      "headers": {
+        "x-api-version": "2026-03-11"
+      },
+      "body": {
+        "type": [
+          "Stealth Position"
+        ],
+        "created_after": "1",
+        "page": "1",
+        "limit": "100"
+      },
+      "status": 200,
+      "response": "{\"data\":[{\"id\":\"sig_2\",\"score\":6,\"source\":\"linkedin\",\"firstName\":\"Marcus\",\"lastName\":\"Webb\",\"imageUrl\":null,\"nationality\":\"British\",\"description\":null,\"city\":\"London\",\"country\":\"United Kingdom\",\"gender\":\"man\",\"githubSlug\":null,\"linkedinIdIm\":null,\"linkedinIdStr\":\"marcus-webb\",\"signalHash\":\"hash_sig_2\",\"profileAccuracy\":\"medium\",\"age\":\"35 to 39\",\"discoveredAt\":1793354979033,\"twitterId\":null,\"email\":null,\"stealthSign\":\"title change\",\"stealthReason\":\"New LinkedIn headline: \\\"Building something new.\\\"\",\"summary\":null,\"createdAt\":1793354979033,\"taggings\":[{\"id\":\"tg_2\",\"key\":\"Stealth Position\",\"namespace\":\"signal_type\",\"signalId\":\"sig_2\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033}],\"experiences\":[{\"id\":\"exp_2\",\"signalId\":\"sig_2\",\"experienceEntityId\":null,\"title\":\"Stealth\",\"location\":\"London\",\"companyName\":null,\"indexOrder\":0,\"startDate\":\"2026-05\",\"endDate\":null,\"createdAt\":1793614179033,\"updatedAt\":1793614179033,\"entity\":null}],\"educations\":[{\"id\":\"edu_2\",\"signalId\":\"sig_2\",\"educationEntityId\":\"ede_2\",\"degree\":\"MBA\",\"schoolName\":\"MIT\",\"indexOrder\":0,\"startDate\":\"2012\",\"endDate\":\"2014\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033,\"entity\":{\"id\":\"ede_2\",\"name\":\"MIT\",\"sourceUrl\":null,\"logoUrl\":null,\"studentCount\":11000,\"createdAt\":1534414179033,\"updatedAt\":1534414179033}}],\"region\":null,\"unipileMessagesCount\":0,\"unipileInvitationsCount\":0,\"screenings\":[],\"views\":[],\"listPresence\":false}],\"meta\":{\"page\":1,\"limit\":100}}"
+    },
+    {
+      "method": "GET",
+      "path": "/searches",
+      "authorization": "Bearer dev-loop-evertrace-key",
+      "headers": {
+        "x-api-version": "2026-03-11"
+      },
+      "body": null,
+      "status": 200,
+      "response": "[{\"id\":\"srch_1\",\"workspaceId\":\"ws_dev_loop\",\"emoji\":\"🕵️\",\"title\":\"Stealth founders\",\"createdBy\":\"usr_1\",\"updatedBy\":\"usr_1\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033,\"visitedAt\":1793614179033,\"visitedBy\":\"usr_1\",\"orderIndex\":\"0\",\"sharees\":[],\"filters\":[{\"id\":\"sfr_1\",\"searchId\":\"srch_1\",\"key\":\"status\",\"operator\":\"in\",\"value\":\"[\\\"Stealth Position\\\"]\",\"workspaceId\":\"ws_dev_loop\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033}]},{\"id\":\"srch_2\",\"workspaceId\":\"ws_dev_loop\",\"emoji\":\"🌍\",\"title\":\"Strong outside Japan\",\"createdBy\":\"usr_1\",\"updatedBy\":\"usr_1\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033,\"visitedAt\":1793614179033,\"visitedBy\":\"usr_1\",\"orderIndex\":\"1\",\"sharees\":[],\"filters\":[{\"id\":\"sfr_2\",\"searchId\":\"srch_2\",\"key\":\"score\",\"operator\":\"gte\",\"value\":\"7\",\"workspaceId\":\"ws_dev_loop\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033},{\"id\":\"sfr_3\",\"searchId\":\"srch_2\",\"key\":\"country\",\"operator\":\"not_in\",\"value\":\"Japan\",\"workspaceId\":\"ws_dev_loop\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033}]}]"
+    },
+    {
+      "method": "POST",
+      "path": "/signals",
+      "authorization": "Bearer dev-loop-evertrace-key",
+      "headers": {
+        "x-api-version": "2026-03-11"
+      },
+      "body": {
+        "score": "7",
+        "country": [
+          "!Japan"
+        ],
+        "created_after": "1",
+        "page": "1",
+        "limit": "100"
+      },
+      "status": 200,
+      "response": "{\"data\":[{\"id\":\"sig_1\",\"score\":8,\"source\":\"linkedin\",\"firstName\":\"Priya\",\"lastName\":\"Narayanan\",\"imageUrl\":null,\"nationality\":\"American\",\"description\":null,\"city\":\"San Francisco\",\"country\":\"United States\",\"gender\":\"woman\",\"githubSlug\":null,\"linkedinIdIm\":null,\"linkedinIdStr\":\"priya-narayanan\",\"signalHash\":\"hash_sig_1\",\"profileAccuracy\":\"high\",\"age\":\"30 to 34\",\"discoveredAt\":1793527779033,\"twitterId\":null,\"email\":null,\"stealthSign\":null,\"stealthReason\":null,\"summary\":\"Left stealth to found a robotics company.\",\"createdAt\":1793527779033,\"taggings\":[{\"id\":\"tg_1\",\"key\":\"New Company\",\"namespace\":\"signal_type\",\"signalId\":\"sig_1\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033}],\"experiences\":[{\"id\":\"exp_1\",\"signalId\":\"sig_1\",\"experienceEntityId\":\"exe_1\",\"title\":\"Founder & CEO\",\"location\":\"San Francisco\",\"companyName\":\"Northwind Robotics\",\"indexOrder\":0,\"startDate\":\"2026-06\",\"endDate\":null,\"createdAt\":1793614179033,\"updatedAt\":1793614179033,\"entity\":{\"id\":\"exe_1\",\"source\":\"evertrace\",\"name\":\"Northwind Robotics\",\"websiteUrl\":\"https://northwind.robotics\",\"customerSegment\":\"B2B\",\"sourceUrl\":null,\"logoUrl\":null,\"employeeCount\":42,\"createdAt\":1776334179033,\"updatedAt\":1792750179033}}],\"educations\":[{\"id\":\"edu_1\",\"signalId\":\"sig_1\",\"educationEntityId\":\"ede_1\",\"degree\":\"BS Computer Science\",\"schoolName\":\"Stanford University\",\"indexOrder\":0,\"startDate\":\"2014\",\"endDate\":\"2018\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033,\"entity\":{\"id\":\"ede_1\",\"name\":\"Stanford University\",\"sourceUrl\":null,\"logoUrl\":null,\"studentCount\":17000,\"createdAt\":1534414179033,\"updatedAt\":1534414179033}}],\"region\":null,\"unipileMessagesCount\":0,\"unipileInvitationsCount\":0,\"screenings\":[],\"views\":[],\"listPresence\":true}],\"meta\":{\"page\":1,\"limit\":100}}"
+    },
+    {
+      "method": "GET",
+      "path": "/searches",
+      "authorization": "Bearer dev-loop-evertrace-key",
+      "headers": {
+        "x-api-version": "2026-03-11"
+      },
+      "body": null,
+      "status": 200,
+      "response": "[{\"id\":\"srch_1\",\"workspaceId\":\"ws_dev_loop\",\"emoji\":\"🕵️\",\"title\":\"Stealth founders\",\"createdBy\":\"usr_1\",\"updatedBy\":\"usr_1\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033,\"visitedAt\":1793614179033,\"visitedBy\":\"usr_1\",\"orderIndex\":\"0\",\"sharees\":[],\"filters\":[{\"id\":\"sfr_1\",\"searchId\":\"srch_1\",\"key\":\"status\",\"operator\":\"in\",\"value\":\"[\\\"Stealth Position\\\"]\",\"workspaceId\":\"ws_dev_loop\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033}]},{\"id\":\"srch_2\",\"workspaceId\":\"ws_dev_loop\",\"emoji\":\"🌍\",\"title\":\"Strong outside Japan\",\"createdBy\":\"usr_1\",\"updatedBy\":\"usr_1\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033,\"visitedAt\":1793614179033,\"visitedBy\":\"usr_1\",\"orderIndex\":\"1\",\"sharees\":[],\"filters\":[{\"id\":\"sfr_2\",\"searchId\":\"srch_2\",\"key\":\"score\",\"operator\":\"gte\",\"value\":\"7\",\"workspaceId\":\"ws_dev_loop\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033},{\"id\":\"sfr_3\",\"searchId\":\"srch_2\",\"key\":\"country\",\"operator\":\"not_in\",\"value\":\"Japan\",\"workspaceId\":\"ws_dev_loop\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033}]}]"
+    },
+    {
+      "method": "GET",
+      "path": "/lists",
+      "authorization": "Bearer dev-loop-evertrace-key",
+      "headers": {
+        "x-api-version": "2026-03-11"
+      },
+      "body": null,
+      "status": 200,
+      "response": "[{\"id\":\"list_1\",\"workspaceId\":\"ws_dev_loop\",\"createdBy\":\"usr_1\",\"name\":\"Pipeline\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033,\"entriesCount\":1,\"creator\":{\"id\":\"usr_1\",\"name\":\"Dev Loop User\",\"firstName\":\"Dev Loop\",\"lastName\":\"User\",\"email\":\"dev-loop@listen-fire.local\",\"emailVerified\":true,\"inviterId\":null,\"image\":null,\"workspaceId\":\"ws_dev_loop\",\"createdAt\":\"2026-01-01T00:00:00.000Z\",\"updatedAt\":\"2026-01-01T00:00:00.000Z\",\"onboardedAt\":\"2026-01-01T00:00:00.000Z\",\"role\":\"ws_owner\"},\"accesses\":[]},{\"id\":\"list_2\",\"workspaceId\":\"ws_dev_loop\",\"createdBy\":\"usr_1\",\"name\":\"Watchlist\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033,\"entriesCount\":0,\"creator\":{\"id\":\"usr_1\",\"name\":\"Dev Loop User\",\"firstName\":\"Dev Loop\",\"lastName\":\"User\",\"email\":\"dev-loop@listen-fire.local\",\"emailVerified\":true,\"inviterId\":null,\"image\":null,\"workspaceId\":\"ws_dev_loop\",\"createdAt\":\"2026-01-01T00:00:00.000Z\",\"updatedAt\":\"2026-01-01T00:00:00.000Z\",\"onboardedAt\":\"2026-01-01T00:00:00.000Z\",\"role\":\"ws_owner\"},\"accesses\":[]}]"
+    },
+    {
+      "method": "GET",
+      "path": "/lists/list_1/entries?page=1&limit=100&sort_by=entry_created_at&sort_order=desc",
+      "authorization": "Bearer dev-loop-evertrace-key",
+      "headers": {
+        "x-api-version": "2026-03-11"
+      },
+      "body": null,
+      "status": 200,
+      "response": "{\"data\":[{\"id\":\"entry_1\",\"workspaceId\":\"ws_dev_loop\",\"listId\":\"list_1\",\"signalId\":\"sig_1\",\"addedBy\":\"usr_1\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033,\"signal\":{\"id\":\"sig_1\",\"score\":8,\"source\":\"linkedin\",\"firstName\":\"Priya\",\"lastName\":\"Narayanan\",\"imageUrl\":null,\"nationality\":\"American\",\"description\":null,\"city\":\"San Francisco\",\"country\":\"United States\",\"gender\":\"woman\",\"githubSlug\":null,\"linkedinIdIm\":null,\"linkedinIdStr\":\"priya-narayanan\",\"signalHash\":\"hash_sig_1\",\"profileAccuracy\":\"high\",\"age\":\"30 to 34\",\"discoveredAt\":1793527779033,\"twitterId\":null,\"email\":null,\"stealthSign\":null,\"stealthReason\":null,\"summary\":\"Left stealth to found a robotics company.\",\"createdAt\":1793527779033,\"taggings\":[{\"id\":\"tg_1\",\"key\":\"New Company\",\"namespace\":\"signal_type\",\"signalId\":\"sig_1\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033}],\"experiences\":[{\"id\":\"exp_1\",\"signalId\":\"sig_1\",\"experienceEntityId\":\"exe_1\",\"title\":\"Founder & CEO\",\"location\":\"San Francisco\",\"companyName\":\"Northwind Robotics\",\"indexOrder\":0,\"startDate\":\"2026-06\",\"endDate\":null,\"createdAt\":1793614179033,\"updatedAt\":1793614179033,\"entity\":{\"id\":\"exe_1\",\"source\":\"evertrace\",\"name\":\"Northwind Robotics\",\"websiteUrl\":\"https://northwind.robotics\",\"customerSegment\":\"B2B\",\"sourceUrl\":null,\"logoUrl\":null,\"employeeCount\":42,\"createdAt\":1776334179033,\"updatedAt\":1792750179033}}],\"educations\":[{\"id\":\"edu_1\",\"signalId\":\"sig_1\",\"educationEntityId\":\"ede_1\",\"degree\":\"BS Computer Science\",\"schoolName\":\"Stanford University\",\"indexOrder\":0,\"startDate\":\"2014\",\"endDate\":\"2018\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033,\"entity\":{\"id\":\"ede_1\",\"name\":\"Stanford University\",\"sourceUrl\":null,\"logoUrl\":null,\"studentCount\":17000,\"createdAt\":1534414179033,\"updatedAt\":1534414179033}}],\"region\":null,\"unipileMessagesCount\":0,\"unipileInvitationsCount\":0,\"screenings\":[],\"views\":[],\"listPresence\":true},\"addedByUser\":{\"id\":\"usr_1\",\"name\":\"Dev Loop User\",\"firstName\":\"Dev Loop\",\"lastName\":\"User\",\"email\":\"dev-loop@listen-fire.local\",\"emailVerified\":true,\"inviterId\":null,\"image\":null,\"workspaceId\":\"ws_dev_loop\",\"createdAt\":\"2026-01-01T00:00:00.000Z\",\"updatedAt\":\"2026-01-01T00:00:00.000Z\",\"onboardedAt\":\"2026-01-01T00:00:00.000Z\",\"role\":\"ws_owner\"}}],\"meta\":{\"page\":1,\"limit\":100}}"
+    },
+    {
+      "method": "GET",
+      "path": "/lists/list_2/entries?page=1&limit=100&sort_by=entry_created_at&sort_order=desc",
+      "authorization": "Bearer dev-loop-evertrace-key",
+      "headers": {
+        "x-api-version": "2026-03-11"
+      },
+      "body": null,
+      "status": 200,
+      "response": "{\"data\":[],\"meta\":{\"page\":1,\"limit\":100}}"
+    },
+    {
+      "method": "GET",
+      "path": "/lists",
+      "authorization": "Bearer dev-loop-evertrace-key",
+      "headers": {
+        "x-api-version": "2026-03-11"
+      },
+      "body": null,
+      "status": 200,
+      "response": "[{\"id\":\"list_1\",\"workspaceId\":\"ws_dev_loop\",\"createdBy\":\"usr_1\",\"name\":\"Pipeline\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033,\"entriesCount\":1,\"creator\":{\"id\":\"usr_1\",\"name\":\"Dev Loop User\",\"firstName\":\"Dev Loop\",\"lastName\":\"User\",\"email\":\"dev-loop@listen-fire.local\",\"emailVerified\":true,\"inviterId\":null,\"image\":null,\"workspaceId\":\"ws_dev_loop\",\"createdAt\":\"2026-01-01T00:00:00.000Z\",\"updatedAt\":\"2026-01-01T00:00:00.000Z\",\"onboardedAt\":\"2026-01-01T00:00:00.000Z\",\"role\":\"ws_owner\"},\"accesses\":[]},{\"id\":\"list_2\",\"workspaceId\":\"ws_dev_loop\",\"createdBy\":\"usr_1\",\"name\":\"Watchlist\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033,\"entriesCount\":0,\"creator\":{\"id\":\"usr_1\",\"name\":\"Dev Loop User\",\"firstName\":\"Dev Loop\",\"lastName\":\"User\",\"email\":\"dev-loop@listen-fire.local\",\"emailVerified\":true,\"inviterId\":null,\"image\":null,\"workspaceId\":\"ws_dev_loop\",\"createdAt\":\"2026-01-01T00:00:00.000Z\",\"updatedAt\":\"2026-01-01T00:00:00.000Z\",\"onboardedAt\":\"2026-01-01T00:00:00.000Z\",\"role\":\"ws_owner\"},\"accesses\":[]}]"
+    },
+    {
+      "method": "GET",
+      "path": "/lists/list_1/entries?page=1&limit=100&sort_by=entry_created_at&sort_order=desc",
+      "authorization": "Bearer dev-loop-evertrace-key",
+      "headers": {
+        "x-api-version": "2026-03-11"
+      },
+      "body": null,
+      "status": 200,
+      "response": "{\"data\":[{\"id\":\"entry_1\",\"workspaceId\":\"ws_dev_loop\",\"listId\":\"list_1\",\"signalId\":\"sig_1\",\"addedBy\":\"usr_1\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033,\"signal\":{\"id\":\"sig_1\",\"score\":8,\"source\":\"linkedin\",\"firstName\":\"Priya\",\"lastName\":\"Narayanan\",\"imageUrl\":null,\"nationality\":\"American\",\"description\":null,\"city\":\"San Francisco\",\"country\":\"United States\",\"gender\":\"woman\",\"githubSlug\":null,\"linkedinIdIm\":null,\"linkedinIdStr\":\"priya-narayanan\",\"signalHash\":\"hash_sig_1\",\"profileAccuracy\":\"high\",\"age\":\"30 to 34\",\"discoveredAt\":1793527779033,\"twitterId\":null,\"email\":null,\"stealthSign\":null,\"stealthReason\":null,\"summary\":\"Left stealth to found a robotics company.\",\"createdAt\":1793527779033,\"taggings\":[{\"id\":\"tg_1\",\"key\":\"New Company\",\"namespace\":\"signal_type\",\"signalId\":\"sig_1\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033}],\"experiences\":[{\"id\":\"exp_1\",\"signalId\":\"sig_1\",\"experienceEntityId\":\"exe_1\",\"title\":\"Founder & CEO\",\"location\":\"San Francisco\",\"companyName\":\"Northwind Robotics\",\"indexOrder\":0,\"startDate\":\"2026-06\",\"endDate\":null,\"createdAt\":1793614179033,\"updatedAt\":1793614179033,\"entity\":{\"id\":\"exe_1\",\"source\":\"evertrace\",\"name\":\"Northwind Robotics\",\"websiteUrl\":\"https://northwind.robotics\",\"customerSegment\":\"B2B\",\"sourceUrl\":null,\"logoUrl\":null,\"employeeCount\":42,\"createdAt\":1776334179033,\"updatedAt\":1792750179033}}],\"educations\":[{\"id\":\"edu_1\",\"signalId\":\"sig_1\",\"educationEntityId\":\"ede_1\",\"degree\":\"BS Computer Science\",\"schoolName\":\"Stanford University\",\"indexOrder\":0,\"startDate\":\"2014\",\"endDate\":\"2018\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033,\"entity\":{\"id\":\"ede_1\",\"name\":\"Stanford University\",\"sourceUrl\":null,\"logoUrl\":null,\"studentCount\":17000,\"createdAt\":1534414179033,\"updatedAt\":1534414179033}}],\"region\":null,\"unipileMessagesCount\":0,\"unipileInvitationsCount\":0,\"screenings\":[],\"views\":[],\"listPresence\":true},\"addedByUser\":{\"id\":\"usr_1\",\"name\":\"Dev Loop User\",\"firstName\":\"Dev Loop\",\"lastName\":\"User\",\"email\":\"dev-loop@listen-fire.local\",\"emailVerified\":true,\"inviterId\":null,\"image\":null,\"workspaceId\":\"ws_dev_loop\",\"createdAt\":\"2026-01-01T00:00:00.000Z\",\"updatedAt\":\"2026-01-01T00:00:00.000Z\",\"onboardedAt\":\"2026-01-01T00:00:00.000Z\",\"role\":\"ws_owner\"}}],\"meta\":{\"page\":1,\"limit\":100}}"
+    },
+    {
+      "method": "GET",
+      "path": "/lists",
+      "authorization": "Bearer dev-loop-evertrace-key",
+      "headers": {
+        "x-api-version": "2026-03-11"
+      },
+      "body": null,
+      "status": 200,
+      "response": "[{\"id\":\"list_1\",\"workspaceId\":\"ws_dev_loop\",\"createdBy\":\"usr_1\",\"name\":\"Pipeline\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033,\"entriesCount\":1,\"creator\":{\"id\":\"usr_1\",\"name\":\"Dev Loop User\",\"firstName\":\"Dev Loop\",\"lastName\":\"User\",\"email\":\"dev-loop@listen-fire.local\",\"emailVerified\":true,\"inviterId\":null,\"image\":null,\"workspaceId\":\"ws_dev_loop\",\"createdAt\":\"2026-01-01T00:00:00.000Z\",\"updatedAt\":\"2026-01-01T00:00:00.000Z\",\"onboardedAt\":\"2026-01-01T00:00:00.000Z\",\"role\":\"ws_owner\"},\"accesses\":[]},{\"id\":\"list_2\",\"workspaceId\":\"ws_dev_loop\",\"createdBy\":\"usr_1\",\"name\":\"Watchlist\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033,\"entriesCount\":0,\"creator\":{\"id\":\"usr_1\",\"name\":\"Dev Loop User\",\"firstName\":\"Dev Loop\",\"lastName\":\"User\",\"email\":\"dev-loop@listen-fire.local\",\"emailVerified\":true,\"inviterId\":null,\"image\":null,\"workspaceId\":\"ws_dev_loop\",\"createdAt\":\"2026-01-01T00:00:00.000Z\",\"updatedAt\":\"2026-01-01T00:00:00.000Z\",\"onboardedAt\":\"2026-01-01T00:00:00.000Z\",\"role\":\"ws_owner\"},\"accesses\":[]}]"
+    },
+    {
+      "method": "GET",
+      "path": "/lists",
+      "authorization": "Bearer dev-loop-evertrace-key",
+      "headers": {
+        "x-api-version": "2026-03-11"
+      },
+      "body": null,
+      "status": 200,
+      "response": "[{\"id\":\"list_1\",\"workspaceId\":\"ws_dev_loop\",\"createdBy\":\"usr_1\",\"name\":\"Pipeline\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033,\"entriesCount\":1,\"creator\":{\"id\":\"usr_1\",\"name\":\"Dev Loop User\",\"firstName\":\"Dev Loop\",\"lastName\":\"User\",\"email\":\"dev-loop@listen-fire.local\",\"emailVerified\":true,\"inviterId\":null,\"image\":null,\"workspaceId\":\"ws_dev_loop\",\"createdAt\":\"2026-01-01T00:00:00.000Z\",\"updatedAt\":\"2026-01-01T00:00:00.000Z\",\"onboardedAt\":\"2026-01-01T00:00:00.000Z\",\"role\":\"ws_owner\"},\"accesses\":[]},{\"id\":\"list_2\",\"workspaceId\":\"ws_dev_loop\",\"createdBy\":\"usr_1\",\"name\":\"Watchlist\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033,\"entriesCount\":0,\"creator\":{\"id\":\"usr_1\",\"name\":\"Dev Loop User\",\"firstName\":\"Dev Loop\",\"lastName\":\"User\",\"email\":\"dev-loop@listen-fire.local\",\"emailVerified\":true,\"inviterId\":null,\"image\":null,\"workspaceId\":\"ws_dev_loop\",\"createdAt\":\"2026-01-01T00:00:00.000Z\",\"updatedAt\":\"2026-01-01T00:00:00.000Z\",\"onboardedAt\":\"2026-01-01T00:00:00.000Z\",\"role\":\"ws_owner\"},\"accesses\":[]}]"
+    },
+    {
+      "method": "GET",
+      "path": "/lists/list_1/entries?page=1&limit=100&sort_by=entry_created_at&sort_order=desc",
+      "authorization": "Bearer dev-loop-evertrace-key",
+      "headers": {
+        "x-api-version": "2026-03-11"
+      },
+      "body": null,
+      "status": 200,
+      "response": "{\"data\":[{\"id\":\"entry_1\",\"workspaceId\":\"ws_dev_loop\",\"listId\":\"list_1\",\"signalId\":\"sig_1\",\"addedBy\":\"usr_1\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033,\"signal\":{\"id\":\"sig_1\",\"score\":8,\"source\":\"linkedin\",\"firstName\":\"Priya\",\"lastName\":\"Narayanan\",\"imageUrl\":null,\"nationality\":\"American\",\"description\":null,\"city\":\"San Francisco\",\"country\":\"United States\",\"gender\":\"woman\",\"githubSlug\":null,\"linkedinIdIm\":null,\"linkedinIdStr\":\"priya-narayanan\",\"signalHash\":\"hash_sig_1\",\"profileAccuracy\":\"high\",\"age\":\"30 to 34\",\"discoveredAt\":1793527779033,\"twitterId\":null,\"email\":null,\"stealthSign\":null,\"stealthReason\":null,\"summary\":\"Left stealth to found a robotics company.\",\"createdAt\":1793527779033,\"taggings\":[{\"id\":\"tg_1\",\"key\":\"New Company\",\"namespace\":\"signal_type\",\"signalId\":\"sig_1\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033}],\"experiences\":[{\"id\":\"exp_1\",\"signalId\":\"sig_1\",\"experienceEntityId\":\"exe_1\",\"title\":\"Founder & CEO\",\"location\":\"San Francisco\",\"companyName\":\"Northwind Robotics\",\"indexOrder\":0,\"startDate\":\"2026-06\",\"endDate\":null,\"createdAt\":1793614179033,\"updatedAt\":1793614179033,\"entity\":{\"id\":\"exe_1\",\"source\":\"evertrace\",\"name\":\"Northwind Robotics\",\"websiteUrl\":\"https://northwind.robotics\",\"customerSegment\":\"B2B\",\"sourceUrl\":null,\"logoUrl\":null,\"employeeCount\":42,\"createdAt\":1776334179033,\"updatedAt\":1792750179033}}],\"educations\":[{\"id\":\"edu_1\",\"signalId\":\"sig_1\",\"educationEntityId\":\"ede_1\",\"degree\":\"BS Computer Science\",\"schoolName\":\"Stanford University\",\"indexOrder\":0,\"startDate\":\"2014\",\"endDate\":\"2018\",\"createdAt\":1793614179033,\"updatedAt\":1793614179033,\"entity\":{\"id\":\"ede_1\",\"name\":\"Stanford University\",\"sourceUrl\":null,\"logoUrl\":null,\"studentCount\":17000,\"createdAt\":1534414179033,\"updatedAt\":1534414179033}}],\"region\":null,\"unipileMessagesCount\":0,\"unipileInvitationsCount\":0,\"screenings\":[],\"views\":[],\"listPresence\":true},\"addedByUser\":{\"id\":\"usr_1\",\"name\":\"Dev Loop User\",\"firstName\":\"Dev Loop\",\"lastName\":\"User\",\"email\":\"dev-loop@listen-fire.local\",\"emailVerified\":true,\"inviterId\":null,\"image\":null,\"workspaceId\":\"ws_dev_loop\",\"createdAt\":\"2026-01-01T00:00:00.000Z\",\"updatedAt\":\"2026-01-01T00:00:00.000Z\",\"onboardedAt\":\"2026-01-01T00:00:00.000Z\",\"role\":\"ws_owner\"}}],\"meta\":{\"page\":1,\"limit\":100}}"
+    },
+    {
+      "method": "GET",
+      "path": "/lists/list_2/entries?page=1&limit=100&sort_by=entry_created_at&sort_order=desc",
+      "authorization": "Bearer dev-loop-evertrace-key",
+      "headers": {
+        "x-api-version": "2026-03-11"
+      },
+      "body": null,
+      "status": 200,
+      "response": "{\"data\":[],\"meta\":{\"page\":1,\"limit\":100}}"
+    }
+  ]
+}
