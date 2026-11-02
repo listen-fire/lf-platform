@@ -28,6 +28,7 @@ import { laneShortForm } from "@/lib/trigger-name";
 import { formatRunCostUsd } from "@/lib/run-cost";
 
 type MovementRun = RouterOutputs["views"]["movement"]["runs"][number];
+type MovementEvent = RouterOutputs["views"]["movement"]["events"][number];
 
 /** The server hands back a fixed window; the UI says so rather than
  *  implying the list is everything. */
@@ -337,21 +338,22 @@ export function MovementActivity({ movementId }: { movementId: string }) {
   );
 }
 
-/** How an arrival ended up, in the reader's terms. */
+/** How an arrival reached a listen, in the reader's terms. */
 const ARRIVAL_LABEL: Record<
-  string,
+  MovementEvent["status"],
   { label: string; tone: "emerald" | "red" | "amber" | "gray" }
 > = {
-  received: { label: "Received", tone: "gray" },
-  dispatched: { label: "Ran", tone: "emerald" },
-  failed: { label: "Failed", tone: "red" },
-  suppressed: { label: "Held back", tone: "amber" },
+  ran: { label: "Ran", tone: "emerald" },
+  run_failed: { label: "Failed", tone: "red" },
+  not_judged: { label: "Not judged", tone: "amber" },
 };
 
 /**
- * The arrival ledger, scoped to the same lane filter as the runs above. Replay
- * re-feeds a stored event through dispatch — it behaves like a fresh arrival,
- * so a new run shows up in the list above.
+ * The arrival ledger, scoped to the same lane filter as the runs above: the
+ * runs arrivals started, and the arrivals a listen could not judge (its
+ * connected system could not give a field its filter reads). Replay puts
+ * the kept delivery through that one listen again; a run it starts shows up
+ * in the list above.
  */
 function EventsReceived({
   movementId,
@@ -366,7 +368,7 @@ function EventsReceived({
     { refetchInterval: 15_000, refetchOnWindowFocus: true },
   );
 
-  const replay = trpc.views.triggers.replayTriggerEvent.useMutation({
+  const replay = trpc.views.triggers.replayDelivery.useMutation({
     onSuccess: () => {
       void utils.views.movement.events.invalidate({ movementId });
       void utils.views.movement.runs.invalidate({ movementId });
@@ -399,10 +401,8 @@ function EventsReceived({
         <div className="rounded-xl border border-gray-200 bg-white">
           <ul className="divide-y divide-gray-100">
             {events.map((evt) => {
-              const arrival = ARRIVAL_LABEL[evt.status] ?? {
-                label: evt.status,
-                tone: "gray" as const,
-              };
+              const arrival = ARRIVAL_LABEL[evt.status];
+              const deliveryId = evt.deliveryId;
               return (
                 <li
                   key={evt.id}
@@ -433,20 +433,45 @@ function EventsReceived({
                       </span>
                     )}
                   </span>
-                  <button
-                    type="button"
-                    disabled={replay.isLoading}
-                    onClick={() => replay.mutate({ eventId: evt.id })}
-                    className="shrink-0 rounded-lg border border-gray-200 px-2.5 py-1 text-[12px] font-medium text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-                    data-testid={`replay-event-${evt.id}`}
-                    title="Send this event through again — it runs like a fresh arrival."
-                  >
-                    Replay
-                  </button>
+                  {deliveryId !== null && (
+                    <button
+                      type="button"
+                      disabled={replay.isLoading}
+                      onClick={() =>
+                        replay.mutate({
+                          triggerId: evt.triggerId,
+                          deliveryId,
+                          // A run already started: run it again on purpose.
+                          force: evt.status !== "not_judged",
+                        })
+                      }
+                      className="shrink-0 rounded-lg border border-gray-200 px-2.5 py-1 text-[12px] font-medium text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      data-testid={`replay-event-${evt.id}`}
+                      title="Put this delivery through this listen again."
+                    >
+                      Replay
+                    </button>
+                  )}
                 </li>
               );
             })}
           </ul>
+          {replay.data?.outcome === "refused" && (
+            <div
+              className="border-t border-gray-100 px-4 py-2 text-[12px] text-red-600"
+              data-testid="replay-refused"
+            >
+              {replay.data.reason}
+            </div>
+          )}
+          {replay.data?.outcome === "replayed" && (
+            <div
+              className="border-t border-gray-100 px-4 py-2 text-[12px] text-gray-600"
+              data-testid="replay-outcome"
+            >
+              {replay.data.lines.join(" ")}
+            </div>
+          )}
           {replay.error && (
             <div
               className="border-t border-gray-100 px-4 py-2 text-[12px] text-red-600"

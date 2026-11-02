@@ -52,7 +52,6 @@ import {
   type ConfigBlock,
 } from 'movement-engine/public/adapter-config';
 import { findSiblingTriggerByConfigValue } from '../../../services/translation_graph/storage/tg_table';
-import { listTriggerEvents } from '../../../services/translation_graph/triggers/event_store';
 import {
   parseRunMode,
   type TriggerRunMode,
@@ -423,26 +422,6 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
       }),
 
     /**
-     * The receipts the retired capture path stored for a trigger: its
-     * history before listens were judged by their plans.
-     */
-    listTriggerEvents: userProcedure
-      .input(
-        z.object({
-          triggerId: z.string().min(1),
-          limit: z.number().int().min(1).max(100).optional(),
-        }),
-      )
-      .query(async ({ input }) => {
-        const ctx = currentContext();
-        return listTriggerEvents({
-          teamId: ctx.user.teamId as TeamId,
-          triggerId: input.triggerId,
-          ...(input.limit !== undefined ? { limit: input.limit } : {}),
-        });
-      }),
-
-    /**
      * Live "Recent activity" — pushes each newly-recorded firing for THIS
      * trigger to the automation detail page so the list updates without a
      * refetch. Backed by the in-process message queue (`mq.triggerRuns`),
@@ -756,9 +735,8 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
      * starts clean, and logs who resumed it. Auto-resume is deliberately NOT the
      * default — the looping condition usually persists and would oscillate.
      *
-     * The events captured while paused are recorded as replayable
-     * `trigger_event` rows; reprocessing them is the follow-on replay UX.
-     *
+     * The deliveries that arrived while paused are kept; `replayDelivery`
+     * puts one through its listen again.
      */
     resumeGuardPaused: userProcedure
       .input(z.object({ triggerId: z.string().min(1) }))

@@ -242,7 +242,6 @@ export const MANIFEST: Record<Product, TableSpec[]> = {
     { table: 'movement_issue', tenancy: { kind: 'team_column' } },
     { table: 'movement_story_token', tenancy: { kind: 'team_column' } },
     { table: 'trigger', tenancy: { kind: 'team_column' } },
-    { table: 'trigger_event', tenancy: { kind: 'team_column' }, history: true },
     {
       table: 'trigger_run',
       tenancy: { kind: 'team_column' },

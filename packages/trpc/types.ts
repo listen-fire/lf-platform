@@ -1276,16 +1276,36 @@ export type MovementRunItem = {
     inputTokens: number;
     outputTokens: number;
 };
+/** How an arrival reached one of a movement's listens: a run it started, or
+ *  an `Arrival Not Judged` fact (the listen could not tell). */
+type MovementEventStatus = 'ran' | 'run_failed' | 'not_judged';
 export type MovementEventItem = {
     id: string;
-    /** The lane (trigger name) the event arrived on. */
+    /** The lane (trigger name) of the listen it reached. */
     lane: string;
-    /** The channel the event came through — source adapter slug. */
+    /** The listen, and the kept delivery it came in: what a replay names. */
+    triggerId: string;
+    deliveryId: string | null;
+    /** The module it came from. */
     adapterType: string;
-    status: string;
+    status: MovementEventStatus;
     failureReason: string | null;
+    /** For a fact, which attempt (0 as delivered, one more per replay). */
+    attempt: number | null;
     occurredAt: Date;
     createdAt: Date;
+};
+/** What a replay did, said in lines a person reads. */
+type ReplayOutcome = {
+    outcome: 'refused';
+    reason: string;
+} | {
+    outcome: 'replayed';
+    runIds: string[];
+    replayDeliveryId: string | null;
+    attempt: number;
+    stillUndecided: boolean;
+    lines: string[];
 };
 /**
  * How the editor treats a pin. `kind`: whose checker lints it (`legacy`: the
@@ -12217,7 +12237,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
             }, AutomationDetail>;
-            listTriggerEvents: _trpc_server.BuildProcedure<"query", {
+            replayDelivery: _trpc_server.BuildProcedure<"mutation", {
                 _config: _trpc_server.RootConfig<{
                     ctx: {
                         authorise: () => Promise<void>;
@@ -12236,56 +12256,17 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 };
                 _input_in: {
                     triggerId: string;
-                    limit?: number | undefined;
+                    deliveryId: string;
+                    force?: boolean | undefined;
                 };
                 _input_out: {
                     triggerId: string;
-                    limit?: number | undefined;
+                    deliveryId: string;
+                    force?: boolean | undefined;
                 };
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
-            }, {
-                id: TriggerEventId;
-                created_at: Date;
-                status: string;
-                trigger_id: string;
-                trigger_type: string;
-                failure_reason: string | null;
-                adapter_type: string;
-                dispatched_at: Date | null;
-                occurred_at: Date;
-            }[]>;
-            replayTriggerEvent: _trpc_server.BuildProcedure<"mutation", {
-                _config: _trpc_server.RootConfig<{
-                    ctx: {
-                        authorise: () => Promise<void>;
-                    };
-                    meta: object;
-                    errorShape: {
-                        message: string;
-                        code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
-                        data: _trpc_server_dist_error_formatter.DefaultErrorData;
-                    };
-                    transformer: _trpc_server.DefaultDataTransformer;
-                }>;
-                _meta: object;
-                _ctx_out: {
-                    authorise: () => Promise<void>;
-                };
-                _input_in: {
-                    eventId: string;
-                };
-                _input_out: {
-                    eventId: string;
-                };
-                _output_in: typeof _trpc_server.unsetMarker;
-                _output_out: typeof _trpc_server.unsetMarker;
-            }, {
-                replayed: false;
-            } | {
-                replayed: true;
-                runId: TriggerRunId;
-            }>;
+            }, ReplayOutcome>;
             onRunActivity: _trpc_server.BuildProcedure<"subscription", {
                 _config: _trpc_server.RootConfig<{
                     ctx: {

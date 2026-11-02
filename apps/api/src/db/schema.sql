@@ -841,8 +841,8 @@ CREATE INDEX inventory_delta_holding_asset_id_idx ON public.inventory_delta_hold
 
 
 -- (The engine-runtime tables that used to sit here — `trigger_run`,
--- `parked_run`, `join_pending`, `join_branch_export`, `record_binding` and
--- `trigger_event` — moved to the
+-- `parked_run`, `join_pending`, `join_branch_export` and `record_binding` —
+-- moved to the
 -- AUTOMATIONS SCHEMA at the end of this file. They are the movement engine's
 -- own run ledger and park machinery; nothing outside automations writes them.
 -- What stayed behind is the ops-residual side of the split: `llm_usage` keeps a
@@ -2781,8 +2781,7 @@ CREATE UNIQUE INDEX asks_worker_heartbeat_worker_idx ON asks.worker_heartbeat US
 -- programs, their immutable versions, the issues a failing run aggregates into,
 -- the story links they are served on, and the `trigger` rows that are the
 -- dispatch index for their `listen` statements. The ENGINE RUNTIME layer: the
--- `trigger_event` receipts a door stores before acking, the `trigger_run`
--- ledger of firings, and the park machinery a run suspends into
+-- deliveries a door keeps before acking, the `trigger_run` ledger of firings, and the park machinery a run suspends into
 -- (`parked_run`, `join_pending`, `join_branch_export`, and 0.13's waits)
 -- plus the engine's two side tables (`record_binding`,
 -- `exposed_file`). The CREDENTIALS VAULT: the encrypted connections every
@@ -2992,8 +2991,8 @@ CREATE TABLE automations.trigger (
     -- Loop-guard graceful disable (Phase 1, plans/2026-06-14-loop-guard/4_disable_and_notify.md).
     -- A safety pause set by the loop guard on a breach, kept DISTINCT from a human
     -- `run_mode = 'off'` so the dispatcher (and an operator) can tell them apart. When
-    -- `guard_paused_at` is non-null the dispatch gate skips the RUN (the inbound receipt
-    -- in automations.trigger_event is still stored upstream → replayable; no data is lost).
+    -- `guard_paused_at` is non-null the dispatch gate skips the RUN (the delivery it came
+    -- in is kept, and a replay puts it through its listen again; no data is lost).
     -- Manual resume clears these (auto-resume is deliberately NOT the default — the
     -- looping condition usually persists and would oscillate).
     guard_paused_at timestamptz,                 -- NULL = not safety-paused; non-null = paused at this time by the loop guard
@@ -3279,10 +3278,6 @@ CREATE TABLE automations.trigger_run (
     -- Stamped while a segment executes (at start, then every live-trace tick).
     -- A `running` run whose stamp has gone stale has no live process behind it.
     last_heartbeat_at timestamptz,
-    -- The stored inbound receipt this run was dispatched from, when there was
-    -- one. Lets a re-claimed dispatch find the run its first attempt started.
-    -- FK declared after automations.trigger_event below.
-    trigger_event_id uuid,
     -- The per-run lease (services/movement_engine/run_lease.ts): whoever holds
     -- it is the one process stepping this run. Claimed with one UPDATE while
     -- free or expired, renewed with the segment heartbeat, released when the
@@ -3482,8 +3477,7 @@ CREATE TABLE automations.module_processes (
 -- lf's door in its one write: the events it produced, and the request it came
 -- as, redacted (`request`, never a signature). A provider's own delivery id, when the door has one,
 -- keeps a redelivery out at its subscription. trigger_run.delivery_id names the
--- delivery whose event started a run. The platform's own receipts stay in
--- trigger_event, which is per trigger and has no team.
+-- delivery whose arrival started a run, on both hosts.
 CREATE TABLE automations.delivery (
     id uuid PRIMARY KEY,
     team_id uuid NOT NULL,
@@ -3801,49 +3795,6 @@ CREATE INDEX record_binding_a_idx ON automations.record_binding USING btree (
 CREATE INDEX record_binding_b_idx ON automations.record_binding USING btree (
     team_id, b_adapter_type, b_instance_key, b_type_id, b_record_id
 );
-
--- trigger_event — every event RECEIVED for a trigger, stored at the door
--- BEFORE any processing: the sender gets an immediate ack, dispatch runs
--- asynchronously from the stored row, and any stored event can be played
--- back. `status` is the dispatch lifecycle ('received' → 'dispatched' |
--- 'failed'); an event stuck at 'received' after a crash is replayable.
-CREATE TABLE automations.trigger_event (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    team_id uuid NOT NULL, -- opaque tenant id; NO foreign key (D3)
-    trigger_id text NOT NULL, -- the automations.trigger the event was routed to (text: engine-side id)
-    adapter_type text NOT NULL,
-    trigger_type text NOT NULL, -- 'webhook' | 'manual' | …
-    payload jsonb NOT NULL,
-    status text NOT NULL DEFAULT 'received', -- 'received' | 'dispatched' | 'failed'
-    dispatched_at timestamp(3) with time zone,
-    failure_reason text,
-    -- Which dispatch gate refused this event while the team was blocked
-    -- ('trial_ended' | 'team_on_ice' | 'payment_hold'). The row stays at
-    -- status='received' (replayable); this stamp is the cheap index a future
-    -- windowed-replay-on-unblock scan will use. No replay behavior today.
-    dropped_reason text,
-    external_event_id text, -- the source's own per-DELIVERY id (Slack envelope event_id, …); the idempotency key for at-least-once redeliveries. NULL when the source has no stable delivery id.
-    occurred_at timestamp(3) with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
-);
-
-ALTER TABLE ONLY automations.trigger_event
-    ADD CONSTRAINT trigger_event_pkey PRIMARY KEY (id);
-
-
-CREATE INDEX trigger_event_team_id_idx ON automations.trigger_event USING btree (team_id);
-CREATE INDEX trigger_event_trigger_id_idx ON automations.trigger_event USING btree (trigger_id);
-CREATE INDEX trigger_event_created_at_idx ON automations.trigger_event USING btree (created_at);
--- Idempotency: a source's per-delivery id is unique PER TRIGGER, so an
--- at-least-once redelivery (Slack retries an event it didn't get a 200 for in
--- 3s) is a no-op insert rather than a duplicate run. Partial: NULL delivery ids
--- (sources without a stable per-delivery handle) are never deduped.
-CREATE UNIQUE INDEX trigger_event_delivery_idempotency_idx ON automations.trigger_event USING btree (trigger_id, external_event_id) WHERE external_event_id IS NOT NULL;
-
--- A run's receipt. SET NULL: pruning a receipt must not take its run's history.
-ALTER TABLE ONLY automations.trigger_run
-    ADD CONSTRAINT trigger_run_trigger_event_id_fkey FOREIGN KEY (trigger_event_id) REFERENCES automations.trigger_event(id) ON DELETE SET NULL;
-CREATE INDEX trigger_run_trigger_event_id_idx ON automations.trigger_run USING btree (trigger_event_id);
 
 -- ## Exposed File
 -- Short-lived public exposure of a file's bytes for adapters whose target needs

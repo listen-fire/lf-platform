@@ -725,29 +725,6 @@ model Trigger {
   @@schema("automations")
 }
 
-model TriggerEvent {
-  id              String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  teamId          String       @map("team_id") @db.Uuid
-  triggerId       String       @map("trigger_id")
-  adapterType     String       @map("adapter_type")
-  triggerType     String       @map("trigger_type")
-  payload         Json
-  status          String       @default("received")
-  dispatchedAt    DateTime?    @map("dispatched_at") @db.Timestamptz(3)
-  failureReason   String?      @map("failure_reason")
-  droppedReason   String?      @map("dropped_reason")
-  externalEventId String?      @map("external_event_id")
-  occurredAt      DateTime     @default(now()) @map("occurred_at") @db.Timestamptz(3)
-  createdAt       DateTime     @default(now()) @map("created_at")
-  triggerRuns     TriggerRun[]
-
-  @@index([createdAt])
-  @@index([teamId])
-  @@index([triggerId])
-  @@map("trigger_event")
-  @@schema("automations")
-}
-
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model TriggerRun {
   id                          String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -775,7 +752,6 @@ model TriggerRun {
   limitPause                  Json?              @map("limit_pause")
   costCapBaselineMicrodollars BigInt             @default(0) @map("cost_cap_baseline_microdollars")
   lastHeartbeatAt             DateTime?          @map("last_heartbeat_at") @db.Timestamptz(6)
-  triggerEventId              String?            @map("trigger_event_id") @db.Uuid
   leaseOwner                  String?            @map("lease_owner")
   leaseUntil                  DateTime?          @map("lease_until") @db.Timestamptz(6)
   leaseToken                  String?            @map("lease_token") @db.Uuid
@@ -788,13 +764,11 @@ model TriggerRun {
   joinPendings                JoinPending[]
   parkedRuns                  ParkedRun[]
   movementVersion             MovementVersion?   @relation(fields: [movementVersionId], references: [id])
-  triggerEvent                TriggerEvent?      @relation(fields: [triggerEventId], references: [id], onUpdate: NoAction)
 
   @@index([createdAt])
   @@index([deliveryId])
   @@index([host, teamId, startedAt], map: "trigger_run_host_team_idx")
   @@index([teamId])
-  @@index([triggerEventId])
   @@index([triggerId])
   @@map("trigger_run")
   @@schema("automations")

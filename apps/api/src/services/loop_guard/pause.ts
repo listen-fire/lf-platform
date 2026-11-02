@@ -2,8 +2,8 @@
 //
 // The breach write to Postgres is RARE (only on the transition into paused),
 // so it's off the hot path's steady state — the steady state is pure Redis.
-// "Paused" means the RUN is skipped; the inbound receipt (public.trigger_event)
-// is stored upstream and stays replayable. No data is lost.
+// "Paused" means the RUN is skipped; the delivery it came in is kept, and a
+// replay puts it through its listen again. No data is lost.
 //
 // Manual resume only (auto-resume is deliberately not the default — the looping
 // condition usually persists and would oscillate). Resume clears the columns
