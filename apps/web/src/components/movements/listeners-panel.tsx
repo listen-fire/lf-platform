@@ -25,7 +25,7 @@
 
 import { useMemo, useState } from "react";
 import { Check, Copy, Pause, Play, Plus } from "lucide-react";
-import { expressionOfSlot } from 'movement-lang';
+import { expressionOfSlot, spellPathHead } from 'movement-lang';
 import { MovementParseError, parseProgram } from 'movement-lang';
 import type { ExprSlot, ListenDeclaration, Program } from "movement-lang";
 
@@ -59,6 +59,9 @@ export interface ActiveListen {
    *  keys by its planned pipeline: matched to a row of its movement whatever
    *  that row's key. */
   traversal: boolean;
+  /** Where it listens, as written (`crm-[:Deals]->-[c:Changes]->`); null
+   *  for the settings form, which names only its instance. */
+  address: string | null;
   movement: string;
   /** 1-based source lines the statement spans. */
   startLine: number;
@@ -68,6 +71,7 @@ export interface ActiveListen {
 export interface PausedListen {
   instance: string;
   configKey: string | null;
+  address: string | null;
   movement: string;
   /** 1-based source lines of the commented-out statement. */
   startLine: number;
@@ -100,6 +104,10 @@ function configKeyOf(listen: ListenDeclaration): string | null {
     if (arg) return configValueString(arg.value);
   }
   return null;
+}
+
+function addressOf(listen: ListenDeclaration): string | null {
+  return listen.path !== undefined ? spellPathHead(listen.path) : null;
 }
 
 /** instance name → adapter slug, via the program's constructions
@@ -148,6 +156,7 @@ export function activeListensOf(source: string): ActiveListen[] | null {
       adapter: adapters.get(listen.instance) ?? null,
       configKey: configKeyOf(listen),
       traversal: listen.path !== undefined,
+      address: addressOf(listen),
       movement: listen.movement,
       startLine: listen.span.start.line,
       endLine: listen.span.end.line,
@@ -183,6 +192,7 @@ export function pausedListensOf(source: string): PausedListen[] {
         paused.push({
           instance: listen.instance,
           configKey: configKeyOf(listen),
+          address: addressOf(listen),
           movement: listen.movement,
           startLine: i + 1,
           endLine: j + 1,
@@ -330,6 +340,7 @@ export function ListenersPanel(props: ListenersPanelProps) {
             <ListenerCard
               key={`active-${i}`}
               kind={server?.kind ?? listen.adapter}
+              address={listen.address}
               movement={listen.movement}
               configKey={listen.configKey}
               inboundAddress={server?.inboundAddress ?? null}
@@ -362,6 +373,7 @@ export function ListenersPanel(props: ListenersPanelProps) {
           <ListenerCard
             key={`paused-${i}`}
             kind={adapters?.get(listen.instance) ?? null}
+            address={listen.address}
             movement={listen.movement}
             configKey={listen.configKey}
             inboundAddress={null}
@@ -443,6 +455,8 @@ const STATUS_STYLES = {
 
 function ListenerCard(props: {
   kind: string | null;
+  /** The listen's address; the card is titled by it, else by its channel. */
+  address: string | null;
   movement: string;
   configKey: string | null;
   inboundAddress: string | null;
@@ -483,9 +497,19 @@ function ListenerCard(props: {
             />
           </span>
           <div className="min-w-0">
-            <div className="truncate text-[12.5px] font-medium text-gray-900">
-              {props.kind ? channelLabel(props.kind) : "Channel"}
-            </div>
+            {props.address !== null ? (
+              <div
+                className="truncate font-mono text-[11.5px] font-medium text-gray-900"
+                title={props.address}
+                data-testid="listener-address"
+              >
+                {props.address}
+              </div>
+            ) : (
+              <div className="truncate text-[12.5px] font-medium text-gray-900">
+                {props.kind ? channelLabel(props.kind) : "Channel"}
+              </div>
+            )}
             <div className="truncate text-[11.5px] text-gray-400">
               Runs <span className="font-mono text-[11px]">{props.movement}</span>
             </div>

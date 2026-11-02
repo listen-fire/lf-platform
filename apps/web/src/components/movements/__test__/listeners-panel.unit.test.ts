@@ -56,3 +56,50 @@ describe("a listener the platform stopped", () => {
     expect(html).not.toContain('data-testid="listener-pause"');
   });
 });
+
+describe("a listen on a traversal", () => {
+  const TRAVERSAL = `graph = connect #kg
+
+function onOrg(c: <graph-[:\`Organisation Change\`]->>) {
+}
+
+listen to graph-[:Organisation]->-[c:Changes WHERE c.Kind == "created"]-> fire onOrg
+`;
+
+  it("is titled by its address, not its module", () => {
+    const props: ListenersPanelProps = {
+      source: TRAVERSAL,
+      serverListeners: [{ ...served(null), kind: "kg", configKey: "listen:f:onOrg:abc", movementName: "onOrg" }],
+      suggestionMessages: [],
+      saving: false,
+      onPause: () => {},
+      onResume: () => {},
+      onAddListener: () => {},
+      onResumeStopped: () => {},
+      resuming: false,
+      onOpenActivity: () => {},
+    };
+    const html = renderToStaticMarkup(createElement(ListenersPanel, props));
+    expect(html).toContain('data-testid="listener-card-listening"');
+    expect(html).toContain('graph-[:Organisation]-&gt;-[c:Changes WHERE c.Kind == &quot;created&quot;]-&gt;');
+    expect(html).not.toContain(">Kg<");
+  });
+
+  it("keeps its address while paused", () => {
+    const props: ListenersPanelProps = {
+      source: TRAVERSAL.replace("listen to", "# listen to"),
+      serverListeners: [],
+      suggestionMessages: [],
+      saving: false,
+      onPause: () => {},
+      onResume: () => {},
+      onAddListener: () => {},
+      onResumeStopped: () => {},
+      resuming: false,
+      onOpenActivity: () => {},
+    };
+    const html = renderToStaticMarkup(createElement(ListenersPanel, props));
+    expect(html).toContain('data-testid="listener-card-paused"');
+    expect(html).toContain('data-testid="listener-address"');
+  });
+});
