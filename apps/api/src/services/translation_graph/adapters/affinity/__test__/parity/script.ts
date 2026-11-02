@@ -104,20 +104,18 @@ export async function runAffinityParityScript(adapter: Adapter): Promise<Transcr
     await t.step(`preprocessInbound ${name}`, () => adapter.preprocessInbound?.({ raw }) ?? null);
   }
 
-  const registered = await t.step('ensureEventSubscription create', () =>
-    adapter.ensureEventSubscription?.({ callbackUrl: 'https://example.test/api/public/webhook-sync/affinity/sub-1', events: ['organization.created', 'organization.updated'] } as never) ?? null,
+  // One subscription per listenable edge (adapter protocol 2.6): every
+  // record's Changes, under one webhook.
+  const registered = await t.step('ensureEventSubscription Changes', () =>
+    adapter.ensureEventSubscription?.({ edge: 'Changes', callbackUrl: 'https://example.test/api/public/webhook-sync/affinity/sub-1' }) ?? null,
   );
   const externalId = registered?.externalId;
   if (externalId !== undefined) {
-    await t.step('ensureEventSubscription unchanged', () =>
-      adapter.ensureEventSubscription?.({ callbackUrl: 'https://example.test/x', events: ['organization.updated', 'organization.created'], current: { externalId, events: ['organization.created', 'organization.updated'] } } as never) ?? null,
-    );
-    await t.step('ensureEventSubscription widened', () =>
-      adapter.ensureEventSubscription?.({ callbackUrl: 'https://example.test/x', events: ['organization.created', 'person.created'], current: { externalId, events: ['organization.created'] } } as never) ?? null,
+    await t.step('ensureEventSubscription Changes held', () =>
+      adapter.ensureEventSubscription?.({ edge: 'Changes', callbackUrl: 'https://example.test/x', current: { externalId } }) ?? null,
     );
     await t.step('removeEventSubscription', () => adapter.removeEventSubscription?.({ callbackUrl: 'https://example.test/x', externalId }) ?? null);
   }
-  await t.step('listEventTypes', () => adapter.listEventTypes?.() ?? null);
   return t.entries;
 }
 

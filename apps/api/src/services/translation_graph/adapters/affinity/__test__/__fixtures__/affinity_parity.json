@@ -131,6 +131,48 @@
           "writable": false,
           "readable": false,
           "scope": "inherits-parent-config"
+        },
+        {
+          "typeId": "OrganizationChange",
+          "displayName": "OrganizationChange",
+          "writable": false,
+          "readable": false
+        },
+        {
+          "typeId": "PersonChange",
+          "displayName": "PersonChange",
+          "writable": false,
+          "readable": false
+        },
+        {
+          "typeId": "OpportunityChange",
+          "displayName": "OpportunityChange",
+          "writable": false,
+          "readable": false
+        },
+        {
+          "typeId": "List Entry Change — Pipeline",
+          "displayName": "List Entry Change — Pipeline",
+          "writable": false,
+          "readable": false
+        },
+        {
+          "typeId": "List Entry Change — Portfolio",
+          "displayName": "List Entry Change — Portfolio",
+          "writable": false,
+          "readable": false
+        },
+        {
+          "typeId": "List Entry Change — Advisors",
+          "displayName": "List Entry Change — Advisors",
+          "writable": false,
+          "readable": false
+        },
+        {
+          "typeId": "List Entry Change — Deals",
+          "displayName": "List Entry Change — Deals",
+          "writable": false,
+          "readable": false
         }
       ]
     },
@@ -495,6 +537,22 @@
             "direction": "outgoing",
             "writable": false,
             "description": "Reminders tagged with this organization."
+          },
+          {
+            "fieldId": "affinity:changes",
+            "name": "Changes",
+            "targetTypeId": "OrganizationChange",
+            "cardinality": "many",
+            "direction": "outgoing",
+            "readable": false,
+            "listenable": true,
+            "delivery": "connection",
+            "identity": "Id",
+            "attributes": true,
+            "carries": [
+              "Organization"
+            ],
+            "description": "What happens to this organization in Affinity, each change once: created, a field's value set, changed or cleared (`Field` names it, `Current` and `Previous` hold its value), deleted."
           }
         ],
         "fields": [
@@ -681,6 +739,22 @@
             "direction": "outgoing",
             "writable": false,
             "description": "Affinity-computed strengths between this (external) person and each internal person they have history with (GET /relationships-strengths). Read-only."
+          },
+          {
+            "fieldId": "affinity:changes",
+            "name": "Changes",
+            "targetTypeId": "PersonChange",
+            "cardinality": "many",
+            "direction": "outgoing",
+            "readable": false,
+            "listenable": true,
+            "delivery": "connection",
+            "identity": "Id",
+            "attributes": true,
+            "carries": [
+              "Person"
+            ],
+            "description": "What happens to this person in Affinity, each change once: created, a field's value set, changed or cleared (`Field` names it, `Current` and `Previous` hold its value), deleted."
           }
         ],
         "fields": [
@@ -805,6 +879,22 @@
             "direction": "outgoing",
             "writable": false,
             "description": "Reminders tagged with this opportunity."
+          },
+          {
+            "fieldId": "affinity:changes",
+            "name": "Changes",
+            "targetTypeId": "OpportunityChange",
+            "cardinality": "many",
+            "direction": "outgoing",
+            "readable": false,
+            "listenable": true,
+            "delivery": "connection",
+            "identity": "Id",
+            "attributes": true,
+            "carries": [
+              "Opportunity"
+            ],
+            "description": "What happens to this opportunity in Affinity, each change once: created, a field's value set, changed or cleared (`Field` names it, `Current` and `Previous` hold its value), deleted."
           }
         ],
         "fields": [
@@ -1294,6 +1384,22 @@
             "direction": "outgoing",
             "writable": true,
             "description": "Owners — a person reference field on this record. A linked write sets it to the person written along the edge."
+          },
+          {
+            "fieldId": "affinity:changes",
+            "name": "Changes",
+            "targetTypeId": "List Entry Change — Pipeline",
+            "cardinality": "many",
+            "direction": "outgoing",
+            "readable": false,
+            "listenable": true,
+            "delivery": "connection",
+            "identity": "Id",
+            "attributes": true,
+            "carries": [
+              "List Entry — Pipeline"
+            ],
+            "description": "What happens to this entry on Pipeline in Affinity, each change once: created, a field's value set, changed or cleared (`Field` names it, `Current` and `Previous` hold its value), deleted."
           }
         ],
         "fields": [
@@ -1359,6 +1465,22 @@
             "cardinality": "one",
             "direction": "outgoing",
             "description": "The organization this list entry is on."
+          },
+          {
+            "fieldId": "affinity:changes",
+            "name": "Changes",
+            "targetTypeId": "List Entry Change — Portfolio",
+            "cardinality": "many",
+            "direction": "outgoing",
+            "readable": false,
+            "listenable": true,
+            "delivery": "connection",
+            "identity": "Id",
+            "attributes": true,
+            "carries": [
+              "List Entry — Portfolio"
+            ],
+            "description": "What happens to this entry on Portfolio in Affinity, each change once: created, a field's value set, changed or cleared (`Field` names it, `Current` and `Previous` hold its value), deleted."
           }
         ],
         "fields": [
@@ -1417,6 +1539,22 @@
             "cardinality": "one",
             "direction": "outgoing",
             "description": "The person this list entry is on."
+          },
+          {
+            "fieldId": "affinity:changes",
+            "name": "Changes",
+            "targetTypeId": "List Entry Change — Advisors",
+            "cardinality": "many",
+            "direction": "outgoing",
+            "readable": false,
+            "listenable": true,
+            "delivery": "connection",
+            "identity": "Id",
+            "attributes": true,
+            "carries": [
+              "List Entry — Advisors"
+            ],
+            "description": "What happens to this entry on Advisors in Affinity, each change once: created, a field's value set, changed or cleared (`Field` names it, `Current` and `Previous` hold its value), deleted."
           }
         ],
         "fields": [
@@ -1474,6 +1612,22 @@
             "direction": "outgoing",
             "writable": false,
             "description": "The opportunity this list entry is on."
+          },
+          {
+            "fieldId": "affinity:changes",
+            "name": "Changes",
+            "targetTypeId": "List Entry Change — Deals",
+            "cardinality": "many",
+            "direction": "outgoing",
+            "readable": false,
+            "listenable": true,
+            "delivery": "connection",
+            "identity": "Id",
+            "attributes": true,
+            "carries": [
+              "List Entry — Deals"
+            ],
+            "description": "What happens to this entry on Deals in Affinity, each change once: created, a field's value set, changed or cleared (`Field` names it, `Current` and `Previous` hold its value), deleted."
           }
         ],
         "fields": [
@@ -1616,6 +1770,745 @@
       }
     },
     {
+      "step": "describe OrganizationChange",
+      "answer": {
+        "typeId": "OrganizationChange",
+        "displayName": "OrganizationChange",
+        "description": "A change to an Affinity organization: what happened (`Kind`) and, when a field's value changed, which field (`Field`), how (`Field Change`) and its value (`Current`, or `Previous` when it was cleared), each holding only that field. Walk `Organization` for the organization as it is now.",
+        "fields": [
+          {
+            "fieldId": "Id",
+            "displayName": "Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "cardinality": "one",
+            "description": "Names the change: the same on every redelivery of it."
+          },
+          {
+            "fieldId": "Kind",
+            "displayName": "Kind",
+            "kind": "enum",
+            "writable": false,
+            "required": true,
+            "cardinality": "one",
+            "enumValues": [
+              "created",
+              "updated",
+              "deleted"
+            ],
+            "description": "What happened to the organization: a field value set, changed or cleared is `updated`."
+          },
+          {
+            "fieldId": "Field",
+            "displayName": "Field",
+            "kind": "enum",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "enumValues": [
+              "Description",
+              "Industry",
+              "Location",
+              "Stage",
+              "Status",
+              "Amount Raised",
+              "Founded Date",
+              "Employee Count"
+            ],
+            "description": "When a field value changed, the field, by its name (`Status`)."
+          },
+          {
+            "fieldId": "Field Change",
+            "displayName": "Field Change",
+            "kind": "enum",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "enumValues": [
+              "set",
+              "changed",
+              "cleared"
+            ],
+            "description": "When a field value changed, how: `set` (a value given to the field), `changed` (its value replaced) or `cleared` (its value removed). For a field holding several values, each value added is `set` and each removed `cleared`."
+          },
+          {
+            "fieldId": "Current",
+            "displayName": "Current",
+            "kind": "record",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "record": {
+              "typeId": "Organization"
+            },
+            "mayBeAbsent": true,
+            "description": "When a field's value was set or changed, the organization holding only that field, at its new value (`exists(c.Current) AND c.Current.Status == \"Won\"`); a field holding several values holds the one added. Absent otherwise."
+          },
+          {
+            "fieldId": "Previous",
+            "displayName": "Previous",
+            "kind": "record",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "record": {
+              "typeId": "Organization"
+            },
+            "mayBeAbsent": true,
+            "description": "When a field's value was cleared, the organization holding only that field, at the value removed. Absent otherwise. Affinity does not send the value a change replaced, so a filter reading it on a `changed` change cannot be judged."
+          },
+          {
+            "fieldId": "Record",
+            "displayName": "Record",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "cardinality": "one",
+            "description": "The organization's Affinity id."
+          }
+        ],
+        "references": [
+          {
+            "fieldId": "Organization",
+            "name": "Organization",
+            "targetTypeId": "Organization",
+            "cardinality": "one",
+            "direction": "outgoing",
+            "requiresLiveRecord": true,
+            "description": "The organization that changed, read from Affinity."
+          }
+        ]
+      }
+    },
+    {
+      "step": "describe PersonChange",
+      "answer": {
+        "typeId": "PersonChange",
+        "displayName": "PersonChange",
+        "description": "A change to an Affinity person: what happened (`Kind`) and, when a field's value changed, which field (`Field`), how (`Field Change`) and its value (`Current`, or `Previous` when it was cleared), each holding only that field. Walk `Person` for the person as it is now.",
+        "fields": [
+          {
+            "fieldId": "Id",
+            "displayName": "Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "cardinality": "one",
+            "description": "Names the change: the same on every redelivery of it."
+          },
+          {
+            "fieldId": "Kind",
+            "displayName": "Kind",
+            "kind": "enum",
+            "writable": false,
+            "required": true,
+            "cardinality": "one",
+            "enumValues": [
+              "created",
+              "updated",
+              "deleted"
+            ],
+            "description": "What happened to the person: a field value set, changed or cleared is `updated`."
+          },
+          {
+            "fieldId": "Field",
+            "displayName": "Field",
+            "kind": "string",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "description": "When a field value changed, the field, by its name."
+          },
+          {
+            "fieldId": "Field Change",
+            "displayName": "Field Change",
+            "kind": "enum",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "enumValues": [
+              "set",
+              "changed",
+              "cleared"
+            ],
+            "description": "When a field value changed, how: `set` (a value given to the field), `changed` (its value replaced) or `cleared` (its value removed). For a field holding several values, each value added is `set` and each removed `cleared`."
+          },
+          {
+            "fieldId": "Current",
+            "displayName": "Current",
+            "kind": "record",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "record": {
+              "typeId": "Person"
+            },
+            "mayBeAbsent": true,
+            "description": "When a field's value was set or changed, the person holding only that field, at its new value (`exists(c.Current) AND c.Current.Status == \"Won\"`); a field holding several values holds the one added. Absent otherwise."
+          },
+          {
+            "fieldId": "Previous",
+            "displayName": "Previous",
+            "kind": "record",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "record": {
+              "typeId": "Person"
+            },
+            "mayBeAbsent": true,
+            "description": "When a field's value was cleared, the person holding only that field, at the value removed. Absent otherwise. Affinity does not send the value a change replaced, so a filter reading it on a `changed` change cannot be judged."
+          },
+          {
+            "fieldId": "Record",
+            "displayName": "Record",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "cardinality": "one",
+            "description": "The person's Affinity id."
+          }
+        ],
+        "references": [
+          {
+            "fieldId": "Person",
+            "name": "Person",
+            "targetTypeId": "Person",
+            "cardinality": "one",
+            "direction": "outgoing",
+            "requiresLiveRecord": true,
+            "description": "The person that changed, read from Affinity."
+          }
+        ]
+      }
+    },
+    {
+      "step": "describe OpportunityChange",
+      "answer": {
+        "typeId": "OpportunityChange",
+        "displayName": "OpportunityChange",
+        "description": "A change to an Affinity opportunity: what happened (`Kind`) and, when a field's value changed, which field (`Field`), how (`Field Change`) and its value (`Current`, or `Previous` when it was cleared), each holding only that field. Walk `Opportunity` for the opportunity as it is now.",
+        "fields": [
+          {
+            "fieldId": "Id",
+            "displayName": "Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "cardinality": "one",
+            "description": "Names the change: the same on every redelivery of it."
+          },
+          {
+            "fieldId": "Kind",
+            "displayName": "Kind",
+            "kind": "enum",
+            "writable": false,
+            "required": true,
+            "cardinality": "one",
+            "enumValues": [
+              "created",
+              "updated",
+              "deleted"
+            ],
+            "description": "What happened to the opportunity: a field value set, changed or cleared is `updated`."
+          },
+          {
+            "fieldId": "Field",
+            "displayName": "Field",
+            "kind": "string",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "description": "When a field value changed, the field, by its name."
+          },
+          {
+            "fieldId": "Field Change",
+            "displayName": "Field Change",
+            "kind": "enum",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "enumValues": [
+              "set",
+              "changed",
+              "cleared"
+            ],
+            "description": "When a field value changed, how: `set` (a value given to the field), `changed` (its value replaced) or `cleared` (its value removed). For a field holding several values, each value added is `set` and each removed `cleared`."
+          },
+          {
+            "fieldId": "Current",
+            "displayName": "Current",
+            "kind": "record",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "record": {
+              "typeId": "Opportunity"
+            },
+            "mayBeAbsent": true,
+            "description": "When a field's value was set or changed, the opportunity holding only that field, at its new value (`exists(c.Current) AND c.Current.Status == \"Won\"`); a field holding several values holds the one added. Absent otherwise."
+          },
+          {
+            "fieldId": "Previous",
+            "displayName": "Previous",
+            "kind": "record",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "record": {
+              "typeId": "Opportunity"
+            },
+            "mayBeAbsent": true,
+            "description": "When a field's value was cleared, the opportunity holding only that field, at the value removed. Absent otherwise. Affinity does not send the value a change replaced, so a filter reading it on a `changed` change cannot be judged."
+          },
+          {
+            "fieldId": "Record",
+            "displayName": "Record",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "cardinality": "one",
+            "description": "The opportunity's Affinity id."
+          }
+        ],
+        "references": [
+          {
+            "fieldId": "Opportunity",
+            "name": "Opportunity",
+            "targetTypeId": "Opportunity",
+            "cardinality": "one",
+            "direction": "outgoing",
+            "requiresLiveRecord": true,
+            "description": "The opportunity that changed, read from Affinity."
+          }
+        ]
+      }
+    },
+    {
+      "step": "describe List Entry Change — Pipeline",
+      "answer": {
+        "typeId": "List Entry Change — Pipeline",
+        "displayName": "List Entry Change — Pipeline",
+        "description": "A change to an Affinity entry on Pipeline: what happened (`Kind`) and, when a field's value changed, which field (`Field`), how (`Field Change`) and its value (`Current`, or `Previous` when it was cleared), each holding only that field. Walk `List Entry` for the entry on Pipeline as it is now.",
+        "fields": [
+          {
+            "fieldId": "Id",
+            "displayName": "Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "cardinality": "one",
+            "description": "Names the change: the same on every redelivery of it."
+          },
+          {
+            "fieldId": "Kind",
+            "displayName": "Kind",
+            "kind": "enum",
+            "writable": false,
+            "required": true,
+            "cardinality": "one",
+            "enumValues": [
+              "created",
+              "updated",
+              "deleted"
+            ],
+            "description": "What happened to the entry on Pipeline: a field value set, changed or cleared is `updated`."
+          },
+          {
+            "fieldId": "Field",
+            "displayName": "Field",
+            "kind": "enum",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "enumValues": [
+              "Deal Stage",
+              "Deal Size",
+              "Next Step",
+              "Owners"
+            ],
+            "description": "When a field value changed, the field, by its name (`Status`)."
+          },
+          {
+            "fieldId": "Field Change",
+            "displayName": "Field Change",
+            "kind": "enum",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "enumValues": [
+              "set",
+              "changed",
+              "cleared"
+            ],
+            "description": "When a field value changed, how: `set` (a value given to the field), `changed` (its value replaced) or `cleared` (its value removed). For a field holding several values, each value added is `set` and each removed `cleared`."
+          },
+          {
+            "fieldId": "Current",
+            "displayName": "Current",
+            "kind": "record",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "record": {
+              "typeId": "List Entry — Pipeline"
+            },
+            "mayBeAbsent": true,
+            "description": "When a field's value was set or changed, the entry on Pipeline holding only that field, at its new value (`exists(c.Current) AND c.Current.Status == \"Won\"`); a field holding several values holds the one added. Absent otherwise."
+          },
+          {
+            "fieldId": "Previous",
+            "displayName": "Previous",
+            "kind": "record",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "record": {
+              "typeId": "List Entry — Pipeline"
+            },
+            "mayBeAbsent": true,
+            "description": "When a field's value was cleared, the entry on Pipeline holding only that field, at the value removed. Absent otherwise. Affinity does not send the value a change replaced, so a filter reading it on a `changed` change cannot be judged."
+          },
+          {
+            "fieldId": "Record",
+            "displayName": "Record",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "cardinality": "one",
+            "description": "The entry on Pipeline's Affinity id."
+          }
+        ],
+        "references": [
+          {
+            "fieldId": "List Entry",
+            "name": "List Entry",
+            "targetTypeId": "List Entry — Pipeline",
+            "cardinality": "one",
+            "direction": "outgoing",
+            "requiresLiveRecord": true,
+            "description": "The entry on Pipeline that changed, read from Affinity."
+          }
+        ]
+      }
+    },
+    {
+      "step": "describe List Entry Change — Portfolio",
+      "answer": {
+        "typeId": "List Entry Change — Portfolio",
+        "displayName": "List Entry Change — Portfolio",
+        "description": "A change to an Affinity entry on Portfolio: what happened (`Kind`) and, when a field's value changed, which field (`Field`), how (`Field Change`) and its value (`Current`, or `Previous` when it was cleared), each holding only that field. Walk `List Entry` for the entry on Portfolio as it is now.",
+        "fields": [
+          {
+            "fieldId": "Id",
+            "displayName": "Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "cardinality": "one",
+            "description": "Names the change: the same on every redelivery of it."
+          },
+          {
+            "fieldId": "Kind",
+            "displayName": "Kind",
+            "kind": "enum",
+            "writable": false,
+            "required": true,
+            "cardinality": "one",
+            "enumValues": [
+              "created",
+              "updated",
+              "deleted"
+            ],
+            "description": "What happened to the entry on Portfolio: a field value set, changed or cleared is `updated`."
+          },
+          {
+            "fieldId": "Field",
+            "displayName": "Field",
+            "kind": "enum",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "enumValues": [
+              "Ownership %",
+              "Board Seat",
+              "Investment Date"
+            ],
+            "description": "When a field value changed, the field, by its name (`Status`)."
+          },
+          {
+            "fieldId": "Field Change",
+            "displayName": "Field Change",
+            "kind": "enum",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "enumValues": [
+              "set",
+              "changed",
+              "cleared"
+            ],
+            "description": "When a field value changed, how: `set` (a value given to the field), `changed` (its value replaced) or `cleared` (its value removed). For a field holding several values, each value added is `set` and each removed `cleared`."
+          },
+          {
+            "fieldId": "Current",
+            "displayName": "Current",
+            "kind": "record",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "record": {
+              "typeId": "List Entry — Portfolio"
+            },
+            "mayBeAbsent": true,
+            "description": "When a field's value was set or changed, the entry on Portfolio holding only that field, at its new value (`exists(c.Current) AND c.Current.Status == \"Won\"`); a field holding several values holds the one added. Absent otherwise."
+          },
+          {
+            "fieldId": "Previous",
+            "displayName": "Previous",
+            "kind": "record",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "record": {
+              "typeId": "List Entry — Portfolio"
+            },
+            "mayBeAbsent": true,
+            "description": "When a field's value was cleared, the entry on Portfolio holding only that field, at the value removed. Absent otherwise. Affinity does not send the value a change replaced, so a filter reading it on a `changed` change cannot be judged."
+          },
+          {
+            "fieldId": "Record",
+            "displayName": "Record",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "cardinality": "one",
+            "description": "The entry on Portfolio's Affinity id."
+          }
+        ],
+        "references": [
+          {
+            "fieldId": "List Entry",
+            "name": "List Entry",
+            "targetTypeId": "List Entry — Portfolio",
+            "cardinality": "one",
+            "direction": "outgoing",
+            "requiresLiveRecord": true,
+            "description": "The entry on Portfolio that changed, read from Affinity."
+          }
+        ]
+      }
+    },
+    {
+      "step": "describe List Entry Change — Advisors",
+      "answer": {
+        "typeId": "List Entry Change — Advisors",
+        "displayName": "List Entry Change — Advisors",
+        "description": "A change to an Affinity entry on Advisors: what happened (`Kind`) and, when a field's value changed, which field (`Field`), how (`Field Change`) and its value (`Current`, or `Previous` when it was cleared), each holding only that field. Walk `List Entry` for the entry on Advisors as it is now.",
+        "fields": [
+          {
+            "fieldId": "Id",
+            "displayName": "Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "cardinality": "one",
+            "description": "Names the change: the same on every redelivery of it."
+          },
+          {
+            "fieldId": "Kind",
+            "displayName": "Kind",
+            "kind": "enum",
+            "writable": false,
+            "required": true,
+            "cardinality": "one",
+            "enumValues": [
+              "created",
+              "updated",
+              "deleted"
+            ],
+            "description": "What happened to the entry on Advisors: a field value set, changed or cleared is `updated`."
+          },
+          {
+            "fieldId": "Field",
+            "displayName": "Field",
+            "kind": "enum",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "enumValues": [
+              "Advisory Focus",
+              "Engagement"
+            ],
+            "description": "When a field value changed, the field, by its name (`Status`)."
+          },
+          {
+            "fieldId": "Field Change",
+            "displayName": "Field Change",
+            "kind": "enum",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "enumValues": [
+              "set",
+              "changed",
+              "cleared"
+            ],
+            "description": "When a field value changed, how: `set` (a value given to the field), `changed` (its value replaced) or `cleared` (its value removed). For a field holding several values, each value added is `set` and each removed `cleared`."
+          },
+          {
+            "fieldId": "Current",
+            "displayName": "Current",
+            "kind": "record",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "record": {
+              "typeId": "List Entry — Advisors"
+            },
+            "mayBeAbsent": true,
+            "description": "When a field's value was set or changed, the entry on Advisors holding only that field, at its new value (`exists(c.Current) AND c.Current.Status == \"Won\"`); a field holding several values holds the one added. Absent otherwise."
+          },
+          {
+            "fieldId": "Previous",
+            "displayName": "Previous",
+            "kind": "record",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "record": {
+              "typeId": "List Entry — Advisors"
+            },
+            "mayBeAbsent": true,
+            "description": "When a field's value was cleared, the entry on Advisors holding only that field, at the value removed. Absent otherwise. Affinity does not send the value a change replaced, so a filter reading it on a `changed` change cannot be judged."
+          },
+          {
+            "fieldId": "Record",
+            "displayName": "Record",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "cardinality": "one",
+            "description": "The entry on Advisors's Affinity id."
+          }
+        ],
+        "references": [
+          {
+            "fieldId": "List Entry",
+            "name": "List Entry",
+            "targetTypeId": "List Entry — Advisors",
+            "cardinality": "one",
+            "direction": "outgoing",
+            "requiresLiveRecord": true,
+            "description": "The entry on Advisors that changed, read from Affinity."
+          }
+        ]
+      }
+    },
+    {
+      "step": "describe List Entry Change — Deals",
+      "answer": {
+        "typeId": "List Entry Change — Deals",
+        "displayName": "List Entry Change — Deals",
+        "description": "A change to an Affinity entry on Deals: what happened (`Kind`) and, when a field's value changed, which field (`Field`), how (`Field Change`) and its value (`Current`, or `Previous` when it was cleared), each holding only that field. Walk `List Entry` for the entry on Deals as it is now.",
+        "fields": [
+          {
+            "fieldId": "Id",
+            "displayName": "Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "cardinality": "one",
+            "description": "Names the change: the same on every redelivery of it."
+          },
+          {
+            "fieldId": "Kind",
+            "displayName": "Kind",
+            "kind": "enum",
+            "writable": false,
+            "required": true,
+            "cardinality": "one",
+            "enumValues": [
+              "created",
+              "updated",
+              "deleted"
+            ],
+            "description": "What happened to the entry on Deals: a field value set, changed or cleared is `updated`."
+          },
+          {
+            "fieldId": "Field",
+            "displayName": "Field",
+            "kind": "string",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "description": "When a field value changed, the field, by its name."
+          },
+          {
+            "fieldId": "Field Change",
+            "displayName": "Field Change",
+            "kind": "enum",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "enumValues": [
+              "set",
+              "changed",
+              "cleared"
+            ],
+            "description": "When a field value changed, how: `set` (a value given to the field), `changed` (its value replaced) or `cleared` (its value removed). For a field holding several values, each value added is `set` and each removed `cleared`."
+          },
+          {
+            "fieldId": "Current",
+            "displayName": "Current",
+            "kind": "record",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "record": {
+              "typeId": "List Entry — Deals"
+            },
+            "mayBeAbsent": true,
+            "description": "When a field's value was set or changed, the entry on Deals holding only that field, at its new value (`exists(c.Current) AND c.Current.Status == \"Won\"`); a field holding several values holds the one added. Absent otherwise."
+          },
+          {
+            "fieldId": "Previous",
+            "displayName": "Previous",
+            "kind": "record",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "record": {
+              "typeId": "List Entry — Deals"
+            },
+            "mayBeAbsent": true,
+            "description": "When a field's value was cleared, the entry on Deals holding only that field, at the value removed. Absent otherwise. Affinity does not send the value a change replaced, so a filter reading it on a `changed` change cannot be judged."
+          },
+          {
+            "fieldId": "Record",
+            "displayName": "Record",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "cardinality": "one",
+            "description": "The entry on Deals's Affinity id."
+          }
+        ],
+        "references": [
+          {
+            "fieldId": "List Entry",
+            "name": "List Entry",
+            "targetTypeId": "List Entry — Deals",
+            "cardinality": "one",
+            "direction": "outgoing",
+            "requiresLiveRecord": true,
+            "description": "The entry on Deals that changed, read from Affinity."
+          }
+        ]
+      }
+    },
+    {
       "step": "describe Nonexistent",
       "answer": null
     },
@@ -1707,6 +2600,22 @@
               "direction": "outgoing",
               "writable": false,
               "description": "Reminders tagged with this organization."
+            },
+            {
+              "fieldId": "affinity:changes",
+              "name": "Changes",
+              "targetTypeId": "OrganizationChange",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "readable": false,
+              "listenable": true,
+              "delivery": "connection",
+              "identity": "Id",
+              "attributes": true,
+              "carries": [
+                "Organization"
+              ],
+              "description": "What happens to this organization in Affinity, each change once: created, a field's value set, changed or cleared (`Field` names it, `Current` and `Previous` hold its value), deleted."
             }
           ],
           "fields": [
@@ -1851,6 +2760,11 @@
             "stub": true,
             "typeId": "Reminder",
             "displayName": "Reminder"
+          },
+          "affinity:changes": {
+            "stub": true,
+            "typeId": "OrganizationChange",
+            "displayName": "OrganizationChange"
           }
         },
         "targetPositions": {
@@ -1897,6 +2811,14 @@
           "reminders": {
             "adapterType": "affinity",
             "recordType": "Reminder",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "affinity:changes": {
+            "adapterType": "affinity",
+            "recordType": "OrganizationChange",
             "identity": {
               "kind": "unstable",
               "data": {}
@@ -2050,6 +2972,22 @@
               "direction": "outgoing",
               "writable": false,
               "description": "Affinity-computed strengths between this (external) person and each internal person they have history with (GET /relationships-strengths). Read-only."
+            },
+            {
+              "fieldId": "affinity:changes",
+              "name": "Changes",
+              "targetTypeId": "PersonChange",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "readable": false,
+              "listenable": true,
+              "delivery": "connection",
+              "identity": "Id",
+              "attributes": true,
+              "carries": [
+                "Person"
+              ],
+              "description": "What happens to this person in Affinity, each change once: created, a field's value set, changed or cleared (`Field` names it, `Current` and `Previous` hold its value), deleted."
             }
           ],
           "fields": [
@@ -2137,6 +3075,11 @@
             "stub": true,
             "typeId": "Relationship Strength",
             "displayName": "Relationship Strength"
+          },
+          "affinity:changes": {
+            "stub": true,
+            "typeId": "PersonChange",
+            "displayName": "PersonChange"
           }
         },
         "targetPositions": {
@@ -2191,6 +3134,14 @@
           "relationship_strengths": {
             "adapterType": "affinity",
             "recordType": "Relationship Strength",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "affinity:changes": {
+            "adapterType": "affinity",
+            "recordType": "PersonChange",
             "identity": {
               "kind": "unstable",
               "data": {}
@@ -2980,6 +3931,22 @@
               "direction": "outgoing",
               "writable": true,
               "description": "Owners — a person reference field on this record. A linked write sets it to the person written along the edge."
+            },
+            {
+              "fieldId": "affinity:changes",
+              "name": "Changes",
+              "targetTypeId": "List Entry Change — Pipeline",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "readable": false,
+              "listenable": true,
+              "delivery": "connection",
+              "identity": "Id",
+              "attributes": true,
+              "carries": [
+                "List Entry — Pipeline"
+              ],
+              "description": "What happens to this entry on Pipeline in Affinity, each change once: created, a field's value set, changed or cleared (`Field` names it, `Current` and `Previous` hold its value), deleted."
             }
           ],
           "fields": [
@@ -3041,6 +4008,11 @@
             "stub": true,
             "typeId": "Organization",
             "displayName": "Organization"
+          },
+          "affinity:changes": {
+            "stub": true,
+            "typeId": "List Entry Change — Pipeline",
+            "displayName": "List Entry Change — Pipeline"
           }
         },
         "targetPositions": {
@@ -3055,6 +4027,14 @@
           "organization": {
             "adapterType": "affinity",
             "recordType": "Organization",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "affinity:changes": {
+            "adapterType": "affinity",
+            "recordType": "List Entry Change — Pipeline",
             "identity": {
               "kind": "unstable",
               "data": {}
@@ -3579,6 +4559,22 @@
               "direction": "outgoing",
               "writable": false,
               "description": "Affinity-computed strengths between this (external) person and each internal person they have history with (GET /relationships-strengths). Read-only."
+            },
+            {
+              "fieldId": "affinity:changes",
+              "name": "Changes",
+              "targetTypeId": "PersonChange",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "readable": false,
+              "listenable": true,
+              "delivery": "connection",
+              "identity": "Id",
+              "attributes": true,
+              "carries": [
+                "Person"
+              ],
+              "description": "What happens to this person in Affinity, each change once: created, a field's value set, changed or cleared (`Field` names it, `Current` and `Previous` hold its value), deleted."
             }
           ],
           "fields": [
@@ -3666,6 +4662,11 @@
             "stub": true,
             "typeId": "Relationship Strength",
             "displayName": "Relationship Strength"
+          },
+          "affinity:changes": {
+            "stub": true,
+            "typeId": "PersonChange",
+            "displayName": "PersonChange"
           }
         },
         "targetPositions": {
@@ -3720,6 +4721,14 @@
           "relationship_strengths": {
             "adapterType": "affinity",
             "recordType": "Relationship Strength",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "affinity:changes": {
+            "adapterType": "affinity",
+            "recordType": "PersonChange",
             "identity": {
               "kind": "unstable",
               "data": {}
@@ -3838,6 +4847,22 @@
               "direction": "outgoing",
               "writable": false,
               "description": "Reminders tagged with this organization."
+            },
+            {
+              "fieldId": "affinity:changes",
+              "name": "Changes",
+              "targetTypeId": "OrganizationChange",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "readable": false,
+              "listenable": true,
+              "delivery": "connection",
+              "identity": "Id",
+              "attributes": true,
+              "carries": [
+                "Organization"
+              ],
+              "description": "What happens to this organization in Affinity, each change once: created, a field's value set, changed or cleared (`Field` names it, `Current` and `Previous` hold its value), deleted."
             }
           ],
           "fields": [
@@ -3982,6 +5007,11 @@
             "stub": true,
             "typeId": "Reminder",
             "displayName": "Reminder"
+          },
+          "affinity:changes": {
+            "stub": true,
+            "typeId": "OrganizationChange",
+            "displayName": "OrganizationChange"
           }
         },
         "targetPositions": {
@@ -4028,6 +5058,14 @@
           "reminders": {
             "adapterType": "affinity",
             "recordType": "Reminder",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "affinity:changes": {
+            "adapterType": "affinity",
+            "recordType": "OrganizationChange",
             "identity": {
               "kind": "unstable",
               "data": {}
@@ -5640,6 +6678,22 @@
               "direction": "outgoing",
               "writable": false,
               "description": "Reminders tagged with this opportunity."
+            },
+            {
+              "fieldId": "affinity:changes",
+              "name": "Changes",
+              "targetTypeId": "OpportunityChange",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "readable": false,
+              "listenable": true,
+              "delivery": "connection",
+              "identity": "Id",
+              "attributes": true,
+              "carries": [
+                "Opportunity"
+              ],
+              "description": "What happens to this opportunity in Affinity, each change once: created, a field's value set, changed or cleared (`Field` names it, `Current` and `Previous` hold its value), deleted."
             }
           ],
           "fields": [
@@ -5691,6 +6745,11 @@
             "stub": true,
             "typeId": "Reminder",
             "displayName": "Reminder"
+          },
+          "affinity:changes": {
+            "stub": true,
+            "typeId": "OpportunityChange",
+            "displayName": "OpportunityChange"
           }
         },
         "targetPositions": {
@@ -5745,6 +6804,14 @@
           "reminders": {
             "adapterType": "affinity",
             "recordType": "Reminder",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "affinity:changes": {
+            "adapterType": "affinity",
+            "recordType": "OpportunityChange",
             "identity": {
               "kind": "unstable",
               "data": {}
@@ -5856,6 +6923,22 @@
               "direction": "outgoing",
               "writable": false,
               "description": "Affinity-computed strengths between this (external) person and each internal person they have history with (GET /relationships-strengths). Read-only."
+            },
+            {
+              "fieldId": "affinity:changes",
+              "name": "Changes",
+              "targetTypeId": "PersonChange",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "readable": false,
+              "listenable": true,
+              "delivery": "connection",
+              "identity": "Id",
+              "attributes": true,
+              "carries": [
+                "Person"
+              ],
+              "description": "What happens to this person in Affinity, each change once: created, a field's value set, changed or cleared (`Field` names it, `Current` and `Previous` hold its value), deleted."
             }
           ],
           "fields": [
@@ -5943,6 +7026,11 @@
             "stub": true,
             "typeId": "Relationship Strength",
             "displayName": "Relationship Strength"
+          },
+          "affinity:changes": {
+            "stub": true,
+            "typeId": "PersonChange",
+            "displayName": "PersonChange"
           }
         },
         "targetPositions": {
@@ -5997,6 +7085,14 @@
           "relationship_strengths": {
             "adapterType": "affinity",
             "recordType": "Relationship Strength",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "affinity:changes": {
+            "adapterType": "affinity",
+            "recordType": "PersonChange",
             "identity": {
               "kind": "unstable",
               "data": {}
@@ -6358,6 +7454,22 @@
               "direction": "outgoing",
               "writable": false,
               "description": "Reminders tagged with this organization."
+            },
+            {
+              "fieldId": "affinity:changes",
+              "name": "Changes",
+              "targetTypeId": "OrganizationChange",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "readable": false,
+              "listenable": true,
+              "delivery": "connection",
+              "identity": "Id",
+              "attributes": true,
+              "carries": [
+                "Organization"
+              ],
+              "description": "What happens to this organization in Affinity, each change once: created, a field's value set, changed or cleared (`Field` names it, `Current` and `Previous` hold its value), deleted."
             }
           ],
           "fields": [
@@ -6502,6 +7614,11 @@
             "stub": true,
             "typeId": "Reminder",
             "displayName": "Reminder"
+          },
+          "affinity:changes": {
+            "stub": true,
+            "typeId": "OrganizationChange",
+            "displayName": "OrganizationChange"
           }
         },
         "targetPositions": {
@@ -6548,6 +7665,14 @@
           "reminders": {
             "adapterType": "affinity",
             "recordType": "Reminder",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "affinity:changes": {
+            "adapterType": "affinity",
+            "recordType": "OrganizationChange",
             "identity": {
               "kind": "unstable",
               "data": {}
@@ -7089,6 +8214,22 @@
               "direction": "outgoing",
               "writable": false,
               "description": "The opportunity this list entry is on."
+            },
+            {
+              "fieldId": "affinity:changes",
+              "name": "Changes",
+              "targetTypeId": "List Entry Change — Deals",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "readable": false,
+              "listenable": true,
+              "delivery": "connection",
+              "identity": "Id",
+              "attributes": true,
+              "carries": [
+                "List Entry — Deals"
+              ],
+              "description": "What happens to this entry on Deals in Affinity, each change once: created, a field's value set, changed or cleared (`Field` names it, `Current` and `Previous` hold its value), deleted."
             }
           ],
           "fields": [
@@ -7114,12 +8255,25 @@
             "stub": true,
             "typeId": "Opportunity",
             "displayName": "Opportunity"
+          },
+          "affinity:changes": {
+            "stub": true,
+            "typeId": "List Entry Change — Deals",
+            "displayName": "List Entry Change — Deals"
           }
         },
         "targetPositions": {
           "opportunity": {
             "adapterType": "affinity",
             "recordType": "Opportunity",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "affinity:changes": {
+            "adapterType": "affinity",
+            "recordType": "List Entry Change — Deals",
             "identity": {
               "kind": "unstable",
               "data": {}
@@ -7810,6 +8964,22 @@
               "direction": "outgoing",
               "writable": false,
               "description": "Affinity-computed strengths between this (external) person and each internal person they have history with (GET /relationships-strengths). Read-only."
+            },
+            {
+              "fieldId": "affinity:changes",
+              "name": "Changes",
+              "targetTypeId": "PersonChange",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "readable": false,
+              "listenable": true,
+              "delivery": "connection",
+              "identity": "Id",
+              "attributes": true,
+              "carries": [
+                "Person"
+              ],
+              "description": "What happens to this person in Affinity, each change once: created, a field's value set, changed or cleared (`Field` names it, `Current` and `Previous` hold its value), deleted."
             }
           ],
           "fields": [
@@ -7897,6 +9067,11 @@
             "stub": true,
             "typeId": "Relationship Strength",
             "displayName": "Relationship Strength"
+          },
+          "affinity:changes": {
+            "stub": true,
+            "typeId": "PersonChange",
+            "displayName": "PersonChange"
           }
         },
         "targetPositions": {
@@ -7951,6 +9126,14 @@
           "relationship_strengths": {
             "adapterType": "affinity",
             "recordType": "Relationship Strength",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "affinity:changes": {
+            "adapterType": "affinity",
+            "recordType": "PersonChange",
             "identity": {
               "kind": "unstable",
               "data": {}
@@ -8329,6 +9512,22 @@
               "direction": "outgoing",
               "writable": false,
               "description": "Affinity-computed strengths between this (external) person and each internal person they have history with (GET /relationships-strengths). Read-only."
+            },
+            {
+              "fieldId": "affinity:changes",
+              "name": "Changes",
+              "targetTypeId": "PersonChange",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "readable": false,
+              "listenable": true,
+              "delivery": "connection",
+              "identity": "Id",
+              "attributes": true,
+              "carries": [
+                "Person"
+              ],
+              "description": "What happens to this person in Affinity, each change once: created, a field's value set, changed or cleared (`Field` names it, `Current` and `Previous` hold its value), deleted."
             }
           ],
           "fields": [
@@ -8416,6 +9615,11 @@
             "stub": true,
             "typeId": "Relationship Strength",
             "displayName": "Relationship Strength"
+          },
+          "affinity:changes": {
+            "stub": true,
+            "typeId": "PersonChange",
+            "displayName": "PersonChange"
           }
         },
         "targetPositions": {
@@ -8470,6 +9674,14 @@
           "relationship_strengths": {
             "adapterType": "affinity",
             "recordType": "Relationship Strength",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "affinity:changes": {
+            "adapterType": "affinity",
+            "recordType": "PersonChange",
             "identity": {
               "kind": "unstable",
               "data": {}
@@ -8573,6 +9785,22 @@
               "direction": "outgoing",
               "writable": true,
               "description": "Owners — a person reference field on this record. A linked write sets it to the person written along the edge."
+            },
+            {
+              "fieldId": "affinity:changes",
+              "name": "Changes",
+              "targetTypeId": "List Entry Change — Pipeline",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "readable": false,
+              "listenable": true,
+              "delivery": "connection",
+              "identity": "Id",
+              "attributes": true,
+              "carries": [
+                "List Entry — Pipeline"
+              ],
+              "description": "What happens to this entry on Pipeline in Affinity, each change once: created, a field's value set, changed or cleared (`Field` names it, `Current` and `Previous` hold its value), deleted."
             }
           ],
           "fields": [
@@ -8634,6 +9862,11 @@
             "stub": true,
             "typeId": "Organization",
             "displayName": "Organization"
+          },
+          "affinity:changes": {
+            "stub": true,
+            "typeId": "List Entry Change — Pipeline",
+            "displayName": "List Entry Change — Pipeline"
           }
         },
         "targetPositions": {
@@ -8648,6 +9881,14 @@
           "organization": {
             "adapterType": "affinity",
             "recordType": "Organization",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "affinity:changes": {
+            "adapterType": "affinity",
+            "recordType": "List Entry Change — Pipeline",
             "identity": {
               "kind": "unstable",
               "data": {}
@@ -8760,6 +10001,22 @@
               "direction": "outgoing",
               "writable": false,
               "description": "Reminders tagged with this organization."
+            },
+            {
+              "fieldId": "affinity:changes",
+              "name": "Changes",
+              "targetTypeId": "OrganizationChange",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "readable": false,
+              "listenable": true,
+              "delivery": "connection",
+              "identity": "Id",
+              "attributes": true,
+              "carries": [
+                "Organization"
+              ],
+              "description": "What happens to this organization in Affinity, each change once: created, a field's value set, changed or cleared (`Field` names it, `Current` and `Previous` hold its value), deleted."
             }
           ],
           "fields": [
@@ -8904,6 +10161,11 @@
             "stub": true,
             "typeId": "Reminder",
             "displayName": "Reminder"
+          },
+          "affinity:changes": {
+            "stub": true,
+            "typeId": "OrganizationChange",
+            "displayName": "OrganizationChange"
           }
         },
         "targetPositions": {
@@ -8950,6 +10212,14 @@
           "reminders": {
             "adapterType": "affinity",
             "recordType": "Reminder",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "affinity:changes": {
+            "adapterType": "affinity",
+            "recordType": "OrganizationChange",
             "identity": {
               "kind": "unstable",
               "data": {}
@@ -9256,6 +10526,22 @@
               "direction": "outgoing",
               "writable": false,
               "description": "The opportunity this list entry is on."
+            },
+            {
+              "fieldId": "affinity:changes",
+              "name": "Changes",
+              "targetTypeId": "List Entry Change — Deals",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "readable": false,
+              "listenable": true,
+              "delivery": "connection",
+              "identity": "Id",
+              "attributes": true,
+              "carries": [
+                "List Entry — Deals"
+              ],
+              "description": "What happens to this entry on Deals in Affinity, each change once: created, a field's value set, changed or cleared (`Field` names it, `Current` and `Previous` hold its value), deleted."
             }
           ],
           "fields": [
@@ -9281,12 +10567,25 @@
             "stub": true,
             "typeId": "Opportunity",
             "displayName": "Opportunity"
+          },
+          "affinity:changes": {
+            "stub": true,
+            "typeId": "List Entry Change — Deals",
+            "displayName": "List Entry Change — Deals"
           }
         },
         "targetPositions": {
           "opportunity": {
             "adapterType": "affinity",
             "recordType": "Opportunity",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "affinity:changes": {
+            "adapterType": "affinity",
+            "recordType": "List Entry Change — Deals",
             "identity": {
               "kind": "unstable",
               "data": {}
@@ -9404,6 +10703,22 @@
               "direction": "outgoing",
               "writable": false,
               "description": "Reminders tagged with this opportunity."
+            },
+            {
+              "fieldId": "affinity:changes",
+              "name": "Changes",
+              "targetTypeId": "OpportunityChange",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "readable": false,
+              "listenable": true,
+              "delivery": "connection",
+              "identity": "Id",
+              "attributes": true,
+              "carries": [
+                "Opportunity"
+              ],
+              "description": "What happens to this opportunity in Affinity, each change once: created, a field's value set, changed or cleared (`Field` names it, `Current` and `Previous` hold its value), deleted."
             }
           ],
           "fields": [
@@ -9455,6 +10770,11 @@
             "stub": true,
             "typeId": "Reminder",
             "displayName": "Reminder"
+          },
+          "affinity:changes": {
+            "stub": true,
+            "typeId": "OpportunityChange",
+            "displayName": "OpportunityChange"
           }
         },
         "targetPositions": {
@@ -9509,6 +10829,14 @@
           "reminders": {
             "adapterType": "affinity",
             "recordType": "Reminder",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "affinity:changes": {
+            "adapterType": "affinity",
+            "recordType": "OpportunityChange",
             "identity": {
               "kind": "unstable",
               "data": {}
@@ -9867,17 +11195,38 @@
     {
       "step": "preprocessInbound organization.updated",
       "answer": {
-        "events": [
+        "events": [],
+        "arrivals": [
           {
-            "payload": {
-              "id": 9601,
-              "name": "Graph Redesign Co",
-              "domain": "graphredesign.co"
+            "edge": "Changes",
+            "key": "organization:9601",
+            "identity": "organization.updated:9601:b1312fd6a1a3ddbd",
+            "landing": {
+              "recordId": "organization.updated:9601:b1312fd6a1a3ddbd",
+              "recordType": "OrganizationChange",
+              "fields": {
+                "Id": "organization.updated:9601:b1312fd6a1a3ddbd",
+                "Kind": "updated",
+                "Record": "9601"
+              }
             },
-            "externalId": "9601",
-            "recordType": "Organization",
-            "eventType": "organization.updated",
-            "changeType": "update",
+            "parents": [
+              {
+                "recordId": "9601",
+                "recordType": "Organization",
+                "fields": {
+                  "Name": "Graph Redesign Co",
+                  "Domain": "graphredesign.co",
+                  "Domains": [
+                    "graphredesign.co"
+                  ]
+                }
+              }
+            ],
+            "about": {
+              "recordType": "Organization",
+              "externalId": "9601"
+            },
             "occurredAt": "2025-10-09T08:53:20.000Z"
           }
         ]
@@ -9886,17 +11235,40 @@
     {
       "step": "preprocessInbound person.created",
       "answer": {
-        "events": [
+        "events": [],
+        "arrivals": [
           {
-            "payload": {
-              "id": 9701,
-              "first_name": "Grace",
-              "last_name": "Graph"
+            "edge": "Changes",
+            "key": "person:9701",
+            "identity": "person.created:9701:ea1e31ecf237c7ca",
+            "landing": {
+              "recordId": "person.created:9701:ea1e31ecf237c7ca",
+              "recordType": "PersonChange",
+              "fields": {
+                "Id": "person.created:9701:ea1e31ecf237c7ca",
+                "Kind": "created",
+                "Record": "9701"
+              }
             },
-            "externalId": "9701",
-            "recordType": "Person",
-            "eventType": "person.created",
-            "changeType": "create",
+            "parents": [
+              {
+                "recordId": "9701",
+                "recordType": "Person",
+                "fields": {
+                  "First name": "Grace",
+                  "Last name": "Graph",
+                  "Full name": "Grace Graph",
+                  "Email": "grace@graphredesign.co",
+                  "Emails": [
+                    "grace@graphredesign.co"
+                  ]
+                }
+              }
+            ],
+            "about": {
+              "recordType": "Person",
+              "externalId": "9701"
+            },
             "occurredAt": "2025-10-09T08:53:21.000Z"
           }
         ]
@@ -9905,18 +11277,34 @@
     {
       "step": "preprocessInbound list_entry.created",
       "answer": {
-        "events": [
+        "events": [],
+        "arrivals": [
           {
-            "payload": {
-              "id": 9801,
-              "list_id": 1,
-              "entity_id": 9601,
-              "entity_type": 1
+            "edge": "Changes",
+            "key": "list-entry:9801",
+            "identity": "list_entry.created:9801:a0345a61af745a68",
+            "landing": {
+              "recordId": "list_entry.created:9801:a0345a61af745a68",
+              "recordType": "List Entry Change — Pipeline",
+              "fields": {
+                "Id": "list_entry.created:9801:a0345a61af745a68",
+                "Kind": "created",
+                "Record": "9801"
+              }
             },
-            "externalId": "9801",
-            "recordType": "List Entry — Pipeline",
-            "eventType": "list_entry.created",
-            "changeType": "create",
+            "parents": [
+              {
+                "recordId": "9801",
+                "recordType": "List Entry — Pipeline",
+                "fields": {
+                  "listName": "Pipeline"
+                }
+              }
+            ],
+            "about": {
+              "recordType": "List Entry — Pipeline",
+              "externalId": "9801"
+            },
             "occurredAt": "2025-10-09T08:53:22.000Z"
           }
         ]
@@ -9925,20 +11313,42 @@
     {
       "step": "preprocessInbound field_value.updated on a list entry",
       "answer": {
-        "events": [
+        "events": [],
+        "arrivals": [
           {
-            "payload": {
-              "id": 1,
-              "field_id": 21,
-              "list_entry_id": 9801,
-              "entity_id": 9601,
-              "entity_type": 1,
-              "value": "x"
+            "edge": "Changes",
+            "key": "list-entry:9801",
+            "identity": "field_value.updated:1:c575ee247a95e910",
+            "landing": {
+              "recordId": "field_value.updated:1:c575ee247a95e910",
+              "recordType": "List Entry Change — Pipeline",
+              "fields": {
+                "Id": "field_value.updated:1:c575ee247a95e910",
+                "Kind": "updated",
+                "Record": "9801",
+                "Field": "Deal Stage",
+                "Field Change": "changed",
+                "Current": {
+                  "Deal Stage": "x"
+                }
+              },
+              "unknown": [
+                "Previous"
+              ]
             },
-            "externalId": "9801",
-            "recordType": "List Entry — Pipeline",
-            "eventType": "field_value.updated",
-            "changeType": "update",
+            "parents": [
+              {
+                "recordId": "9801",
+                "recordType": "List Entry — Pipeline",
+                "fields": {
+                  "listName": "Pipeline"
+                }
+              }
+            ],
+            "about": {
+              "recordType": "List Entry — Pipeline",
+              "externalId": "9801"
+            },
             "occurredAt": "2025-10-09T08:53:23.000Z"
           }
         ]
@@ -9947,19 +11357,46 @@
     {
       "step": "preprocessInbound field_value.updated on an organization",
       "answer": {
-        "events": [
+        "events": [],
+        "arrivals": [
           {
-            "payload": {
-              "id": 2,
-              "field_id": 3,
-              "entity_id": 9601,
-              "entity_type": 1,
-              "value": "y"
+            "edge": "Changes",
+            "key": "organization:9601",
+            "identity": "field_value.updated:2:c4b4b7631e6c048b",
+            "landing": {
+              "recordId": "field_value.updated:2:c4b4b7631e6c048b",
+              "recordType": "OrganizationChange",
+              "fields": {
+                "Id": "field_value.updated:2:c4b4b7631e6c048b",
+                "Kind": "updated",
+                "Record": "9601",
+                "Field": "Description",
+                "Field Change": "changed",
+                "Current": {
+                  "Description": "y"
+                }
+              },
+              "unknown": [
+                "Previous"
+              ]
             },
-            "externalId": "9601",
-            "recordType": "Organization",
-            "eventType": "field_value.updated",
-            "changeType": "update",
+            "parents": [
+              {
+                "recordId": "9601",
+                "recordType": "Organization",
+                "fields": {
+                  "Name": "Graph Redesign Co",
+                  "Domain": "graphredesign.co",
+                  "Domains": [
+                    "graphredesign.co"
+                  ]
+                }
+              }
+            ],
+            "about": {
+              "recordType": "Organization",
+              "externalId": "9601"
+            },
             "occurredAt": "2025-10-09T08:53:24.000Z"
           }
         ]
@@ -9968,37 +11405,29 @@
     {
       "step": "preprocessInbound list.created (unmapped)",
       "answer": {
-        "events": []
+        "events": [],
+        "arrivals": []
       }
     },
     {
       "step": "preprocessInbound not a delivery",
       "answer": {
-        "events": []
+        "events": [],
+        "arrivals": []
       }
     },
     {
-      "step": "ensureEventSubscription create",
+      "step": "ensureEventSubscription Changes",
       "answer": {
         "externalId": "1"
       }
     },
     {
-      "step": "ensureEventSubscription unchanged",
+      "step": "ensureEventSubscription Changes held",
       "answer": null
-    },
-    {
-      "step": "ensureEventSubscription widened",
-      "answer": {
-        "externalId": "1"
-      }
     },
     {
       "step": "removeEventSubscription",
-      "answer": null
-    },
-    {
-      "step": "listEventTypes",
       "answer": null
     }
   ],
@@ -10026,6 +11455,14 @@
       "body": null,
       "status": 200,
       "response": "[{\"id\":51,\"name\":\"[Advisors] Advisory Focus\",\"entity_type\":0,\"value_type\":6,\"list_id\":4,\"enrichment_source\":\"none\",\"allows_multiple\":false,\"track_changes\":false,\"dropdown_options\":null},{\"id\":52,\"name\":\"[Advisors] Engagement\",\"entity_type\":0,\"value_type\":7,\"list_id\":4,\"enrichment_source\":\"none\",\"allows_multiple\":false,\"track_changes\":true,\"dropdown_options\":[{\"id\":60,\"text\":\"Prospective\",\"rank\":0,\"color\":0},{\"id\":61,\"text\":\"Active\",\"rank\":1,\"color\":1},{\"id\":62,\"text\":\"Lapsed\",\"rank\":2,\"color\":2}]}]"
+    },
+    {
+      "method": "GET",
+      "path": "/fields?with_modified_names=true",
+      "authorization": "Basic OmRldi1sb29wLWFmZmluaXR5LWtleQ==",
+      "body": null,
+      "status": 200,
+      "response": "[{\"id\":3,\"name\":\"Description\",\"entity_type\":1,\"value_type\":6,\"list_id\":null,\"enrichment_source\":\"none\",\"allows_multiple\":false,\"track_changes\":false,\"dropdown_options\":null},{\"id\":4,\"name\":\"Industry\",\"entity_type\":1,\"value_type\":6,\"list_id\":null,\"enrichment_source\":\"none\",\"allows_multiple\":false,\"track_changes\":false,\"dropdown_options\":null},{\"id\":5,\"name\":\"Location\",\"entity_type\":1,\"value_type\":5,\"list_id\":null,\"enrichment_source\":\"none\",\"allows_multiple\":false,\"track_changes\":false,\"dropdown_options\":null},{\"id\":6,\"name\":\"Stage\",\"entity_type\":1,\"value_type\":2,\"list_id\":null,\"enrichment_source\":\"none\",\"allows_multiple\":false,\"track_changes\":false,\"dropdown_options\":[{\"id\":1,\"text\":\"Pre-Seed\",\"rank\":0,\"color\":0},{\"id\":2,\"text\":\"Seed\",\"rank\":1,\"color\":1},{\"id\":3,\"text\":\"Series A\",\"rank\":2,\"color\":2},{\"id\":4,\"text\":\"Series B\",\"rank\":3,\"color\":3}]},{\"id\":7,\"name\":\"Status\",\"entity_type\":1,\"value_type\":7,\"list_id\":null,\"enrichment_source\":\"none\",\"allows_multiple\":false,\"track_changes\":true,\"dropdown_options\":[{\"id\":10,\"text\":\"New\",\"rank\":0,\"color\":0},{\"id\":11,\"text\":\"In Review\",\"rank\":1,\"color\":1},{\"id\":12,\"text\":\"Passed\",\"rank\":2,\"color\":2},{\"id\":13,\"text\":\"Active\",\"rank\":3,\"color\":3}]},{\"id\":11,\"name\":\"Amount Raised\",\"entity_type\":1,\"value_type\":3,\"list_id\":null,\"enrichment_source\":\"none\",\"allows_multiple\":false,\"track_changes\":false,\"dropdown_options\":null},{\"id\":12,\"name\":\"Founded Date\",\"entity_type\":1,\"value_type\":4,\"list_id\":null,\"enrichment_source\":\"none\",\"allows_multiple\":false,\"track_changes\":false,\"dropdown_options\":null},{\"id\":13,\"name\":\"Employee Count\",\"entity_type\":1,\"value_type\":3,\"list_id\":null,\"enrichment_source\":\"affinity-data\",\"allows_multiple\":false,\"track_changes\":false,\"dropdown_options\":null},{\"id\":21,\"name\":\"[Pipeline] Deal Stage\",\"entity_type\":1,\"value_type\":7,\"list_id\":1,\"enrichment_source\":\"none\",\"allows_multiple\":false,\"track_changes\":true,\"dropdown_options\":[{\"id\":30,\"text\":\"Sourced\",\"rank\":0,\"color\":0},{\"id\":31,\"text\":\"Screening\",\"rank\":1,\"color\":1},{\"id\":32,\"text\":\"Partner Review\",\"rank\":2,\"color\":2},{\"id\":33,\"text\":\"Term Sheet\",\"rank\":3,\"color\":3}]},{\"id\":22,\"name\":\"[Pipeline] Deal Size\",\"entity_type\":1,\"value_type\":3,\"list_id\":1,\"enrichment_source\":\"none\",\"allows_multiple\":false,\"track_changes\":false,\"dropdown_options\":null},{\"id\":23,\"name\":\"[Pipeline] Next Step\",\"entity_type\":1,\"value_type\":6,\"list_id\":1,\"enrichment_source\":\"none\",\"allows_multiple\":false,\"track_changes\":false,\"dropdown_options\":null},{\"id\":24,\"name\":\"[Pipeline] Owners\",\"entity_type\":1,\"value_type\":0,\"list_id\":1,\"enrichment_source\":\"none\",\"allows_multiple\":true,\"track_changes\":false,\"dropdown_options\":null},{\"id\":41,\"name\":\"[Portfolio] Ownership %\",\"entity_type\":1,\"value_type\":3,\"list_id\":3,\"enrichment_source\":\"none\",\"allows_multiple\":false,\"track_changes\":false,\"dropdown_options\":null},{\"id\":42,\"name\":\"[Portfolio] Board Seat\",\"entity_type\":1,\"value_type\":6,\"list_id\":3,\"enrichment_source\":\"none\",\"allows_multiple\":false,\"track_changes\":false,\"dropdown_options\":null},{\"id\":43,\"name\":\"[Portfolio] Investment Date\",\"entity_type\":1,\"value_type\":4,\"list_id\":3,\"enrichment_source\":\"none\",\"allows_multiple\":false,\"track_changes\":false,\"dropdown_options\":null},{\"id\":51,\"name\":\"[Advisors] Advisory Focus\",\"entity_type\":0,\"value_type\":6,\"list_id\":4,\"enrichment_source\":\"none\",\"allows_multiple\":false,\"track_changes\":false,\"dropdown_options\":null},{\"id\":52,\"name\":\"[Advisors] Engagement\",\"entity_type\":0,\"value_type\":7,\"list_id\":4,\"enrichment_source\":\"none\",\"allows_multiple\":false,\"track_changes\":true,\"dropdown_options\":[{\"id\":60,\"text\":\"Prospective\",\"rank\":0,\"color\":0},{\"id\":61,\"text\":\"Active\",\"rank\":1,\"color\":1},{\"id\":62,\"text\":\"Lapsed\",\"rank\":2,\"color\":2}]}]"
     },
     {
       "method": "GET",
@@ -11646,7 +13083,7 @@
         "content": "Parity note"
       },
       "status": 200,
-      "response": "{\"id\":1,\"organization_ids\":[1],\"person_ids\":[],\"opportunity_ids\":[],\"parent_id\":null,\"content\":\"Parity note\",\"type\":0,\"creator_id\":1,\"created_at\":\"2026-10-26T12:44:56.625Z\",\"updated_at\":null}"
+      "response": "{\"id\":1,\"organization_ids\":[1],\"person_ids\":[],\"opportunity_ids\":[],\"parent_id\":null,\"content\":\"Parity note\",\"type\":0,\"creator_id\":1,\"created_at\":\"2026-11-02T17:24:24.072Z\",\"updated_at\":null}"
     },
     {
       "method": "GET",
@@ -11672,7 +13109,7 @@
         "entity_id": 1
       },
       "status": 200,
-      "response": "{\"id\":1,\"list_id\":1,\"entity_id\":1,\"created_at\":\"2026-10-26T12:44:56.632Z\"}"
+      "response": "{\"id\":1,\"list_id\":1,\"entity_id\":1,\"created_at\":\"2026-11-02T17:24:24.077Z\"}"
     },
     {
       "method": "GET",
@@ -11680,7 +13117,7 @@
       "authorization": "Basic OmRldi1sb29wLWFmZmluaXR5LWtleQ==",
       "body": null,
       "status": 200,
-      "response": "{\"id\":1,\"list_id\":1,\"entity_id\":1,\"created_at\":\"2026-10-26T12:44:56.632Z\"}"
+      "response": "{\"id\":1,\"list_id\":1,\"entity_id\":1,\"created_at\":\"2026-11-02T17:24:24.077Z\"}"
     },
     {
       "method": "GET",
@@ -11717,7 +13154,7 @@
       "authorization": "Basic OmRldi1sb29wLWFmZmluaXR5LWtleQ==",
       "body": null,
       "status": 200,
-      "response": "{\"id\":1,\"list_id\":1,\"entity_id\":1,\"created_at\":\"2026-10-26T12:44:56.632Z\"}"
+      "response": "{\"id\":1,\"list_id\":1,\"entity_id\":1,\"created_at\":\"2026-11-02T17:24:24.077Z\"}"
     },
     {
       "method": "GET",
@@ -11746,7 +13183,7 @@
       "authorization": "Basic OmRldi1sb29wLWFmZmluaXR5LWtleQ==",
       "body": null,
       "status": 200,
-      "response": "{\"id\":1,\"list_id\":1,\"entity_id\":1,\"created_at\":\"2026-10-26T12:44:56.632Z\"}"
+      "response": "{\"id\":1,\"list_id\":1,\"entity_id\":1,\"created_at\":\"2026-11-02T17:24:24.077Z\"}"
     },
     {
       "method": "GET",
@@ -11823,6 +13260,70 @@
       "response": "{\"success\":true}"
     },
     {
+      "method": "GET",
+      "path": "/organizations/9601",
+      "authorization": "Basic OmRldi1sb29wLWFmZmluaXR5LWtleQ==",
+      "body": null,
+      "status": 200,
+      "response": "{\"id\":9601,\"name\":\"Graph Redesign Co\",\"domain\":\"graphredesign.co\",\"domains\":[\"graphredesign.co\"],\"person_ids\":[9701],\"global\":false,\"list_entries\":[{\"id\":9801,\"list_id\":1,\"entity_id\":9601,\"entity_type\":1,\"created_at\":\"2026-07-10T10:00:00.000Z\"}]}"
+    },
+    {
+      "method": "GET",
+      "path": "/field-values?organization_id=9601",
+      "authorization": "Basic OmRldi1sb29wLWFmZmluaXR5LWtleQ==",
+      "body": null,
+      "status": 200,
+      "response": "[]"
+    },
+    {
+      "method": "GET",
+      "path": "/persons/9701",
+      "authorization": "Basic OmRldi1sb29wLWFmZmluaXR5LWtleQ==",
+      "body": null,
+      "status": 200,
+      "response": "{\"id\":9701,\"first_name\":\"Grace\",\"last_name\":\"Graph\",\"primary_email\":\"grace@graphredesign.co\",\"emails\":[\"grace@graphredesign.co\"],\"organization_ids\":[9601],\"list_entries\":[]}"
+    },
+    {
+      "method": "GET",
+      "path": "/field-values?person_id=9701",
+      "authorization": "Basic OmRldi1sb29wLWFmZmluaXR5LWtleQ==",
+      "body": null,
+      "status": 200,
+      "response": "[]"
+    },
+    {
+      "method": "GET",
+      "path": "/field-values?list_entry_id=9801",
+      "authorization": "Basic OmRldi1sb29wLWFmZmluaXR5LWtleQ==",
+      "body": null,
+      "status": 200,
+      "response": "[]"
+    },
+    {
+      "method": "GET",
+      "path": "/field-values?list_entry_id=9801",
+      "authorization": "Basic OmRldi1sb29wLWFmZmluaXR5LWtleQ==",
+      "body": null,
+      "status": 200,
+      "response": "[]"
+    },
+    {
+      "method": "GET",
+      "path": "/organizations/9601",
+      "authorization": "Basic OmRldi1sb29wLWFmZmluaXR5LWtleQ==",
+      "body": null,
+      "status": 200,
+      "response": "{\"id\":9601,\"name\":\"Graph Redesign Co\",\"domain\":\"graphredesign.co\",\"domains\":[\"graphredesign.co\"],\"person_ids\":[9701],\"global\":false,\"list_entries\":[{\"id\":9801,\"list_id\":1,\"entity_id\":9601,\"entity_type\":1,\"created_at\":\"2026-07-10T10:00:00.000Z\"}]}"
+    },
+    {
+      "method": "GET",
+      "path": "/field-values?organization_id=9601",
+      "authorization": "Basic OmRldi1sb29wLWFmZmluaXR5LWtleQ==",
+      "body": null,
+      "status": 200,
+      "response": "[]"
+    },
+    {
       "method": "POST",
       "path": "/webhooks",
       "authorization": "Basic OmRldi1sb29wLWFmZmluaXR5LWtleQ==",
@@ -11830,24 +13331,23 @@
         "webhook_url": "https://example.test/api/public/webhook-sync/affinity/sub-1",
         "subscriptions": [
           "organization.created",
-          "organization.updated"
+          "organization.updated",
+          "organization.deleted",
+          "person.created",
+          "person.updated",
+          "person.deleted",
+          "opportunity.created",
+          "opportunity.updated",
+          "opportunity.deleted",
+          "list_entry.created",
+          "list_entry.deleted",
+          "field_value.created",
+          "field_value.updated",
+          "field_value.deleted"
         ]
       },
       "status": 200,
-      "response": "{\"id\":1,\"webhook_url\":\"https://example.test/api/public/webhook-sync/affinity/sub-1\",\"subscriptions\":[\"organization.created\",\"organization.updated\"]}"
-    },
-    {
-      "method": "PUT",
-      "path": "/webhooks/1",
-      "authorization": "Basic OmRldi1sb29wLWFmZmluaXR5LWtleQ==",
-      "body": {
-        "subscriptions": [
-          "organization.created",
-          "person.created"
-        ]
-      },
-      "status": 200,
-      "response": "{\"id\":1,\"webhook_url\":\"https://example.test/api/public/webhook-sync/affinity/sub-1\",\"subscriptions\":[\"organization.created\",\"person.created\"]}"
+      "response": "{\"id\":1,\"webhook_url\":\"https://example.test/api/public/webhook-sync/affinity/sub-1\",\"subscriptions\":[\"organization.created\",\"organization.updated\",\"organization.deleted\",\"person.created\",\"person.updated\",\"person.deleted\",\"opportunity.created\",\"opportunity.updated\",\"opportunity.deleted\",\"list_entry.created\",\"list_entry.deleted\",\"field_value.created\",\"field_value.updated\",\"field_value.deleted\"]}"
     },
     {
       "method": "DELETE",

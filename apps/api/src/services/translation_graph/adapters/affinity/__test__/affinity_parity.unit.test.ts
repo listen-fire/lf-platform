@@ -5,8 +5,9 @@
 // requests too). Each implementation is replayed against the recording and
 // must make the same requests and model calls and give the same answers.
 //
-// The legacy line is gone, so the recording no longer changes: it is the
-// behaviour every module subject keeps.
+// The legacy line is gone; the module in process is the recorded subject.
+// Re-record (when the module changes on purpose, reading the diff):
+// AFFINITY_PARITY_RECORD=1 pnpm test:unit --testPathPattern affinity_parity
 
 jest.mock('../../../../../lib/credentials', () => ({
   decryptToken: async () => (await import('../../__test__/crm_parity/legacy_row')).decryptSeededRow(),
@@ -32,7 +33,7 @@ jest.mock('../../../../credentials/secrets_postgres', () => ({
   },
 }));
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { AddressInfo } from 'node:net';
@@ -45,7 +46,8 @@ import { createRemoteAdapter, fetchRemoteManifest } from 'movement-engine/public
 import { affinityModule } from '@listen-fire/affinity';
 import { getAdapter } from '../../registry';
 import { BUILTIN_MODULES } from '../../builtin_modules';
-import { replayingServer, type Exchange } from '../../__test__/parity/exchange';
+import { recordingServer, replayingServer, type Exchange } from '../../__test__/parity/exchange';
+import { bootFakeCrm } from '../../__test__/crm_parity/fake_channels';
 import { cannedChat, cannedStructured, modelCalls, type ModelCall } from '../../__test__/crm_parity/legacy_row';
 import { freezeClock, unwrappedRemoteErrors, type TranscriptEntry } from '../../__test__/crm_parity/walk';
 import type { Adapter } from 'movement-engine/public/adapter';
@@ -96,7 +98,31 @@ async function expectAffinityParity(subjectAt: (baseUrl: string) => Promise<Adap
   }
 }
 
-describe('affinity recorded parity', () => {
+/** The module in process, as the platform registry builds it, its stored
+ *  credential pointed at `baseUrl`. */
+function moduleSubject(baseUrl: string): Adapter {
+  const install = freshInstall();
+  vault.current = createMemoryVault({ [install.credentialsId]: { apiKey: API_KEY, baseUrl } });
+  return getAdapter({ adapterType: 'affinity', ...install });
+}
+
+const recording = process.env.AFFINITY_PARITY_RECORD === '1';
+
+(recording ? it : it.skip)('records the module in process against fake-channels', async () => {
+  const fake = await bootFakeCrm('affinity');
+  const proxy = await recordingServer(fake.baseUrl);
+  try {
+    modelCalls.length = 0;
+    const transcript = await runAffinityParityScript(moduleSubject(proxy.baseUrl));
+    const fixture: Recording = { transcript, exchanges: proxy.exchanges(), modelCalls: [...modelCalls] };
+    writeFileSync(FIXTURE, `${JSON.stringify(fixture, null, 2)}\n`);
+  } finally {
+    await proxy.close();
+    fake.stop();
+  }
+});
+
+(recording ? describe.skip : describe)('affinity recorded parity', () => {
   it('the recording walks the whole surface, writes, and fails nowhere it should not', () => {
     const { transcript, exchanges, modelCalls: calls } = loadRecording();
     const errors = transcript.filter((entry) => {
@@ -116,11 +142,7 @@ describe('affinity recorded parity', () => {
 
   it('the module in process, through the platform registry, replays identically', async () => {
     expect(BUILTIN_MODULES.affinity?.line).toBe('module');
-    await expectAffinityParity((baseUrl) => {
-      const install = freshInstall();
-      vault.current = createMemoryVault({ [install.credentialsId]: { apiKey: API_KEY, baseUrl } });
-      return getAdapter({ adapterType: 'affinity', ...install });
-    });
+    await expectAffinityParity(moduleSubject);
   });
 
   it('the module served over protocol 2, lent the same models, replays identically', async () => {
