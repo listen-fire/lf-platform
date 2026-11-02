@@ -1,5 +1,5 @@
 // Rule 1's collapse, runtime. A field-less 1:1 event node is pure indirection,
-// so the messaging adapters' `fires` edge lands STRAIGHT on the record
+// so a messaging listen's arrival lands STRAIGHT on the record
 // (`chat -[:Slack Message]->`, no `Message Received` in between). The seed is
 // then the record itself:
 //
@@ -118,7 +118,8 @@ const CHAT_SCHEMA: InstanceSchema = {
       edges: { replies: { target: MESSAGE, writable: true, readable: false } },
     },
   },
-  collections: {},
+  // Each message arrives on `Messages`.
+  collections: { Messages: { target: MESSAGE, readable: false, listenable: true } },
   writableRoots: {},
   createShapes: {
     [MESSAGE]: {
@@ -210,7 +211,7 @@ const REPLY = [
   '  }',
   '}',
   '',
-  'listen to chat {} fire reply',
+  'listen to chat-[:Messages]-> fire reply',
 ].join('\n');
 
 function messageEvent(input: { withRecordRef: boolean }): TriggerEvent {

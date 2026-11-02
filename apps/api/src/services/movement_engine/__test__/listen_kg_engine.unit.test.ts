@@ -1,19 +1,13 @@
-// kg-seeded movements (the mutation-listen increment) — engine side.
+// The knowledge graph's natural-name read seam, engine side.
 //
-//   1. A movement fired by `listen to graph { type: "company" }` seeds the
-//      mutated record's stable KG position from the mutation event and
-//      reads its properties THROUGH the adapter read seam (a fake KG
-//      adapter's getFieldValue), writing the values to a fake external
-//      target.
-//   2. Edge hops off the kg seed stream through getRelated, the same
-//      seam every source walks.
-//   3. A mutation event with no recordId fails loud (MOVENG_RUNTIME).
-//   4. surfaceReadAdapter — the natural-name→internal-id read translation,
-//      driven by the adapter's OWN introspection-derived resolver (uniform
-//      across adapters; the KG is not special): getFieldValue translates
-//      property names per type, getRelated translates edge names to
-//      EdgeTypeIds and stamps landed positions with the hop target's natural
-//      type.
+// surfaceReadAdapter — the natural-name→internal-id read translation, driven
+// by the adapter's OWN introspection-derived resolver (uniform across
+// adapters; the KG is not special): getFieldValue translates property names
+// per type, getRelated translates edge names to EdgeTypeIds and stamps landed
+// positions with the hop target's natural type.
+//
+// (A 0.12 graph listen seeded the changed record itself; from 0.13 a listen
+// on a record's `Changes` lands the change, modules/kg's subject.)
 
 // ── Jest module workarounds (mirrors run.unit.test.ts) ──────────────────────
 
@@ -216,169 +210,6 @@ const kgSchema: InstanceSchema = {
 const catalog = staticCatalogSnapshot({
   credentials: { acme_main: { adapters: ['attio'] } },
   instanceSchemas: { kg: kgSchema },
-});
-
-function mutationEvent(overrides: Partial<TriggerEvent> = {}): TriggerEvent {
-  // The graph's 0.12 change event, which the legacy engine seeds from.
-  const payload = {
-    recordId: COMPANY_NODE_ID,
-    nodeTypeId: 'nt-company',
-    changeKind: 'update',
-    changedFields: ['pt-domains'],
-    context: {
-      source: { type: 'structured_input', adapterType: 'kg' },
-      occurredAt: new Date().toISOString(),
-    },
-  };
-  return {
-    pipelineInputId: 'trigger:t-kg-1',
-    adapterType: 'kg',
-    triggerType: 'mutation',
-    payload,
-    recordId: COMPANY_NODE_ID,
-    changedFields: ['pt-domains'],
-    occurredAt: payload.context.occurredAt,
-    ...overrides,
-  };
-}
-
-const ON_COMPANY_CHANGE = [
-  'import { attio, kg } from adapters',
-  'import { acme_main } from credentials',
-  '',
-  'crm = connect attio using acme_main',
-  'graph = connect kg',
-  '',
-  'function on_company_change(rec: <graph-[:company]->>) {',
-  '  write crm-[:companies]-> {',
-  '    unique by (`name`)',
-  '    name:    rec.`name`',
-  '    domains: rec.`domains`',
-  '  }',
-  '}',
-  '',
-  'listen to graph { type: "company", events: ["record.created", "record.updated"], fields: [domains] } fire on_company_change',
-].join('\n');
-
-describe('kg-seeded movements (mutation listen) — runMovement', () => {
-  it('seeds the mutated record and reads its properties through the KG adapter', async () => {
-    const target = makeTargetFake('attio');
-    const kg = makeKgFake({
-      records: {
-        [COMPANY_NODE_ID]: { name: 'Acme Corp', domains: ['acme.dev'] },
-      },
-    });
-
-    const result = await runMovement({
-      source: ON_COMPANY_CHANGE,
-      movementName: 'on_company_change',
-      event: mutationEvent(),
-      teamId: TEAM_ID,
-      catalog,
-      credentialIds: credentialIdsFor(catalog, () => 'cred-attio-1'),
-      host: makeTestHost({
-        adapters: {
-          resolve: ({ adapterType }) => {
-            if (adapterType === 'kg') return kg;
-            if (adapterType === 'attio') return target.adapter;
-            throw new Error(`test: no fake for '${adapterType}'`);
-          },
-        },
-      }),
-    });
-
-    expect(result.movementName).toBe('on_company_change');
-    // The fake target declares no descriptor, so the engine's cardinality
-    // coercion folds the list to CSV — frozen-engine parity, not a kg fact.
-    expect(target.creates).toEqual([
-      {
-        recordType: 'company',
-        fields: { name: 'Acme Corp', domains: 'acme.dev' },
-      },
-    ]);
-    // Source-property provenance carries the graph INSTANCE's own name + the
-    // record — the instance the movement constructed, like any other system.
-    expect(result.writes[0].provenance['name']?.[0]).toMatchObject({
-      kind: 'source_field',
-      instance: 'graph',
-      adapterType: 'kg',
-      field: 'name',
-    });
-  });
-
-  it('edge hops off the kg seed stream through getRelated', async () => {
-    const target = makeTargetFake('attio');
-    const kg = makeKgFake({
-      records: {
-        [COMPANY_NODE_ID]: { name: 'Acme Corp' },
-        'round-1': { stage: 'Series A' },
-      },
-      edges: {
-        [COMPANY_NODE_ID]: { rounds: [{ id: 'round-1' }] },
-      },
-    });
-
-    const source = [
-      'import { attio, kg } from adapters',
-      'import { acme_main } from credentials',
-      '',
-      'crm = connect attio using acme_main',
-      'graph = connect kg',
-      '',
-      'function on_company_change(rec: <graph-[:company]->>) {',
-      '  rec-[r:rounds]-> {',
-      '    write crm-[:companies]-> {',
-      '      unique by (`name`)',
-      '      name: r.`stage`',
-      '    }',
-      '  }',
-      '}',
-      '',
-      'listen to graph { type: "company" } fire on_company_change',
-    ].join('\n');
-
-    const result = await runMovement({
-      source,
-      movementName: 'on_company_change',
-      event: mutationEvent(),
-      teamId: TEAM_ID,
-      catalog,
-      credentialIds: credentialIdsFor(catalog, () => 'cred-attio-1'),
-      host: makeTestHost({
-        adapters: {
-          resolve: ({ adapterType }) => {
-            if (adapterType === 'kg') return kg;
-            if (adapterType === 'attio') return target.adapter;
-            throw new Error(`test: no fake for '${adapterType}'`);
-          },
-        },
-      }),
-    });
-
-    expect(result.writes).toHaveLength(1);
-    expect(target.creates[0].fields).toEqual({ name: 'Series A' });
-  });
-
-  it('a mutation event with no recordId fails loud', async () => {
-    const target = makeTargetFake('attio');
-    const kg = makeKgFake({ records: {} });
-    await expect(
-      runMovement({
-        source: ON_COMPANY_CHANGE,
-        movementName: 'on_company_change',
-        event: mutationEvent({ recordId: undefined }),
-        teamId: TEAM_ID,
-        catalog,
-        credentialIds: credentialIdsFor(catalog, () => 'cred-attio-1'),
-        host: makeTestHost({
-          adapters: {
-            resolve: ({ adapterType }) =>
-              adapterType === 'kg' ? kg : target.adapter,
-          },
-        }),
-      }),
-    ).rejects.toThrow(MovementEngineError);
-  });
 });
 
 describe('surfaceReadAdapter — natural-name read seam (KG)', () => {
