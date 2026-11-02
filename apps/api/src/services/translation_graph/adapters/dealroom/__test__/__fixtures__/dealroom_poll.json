@@ -11,40 +11,132 @@
               "recordId": "4",
               "recordType": "Funding Round",
               "fields": {
-                "Id": 4,
                 "id": 4,
-                "Round": "series a",
                 "round": "series a",
-                "Standardised Round Label": "Series A",
                 "standardised_round_label": "Series A",
-                "Year": 2026,
                 "year": 2026,
-                "Month": 7,
                 "month": 7,
+                "amount": 9,
+                "currency": "GBP",
+                "amount_usd_million": 11.43,
+                "amount_eur_million": 10.44,
+                "valuation": 45,
+                "is_verified": true,
+                "is_undisclosed": false,
+                "news_source": null,
+                "unknown_investors": [],
+                "last_updated_utc": "2026-07-04T11:00:00.000Z",
+                "created_utc": "2026-07-04T11:00:00.000Z",
+                "company": {
+                  "id": 2,
+                  "name": "Ledgerly",
+                  "path": "ledgerly",
+                  "tagline": "Bookkeeping automation for freelancers",
+                  "url": "https://app.dealroom.co/companies/ledgerly",
+                  "website_url": "https://ledgerly.co.uk",
+                  "images": {
+                    "32x32": "https://fake-dealroom.local/logos/company-2/32x32.png",
+                    "74x74": "https://fake-dealroom.local/logos/company-2/74x74.png",
+                    "100x100": "https://fake-dealroom.local/logos/company-2/100x100.png"
+                  },
+                  "total_funding": 12.53,
+                  "total_funding_currency": "EUR",
+                  "industries": [
+                    {
+                      "id": 102,
+                      "name": "Fintech"
+                    }
+                  ],
+                  "hq_locations": [
+                    {
+                      "id": 1002,
+                      "is_headquarters": true,
+                      "is_founding_location": true,
+                      "address": "London, United Kingdom",
+                      "city": {
+                        "id": 10023,
+                        "name": "London"
+                      },
+                      "country": {
+                        "id": 10022,
+                        "name": "United Kingdom"
+                      },
+                      "street": null,
+                      "street_number": null,
+                      "zip": null,
+                      "lat": 51.5072,
+                      "lon": -0.1276,
+                      "continent": {
+                        "id": 10021,
+                        "name": "Europe"
+                      }
+                    }
+                  ],
+                  "last_updated": "2026-07-20T09:00:00+00:00",
+                  "last_updated_utc": "2026-07-20 09:00:00",
+                  "created_utc": "2023-01-05 12:00:00",
+                  "type": "company",
+                  "total_funding_source": 12530000
+                },
+                "investors": [
+                  {
+                    "id": 3,
+                    "name": "Ferrovia Partners",
+                    "path": "ferrovia_partners",
+                    "url": "https://app.dealroom.co/investors/ferrovia_partners",
+                    "images": {
+                      "32x32": "https://fake-dealroom.local/logos/investor-3/32x32.png",
+                      "74x74": "https://fake-dealroom.local/logos/investor-3/74x74.png",
+                      "100x100": "https://fake-dealroom.local/logos/investor-3/100x100.png"
+                    },
+                    "lead": true,
+                    "type": "investor"
+                  },
+                  {
+                    "id": 2,
+                    "name": "Solstice Capital",
+                    "path": "solstice_capital",
+                    "url": "https://app.dealroom.co/investors/solstice_capital",
+                    "images": {
+                      "32x32": "https://fake-dealroom.local/logos/investor-2/32x32.png",
+                      "74x74": "https://fake-dealroom.local/logos/investor-2/74x74.png",
+                      "100x100": "https://fake-dealroom.local/logos/investor-2/100x100.png"
+                    },
+                    "lead": false,
+                    "type": "investor"
+                  },
+                  {
+                    "id": 4,
+                    "name": "Elena Krauss",
+                    "path": "elena_krauss",
+                    "url": "https://app.dealroom.co/investors/elena_krauss",
+                    "images": {
+                      "32x32": "https://fake-dealroom.local/logos/investor-4/32x32.png",
+                      "74x74": "https://fake-dealroom.local/logos/investor-4/74x74.png",
+                      "100x100": "https://fake-dealroom.local/logos/investor-4/100x100.png"
+                    },
+                    "lead": false,
+                    "type": "investor"
+                  }
+                ],
+                "Id": 4,
+                "Round": "series a",
+                "Standardised Round Label": "Series A",
+                "Year": 2026,
+                "Month": 7,
                 "Date": "2026-07-01T00:00:00.000Z",
                 "date": "2026-07-01T00:00:00.000Z",
                 "Amount": 9,
-                "amount": 9,
                 "Currency": "GBP",
-                "currency": "GBP",
                 "Amount USD Million": 11.43,
-                "amount_usd_million": 11.43,
                 "Amount EUR Million": 10.44,
-                "amount_eur_million": 10.44,
                 "Valuation": 45,
-                "valuation": 45,
                 "Is Verified": true,
-                "is_verified": true,
                 "Is Undisclosed": false,
-                "is_undisclosed": false,
                 "News Source": null,
-                "news_source": null,
                 "Unknown Investors": [],
-                "unknown_investors": [],
                 "Last Updated": "2026-07-04T11:00:00.000Z",
-                "last_updated_utc": "2026-07-04T11:00:00.000Z",
                 "Created At": "2026-07-04T11:00:00.000Z",
-                "created_utc": "2026-07-04T11:00:00.000Z",
                 "Company Industries": [
                   "Fintech"
                 ],
@@ -75,40 +167,119 @@
               "recordId": "12",
               "recordType": "Funding Round",
               "fields": {
-                "Id": 12,
                 "id": 12,
-                "Round": "seed",
                 "round": "seed",
-                "Standardised Round Label": "Seed",
                 "standardised_round_label": "Seed",
-                "Year": 2026,
                 "year": 2026,
-                "Month": 8,
                 "month": 8,
+                "amount": 2,
+                "currency": "EUR",
+                "amount_usd_million": 2.18,
+                "amount_eur_million": 2,
+                "valuation": 9,
+                "is_verified": true,
+                "is_undisclosed": false,
+                "news_source": null,
+                "unknown_investors": [],
+                "last_updated_utc": "2026-08-30T12:00:00.000Z",
+                "created_utc": "2026-08-30T12:00:00.000Z",
+                "company": {
+                  "id": 8,
+                  "name": "Devsloop",
+                  "path": "devsloop",
+                  "tagline": "Preview environments on every pull request",
+                  "url": "https://app.dealroom.co/companies/devsloop",
+                  "website_url": "https://devsloop.dev",
+                  "images": {
+                    "32x32": "https://fake-dealroom.local/logos/company-8/32x32.png",
+                    "74x74": "https://fake-dealroom.local/logos/company-8/74x74.png",
+                    "100x100": "https://fake-dealroom.local/logos/company-8/100x100.png"
+                  },
+                  "total_funding": 2,
+                  "total_funding_currency": "EUR",
+                  "industries": [
+                    {
+                      "id": 108,
+                      "name": "Developer Tools"
+                    }
+                  ],
+                  "hq_locations": [
+                    {
+                      "id": 1008,
+                      "is_headquarters": true,
+                      "is_founding_location": true,
+                      "address": "Berlin, Germany",
+                      "city": {
+                        "id": 10083,
+                        "name": "Berlin"
+                      },
+                      "country": {
+                        "id": 10082,
+                        "name": "Germany"
+                      },
+                      "street": null,
+                      "street_number": null,
+                      "zip": null,
+                      "lat": 52.52,
+                      "lon": 13.405,
+                      "continent": {
+                        "id": 10081,
+                        "name": "Europe"
+                      }
+                    }
+                  ],
+                  "last_updated": "2026-09-02T09:00:00+00:00",
+                  "last_updated_utc": "2026-09-02 09:00:00",
+                  "created_utc": "2024-01-08 12:00:00",
+                  "type": "company",
+                  "total_funding_source": 2000000
+                },
+                "investors": [
+                  {
+                    "id": 3,
+                    "name": "Ferrovia Partners",
+                    "path": "ferrovia_partners",
+                    "url": "https://app.dealroom.co/investors/ferrovia_partners",
+                    "images": {
+                      "32x32": "https://fake-dealroom.local/logos/investor-3/32x32.png",
+                      "74x74": "https://fake-dealroom.local/logos/investor-3/74x74.png",
+                      "100x100": "https://fake-dealroom.local/logos/investor-3/100x100.png"
+                    },
+                    "lead": true,
+                    "type": "investor"
+                  },
+                  {
+                    "id": 4,
+                    "name": "Elena Krauss",
+                    "path": "elena_krauss",
+                    "url": "https://app.dealroom.co/investors/elena_krauss",
+                    "images": {
+                      "32x32": "https://fake-dealroom.local/logos/investor-4/32x32.png",
+                      "74x74": "https://fake-dealroom.local/logos/investor-4/74x74.png",
+                      "100x100": "https://fake-dealroom.local/logos/investor-4/100x100.png"
+                    },
+                    "lead": false,
+                    "type": "investor"
+                  }
+                ],
+                "Id": 12,
+                "Round": "seed",
+                "Standardised Round Label": "Seed",
+                "Year": 2026,
+                "Month": 8,
                 "Date": "2026-08-01T00:00:00.000Z",
                 "date": "2026-08-01T00:00:00.000Z",
                 "Amount": 2,
-                "amount": 2,
                 "Currency": "EUR",
-                "currency": "EUR",
                 "Amount USD Million": 2.18,
-                "amount_usd_million": 2.18,
                 "Amount EUR Million": 2,
-                "amount_eur_million": 2,
                 "Valuation": 9,
-                "valuation": 9,
                 "Is Verified": true,
-                "is_verified": true,
                 "Is Undisclosed": false,
-                "is_undisclosed": false,
                 "News Source": null,
-                "news_source": null,
                 "Unknown Investors": [],
-                "unknown_investors": [],
                 "Last Updated": "2026-08-30T12:00:00.000Z",
-                "last_updated_utc": "2026-08-30T12:00:00.000Z",
                 "Created At": "2026-08-30T12:00:00.000Z",
-                "created_utc": "2026-08-30T12:00:00.000Z",
                 "Company Industries": [
                   "Developer Tools"
                 ],
@@ -149,40 +320,132 @@
               "recordId": "4",
               "recordType": "Funding Round",
               "fields": {
-                "Id": 4,
                 "id": 4,
-                "Round": "series a",
                 "round": "series a",
-                "Standardised Round Label": "Series A",
                 "standardised_round_label": "Series A",
-                "Year": 2026,
                 "year": 2026,
-                "Month": 7,
                 "month": 7,
+                "amount": 9,
+                "currency": "GBP",
+                "amount_usd_million": 11.43,
+                "amount_eur_million": 10.44,
+                "valuation": 45,
+                "is_verified": true,
+                "is_undisclosed": false,
+                "news_source": null,
+                "unknown_investors": [],
+                "last_updated_utc": "2026-07-04T11:00:00.000Z",
+                "created_utc": "2026-07-04T11:00:00.000Z",
+                "company": {
+                  "id": 2,
+                  "name": "Ledgerly",
+                  "path": "ledgerly",
+                  "tagline": "Bookkeeping automation for freelancers",
+                  "url": "https://app.dealroom.co/companies/ledgerly",
+                  "website_url": "https://ledgerly.co.uk",
+                  "images": {
+                    "32x32": "https://fake-dealroom.local/logos/company-2/32x32.png",
+                    "74x74": "https://fake-dealroom.local/logos/company-2/74x74.png",
+                    "100x100": "https://fake-dealroom.local/logos/company-2/100x100.png"
+                  },
+                  "total_funding": 12.53,
+                  "total_funding_currency": "EUR",
+                  "industries": [
+                    {
+                      "id": 102,
+                      "name": "Fintech"
+                    }
+                  ],
+                  "hq_locations": [
+                    {
+                      "id": 1002,
+                      "is_headquarters": true,
+                      "is_founding_location": true,
+                      "address": "London, United Kingdom",
+                      "city": {
+                        "id": 10023,
+                        "name": "London"
+                      },
+                      "country": {
+                        "id": 10022,
+                        "name": "United Kingdom"
+                      },
+                      "street": null,
+                      "street_number": null,
+                      "zip": null,
+                      "lat": 51.5072,
+                      "lon": -0.1276,
+                      "continent": {
+                        "id": 10021,
+                        "name": "Europe"
+                      }
+                    }
+                  ],
+                  "last_updated": "2026-07-20T09:00:00+00:00",
+                  "last_updated_utc": "2026-07-20 09:00:00",
+                  "created_utc": "2023-01-05 12:00:00",
+                  "type": "company",
+                  "total_funding_source": 12530000
+                },
+                "investors": [
+                  {
+                    "id": 3,
+                    "name": "Ferrovia Partners",
+                    "path": "ferrovia_partners",
+                    "url": "https://app.dealroom.co/investors/ferrovia_partners",
+                    "images": {
+                      "32x32": "https://fake-dealroom.local/logos/investor-3/32x32.png",
+                      "74x74": "https://fake-dealroom.local/logos/investor-3/74x74.png",
+                      "100x100": "https://fake-dealroom.local/logos/investor-3/100x100.png"
+                    },
+                    "lead": true,
+                    "type": "investor"
+                  },
+                  {
+                    "id": 2,
+                    "name": "Solstice Capital",
+                    "path": "solstice_capital",
+                    "url": "https://app.dealroom.co/investors/solstice_capital",
+                    "images": {
+                      "32x32": "https://fake-dealroom.local/logos/investor-2/32x32.png",
+                      "74x74": "https://fake-dealroom.local/logos/investor-2/74x74.png",
+                      "100x100": "https://fake-dealroom.local/logos/investor-2/100x100.png"
+                    },
+                    "lead": false,
+                    "type": "investor"
+                  },
+                  {
+                    "id": 4,
+                    "name": "Elena Krauss",
+                    "path": "elena_krauss",
+                    "url": "https://app.dealroom.co/investors/elena_krauss",
+                    "images": {
+                      "32x32": "https://fake-dealroom.local/logos/investor-4/32x32.png",
+                      "74x74": "https://fake-dealroom.local/logos/investor-4/74x74.png",
+                      "100x100": "https://fake-dealroom.local/logos/investor-4/100x100.png"
+                    },
+                    "lead": false,
+                    "type": "investor"
+                  }
+                ],
+                "Id": 4,
+                "Round": "series a",
+                "Standardised Round Label": "Series A",
+                "Year": 2026,
+                "Month": 7,
                 "Date": "2026-07-01T00:00:00.000Z",
                 "date": "2026-07-01T00:00:00.000Z",
                 "Amount": 9,
-                "amount": 9,
                 "Currency": "GBP",
-                "currency": "GBP",
                 "Amount USD Million": 11.43,
-                "amount_usd_million": 11.43,
                 "Amount EUR Million": 10.44,
-                "amount_eur_million": 10.44,
                 "Valuation": 45,
-                "valuation": 45,
                 "Is Verified": true,
-                "is_verified": true,
                 "Is Undisclosed": false,
-                "is_undisclosed": false,
                 "News Source": null,
-                "news_source": null,
                 "Unknown Investors": [],
-                "unknown_investors": [],
                 "Last Updated": "2026-07-04T11:00:00.000Z",
-                "last_updated_utc": "2026-07-04T11:00:00.000Z",
                 "Created At": "2026-07-04T11:00:00.000Z",
-                "created_utc": "2026-07-04T11:00:00.000Z",
                 "Company Industries": [
                   "Fintech"
                 ],
