@@ -53,12 +53,12 @@ describe('adapter triggerExpectation — honest inbound semantics', () => {
     expect(t).toMatch(/do not promise/i);
   });
 
-  it('KG warns about movement-written mutations looping', () => {
+  it('KG names its Changes and warns that a listen writing what it hears can wake itself', () => {
     const t = KG_MANIFEST.triggerExpectation;
     expect(t).toBeDefined();
-    expect(t).toMatch(/another movement/i);
-    expect(t).toMatch(/loop/i);
-    expect(t).toMatch(/suppress_self/);
+    expect(t).toMatch(/Changes/);
+    expect(t).toMatch(/another automation/i);
+    expect(t).toMatch(/wake itself/i);
   });
 
   it('WhatsApp frames the number as a deliberate capture channel, never chat access', () => {
@@ -85,8 +85,9 @@ describe('adapter triggerExpectation — honest inbound semantics', () => {
     expect(t).toMatch(/do not promise/i);
   });
 
-  it('Valuations names the required events narrowing', () => {
-    expect(NATIVE_VALUATIONS_MANIFEST.triggerExpectation).toMatch(/MUST name the events/);
+  it('Valuations names its Changes, with the row before and after', () => {
+    expect(NATIVE_VALUATIONS_MANIFEST.triggerExpectation).toMatch(/Changes/);
+    expect(NATIVE_VALUATIONS_MANIFEST.triggerExpectation).toMatch(/Previous.*Current/);
   });
 
   it('EVERY source adapter carries a triggerExpectation (no silent gaps)', () => {

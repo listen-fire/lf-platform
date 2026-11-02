@@ -18,8 +18,8 @@ export interface KgModuleHost {
   /** The store for one install: its team is `ctx.config.tenant`, its
    *  connection `ctx.config.credentialRef`. */
   store(ctx: ModuleContext): KgStore;
-  /** Whether the store's change events reach this host as signed webhooks (a
-   *  store in another process), so the listen reconciler registers them. */
+  /** Whether the store's changes reach this host as signed webhooks (a store
+   *  in another process), so the listen reconciler registers them. */
   changeWebhooks: boolean;
 }
 
@@ -46,7 +46,7 @@ export function kgModuleWith(host: KgModuleHost): AdapterModuleDefinition {
 
 export { KG_CREDENTIAL_TYPE };
 export * from './adapter';
-export * from './events';
+export * from './changes';
 export * from './handbook_section';
 export * from './manifest';
 export * from './store';

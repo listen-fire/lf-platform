@@ -84,7 +84,7 @@ Asserting an edge that is already there changes nothing, so this is safe to re-r
 Run an automation whenever a record in the graph changes, whoever changed it:
 
 \`\`\`
-function \`Announce The Ticket\`(change: <graph-[r:\`Record Change\` WHERE r.type == "Support Ticket" AND r.action == "record.updated"]->>) {
+function \`Announce The Ticket\`(change: <graph-[:\`Support Ticket Change\`]->>) {
   general = only(team-[ch:Channels WHERE ch.Name == "general"]->)
   if (general == null) { fail("no #general channel") }
   change-[ticket:Record]-> {
@@ -92,16 +92,17 @@ function \`Announce The Ticket\`(change: <graph-[r:\`Record Change\` WHERE r.typ
   }
 }
 
-listen to graph { type: "Support Ticket", events: ["record.updated"], fields: [Status] } fire \`Announce The Ticket\`
+listen to graph-[t:\`Support Ticket\`]->-[c:Changes WHERE c.Kind == "updated"]-> fire \`Announce The Ticket\`
 \`\`\`
 
-What arrives is the CHANGE, not the record. A \`Record Change\` says which type changed and how; the record it happened to is one hop away, over \`Record\`. Every system whose changes can start an automation hands them over this way, so the shape is the one you already know.
+What arrives is the CHANGE, not the record. Each record has its \`Changes\`, and a support ticket's are \`Support Ticket Change\`s.
 
-- \`type\` is required, and names the watched type in quotes. The parameter pins the same name, which is what lets the record one hop along carry that type's properties.
-- \`events\` narrows to \`"record.created"\`, \`"record.updated"\`, \`"record.deleted"\` — omit it for all three.
-- \`fields\` narrows updates to the properties you care about, named bare. They are properties of the RECORD, and an update that touched nothing on the list does not fire.
-- A deleted record has nothing left to read, so \`Record\` is not there on a delete. Pin \`action\` as above, or test with \`is\` before walking it.
-- A run that both listens to the graph and writes to it can wake itself. Narrow the listener to the types and fields you actually mean; where an automation should ignore its own writes and react only to everyone else's, add \`suppress_self: true\`.
+- \`Kind\` is \`created\`, \`updated\` or \`deleted\`.
+- \`Changed Fields\` names the properties and edges the change moved: every one a created record was given, none for a deleted one.
+- \`c.Current\` is the record as the change left it, every property by name, absent once it is deleted. Test it present before reading through it: \`exists(c.Current) AND c.Current.Status == "Escalated"\`.
+- \`Record\` is the record as it is now, read when the function walks it; a deleted one is none.
+- A WHERE on the type's hop (\`t.Status == "Open"\`) is judged on the record as the change left it.
+- A run that listens to a type and writes to it can wake itself. Listen-Fire stops a listen whose runs keep changing the records it hears; narrow the listen to the changes you mean.
 
 ### when-the-graph-and-when-the-other-system
 
@@ -148,7 +149,7 @@ listen to inbox { key: "intake" } fire \`Record The Company\`
 `,
     },
     {
-      construct: 'a knowledge-graph mutation listener — the event position, the hop to the changed record, and field narrowing',
+      construct: 'a listen on a knowledge-graph record\'s Changes — the change type, its Current record, and the walk to the record now',
       status: 'runs',
       probe: `
 import { \`@lf/kg\` as kg, \`@lf/slack\` as slack } from adapters
@@ -157,7 +158,7 @@ import { team_workspace } from credentials
 team = connect slack using team_workspace
 graph = connect kg
 
-function \`Announce The Ticket\`(change: <graph-[r:\`Record Change\` WHERE r.type == "Support Ticket" AND r.action == "record.updated"]->>) {
+function \`Announce The Ticket\`(change: <graph-[:\`Support Ticket Change\`]->>) {
   general = only(team-[ch:Channels WHERE ch.Name == "general"]->)
   if (general == null) { fail("no #general channel") }
   change-[ticket:Record]-> {
@@ -167,7 +168,7 @@ function \`Announce The Ticket\`(change: <graph-[r:\`Record Change\` WHERE r.typ
   }
 }
 
-listen to graph { type: "Support Ticket", events: ["record.updated"], fields: [Status] } fire \`Announce The Ticket\`
+listen to graph-[t:\`Support Ticket\`]->-[c:Changes WHERE c.Kind == "updated" AND exists(c.Current) AND c.Current.Status == "Escalated"]-> fire \`Announce The Ticket\`
 `,
     },
     {

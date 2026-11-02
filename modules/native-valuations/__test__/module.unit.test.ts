@@ -1,9 +1,9 @@
 // The module as a host loads it: its definition, the API it opens from a
-// credential, the webhook helpers' requests, and the inbound parse.
+// credential, the webhook helpers' requests, and a delivery's arrival.
 
 import { adapterInProcess, inProcessValidationDefault, refusingFiles, refusingKv } from 'module-kit';
 
-import { nativeValuationsModule, registerValuationsWebhook, deregisterValuationsWebhook, valuationsApiFrom, parseValuationsEvents } from '../index';
+import { NativeValuationsAdapter, nativeValuationsModule, registerValuationsWebhook, deregisterValuationsWebhook, valuationsApiFrom } from '../index';
 
 const quiet = { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
 
@@ -73,12 +73,71 @@ describe('the webhook helpers', () => {
   });
 });
 
-describe('parseValuationsEvents', () => {
-  it('makes one event of a delivery, its entity the record type, and nothing of junk', () => {
-    const delivery = { event: 'valuations:investment:update', timestamp: 't', actor: { type: 'system', id: null }, data: { id: 'inv-1', before: null, after: { id: 'inv-1' } } };
-    expect(parseValuationsEvents(delivery)).toEqual([
-      { payload: delivery, externalId: 'inv-1', recordType: 'investment', eventType: 'valuations:investment:update', actor: { type: 'system', id: null } },
+describe('a delivery', () => {
+  const adapter = new NativeValuationsAdapter({ api: async () => null, log: quiet });
+  const delivery = (event: string, before: unknown, after: unknown) => ({
+    event,
+    timestamp: '2026-11-02T10:00:00.000Z',
+    actor: { type: 'system', id: null },
+    data: { id: 'le-1', before, after },
+  });
+
+  it('arrives on the row’s Changes, about the row by its entity’s name and id, with the row before and after', async () => {
+    const { events, arrivals } = await adapter.preprocessInbound({
+      raw: delivery('valuations:legal_entity:update', { id: 'le-1', name: 'Acme', city: 'Leeds' }, { id: 'le-1', name: 'Acme Ltd', city: 'Leeds' }),
+    });
+    expect(events).toEqual([]);
+    expect(arrivals).toEqual([
+      {
+        edge: 'Changes',
+        key: 'le-1',
+        identity: 'legal_entity:le-1:updated:2026-11-02T10:00:00.000Z',
+        landing: {
+          recordId: 'legal_entity:le-1:updated:2026-11-02T10:00:00.000Z',
+          recordType: 'Legal Entity Change',
+          fields: {
+            Id: 'legal_entity:le-1:updated:2026-11-02T10:00:00.000Z',
+            Kind: 'updated',
+            'Changed Fields': ['Name'],
+            'Record Id': 'le-1',
+            Current: { Id: 'le-1', Name: 'Acme Ltd', City: 'Leeds' },
+            Previous: { Id: 'le-1', Name: 'Acme', City: 'Leeds' },
+          },
+        },
+        parents: [{ recordId: 'le-1', recordType: 'Legal Entity', fields: { id: 'le-1', name: 'Acme Ltd', city: 'Leeds' } }],
+        about: { recordType: 'Legal Entity', externalId: 'le-1' },
+        occurredAt: '2026-11-02T10:00:00.000Z',
+      },
     ]);
-    expect(parseValuationsEvents({ event: 'valuations:investment:update' })).toEqual([]);
+  });
+
+  it('names what a created row was given, and carries the deleted row as it was', async () => {
+    const created = await adapter.preprocessInbound({ raw: delivery('valuations:asset:create', null, { id: 'le-1', name: 'Shares', type: null }) });
+    expect(created.arrivals[0]?.landing).toMatchObject({ recordType: 'Asset Change', fields: { Kind: 'created', 'Changed Fields': ['Id', 'Name'] } });
+    expect(created.arrivals[0]?.landing.fields).not.toHaveProperty('Previous');
+    const deleted = await adapter.preprocessInbound({ raw: delivery('valuations:asset:delete', { id: 'le-1', name: 'Shares' }, null) });
+    expect(deleted.arrivals[0]?.landing.fields).toMatchObject({ Kind: 'deleted', 'Changed Fields': [], Previous: { Id: 'le-1', Name: 'Shares' } });
+    expect(deleted.arrivals[0]?.parents).toEqual([{ recordId: 'le-1', recordType: 'Asset', fields: { id: 'le-1', name: 'Shares' } }]);
+  });
+
+  it('runs nothing for junk or an entity it does not describe', async () => {
+    expect((await adapter.preprocessInbound({ raw: { event: 'valuations:legal_entity:update' } })).arrivals).toEqual([]);
+    expect((await adapter.preprocessInbound({ raw: delivery('valuations:fund:update', null, {}) })).arrivals).toEqual([]);
+  });
+
+  it('hangs a listenable Changes off each entity, landing on its change type', async () => {
+    const entity = await adapter.describe('Legal Entity');
+    expect(entity?.references.find((ref) => ref.name === 'Changes')).toMatchObject({
+      targetTypeId: 'Legal Entity Change',
+      listenable: true,
+      delivery: 'connection',
+      identity: 'Id',
+      carries: ['Legal Entity'],
+    });
+    const investment = await adapter.describe('Investment');
+    expect(investment?.references.find((ref) => ref.name === 'Changes')).not.toHaveProperty('carries');
+    const change = await adapter.describe('Legal Entity Change');
+    expect(change?.fields.map((field) => field.fieldId)).toEqual(['Id', 'Kind', 'Changed Fields', 'Record Id', 'Current', 'Previous']);
+    await expect(adapter.arrivals.awaitKeys({ edge: 'Changes', heads: [{ recordId: 'le-1' }] })).resolves.toEqual([{ key: 'le-1' }]);
   });
 });

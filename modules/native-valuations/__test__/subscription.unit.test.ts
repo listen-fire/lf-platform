@@ -1,10 +1,8 @@
-// native-valuations is now a first-class movement-listen source: a movement that
-// `listen`s to it gets a Valuations webhook auto-provisioned via the adapter's
-// ensureEventSubscription (the `syncListenSubscriptions` bridge), exactly like
-// Attio/Airtable. Before this it only registered via the manual Settings path,
-// so `listen to vals {}` provisioned nothing. These guard (1) the manifest
-// opt-in the reconciler gates on, and (2) the adapter delegating to the shared
-// register/deregister helper with correct change-handling.
+// A listen on a Valuations record's `Changes` gets a Valuations webhook
+// provisioned through the adapter's ensureEventSubscription (the
+// `syncListenSubscriptions` bridge), as Attio's does. These guard the manifest
+// opt-in the reconciler gates on, and the adapter delegating to the shared
+// register/deregister helper.
 
 const registerValuationsWebhook = jest.fn(async (_api: unknown, _input: unknown) => ({ externalId: 'https://cb', secret: 'shh' }));
 const deregisterValuationsWebhook = jest.fn(async (_api: unknown, _input: unknown) => {});
@@ -23,58 +21,37 @@ const adapter = (api: typeof API | null = API) => new NativeValuationsAdapter({ 
 beforeEach(() => jest.clearAllMocks());
 
 describe('native-valuations manifest — movement-listen opt-in', () => {
-  it('declares ensureEventSubscription + removeEventSubscription + subscribableEvents, and requires events', () => {
+  it('declares ensureEventSubscription + removeEventSubscription', () => {
     expect(NATIVE_VALUATIONS_MANIFEST.methods).toEqual(
-      expect.arrayContaining(['ensureEventSubscription', 'removeEventSubscription']),
+      expect.arrayContaining(['ensureEventSubscription', 'removeEventSubscription', 'awaitKeys']),
     );
-    expect(NATIVE_VALUATIONS_MANIFEST.subscribableEvents).toEqual([
-      'valuations:legal_entity:create',
-      'valuations:legal_entity:update',
-      'valuations:legal_entity:delete',
-    ]);
-    // `events` required → `listen to vals {}` is flagged (the user must name what it watches).
-    expect(NATIVE_VALUATIONS_MANIFEST.listenConfig).toEqual([{ key: 'events', required: true }]);
   });
 });
 
 describe('NativeValuationsAdapter.ensureEventSubscription', () => {
-  it('registers via the shared helper with the channel events + callback URL', async () => {
-    const result = await adapter().ensureEventSubscription!({
-      events: ['valuations:legal_entity:create', 'valuations:legal_entity:update'],
-      callbackUrl: 'https://cb',
-    });
-    expect(registerValuationsWebhook).toHaveBeenCalledWith(API, {
-      targetUrl: 'https://cb',
-      eventTypes: ['valuations:legal_entity:create', 'valuations:legal_entity:update'],
-    });
+  it('registers one webhook for every entity’s changes at the callback URL', async () => {
+    const result = await adapter().ensureEventSubscription!({ edge: 'Changes', callbackUrl: 'https://cb' });
+    expect(registerValuationsWebhook).toHaveBeenCalledTimes(1);
+    const [, input] = registerValuationsWebhook.mock.calls[0] ?? [];
+    expect(input).toMatchObject({ targetUrl: 'https://cb' });
+    expect(input).toHaveProperty('eventTypes', expect.arrayContaining(['valuations:legal_entity:update', 'valuations:investment:delete', 'valuations:asset_transfer:create']));
     expect(result).toEqual({ externalId: 'https://cb', secret: 'shh' });
   });
 
-  it('no-ops (no register) when the registered event set is unchanged', async () => {
-    const result = await adapter().ensureEventSubscription!({
-      events: ['valuations:legal_entity:create'],
-      callbackUrl: 'https://cb',
-      current: { externalId: 'https://cb', events: ['valuations:legal_entity:create'] },
-    });
+  it('keeps the webhook it holds', async () => {
+    const result = await adapter().ensureEventSubscription!({ edge: 'Changes', callbackUrl: 'https://cb', current: { externalId: 'https://cb' } });
     expect(result).toBeUndefined();
     expect(registerValuationsWebhook).not.toHaveBeenCalled();
-    expect(deregisterValuationsWebhook).not.toHaveBeenCalled();
   });
 
-  it('deregisters the superseded webhook then re-registers when the event set changes', async () => {
-    await adapter().ensureEventSubscription!({
-      events: ['valuations:legal_entity:create', 'valuations:legal_entity:update'],
-      callbackUrl: 'https://cb',
-      current: { externalId: 'https://cb', events: ['valuations:legal_entity:create'] },
-    });
-    expect(deregisterValuationsWebhook).toHaveBeenCalledWith(API, { externalId: 'https://cb' });
-    expect(registerValuationsWebhook).toHaveBeenCalledTimes(1);
+  it('refuses an edge that is not listenable', async () => {
+    await expect(adapter().ensureEventSubscription!({ edge: 'Investments', callbackUrl: 'https://cb' })).rejects.toThrow("'Investments' is not a listenable edge");
   });
 });
 
 describe('an install with no credential', () => {
   it('provisions nothing and removes nothing', async () => {
-    expect(await adapter(null).ensureEventSubscription!({ events: ['valuations:legal_entity:create'], callbackUrl: 'https://cb' })).toBeUndefined();
+    expect(await adapter(null).ensureEventSubscription!({ edge: 'Changes', callbackUrl: 'https://cb' })).toBeUndefined();
     await adapter(null).removeEventSubscription!({ callbackUrl: 'https://cb', externalId: 'https://cb' });
     expect(registerValuationsWebhook).not.toHaveBeenCalled();
     expect(deregisterValuationsWebhook).not.toHaveBeenCalled();

@@ -5,10 +5,9 @@
  *  package's slug. */
 export const NATIVE_VALUATIONS_ADAPTER_TYPE = 'native-valuations';
 
-/** The Valuations events a `listen to <vals> { events: [...] }` may subscribe
- *  to — exactly the `row.type` strings the Valuations outbox worker emits, so
- *  the registration's `eventTypes` and the inbound parse agree. Also the
- *  platform's Settings provider's default event types. */
+/** The event types the platform's Settings provider offers a webhook by
+ *  default: a legal entity's changes, as the Valuations outbox worker names
+ *  them. A listen's webhook takes every entity's (changes.ts). */
 export const NATIVE_VALUATIONS_SUBSCRIBABLE_EVENTS = [
   'valuations:legal_entity:create',
   'valuations:legal_entity:update',

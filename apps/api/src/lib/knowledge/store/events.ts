@@ -18,6 +18,8 @@
 // "can't answer", which is logged and ignored. Every 2-way sync would start
 // echoing itself and nothing would fail. So the context rides verbatim.
 
+import { randomUUID } from 'node:crypto';
+
 import { sql } from 'kysely';
 
 import type { KnowledgeWriteDb } from './write';
@@ -62,15 +64,18 @@ export interface MutationEvent {
   context: MutationContextPayload;
 }
 
-/** The delivered body. One event per delivery, mirroring the valuations shape. */
+/** The delivered body. One event per delivery, mirroring the valuations shape.
+ *  `id` names the change, the same on every redelivery of it: one run's two
+ *  writes to a record share their context, so nothing else tells them apart. */
 export interface MutationEventEnvelope {
+  id: string;
   event: MutationEventType;
   timestamp: string;
   data: MutationEvent;
 }
 
-export function envelopeFor(event: MutationEvent, occurredAt: string): MutationEventEnvelope {
-  return { event: EVENT_TYPE_BY_KIND[event.changeKind], timestamp: occurredAt, data: event };
+export function envelopeFor(event: MutationEvent, change: { id: string; occurredAt: string }): MutationEventEnvelope {
+  return { id: change.id, event: EVENT_TYPE_BY_KIND[event.changeKind], timestamp: change.occurredAt, data: event };
 }
 
 /**
@@ -235,7 +240,7 @@ export class MutationCollector {
           team_id: this.teamId,
           event_type: EVENT_TYPE_BY_KIND[event.changeKind],
           node_id: event.recordId,
-          payload: sql`${JSON.stringify(envelopeFor(event, occurredAt))}::jsonb`,
+          payload: sql`${JSON.stringify(envelopeFor(event, { id: randomUUID(), occurredAt }))}::jsonb`,
         })),
       )
       .execute();

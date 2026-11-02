@@ -1515,11 +1515,12 @@ async function injectKgMutation(args: {
     changedFields: args.fields ?? [],
     context,
   };
+  const changeId = randomUUID();
   const { queued } = await runInDevLoopContext(seed, () =>
     queueKnowledgeChange({
       teamId: seed.teamId,
-      envelope: envelopeFor(event, context.occurredAt),
-      outboxId: randomUUID(),
+      envelope: envelopeFor(event, { id: changeId, occurredAt: context.occurredAt }),
+      outboxId: changeId,
     }),
   );
   const settled = await awaitTeamWorkSettled({ teamId: seed.teamId, timeoutMs: 30_000 });

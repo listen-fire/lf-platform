@@ -1,48 +1,15 @@
-// `@lf/kg`'s declarations: the adapter type, the event surface every listen
-// to the graph names, and the manifest the host lists the graph by without
-// loading it.
+// `@lf/kg`'s declarations: the adapter type, and the manifest the host lists
+// the graph by without loading it.
 
 import type { AdapterManifest } from 'movement-engine/public/adapter';
 import type { WireInboundDeclarationShape } from 'engine-contracts';
 
 import { KNOWLEDGE_GRAPH_HANDBOOK_SECTION } from './handbook_section';
-import { KG_SUBSCRIBABLE_EVENTS } from './events';
 
 /** Stable adapter identifier. Matches `MutationContext.source.adapterType`, and
  *  IS the import name a movement constructs the graph through
  *  (`` import { `@lf/kg` as kg } from adapters `` ⇒ `graph = connect kg`). */
 export const KG_ADAPTER_TYPE = 'kg';
-
-// ── The event surface (D40) ─────────────────────────────────────────────────
-// The graph publishes an EVENT ENTRY exactly like every other adapter — the
-// same shape Airtable's `Record Change` has, for the same reasons. Nothing
-// here is graph-specific machinery: a listen names the watched node type, the
-// change kind is the event node's own `action` field, and the changed record
-// is REACHED over the event's `Record` edge rather than being the event.
-
-/** The event node's own type name. JUST A NODE: its change kind is its
- *  `action` field, narrowed in the address —
- *  `<graph-[:`Record Change` WHERE `action` == "record.created"]->>`. */
-export const KG_EVENT_TYPE_NAME = 'Record Change';
-/** The dispatch id for the event node (its `describe` / `getRelated` currency);
- *  the display name above is what an author writes. */
-export const KG_EVENT_TYPE_ID = 'kg:record_change';
-/** The event node's edge to the changed record. */
-export const KG_EVENT_RECORD_EDGE = 'record';
-/** Its NATURAL name — Title Case, the one convention across adapter surfaces. */
-export const KG_EVENT_RECORD_EDGE_NAME = 'Record';
-
-/**
- * The meta collection whose members are this team's node types.
- *
- * `Base`/`Table` for the graph: the node the `type:` listen hop selects a
- * member of, and the type the event's `Record` edge lands on before anything
- * says WHICH node type. Its members ride the root hop's `targetPositions`, each
- * publishing `Id` — the name a listen writes, which for the graph IS the node
- * type's identity (the ontology UUID stays adapter-private, in the structured-id
- * cache and the SQL).
- */
-export const KG_NODE_TYPE_META_TYPE = 'Node Type';
 
 /** Synthetic target type for the `#resources` reference — a `node_resource`
  *  attachment surfaced as a resource position. The id IS the natural display
@@ -98,10 +65,7 @@ export function kgManifest(input: { changeWebhooks: boolean }): AdapterManifest 
       'listEntryPoints', 'describe', 'resolveEntity', 'getDedupRules',
       'getFieldValue', 'getRelated', 'createRecord', 'updateRecord', 'deleteRecord',
       'linkRecords', 'unlinkRecords',
-      // Echo-authorship capability — gates the opt-in `suppress_self` listen
-      // flag (the KG answers from its own mutation-context provenance).
-      'didWeAuthor',
-      'preprocessInbound',
+      'preprocessInbound', 'awaitKeys',
       ...(input.changeWebhooks ? (['ensureEventSubscription', 'removeEventSubscription'] as const) : []),
     ],
     // The graph is reached with a stored credential, like every other system
@@ -114,37 +78,16 @@ export function kgManifest(input: { changeWebhooks: boolean }): AdapterManifest 
     // disagree about whether one-click provisioning exists.
     requiredCredentialType: KG_CREDENTIAL_TYPE,
     triggerKinds: ['KG_MUTATION'],
-    // The change kinds a listen subscribes to, in the platform's uniform
-    // `record.*` currency (D40) — ONE namespace with attio and airtable, and the
-    // same values the event node's `action` field enumerates.
-    subscribableEvents: [...KG_SUBSCRIBABLE_EVENTS],
     // The graph's model is per-team and user-editable, so describing an instance
     // is a live read of THIS team's ontology rather than a static constant.
     introspectedSchema: true,
-    // `type` is the ADDRESS of the record the event's `Record` edge lands on: a
-    // listen is shorthand for a WHERE, so naming the watched type here is what
-    // narrows the edge, and the author never restates it in the movement. It
-    // matches on `Id`, which for the graph IS the node type's name — the
-    // framework identity the entry points publish (the ontology UUID never rides
-    // a position). `fields` is the changed-attribute filter: bare property names
-    // of the watched type. `events` needs no entry — `subscribableEvents`
-    // projects it — and `suppress_self` is universal, validated centrally for
-    // every adapter, so neither is declared here.
-    listenConfig: [
-      {
-        key: 'type',
-        required: true,
-        narrows: { collection: KG_NODE_TYPE_META_TYPE, matchField: 'Id' },
-      },
-      { key: 'fields', format: 'fields' },
-    ],
     triggerExpectation:
-      "Fires when a record in the team's Listen-Fire knowledge graph is created, " +
-      'updated or deleted — whether a user edited it, an agent wrote it, or ' +
-      'ANOTHER MOVEMENT wrote it. That last case can loop a movement that ' +
-      'both listens to and writes the same types: narrow the listen to ' +
-      'specific types/changes, and use suppress_self where the movement ' +
-      'should ignore its own writes.',
+      "Listen on a record's Changes: graph-[t:`Support Ticket`]->-[c:Changes WHERE c.Kind == \"updated\"]->. " +
+      "It fires when a record of that type in the team's knowledge graph is created, updated or deleted, " +
+      'whoever changed it: a person, an agent, or another automation. A change names what moved ' +
+      '(`Changed Fields`) and carries the record as the change left it (`Current`). An automation that ' +
+      'listens to a type and writes to it can wake itself: Listen-Fire stops a listen whose runs keep ' +
+      'changing the records it hears, and narrowing the listen to the changes it means avoids that.',
     handbookSection: KNOWLEDGE_GRAPH_HANDBOOK_SECTION,
     vocabulary: {
       // No brand mark — the KG is intrinsic, not a third-party system.

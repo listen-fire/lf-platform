@@ -18,13 +18,11 @@
 
 import type { ModuleLog } from 'module-kit';
 import type { EdgesFromResult } from 'movement-engine/public/adapter';
-import type { TriggerEvent } from 'movement-engine/public/inbound';
 import type {
   Adapter,
   RuntimeCapabilities,
   DedupConstraint,
   DedupRules,
-  DiscriminableEvent,
   EnsureEventSubscriptionInput,
   EventSubscriptionRegistration,
   RemoveEventSubscriptionInput,
@@ -46,9 +44,10 @@ import type {
   WriteInput,
   WriteResult,
 } from 'movement-engine/public/adapter';
+import type { ArrivalsCapability, AwaitHead, AwaitKey } from 'engine-contracts';
 import type { KgStore, WireOntology, WirePropertyType } from './store';
 
-import { hydrateTargets, typeAddressedPositions, uniformWalk } from 'module-kit/adapter/hop';
+import { uniformWalk } from 'module-kit/adapter/hop';
 import { RESOURCES_REFERENCE_FIELD_ID, writeParentLinks } from 'movement-engine/public/adapter';
 import {
   ADAPTER_META_TYPE_ID,
@@ -69,17 +68,18 @@ import {
   type AdapterNameResolver,
   type ScopedResolver,
 } from 'module-kit/adapter/name_resolution';
-import { KG_SUBSCRIBABLE_EVENTS, changeEventsOf, didWeAuthorChange } from './events';
 import {
-  KG_ADAPTER_TYPE,
-  KG_EVENT_RECORD_EDGE,
-  KG_EVENT_RECORD_EDGE_NAME,
-  KG_EVENT_TYPE_ID,
-  KG_EVENT_TYPE_NAME,
-  KG_NODE_TYPE_META_TYPE,
-  KG_RESOURCE_TYPE_ID,
-  KG_RESOURCES_EDGE_NAME,
-} from './manifest';
+  KG_CHANGE_EVENTS,
+  KG_CHANGE_RECORD_EDGE,
+  KG_CHANGES_EDGE,
+  changeArrivals,
+  changeEntryPoint,
+  changesReference,
+  describeChange,
+  nodeTypeOfChangeType,
+  type KgChangeArrival,
+} from './changes';
+import { KG_ADAPTER_TYPE, KG_RESOURCE_TYPE_ID, KG_RESOURCES_EDGE_NAME } from './manifest';
 import {
   createKgRecord,
   deleteKgRecord,
@@ -88,97 +88,6 @@ import {
   updateKgRecord,
   type WriteConnection,
 } from './writes';
-
-/**
- * The EVENT edge off the meta node: `meta -[:`Record Change`]-> <the event>`.
- *
- * `readable: false` and that is the honest statement: nothing can enumerate the
- * changes that have happened — an event is pushed, never pulled. The edge's
- * promise is `fires`.
- */
-function recordChangeEntryPoint(): SchemaEntryPoint {
-  return {
-    typeId: KG_EVENT_TYPE_ID,
-    displayName: KG_EVENT_TYPE_NAME,
-    writable: false,
-    readable: false,
-    fires: true,
-  };
-}
-
-/**
- * The `Node Type` node, UNNARROWED — where the event's `Record` edge lands
- * before anything says WHICH node type. Honestly minimal: a record's fields
- * depend on WHICH type, so the unnarrowed node has none; the listen's `type:`
- * pin narrows it to a real type's surface.
- */
-function describeNodeTypeMeta(): SchemaTypeDescriptor {
-  return {
-    typeId: KG_NODE_TYPE_META_TYPE,
-    displayName: KG_NODE_TYPE_META_TYPE,
-    description:
-      'One of the types in this workspace’s data model. Which fields a record ' +
-      'has depends on WHICH type — a listen’s `type:` pin narrows it to one.',
-    fields: [],
-    references: [],
-  };
-}
-
-/**
- * The event node: the changed record's identity, and an edge to the record
- * itself. The event and the record are DIFFERENT NODES — the record is
- * reached, never conflated.
- */
-function describeRecordChange(): SchemaTypeDescriptor {
-  const idField = (name: string, description: string) => ({
-    fieldId: name,
-    displayName: name,
-    kind: 'string' as const,
-    writable: false,
-    required: false,
-    description,
-  });
-  return {
-    typeId: KG_EVENT_TYPE_ID,
-    displayName: KG_EVENT_TYPE_NAME,
-    description:
-      'A change to a record in this workspace’s own graph — created, updated ' +
-      'or deleted. The record itself is one hop away, over `Record`.',
-    fields: [
-      {
-        fieldId: 'action',
-        displayName: 'action',
-        kind: 'enum' as const,
-        enumValues: [...KG_SUBSCRIBABLE_EVENTS],
-        writable: false,
-        required: false,
-        description:
-          'Which kind of change this event is — the same values a listen’s `events:` names.',
-      },
-      idField('type', 'The type of record that changed — the name a `listen` names.'),
-      idField('record', 'The changed record’s id.'),
-    ],
-    references: [
-      {
-        fieldId: KG_EVENT_RECORD_EDGE,
-        name: KG_EVENT_RECORD_EDGE_NAME,
-        targetTypeId: KG_NODE_TYPE_META_TYPE,
-        cardinality: 'one' as const,
-        description: 'The record that changed.',
-        // THE hop from the event to what it is about (D40(b)) — declared, so a
-        // listen's `fields:` names properties of the record rather than of the
-        // event node, without anything having to recognise the name `Record`.
-        subject: true,
-        // Reached, never written along: a movement writes to a TYPE, not
-        // through an event.
-        writable: false,
-        // A deleted record can no longer be hydrated, so a listen narrowed to
-        // `record.deleted` drops this edge rather than offering a dead walk.
-        requiresLiveRecord: true,
-      },
-    ],
-  };
-}
 
 /** One property type as a schema field. Node-anchored and edge-anchored
  *  property types describe identically — an anchor is a write-routing fact,
@@ -327,9 +236,10 @@ export class KnowledgeGraphAdapter implements Adapter {
   // customer's schema, so callers should not cache aggressively.
 
   async listEntryPoints(): Promise<SchemaEntryPoint[]> {
-    // The EVENT edge leads, and it is behind nothing: a listen HANDS you the
-    // event position, so naming it must not require having walked anywhere.
-    return [recordChangeEntryPoint(), ...(await this.nodeTypeEntryPoints())];
+    const nodeTypes = await this.nodeTypeEntryPoints();
+    // Each node type's change type, which its records' `Changes` land on:
+    // named so the resolver knows it, never listed (changes.ts).
+    return [...nodeTypes, ...nodeTypes.map((entry) => changeEntryPoint(entry.typeId))];
   }
 
   /** One entry per ontology node type — the author-facing collections. */
@@ -361,84 +271,17 @@ export class KnowledgeGraphAdapter implements Adapter {
    *
    */
   async edgesFrom(position: SourcePosition): Promise<EdgesFromResult | null> {
-    // A `Node Type` MEMBER — the node the `type:` listen hop selects. It is
-    // pinned to one node type, so what is there is that type's own descriptor;
-    // `uniformWalk` would describe the unnarrowed meta node instead.
-    if (
-      position.recordType === KG_NODE_TYPE_META_TYPE &&
-      position.identity.kind === 'stable'
-    ) {
-      const descriptor = await this.describe(position.identity.recordId);
-      if (!descriptor) return null;
-      return {
-        descriptor,
-        ...(await this.walkTargets(descriptor)),
-      };
-    }
-    const hop = await uniformWalk({
+    return uniformWalk({
       adapterType: KG_ADAPTER_TYPE,
       at: position,
       root: await this.walkRoot(),
       describe: (typeId) => this.describe(typeId),
     });
-    // Only the META node carries the `Node Type` members (uniformWalk's own
-    // rule for "which node is this": no recordType means the root).
-    const atMeta = position.recordType == null || position.recordType === META_RECORD_TYPE;
-    if (!hop || !atMeta) return hop;
-    return { ...hop, targetPositions: await this.rootTargetPositions(hop) };
-  }
-
-  /** What a described node's edges land on — the KG's describes are local
-   *  reads, so nothing is stubbed. */
-  private async walkTargets(
-    descriptor: SchemaTypeDescriptor,
-  ): Promise<Pick<EdgesFromResult, 'targetPositions' | 'targetNodes'>> {
-    const targetPositions = typeAddressedPositions({
-      adapterType: KG_ADAPTER_TYPE,
-      descriptor,
-    });
-    const targetNodes = await hydrateTargets({
-      descriptor,
-      describe: (typeId) => this.describe(typeId),
-    });
-    return {
-      ...(Object.keys(targetPositions).length > 0 ? { targetPositions } : {}),
-      ...(targetNodes !== undefined ? { targetNodes } : {}),
-    };
-  }
-
-  /**
-   * The root's paths, with the `Node Type` MEMBERS folded in.
-   *
-   * The members carry no reference row of their own — they are the polymorphic
-   * collection a listen's `type:` hop narrows, not an edge an author walks (the
-   * node types are already root edges in their own right). `Id` addresses a
-   * member the way a LISTEN does; `Name` the way the walk displays it. Both are
-   * the node type's name, because for this graph that IS its identity.
-   *
-   * Members are filed FIRST so the type-addressed edges below them win the
-   * walk's by-name memory (`filePaths` keys on the label, which a member and
-   * its collection edge necessarily share): naming `Company` must reach the
-   * COLLECTION of companies, not the meta node describing the type.
-   */
-  private async rootTargetPositions(
-    hop: EdgesFromResult,
-  ): Promise<Record<string, SourcePosition>> {
-    const members: Record<string, SourcePosition> = {};
-    for (const entry of await this.nodeTypeEntryPoints()) {
-      members[`${KG_NODE_TYPE_META_TYPE}::${entry.typeId}`] = makeStablePosition({
-        adapterType: KG_ADAPTER_TYPE,
-        recordType: KG_NODE_TYPE_META_TYPE,
-        recordId: entry.typeId,
-        data: { Id: entry.typeId, Name: entry.displayName },
-      });
-    }
-    return { ...members, ...(hop.targetPositions ?? {}) };
   }
 
   /** The root: what this knowledge graph IS, and an edge per node type. */
   private async walkRoot(): Promise<SchemaTypeDescriptor> {
-    const entries = await this.listEntryPoints();
+    const entries = await this.nodeTypeEntryPoints();
     return {
       typeId: META_RECORD_TYPE,
       displayName: 'Knowledge Graph',
@@ -456,9 +299,6 @@ export class KnowledgeGraphAdapter implements Adapter {
         // promises rather than restating them, so they cannot drift.
         ...(entry.readable !== undefined ? { readable: entry.readable } : {}),
         ...(entry.writable !== undefined ? { writable: entry.writable } : {}),
-        // `fires` IS the event edge's promise, and it has to be stated on the
-        // walk too — read/write both false would otherwise read as a dead edge.
-        ...(entry.fires !== undefined ? { fires: entry.fires } : {}),
         // The scan pages the WHOLE collection newest-first by `(created_at,
         // id)` and reverses once (`scanNodeIds`), so the type's nodes arrive
         // oldest-first — the order they were ADDED to the graph, which is not
@@ -475,13 +315,6 @@ export class KnowledgeGraphAdapter implements Adapter {
     // to enumerate. Return null and short-circuit before the UUID-typed
     // node_type query rejects the sentinel string.
     if (typeRef === ADAPTER_META_TYPE_ID) return null;
-    // The event node and the meta collection its `Record` edge lands on, by
-    // either spelling. Both cost nothing: an event's shape is a fact about the
-    // adapter, not about the workspace.
-    if (typeRef === KG_EVENT_TYPE_ID || typeRef === KG_EVENT_TYPE_NAME) {
-      return describeRecordChange();
-    }
-    if (typeRef === KG_NODE_TYPE_META_TYPE) return describeNodeTypeMeta();
     // `Attached Resource` is the synthetic target of every node type's
     // `#resources` edge — a `node_resource` attachment surfaced as a resource
     // position, NOT an ontology node type, so `structuredIdFor` can't recover a
@@ -515,7 +348,10 @@ export class KnowledgeGraphAdapter implements Adapter {
     // an id never lands here.
     const model = await this.ontology.get();
     const nodeType = model.nodeTypes.find((nt) => nt.name === typeRef);
-    if (!nodeType) return null;
+    if (!nodeType) {
+      const changed = nodeTypeOfChangeType(model, typeRef);
+      return changed === undefined ? null : describeChange(model, changed);
+    }
     const typeId = nodeType.id;
 
     const propertyTypes = model.propertyTypes.filter((pt) => pt.nodeTypeId === typeId);
@@ -684,6 +520,7 @@ export class KnowledgeGraphAdapter implements Adapter {
           direction: 'outgoing' as const,
           name: KG_RESOURCES_EDGE_NAME,
         },
+        changesReference(nodeType.name),
       ],
     };
   }
@@ -911,6 +748,10 @@ export class KnowledgeGraphAdapter implements Adapter {
       const data = positionData(input.position) as Record<string, unknown> | null | undefined;
       return data?.[key] ?? null;
     }
+    // A change, or a record an arrival carried: its fields ride the landing,
+    // as the change had them (changes.ts).
+    const landed = await this.landedFieldValue(input);
+    if (landed !== undefined) return landed;
     const nodeId = expectKgNodeId(input.position, 'getFieldValue');
     // `fieldId` is the NATURAL property name and the position's `recordType`
     // is the NATURAL node-type name (the source-read wrapper stamps it);
@@ -924,6 +765,19 @@ export class KnowledgeGraphAdapter implements Adapter {
     // got here already landed on the position, and a record deleted between the
     // landing and the read is an ordinary race, not a broken program.
     return node?.properties[propertyTypeId] ?? null;
+  }
+
+  /** A field a landing carries: every field of a change (an absent one reads
+   *  null), and a carried record's property by name. Undefined for a field the
+   *  position does not hold, which is read from the store. */
+  private async landedFieldValue(input: GetFieldValueInput): Promise<unknown> {
+    const data = positionData(input.position);
+    if (typeof data !== 'object' || data === null) return undefined;
+    const held = Object.entries(data).find(([name]) => name === input.fieldId);
+    if (nodeTypeOfChangeType(await this.ontology.get(), input.position.recordType) !== undefined) {
+      return held?.[1] ?? null;
+    }
+    return held?.[1];
   }
 
   /** Resolve a NATURAL property name to its PropertyTypeId against a NATURAL
@@ -977,40 +831,6 @@ export class KnowledgeGraphAdapter implements Adapter {
 
     const nodeId = expectKgNodeId(input.position, 'getRelated');
 
-    // THE hop from an event to what it is about (D40). It is not an ontology
-    // edge — no edge row connects a change to its record — so it is walked
-    // rather than queried: the event position is identified BY the record it
-    // describes, and this hop is the same id, retyped from the event to the
-    // record's own node type. That retyping is the whole point: the event's
-    // surface is `action`/`type`, the record's is its properties, and a listen's
-    // body reads the second.
-    //
-    // A deleted record cannot be retyped — there is nothing left to name — so
-    // the hop yields nothing rather than a position pointing at a hole. The
-    // descriptor says as much with `requiresLiveRecord`.
-    if (
-      input.position.recordType === KG_EVENT_TYPE_NAME ||
-      input.position.recordType === KG_EVENT_TYPE_ID
-    ) {
-      if (input.fieldId !== KG_EVENT_RECORD_EDGE && input.fieldId !== KG_EVENT_RECORD_EDGE_NAME) {
-        return [];
-      }
-      const record = await this.store.getNode(nodeId);
-      if (!record) return [];
-      const model = await this.ontology.get();
-      const typeName = model.nodeTypes.find((nt) => nt.id === record.nodeTypeId)?.name;
-      if (typeName === undefined) return [];
-      return [
-        {
-          position: makeStablePosition({
-            adapterType: KG_ADAPTER_TYPE,
-            recordType: typeName,
-            recordId: record.id,
-          }),
-        },
-      ];
-    }
-
     // Resources: a node's `node_resource` attachments become resource
     // positions whose `data` carries the `Resource`. Matched by the reserved
     // fieldId — the edge's address — and never by its display name: a team's
@@ -1032,6 +852,18 @@ export class KnowledgeGraphAdapter implements Adapter {
           data: resource,
         }),
       }));
+    }
+
+    // A change's `Record`: the record it is about, as it is now. A deleted one
+    // is none.
+    const changed = nodeTypeOfChangeType(await this.ontology.get(), input.position.recordType);
+    if (changed !== undefined) {
+      if (input.fieldId !== KG_CHANGE_RECORD_EDGE) return [];
+      const data = positionData(input.position);
+      const recordId = typeof data === 'object' && data !== null ? Reflect.get(data, 'Record Id') : undefined;
+      const record = typeof recordId === 'string' ? await this.store.getNode(recordId) : null;
+      if (record === null) return [];
+      return [{ position: makeStablePosition({ adapterType: KG_ADAPTER_TYPE, recordType: changed, recordId: record.id }) }];
     }
 
     // `fieldId` is the NATURAL edge name, belonging to the position's NATURAL
@@ -1094,42 +926,46 @@ export class KnowledgeGraphAdapter implements Adapter {
     return ids.reverse();
   }
 
-  // ── 4. Trigger implementations ──────────────────────────────────────────
+  // ── 4. Changes ──────────────────────────────────────────────────────────
   //
-  // The graph supports only the 'mutation' trigger. Events are derived and
-  // enqueued by the store's write door and delivered by the outbox drainer
-  // (M-38) — never polled — so there is no snapshot or poll source here. What
-  // there IS depends on which way this deployment delivers (D39(c)): composed
-  // hands the drainer's envelope straight to the local subscriber and these
-  // subscription methods are not even advertised; standalone receives the same
-  // envelope over a signed webhook, which is what the three below are for.
+  // The store derives one change per record a write touched and hands it on
+  // through an outbox, never polled. Which way it travels depends on the
+  // deployment (D39(c)): beside the host, the drainer hands the envelope
+  // straight to the host and the subscription methods are not advertised; in
+  // another process, it arrives as a signed webhook, which the two below
+  // register.
 
-  /**
-   * The drainer's envelope, in the engine's currency.
-   *
-   * It is deliberately the SAME envelope either way — `{ event, timestamp,
-   * data }` — so the local and webhook paths cannot drift into describing the
-   * same mutation differently. `changedFields` rides along because a listen can
-   * filter on it; the whole payload crosses verbatim because `didWeAuthor`
-   * computes the entire `suppress_self` semantic from the mutation context, and
-   * a stripped bag degrades it to "can't answer", which is logged and ignored
-   * while every 2-way sync quietly starts echoing (K-29).
-   */
-  async preprocessInbound(input: { raw: unknown }): Promise<{ events: DiscriminableEvent[] }> {
-    return { events: changeEventsOf(input.raw, (message, meta) => this.log.warn(message, meta)) };
+  /** The store's change as the arrival on its record's `Changes` (changes.ts),
+   *  carrying the record as the change left it. */
+  async preprocessInbound(input: { raw: unknown }): Promise<{ events: []; arrivals: KgChangeArrival[] }> {
+    const arrivals = await changeArrivals(input.raw, {
+      ontology: () => this.ontology.get(),
+      node: (nodeId) => this.store.getNode(nodeId),
+    });
+    return { events: [], arrivals };
   }
 
+  /** A run waits on a record's `Changes` under its id: the key each arrival
+   *  on them names. */
+  readonly arrivals: ArrivalsCapability = {
+    awaitKeys: async ({ edge, heads }: { edge: string; heads: AwaitHead[] }): Promise<AwaitKey[]> => {
+      if (edge !== KG_CHANGES_EDGE) throw new Error(`kg: '${edge}' is not a listenable edge (only '${KG_CHANGES_EDGE}')`);
+      return heads.map((head) => ({ key: head.recordId }));
+    },
+  };
+
   /**
-   * Register (or re-register) this deployment's callback with the graph.
-   *
-   * Idempotent by URL on the graph's side, which is what makes re-registering
-   * on every listen change the right move rather than a diff nobody can trust:
-   * the event selection is whatever the reconciler last said it was.
+   * Have the store post its changes to this deployment's callback. One
+   * registration serves every listen on a connection's `Changes`: it takes
+   * every change, and the host judges each by the record type it landed on.
    */
   async ensureEventSubscription(
     input: EnsureEventSubscriptionInput,
   ): Promise<EventSubscriptionRegistration | undefined> {
-    return (await this.store.registerChangeWebhook({ targetUrl: input.callbackUrl, eventTypes: input.events })) ?? undefined;
+    if (input.edge !== KG_CHANGES_EDGE) throw new Error(`kg: '${input.edge}' is not a listenable edge (only '${KG_CHANGES_EDGE}')`);
+    // The one registration for this URL is held: it already takes every change.
+    if (input.current?.externalId !== undefined) return undefined;
+    return (await this.store.registerChangeWebhook({ targetUrl: input.callbackUrl, eventTypes: [...KG_CHANGE_EVENTS] })) ?? undefined;
   }
 
   async removeEventSubscription(input: RemoveEventSubscriptionInput): Promise<void> {
@@ -1300,27 +1136,6 @@ export class KnowledgeGraphAdapter implements Adapter {
   // engine. The KG is no longer a correspondence store for the engine;
   // linking is the engine-owned `bind` store. The `linked_object` table
   // survives for `resolveByBridge` candidate lookup, not for prior-match.)
-
-  // ── Echo authorship (the `suppress_self` capability, Decision §3.2) ──────
-  //
-  // "Did WE author this KG change?" The KG is the CLEANEST actor story: every
-  // write carries a MutationContext whose `source` records HOW it was produced
-  // — and a mutation event hands that context straight back to us as the
-  // event's payload. So we answer purely from the change's own provenance, no
-  // external round-trip and no recent-write cache needed here.
-  //
-  // SCOPED TO THIS CHANGE'S AUTHORSHIP, never the record's identity:
-  //   - `structured_input` / `extraction` produced by a movement or trigger
-  //     (a `translationGraphId` or `trigger:`-marked `pipelineInputId` present)
-  //     IS our own automated write → suppress (`true`). This is exactly the
-  //     A↔B self-echo the author opted out of.
-  //   - `user_edit` / `agent` / `api` — a HUMAN (or an interactive agent /
-  //     direct API call) editing a record, even one automation once wrote —
-  //     is NOT this-change authorship by the sync → `false`, fires normally.
-  //   - no recognisable provenance → `null` (can't tell; don't suppress).
-  async didWeAuthor(input: { event: TriggerEvent }): Promise<boolean | null> {
-    return didWeAuthorChange(input.event);
-  }
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────

@@ -43,7 +43,7 @@ export default nativeValuationsModule;
 
 export * from './adapter';
 export * from './credential';
-export * from './inbound';
+export * from './changes';
 export * from './manifest';
 export * from './types';
 export * from './webhook';

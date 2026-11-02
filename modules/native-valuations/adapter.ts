@@ -8,8 +8,6 @@
 import type {
   DeleteInput,
   DeleteResult,
-  DiscriminableEvent,
-  EventType,
   GetFieldValueInput,
   GetRelatedInput,
   ReadInput,
@@ -50,9 +48,21 @@ import {
 import { writeParentLinks, type ParentLink, type ParentAssociation } from 'movement-engine/public/adapter';
 import { describeError } from 'movement-engine/public/errors';
 
+import type { ArrivalsCapability, AwaitHead, AwaitKey } from 'engine-contracts';
 import type { ValuationsApi } from './credential';
 
-import { parseValuationsEvents } from './inbound';
+import {
+  VALUATIONS_CHANGE_RECORD_EDGE,
+  VALUATIONS_CHANGES_EDGE,
+  changeArrivals,
+  changeEntryPoint,
+  changeEventsOf,
+  changeTypeName,
+  changesReference,
+  describeChange,
+  type ChangedEntity,
+  type ValuationsChangeArrival,
+} from './changes';
 import { NATIVE_VALUATIONS_MANIFEST } from './manifest';
 import { NATIVE_VALUATIONS_ADAPTER_TYPE } from './types';
 import { registerValuationsWebhook, deregisterValuationsWebhook } from './webhook';
@@ -1071,38 +1081,6 @@ function valuationsEdge(): SchemaReferenceDescriptor {
   };
 }
 
-const WEBHOOK_EVENT_TYPE = 'native-valuations:webhook_event';
-
-// Inbound webhook payload shape — mirrors `eventSchema` in
-// services/webhook_sync/providers/native_valuations.ts. Surfaced to the
-// trigger filter editor so authors can target an event in terms the
-// editor understands (event = "valuations:legal_entity:create", etc.)
-// instead of being given Attio's `event_type` / `id.object_id` shape.
-//
-// The `event` enum is built from the entity catalog × {create, update,
-// delete}, matching the outbox-side `actionToEventOp` mapping.
-const WEBHOOK_EVENT_OPS = ['create', 'update', 'delete'] as const;
-const WEBHOOK_EVENT_VALUES: string[] = ENTITIES.flatMap((e) =>
-  WEBHOOK_EVENT_OPS.map((op) => `valuations:${e.table}:${op}`),
-);
-
-const WEBHOOK_EVENT_DESCRIPTOR: SchemaTypeDescriptor = {
-  typeId: WEBHOOK_EVENT_TYPE,
-  displayName: 'Webhook Event',
-  fields: [
-    { fieldId: 'event', displayName: 'Event', kind: 'enum', writable: false, required: false, enumValues: WEBHOOK_EVENT_VALUES },
-    { fieldId: 'timestamp', displayName: 'Timestamp', kind: 'date', writable: false, required: false },
-    { fieldId: 'actor.type', displayName: 'Actor Type', kind: 'enum', writable: false, required: false, enumValues: ['user', 'api-token', 'system'] },
-    { fieldId: 'actor.id', displayName: 'Actor Id', kind: 'string', writable: false, required: false },
-    { fieldId: 'data.id', displayName: 'Record Id', kind: 'string', writable: false, required: false },
-  ],
-  references: ENTITIES.map((e) => ({
-    fieldId: e.displayName,
-    targetTypeId: e.displayName,
-    cardinality: 'one' as const,
-  })),
-};
-
 const DESCRIPTORS_BY_DISPLAY_NAME: Record<string, SchemaTypeDescriptor> = {
   [LEGAL_ENTITY_TYPE]: LEGAL_ENTITY_DESCRIPTOR,
   [INVESTMENT_TYPE]: INVESTMENT_DESCRIPTOR,
@@ -1143,9 +1121,6 @@ const DESCRIPTORS_BY_DISPLAY_NAME: Record<string, SchemaTypeDescriptor> = {
   // the first command edge off a non-Legal-Entity parent), WITH a
   // Transaction-only receipt (see ADD_FUND_DRAWDOWN_DESCRIPTOR above).
   [ADD_FUND_DRAWDOWN_TYPE]: ADD_FUND_DRAWDOWN_DESCRIPTOR,
-  // The webhook-event meta type is a FIXED synthetic sentinel (no name↔id gap),
-  // keyed by its own constant — resolved before the name cache.
-  [WEBHOOK_EVENT_TYPE]: WEBHOOK_EVENT_DESCRIPTOR,
   // The computed valuation type — an edge target only, never a CRUD entity.
   [VALUATION_TYPE]: VALUATION_DESCRIPTOR,
 };
@@ -1175,9 +1150,20 @@ const META_DESCRIPTOR: SchemaTypeDescriptor = {
 };
 
 function descriptorFor(displayName: string): SchemaTypeDescriptor | null {
+  const changed = ENTITIES.find((e) => changeTypeName(e) === displayName);
+  if (changed !== undefined) return describeChange(changedEntity(changed), DESCRIPTORS_BY_DISPLAY_NAME[changed.displayName]);
   const raw = DESCRIPTORS_BY_DISPLAY_NAME[displayName];
   if (!raw) return null;
-  return withDefaultBackingFields(raw);
+  const entity = ENTITY_BY_DISPLAY_NAME[displayName];
+  // Every entity's rows hang their changes off them (changes.ts).
+  return withDefaultBackingFields(
+    entity === undefined ? raw : { ...raw, references: [...raw.references, changesReference(changedEntity(entity))] },
+  );
+}
+
+/** An entity as its changes name it. */
+function changedEntity(entity: EntityDescriptor): ChangedEntity {
+  return { table: entity.table, displayName: entity.displayName, rooted: entity.root === 'collection' };
 }
 
 /**
@@ -1330,19 +1316,31 @@ function staticString(e: Expression): string | undefined {
 
 export class NativeValuationsAdapter extends BaseAdapter {
 
-  /** THE raw→events seam for Valuations webhook deliveries. */
-  async preprocessInbound(input: {
-    raw: unknown;
-    checkpoint?: unknown;
-  }): Promise<{ events: DiscriminableEvent[] }> {
-    return { events: parseValuationsEvents(input.raw) };
+  /** A Valuations webhook delivery: the arrival on its row's `Changes`
+   *  (changes.ts), carrying the row before and after the change. */
+  async preprocessInbound(input: { raw: unknown }): Promise<{ events: []; arrivals: ValuationsChangeArrival[] }> {
+    const arrivals = changeArrivals(input.raw, {
+      entityOfTable: (table) => {
+        const entity = ENTITY_BY_TABLE[table];
+        return entity === undefined ? undefined : changedEntity(entity);
+      },
+      descriptorOf: (entity) => DESCRIPTORS_BY_DISPLAY_NAME[entity.displayName],
+    });
+    return { events: [], arrivals };
   }
+
+  /** A run waits on a record's `Changes` under its id: the key each arrival
+   *  on them names. */
+  readonly arrivals: ArrivalsCapability = {
+    awaitKeys: async ({ edge, heads }: { edge: string; heads: AwaitHead[] }): Promise<AwaitKey[]> => {
+      if (edge !== VALUATIONS_CHANGES_EDGE) {
+        throw new Error(`native-valuations: '${edge}' is not a listenable edge (only '${VALUATIONS_CHANGES_EDGE}')`);
+      }
+      return heads.map((head) => ({ key: head.recordId }));
+    },
+  };
   readonly adapterType = NATIVE_VALUATIONS_ADAPTER_TYPE;
   readonly supportedTriggers = NATIVE_VALUATIONS_MANIFEST.supportedTriggers;
-  /** Unstable positions resolve to the Valuations webhook-event type, except
-   *  the meta root (`metaRecordType`) which resolves to null. Pure config
-   *  consumed by the engine's generic `resolvePositionTypeId`. */
-  readonly webhookEventTypeId = WEBHOOK_EVENT_TYPE;
   readonly metaRecordType = META_RECORD_TYPE;
   private readonly fetchCache = new Map<string, SourcePosition>();
 
@@ -1352,29 +1350,20 @@ export class NativeValuationsAdapter extends BaseAdapter {
 
   // ── Event subscriptions (the listen-reconciliation seam) ─────────────────
   // Self-registration with Valuations via /api/v1/valuations/webhooks, shared
-  // with the platform's Settings provider (webhook.ts). This is what
-  // provisions a webhook when a movement `listen`s to the Valuations instance
-  // (syncListenSubscriptions drives it). Scope-less: the channel is just
-  // (adapter, credential). Valuations has no webhook PATCH, so a changed event
-  // set is deregister-then-register.
+  // with the platform's Settings provider (webhook.ts). One webhook serves
+  // every listen on a connection's `Changes`: it takes every entity's events,
+  // and the host judges each arrival by the record type it landed on.
   async ensureEventSubscription(
     input: EnsureEventSubscriptionInput,
   ): Promise<EventSubscriptionRegistration | undefined> {
+    if (input.edge !== VALUATIONS_CHANGES_EDGE) {
+      throw new Error(`native-valuations: '${input.edge}' is not a listenable edge (only '${VALUATIONS_CHANGES_EDGE}')`);
+    }
+    // The one webhook for this URL is held: it already takes every event.
+    if (input.current?.externalId !== undefined) return undefined;
     const api = await this.sources.api();
     if (api === null) return undefined;
-    if (input.current?.externalId !== undefined) {
-      const unchanged =
-        input.current.events.length === input.events.length &&
-        input.current.events.every((e) => input.events.includes(e));
-      if (unchanged) return undefined;
-      await deregisterValuationsWebhook(api, { externalId: input.current.externalId }).catch((err) => {
-        this.sources.log.warn(
-          '[NativeValuationsAdapter] failed to deregister superseded webhook before recreate',
-          { error: err instanceof Error ? err.message : String(err) },
-        );
-      });
-    }
-    return registerValuationsWebhook(api, { targetUrl: input.callbackUrl, eventTypes: input.events });
+    return registerValuationsWebhook(api, { targetUrl: input.callbackUrl, eventTypes: ENTITIES.flatMap(changeEventsOf) });
   }
 
   async removeEventSubscription(input: RemoveEventSubscriptionInput): Promise<void> {
@@ -1548,6 +1537,9 @@ export class NativeValuationsAdapter extends BaseAdapter {
         writable: false,
         readable: false,
       },
+      // Each entity's change type, which its rows' `Changes` land on: named so
+      // the resolver knows it, never listed (changes.ts).
+      ...ENTITIES.map((e) => changeEntryPoint(changedEntity(e))),
     ];
   }
 
@@ -1574,30 +1566,6 @@ export class NativeValuationsAdapter extends BaseAdapter {
     // descriptor. An unknown name → null.
     const name = await this.resolveTypeRef(typeRef);
     return descriptorFor(name);
-  }
-
-  /**
-   * The event-type union: one entry per Valuations entity, recognised by the
-   * outbox event name `valuations:<table>:<op>`. The engine discriminates an
-   * inbound event against it into a typed entity position — replacing the
-   * `native-valuations:webhook_event` meta-type.
-   */
-  async listEventTypes(): Promise<EventType[]> {
-    return ENTITIES.map((e) => ({
-      // The discriminated position carries the entity's NAME as its positionType
-      // — the engine seeds the inbound root with it directly (no typeId →
-      // displayName restamp). The `match` still keys on the outbox event name.
-      tag: e.displayName,
-      positionType: e.displayName,
-      match: {
-        path: 'event',
-        equals: [
-          `valuations:${e.table}:create`,
-          `valuations:${e.table}:update`,
-          `valuations:${e.table}:delete`,
-        ],
-      },
-    }));
   }
 
   // ── 2. Entity resolution ──
@@ -1715,19 +1683,10 @@ export class NativeValuationsAdapter extends BaseAdapter {
         `NativeValuationsAdapter.getFieldValue expects ${this.adapterType} positions; got ${input.position.adapterType}`,
       );
     }
-    const raw = positionData(input.position);
-    if (!isStablePosition(input.position) && input.position.recordType === null) {
-      // Legacy raw-payload authoring against an UNTYPED position: read dot-paths
-      // (`event`, `actor.type`, `data.after.<field>`) off the whole envelope.
-      // A discriminated event is typed (recordType set) and takes the path below.
-      return readDotPath(raw, input.fieldId);
-    }
-    // Typed position — a discriminated inbound event or a fetched external
-    // record. A discriminated event carries the webhook envelope, so unwrap it
-    // to the record's flat row (the `after` snapshot, `before` on delete); a
-    // fetched record is already that flat row.
-    const data = (webhookEnvelopeRow(raw) ?? raw) as Record<string, unknown> | null | undefined;
+    const data = positionData(input.position) as Record<string, unknown> | null | undefined;
     if (!data) return null;
+    // A change's fields ride its landing by name (changes.ts).
+    if (ENTITIES.some((e) => changeTypeName(e) === input.position.recordType)) return data[input.fieldId] ?? null;
     // `fieldId` is the NATURAL field name and `position.recordType` is the
     // NATURAL type name (the read wrapper stamps it); resolve to the internal
     // field id the payload is keyed by, against that type (Decision #3).
@@ -1763,45 +1722,19 @@ export class NativeValuationsAdapter extends BaseAdapter {
       return results;
     }
 
-    // webhook-event → record traversal: the edge name corresponds to the entity
-    // type (e.g. `Legal Entity`). The trigger filter pins the entity via
-    // `event == 'valuations:<entity>:<op>'`; we infer the entity from the
-    // event payload's `event` field. The webhook-event type is not an entry
-    // point (no resolver entry), and the reference's natural name IS the
-    // entity displayName / typeId — so compare against both directly.
-    if (!isStablePosition(input.position)) {
-      const data = positionData(input.position) as { event?: string; data?: { id?: string; after?: unknown } };
-      if (!data.event || !data.data?.id) return [];
-      const entityName = data.event.split(':')[1];
-      if (!entityName) return [];
-      const entity = ENTITY_BY_TABLE[entityName];
-      if (!entity) return [];
-
-      // The edge name is the entity's display name (the reference's natural
-      // name on the webhook-event descriptor); pickers resolve it via the
-      // schema descriptor's references.
-      const targetName = entity.displayName;
-      if (input.fieldId !== targetName) {
-        return [];
+    // A change's `Record`: the row it is about, as it is now. A deleted one
+    // is none.
+    const changed = ENTITIES.find((e) => changeTypeName(e) === input.position.recordType);
+    if (changed !== undefined) {
+      if (input.fieldId !== VALUATIONS_CHANGE_RECORD_EDGE) return [];
+      const recordId = Reflect.get(positionData(input.position) ?? {}, 'Record Id');
+      if (typeof recordId !== 'string') return [];
+      try {
+        return [{ position: await this.fetchExternalRecord(changed.displayName, recordId) }];
+      } catch (err) {
+        if (isHttp404(err)) return [];
+        throw err;
       }
-
-      const cacheKey = `${this.adapterType}:${targetName}:${data.data.id}`;
-      const cached = this.fetchCache.get(cacheKey);
-      if (cached) return [{ position: cached }];
-
-      // Use `data.after` if present (full snapshot in the webhook payload) so
-      // we don't need an extra REST round-trip for steady-state.
-      const recordData = (data.data.after ?? null) as Record<string, unknown> | null;
-      const position: SourcePosition = recordData
-        ? makeStablePosition({
-            adapterType: this.adapterType,
-            recordId: data.data.id,
-            recordType: targetName,
-            data: recordData,
-          })
-        : await this.fetchExternalRecord(targetName, data.data.id);
-      this.fetchCache.set(cacheKey, position);
-      return [{ position }];
     }
 
     // AddMarkdown receipt → Event/Prices: the command's write result carried
@@ -1988,11 +1921,7 @@ export class NativeValuationsAdapter extends BaseAdapter {
       return this.readDownEdge(downEdge, input);
     }
 
-    // A discriminated inbound event carries the webhook envelope; unwrap it to
-    // the record row so the FK column resolves (a fetched record is already the
-    // flat row). Mirrors `getFieldValue`.
-    const raw = positionData(input.position);
-    const data = (webhookEnvelopeRow(raw) ?? raw) as Record<string, unknown> | null;
+    const data = positionData(input.position) as Record<string, unknown> | null;
     const targetId = data?.[fieldId];
     if (typeof targetId !== 'string') return [];
 
@@ -2113,8 +2042,7 @@ export class NativeValuationsAdapter extends BaseAdapter {
     edge: DownEdgeDescriptor,
     input: GetRelatedInput,
   ): Promise<RelatedResult[]> {
-    const raw = positionData(input.position);
-    const row = (webhookEnvelopeRow(raw) ?? raw) as Record<string, unknown> | null;
+    const row = positionData(input.position) as Record<string, unknown> | null;
     const parentId = row?.id;
     if (typeof parentId !== 'string') return [];
 
@@ -2164,8 +2092,7 @@ export class NativeValuationsAdapter extends BaseAdapter {
     const criteria = parseValuationCriteria(input.where);
     if (!criteria) return []; // date or currency absent — nothing to compute
 
-    const raw = positionData(input.position);
-    const row = (webhookEnvelopeRow(raw) ?? raw) as Record<string, unknown> | null;
+    const row = positionData(input.position) as Record<string, unknown> | null;
     const entityId = row?.id;
     if (typeof entityId !== 'string') return [];
 
@@ -2522,40 +2449,6 @@ export class NativeValuationsAdapter extends BaseAdapter {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
-
-/**
- * The record row inside a Valuations webhook envelope. The outbox worker emits
- * `{event, timestamp, actor, data: {id, before, after}}`; the entity's row is
- * the post-change snapshot (`after`), or the pre-change one on delete
- * (`before`). Returns null when `data` isn't that envelope — e.g. a record
- * fetched from the REST API, which is already the flat row.
- */
-function webhookEnvelopeRow(data: unknown): Record<string, unknown> | null {
-  if (data === null || typeof data !== 'object') return null;
-  const envelope = data as { event?: unknown; data?: { after?: unknown; before?: unknown } };
-  if (
-    typeof envelope.event !== 'string' ||
-    envelope.data === null ||
-    typeof envelope.data !== 'object'
-  ) {
-    return null;
-  }
-  const row = envelope.data.after ?? envelope.data.before ?? null;
-  return row !== null && typeof row === 'object' ? (row as Record<string, unknown>) : null;
-}
-
-function readDotPath(obj: unknown, path: string): unknown {
-  if (obj == null) return undefined;
-  let current: unknown = obj;
-  for (const segment of path.split('.')) {
-    if (current && typeof current === 'object' && segment in (current as Record<string, unknown>)) {
-      current = (current as Record<string, unknown>)[segment];
-    } else {
-      return undefined;
-    }
-  }
-  return current;
-}
 
 /**
  * A create has no existing value to clear, so a field with nothing in it is a

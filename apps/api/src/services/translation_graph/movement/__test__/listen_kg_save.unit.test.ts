@@ -628,31 +628,3 @@ listen to sh {} fire on_row
     expect(result.ok).toBe(true);
   });
 });
-
-describe('manifest ↔ event-node vocabulary pin', () => {
-  // ONE namespace, and it is the platform's: a listen's `events:` selection and
-  // the event node's own `action` axis are the same values, and the deleted
-  // spelling is the one the checker keys the dropped-record-edge behaviour on.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const real = {
-    ...(jest.requireActual('@listen-fire/kg') as typeof import('@listen-fire/kg')),
-    KG_MANIFEST: (jest.requireActual('@listen-fire/kg/manifest') as typeof import('@listen-fire/kg/manifest')).kgManifest({ changeWebhooks: false }),
-  };
-
-  it("the manifest's subscribable events are the event node's own `action` enum", async () => {
-    const adapter = new real.KnowledgeGraphAdapter({
-      store: { ontology: async () => ({ nodeTypes: [], propertyTypes: [], edgeTypes: [] }) } as never,
-      log: console,
-    });
-    const descriptor = await adapter.describe(real.KG_EVENT_TYPE_NAME);
-    const action = descriptor?.fields.find((f) => f.displayName === 'action');
-    expect(action?.enumValues).toEqual([...real.KG_SUBSCRIBABLE_EVENTS]);
-    expect(real.KG_MANIFEST.subscribableEvents).toEqual([...real.KG_SUBSCRIBABLE_EVENTS]);
-  });
-
-  it('the deleted spelling is the one the checker drops live-record edges on', () => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { RECORD_DELETED_ACTION } = require('legacy-lang');
-    expect(real.KG_SUBSCRIBABLE_EVENTS).toContain(RECORD_DELETED_ACTION);
-  });
-});

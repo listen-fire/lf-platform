@@ -94,7 +94,6 @@ import type {
 } from 'movement-engine/public/adapter';
 import { containerAssociation } from 'movement-engine/public/adapter';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
-import type { RecordMutationEvent } from '@listen-fire/kg';
 import {
   makeStablePosition,
   positionData,
@@ -220,7 +219,8 @@ const catalog = staticCatalogSnapshot({
 });
 
 function mutationEvent(overrides: Partial<TriggerEvent> = {}): TriggerEvent {
-  const payload: RecordMutationEvent = {
+  // The graph's 0.12 change event, which the legacy engine seeds from.
+  const payload = {
     recordId: COMPANY_NODE_ID,
     nodeTypeId: 'nt-company',
     changeKind: 'update',

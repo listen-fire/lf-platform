@@ -4,7 +4,8 @@ import type { AdapterManifest } from 'movement-engine/public/adapter';
 
 import { META_RECORD_TYPE } from 'movement-engine/public/catalog';
 
-import { NATIVE_VALUATIONS_ADAPTER_TYPE, NATIVE_VALUATIONS_SUBSCRIBABLE_EVENTS } from './types';
+import { VALUATIONS_CHANGES_EDGE } from './changes';
+import { NATIVE_VALUATIONS_ADAPTER_TYPE } from './types';
 
 /**
  * Static manifest — the construction-free declaration the registry exposes via
@@ -20,23 +21,37 @@ export const NATIVE_VALUATIONS_MANIFEST: AdapterManifest = {
     'when they change.',
   supportedTriggers: ['webhook', 'snapshot', 'mutation'],
   methods: [
-    'listEntryPoints', 'describe', 'listEventTypes', 'getFieldValue', 'preprocessInbound',
+    'listEntryPoints', 'describe', 'getFieldValue', 'preprocessInbound', 'awaitKeys',
     'getRelated', 'createRecord', 'updateRecord', 'deleteRecord',
     'readRecord', 'translateFilter', 'ensureEventSubscription', 'removeEventSubscription',
   ],
   requiredCredentialType: 'NATIVE_VALUATIONS',
   metaRecordType: META_RECORD_TYPE,
   triggerKinds: ['NATIVE_VALUATIONS'],
-  // The Valuations events a `listen to <vals> { events: [...] }` subscribes to —
-  // the `events` listen-config vocabulary, folded into the webhook registration.
-  // `events` is REQUIRED: a Valuations listen must name what it watches.
-  subscribableEvents: [...NATIVE_VALUATIONS_SUBSCRIBABLE_EVENTS],
-  listenConfig: [{ key: 'events', required: true }],
+  // A 0.12 listen (`{ events: ["valuations:legal_entity:update", …] }`, the
+  // only entity it could name) is a listen on a legal entity's `Changes`,
+  // its events compared as `Kind`.
+  listenSettingsBecome: {
+    path: ['Legal Entity', VALUATIONS_CHANGES_EDGE],
+    aliases: ['e', 'c'],
+    keys: {
+      events: {
+        hop: 1,
+        field: 'Kind',
+        op: 'in',
+        values: {
+          'valuations:legal_entity:create': 'created',
+          'valuations:legal_entity:update': 'updated',
+          'valuations:legal_entity:delete': 'deleted',
+        },
+      },
+    },
+  },
   triggerExpectation:
-    'Fires when data changes inside Listen-Fire Valuations (its own webhook, ' +
-    'managed automatically) — the listen MUST name the events it watches, ' +
-    'and only those arrive. Changes made outside Valuations (e.g. in a ' +
-    'spreadsheet that feeds it) are not seen until they land in Valuations.',
+    "Listen on a record's Changes: vals-[e:`Legal Entity`]->-[c:Changes WHERE c.Kind == \"updated\"]->. " +
+    'It fires when a row changes inside Listen-Fire Valuations (its own webhook, managed automatically): ' +
+    'created, updated or deleted, with the row as it was (`Previous`) and as the change left it (`Current`). ' +
+    'Changes made outside Valuations (e.g. in a spreadsheet that feeds it) are not seen until they land in Valuations.',
   vocabulary: {
     // No brand mark — Listen-Fire's own product, not a third-party system.
     eventPhrase: {
