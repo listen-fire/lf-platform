@@ -811,7 +811,7 @@ async function runInDevLoopContext<T>(
  * `movement_scheduler/worker.ts` builds) and dispatches it in-process through
  * `dispatchTriggerByIdEvent` — the same entry the scheduler uses. No HTTP: cron
  * has no inbound route. Author a listener first:
- *   timer = cron(); listen to timer { schedule: "…" } fire <movement>
+ *   listen to cron-[t:Ticks WHERE t.Schedule == "…"]-> fire <movement>
  */
 async function injectCron(args: { movement?: string }) {
   const seed = await ensureDevLoopTeam();
@@ -825,7 +825,7 @@ async function injectCron(args: { movement?: string }) {
       note:
         'No cron movement triggers on the dev-loop team. Author one with ' +
         '`pnpm dev:movement provision --file <f>` where <f> has ' +
-        '`timer = cron()` + `listen to timer { schedule: "…" } fire <movement>`.',
+        '`listen to cron-[t:Ticks WHERE t.Schedule == "…"]-> fire <movement>`.',
     };
   }
 
@@ -921,7 +921,7 @@ async function injectGranola(args: GranolaInjectArgs) {
       seededNoteId: noteId,
       error:
         'No granola movement trigger on the dev-loop team. Run `pnpm dev:granola setup` first ' +
-        '(it saves a movement with `listen to gr {} fire …`).',
+        '(it saves a movement with `listen to gr-[:Meetings]-> fire …`).',
     };
   }
 
@@ -1045,7 +1045,7 @@ async function injectEvertrace(args: EvertraceInjectArgs) {
       seededSignalId: signalId,
       error:
         'No evertrace movement trigger on the dev-loop team. Run `pnpm dev:evertrace setup` first ' +
-        '(it saves a movement with `listen to et {} fire …`).',
+        '(it saves a movement listening on its Signals and list entries).',
     };
   }
 
@@ -1321,7 +1321,7 @@ async function injectDealroom(args: DealroomInjectArgs) {
       seededRoundId: nextId,
       error:
         'No dealroom movement trigger on the dev-loop team. Run `pnpm dev:dealroom setup` first ' +
-        '(it saves a movement with `listen to dr {} fire …`).',
+        '(it saves a movement listening on its funding rounds).',
     };
   }
 
@@ -1419,7 +1419,7 @@ async function injectGmailMessage(args: {
       seeded,
       error:
         'No gmail movement trigger on the dev-loop team. Run `pnpm dev:gmail setup` first ' +
-        '(it saves a movement with `listen to mail {} fire …`).',
+        '(it saves a movement listening on the messages of the inbox).',
     };
   }
 

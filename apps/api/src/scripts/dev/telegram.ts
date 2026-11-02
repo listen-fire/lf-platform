@@ -48,7 +48,7 @@ import { saveMovement } from '../../services/translation_graph/movement/provisio
  * The checker enforces one listener per (instance, config) identity PER
  * PARSED PROGRAM (`packages/legacy-lang/checker/check.ts` —
  * `MOV_LISTEN_DUPLICATE`, unchanged since the listen-derived-triggers design
- * of 2026-06-10): `listen to tg {}` repeated three times in one file collides
+ * of 2026-06-10): `listen to tg-[:Messages]->` repeated three times in one file collides
  * on identity regardless of which movement each fires, and the Telegram
  * adapter declares no `triggerConfig` vocabulary to differentiate them with.
  * That's a per-file authoring constraint, not a per-team one — dispatch fans
@@ -62,11 +62,9 @@ import { saveMovement } from '../../services/translation_graph/movement/provisio
  * idempotent per movement.
  */
 const TELEGRAM_VOICE_MOVEMENT = `
-import { telegram, slack } from adapters
-import { \`Dev Loop Telegram\`, \`Dev Loop Slack\` } from credentials
 
-tg   = connect telegram using \`Dev Loop Telegram\`
-chat = connect slack using \`Dev Loop Slack\`
+tg   = connect \`@lf/telegram\` using \`Dev Loop Telegram\`
+chat = connect \`@lf/slack\` using \`Dev Loop Slack\`
 
 node ExtractedShape: "the relevant information in the content" {
   node update: "Each distinct update, report, or request in this message — including anything SPOKEN in an attached voice note or audio file (the audio's transcript is part of the source text)." {
@@ -87,16 +85,14 @@ function telegram_voice_intake(m: <tg-[:\`Message\`]->>) {
   }
 }
 
-listen to tg {} fire telegram_voice_intake
+listen to tg-[:Messages]-> fire telegram_voice_intake
 `;
 
 /** `write m-[:Replies]->` threads a reply under the inbound message (chat +
  *  reply target from the parent, never a field). */
 const TELEGRAM_REPLY_MOVEMENT = `
-import { telegram } from adapters
-import { \`Dev Loop Telegram\` } from credentials
 
-tg = connect telegram using \`Dev Loop Telegram\`
+tg = connect \`@lf/telegram\` using \`Dev Loop Telegram\`
 
 function tg_reply(m: <tg-[:\`Message\`]->>) {
   write m-[:Replies]-> {
@@ -104,16 +100,14 @@ function tg_reply(m: <tg-[:\`Message\`]->>) {
   }
 }
 
-listen to tg {} fire tg_reply
+listen to tg-[:Messages]-> fire tg_reply
 `;
 
 /** `write u-[:Messages]->` DMs the linked dev-loop user (their linked-user id
  *  IS the private chat id). */
 const TELEGRAM_DM_MOVEMENT = `
-import { telegram } from adapters
-import { \`Dev Loop Telegram\` } from credentials
 
-tg = connect telegram using \`Dev Loop Telegram\`
+tg = connect \`@lf/telegram\` using \`Dev Loop Telegram\`
 
 function tg_dm(m: <tg-[:\`Message\`]->>) {
   tg-[u:\`Linked Users\` WHERE u.\`Email\` == "${DEV_LOOP_EMAIL}"]-> {
@@ -123,7 +117,7 @@ function tg_dm(m: <tg-[:\`Message\`]->>) {
   }
 }
 
-listen to tg {} fire tg_dm
+listen to tg-[:Messages]-> fire tg_dm
 `;
 
 async function main() {

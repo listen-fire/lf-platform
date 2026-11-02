@@ -25,10 +25,9 @@ import '../../services';
 
 import fs from 'node:fs';
 
-import { referencedConstructions } from 'legacy-lang';
 
 import { checkMovementSource } from '../../services/translation_graph/movement/authoring';
-import { movementCatalogSnapshotForTeam } from '../../services/translation_graph/movement/catalog';
+import { constructionsOf, movementCatalogSnapshotForTeam } from '../../services/translation_graph/movement/catalog';
 import { ensureDevLoopTeam } from './_lib';
 
 import type { TeamId } from '../../generated/kysely/core/Team';
@@ -69,7 +68,7 @@ async function main() {
   const typed = await movementCatalogSnapshotForTeam(teamId as TeamId, { source });
   const snapshot = typed.snapshot;
 
-  for (const ref of referencedConstructions(source)) {
+  for (const ref of constructionsOf(source)) {
     const spec = snapshot.adapters[ref.adapter];
     const positioned =
       ref.constructionArgs !== undefined && Object.keys(ref.constructionArgs).length > 0

@@ -29,7 +29,7 @@
  * from the inbound message, never a `To` field). They're provisioned as two
  * separate programs (mirrors telegram.ts) — the checker's MOV_LISTEN_DUPLICATE
  * rule keys off `instance::config` only, not the fired movement, so two
- * `listen to wa {}` statements in the SAME file collide even though they fire
+ * `listen to wa-[:Messages]->` statements in the SAME file collide even though they fire
  * different movements.
  *
  * See docs/dev-loop.md "Worked example: inbound WhatsApp media".
@@ -69,11 +69,9 @@ const DEFAULT_SENDER_PHONE = '+15551234567';
  *     The `(send)` sentinels are gone.
  */
 const WHATSAPP_INTAKE_MOVEMENT = `
-import { whatsapp, slack } from adapters
-import { \`Dev Loop Slack\` } from credentials
 
-wa   = connect whatsapp
-chat = connect slack using \`Dev Loop Slack\`
+wa   = connect \`@lf/whatsapp\`
+chat = connect \`@lf/slack\` using \`Dev Loop Slack\`
 
 function whatsapp_intake(m: <wa-[:\`Message\`]->>) {
   chat-[ch:Channels WHERE ch.\`Name\` == "dealflow"]-> {
@@ -83,13 +81,12 @@ function whatsapp_intake(m: <wa-[:\`Message\`]->>) {
   }
 }
 
-listen to wa {} fire whatsapp_intake
+listen to wa-[:Messages]-> fire whatsapp_intake
 `;
 
 const WHATSAPP_REPLY_MOVEMENT = `
-import { whatsapp } from adapters
 
-wa = connect whatsapp
+wa = connect \`@lf/whatsapp\`
 
 function wa_reply(m: <wa-[:\`Message\`]->>) {
   write m-[:Reactions]-> { Emoji: "👍" }
@@ -97,18 +94,16 @@ function wa_reply(m: <wa-[:\`Message\`]->>) {
   write m-[:Replies]-> { Body: "Noted: \${m.\`Body\`}" }
 }
 
-listen to wa {} fire wa_reply
+listen to wa-[:Messages]-> fire wa_reply
 `;
 
 // Reads a document attached to the message through the file-text seam (a PDF's
 // text layer needs no OCR) and posts what it says. Proof of the document path:
 // `pnpm dev:inject whatsapp --media --media-type document`, then `dev:inspect slack`.
 const WHATSAPP_DOCUMENT_MOVEMENT = `
-import { whatsapp, slack } from adapters
-import { \`Dev Loop Slack\` } from credentials
 
-wa   = connect whatsapp
-chat = connect slack using \`Dev Loop Slack\`
+wa   = connect \`@lf/whatsapp\`
+chat = connect \`@lf/slack\` using \`Dev Loop Slack\`
 
 node ExtractedShape: "the relevant information in the content" {
   node company: "each company named in the attached document" {
@@ -130,7 +125,7 @@ function wa_document_intake(m: <wa-[:\`Message\`]->>) {
   }
 }
 
-listen to wa {} fire wa_document_intake
+listen to wa-[:Messages]-> fire wa_document_intake
 `;
 
 /** Idempotently map `phone` → the dev-loop user so `resolveSenderTeam` finds a

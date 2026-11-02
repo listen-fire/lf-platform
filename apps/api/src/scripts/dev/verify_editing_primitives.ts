@@ -17,15 +17,12 @@ const BASE = process.env.API_BASE_URL ?? 'http://localhost:3500';
 const MOVEMENT_NAME = 'editing_primitives_probe';
 
 function program(name: string, note: string): string {
-  return `import { manual } from adapters
-
-runs = connect manual
-
-function ${name}(go: <runs-[:Invocation]->>) {
+  return `
+function ${name}(go: <manual-[:Invocations]->>) {
   x = "${note}"
 }
 
-listen to runs {} fire ${name}
+listen to manual-[:Invocations]-> fire ${name}
 `;
 }
 
@@ -130,16 +127,13 @@ async function main(): Promise<void> {
 
   // 4. Ambiguous anchor -> 400.
   const ambiguousName = 'ambiguous_probe';
-  const ambiguousSource = `import { manual } from adapters
-
-runs = connect manual
-
-function ${ambiguousName}(go: <runs-[:Invocation]->>) {
+  const ambiguousSource = `
+function ${ambiguousName}(go: <manual-[:Invocations]->>) {
   a = "dup"
   b = "dup"
 }
 
-listen to runs {} fire ${ambiguousName}
+listen to manual-[:Invocations]-> fire ${ambiguousName}
 `;
   const seededAmbiguous = await call(key, 'POST', '/automations/save', {
     source: ambiguousSource,

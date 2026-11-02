@@ -14,42 +14,32 @@ const CONNECTIONS: Record<string, string> = {
 const connectionForAdapter = (adapter: string) => CONNECTIONS[adapter];
 
 describe('rewriteConnectionNames', () => {
-  it('rewires an illustrative connection onto the workspace one, import and construction', () => {
+  it('rewires an illustrative connection onto the workspace one', () => {
     const { source, unresolved } = rewriteConnectionNames({
       source: [
-        'import { attio } from adapters',
-        'import { acme } from credentials',
-        'crm = attio(credentials: acme)',
-        'movement m(x: <crm-[:`Webhook Event`]->>) { }',
+        'crm = connect `@lf/attio` using acme',
+        'function m(c: <crm-[:CompanyChange]->>) { }',
       ].join('\n'),
       connectionForAdapter,
     });
-    expect(source).toContain('import { `Dev Loop Attio` } from credentials');
-    expect(source).toContain('crm = attio(credentials: `Dev Loop Attio`)');
+    expect(source).toContain('crm = connect `@lf/attio` using `Dev Loop Attio`');
     expect(unresolved).toEqual([]);
   });
 
   it('rewires each adapter to its OWN connection', () => {
     const { source } = rewriteConnectionNames({
       source: [
-        'import { attio, slack } from adapters',
-        'import { main_crm, team_chat } from credentials',
-        'crm = attio(credentials: main_crm)',
-        'chat = slack(credentials: team_chat)',
+        'crm = connect `@lf/attio` using main_crm',
+        'chat = connect `@lf/slack` using team_chat',
       ].join('\n'),
       connectionForAdapter,
     });
-    expect(source).toContain('import { `Dev Loop Attio`, `Dev Loop Slack` } from credentials');
-    expect(source).toContain('attio(credentials: `Dev Loop Attio`)');
-    expect(source).toContain('slack(credentials: `Dev Loop Slack`)');
+    expect(source).toContain('crm = connect `@lf/attio` using `Dev Loop Attio`');
+    expect(source).toContain('chat = connect `@lf/slack` using `Dev Loop Slack`');
   });
 
   it('leaves a name alone (and reports it) when the workspace has no such connection', () => {
-    const source = [
-      'import { `native-valuations` } from adapters',
-      "import { `Toni's Valuations` } from credentials",
-      "vals = `native-valuations`(credentials: `Toni's Valuations`)",
-    ].join('\n');
+    const source = "vals = connect #`native-valuations` using `Toni's Valuations`";
     const rewritten = rewriteConnectionNames({ source, connectionForAdapter });
     expect(rewritten.source).toBe(source);
     expect(rewritten.unresolved).toEqual([
@@ -59,14 +49,10 @@ describe('rewriteConnectionNames', () => {
 
   it('does not rewrite a name that merely shares a prefix', () => {
     const { source } = rewriteConnectionNames({
-      source: [
-        'import { attio } from adapters',
-        'import { acme } from credentials',
-        'acme_records = attio(credentials: acme)',
-      ].join('\n'),
+      source: 'acme_records = connect `@lf/attio` using acme',
       connectionForAdapter,
     });
-    expect(source).toContain('acme_records = attio(credentials: `Dev Loop Attio`)');
+    expect(source).toContain('acme_records = connect `@lf/attio` using `Dev Loop Attio`');
   });
 });
 

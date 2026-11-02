@@ -17,7 +17,7 @@
 //     connections are its own. Rewire each probe's credential to the dev-loop
 //     connection for the SAME adapter, so the demand closure resolves. The
 //     alias→adapter mapping is read off the probe itself
-//     (`referencedConstructions`), never a hand-maintained table — a table
+//     (`constructionsOf`), never a hand-maintained table — a table
 //     would go stale the first time a chapter invents a new alias, and go stale
 //     silently (an unresolved connection leaves the instance untyped, which is
 //     the checker staying silent, not erroring).
@@ -30,7 +30,7 @@
 //     absence of a claim and must never overwrite a real one.
 
 import { type InstanceSchema, type PositionSchema } from 'movement-lang';
-import { referencedConstructions } from 'legacy-lang';
+import { constructionsOf } from '../../../services/translation_graph/movement/catalog';
 
 import { getMovementHandbook } from '../../../lib/knowledge/movement_handbook';
 
@@ -91,7 +91,7 @@ export function rewriteConnectionNames(input: {
 }): { source: string; unresolved: Array<{ adapter: string; authored: string }> } {
   let source = input.source;
   const unresolved: Array<{ adapter: string; authored: string }> = [];
-  for (const ref of referencedConstructions(input.source)) {
+  for (const ref of constructionsOf(input.source)) {
     if (ref.credential === undefined) continue;
     const target = input.connectionForAdapter(ref.adapter);
     if (target === undefined) {

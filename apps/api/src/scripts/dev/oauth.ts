@@ -25,19 +25,16 @@ import { saveMovement } from '../../services/translation_graph/movement/provisio
 
 function proofFile(): string {
   return `
-import { manual, dropbox } from adapters
-import { \`${DEV_LOOP_DROPBOX_CREDENTIAL_NAME}\` } from credentials
 
-runs = connect manual
-drive = connect dropbox using \`${DEV_LOOP_DROPBOX_CREDENTIAL_NAME}\`
+drive = connect \`@lf/dropbox\` using \`${DEV_LOOP_DROPBOX_CREDENTIAL_NAME}\`
 
-function oauth_refresh_proof(go: <runs-[:Invocation]->>) {
+function oauth_refresh_proof(go: <manual-[:Invocations]->>) {
   write drive-[:Folders]-> {
     Name: "oauth-refresh-proof"
   }
 }
 
-listen to runs {} fire oauth_refresh_proof
+listen to manual-[:Invocations]-> fire oauth_refresh_proof
 `;
 }
 

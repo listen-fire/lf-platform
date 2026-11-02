@@ -54,12 +54,10 @@ async function ensureCredential(input: {
 }
 
 const MOVEMENT = `
-import { telegram, ask, attio } from adapters
-import { \`Dev Loop Telegram\`, \`Dev Loop Attio\` } from credentials
 
-tg = connect telegram using \`Dev Loop Telegram\`
-questions = connect ask
-crm = connect attio using \`Dev Loop Attio\`
+tg = connect \`@lf/telegram\` using \`Dev Loop Telegram\`
+questions = connect \`@lf/ask\`
+crm = connect \`@lf/attio\` using \`Dev Loop Attio\`
 
 function race_fanout_probe(m: <tg-[:\`Message\`]->>) {
   names = crm-[c:Companies]-> {
@@ -86,7 +84,7 @@ function race_fanout_probe(m: <tg-[:\`Message\`]->>) {
   }
 }
 
-listen to tg {} fire race_fanout_probe
+listen to tg-[:Messages]-> fire race_fanout_probe
 `;
 
 async function main() {

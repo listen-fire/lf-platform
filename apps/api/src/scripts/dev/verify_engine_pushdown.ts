@@ -96,14 +96,11 @@ function affinityOnFake(): AffinityAdapter {
 }
 
 function movementSource(body: string): string {
-  return `import { manual, affinity } from adapters
-import { affinity_cred } from credentials
-runs = connect manual
-crm = connect affinity using affinity_cred
-function lookup(go: <runs-[:Invocation]->>) {
+  return `crm = connect \`@lf/affinity\` using affinity_cred
+function lookup(go: <manual-[:Invocations]->>) {
 ${body}
 }
-listen to runs {} fire lookup
+listen to manual-[:Invocations]-> fire lookup
 `;
 }
 

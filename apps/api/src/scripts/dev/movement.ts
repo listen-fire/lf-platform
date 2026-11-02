@@ -61,13 +61,13 @@ import { saveMovement } from '../../services/translation_graph/movement/provisio
 import { runMovementNow } from '../../services/translation_graph/movement/run_now';
 import { getMovementRowByName } from '../../services/translation_graph/movement/store';
 import {
+  constructionsOf,
   movementCatalogForTeam,
   type TeamMovementCatalog,
 } from '../../services/translation_graph/movement/catalog';
 import { indexManifestsByName, listAdapterManifests } from '../../services/translation_graph/adapters/registry';
 
 import { type InstanceSchema } from 'movement-lang';
-import { referencedConstructions } from 'legacy-lang';
 
 import {
   describableAdapters,
@@ -100,12 +100,10 @@ import {
  */
 const FIXTURE_MOVEMENT_NAME = 'dealflow_intake';
 const FIXTURE_MOVEMENT = `
-import { email, attio, slack } from adapters
-import { \`Dev Loop Attio\`, \`Dev Loop Slack\` } from credentials
 
-inbox = connect email
-crm   = connect attio using \`Dev Loop Attio\`
-chat  = connect slack using \`Dev Loop Slack\`
+inbox = connect \`@lf/email\`
+crm   = connect \`@lf/attio\` using \`Dev Loop Attio\`
+chat  = connect \`@lf/slack\` using \`Dev Loop Slack\`
 
 function dealflow_intake(m: <inbox-[:Email]->>) {
   co = write crm-[:Companies]-> {
@@ -120,7 +118,7 @@ function dealflow_intake(m: <inbox-[:Email]->>) {
   }
 }
 
-listen to inbox { key: "dealflow-intake" } fire dealflow_intake
+listen to inbox-[e:Emails WHERE e.Key == "dealflow-intake"]-> fire dealflow_intake
 
 function dealflow_reply(sm: <chat-[:Message]->>) {
   write sm-[:Replies]-> {
@@ -129,7 +127,7 @@ function dealflow_reply(sm: <chat-[:Message]->>) {
   }
 }
 
-listen to chat { events: ["message"] } fire dealflow_reply
+listen to chat-[:Channels]->-[:Messages]-> fire dealflow_reply
 `;
 
 
@@ -160,10 +158,9 @@ interface CapturedCatalog {
   describable: (constructed: Iterable<string>) => string[];
 }
 
-/** The adapter SPEC (construction signature + the `listen { … }` config
- *  vocabulary) is as much a part of what an example must be true about as the
- *  instance schema — `listen to timer { schedule: … }` is checked against it —
- *  so both are captured. Construction-free, hence read off any catalog. */
+/** The adapter SPEC (construction signature and what it declares of its
+ *  listenable edges) is as much a part of what an example must be true about
+ *  as the instance schema, so both are captured. Construction-free, hence read off any catalog. */
 function specOf(catalog: TeamMovementCatalog['catalog'], adapter: string): unknown {
   const { schema: _bundled, ...spec } = (catalog.adapter(adapter) ?? {}) as Record<
     string,
@@ -387,7 +384,7 @@ async function main() {
       // A capture missing an adapter the examples construct would write a
       // fixture that quietly checks those examples against nothing.
       const absent = captured
-        .describable(sources.flatMap((s) => referencedConstructions(s.source).map((r) => r.adapter)))
+        .describable(sources.flatMap((s) => constructionsOf(s.source).map((r) => r.adapter)))
         .filter((adapter) => captured.schemas[adapter] === undefined)
         .sort();
       if (absent.length > 0) {
@@ -425,7 +422,7 @@ async function main() {
 
   if (command === 'run') {
     // Inject an invocation event on the saved movement's MANUAL channel
-    // (`go = manual()` + `listen to go {} fire <movement>`) — the same
+    // (`listen to manual-[:Invocations]-> fire <movement>`) — the same
     // dispatch path the editor's "Run now" button uses (movement.runNow).
     const name = args[1];
     if (!name) {

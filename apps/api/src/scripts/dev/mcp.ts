@@ -32,20 +32,17 @@ import { startFakeMcpServer } from './lib/fake_mcp';
 const TOKEN = process.env.DEV_MCP_TOKEN ?? 'dev-mcp-token';
 const CREDENTIAL = 'Dev Loop MCP';
 
-const PROBE = `import { manual, mcp } from adapters
-import { \`${CREDENTIAL}\` } from credentials
+const PROBE = `
+tracker = connect \`@lf/mcp\` using \`${CREDENTIAL}\`
 
-go = connect manual
-tracker = connect mcp using \`${CREDENTIAL}\`
-
-function mcp_probe(run: <go-[:Invocation]->>) {
+function mcp_probe(run: <manual-[:Invocations]->>) {
   issue = write tracker-[:create_issue]-> { title: "Dev loop probe", team: "ENG" }
   tracker-[r:search_issues WHERE r.query == "probe"]-> {
     write tracker-[:create_issue]-> { title: "seen \${r.count}: \${issue.text}", team: "OPS" }
   }
 }
 
-listen to go {} fire mcp_probe
+listen to manual-[:Invocations]-> fire mcp_probe
 `;
 
 function flagValue(args: string[], name: string): string | undefined {

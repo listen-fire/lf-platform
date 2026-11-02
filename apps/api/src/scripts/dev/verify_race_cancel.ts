@@ -31,14 +31,11 @@ import { saveMovement } from '../../services/translation_graph/movement/provisio
  * comfortable window to answer first on the other leg.
  */
 const RACE_CANCEL = `
-import { manual, ask, slack } from adapters
-import { \`Dev Loop Slack\` } from credentials
 
-runs = connect manual
-questions = connect ask
-chat = connect slack using \`Dev Loop Slack\`
+questions = connect \`@lf/ask\`
+chat = connect \`@lf/slack\` using \`Dev Loop Slack\`
 
-function race_cancel_probe(go: <runs-[:Invocation]->>) {
+function race_cancel_probe(go: <manual-[:Invocations]->>) {
   q = write questions-[:Provide]-> {
     Prompt: "Which way?"
     \`Answer Type\`: "text"
@@ -64,7 +61,7 @@ function race_cancel_probe(go: <runs-[:Invocation]->>) {
   }
 }
 
-listen to runs {} fire race_cancel_probe
+listen to manual-[:Invocations]-> fire race_cancel_probe
 `;
 
 /**
@@ -74,11 +71,8 @@ listen to runs {} fire race_cancel_probe
  * the single record a WHERE narrows to.
  */
 const LANG_SURFACE = `
-import { manual, slack } from adapters
-import { \`Dev Loop Slack\` } from credentials
 
-runs = connect manual
-chat = connect slack using \`Dev Loop Slack\`
+chat = connect \`@lf/slack\` using \`Dev Loop Slack\`
 
 type Thesis = <"Consumer" | "Infra" | "Health">
 
@@ -89,7 +83,7 @@ node FoundShape: "the relevant information in the content" {
   }
 }
 
-function lang_surface_probe(go: <runs-[:Invocation]->>) {
+function lang_surface_probe(go: <manual-[:Invocations]->>) {
   found = extractOne([go.\`Text\`], FoundShape)
   if (found != null) {
     rows     = found-[f:finding]-> { return { thesis: coalesce(f.thesis, "Consumer"), line: coalesce(f.headline, "") } }
@@ -105,7 +99,7 @@ function lang_surface_probe(go: <runs-[:Invocation]->>) {
   }
 }
 
-listen to runs {} fire lang_surface_probe
+listen to manual-[:Invocations]-> fire lang_surface_probe
 `;
 
 async function main() {

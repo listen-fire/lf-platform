@@ -228,7 +228,7 @@ function packageOf(manifest: AdapterManifest): Pick<AdapterSpec, 'package'> {
 
 /** What `source` constructs, each by its adapter's key: a `connect` names a
  *  module installed from a package by that package (``connect `@lf/slack` ``). */
-function constructionsOf(source: string): ConstructionRef[] {
+export function constructionsOf(source: string): ConstructionRef[] {
   return referencedConstructions(source).map((ref) => ({ ...ref, adapter: adapterKeyNamed(ref.adapter) }));
 }
 

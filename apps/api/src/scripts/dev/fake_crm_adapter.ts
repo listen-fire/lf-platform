@@ -67,7 +67,7 @@ import { META_RECORD_TYPE, makeStablePosition, positionData } from 'movement-eng
 import { AdapterBadRequestError, createAdapterProtocolHandler } from 'module-kit';
 
 
-/** Slug the engine routes on — the `acme_crm` in `import { acme_crm } from adapters`. */
+/** Slug the engine routes on — the `acme_crm` in `connect #acme_crm`. */
 export const FAKE_CRM_ADAPTER_TYPE = 'acme_crm';
 /** The single writable record type this CRM exposes. */
 export const FAKE_CRM_COMPANY_TYPE = 'Company';

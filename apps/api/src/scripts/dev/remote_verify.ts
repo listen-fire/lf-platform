@@ -43,13 +43,11 @@ import {
  *  Company to it. Every name is the adapter's natural name (its displayName),
  *  resolved to the remote server's internal id at the wire boundary. */
 const REMOTE_MOVEMENT = `
-import { manual, acme_crm } from adapters
-crm = connect acme_crm
-runs = connect manual
-function push_company(go: <runs-[:Invocation]->>) {
+crm = connect #acme_crm
+function push_company(go: <manual-[:Invocations]->>) {
   write crm-[:Company]-> { Name: "Vireo Robotics" }
 }
-listen to runs {} fire push_company
+listen to manual-[:Invocations]-> fire push_company
 `;
 
 async function main(): Promise<void> {

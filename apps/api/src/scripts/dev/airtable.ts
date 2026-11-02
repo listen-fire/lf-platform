@@ -16,14 +16,13 @@
  *      ensures both so `setup` works standalone),
  *   2. a base + table seeded into fake-channels (so the movement's
  *      `<at-[:\`Deals\`]->>` type resolves at author time), and
- *   3. a movement that `listen`s to that (base, table) for `record.created`
- *      ONLY and writes each new record to the fake Slack `dealflow` channel,
- *      PLUS its positioned twin (`airtable_intake_positioned`): the instance
- *      constructed AT the base (`base: "Dev Base"`), a table-only listen and a
- *      table-only signature — the position supplies the base hop. Both
- *      listens resolve to ONE subscription channel (channel identity is the
- *      RESOLVED address), so a single inject fires BOTH movements: two Slack
- *      messages, "Airtable record created: …" and "Positioned intake: …".
+ *   3. a movement that listens to that (base, table)'s `Changes` for rows
+ *      created ONLY and writes each new row to the fake Slack `dealflow`
+ *      channel, PLUS its positioned twin (`airtable_intake_positioned`): the
+ *      connection started AT the base (`base: "Dev Base"`), its listen
+ *      beginning at the base's `Tables`. A single inject fires BOTH
+ *      movements: two Slack messages, "Airtable record created: …" and
+ *      "Positioned intake: …".
  *
  * Saving the movement runs the REAL listen-reconciliation path
  * (`syncListenSubscriptions` → `ensureEventSubscription` → `createWebhook`
@@ -37,7 +36,7 @@
  *
  * and verify with `pnpm dev:inspect slack` / `pnpm dev:inspect airtable` +
  * `tail -F .dev-loop/loop.log`. An `--event update` proves selection holds:
- * the webhook only subscribed to creates, so the change is never queued and no
+ * both listens take only `created` changes, so the update arrives and no
  * movement runs. See docs/dev-loop.md "dev:inject airtable-webhook".
  */
 
@@ -67,42 +66,21 @@ export const DEV_AIRTABLE_BASE_NAME = 'Dev Base';
 export const DEV_AIRTABLE_TABLE_ID = 'tblDeals';
 export const DEV_AIRTABLE_TABLE_NAME = 'Deals';
 
-/** The proof movement: listens to the seeded (base, table) for record creates
- *  ONLY and writes each new record to the fake Slack `dealflow` channel (so a
- *  run is observable via `pnpm dev:inspect slack`).
+/** The proof movement: listens to the seeded (base, table) for rows created
+ *  ONLY and writes each new row to the fake Slack `dealflow` channel (so a run
+ *  is observable via `pnpm dev:inspect slack`).
  *
- *  THE EVENT AND THE ROW ARE DIFFERENT NODES — and THE EVENT IS JUST A NODE:
- *  the parameter is `Record Change`, an occurrence, its change kind the node's
- *  own `action` field pinned in the address (`Record Created` was only ever a
- *  nominal name for `` Record Change WHERE `action` == "record.created" ``).
- *  The row that changed hangs off the event's `record` edge. This adapter used
- *  to seed the row AS the event, which is why a movement could declare
- *  `<at-[:`Deals`]->>` with nothing to check it against.
- *
- *  NO `base:`. The event is an edge off the META node and lives behind no
- *  container: a listen HANDS you the event position, so naming it must not
- *  require having walked to a base. Positioning the instance was only ever
- *  needed to name a TABLE, and this movement never names one.
- *
- *  THE SIGNATURE NAMES THE FULL ADDRESS. A type annotation IS an address, so
- *  the parameter says which event, in which base, in which table — and the
- *  listen must produce one that satisfies it. That is not a restatement of the
- *  listen: it is PARAMETER vs ARGUMENT. `f(x: int)` and `f(3)` both "say int",
- *  and nobody calls that duplication — it is what type checking IS. Point the
- *  listen at another table and this stops compiling, which is the whole reason
- *  the address exists: two listens narrowing differently used to be SILENT.
- *
- *  plans/2026-07-10-adapter-entry-positions/8_event_edges.md */
+ *  The listen walks to the table by its ids and ends on the table's
+ *  `Changes`, narrowed to `created`: one change per row an edit touched,
+ *  landing on the table's own change type (`Deals Change`), which the
+ *  parameter names. The row is the change's `Record`, read from Airtable when
+ *  the function walks it. */
 const AIRTABLE_MOVEMENT = `
-import { airtable, slack } from adapters
-import { \`Dev Loop Airtable\`, \`Dev Loop Slack\` } from credentials
+at   = connect \`@lf/airtable\` using \`Dev Loop Airtable\`
+chat = connect \`@lf/slack\` using \`Dev Loop Slack\`
 
-at   = connect airtable using \`Dev Loop Airtable\`
-chat = connect slack using \`Dev Loop Slack\`
-
-function airtable_intake(e: <at-[:\`Record Change\`
-      WHERE \`action\` == "record.created" AND \`base\` == "${DEV_AIRTABLE_BASE_ID}" AND \`table\` == "${DEV_AIRTABLE_TABLE_ID}"]->>) {
-  e-[r:Record]-> {
+function airtable_intake(c: <at-[:\`${DEV_AIRTABLE_TABLE_NAME} Change\`]->>) {
+  c-[r:Record]-> {
     chat-[ch:Channels WHERE ch.\`Name\` == "dealflow"]-> {
       write ch-[:Messages]-> {
         Message: "Airtable record created: \${r.\`Name\`} (stage \${r.\`Stage\`})"
@@ -111,32 +89,19 @@ function airtable_intake(e: <at-[:\`Record Change\`
   }
 }
 
-listen to at { base: "${DEV_AIRTABLE_BASE_ID}", table: "${DEV_AIRTABLE_TABLE_ID}", events: ["record.created"] } fire airtable_intake
+listen to at-[b:Bases WHERE b.Id == "${DEV_AIRTABLE_BASE_ID}"]->-[t:Tables WHERE t.Id == "${DEV_AIRTABLE_TABLE_ID}"]->-[c:Changes WHERE c.Kind == "created"]-> fire airtable_intake
 `;
 
-/** The POSITIONED twin, a separate movement file. EVENT EDGES HANG OFF
- *  POSITIONS: the instance starts AT the base (`base: "Dev Base"` — by NAME),
- *  so the base hop of the listen's address comes from the position and the
- *  listen names ONLY the table. The signature is likewise table-only — a
- *  COMPLETE address relative to the position.
- *
- *  CHANNEL IDENTITY IS THE RESOLVED ADDRESS: provisioning resolves
- *  position+config → { base: appDevLoop, table: tblDeals } (persisted on the
- *  trigger as `resolved_address`), which keys the SAME subscription channel as
- *  the unpositioned movement's full-config listen — one webhook, both
- *  movements fire on an inject.
- *
- *  plans/2026-07-10-adapter-entry-positions/8_event_edges.md */
+/** The POSITIONED twin, a separate movement file: the connection starts AT
+ *  the base (`base: "Dev Base"`, by name), so its listen begins at the base's
+ *  `Tables` and names only the table. Both listens hear the same table, so a
+ *  single inject fires both movements. */
 const AIRTABLE_POSITIONED_MOVEMENT = `
-import { airtable, slack } from adapters
-import { \`Dev Loop Airtable\`, \`Dev Loop Slack\` } from credentials
+at   = connect \`@lf/airtable\` using \`Dev Loop Airtable\` { base: "${DEV_AIRTABLE_BASE_NAME}" }
+chat = connect \`@lf/slack\` using \`Dev Loop Slack\`
 
-at   = connect airtable using \`Dev Loop Airtable\` { base: "${DEV_AIRTABLE_BASE_NAME}" }
-chat = connect slack using \`Dev Loop Slack\`
-
-function airtable_intake_positioned(e: <at-[:\`Record Change\`
-      WHERE \`action\` == "record.created" AND \`table\` == "${DEV_AIRTABLE_TABLE_ID}"]->>) {
-  e-[r:Record]-> {
+function airtable_intake_positioned(c: <at-[:\`${DEV_AIRTABLE_TABLE_NAME} Change\`]->>) {
+  c-[r:Record]-> {
     chat-[ch:Channels WHERE ch.\`Name\` == "dealflow"]-> {
       write ch-[:Messages]-> {
         Message: "Positioned intake: \${r.\`Name\`} (stage \${r.\`Stage\`})"
@@ -145,7 +110,7 @@ function airtable_intake_positioned(e: <at-[:\`Record Change\`
   }
 }
 
-listen to at { table: "${DEV_AIRTABLE_TABLE_ID}", events: ["record.created"] } fire airtable_intake_positioned
+listen to at-[t:Tables WHERE t.Id == "${DEV_AIRTABLE_TABLE_ID}"]->-[c:Changes WHERE c.Kind == "created"]-> fire airtable_intake_positioned
 `;
 
 

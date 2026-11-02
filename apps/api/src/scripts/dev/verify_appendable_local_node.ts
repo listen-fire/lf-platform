@@ -31,13 +31,10 @@ const FAKE_CHANNELS_URL = process.env.FAKE_CHANNELS_URL || 'http://localhost:555
 // The exact syntax taught in the handbook's `collect-what-you-wrote` section
 // (listen-fire's packages/handbook/chapters/anatomy.ts), against
 // the seeded dev-loop team's Slack credential and its `dealflow` channel.
-const SOURCE = `import { manual, slack } from adapters
-import { \`Dev Loop Slack\` } from credentials
+const SOURCE = `
+chat = connect \`@lf/slack\` using \`Dev Loop Slack\`
 
-runs = connect manual
-chat = connect slack using \`Dev Loop Slack\`
-
-function ${MOVEMENT_NAME}(go: <runs-[:Invocation]->>) {
+function ${MOVEMENT_NAME}(go: <manual-[:Invocations]->>) {
   sent = node { messages: <chat-[:Channels]->-[:Messages]->> }
 
   chat-[ch:Channels WHERE ch.\`Name\` == "dealflow"]-> {
@@ -57,7 +54,7 @@ function ${MOVEMENT_NAME}(go: <runs-[:Invocation]->>) {
   }
 }
 
-listen to runs {} fire ${MOVEMENT_NAME}
+listen to manual-[:Invocations]-> fire ${MOVEMENT_NAME}
 `;
 
 async function mintKey(): Promise<{ key: string; teamId: string }> {

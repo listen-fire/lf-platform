@@ -170,7 +170,7 @@ it('reads as Alice and writes as Bob through one install; Alice’s rotated toke
   const { triggerId } = await seedMirror();
 
   // The deal's arrival on the root `Deal`, as the module's door reports it.
-  const arrival = WireArrival.parse(dealArrival({ id: 'deal-1', Name: 'Acme expansion', owner: 'alice' }));
+  const arrival = WireArrival.parse(dealArrival({ id: 'deal-1', Name: 'Acme expansion' }));
   if ('gone' in arrival) throw new Error('test: a created deal arrives, it does not go');
   const triggerEvent = arrivalTriggerOf({ pipelineInputId: `trigger:${triggerId}`, adapterType: 'hubspot', arrival, now: new Date() });
   const result = await dispatchTriggerByIdEvent({ triggerId, teamId, event: triggerEvent });

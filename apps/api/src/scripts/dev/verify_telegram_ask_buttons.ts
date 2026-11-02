@@ -53,11 +53,9 @@ async function ensureCredential(input: {
 }
 
 const MOVEMENT = `
-import { telegram, ask } from adapters
-import { \`Dev Loop Telegram\` } from credentials
 
-tg = connect telegram using \`Dev Loop Telegram\`
-questions = connect ask
+tg = connect \`@lf/telegram\` using \`Dev Loop Telegram\`
+questions = connect \`@lf/ask\`
 
 function tg_ask_buttons(m: <tg-[:\`Message\`]->>) {
   q = write questions-[:Check]-> {
@@ -81,7 +79,7 @@ function tg_ask_buttons(m: <tg-[:\`Message\`]->>) {
   }
 }
 
-listen to tg {} fire tg_ask_buttons
+listen to tg-[:Messages]-> fire tg_ask_buttons
 `;
 
 async function main() {

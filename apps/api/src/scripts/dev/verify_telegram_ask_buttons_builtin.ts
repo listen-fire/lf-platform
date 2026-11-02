@@ -50,11 +50,9 @@ async function ensureEmptyCredential(input: { teamId: string; name: string }): P
 }
 
 const MOVEMENT = `
-import { telegram, ask } from adapters
-import { \`Dev Loop Telegram Builtin\` } from credentials
 
-tg = connect telegram using \`Dev Loop Telegram Builtin\`
-questions = connect ask
+tg = connect \`@lf/telegram\` using \`Dev Loop Telegram Builtin\`
+questions = connect \`@lf/ask\`
 
 function tg_ask_buttons_builtin(m: <tg-[:\`Message\`]->>) {
   q = write questions-[:Check]-> {
@@ -78,7 +76,7 @@ function tg_ask_buttons_builtin(m: <tg-[:\`Message\`]->>) {
   }
 }
 
-listen to tg {} fire tg_ask_buttons_builtin
+listen to tg-[:Messages]-> fire tg_ask_buttons_builtin
 `;
 
 async function main() {

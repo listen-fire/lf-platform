@@ -38,15 +38,13 @@ const MOVEMENT_NAME = 'authoring_latency_probe';
 
 /**
  * The probe program. `note` varies the body text (a save with no listener
- * change); `crmEvents` varies the Attio listen (a save that moves the derived
+ * change); `changeKinds` varies the Attio listen (a save that moves the derived
  * trigger, and with it the external subscription this team registers).
  */
-function program(input: { note: string; crmEvents: string[] }): string {
-  return `import { attio, slack } from adapters
-import { \`Dev Loop Attio\`, \`Dev Loop Slack\` } from credentials
-
-crm  = connect attio using \`Dev Loop Attio\`
-chat = connect slack using \`Dev Loop Slack\`
+function program(input: { note: string; changeKinds: string[] }): string {
+  return `
+crm  = connect \`@lf/attio\` using \`Dev Loop Attio\`
+chat = connect \`@lf/slack\` using \`Dev Loop Slack\`
 
 function latency_intake(sm: <chat-[:Message]->>) {
   co = write crm-[:Companies]-> {
@@ -61,21 +59,19 @@ function latency_intake(sm: <chat-[:Message]->>) {
   }
 }
 
-listen to chat { events: ["message"] } fire latency_intake
+listen to chat-[:Channels]->-[:Messages]-> fire latency_intake
 
-function latency_watch(ev: <crm-[:\`Webhook Event\`]->>) {
-  if (ev is <crm-[:\`Webhook Event\` WHERE \`action\` == "record.created"]->>) {
-    ev-[co:Companies]-> {
-      chat-[ch:Channels WHERE ch.\`Name\` == "dealflow"]-> {
-        write ch-[:Messages]-> {
-          Message: "Changed: \${co.\`Name\`}"
-        }
+function latency_watch(change: <crm-[:CompanyChange]->>) {
+  change-[co:Company]-> {
+    chat-[ch:Channels WHERE ch.\`Name\` == "dealflow"]-> {
+      write ch-[:Messages]-> {
+        Message: "Changed: \${co.\`Name\`}"
       }
     }
   }
 }
 
-listen to crm { events: [${input.crmEvents.map((e) => `"${e}"`).join(', ')}] } fire latency_watch
+listen to crm-[:Companies]->-[c:Changes WHERE c.Kind IN [${input.changeKinds.map((kind) => `"${kind}"`).join(', ')}]]-> fire latency_watch
 `;
 }
 
@@ -144,7 +140,7 @@ async function main(): Promise<void> {
   // Establish the row once, so every measured save is a RE-save (the shape an
   // agent iterating on an automation actually pays for).
   const seeded = await post(key, '/automations/save', {
-    source: program({ note: 'seed', crmEvents: ['record.created'] }),
+    source: program({ note: 'seed', changeKinds: ['created'] }),
     name: MOVEMENT_NAME,
   });
   report('seed', 0, 'save', seeded);
@@ -161,13 +157,13 @@ async function main(): Promise<void> {
 
   for (let run = 1; run <= RUNS; run++) {
     // (a) validate then save immediately — inside the 20s instance-cache TTL.
-    const a = program({ note: `a-${run}`, crmEvents: ['record.created'] });
+    const a = program({ note: `a-${run}`, changeKinds: ['created'] });
     console.log(`## a validate+save immediate (run ${run})`);
     report('a', run, 'validate', await validate(a));
     report('a', run, 'save', await save(a));
 
     // (b) validate, wait out the 20s TTL, then save.
-    const b = program({ note: `b-${run}`, crmEvents: ['record.created'] });
+    const b = program({ note: `b-${run}`, changeKinds: ['created'] });
     console.log(`## b validate, 30s gap, save (run ${run})`);
     report('b', run, 'validate', await validate(b));
     await sleep(30_000);
@@ -175,16 +171,15 @@ async function main(): Promise<void> {
 
     // (c) a one-line body-text edit — nothing about the listeners moves.
     console.log(`## c body-text edit (run ${run})`);
-    report('c', run, 'save', await save(program({ note: `c-${run}`, crmEvents: ['record.created'] })));
+    report('c', run, 'save', await save(program({ note: `c-${run}`, changeKinds: ['created'] })));
 
     // (d) a listen change — the derived trigger and the subscription sync move.
-    const events =
-      run % 2 === 0 ? ['record.created'] : ['record.created', 'record.updated'];
+    const kinds = run % 2 === 0 ? ['created'] : ['created', 'updated'];
     console.log(`## d listen change (run ${run})`);
-    report('d', run, 'save', await save(program({ note: 'd', crmEvents: events })));
+    report('d', run, 'save', await save(program({ note: 'd', changeKinds: kinds })));
 
     // (e) the same source twice — the no-op re-save.
-    const e = program({ note: `e-${run}`, crmEvents: ['record.created'] });
+    const e = program({ note: `e-${run}`, changeKinds: ['created'] });
     console.log(`## e same source twice (run ${run})`);
     report('e', run, 'save-1', await save(e));
     report('e', run, 'save-2', await save(e));
