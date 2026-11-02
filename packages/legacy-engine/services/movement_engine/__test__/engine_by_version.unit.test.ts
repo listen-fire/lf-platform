@@ -6,7 +6,7 @@
 // TypeScript engine. The engine settings that once chose otherwise are
 // refused at boot.
 
-import { LANGUAGE_VERSION, EMPTY_CATALOG_SNAPSHOT, fromCatalogSnapshot, mockCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
+import { LANGUAGE_VERSION, EMPTY_CATALOG_SNAPSHOT, mockCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import { tenantIdOf } from 'engine-contracts';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 
@@ -106,7 +106,7 @@ function timerSink() {
 
 function inputOf(source: string, languageVersion: LanguageVersion, runId: string, sink?: ParkSink): RunMovementInput {
   return {
-    source: spelledFor(languageVersion, source, fromCatalogSnapshot(catalog)),
+    source: spelledFor(languageVersion, source, catalog),
     languageVersion,
     event,
     teamId: TEAM_ID,

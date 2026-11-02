@@ -73,7 +73,7 @@ jest.mock('../../../lib/anthropic', () => ({
 }));
 
 import { runMovement, resumeMovement } from '@listen-fire/legacy-engine/dispatch';
-import { LANGUAGE_VERSION, fromCatalogSnapshot } from 'movement-lang';
+import { LANGUAGE_VERSION } from 'movement-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import type { ParkSink } from '@listen-fire/legacy-engine/services/movement_engine/run';
 import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
@@ -269,7 +269,7 @@ interface RunAdapters {
 // The programs here are written in the spelling versions 1–4 read; the run
 // (under the current version) reads them as the upgrade tool rewrites them.
 const inCurrentSpelling = (source: string): string =>
-  spelledFor(LANGUAGE_VERSION, source, fromCatalogSnapshot(catalog));
+  spelledFor(LANGUAGE_VERSION, source, catalog);
 
 function run(source: string, payload: Record<string, unknown>, adapters: RunAdapters):
   Promise<Awaited<ReturnType<typeof runMovement>>> {

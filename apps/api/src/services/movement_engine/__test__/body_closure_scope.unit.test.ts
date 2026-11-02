@@ -15,7 +15,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { fromCatalogSnapshot, type InstanceSchema } from 'movement-lang';
+import { type InstanceSchema } from 'movement-lang';
 import type { Adapter, RuntimeCapabilities, WriteInput } from 'movement-engine/public/adapter';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { tenantIdOf } from 'engine-contracts';
@@ -181,7 +181,7 @@ function runInput(source: string, parks: Sink, kg: ReturnType<typeof makeKgFake>
   // where it still does (the version loops below pass their own).
   const version = pinned ?? (source.includes('await parallel') ? 4 : 5);
   return {
-    source: spelledForSurface(pinOf(version), source, fromCatalogSnapshot(catalog)),
+    source: spelledForSurface(pinOf(version), source, catalog),
     event: manualEvent(),
     teamId: TEAM_ID,
     catalog,
@@ -521,7 +521,7 @@ function inputOn(source: string, parks: Sink, kg: ReturnType<typeof makeKgFake>,
     pin.files === undefined
       ? undefined
       : Object.fromEntries(
-          Object.entries(pin.files).map(([name, file]) => [name, { source: spelledForSurface(pinOf(pin.version ?? 5), file.source, fromCatalogSnapshot(catalog)) }]),
+          Object.entries(pin.files).map(([name, file]) => [name, { source: spelledForSurface(pinOf(pin.version ?? 5), file.source, catalog) }]),
         );
   return {
     ...runInput(source, parks, kg, pin.version),

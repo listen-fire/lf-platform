@@ -84,6 +84,9 @@ import {
   type CatalogAdapterInput,
 } from 'movement-engine/public/catalog';
 import { closeDemandOverChains, closeDemandOverWriteVariants, demandSeed } from './demand';
+import { MANUAL_ADAPTER_TYPE, MANUAL_SURFACE } from '../adapters/manual';
+import { CRON_ADAPTER_TYPE, CRON_SURFACE } from '../adapters/cron';
+import type { UnitSurface } from '../adapters/unit_surface';
 
 const textList: SchemaFieldType = { kind: 'list', of: 'text' };
 
@@ -195,6 +198,25 @@ const THIN_INSTANCE_SCHEMAS: Record<string, InstanceSchema> = {
   },
 };
 
+/** A run host unit's instance schema, projected from the unit's own fixed
+ *  surface the way a team's catalog projects what the unit's adapter answers. */
+function unitInstanceSchema(adapterType: string, surface: UnitSurface): InstanceSchema {
+  return instanceSchemaFromDescriptors({
+    adapterType,
+    entries: surface.entries,
+    descriptors: new Map(surface.types.map((type) => [type.typeId, type])),
+    metaDescriptor: surface.root,
+    supportsInPlaceUpdate: false,
+  }).schema;
+}
+
+/** The run host's units, described as a team's catalog describes them, so a
+ *  program in a test listens to `manual-[:Invocations]->` as a saved one does. */
+const UNIT_SCHEMAS: Record<string, InstanceSchema> = {
+  [MANUAL_ADAPTER_TYPE]: unitInstanceSchema(MANUAL_ADAPTER_TYPE, MANUAL_SURFACE),
+  [CRON_ADAPTER_TYPE]: unitInstanceSchema(CRON_ADAPTER_TYPE, CRON_SURFACE),
+};
+
 /** What the checker reads of a module's listens, off its manifest alone, as
  *  the engine's own snapshot projects it: whether anything can fire, what an
  *  author is told to expect, the re-send window, and how a 0.12 settings
@@ -264,13 +286,14 @@ export function staticCatalogFromManifests(
       // STUB — construction arguments are ignored; see module header for
       // the real per-credential seam.
       const schema = options.instanceSchemas?.[adapterName] ?? THIN_INSTANCE_SCHEMAS[adapterName];
+      if (schema === undefined) return UNIT_SCHEMAS[adapterName];
       // These fixtures stand opposite FAKE adapters, and a fake declares the
       // permissive runtime capabilities — inline edge properties included. So
       // the fixture says so too, or the checker calls a name a mistake that
       // the adapter under test answers at run time. The real per-credential
       // projection reads the capability off the adapter itself
       // (`instance_cache`), where it is a fact rather than a fixture.
-      return schema !== undefined ? { ...schema, edgesCarryProperties: true } : undefined;
+      return { ...schema, edgesCarryProperties: true };
     },
   };
 }

@@ -26,7 +26,7 @@
 import path from 'node:path';
 import { readFileSync, writeFileSync } from 'node:fs';
 
-import { LANGUAGE_VERSION, fromCatalogSnapshot, resolveFileFromSnapshot, typeNameOf, type CatalogSnapshot } from 'movement-lang';
+import { LANGUAGE_VERSION, resolveFileFromSnapshot, typeNameOf, type CatalogSnapshot } from 'movement-lang';
 import { parseProgram } from 'legacy-lang';
 import { loadChecks, loadSnapshots } from 'legacy-lang/conformance/checks_corpus';
 import { corpusFile, overCorpus, SNAPSHOT_TABLE_FILE } from 'legacy-lang/conformance/checks_pin';
@@ -143,11 +143,11 @@ function respelled(source: string, catalog: CatalogSnapshot): { source: string; 
       catalog.files === undefined
         ? undefined
         : Object.fromEntries(
-            Object.entries(catalog.files).map(([name, file]) => [name, { ...file, source: spelledFor(LANGUAGE_VERSION, file.source, fromCatalogSnapshot({ ...catalog, files: undefined })) }]),
+            Object.entries(catalog.files).map(([name, file]) => [name, { ...file, source: spelledFor(LANGUAGE_VERSION, file.source, { ...catalog, files: undefined }) }]),
           );
     const spelledCatalog = files === undefined ? catalog : { ...catalog, files };
     const resolveFile = resolveFileFromSnapshot(spelledCatalog);
-    return { source: spelledFor(LANGUAGE_VERSION, source, fromCatalogSnapshot(spelledCatalog), resolveFile !== undefined ? { resolveFile } : {}), catalog: spelledCatalog };
+    return { source: spelledFor(LANGUAGE_VERSION, source, spelledCatalog, resolveFile !== undefined ? { resolveFile } : {}), catalog: spelledCatalog };
   } catch {
     return undefined;
   }

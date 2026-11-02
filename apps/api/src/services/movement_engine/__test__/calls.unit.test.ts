@@ -87,7 +87,7 @@ import { runFailureCause } from '@listen-fire/legacy-engine/services/movement_en
 
 import type { CapturedWrite } from 'movement-engine/public/adapter';
 import { MovementEngineError } from '@listen-fire/legacy-engine/services/movement_engine/expression';
-import { LANGUAGE_VERSION, fromCatalogSnapshot } from 'movement-lang';
+import { LANGUAGE_VERSION } from 'movement-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import {
@@ -338,7 +338,7 @@ describe('§G under 0.12 — `_resources` off an adapter record is not read', ()
     });
     const dropbox = makeFakeAdapter('dropbox');
     const run = runMovement({
-      source: spelledFor(LANGUAGE_VERSION, INTAKE_G, fromCatalogSnapshot(catalog)),
+      source: spelledFor(LANGUAGE_VERSION, INTAKE_G, catalog),
       languageVersion: LANGUAGE_VERSION,
       movementName: 'intake',
       event: webhookEvent('email', { subject: 'Acme deck' }),

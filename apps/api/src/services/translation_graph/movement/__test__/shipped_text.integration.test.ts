@@ -21,7 +21,7 @@ jest.mock('../../adapters/resolve', () => {
   return { ...actual, resolveAdapter: jest.fn() };
 });
 
-import { LANGUAGE_VERSION, fromCatalogSnapshot } from 'movement-lang';
+import { LANGUAGE_VERSION } from 'movement-lang';
 import { eventAddressKey } from 'legacy-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 
@@ -179,7 +179,7 @@ const ANNOUNCE = (marker: string) =>
 const BROKEN_EDIT = (marker: string) => `${ANNOUNCE(marker)}\nmovement half_written(`;
 
 function spelled(text: string): string {
-  return spelledFor(LANGUAGE_VERSION, text, fromCatalogSnapshot(buildCatalog()));
+  return spelledFor(LANGUAGE_VERSION, text, buildCatalog());
 }
 
 function webhookEvent(): TriggerEvent {

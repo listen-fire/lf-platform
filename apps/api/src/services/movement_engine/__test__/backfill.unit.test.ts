@@ -346,14 +346,13 @@ const CREDENTIAL_IDS: Record<string, string> = { acme_main: 'cred-attio-1' };
 // roots its traversal at the constructed instance — `crm-[c:companies]->`
 // streams the collection through the crm instance's own adapter.
 const BACKFILL = [
-  'import { manual, attio, kg } from adapters',
+  'import { attio, kg } from adapters',
   'import { acme_main } from credentials',
   '',
-  'runs = connect manual',
   'graph = connect kg',
   'crm = connect attio using acme_main',
   '',
-  'function backfill(go: <runs-[:Invocation]->>) {',
+  'function backfill(go: <manual-[:Invocation]->>) {',
   '  crm-[c:companies]-> {',
   '    write graph-[:company]-> {',
   '      unique by (`name`)',
@@ -363,7 +362,7 @@ const BACKFILL = [
   '  }',
   '}',
   '',
-  'listen to runs-[:Invocations]-> fire backfill',
+  'listen to manual-[:Invocations]-> fire backfill',
 ].join('\n');
 
 const COMPANIES: CompanyRow[] = [
@@ -555,14 +554,13 @@ describe('backfill streaming — the engine prefers iterateRelated', () => {
 // would throw drift ("'threshold' is not a known field"). Resolved from scope,
 // the WHERE behaves like `\`name\` == "Globex"`.
 const BACKFILL_BINDING_WHERE = [
-  'import { manual, attio, kg } from adapters',
+  'import { attio, kg } from adapters',
   'import { acme_main } from credentials',
   '',
-  'runs = connect manual',
   'graph = connect kg',
   'crm = connect attio using acme_main',
   '',
-  'function backfill(go: <runs-[:Invocation]->>) {',
+  'function backfill(go: <manual-[:Invocation]->>) {',
   '  threshold = "Globex"',
   '  crm-[c:companies WHERE c.`name` == threshold]-> {',
   '    write graph-[:company]-> {',
@@ -573,7 +571,7 @@ const BACKFILL_BINDING_WHERE = [
   '  }',
   '}',
   '',
-  'listen to runs-[:Invocations]-> fire backfill',
+  'listen to manual-[:Invocations]-> fire backfill',
 ].join('\n');
 
 describe('a local `=` binding resolves inside a hop WHERE', () => {
@@ -613,21 +611,20 @@ describe('a local `=` binding resolves inside a hop WHERE', () => {
     // founded before today, so the comparison is vacuously true; the point is
     // it RUNS clean, with no type mismatch, the exact failure hit in production.
     const dated = [
-      'import { manual, attio, kg } from adapters',
+      'import { attio, kg } from adapters',
       'import { acme_main } from credentials',
       '',
-      'runs = connect manual',
-      'graph = connect kg',
+          'graph = connect kg',
       'crm = connect attio using acme_main',
       '',
-      'function backfill(go: <runs-[:Invocation]->>) {',
+      'function backfill(go: <manual-[:Invocation]->>) {',
       '  c = @current_date',
       '  crm-[co:companies WHERE co.`founded` <= c]-> {',
       '    write graph-[:company]-> { unique by (`name`) name: co.`name` }',
       '  }',
       '}',
       '',
-      'listen to runs-[:Invocations]-> fire backfill',
+      'listen to manual-[:Invocations]-> fire backfill',
     ].join('\n');
     const source = makeCollectionSource(COMPANIES);
     const kg = makeFakeKg();

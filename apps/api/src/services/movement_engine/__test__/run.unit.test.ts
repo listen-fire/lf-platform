@@ -117,7 +117,7 @@ jest.mock('../../../lib/anthropic', () => ({
 }));
 
 import type { InstanceSchema, LanguageVersion } from 'movement-lang';
-import { LANGUAGE_VERSION, fromCatalogSnapshot, mockCatalogSnapshot } from 'movement-lang';
+import { LANGUAGE_VERSION, mockCatalogSnapshot } from 'movement-lang';
 import { parseMovementExpression } from 'legacy-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import type { Expression } from 'movement-lang/expression/types';
@@ -295,7 +295,7 @@ const kgSchema: InstanceSchema = {
 // version-5 run reads it as the upgrade tool rewrites it.
 function respelled<I extends RunInput>(input: I): I {
   const version = input.languageVersion ?? LANGUAGE_VERSION;
-  return { ...input, source: spelledFor(version, input.source, fromCatalogSnapshot(input.catalog)) };
+  return { ...input, source: spelledFor(version, input.source, input.catalog) };
 }
 const runMovement = (input: RunMovementInput) => runAsWritten(respelled(input));
 const resumeMovement = (input: ResumeMovementInput) => resumeAsWritten(respelled(input));

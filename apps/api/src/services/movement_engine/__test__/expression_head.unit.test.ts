@@ -80,7 +80,7 @@ jest.mock('../../../lib/anthropic', () => ({
   MAX_CHAT_CONTINUATIONS: 5,
 }));
 
-import { LANGUAGE_VERSION, fromCatalogSnapshot, mockCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
+import { LANGUAGE_VERSION, mockCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import type {
@@ -261,7 +261,7 @@ function run(
 ): Promise<Awaited<ReturnType<typeof runMovement>>> {
   return runMovement({
     ...(opts.languageVersion !== undefined ? { languageVersion: opts.languageVersion } : {}),
-    source: spelledFor(opts.languageVersion ?? LANGUAGE_VERSION, PRELUDE + source, fromCatalogSnapshot(catalog)),
+    source: spelledFor(opts.languageVersion ?? LANGUAGE_VERSION, PRELUDE + source, catalog),
     movementName: 'intake',
     event: webhookEvent({ subject: 'Deals', text: opts.text ?? '' }),
     teamId: TEAM_ID,

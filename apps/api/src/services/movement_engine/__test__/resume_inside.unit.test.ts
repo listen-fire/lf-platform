@@ -19,7 +19,6 @@
 
 import { LANGUAGE_VERSION, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import { pinOf } from './pin_of';
-import { fromCatalogSnapshot } from 'movement-lang';
 import { isLegacyLanguageVersion } from 'legacy-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import type { Adapter, RuntimeCapabilities, WriteInput } from 'movement-engine/public/adapter';
@@ -196,7 +195,7 @@ interface Harness {
 
 function runInput(h: Harness, kg: ReturnType<typeof makeKgFake>, suspendAt?: string[]) {
   return {
-    source: spelledFor(h.languageVersion ?? LANGUAGE_VERSION, h.source, fromCatalogSnapshot(catalog)),
+    source: spelledFor(h.languageVersion ?? LANGUAGE_VERSION, h.source, catalog),
     event: manualEvent(),
     teamId: TEAM_ID,
     catalog,

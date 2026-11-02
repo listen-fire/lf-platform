@@ -3,20 +3,27 @@
 // `lib/kysely` / `lib/credentials` leaves, and the Bot API is exercised via a
 // stubbed `global.fetch`. Covers:
 //   1. listEntryPoints / describe (message, attachment, linked_user).
-//   2. preprocessInbound — a real-shaped Update → a tagged telegram:message
-//      event; a non-message update is skipped.
+//   2. preprocessInbound — a real-shaped Update → one arrival landing on its
+//      Message; a non-message update is skipped.
 //   3. getFieldValue — message scalars.
 //   4. getActorCandidates / extractActor — from message.from (no email).
 //   5. createRecord — edge-anchored DM / reply → the right sendMessage call.
 //   6. resolveFileRef — getFile → fetch path.
-//   7. listEventTypes — parse→discriminate pin (both doors use the tagged mapper).
 
 import type { TeamId } from '../../../../../generated/kysely/core/Team';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 import type { TelegramUpdate } from '@listen-fire/telegram/types';
 import type { FileRef } from 'movement-engine/public/adapter';
 
+import type { Arrival, AwaitLanding } from 'engine-contracts';
+
 import { makeStablePosition, makeUnstablePosition } from 'engine-contracts/catalog';
+
+/** The landing of an arrival that is not a record's going. */
+function landingOf(arrival: Arrival | undefined): AwaitLanding {
+  if (arrival === undefined || 'gone' in arrival) throw new Error('expected an arrival that lands');
+  return arrival.landing;
+}
 
 // ── Module-scope mocks ──────────────────────────────────────────────────────
 // The credential read (getQb → external_service_credentials) and decryption are
@@ -81,7 +88,6 @@ import {
   TELEGRAM_ADAPTER_TYPE,
   TELEGRAM_MESSAGE_TYPE_ID,
   TELEGRAM_ATTACHMENT_TYPE_ID,
-  type TelegramMessagePayload,
 } from '../index';
 import { TELEGRAM_LINKED_USER_TYPE_ID } from '@listen-fire/telegram/types';
 
@@ -124,14 +130,14 @@ describe('TelegramAdapter schema', () => {
     expect(readable.map((e) => e.typeId)).toEqual([TELEGRAM_LINKED_USER_TYPE_ID]);
   });
 
-  it('the fires edge lands straight on Message — no field-less event node (rule 1)', async () => {
+  it('the listenable edge lands straight on Message — no field-less event node (rule 1)', async () => {
     const entries = await adapter().listEntryPoints();
     const message = entries.find((e) => e.typeId === TELEGRAM_MESSAGE_TYPE_ID);
     expect(message).toBeDefined();
     expect(message?.displayName).toBe('Message');
     expect(message?.readable).toBe(false);
     expect(message?.writable).toBe(false);
-    expect(message?.fires).toBe(true);
+    expect(message?.listenable).toBe(true);
     // The retired indirection stays retired: nothing describes it.
     expect(await adapter().describe('Message Received')).toBeNull();
   });
@@ -177,22 +183,12 @@ describe('TelegramAdapter schema', () => {
 
 describe('TelegramAdapter.preprocessInbound', () => {
   it('parses a real-shaped Update into a telegram:message event', async () => {
-    const { events } = await adapter().preprocessInbound({ raw: SAMPLE_UPDATE });
-    expect(events).toHaveLength(1);
-    // Tagged at parse time — the tag-only event type is selectable only by tag.
-    expect(events[0].tag).toBe('message');
-    // The event rides the legacy-conversion shape (recordType/eventType) —
-    // the same shape the retired provider `parseEvents` path emitted, so
-    // BYO-door dispatch semantics are unchanged by the seam migration.
-    expect(events[0].recordType).toBe(TELEGRAM_MESSAGE_TYPE_ID);
-    expect(events[0].eventType).toBe('message');
-    expect(events[0].externalId).toBe('42');
-    // The changeType is a stored-receipt fact (nothing routes on it since
-    // the variant retirement) — the seed routes on discrimination, and the
-    // message entry now carries the fires edge itself.
-    // plans/2026-07-10-adapter-entry-positions/8_event_edges.md
-    expect(events[0].changeType).toBe('create');
-    const payload = events[0].payload as TelegramMessagePayload;
+    const { arrivals } = await adapter().preprocessInbound({ raw: SAMPLE_UPDATE });
+    expect(arrivals).toHaveLength(1);
+    // A message lands as a stable Message keyed by its id, so a reply write
+    // can anchor off the listen's parameter.
+    expect(landingOf(arrivals[0]).recordId).toBe('42');
+    const payload = landingOf(arrivals[0]).fields;
     expect(payload).toMatchObject({
       message_id: '42',
       text: 'Closed the round!',
@@ -205,7 +201,7 @@ describe('TelegramAdapter.preprocessInbound', () => {
   });
 
   it('uses the caption as text + builds an attachment for a document message', async () => {
-    const { events } = await adapter().preprocessInbound({
+    const { arrivals } = await adapter().preprocessInbound({
       raw: {
         update_id: 101,
         message: {
@@ -218,8 +214,7 @@ describe('TelegramAdapter.preprocessInbound', () => {
         },
       } satisfies TelegramUpdate,
     });
-    expect(events[0].tag).toBe('message');
-    const payload = events[0].payload as TelegramMessagePayload;
+    const payload = landingOf(arrivals[0]).fields;
     expect(payload.text).toBe('the deck');
     expect(payload.attachments).toEqual([
       { file_id: 'FILE9', name: 'deck.pdf', contentType: 'application/pdf', size: 1234 },
@@ -227,7 +222,7 @@ describe('TelegramAdapter.preprocessInbound', () => {
   });
 
   it('builds an attachment for a voice note (audio/ogg opus)', async () => {
-    const { events } = await adapter().preprocessInbound({
+    const { arrivals } = await adapter().preprocessInbound({
       raw: {
         update_id: 103,
         message: {
@@ -239,15 +234,14 @@ describe('TelegramAdapter.preprocessInbound', () => {
         },
       } satisfies TelegramUpdate,
     });
-    expect(events[0].tag).toBe('message');
-    const payload = events[0].payload as TelegramMessagePayload;
+    const payload = landingOf(arrivals[0]).fields;
     expect(payload.attachments).toEqual([
       { file_id: 'VOICE1', name: 'voice_uv1.ogg', contentType: 'audio/ogg', size: 4321 },
     ]);
   });
 
   it('builds an attachment for an audio message (music / audio file)', async () => {
-    const { events } = await adapter().preprocessInbound({
+    const { arrivals } = await adapter().preprocessInbound({
       raw: {
         update_id: 104,
         message: {
@@ -260,8 +254,7 @@ describe('TelegramAdapter.preprocessInbound', () => {
         },
       } satisfies TelegramUpdate,
     });
-    expect(events[0].tag).toBe('message');
-    const payload = events[0].payload as TelegramMessagePayload;
+    const payload = landingOf(arrivals[0]).fields;
     expect(payload.text).toBe('listen to this');
     expect(payload.attachments).toEqual([
       { file_id: 'AUDIO1', name: 'memo.m4a', contentType: 'audio/mp4', size: 9999 },
@@ -269,8 +262,8 @@ describe('TelegramAdapter.preprocessInbound', () => {
   });
 
   it('skips a non-message update (no message present)', async () => {
-    const { events } = await adapter().preprocessInbound({ raw: { update_id: 102 } });
-    expect(events).toEqual([]);
+    const { arrivals } = await adapter().preprocessInbound({ raw: { update_id: 102 } });
+    expect(arrivals).toEqual([]);
   });
 });
 
@@ -322,7 +315,7 @@ describe('TelegramAdapter.getFieldValue', () => {
   // ids on the method's first line.
   const MESSAGE_TYPE = 'Message';
 
-  function messagePosition(payload: Partial<TelegramMessagePayload>) {
+  function messagePosition(payload: Record<string, unknown>) {
     return makeUnstablePosition({
       adapterType: TELEGRAM_ADAPTER_TYPE,
       recordType: MESSAGE_TYPE,
@@ -332,8 +325,8 @@ describe('TelegramAdapter.getFieldValue', () => {
 
   it('reads message scalar fields', async () => {
     const a = adapter();
-    const { events } = await a.preprocessInbound({ raw: SAMPLE_UPDATE });
-    const position = messagePosition(events[0].payload as TelegramMessagePayload);
+    const { arrivals } = await a.preprocessInbound({ raw: SAMPLE_UPDATE });
+    const position = messagePosition(landingOf(arrivals[0]).fields);
     expect(await a.getFieldValue({ position, fieldId: 'Text' })).toBe('Closed the round!');
     expect(await a.getFieldValue({ position, fieldId: 'Chat Id' })).toBe('-1001');
     expect(await a.getFieldValue({ position, fieldId: 'Sender Username' })).toBe('adas');
@@ -359,31 +352,42 @@ describe('TelegramAdapter actor resolution (telegram_user_id → email via the s
     identityStore.clear();
   });
 
-  function event(payload: Partial<TelegramMessagePayload>): TriggerEvent {
+  // The door names who acted on each arrival (adapter protocol 2.7), and the
+  // run's event carries that arrival: the actor is read back off it.
+  async function firedBy(a: TelegramAdapter, from: { id: number; is_bot: boolean; first_name: string; username?: string } | undefined): Promise<TriggerEvent> {
+    const { arrivals } = await a.preprocessInbound({
+      raw: {
+        update_id: 300,
+        message: {
+          message_id: 42,
+          ...(from !== undefined ? { from } : {}),
+          chat: { id: -1001, type: 'supergroup', title: 'Deals' },
+          date: 1_700_000_000,
+          text: 'hello',
+        },
+      } satisfies TelegramUpdate,
+    });
+    const arrival = arrivals[0];
+    if (arrival === undefined || 'gone' in arrival) throw new Error('expected an arrival that lands');
     return {
       pipelineInputId: 'trigger:t-1',
       adapterType: TELEGRAM_ADAPTER_TYPE,
       triggerType: 'webhook',
-      payload,
+      payload: arrival.landing.fields,
+      arrival: { ...arrival, adapterType: TELEGRAM_ADAPTER_TYPE },
     };
   }
 
   // A message from `from.id === 123` with a username/first name (for @actor_*).
-  function messageFromBoundUser(): Partial<TelegramMessagePayload> {
-    return {
-      message_id: '42',
-      sender_id: TG_USER,
-      sender_username: 'adas',
-      sender_first_name: 'Ada',
-    };
-  }
+  const BOUND_USER = { id: Number(TG_USER), is_bot: false, first_name: 'Ada', username: 'adas' };
 
   it('bound id → email-bearing identity carrying the team-scoped email', async () => {
     // teamA has a binding for tg user 123 → x@a.com.
     identityStore.set(identityKey(TEAM_A, TG_USER), EMAIL_A);
     const a = new TelegramAdapter(TEAM_A, CRED_ID);
+    const fired = await firedBy(a, BOUND_USER);
 
-    const actor = await a.extractActor({ event: event(messageFromBoundUser()) });
+    const actor = await a.extractActor({ event: fired });
     expect(actor).toEqual({
       identifier: TG_USER,
       scheme: 'email',
@@ -393,7 +397,7 @@ describe('TelegramAdapter actor resolution (telegram_user_id → email via the s
       label: '@adas',
     });
 
-    const candidates = await a.getActorCandidates({ event: event(messageFromBoundUser()) });
+    const candidates = await a.getActorCandidates({ event: fired });
     expect(candidates).toEqual([
       {
         identity: {
@@ -412,8 +416,9 @@ describe('TelegramAdapter actor resolution (telegram_user_id → email via the s
   it('unbound id → null actor / no candidates (no row for this sender)', async () => {
     // Store empty — no binding for tg user 123 in this team.
     const a = new TelegramAdapter(TEAM_A, CRED_ID);
-    expect(await a.extractActor({ event: event(messageFromBoundUser()) })).toBeNull();
-    expect(await a.getActorCandidates({ event: event(messageFromBoundUser()) })).toEqual([]);
+    const fired = await firedBy(a, BOUND_USER);
+    expect(await a.extractActor({ event: fired })).toBeNull();
+    expect(await a.getActorCandidates({ event: fired })).toEqual([]);
   });
 
   // ── CROSS-TEAM ISOLATION (load-bearing security test) ──────────────────
@@ -422,25 +427,23 @@ describe('TelegramAdapter actor resolution (telegram_user_id → email via the s
   it('cross-team: teamB adapter never resolves teamA-owned binding for the same id', async () => {
     identityStore.set(identityKey(TEAM_A, TG_USER), EMAIL_A);
     const teamB = new TelegramAdapter(TEAM_B, CRED_ID);
+    const firedB = await firedBy(teamB, BOUND_USER);
 
-    const actor = await teamB.extractActor({ event: event(messageFromBoundUser()) });
-    expect(actor).toBeNull();
-
-    const candidates = await teamB.getActorCandidates({ event: event(messageFromBoundUser()) });
-    expect(candidates).toEqual([]);
+    expect(await teamB.extractActor({ event: firedB })).toBeNull();
+    expect(await teamB.getActorCandidates({ event: firedB })).toEqual([]);
 
     // teamA, by contrast, DOES resolve its own binding for the identical id.
     const teamA = new TelegramAdapter(TEAM_A, CRED_ID);
-    const teamAActor = await teamA.extractActor({ event: event(messageFromBoundUser()) });
+    const teamAActor = await teamA.extractActor({ event: await firedBy(teamA, BOUND_USER) });
     expect(teamAActor?.email).toBe(EMAIL_A);
   });
 
   it('null actor when there is no sender id at all', async () => {
     identityStore.set(identityKey(TEAM_A, TG_USER), EMAIL_A);
     const a = new TelegramAdapter(TEAM_A, CRED_ID);
-    const e = event({ message_id: '1', sender_id: '' });
-    expect(await a.getActorCandidates({ event: e })).toEqual([]);
-    expect(await a.extractActor({ event: e })).toBeNull();
+    const fired = await firedBy(a, undefined);
+    expect(await a.getActorCandidates({ event: fired })).toEqual([]);
+    expect(await a.extractActor({ event: fired })).toBeNull();
   });
 });
 

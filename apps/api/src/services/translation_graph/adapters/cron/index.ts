@@ -24,6 +24,7 @@ import { uniformWalk } from 'module-kit/adapter/hop';
 import { CRON_HANDBOOK_SECTION } from './handbook_section';
 import { META_RECORD_TYPE, positionData } from 'movement-engine/public/catalog';
 import { BaseAdapter } from 'module-kit/adapter/base';
+import { describedType, type UnitSurface } from '../unit_surface';
 import { CronParseError, cronMatches, nextCronOccurrence, parseCron, type CronSchedule } from 'legacy-lang/cron';
 
 /** Stable adapter identifier — the trigger `kind` of cron-derived rows. */
@@ -97,52 +98,40 @@ export const CRON_MANIFEST: AdapterManifest = {
   },
 };
 
-export class CronAdapter extends BaseAdapter implements Adapter {
-  readonly adapterType = CRON_ADAPTER_TYPE;
-  readonly supportedTriggers = CRON_MANIFEST.supportedTriggers;
-  /** Unstable tick positions resolve to the tick type. */
-  readonly webhookEventTypeId = CRON_TICK_TYPE_ID;
-
-  // teamId is accepted for parity with other adapters; cron has no
-  // per-team configuration.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  constructor(private readonly teamId: TeamId) {
-    super();
-  }
-
-  async listEntryPoints(): Promise<SchemaEntryPoint[]> {
-    // The natural name (`Tick`, TitleCase) is the currency authors, the
-    // checker, and the hover all use; the internal `tick` typeId lives only in
-    // this adapter's private cache. They no longer need to be identical: the
-    // event edge keys its seed position by the natural node NAME (the address,
-    // layer 8), and describe accepts either spelling — so field reads resolve
-    // through the resolver whichever way the seed is stamped.
-    return [
-      {
-        typeId: CRON_TICK_TYPE_ID,
-        displayName: CRON_TICK_DISPLAY_NAME,
-        writable: false,
-        // Nothing enumerates ticks: each is an arrival on `Ticks`, polled.
-        readable: false,
-        collectionName: CRON_TICKS_EDGE,
-        listenable: true,
-        // Every schedule's ticks: only a filter on its schedule bounds it.
-        bounded: false,
-        boundedBy: ['Schedule'],
-        delivery: 'polled',
-        pollEverySeconds: CRON_POLL_EVERY_SECONDS,
-        cursor: true,
-        capability: { filter: 'native', supportsLimit: false },
-      },
-    ];
-  }
-
+/** What a cron instance publishes and every type it describes. It is
+ *  fixed data, so a catalog that cannot ask the adapter (the static one
+ *  tests check against) projects the surface the adapter answers. */
+export const CRON_SURFACE: UnitSurface = {
+  // The natural name (`Tick`, TitleCase) is the currency authors, the
+  // checker, and the hover all use; the internal `tick` typeId lives only in
+  // this adapter's private cache. They no longer need to be identical: the
+  // event edge keys its seed position by the natural node NAME (the address,
+  // layer 8), and describe accepts either spelling — so field reads resolve
+  // through the resolver whichever way the seed is stamped.
+  entries: [
+    {
+      typeId: CRON_TICK_TYPE_ID,
+      displayName: CRON_TICK_DISPLAY_NAME,
+      writable: false,
+      // Nothing enumerates ticks: each is an arrival on `Ticks`, polled.
+      readable: false,
+      collectionName: CRON_TICKS_EDGE,
+      listenable: true,
+      // Every schedule's ticks: only a filter on its schedule bounds it.
+      bounded: false,
+      boundedBy: ['Schedule'],
+      delivery: 'polled',
+      pollEverySeconds: CRON_POLL_EVERY_SECONDS,
+      cursor: true,
+      capability: { filter: 'native', supportsLimit: false },
+    },
+  ],
   /**
    * The smallest graph there is: a schedule, and the tick it delivers. Nothing
    * enumerates ticks, so the single edge leaving the root is one you are fired
    * along — which is the honest shape of a timer, not a gap in it.
    */
-  private static readonly ROOT: SchemaTypeDescriptor = {
+  root: {
     typeId: META_RECORD_TYPE,
     displayName: 'Schedule',
     description:
@@ -161,21 +150,9 @@ export class CronAdapter extends BaseAdapter implements Adapter {
         description: "A schedule's ticks — what a listen is fired by.",
       },
     ],
-  };
-
-  async edgesFrom(position: SourcePosition): Promise<EdgesFromResult | null> {
-    return uniformWalk({
-      adapterType: CRON_ADAPTER_TYPE,
-      at: position,
-      root: CronAdapter.ROOT,
-      describe: (typeId) => this.describe(typeId),
-    });
-  }
-
-  async describe(typeRef: string): Promise<SchemaTypeDescriptor | null> {
-    const typeId = await this.resolveTypeRef(typeRef);
-    if (typeId !== CRON_TICK_TYPE_ID) return null;
-    return {
+  },
+  types: [
+    {
       typeId: CRON_TICK_TYPE_ID,
       displayName: CRON_TICK_DISPLAY_NAME,
       description: 'One scheduled firing — when it was due, on which schedule, in which zone.',
@@ -204,7 +181,38 @@ export class CronAdapter extends BaseAdapter implements Adapter {
         },
       ],
       references: [],
-    };
+    },
+  ],
+};
+
+export class CronAdapter extends BaseAdapter implements Adapter {
+  readonly adapterType = CRON_ADAPTER_TYPE;
+  readonly supportedTriggers = CRON_MANIFEST.supportedTriggers;
+  /** Unstable tick positions resolve to the tick type. */
+  readonly webhookEventTypeId = CRON_TICK_TYPE_ID;
+
+  // teamId is accepted for parity with other adapters; cron has no
+  // per-team configuration.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  constructor(private readonly teamId: TeamId) {
+    super();
+  }
+
+  async listEntryPoints(): Promise<SchemaEntryPoint[]> {
+    return [...CRON_SURFACE.entries];
+  }
+
+  async edgesFrom(position: SourcePosition): Promise<EdgesFromResult | null> {
+    return uniformWalk({
+      adapterType: CRON_ADAPTER_TYPE,
+      at: position,
+      root: CRON_SURFACE.root,
+      describe: (typeId) => this.describe(typeId),
+    });
+  }
+
+  async describe(typeRef: string): Promise<SchemaTypeDescriptor | null> {
+    return describedType(CRON_SURFACE, await this.resolveTypeRef(typeRef));
   }
 
   async getFieldValue(input: { position: SourcePosition; fieldId: string }): Promise<unknown> {

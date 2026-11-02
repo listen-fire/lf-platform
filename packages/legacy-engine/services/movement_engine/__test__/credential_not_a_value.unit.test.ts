@@ -12,7 +12,7 @@ import { MovementEngineError } from 'movement-engine/public/errors';
 import { makeTestHost } from 'movement-engine/public/testing';
 import { tenantIdOf } from 'engine-contracts';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
-import { LANGUAGE_VERSION, fromCatalogSnapshot, mockCatalogSnapshot, type LanguageVersion } from 'movement-lang';
+import { LANGUAGE_VERSION, mockCatalogSnapshot, type LanguageVersion } from 'movement-lang';
 import { parseMovementExpression } from 'legacy-lang';
 
 const VERSIONS: LanguageVersion[] = ['1', '2', '3', '4', LANGUAGE_VERSION];
@@ -78,7 +78,7 @@ movement m(msg: <inbox-[:message]->>) {
 }
 `;
     const run = runMovement({
-      source: spelledFor(version, source, fromCatalogSnapshot(catalog)),
+      source: spelledFor(version, source, catalog),
       event: {
         pipelineInputId: 'trigger:email-cred',
         adapterType: 'email',

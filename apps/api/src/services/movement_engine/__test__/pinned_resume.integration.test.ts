@@ -36,7 +36,7 @@ import { positionData } from 'engine-contracts/catalog';
 import type { Adapter, RuntimeCapabilities } from 'movement-engine/public/adapter';
 import { containerAssociation } from 'movement-engine/public/adapter';
 import type { Catalog, CatalogSnapshot, InstanceSchema, PositionSchema } from 'movement-lang';
-import { LANGUAGE_VERSION, fromCatalogSnapshot, resolveFileFromSnapshot } from 'movement-lang';
+import { LANGUAGE_VERSION, resolveFileFromSnapshot } from 'movement-lang';
 import { eventAddressKey } from 'legacy-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
@@ -207,8 +207,8 @@ function webhookEvent(): TriggerEvent {
 }
 
 function spelled(text: string): string {
-  const catalog = { ...buildCatalog(), files: { 'lib/words': { source: spelledFor(LANGUAGE_VERSION, LIBRARY('ORIGINAL'), fromCatalogSnapshot(buildCatalog())) } } };
-  return spelledFor(LANGUAGE_VERSION, text, fromCatalogSnapshot(catalog), { resolveFile: resolveFileFromSnapshot(catalog) });
+  const catalog = { ...buildCatalog(), files: { 'lib/words': { source: spelledFor(LANGUAGE_VERSION, LIBRARY('ORIGINAL'), buildCatalog()) } } };
+  return spelledFor(LANGUAGE_VERSION, text, catalog, { resolveFile: resolveFileFromSnapshot(catalog) });
 }
 
 /** The library-source store keys its rows by its own team id type. */

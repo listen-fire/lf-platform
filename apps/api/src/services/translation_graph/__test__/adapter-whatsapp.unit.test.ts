@@ -58,6 +58,7 @@ import { parseProgram } from 'legacy-lang';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { SchemaTypeDescriptor, SourcePosition } from 'engine-contracts/catalog';
+import type { AwaitLanding } from 'engine-contracts';
 
 import {
   WhatsappAdapter,
@@ -72,8 +73,6 @@ import {
 import { fileValue, RESOURCES_REFERENCE_FIELD_ID } from 'movement-engine/public/adapter';
 import { installMemoryDocumentStore } from '../engine/files/__test__/memory_document_store';
 import { normalizeWhatsappPhone } from '@listen-fire/whatsapp/phone';
-import { discriminateEvent } from 'movement-engine/public/inbound';
-import { whatsappInboundEvents } from '@listen-fire/whatsapp/inbound';
 import { makeStablePosition, makeUnstablePosition } from 'engine-contracts/catalog';
 import { instanceSchemaFromDescriptors } from 'movement-engine/public/catalog';
 
@@ -631,16 +630,12 @@ describe('WhatsappAdapter.createRecord — anchor discipline', () => {
   });
 });
 
-// ── Inbound parse → discriminate pin (the chunk-1 carry-note) ────────────
-// WhatsApp's normalized payloads carry NO literal discriminator, so the event
-// type is TAG-ONLY: `preprocessInbound` stamps the parse-time classification
-// as the tag. After rule 1's collapse each kind discriminates to the RECORD
-// its fires edge delivers (`Message` / `Reaction` /
-// `Location`), seeded STABLE on the wamid — no event-node
-// indirection. This pins that a REACTION envelope lands on the reaction
-// record, never the message, and that the un-tagged conversion discriminates
-// NOTHING (the tag is load-bearing).
-describe('WhatsappAdapter.listEventTypes — inbound parse→discriminate pin', () => {
+// ── Inbound parse → arrival pin ──────────────────────────────────────────
+// Each kind of WhatsApp message arrives on the record its edge delivers
+// (`Message` / `Reaction` / `Location`, by their natural names), keyed by
+// its wamid. This pins that a
+// REACTION envelope lands on the reaction record, never the message.
+describe('WhatsappAdapter.preprocessInbound — each kind lands on its own record', () => {
   const envelope = (message: Record<string, unknown>) => ({
     object: 'whatsapp_business_account',
     entry: [
@@ -662,36 +657,27 @@ describe('WhatsappAdapter.listEventTypes — inbound parse→discriminate pin', 
   const REACTION = { from: '15551234567', id: 'wamid.RX', reaction: { message_id: 'wamid.TARGET', emoji: '👍' } };
   const LOCATION = { from: '15551234567', id: 'wamid.LOC', location: { latitude: 1, longitude: 2 } };
 
-  it('a text message discriminates to Message, seeded stable on the wamid', async () => {
-    const { events } = await adapter().preprocessInbound({ raw: envelope(TEXT) });
-    expect(events).toHaveLength(1);
-    const eventTypes = await adapter().listEventTypes();
-    const result = discriminateEvent({ adapterType: WHATSAPP_ADAPTER_TYPE, event: events[0], eventTypes });
-    expect(result?.eventType.positionType).toBe(WHATSAPP_RECORD_TYPE_ID);
-    expect(result?.position.identity).toMatchObject({ kind: 'stable', recordId: 'wamid.TEXT' });
+  async function landingOf(message: Record<string, unknown>): Promise<AwaitLanding> {
+    const { arrivals } = await adapter().preprocessInbound({ raw: envelope(message) });
+    expect(arrivals).toHaveLength(1);
+    const arrival = arrivals[0];
+    if (arrival === undefined || 'gone' in arrival) throw new Error('expected an arrival that lands');
+    return arrival.landing;
+  }
+
+  it('a text message lands on Message, keyed by the wamid', async () => {
+    const landing = await landingOf(TEXT);
+    expect(landing.recordType).toBe('Message');
+    expect(landing.recordId).toBe('wamid.TEXT');
   });
 
   it('a REACTION envelope lands on Reaction, NEVER the message', async () => {
-    const { events } = await adapter().preprocessInbound({ raw: envelope(REACTION) });
-    const eventTypes = await adapter().listEventTypes();
-    const result = discriminateEvent({ adapterType: WHATSAPP_ADAPTER_TYPE, event: events[0], eventTypes });
-    expect(result?.eventType.positionType).toBe(WHATSAPP_INBOUND_REACTION_TYPE);
-    expect(result?.eventType.positionType).not.toBe(WHATSAPP_RECORD_TYPE_ID);
+    const landing = await landingOf(REACTION);
+    expect(landing.recordType).toBe('Reaction');
   });
 
   it('a location envelope lands on Location', async () => {
-    const { events } = await adapter().preprocessInbound({ raw: envelope(LOCATION) });
-    const eventTypes = await adapter().listEventTypes();
-    const result = discriminateEvent({ adapterType: WHATSAPP_ADAPTER_TYPE, event: events[0], eventTypes });
-    expect(result?.eventType.positionType).toBe(WHATSAPP_INBOUND_LOCATION_TYPE);
-  });
-
-  it('an UN-tagged event discriminates NONE — pins that the tag is load-bearing', async () => {
-    const eventTypes = await adapter().listEventTypes();
-    for (const message of [TEXT, REACTION, LOCATION]) {
-      const { tag: _tag, ...untagged } = whatsappInboundEvents(envelope(message))[0]!;
-      expect(discriminateEvent({ adapterType: WHATSAPP_ADAPTER_TYPE, event: untagged, eventTypes })).toBeNull();
-    }
+    expect((await landingOf(LOCATION)).recordType).toBe('Location');
   });
 });
 
@@ -735,11 +721,6 @@ describe('File duality — movement compile against the real projected schema', 
       adapters: {
         whatsapp: {
           constructionArgs: [],
-          // Mirror the real catalog projection: a config-less listen is
-          // subscribed to MESSAGES ONLY (the manifest's
-          // defaultSubscribedEvents), so it types against `Message`
-          // (the fires edge lands straight on it — rule 1's collapse).
-          defaultEvents: ['message'],
           schema: projected.schema,
         },
       },

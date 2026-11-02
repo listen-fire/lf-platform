@@ -4,7 +4,7 @@
 // (`check.program`). A run on the TypeScript engine keeps the TypeScript
 // checker. The engine's requests are read off the artifact's segments.
 
-import { LANGUAGE_VERSION, fromCatalogSnapshot, mockCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
+import { LANGUAGE_VERSION, mockCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import { tenantIdOf } from 'engine-contracts';
 
@@ -82,13 +82,16 @@ const email: Adapter = {
 const PRELUDE = ['import { email } from adapters', 'import { dealflow_inbox } from credentials', 'inbox = email(credentials: dealflow_inbox)', ''].join('\n');
 
 async function run(languageVersion: LanguageVersion, body: string) {
+  // Written once, in the spelling versions 1–4 read; a version 5 run reads it
+  // as the upgrade tool respells it. Respelled before counting: the respelling
+  // asks the Rust checker for its fixes.
+  const source = spelledFor(languageVersion, `${PRELUDE}movement m(msg: <inbox-[:message]->>) {\n${body}\n}`, catalog);
   asked.length = 0;
   checkers.rust = 0;
   checkers.typescript = 0;
   try {
     const result = await runMovement({
-      // Written once, in the spelling versions 1–4 read; a version 5 run reads it as the upgrade tool respells it.
-      source: spelledFor(languageVersion, `${PRELUDE}movement m(msg: <inbox-[:message]->>) {\n${body}\n}`, fromCatalogSnapshot(catalog)),
+      source,
       event: { pipelineInputId: 'pi-native-check', adapterType: 'email', triggerType: 'webhook', payload: {} },
       teamId: TEAM_ID,
       catalog,

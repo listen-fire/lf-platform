@@ -61,6 +61,7 @@ import {
   positionData,
 } from 'movement-engine/public/catalog';
 import { BaseAdapter } from 'module-kit/adapter/base';
+import { describedType, type UnitSurface } from '../unit_surface';
 
 /** Stable adapter identifier — the trigger `kind` of manual-derived rows. */
 export const MANUAL_ADAPTER_TYPE = 'manual';
@@ -179,56 +180,46 @@ export const MANUAL_MANIFEST: AdapterManifest = {
   },
 };
 
-export class ManualAdapter extends BaseAdapter implements Adapter {
-  readonly adapterType = MANUAL_ADAPTER_TYPE;
-  readonly supportedTriggers = MANUAL_MANIFEST.supportedTriggers;
-  /** Unstable invocation positions resolve to the invocation type. */
-  readonly webhookEventTypeId = MANUAL_INVOCATION_TYPE_ID;
-
-  // teamId: the team whose stored documents its files may be read from.
-  constructor(private readonly teamId: TeamId) {
-    super();
-  }
-
-  async listEntryPoints(): Promise<SchemaEntryPoint[]> {
-    // The natural names (`Invocation` / `File`, TitleCase) are the currency
-    // authors, the checker, and the hover use; the internal `invocation` /
-    // `file` typeIds live only in this adapter's private cache. They no longer
-    // need to be identical: the event edge keys its seed by the natural node
-    // NAME (the address, layer 8), fanned file positions carry the natural
-    // name (THE ONE RULE, base.ts), and describe accepts either spelling — so
-    // reads resolve through the resolver whichever way a position is stamped.
-    return [
-      {
-        typeId: MANUAL_INVOCATION_TYPE_ID,
-        displayName: MANUAL_INVOCATION_DISPLAY_NAME,
-        writable: false,
-        // Nothing enumerates Run-now presses: each is an arrival on
-        // `Invocations`, to the listens on it.
-        readable: false,
-        collectionName: MANUAL_INVOCATIONS_EDGE,
-        listenable: true,
-        delivery: 'connection',
-      },
-      {
-        typeId: MANUAL_FILE_TYPE_ID,
-        displayName: MANUAL_FILE_DISPLAY_NAME,
-        writable: false,
-        // A supplied file is reached ONLY via the invocation's `Files` edge —
-        // the same child-type honesty as every category-1 sweep entry: the
-        // position survives via reachability; the phantom root read dies.
-        readable: false,
-      },
-    ];
-  }
-
+/** What a manual instance publishes and every type it describes. It is
+ *  fixed data, so a catalog that cannot ask the adapter (the static one
+ *  tests check against) projects the surface the adapter answers. */
+export const MANUAL_SURFACE: UnitSurface = {
+  // The natural names (`Invocation` / `File`, TitleCase) are the currency
+  // authors, the checker, and the hover use; the internal `invocation` /
+  // `file` typeIds live only in this adapter's private cache. They no longer
+  // need to be identical: the event edge keys its seed by the natural node
+  // NAME (the address, layer 8), fanned file positions carry the natural
+  // name (THE ONE RULE, base.ts), and describe accepts either spelling — so
+  // reads resolve through the resolver whichever way a position is stamped.
+  entries: [
+    {
+      typeId: MANUAL_INVOCATION_TYPE_ID,
+      displayName: MANUAL_INVOCATION_DISPLAY_NAME,
+      writable: false,
+      // Nothing enumerates Run-now presses: each is an arrival on
+      // `Invocations`, to the listens on it.
+      readable: false,
+      collectionName: MANUAL_INVOCATIONS_EDGE,
+      listenable: true,
+      delivery: 'connection',
+    },
+    {
+      typeId: MANUAL_FILE_TYPE_ID,
+      displayName: MANUAL_FILE_DISPLAY_NAME,
+      writable: false,
+      // A supplied file is reached ONLY via the invocation's `Files` edge —
+      // the same child-type honesty as every category-1 sweep entry: the
+      // position survives via reachability; the phantom root read dies.
+      readable: false,
+    },
+  ],
   /**
    * The root: a way to be run, and the invocation that arrives when someone
    * runs it. Note that `File` is NOT here — a supplied file is reached only
    * along the invocation's `Files` edge, so the walk arrives at it one hop in
    * and never advertises a root read that could not work.
    */
-  private static readonly ROOT: SchemaTypeDescriptor = {
+  root: {
     typeId: META_RECORD_TYPE,
     displayName: 'Run',
     description:
@@ -248,65 +239,78 @@ export class ManualAdapter extends BaseAdapter implements Adapter {
         description: 'Somebody running the automation — what a listen delivers.',
       },
     ],
-  };
+  },
+  types: [
+    {
+      typeId: MANUAL_INVOCATION_TYPE_ID,
+      displayName: MANUAL_INVOCATION_DISPLAY_NAME,
+      description: 'One Run-now press — when, by whom, and any text or files supplied.',
+      fields: [
+        { fieldId: 'firedAt', displayName: 'Fired at', kind: 'date', writable: false, required: true, description: 'When the run was requested (UTC).' },
+        { fieldId: 'actorEmail', displayName: 'Run by (email)', kind: 'string', writable: false, required: false, description: 'Email of the member who pressed Run now, when known.' },
+        { fieldId: 'actorName', displayName: 'Run by (name)', kind: 'string', writable: false, required: false, description: 'Name of the member who pressed Run now, when known.' },
+        { fieldId: 'text', displayName: 'Text', kind: 'string', writable: false, required: false, description: 'Text supplied when running the movement (optional).' },
+        // `content` is a friendly alias for the text — authors who want
+        // "the body" regardless of how the run was triggered use this.
+        { fieldId: 'content', displayName: 'Content', kind: 'string', writable: false, required: false, description: 'The supplied text. An alias for "Text".' },
+      ],
+      references: [
+        {
+          fieldId: MANUAL_FILES_FIELD,
+          targetTypeId: MANUAL_FILE_TYPE_ID,
+          cardinality: 'many',
+          direction: 'outgoing',
+          name: 'Files',
+          // Read-only: the files came with the run request; nothing is
+          // ever created along this edge.
+          writable: false,
+          description: 'Files supplied when running the movement (zero or more).',
+        },
+      ],
+    },
+    {
+      typeId: MANUAL_FILE_TYPE_ID,
+      displayName: MANUAL_FILE_DISPLAY_NAME,
+      fields: [
+        { fieldId: 'name', displayName: 'Name', kind: 'string', writable: false, required: true },
+        { fieldId: 'contentType', displayName: 'Content Type', kind: 'string', writable: false, required: true },
+        { fieldId: 'size', displayName: 'Size', kind: 'number', writable: false, required: false },
+        // `data` is the binary handle — the File primitive per
+        // resources_currency.md, matching the email/whatsapp attachment's
+        // File field so File-typed expressions route into File-typed targets.
+        { fieldId: 'data', displayName: 'File', kind: 'file', writable: false, required: false },
+      ],
+      references: [],
+    },
+  ],
+};
+
+export class ManualAdapter extends BaseAdapter implements Adapter {
+  readonly adapterType = MANUAL_ADAPTER_TYPE;
+  readonly supportedTriggers = MANUAL_MANIFEST.supportedTriggers;
+  /** Unstable invocation positions resolve to the invocation type. */
+  readonly webhookEventTypeId = MANUAL_INVOCATION_TYPE_ID;
+
+  // teamId: the team whose stored documents its files may be read from.
+  constructor(private readonly teamId: TeamId) {
+    super();
+  }
+
+  async listEntryPoints(): Promise<SchemaEntryPoint[]> {
+    return [...MANUAL_SURFACE.entries];
+  }
 
   async edgesFrom(position: SourcePosition): Promise<EdgesFromResult | null> {
     return uniformWalk({
       adapterType: MANUAL_ADAPTER_TYPE,
       at: position,
-      root: ManualAdapter.ROOT,
+      root: MANUAL_SURFACE.root,
       describe: (typeId) => this.describe(typeId),
     });
   }
 
   async describe(typeRef: string): Promise<SchemaTypeDescriptor | null> {
-    const typeId = await this.resolveTypeRef(typeRef);
-    if (typeId === MANUAL_INVOCATION_TYPE_ID) {
-      return {
-        typeId: MANUAL_INVOCATION_TYPE_ID,
-        displayName: MANUAL_INVOCATION_DISPLAY_NAME,
-        description: 'One Run-now press — when, by whom, and any text or files supplied.',
-        fields: [
-          { fieldId: 'firedAt', displayName: 'Fired at', kind: 'date', writable: false, required: true, description: 'When the run was requested (UTC).' },
-          { fieldId: 'actorEmail', displayName: 'Run by (email)', kind: 'string', writable: false, required: false, description: 'Email of the member who pressed Run now, when known.' },
-          { fieldId: 'actorName', displayName: 'Run by (name)', kind: 'string', writable: false, required: false, description: 'Name of the member who pressed Run now, when known.' },
-          { fieldId: 'text', displayName: 'Text', kind: 'string', writable: false, required: false, description: 'Text supplied when running the movement (optional).' },
-          // `content` is a friendly alias for the text — authors who want
-          // "the body" regardless of how the run was triggered use this.
-          { fieldId: 'content', displayName: 'Content', kind: 'string', writable: false, required: false, description: 'The supplied text. An alias for "Text".' },
-        ],
-        references: [
-          {
-            fieldId: MANUAL_FILES_FIELD,
-            targetTypeId: MANUAL_FILE_TYPE_ID,
-            cardinality: 'many',
-            direction: 'outgoing',
-            name: 'Files',
-            // Read-only: the files came with the run request; nothing is
-            // ever created along this edge.
-            writable: false,
-            description: 'Files supplied when running the movement (zero or more).',
-          },
-        ],
-      };
-    }
-    if (typeId === MANUAL_FILE_TYPE_ID) {
-      return {
-        typeId: MANUAL_FILE_TYPE_ID,
-        displayName: MANUAL_FILE_DISPLAY_NAME,
-        fields: [
-          { fieldId: 'name', displayName: 'Name', kind: 'string', writable: false, required: true },
-          { fieldId: 'contentType', displayName: 'Content Type', kind: 'string', writable: false, required: true },
-          { fieldId: 'size', displayName: 'Size', kind: 'number', writable: false, required: false },
-          // `data` is the binary handle — the File primitive per
-          // resources_currency.md, matching the email/whatsapp attachment's
-          // File field so File-typed expressions route into File-typed targets.
-          { fieldId: 'data', displayName: 'File', kind: 'file', writable: false, required: false },
-        ],
-        references: [],
-      };
-    }
-    return null;
+    return describedType(MANUAL_SURFACE, await this.resolveTypeRef(typeRef));
   }
 
   async getFieldValue(input: { position: SourcePosition; fieldId: string }): Promise<unknown> {

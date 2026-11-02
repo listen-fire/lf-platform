@@ -10,7 +10,6 @@
 // eval wire cannot carry.
 
 import {
-  fromCatalogSnapshot,
   mockCatalogSnapshot,
   type InstanceSchema,
   type PluginSpec,
@@ -194,7 +193,7 @@ const USAGE = { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheCreati
 
 /** The program as version 5 spells it (the shapes and calls are written so). */
 const spelled = (source: string): string =>
-  spelledFor(LANGUAGE_VERSION, source, fromCatalogSnapshot(catalog));
+  spelledFor(LANGUAGE_VERSION, source, catalog);
 
 /** One run on the Rust engine: what it returned or threw, and what the model
  *  client and the plugin invoker were asked. */

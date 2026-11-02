@@ -13,7 +13,7 @@ import { resolveAdapter } from '../../adapters/resolve';
 import { createManualAdapter } from '../../adapters/manual';
 import { MANUAL_HANDBOOK_SECTION } from '../../adapters/manual/handbook_section';
 import { clearIntrospectionCache } from '../instance_cache';
-import { movementCatalogForTeam } from '../catalog';
+import { movementCatalogForTeam, staticCatalogSnapshot } from '../catalog';
 import { diagnoseMovementSource } from '../authoring';
 
 jest.mock('../../../../lib/kysely', () => {
@@ -125,5 +125,14 @@ describe("a team's run snapshot and the run host's units", () => {
     const invocation = team.runSnapshot?.().adapters.manual?.schemas['']?.positions.Invocation;
     expect(invocation?.properties).toMatchObject({ Text: 'text' });
     expect(invocation?.edges).toMatchObject({ Files: { target: 'File' } });
+  });
+
+  it("the static catalog tests check against describes manual as a team's catalog does", async () => {
+    const team = await movementCatalogForTeam(TEAM, { source: BARE_READING_TEXT, languageVersion: LANGUAGE_VERSION });
+    const described = team.runSnapshot?.().adapters.manual?.schemas[''];
+    const projected = staticCatalogSnapshot().adapters.manual?.schemas[''];
+    expect(described?.positions.Invocation).toBeDefined();
+    expect(projected?.positions.Invocation).toEqual(described?.positions.Invocation);
+    expect(projected?.collections).toEqual(described?.collections);
   });
 });

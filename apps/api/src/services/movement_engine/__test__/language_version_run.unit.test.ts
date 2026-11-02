@@ -137,7 +137,7 @@ function manualEvent(): TriggerEvent {
 // A pin no release reads has no surface spelling to put the source in.
 function run(kg: ReturnType<typeof makeKgFake>, languageVersion?: LanguageVersion, spell = true) {
   return runMovement({
-    source: spell ? spelledFor(languageVersion ?? LANGUAGE_VERSION, SOURCE, fromCatalogSnapshot(catalog)) : SOURCE,
+    source: spell ? spelledFor(languageVersion ?? LANGUAGE_VERSION, SOURCE, catalog) : SOURCE,
     ...(languageVersion !== undefined ? { languageVersion } : {}),
     event: manualEvent(),
     teamId: TEAM_ID,
