@@ -16,8 +16,23 @@ export interface UpgradeDiagnostic {
 
 // A legacy id ('1'..'4') is a version from before the language was versioned
 // by its release.
+function isLegacy(version: LanguageVersion): boolean {
+  return /^[1-4]$/.test(version);
+}
+
 function versionName(version: LanguageVersion): string {
-  return /^[1-4]$/.test(version) ? `legacy ${version}` : version;
+  return isLegacy(version) ? `legacy ${version}` : version;
+}
+
+/** What happens to it until it is upgraded: a legacy id runs on the platform's
+ *  own engine; a release pin the installed language does not read stopped
+ *  firing at the deploy that installed it. */
+function Meanwhile({ version }: { version: LanguageVersion }) {
+  return isLegacy(version) ? (
+    <>It keeps running as <VersionTag name={versionName(version)} /> until you upgrade it.</>
+  ) : (
+    <>It stopped firing when <VersionTag name={versionName(LANGUAGE_VERSION)} /> was installed, and stays stopped until you upgrade it.</>
+  );
 }
 
 function issuesText(count: number): string {
@@ -87,14 +102,14 @@ export function LanguageVersionNotice({
       </p>
       {!isCurrent && issues.length === 0 && (
         <p className="mt-2 text-[12.5px] leading-relaxed text-gray-600">
-          It keeps running as <VersionTag name={name} /> until you upgrade it:
-          ask your own agent to, through the MCP connector.
+          <Meanwhile version={languageVersion} /> Ask your own agent to
+          upgrade it, through the MCP connector.
         </p>
       )}
       {issues.length > 0 && (
         <>
           <p className="mt-2 text-[12.5px] leading-relaxed text-gray-600">
-            It keeps running as <VersionTag name={name} />.{" "}
+            <Meanwhile version={languageVersion} />{" "}
             <VersionTag name={current} /> reports the issues below; fix them,
             then ask your own agent to upgrade it, through the MCP connector.
           </p>
