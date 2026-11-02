@@ -40,6 +40,8 @@ import type { Catalog, CatalogSnapshot, InstanceSchema, PositionSchema } from 'm
 import { LANGUAGE_VERSION } from 'movement-lang';
 import { eventAddressKey } from 'legacy-lang';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
+import { arrivalTriggerOf } from 'movement-engine/public/inbound';
+import { MANUAL_ADAPTER_TYPE, invocationArrival } from '../../translation_graph/adapters/manual';
 import { resumeTimerHandler } from '../timer_resume';
 import { testWorkContext } from '../../../test/harness/work';
 
@@ -161,13 +163,9 @@ function makeSlackTargetFake(): { adapter: Adapter; creates: Record<string, unkn
 }
 
 const SLEEP_THEN_NOTIFY = [
-  'import { attio, slack } from adapters',
-  'import { acme_main, acme_slack } from credentials',
+  'chat = connect `@lf/slack` using acme_slack',
   '',
-  'crm = connect attio using acme_main',
-  'chat = connect slack using acme_slack',
-  '',
-  'function sleep_then_notify(ev: <crm-[:`Webhook Event`]->>) {',
+  'function sleep_then_notify(go: <manual-[:Invocations]->>) {',
   '  await sleep(1s)',
   '  write chat-[:messages]-> {',
   '    channel: "#alerts"',
@@ -175,7 +173,7 @@ const SLEEP_THEN_NOTIFY = [
   '  }',
   '}',
   '',
-  'listen to crm { events: ["record.created"] } fire sleep_then_notify',
+  'listen to manual-[:Invocations]-> fire sleep_then_notify',
 ].join('\n');
 
 // A sleep nested ONE LEVEL inside an `if`, followed by a TRAILING TOP-LEVEL write
@@ -192,14 +190,10 @@ const SLEEP_THEN_NOTIFY = [
 // with the linear top-level `sleep; write` above (SLEEP_THEN_NOTIFY), where the
 // leaf's OWN block IS the movement body, so the trailing write DOES run.
 const IF_THEN_TAIL = [
-  'import { attio, slack } from adapters',
-  'import { acme_main, acme_slack } from credentials',
+  'chat = connect `@lf/slack` using acme_slack',
   '',
-  'crm = connect attio using acme_main',
-  'chat = connect slack using acme_slack',
-  '',
-  'function if_then_tail(ev: <crm-[:`Webhook Event`]->>) {',
-  '  if (ev is <crm-[:`Webhook Event` WHERE `action` == "record.created"]->>) {',
+  'function if_then_tail(go: <manual-[:Invocations]->>) {',
+  '  if (true) {',
   '    await sleep(1s)',
   '    write chat-[:messages]-> {',
   '      channel: "#alerts"',
@@ -212,7 +206,7 @@ const IF_THEN_TAIL = [
   '  }',
   '}',
   '',
-  'listen to crm { events: ["record.created"] } fire if_then_tail',
+  'listen to manual-[:Invocations]-> fire if_then_tail',
 ].join('\n');
 
 async function seedMovement(
@@ -238,7 +232,7 @@ async function seedMovement(
       id: triggerId,
       team_id: teamId,
       name: 'Attio record changes',
-      kind: 'attio',
+      kind: 'manual',
       movement_id: movementId,
       fired_movement_name: opts.firedName,
     } as any)
@@ -258,17 +252,10 @@ async function seedMovementWithTrigger(teamId: TeamId): Promise<{
   });
 }
 
+/** A press of Run now: an arrival on the manual unit's `Invocations`. */
 function webhookEvent(): TriggerEvent {
-  return {
-    pipelineInputId: 'trigger:test',
-    adapterType: 'attio',
-    triggerType: 'webhook',
-    payload: { event_type: 'record.created', action: 'record.created', id: { object_id: 'obj-x', record_id: 'co-1' } },
-    changeType: 'create',
-    rootRecordType: 'Companies',
-    externalRecordRef: { adapterType: 'attio', externalId: 'co-1', recordType: 'Companies' },
-    occurredAt: new Date().toISOString(),
-  };
+  const arrival = invocationArrival({ firedAt: new Date().toISOString(), submissionId: randomUUID() });
+  return arrivalTriggerOf({ pipelineInputId: 'trigger:test', adapterType: MANUAL_ADAPTER_TYPE, arrival, now: new Date() });
 }
 
 describe('timer_resume — the wake driver (real DB)', () => {
@@ -297,9 +284,12 @@ describe('timer_resume — the wake driver (real DB)', () => {
 
     const target = makeSlackTargetFake();
     slackCreates = target.creates;
-    mockedResolve.mockImplementation(async ({ adapterType }: { adapterType: string }) => {
+    const actualResolve = jest.requireActual('../../translation_graph/adapters/resolve').resolveAdapter;
+    mockedResolve.mockImplementation(async (input: { adapterType: string }) => {
+      const { adapterType } = input;
       if (adapterType === 'attio') return makeAttioSourceFake();
       if (adapterType === 'slack') return target.adapter;
+      if (adapterType === MANUAL_ADAPTER_TYPE) return actualResolve(input);
       throw new Error(`test: no fake for '${adapterType}'`);
     });
   });

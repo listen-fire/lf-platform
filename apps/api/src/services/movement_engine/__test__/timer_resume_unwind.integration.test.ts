@@ -54,6 +54,8 @@ import type { Catalog, CatalogSnapshot, InstanceSchema, LanguageVersion, Positio
 import { LANGUAGE_VERSION } from 'movement-lang';
 import { eventAddressKey } from 'legacy-lang';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
+import { arrivalTriggerOf } from 'movement-engine/public/inbound';
+import { MANUAL_ADAPTER_TYPE, invocationArrival } from '../../translation_graph/adapters/manual';
 import { resumeTimerHandler } from '../timer_resume';
 import { testWorkContext } from '../../../test/harness/work';
 
@@ -88,7 +90,7 @@ const ATTIO_SCHEMA: InstanceSchema = {
     },
     ...graftPositions,
   },
-  collections: {},
+  collections: { Contacts: { target: 'Contact' } },
   unions: { [EVENT]: graftVariants },
   writableRoots: {},
 };
@@ -222,9 +224,9 @@ const PRELUDE_V3 = [
 // §10.3 / §10.9 — fan-out sleep inside an `if`, trailing top-level write.
 const FANOUT_THEN_TAIL = [
   ...PRELUDE,
-  'function fanout_then_tail(ev: <crm-[:`Webhook Event`]->>) {',
-  '  if (ev is <crm-[:`Webhook Event` WHERE `action` == "record.created"]->>) {',
-  '    ev-[c:Contacts]-> {',
+  'function fanout_then_tail(go: <manual-[:Invocations]->>) {',
+  '  if (true) {',
+  '    crm-[c:Contacts]-> {',
   '      await sleep(1s)',
   '      write chat-[:messages]-> {',
   '        channel: "#alerts"',
@@ -238,14 +240,14 @@ const FANOUT_THEN_TAIL = [
   '  }',
   '}',
   '',
-  'listen to crm { events: ["record.created"] } fire fanout_then_tail',
+  'listen to manual-[:Invocations]-> fire fanout_then_tail',
 ].join('\n');
 
 const ASSIGNED_FANOUT = [
   ...PRELUDE,
-  'function assigned_fanout(ev: <crm-[:`Webhook Event`]->>) {',
-  '  if (ev is <crm-[:`Webhook Event` WHERE `action` == "record.created"]->>) {',
-  '    xs = ev-[c:Contacts]-> {',
+  'function assigned_fanout(go: <manual-[:Invocations]->>) {',
+  '  if (true) {',
+  '    xs = crm-[c:Contacts]-> {',
   '      await sleep(1s)',
   '      return write chat-[:messages]-> {',
   '        channel: "#alerts"',
@@ -259,7 +261,7 @@ const ASSIGNED_FANOUT = [
   '  }',
   '}',
   '',
-  'listen to crm { events: ["record.created"] } fire assigned_fanout',
+  'listen to manual-[:Invocations]-> fire assigned_fanout',
 ].join('\n');
 const PARALLEL_TAIL_V3 = [
   ...PRELUDE_V3,
@@ -296,10 +298,13 @@ const PARALLEL_TAIL_V3 = [
 const DEEP_NEST_V3 = [
   ...PRELUDE_V3,
   'movement deep_nest_v3(ev: <crm-[:`Webhook Event`]->>) {',
-  '  if ev IS <crm-[:`Webhook Event` WHERE `action` == "record.created"]->> {',
+  // A 0.12 event is no longer typed (ruling 11: 0.13 seeds no typed event),
+  // so the outer `if` holds on a plain comparison and the fan-out walks the
+  // connection's contacts rather than the event's.
+  '  if "on" == "on" {',
   '    r = await parallel([',
   '      () => {',
-  '        ev-[c:Contacts]-> {',
+  '        crm-[c:Contacts]-> {',
   '          await sleep(1s)',
   '          write chat-[:messages]-> {',
   '            channel: "#alerts"',
@@ -334,8 +339,8 @@ const DEEP_NEST_V3 = [
 // §10.6 — non-join re-park: the trailing continuation ITSELF contains a sleep.
 const IF_THEN_SLEEP_TAIL = [
   ...PRELUDE,
-  'function if_then_sleep_tail(ev: <crm-[:`Webhook Event`]->>) {',
-  '  if (ev is <crm-[:`Webhook Event` WHERE `action` == "record.created"]->>) {',
+  'function if_then_sleep_tail(go: <manual-[:Invocations]->>) {',
+  '  if (true) {',
   '    await sleep(1s)',
   '    write chat-[:messages]-> {',
   '      channel: "#alerts"',
@@ -349,7 +354,7 @@ const IF_THEN_SLEEP_TAIL = [
   '  }',
   '}',
   '',
-  'listen to crm { events: ["record.created"] } fire if_then_sleep_tail',
+  'listen to manual-[:Invocations]-> fire if_then_sleep_tail',
 ].join('\n');
 
 // §10.6 / §10.9 — fan-out whose CLOSER's continuation re-parks (trailing sleep).
@@ -359,9 +364,9 @@ const IF_THEN_SLEEP_TAIL = [
 // + branch exports SURVIVE — the exact mid-crash state to re-scan.
 const FANOUT_TAIL_REPARK = [
   ...PRELUDE,
-  'function fanout_tail_repark(ev: <crm-[:`Webhook Event`]->>) {',
-  '  if (ev is <crm-[:`Webhook Event` WHERE `action` == "record.created"]->>) {',
-  '    ev-[c:Contacts]-> {',
+  'function fanout_tail_repark(go: <manual-[:Invocations]->>) {',
+  '  if (true) {',
+  '    crm-[c:Contacts]-> {',
   '      await sleep(1s)',
   '      write chat-[:messages]-> {',
   '        channel: "#alerts"',
@@ -376,7 +381,7 @@ const FANOUT_TAIL_REPARK = [
   '  }',
   '}',
   '',
-  'listen to crm { events: ["record.created"] } fire fanout_tail_repark',
+  'listen to manual-[:Invocations]-> fire fanout_tail_repark',
 ].join('\n');
 
 async function seedMovement(
@@ -401,7 +406,7 @@ async function seedMovement(
       id: triggerId,
       team_id: teamId,
       name: 'Attio record changes',
-      kind: 'attio',
+      kind: 'manual',
       movement_id: movementId,
       fired_movement_name: opts.firedName,
     } as any)
@@ -410,7 +415,8 @@ async function seedMovement(
   return { triggerId };
 }
 
-function webhookEvent(): TriggerEvent {
+/** A 0.12 Attio webhook event, as a version-3 movement's listen heard it. */
+function legacyWebhookEvent(): TriggerEvent {
   return {
     pipelineInputId: 'trigger:test',
     adapterType: 'attio',
@@ -421,6 +427,12 @@ function webhookEvent(): TriggerEvent {
     externalRecordRef: { adapterType: 'attio', externalId: 'co-1', recordType: 'Companies' },
     occurredAt: new Date().toISOString(),
   };
+}
+
+/** A press of Run now: an arrival on the manual unit's `Invocations`. */
+function webhookEvent(): TriggerEvent {
+  const arrival = invocationArrival({ firedAt: new Date().toISOString(), submissionId: randomUUID() });
+  return arrivalTriggerOf({ pipelineInputId: 'trigger:test', adapterType: MANUAL_ADAPTER_TYPE, arrival, now: new Date() });
 }
 
 async function timerParks(teamId: TeamId): Promise<{ runId: string; address: string; state: unknown }[]> {
@@ -518,9 +530,12 @@ describe('timer_resume — unwind-and-continue matrix (real DB)', () => {
 
     const target = makeSlackTargetFake();
     slackCreates = target.creates;
-    mockedResolve.mockImplementation(async ({ adapterType }: { adapterType: string }) => {
+    const actualResolve = jest.requireActual('../../translation_graph/adapters/resolve').resolveAdapter;
+    mockedResolve.mockImplementation(async (input: { adapterType: string }) => {
+      const { adapterType } = input;
       if (adapterType === 'attio') return makeAttioSourceFake();
       if (adapterType === 'slack') return target.adapter;
+      if (adapterType === MANUAL_ADAPTER_TYPE) return actualResolve(input);
       throw new Error(`test: no fake for '${adapterType}'`);
     });
   });
@@ -580,7 +595,7 @@ describe('timer_resume — unwind-and-continue matrix (real DB)', () => {
       name: 'Parallel combinator tail',
     });
 
-    await dispatchTriggerByIdEvent({ triggerId, teamId, event: webhookEvent() });
+    await dispatchTriggerByIdEvent({ triggerId, teamId, event: legacyWebhookEvent() });
     // Both arms parked at their sleep; no writes yet.
     expect(slackCreates).toHaveLength(0);
     const parks = await timerParks(teamId);
@@ -671,7 +686,7 @@ describe('timer_resume — unwind-and-continue matrix (real DB)', () => {
       name: 'Deep nest (combinator)',
     });
 
-    await dispatchTriggerByIdEvent({ triggerId, teamId, event: webhookEvent() });
+    await dispatchTriggerByIdEvent({ triggerId, teamId, event: legacyWebhookEvent() });
     const parks = await timerParks(teamId);
     // N fan-out leaves (arm 0) + 1 sleep leaf (arm 1).
     expect(parks).toHaveLength(FANOUT_N + 1);

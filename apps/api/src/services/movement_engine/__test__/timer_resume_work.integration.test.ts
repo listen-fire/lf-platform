@@ -31,6 +31,8 @@ import type { Catalog, CatalogSnapshot, InstanceSchema, PositionSchema } from 'm
 import { LANGUAGE_VERSION } from 'movement-lang';
 import { eventAddressKey } from 'legacy-lang';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
+import { arrivalTriggerOf } from 'movement-engine/public/inbound';
+import { MANUAL_ADAPTER_TYPE, invocationArrival } from '../../translation_graph/adapters/manual';
 import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
 import { TriggerRunRecorder } from '../../translation_graph/runs/trigger_run';
 import { registerTimerWork, resumeTimerParkedRun, settleCancelledTimersHandler, timerWorkKey } from '../timer_resume';
@@ -158,13 +160,9 @@ function makeSlackTargetFake(): { adapter: Adapter; creates: Record<string, unkn
 }
 
 const SLEEP_THEN_NOTIFY = [
-  'import { attio, slack } from adapters',
-  'import { acme_main, acme_slack } from credentials',
+  'chat = connect `@lf/slack` using acme_slack',
   '',
-  'crm = connect attio using acme_main',
-  'chat = connect slack using acme_slack',
-  '',
-  'function sleep_then_notify(ev: <crm-[:`Webhook Event`]->>) {',
+  'function sleep_then_notify(go: <manual-[:Invocations]->>) {',
   '  await sleep(1h)',
   '  write chat-[:messages]-> {',
   '    channel: "#alerts"',
@@ -172,17 +170,13 @@ const SLEEP_THEN_NOTIFY = [
   '  }',
   '}',
   '',
-  'listen to crm { events: ["record.created"] } fire sleep_then_notify',
+  'listen to manual-[:Invocations]-> fire sleep_then_notify',
 ].join('\n');
 
 const SLEEP_THEN_TWICE = [
-  'import { attio, slack } from adapters',
-  'import { acme_main, acme_slack } from credentials',
+  'chat = connect `@lf/slack` using acme_slack',
   '',
-  'crm = connect attio using acme_main',
-  'chat = connect slack using acme_slack',
-  '',
-  'function sleep_then_twice(ev: <crm-[:`Webhook Event`]->>) {',
+  'function sleep_then_twice(go: <manual-[:Invocations]->>) {',
   '  await sleep(1h)',
   '  write chat-[:messages]-> {',
   '    channel: "#alerts"',
@@ -194,17 +188,13 @@ const SLEEP_THEN_TWICE = [
   '  }',
   '}',
   '',
-  'listen to crm { events: ["record.created"] } fire sleep_then_twice',
+  'listen to manual-[:Invocations]-> fire sleep_then_twice',
 ].join('\n');
 
 const SLEEP_THEN_LAST = [
-  'import { attio, slack } from adapters',
-  'import { acme_main, acme_slack } from credentials',
+  'chat = connect `@lf/slack` using acme_slack',
   '',
-  'crm = connect attio using acme_main',
-  'chat = connect slack using acme_slack',
-  '',
-  'function sleep_then_last(ev: <crm-[:`Webhook Event`]->>) {',
+  'function sleep_then_last(go: <manual-[:Invocations]->>) {',
   '  await sleep(1h)',
   '  write chat-[:messages]-> {',
   '    channel: "#alerts"',
@@ -212,7 +202,7 @@ const SLEEP_THEN_LAST = [
   '  }',
   '}',
   '',
-  'listen to crm { events: ["record.created"] } fire sleep_then_last',
+  'listen to manual-[:Invocations]-> fire sleep_then_last',
 ].join('\n');
 
 async function seedMovement(
@@ -237,8 +227,8 @@ async function seedMovement(
     .values({
       id: triggerId,
       team_id: teamId,
-      name: 'Attio record changes',
-      kind: 'attio',
+      name: 'Run now',
+      kind: 'manual',
       movement_id: movementId,
       fired_movement_name: opts.firedName,
     } as any)
@@ -258,17 +248,10 @@ async function seedMovementWithTrigger(teamId: TeamId): Promise<{
   });
 }
 
+/** A press of Run now: an arrival on the manual unit's `Invocations`. */
 function webhookEvent(): TriggerEvent {
-  return {
-    pipelineInputId: 'trigger:test',
-    adapterType: 'attio',
-    triggerType: 'webhook',
-    payload: { event_type: 'record.created', action: 'record.created', id: { object_id: 'obj-x', record_id: 'co-1' } },
-    changeType: 'create',
-    rootRecordType: 'Companies',
-    externalRecordRef: { adapterType: 'attio', externalId: 'co-1', recordType: 'Companies' },
-    occurredAt: new Date().toISOString(),
-  };
+  const arrival = invocationArrival({ firedAt: new Date().toISOString(), submissionId: randomUUID() });
+  return arrivalTriggerOf({ pipelineInputId: 'trigger:test', adapterType: MANUAL_ADAPTER_TYPE, arrival, now: new Date() });
 }
 
 
@@ -399,10 +382,12 @@ describe('timer_resume — parks resume through the work table (real DB)', () =>
 
     const target = makeSlackTargetFake();
     slackCreates = target.creates;
-    mockedResolve.mockImplementation(async ({ adapterType }: { adapterType: string }) => {
-      if (adapterType === 'attio') return makeAttioSourceFake();
-      if (adapterType === 'slack') return target.adapter;
-      throw new Error(`test: no fake for '${adapterType}'`);
+    const actualResolve = jest.requireActual('../../translation_graph/adapters/resolve').resolveAdapter;
+    mockedResolve.mockImplementation(async (input: { adapterType: string }) => {
+      if (input.adapterType === 'attio') return makeAttioSourceFake();
+      if (input.adapterType === 'slack') return target.adapter;
+      if (input.adapterType === MANUAL_ADAPTER_TYPE) return actualResolve(input);
+      throw new Error(`test: no fake for '${input.adapterType}'`);
     });
   });
 

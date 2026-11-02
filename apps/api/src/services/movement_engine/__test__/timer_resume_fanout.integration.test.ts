@@ -54,6 +54,8 @@ import type { Catalog, CatalogSnapshot, InstanceSchema, PositionSchema } from 'm
 import { LANGUAGE_VERSION } from 'movement-lang';
 import { eventAddressKey } from 'legacy-lang';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
+import { arrivalTriggerOf } from 'movement-engine/public/inbound';
+import { MANUAL_ADAPTER_TYPE, invocationArrival } from '../../translation_graph/adapters/manual';
 import { resumeTimerHandler } from '../timer_resume';
 import { testWorkContext } from '../../../test/harness/work';
 
@@ -90,7 +92,7 @@ const ATTIO_SCHEMA: InstanceSchema = {
     },
     ...graftPositions,
   },
-  collections: {},
+  collections: { Contacts: { target: 'Contact' } },
   unions: { [EVENT]: graftVariants },
   writableRoots: {},
 };
@@ -194,15 +196,12 @@ function makeSlackTargetFake(): { adapter: Adapter; creates: Record<string, unkn
 // contacts, and — for EACH — sleep then write. One dispatch ⇒ N timer parks
 // under one join (the block frame).
 const FANOUT_SLEEP = [
-  'import { attio, slack } from adapters',
-  'import { acme_main, acme_slack } from credentials',
+  'crm = connect `@lf/attio` using acme_main',
+  'chat = connect `@lf/slack` using acme_slack',
   '',
-  'crm = connect attio using acme_main',
-  'chat = connect slack using acme_slack',
-  '',
-  'function fanout_sleep_notify(ev: <crm-[:`Webhook Event`]->>) {',
-  '  if (ev is <crm-[:`Webhook Event` WHERE `action` == "record.created"]->>) {',
-  '    ev-[c:Contacts]-> {',
+  'function fanout_sleep_notify(go: <manual-[:Invocations]->>) {',
+  '  if (true) {',
+  '    crm-[c:Contacts]-> {',
   '      await sleep(1s)',
   '      write chat-[:messages]-> {',
   '        channel: "#alerts"',
@@ -212,7 +211,7 @@ const FANOUT_SLEEP = [
   '  }',
   '}',
   '',
-  'listen to crm { events: ["record.created"] } fire fanout_sleep_notify',
+  'listen to manual-[:Invocations]-> fire fanout_sleep_notify',
 ].join('\n');
 
 // The fan-out sleep movement WITH A TRAILING TOP-LEVEL WRITE after the fan-out
@@ -229,15 +228,12 @@ const FANOUT_SLEEP = [
 // claiming the completer "runs the enclosing sequence forward" is not backed by
 // code on this resume path.
 const FANOUT_THEN_TAIL = [
-  'import { attio, slack } from adapters',
-  'import { acme_main, acme_slack } from credentials',
+  'crm = connect `@lf/attio` using acme_main',
+  'chat = connect `@lf/slack` using acme_slack',
   '',
-  'crm = connect attio using acme_main',
-  'chat = connect slack using acme_slack',
-  '',
-  'function fanout_then_tail(ev: <crm-[:`Webhook Event`]->>) {',
-  '  if (ev is <crm-[:`Webhook Event` WHERE `action` == "record.created"]->>) {',
-  '    ev-[c:Contacts]-> {',
+  'function fanout_then_tail(go: <manual-[:Invocations]->>) {',
+  '  if (true) {',
+  '    crm-[c:Contacts]-> {',
   '      await sleep(1s)',
   '      write chat-[:messages]-> {',
   '        channel: "#alerts"',
@@ -251,7 +247,7 @@ const FANOUT_THEN_TAIL = [
   '  }',
   '}',
   '',
-  'listen to crm { events: ["record.created"] } fire fanout_then_tail',
+  'listen to manual-[:Invocations]-> fire fanout_then_tail',
 ].join('\n');
 
 async function seedMovement(
@@ -276,7 +272,7 @@ async function seedMovement(
       id: triggerId,
       team_id: teamId,
       name: 'Attio record changes',
-      kind: 'attio',
+      kind: 'manual',
       movement_id: movementId,
       fired_movement_name: opts.firedName,
     } as any)
@@ -293,17 +289,10 @@ async function seedMovementWithTrigger(teamId: TeamId): Promise<{ triggerId: Tri
   });
 }
 
+/** A press of Run now: an arrival on the manual unit's `Invocations`. */
 function webhookEvent(): TriggerEvent {
-  return {
-    pipelineInputId: 'trigger:test',
-    adapterType: 'attio',
-    triggerType: 'webhook',
-    payload: { event_type: 'record.created', action: 'record.created', id: { object_id: 'obj-x', record_id: 'co-1' } },
-    changeType: 'create',
-    rootRecordType: 'Companies',
-    externalRecordRef: { adapterType: 'attio', externalId: 'co-1', recordType: 'Companies' },
-    occurredAt: new Date().toISOString(),
-  };
+  const arrival = invocationArrival({ firedAt: new Date().toISOString(), submissionId: randomUUID() });
+  return arrivalTriggerOf({ pipelineInputId: 'trigger:test', adapterType: MANUAL_ADAPTER_TYPE, arrival, now: new Date() });
 }
 
 async function timerParks(teamId: TeamId): Promise<{ runId: string; address: string }[]> {
@@ -380,9 +369,12 @@ describe('timer_resume — fan-out sleep, multi-park-per-run under a join (real 
 
     const target = makeSlackTargetFake();
     slackCreates = target.creates;
-    mockedResolve.mockImplementation(async ({ adapterType }: { adapterType: string }) => {
+    const actualResolve = jest.requireActual('../../translation_graph/adapters/resolve').resolveAdapter;
+    mockedResolve.mockImplementation(async (input: { adapterType: string }) => {
+      const { adapterType } = input;
       if (adapterType === 'attio') return makeAttioSourceFake();
       if (adapterType === 'slack') return target.adapter;
+      if (adapterType === MANUAL_ADAPTER_TYPE) return actualResolve(input);
       throw new Error(`test: no fake for '${adapterType}'`);
     });
   });

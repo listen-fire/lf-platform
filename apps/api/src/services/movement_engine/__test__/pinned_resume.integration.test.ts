@@ -3,7 +3,7 @@
 // movement is edited and redeployed (a new movement_version) and the library
 // is edited (the team's saved files); the wake resumes it on the movement text
 // it was pinned to (trigger_run.movement_version_id; version rows are
-// immutable) and on the library text its park pinned (park state version 2's
+// immutable) and on the library text its park pinned (park state version 3's
 // `libraries`, kept once by hash in automations.park_library_source).
 //
 // Only the network seams are mocked, as timer_resume.integration.test.ts does:
@@ -40,6 +40,8 @@ import { LANGUAGE_VERSION, resolveFileFromSnapshot } from 'movement-lang';
 import { eventAddressKey } from 'legacy-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
+import { arrivalTriggerOf } from 'movement-engine/public/inbound';
+import { MANUAL_ADAPTER_TYPE, invocationArrival } from '../../translation_graph/adapters/manual';
 import { resumeTimerHandler } from '../timer_resume';
 import { testWorkContext } from '../../../test/harness/work';
 
@@ -175,35 +177,25 @@ const LIBRARY = (marker: string) =>
 
 const ROOT = (marker: string) =>
   [
-    'import { attio, slack } from adapters',
-    'import { acme_main, acme_slack } from credentials',
     'import { greeting } from "lib/words"',
     '',
-    'crm = attio(credentials: acme_main)',
-    'chat = slack(credentials: acme_slack)',
+    'chat = connect `@lf/slack` using acme_slack',
     '',
-    'movement pinned(ev: <crm-[:`Webhook Event`]->>) {',
+    'function pinned(go: <manual-[:Invocations]->>) {',
     `  said = greeting("root-${marker}")`,
     '  write chat-[:messages]-> {',
     '    channel: "#alerts"',
-    `    text: CONCAT(said, "/after-${marker}")`,
+    `    text: "\${said}/after-${marker}"`,
     '  }',
     '}',
     '',
-    'listen to crm { events: ["record.created"] } fire pinned',
+    'listen to manual-[:Invocations]-> fire pinned',
   ].join('\n');
 
+/** A press of Run now: an arrival on the manual unit's `Invocations`. */
 function webhookEvent(): TriggerEvent {
-  return {
-    pipelineInputId: 'trigger:test',
-    adapterType: 'attio',
-    triggerType: 'webhook',
-    payload: { event_type: 'record.created', action: 'record.created', id: { object_id: 'obj-x', record_id: 'co-1' } },
-    changeType: 'create',
-    rootRecordType: 'Companies',
-    externalRecordRef: { adapterType: 'attio', externalId: 'co-1', recordType: 'Companies' },
-    occurredAt: new Date().toISOString(),
-  };
+  const arrival = invocationArrival({ firedAt: new Date().toISOString(), submissionId: randomUUID() });
+  return arrivalTriggerOf({ pipelineInputId: 'trigger:test', adapterType: MANUAL_ADAPTER_TYPE, arrival, now: new Date() });
 }
 
 function spelled(text: string): string {
@@ -240,9 +232,12 @@ describe('a paused run resumes on the text it was pinned to (real DB, Rust engin
     serveLibrary('ORIGINAL');
     const target = makeSlackTargetFake();
     slackCreates = target.creates;
-    mockedResolve.mockImplementation(async ({ adapterType }: { adapterType: string }) => {
+    const actualResolve = jest.requireActual('../../translation_graph/adapters/resolve').resolveAdapter;
+    mockedResolve.mockImplementation(async (input: { adapterType: string }) => {
+      const { adapterType } = input;
       if (adapterType === 'attio') return makeAttioSourceFake();
       if (adapterType === 'slack') return target.adapter;
+      if (adapterType === MANUAL_ADAPTER_TYPE) return actualResolve(input);
       throw new Error(`test: no fake for '${adapterType}'`);
     });
   });
@@ -258,14 +253,14 @@ describe('a paused run resumes on the text it was pinned to (real DB, Rust engin
     await getAutomationsQb(['movement'])
       .insertInto('movement')
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .values({ id: movementId, team_id: teamId, name: 'Pinned', source: spelled(ROOT('ORIGINAL')), language_version: LANGUAGE_VERSION } as any)
+      .values({ id: movementId, team_id: teamId, name: 'Pinned', source: ROOT('ORIGINAL'), language_version: LANGUAGE_VERSION } as any)
       .execute();
-    await mintMovementVersionIfChanged({ teamId, movementId, source: spelled(ROOT('ORIGINAL')), languageVersion: LANGUAGE_VERSION });
+    await mintMovementVersionIfChanged({ teamId, movementId, source: ROOT('ORIGINAL'), languageVersion: LANGUAGE_VERSION });
     const triggerId = randomUUID() as TriggerId;
     await getAutomationsQb(['trigger'])
       .insertInto('trigger')
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .values({ id: triggerId, team_id: teamId, name: 'Attio record changes', kind: 'attio', movement_id: movementId, fired_movement_name: 'pinned' } as any)
+      .values({ id: triggerId, team_id: teamId, name: 'Run now', kind: 'manual', movement_id: movementId, fired_movement_name: 'pinned' } as any)
       .execute();
 
     // The run parks inside the library function, before its closure runs.
@@ -281,7 +276,7 @@ describe('a paused run resumes on the text it was pinned to (real DB, Rust engin
     // Park state version 2 (the Rust engine's): the library named by the hash
     // its one stored text is kept by.
     const state = parked.state as { version: number; libraries: Array<{ path: string; hash: string }> };
-    expect(state.version).toBe(2);
+    expect(state.version).toBe(3);
     expect(state.libraries).toEqual([{ path: 'lib/words', hash: expect.stringMatching(/^sha256:[0-9a-f]{64}$/) }]);
     const stored = await getAutomationsQb(['park_library_source'])
       .selectFrom('park_library_source')
@@ -292,8 +287,8 @@ describe('a paused run resumes on the text it was pinned to (real DB, Rust engin
 
     // While it waits: the movement is edited and redeployed, and the library
     // edited.
-    await getAutomationsQb(['movement']).updateTable('movement').set({ source: spelled(ROOT('EDITED')) }).where('id', '=', movementId).execute();
-    const redeployed = await mintMovementVersionIfChanged({ teamId, movementId, source: spelled(ROOT('EDITED')), languageVersion: LANGUAGE_VERSION });
+    await getAutomationsQb(['movement']).updateTable('movement').set({ source: ROOT('EDITED') }).where('id', '=', movementId).execute();
+    const redeployed = await mintMovementVersionIfChanged({ teamId, movementId, source: ROOT('EDITED'), languageVersion: LANGUAGE_VERSION });
     expect(redeployed.minted).toBe(true);
     serveLibrary('EDITED');
 

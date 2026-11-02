@@ -87,6 +87,8 @@ import type { Catalog, CatalogSnapshot, InstanceSchema, PositionSchema } from 'm
 import { LANGUAGE_VERSION } from 'movement-lang';
 import { eventAddressKey } from 'legacy-lang';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
+import { arrivalTriggerOf } from 'movement-engine/public/inbound';
+import { MANUAL_ADAPTER_TYPE, invocationArrival } from '../../translation_graph/adapters/manual';
 import { postgresRunHostStore } from '../run_host_store';
 
 const mockedCatalog = runCatalogSnapshotForTeam as jest.Mock;
@@ -269,7 +271,7 @@ async function seedMovement(
       id: triggerId,
       team_id: teamId,
       name: 'Attio record changes',
-      kind: 'attio',
+      kind: 'manual',
       movement_id: movementId,
       fired_movement_name: opts.firedName,
     } as any)
@@ -278,28 +280,18 @@ async function seedMovement(
   return { movementId, triggerId };
 }
 
+/** A press of Run now: an arrival on the manual unit's `Invocations`. */
 function webhookEvent(): TriggerEvent {
-  return {
-    pipelineInputId: 'trigger:test',
-    adapterType: 'attio',
-    triggerType: 'webhook',
-    payload: { event_type: 'record.created', action: 'record.created', id: { object_id: 'obj-x', record_id: 'co-1' } },
-    changeType: 'create',
-    rootRecordType: 'Companies',
-    externalRecordRef: { adapterType: 'attio', externalId: 'co-1', recordType: 'Companies' },
-    occurredAt: new Date().toISOString(),
-  };
+  const arrival = invocationArrival({ firedAt: new Date().toISOString(), submissionId: randomUUID() });
+  return arrivalTriggerOf({ pipelineInputId: 'trigger:test', adapterType: MANUAL_ADAPTER_TYPE, arrival, now: new Date() });
 }
 
 const FETCH_TWICE = [
-  'import { attio, slack } from adapters',
-  'import { acme_main, acme_slack } from credentials',
   'import { fetchUrl } from plugins',
   '',
-  'crm = connect attio using acme_main',
-  'chat = connect slack using acme_slack',
+  'chat = connect `@lf/slack` using acme_slack',
   '',
-  'function fetch_twice(ev: <crm-[:`Webhook Event`]->>) {',
+  'function fetch_twice(go: <manual-[:Invocations]->>) {',
   '  page = fetchUrl("a")',
   '  write chat-[:messages]-> {',
   '    channel: "#a"',
@@ -312,7 +304,7 @@ const FETCH_TWICE = [
   '  }',
   '}',
   '',
-  'listen to crm { events: ["record.created"] } fire fetch_twice',
+  'listen to manual-[:Invocations]-> fire fetch_twice',
 ].join('\n');
 
 const ENV_VAR = 'MOVEMENT_MAX_RUN_COST_USD';
@@ -343,9 +335,12 @@ describe('a run paused at its cost cap (real DB)', () => {
     });
     const target = makeSlackTargetFake();
     slackCreates = target.creates;
-    mockedResolve.mockImplementation(async ({ adapterType }: { adapterType: string }) => {
+    const actualResolve = jest.requireActual('../../translation_graph/adapters/resolve').resolveAdapter;
+    mockedResolve.mockImplementation(async (input: { adapterType: string }) => {
+      const { adapterType } = input;
       if (adapterType === 'attio') return makeAttioSourceFake();
       if (adapterType === 'slack') return target.adapter;
+      if (adapterType === MANUAL_ADAPTER_TYPE) return actualResolve(input);
       throw new Error(`test: no fake for '${adapterType}'`);
     });
   });
@@ -433,13 +428,9 @@ describe('a run paused at its cost cap (real DB)', () => {
 
   it('pauses at a judged unique-by write, and the operator resume carries it on', async () => {
     const JUDGED_TWICE = [
-      'import { attio, slack } from adapters',
-      'import { acme_main, acme_slack } from credentials',
+      'chat = connect `@lf/slack` using acme_slack',
       '',
-      'crm = connect attio using acme_main',
-      'chat = connect slack using acme_slack',
-      '',
-      'function judged_twice(ev: <crm-[:`Webhook Event`]->>) {',
+      'function judged_twice(go: <manual-[:Invocations]->>) {',
       '  write chat-[:messages]-> {',
       '    unique by (FUZZY `text`)',
       '    channel: "#a"',
@@ -452,7 +443,7 @@ describe('a run paused at its cost cap (real DB)', () => {
       '  }',
       '}',
       '',
-      'listen to crm { events: ["record.created"] } fire judged_twice',
+      'listen to manual-[:Invocations]-> fire judged_twice',
     ].join('\n');
     const catalog = buildCatalog({ judgedSlack: true });
     mockedCatalog.mockResolvedValue({
@@ -461,9 +452,12 @@ describe('a run paused at its cost cap (real DB)', () => {
       notes: [],
     });
     const target = makeJudgedSlackFake();
-    mockedResolve.mockImplementation(async ({ adapterType }: { adapterType: string }) => {
+    const actualResolve = jest.requireActual('../../translation_graph/adapters/resolve').resolveAdapter;
+    mockedResolve.mockImplementation(async (input: { adapterType: string }) => {
+      const { adapterType } = input;
       if (adapterType === 'attio') return makeAttioSourceFake();
       if (adapterType === 'slack') return target.adapter;
+      if (adapterType === MANUAL_ADAPTER_TYPE) return actualResolve(input);
       throw new Error(`test: no fake for '${adapterType}'`);
     });
     mockJudgements = 0;
