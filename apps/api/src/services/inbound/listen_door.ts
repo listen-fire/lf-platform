@@ -57,6 +57,8 @@ import { chainBefore, loopSettings } from './loop_breaker';
  *  why it cannot (a node the program imports from another file). */
 const landingSchema = z.union([z.object({ declared: z.unknown() }), z.object({ unread: z.string() })]);
 
+const listenDeliverySchema = z.object({ kind: z.enum(['connection', 'scope', 'polled']), pollEverySeconds: z.number().positive().optional() });
+
 /** What provisioning keeps on a listen's trigger row (`trigger.config`): the
  *  plan the check made, its pipeline, its connection's construction, the
  *  edges its fired function awaits off what a delivery hands it, the field
@@ -72,10 +74,12 @@ export const listenConfigSchema = z.object({
     landing: landingSchema.optional(),
     /** How its last edge's arrivals reach the host, as its module declares
      *  it: pushed to the connection or per scope, or polled every
-     *  `pollEverySeconds` (poll_source/worker.ts). Absent when undeclared. */
-    delivery: z
-      .object({ kind: z.enum(['connection', 'scope', 'polled']), pollEverySeconds: z.number().positive().optional() })
-      .optional(),
+     *  `pollEverySeconds` (poll_source/worker.ts). Absent when undeclared,
+     *  and for a listen over a union, whose members say it each. */
+    delivery: listenDeliverySchema.optional(),
+    /** A listen over a union: how each member's last edge is delivered, off
+     *  that member's record type, in the order of its plan's `members`. */
+    members: z.array(z.object({ delivery: listenDeliverySchema.optional() })).optional(),
   }),
 });
 export type ListenConfig = z.infer<typeof listenConfigSchema>['listen'];

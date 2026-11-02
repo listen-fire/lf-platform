@@ -4,13 +4,13 @@
 // another's. So a listen on it must name its key, and the door routes mail to
 // the team whose listen names that key.
 
-import type { ListenPlan } from 'engine-contracts';
+import { lastEdgeOf, memberPlans, type ListenPlan } from 'engine-contracts';
 import type { Expression } from 'movement-lang/expression/types';
 import { EMAIL_ADAPTER_NAMES, EMAIL_KEY_FIELD, EMAILS_EDGE } from '@listen-fire/email/types';
 
 /** Whether `plan` listens on the shared inbox's mail. */
 export function listensOnSharedInbox(plan: ListenPlan): boolean {
-  return EMAIL_ADAPTER_NAMES.includes(plan.adapter) && plan.hops.at(-1)?.edge === EMAILS_EDGE;
+  return EMAIL_ADAPTER_NAMES.includes(plan.adapter) && lastEdgeOf(plan) === EMAILS_EDGE;
 }
 
 function isKeyField(expression: Expression, keyIds: ReadonlySet<string>): boolean {
@@ -53,12 +53,20 @@ function requiredKeys(expression: Expression, keyIds: ReadonlySet<string>): stri
  * The keys a listen on the shared inbox takes mail for: those its last hop's
  * WHERE requires `Key` to be (`e.Key == "deals"`, `e.Key IN [...]`), lowercased
  * as the door reads them. Empty when it takes mail whatever its key, or only
- * mail to the box itself (`e.Key == ""`), which is every team's.
+ * mail to the box itself (`e.Key == ""`), which is every team's. A listen over
+ * a union takes what any member's traversal takes, so one member naming no
+ * key leaves it naming none.
  */
 export function inboxKeysOf(plan: ListenPlan, fieldIds: Readonly<Record<string, Readonly<Record<string, string>>>> = {}): string[] {
-  const last = plan.hops.at(-1);
-  if (last === undefined) return [];
   const keyIds = new Set([EMAIL_KEY_FIELD, ...Object.values(fieldIds).flatMap((fields) => (fields[EMAIL_KEY_FIELD] !== undefined ? [fields[EMAIL_KEY_FIELD]] : []))]);
+  const each = memberPlans(plan).map((traversal) => traversalKeys(traversal, keyIds));
+  return each.some((keys) => keys.length === 0) ? [] : [...new Set(each.flat())];
+}
+
+/** The keys one traversal's last hop requires; empty for none. */
+function traversalKeys(traversal: ListenPlan, keyIds: ReadonlySet<string>): string[] {
+  const last = traversal.hops.at(-1);
+  if (last === undefined) return [];
   const parts = [last.taken, last.checked].filter((part): part is Expression => part !== undefined);
   const keys = parts.length === 0 ? null : requiredKeys({ type: 'logical', op: 'and', operands: parts }, keyIds);
   return (keys ?? []).filter((key) => key !== '');

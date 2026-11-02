@@ -175,6 +175,10 @@ const ResolutionParams = z.object({
   resolvedAt: optStr,
   failure: optStr,
   parents: z.record(z.string(), strings).nullish().transform((v) => v ?? undefined),
+  members: z
+    .array(z.object({ heads: strings, parents: z.record(z.string(), strings).nullish().transform((v) => v ?? undefined) }))
+    .nullish()
+    .transform((v) => v ?? undefined),
 });
 
 // ── Dispatch ────────────────────────────────────────────────────────────────

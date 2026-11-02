@@ -34,7 +34,7 @@ import { inTransaction } from '../lf_store/scope';
 import { notifyWork } from '../work/drain';
 import { pollSubscriptionId } from '../poll_source/worker';
 import { readKeptRequest, type CapturedRequest } from './captured_request';
-import { listenEdgeDigest, listenEdgeKeyOf } from './listen_edge';
+import { listenEdgeKeysOf } from './listen_edge';
 import { judgeArrivals, keepJudgedDelivery, savedListenOf, unjudgedFacts, type SavedListen } from './listen_door';
 
 /** What a replay did, said in lines a person reads. */
@@ -159,8 +159,7 @@ export async function replayThroughListen(input: { teamId: TeamId; triggerId: Tr
   let credentialsId: string | null;
   if ('page' in kept) {
     if (row.source === 'poll') {
-      const key = listenEdgeKeyOf(listen, ['polled']);
-      if (key === null || pollSubscriptionId(listenEdgeDigest(key)) !== row.subscriptionId) {
+      if (!listenEdgeKeysOf(listen, ['polled']).some(({ digest }) => pollSubscriptionId(digest) === row.subscriptionId)) {
         return {
           outcome: 'refused',
           reason: `delivery ${row.id} is a poll's page, read for the listens that shared that poll: ${named} is not one of them (it may have been edited since, or its connection changed)`,

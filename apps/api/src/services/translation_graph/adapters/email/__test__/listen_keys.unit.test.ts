@@ -57,3 +57,30 @@ describe('a listen on the shared inbox without a key is refused at save', () => 
     expect(keylessInboxListen({ ...emailListen(), adapter: 'gmail', hops: [{ edge: 'Messages', from: '', to: 'Message', judged: 'arrival' }] })).toBeNull();
   });
 });
+
+describe('a listen over a union on the shared inbox', () => {
+  /** A listen whose earlier hop lands on a union: one traversal per member,
+   *  each ending on the inbox's `Emails`, the plan's own hops empty. */
+  function unionListen(...wheres: Array<Pick<PlanHop, 'taken' | 'checked'>>): ListenPlan {
+    return {
+      ...emailListen(),
+      hops: [],
+      members: wheres.map((where, member) => ({
+        hops: [
+          { edge: 'Boxes', from: '', to: `Box${member}`, judged: 'none', memberOf: 'Box0 | Box1' },
+          { edge: 'Emails', from: `Box${member}`, to: 'Email', judged: 'arrival', ...where },
+        ],
+      })),
+    };
+  }
+
+  it('takes the keys its members name, together', () => {
+    expect(inboxKeysOf(unionListen({ checked: key('a') }, { checked: key('b') }))).toEqual(['a', 'b']);
+  });
+
+  it('names none when one member names none, and is refused at save for it', () => {
+    const listen = unionListen({ checked: key('a') }, { checked: subject('Intro') });
+    expect(inboxKeysOf(listen)).toEqual([]);
+    expect(keylessInboxListen(listen)).not.toBeNull();
+  });
+});

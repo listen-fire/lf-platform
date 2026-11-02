@@ -503,6 +503,19 @@ describe('the lf store module', () => {
     expect(await lf('listens.states', { pipelines: ['listen:fresh'] })).toEqual({ 'listen:fresh': { heads: [], resolvedAt: null, failure: null, paused: 'p', held: 0 } });
   });
 
+  it("keeps a union listen's members in its one state, each member's heads and parents", async () => {
+    const lf = store(teamA);
+    const pipeline = 'listen:f:union';
+    const claim = (await lf('listens.claimResolve', { pipeline, ttlMs: 60_000 })) as { token: string };
+    const members = [{ heads: ['p1'], parents: { Spaces: ['s1'] } }, { heads: ['c1'] }];
+    const resolution = { heads: ['p1', 'c1'], resolvedAt: past(0), failure: null, parents: { Spaces: ['s1'] }, members };
+    expect(await lf('listens.saveResolution', { pipeline, token: claim.token, resolution })).toBe(true);
+    expect(await lf('listens.states', { pipelines: [pipeline] })).toEqual({ [pipeline]: { ...resolution, paused: null, held: 0 } });
+    // A pause keeps the members as it keeps the rest.
+    await lf('listens.setPaused', { pipeline, paused: 'p' });
+    expect(await lf('listens.states', { pipelines: [pipeline] })).toMatchObject({ [pipeline]: { members, paused: 'p' } });
+  });
+
   it('keeps the write ledger: the deepest write since an instant, a run keeping one write per record, the old forgotten', async () => {
     const lf = store(teamA);
     const record = { adapter: 'acme_crm', recordType: 'Company', externalId: 'company-1' };

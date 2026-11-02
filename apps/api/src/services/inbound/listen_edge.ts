@@ -10,6 +10,8 @@
 
 import { createHash } from 'node:crypto';
 
+import { memberPlans, type ListenPlan } from 'engine-contracts';
+
 import type { TeamId } from '../../generated/kysely/core/Team';
 import type { SavedListen } from './listen_door';
 
@@ -43,18 +45,40 @@ export function listenEdgeDigest(key: ListenEdgeKey): string {
   return createHash('sha256').update(canonical(key)).digest('hex').slice(0, 16);
 }
 
-/** The key `listen` is delivered under when its last edge is delivered as
- *  `deliveries` names; null otherwise. */
-export function listenEdgeKeyOf(listen: SavedListen, deliveries: readonly ListenDelivery[]): ListenEdgeKey | null {
-  const last = listen.plan.hops.at(-1);
-  const delivery = listen.delivery?.kind;
-  if (last === undefined || delivery === undefined || !deliveries.includes(delivery)) return null;
-  return {
-    teamId: listen.teamId,
-    adapterType: listen.plan.adapter,
-    credentialsId: listen.credentialsId,
-    constructionArgs: listen.constructionArgs,
-    edge: last.edge,
-    taken: last.taken,
-  };
+/** One traversal a listen is watched by, with how its last edge is
+ *  delivered: the listen's own, or, over a union, each member's
+ *  (`memberPlans`). Each is how the one listen is watched, never a listen of
+ *  its own. */
+export function watchedTraversals(listen: SavedListen): Array<{ plan: ListenPlan; delivery: SavedListen['delivery'] }> {
+  if (listen.plan.members === undefined) return [{ plan: listen.plan, delivery: listen.delivery }];
+  return memberPlans(listen.plan).map((plan, member) => ({ plan, delivery: listen.members?.[member]?.delivery }));
+}
+
+/** The keys `listen` is delivered under where a traversal's last edge is
+ *  delivered as `deliveries` names, each once with how it is delivered. Two
+ *  members of a union may share one key: the listen is one, so it is heard
+ *  there once. */
+export function listenEdgeKeysOf(
+  listen: SavedListen,
+  deliveries: readonly ListenDelivery[],
+): Array<{ key: ListenEdgeKey; digest: string; delivery: NonNullable<SavedListen['delivery']> }> {
+  const keys = new Map<string, { key: ListenEdgeKey; digest: string; delivery: NonNullable<SavedListen['delivery']> }>();
+  for (const { plan, delivery } of watchedTraversals(listen)) {
+    const last = plan.hops.at(-1);
+    if (last === undefined || delivery === undefined || !deliveries.includes(delivery.kind)) continue;
+    const key: ListenEdgeKey = {
+      teamId: listen.teamId,
+      adapterType: listen.plan.adapter,
+      credentialsId: listen.credentialsId,
+      constructionArgs: listen.constructionArgs,
+      edge: last.edge,
+      taken: last.taken,
+    };
+    const digest = listenEdgeDigest(key);
+    const seen = keys.get(digest);
+    // Polled under one key by two members, it is polled at the sooner of their intervals.
+    const sooner = seen !== undefined && (seen.delivery.pollEverySeconds ?? Infinity) <= (delivery.pollEverySeconds ?? Infinity) ? seen.delivery : delivery;
+    keys.set(digest, { key, digest, delivery: sooner });
+  }
+  return [...keys.values()];
 }

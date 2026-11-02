@@ -13,29 +13,46 @@ import {
   triggerAwaitsOf,
 } from 'movement-engine/public/inbound';
 
-import type { ListenPlan } from 'engine-contracts';
+import { memberPlans, type ListenPlan } from 'engine-contracts';
 import type { CatalogSnapshot, EdgeListening, InstanceSchema, LanguageVersion, Program } from 'movement-lang';
 import type { ListenConfig } from '../../inbound/listen_door';
 import { keylessInboxListen } from '../adapters/email/listen_keys';
 
 /** Why this host would not fire `plan` as written, if it would not: only
  *  listen-fire lists the members of an earlier hop whose WHERE an arrival
- *  does not carry the record for (a `resolved` hop). Judged here with that
- *  hop unjudged, it would fire under every member. */
+ *  does not carry the record for (a `resolved` hop), in the listen's own
+ *  traversal or any member's of a union. Judged here with that hop unjudged,
+ *  it would fire under every member. */
 function unfiredHere(plan: ListenPlan): string | null {
-  const resolved = plan.hops.filter((hop) => hop.judged === 'resolved').map((hop) => `\`${hop.edge}\``);
+  const resolved = memberPlans(plan).flatMap((traversal) => traversal.hops.filter((hop) => hop.judged === 'resolved').map((hop) => `\`${hop.edge}\``));
   if (resolved.length === 0) return null;
-  return `the listen that fires ${plan.movement} filters ${resolved.join(', ')} by a WHERE its module's arrivals do not carry the record for: this host cannot judge it, and would fire under every one. Filter that hop on the landing's fields instead`;
+  return `the listen that fires ${plan.movement} filters ${[...new Set(resolved)].join(', ')} by a WHERE its module's arrivals do not carry the record for: this host cannot judge it, and would fire under every one. Filter that hop on the landing's fields instead`;
 }
 
-/** How the arrivals on `plan`'s last edge reach the host, as `schema` (its
- *  connection's) declares that edge or root collection. */
-function deliveryOf(schema: InstanceSchema | undefined, plan: ListenPlan): ListenConfig['delivery'] {
-  const last = plan.hops.at(-1);
+/** How the arrivals on one traversal's last edge reach the host, as `schema`
+ *  (its connection's) declares that edge, off that traversal's own record
+ *  type, or that root collection. */
+function deliveryOf(schema: InstanceSchema | undefined, traversal: ListenPlan): ListenConfig['delivery'] {
+  const last = traversal.hops.at(-1);
   if (schema === undefined || last === undefined) return undefined;
   const declared: EdgeListening | undefined = last.from === '' ? schema.collections[last.edge] : schema.positions[last.from]?.edges[last.edge];
   if (declared?.delivery === undefined) return undefined;
   return { kind: declared.delivery, ...(declared.pollEverySeconds !== undefined ? { pollEverySeconds: declared.pollEverySeconds } : {}) };
+}
+
+/** How each traversal of `plan` is delivered: the listen's own, or, over a
+ *  union, each member's in the plan's order (`members`). */
+function deliveriesOf(schema: InstanceSchema | undefined, plan: ListenPlan): Pick<ListenConfig, 'delivery' | 'members'> {
+  if (plan.members === undefined) {
+    const delivery = deliveryOf(schema, plan);
+    return delivery !== undefined ? { delivery } : {};
+  }
+  return {
+    members: memberPlans(plan).map((traversal) => {
+      const delivery = deliveryOf(schema, traversal);
+      return delivery !== undefined ? { delivery } : {};
+    }),
+  };
 }
 
 function messageOf(error: unknown): string {
@@ -76,7 +93,6 @@ export function plannedListensOfSource(input: {
       }
     }
     const schema = listenSchemaOf(input.snapshot.adapters[listen.plan.adapter], listen);
-    const delivery = deliveryOf(schema, listen.plan);
     listens.push({
       pipeline: listen.pipeline,
       plan: listen.plan,
@@ -85,7 +101,7 @@ export function plannedListensOfSource(input: {
       awaits: triggerAwaitsOf({ program: input.program, stamps: answer.stamps, plan: listen.plan }),
       fieldIds: fieldIdsOf(schema),
       ...(landing !== undefined ? { landing } : {}),
-      ...(delivery !== undefined ? { delivery } : {}),
+      ...deliveriesOf(schema, listen.plan),
     });
   }
   return { listens, refused };

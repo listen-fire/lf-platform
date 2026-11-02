@@ -49,7 +49,7 @@ import { builtinInboundSecretIssuedByProvider } from '../adapters/builtin_module
 import { teamAdapterManifestSet } from '../adapters/team_manifests';
 import { readTeamEngine } from '../../lf_engine/team_engine';
 import { savedListens, type SavedListen } from '../../inbound/listen_door';
-import { listenEdgeDigest, listenEdgeKeyOf, type ListenEdgeKey } from '../../inbound/listen_edge';
+import { listenEdgeKeysOf, type ListenEdgeKey } from '../../inbound/listen_edge';
 import { registerWorkHandler } from '../../work/drain';
 
 export const MOVEMENT_LISTEN_PROVISIONER = 'movement-listen';
@@ -90,10 +90,7 @@ export async function listensOfSubscription(input: {
   const held = edgeSubscriptionOf(input.subscriptions);
   if (held === null) return undefined;
   const listens = await savedListens({ teamId: input.teamId, adapterType: input.adapterType });
-  return listens.filter((listen) => {
-    const key = listenEdgeKeyOf(listen, ['connection', 'scope']);
-    return key !== null && listenEdgeDigest(key) === held.digest;
-  });
+  return listens.filter((listen) => listenEdgeKeysOf(listen, ['connection', 'scope']).some(({ digest }) => digest === held.digest));
 }
 
 /** One subscription the team's listens want. */
@@ -135,28 +132,27 @@ async function desiredSubscriptions(
 ): Promise<DesiredSubscription[]> {
   const desired = new Map<string, DesiredSubscription>();
   for (const listen of await savedListens({ teamId })) {
-    const key = listenEdgeKeyOf(listen, ['connection', 'scope']);
-    if (key === null) continue;
-    const slug = resolveAdapterSlug(key.adapterType);
-    const manifest = manifestBySlug.get(slug);
-    if (manifest === undefined || !manifest.methods.includes('ensureEventSubscription')) continue;
-    if (key.credentialsId === null && manifest.requiredCredentialType !== undefined) {
-      notes.push(`${slug}: ${listen.file}:${listen.plan.movement} has no credential, so ${key.edge} cannot be subscribed for`);
-      continue;
+    for (const { key, digest } of listenEdgeKeysOf(listen, ['connection', 'scope'])) {
+      const slug = resolveAdapterSlug(key.adapterType);
+      const manifest = manifestBySlug.get(slug);
+      if (manifest === undefined || !manifest.methods.includes('ensureEventSubscription')) continue;
+      if (key.credentialsId === null && manifest.requiredCredentialType !== undefined) {
+        notes.push(`${slug}: ${listen.file}:${listen.plan.movement} has no credential, so ${key.edge} cannot be subscribed for`);
+        continue;
+      }
+      if (desired.has(digest)) continue;
+      desired.set(digest, {
+        slug,
+        providerKey: webhookProviderKey(manifest),
+        key,
+        held: {
+          digest,
+          edge: key.edge,
+          ...(key.taken !== undefined ? { filter: key.taken } : {}),
+          ...(key.constructionArgs !== undefined ? { constructionArgs: key.constructionArgs } : {}),
+        },
+      });
     }
-    const digest = listenEdgeDigest(key);
-    if (desired.has(digest)) continue;
-    desired.set(digest, {
-      slug,
-      providerKey: webhookProviderKey(manifest),
-      key,
-      held: {
-        digest,
-        edge: key.edge,
-        ...(key.taken !== undefined ? { filter: key.taken } : {}),
-        ...(key.constructionArgs !== undefined ? { constructionArgs: key.constructionArgs } : {}),
-      },
-    });
   }
   return [...desired.values()];
 }

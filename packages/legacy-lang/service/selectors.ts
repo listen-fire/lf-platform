@@ -717,6 +717,11 @@ export function scanInstanceChains(
         case 'error':
           visitSlot(statement.message, aliasScope);
           break;
+        // A listen's traversal is walked as a read is: each hop's landing is
+        // described, through a union to each member's own edges.
+        case 'listen':
+          if (statement.path !== undefined) visitHead(statement.path, aliasScope);
+          break;
         default:
           break;
       }

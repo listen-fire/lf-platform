@@ -22,6 +22,24 @@ export interface Resolution {
   failure: string | null;
   /** By the hop's edge, the records it is watched under; absent: none. */
   parents?: Record<string, string[]>;
+  /** A listen through or onto a union: each member's own heads and parents,
+   *  in its plan's order of members (`heads` and `parents` are theirs
+   *  together). Absent for any other listen. */
+  members?: MemberResolution[];
+}
+
+/** One member's part of a union listen's resolution. */
+export interface MemberResolution {
+  heads: string[];
+  parents?: Record<string, string[]>;
+}
+
+const StoredMember = z.object({ heads: z.array(z.string()), parents: z.record(z.string(), z.array(z.string())).nullish() });
+
+/** A member as the wire carries it: `parents` only when it has some. */
+function memberOf(stored: z.infer<typeof StoredMember>): MemberResolution {
+  const parents = stored.parents ?? {};
+  return { heads: stored.heads, ...(Object.keys(parents).length > 0 ? { parents } : {}) };
 }
 
 const StoredState = z.object({
@@ -29,12 +47,14 @@ const StoredState = z.object({
   resolvedAt: z.string().nullable(),
   failure: z.string().nullable(),
   parents: z.record(z.string(), z.array(z.string())).nullish(),
+  members: z.array(StoredMember).nullish(),
   paused: z.string().nullish(),
   // A state kept before the count holds none: no arrival held.
   held: z.number().int().nullish(),
 });
 
-/** A listen's state as the wire carries it: `parents` only when it has some. */
+/** A listen's state as the wire carries it: `parents` only when it has
+ *  some, `members` only for a listen over a union. */
 function stateOf(stored: unknown) {
   const state = StoredState.parse(stored);
   const parents = state.parents ?? {};
@@ -45,6 +65,7 @@ function stateOf(stored: unknown) {
     paused: state.paused ?? null,
     held: state.held ?? 0,
     ...(Object.keys(parents).length > 0 ? { parents } : {}),
+    ...(state.members != null ? { members: state.members.map(memberOf) } : {}),
   };
 }
 
@@ -78,8 +99,8 @@ export async function claimResolve(scope: LfTenant, input: { pipeline: string; t
 /** The resolution replaces the state but for `paused` and `held`, and the hold
  *  is let go; `false`, nothing written, when the hold lapsed and was taken since. */
 export async function saveResolution(scope: LfTenant, input: { pipeline: string; token: string; resolution: Resolution }): Promise<boolean> {
-  const { heads, resolvedAt, failure, parents } = input.resolution;
-  const resolution = JSON.stringify({ heads, resolvedAt, failure, ...(parents !== undefined ? { parents } : {}) });
+  const { heads, resolvedAt, failure, parents, members } = input.resolution;
+  const resolution = JSON.stringify({ heads, resolvedAt, failure, ...(parents !== undefined ? { parents } : {}), ...(members !== undefined ? { members } : {}) });
   const { rows } = await sql`
     update automations.listen_state set
       state = ${resolution}::text::jsonb || jsonb_build_object('paused', state->'paused', 'held', coalesce(state->'held', '0'::jsonb)),

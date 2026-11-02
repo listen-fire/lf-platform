@@ -32,7 +32,7 @@ import { lfEngineTeams } from '../lf_engine/team_engine';
 import { notifyWork, registerWorkHandler } from '../work/drain';
 import { enqueueWork, listWorkByKind, removeWork } from '../work/store';
 import { edgePollerOf } from './edge_poller';
-import { listenEdgeDigest, listenEdgeKeyOf, type ListenEdgeKey } from '../inbound/listen_edge';
+import { listenEdgeKeysOf, type ListenEdgeKey } from '../inbound/listen_edge';
 
 /** The interval of a polled edge that declares none. */
 const DEFAULT_POLL_EVERY_SECONDS = 60;
@@ -77,7 +77,10 @@ export async function sharedPolls(input: { teamId?: TeamId } = {}): Promise<Shar
     .selectFrom('trigger')
     .innerJoin('movement', 'movement.id', 'trigger.movement_id')
     .where('trigger.run_mode', '!=', 'off')
-    .where(sql<boolean>`trigger.config->'listen'->'delivery'->>'kind' = 'polled'`);
+    // A listen polled on its own last edge, or over a union on some member's.
+    .where(
+      sql<boolean>`(trigger.config->'listen'->'delivery'->>'kind' = 'polled' or trigger.config->'listen'->'members' @> '[{"delivery":{"kind":"polled"}}]'::jsonb)`,
+    );
   if (input.teamId !== undefined) query = query.where('trigger.team_id', '=', input.teamId);
   const [rows, lfTeams] = await Promise.all([
     query
@@ -91,15 +94,14 @@ export async function sharedPolls(input: { teamId?: TeamId } = {}): Promise<Shar
     const parsed = listenConfigSchema.safeParse(row.config);
     if (!parsed.success) continue;
     const listen: SavedListen = { ...parsed.data.listen, triggerId: row.id, teamId: teamIdSchema.parse(row.teamId), file: row.file, credentialsId: row.credentialsId ?? null };
-    const key = listenEdgeKeyOf(listen, ['polled']);
-    if (key === null) continue;
-    const digest = listenEdgeDigest(key);
-    const everyMs = (listen.delivery?.pollEverySeconds ?? DEFAULT_POLL_EVERY_SECONDS) * SECOND;
-    const shared = polls.get(digest);
-    if (shared === undefined) polls.set(digest, { key, digest, listens: [listen], everyMs });
-    else {
-      shared.listens.push(listen);
-      shared.everyMs = Math.min(shared.everyMs, everyMs);
+    for (const { key, digest, delivery } of listenEdgeKeysOf(listen, ['polled'])) {
+      const everyMs = (delivery.pollEverySeconds ?? DEFAULT_POLL_EVERY_SECONDS) * SECOND;
+      const shared = polls.get(digest);
+      if (shared === undefined) polls.set(digest, { key, digest, listens: [listen], everyMs });
+      else {
+        shared.listens.push(listen);
+        shared.everyMs = Math.min(shared.everyMs, everyMs);
+      }
     }
   }
   return [...polls.values()];

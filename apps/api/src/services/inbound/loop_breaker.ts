@@ -20,7 +20,7 @@
 import { sql } from 'kysely';
 import { z } from 'zod';
 
-import type { Arrival } from 'engine-contracts';
+import { memberPlans, type Arrival, type ListenPlan } from 'engine-contracts';
 import type {
   AdapterCall,
   AdapterCallAnswer,
@@ -89,6 +89,14 @@ export function recordsOf(adapter: string, arrival: HeardArrival, landingType: s
   return records;
 }
 
+/** The record type an arrival on `plan` lands on when it states none: its
+ *  last hop's, or over a union the one its members' share (none when they
+ *  land on different types, where an arrival must say which). */
+function landingTypeOf(plan: ListenPlan): string {
+  const landings = new Set(memberPlans(plan).map((traversal) => traversal.hops.at(-1)?.to ?? ''));
+  return landings.size === 1 ? [...landings][0] ?? '' : '';
+}
+
 /** The earliest write that can have caused `arrival`. */
 export function sinceOf(arrival: HeardArrival, windowMs: number, now: Date): Date {
   const occurred = arrival.occurredAt !== undefined ? Date.parse(arrival.occurredAt) : Number.NaN;
@@ -124,7 +132,7 @@ export async function chainBefore(input: {
   settings: LoopSettings;
 }): Promise<string[]> {
   const { teamId, listen, arrival } = input;
-  const landingType = listen.plan.hops[listen.plan.hops.length - 1]?.to ?? '';
+  const landingType = landingTypeOf(listen.plan);
   const records = recordsOf(listen.plan.adapter, arrival, landingType);
   if (records.length === 0) return [];
   const since = sinceOf(arrival, input.settings.windowMs, input.now).toISOString();
@@ -155,9 +163,15 @@ const DEFAULT_POLL_EVERY_SECONDS = 60;
  *  its slowest poll may take to find an echo. */
 async function keptMsOf(teamId: TeamId, windowMs: number): Promise<number> {
   const { rows } = await sql<{ slowest: number | null }>`
-    select max(coalesce((config->'listen'->'delivery'->>'pollEverySeconds')::numeric, ${DEFAULT_POLL_EVERY_SECONDS}::numeric))::float8 as slowest
-    from automations.trigger
-    where team_id = ${teamId}::uuid and config->'listen'->'delivery'->>'kind' = 'polled'`.execute(getAutomationsQb(['trigger']));
+    select max(coalesce((traversal.delivery->>'pollEverySeconds')::numeric, ${DEFAULT_POLL_EVERY_SECONDS}::numeric))::float8 as slowest
+    from automations.trigger t
+    -- A listen's own last edge, or over a union each member's.
+    cross join lateral (
+      select t.config->'listen'->'delivery' as delivery
+      union all
+      select member->'delivery' from jsonb_array_elements(coalesce(t.config->'listen'->'members', '[]'::jsonb)) member
+    ) traversal
+    where t.team_id = ${teamId}::uuid and traversal.delivery->>'kind' = 'polled'`.execute(getAutomationsQb(['trigger']));
   return windowMs + (rows[0]?.slowest ?? 0) * 1000;
 }
 

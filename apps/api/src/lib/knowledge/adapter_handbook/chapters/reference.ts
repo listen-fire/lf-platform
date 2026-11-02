@@ -90,8 +90,8 @@ here.**
   "methods": ["listEntryPoints","describe","resolveEntity","getFieldValue","getRelated","createRecord","updateRecord","deleteRecord"]
 }
 \`\`\`
-- \`adapterType\` is the slug you import in an automation
-  (\`import { acme_crm } from adapters\`). One install per slug per team.
+- \`adapterType\` is the slug an automation connects it by, after \`#\`
+  (\`crm = connect #acme_crm\`). One install per slug per team.
 - \`authStrategy\` matches the auth section of the protocol chapter. For
   \`shared_secret\` add \`"header": "X-Your-Header"\`.
 - \`methods\` must equal what your server implements.

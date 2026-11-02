@@ -197,6 +197,16 @@ function m(x: <runner-[:invocation]->>) {
     expect(selected).toEqual([true, true]);
   });
 
+  it("walks a listen's traversal, so each hop's landing is described", () => {
+    const chains = scanInstanceChains(
+      'crm = connect `@lf/attio` using acme\nfunction advised(c: <crm-[:CompanyChange]->>) {\n  return c.Kind\n}\nlisten to crm-[:Funds]->-[:Advisors]->-[c:Changes]-> fire advised\n',
+      { languageVersion: LANGUAGE_VERSION },
+    );
+    expect(chains.map((c) => [c.adapter, c.credential, c.steps.map((s) => (s.type === 'edge' ? s.edgeTypeId : s.type))])).toEqual([
+      ['@lf/attio', 'acme', ['Funds', 'Advisors', 'Changes']],
+    ]);
+  });
+
   it('yields nothing for unparseable programs or ungrounded roots', () => {
     expect(scanInstanceChains('function m(')).toEqual([]);
     expect(scanInstanceChains('function m(x: <a-[:b]->>) {\n  ghost-[c:Things]-> { }\n}')).toEqual([]);
