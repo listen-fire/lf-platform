@@ -187,6 +187,8 @@ export FAKE_REMOTE_ADAPTER_PORT="${FAKE_REMOTE_ADAPTER_PORT:-$((HARNESS_BASE + 2
 export FAKE_ISSUER_PORT="${FAKE_ISSUER_PORT:-$((HARNESS_BASE + 3))}"
 # The fake Cloud Tasks, started only under the wake shape.
 export FAKE_CLOUD_TASKS_PORT="${FAKE_CLOUD_TASKS_PORT:-$((HARNESS_BASE + 4))}"
+# The fake model vendor, started unless DEV_LOOP_MODELS=real.
+export FAKE_MODEL_PORT="${FAKE_MODEL_PORT:-$((HARNESS_BASE + 5))}"
 # admin also runs under `pnpm -r --parallel dev`; keep it in this profile's
 # range (base+4 — default stays 3004) so an agent stack never collides with
 # the default stack's admin.
@@ -271,7 +273,7 @@ fi
 # above), so --force-kill can only ever touch this profile's own app-port
 # holders, never another stack's or another project's (e.g. an unrelated
 # sibling repo's `dev` compose project) containers.
-PORTS_TO_CHECK=("$PORT" "$WEB_PORT" "$FAKE_CHANNELS_PORT" "$FAKE_REMOTE_ADAPTER_PORT" "$ADMIN_PORT" "$FAKE_ISSUER_PORT" "$FAKE_CLOUD_TASKS_PORT")
+PORTS_TO_CHECK=("$PORT" "$WEB_PORT" "$FAKE_CHANNELS_PORT" "$FAKE_REMOTE_ADAPTER_PORT" "$ADMIN_PORT" "$FAKE_ISSUER_PORT" "$FAKE_CLOUD_TASKS_PORT" "$FAKE_MODEL_PORT")
 
 # The loop's own background helpers (fake-channels, fake CRM, fake issuer, fake Cloud Tasks, scheduler) each run
 # in a process group of their own, recorded here, so a stop takes down the
@@ -376,6 +378,26 @@ export RESEND_WEBHOOK_SECRET="${RESEND_WEBHOOK_SECRET:-whsec_ZGV2LWxvb3AtcmVzZW5
 # working; it is refused outright in production, whatever it says here.
 export ALLOW_UNSIGNED_WEBHOOKS="${ALLOW_UNSIGNED_WEBHOOKS:-true}"
 
+# Models. The loop never calls a real model API: Anthropic's client is pointed
+# at the fake model vendor (`pnpm dev:fake-model`, canned answers), OpenAI's at
+# the same fake, which refuses it, and MODEL_MAP sends no model elsewhere. A
+# key in apps/api/.env then goes nowhere. DEV_LOOP_MODELS=real keeps the real
+# vendors, for a session that means to spend on them.
+DEV_LOOP_MODELS="${DEV_LOOP_MODELS:-fake}"
+case "$DEV_LOOP_MODELS" in
+  fake)
+    export ANTHROPIC_BASE_URL="http://127.0.0.1:$FAKE_MODEL_PORT"
+    export OPENAI_BASE_URL="http://127.0.0.1:$FAKE_MODEL_PORT/openai/v1"
+    export MODEL_MAP='{}'
+    ;;
+  real) ;;
+  *)
+    echo "[dev:loop] unknown DEV_LOOP_MODELS='$DEV_LOOP_MODELS' (expected: fake, real)"
+    exit 1
+    ;;
+esac
+echo "[dev:loop] models: $DEV_LOOP_MODELS${ANTHROPIC_BASE_URL:+  (Anthropic at $ANTHROPIC_BASE_URL)}"
+
 # The push-tick shape: the API drains only when its tick endpoint is called.
 # The shape owns the drain mode outright: a caller's AUTOMATIONS_DRAIN_MODE=loop
 # would make this the default shape under another name. Its key is minted
@@ -466,6 +488,18 @@ JSON
 )
 fi
 
+# Out-of-band CLIs reach the same fake model vendor as the API.
+MODEL_ENV_JSON=""
+if [ "$DEV_LOOP_MODELS" = "fake" ]; then
+  MODEL_ENV_JSON=$(cat <<JSON
+,
+    "ANTHROPIC_BASE_URL": "$ANTHROPIC_BASE_URL",
+    "OPENAI_BASE_URL": "$OPENAI_BASE_URL",
+    "MODEL_MAP": "{}"
+JSON
+)
+fi
+
 # Write a marker file so that out-of-band dev CLIs (e.g. `pnpm dev:inject`
 # invoked in a fresh shell) auto-discover the active stack's ports.
 # `_profile_loader.ts` reads this and merges into process.env without
@@ -496,7 +530,7 @@ cat > "$PROFILE_FILE" <<EOF
     "GMAIL_SEND_ENABLED": "$GMAIL_SEND_ENABLED",
     "GMAIL_MAILBOX_ALLOWLIST": "$GMAIL_MAILBOX_ALLOWLIST",
     "INBOUND_EMAIL_ADDRESS": "$INBOUND_EMAIL_ADDRESS",
-    "MOCK_OUTPUT_ADAPTERS": "$MOCK_OUTPUT_ADAPTERS"$EXTRA_ENV_JSON
+    "MOCK_OUTPUT_ADAPTERS": "$MOCK_OUTPUT_ADAPTERS"$MODEL_ENV_JSON$EXTRA_ENV_JSON
   }
 }
 EOF
@@ -543,6 +577,16 @@ FAKE_CRM_PID=$!
 set +m
 echo "$FAKE_CRM_PID" >> "$HELPERS_FILE"
 echo "[dev:loop] fake CRM (acme_crm): $FAKE_REMOTE_ADAPTER_URL (pid $FAKE_CRM_PID, log $FAKE_CRM_LOG)"
+
+if [ "$DEV_LOOP_MODELS" = "fake" ]; then
+  FAKE_MODEL_LOG="$LOG_DIR/fake-model.log"
+  set -m
+  ( cd apps/api && exec pnpm run dev:fake-model ) > "$FAKE_MODEL_LOG" 2>&1 &
+  FAKE_MODEL_PID=$!
+  set +m
+  echo "$FAKE_MODEL_PID" >> "$HELPERS_FILE"
+  echo "[dev:loop] fake model: $ANTHROPIC_BASE_URL (pid $FAKE_MODEL_PID, log $FAKE_MODEL_LOG)"
+fi
 
 FAKE_ISSUER_PID=""
 if [ "$SHAPE" = "wake" ]; then

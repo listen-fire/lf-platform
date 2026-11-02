@@ -94,7 +94,13 @@ What this does:
 6. starts the fake CRM fixture in the background (it isn't a workspace package,
    so `pnpm -r --parallel dev` doesn't reach it; logs to `.dev-loop/fake-crm.log`,
    killed with the stack)
-7. exec's `pnpm dev` which runs in parallel:
+7. starts the fake model vendor (`pnpm dev:fake-model`, log
+   `.dev-loop/fake-model.log`) and points `ANTHROPIC_BASE_URL` and
+   `OPENAI_BASE_URL` at it, with an empty `MODEL_MAP`, so the loop never calls
+   a real model API. It answers Anthropic's Messages API with canned text (a
+   plain circle for the knowledge graph's icon call) and refuses every other
+   vendor path. `DEV_LOOP_MODELS=real` keeps the real vendors.
+8. exec's `pnpm dev` which runs in parallel:
 
 | Service       | default | agent | agent2 | agent3 |
 |---------------|---------|-------|--------|--------|
@@ -104,6 +110,7 @@ What this does:
 | test-harness  | 5555    | 6055  | 6155   | 6255   |
 | fake-channels | 5556    | 6056  | 6156   | 6256   |
 | fake CRM (`acme_crm`) | 5557 | 6057 | 6157  | 6257   |
+| fake model    | 5560    | 6060  | 6160   | 6260   |
 | postgres      | 9432 (shared: default, agent2, agent3) | 9434 (own project) | 9432 | 9432 |
 | redis         | 6379 (shared: default, agent2, agent3) | 6381 (own project) | 6379 | 6379 |
 | objectstore (S3 API, `S3_HOST_PORT`) | 9010 (shared: default, agent2, agent3) | 9012 (own project) | 9010 | 9010 |
