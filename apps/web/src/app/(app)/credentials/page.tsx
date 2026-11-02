@@ -2,12 +2,12 @@
 
 /**
  * `/credentials` — the Credentials page (user-facing name: "Credentials",
- * matching the movement language's `credentials` import namespace). Merges
+ * the credentials a program connects with). Merges
  * the previous `/integrations`, `/sources`, and `/destinations` pages into
  * one scrollable page:
  *
- *   1. Credentials — connected accounts, each showing the import name a
- *      movement uses (`import { dev_loop_attio } from credentials`) plus
+ *   1. Credentials — connected accounts, each showing the `connect` a
+ *      program writes with it (``connect `@lf/attio` using dev_loop_attio``) plus
  *      derived read/write badges and automation counts
  *   2. Source channels — built-in receivers (inbound Email,
  *      WhatsApp, Web upload) with usage counts
@@ -30,7 +30,7 @@ import {
   CONNECTABLE_CREDENTIAL_TYPES,
   IntegrationModal,
 } from "@/components/integrations/integration-modal";
-import { ImportSnippet } from "@/components/import-snippet";
+import { CodeSnippet } from "@/components/code-snippet";
 import { ServiceIcon } from "@/components/service-icon";
 import { Modal } from "@/components/ontology/modal";
 import {
@@ -127,7 +127,7 @@ export default function ConnectionsPage() {
           <section id="integrations">
             <SectionHeader
               title="Connected accounts"
-              subtitle="authorised by your team — movements import each one by name from credentials"
+              subtitle="authorised by your team — a program connects with each one by name"
               action={
                 <Button
                   variant="primary"
@@ -163,14 +163,10 @@ export default function ConnectionsPage() {
                       <div className="mt-0.5 text-[12px] text-gray-400">
                         {automationCountLabel(integration.automationCount)}
                       </div>
-                      {integration.importNames.length > 0 && (
+                      {integration.connectLines.length > 0 && (
                         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                          {integration.importNames.map((importName) => (
-                            <ImportSnippet
-                              key={importName}
-                              name={importName}
-                              from="credentials"
-                            />
+                          {integration.connectLines.map((line) => (
+                            <CodeSnippet key={line} code={line} />
                           ))}
                         </div>
                       )}
@@ -471,9 +467,9 @@ function DeleteCredentialDialog({
  *
  *   1. Connect the TEAM to the shared Listen-Fire bot. The first click calls
  *      `connections.connectTelegramTeam`, which creates the team's (secret-less)
- *      Telegram credential — the row a movement imports as
- *      `import { … } from credentials` and constructs with
- *      `telegram(credentials: …)`. Idempotent: re-connecting is a no-op.
+ *      Telegram credential — the row a program connects with as
+ *      ``connect `@lf/telegram` using …``. Idempotent:
+ *      re-connecting is a no-op.
  *   2. Link YOUR identity. With the team connected, the same click also mints a
  *      one-time deep-link via `connections.connectTelegram` and shows the
  *      `t.me/<bot>?start=<token>` link. Pressing Start in Telegram completes the

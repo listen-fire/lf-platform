@@ -52,7 +52,7 @@ import { connectMethodForType } from '../../credentials/connect_link';
 import { isLegacyApp } from '../../credentials/app_id';
 import { isCredentialType } from '../adapters/credential_type';
 import { indexManifestsByName, listAdapterManifests } from '../adapters/registry';
-import { adapterKeyNamed, builtinModulePackage } from '../adapters/builtin_modules';
+import { adapterKeyNamed, builtinModulePackage, connectWrittenAs } from '../adapters/builtin_modules';
 import { mcpDisabledRefusal } from '../adapters/mcp/enabled';
 import { listRemoteAdapters } from '../adapters/remote/store';
 import { teamAdapterManifests } from '../adapters/team_manifests';
@@ -1328,6 +1328,7 @@ export function toAgentCatalogView(input: {
         // knows to connect it before relying on a live listener.
         const remoteStatus = remoteConnections?.[slug];
         const connect = remoteStatus !== undefined ? ('key-entry' as const) : spec.connect;
+        const writtenAs = connectWrittenAs(slug);
         return [
           slug,
           {
@@ -1340,7 +1341,7 @@ export function toAgentCatalogView(input: {
             // How a program's `connect` names it: a package module by its
             // package, the platform's own by `#` and its key. A unit is
             // listened to by name, never connected.
-            ...(RUN_HOST_UNITS.includes(slug) ? {} : { writtenAs: spec.package !== undefined ? `\`${spec.package}\`` : `#${spellName(slug)}` }),
+            ...(writtenAs !== undefined ? { writtenAs } : {}),
             requiresCredential: spec.constructionArgs.some(
               (a) => a.kind === 'credential' && a.required,
             ),

@@ -216,8 +216,8 @@ export function IntegrationModal({
   onClose: () => void;
   /** Reconnect mode: re-run the auth flow for this credential and save
    *  the fresh tokens onto the SAME row. The name (and therefore the
-   *  import name movements reference) is locked — reconnecting must
-   *  never break `import { … } from credentials`. */
+   *  name programs connect with) is locked — reconnecting must never
+   *  break ``connect `@lf/…` using <name>``. */
   existing?: { id: string; name: string; type: string };
   /** Preselect the credential type (e.g. the Adapters page's Connect
    *  button). Ignored when editing an existing credential. */

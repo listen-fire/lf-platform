@@ -37,6 +37,7 @@ import {
   resolveAdapterSlug,
 } from '../../../services/translation_graph/adapters/registry';
 import { credentialImportNames } from 'movement-engine/public/catalog';
+import { connectWrittenAs } from '../../../services/translation_graph/adapters/builtin_modules';
 import { inboundRoutingAddress } from '@listen-fire/email';
 import { WHATSAPP_MOVEMENTS_NUMBER } from '../../../services/translation_graph/adapters/whatsapp';
 import {
@@ -58,15 +59,18 @@ export type ConnectionsIntegration = {
   writes: boolean;
   automationCount: number;
   /**
-   * The names a movement program imports this credential under —
-   * `import { <name> } from credentials`. Computed with the movement
+   * The names a program connects with this credential under —
+   * ``connect `@lf/attio` using <name>``. Computed with the movement
    * catalog's own projection (`credentialImportNames`) so the page shows
    * exactly what the language resolves. Usually one entry; several when
    * one credential type serves multiple adapters (e.g. a Google account
    * powering both Sheets and Drive); empty when no adapter can use the
-   * credential from a movement.
+   * credential from a program.
    */
   importNames: string[];
+  /** Each `connect` a program writes with this credential: one per module
+   *  the credential's type connects, under each of its names. */
+  connectLines: string[];
 };
 
 export type ConnectionsSourceChannel = {
@@ -133,6 +137,15 @@ export type CredentialDependentsPayload = {
  * The email and WhatsApp ones are the DEPLOYMENT's own inbound address and
  * number, because that is what a user would be told to write to.
  */
+/** Each `connect` a program writes with a credential of `type`, under each
+ *  of `names`: one per module that credential type connects. */
+function connectLinesOf(type: string, names: readonly string[]): string[] {
+  const modules = listAdapterManifests()
+    .filter((manifest) => manifest.requiredCredentialType === type)
+    .flatMap((manifest) => connectWrittenAs(manifest.adapterType) ?? []);
+  return modules.flatMap((module) => names.map((name) => `connect ${module} using ${name}`));
+}
+
 function builtInChannels(): ConnectionsSourceChannel[] {
   const address = inboundRoutingAddress();
   return [
@@ -293,6 +306,7 @@ const connectionsRouter = (procedure: typeof trpc.procedure) => {
             writes: false,
             automationCount: boundTriggers.length,
             importNames: importNamesByCredentialId.get(credId) ?? [],
+            connectLines: connectLinesOf(c.type, importNamesByCredentialId.get(credId) ?? []),
           };
         });
 

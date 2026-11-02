@@ -16,7 +16,7 @@ import Link from "next/link";
 import { ArrowUpRight, Puzzle } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { usePageTitle } from "@/components/page-title";
-import { ImportSnippet } from "@/components/import-snippet";
+import { CodeSnippet } from "@/components/code-snippet";
 import {
   Badge,
   CardList,
@@ -65,7 +65,7 @@ export default function PluginsPage() {
                       {plugin.description}
                     </p>
                     <div className="mt-1.5">
-                      <ImportSnippet name={plugin.importName} from="plugins" />
+                      <CodeSnippet code={`import { ${plugin.importName} } from plugins`} />
                     </div>
                     <dl className="mt-2 space-y-1">
                       {plugin.params.length > 0 && (

@@ -5,8 +5,8 @@
  * straight from the static adapter manifests (`views.adapters.list`).
  *
  * One row per adapter: name, honest description, plain-language capability
- * badges (reads / writes / listens for events), the movement import name
- * (`import { attio } from adapters`), and a Connect affordance that opens
+ * badges (reads / writes / listens for events), how a program connects it
+ * (``connect `@lf/attio` ``), and a Connect affordance that opens
  * the existing credential-creation flow preselected for that service.
  * Built-in adapters (email, WhatsApp, web, the knowledge graph) say so
  * instead of offering Connect.
@@ -25,7 +25,7 @@ import {
   IntegrationModal,
   CONNECTABLE_CREDENTIAL_TYPES,
 } from "@/components/integrations/integration-modal";
-import { ImportSnippet } from "@/components/import-snippet";
+import { CodeSnippet } from "@/components/code-snippet";
 import { ServiceIcon } from "@/components/service-icon";
 import {
   Badge,
@@ -200,12 +200,9 @@ export default function AdaptersPage() {
                                 {entry.description}
                               </p>
                             )}
-                            {entry.importName && (
+                            {entry.connectAs && (
                               <div className="mt-1.5">
-                                <ImportSnippet
-                                  name={entry.importName}
-                                  from="adapters"
-                                />
+                                <CodeSnippet code={`connect ${entry.connectAs}`} />
                               </div>
                             )}
                           </div>

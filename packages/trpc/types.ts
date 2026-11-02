@@ -1759,15 +1759,18 @@ export type ConnectionsIntegration = {
     writes: boolean;
     automationCount: number;
     /**
-     * The names a movement program imports this credential under —
-     * `import { <name> } from credentials`. Computed with the movement
+     * The names a program connects with this credential under —
+     * ``connect `@lf/attio` using <name>``. Computed with the movement
      * catalog's own projection (`credentialImportNames`) so the page shows
      * exactly what the language resolves. Usually one entry; several when
      * one credential type serves multiple adapters (e.g. a Google account
      * powering both Sheets and Drive); empty when no adapter can use the
-     * credential from a movement.
+     * credential from a program.
      */
     importNames: string[];
+    /** Each `connect` a program writes with this credential: one per module
+     *  the credential's type connects, under each of its names. */
+    connectLines: string[];
 };
 export type ConnectionsSourceChannel = {
     /** Stable key matching the trigger.kind for this built-in receiver. */
@@ -1877,9 +1880,8 @@ export type AdapterCatalogEntry = {
     slug: string;
     name: string;
     description: string;
-    /** Movement import name (`import { <name> } from adapters`), or null when
-     *  the slug isn't a valid movement identifier. */
-    importName: string | null;
+    /** What a program's `connect` names it by, or null for a run host unit. */
+    connectAs: string | null;
     /** Movements can read records out of this system. */
     reads: boolean;
     /** Movements can create/update/delete records in this system. */

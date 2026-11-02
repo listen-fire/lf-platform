@@ -47,6 +47,7 @@ import {
 } from 'movement-engine/public/secrets';
 import { CHECKED_BY_MODULE, declaredInboundVerifier, type InboundVerifier } from 'movement-engine/public/inbound';
 import { ownedFilesAdapter } from 'movement-engine/public/modules';
+import { RUN_HOST_UNITS, spellName } from 'movement-lang';
 import { logger } from 'movement-engine/public/log';
 import type { BrowserSlot } from 'movement-engine/public/browser';
 import { DEALROOM_MANIFEST } from '@listen-fire/dealroom/manifest';
@@ -709,6 +710,16 @@ export function loadBuiltinModule(entry: AdapterModuleLine, install: BuiltinInst
  *  undefined for the platform's own module. */
 export function builtinModulePackage(adapterType: string): string | undefined {
   return moduleLineOf(adapterType)?.package;
+}
+
+/** How a program's `connect` names a module: a built-in installed from a
+ *  package by that package (``connect `@lf/slack` ``), the platform's own or a
+ *  team's install by `#` and its key (`connect #kg`). A run host unit is
+ *  listened to by name, never connected: undefined. */
+export function connectWrittenAs(adapterType: string): string | undefined {
+  if (RUN_HOST_UNITS.includes(adapterType)) return undefined;
+  const installedFrom = builtinModulePackage(adapterType);
+  return installedFrom !== undefined ? `\`${installedFrom}\`` : `#${spellName(adapterType)}`;
 }
 
 /** The adapter key a `connect` names as written: the built-in installed

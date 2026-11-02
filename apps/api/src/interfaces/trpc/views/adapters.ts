@@ -11,10 +11,10 @@
  * adapter is built in). `connectedCount` layers the per-team credential
  * state on top so the page can say "already connected".
  *
- * The movement language's `adapters` namespace imports an adapter by its
- * slug (`import { attio } from adapters`), so `importName` is the slug —
- * surfaced only when it's a valid movement identifier (a couple of
- * intrinsic slugs carry dashes and aren't importable yet).
+ * A program connects a module by its package (``connect `@lf/attio` ``), the
+ * platform's own by `#` and its key (`connect #kg`); `connectAs` is what
+ * follows `connect`. A run host unit (`manual`, `cron`) is always connected
+ * and listened to by name, so it has none.
  */
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
@@ -24,7 +24,7 @@ import { trpc } from '../trpc';
 import { getAutomationsQb } from '../../../lib/kysely';
 import { listAdapterManifests } from '../../../services/translation_graph/adapters/registry';
 import { WRITE_METHODS } from 'movement-engine/public/adapter';
-import { importIdentifier } from 'movement-engine/public/catalog';
+import { connectWrittenAs } from '../../../services/translation_graph/adapters/builtin_modules';
 import { userProcedure as sharedUserProcedure } from '../procedures';
 
 
@@ -33,9 +33,8 @@ export type AdapterCatalogEntry = {
   slug: string;
   name: string;
   description: string;
-  /** Movement import name (`import { <name> } from adapters`), or null when
-   *  the slug isn't a valid movement identifier. */
-  importName: string | null;
+  /** What a program's `connect` names it by, or null for a run host unit. */
+  connectAs: string | null;
   /** Movements can read records out of this system. */
   reads: boolean;
   /** Movements can create/update/delete records in this system. */
@@ -76,8 +75,7 @@ const adaptersRouter = (procedure: typeof trpc.procedure) => {
             slug: m.adapterType,
             name: m.displayName,
             description: m.description ?? '',
-            importName:
-              m.adapterType === importIdentifier(m.adapterType) ? m.adapterType : null,
+            connectAs: connectWrittenAs(m.adapterType) ?? null,
             reads: m.methods.some((method) =>
               (READ_METHODS as readonly string[]).includes(method),
             ),
