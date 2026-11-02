@@ -43,23 +43,16 @@ import {
 import { saveMovement } from '../../services/translation_graph/movement/provision';
 
 /**
- * Three SEPARATE programs, not one file with three listens.
- *
- * The checker enforces one listener per (instance, config) identity PER
- * PARSED PROGRAM (`packages/legacy-lang/checker/check.ts` —
- * `MOV_LISTEN_DUPLICATE`, unchanged since the listen-derived-triggers design
- * of 2026-06-10): `listen to tg-[:Messages]->` repeated three times in one file collides
- * on identity regardless of which movement each fires, and the Telegram
- * adapter declares no `triggerConfig` vocabulary to differentiate them with.
- * That's a per-file authoring constraint, not a per-team one — dispatch fans
- * out across ALL trigger rows that match an inbound credential
- * (`webhook_sync/handler.ts`'s `candidates` loop is keyed by kind +
- * credentials, not by which movement file created the row), so three
- * independently-saved movements against the SAME `Dev Loop Telegram`
- * credential all fire off one inbound event, exactly like three listens in
- * one file would if the checker allowed it. Each `saveMovement` upserts by
- * the program's first declared movement name, so re-running `setup` stays
- * idempotent per movement.
+ * Three separate programs, one per movement. The language would take all
+ * three listens in one file: `MOV_LISTEN_DUPLICATE` refuses only a listen
+ * identical to another in its traversal AND the function it fires, so
+ * `listen to tg-[:Messages]->` firing three different functions is three
+ * listens. They stay separate so each is saved, re-saved and inspected on its
+ * own: `saveMovement` upserts by the program's first declared movement name,
+ * so re-running `setup` stays idempotent per movement. Separate files cost
+ * nothing at the door: one Telegram arrival is judged against every listen on
+ * its edge that hears the `Dev Loop Telegram` credential, whichever program
+ * declared it, so all three fire off one inbound message.
  */
 const TELEGRAM_VOICE_MOVEMENT = `
 

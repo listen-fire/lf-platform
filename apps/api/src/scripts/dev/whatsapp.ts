@@ -27,10 +27,9 @@
  * exercises the unified write-back surface — a reaction, the ephemeral typing
  * action (`write m-[:Typing]-> {}`), and a threaded reply (recipient derived
  * from the inbound message, never a `To` field). They're provisioned as two
- * separate programs (mirrors telegram.ts) — the checker's MOV_LISTEN_DUPLICATE
- * rule keys off `instance::config` only, not the fired movement, so two
- * `listen to wa-[:Messages]->` statements in the SAME file collide even though they fire
- * different movements.
+ * separate programs (as telegram.ts does) so each is saved and inspected on
+ * its own; one file would do too, since `MOV_LISTEN_DUPLICATE` refuses only a
+ * listen that also fires the same function.
  *
  * See docs/dev-loop.md "Worked example: inbound WhatsApp media".
  */
