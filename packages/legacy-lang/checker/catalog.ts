@@ -677,7 +677,9 @@ export function fieldTypesOfSchema(
   declared: Readonly<Record<string, SchemaFieldType>>,
   instance?: InstanceSchema,
 ): Record<string, FieldType> {
-  const fields: Record<string, FieldType> = {};
+  // Without a prototype: a field named `__proto__` (an ordinary name from
+  // version 5) is held as its own key, not set as the prototype.
+  const fields: Record<string, FieldType> = Object.create(null);
   for (const [name, type] of Object.entries(declared)) fields[name] = fieldTypeOfSchema(type, instance);
   return fields;
 }
@@ -712,7 +714,7 @@ export function surfaceTypeOfSchema(declared: SchemaFieldType): SurfaceFieldType
 
 /** `surfaceTypeOfSchema` over each field of a schema's field map. */
 export function surfaceTypesOfSchema(declared: Readonly<Record<string, SchemaFieldType>>): Record<string, SurfaceFieldType> {
-  const fields: Record<string, SurfaceFieldType> = {};
+  const fields: Record<string, SurfaceFieldType> = Object.create(null);
   for (const [name, type] of Object.entries(declared)) fields[name] = surfaceTypeOfSchema(type);
   return fields;
 }
@@ -790,7 +792,7 @@ function heldRecordFields(
   if (members.some(member => expanding.has(member))) return { kind: 'dict', of: 'json' };
   const inner = new Set([...expanding, ...members]);
   const [first, ...rest] = schemas.map(schema => schema!.properties);
-  const shape: Record<string, FieldType> = {};
+  const shape: Record<string, FieldType> = Object.create(null);
   for (const [name, declared] of Object.entries(first)) {
     const type = convertSchemaFieldType(declared, instance, inner);
     const shared = rest.every(other => {
