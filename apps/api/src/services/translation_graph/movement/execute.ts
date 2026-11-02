@@ -26,7 +26,6 @@ import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { MovementTraceEntry } from 'movement-engine/public/trace';
 import type { AnyParkedScopeState } from 'engine-contracts';
 import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
-import type { TriggerEventId } from '../../../generated/kysely/automations/TriggerEvent';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 
 import { describeError } from 'movement-engine/public/errors';
@@ -278,8 +277,6 @@ type MovementFiringInput = {
    *  caller minted the id so it could return it before this firing started).
    *  Absent ⇒ the recorder mints its own id, as before. */
   existingRunId?: TriggerRunId;
-  /** The stored inbound receipt this firing came from, recorded on the run. */
-  triggerEventId?: TriggerEventId;
   /** Where the delivery that started the run was kept in the arrival log. */
   triggerMark?: number;
 };
@@ -304,7 +301,6 @@ async function runMovementFiringInContext(
     // Pin the version the run executes (P11): the shipped one it runs.
     movementVersionId: input.movement.version.id,
     ...(input.existingRunId !== undefined ? { existingRunId: input.existingRunId } : {}),
-    ...(input.triggerEventId !== undefined ? { triggerEventId: input.triggerEventId } : {}),
   });
   await recorder.startOpsRun();
   const movementName = input.firedMovementName ?? firedMovementNameFromTriggerName(input.triggerName);

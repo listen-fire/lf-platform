@@ -9,7 +9,6 @@
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
-import type { TriggerEventId } from '../../../generated/kysely/automations/TriggerEvent';
 import type { EvaluationResult } from '../engine/types';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 
@@ -28,7 +27,6 @@ import {
 import { runModeGate } from './run_mode';
 import { consultEchoSuppression } from './echo_suppression';
 import { consultActorGate } from './actor_gate';
-import { markTriggerEventSuppressed } from './event_store';
 import * as loopGuard from '../../loop_guard';
 import { isWriteEffect } from 'movement-engine/public/trace';
 import { notifyBreach } from '../../loop_guard/notify';
@@ -62,23 +60,12 @@ export interface TriggerIdDispatchInput {
   /** Dry-run mode — captures writes instead of committing. */
   dryRun?: boolean;
   /**
-   * The durable `trigger_event` receipt id for this event, when the caller
-   * stored one upstream. Enables the loop guard's QUEUE-DON'T-DROP: on a rate
-   * throttle the guard schedules a delayed re-dispatch of THIS stored receipt,
-   * so the event is held and released later, never lost. Absent only for
-   * in-process callers with no receipt (the dev CLI's synchronous Run-now),
-   * which degrade to record-and-skip rather than silently dropping.
-   *
-   * queue-don't-drop
-   */
-  storedEventId?: TriggerEventId;
-  /**
    * Adopt an EXISTING `trigger_run` id for a movement firing rather than
-   * minting a fresh one inside the recorder. A queued run (dispatch_event.ts
-   * `queueRun`: Run now, replay) is inserted waiting so its id goes back to
-   * the caller IMMEDIATELY; the worker that drains its row dispatches here,
-   * and the firing's recorder upserts THAT row to its terminal status. Absent
-   * ⇒ the firing mints its own id, as before.
+   * minting a fresh one inside the recorder. A queued run (a `fire_event`
+   * row, inbound/fire_event.ts) is inserted waiting under its listen's
+   * receipt; the worker that drains its row dispatches here, and the firing's
+   * recorder upserts THAT row to its terminal status. Absent ⇒ the firing
+   * mints its own id.
    */
   existingRunId?: TriggerRunId;
   /** Where the delivery that started the run was kept in the arrival log:
@@ -124,14 +111,11 @@ export async function dispatchTriggerByIdEvent(
 ): Promise<TriggerIdDispatchResult> {
   // The engine switch, before anything else (read through the process's copy
   // of the lf-engined teams, so no query per firing): an lf-engined team's
-  // listeners are lf's to run, so a live firing here is dropped and its
-  // receipt kept replayable. Every door passes here (inbound, poll, cron,
+  // listeners are lf's to run, so a live firing here is dropped (its
+  // delivery stays kept, and replayable). Every door passes here (inbound, poll, cron,
   // Run-now); an explicit dry run is the editor's test run, which runs nothing
   // for real, so it still dispatches.
   if (!input.dryRun && (await isLfEngineTeam(input.teamId))) {
-    if (input.storedEventId !== undefined) {
-      await markTriggerEventSuppressed(input.storedEventId, describeDroppedReason('engine_lf'));
-    }
     logger.info('[TGRouter] dropped: the team\'s engine is lf', { triggerId: input.triggerId });
     return { evaluations: [], droppedReason: 'engine_lf' };
   }
@@ -179,7 +163,7 @@ export async function dispatchTriggerByIdEvent(
   // run_mode gate above (the established "don't run this" precedent). It does
   // two things, in order:
   //   (a) honour an EXISTING guard-pause — a prior team-budget breach already
-  //       parked this automation; skip the run (the receipt is replayable).
+  //       parked this automation; skip the run (its delivery is replayable).
   //   (b) EVALUATE this run against the floor — a team-budget breach pauses;
   //       a per-trigger rate breach throttles (queue-don't-drop).
   // Both are skipped under dry-run (a rehearsal can't loop in production) and
@@ -191,8 +175,6 @@ export async function dispatchTriggerByIdEvent(
       teamId: input.teamId,
       triggerName: triggerRow.name,
       movementId: triggerRow.movementId,
-      storedEventId: input.storedEventId,
-      existingRunId: input.existingRunId,
     });
     if (guardDisposition) return { evaluations: [], droppedReason: guardDisposition };
   }
@@ -222,12 +204,8 @@ export async function dispatchTriggerByIdEvent(
         adapterType: input.event.adapterType,
         reason: disposition.reason,
       });
-      // Recorded, not dropped: the stored receipt is marked suppressed and
-      // stays replayable. No receipt (synchronous run) → still skipped; the
-      // disposition is surfaced to the caller.
-      if (input.storedEventId !== undefined) {
-        await markTriggerEventSuppressed(input.storedEventId, disposition.reason);
-      }
+      // Not dropped: the delivery stays kept and replayable; the queued
+      // run is settled naming the disposition (inbound/fire_event.ts).
       return { evaluations: [], droppedReason: 'echo_suppressed' };
     }
     if (disposition.kind === 'no-op') {
@@ -242,7 +220,7 @@ export async function dispatchTriggerByIdEvent(
     // "did WE write this", this answers "is the sender one of ours"). Slack
     // is the declaring adapter today: its parser forwards every inner event,
     // bots included, so without this a listen+reply movement replies to its
-    // own replies forever. Fail closed; the suppressed receipt is replayable.
+    // own replies forever. Fail closed; the delivery stays replayable.
     const actorGate = await consultActorGate({
       teamId: input.teamId,
       sourceAdapter,
@@ -254,9 +232,6 @@ export async function dispatchTriggerByIdEvent(
         adapterType: input.event.adapterType,
         reason: actorGate.reason,
       });
-      if (input.storedEventId !== undefined) {
-        await markTriggerEventSuppressed(input.storedEventId, actorGate.reason);
-      }
       return { evaluations: [], droppedReason: 'actor_unregistered' };
     }
   }
@@ -286,9 +261,6 @@ export async function dispatchTriggerByIdEvent(
         triggerId: input.triggerId,
         movementId: triggerRow.movementId,
       });
-      if (input.storedEventId !== undefined) {
-        await markTriggerEventSuppressed(input.storedEventId, describeDroppedReason('not_shipped'));
-      }
       return { evaluations: [], droppedReason: 'not_shipped' };
     }
     if (fired.kind === 'missing') {
@@ -318,7 +290,6 @@ export async function dispatchTriggerByIdEvent(
       recordingTriggerType,
       dryRun,
       ...(input.existingRunId !== undefined ? { existingRunId: input.existingRunId } : {}),
-      ...(input.storedEventId !== undefined ? { triggerEventId: input.storedEventId } : {}),
       ...(input.triggerMark !== undefined ? { triggerMark: input.triggerMark } : {}),
     });
     if (firing.result) {
@@ -379,13 +350,10 @@ async function applyLoopGuard(input: {
   teamId: TeamId;
   triggerName: string;
   movementId: string | null;
-  storedEventId?: string;
-  existingRunId?: TriggerRunId;
 }): Promise<'loop_guard_paused' | 'loop_guard_throttled' | undefined> {
   try {
-    // (a) Already guard-paused? Skip the run. The receipt was stored upstream,
-    //     so the paused automation's backlog is the recorded trigger_events,
-    //     replayable once a human resumes. We honour the pause even in observe
+    // (a) Already guard-paused? Skip the run. Its delivery is kept, so the
+    //     paused automation's backlog is replayable once a human resumes. We honour the pause even in observe
     //     mode — a human (or the guard in a prior enforce window) set it
     //     deliberately, and observe-mode only governs whether the guard sets
     //     NEW pauses, not whether it respects existing ones.
@@ -437,27 +405,12 @@ async function applyLoopGuard(input: {
 
     if (decision.kind === 'throttle') {
       if (!decision.enforced) return undefined;
-      // QUEUE-DON'T-DROP. If the caller gave us a durable receipt id, schedule a
-      // delayed re-dispatch of that stored event — held now, released after the
-      // rate window, never lost. If not (an in-process caller with no stored
-      // receipt to replay), degrade gracefully to record-and-skip: the
-      // run is skipped but the event is NOT dropped — its trigger_event receipt
-      // (stored upstream of dispatch) stays at status='received' and is
-      // replayable. We log the degraded path explicitly.
-      if (input.storedEventId !== undefined) {
-        await scheduleDeferredReplay({
-          storedEventId: input.storedEventId,
-          delayMs: decision.retryAfterMs,
-          triggerId: input.triggerId,
-          ...(input.existingRunId !== undefined ? { runId: input.existingRunId } : {}),
-        });
-      } else {
-        logger.warn(
-          '[LoopGuard] throttled with no durable receipt — degrading to ' +
-            'record-and-skip (event remains replayable, NOT dropped)',
-          { triggerId: input.triggerId, reason: decision.reason },
-        );
-      }
+      // QUEUE-DON'T-DROP: the caller holds the run's row (a `fire_event`
+      // row, inbound/fire_event.ts) and releases it to retry later.
+      logger.info('[LoopGuard] run held — its row retries after the rate window (queue-don\'t-drop)', {
+        triggerId: input.triggerId,
+        reason: decision.reason,
+      });
       return 'loop_guard_throttled';
     }
 
@@ -469,39 +422,6 @@ async function applyLoopGuard(input: {
       error: err instanceof Error ? err.message : String(err),
     });
     return undefined;
-  }
-}
-
-/**
- * Schedule a held event's release: its receipt goes back on the work queue,
- * due after `delayMs`, so whichever worker drains then runs it — the release
- * survives a restart, and a deployment that stops between requests still
- * releases it. A queued run the receipt carries stays its run.
- */
-async function scheduleDeferredReplay(input: {
-  storedEventId: string;
-  delayMs: number;
-  triggerId: string;
-  runId?: TriggerRunId;
-}): Promise<void> {
-  logger.info('[LoopGuard] event held — scheduling delayed release (queue-don\'t-drop)', {
-    triggerId: input.triggerId,
-    storedEventId: input.storedEventId,
-    delayMs: input.delayMs,
-  });
-  try {
-    // Lazy import to avoid a module cycle (dispatch_event imports router).
-    const { requeueReceipt } = await import('./dispatch_event');
-    await requeueReceipt({
-      storedEventId: input.storedEventId as TriggerEventId,
-      dueAt: new Date(Date.now() + input.delayMs),
-      ...(input.runId !== undefined ? { runId: input.runId } : {}),
-    });
-  } catch (err) {
-    logger.error('[LoopGuard] deferred release not queued (event still replayable by hand)', {
-      storedEventId: input.storedEventId,
-      error: err instanceof Error ? err.message : String(err),
-    });
   }
 }
 

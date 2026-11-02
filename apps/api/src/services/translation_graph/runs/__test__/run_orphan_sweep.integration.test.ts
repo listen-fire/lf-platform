@@ -1,12 +1,11 @@
 // The periodic orphan sweep against the real tables: a `running` run whose
-// segment has gone silent fails with the receipt that started it; a live run
+// segment has gone silent fails; a live run
 // and a parked one are left alone.
 
 import { randomUUID } from 'node:crypto';
 
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type { TriggerRunId } from '../../../../generated/kysely/automations/TriggerRun';
-import type { TriggerEventId } from '../../../../generated/kysely/automations/TriggerEvent';
 
 import { getAutomationsQb, getCoreQb } from '../../../../lib/kysely';
 import { cleanupTeam } from '../../../../test/harness/cleanup';
@@ -16,27 +15,10 @@ import { getMovementRunStatus } from '../../movement/run_now';
 
 const MINUTE = 60_000;
 
-async function seedReceipt(teamId: TeamId): Promise<TriggerEventId> {
-  const row = await getAutomationsQb(['trigger_event'])
-    .insertInto('trigger_event')
-    .values({
-      team_id: teamId,
-      trigger_id: randomUUID(),
-      adapter_type: 'attio',
-      trigger_type: 'webhook',
-      payload: JSON.stringify({}),
-      status: 'received',
-    })
-    .returning('id')
-    .executeTakeFirstOrThrow();
-  return row.id;
-}
-
 async function seedRun(input: {
   teamId: TeamId;
   status: 'running' | 'parked';
   lastHeartbeatAt: Date;
-  receiptId?: TriggerEventId;
 }): Promise<TriggerRunId> {
   const id = randomUUID() as TriggerRunId;
   await getAutomationsQb(['trigger_run'])
@@ -49,7 +31,6 @@ async function seedRun(input: {
       status: input.status,
       started_at: input.lastHeartbeatAt,
       last_heartbeat_at: input.lastHeartbeatAt,
-      trigger_event_id: input.receiptId ?? null,
     })
     .execute();
   return id;
@@ -58,14 +39,6 @@ async function seedRun(input: {
 async function runState(id: TriggerRunId) {
   return getAutomationsQb(['trigger_run'])
     .selectFrom('trigger_run')
-    .where('id', '=', id)
-    .select(['status', 'failure_reason'])
-    .executeTakeFirstOrThrow();
-}
-
-async function receiptState(id: TriggerEventId) {
-  return getAutomationsQb(['trigger_event'])
-    .selectFrom('trigger_event')
     .where('id', '=', id)
     .select(['status', 'failure_reason'])
     .executeTakeFirstOrThrow();
@@ -87,14 +60,12 @@ describe('run_orphan_sweep (real DB)', () => {
     await cleanupTeam(teamId);
   });
 
-  it('fails a silent running run and its received receipt; leaves a live run and a parked run alone', async () => {
+  it('fails a silent running run; leaves a live run and a parked run alone', async () => {
     const now = new Date();
-    const receiptId = await seedReceipt(teamId);
     const orphan = await seedRun({
       teamId,
       status: 'running',
       lastHeartbeatAt: new Date(now.getTime() - 2 * MINUTE),
-      receiptId,
     });
     const live = await seedRun({ teamId, status: 'running', lastHeartbeatAt: now });
     const parked = await seedRun({
@@ -106,10 +77,6 @@ describe('run_orphan_sweep (real DB)', () => {
     await runOrphanSweepHandler.run({}, testWorkContext(now));
 
     expect(await runState(orphan)).toEqual({
-      status: 'failed',
-      failure_reason: 'segment did not complete: process died or stalled',
-    });
-    expect(await receiptState(receiptId)).toEqual({
       status: 'failed',
       failure_reason: 'segment did not complete: process died or stalled',
     });

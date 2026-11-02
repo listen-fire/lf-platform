@@ -9,7 +9,7 @@
  *    BEFORE the engine runs, on the one dispatch path (a knowledge-graph change
  *    takes it too, through its work row);
  *  - `suppress` returns the `echo_suppressed` disposition and records (not
- *    drops) the stored receipt as suppressed;
+ *    drops) the run, its delivery kept;
  *  - `no-op` (flag on, adapter can't answer) fires as normal with a loud log;
  *  - the consult is skipped under dry-run.
  */
@@ -33,9 +33,8 @@ describe('dispatchTriggerByIdEvent — echo-suppression wiring (external path)',
     expect(movementIdx).toBeGreaterThan(consultIdx);
   });
 
-  it('suppression returns echo_suppressed and records the receipt (not drop)', () => {
+  it('suppression returns echo_suppressed (the delivery stays kept, and replayable)', () => {
     expect(routerSrc).toMatch(/disposition\.kind === 'suppress'/);
-    expect(routerSrc).toMatch(/markTriggerEventSuppressed\(input\.storedEventId/);
     expect(routerSrc).toMatch(/droppedReason: 'echo_suppressed'/);
   });
 

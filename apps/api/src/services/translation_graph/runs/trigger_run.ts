@@ -15,7 +15,6 @@ import type { EvaluationResult } from '../engine/types';
 import type { MovementRunResult } from 'movement-engine/public/movement-engine';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
-import type { TriggerEventId } from '../../../generated/kysely/automations/TriggerEvent';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 import type { WorkHandler } from '../../work/kinds';
 
@@ -38,7 +37,6 @@ import { describeRunAwaits } from '../../movement_engine/await_description';
 import OpsEventType from '../../../generated/kysely/public/OpsEventType';
 import OpsSeverity from '../../../generated/kysely/public/OpsSeverity';
 import { OpsDetailLevel } from '../../../lib/ops/types';
-import { markTriggerEventFailed } from '../triggers/event_store';
 import { settleUnresumableRun } from '../../interaction/run_failure';
 import { ORPHAN_AFTER, withRunLease } from '../../movement_engine/run_lease';
 import { returnLeavesOfLapsedLeases } from '../../movement_engine/run_host_store';
@@ -73,11 +71,8 @@ export interface TriggerRunFiring {
    * mints a new id, as before.
    */
   existingRunId?: TriggerRunId;
-  /** The stored inbound receipt this firing was dispatched from, when there
-   *  was one — how a re-claimed dispatch finds the run it already started. */
-  triggerEventId?: TriggerEventId;
   /** The row is inserted waiting in the work queue: no segment has started,
-   *  so it carries no heartbeat until a worker claims it (`claimQueuedRun`). */
+   *  so it carries no heartbeat until a worker starts it. */
   queued?: boolean;
 }
 
@@ -286,7 +281,6 @@ export class TriggerRunRecorder {
           dry_run: this.firing.dryRun ?? false,
           started_at: this.startedAt,
           last_heartbeat_at: this.firing.queued === true ? null : new Date(),
-          trigger_event_id: this.firing.triggerEventId ?? null,
         })
         .onConflict((oc) => oc.column('id').doNothing())
         .execute();
@@ -767,7 +761,6 @@ export class TriggerRunRecorder {
             completed_at: terminal.completedAt,
             failed_at: terminal.failedAt,
             failure_reason: terminal.failureReason,
-            trigger_event_id: this.firing.triggerEventId ?? null,
           })
           .onConflict((oc) => {
             const update = oc.column('id').doUpdateSet({
@@ -1007,25 +1000,8 @@ export async function runningSegment(
   return stale ? 'orphaned' : 'live';
 }
 
-/**
- * Take a queued run (inserted with `queued`) for its first segment. Compare
- * and set on the missing heartbeat, so of two claims of one queued run only one
- * starts it; false when the run already started, settled, or is gone.
- */
-export async function claimQueuedRun(runId: TriggerRunId): Promise<boolean> {
-  const claimed = await getAutomationsQb(['trigger_run'])
-    .updateTable('trigger_run')
-    .set({ last_heartbeat_at: sql<Date>`now()` })
-    .where('id', '=', runId)
-    .where('status', '=', 'running')
-    .where('last_heartbeat_at', 'is', null)
-    .returning('id')
-    .executeTakeFirst();
-  return claimed !== undefined;
-}
-
-/** Put a claimed run back in the queue (a guard held it before it fired), so
- *  its re-queued row claims it again. */
+/** Put a started run back in the queue (a guard held it before it fired), so
+ *  its row, released to retry, starts it again. */
 export async function requeueRun(runId: TriggerRunId): Promise<void> {
   await getAutomationsQb(['trigger_run'])
     .updateTable('trigger_run')
@@ -1084,19 +1060,16 @@ export async function settleOrphanedRunningRuns(): Promise<void> {
     .where(
       sql<boolean>`NOT (trigger_run.last_heartbeat_at IS NULL AND EXISTS (
         SELECT 1 FROM automations.work
-        WHERE work.host = 'platform' AND work.kind = 'dispatch_event' AND work.payload->>'runId' = trigger_run.id::text))`,
+        WHERE work.host = 'platform' AND work.kind = 'fire_event' AND work.payload->>'runId' = trigger_run.id::text))`,
     )
-    .select(['id', 'trigger_event_id', 'failure_reason'])
+    .select(['id', 'failure_reason'])
     .execute();
   for (const orphan of orphans) {
     // A segment that stopped for a lost lease said so on the row.
     const reason = orphan.failure_reason ?? ORPHANED_SEGMENT;
     // Under the run's lease, which a dead segment's has lapsed by now (the
     // same silence). Held, the run is not orphaned after all: leave it.
-    const settled = await withRunLease(orphan.id, () => settleUnresumableRun({ runId: orphan.id, reason }));
-    if (settled.kind === 'held' && orphan.trigger_event_id !== null) {
-      await markTriggerEventFailed(orphan.trigger_event_id, reason);
-    }
+    await withRunLease(orphan.id, () => settleUnresumableRun({ runId: orphan.id, reason }));
   }
 }
 

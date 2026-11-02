@@ -7,13 +7,14 @@ import { createHmac } from 'node:crypto';
 import type { GoldenCase } from '../harness';
 
 import { withEnv } from '../env';
-import { SECRETS, hmacBase64, hmacHex, slackSignature } from '../secrets';
+import { FIXED_NOW_SECONDS, SECRETS, hmacBase64, hmacHex, slackSignature } from '../secrets';
 import { world } from '../world';
 import { REMOTE_SIGNATURE_HEADER_FOR_CASES } from './names';
 import { define, givenSubscription, givenTrigger, json, post, text } from './support';
 
 const ATTIO_BODY = { events: [{ event_type: 'record.created', id: { record_id: 'rec-1' } }], event_id: 'evt-attio-1' };
-const SLACK_TIMESTAMP = '1760702400';
+// Slack refuses a timestamp outside its replay window of the door's clock.
+const SLACK_TIMESTAMP = FIXED_NOW_SECONDS;
 const slackHeaders = (secret: string) => (body: Buffer) => ({
   'x-slack-request-timestamp': SLACK_TIMESTAMP,
   'x-slack-signature': slackSignature({ secret, timestamp: SLACK_TIMESTAMP, body }),
@@ -206,7 +207,7 @@ export const webhookSyncCases: GoldenCase[] = define('webhook_sync', [
   },
   {
     id: 'wake-keys-failure',
-    note: 'A wakeKeys that throws costs the delivery its ack, not its events: they are captured and queued, then 500 so the sender retries.',
+    note: 'A module`s wakeKeys is never asked: a delivery wakes the waits on the records its arrivals land on, as it is kept.',
     arrange: () => {
       attioArrange();
       world.adapters.attio = {
@@ -222,7 +223,7 @@ export const webhookSyncCases: GoldenCase[] = define('webhook_sync', [
   },
   {
     id: 'receipt-enqueue-failure-is-isolated',
-    note: 'A receipt whose work row cannot be queued is logged and the delivery answered 500, so the sender retries and the stored receipt is re-queued. The wakes are still queued. (Before the shared inbound core it was acked 200 and the receipt never ran.)',
+    note: 'A delivery whose runs cannot be queued is not kept at all, and is answered 500 so the sender retries.',
     arrange: () => {
       attioArrange();
       world.enqueueFails = true;
@@ -231,7 +232,7 @@ export const webhookSyncCases: GoldenCase[] = define('webhook_sync', [
   },
   {
     id: 'wake-enqueue-failure',
-    note: 'A wake that cannot be queued is a 500 so the sender retries; the events were already receipted.',
+    note: 'A delivery whose wakes cannot be queued is not kept at all, and is answered 500 so the sender retries.',
     arrange: () => {
       attioArrange();
       world.enqueueFails = true;
@@ -246,7 +247,7 @@ export const webhookSyncCases: GoldenCase[] = define('webhook_sync', [
   },
   {
     id: 'capture-failure',
-    note: 'An event whose receipt cannot be stored is dropped from the count; the delivery is still acked 200 with zero processed.',
+    note: 'A delivery is kept in one write: when it cannot be kept, nothing of it is, and the door answers 500 so the sender retries.',
     arrange: () => {
       attioArrange();
       world.captureFails = true;

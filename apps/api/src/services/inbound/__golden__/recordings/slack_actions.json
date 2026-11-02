@@ -1,214 +1,5 @@
 [
   {
-    "id": "button-tap-fires-callback",
-    "door": "slack_actions",
-    "note": "A signed block action carrying a callback id fires it and queues the reply that replaces the original message (a slack_response row keyed on trigger_id).",
-    "request": {
-      "method": "POST",
-      "path": "/api/public/slack-actions",
-      "headers": {
-        "content-type": "application/x-www-form-urlencoded",
-        "x-slack-request-timestamp": "1760702400",
-        "x-slack-signature": "v0=9551bbba50adb9c489ed489820cacc39991439348b99632d02ab1d657bd6cead"
-      },
-      "body": "payload=%7B%22type%22%3A%22block_actions%22%2C%22response_url%22%3A%22https%3A%2F%2Fhooks.slack.test%2Factions%2FT9%2F1%2Fabc%22%2C%22trigger_id%22%3A%221760702400.golden%22%2C%22actions%22%3A%5B%7B%22action_id%22%3A%22btn%22%2C%22value%22%3A%22cb_golden0001%22%7D%5D%7D"
-    },
-    "response": {
-      "status": 200,
-      "headers": {
-        "content-type": "application/json; charset=utf-8",
-        "content-length": "11"
-      },
-      "body": "{\"ok\":true}"
-    },
-    "effects": [
-      {
-        "kind": "fire_callback",
-        "id": "cb_golden0001",
-        "values": {}
-      },
-      {
-        "kind": "enqueue_work",
-        "row": {
-          "kind": "slack_response",
-          "key": "slack_response:1760702400.golden",
-          "payload": {
-            "responseUrl": "https://hooks.slack.test/actions/T9/1/abc",
-            "body": {
-              "replace_original": true,
-              "text": "Thanks — that has been recorded.",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": ":white_check_mark: Thanks — that has been recorded."
-                  }
-                }
-              ]
-            }
-          }
-        }
-      },
-      {
-        "kind": "notify_work"
-      }
-    ]
-  },
-  {
-    "id": "button-tap-closed-callback",
-    "door": "slack_actions",
-    "note": "A tap on a closed callback is an ephemeral notice and leaves the message.",
-    "request": {
-      "method": "POST",
-      "path": "/api/public/slack-actions",
-      "headers": {
-        "content-type": "application/x-www-form-urlencoded",
-        "x-slack-request-timestamp": "1760702400",
-        "x-slack-signature": "v0=9551bbba50adb9c489ed489820cacc39991439348b99632d02ab1d657bd6cead"
-      },
-      "body": "payload=%7B%22type%22%3A%22block_actions%22%2C%22response_url%22%3A%22https%3A%2F%2Fhooks.slack.test%2Factions%2FT9%2F1%2Fabc%22%2C%22trigger_id%22%3A%221760702400.golden%22%2C%22actions%22%3A%5B%7B%22action_id%22%3A%22btn%22%2C%22value%22%3A%22cb_golden0001%22%7D%5D%7D"
-    },
-    "response": {
-      "status": 200,
-      "headers": {
-        "content-type": "application/json; charset=utf-8",
-        "content-length": "11"
-      },
-      "body": "{\"ok\":true}"
-    },
-    "effects": [
-      {
-        "kind": "fire_callback",
-        "id": "cb_golden0001",
-        "values": {}
-      },
-      {
-        "kind": "enqueue_work",
-        "row": {
-          "kind": "slack_response",
-          "key": "slack_response:1760702400.golden",
-          "payload": {
-            "responseUrl": "https://hooks.slack.test/actions/T9/1/abc",
-            "body": {
-              "response_type": "ephemeral",
-              "replace_original": false,
-              "text": "This request was already closed."
-            }
-          }
-        }
-      },
-      {
-        "kind": "notify_work"
-      }
-    ]
-  },
-  {
-    "id": "callback-firing-throws",
-    "door": "slack_actions",
-    "note": "A firing failure still tells the tapper.",
-    "request": {
-      "method": "POST",
-      "path": "/api/public/slack-actions",
-      "headers": {
-        "content-type": "application/x-www-form-urlencoded",
-        "x-slack-request-timestamp": "1760702400",
-        "x-slack-signature": "v0=9551bbba50adb9c489ed489820cacc39991439348b99632d02ab1d657bd6cead"
-      },
-      "body": "payload=%7B%22type%22%3A%22block_actions%22%2C%22response_url%22%3A%22https%3A%2F%2Fhooks.slack.test%2Factions%2FT9%2F1%2Fabc%22%2C%22trigger_id%22%3A%221760702400.golden%22%2C%22actions%22%3A%5B%7B%22action_id%22%3A%22btn%22%2C%22value%22%3A%22cb_golden0001%22%7D%5D%7D"
-    },
-    "response": {
-      "status": 200,
-      "headers": {
-        "content-type": "application/json; charset=utf-8",
-        "content-length": "11"
-      },
-      "body": "{\"ok\":true}"
-    },
-    "effects": [
-      {
-        "kind": "fire_callback",
-        "id": "cb_golden0001",
-        "values": {}
-      },
-      {
-        "kind": "enqueue_work",
-        "row": {
-          "kind": "slack_response",
-          "key": "slack_response:1760702400.golden",
-          "payload": {
-            "responseUrl": "https://hooks.slack.test/actions/T9/1/abc",
-            "body": {
-              "response_type": "ephemeral",
-              "replace_original": false,
-              "text": "Something went wrong recording that."
-            }
-          }
-        }
-      },
-      {
-        "kind": "notify_work"
-      }
-    ]
-  },
-  {
-    "id": "date-picker-supplies-value",
-    "door": "slack_actions",
-    "note": "A control with no value rides the callback id in action_id and the tap-time capture as the supplied value.",
-    "request": {
-      "method": "POST",
-      "path": "/api/public/slack-actions",
-      "headers": {
-        "content-type": "application/x-www-form-urlencoded",
-        "x-slack-request-timestamp": "1760702400",
-        "x-slack-signature": "v0=8a858a543db9e42b3f825e239eae5dee971690edaa3a20461cd9967e77636b7b"
-      },
-      "body": "payload=%7B%22type%22%3A%22block_actions%22%2C%22response_url%22%3A%22https%3A%2F%2Fhooks.slack.test%2Factions%2FT9%2F1%2Fabc%22%2C%22trigger_id%22%3A%221760702400.golden%22%2C%22actions%22%3A%5B%7B%22action_id%22%3A%22cb_golden0001%22%2C%22selected_date%22%3A%222026-11-02%22%7D%5D%7D"
-    },
-    "response": {
-      "status": 200,
-      "headers": {
-        "content-type": "application/json; charset=utf-8",
-        "content-length": "11"
-      },
-      "body": "{\"ok\":true}"
-    },
-    "effects": [
-      {
-        "kind": "fire_callback",
-        "id": "cb_golden0001",
-        "values": {},
-        "suppliedValue": "2026-11-02"
-      },
-      {
-        "kind": "enqueue_work",
-        "row": {
-          "kind": "slack_response",
-          "key": "slack_response:1760702400.golden",
-          "payload": {
-            "responseUrl": "https://hooks.slack.test/actions/T9/1/abc",
-            "body": {
-              "replace_original": true,
-              "text": "Thanks — that has been recorded.",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": ":white_check_mark: Thanks — that has been recorded."
-                  }
-                }
-              ]
-            }
-          }
-        }
-      },
-      {
-        "kind": "notify_work"
-      }
-    ]
-  },
-  {
     "id": "legacy-ask-answer-link",
     "door": "slack_actions",
     "note": "A legacy ask answer link in value is answered through the ask door.",
@@ -217,8 +8,8 @@
       "path": "/api/public/slack-actions",
       "headers": {
         "content-type": "application/x-www-form-urlencoded",
-        "x-slack-request-timestamp": "1760702400",
-        "x-slack-signature": "v0=de7331ece6aef3651cdea13867b8aa961fadc5d36117733a6204ba4689ae7963"
+        "x-slack-request-timestamp": "1792238400",
+        "x-slack-signature": "v0=d86f976e47ffd588fab73a85f2ec0485bc3611128875066f9e5facc305d4c856"
       },
       "body": "payload=%7B%22type%22%3A%22block_actions%22%2C%22response_url%22%3A%22https%3A%2F%2Fhooks.slack.test%2Factions%2FT9%2F1%2Fabc%22%2C%22trigger_id%22%3A%221760702400.golden%22%2C%22actions%22%3A%5B%7B%22action_id%22%3A%22btn%22%2C%22value%22%3A%22https%3A%2F%2Fgolden.example.test%2Fapi%2Fasks%2Fask_tok1%3Fanswer%3Dyes%22%7D%5D%7D"
     },
@@ -273,8 +64,8 @@
       "path": "/api/public/slack-actions",
       "headers": {
         "content-type": "application/x-www-form-urlencoded",
-        "x-slack-request-timestamp": "1760702400",
-        "x-slack-signature": "v0=94750d415887dcaed66dba34995b0f1ebc4337811337b8d0b6a68b7057c63b0f"
+        "x-slack-request-timestamp": "1792238400",
+        "x-slack-signature": "v0=15c739398d85b2f2c863820e0dc2c08db0c42e8a1ba220ffedbd28e6821de8f8"
       },
       "body": "payload=%7B%22type%22%3A%22shortcut%22%7D"
     },
@@ -297,8 +88,8 @@
       "path": "/api/public/slack-actions",
       "headers": {
         "content-type": "application/x-www-form-urlencoded",
-        "x-slack-request-timestamp": "1760702400",
-        "x-slack-signature": "v0=d31e0c6c0ae96a39fb81475ede59861b5f1514ef887984f194b32307bc721671"
+        "x-slack-request-timestamp": "1792238400",
+        "x-slack-signature": "v0=6088aab4b2a13d616e078689923a1db35fab3965f2042e998a67299f9fe6a0f1"
       },
       "body": "other=x"
     },
@@ -321,8 +112,8 @@
       "path": "/api/public/slack-actions",
       "headers": {
         "content-type": "application/x-www-form-urlencoded",
-        "x-slack-request-timestamp": "1760702400",
-        "x-slack-signature": "v0=46a0db718816afa3007513e70fe434b37127446f450245025174004657ea7998"
+        "x-slack-request-timestamp": "1792238400",
+        "x-slack-signature": "v0=c49b64f386343a96b04961eec933eb8c10ca5e1255a340f6de2b1ab97630fa8a"
       },
       "body": "payload=%7B%22type%22%3A%22block_actions%22%2C%22response_url%22%3A%22https%3A%2F%2Fhooks.slack.test%2Factions%2FT9%2F1%2Fabc%22%2C%22trigger_id%22%3A%221760702400.golden%22%2C%22actions%22%3A%5B%7B%22action_id%22%3A%22overflow%22%2C%22value%22%3A%22something%22%7D%5D%7D"
     },
@@ -345,8 +136,8 @@
       "path": "/api/public/slack-actions",
       "headers": {
         "content-type": "application/x-www-form-urlencoded",
-        "x-slack-request-timestamp": "1760702400",
-        "x-slack-signature": "v0=1a4ee2ec876806df09843bbf61c817c5509406c49a36857951334b219174d021"
+        "x-slack-request-timestamp": "1792238400",
+        "x-slack-signature": "v0=386b81d7887c4793c1e7749b36fee3166f9baa874d8171f6b80b83bef3efa2c0"
       },
       "body": "payload=%7B%22type%22%3A%22block_actions%22%2C%22response_url%22%3A%22https%3A%2F%2Fhooks.slack.test%2Factions%2FT9%2F1%2Fabc%22%2C%22trigger_id%22%3A%221760702400.golden%22%2C%22actions%22%3A%5B%7B%22action_id%22%3A%22btn%22%2C%22value%22%3A%22cb_golden0001%22%7D%5D%7D"
     },

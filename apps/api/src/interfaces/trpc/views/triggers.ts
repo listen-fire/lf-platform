@@ -60,7 +60,6 @@ import {
   runMovementAsync,
   type MovementRunAsyncResult,
 } from '../../../services/translation_graph/movement/run_now';
-import { replayTriggerEvent } from '../../../services/translation_graph/triggers/dispatch_event';
 import { clearGuardPaused } from '../../../services/loop_guard';
 import ExternalServiceType from '../../../generated/kysely/automations/ExternalServiceType';
 import { reportedFailureReason } from '../../../services/translation_graph/runs/trigger_run';
@@ -423,9 +422,8 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
       }),
 
     /**
-     * The durable receipt log: every inbound event stored for a trigger,
-     * and playback — re-dispatch any stored event through normal trigger
-     * dispatch (a replay acts like a fresh arrival; it records a new run).
+     * The receipts the retired capture path stored for a trigger: its
+     * history before listens were judged by their plans.
      */
     listTriggerEvents: userProcedure
       .input(
@@ -440,16 +438,6 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
           teamId: ctx.user.teamId as TeamId,
           triggerId: input.triggerId,
           ...(input.limit !== undefined ? { limit: input.limit } : {}),
-        });
-      }),
-
-    replayTriggerEvent: userProcedure
-      .input(z.object({ eventId: z.string().min(1) }))
-      .mutation(async ({ input }) => {
-        const ctx = currentContext();
-        return replayTriggerEvent({
-          teamId: ctx.user.teamId as TeamId,
-          eventId: input.eventId,
         });
       }),
 

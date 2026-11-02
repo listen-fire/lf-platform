@@ -4,19 +4,14 @@
 // install that answered to a built-in's name would be shadowed in some places
 // and not others, or would let a third party's server stand in for a built-in
 // at a door that authenticates by install. So no name a built-in answers to,
-// in any casing, and none of the engine's reserved await identities.
-
-import { CALLBACK_AWAIT_TYPE } from 'engine-contracts';
+// in any casing.
 
 import { listAdapterManifests } from '../registry';
 
-/** Await identities the engine keys parks by that are not ordinary adapters. */
-const RESERVED = [CALLBACK_AWAIT_TYPE];
-
 /** Every name a built-in answers to — slug, trigger kinds, author aliases —
- *  folded to lower case, plus the reserved identities. */
+ *  folded to lower case. */
 function takenNames(): ReadonlySet<string> {
-  const names = new Set(RESERVED.map((name) => name.toLowerCase()));
+  const names = new Set<string>();
   for (const manifest of listAdapterManifests()) {
     // A test that stubs an adapter module can leave its manifest undefined.
     if (!manifest) continue;

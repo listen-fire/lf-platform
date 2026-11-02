@@ -27,50 +27,16 @@
         "teamId": "team-1"
       },
       {
-        "kind": "find_triggers",
+        "kind": "deliver_arrivals",
         "teamId": "team-1",
-        "kinds": [
-          "ATTIO",
-          "attio"
-        ]
-      },
-      {
-        "kind": "capture_receipt",
-        "triggerId": "trigger-1",
-        "movementId": "movement-1",
-        "teamId": "team-1",
-        "adapterType": "attio",
-        "triggerType": "webhook",
-        "event": {
-          "eventType": "inbound",
-          "externalId": "rec-1",
-          "idempotencyKey": "evt-attio-1",
-          "payload": {
-            "events": [
-              {
-                "event_type": "record.created",
-                "id": {
-                  "record_id": "rec-1"
-                }
-              }
-            ],
-            "event_id": "evt-attio-1"
-          }
-        }
-      },
-      {
-        "kind": "enqueue_receipts",
-        "receipts": [
-          {
-            "receiptId": "receipt-trigger-1"
-          }
-        ]
-      },
-      {
-        "kind": "enqueue_wakes",
-        "adapterType": "attio",
-        "teamId": "team-1",
-        "correlationKeys": []
+        "delivered": {
+          "adapterType": "attio",
+          "credentialsId": "cred-1"
+        },
+        "subscriptionId": "sub-1",
+        "externalId": null,
+        "source": "webhook",
+        "arrivals": []
       },
       {
         "kind": "notify_work"
@@ -150,50 +116,16 @@
         "teamId": "team-1"
       },
       {
-        "kind": "find_triggers",
+        "kind": "deliver_arrivals",
         "teamId": "team-1",
-        "kinds": [
-          "ATTIO",
-          "attio"
-        ]
-      },
-      {
-        "kind": "capture_receipt",
-        "triggerId": "trigger-1",
-        "movementId": "movement-1",
-        "teamId": "team-1",
-        "adapterType": "attio",
-        "triggerType": "webhook",
-        "event": {
-          "eventType": "inbound",
-          "externalId": "rec-1",
-          "idempotencyKey": "evt-attio-1",
-          "payload": {
-            "events": [
-              {
-                "event_type": "record.created",
-                "id": {
-                  "record_id": "rec-1"
-                }
-              }
-            ],
-            "event_id": "evt-attio-1"
-          }
-        }
-      },
-      {
-        "kind": "enqueue_receipts",
-        "receipts": [
-          {
-            "receiptId": "receipt-trigger-1"
-          }
-        ]
-      },
-      {
-        "kind": "enqueue_wakes",
-        "adapterType": "attio",
-        "teamId": "team-1",
-        "correlationKeys": []
+        "delivered": {
+          "adapterType": "attio",
+          "credentialsId": "cred-1"
+        },
+        "subscriptionId": "sub-1",
+        "externalId": null,
+        "source": "webhook",
+        "arrivals": []
       },
       {
         "kind": "notify_work"
@@ -228,50 +160,16 @@
         "teamId": "team-1"
       },
       {
-        "kind": "find_triggers",
+        "kind": "deliver_arrivals",
         "teamId": "team-1",
-        "kinds": [
-          "ATTIO",
-          "attio"
-        ]
-      },
-      {
-        "kind": "capture_receipt",
-        "triggerId": "trigger-1",
-        "movementId": "movement-1",
-        "teamId": "team-1",
-        "adapterType": "attio",
-        "triggerType": "webhook",
-        "event": {
-          "eventType": "inbound",
-          "externalId": "rec-1",
-          "idempotencyKey": "evt-attio-1",
-          "payload": {
-            "events": [
-              {
-                "event_type": "record.created",
-                "id": {
-                  "record_id": "rec-1"
-                }
-              }
-            ],
-            "event_id": "evt-attio-1"
-          }
-        }
-      },
-      {
-        "kind": "enqueue_receipts",
-        "receipts": [
-          {
-            "receiptId": "receipt-trigger-1"
-          }
-        ]
-      },
-      {
-        "kind": "enqueue_wakes",
-        "adapterType": "attio",
-        "teamId": "team-1",
-        "correlationKeys": []
+        "delivered": {
+          "adapterType": "attio",
+          "credentialsId": "cred-1"
+        },
+        "subscriptionId": "sub-1",
+        "externalId": null,
+        "source": "webhook",
+        "arrivals": []
       },
       {
         "kind": "notify_work"
@@ -331,50 +229,16 @@
         "teamId": "team-1"
       },
       {
-        "kind": "find_triggers",
+        "kind": "deliver_arrivals",
         "teamId": "team-1",
-        "kinds": [
-          "ATTIO",
-          "attio"
-        ]
-      },
-      {
-        "kind": "capture_receipt",
-        "triggerId": "trigger-1",
-        "movementId": "movement-1",
-        "teamId": "team-1",
-        "adapterType": "attio",
-        "triggerType": "webhook",
-        "event": {
-          "eventType": "inbound",
-          "externalId": "rec-1",
-          "idempotencyKey": "evt-attio-1",
-          "payload": {
-            "events": [
-              {
-                "event_type": "record.created",
-                "id": {
-                  "record_id": "rec-1"
-                }
-              }
-            ],
-            "event_id": "evt-attio-1"
-          }
-        }
-      },
-      {
-        "kind": "enqueue_receipts",
-        "receipts": [
-          {
-            "receiptId": "receipt-trigger-1"
-          }
-        ]
-      },
-      {
-        "kind": "enqueue_wakes",
-        "adapterType": "attio",
-        "teamId": "team-1",
-        "correlationKeys": []
+        "delivered": {
+          "adapterType": "attio",
+          "credentialsId": "cred-1"
+        },
+        "subscriptionId": "sub-1",
+        "externalId": null,
+        "source": "webhook",
+        "arrivals": []
       },
       {
         "kind": "notify_work"
@@ -409,50 +273,16 @@
         "teamId": "team-1"
       },
       {
-        "kind": "find_triggers",
+        "kind": "deliver_arrivals",
         "teamId": "team-1",
-        "kinds": [
-          "ATTIO",
-          "attio"
-        ]
-      },
-      {
-        "kind": "capture_receipt",
-        "triggerId": "trigger-1",
-        "movementId": "movement-1",
-        "teamId": "team-1",
-        "adapterType": "attio",
-        "triggerType": "webhook",
-        "event": {
-          "eventType": "inbound",
-          "externalId": "rec-1",
-          "idempotencyKey": "evt-attio-1",
-          "payload": {
-            "events": [
-              {
-                "event_type": "record.created",
-                "id": {
-                  "record_id": "rec-1"
-                }
-              }
-            ],
-            "event_id": "evt-attio-1"
-          }
-        }
-      },
-      {
-        "kind": "enqueue_receipts",
-        "receipts": [
-          {
-            "receiptId": "receipt-trigger-1"
-          }
-        ]
-      },
-      {
-        "kind": "enqueue_wakes",
-        "adapterType": "attio",
-        "teamId": "team-1",
-        "correlationKeys": []
+        "delivered": {
+          "adapterType": "attio",
+          "credentialsId": "cred-1"
+        },
+        "subscriptionId": "sub-1",
+        "externalId": null,
+        "source": "webhook",
+        "arrivals": []
       },
       {
         "kind": "notify_work"
@@ -659,22 +489,16 @@
         "teamId": "team-1"
       },
       {
-        "kind": "find_triggers",
+        "kind": "deliver_arrivals",
         "teamId": "team-1",
-        "kinds": [
-          "ATTIO",
-          "attio"
-        ]
-      },
-      {
-        "kind": "enqueue_receipts",
-        "receipts": []
-      },
-      {
-        "kind": "enqueue_wakes",
-        "adapterType": "attio",
-        "teamId": "team-1",
-        "correlationKeys": []
+        "delivered": {
+          "adapterType": "attio",
+          "credentialsId": "cred-1"
+        },
+        "subscriptionId": "sub-1",
+        "externalId": null,
+        "source": "webhook",
+        "arrivals": []
       },
       {
         "kind": "notify_work"
@@ -709,15 +533,6 @@
         "teamId": "team-1"
       },
       {
-        "kind": "enqueue_wakes",
-        "adapterType": "attio",
-        "teamId": "team-1",
-        "correlationKeys": [
-          "thread:abc",
-          "thread:def"
-        ]
-      },
-      {
         "kind": "notify_work"
       }
     ]
@@ -725,204 +540,7 @@
   {
     "id": "wake-keys-failure",
     "door": "webhook_sync",
-    "note": "A wakeKeys that throws costs the delivery its ack, not its events: they are captured and queued, then 500 so the sender retries.",
-    "request": {
-      "method": "POST",
-      "path": "/api/public/webhook-sync/attio/sub-1",
-      "headers": {
-        "attio-signature": "1ba60e8a8a13bef634dc037e889b4de609dd0fcd4dfab895c9f9fb280fa71170",
-        "content-type": "application/json"
-      },
-      "body": "{\"events\":[{\"event_type\":\"record.created\",\"id\":{\"record_id\":\"rec-1\"}}],\"event_id\":\"evt-attio-1\"}"
-    },
-    "response": {
-      "status": 500,
-      "headers": {
-        "content-type": "application/json; charset=utf-8",
-        "content-length": "20"
-      },
-      "body": "{\"error\":\"internal\"}"
-    },
-    "effects": [
-      {
-        "kind": "adapter_preprocess",
-        "adapterType": "attio",
-        "teamId": "team-1"
-      },
-      {
-        "kind": "find_triggers",
-        "teamId": "team-1",
-        "kinds": [
-          "ATTIO",
-          "attio"
-        ]
-      },
-      {
-        "kind": "capture_receipt",
-        "triggerId": "trigger-1",
-        "movementId": "movement-1",
-        "teamId": "team-1",
-        "adapterType": "attio",
-        "triggerType": "webhook",
-        "event": {
-          "eventType": "inbound",
-          "externalId": "rec-1",
-          "idempotencyKey": "delivery-1",
-          "payload": {
-            "events": [
-              {
-                "event_type": "record.created",
-                "id": {
-                  "record_id": "rec-1"
-                }
-              }
-            ],
-            "event_id": "evt-attio-1"
-          }
-        }
-      },
-      {
-        "kind": "enqueue_receipts",
-        "receipts": [
-          {
-            "receiptId": "receipt-trigger-1"
-          }
-        ]
-      }
-    ]
-  },
-  {
-    "id": "receipt-enqueue-failure-is-isolated",
-    "door": "webhook_sync",
-    "note": "A receipt whose work row cannot be queued is logged and the delivery answered 500, so the sender retries and the stored receipt is re-queued. The wakes are still queued. (Before the shared inbound core it was acked 200 and the receipt never ran.)",
-    "request": {
-      "method": "POST",
-      "path": "/api/public/webhook-sync/attio/sub-1",
-      "headers": {
-        "attio-signature": "1ba60e8a8a13bef634dc037e889b4de609dd0fcd4dfab895c9f9fb280fa71170",
-        "content-type": "application/json"
-      },
-      "body": "{\"events\":[{\"event_type\":\"record.created\",\"id\":{\"record_id\":\"rec-1\"}}],\"event_id\":\"evt-attio-1\"}"
-    },
-    "response": {
-      "status": 500,
-      "headers": {
-        "content-type": "application/json; charset=utf-8",
-        "content-length": "20"
-      },
-      "body": "{\"error\":\"internal\"}"
-    },
-    "effects": [
-      {
-        "kind": "adapter_preprocess",
-        "adapterType": "attio",
-        "teamId": "team-1"
-      },
-      {
-        "kind": "find_triggers",
-        "teamId": "team-1",
-        "kinds": [
-          "ATTIO",
-          "attio"
-        ]
-      },
-      {
-        "kind": "capture_receipt",
-        "triggerId": "trigger-1",
-        "movementId": "movement-1",
-        "teamId": "team-1",
-        "adapterType": "attio",
-        "triggerType": "webhook",
-        "event": {
-          "eventType": "inbound",
-          "externalId": "rec-1",
-          "idempotencyKey": "evt-attio-1",
-          "payload": {
-            "events": [
-              {
-                "event_type": "record.created",
-                "id": {
-                  "record_id": "rec-1"
-                }
-              }
-            ],
-            "event_id": "evt-attio-1"
-          }
-        }
-      },
-      {
-        "kind": "enqueue_wakes",
-        "adapterType": "attio",
-        "teamId": "team-1",
-        "correlationKeys": []
-      }
-    ]
-  },
-  {
-    "id": "wake-enqueue-failure",
-    "door": "webhook_sync",
-    "note": "A wake that cannot be queued is a 500 so the sender retries; the events were already receipted.",
-    "request": {
-      "method": "POST",
-      "path": "/api/public/webhook-sync/attio/sub-1",
-      "headers": {
-        "attio-signature": "1ba60e8a8a13bef634dc037e889b4de609dd0fcd4dfab895c9f9fb280fa71170",
-        "content-type": "application/json"
-      },
-      "body": "{\"events\":[{\"event_type\":\"record.created\",\"id\":{\"record_id\":\"rec-1\"}}],\"event_id\":\"evt-attio-1\"}"
-    },
-    "response": {
-      "status": 500,
-      "headers": {
-        "content-type": "application/json; charset=utf-8",
-        "content-length": "20"
-      },
-      "body": "{\"error\":\"internal\"}"
-    },
-    "effects": [
-      {
-        "kind": "adapter_preprocess",
-        "adapterType": "attio",
-        "teamId": "team-1"
-      },
-      {
-        "kind": "find_triggers",
-        "teamId": "team-1",
-        "kinds": [
-          "ATTIO",
-          "attio"
-        ]
-      },
-      {
-        "kind": "capture_receipt",
-        "triggerId": "trigger-1",
-        "movementId": "movement-1",
-        "teamId": "team-1",
-        "adapterType": "attio",
-        "triggerType": "webhook",
-        "event": {
-          "eventType": "inbound",
-          "externalId": "rec-1",
-          "idempotencyKey": "delivery-1",
-          "payload": {
-            "events": [
-              {
-                "event_type": "record.created",
-                "id": {
-                  "record_id": "rec-1"
-                }
-              }
-            ],
-            "event_id": "evt-attio-1"
-          }
-        }
-      }
-    ]
-  },
-  {
-    "id": "capture-failure",
-    "door": "webhook_sync",
-    "note": "An event whose receipt cannot be stored is dropped from the count; the delivery is still acked 200 with zero processed.",
+    "note": "A module`s wakeKeys is never asked: a delivery wakes the waits on the records its arrivals land on, as it is kept.",
     "request": {
       "method": "POST",
       "path": "/api/public/webhook-sync/attio/sub-1",
@@ -938,7 +556,7 @@
         "content-type": "application/json; charset=utf-8",
         "content-length": "31"
       },
-      "body": "{\"ok\":true,\"eventsProcessed\":0}"
+      "body": "{\"ok\":true,\"eventsProcessed\":1}"
     },
     "effects": [
       {
@@ -947,21 +565,106 @@
         "teamId": "team-1"
       },
       {
-        "kind": "find_triggers",
+        "kind": "deliver_arrivals",
         "teamId": "team-1",
-        "kinds": [
-          "ATTIO",
-          "attio"
-        ]
-      },
-      {
-        "kind": "enqueue_wakes",
-        "adapterType": "attio",
-        "teamId": "team-1",
-        "correlationKeys": []
+        "delivered": {
+          "adapterType": "attio",
+          "credentialsId": "cred-1"
+        },
+        "subscriptionId": "sub-1",
+        "externalId": null,
+        "source": "webhook",
+        "arrivals": []
       },
       {
         "kind": "notify_work"
+      }
+    ]
+  },
+  {
+    "id": "receipt-enqueue-failure-is-isolated",
+    "door": "webhook_sync",
+    "note": "A delivery whose runs cannot be queued is not kept at all, and is answered 500 so the sender retries.",
+    "request": {
+      "method": "POST",
+      "path": "/api/public/webhook-sync/attio/sub-1",
+      "headers": {
+        "attio-signature": "1ba60e8a8a13bef634dc037e889b4de609dd0fcd4dfab895c9f9fb280fa71170",
+        "content-type": "application/json"
+      },
+      "body": "{\"events\":[{\"event_type\":\"record.created\",\"id\":{\"record_id\":\"rec-1\"}}],\"event_id\":\"evt-attio-1\"}"
+    },
+    "response": {
+      "status": 500,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "content-length": "20"
+      },
+      "body": "{\"error\":\"internal\"}"
+    },
+    "effects": [
+      {
+        "kind": "adapter_preprocess",
+        "adapterType": "attio",
+        "teamId": "team-1"
+      }
+    ]
+  },
+  {
+    "id": "wake-enqueue-failure",
+    "door": "webhook_sync",
+    "note": "A delivery whose wakes cannot be queued is not kept at all, and is answered 500 so the sender retries.",
+    "request": {
+      "method": "POST",
+      "path": "/api/public/webhook-sync/attio/sub-1",
+      "headers": {
+        "attio-signature": "1ba60e8a8a13bef634dc037e889b4de609dd0fcd4dfab895c9f9fb280fa71170",
+        "content-type": "application/json"
+      },
+      "body": "{\"events\":[{\"event_type\":\"record.created\",\"id\":{\"record_id\":\"rec-1\"}}],\"event_id\":\"evt-attio-1\"}"
+    },
+    "response": {
+      "status": 500,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "content-length": "20"
+      },
+      "body": "{\"error\":\"internal\"}"
+    },
+    "effects": [
+      {
+        "kind": "adapter_preprocess",
+        "adapterType": "attio",
+        "teamId": "team-1"
+      }
+    ]
+  },
+  {
+    "id": "capture-failure",
+    "door": "webhook_sync",
+    "note": "A delivery is kept in one write: when it cannot be kept, nothing of it is, and the door answers 500 so the sender retries.",
+    "request": {
+      "method": "POST",
+      "path": "/api/public/webhook-sync/attio/sub-1",
+      "headers": {
+        "attio-signature": "1ba60e8a8a13bef634dc037e889b4de609dd0fcd4dfab895c9f9fb280fa71170",
+        "content-type": "application/json"
+      },
+      "body": "{\"events\":[{\"event_type\":\"record.created\",\"id\":{\"record_id\":\"rec-1\"}}],\"event_id\":\"evt-attio-1\"}"
+    },
+    "response": {
+      "status": 500,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "content-length": "20"
+      },
+      "body": "{\"error\":\"internal\"}"
+    },
+    "effects": [
+      {
+        "kind": "adapter_preprocess",
+        "adapterType": "attio",
+        "teamId": "team-1"
       }
     ]
   },
@@ -993,77 +696,16 @@
         "teamId": "team-1"
       },
       {
-        "kind": "find_triggers",
+        "kind": "deliver_arrivals",
         "teamId": "team-1",
-        "kinds": [
-          "ATTIO",
-          "attio"
-        ]
-      },
-      {
-        "kind": "capture_receipt",
-        "triggerId": "trigger-1",
-        "movementId": "movement-1",
-        "teamId": "team-1",
-        "adapterType": "attio",
-        "triggerType": "webhook",
-        "event": {
-          "eventType": "inbound",
-          "externalId": "rec-1",
-          "idempotencyKey": "delivery-1",
-          "payload": {
-            "events": [
-              {
-                "event_type": "record.created",
-                "id": {
-                  "record_id": "rec-1"
-                }
-              }
-            ],
-            "event_id": "evt-attio-1"
-          }
-        }
-      },
-      {
-        "kind": "db",
-        "op": "update",
-        "table": "webhook_subscription",
-        "steps": [
-          [
-            "set",
-            [
-              {
-                "inbound_checkpoint": {
-                  "sql": [
-                    "{\"cursor\":\"c-2\"}"
-                  ]
-                }
-              }
-            ]
-          ],
-          [
-            "where",
-            [
-              "id",
-              "=",
-              "sub-1"
-            ]
-          ]
-        ]
-      },
-      {
-        "kind": "enqueue_receipts",
-        "receipts": [
-          {
-            "receiptId": "receipt-trigger-1"
-          }
-        ]
-      },
-      {
-        "kind": "enqueue_wakes",
-        "adapterType": "attio",
-        "teamId": "team-1",
-        "correlationKeys": []
+        "delivered": {
+          "adapterType": "attio",
+          "credentialsId": "cred-1"
+        },
+        "subscriptionId": "sub-1",
+        "externalId": null,
+        "source": "webhook",
+        "arrivals": []
       },
       {
         "kind": "notify_work"
@@ -1098,38 +740,6 @@
         "teamId": "team-1"
       },
       {
-        "kind": "find_triggers",
-        "teamId": "team-1",
-        "kinds": [
-          "ATTIO",
-          "attio"
-        ]
-      },
-      {
-        "kind": "capture_receipt",
-        "triggerId": "trigger-1",
-        "movementId": "movement-1",
-        "teamId": "team-1",
-        "adapterType": "attio",
-        "triggerType": "webhook",
-        "event": {
-          "eventType": "inbound",
-          "externalId": "rec-1",
-          "idempotencyKey": "evt-attio-1",
-          "payload": {
-            "events": [
-              {
-                "event_type": "record.created",
-                "id": {
-                  "record_id": "rec-1"
-                }
-              }
-            ],
-            "event_id": "evt-attio-1"
-          }
-        }
-      },
-      {
         "kind": "enqueue_linked_object_refresh",
         "refresh": {
           "teamId": "team-1",
@@ -1140,18 +750,16 @@
         "eventKey": "evt-attio-1"
       },
       {
-        "kind": "enqueue_receipts",
-        "receipts": [
-          {
-            "receiptId": "receipt-trigger-1"
-          }
-        ]
-      },
-      {
-        "kind": "enqueue_wakes",
-        "adapterType": "attio",
+        "kind": "deliver_arrivals",
         "teamId": "team-1",
-        "correlationKeys": []
+        "delivered": {
+          "adapterType": "attio",
+          "credentialsId": "cred-1"
+        },
+        "subscriptionId": "sub-1",
+        "externalId": null,
+        "source": "webhook",
+        "arrivals": []
       },
       {
         "kind": "notify_work"
@@ -1209,50 +817,16 @@
         "teamId": "team-harness"
       },
       {
-        "kind": "find_triggers",
+        "kind": "deliver_arrivals",
         "teamId": "team-harness",
-        "kinds": [
-          "ATTIO",
-          "attio"
-        ]
-      },
-      {
-        "kind": "capture_receipt",
-        "triggerId": "trigger-1",
-        "movementId": "movement-1",
-        "teamId": "team-harness",
-        "adapterType": "attio",
-        "triggerType": "webhook",
-        "event": {
-          "eventType": "inbound",
-          "externalId": "rec-1",
-          "idempotencyKey": "evt-attio-1",
-          "payload": {
-            "events": [
-              {
-                "event_type": "record.created",
-                "id": {
-                  "record_id": "rec-1"
-                }
-              }
-            ],
-            "event_id": "evt-attio-1"
-          }
-        }
-      },
-      {
-        "kind": "enqueue_receipts",
-        "receipts": [
-          {
-            "receiptId": "receipt-trigger-1"
-          }
-        ]
-      },
-      {
-        "kind": "enqueue_wakes",
-        "adapterType": "attio",
-        "teamId": "team-harness",
-        "correlationKeys": []
+        "delivered": {
+          "adapterType": "attio",
+          "credentialsId": "cred-1"
+        },
+        "subscriptionId": "sub-1",
+        "externalId": null,
+        "source": "webhook",
+        "arrivals": []
       },
       {
         "kind": "drain_until_idle",
@@ -1289,47 +863,16 @@
         "teamId": "team-1"
       },
       {
-        "kind": "find_triggers",
+        "kind": "deliver_arrivals",
         "teamId": "team-1",
-        "kinds": [
-          "AIRTABLE",
-          "airtable"
-        ]
-      },
-      {
-        "kind": "capture_receipt",
-        "triggerId": "trigger-1",
-        "movementId": "movement-1",
-        "teamId": "team-1",
-        "adapterType": "airtable",
-        "triggerType": "webhook",
-        "event": {
-          "eventType": "inbound",
-          "externalId": "rec-1",
-          "idempotencyKey": "delivery-1",
-          "payload": {
-            "base": {
-              "id": "app1"
-            },
-            "webhook": {
-              "id": "wh1"
-            }
-          }
-        }
-      },
-      {
-        "kind": "enqueue_receipts",
-        "receipts": [
-          {
-            "receiptId": "receipt-trigger-1"
-          }
-        ]
-      },
-      {
-        "kind": "enqueue_wakes",
-        "adapterType": "airtable",
-        "teamId": "team-1",
-        "correlationKeys": []
+        "delivered": {
+          "adapterType": "airtable",
+          "credentialsId": "cred-1"
+        },
+        "subscriptionId": "sub-1",
+        "externalId": null,
+        "source": "webhook",
+        "arrivals": []
       },
       {
         "kind": "notify_work"
@@ -1387,45 +930,16 @@
         "teamId": "team-1"
       },
       {
-        "kind": "find_triggers",
+        "kind": "deliver_arrivals",
         "teamId": "team-1",
-        "kinds": [
-          "AFFINITY",
-          "affinity"
-        ]
-      },
-      {
-        "kind": "capture_receipt",
-        "triggerId": "trigger-1",
-        "movementId": "movement-1",
-        "teamId": "team-1",
-        "adapterType": "affinity",
-        "triggerType": "webhook",
-        "event": {
-          "eventType": "inbound",
-          "externalId": "rec-1",
-          "idempotencyKey": "delivery-1",
-          "payload": {
-            "type": "list_entry.created",
-            "body": {
-              "id": 7
-            }
-          }
-        }
-      },
-      {
-        "kind": "enqueue_receipts",
-        "receipts": [
-          {
-            "receiptId": "receipt-trigger-1"
-          }
-        ]
-      },
-      {
-        "kind": "enqueue_wakes",
-        "adapterType": "affinity",
-        "teamId": "team-1",
-        "correlationKeys": []
+        "delivered": {
+          "adapterType": "affinity",
+          "credentialsId": "cred-1"
+        },
+        "subscriptionId": "sub-1",
+        "externalId": null,
+        "source": "webhook",
+        "arrivals": []
       },
       {
         "kind": "notify_work"
@@ -1460,45 +974,16 @@
         "teamId": "team-1"
       },
       {
-        "kind": "find_triggers",
+        "kind": "deliver_arrivals",
         "teamId": "team-1",
-        "kinds": [
-          "AFFINITY",
-          "affinity"
-        ]
-      },
-      {
-        "kind": "capture_receipt",
-        "triggerId": "trigger-1",
-        "movementId": "movement-1",
-        "teamId": "team-1",
-        "adapterType": "affinity",
-        "triggerType": "webhook",
-        "event": {
-          "eventType": "inbound",
-          "externalId": "rec-1",
-          "idempotencyKey": "delivery-1",
-          "payload": {
-            "type": "list_entry.created",
-            "body": {
-              "id": 7
-            }
-          }
-        }
-      },
-      {
-        "kind": "enqueue_receipts",
-        "receipts": [
-          {
-            "receiptId": "receipt-trigger-1"
-          }
-        ]
-      },
-      {
-        "kind": "enqueue_wakes",
-        "adapterType": "affinity",
-        "teamId": "team-1",
-        "correlationKeys": []
+        "delivered": {
+          "adapterType": "affinity",
+          "credentialsId": "cred-1"
+        },
+        "subscriptionId": "sub-1",
+        "externalId": null,
+        "source": "webhook",
+        "arrivals": []
       },
       {
         "kind": "notify_work"
@@ -1600,50 +1085,16 @@
         "teamId": "team-1"
       },
       {
-        "kind": "find_triggers",
+        "kind": "deliver_arrivals",
         "teamId": "team-1",
-        "kinds": [
-          "ATTIO",
-          "attio"
-        ]
-      },
-      {
-        "kind": "capture_receipt",
-        "triggerId": "trigger-1",
-        "movementId": "movement-1",
-        "teamId": "team-1",
-        "adapterType": "attio",
-        "triggerType": "webhook",
-        "event": {
-          "eventType": "inbound",
-          "externalId": "rec-1",
-          "idempotencyKey": "evt-attio-1",
-          "payload": {
-            "events": [
-              {
-                "event_type": "record.created",
-                "id": {
-                  "record_id": "rec-1"
-                }
-              }
-            ],
-            "event_id": "evt-attio-1"
-          }
-        }
-      },
-      {
-        "kind": "enqueue_receipts",
-        "receipts": [
-          {
-            "receiptId": "receipt-trigger-1"
-          }
-        ]
-      },
-      {
-        "kind": "enqueue_wakes",
-        "adapterType": "attio",
-        "teamId": "team-1",
-        "correlationKeys": []
+        "delivered": {
+          "adapterType": "attio",
+          "credentialsId": "cred-1"
+        },
+        "subscriptionId": "sub-1",
+        "externalId": null,
+        "source": "webhook",
+        "arrivals": []
       },
       {
         "kind": "notify_work"
@@ -1701,47 +1152,16 @@
         "teamId": "team-1"
       },
       {
-        "kind": "find_triggers",
+        "kind": "deliver_arrivals",
         "teamId": "team-1",
-        "kinds": [
-          "AIRTABLE",
-          "airtable"
-        ]
-      },
-      {
-        "kind": "capture_receipt",
-        "triggerId": "trigger-1",
-        "movementId": "movement-1",
-        "teamId": "team-1",
-        "adapterType": "airtable",
-        "triggerType": "webhook",
-        "event": {
-          "eventType": "inbound",
-          "externalId": "rec-1",
-          "idempotencyKey": "delivery-1",
-          "payload": {
-            "base": {
-              "id": "app1"
-            },
-            "webhook": {
-              "id": "wh1"
-            }
-          }
-        }
-      },
-      {
-        "kind": "enqueue_receipts",
-        "receipts": [
-          {
-            "receiptId": "receipt-trigger-1"
-          }
-        ]
-      },
-      {
-        "kind": "enqueue_wakes",
-        "adapterType": "airtable",
-        "teamId": "team-1",
-        "correlationKeys": []
+        "delivered": {
+          "adapterType": "airtable",
+          "credentialsId": "cred-1"
+        },
+        "subscriptionId": "sub-1",
+        "externalId": null,
+        "source": "webhook",
+        "arrivals": []
       },
       {
         "kind": "notify_work"
@@ -1798,45 +1218,16 @@
         "teamId": "team-1"
       },
       {
-        "kind": "find_triggers",
+        "kind": "deliver_arrivals",
         "teamId": "team-1",
-        "kinds": [
-          "AFFINITY",
-          "affinity"
-        ]
-      },
-      {
-        "kind": "capture_receipt",
-        "triggerId": "trigger-1",
-        "movementId": "movement-1",
-        "teamId": "team-1",
-        "adapterType": "affinity",
-        "triggerType": "webhook",
-        "event": {
-          "eventType": "inbound",
-          "externalId": "rec-1",
-          "idempotencyKey": "delivery-1",
-          "payload": {
-            "type": "list_entry.created",
-            "body": {
-              "id": 7
-            }
-          }
-        }
-      },
-      {
-        "kind": "enqueue_receipts",
-        "receipts": [
-          {
-            "receiptId": "receipt-trigger-1"
-          }
-        ]
-      },
-      {
-        "kind": "enqueue_wakes",
-        "adapterType": "affinity",
-        "teamId": "team-1",
-        "correlationKeys": []
+        "delivered": {
+          "adapterType": "affinity",
+          "credentialsId": "cred-1"
+        },
+        "subscriptionId": "sub-1",
+        "externalId": null,
+        "source": "webhook",
+        "arrivals": []
       },
       {
         "kind": "notify_work"
@@ -1940,8 +1331,8 @@
       "path": "/api/public/webhook-sync/slack/sub-1",
       "headers": {
         "content-type": "application/json",
-        "x-slack-request-timestamp": "1760702400",
-        "x-slack-signature": "v0=60397a01840fb9b0838a813a5caa13a17134be5243cb310964ca278262207e44"
+        "x-slack-request-timestamp": "1792238400",
+        "x-slack-signature": "v0=56abb0607ef2f8fabc338d4d0d63e5f17b363ed8b42fb8b6f49ad55e8eab516a"
       },
       "body": "{\"type\":\"event_callback\",\"event_id\":\"Ev1\",\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"channel\":\"C1\",\"user\":\"U1\",\"ts\":\"1760702400.000100\",\"text\":\"hello\"}}"
     },
@@ -1960,51 +1351,16 @@
         "teamId": "team-1"
       },
       {
-        "kind": "find_triggers",
+        "kind": "deliver_arrivals",
         "teamId": "team-1",
-        "kinds": [
-          "SLACK",
-          "slack"
-        ]
-      },
-      {
-        "kind": "capture_receipt",
-        "triggerId": "trigger-1",
-        "movementId": "movement-1",
-        "teamId": "team-1",
-        "adapterType": "slack",
-        "triggerType": "webhook",
-        "event": {
-          "eventType": "inbound",
-          "externalId": "rec-1",
-          "idempotencyKey": "Ev1",
-          "payload": {
-            "type": "event_callback",
-            "event_id": "Ev1",
-            "team_id": "T1",
-            "event": {
-              "type": "message",
-              "channel": "C1",
-              "user": "U1",
-              "ts": "1760702400.000100",
-              "text": "hello"
-            }
-          }
-        }
-      },
-      {
-        "kind": "enqueue_receipts",
-        "receipts": [
-          {
-            "receiptId": "receipt-trigger-1"
-          }
-        ]
-      },
-      {
-        "kind": "enqueue_wakes",
-        "adapterType": "slack",
-        "teamId": "team-1",
-        "correlationKeys": []
+        "delivered": {
+          "adapterType": "slack",
+          "credentialsId": "cred-1"
+        },
+        "subscriptionId": "sub-1",
+        "externalId": null,
+        "source": "webhook",
+        "arrivals": []
       },
       {
         "kind": "notify_work"
@@ -2020,8 +1376,8 @@
       "path": "/api/public/webhook-sync/slack/sub-1",
       "headers": {
         "content-type": "application/json",
-        "x-slack-request-timestamp": "1760702400",
-        "x-slack-signature": "v0=d505d10fee34dc369ab6f033cf11f27a246b17c2d9c34997d8b00301199e0a60"
+        "x-slack-request-timestamp": "1792238400",
+        "x-slack-signature": "v0=eeff78801873b0edab1f893708f81694b095777c51becc98abe97400e968160d"
       },
       "body": "{\"type\":\"event_callback\",\"event_id\":\"Ev1\",\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"channel\":\"C1\",\"user\":\"U1\",\"ts\":\"1760702400.000100\",\"text\":\"hello\"}}"
     },
@@ -2044,7 +1400,7 @@
       "path": "/api/public/webhook-sync/slack/sub-1",
       "headers": {
         "content-type": "application/json",
-        "x-slack-signature": "v0=60397a01840fb9b0838a813a5caa13a17134be5243cb310964ca278262207e44"
+        "x-slack-signature": "v0=56abb0607ef2f8fabc338d4d0d63e5f17b363ed8b42fb8b6f49ad55e8eab516a"
       },
       "body": "{\"type\":\"event_callback\",\"event_id\":\"Ev1\",\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"channel\":\"C1\",\"user\":\"U1\",\"ts\":\"1760702400.000100\",\"text\":\"hello\"}}"
     },
@@ -2109,172 +1465,16 @@
         "teamId": "team-1"
       },
       {
-        "kind": "find_triggers",
+        "kind": "deliver_arrivals",
         "teamId": "team-1",
-        "kinds": [
-          "TELEGRAM",
-          "telegram"
-        ]
-      },
-      {
-        "kind": "capture_receipt",
-        "triggerId": "trigger-1",
-        "movementId": "movement-1",
-        "teamId": "team-1",
-        "adapterType": "telegram",
-        "triggerType": "webhook",
-        "event": {
-          "eventType": "inbound",
-          "externalId": "rec-1",
-          "idempotencyKey": "delivery-1",
-          "payload": {
-            "update_id": 1,
-            "message": {
-              "message_id": 5,
-              "text": "hi",
-              "chat": {
-                "id": 9
-              },
-              "from": {
-                "id": 3
-              }
-            }
-          }
-        }
-      },
-      {
-        "kind": "enqueue_receipts",
-        "receipts": [
-          {
-            "receiptId": "receipt-trigger-1"
-          }
-        ]
-      },
-      {
-        "kind": "enqueue_wakes",
-        "adapterType": "telegram",
-        "teamId": "team-1",
-        "correlationKeys": []
-      },
-      {
-        "kind": "notify_work"
-      }
-    ]
-  },
-  {
-    "id": "telegram-callback-query-fires-callback",
-    "door": "webhook_sync",
-    "note": "A button tap carrying a callback id fires it, answers the tap, retires the keyboard, and ends the delivery (no events).",
-    "request": {
-      "method": "POST",
-      "path": "/api/public/webhook-sync/telegram/sub-1",
-      "headers": {
-        "content-type": "application/json",
-        "x-telegram-bot-api-secret-token": "golden-telegram-byo-secret-0001"
-      },
-      "body": "{\"update_id\":2,\"callback_query\":{\"id\":\"cbq-1\",\"data\":\"cb_golden0001\",\"message\":{\"message_id\":11,\"chat\":{\"id\":9}}}}"
-    },
-    "response": {
-      "status": 200,
-      "headers": {
-        "content-type": "application/json; charset=utf-8",
-        "content-length": "31"
-      },
-      "body": "{\"ok\":true,\"eventsProcessed\":0}"
-    },
-    "effects": [
-      {
-        "kind": "fire_callback",
-        "id": "cb_golden0001",
-        "values": {}
-      },
-      {
-        "kind": "telegram_answer_callback_query",
-        "teamId": "team-1",
-        "callbackQueryId": "cbq-1",
-        "text": "Thanks — that has been recorded."
-      },
-      {
-        "kind": "telegram_clear_reply_markup",
-        "teamId": "team-1",
-        "chatId": "9",
-        "messageId": 11
-      },
-      {
-        "kind": "notify_work"
-      }
-    ]
-  },
-  {
-    "id": "telegram-callback-query-not-served-keeps-keyboard",
-    "door": "webhook_sync",
-    "note": "A tap on an already-closed callback answers the tap but leaves the keyboard.",
-    "request": {
-      "method": "POST",
-      "path": "/api/public/webhook-sync/telegram/sub-1",
-      "headers": {
-        "content-type": "application/json",
-        "x-telegram-bot-api-secret-token": "golden-telegram-byo-secret-0001"
-      },
-      "body": "{\"update_id\":2,\"callback_query\":{\"id\":\"cbq-2\",\"data\":\"cb_golden0001\",\"message\":{\"message_id\":11,\"chat\":{\"id\":9}}}}"
-    },
-    "response": {
-      "status": 200,
-      "headers": {
-        "content-type": "application/json; charset=utf-8",
-        "content-length": "31"
-      },
-      "body": "{\"ok\":true,\"eventsProcessed\":0}"
-    },
-    "effects": [
-      {
-        "kind": "fire_callback",
-        "id": "cb_golden0001",
-        "values": {}
-      },
-      {
-        "kind": "telegram_answer_callback_query",
-        "teamId": "team-1",
-        "callbackQueryId": "cbq-2",
-        "text": "This request was already closed."
-      },
-      {
-        "kind": "notify_work"
-      }
-    ]
-  },
-  {
-    "id": "telegram-callback-query-firing-throws",
-    "door": "webhook_sync",
-    "note": "A firing that throws is acked to the tapper as a failure; the delivery still ends handled with 200.",
-    "request": {
-      "method": "POST",
-      "path": "/api/public/webhook-sync/telegram/sub-1",
-      "headers": {
-        "content-type": "application/json",
-        "x-telegram-bot-api-secret-token": "golden-telegram-byo-secret-0001"
-      },
-      "body": "{\"update_id\":2,\"callback_query\":{\"id\":\"cbq-3\",\"data\":\"cb_golden0001\",\"message\":{\"message_id\":11,\"chat\":{\"id\":9}}}}"
-    },
-    "response": {
-      "status": 200,
-      "headers": {
-        "content-type": "application/json; charset=utf-8",
-        "content-length": "31"
-      },
-      "body": "{\"ok\":true,\"eventsProcessed\":0}"
-    },
-    "effects": [
-      {
-        "kind": "fire_callback",
-        "id": "cb_golden0001",
-        "values": {}
-      },
-      {
-        "kind": "telegram_answer_callback_query",
-        "teamId": "team-1",
-        "callbackQueryId": "cbq-3",
-        "text": "Something went wrong recording that."
+        "delivered": {
+          "adapterType": "telegram",
+          "credentialsId": "cred-1"
+        },
+        "subscriptionId": "sub-1",
+        "externalId": null,
+        "source": "webhook",
+        "arrivals": []
       },
       {
         "kind": "notify_work"
@@ -2309,52 +1509,16 @@
         "teamId": "team-1"
       },
       {
-        "kind": "find_triggers",
+        "kind": "deliver_arrivals",
         "teamId": "team-1",
-        "kinds": [
-          "TELEGRAM",
-          "telegram"
-        ]
-      },
-      {
-        "kind": "capture_receipt",
-        "triggerId": "trigger-1",
-        "movementId": "movement-1",
-        "teamId": "team-1",
-        "adapterType": "telegram",
-        "triggerType": "webhook",
-        "event": {
-          "eventType": "inbound",
-          "externalId": "rec-1",
-          "idempotencyKey": "delivery-1",
-          "payload": {
-            "update_id": 2,
-            "callback_query": {
-              "id": "cbq-4",
-              "data": "something-else",
-              "message": {
-                "message_id": 11,
-                "chat": {
-                  "id": 9
-                }
-              }
-            }
-          }
-        }
-      },
-      {
-        "kind": "enqueue_receipts",
-        "receipts": [
-          {
-            "receiptId": "receipt-trigger-1"
-          }
-        ]
-      },
-      {
-        "kind": "enqueue_wakes",
-        "adapterType": "telegram",
-        "teamId": "team-1",
-        "correlationKeys": []
+        "delivered": {
+          "adapterType": "telegram",
+          "credentialsId": "cred-1"
+        },
+        "subscriptionId": "sub-1",
+        "externalId": null,
+        "source": "webhook",
+        "arrivals": []
       },
       {
         "kind": "notify_work"
@@ -2434,77 +1598,16 @@
         "teamId": "team-1"
       },
       {
-        "kind": "find_triggers",
+        "kind": "deliver_arrivals",
         "teamId": "team-1",
-        "kinds": [
-          "INBOUND_WHATSAPP",
-          "whatsapp"
-        ]
-      },
-      {
-        "kind": "capture_receipt",
-        "triggerId": "trigger-1",
-        "movementId": "movement-1",
-        "teamId": "team-1",
-        "adapterType": "whatsapp",
-        "triggerType": "webhook",
-        "event": {
-          "eventType": "inbound",
-          "externalId": "rec-1",
-          "idempotencyKey": "delivery-1",
-          "payload": {
-            "object": "whatsapp_business_account",
-            "entry": [
-              {
-                "id": "waba-1",
-                "changes": [
-                  {
-                    "field": "messages",
-                    "value": {
-                      "metadata": {
-                        "display_phone_number": "15550001111",
-                        "phone_number_id": "pn-1"
-                      },
-                      "contacts": [
-                        {
-                          "wa_id": "15550002222",
-                          "profile": {
-                            "name": "Ada"
-                          }
-                        }
-                      ],
-                      "messages": [
-                        {
-                          "from": "15550002222",
-                          "id": "wamid.1",
-                          "timestamp": "1760702400",
-                          "type": "text",
-                          "text": {
-                            "body": "hi"
-                          }
-                        }
-                      ]
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        }
-      },
-      {
-        "kind": "enqueue_receipts",
-        "receipts": [
-          {
-            "receiptId": "receipt-trigger-1"
-          }
-        ]
-      },
-      {
-        "kind": "enqueue_wakes",
-        "adapterType": "whatsapp",
-        "teamId": "team-1",
-        "correlationKeys": []
+        "delivered": {
+          "adapterType": "whatsapp",
+          "credentialsId": "cred-1"
+        },
+        "subscriptionId": "sub-1",
+        "externalId": null,
+        "source": "webhook",
+        "arrivals": []
       },
       {
         "kind": "notify_work"
@@ -2604,92 +1707,21 @@
     },
     "effects": [
       {
-        "kind": "fire_callback",
-        "id": "cb_golden0001",
-        "values": {}
-      },
-      {
-        "kind": "whatsapp_send_text",
-        "businessPhoneNumberId": "pn-1",
-        "to": "15550002222",
-        "text": "Thanks — that has been recorded.",
-        "options": {
-          "replyToMessageId": "wamid.2"
-        }
-      },
-      {
         "kind": "adapter_preprocess",
         "adapterType": "whatsapp",
         "teamId": "team-1"
       },
       {
-        "kind": "find_triggers",
+        "kind": "deliver_arrivals",
         "teamId": "team-1",
-        "kinds": [
-          "INBOUND_WHATSAPP",
-          "whatsapp"
-        ]
-      },
-      {
-        "kind": "capture_receipt",
-        "triggerId": "trigger-1",
-        "movementId": "movement-1",
-        "teamId": "team-1",
-        "adapterType": "whatsapp",
-        "triggerType": "webhook",
-        "event": {
-          "eventType": "inbound",
-          "externalId": "rec-1",
-          "idempotencyKey": "delivery-1",
-          "payload": {
-            "object": "whatsapp_business_account",
-            "entry": [
-              {
-                "id": "waba-1",
-                "changes": [
-                  {
-                    "field": "messages",
-                    "value": {
-                      "metadata": {
-                        "display_phone_number": "15550001111",
-                        "phone_number_id": "pn-1"
-                      },
-                      "messages": [
-                        {
-                          "from": "15550002222",
-                          "id": "wamid.2",
-                          "timestamp": "1760702400",
-                          "type": "interactive",
-                          "interactive": {
-                            "type": "button_reply",
-                            "button_reply": {
-                              "id": "cb_golden0001",
-                              "title": "Approve"
-                            }
-                          }
-                        }
-                      ]
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        }
-      },
-      {
-        "kind": "enqueue_receipts",
-        "receipts": [
-          {
-            "receiptId": "receipt-trigger-1"
-          }
-        ]
-      },
-      {
-        "kind": "enqueue_wakes",
-        "adapterType": "whatsapp",
-        "teamId": "team-1",
-        "correlationKeys": []
+        "delivered": {
+          "adapterType": "whatsapp",
+          "credentialsId": "cred-1"
+        },
+        "subscriptionId": "sub-1",
+        "externalId": null,
+        "source": "webhook",
+        "arrivals": []
       },
       {
         "kind": "notify_work"
@@ -2724,43 +1756,16 @@
         "teamId": "team-1"
       },
       {
-        "kind": "find_triggers",
+        "kind": "deliver_arrivals",
         "teamId": "team-1",
-        "kinds": [
-          "NATIVE_VALUATIONS",
-          "native-valuations"
-        ]
-      },
-      {
-        "kind": "capture_receipt",
-        "triggerId": "trigger-1",
-        "movementId": "movement-1",
-        "teamId": "team-1",
-        "adapterType": "native-valuations",
-        "triggerType": "webhook",
-        "event": {
-          "eventType": "inbound",
-          "externalId": "rec-1",
-          "idempotencyKey": "delivery-1",
-          "payload": {
-            "event_type": "valuations:legal_entity:create",
-            "id": "le-1"
-          }
-        }
-      },
-      {
-        "kind": "enqueue_receipts",
-        "receipts": [
-          {
-            "receiptId": "receipt-trigger-1"
-          }
-        ]
-      },
-      {
-        "kind": "enqueue_wakes",
-        "adapterType": "native-valuations",
-        "teamId": "team-1",
-        "correlationKeys": []
+        "delivered": {
+          "adapterType": "native-valuations",
+          "credentialsId": "cred-1"
+        },
+        "subscriptionId": "sub-1",
+        "externalId": null,
+        "source": "webhook",
+        "arrivals": []
       },
       {
         "kind": "notify_work"
@@ -2818,43 +1823,16 @@
         "teamId": "team-1"
       },
       {
-        "kind": "find_triggers",
+        "kind": "deliver_arrivals",
         "teamId": "team-1",
-        "kinds": [
-          "KG_MUTATION",
-          "kg"
-        ]
-      },
-      {
-        "kind": "capture_receipt",
-        "triggerId": "trigger-1",
-        "movementId": "movement-1",
-        "teamId": "team-1",
-        "adapterType": "kg",
-        "triggerType": "mutation",
-        "event": {
-          "eventType": "inbound",
-          "externalId": "rec-1",
-          "idempotencyKey": "delivery-1",
-          "payload": {
-            "mutation": "node.created",
-            "id": "n-1"
-          }
-        }
-      },
-      {
-        "kind": "enqueue_receipts",
-        "receipts": [
-          {
-            "receiptId": "receipt-trigger-1"
-          }
-        ]
-      },
-      {
-        "kind": "enqueue_wakes",
-        "adapterType": "kg",
-        "teamId": "team-1",
-        "correlationKeys": []
+        "delivered": {
+          "adapterType": "kg",
+          "credentialsId": "cred-1"
+        },
+        "subscriptionId": "sub-1",
+        "externalId": null,
+        "source": "webhook",
+        "arrivals": []
       },
       {
         "kind": "notify_work"
@@ -2889,46 +1867,16 @@
         "teamId": "team-1"
       },
       {
-        "kind": "find_triggers",
+        "kind": "deliver_arrivals",
         "teamId": "team-1",
-        "kinds": [
-          "ACME-CRM",
-          "acme-crm"
-        ]
-      },
-      {
-        "kind": "capture_receipt",
-        "triggerId": "trigger-1",
-        "movementId": "movement-1",
-        "teamId": "team-1",
-        "adapterType": "acme-crm",
-        "triggerType": "webhook",
-        "event": {
-          "eventType": "inbound",
-          "externalId": "rec-1",
-          "idempotencyKey": "delivery-1",
-          "payload": {
-            "records": [
-              {
-                "id": "r1"
-              }
-            ]
-          }
-        }
-      },
-      {
-        "kind": "enqueue_receipts",
-        "receipts": [
-          {
-            "receiptId": "receipt-trigger-1"
-          }
-        ]
-      },
-      {
-        "kind": "enqueue_wakes",
-        "adapterType": "acme-crm",
-        "teamId": "team-1",
-        "correlationKeys": []
+        "delivered": {
+          "adapterType": "acme-crm",
+          "credentialsId": "cred-remote"
+        },
+        "subscriptionId": "sub-1",
+        "externalId": null,
+        "source": "webhook",
+        "arrivals": []
       },
       {
         "kind": "notify_work"

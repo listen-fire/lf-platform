@@ -8,8 +8,8 @@
  *  - the guard is consulted INSIDE dispatch, AFTER the run_mode gate and BEFORE
  *    the movement firing runs (`runMovementFiring`);
  *  - an existing guard-pause skips the run (`loop_guard_paused`);
- *  - a rate throttle is QUEUE-DON'T-DROP (a stored receipt is held + replayed;
- *    no receipt → record-and-skip, explicitly NOT dropped);
+ *  - a rate throttle is QUEUE-DON'T-DROP (the caller holds the run's row and
+ *    releases it to retry: inbound/fire_event.ts);
  *  - observe mode does not enforce (the `enforced` branch);
  *  - the whole check fails open (try/catch → undefined / allow);
  *  - the guard is skipped under dry-run.
@@ -96,14 +96,9 @@ describe('applyLoopGuard — pause / throttle / fail-open', () => {
     expect(pauseBranch).toMatch(/notifyBreach\(/);
   });
 
-  it('throttle is QUEUE-DON\'T-DROP: held+replayed with a receipt, record-and-skip without', () => {
+  it('throttle is QUEUE-DON\'T-DROP: the run is handed back held, never dropped', () => {
     const throttleBranch = fn.slice(fn.indexOf("decision.kind === 'throttle'"));
     expect(throttleBranch).toMatch(/if \(!decision\.enforced\) return undefined/);
-    // With a durable receipt → schedule a delayed re-dispatch (held, released).
-    expect(throttleBranch).toMatch(/input\.storedEventId !== undefined/);
-    expect(throttleBranch).toMatch(/scheduleDeferredReplay\(/);
-    // Without one → degrade to record-and-skip, explicitly NOT dropped.
-    expect(throttleBranch).toMatch(/record-and-skip/);
     expect(throttleBranch).toMatch(/return 'loop_guard_throttled'/);
   });
 
@@ -113,15 +108,5 @@ describe('applyLoopGuard — pause / throttle / fail-open', () => {
 
   it('FAILS OPEN — a guard fault allows the run (returns undefined)', () => {
     expect(fn).toMatch(/catch \(err\)[\s\S]*failing open[\s\S]*return undefined/);
-  });
-});
-
-describe('scheduleDeferredReplay — the held-event release', () => {
-  const fn = extractFunction(src, 'scheduleDeferredReplay');
-
-  it('puts the stored receipt back on the work queue, due after the delay — no in-process timer', () => {
-    expect(fn).not.toMatch(/setTimeout\(/);
-    expect(fn).toMatch(/requeueReceipt\(/);
-    expect(fn).toMatch(/dueAt: new Date\(Date\.now\(\) \+ input\.delayMs\)/);
   });
 });

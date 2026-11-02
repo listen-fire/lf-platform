@@ -108,7 +108,6 @@ import {
 import { mintMovementVersionIfChanged, movementSourceHash } from './version_store';
 import { stepTimer, type StepTimer } from './timing';
 import { settleRunsParkedOnTriggers } from '../../interaction/run_failure';
-import { revokeCallbacksForRuns } from '../../movement_engine/callback_store';
 import {
   assessMovementValidity,
   diagnoseMovementSource,
@@ -1324,12 +1323,6 @@ export async function deleteMovement(input: { teamId: string; id: string }): Pro
       'This run was still waiting to continue when the automation was deleted, so it was stopped.',
   });
 
-  // A RUNNING run isn't parked, so the settle above doesn't reach it — but its
-  // callbacks are just as unfireable once the version pin is gone (a fire has no
-  // AST to resume into). Revoke every callback of every run of these triggers,
-  // so a late tap gets the closed ack rather than a router error.
-  await revokeCallbacksOfTriggers([...triggerIds]);
-
   for (const triggerId of triggerIds) {
     await qb
       .deleteFrom('trigger')
@@ -1342,19 +1335,6 @@ export async function deleteMovement(input: { teamId: string; id: string }): Pro
   await syncListenSubscriptions({ teamId: input.teamId as TeamId });
   emitMovementChange({ teamId: input.teamId, movementId: input.id, action: 'deleteMovement' });
   return true;
-}
-
-/** Revoke every callback minted by any run of these triggers (movement delete).
- *  Scoped by run so it is one indexed read plus one update — the callback table
- *  keys on the run, never on the trigger. */
-async function revokeCallbacksOfTriggers(triggerIds: string[]): Promise<void> {
-  if (triggerIds.length === 0) return;
-  const runs = await getAutomationsQb(['trigger_run'])
-    .selectFrom('trigger_run')
-    .where('trigger_id', 'in', triggerIds)
-    .select('id')
-    .execute();
-  await revokeCallbacksForRuns(runs.map((r) => r.id));
 }
 
 /** The first movement declaration's name. Uses the real parser (the installed

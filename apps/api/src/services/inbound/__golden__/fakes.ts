@@ -157,34 +157,29 @@ export function triggerTableFake(): AnyRecord {
   };
 }
 
-export function dispatchEventFake(): AnyRecord {
+export function listenDoorFake(): AnyRecord {
   return {
-    captureDiscriminableEvent: async (input: { triggerId: string; movementId: string; event: AnyRecord; adapterType: string; teamId: string; triggerType: string }) => {
-      if (world.captureFails) throw new Error('capture refused');
+    // The delivery is one write: any refusal fails it whole, and the door
+    // answers so its sender retries. A listen takes each arrival when the
+    // world holds a trigger with a movement behind it (for mail, a live one).
+    deliverArrivals: async (input: AnyRecord) => {
+      if (world.storeFails || world.enqueueFails || world.captureFails) throw new Error('store unavailable');
       record({
-        kind: 'capture_receipt',
-        triggerId: input.triggerId,
-        movementId: input.movementId,
+        kind: 'deliver_arrivals',
         teamId: input.teamId,
-        adapterType: input.adapterType,
-        triggerType: input.triggerType,
-        event: input.event,
+        delivered: input.delivered,
+        subscriptionId: input.subscriptionId,
+        externalId: input.externalId,
+        source: input.source,
+        arrivals: input.arrivals,
       });
-      return { receiptId: `receipt-${input.triggerId}` };
+      const delivered = input.delivered as { adapterType: string };
+      const listening =
+        world.triggers.some((trigger) => trigger.movementId !== null) && (delivered.adapterType !== 'email' || world.emailTriggerLive);
+      const arrivals = input.arrivals as unknown[];
+      const fires = listening ? arrivals.map((_, index) => ({ runId: `run-${index + 1}` })) : [];
+      return { kept: { kept: true, arrivalMark: 1 }, deliveryId: 'delivery-1', fires };
     },
-    enqueueCapturedEvents: async (captured: AnyRecord[]) => {
-      if (world.enqueueFails) throw new Error('queue unavailable');
-      record({ kind: 'enqueue_receipts', receipts: captured });
-    },
-    receiveTriggerEvent: async (input: AnyRecord) => {
-      if (world.storeFails) throw new Error('store unavailable');
-      record({ kind: 'store_trigger_event', ...input });
-      return { eventId: 'event-1', duplicate: false };
-    },
-    readReceiptGroupOutcomes: async (input: { groups: { group: unknown }[] }) => ({
-      cleared: input.groups.map((entry) => entry.group),
-      failed: [],
-    }),
   };
 }
 

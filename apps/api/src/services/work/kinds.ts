@@ -1,10 +1,9 @@
-// The work kinds the core runs: dispatch, the clock, polling, wakes,
+// The work kinds the core runs: a delivery's runs, the clock, polling, wakes,
 // and the sweeps that keep them. A unit (an adapter package, a
 // product's own upkeep) adds its own kinds: it declares each into
 // `UnitWorkKinds` and registers it with `registerWorkKinds` (drain.ts), so the
 // core names none of them.
 export const CORE_WORK_KINDS = [
-  'dispatch_event', // payload: CapturedTriggerEvent (triggers/dispatch_event.ts)
   'fire_event', // payload: FireRow (inbound/listen_door.ts): one run a kept delivery queued
   'resume_timer', // payload: { runId: string }
   'fire_cron', // payload: { triggerId: string }

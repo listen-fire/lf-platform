@@ -23,7 +23,6 @@ import type {
 import { getAutomationsQb } from '../../lib/kysely';
 import { getWebhookProvider } from './providers';
 import { logger } from 'movement-engine/public/log';
-import { readReceiptGroupOutcomes, type CapturedTriggerEvent } from '../translation_graph/triggers/dispatch_event';
 import { deliverArrivals } from '../inbound/listen_door';
 import { TELEGRAM_ADAPTER_TYPE, TelegramAdapter } from '../translation_graph/adapters/telegram';
 import { handleTelegramCallbackQuery, ownsCallbackQuery } from './telegram_callback_door';
@@ -42,13 +41,16 @@ import { mayBeRemoteSlug } from '../translation_graph/adapters/remote/slugs';
 import { LEGACY_INTERCEPTS, builtInVerifierFor } from '../inbound/legacy_signature_headers';
 import { builtinModuleInboundVerifier } from '../translation_graph/adapters/builtin_modules';
 
-/** The receipts phase 1 stored for one event (one per trigger that matched). */
-export type CapturedReceipts = CapturedTriggerEvent[];
+/** What capture keeps of one event: nothing. Every listen is judged on the
+ *  delivery's arrivals as it is kept (`keepDelivery`), so no event is matched
+ *  to a listen on its own. */
+export type CapturedReceipts = never[];
 
 /**
- * Outcome of a delivery once its work rows have drained: events that cleared
- * BOTH capture and dispatch. Only a test-harness caller ever sees it (it drains
- * before acking); a production sender is acked before its rows run.
+ * Outcome of a delivery once its team's work rows have drained: the events it
+ * carried, unless those rows did not settle in time. Only a test-harness
+ * caller ever sees it (it drains before acking); a production sender is acked
+ * before its rows run.
  */
 export interface DeferredOutcome {
   eventsProcessed: number;
@@ -69,13 +71,14 @@ async function readDeliveryOutcome(input: {
   queued: QueuedDelivery<CapturedReceipts>;
   settle: SettleReport;
 }): Promise<DeferredOutcome> {
-  const { cleared, failed } = await readReceiptGroupOutcomes({
-    groups: input.queued.enqueued.map((entry) => ({ group: entry.event, receipts: entry.captured })),
-    settle: input.settle,
-  });
+  const { queued, settle } = input;
+  const unsettled = settle.unsettledTeamIds.has(queued.teamId);
   return {
-    eventsProcessed: cleared.length,
-    perEventErrors: [...input.queued.captureErrors, ...failed.map(({ group, error }) => ({ event: group, error }))],
+    eventsProcessed: unsettled ? 0 : queued.enqueued.length,
+    perEventErrors: [
+      ...queued.captureErrors,
+      ...(unsettled ? queued.enqueued.map((entry) => ({ event: entry.event, error: settle.unsettledError })) : []),
+    ],
   };
 }
 

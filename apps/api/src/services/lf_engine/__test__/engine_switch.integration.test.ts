@@ -17,10 +17,9 @@ import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { getAutomationsQb, getCoreQb } from '../../../lib/kysely';
 import { cleanupTeam } from '../../../test/harness/cleanup';
 import { saveMovement } from '../../translation_graph/movement/provision';
-import { MANUAL_ADAPTER_TYPE } from '../../translation_graph/adapters/manual';
+import { MANUAL_ADAPTER_TYPE, invocationArrival } from '../../translation_graph/adapters/manual';
 import { dispatchTriggerByIdEvent } from '../../translation_graph/triggers/router';
-import { storeTriggerEvent } from '../../translation_graph/triggers/event_store';
-import { describeDroppedReason } from '../../translation_graph/triggers/dropped_reason';
+import { arrivalTriggerOf } from 'movement-engine/public/inbound';
 import { answerFor } from '../../lf_movements/answer';
 import { switchTeamEngine } from '../switch';
 import { readTeamEngine } from '../team_engine';
@@ -29,28 +28,18 @@ jest.mock('../../credentials/credential_lifecycle', () => ({
   credentialLifecycle: () => undefined,
 }));
 
-const SOURCE = `import { manual } from adapters
-
-runs = connect manual
-
-function hello(go: <runs-[:\`Invocation\`]->>) {
+const SOURCE = `function hello(go: <manual-[:Invocations]->>) {
 }
 
-listen to runs {} fire hello
+listen to manual-[:Invocations]-> fire hello
 `;
 
 let teamId: TeamId;
 let triggerId: TriggerId;
 
 function manualEvent(): TriggerEvent {
-  const firedAt = new Date().toISOString();
-  return {
-    pipelineInputId: `trigger:${triggerId}`,
-    adapterType: MANUAL_ADAPTER_TYPE,
-    triggerType: 'webhook',
-    payload: { firedAt, submissionId: randomUUID() },
-    occurredAt: firedAt,
-  };
+  const arrival = invocationArrival({ firedAt: new Date().toISOString(), submissionId: randomUUID() });
+  return arrivalTriggerOf({ pipelineInputId: `trigger:${triggerId}`, adapterType: MANUAL_ADAPTER_TYPE, arrival, now: new Date() });
 }
 
 const runCount = async () =>
@@ -67,17 +56,10 @@ async function slotServes(): Promise<boolean> {
 }
 
 /** Whether a live dispatch ran the listener, and what it answered. */
-async function dispatchRuns(): Promise<{ ran: boolean; droppedReason: string | undefined; receipt: { status: string; failure_reason: string | null } }> {
+async function dispatchRuns(): Promise<{ ran: boolean; droppedReason: string | undefined }> {
   const before = await runCount();
-  const event = manualEvent();
-  const stored = await storeTriggerEvent({ teamId, triggerId, event });
-  const outcome = await dispatchTriggerByIdEvent({ triggerId, teamId, event, storedEventId: stored.id });
-  const receipt = await getAutomationsQb(['trigger_event'])
-    .selectFrom('trigger_event')
-    .where('id', '=', stored.id)
-    .select(['status', 'failure_reason'])
-    .executeTakeFirstOrThrow();
-  return { ran: (await runCount()) > before, droppedReason: outcome.droppedReason, receipt };
+  const outcome = await dispatchTriggerByIdEvent({ triggerId, teamId, event: manualEvent() });
+  return { ran: (await runCount()) > before, droppedReason: outcome.droppedReason };
 }
 
 beforeAll(async () => {
@@ -123,7 +105,6 @@ describe('the engine switch', () => {
     expect(servesSet).toBe(true);
     expect(set.ran).toBe(false);
     expect(set.droppedReason).toBe('engine_lf');
-    expect(set.receipt).toEqual({ status: 'suppressed', failure_reason: describeDroppedReason('engine_lf') });
     expect(servesSet !== set.ran).toBe(true);
 
     await switchTeamEngine(teamId, { engine: 'platform', changedBy: null });

@@ -22,10 +22,6 @@
       "GET /webhook",
       "POST /webhook"
     ],
-    "/api/cb": [
-      "GET /:id",
-      "POST /:id"
-    ],
     "/api/asks": [
       "GET /:token",
       "GET /:token/detail",
@@ -45,7 +41,6 @@
       "app.use('/api/public/slack', express.raw({ type: 'application/json' }), slackEventsRouter);",
       "app.use('/api/public/slack-actions', express.raw({ type: '*/*' }), slackInteractivityRouter);",
       "app.use('/api/resend', express.raw({ type: 'application/json' }));",
-      "app.use('/api/cb', callbacksRouter);",
       "app.use('/api/asks', asksRouter);",
       "app.use('/api/public', publicRouter);",
       "app.use('/api', privateRouter);"

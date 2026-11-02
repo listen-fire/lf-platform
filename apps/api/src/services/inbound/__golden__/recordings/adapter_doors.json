@@ -2,7 +2,7 @@
   {
     "id": "emit-good-credential",
     "door": "adapter_doors",
-    "note": "The presented credential names the install and so the team; events are receipted against its triggers and queued; 202 with the count.",
+    "note": "An authenticated emit is refused by name, 410: listen-fire 0.13 retired it for arrivals.",
     "request": {
       "method": "POST",
       "path": "/api/public/adapter/acme-crm/emit",
@@ -13,49 +13,14 @@
       "body": "{\"events\":[{\"eventType\":\"record.created\",\"externalId\":\"r-1\",\"payload\":{\"id\":\"r-1\"}}]}"
     },
     "response": {
-      "status": 202,
+      "status": 410,
       "headers": {
         "content-type": "application/json; charset=utf-8",
-        "content-length": "14"
+        "content-length": "264"
       },
-      "body": "{\"accepted\":1}"
+      "body": "{\"error\":\"emit_retired\",\"message\":\"`emit` is retired in listen-fire 0.13: a listen is a traversal, fired by the arrivals on its edge, so an event fires no listen; send what happened to `wake` as `arrivals` (docs/contracts/adapter-protocol.md, Reporting arrivals)\"}"
     },
-    "effects": [
-      {
-        "kind": "find_triggers",
-        "teamId": "aaaaaaaa-0000-4000-8000-000000000001",
-        "kinds": [
-          "ACME-CRM",
-          "acme-crm"
-        ]
-      },
-      {
-        "kind": "capture_receipt",
-        "triggerId": "trigger-1",
-        "movementId": "movement-1",
-        "teamId": "aaaaaaaa-0000-4000-8000-000000000001",
-        "adapterType": "acme-crm",
-        "triggerType": "webhook",
-        "event": {
-          "payload": {
-            "id": "r-1"
-          },
-          "externalId": "r-1",
-          "eventType": "record.created"
-        }
-      },
-      {
-        "kind": "enqueue_receipts",
-        "receipts": [
-          {
-            "receiptId": "receipt-trigger-1"
-          }
-        ]
-      },
-      {
-        "kind": "notify_work"
-      }
-    ]
+    "effects": []
   },
   {
     "id": "emit-bearer-strategy",
@@ -71,27 +36,14 @@
       "body": "{\"events\":[{\"eventType\":\"record.created\",\"externalId\":\"r-1\",\"payload\":{\"id\":\"r-1\"}}]}"
     },
     "response": {
-      "status": 202,
+      "status": 410,
       "headers": {
         "content-type": "application/json; charset=utf-8",
-        "content-length": "14"
+        "content-length": "264"
       },
-      "body": "{\"accepted\":0}"
+      "body": "{\"error\":\"emit_retired\",\"message\":\"`emit` is retired in listen-fire 0.13: a listen is a traversal, fired by the arrivals on its edge, so an event fires no listen; send what happened to `wake` as `arrivals` (docs/contracts/adapter-protocol.md, Reporting arrivals)\"}"
     },
-    "effects": [
-      {
-        "kind": "find_triggers",
-        "teamId": "aaaaaaaa-0000-4000-8000-000000000001",
-        "kinds": [
-          "ACME-CRM",
-          "acme-crm"
-        ]
-      },
-      {
-        "kind": "enqueue_receipts",
-        "receipts": []
-      }
-    ]
+    "effects": []
   },
   {
     "id": "emit-wrong-credential",
@@ -222,32 +174,19 @@
       "body": "{\"events\":[{\"eventType\":\"record.created\",\"externalId\":\"r-1\",\"payload\":{\"id\":\"r-1\"}}]}"
     },
     "response": {
-      "status": 202,
+      "status": 410,
       "headers": {
         "content-type": "application/json; charset=utf-8",
-        "content-length": "14"
+        "content-length": "264"
       },
-      "body": "{\"accepted\":0}"
+      "body": "{\"error\":\"emit_retired\",\"message\":\"`emit` is retired in listen-fire 0.13: a listen is a traversal, fired by the arrivals on its edge, so an event fires no listen; send what happened to `wake` as `arrivals` (docs/contracts/adapter-protocol.md, Reporting arrivals)\"}"
     },
-    "effects": [
-      {
-        "kind": "find_triggers",
-        "teamId": "aaaaaaaa-0000-4000-8000-000000000002",
-        "kinds": [
-          "ACME-CRM",
-          "acme-crm"
-        ]
-      },
-      {
-        "kind": "enqueue_receipts",
-        "receipts": []
-      }
-    ]
+    "effects": []
   },
   {
     "id": "emit-malformed-body-after-auth",
     "door": "adapter_doors",
-    "note": "The body is judged only after authentication: 400 with the issues.",
+    "note": "An authenticated emit is refused 410 by name before its body is read.",
     "request": {
       "method": "POST",
       "path": "/api/public/adapter/acme-crm/emit",
@@ -258,12 +197,12 @@
       "body": "{\"events\":[]}"
     },
     "response": {
-      "status": 400,
+      "status": 410,
       "headers": {
         "content-type": "application/json; charset=utf-8",
-        "content-length": "108"
+        "content-length": "264"
       },
-      "body": "{\"error\":\"bad_request\",\"issues\":[{\"path\":\"events\",\"message\":\"Too small: expected array to have >=1 items\"}]}"
+      "body": "{\"error\":\"emit_retired\",\"message\":\"`emit` is retired in listen-fire 0.13: a listen is a traversal, fired by the arrivals on its edge, so an event fires no listen; send what happened to `wake` as `arrivals` (docs/contracts/adapter-protocol.md, Reporting arrivals)\"}"
     },
     "effects": []
   },
@@ -319,7 +258,7 @@
   {
     "id": "emit-capture-failure",
     "door": "adapter_doors",
-    "note": "An event whose receipt cannot be stored fails the call 500 with the counts, after the others were queued.",
+    "note": "An authenticated emit is refused 410 by name: nothing is captured to fail.",
     "request": {
       "method": "POST",
       "path": "/api/public/adapter/acme-crm/emit",
@@ -330,32 +269,19 @@
       "body": "{\"events\":[{\"eventType\":\"record.created\",\"externalId\":\"r-1\",\"payload\":{\"id\":\"r-1\"}}]}"
     },
     "response": {
-      "status": 500,
+      "status": 410,
       "headers": {
         "content-type": "application/json; charset=utf-8",
-        "content-length": "50"
+        "content-length": "264"
       },
-      "body": "{\"error\":\"capture_failed\",\"accepted\":0,\"failed\":1}"
+      "body": "{\"error\":\"emit_retired\",\"message\":\"`emit` is retired in listen-fire 0.13: a listen is a traversal, fired by the arrivals on its edge, so an event fires no listen; send what happened to `wake` as `arrivals` (docs/contracts/adapter-protocol.md, Reporting arrivals)\"}"
     },
-    "effects": [
-      {
-        "kind": "find_triggers",
-        "teamId": "aaaaaaaa-0000-4000-8000-000000000001",
-        "kinds": [
-          "ACME-CRM",
-          "acme-crm"
-        ]
-      },
-      {
-        "kind": "enqueue_receipts",
-        "receipts": []
-      }
-    ]
+    "effects": []
   },
   {
     "id": "wake-good-credential",
     "door": "adapter_doors",
-    "note": "Wake keys are queued as await wakes for the caller team; 202 with the count.",
+    "note": "A wake naming keys is refused 400: since adapter protocol 2.5 a wake names what arrived.",
     "request": {
       "method": "POST",
       "path": "/api/public/adapter/acme-crm/wake",
@@ -366,27 +292,14 @@
       "body": "{\"keys\":[\"thread:abc\",\"thread:def\"]}"
     },
     "response": {
-      "status": 202,
+      "status": 400,
       "headers": {
         "content-type": "application/json; charset=utf-8",
-        "content-length": "14"
+        "content-length": "282"
       },
-      "body": "{\"accepted\":2}"
+      "body": "{\"error\":\"bad_request\",\"issues\":[{\"path\":\"keys\",\"message\":\"a wake names what arrived from adapter protocol 2.5: send `arrivals`, not `keys` (docs/contracts/adapter-protocol.md, Reporting arrivals)\"},{\"path\":\"arrivals\",\"message\":\"Invalid input: expected array, received undefined\"}]}"
     },
-    "effects": [
-      {
-        "kind": "enqueue_wakes",
-        "adapterType": "acme-crm",
-        "teamId": "aaaaaaaa-0000-4000-8000-000000000001",
-        "correlationKeys": [
-          "thread:abc",
-          "thread:def"
-        ]
-      },
-      {
-        "kind": "notify_work"
-      }
-    ]
+    "effects": []
   },
   {
     "id": "wake-empty-keys",
@@ -405,9 +318,9 @@
       "status": 400,
       "headers": {
         "content-type": "application/json; charset=utf-8",
-        "content-length": "106"
+        "content-length": "282"
       },
-      "body": "{\"error\":\"bad_request\",\"issues\":[{\"path\":\"keys\",\"message\":\"Too small: expected array to have >=1 items\"}]}"
+      "body": "{\"error\":\"bad_request\",\"issues\":[{\"path\":\"keys\",\"message\":\"a wake names what arrived from adapter protocol 2.5: send `arrivals`, not `keys` (docs/contracts/adapter-protocol.md, Reporting arrivals)\"},{\"path\":\"arrivals\",\"message\":\"Invalid input: expected array, received undefined\"}]}"
     },
     "effects": []
   },

@@ -27,31 +27,37 @@
         "emailId": "re_golden_1"
       },
       {
-        "kind": "store_trigger_event",
-        "triggerId": "trigger-1",
-        "event": {
-          "pipelineInputId": "trigger:trigger-1",
-          "adapterType": "inbound_email",
-          "triggerType": "webhook",
-          "payload": {
-            "messageId": "<m-1@example.com>",
-            "subject": "Intro",
-            "sender": "Ada <ada@example.com>",
-            "recipient": "inbox+deals@example.com",
-            "bodyText": "Hello there",
-            "attachments": []
-          },
-          "changeType": "create",
-          "rootRecordType": "email:message",
-          "idempotencyKey": "<m-1@example.com>",
-          "externalRecordRef": {
-            "adapterType": "email",
-            "externalId": "<m-1@example.com>",
-            "recordType": "email:message"
-          },
-          "occurredAt": "2026-10-17T12:00:00.000Z"
+        "kind": "deliver_arrivals",
+        "teamId": "team-1",
+        "delivered": {
+          "adapterType": "email",
+          "credentialsId": null
         },
-        "teamId": "team-1"
+        "subscriptionId": "email",
+        "externalId": "email:<m-1@example.com>",
+        "source": "webhook",
+        "arrivals": [
+          {
+            "edge": "Emails",
+            "identity": "<m-1@example.com>",
+            "landing": {
+              "recordType": "Email",
+              "fields": {
+                "messageId": "<m-1@example.com>",
+                "subject": "Intro",
+                "sender": "Ada <ada@example.com>",
+                "recipient": "inbox+deals@example.com",
+                "bodyText": "Hello there",
+                "attachments": [],
+                "content": "Hello there",
+                "Key": "deals"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "kind": "notify_work"
       }
     ]
   },
@@ -81,6 +87,36 @@
       {
         "kind": "resend_fetch",
         "emailId": "re_golden_1"
+      },
+      {
+        "kind": "deliver_arrivals",
+        "teamId": "team-1",
+        "delivered": {
+          "adapterType": "email",
+          "credentialsId": null
+        },
+        "subscriptionId": "email",
+        "externalId": "email:<m-1@example.com>",
+        "source": "webhook",
+        "arrivals": [
+          {
+            "edge": "Emails",
+            "identity": "<m-1@example.com>",
+            "landing": {
+              "recordType": "Email",
+              "fields": {
+                "messageId": "<m-1@example.com>",
+                "subject": "Intro",
+                "sender": "Ada <ada@example.com>",
+                "recipient": "inbox+deals@example.com",
+                "bodyText": "Hello there",
+                "attachments": [],
+                "content": "Hello there",
+                "Key": "deals"
+              }
+            }
+          }
+        ]
       },
       {
         "kind": "db",
@@ -144,6 +180,36 @@
       {
         "kind": "resend_fetch",
         "emailId": "re_golden_1"
+      },
+      {
+        "kind": "deliver_arrivals",
+        "teamId": "team-1",
+        "delivered": {
+          "adapterType": "email",
+          "credentialsId": null
+        },
+        "subscriptionId": "email",
+        "externalId": "email:<m-1@example.com>",
+        "source": "webhook",
+        "arrivals": [
+          {
+            "edge": "Emails",
+            "identity": "<m-1@example.com>",
+            "landing": {
+              "recordType": "Email",
+              "fields": {
+                "messageId": "<m-1@example.com>",
+                "subject": "Intro",
+                "sender": "Ada <ada@example.com>",
+                "recipient": "inbox+deals@example.com",
+                "bodyText": "Hello there",
+                "attachments": [],
+                "content": "Hello there",
+                "Key": "deals"
+              }
+            }
+          }
+        ]
       },
       {
         "kind": "db",

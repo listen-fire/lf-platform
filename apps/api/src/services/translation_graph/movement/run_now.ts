@@ -18,6 +18,7 @@
 import { Readable } from 'node:stream';
 import { createHash, randomUUID } from 'node:crypto';
 
+import { sql } from 'kysely';
 import { MovementParseError, parseProgram } from 'movement-lang';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
@@ -265,7 +266,7 @@ export async function getMovementRunStatus(input: {
       'limit_pause',
     ])
     .executeTakeFirst();
-  if (!row) return { error: `run ${input.runId} not found` };
+  if (!row) return (await queuedRunStatus(input)) ?? { error: `run ${input.runId} not found` };
   const pause = readLimitPause(row.limit_pause);
 
   const errors = Array.isArray(row.errors)
@@ -302,6 +303,38 @@ export async function getMovementRunStatus(input: {
           },
         }
       : {}),
+  };
+}
+
+/**
+ * A run its delivery queued and no worker has started yet: its `fire_event`
+ * row is waiting, and its run row is written as the row starts it (under its
+ * listen's receipt, inbound/fire_event.ts). Running, as far as its caller
+ * goes.
+ */
+async function queuedRunStatus(input: { teamId: string; runId: string }): Promise<MovementRunStatus | null> {
+  const row = await getAutomationsQb(['work'])
+    .selectFrom('work')
+    .where('host', '=', 'platform')
+    .where('kind', '=', 'fire_event')
+    .where('team_id', '=', input.teamId)
+    .where('dead_at', 'is', null)
+    .where(sql<boolean>`payload->>'runId' = ${input.runId}`)
+    .select('created_at')
+    .executeTakeFirst();
+  if (!row) return null;
+  return {
+    runId: input.runId,
+    status: 'running',
+    recordCount: 0,
+    dryRun: false,
+    errors: [],
+    startedAt: row.created_at.toISOString(),
+    finishedAt: null,
+    failedAt: null,
+    failureReason: null,
+    costUsd: 0,
+    modelCalls: 0,
   };
 }
 

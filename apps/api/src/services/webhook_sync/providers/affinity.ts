@@ -33,12 +33,12 @@ import {
   affinityCredsParser,
   getAffinityClient,
 } from '@listen-fire/affinity/api_client';
-import { AFFINITY_SUBSCRIBABLE_EVENTS } from '@listen-fire/affinity/inbound';
+import { AFFINITY_RECORD_EVENTS } from '@listen-fire/affinity/changes';
 
 const affinityProvider: WebhookProvider = {
   canRegisterViaApi: true,
 
-  defaultEventTypes: [...AFFINITY_SUBSCRIBABLE_EVENTS],
+  defaultEventTypes: [...AFFINITY_RECORD_EVENTS],
 
   // See the signature stance above: URL-trust without a key, strict HMAC
   // verification once the credential carries the account's signature key.

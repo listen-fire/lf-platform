@@ -27,9 +27,9 @@ jest.mock('../../translation_graph/storage/tg_table', () => ({
   ...jest.requireActual('../../translation_graph/storage/tg_table'),
   ...require('./fakes').triggerTableFake(),
 }));
-jest.mock('../../translation_graph/triggers/dispatch_event', () => ({
-  ...jest.requireActual('../../translation_graph/triggers/dispatch_event'),
-  ...require('./fakes').dispatchEventFake(),
+jest.mock('../listen_door', () => ({
+  ...jest.requireActual('../listen_door'),
+  ...require('./fakes').listenDoorFake(),
 }));
 jest.mock('../../movement_engine/await_wake', () => ({
   ...jest.requireActual('../../movement_engine/await_wake'),

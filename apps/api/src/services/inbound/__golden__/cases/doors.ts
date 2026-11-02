@@ -5,11 +5,12 @@
 import type { GoldenCase } from '../harness';
 
 import { withEnv } from '../env';
-import { SECRETS, hmacHex, slackSignature } from '../secrets';
+import { FIXED_NOW_SECONDS, SECRETS, hmacHex, slackSignature } from '../secrets';
 import { record, world } from '../world';
 import { define, json, post, text } from './support';
 
-const SLACK_TIMESTAMP = '1760702400';
+// Slack refuses a timestamp outside its replay window of the door's clock.
+const SLACK_TIMESTAMP = FIXED_NOW_SECONDS;
 const slackHeaders = (secret: string, contentType = 'application/json') => (body: Buffer) => ({
   'content-type': contentType,
   'x-slack-request-timestamp': SLACK_TIMESTAMP,
@@ -35,7 +36,7 @@ const EMIT = { events: [{ eventType: 'record.created', externalId: 'r-1', payloa
 export const adapterDoorCases: GoldenCase[] = define('adapter_doors', [
   {
     id: 'emit-good-credential',
-    note: 'The presented credential names the install and so the team; events are receipted against its triggers and queued; 202 with the count.',
+    note: 'An authenticated emit is refused by name, 410: listen-fire 0.13 retired it for arrivals.',
     arrange: () => {
       world.remoteInstalls.push(installOf(TEAM_1));
       world.triggers.push({ id: 'trigger-1', movementId: 'movement-1', kind: 'acme-crm', credentialsId: null, config: {} });
@@ -97,7 +98,7 @@ export const adapterDoorCases: GoldenCase[] = define('adapter_doors', [
   },
   {
     id: 'emit-malformed-body-after-auth',
-    note: 'The body is judged only after authentication: 400 with the issues.',
+    note: 'An authenticated emit is refused 410 by name before its body is read.',
     arrange: () => {
       world.remoteInstalls.push(installOf(TEAM_1));
     },
@@ -122,7 +123,7 @@ export const adapterDoorCases: GoldenCase[] = define('adapter_doors', [
   },
   {
     id: 'emit-capture-failure',
-    note: 'An event whose receipt cannot be stored fails the call 500 with the counts, after the others were queued.',
+    note: 'An authenticated emit is refused 410 by name: nothing is captured to fail.',
     arrange: () => {
       world.remoteInstalls.push(installOf(TEAM_1));
       world.triggers.push({ id: 'trigger-1', movementId: 'movement-1', kind: 'acme-crm', credentialsId: null, config: {} });
@@ -132,7 +133,7 @@ export const adapterDoorCases: GoldenCase[] = define('adapter_doors', [
   },
   {
     id: 'wake-good-credential',
-    note: 'Wake keys are queued as await wakes for the caller team; 202 with the count.',
+    note: 'A wake naming keys is refused 400: since adapter protocol 2.5 a wake names what arrived.',
     arrange: () => {
       world.remoteInstalls.push(installOf(TEAM_1));
     },

@@ -180,20 +180,20 @@ async function ensureAttioSubscription(teamId: string): Promise<{ id: string; cr
  * Idempotently ensure a Slack `webhook_subscription` row exists for the
  * dev-loop team so `/api/public/webhook-sync/slack/<sub-id>` resolves.
  * The subscription is bound to the team's `SLACK` credential row, mirroring
- * production BYO inbound: inbound dispatch (`dispatchToProviderTriggers`)
- * drops any trigger whose `credentials_id` disagrees with the delivering
- * subscription, so the subscription's credential must agree with the
- * movement's slack trigger, not just point at some valid FK target. A
+ * production BYO inbound: a connection's delivery is heard only by the listens
+ * on that connection (inbound/listen_door.ts `judgeArrivals`), so the
+ * subscription's credential must agree with the movement's slack listen, not
+ * just point at some valid FK target. A
  * pre-existing subscription bound to a stale/arbitrary credential is
  * repaired in place rather than left to silently swallow injected events.
  */
 async function ensureSlackSubscription(teamId: string): Promise<{ id: string; credentialsId: string }> {
   // Bind to the SLACK credential row, mirroring production BYO inbound: a
   // Slack webhook subscription is tied to Slack credentials. This id must
-  // equal the movement's slack trigger `credentials_id` — the inbound
-  // dispatch filter (`dispatchToProviderTriggers`) drops any trigger whose
-  // credential disagrees with the delivering subscription, so an arbitrary
-  // FK target here silently prevents the reply movement from ever firing.
+  // equal the movement's slack listen `credentials_id` — a listen on another
+  // connection than the delivering subscription's hears nothing of it, so an
+  // arbitrary FK target here silently prevents the reply movement from ever
+  // firing.
   const slackCred = await getAutomationsQb(['external_service_credentials'])
     .selectFrom('external_service_credentials')
     .where('team_id', '=', teamId as TeamId)

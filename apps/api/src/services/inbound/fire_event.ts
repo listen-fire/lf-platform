@@ -13,10 +13,15 @@ import type { TriggerId } from '../../generated/kysely/automations/Trigger';
 import type { TriggerRunId } from '../../generated/kysely/automations/TriggerRun';
 import type { WorkHandler } from '../work/kinds';
 
-import { registerWorkHandler } from '../work/drain';
+import { registerWorkHandler, WorkDeferred } from '../work/drain';
 import { platformTokenRegistry } from '../translation_graph/engine/platform_token_registry_db';
-import { dispatchTriggerByIdEvent, mapRecordingTriggerType } from '../translation_graph/triggers/router';
-import { settleQueuedRunAfterDispatch } from '../translation_graph/triggers/dispatch_event';
+import {
+  dispatchTriggerByIdEvent,
+  mapRecordingTriggerType,
+  type TriggerIdDispatchResult,
+} from '../translation_graph/triggers/router';
+import { describeDroppedReason } from '../translation_graph/triggers/dropped_reason';
+import { requeueRun } from '../translation_graph/runs/trigger_run';
 import { shippedMovementForTrigger } from '../translation_graph/movement/execute';
 import { getAutomationsQb } from '../../lib/kysely';
 import { dropUnstartedWaits } from '../movement_engine/run_host_waits';
@@ -71,7 +76,46 @@ async function runFireRow(payload: unknown): Promise<void> {
     existingRunId: runId,
     ...(fire.arrivalMark !== undefined ? { triggerMark: fire.arrivalMark } : {}),
   });
-  await settleQueuedRunAfterDispatch({ runId, teamId, result, storedEventId: undefined });
+  if (result.droppedReason === 'loop_guard_throttled') {
+    // Held, not dropped: the run goes back to waiting, and its row retries
+    // once the guard's rate window has had time to pass.
+    await requeueRun(runId);
+    throw new WorkDeferred(`${listen.file}:${listen.plan.movement} is held by the loop guard's rate floor`);
+  }
+  await settleQueuedRun({ runId, teamId, result });
+}
+
+/**
+ * A queued run whose dispatch produced no firing (run_mode off, echo
+ * suppressed, guard paused, …) would stay `running` forever: the recorder only
+ * touches the row on a firing. Settle it `failed`, naming why, so whoever
+ * follows the run learns the reason. A firing has already settled the row, so
+ * the `running` guard makes this a no-op.
+ */
+async function settleQueuedRun(input: { runId: TriggerRunId; teamId: TeamId; result: TriggerIdDispatchResult }): Promise<void> {
+  const { result } = input;
+  // The queued row could not know the listener rehearses (its run mode is read
+  // at dispatch), and the firing's settle leaves the flag as it found it.
+  if (result.movementFirings?.some((firing) => firing.dryRun) === true) {
+    await getAutomationsQb(['trigger_run'])
+      .updateTable('trigger_run')
+      .set({ dry_run: true })
+      .where('id', '=', input.runId)
+      .execute();
+  }
+  const reason =
+    result.droppedReason !== undefined
+      ? describeDroppedReason(result.droppedReason)
+      : result.errors !== undefined && result.errors.length > 0
+        ? result.errors.map((e) => e.message).join('; ')
+        : 'dispatch produced no firing';
+  await getAutomationsQb(['trigger_run'])
+    .updateTable('trigger_run')
+    .set({ status: 'failed', failed_at: new Date(), failure_reason: reason })
+    .where('id', '=', input.runId)
+    .where('team_id', '=', input.teamId)
+    .where('status', '=', 'running')
+    .execute();
 }
 
 /** The waits the delivery opened for this row's run, when the run never
