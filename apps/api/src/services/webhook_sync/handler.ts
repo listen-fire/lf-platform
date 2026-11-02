@@ -280,11 +280,26 @@ export const platformInboundStore: InboundStore<CapturedReceipts> = {
   keepDelivery: (input) => keepWebhookDelivery(input, null),
 };
 
+/** A request as the door received it, before anything read it. */
+export interface ReceivedRequest {
+  rawBody: Buffer;
+  headers: InboundHeaders;
+  method?: string;
+  path?: string;
+  query?: string;
+}
+
+/** The platform's store for one received request: its delivery keeps the
+ *  request (redacted), so a listen can be put through it again. */
+export function platformInboundStoreFor(received: ReceivedRequest): InboundStore<CapturedReceipts> {
+  return { ...platformInboundStore, keepDelivery: (input) => keepWebhookDelivery(input, received) };
+}
+
 /** A webhook delivery's one write, with the request it came as when the door
- *  has it (kept redacted, so a listen can be put through it again). */
+ *  has it. */
 async function keepWebhookDelivery(
   { subscription, source, arrivals, checkpoint }: Parameters<InboundStore<CapturedReceipts>['keepDelivery']>[0],
-  received: { rawBody: Buffer; headers: InboundHeaders } | null,
+  received: ReceivedRequest | null,
 ): Promise<{ kept: boolean; arrivalMark?: number }> {
   const listens = await listensOfSubscription({
     teamId: subscription.teamId as TeamId,
@@ -306,6 +321,9 @@ async function keepWebhookDelivery(
             keeping: builtinModuleRequestKeeping(source.adapterType),
             headers: received.headers,
             rawBody: received.rawBody,
+            ...(received.method !== undefined ? { method: received.method } : {}),
+            ...(received.path !== undefined ? { path: received.path } : {}),
+            ...(received.query !== undefined ? { query: received.query } : {}),
             // The cursor it was read against, so a replay reads it the same way.
             ...(subscription.checkpoint !== undefined && subscription.checkpoint !== null ? { checkpoint: subscription.checkpoint } : {}),
             arrivals,
@@ -336,9 +354,7 @@ async function handleInboundWebhook(options: {
   rawBody: Buffer;
   headers: InboundHeaders;
 }): Promise<HandleResult> {
-  const received = { rawBody: options.rawBody, headers: options.headers };
-  const store: InboundStore<CapturedReceipts> = { ...platformInboundStore, keepDelivery: (input) => keepWebhookDelivery(input, received) };
-  const result = await receiveDelivery(store, {
+  const result = await receiveDelivery(platformInboundStoreFor({ rawBody: options.rawBody, headers: options.headers }), {
     providerKey: options.provider,
     subscriptionId: options.subscriptionId,
     rawBody: options.rawBody,

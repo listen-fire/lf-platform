@@ -8,7 +8,7 @@ import type { Request, Response } from 'express';
 import type { DeliveryHost, InboundStore } from 'movement-engine/public/inbound';
 
 import { answerDelivery } from 'movement-engine/public/inbound';
-import { platformInboundStore, queueForHarness, type CapturedReceipts } from '../../services/webhook_sync/handler';
+import { platformInboundStoreFor, queueForHarness, type CapturedReceipts, type ReceivedRequest } from '../../services/webhook_sync/handler';
 import { notifyWork } from '../../services/work/drain';
 import { runHarnessDelivery } from '../../services/work/harness';
 import { inboundBodyRefusals, sendInboundAnswer } from './inbound_answer';
@@ -25,9 +25,10 @@ const platformDeliveryHost: DeliveryHost<CapturedReceipts> = {
 };
 
 /** The door over any store: the platform's below, an in-memory one in the
- *  inbound contract suite. */
+ *  inbound contract suite. `storeFor` is handed each request as it arrived,
+ *  so a store that keeps it beside its delivery can. */
 export function createWebhookSyncRouter<Captured>(
-  store: InboundStore<Captured>,
+  storeFor: (received: ReceivedRequest) => InboundStore<Captured>,
   host: DeliveryHost<Captured>,
 ): ReturnType<typeof Router> {
   const router: ReturnType<typeof Router> = Router();
@@ -40,14 +41,17 @@ export function createWebhookSyncRouter<Captured>(
     // A JSON body the parser left unparsed (another content type) verifies as `{}`.
     const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body ?? {}));
     const queryAt = req.originalUrl.indexOf('?');
-    const answer = await answerDelivery(store, host, {
-      provider: req.params.provider,
-      subscriptionId: req.params.subscriptionId,
+    const received: ReceivedRequest = {
       rawBody,
       headers: req.headers,
       method: req.method,
       path: queryAt === -1 ? req.originalUrl : req.originalUrl.slice(0, queryAt),
       query: queryAt === -1 ? '' : req.originalUrl.slice(queryAt + 1),
+    };
+    const answer = await answerDelivery(storeFor(received), host, {
+      provider: req.params.provider,
+      subscriptionId: req.params.subscriptionId,
+      ...received,
     });
     sendInboundAnswer(res, answer);
   };
@@ -57,6 +61,6 @@ export function createWebhookSyncRouter<Captured>(
   return router;
 }
 
-const webhookSyncRouter: ReturnType<typeof Router> = createWebhookSyncRouter(platformInboundStore, platformDeliveryHost);
+const webhookSyncRouter: ReturnType<typeof Router> = createWebhookSyncRouter(platformInboundStoreFor, platformDeliveryHost);
 
 export { webhookSyncRouter };

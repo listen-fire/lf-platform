@@ -27,11 +27,12 @@ const backend: InboundContractBackend = {
   baseUrl: '',
   async arrange(world) {
     await close();
-    stores = memoryInboundStores(world);
+    const arranged = memoryInboundStores(world);
+    stores = arranged;
     const app = express();
     // Mounted as server.ts mounts them: each door brings its own parser.
-    app.use('/api/public/webhook-sync', createWebhookSyncRouter(stores.store, stores.host));
-    app.use('/api/public/adapter', createAdapterDoorsRouter(stores.push));
+    app.use('/api/public/webhook-sync', createWebhookSyncRouter(() => arranged.store, arranged.host));
+    app.use('/api/public/adapter', createAdapterDoorsRouter(arranged.push));
     const listening = createServer(app);
     await new Promise<void>((done) => listening.listen(0, '127.0.0.1', () => done()));
     server = listening;

@@ -445,9 +445,9 @@ export async function claimReceipt(input: {
       if (rows.length === 1) {
         if (existing === undefined) {
           await sql`
-            insert into automations.trigger_run (id, team_id, trigger_id, trigger_type, status, record_id, movement_version_id, trigger_payload, started_at, last_heartbeat_at)
+            insert into automations.trigger_run (id, team_id, trigger_id, trigger_type, status, record_id, movement_version_id, trigger_payload, started_at, last_heartbeat_at, delivery_id)
             values (${fire.runId}::uuid, ${fire.teamId}::uuid, ${fire.triggerId}::text, ${run.triggerType}::text, 'running', ${run.recordId}::text,
-                    ${run.movementVersionId}::uuid, ${JSON.stringify(run.payload)}::text::jsonb, now(), null)`.execute(trx);
+                    ${run.movementVersionId}::uuid, ${JSON.stringify(run.payload)}::text::jsonb, now(), null, ${fire.deliveryId}::uuid)`.execute(trx);
         }
         return { kind: 'run' };
       }

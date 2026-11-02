@@ -3302,8 +3302,9 @@ CREATE TABLE automations.trigger_run (
     -- {truncated, bytes, preview} or {unwritable}). json, not jsonb, so the
     -- value reads back in the key order it was written in. Written only by lf.
     returned json,
-    -- The automations.delivery whose event started this run (lf only). No
-    -- foreign key: retention forgets deliveries that settled runs still name.
+    -- The automations.delivery whose arrival started this run (both hosts):
+    -- what a replay of it names. No foreign key: retention forgets deliveries
+    -- that settled runs still name.
     delivery_id uuid,
     -- The arrival mark (the latest automations.arrival seq) taken as the run
     -- lease was claimed, in the claim's write. While the lease is unexpired the
