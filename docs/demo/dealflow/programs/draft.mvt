@@ -1,9 +1,6 @@
-import { `@lf/gmail` as gmail, `@lf/attio` as attio, `@lf/slack` as slack } from adapters
-import { `Dev Loop Gmail` as gmailCred, `Dev Loop Attio` as attioCred, `Dev Loop Slack` as slackCred } from credentials
-
-mail = connect gmail using gmailCred
-crm  = connect attio using attioCred
-chat = connect slack using slackCred
+mail = connect `@lf/gmail` using acme_mail
+crm  = connect `@lf/attio` using acme_main
+chat = connect `@lf/slack` using acme_slack
 
 node Pitch: "the startup pitching us in this email" {
   company: <text> "the startup's name"
@@ -11,7 +8,7 @@ node Pitch: "the startup pitching us in this email" {
   summary: <text> "what the startup does, in one sentence"
 }
 
-function `Founder Intake`(msg: <mail-[:Message]->>) {
+function `Founder Intake`(msg: <mail-[:Messages]->>) {
   address = coalesce(Text.regexExtract(msg.From, "<(.+)>", 1), msg.From)
   founder = Text.trim(Text.regexExtract(msg.From, "^([^<]+)<", 1))
   domain  = Text.regexExtract(address, "@(.+)$", 1)
@@ -36,4 +33,4 @@ function `Founder Intake`(msg: <mail-[:Message]->>) {
   }
 }
 
-listen to mail { events: ["message_received"], labels: ["Dealflow"] } fire `Founder Intake`
+listen to mail-[m:Messages WHERE m.Labels CONTAINS "Dealflow"]-> fire `Founder Intake`

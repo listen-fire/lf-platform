@@ -12,11 +12,18 @@ DEMO="$(cd "$HERE/.." && pwd)"
 REPO="$(cd "$DEMO/../.." && pwd)"
 CAP="$HERE/.work/capture"
 MCP="$DEMO/scripts/mcp.sh"
-FAKE=http://localhost:6056
+FAKE="${FAKE_CHANNELS_URL:-http://localhost:6056}"   # the agent profile's fakes, unless the loop runs elsewhere
 mkdir -p "$CAP" "$DEMO/.work"
 
 # Gmail + Slack credentials (and Gmail's own proof automation, removed below).
 (cd "$REPO" && pnpm -s dev:gmail setup >/dev/null)
+# The mailbox's own label the listen names. Gmail carries a message's labels by
+# id (`Label_<n>`), so the email is delivered under that id.
+curl -s -X POST "$FAKE/gmail/v1/users/me/labels" -H 'content-type: application/json' -d '{"name":"Dealflow"}' >/dev/null
+DEALFLOW_LABEL=$(curl -s "$FAKE/gmail/v1/users/me/labels" | jq -er '.labels[] | select(.name == "Dealflow") | .id')
+# The program connects the site's names: acme_mail, acme_main, acme_slack.
+(cd "$REPO/apps/api" && TZ=utc npx ts-node --project tsconfig.dev.json --transpile-only \
+  -r dotenv/config -r tsconfig-paths/register "$HERE/acme_credentials.ts") >"$CAP/00_credentials.txt"
 
 # A key acting as the dev-loop team.
 (cd "$REPO/apps/api" && TZ=utc npx ts-node --project tsconfig.dev.json --transpile-only \
@@ -29,7 +36,7 @@ mkdir -p "$CAP" "$DEMO/.work"
 
 # The agent: read the systems, save the draft (refused), save the fix (live).
 "$MCP" getStarted '{}' >"$CAP/01_getStarted.txt"
-"$MCP" describeConnection '{"system":"attio","position":"-[:Companies]->"}' >"$CAP/02_describe_companies.txt"
+"$MCP" describeConnection '{"system":"attio","connection":"acme_main","position":"-[:Companies]->"}' >"$CAP/02_describe_companies.txt"
 "$MCP" saveAutomation "$(jq -nc --rawfile s "$HERE/programs/draft.mvt" '{source:$s, name:"Founder intake"}')" >"$CAP/10_save_draft.json"
 "$MCP" saveAutomation "$(jq -nc --rawfile s "$HERE/programs/fixed.mvt" '{source:$s, name:"Founder intake"}')" >"$CAP/11_save_fixed.json"
 jq -e '.ok == false' "$CAP/10_save_draft.json" >/dev/null || { echo "draft unexpectedly saved"; exit 1; }
@@ -43,10 +50,15 @@ pnpm -s dev:inject gmail-message --subject "Lunch on Friday?" --from "sam@friend
 for s in attio slack; do curl -s -X DELETE "$FAKE/admin/$s/state" >/dev/null; done
 
 pnpm -s dev:inject gmail-message --subject "Lumen Labs: raising our seed round" \
-  --from "Maya Chen <maya@lumenlabs.io>" --labels "INBOX,Dealflow" \
+  --from "Maya Chen <maya@lumenlabs.io>" --labels "INBOX,$DEALFLOW_LABEL" \
   --body "$(cat "$HERE/programs/founder_email.txt")" >"$CAP/20_inject.json"
 
-"$MCP" listRuns "{\"idOrName\":\"$MOVEMENT\"}" >"$CAP/30_runs.json"
+# The delivery queues its run; the drain starts it.
+for _ in $(seq 60); do
+  "$MCP" listRuns "{\"idOrName\":\"$MOVEMENT\"}" >"$CAP/30_runs.json"
+  jq -e '.runs | length > 0' "$CAP/30_runs.json" >/dev/null && break
+  sleep 1
+done
 RUN=$(jq -er '.runs[0].runId' "$CAP/30_runs.json")
 for _ in $(seq 60); do
   "$MCP" checkRun "{\"runId\":\"$RUN\"}" >"$CAP/31_check.json"

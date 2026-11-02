@@ -24,7 +24,7 @@ Needs `ANTHROPIC_API_KEY` in `apps/api/.env` (the runs make real model
 calls). The scripts need `jq`.
 
 ```bash
-pnpm dev:loop:agent                     # in its own terminal
+DEV_LOOP_MODELS=real pnpm dev:loop:agent   # in its own terminal; the loop fakes models otherwise
 pnpm dev:seed
 cd docs/demo/<video>
 ./capture.sh                            # the agent's loop over MCP, then the events and their runs

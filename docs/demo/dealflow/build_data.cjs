@@ -17,14 +17,15 @@ const read = (f) => JSON.parse(fs.readFileSync(path.join(CAP, f), 'utf8'));
 const draft = read('10_save_draft.json');
 const fixed = read('11_save_fixed.json');
 const run = read('40_inspect.json');
-const payload = run.sourceEvent.payload;
+// A 0.13 run starts from an arrival: the message as the Messages edge landed it.
+const message = run.sourceEvent.arrival.landing.fields;
 
 const data = {
   v1: fs.readFileSync(path.join(HERE, 'programs', 'draft.mvt'), 'utf8').trimEnd(),
   v2: fs.readFileSync(path.join(HERE, 'programs', 'fixed.mvt'), 'utf8').trimEnd(),
   diagnostics: draft.diagnostics,
   validatedUnder: draft.validatedUnder,
-  saved: { ok: fixed.ok, listeners: fixed.listeners.map((l) => ({ kind: l.kind, config: l.config })) },
+  saved: { ok: fixed.ok, listeners: fixed.listeners.map((l) => ({ kind: l.kind, plan: l.config.listen.plan })) },
   run: {
     status: run.status,
     committed: run.committed,
@@ -34,10 +35,10 @@ const data = {
     // The program makes one extraction (`extractOne(…, Pitch, { tier: 'quick' })`).
     extract: run.modelCalls > 0 ? { label: 'Pitch', target: 'quick tier' } : undefined,
     email: {
-      from: payload.from,
-      subject: payload.subject,
-      labels: payload.labels,
-      body: String(payload.bodyText).replace(/\\n/g, '\n'),
+      from: message.From,
+      subject: message.Subject,
+      labels: message.Labels,
+      body: String(message['Plain Body']).replace(/\\n/g, '\n'),
     },
     writes: run.writes.map((w) => ({ target: w.target, action: w.action, values: w.values })),
   },
