@@ -30,7 +30,7 @@ export async function resumeLimitPausedRun(
   const run = await getAutomationsQb(['trigger_run'])
     .selectFrom('trigger_run')
     .where('id', '=', runId)
-    .select(['status', 'diagnostics', 'limit_pause', 'cancel_requested_at'])
+    .select(['team_id', 'status', 'diagnostics', 'limit_pause', 'cancel_requested_at'])
     .executeTakeFirst();
   if (run === undefined) throw new MovementEngineError('MOVENG_RUNTIME', `run ${runId} not found`);
 
@@ -76,6 +76,7 @@ export async function resumeLimitPausedRun(
   let resumed = 0;
   await drainRun(hostedRunHost(), {
     runId,
+    teamId: run.team_id,
     leaves: { addresses: leaves.map((leaf) => leaf.address), reason: 'limit' },
     ...(lease !== undefined ? { lease } : {}),
     step: (request, settle) => {

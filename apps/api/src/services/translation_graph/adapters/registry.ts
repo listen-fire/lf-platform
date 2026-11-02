@@ -3,7 +3,6 @@
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { Adapter, AdapterManifest, BrandIcon } from 'movement-engine/public/adapter';
-import type { ConfigBlock, TextBlock } from 'movement-engine/public/adapter-config';
 
 import ExternalServiceType from '../../../generated/kysely/automations/ExternalServiceType';
 import { WRITE_METHODS } from 'movement-engine/public/adapter';
@@ -74,28 +73,19 @@ type AdapterFactory = (input: {
 const ADAPTER_FACTORIES: Record<string, AdapterFactory> = {
   // The knowledge graph — a module (@lf/kg) over the platform's own store.
   [KG_ADAPTER_TYPE]: moduleOnlyAdapterFactory(KG_ADAPTER_TYPE),
-  [ATTIO_ADAPTER_TYPE]: builtinAdapterFactory(ATTIO_ADAPTER_TYPE, ({ teamId, credentialsId }) => {
-    const { createAttioAdapter }: typeof import('./attio') = require('./attio');
-    return createAttioAdapter({ teamId, credentialsId });
-  }),
+  [ATTIO_ADAPTER_TYPE]: moduleOnlyAdapterFactory(ATTIO_ADAPTER_TYPE),
   // Affinity adapter — write target only (v3-output parity). Source-side
   // triggers (snapshot/poll) are deferred — Affinity has no v3 input — so it
   // appears as a target in the editor picker, not a source.
-  [AFFINITY_ADAPTER_TYPE]: builtinAdapterFactory(AFFINITY_ADAPTER_TYPE, ({ teamId, credentialsId }) => {
-    const { createAffinityAdapter }: typeof import('./affinity') = require('./affinity');
-    return createAffinityAdapter({ teamId, credentialsId });
-  }),
+  [AFFINITY_ADAPTER_TYPE]: moduleOnlyAdapterFactory(AFFINITY_ADAPTER_TYPE),
   // A module (@lf/native-valuations, platform-supplied); its BUILTIN_MODULES
   // line picks module or legacy.
   [NATIVE_VALUATIONS_ADAPTER_TYPE]: builtinAdapterFactory(NATIVE_VALUATIONS_ADAPTER_TYPE, ({ teamId, credentialsId }) => {
     const { createNativeValuationsAdapter }: typeof import('./native_valuations') = require('./native_valuations');
     return createNativeValuationsAdapter({ teamId, credentialsId });
   }),
-  // A module (@lf/slack); its BUILTIN_MODULES line picks module or legacy.
-  [SLACK_ADAPTER_TYPE]: builtinAdapterFactory(SLACK_ADAPTER_TYPE, ({ teamId, credentialsId }) => {
-    const { createSlackAdapter }: typeof import('./slack') = require('./slack');
-    return createSlackAdapter({ teamId, credentialsId });
-  }),
+  // A module (@lf/slack).
+  [SLACK_ADAPTER_TYPE]: moduleOnlyAdapterFactory(SLACK_ADAPTER_TYPE),
   // Telegram adapter — source (inbound messages + media) AND target (send a
   // message). Bot-token credential; inbound arrives by webhook
   // (preprocessInbound); outbound is the unified telegram:message, created
@@ -124,14 +114,7 @@ const ADAPTER_FACTORIES: Record<string, AdapterFactory> = {
   // Airtable adapter — read/write target plus webhook source. An optional
   // `base:` entry position (constructionArgs.base) scopes introspection to one
   // base, so a large workspace doesn't walk every base.
-  [AIRTABLE_ADAPTER_TYPE]: builtinAdapterFactory(AIRTABLE_ADAPTER_TYPE, ({ teamId, credentialsId, constructionArgs }) => {
-    const { createAirtableAdapter }: typeof import('./airtable') = require('./airtable');
-    return createAirtableAdapter({
-      teamId,
-      credentialsId,
-      ...(constructionArgs?.base !== undefined ? { base: constructionArgs.base } : {}),
-    });
-  }),
+  [AIRTABLE_ADAPTER_TYPE]: moduleOnlyAdapterFactory(AIRTABLE_ADAPTER_TYPE),
   // Google Sheets adapter — append-only write target (v3-output parity).
   // Source-side triggers (snapshot/poll) are deferred — Sheets has no v3
   // input — so it appears as a target in the editor picker, not a source.
@@ -379,65 +362,6 @@ export function siblingKindsForAdapter(kind: string): string[] {
   );
   if (!siblings.includes(kind)) siblings.push(kind);
   return siblings;
-}
-
-/**
- * The trigger-config BLOCK list an adapter declares for `kind`, or null when
- * the kind has no registered adapter or declares no editable config. The full
- * {@link ConfigBlock} union (value + presentation + action blocks) — the host
- * renders all of them, the validator walks only the value ones. Read straight
- * off the static manifest — construction-free. Accepts a slug or trigger-kind
- * alias.
- */
-export function getTriggerConfigSchema(input: {
-  kind: string;
-  teamId: TeamId;
-}): readonly ConfigBlock[] | null {
-  return getAdapterManifest(input.kind)?.triggerConfig ?? null;
-}
-
-/**
- * The adapter's INBOUND ROUTING KEY block, or null when it declares none —
- * the generic, de-named successor to `inboundChannel === 'forwarding-address'`.
- * An adapter whose inbound events arrive addressed by a config value (email's
- * plus-suffix `key`) marks that `triggerConfig` text/slug block
- * `routingKey: true`; provisioning, the listen vocabulary, and inbound dispatch
- * all route off this one declaration. Accepts a slug or trigger-kind alias.
- */
-export function adapterInboundRoutingKey(
-  adapterType: string,
-): TextBlock | null {
-  const blocks = getAdapterManifest(adapterType)?.triggerConfig;
-  for (const block of blocks ?? []) {
-    if ((block.kind === 'text' || block.kind === 'slug') && block.routingKey === true) {
-      return block;
-    }
-  }
-  return null;
-}
-
-/**
- * The address inbound events for this listen have to be sent TO, composed from
- * the routing-key block's own `prefix` + value + `suffix` (email:
- * `<local>+<key>@<domain>`, from `INBOUND_EMAIL_ADDRESS`). Null for an adapter
- * with no routing key, or a config
- * carrying no value for it.
- *
- * It lives beside the declaration it is composed from because more than one
- * reader needs it: provisioning surfaces it on the listener row, and the story
- * renderer says it out loud in the trigger's own sentence. A second spelling of
- * "how the address is built" is how two surfaces start telling a user two
- * different addresses.
- */
-export function inboundAddressFor(
-  adapterType: string,
-  config: Record<string, unknown>,
-): string | null {
-  const field = adapterInboundRoutingKey(adapterType);
-  if (!field) return null;
-  const value = config[field.key];
-  if (typeof value !== 'string' || value.length === 0) return null;
-  return `${field.prefix ?? ''}${value}${field.suffix ?? ''}`;
 }
 
 /** Registered adapter types — for diagnostics, agent-facing schema introspection, etc. */

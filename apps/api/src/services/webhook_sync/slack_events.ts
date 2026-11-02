@@ -29,7 +29,7 @@ import { getAutomationsQb } from '../../lib/kysely';
 import { logger } from 'movement-engine/public/log';
 import { teamIdSchema } from '../../lib/team_id';
 import { resolveAdapter } from '../translation_graph/adapters/resolve';
-import { SLACK_ADAPTER_TYPE } from '../translation_graph/adapters/slack';
+import { SLACK_ADAPTER_TYPE } from '@listen-fire/slack/types';
 import { deliverArrivals } from '../inbound/listen_door';
 import { capturedRequest } from '../inbound/captured_request';
 import { builtinModuleRequestKeeping } from '../translation_graph/adapters/builtin_modules';

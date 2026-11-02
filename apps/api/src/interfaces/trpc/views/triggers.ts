@@ -41,19 +41,10 @@ import {
   type AutomationStatus,
 } from '../../../lib/automation/status';
 import {
-  getTriggerConfigSchema,
-  siblingKindsForAdapter,
   listAdapterCapabilities,
   adapterRequiredCredentialType,
   resolveAdapterSlug,
 } from '../../../services/translation_graph/adapters/registry';
-import {
-  zodFromConfigBlocks,
-  firstTriggerConfigError,
-  isValueBlock,
-  type ConfigBlock,
-} from 'movement-engine/public/adapter-config';
-import { findSiblingTriggerByConfigValue } from '../../../services/translation_graph/storage/tg_table';
 import {
   parseRunMode,
   type TriggerRunMode,
@@ -507,138 +498,6 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
           return () => queue.off('message', onMessage);
         });
       }),
-
-    /**
-     * Read a trigger's editable configuration: the adapter-declared config
-     * BLOCKS (value blocks with label/help/widget + prefix/suffix,
-     * presentation `section` blocks, action affordances) plus the current
-     * values from `trigger.config` (keyed by each value block's `key`). The
-     * automation detail page walks the blocks and renders the rich form. An
-     * empty `blocks` array means the trigger kind has no user-editable settings
-     * (the page hides the section).
-     *
-     */
-    getTriggerConfig: userProcedure
-      .input(z.object({ id: z.string().min(1) }))
-      .query(
-        async ({
-          input,
-        }): Promise<{
-          blocks: ConfigBlock[];
-          values: Record<string, string>;
-        }> => {
-          const ctx = currentContext();
-          const teamId = ctx.user.teamId as TeamId;
-          const trigger = await getAutomationsQb(['trigger'])
-            .selectFrom('trigger')
-            .where('id', '=', input.id as TriggerId)
-            .where('team_id', '=', teamId)
-            .select(['kind', 'config'])
-            .executeTakeFirst();
-          if (!trigger) throw new Error(`Automation ${input.id} not found`);
-
-          const blocks = getTriggerConfigSchema({ kind: trigger.kind, teamId });
-          if (!blocks || blocks.length === 0) {
-            return { blocks: [], values: {} };
-          }
-          const config = (trigger.config ?? {}) as Record<string, unknown>;
-          const values: Record<string, string> = {};
-          for (const block of blocks) {
-            if (!isValueBlock(block)) continue;
-            const raw = config[block.key];
-            values[block.key] = raw == null ? '' : String(raw);
-          }
-          return { blocks: [...blocks], values };
-        },
-      ),
-
-    /**
-     * Persist edited trigger configuration. Validates the submitted
-     * values against the adapter's declared schema, enforces any
-     * `unique` field across sibling kinds (excluding self), then merges
-     * the validated values into `trigger.config` — structural keys the
-     * form doesn't manage (e.g. `destination`) are preserved. Team-scoped;
-     * a cross-team id returns the same not-found error a missing row would.
-     *
-     */
-    updateTriggerConfig: userProcedure
-      .input(
-        z.object({
-          id: z.string().min(1),
-          values: z.record(z.string(), z.unknown()),
-        }),
-      )
-      .mutation(
-        async ({
-          input,
-        }): Promise<{ id: string; values: Record<string, string> }> => {
-          const ctx = currentContext();
-          const teamId = ctx.user.teamId as TeamId;
-          const trigger = await getAutomationsQb(['trigger'])
-            .selectFrom('trigger')
-            .where('id', '=', input.id as TriggerId)
-            .where('team_id', '=', teamId)
-            .select(['id', 'kind', 'config'])
-            .executeTakeFirst();
-          if (!trigger) throw new Error(`Automation ${input.id} not found`);
-
-          const blocks = getTriggerConfigSchema({ kind: trigger.kind, teamId });
-          if (!blocks || blocks.length === 0) {
-            throw new Error('This automation has no editable settings.');
-          }
-
-          const parsed = zodFromConfigBlocks(blocks).safeParse(input.values);
-          if (!parsed.success) {
-            throw new Error(firstTriggerConfigError(parsed.error));
-          }
-          const validated = parsed.data as Record<string, unknown>;
-
-          // Enforce adapter-declared uniqueness across the kinds that
-          // share this adapter (e.g. all email-style inbound kinds). Only
-          // value blocks carry `key`/`unique`; presentation/action blocks
-          // contribute nothing here.
-          const siblingKinds = siblingKindsForAdapter(trigger.kind);
-          for (const block of blocks) {
-            if (!isValueBlock(block) || block.kind === 'select' || !block.unique) {
-              continue;
-            }
-            const value = validated[block.key];
-            if (value == null || value === '') continue;
-            const conflict = await findSiblingTriggerByConfigValue({
-              teamId,
-              kinds: siblingKinds,
-              fieldKey: block.key,
-              value: String(value),
-              excludeTriggerId: trigger.id as unknown as string,
-            });
-            if (conflict) {
-              throw new Error(
-                `"${String(value)}" is already in use by another automation. Pick a different ${block.label.toLowerCase()}.`,
-              );
-            }
-          }
-
-          const existing = (trigger.config ?? {}) as Record<string, unknown>;
-          const nextConfig = { ...existing, ...validated };
-          await getAutomationsQb(['trigger'])
-            .updateTable('trigger')
-            .set({
-              config: sql`${JSON.stringify(nextConfig)}::jsonb` as unknown as never,
-              updated_at: sql`now()`,
-            })
-            .where('id', '=', trigger.id as TriggerId)
-            .where('team_id', '=', teamId)
-            .execute();
-
-          const values: Record<string, string> = {};
-          for (const block of blocks) {
-            if (!isValueBlock(block)) continue;
-            const raw = validated[block.key];
-            values[block.key] = raw == null ? '' : String(raw);
-          }
-          return { id: trigger.id as unknown as string, values };
-        },
-      ),
 
     /**
      * Rename a trigger (the user-facing name of an automation). The

@@ -41,14 +41,13 @@ import type {
   StoryViewType,
 } from 'story-view/view';
 
-import { getAdapterManifest, inboundAddressFor } from '../adapters/registry';
+import { getAdapterManifest } from '../adapters/registry';
 import { resolveEventPhrase } from '../vocabulary';
 import { movementCatalogForTeam, type TeamMovementCatalog } from './catalog';
 import { routeOf } from './language_route';
 import { storyFromAnalysis } from './story_from_analysis';
 import {
   getMovementRow,
-  listDerivedTriggerRows,
   type MovementValidityStatus,
 } from './store';
 import { movementSourceHash } from './version_store';
@@ -104,13 +103,8 @@ export function joinStoryView(input: {
   movement: StoryViewMovement;
   story: StoryIR;
   vocabulary: StoryVocabulary;
-  /** What the platform PROVISIONED for this file's listens. Absent for a story
-   *  projected from source alone — the sentence then says only what the script
-   *  itself can support. */
-  listeners?: StoryProvisionedListener[];
 }): StoryView {
   const { story, vocabulary } = input;
-  const listeners = input.listeners ?? [];
 
   const systemOf = (adapterType?: string): StoryViewSystem | null => {
     if (adapterType === undefined) return null;
@@ -131,12 +125,7 @@ export function joinStoryView(input: {
     const system = systemOf(trigger.adapterType);
     return {
       id: trigger.id,
-      sentence: triggerSentence({
-        trigger,
-        system,
-        vocabulary,
-        provisioned: provisionedFor(trigger, listeners),
-      }),
+      sentence: triggerSentence({ trigger, system, vocabulary }),
       system,
       ...(trigger.path !== undefined ? { path: trigger.path } : {}),
       ...(trigger.lane !== undefined ? { lane: trigger.lane } : {}),
@@ -377,73 +366,21 @@ function eachChip(story: StoryIR, visit: (chip: Chip) => void): void {
 }
 
 /**
- * What the platform made when this file went live, per `listen`. The script
- * cannot know any of it: an inbound address exists because something
- * provisioned it, and a movement that has never been saved has none.
- */
-export interface StoryProvisionedListener {
-  /** The channel — the source adapter slug. */
-  kind: string;
-  /** The movement this listener fires. */
-  movementName: string | null;
-  /** The listener's own routing config, as persisted. */
-  config: Record<string, unknown>;
-  /** Where events for this listener have to be sent (email's
-   *  `<local>+<key>@<domain>`), or null for a channel with no such address. */
-  inboundAddress: string | null;
-}
-
-/**
- * The listener a story trigger was provisioned as — matched on what both sides
- * actually say: the channel, the movement fired, and every narrowing key the
- * listen declared appearing with the same value in the persisted config. Two
- * listens on one channel differ by exactly those keys, so nothing else is
- * needed to tell them apart, and a listener whose config no longer agrees with
- * the script (a save that has not shipped) matches nothing rather than lending
- * its address to a listen that never had one.
- */
-function provisionedFor(
-  trigger: StoryIR['triggers'][number],
-  listeners: StoryProvisionedListener[],
-): StoryProvisionedListener | undefined {
-  if (trigger.adapterType === undefined) return undefined;
-  return listeners.find(
-    (listener) =>
-      listener.kind === trigger.adapterType
-      && (listener.movementName === null || listener.movementName === trigger.fires)
-      && Object.entries(trigger.narrowing).every(
-        ([key, value]) => listener.config[key] === value,
-      ),
-  );
-}
-
-/**
  * The trigger's sentence: the adapter's own declared phrasing where it has
  * one, otherwise a generic composition from its declared display name. The
  * listen's config — its event selection plus its narrowing keys, exactly as
  * the author wrote them — is what the templates' `{slot}` tokens fill from,
  * which is the same feed a persisted trigger row gives `describeSource`.
- *
- * The PROVISIONED facts join the same slots. An email listen carries a routing
- * tag; what a person needs to be told is the address that tag mints, and only
- * the platform knows it. So it fills an `{address}` slot like any other, the
- * adapter's ordered templates decide whether saying it is the better sentence,
- * and a movement with nothing provisioned yet falls through to the phrasing
- * that is true of the script alone.
- *
  */
 function triggerSentence(input: {
   trigger: StoryIR['triggers'][number];
   system: StoryViewSystem | null;
   vocabulary: StoryVocabulary;
-  provisioned?: StoryProvisionedListener | undefined;
 }): string {
   const { trigger, system } = input;
-  const address = input.provisioned?.inboundAddress ?? null;
   const config: Record<string, unknown> = {
     ...trigger.narrowing,
     ...(trigger.events !== undefined ? { events: trigger.events } : {}),
-    ...(address !== null ? { address } : {}),
   };
   const declared =
     trigger.adapterType !== undefined
@@ -684,7 +621,6 @@ export async function projectStoryView(row: {
       movement: { ...movement, validity: result.story.movement.validity },
       story: result.story,
       vocabulary: storyVocabularyOf(teamCatalog),
-      listeners: await provisionedListeners(row.id),
     }),
   };
 }
@@ -701,23 +637,6 @@ function storyProblemOf(diagnostic: Diagnostic): StoryProblem {
     severity: diagnosticSeverity(diagnostic),
     span: diagnostic.span,
   };
-}
-
-/**
- * The listeners this movement's last shipped save provisioned. A file that has
- * never gone live has none, and the trigger sentence says only what the script
- * supports — which is the honest answer, not a shortcoming to paper over.
- */
-async function provisionedListeners(
-  movementId: string,
-): Promise<StoryProvisionedListener[]> {
-  const rows = await listDerivedTriggerRows(movementId);
-  return rows.map((row) => ({
-    kind: row.kind,
-    movementName: row.firedMovementName ?? null,
-    config: row.config,
-    inboundAddress: inboundAddressFor(row.kind, row.config),
-  }));
 }
 
 /**

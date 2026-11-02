@@ -217,6 +217,6 @@ export async function resumeTimerParkedRun(
   if (due.length === 0) return 'done';
   const step = await parkedRunStep({ runId: run.runId, ...(lease !== undefined ? { lease } : {}), log: 'TimerResume' });
   if (step === null) return 'done';
-  const drained = await drainDueTimers(host, { runId: run.runId, dueBy: now.toISOString(), ...(lease !== undefined ? { lease } : {}), step });
+  const drained = await drainDueTimers(host, { runId: run.runId, teamId: run.teamId, dueBy: now.toISOString(), ...(lease !== undefined ? { lease } : {}), step });
   return drained === 'leaseLost' ? 'lease_lost' : 'done';
 }

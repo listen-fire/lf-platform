@@ -389,7 +389,7 @@ export const BUILTIN_MODULES: BuiltinModuleTable = {
     load: () => {
       if (platformSlackModule === undefined) {
         const { slackModuleWith }: typeof import('@listen-fire/slack') = require('@listen-fire/slack');
-        const { platformSlackChat, platformSlackFile }: typeof import('./slack') = require('./slack');
+        const { platformSlackChat, platformSlackFile }: typeof import('./slack/platform') = require('./slack/platform');
         platformSlackModule = slackModuleWith({
           chat: platformSlackChat,
           readFile: (ref, ctx) => platformSlackFile(ref, teamIdSchema.parse(ctx.config.tenant)),

@@ -32,7 +32,7 @@ import { inboundBodyRefusals, sendInboundAnswer } from './inbound_answer';
 /** The doors over any store: the platform's below, an in-memory one in the
  *  inbound contract suite. The models door is mounted only for a host that
  *  answers it (`models`). */
-export function createAdapterDoorsRouter<Captured>(store: PushStore<Captured>, models?: HostModelCall): ReturnType<typeof Router> {
+export function createAdapterDoorsRouter(store: PushStore, models?: HostModelCall): ReturnType<typeof Router> {
   const router: ReturnType<typeof Router> = Router();
   // The doors are self-authorising (the presented credential is the auth), so
   // they mount before the app's JSON parser and bring their own. A body over the

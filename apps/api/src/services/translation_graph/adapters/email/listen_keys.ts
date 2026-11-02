@@ -7,6 +7,7 @@
 import { lastEdgeOf, memberPlans, type ListenPlan } from 'engine-contracts';
 import type { Expression } from 'movement-lang/expression/types';
 import { EMAIL_ADAPTER_NAMES, EMAIL_KEY_FIELD, EMAILS_EDGE } from '@listen-fire/email/types';
+import { inboundRoutingAddress } from '@listen-fire/email/address';
 
 /** Whether `plan` listens on the shared inbox's mail. */
 export function listensOnSharedInbox(plan: ListenPlan): boolean {
@@ -78,4 +79,14 @@ function traversalKeys(traversal: ListenPlan, keyIds: ReadonlySet<string>): stri
 export function keylessInboxListen(plan: ListenPlan): string | null {
   if (!listensOnSharedInbox(plan) || inboxKeysOf(plan).length > 0) return null;
   return `the listen that fires ${plan.movement} hears ${EMAILS_EDGE} on the inbox every team shares without naming its key: mail is routed to a team by the plus-suffix it was sent to, so it would hear nothing. Name the key in its WHERE (\`${EMAILS_EDGE} WHERE e.${EMAIL_KEY_FIELD} == "deals"\` hears mail sent to inbox+deals@…)`;
+}
+
+/** Where mail for `plan` is sent (`inbox+deals@example.com`), one address per
+ *  key it names, or null when it names none or the deployment has no inbound
+ *  address. What the listeners panel tells a person to send mail to. */
+export function inboxAddressesOf(plan: ListenPlan, fieldIds: Readonly<Record<string, Readonly<Record<string, string>>>> = {}): string | null {
+  const address = inboundRoutingAddress();
+  if (address === null || !listensOnSharedInbox(plan)) return null;
+  const keys = inboxKeysOf(plan, fieldIds);
+  return keys.length === 0 ? null : keys.map((key) => `${address.prefix}${key}${address.suffix}`).join(', ');
 }

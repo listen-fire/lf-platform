@@ -78,7 +78,7 @@ import { unsafeCurrentContext } from '../../../services/context';
 import { logger } from 'movement-engine/public/log';
 import { recordUserMilestone, recordTeamMilestone } from '../../../lib/journey';
 import { getAutomationsQb } from '../../../lib/kysely';
-import { inboundAddressFor } from '../adapters/registry';
+import { inboxAddressesOf } from '../adapters/email/listen_keys';
 import { enqueueWork } from '../../work/store';
 import type { WorkKind } from '../../work/kinds';
 import { syncListenSubscriptions } from './listen_subscriptions';
@@ -238,6 +238,12 @@ function configKeyOf(
     return `${config['base']}:${config['table']}`;
   }
   return null;
+}
+
+/** Where a person sends mail for this listen, when it hears the shared inbox. */
+function inboundAddressOf(config: Record<string, unknown>): string | null {
+  const planned = listenConfigSchema.safeParse(config);
+  return planned.success ? inboxAddressesOf(planned.data.listen.plan, planned.data.listen.fieldIds) : null;
 }
 
 /** The discriminator in SURFACE spelling — what the listener summary
@@ -519,7 +525,7 @@ async function reconcileDerivedTriggers(input: {
       credentialsId: desired.credentialsId,
       config: desired.config,
       configKey,
-      inboundAddress: inboundAddressFor(desired.adapter, desired.config),
+      inboundAddress: inboundAddressOf(desired.config),
       runMode,
       reused: kept !== undefined,
     });
@@ -1186,7 +1192,7 @@ function toListenerInfo(row: DerivedTriggerRow, pauses: ReadonlyMap<string, List
     kind: row.kind,
     config: row.config,
     configKey,
-    inboundAddress: inboundAddressFor(row.kind, row.config),
+    inboundAddress: inboundAddressOf(row.config),
     movementName:
       row.firedMovementName ??
       (nameParts.length >= 3 ? nameParts[nameParts.length - 1] : null),

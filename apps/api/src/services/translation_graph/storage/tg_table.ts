@@ -121,35 +121,6 @@ export async function findTriggerByInboundKey(input: {
 }
 
 /**
- * Uniqueness lookup for adapter-declared `unique` config fields: is there
- * another trigger on the team (within the given sibling kinds) whose
- * `config->><fieldKey>` already equals `value`, excluding the trigger
- * being edited? Returns the conflicting trigger id, or null when free.
- *
- * `fieldKey` is interpolated as a bound parameter — it comes from the
- * adapter's own declared schema, never from user input.
- */
-export async function findSiblingTriggerByConfigValue(input: {
-  teamId: string;
-  kinds: string[];
-  fieldKey: string;
-  value: string;
-  excludeTriggerId: string;
-}): Promise<{ id: string } | null> {
-  if (input.kinds.length === 0) return null;
-  const row = await getAutomationsQb(['trigger'])
-    .selectFrom('trigger')
-    .where('team_id', '=', input.teamId as TeamId)
-    .where('kind', 'in', input.kinds)
-    .where(sql`config->>${input.fieldKey}`, '=', input.value)
-    .where('id', '!=', input.excludeTriggerId as unknown as TriggerId)
-    .select(['id'])
-    .executeTakeFirst();
-  if (!row) return null;
-  return { id: row.id as unknown as string };
-}
-
-/**
  * Webhook / mutation-side dispatch lookup: find every trigger on a team
  * whose `kind` is in the given set. Used by the webhook handler (to
  * fan out provider-keyed triggers) and the mutation dispatcher (to find

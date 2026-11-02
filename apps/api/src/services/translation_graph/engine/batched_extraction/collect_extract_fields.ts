@@ -106,9 +106,15 @@ function fieldTypeForTargetField(
         enumOptions: fd.enumValues ?? [],
       };
     case 'reference':
+    // A named scalar (an email, a URL) is text to the model.
+    case 'owned':
       return { type: { kind: 'string' } };
     case 'file':
       return { type: { kind: 'file' } };
+    // A field holding another record's fields is structured data, not a
+    // scalar the model fills in.
+    case 'record':
+      return { type: { kind: 'json' } };
   }
 }
 
