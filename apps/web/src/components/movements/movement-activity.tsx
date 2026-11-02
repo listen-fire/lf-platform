@@ -368,6 +368,12 @@ function EventsReceived({
     { refetchInterval: 15_000, refetchOnWindowFocus: true },
   );
 
+  // A kept request is the team admins' to read (each read recorded), so
+  // only they are offered it.
+  const viewer = trpc.views.teamMembers.overview.useQuery();
+  const isAdmin = viewer.data?.viewer.access === "write";
+  const shown = trpc.views.triggers.showDeliveryRequest.useMutation();
+
   const replay = trpc.views.triggers.replayDelivery.useMutation({
     onSuccess: () => {
       void utils.views.movement.events.invalidate({ movementId });
@@ -433,6 +439,18 @@ function EventsReceived({
                       </span>
                     )}
                   </span>
+                  {deliveryId !== null && isAdmin && (
+                    <button
+                      type="button"
+                      disabled={shown.isLoading}
+                      onClick={() => shown.mutate({ deliveryId })}
+                      className="shrink-0 rounded-lg border border-gray-200 px-2.5 py-1 text-[12px] font-medium text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      data-testid={`show-request-${evt.id}`}
+                      title="Show the request this delivery came as. Your read is recorded."
+                    >
+                      Show request
+                    </button>
+                  )}
                   {deliveryId !== null && (
                     <button
                       type="button"
@@ -456,6 +474,30 @@ function EventsReceived({
               );
             })}
           </ul>
+          {shown.data?.outcome === "refused" && (
+            <div
+              className="border-t border-gray-100 px-4 py-2 text-[12px] text-red-600"
+              data-testid="show-request-refused"
+            >
+              {shown.data.reason}
+            </div>
+          )}
+          {shown.data?.outcome === "shown" && (
+            <pre
+              className="max-h-80 overflow-auto border-t border-gray-100 px-4 py-2 text-[11px] text-gray-700"
+              data-testid="show-request-kept"
+            >
+              {JSON.stringify(shown.data.kept, null, 2)}
+            </pre>
+          )}
+          {shown.error && (
+            <div
+              className="border-t border-gray-100 px-4 py-2 text-[12px] text-red-600"
+              data-testid="show-request-error"
+            >
+              {shown.error.message}
+            </div>
+          )}
           {replay.data?.outcome === "refused" && (
             <div
               className="border-t border-gray-100 px-4 py-2 text-[12px] text-red-600"

@@ -109,27 +109,23 @@ function starterSource(snapshot: CatalogSnapshot): string {
   if (adapter === undefined) return FALLBACK_SOURCE;
   const schemas = snapshot.adapters[adapter]?.schemas ?? {};
   const schema = schemas[credentialName] ?? Object.values(schemas)[0];
-  const positions = Object.keys(schema?.positions ?? {});
-  const position = positions.includes("message") ? "message" : positions[0];
-  if (position === undefined) return FALLBACK_SOURCE;
-  // A type names its edge as an address ('.' is for properties); a name that
-  // isn't identifier-safe wears backticks, as anywhere else.
-  const positionRef = /^[A-Za-z_]\w*$/.test(position) ? position : `\`${position}\``;
-  // The listener makes the starter a complete automation: events on the
-  // source fire the movement. Channels with routing keys get one.
-  const listenConfig = snapshot.adapters[adapter]?.triggerConfig?.includes("key")
-    ? ' { key: "my-movement" }'
-    : "";
+  // The listener makes the starter a complete automation: it listens to the
+  // first edge off the connection its module announces arrivals on.
+  const listened = Object.entries(schema?.collections ?? {}).find(([, collection]) => collection.listenable === true);
+  if (listened === undefined) return FALLBACK_SOURCE;
+  const [edge, collection] = listened;
+  // An edge name that isn't identifier-safe wears backticks, as anywhere else.
+  const edgeRef = /^[A-Za-z_]\w*$/.test(edge) ? edge : `\`${edge}\``;
   return `import { ${adapter} } from adapters
 import { ${credentialName} } from credentials
 
-source = ${adapter}(credentials: ${credentialName})
+source = connect ${adapter} using ${credentialName}
 
-movement my_movement(item: <source-[:${positionRef}]->>) {
-  # describe what should happen for each ${position}
+function my_movement(item: <source-[:${edgeRef}]->>) {
+  # describe what should happen for each ${collection.target}
 }
 
-listen to source${listenConfig} fire my_movement
+listen to source-[:${edgeRef}]-> fire my_movement
 `;
 }
 

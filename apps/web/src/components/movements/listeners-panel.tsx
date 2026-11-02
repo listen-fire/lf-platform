@@ -50,6 +50,10 @@ export interface ActiveListen {
   /** Adapter slug from the instance's construction, when resolvable. */
   adapter: string | null;
   configKey: string | null;
+  /** A listen on a traversal (`listen to x-[:E]-> fire f`), which the server
+   *  keys by its planned pipeline: matched to a row of its movement whatever
+   *  that row's key. */
+  traversal: boolean;
   movement: string;
   /** 1-based source lines the statement spans. */
   startLine: number;
@@ -138,11 +142,16 @@ export function activeListensOf(source: string): ActiveListen[] | null {
       instance: listen.instance,
       adapter: adapters.get(listen.instance) ?? null,
       configKey: configKeyOf(listen),
+      traversal: listen.path !== undefined,
       movement: listen.movement,
       startLine: listen.span.start.line,
       endLine: listen.span.end.line,
     }));
 }
+
+/** How the server keys a planned listen's row: its pipeline,
+ *  `listen:<file>:<movement>:<digest>`, which the script cannot spell. */
+const PLANNED_LISTEN_PREFIX = "listen:";
 
 const COMMENT_PREFIX = /^(\s*)#\s?/;
 const COMMENTED_LISTEN_START = /^\s*#\s?listen\s/;
@@ -281,7 +290,9 @@ export function ListenersPanel(props: ListenersPanelProps) {
     const remaining = [...serverListeners];
     return (active ?? []).map((listen) => {
       const index = remaining.findIndex(
-        (s) => s.movementName === listen.movement && s.configKey === listen.configKey,
+        (s) =>
+          s.movementName === listen.movement &&
+          (listen.traversal ? s.configKey?.startsWith(PLANNED_LISTEN_PREFIX) === true : s.configKey === listen.configKey),
       );
       const server = index >= 0 ? remaining.splice(index, 1)[0] : null;
       return { listen, server };
