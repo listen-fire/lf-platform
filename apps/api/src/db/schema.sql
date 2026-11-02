@@ -3781,7 +3781,9 @@ CREATE TABLE automations.arrival_unjudged (
     movement text NOT NULL,
     delivery_id text,
     edge text NOT NULL,
+    adapter text,                          -- the module the arrival came from; null on a fact kept before 0.13.x kept it
     record_id text,
+    landing jsonb,                         -- what landed, { recordId?, recordType?, fields }, as its module reported it
     reason text NOT NULL,
     cause text,
     noted_at timestamptz NOT NULL,

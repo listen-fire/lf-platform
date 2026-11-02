@@ -5,6 +5,7 @@ import type { default as PublicInboxTable } from './PublicInbox';
 import type { default as JoinPendingTable } from './JoinPending';
 import type { default as TelegramTokenTable } from './TelegramToken';
 import type { default as InboundCheckpointTable } from './InboundCheckpoint';
+import type { default as ReleaseSeenTable } from './ReleaseSeen';
 import type { default as MovementStoryTokenTable } from './MovementStoryToken';
 import type { default as SystemEventTable } from './SystemEvent';
 import type { default as ExposedFileTable } from './ExposedFile';
@@ -14,16 +15,20 @@ import type { default as MovementVersionTable } from './MovementVersion';
 import type { default as JoinBranchExportTable } from './JoinBranchExport';
 import type { default as AdapterAwaitTable } from './AdapterAwait';
 import type { default as PhoneVerificationTable } from './PhoneVerification';
+import type { default as WriteLedgerTable } from './WriteLedger';
 import type { default as RemoteAdapterTable } from './RemoteAdapter';
 import type { default as MovementTable } from './Movement';
 import type { default as MovementIssueTable } from './MovementIssue';
 import type { default as PhoneNumberTable } from './PhoneNumber';
 import type { default as TeamSettingsTable } from './TeamSettings';
 import type { default as EventReceiptTable } from './EventReceipt';
+import type { default as WaitRowTable } from './WaitRow';
 import type { default as WorkTable } from './Work';
 import type { default as CallbackTable } from './Callback';
 import type { default as LfMovementsListingTable } from './LfMovementsListing';
+import type { default as ArrivalTable } from './Arrival';
 import type { default as TriggerRunTable } from './TriggerRun';
+import type { default as ArrivalUnjudgedTable } from './ArrivalUnjudged';
 import type { default as TriggerTable } from './Trigger';
 import type { default as AuditLogTable } from './AuditLog';
 import type { default as TriggerEventTable } from './TriggerEvent';
@@ -35,12 +40,15 @@ import type { default as ModuleProcessesTable } from './ModuleProcesses';
 import type { default as PlatformOwnedTokenTable } from './PlatformOwnedToken';
 import type { default as ParkLibrarySourceTable } from './ParkLibrarySource';
 import type { default as ConnectTokenTable } from './ConnectToken';
+import type { default as ListenStateTable } from './ListenState';
 import type { default as DeployCheckTable } from './DeployCheck';
 import type { default as GoogleGrantedItemTable } from './GoogleGrantedItem';
 import type { default as TelegramIdentityTable } from './TelegramIdentity';
 import type { default as DeliveryTable } from './Delivery';
 import type { default as OutboundEmailTable } from './OutboundEmail';
 import type { default as TeamEngineTable } from './TeamEngine';
+import type { default as ArrivalIdentityTable } from './ArrivalIdentity';
+import type { default as WaitSeenTable } from './WaitSeen';
 import type { default as WebhookSubscriptionTable } from './WebhookSubscription';
 
 export default interface AutomationsSchema {
@@ -51,6 +59,8 @@ export default interface AutomationsSchema {
   telegram_token: TelegramTokenTable;
 
   inbound_checkpoint: InboundCheckpointTable;
+
+  release_seen: ReleaseSeenTable;
 
   movement_story_token: MovementStoryTokenTable;
 
@@ -70,6 +80,8 @@ export default interface AutomationsSchema {
 
   phone_verification: PhoneVerificationTable;
 
+  write_ledger: WriteLedgerTable;
+
   remote_adapter: RemoteAdapterTable;
 
   movement: MovementTable;
@@ -82,13 +94,19 @@ export default interface AutomationsSchema {
 
   event_receipt: EventReceiptTable;
 
+  wait_row: WaitRowTable;
+
   work: WorkTable;
 
   callback: CallbackTable;
 
   lf_movements_listing: LfMovementsListingTable;
 
+  arrival: ArrivalTable;
+
   trigger_run: TriggerRunTable;
+
+  arrival_unjudged: ArrivalUnjudgedTable;
 
   trigger: TriggerTable;
 
@@ -112,6 +130,8 @@ export default interface AutomationsSchema {
 
   connect_token: ConnectTokenTable;
 
+  listen_state: ListenStateTable;
+
   deploy_check: DeployCheckTable;
 
   google_granted_item: GoogleGrantedItemTable;
@@ -123,6 +143,10 @@ export default interface AutomationsSchema {
   outbound_email: OutboundEmailTable;
 
   team_engine: TeamEngineTable;
+
+  arrival_identity: ArrivalIdentityTable;
+
+  wait_seen: WaitSeenTable;
 
   webhook_subscription: WebhookSubscriptionTable;
 }

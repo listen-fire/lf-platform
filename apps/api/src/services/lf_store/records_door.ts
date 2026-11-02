@@ -42,7 +42,12 @@ export interface UnjudgedArrival {
   movement: string;
   deliveryId: string | null;
   edge: string;
+  /** The module the arrival came from; null on a fact kept before it was kept. */
+  adapter: string | null;
   recordId: string | null;
+  /** What landed, as its module reported it: `@lf/system` knows its own
+   *  `Arrival Not Judged` events by it. */
+  landing: unknown;
   reason: string;
   cause: string | null;
   at: string;
@@ -54,9 +59,10 @@ export interface UnjudgedArrival {
 export async function keepUnjudgedIn(exec: Exec, scope: LfTenant, fact: UnjudgedArrival): Promise<boolean> {
   const { rows } = await sql`
     insert into automations.arrival_unjudged
-      (team_id, pipeline, arrival, file, movement, delivery_id, edge, record_id, reason, cause, noted_at, attempt)
+      (team_id, pipeline, arrival, file, movement, delivery_id, edge, adapter, record_id, landing, reason, cause, noted_at, attempt)
     values (${scope.tenant}::uuid, ${fact.pipeline}::text, ${fact.arrival}::text, ${fact.file}::text, ${fact.movement}::text,
-            ${fact.deliveryId}::text, ${fact.edge}::text, ${fact.recordId}::text, ${fact.reason}::text, ${fact.cause}::text,
+            ${fact.deliveryId}::text, ${fact.edge}::text, ${fact.adapter}::text, ${fact.recordId}::text,
+            ${fact.landing === null || fact.landing === undefined ? null : JSON.stringify(fact.landing)}::text::jsonb, ${fact.reason}::text, ${fact.cause}::text,
             date_trunc('milliseconds', ${fact.at}::timestamptz), ${fact.attempt}::int4)
     on conflict do nothing returning 1`.execute(exec);
   return rows.length === 1;
@@ -79,7 +85,7 @@ export async function unjudged(
   input: { after: { at: string; pipeline: string; arrival: string; attempt: number } | null; pipeline: string | null; limit: number },
 ): Promise<UnjudgedArrival[]> {
   const columns = sql`
-    select u.pipeline, u.arrival, u.file, u.movement, u.delivery_id, u.edge, u.record_id, u.reason, u.cause, ${iso('u.noted_at')} as at, u.attempt
+    select u.pipeline, u.arrival, u.file, u.movement, u.delivery_id, u.edge, u.adapter, u.record_id, u.landing, u.reason, u.cause, ${iso('u.noted_at')} as at, u.attempt
     from automations.arrival_unjudged u
     where u.team_id = ${scope.tenant}::uuid and (${input.pipeline}::text is null or u.pipeline = ${input.pipeline}::text)`;
   const order = sql`order by u.noted_at, u.pipeline, u.arrival, u.attempt limit ${input.limit}::int8`;
@@ -91,7 +97,9 @@ export async function unjudged(
     movement: string;
     delivery_id: string | null;
     edge: string;
+    adapter: string | null;
     record_id: string | null;
+    landing: unknown;
     reason: string;
     cause: string | null;
     at: string;
@@ -108,7 +116,9 @@ export async function unjudged(
     movement: r.movement,
     deliveryId: r.delivery_id,
     edge: r.edge,
+    adapter: r.adapter,
     recordId: r.record_id,
+    landing: r.landing ?? null,
     reason: r.reason,
     cause: r.cause,
     at: r.at,

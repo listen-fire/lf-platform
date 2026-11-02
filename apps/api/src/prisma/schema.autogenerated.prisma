@@ -87,6 +87,63 @@ model AdapterAwait {
   @@schema("automations")
 }
 
+model Arrival {
+  seq         BigInt   @id @default(autoincrement())
+  teamId      String   @map("team_id") @db.Uuid
+  adapterType String   @map("adapter_type")
+  edge        String
+  key         String
+  identity    String?
+  version     String?
+  landing     Json?    @db.Json
+  gone        Boolean
+  loggedAt    DateTime @map("logged_at") @db.Timestamptz(6)
+
+  @@index([teamId, adapterType, edge, key, seq], map: "arrival_key_idx")
+  @@index([loggedAt], map: "arrival_logged_idx")
+  @@map("arrival")
+  @@schema("automations")
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model ArrivalIdentity {
+  teamId      String   @map("team_id") @db.Uuid
+  adapterType String   @map("adapter_type")
+  edge        String
+  key         String
+  identity    String
+  version     String?
+  keptUntil   DateTime @map("kept_until") @db.Timestamptz(6)
+
+  @@index([teamId, adapterType, edge, key, identity], map: "arrival_identity_of_idx")
+  @@index([keptUntil], map: "arrival_identity_until_idx")
+  @@map("arrival_identity")
+  @@ignore
+  @@schema("automations")
+}
+
+model ArrivalUnjudged {
+  teamId     String   @map("team_id") @db.Uuid
+  pipeline   String
+  arrival    String
+  attempt    Int
+  file       String
+  movement   String
+  deliveryId String?  @map("delivery_id")
+  edge       String
+  recordId   String?  @map("record_id")
+  reason     String
+  cause      String?
+  notedAt    DateTime @map("noted_at") @db.Timestamptz(6)
+  adapter    String?
+  landing    Json?
+
+  @@id([teamId, pipeline, arrival, attempt])
+  @@index([teamId, notedAt, pipeline, arrival, attempt], map: "arrival_unjudged_at_idx")
+  @@map("arrival_unjudged")
+  @@schema("automations")
+}
+
 model AutomationsAuditLog {
   id        String                             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   createdBy String?                            @map("created_by")
@@ -174,6 +231,7 @@ model Delivery {
   replayOf       String?  @map("replay_of") @db.Uuid
   events         Json
   eventCount     Int      @map("event_count")
+  request        Json?
 
   @@index([teamId, receivedAt], map: "delivery_received_idx")
   @@map("delivery")
@@ -335,6 +393,19 @@ model LfSecretsLease {
 
   @@id([teamId, ref])
   @@map("lf_secrets_lease")
+  @@schema("automations")
+}
+
+model ListenState {
+  teamId     String    @map("team_id") @db.Uuid
+  pipeline   String
+  state      Json
+  leaseToken String?   @map("lease_token") @db.Uuid
+  leaseUntil DateTime? @map("lease_until") @db.Timestamptz(6)
+  updatedAt  DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@id([teamId, pipeline])
+  @@map("listen_state")
   @@schema("automations")
 }
 
@@ -574,6 +645,17 @@ model RecordBinding {
   @@schema("automations")
 }
 
+model ReleaseSeen {
+  teamId  String   @map("team_id") @db.Uuid
+  version String
+  seenAt  DateTime @map("seen_at") @db.Timestamptz(6)
+
+  @@id([teamId, version])
+  @@index([teamId, seenAt, version], map: "release_seen_at_idx")
+  @@map("release_seen")
+  @@schema("automations")
+}
+
 model RemoteAdapter {
   id                         String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   teamId                     String                      @map("team_id") @db.Uuid
@@ -743,6 +825,7 @@ model TriggerRun {
   host                        String             @default("platform")
   returned                    Json?              @db.Json
   deliveryId                  String?            @map("delivery_id") @db.Uuid
+  leaseMark                   BigInt?            @map("lease_mark")
   adapterAwaits               AdapterAwait[]
   callbacks                   Callback[]
   joinBranchExports           JoinBranchExport[]
@@ -758,6 +841,42 @@ model TriggerRun {
   @@index([triggerEventId])
   @@index([triggerId])
   @@map("trigger_run")
+  @@schema("automations")
+}
+
+model WaitRow {
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  runId       String     @map("run_id") @db.Uuid
+  teamId      String     @map("team_id") @db.Uuid
+  adapterType String     @map("adapter_type")
+  edge        String
+  key         String?
+  since       BigInt
+  address     String?
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  strandedAt  DateTime?  @map("stranded_at") @db.Timestamptz(6)
+  fireKey     String?    @map("fire_key")
+  recordId    String?    @map("record_id")
+  waitSeens   WaitSeen[]
+
+  @@unique([runId, teamId, adapterType, edge, key], map: "wait_row_edge_unique")
+  @@index([teamId, adapterType, edge, key], map: "wait_row_key_idx")
+  @@index([runId])
+  @@map("wait_row")
+  @@schema("automations")
+}
+
+model WaitSeen {
+  id       BigInt  @id @default(autoincrement())
+  waitId   String  @map("wait_id") @db.Uuid
+  identity String
+  version  String?
+  matched  Boolean
+  leaf     String?
+  waitRow  WaitRow @relation(fields: [waitId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([waitId, identity], map: "wait_seen_identity_idx")
+  @@map("wait_seen")
   @@schema("automations")
 }
 
@@ -808,6 +927,23 @@ model Work {
   @@unique([host, key], map: "work_host_key_unique")
   @@index([dueAt], map: "work_due_idx")
   @@map("work")
+  @@schema("automations")
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model WriteLedger {
+  teamId     String   @map("team_id") @db.Uuid
+  adapter    String
+  recordType String   @map("record_type")
+  externalId String   @map("external_id")
+  runId      String   @map("run_id")
+  depth      Int
+  at         DateTime @db.Timestamptz(6)
+
+  @@index([teamId, at], map: "write_ledger_at_idx")
+  @@index([teamId, adapter, recordType, externalId, at], map: "write_ledger_record_idx")
+  @@map("write_ledger")
+  @@ignore
   @@schema("automations")
 }
 

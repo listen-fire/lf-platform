@@ -27,6 +27,8 @@ export default interface DeliveryTable {
   events: ColumnType<unknown, unknown, unknown>;
 
   event_count: ColumnType<number, number, number>;
+
+  request: ColumnType<unknown | null, unknown | null, unknown | null>;
 }
 
 export type Delivery = Selectable<DeliveryTable>;

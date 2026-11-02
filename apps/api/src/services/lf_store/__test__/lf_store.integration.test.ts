@@ -457,7 +457,9 @@ describe('the lf store module', () => {
     const fire = await getAutomationsQb(['work']).selectFrom('work').selectAll().where('key', '=', `lf:${teamA}:${fireKey}`).executeTakeFirstOrThrow();
     expect(fire.payload).toEqual({ deliveryId: kept.id, arrivalMark: answer.arrivalMark });
     expect(await lf('inbound.delivery', { id: kept.id })).toMatchObject({ source: 'poll', request });
-    expect(await lf('unjudged.list', { limit: 10 })).toEqual([{ ...unjudged, deliveryId: null, recordId: null, cause: null, attempt: 0, at: expect.any(String) }]);
+    expect(await lf('unjudged.list', { limit: 10 })).toEqual([
+      { ...unjudged, deliveryId: null, adapter: null, recordId: null, landing: null, cause: null, attempt: 0, at: expect.any(String) },
+    ]);
     const waitRows = await sql<{ fire_key: string }>`select fire_key from automations.wait_row where run_id = ${runId}::uuid`.execute(getAutomationsQb(['work']));
     expect(waitRows.rows).toEqual([{ fire_key: `lf:${teamA}:${fireKey}` }]);
 
@@ -526,7 +528,9 @@ describe('the lf store module', () => {
       { version: '0.13.1', at: '2026-11-02T10:00:00.000Z' },
     ]);
 
-    const fact = { pipeline: 'listen:f:m', arrival: 'a1', file: 'f', movement: 'm', deliveryId: null, edge: 'Replies', recordId: 'r1', reason: 'lookup failed', cause: null };
+    // The module the arrival came from and what landed are kept as given.
+    const landing = { recordId: 'r1', recordType: 'Reply', fields: { Text: 'hi' } };
+    const fact = { pipeline: 'listen:f:m', arrival: 'a1', file: 'f', movement: 'm', deliveryId: null, edge: 'Replies', adapter: 'slack', recordId: 'r1', landing, reason: 'lookup failed', cause: null };
     const note = (at: string, attempt: number | undefined, forgetBefore: string) => lf('unjudged.note', { ...fact, at, ...(attempt !== undefined ? { attempt } : {}), forgetBefore });
     expect(await note('2026-11-01T10:00:00.000Z', undefined, '2026-10-01T00:00:00.000Z')).toBe(true);
     expect(await note('2026-11-01T10:00:01.000Z', 0, '2026-10-01T00:00:00.000Z')).toBe(false);

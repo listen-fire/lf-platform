@@ -3,12 +3,12 @@
 
 import type { default as PublicSchema } from './public/PublicSchema';
 import type { default as ValuationsSchema } from './valuations/ValuationsSchema';
-import type { default as KnowledgeSchema } from './knowledge/KnowledgeSchema';
 import type { default as AutomationsSchema } from './automations/AutomationsSchema';
+import type { default as KnowledgeSchema } from './knowledge/KnowledgeSchema';
 import type { default as CoreSchema } from './core/CoreSchema';
 import type { default as MigrationsSchema } from './_migrations/MigrationsSchema';
 import type { default as AsksSchema } from './asks/AsksSchema';
 
-type Database = PublicSchema & ValuationsSchema & KnowledgeSchema & AutomationsSchema & CoreSchema & MigrationsSchema & AsksSchema;
+type Database = PublicSchema & ValuationsSchema & AutomationsSchema & KnowledgeSchema & CoreSchema & MigrationsSchema & AsksSchema;
 
 export default Database;
