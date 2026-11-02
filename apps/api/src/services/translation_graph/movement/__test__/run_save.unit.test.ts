@@ -128,10 +128,21 @@ jest.mock('../../../../lib/kysely', () => {
 jest.mock('../catalog', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { mockCatalog, mockCatalogSnapshot } = require('movement-lang');
+  // The run host's manual unit, as a team's catalog describes it.
+  const { unitInstanceSchema } = jest.requireActual('../../adapters/unit_surface');
+  const { MANUAL_ADAPTER_TYPE, MANUAL_SURFACE } = jest.requireActual('../../adapters/manual');
+  const manual = unitInstanceSchema(MANUAL_ADAPTER_TYPE, MANUAL_SURFACE);
   const spec = {
     adapters: {
-      email: { constructionArgs: [{ name: 'credentials', kind: 'position', required: false }] },
-      manual: { constructionArgs: [{ name: 'credentials', kind: 'position', required: false }] },
+      email: {
+        constructionArgs: [{ name: 'credentials', kind: 'position', required: false }],
+        schema: {
+          positions: { message: { properties: { subject: 'text', Key: 'text' }, edges: {} } },
+          collections: { messages: { target: 'message' }, Emails: { target: 'message', readable: false, listenable: true } },
+          writableRoots: { message: { fields: { subject: 'text' }, resultShape: { externalId: 'text', subject: 'text' } } },
+        },
+      },
+      manual: { constructionArgs: [], schema: manual },
     },
   };
   return {
@@ -171,6 +182,12 @@ jest.mock('../../adapters/registry', () => {
 // External event-subscription diff-sync — exercised by its own suite
 // (listen_kg_save.unit.test.ts); a no-op here keeps the run-entry
 // fixtures off the adapter-resolution graph.
+// The reconcile a new listen asks for is queued work: not this suite's subject.
+jest.mock('../../../work/store', () => ({ enqueueWork: jest.fn(async () => undefined) }));
+
+// A listen paused by the loop breaker is that suite's subject; none is here.
+jest.mock('../../../inbound/listen_pause', () => ({ listenPauses: jest.fn(async () => new Map()) }));
+
 jest.mock('../listen_subscriptions', () => ({
   syncListenSubscriptions: jest.fn(async () => ({ notes: [] })),
 }));

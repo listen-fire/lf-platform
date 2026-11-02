@@ -162,14 +162,14 @@ jest.mock('../catalog', () => {
     adapters: {
       email: {
         constructionArgs: [{ name: 'credentials', kind: 'position', required: false }],
-        // From 5 a read off an event the catalog does not describe is
-        // refused (MOV_EVENT_UNDESCRIBED), so the inbox's message is
-        // described with the fields the fixtures read.
+        // A read off an arrival the catalog does not describe is refused
+        // (MOV_EVENT_UNDESCRIBED), so the inbox's message is described with
+        // the fields the fixtures read.
         schema: {
-          positions: { message: { properties: { subject: 'text', Subject: 'text', text: 'text' }, edges: {} } },
-          collections: {},
+          positions: { message: { properties: { subject: 'text', Subject: 'text', text: 'text', Key: 'text' }, edges: {} } },
+          // Mail arrives on `Emails`; `Key` is the address's tag.
+          collections: { Emails: { target: 'message', readable: false, listenable: true } },
           writableRoots: {},
-          eventPosition: 'message',
         },
       },
     },
@@ -215,6 +215,9 @@ jest.mock('../../adapters/registry', () => {
 
 // A shipped cron or poll is armed by the periodic reconciles; the save asks
 // for a reconcile now (the store write and the wake are their own suites').
+// A listen paused by the loop breaker is that suite's subject; none is here.
+jest.mock('../../../inbound/listen_pause', () => ({ listenPauses: jest.fn(async () => new Map()) }));
+
 jest.mock('../../../work/store', () => ({
   enqueueWork: jest.fn(async () => {}),
 }));
@@ -323,7 +326,7 @@ function intake(m: <inbox-[:message]->>) {
   # version one
 }
 
-listen to inbox { key: "deals" } fire intake
+listen to inbox-[e:Emails WHERE e.Key == "deals"]-> fire intake
 `;
 const SOURCE_V2 = SOURCE_V1.replace('# version one', '# version two');
 const SOURCE_BROKEN = SOURCE_V1.replace('# version one', 'write nowhere-[:thing]-> { x: 1 }');
@@ -337,8 +340,8 @@ function digest(m: <inbox-[:message]->>) {
   # digest
 }
 
-listen to inbox { key: "deals" } fire intake
-listen to inbox { key: "intros" } fire digest
+listen to inbox-[e:Emails WHERE e.Key == "deals"]-> fire intake
+listen to inbox-[e:Emails WHERE e.Key == "intros"]-> fire digest
 `;
 
 const NO_LISTEN = `${PRELUDE}
@@ -367,8 +370,8 @@ function b(m: <inbox_b-[:message]->>) {
   # b
 }
 
-listen to inbox_a { key: "deals" } fire a
-listen to inbox_b { key: "deals" } fire b
+listen to inbox_a-[e:Emails WHERE e.Key == "deals"]-> fire a
+listen to inbox_b-[e:Emails WHERE e.Key == "deals"]-> fire b
 `;
 
 // The same file with a new instance + movement `c` (and its listen) inserted
@@ -391,9 +394,9 @@ function b(m: <inbox_b-[:message]->>) {
   # b
 }
 
-listen to inbox_c { key: "deals" } fire c
-listen to inbox_a { key: "deals" } fire a
-listen to inbox_b { key: "deals" } fire b
+listen to inbox_c-[e:Emails WHERE e.Key == "deals"]-> fire c
+listen to inbox_a-[e:Emails WHERE e.Key == "deals"]-> fire a
+listen to inbox_b-[e:Emails WHERE e.Key == "deals"]-> fire b
 `;
 
 // A consumer importing from a saved library file (the catalog mock's
@@ -407,7 +410,7 @@ function intake(m: <inbox-[:message]->>) {
   log_lead(node { name: m.\`subject\` })
 }
 
-listen to inbox { key: "deals" } fire intake
+listen to inbox-[e:Emails WHERE e.Key == "deals"]-> fire intake
 `;
 
 const WITH_BAD_FILE_IMPORT = WITH_FILE_IMPORT.replace('"lib/leads"', '"lib/nowhere"');
@@ -419,7 +422,7 @@ function intake(m: <inbox-[:message]->>) {
   # intake
 }
 
-listen as "Alice's lane" to inbox { key: "alice" } fire intake
+listen as "Alice's lane" to inbox-[e:Emails WHERE e.Key == "alice"]-> fire intake
 listen as "Bob's lane"   to inbox { key: "bob"   } fire intake
 `;
 
@@ -586,7 +589,7 @@ describe('saveMovement — listener derivation', () => {
     expect(triggerRows()).toHaveLength(2);
 
     const oneListen = MULTI_LISTEN.replace(
-      'listen to inbox { key: "intros" } fire digest\n',
+      'listen to inbox-[e:Emails WHERE e.Key == "intros"]-> fire digest\n',
       '',
     );
     const second = await saveMovement({ teamId: TEAM, id: first.movementId, source: oneListen });
@@ -763,7 +766,7 @@ function intake(m: <inbox-[:message]->>) {
   }
 }
 
-listen to inbox { key: "deals" } fire intake
+listen to inbox-[e:Emails WHERE e.Key == "deals"]-> fire intake
 `;
     const result = await saveMovement({ teamId: TEAM, source: staged });
     expect(result.ok).toBe(true);
@@ -1480,7 +1483,7 @@ movement intake(m: <inbox-[:message]->>) {
   subject = UPPER(TRIM(m.Subject))
 }
 
-listen to inbox { key: "deals" } fire intake
+listen to inbox-[e:Emails WHERE e.Key == "deals"]-> fire intake
 `;
   const NEW = `import { email } from adapters
 
@@ -1491,7 +1494,7 @@ function intake(m: <inbox-[:message]->>) {
   subject = Text.upper(Text.trim(m.Subject))
 }
 
-listen to inbox { key: "deals" } fire intake
+listen to inbox-[e:Emails WHERE e.Key == "deals"]-> fire intake
 `;
 
   // The upgrade validates and saves inside the team, as one of its members;

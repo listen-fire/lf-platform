@@ -38,11 +38,12 @@ import { movementCatalogForTeam } from '../catalog';
 const emailSchema: InstanceSchema = {
   positions: {
     message: {
-      properties: { subject: 'text', sender: 'text', text: 'text' },
+      properties: { subject: 'text', sender: 'text', text: 'text', Key: 'text' },
       edges: {},
     },
   },
-  collections: { messages: { target: 'message' } },
+  // Mail arrives on `Emails`, a listen's only way in; `Key` is the address's tag.
+  collections: { messages: { target: 'message' }, Emails: { target: 'message', readable: false, listenable: true } },
   writableRoots: {},
 };
 
@@ -191,13 +192,14 @@ describe('diagnoseMovementSource', () => {
     const result = diagnoseMovementSource(source, { catalog, snapshot });
     const unresolved = result.diagnostics.filter((d) => d.code === 'MOV_NAME_UNRESOLVED');
     expect(unresolved).toHaveLength(1);
+    // The fixture's attio names no package, so it is the project's own module.
     expect(unresolved[0].message).toBe(
-      "'attio' is not in scope — import it: add 'import { attio } from adapters' at the top of the file",
+      "'attio' is a module of this project's own, connected by '#' and its name: `connect #attio using main_crm`",
     );
     expect(unresolved[0].fix).toEqual({
-      edits: [{ line: 1, col: 1, endLine: 1, endCol: 1, text: 'import { attio } from adapters\n' }],
+      edits: [{ line: 5, col: 9, endLine: 5, endCol: 37, text: 'connect #attio using main_crm' }],
     });
-    const repaired = `import { attio } from adapters\n${source}`;
+    const repaired = source.replace('connect attio using main_crm', 'connect #attio using main_crm');
     expect(diagnoseMovementSource(repaired, { catalog, snapshot }).ok).toBe(true);
   });
 

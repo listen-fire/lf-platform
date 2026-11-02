@@ -86,7 +86,7 @@ import {
 import { closeDemandOverChains, closeDemandOverWriteVariants, demandSeed } from './demand';
 import { MANUAL_ADAPTER_TYPE, MANUAL_SURFACE } from '../adapters/manual';
 import { CRON_ADAPTER_TYPE, CRON_SURFACE } from '../adapters/cron';
-import type { UnitSurface } from '../adapters/unit_surface';
+import { unitInstanceSchema } from '../adapters/unit_surface';
 
 const textList: SchemaFieldType = { kind: 'list', of: 'text' };
 
@@ -197,18 +197,6 @@ const THIN_INSTANCE_SCHEMAS: Record<string, InstanceSchema> = {
     writableRoots: {},
   },
 };
-
-/** A run host unit's instance schema, projected from the unit's own fixed
- *  surface the way a team's catalog projects what the unit's adapter answers. */
-function unitInstanceSchema(adapterType: string, surface: UnitSurface): InstanceSchema {
-  return instanceSchemaFromDescriptors({
-    adapterType,
-    entries: surface.entries,
-    descriptors: new Map(surface.types.map((type) => [type.typeId, type])),
-    metaDescriptor: surface.root,
-    supportsInPlaceUpdate: false,
-  }).schema;
-}
 
 /** The run host's units, described as a team's catalog describes them, so a
  *  program in a test listens to `manual-[:Invocations]->` as a saved one does. */
