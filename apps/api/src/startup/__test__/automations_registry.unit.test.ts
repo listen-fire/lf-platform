@@ -41,8 +41,8 @@ const ensure = jest.mocked(ensurePeriodicWork);
 const removeRetired = jest.mocked(removeRetiredWork);
 
 const PERIODIC_KINDS = [
-  'cron_reconcile',
   'poll_reconcile',
+  'listen_subscription_retry',
   'ask_closed_sweep',
   'timer_sweep',
   'exposed_file_sweep',
@@ -305,8 +305,8 @@ describe('registerAutomationsWork', () => {
       expect(input.intervalMs).toBeGreaterThan(0);
     }
     expect(Object.fromEntries(ensured.map((input) => [input.kind, input.intervalMs]))).toMatchObject({
-      cron_reconcile: 30_000,
       poll_reconcile: 30_000,
+      listen_subscription_retry: 5 * 60_000,
       ask_closed_sweep: 30_000,
       timer_sweep: 30_000,
       exposed_file_sweep: 5 * 60_000,
@@ -318,7 +318,15 @@ describe('registerAutomationsWork', () => {
 
   it('deletes the rows of retired kinds where the periodic rows are ensured', async () => {
     await registerAutomationsWork();
-    expect(removeRetired).toHaveBeenCalledWith(['await_resume_sweep', 'ask_expiry_sweep']);
+    expect(removeRetired).toHaveBeenCalledWith([
+      'await_resume_sweep',
+      'ask_expiry_sweep',
+      'fire_callback',
+      'dispatch_event',
+      'fire_cron',
+      'cron_reconcile',
+      'poll_source',
+    ]);
     // A retired kind is gone from the live list, not merely unscheduled.
     expect(new Set<string>(claimableWorkKinds()).has('await_resume_sweep')).toBe(false);
     expect(new Set<string>(claimableWorkKinds()).has('ask_expiry_sweep')).toBe(false);

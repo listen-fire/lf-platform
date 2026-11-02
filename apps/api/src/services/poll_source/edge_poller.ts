@@ -37,9 +37,11 @@ export function readPollAnswer(adapterType: string, answer: unknown): EdgePolled
   if (typeof answer === 'object' && answer !== null && 'events' in answer && !('arrivals' in answer)) {
     throw new Error(`${adapterType}: a poll answered events with a checkpoint, the settings poll retired in listen-fire 0.13; a polled edge answers { arrivals, cursor }`);
   }
+  // Read first, so an answer whose `pollAgainAt` is no instant is refused by
+  // that name rather than as a malformed answer.
+  const pollAgainAt = pollAgainAtOf(adapterType, answer);
   const parsed = WirePollEdgeResult.safeParse(answer);
   if (!parsed.success) throw new Error(`${adapterType}: a poll's answer is not { arrivals, cursor }: ${parsed.error.message}`);
-  const pollAgainAt = pollAgainAtOf(adapterType, answer);
   return {
     arrivals: parsed.data.arrivals,
     ...('cursor' in parsed.data ? { cursor: parsed.data.cursor } : {}),

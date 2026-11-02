@@ -154,8 +154,8 @@ describe('productionEngineHost — adapter instances', () => {
 
   it('refuses a segment open whose host families version it does not serve, and opens nothing', async () => {
     const host = productionEngineHost({ teamId: teamOfTenant(TEAM_ID), resolveLive: () => liveAdapter([]) });
-    await expect(host.segment.open({ teamId: TEAM_ID, languageVersion: '2', hostFamiliesVersion: 2 })).rejects.toThrow(
-      'segment.open carries host families version 2, which this host does not serve (supported: 1)',
+    await expect(host.segment.open({ teamId: TEAM_ID, languageVersion: '2', hostFamiliesVersion: HOST_FAMILIES_VERSION + 1 })).rejects.toThrow(
+      `segment.open carries host families version ${HOST_FAMILIES_VERSION + 1}, which this host does not serve (supported: ${HOST_FAMILIES_VERSION})`,
     );
   });
 

@@ -85,12 +85,15 @@ describe('the declarative schemes', () => {
     expect(check(`sha256=${hex('k')}`)).toBe(false);
   });
 
-  it('slack_v0: needs the timestamp header beside the signature', () => {
-    const signature = `v0=${hex('k', `v0:1700000000:${BODY.toString('utf-8')}`)}`;
+  it('slack_v0: needs a fresh timestamp header beside the signature', () => {
+    const now = Math.floor(Date.now() / 1000);
+    const signedAt = (at: number) => `v0=${hex('k', `v0:${at}:${BODY.toString('utf-8')}`)}`;
     const check = (headers: Record<string, string>) => verifyWithScheme('slack_v0', { rawBody: BODY, headers, secret: 'k' });
-    expect(check({ 'x-slack-request-timestamp': '1700000000', 'x-slack-signature': signature })).toBe(true);
-    expect(check({ 'x-slack-signature': signature })).toBe(false);
-    expect(check({ 'x-slack-request-timestamp': '1700000001', 'x-slack-signature': signature })).toBe(false);
+    expect(check({ 'x-slack-request-timestamp': String(now), 'x-slack-signature': signedAt(now) })).toBe(true);
+    expect(check({ 'x-slack-signature': signedAt(now) })).toBe(false);
+    expect(check({ 'x-slack-request-timestamp': String(now + 1), 'x-slack-signature': signedAt(now) })).toBe(false);
+    // Outside Slack's replay window, a right signature is refused.
+    expect(check({ 'x-slack-request-timestamp': '1700000000', 'x-slack-signature': signedAt(1700000000) })).toBe(false);
   });
 
   it('a verifyInbound escape hatch decides on its own', () => {

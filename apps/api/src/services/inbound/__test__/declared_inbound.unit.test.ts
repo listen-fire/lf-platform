@@ -33,8 +33,11 @@ function signed(scheme: WireInboundSignatureSchemeShape, secret: string): Inboun
       return { [header]: hex(secret) };
     case 'airtable_mac':
       return { [header]: `hmac-sha256=${hex(Buffer.from(secret, 'base64'))}` };
-    case 'slack_v0':
-      return { [SLACK_TIMESTAMP_HEADER]: '1700000000', [header]: `v0=${hex(secret, `v0:1700000000:${BODY.toString('utf-8')}`)}` };
+    case 'slack_v0': {
+      // Slack's timestamp is checked fresh (its replay window): sign now.
+      const at = String(Math.floor(Date.now() / 1000));
+      return { [SLACK_TIMESTAMP_HEADER]: at, [header]: `v0=${hex(secret, `v0:${at}:${BODY.toString('utf-8')}`)}` };
+    }
     case 'telegram_secret_token':
       return { [header]: secret };
   }

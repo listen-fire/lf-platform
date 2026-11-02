@@ -503,9 +503,12 @@ describe('referents', () => {
 // ── Triggers ──
 
 describe('triggers', () => {
-  it('uses the system’s own declared sentence, filled from the listen config', () => {
+  // A 0.13 listen's WHERE is no settings config: nothing fills a declared
+  // sentence's slots but the provisioned address, so the sentence is the
+  // generic one and the path says what the listen hears.
+  it('names the system the listen hears, and the movement it fires', () => {
     const [trigger] = view().triggers;
-    expect(trigger!.sentence).toBe('When a note is filed in inbound');
+    expect(trigger!.sentence).toBe('When something happens in Front Desk');
     expect(trigger!.system?.label).toBe('Front Desk');
     expect(trigger!.fires).toBe('intake');
     expect(trigger!.firesMovement).toBe(true);
