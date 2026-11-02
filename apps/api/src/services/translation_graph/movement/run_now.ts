@@ -1,34 +1,22 @@
-// "Run now" — inject an invocation event on a movement's MANUAL channel.
+// "Run now": one invocation of a movement's manual listen.
 //
-// Manual runs collapsed into an adapter (3_syntax_sketch.md "Composition,
-// time, queries, failure"): a movement is runnable on demand when the
-// SAVED source declares a manual-channel listener —
+// A movement is runnable on demand when its SAVED source listens to the
+// host's manual unit (`listen to manual-[:Invocations]-> fire backfill`).
+// Saving provisions that listen as a trigger row (its plan), and a press is an
+// arrival on `Invocations`, judged by that one listen and kept as a delivery
+// like any inbound one (inbound/listen_door.ts): the receipt, the arrival and
+// the run's `fire_event` row are durable before the caller hears the run id,
+// and the drain starts the run under the listen's receipt, through the same
+// gates every firing passes (run mode: off = paused, dry_run = rehearse).
 //
-//   go = manual()
-//   listen to go {} fire backfill
-//
-// Saving derives an ordinary `automations.trigger` row from that listen
-// (kind 'manual'), and this module fires it by building a manual
-// invocation event — carrying the initiating member, so `@user_*` /
-// `@actor_*` resolve to whoever pressed the button — and dispatching it
-// through `dispatchTriggerByIdEvent`, exactly like any inbound event:
-// uniform run_mode gating (off = paused, dry_run = rehearse), uniform
-// trigger_run recording, uniform emitted-event re-dispatch. There is no
-// separate execution path for on-demand runs.
-//
-// An invocation OPTIONALLY carries text and/or files — the input a person
-// types or drops into the movement when they run it. This is the single
-// on-demand entry: callers either name the MOVEMENT (we discover its manual
-// listener's derived trigger) or the TRIGGER directly. Files' bytes are
+// An invocation OPTIONALLY carries text and/or files, and the member who
+// pressed it (so `@user_*` / `@actor_*` resolve to them). Files' bytes are
 // streamed into document storage (`services.document.upload`); the returned
-// `objectUri` rides on the payload as the file's owner-resolvable byte handle,
-// which the manual adapter redeems via `resolveFileRef`.
-//
-// one on-demand invocation service
-// owner-resolvable FileRef handles
+// `objectUri` rides on the invocation as the file's owner-resolvable byte
+// handle, which the manual adapter redeems via `resolveFileRef`.
 
 import { Readable } from 'node:stream';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import { MovementParseError, parseProgram } from 'movement-lang';
 
@@ -36,31 +24,21 @@ import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
 import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
 import type { MovementId } from '../../../generated/kysely/automations/Movement';
-import type { TriggerEvent } from 'movement-engine/public/inbound';
-
 import { teamDocumentKeyPrefix } from 'movement-engine/public/files';
 import { services } from '../../../adapters/registry';
-import { getQb, getAutomationsQb } from '../../../lib/kysely';
+import { getAutomationsQb } from '../../../lib/kysely';
 import { costMicrodollarsToUsd, runCostSummaries } from '../../../lib/llm_usage';
 import { describeLimitPause, readLimitPause } from '../../movement_engine/limit_pause';
-import { handleError } from '../../../lib/errors';
-import { logger } from 'movement-engine/public/log';
 import { flattenTriggerRunPlans, parseTriggerRunSteps } from '../runs/trigger_run_read';
-import { dispatchTriggerByIdEvent } from '../triggers/router';
-import { describeDroppedReason } from '../triggers/dropped_reason';
-import { queueRun } from '../triggers/dispatch_event';
 import { reportedFailureReason } from '../runs/trigger_run';
-import { movementForTrigger } from './execute';
-import { loadTriggerById } from '../storage/tg_table';
 import {
   MANUAL_ADAPTER_TYPE,
+  invocationArrival,
   type ManualFile,
   type ManualInvocationPayload,
 } from '../adapters/manual';
-import { resolveAdapterSlug } from '../adapters/registry';
 import { manualListenerMovements } from './files';
 import { getMovementRow } from './store';
-import { listDerivedTriggerRows } from './store';
 import {
   describeRunAwaits,
   type AwaitDescription,
@@ -70,6 +48,14 @@ import {
   describeExecutedVersion,
   type ExecutedMovementVersion,
 } from './version_store';
+import {
+  judgeArrivals,
+  keepJudgedDelivery,
+  savedListenOf,
+  savedListens,
+  type SavedListen,
+} from '../../inbound/listen_door';
+import { drainUntilIdle, notifyWork } from '../../work/drain';
 
 export interface MovementRunNowSuccess {
   ok: true;
@@ -122,59 +108,7 @@ export interface RunMovementNowInput {
 }
 
 const NO_MANUAL_LISTENER_FIX =
-  'declare a manual channel and save first — `go = manual()` + `listen to go {} fire <movement>`; "Run now" injects an event on that channel';
-
-/**
- * Run a movement's manual channel once, now, IN THIS PROCESS — the dev CLI's
- * entry. Every request door queues instead (`runMovementAsync`), so no
- * movement runs inside a request. The single on-demand invocation
- * entry: the caller either names the MOVEMENT (we discover the manual
- * listener's derived trigger from its SAVED source) or names the TRIGGER
- * directly. Either way one `ManualInvocationPayload` — optionally carrying
- * text + files — is injected through NORMAL dispatch (`dispatchTriggerByIdEvent`).
- */
-export async function runMovementNow(
-  input: RunMovementNowInput,
-): Promise<MovementRunNowResult> {
-  const triggerId = await resolveManualTrigger(input);
-  if (typeof triggerId !== 'string') return triggerId;
-
-  const event = await buildManualInvocationEvent({ triggerId, input });
-
-  const outcome = await dispatchTriggerByIdEvent({
-    triggerId,
-    event,
-    teamId: input.teamId as TeamId,
-  });
-  if (outcome.droppedReason !== undefined) {
-    return { ok: false, errors: [describeDroppedReason(outcome.droppedReason)] };
-  }
-  if (outcome.errors !== undefined && outcome.errors.length > 0) {
-    return { ok: false, errors: outcome.errors.map((e) => e.message) };
-  }
-  const firing = outcome.movementFirings?.[0];
-  if (!firing) {
-    return { ok: false, errors: ['dispatch produced no firing'] };
-  }
-  return {
-    ok: true,
-    movementName: firing.movementName,
-    dryRun: firing.dryRun,
-    recordCount: firing.writes,
-    errors: [],
-  };
-}
-
-// ── Queued run (every on-demand door) ───────────────────────────────────────
-//
-// A non-trivial movement run (extraction + writes) outlasts any request: the
-// MCP tool-call limit, a browser's patience, and a deployment that stops the
-// api between requests. `runMovementAsync` resolves the manual trigger, builds
-// the SAME invocation event `runMovementNow` would, and QUEUES it: the receipt,
-// a `running` run row and a `dispatch_event` work row are durable before it
-// returns the run id. Whichever worker drains next starts the run, adopting
-// that id, so the row settles to its terminal status; the caller follows it
-// with `getMovementRunStatus(runId)`.
+  'listen to the manual unit and save first: `listen to manual-[:Invocations]-> fire <function>`; "Run now" is an arrival on its `Invocations`';
 
 export interface MovementRunAsyncDispatched {
   ok: true;
@@ -186,42 +120,94 @@ export interface MovementRunAsyncDispatched {
 export type MovementRunAsyncResult = MovementRunAsyncDispatched | MovementRunNowFailure;
 
 /**
- * Queue a run of a movement's manual channel and return its id at once. Does
+ * Run a movement's manual listen once, now, IN THIS PROCESS: the dev CLI's
+ * entry. The invocation is queued as every door queues it
+ * (`runMovementAsync`), then this process drains the team's due work and
+ * answers with the run as it settled. Every request door queues instead, so
+ * no movement runs inside a request.
+ */
+export async function runMovementNow(
+  input: RunMovementNowInput,
+): Promise<MovementRunNowResult> {
+  const queued = await runMovementAsync(input);
+  if (!queued.ok) return queued;
+  await drainUntilIdle({ owner: 'run-now', teamId: input.teamId });
+  const status = await getMovementRunStatus({ teamId: input.teamId, runId: queued.runId });
+  if ('error' in status) return { ok: false, errors: [status.error] };
+  if (status.status === 'failed') {
+    return { ok: false, errors: [status.failureReason ?? `run ${queued.runId} failed`] };
+  }
+  return {
+    ok: true,
+    movementName: queued.movementName,
+    dryRun: status.dryRun,
+    recordCount: status.recordCount,
+    errors: status.errors.map((e) => ({ nodeId: e.nodeId ?? null, message: e.message })),
+  };
+}
+
+// ── Queued run (every on-demand door) ───────────────────────────────────────
+//
+// A non-trivial movement run (extraction + writes) outlasts any request: the
+// MCP tool-call limit, a browser's patience, and a deployment that stops the
+// api between requests. So a press is kept as a delivery whose one arrival
+// its listen took: the receipt, the arrival and the run's `fire_event` row
+// are durable before this returns the run id, and whichever worker drains
+// next starts the run under that id. The caller follows it with
+// `getMovementRunStatus(runId)`.
+
+/**
+ * Queue a run of a movement's manual listen and return its id at once. Does
  * NOT run it; poll `getMovementRunStatus`. A retried request carrying the same
- * `requestId` gets the first request's run back.
+ * `requestId` is the same delivery, and gets the first request's run id back.
  */
 export async function runMovementAsync(
   input: RunMovementNowInput,
 ): Promise<MovementRunAsyncResult> {
-  const triggerId = await resolveManualTrigger(input);
-  if (typeof triggerId !== 'string') return triggerId;
+  const listen = await resolveManualListen(input);
+  if (!('pipeline' in listen)) return listen;
 
-  // The firing runs through the movement engine — so the trigger must resolve
-  // to a movement row (the run pins its version). Resolve it now so the queued
-  // run is faithful and a non-movement trigger is refused before queueing.
-  const triggerRow = await loadTriggerById(triggerId);
-  if (!triggerRow || triggerRow.movementId === null) {
+  const invocation = await buildInvocation(input);
+  const arrival = invocationArrival(invocation);
+  const now = new Date();
+  const judged = judgeArrivals({
+    listens: [listen],
+    delivery: { adapterType: MANUAL_ADAPTER_TYPE, credentialsId: null },
+    arrivals: [arrival],
+    now,
+  });
+  const run = judged.minted[0];
+  if (run === undefined) {
     return {
       ok: false,
-      errors: [`trigger ${triggerId} is not a movement trigger — nothing to run`],
+      errors: judged.lines.length > 0 ? judged.lines : [`${listen.file}: its manual listen did not take the invocation`],
     };
   }
-  const movementRow = await movementForTrigger({
+  // A retry of the same request names the same run: its id is the request's.
+  const minted = input.requestId !== undefined
+    ? [{ ...run, runId: requestRunId({ teamId: input.teamId, pipeline: listen.pipeline, requestId: input.requestId }) }]
+    : [run];
+  await keepJudgedDelivery({
     teamId: input.teamId as TeamId,
-    movementId: triggerRow.movementId,
+    subscriptionId: MANUAL_ADAPTER_TYPE,
+    adapterType: MANUAL_ADAPTER_TYPE,
+    externalId: input.requestId !== undefined ? `run-now:${listen.pipeline}:${input.requestId}` : null,
+    // A person asked for this run, as `listen-fire run` asks for one.
+    source: 'cli',
+    arrivals: [arrival],
+    judged: { ...judged, minted },
+    now,
   });
-  if (!movementRow) {
-    return { ok: false, errors: [`movement ${triggerRow.movementId} not found`] };
-  }
+  notifyWork();
+  return { ok: true, runId: minted[0]!.runId, status: 'running', movementName: listen.file };
+}
 
-  const event = await buildManualInvocationEvent({ triggerId, input });
-  const { runId } = await queueRun({
-    triggerId: triggerId as TriggerId,
-    teamId: input.teamId as TeamId,
-    event,
-    movementVersionId: movementRow.currentVersionId,
-  });
-  return { ok: true, runId, status: 'running', movementName: movementRow.name };
+/** A run id that is a function of the request: `(team, listen, request)`
+ *  hashed into the UUID layout. */
+function requestRunId(input: { teamId: string; pipeline: string; requestId: string }): TriggerRunId {
+  const hex = createHash('sha256').update(JSON.stringify([input.teamId, input.pipeline, input.requestId])).digest('hex');
+  const variant = ((parseInt(hex[16]!, 16) & 0x3) | 0x8).toString(16);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}` as TriggerRunId;
 }
 
 // ── Run status read (the poll target) ───────────────────────────────────────
@@ -639,15 +625,9 @@ export async function inspectMovementRun(input: {
 }
 
 /**
- * Build the `ManualInvocationPayload` event for a run — streaming any files
- * into document storage. Shared by the sync (`runMovementNow`) and async
- * (`runMovementAsync`) entries so both inject an identical event.
+ * The invocation a press is — streaming any files into document storage.
  */
-async function buildManualInvocationEvent(args: {
-  triggerId: string;
-  input: RunMovementNowInput;
-}): Promise<TriggerEvent> {
-  const { triggerId, input } = args;
+async function buildInvocation(input: RunMovementNowInput): Promise<ManualInvocationPayload & { submissionId: string }> {
   // Stream each file into document storage; the returned objectUri becomes the
   // file's owner-resolvable byte handle on the payload.
   const files: ManualFile[] = [];
@@ -670,7 +650,7 @@ async function buildManualInvocationEvent(args: {
   }
 
   const text = input.text?.trim() || undefined;
-  const payload: ManualInvocationPayload = {
+  return {
     firedAt: new Date().toISOString(),
     submissionId: input.requestId ?? randomUUID(),
     ...(input.actor?.email !== undefined ? { actorEmail: input.actor.email } : {}),
@@ -678,26 +658,23 @@ async function buildManualInvocationEvent(args: {
     ...(text !== undefined ? { text } : {}),
     ...(files.length > 0 ? { files } : {}),
   };
-  return {
-    pipelineInputId: `trigger:${triggerId}`,
-    adapterType: MANUAL_ADAPTER_TYPE,
-    triggerType: 'webhook',
-    payload,
-    occurredAt: payload.firedAt,
-    ...(input.requestId !== undefined ? { idempotencyKey: input.requestId } : {}),
-  };
 }
 
 /**
- * Resolve the trigger to dispatch on. With `triggerId` it's that trigger,
- * verbatim. With `movementId` the SAVED source is the gate: it must parse and
- * declare a manual listener whose derived trigger row is provisioned. Returns
- * the trigger id on success, or a `MovementRunNowFailure` describing why not.
+ * The manual listen to run. With `triggerId` it is that listen. With
+ * `movementId` the SAVED source is the gate: it must parse and listen to the
+ * manual unit, and that listen must be provisioned.
  */
-async function resolveManualTrigger(
+async function resolveManualListen(
   input: RunMovementNowInput,
-): Promise<string | MovementRunNowFailure> {
-  if (input.triggerId !== undefined) return input.triggerId;
+): Promise<SavedListen | MovementRunNowFailure> {
+  if (input.triggerId !== undefined) {
+    const listen = await savedListenOf(input.triggerId as TriggerId);
+    if (listen === null || listen.teamId !== input.teamId || listen.plan.adapter !== MANUAL_ADAPTER_TYPE) {
+      return { ok: false, errors: [`trigger ${input.triggerId} is no manual listen of this team: nothing to run`] };
+    }
+    return listen;
+  }
   if (input.movementId === undefined) {
     return { ok: false, errors: ['runMovementNow needs exactly one of movementId / triggerId'] };
   }
@@ -707,7 +684,6 @@ async function resolveManualTrigger(
     return { ok: false, errors: [`movement ${input.movementId} not found`] };
   }
 
-  // The gate is the TEXT: the saved source must declare a manual listener.
   let manualTargets: string[];
   try {
     manualTargets = manualListenerMovements(parseProgram(row.source));
@@ -721,24 +697,24 @@ async function resolveManualTrigger(
   if (manualTargets.length === 0) {
     return {
       ok: false,
-      errors: [`'${row.name}' has no manual listener — ${NO_MANUAL_LISTENER_FIX}`],
+      errors: [`'${row.name}' has no manual listen — ${NO_MANUAL_LISTENER_FIX}`],
     };
   }
 
-  // The listener's derived trigger row is the channel. Saving reconciles
-  // it; a manual listen in the text without a row means the last save
-  // didn't go live.
-  const derived = await listDerivedTriggerRows(row.id);
-  const manualTriggers = derived.filter(
-    (t) => resolveAdapterSlug(t.kind) === MANUAL_ADAPTER_TYPE,
-  );
-  if (manualTriggers.length === 0) {
+  // Saving provisions the listen; one in the text without a row means the
+  // last save didn't go live.
+  const [listen] = await savedListens({
+    teamId: input.teamId as TeamId,
+    adapterType: MANUAL_ADAPTER_TYPE,
+    movementId: row.id as MovementId,
+  });
+  if (listen === undefined) {
     return {
       ok: false,
       errors: [
-        `'${row.name}' declares a manual listener but no listener row is provisioned — save the file (a clean save derives it), then run again`,
+        `'${row.name}' listens to the manual unit but its listen is not provisioned — save the file (a clean save provisions it), then run again`,
       ],
     };
   }
-  return manualTriggers[0].id;
+  return listen;
 }

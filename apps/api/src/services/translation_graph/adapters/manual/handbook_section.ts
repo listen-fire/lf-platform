@@ -8,7 +8,7 @@ export const MANUAL_HANDBOOK_SECTION: HandbookSection = {
   title: 'Run now — ad-hoc runs, text, and files (manual)',
   content: `## Run now — ad-hoc runs, text, and files (manual)
 
-Listen to \`manual\` to let a person — or an agent — start a run by hand. It is the host's own — no import, no \`connect\`. "Run now", pasted text, and uploaded files all arrive as its \`Invocation\` event:
+Listen to \`manual\` to let a person — or an agent — start a run by hand. It is the host's own — no import, no \`connect\`. "Run now", pasted text, and uploaded files all arrive on its \`Invocations\`, each one an \`Invocation\`:
 
 \`\`\`
 import { \`@lf/attio\` as attio } from adapters
@@ -21,7 +21,7 @@ node Company: "each company named in the supplied text or files" {
   domain: <text> "the company's web domain, if given"
 }
 
-function \`Import Companies\`(go: <manual-[:Invocation]->>) {
+function \`Import Companies\`(go: <manual-[:Invocations]->>) {
   found = extract([go.Text, ...go-[:Files]->.File], Company)
 
   map(found, (c) => {
@@ -33,7 +33,7 @@ function \`Import Companies\`(go: <manual-[:Invocation]->>) {
   })
 }
 
-listen as "Import companies" to manual fire \`Import Companies\`
+listen as "Import companies" to manual-[:Invocations]-> fire \`Import Companies\`
 \`\`\`
 
 - The example is the whole pattern: whatever the person supplied — \`go.Text\`, uploaded \`Files\` — goes into the extraction's content, and the writes fan out from what was found.
@@ -44,37 +44,35 @@ listen as "Import companies" to manual fire \`Import Companies\`
       construct: 'manual-channel backfills (instance-rooted traversal in the body)',
       status: 'runs',
       probe: `
-import { \`@lf/manual\` as manual, \`@lf/attio\` as attio } from adapters
+import { \`@lf/attio\` as attio } from adapters
 import { acme } from credentials
 
-runs = connect manual
-crm  = connect attio using acme
+crm = connect attio using acme
 
-function \`Nightly Backfill\`(go: <runs-[:Invocation]->>) {
+function \`Nightly Backfill\`(go: <manual-[:Invocations]->>) {
   crm-[c:Companies]-> {
     write c { Categories: "Reviewed" }
   }
 }
 
-listen to runs {} fire \`Nightly Backfill\`
+listen to manual-[:Invocations]-> fire \`Nightly Backfill\`
 `,
     },
     {
       construct: 'manual runs carrying text + files (reading the invocation text and extracting from the supplied files)',
       status: 'runs',
       probe: `
-import { \`@lf/manual\` as manual, \`@lf/attio\` as attio } from adapters
+import { \`@lf/attio\` as attio } from adapters
 import { acme } from credentials
 
-runs = connect manual
-crm  = connect attio using acme
+crm = connect attio using acme
 
 node Company: "each company named in the supplied text or files" {
   name:   <text> "the company's name"
   domain: <text> "the company's web domain, if given"
 }
 
-function \`Import Companies\`(go: <runs-[:Invocation]->>) {
+function \`Import Companies\`(go: <manual-[:Invocations]->>) {
   found = extract([go.Text, ...go-[:Files]->.File], Company)
 
   map(found, (c) => {
@@ -86,7 +84,7 @@ function \`Import Companies\`(go: <runs-[:Invocation]->>) {
   })
 }
 
-listen to runs {} fire \`Import Companies\`
+listen to manual-[:Invocations]-> fire \`Import Companies\`
 `,
     },
   ],

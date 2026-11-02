@@ -126,7 +126,7 @@ describe('keepJudgedDelivery: a judged delivery in one write', () => {
     };
   }
 
-  it('keeps a fire_event row per minted run, due a run lease on, and each unjudged fact with the delivery', async () => {
+  it('keeps a fire_event row per minted run, due at once, and each unjudged fact with the delivery', async () => {
     const saved = listen();
     const runId = randomUUID() as TriggerRunId;
     const now = new Date();
@@ -173,7 +173,7 @@ describe('keepJudgedDelivery: a judged delivery in one write', () => {
     expect(work).toEqual([
       { kind: 'fire_event', key: `fire_event:${runId}`, payload: expect.objectContaining({ runId, deliveryId }), due_at: expect.any(Date) },
     ]);
-    expect(work[0]!.due_at.getTime()).toBeGreaterThan(now.getTime());
+    expect(work[0]!.due_at.getTime()).toBeLessThanOrEqual(Date.now());
     const facts = await sql<{ pipeline: string; adapter: string | null; landing: unknown; delivery_id: string }>`
       select pipeline, adapter, landing, delivery_id::text from automations.arrival_unjudged where team_id = ${teamId}::uuid`.execute(getAutomationsQb(['arrival_unjudged']));
     expect(facts.rows).toEqual([{ pipeline: 'listen:polls.lf:count:9f8e7d6c', adapter: 'chat', landing: ARRIVAL.landing, delivery_id: deliveryId }]);

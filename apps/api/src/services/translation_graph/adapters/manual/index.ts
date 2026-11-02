@@ -49,6 +49,7 @@ import type {
   SourcePosition,
 } from 'movement-engine/public/catalog';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
+import type { Arrival } from 'engine-contracts';
 
 import { streamFileRef } from '../../engine/files/retrieve';
 import { fileHandle, ownedFileSource } from 'movement-engine/public/adapter';
@@ -72,6 +73,10 @@ export const MANUAL_INVOCATION_TYPE_ID = 'invocation';
  *  nodes (adapters/CLAUDE.md). The event seed keys its position by this name
  *  (the address is the natural node name, layer 8); the typeId stays stable. */
 export const MANUAL_INVOCATION_DISPLAY_NAME = 'Invocation';
+
+/** The unit's one listenable edge: each Run-now press is an arrival on it
+ *  (`listen to manual-[:Invocations]-> fire backfill`). */
+export const MANUAL_INVOCATIONS_EDGE = 'Invocations';
 
 /** Type id for the per-file record (one position per uploaded file). Internal
  *  currency — stays lowercase; authors see `MANUAL_FILE_DISPLAY_NAME`. */
@@ -146,6 +151,8 @@ export const MANUAL_MANIFEST: AdapterManifest = {
   // `web`/`WEB` are the legacy slugs of the now-folded web adapter; they alias
   // here so stored web-trigger rows resolve to manual at runtime.
   triggerKinds: ['web', 'WEB'],
+  // An older `listen to go {} fire f` is written as a traversal so.
+  listenSettingsBecome: { path: [MANUAL_INVOCATIONS_EDGE], aliases: ['i'], paramFrom: MANUAL_INVOCATION_DISPLAY_NAME, keys: {} },
   triggerExpectation:
     'Fires only when someone explicitly runs the movement — the Run button, ' +
     'a chat submission, or an API/agent call — optionally carrying text and ' +
@@ -196,12 +203,12 @@ export class ManualAdapter extends BaseAdapter implements Adapter {
         typeId: MANUAL_INVOCATION_TYPE_ID,
         displayName: MANUAL_INVOCATION_DISPLAY_NAME,
         writable: false,
-        // Nothing enumerates Run-now presses — one is DELIVERED to the fired
-        // movement. `readable: true` was the encoding's forced lie; the event
-        // edge marker is what the honest spelling was blocked on. No
-        // change-kind axis, so no `action` field.
+        // Nothing enumerates Run-now presses: each is an arrival on
+        // `Invocations`, to the listens on it.
         readable: false,
-        fires: true,
+        collectionName: MANUAL_INVOCATIONS_EDGE,
+        listenable: true,
+        delivery: 'connection',
       },
       {
         typeId: MANUAL_FILE_TYPE_ID,
@@ -235,8 +242,8 @@ export class ManualAdapter extends BaseAdapter implements Adapter {
         targetTypeId: MANUAL_INVOCATION_TYPE_ID,
         cardinality: 'one',
         direction: 'outgoing',
-        name: MANUAL_INVOCATION_DISPLAY_NAME,
-        fires: true,
+        name: MANUAL_INVOCATIONS_EDGE,
+        listenable: true,
         readable: false,
         description: 'Somebody running the automation — what a listen delivers.',
       },
@@ -376,7 +383,7 @@ export class ManualAdapter extends BaseAdapter implements Adapter {
   // ── Actor parsing — the initiating member feeds @user_* / @actor_* ──
 
   async getActorCandidates(input: { event: TriggerEvent }): Promise<ActorCandidate[]> {
-    const payload = (input.event.payload ?? {}) as Partial<ManualInvocationPayload>;
+    const payload = invocationOfEvent(input.event);
     const email = payload.actorEmail?.trim().toLowerCase();
     if (!email || !email.includes('@')) return [];
     return [
@@ -388,7 +395,7 @@ export class ManualAdapter extends BaseAdapter implements Adapter {
   }
 
   async extractActor(input: { event: TriggerEvent }): Promise<ActorIdentity | null> {
-    const payload = (input.event.payload ?? {}) as Partial<ManualInvocationPayload>;
+    const payload = invocationOfEvent(input.event);
     const email = payload.actorEmail?.trim().toLowerCase();
     if (!email || !email.includes('@')) return null;
     return {
@@ -438,6 +445,24 @@ function manualFileRef(file: Partial<ManualFile>): FileRef | null {
     contentType: file.contentType,
     size: file.size,
     source: ownedFileSource({ adapterType: MANUAL_ADAPTER_TYPE, handle: objectUri }),
+  };
+}
+
+/** The invocation a run's event carries: its arrival's landing, whose fields
+ *  are the payload's by field id (`invocationArrival`). */
+function invocationOfEvent(event: TriggerEvent): Partial<ManualInvocationPayload> {
+  const fields: unknown = event.arrival?.landing.fields ?? event.payload;
+  return fields !== null && typeof fields === 'object' ? (fields as Partial<ManualInvocationPayload>) : {};
+}
+
+/** A Run-now press as the arrival it is on `Invocations`: what the person
+ *  supplied, by field id, landing on an `Invocation`. Its identity is the
+ *  request's own, so a retried request is the same arrival. */
+export function invocationArrival(payload: ManualInvocationPayload & { submissionId: string }): Exclude<Arrival, { gone: true }> {
+  return {
+    edge: MANUAL_INVOCATIONS_EDGE,
+    identity: `invocation:${payload.submissionId}`,
+    landing: { recordType: MANUAL_INVOCATION_DISPLAY_NAME, fields: { ...payload } },
   };
 }
 

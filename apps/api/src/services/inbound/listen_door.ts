@@ -31,7 +31,6 @@ import {
 import {
   DEFAULT_RESEND_WINDOW_MS,
   FIRE_EVENT_WORK_KIND,
-  RUN_LEASE_TTL_MS,
   newArrivalsOf,
   type DeliverySource,
   type DeliveryWait,
@@ -42,6 +41,7 @@ import { logger } from 'movement-engine/public/log';
 
 import type { TeamId } from '../../generated/kysely/core/Team';
 import type { TriggerId } from '../../generated/kysely/automations/Trigger';
+import type { MovementId } from '../../generated/kysely/automations/Movement';
 import type { TriggerRunId } from '../../generated/kysely/automations/TriggerRun';
 import type { UnjudgedArrival } from '../lf_store/records_door';
 
@@ -83,14 +83,17 @@ export interface SavedListen extends ListenConfig {
   credentialsId: string | null;
 }
 
-/** The listens `teamId` saved on `adapterType`'s module. A trigger row of
- *  another shape (a pin 1 to 4 listener) is not a listen and is skipped. */
-export async function savedListens(input: { teamId: TeamId; adapterType: string }): Promise<SavedListen[]> {
-  const rows = await getAutomationsQb(['trigger', 'movement'])
+/** The listens `teamId` saved on `adapterType`'s module (in one file, when
+ *  `movementId` names it). A trigger row of another shape (a pin 1 to 4
+ *  listener) is not a listen and is skipped. */
+export async function savedListens(input: { teamId: TeamId; adapterType: string; movementId?: MovementId }): Promise<SavedListen[]> {
+  let query = getAutomationsQb(['trigger', 'movement'])
     .selectFrom('trigger')
     .innerJoin('movement', 'movement.id', 'trigger.movement_id')
     .where('trigger.team_id', '=', input.teamId)
-    .where('trigger.kind', '=', input.adapterType)
+    .where('trigger.kind', '=', input.adapterType);
+  if (input.movementId !== undefined) query = query.where('trigger.movement_id', '=', input.movementId);
+  const rows = await query
     .select(['trigger.id as id', 'trigger.config as config', 'trigger.credentials_id as credentialsId', 'movement.name as file'])
     .execute();
   return rows.flatMap((row) => {
@@ -331,8 +334,10 @@ export function fireKeyOf(runId: string): string {
  * (a redelivery under the same external id keeps nothing), its arrivals
  * logged under the module's re-send window, a `fire_event` row and the
  * trigger waits per minted run, and the facts of the listens that could not
- * judge it. A run's row is due a run lease after the delivery: a drain takes
- * it at once (`notifyWork`), and one that dies is taken again.
+ * judge it. A run's row is due at once: nothing on this host starts a run
+ * inline (as listen-fire's door does, leaving its row as the fallback), so
+ * the drain is the starter, and the row's lease is what takes it again from
+ * a process that died holding it.
  */
 export async function keepJudgedDelivery(input: {
   teamId: TeamId;
@@ -351,7 +356,6 @@ export async function keepJudgedDelivery(input: {
   const { teamId, judged, now } = input;
   const deliveryId = randomUUID();
   const waits = await deliveryWaitsOf({ teamId, adapterType: input.adapterType, minted: judged.minted });
-  const dueAt = new Date(now.getTime() + RUN_LEASE_TTL_MS).toISOString();
   const fires: FireRow[] = judged.minted.map((run) => ({
     teamId,
     triggerId: run.listen.triggerId,
@@ -375,7 +379,7 @@ export async function keepJudgedDelivery(input: {
       ...(input.replayOf !== undefined ? { replayOf: input.replayOf } : {}),
       ...(input.request !== undefined ? { request: input.request } : {}),
     },
-    work: fires.map((fire): NewWorkRow => ({ kind: FIRE_EVENT_WORK_KIND, key: fireKeyOf(fire.runId), payload: fire, dueAt, teamId })),
+    work: fires.map((fire): NewWorkRow => ({ kind: FIRE_EVENT_WORK_KIND, key: fireKeyOf(fire.runId), payload: fire, teamId })),
     arrivals: {
       teamId,
       adapterType: input.adapterType,

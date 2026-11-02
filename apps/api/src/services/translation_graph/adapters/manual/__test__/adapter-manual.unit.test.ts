@@ -68,6 +68,8 @@ import {
   MANUAL_FILE_TYPE_ID,
   MANUAL_FILE_DISPLAY_NAME,
   MANUAL_FILES_FIELD,
+  MANUAL_INVOCATIONS_EDGE,
+  invocationArrival,
   type ManualInvocationPayload,
 } from '../index';
 
@@ -112,10 +114,19 @@ describe('ManualAdapter schema', () => {
   it('lists the invocation + file entry points (source-only)', async () => {
     const adapter = new ManualAdapter(TEAM_ID);
     const entries = await adapter.listEntryPoints();
-    // The invocation is an EVENT edge (`fires`) — nothing enumerates Run-now
-    // presses; a file is reached only via the invocation's `files` edge.
+    // Nothing enumerates Run-now presses: each is an arrival on the
+    // listenable `Invocations`; a file is reached only via the invocation's
+    // `files` edge.
     expect(entries).toEqual([
-      { typeId: MANUAL_INVOCATION_TYPE_ID, displayName: MANUAL_INVOCATION_DISPLAY_NAME, writable: false, readable: false, fires: true },
+      {
+        typeId: MANUAL_INVOCATION_TYPE_ID,
+        displayName: MANUAL_INVOCATION_DISPLAY_NAME,
+        writable: false,
+        readable: false,
+        collectionName: MANUAL_INVOCATIONS_EDGE,
+        listenable: true,
+        delivery: 'connection',
+      },
       { typeId: MANUAL_FILE_TYPE_ID, displayName: MANUAL_FILE_DISPLAY_NAME, writable: false, readable: false },
     ]);
   });
@@ -283,6 +294,24 @@ describe('ManualAdapter actor parsing', () => {
       name: 'Ada',
       label: 'Ada',
     });
+  });
+
+  it('reads the actor off a run`s arrival, where a Run-now press puts it', async () => {
+    const adapter = new ManualAdapter(TEAM_ID);
+    const arrival = invocationArrival({ ...SAMPLE, submissionId: 'inv-1' });
+    const fired: TriggerEvent = {
+      pipelineInputId: 'listen:backfill:backfill:6761be48',
+      adapterType: MANUAL_ADAPTER_TYPE,
+      triggerType: 'arrival',
+      arrival: { adapterType: MANUAL_ADAPTER_TYPE, edge: arrival.edge, landing: arrival.landing },
+      occurredAt: SAMPLE.firedAt,
+    };
+    expect(arrival).toEqual({
+      edge: 'Invocations',
+      identity: 'invocation:inv-1',
+      landing: { recordType: 'Invocation', fields: { ...SAMPLE } },
+    });
+    expect(await adapter.extractActor({ event: fired })).toEqual(expect.objectContaining({ email: 'ada@example.com', name: 'Ada' }));
   });
 
   it('yields no candidates / null actor when no actor email is present', async () => {
