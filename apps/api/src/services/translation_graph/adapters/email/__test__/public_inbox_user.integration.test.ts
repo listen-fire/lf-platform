@@ -144,16 +144,12 @@ async function readAs(sender: string): Promise<string | null> {
   return run.failure_reason?.match(/read as (\S*)/)?.[1] ?? null;
 }
 
-// Waits on the listen-fire release whose @lf/email reads the actor from the
-// arrival (module-kit `firedRecordFields`): @listen-fire/email 0.13.0 reads it
-// from the 0.12 trigger payload, so the run has no actor of the mail's. Each
-// flips to `it` with that release.
 describe('the user a public inbox’s run reads', () => {
-  it.failing('is whoever claimed the key, for a stranger’s mail', async () => {
+  it('is whoever claimed the key, for a stranger’s mail', async () => {
     await expect(readAs(FOUNDER_EMAIL)).resolves.toBe(CLAIMANT_EMAIL);
   });
 
-  it.failing('is the member, for a member’s mail', async () => {
+  it('is the member, for a member’s mail', async () => {
     await expect(readAs(MEMBER_EMAIL)).resolves.toBe(MEMBER_EMAIL);
   });
 });

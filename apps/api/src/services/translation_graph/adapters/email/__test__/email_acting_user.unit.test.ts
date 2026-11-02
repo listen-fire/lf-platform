@@ -1,10 +1,8 @@
 // The inbound email door's sender gate reads who sent a message the way every
 // run of it does: the email module's candidates for the run trigger the
-// email's arrival makes. Under adapter protocol 2.7 (listen-fire 0.13.1) the
-// sender rides on the arrival (`actor`) and the trigger copies it; under
-// 0.13.0 the module reads a 0.12 trigger payload no arrival trigger carries,
-// so the gate finds no sender. Flip to `it` once the platform takes 0.13.1
-// and its email arrival carries the module's actor.
+// email's arrival makes. The sender rides on the arrival (`actor`, adapter
+// protocol 2.7), named as the module's own door names it, and the trigger
+// copies it.
 
 import type { TeamId } from '../../../../../generated/kysely/core/Team';
 
@@ -26,7 +24,7 @@ beforeEach(() => {
 });
 
 describe('emailActingUser: who an inbound email is from', () => {
-  it.failing('names the sender as the originator, read off the arrival the door delivers', async () => {
+  it('names the sender as the originator, read off the arrival the door delivers', async () => {
     const arrival = inboundEmailArrival({
       payload: { sender: 'ada@example.com', From: 'Ada <ada@example.com>', recipient: 'inbox+deals@example.com', subject: 'Intro', messageId: '<m1@example.com>' },
       fallbackIdentity: 'request-1',

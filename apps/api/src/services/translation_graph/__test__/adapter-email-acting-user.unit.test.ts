@@ -14,7 +14,7 @@
 // address maps to a Listen-Fire user.
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
-import type { TriggerEvent } from 'movement-engine/public/inbound';
+import { arrivalTriggerOf, type TriggerEvent } from 'movement-engine/public/inbound';
 import type { ActingUserTriggerContext } from '../adapters/acting_user_shared';
 
 // DB mock: each `where` chain ends in an `executeTakeFirst` that returns
@@ -44,6 +44,7 @@ jest.mock('../../../lib/kysely', () => ({
 
 import { EmailAdapter } from '../adapters/email';
 import { resolveActingUser } from '../adapters/acting_user/resolve';
+import { inboundEmailArrival } from '../adapters/email/arrival';
 
 const TEAM_ID = 'team-1' as TeamId;
 
@@ -61,14 +62,16 @@ function identify(input: {
   });
 }
 
+/** The run trigger an inbound email makes: the arrival the platform's door
+ *  builds from the provider's payload (its sender as who acted), as a
+ *  `fire_event` row hands it to the run. */
 function makeEvent(payload: Record<string, unknown>): TriggerEvent {
-  return {
+  return arrivalTriggerOf({
     pipelineInputId: 'pi-1',
     adapterType: 'email',
-    triggerType: 'webhook',
-    triggerEntryId: 'te-1',
-    payload,
-  };
+    now: new Date('2026-11-02T12:00:00Z'),
+    arrival: inboundEmailArrival({ payload, fallbackIdentity: 'request-1' }),
+  });
 }
 
 beforeEach(() => {

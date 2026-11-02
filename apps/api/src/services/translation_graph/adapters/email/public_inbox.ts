@@ -13,8 +13,9 @@
 // the sender is not on the team, as a Gmail run acts as the mailbox's owner.
 
 import type { ActingUser } from 'movement-engine/public/adapter';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 
-import { EMAIL_ADAPTER_TYPE, inboundRoutingAddress } from '@listen-fire/email';
+import { EMAIL_ADAPTER_TYPE, EMAIL_KEY_FIELD, inboundRoutingAddress } from '@listen-fire/email';
 
 import { getAutomationsQb } from '../../../../lib/kysely';
 import { principalDirectory } from '../../../principal';
@@ -139,19 +140,20 @@ async function releasePublicInbox(input: { teamId: string; key: string }): Promi
 
 /**
  * Who a run of an email listener acts as when its sender is nobody on the
- * team: whoever claimed the listener's key as this team's public inbox, while
- * they may still act for the team. Null for any other listener, and for a key
- * that is not this team's public inbox — the run then has no acting user, as
- * before.
+ * team: whoever claimed the key the mail was sent to (its arrival's `Key`) as
+ * this team's public inbox, while they may still act for the team. The listen
+ * took the mail, so its filter accepts that key. Null for any other listener,
+ * and for a key that is not this team's public inbox — the run then has no
+ * acting user, as before.
  */
 async function publicInboxActor(input: {
   teamId: string;
   trigger: ActingUserTriggerContext | undefined;
+  event: TriggerEvent | undefined;
 }): Promise<ActingUser | null> {
   const trigger = input.trigger;
   if (trigger === undefined || resolveAdapterSlug(trigger.kind) !== EMAIL_ADAPTER_TYPE) return null;
-  const config = trigger.config;
-  const key = typeof config === 'object' && config !== null && 'key' in config ? config.key : undefined;
+  const key = input.event?.arrival?.landing.fields[EMAIL_KEY_FIELD];
   if (typeof key !== 'string' || key.length === 0) return null;
 
   const inbox = await findPublicInbox(key);

@@ -1,12 +1,14 @@
-// Who a run of an email listener acts as when its key is a public inbox: the
-// sender when they are on the team (the chain's own originator step, first),
-// otherwise whoever claimed the key while they may still act for the team.
+// Who a run of an email listener acts as when the key its mail was sent to is
+// a public inbox: the sender when they are on the team (the chain's own
+// originator step, first), otherwise whoever claimed the key while they may
+// still act for the team.
 // Any other listener, or a key that is not this team's public inbox, resolves
 // exactly as before: to nobody.
 
 import type { TeamId } from '../../../../../generated/kysely/core/Team';
 import type { ActorCandidate } from 'movement-engine/public/adapter';
 import type { ActingUserTriggerContext } from '../../acting_user_shared';
+import { arrivalTriggerOf, type TriggerEvent } from 'movement-engine/public/inbound';
 
 const state: {
   inboxes: { key: string; team_id: string; claimed_by_user_id: string; created_at: Date }[];
@@ -60,12 +62,22 @@ function sender(email: string): ActorCandidate {
   return { identity: { identifier: email, scheme: 'email', email }, source: 'originator' };
 }
 
-function emailTrigger(key: string, kind = 'email'): ActingUserTriggerContext {
-  return { id: 'trigger-1', kind, config: { key }, createdByUserId: 'author-1' };
+/** A run of an email listener (stored under `kind`) on mail sent to `key`:
+ *  its listen's trigger and the run trigger the mail's arrival makes. */
+function mailTo(key: string, kind = 'email'): { trigger: ActingUserTriggerContext; event: TriggerEvent } {
+  return {
+    trigger: { id: 'trigger-1', kind, config: {}, createdByUserId: 'author-1' },
+    event: arrivalTriggerOf({
+      pipelineInputId: 'listen:test:trigger-1',
+      adapterType: 'email',
+      now: new Date('2026-11-02T12:00:00Z'),
+      arrival: { edge: 'Emails', identity: 'm-1', landing: { recordType: 'Email', fields: { Key: key } } },
+    }),
+  };
 }
 
-function resolve(trigger: ActingUserTriggerContext, from: string) {
-  return resolveActingUser({ teamId: TEAM as TeamId, trigger, getCandidates: async () => [sender(from)] });
+function resolve(run: { trigger: ActingUserTriggerContext; event: TriggerEvent }, from: string) {
+  return resolveActingUser({ teamId: TEAM as TeamId, ...run, getCandidates: async () => [sender(from)] });
 }
 
 beforeEach(() => {
@@ -77,34 +89,34 @@ beforeEach(() => {
 
 describe('a run on a public inbox', () => {
   it('acts as whoever claimed the key when the sender is nobody on the team', async () => {
-    await expect(resolve(emailTrigger('deals'), 'founder@startup.com')).resolves.toEqual(CLAIMANT);
+    await expect(resolve(mailTo('deals'), 'founder@startup.com')).resolves.toEqual(CLAIMANT);
   });
 
   it('acts as the sender when they are on the team', async () => {
     const ada = { id: 'user-1', email: 'ada@team.com', name: 'ada' };
     state.teamUsers['ada@team.com'] = ada;
 
-    await expect(resolve(emailTrigger('deals'), 'ada@team.com')).resolves.toEqual(ada);
+    await expect(resolve(mailTo('deals'), 'ada@team.com')).resolves.toEqual(ada);
   });
 
   it('holds for a listener stored under a legacy email kind', async () => {
-    await expect(resolve(emailTrigger('deals', 'CUSTOM_EMAIL'), 'founder@startup.com')).resolves.toEqual(CLAIMANT);
+    await expect(resolve(mailTo('deals', 'CUSTOM_EMAIL'), 'founder@startup.com')).resolves.toEqual(CLAIMANT);
   });
 
   it('acts as nobody once the claimant may no longer act for the team', async () => {
     state.access[`${CLAIMANT.id} ${TEAM}`] = false;
 
-    await expect(resolve(emailTrigger('deals'), 'founder@startup.com')).resolves.toBeNull();
+    await expect(resolve(mailTo('deals'), 'founder@startup.com')).resolves.toBeNull();
   });
 
   it('acts as nobody on a key another team holds', async () => {
     state.inboxes[0].team_id = OTHER_TEAM;
 
-    await expect(resolve(emailTrigger('deals'), 'founder@startup.com')).resolves.toBeNull();
+    await expect(resolve(mailTo('deals'), 'founder@startup.com')).resolves.toBeNull();
   });
 
   it('leaves a key nobody claimed, and any other adapter, as before', async () => {
-    await expect(resolve(emailTrigger('private'), 'founder@startup.com')).resolves.toBeNull();
-    await expect(resolve(emailTrigger('deals', 'slack'), 'founder@startup.com')).resolves.toBeNull();
+    await expect(resolve(mailTo('private'), 'founder@startup.com')).resolves.toBeNull();
+    await expect(resolve(mailTo('deals', 'slack'), 'founder@startup.com')).resolves.toBeNull();
   });
 });

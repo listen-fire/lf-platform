@@ -161,12 +161,9 @@ const RECORDINGS = [
     expect(answerOf('poll an edge that is not polled')).toMatchObject({ error: expect.stringContaining('no edge Attendees') });
   });
 
-  // Known regression, upstream: @lf/granola 0.13's `extractActor` reads the
-  // 0.12 trigger payload, and a 0.13 run's trigger event carries its arrival
-  // instead, so a polled meeting's owner is no longer its run's actor. The
-  // recording keeps what 0.13 answers (null); this flips when the module reads
-  // `event.arrival.landing.fields`.
-  it.failing("a polled meeting's actor is its note owner", () => {
+  // Who acted rides on the arrival (adapter protocol 2.7): the run's trigger
+  // carries it, and the module reads it from there.
+  it("a polled meeting's actor is its note owner", () => {
     const { transcript } = loadRecording(POLLS);
     expect(transcript.find((e) => e.step === 'extractActor 0')?.answer).toMatchObject({ scheme: 'email', email: 'priya@fund.com' });
   });

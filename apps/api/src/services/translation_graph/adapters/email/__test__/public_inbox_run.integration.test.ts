@@ -120,18 +120,14 @@ describe('a run of a public inbox’s mail', () => {
     expect(triggerFound).toBe(triggerId);
   });
 
-  // Waits on the listen-fire release whose @lf/email reads the actor from the
-  // arrival (module-kit `firedRecordFields`): @listen-fire/email 0.13.0 reads
-  // it from the 0.12 trigger payload, so the run falls back to the team's
-  // longest-standing member. Each flips to `it` with that release.
-  it.failing('runs a stranger’s mail as whoever claimed the key, the person the door named', async () => {
+  it('runs a stranger’s mail as whoever claimed the key, the person the door named', async () => {
     const { door, run } = await deliver(FOUNDER_EMAIL);
 
     expect(door).toBe(CLAIMANT);
     expect(run).toBe(CLAIMANT);
   });
 
-  it.failing('runs a member’s mail as the member', async () => {
+  it('runs a member’s mail as the member', async () => {
     const { door, run } = await deliver(MEMBER_EMAIL);
 
     expect(door).toBe(MEMBER);

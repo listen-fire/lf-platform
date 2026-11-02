@@ -42,15 +42,19 @@
                 "subject": "Intro",
                 "body-plain": "Hello there",
                 "Message-Id": "<m-1@example.com>",
-                "timestamp": "1792238400",
-                "token": "golden-mailgun-token-0001",
-                "signature": "efd8f9dae4f290929eb5e0ea31a22b8994446a10165faae7b9fe178ebe7a56cb",
                 "messageId": "<m-1@example.com>",
                 "bodyText": "Hello there",
                 "attachments": [],
                 "content": "Hello there",
                 "Key": "deals"
               }
+            },
+            "actor": {
+              "identifier": "ada@example.com",
+              "scheme": "email",
+              "adapterType": "email",
+              "email": "ada@example.com",
+              "label": "ada@example.com"
             }
           }
         ]
@@ -103,15 +107,19 @@
                 "subject": "Intro",
                 "body-plain": "Hello there",
                 "Message-Id": "<m-1@example.com>",
-                "timestamp": "1792238400",
-                "token": "golden-mailgun-token-0001",
-                "signature": "efd8f9dae4f290929eb5e0ea31a22b8994446a10165faae7b9fe178ebe7a56cb",
                 "messageId": "<m-1@example.com>",
                 "bodyText": "Hello there",
                 "attachments": [],
                 "content": "Hello there",
                 "Key": "deals"
               }
+            },
+            "actor": {
+              "identifier": "ada@example.com",
+              "scheme": "email",
+              "adapterType": "email",
+              "email": "ada@example.com",
+              "label": "ada@example.com"
             }
           }
         ]
@@ -138,9 +146,6 @@
                   "subject": "Intro",
                   "body-plain": "Hello there",
                   "Message-Id": "<m-1@example.com>",
-                  "timestamp": "1792238400",
-                  "token": "golden-mailgun-token-0001",
-                  "signature": "efd8f9dae4f290929eb5e0ea31a22b8994446a10165faae7b9fe178ebe7a56cb",
                   "messageId": "<m-1@example.com>",
                   "bodyText": "Hello there",
                   "attachments": []
@@ -201,15 +206,19 @@
                 "subject": "Intro",
                 "body-plain": "Hello there",
                 "Message-Id": "<m-1@example.com>",
-                "timestamp": "1792238400",
-                "token": "golden-mailgun-token-0001",
-                "signature": "efd8f9dae4f290929eb5e0ea31a22b8994446a10165faae7b9fe178ebe7a56cb",
                 "messageId": "<m-1@example.com>",
                 "bodyText": "Hello there",
                 "attachments": [],
                 "content": "Hello there",
                 "Key": "deals"
               }
+            },
+            "actor": {
+              "identifier": "ada@example.com",
+              "scheme": "email",
+              "adapterType": "email",
+              "email": "ada@example.com",
+              "label": "ada@example.com"
             }
           }
         ]
@@ -236,9 +245,6 @@
                   "subject": "Intro",
                   "body-plain": "Hello there",
                   "Message-Id": "<m-1@example.com>",
-                  "timestamp": "1792238400",
-                  "token": "golden-mailgun-token-0001",
-                  "signature": "efd8f9dae4f290929eb5e0ea31a22b8994446a10165faae7b9fe178ebe7a56cb",
                   "messageId": "<m-1@example.com>",
                   "bodyText": "Hello there",
                   "attachments": []
@@ -299,15 +305,19 @@
                 "subject": "Intro",
                 "body-plain": "Hello there",
                 "Message-Id": "<m-1@example.com>",
-                "timestamp": "1792238400",
-                "token": "golden-mailgun-token-0001",
-                "signature": "efd8f9dae4f290929eb5e0ea31a22b8994446a10165faae7b9fe178ebe7a56cb",
                 "messageId": "<m-1@example.com>",
                 "bodyText": "Hello there",
                 "attachments": [],
                 "content": "Hello there",
                 "Key": "deals"
               }
+            },
+            "actor": {
+              "identifier": "ada@example.com",
+              "scheme": "email",
+              "adapterType": "email",
+              "email": "ada@example.com",
+              "label": "ada@example.com"
             }
           }
         ]
@@ -334,9 +344,6 @@
                   "subject": "Intro",
                   "body-plain": "Hello there",
                   "Message-Id": "<m-1@example.com>",
-                  "timestamp": "1792238400",
-                  "token": "golden-mailgun-token-0001",
-                  "signature": "efd8f9dae4f290929eb5e0ea31a22b8994446a10165faae7b9fe178ebe7a56cb",
                   "messageId": "<m-1@example.com>",
                   "bodyText": "Hello there",
                   "attachments": []
@@ -474,15 +481,19 @@
                 "subject": "Intro",
                 "body-plain": "Hello there",
                 "Message-Id": "<m-1@example.com>",
-                "timestamp": "1792238400",
-                "token": "golden-mailgun-token-0001",
-                "signature": "efd8f9dae4f290929eb5e0ea31a22b8994446a10165faae7b9fe178ebe7a56cb",
                 "messageId": "<m-1@example.com>",
                 "bodyText": "Hello there",
                 "attachments": [],
                 "content": "Hello there",
                 "Key": "deals"
               }
+            },
+            "actor": {
+              "identifier": "newcomer@example.org",
+              "scheme": "email",
+              "adapterType": "email",
+              "email": "newcomer@example.org",
+              "label": "newcomer@example.org"
             }
           }
         ]
@@ -682,15 +693,19 @@
                 "subject": "Intro",
                 "body-plain": "Hello there",
                 "Message-Id": "<m-1@example.com>",
-                "timestamp": "1792238400",
-                "token": "golden-mailgun-token-0001",
-                "signature": "73bd53e761e130e65b7449ba6d0c6a8e429c996860231ee58fc39ab5ea45bfa7",
                 "messageId": "<m-1@example.com>",
                 "bodyText": "Hello there",
                 "attachments": [],
                 "content": "Hello there",
                 "Key": "deals"
               }
+            },
+            "actor": {
+              "identifier": "ada@example.com",
+              "scheme": "email",
+              "adapterType": "email",
+              "email": "ada@example.com",
+              "label": "ada@example.com"
             }
           }
         ]

@@ -19,6 +19,7 @@ import type {
 } from 'movement-engine/public/host';
 import type { CancelGate } from 'movement-engine/public/movement-engine';
 import type { ActingUser } from 'movement-engine/public/adapter';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import type { ActingUserTriggerContext } from '../adapters/acting_user_shared';
 import type { LlmClient } from '../engine/batched_extraction';
 import type { DryRunWriteSink } from 'movement-engine/public/adapter';
@@ -197,7 +198,17 @@ export function productionEngineHost(input: {
           await resolveTeamActingUser({
             teamId: tenantOf(segmentId),
             ...(triggerId !== undefined ? { triggerId } : {}),
-            getCandidates: () => adapters.answer({ segmentId, instance, method: 'getActorCandidates', args: { event } }),
+            event,
+            // The module's own candidates where it offers them; else who
+            // acted on the arrival, as its module said at the door (adapter
+            // protocol 2.7), as the one originator.
+            getCandidates: async () => {
+              if (adapters.offers({ segmentId, instance, method: 'getActorCandidates' })) {
+                return adapters.answer({ segmentId, instance, method: 'getActorCandidates', args: { event } });
+              }
+              const actor = event.arrival?.actor;
+              return actor === undefined ? [] : [{ identity: actor, source: 'originator' as const }];
+            },
           }),
         ),
     },
@@ -280,11 +291,12 @@ function lockDatabaseUrl(): string {
 /** The trigger the event dispatched through decides first (its creator
  *  override and creator fallback); then the source adapter's candidates. A
  *  trigger that is gone reads as none. */
-async function resolveTeamActingUser(input: ActingUserLookup): Promise<ActingUser | null> {
+async function resolveTeamActingUser(input: ActingUserLookup & { event: TriggerEvent }): Promise<ActingUser | null> {
   const trigger = input.triggerId !== undefined ? await loadActingUserTrigger(input.triggerId) : undefined;
   return resolveActingUser({
     teamId: teamOfTenant(input.teamId),
     ...(trigger !== undefined ? { trigger } : {}),
+    event: input.event,
     getCandidates: input.getCandidates,
   });
 }

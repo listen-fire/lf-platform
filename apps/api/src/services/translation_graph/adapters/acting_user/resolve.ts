@@ -25,6 +25,7 @@
 // round-trip.
 
 import type { ActingUser, ActorCandidate } from 'movement-engine/public/adapter';
+import type { TriggerEvent } from 'movement-engine/public/inbound';
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 
 import {
@@ -40,6 +41,9 @@ import { publicInboxActor } from '../email/public_inbox';
 export async function resolveActingUser(input: {
   teamId: TeamId;
   trigger?: ActingUserTriggerContext;
+  /** The run's trigger event, when there is a run: a public inbox is found
+   *  by the key its mail was sent to. */
+  event?: TriggerEvent;
   getCandidates: () => Promise<ActorCandidate[]>;
 }): Promise<ActingUser | null> {
   // 1. Creator override (T6) — short-circuits before the parse thunk runs.
@@ -93,7 +97,7 @@ export async function resolveActingUser(input: {
   }
 
   // 5. Public inbox — the sender is nobody on the team, by design.
-  const claimant = await publicInboxActor({ teamId: input.teamId, trigger: input.trigger });
+  const claimant = await publicInboxActor({ teamId: input.teamId, trigger: input.trigger, event: input.event });
   if (claimant) return claimant;
 
   // 6. No signal — reject.

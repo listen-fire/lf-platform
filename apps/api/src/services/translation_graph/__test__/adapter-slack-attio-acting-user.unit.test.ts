@@ -20,7 +20,7 @@
 // fallback → reject.
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
-import type { TriggerEvent } from 'movement-engine/public/inbound';
+import { arrivalTriggerOf, type TriggerEvent } from 'movement-engine/public/inbound';
 
 // ── DB mock (user_email / user lookups + creator load) ──────────────────
 const dbQueue: Array<unknown> = [];
@@ -93,15 +93,37 @@ function identify(input: {
   });
 }
 
-function makeEvent(payload: Record<string, unknown>, actor?: Record<string, unknown>): TriggerEvent {
-  return {
+/** The run trigger a Slack arrival makes, naming `userId` as who acted, as
+ *  the module's door names them (adapter protocol 2.7). */
+function slackFired(userId?: string): TriggerEvent {
+  return arrivalTriggerOf({
     pipelineInputId: 'pi-1',
     adapterType: 'slack',
-    triggerType: 'webhook',
-    triggerEntryId: 'te-1',
-    payload,
-    actor: actor as TriggerEvent['actor'],
-  };
+    now: new Date('2026-11-02T12:00:00Z'),
+    arrival: {
+      edge: 'Messages',
+      identity: 'C1:1.0',
+      landing: { recordId: 'C1:1.0', fields: { text: 'hi' } },
+      ...(userId !== undefined ? { actor: { identifier: userId, scheme: 'opaque', adapterType: 'slack', label: userId } } : {}),
+    },
+  });
+}
+
+/** The run trigger an Attio change makes: Attio's own `actor` beside its
+ *  fields and, for an actor with an id, who acted (as `changeArrivals`
+ *  builds it). */
+function attioFired(actor?: { id: string; type: string }): TriggerEvent {
+  return arrivalTriggerOf({
+    pipelineInputId: 'pi-1',
+    adapterType: 'attio',
+    now: new Date('2026-11-02T12:00:00Z'),
+    arrival: {
+      edge: 'Changes',
+      identity: 'evt-1',
+      landing: { recordId: 'evt-1', fields: { Kind: 'updated', ...(actor !== undefined ? { actor } : {}) } },
+      ...(actor !== undefined ? { actor: { identifier: actor.id, scheme: 'opaque', adapterType: 'attio', label: actor.id } } : {}),
+    },
+  });
 }
 
 // Both adapters read their credential row from the DB before making any
@@ -126,7 +148,7 @@ describe('SlackAdapter acting-user', () => {
     slackUsersInfo.mockResolvedValue({ user: { profile: { email: 'nobody@external.com' } } });
     const user = await identify({
       adapter,
-      event: makeEvent({ event: { user: 'U123' } }),
+      event: slackFired('U123'),
       trigger: { id: 't-1', kind: 'SLACK', config: {}, createdByUserId: 'creator-1' },
     });
     expect(user).toBeNull();
@@ -140,7 +162,7 @@ describe('SlackAdapter acting-user', () => {
     setDbRow({ id: 'creator-1', email: 'creator@example.com', username: 'creator' });
     const user = await identify({
       adapter,
-      event: makeEvent({ event: { user: 'U123' } }),
+      event: slackFired('U123'),
       trigger: {
         id: 't-1',
         kind: 'SLACK',
@@ -158,7 +180,7 @@ describe('SlackAdapter acting-user', () => {
     slackUsersInfo.mockResolvedValue({ user: { profile: { email: 'nobody@external.com' } } });
     const user = await identify({
       adapter,
-      event: makeEvent({ event: { user: 'U123' } }),
+      event: slackFired('U123'),
       trigger: {
         id: 't-1',
         kind: 'SLACK',
@@ -176,7 +198,7 @@ describe('SlackAdapter acting-user', () => {
     slackUsersInfo.mockResolvedValue({ user: { profile: { email: 'nobody@external.com' } } });
     const user = await identify({
       adapter,
-      event: makeEvent({ event: { user: 'U123' } }),
+      event: slackFired('U123'),
     });
     expect(user).toBeNull();
   });
@@ -190,7 +212,7 @@ describe('SlackAdapter acting-user', () => {
     setDbRow({ id: 'user-h', email: 'ada@example.com', username: 'ada' });
     const user = await identify({
       adapter,
-      event: makeEvent({ event: { user: 'U123' } }),
+      event: slackFired('U123'),
       trigger: { id: 't-1', kind: 'SLACK', config: {}, createdByUserId: 'creator-1' },
     });
     expect(slackUsersInfo).toHaveBeenCalledWith({ user: 'U123' });
@@ -208,7 +230,7 @@ describe('SlackAdapter acting-user', () => {
     await expect(
       identify({
         adapter,
-        event: makeEvent({ event: { user: 'U123' } }),
+        event: slackFired('U123'),
         trigger: { id: 't-1', kind: 'SLACK', config: {}, createdByUserId: 'creator-1' },
       }),
     ).rejects.toThrow('missing_scope');
@@ -222,7 +244,7 @@ describe('SlackAdapter acting-user', () => {
     setDbRow({ id: 'creator-1', email: 'creator@example.com', username: 'creator' });
     const user = await identify({
       adapter,
-      event: makeEvent({ event: { user: 'U123' } }),
+      event: slackFired('U123'),
       trigger: {
         id: 't-1',
         kind: 'SLACK',
@@ -237,7 +259,7 @@ describe('SlackAdapter acting-user', () => {
     const adapter = new SlackAdapter(TEAM_ID);
     const user = await identify({
       adapter,
-      event: makeEvent({ event: { user: 'U123' } }),
+      event: slackFired('U123'),
       trigger: { id: 't-1', kind: 'SLACK', config: {}, createdByUserId: 'creator-1' },
     });
     expect(slackUsersInfo).not.toHaveBeenCalled();
@@ -250,7 +272,7 @@ describe('SlackAdapter acting-user', () => {
     setDbRow({ id: 'creator-1', email: 'creator@example.com', username: 'creator' });
     const user = await identify({
       adapter,
-      event: makeEvent({ event: { user: 'U123' } }),
+      event: slackFired('U123'),
       trigger: {
         id: 't-1',
         kind: 'SLACK',
@@ -266,7 +288,7 @@ describe('SlackAdapter acting-user', () => {
     const adapter = new SlackAdapter(TEAM_ID, 'cred-1');
     const user = await identify({
       adapter,
-      event: makeEvent({ event: { user: 'U123' } }),
+      event: slackFired('U123'),
       trigger: {
         id: 't-1',
         kind: 'SLACK',
@@ -280,27 +302,21 @@ describe('SlackAdapter acting-user', () => {
 
   it('override leaves @actor_* (extractActor) showing the raw originator', async () => {
     const adapter = new SlackAdapter(TEAM_ID, 'cred-1');
-    const actor = await adapter.extractActor({ event: makeEvent({ event: { user: 'U999' } }) });
+    const actor = await adapter.extractActor({ event: slackFired('U999') });
     expect(actor).toEqual({ identifier: 'U999', scheme: 'opaque', adapterType: 'slack', label: 'U999' });
   });
 });
 
 describe('SlackAdapter.extractActor', () => {
-  it('parses the user id from the event_callback envelope', async () => {
+  it('reads who acted off the arrival the run was fired on', async () => {
     const adapter = new SlackAdapter(TEAM_ID);
-    const actor = await adapter.extractActor({ event: makeEvent({ event: { user: 'U123', text: 'hi' } }) });
+    const actor = await adapter.extractActor({ event: slackFired('U123') });
     expect(actor).toEqual({ identifier: 'U123', scheme: 'opaque', adapterType: 'slack', label: 'U123' });
   });
 
-  it('parses the user id from a flat event payload', async () => {
+  it('returns null when the arrival names no one', async () => {
     const adapter = new SlackAdapter(TEAM_ID);
-    const actor = await adapter.extractActor({ event: makeEvent({ user: 'U456' }) });
-    expect(actor?.identifier).toBe('U456');
-  });
-
-  it('returns null when no user id is present', async () => {
-    const adapter = new SlackAdapter(TEAM_ID);
-    const actor = await adapter.extractActor({ event: makeEvent({}) });
+    const actor = await adapter.extractActor({ event: slackFired() });
     expect(actor).toBeNull();
   });
 });
@@ -315,7 +331,7 @@ describe('AttioAdapter acting-user', () => {
     setDbRow(null); // email-match exact-lookup misses
     const user = await identify({
       adapter,
-      event: makeEvent({}, { id: 'wm-1', type: 'workspace-member' }),
+      event: attioFired({ id: 'wm-1', type: 'workspace-member' }),
       trigger: { id: 't-2', kind: 'ATTIO_WEBHOOK', config: {}, createdByUserId: 'creator-1' },
     });
     expect(user).toBeNull();
@@ -329,7 +345,7 @@ describe('AttioAdapter acting-user', () => {
     setDbRow({ id: 'creator-2', email: 'creator2@example.com', username: 'c2' });
     const user = await identify({
       adapter,
-      event: makeEvent({}, { id: 'wm-1', type: 'workspace-member' }),
+      event: attioFired({ id: 'wm-1', type: 'workspace-member' }),
       trigger: {
         id: 't-2',
         kind: 'ATTIO_WEBHOOK',
@@ -348,7 +364,7 @@ describe('AttioAdapter acting-user', () => {
     setDbRow({ id: 'user-h', email: 'ada@example.com', username: 'ada' });
     const user = await identify({
       adapter,
-      event: makeEvent({}, { id: 'wm-1', type: 'workspace-member' }),
+      event: attioFired({ id: 'wm-1', type: 'workspace-member' }),
       trigger: { id: 't-2', kind: 'ATTIO_WEBHOOK', config: {}, createdByUserId: 'creator-2' },
     });
     expect(attioFetch).toHaveBeenCalledWith(
@@ -361,7 +377,7 @@ describe('AttioAdapter acting-user', () => {
     const adapter = createAttioAdapter({ teamId: TEAM_ID, credentialsId: 'cred-1' });
     const user = await identify({
       adapter,
-      event: makeEvent({}, { id: 'tok-1', type: 'api-token' }),
+      event: attioFired({ id: 'tok-1', type: 'api-token' }),
       trigger: { id: 't-2', kind: 'ATTIO_WEBHOOK', config: {}, createdByUserId: 'creator-2' },
     });
     expect(attioFetch).not.toHaveBeenCalled();
@@ -374,7 +390,7 @@ describe('AttioAdapter acting-user', () => {
     attioFetch.mockRejectedValue(new Error('403'));
     const user = await identify({
       adapter,
-      event: makeEvent({}, { id: 'wm-1', type: 'workspace-member' }),
+      event: attioFired({ id: 'wm-1', type: 'workspace-member' }),
       trigger: { id: 't-2', kind: 'ATTIO_WEBHOOK', config: {}, createdByUserId: 'creator-2' },
     });
     expect(user).toBeNull();
@@ -386,7 +402,7 @@ describe('AttioAdapter acting-user', () => {
     setDbRow({ id: 'creator-2', email: 'creator2@example.com', username: 'c2' });
     const user = await identify({
       adapter,
-      event: makeEvent({}, { id: 'wm-1', type: 'workspace-member' }),
+      event: attioFired({ id: 'wm-1', type: 'workspace-member' }),
       trigger: {
         id: 't-2',
         kind: 'ATTIO_WEBHOOK',
@@ -402,7 +418,7 @@ describe('AttioAdapter acting-user', () => {
     const adapter = createAttioAdapter({ teamId: TEAM_ID, credentialsId: 'cred-1' });
     const user = await identify({
       adapter,
-      event: makeEvent({}, { id: 'wm-1', type: 'workspace-member' }),
+      event: attioFired({ id: 'wm-1', type: 'workspace-member' }),
       trigger: {
         id: 't-2',
         kind: 'ATTIO_WEBHOOK',
@@ -416,23 +432,15 @@ describe('AttioAdapter acting-user', () => {
 });
 
 describe('AttioAdapter.extractActor', () => {
-  it('reads actor.id from the event envelope', async () => {
+  it('reads who acted off the arrival the run was fired on', async () => {
     const adapter = createAttioAdapter({ teamId: TEAM_ID, credentialsId: 'cred-1' });
-    const actor = await adapter.extractActor({
-      event: makeEvent({}, { id: 'wm-789', type: 'workspace-member' }),
-    });
+    const actor = await adapter.extractActor({ event: attioFired({ id: 'wm-789', type: 'workspace-member' }) });
     expect(actor).toEqual({ identifier: 'wm-789', scheme: 'opaque', adapterType: 'attio', label: 'wm-789' });
   });
 
-  it('falls back to payload.actor.id when event.actor is absent', async () => {
+  it('returns null when the arrival names no one', async () => {
     const adapter = createAttioAdapter({ teamId: TEAM_ID, credentialsId: 'cred-1' });
-    const actor = await adapter.extractActor({ event: makeEvent({ actor: { id: 'wm-from-payload' } }) });
-    expect(actor?.identifier).toBe('wm-from-payload');
-  });
-
-  it('returns null when nothing carries an actor id', async () => {
-    const adapter = createAttioAdapter({ teamId: TEAM_ID, credentialsId: 'cred-1' });
-    const actor = await adapter.extractActor({ event: makeEvent({}) });
+    const actor = await adapter.extractActor({ event: attioFired() });
     expect(actor).toBeNull();
   });
 });

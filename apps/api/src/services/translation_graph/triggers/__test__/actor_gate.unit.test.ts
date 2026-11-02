@@ -101,6 +101,32 @@ describe('consultActorGate', () => {
     expect(resolved).toBe(false);
   });
 
+  it('asks a module with no candidates of its own about who acted on the arrival', async () => {
+    const actor = { identifier: 'U123', scheme: 'opaque', adapterType: 'slack', label: 'U123' } as const;
+    let sawCandidates: ActorCandidate[] | undefined;
+    const gate = await consultActorGate({
+      teamId: TEAM_ID,
+      sourceAdapter: { adapterType: 'slack' } as unknown as Adapter,
+      event: { ...event('slack'), arrival: { adapterType: 'slack', edge: 'Messages', landing: { fields: {} }, actor } },
+      resolve: async ({ getCandidates }) => {
+        sawCandidates = await getCandidates();
+        return registered;
+      },
+    });
+    expect(sawCandidates).toEqual([{ identity: actor, source: 'originator' }]);
+    expect(gate).toEqual({ kind: 'proceed' });
+  });
+
+  it('drops when neither the module nor the arrival names who acted', async () => {
+    const gate = await consultActorGate({
+      teamId: TEAM_ID,
+      sourceAdapter: { adapterType: 'slack' } as unknown as Adapter,
+      event: event('slack'),
+      resolve: async () => registered,
+    });
+    expect(gate.kind).toBe('drop');
+  });
+
   it('a throwing resolver drops (fail closed — the receipt stays replayable)', async () => {
     const gate = await consultActorGate({
       teamId: TEAM_ID,

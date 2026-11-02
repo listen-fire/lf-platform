@@ -133,6 +133,7 @@ async function emailActor(input: {
   return resolveActingUser({
     teamId: input.teamId,
     trigger: input.trigger,
+    event: input.event,
     getCandidates: () => createEmailAdapter({ teamId: input.teamId }).getActorCandidates({ event: input.event }),
   });
 }

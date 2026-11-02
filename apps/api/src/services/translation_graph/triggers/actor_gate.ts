@@ -46,21 +46,27 @@ export async function consultActorGate(input: {
 }): Promise<ActorGateDisposition> {
   if (!inboundActorGateEnabled(input.event.adapterType)) return { kind: 'proceed' };
 
+  // The module's own candidates where it offers them; else who acted on the
+  // arrival, as its module said at the door (adapter protocol 2.7).
   const candidates = input.sourceAdapter?.getActorCandidates;
-  if (!candidates) {
+  const actor = input.event.arrival?.actor;
+  const getCandidates =
+    candidates !== undefined
+      ? () => candidates.call(input.sourceAdapter, { event: input.event })
+      : actor !== undefined
+        ? async (): Promise<ActorCandidate[]> => [{ identity: actor, source: 'originator' }]
+        : undefined;
+  if (getCandidates === undefined) {
     return {
       kind: 'drop',
       reason:
-        `${input.event.adapterType}: inbound requires a registered actor, but the source ` +
-        'adapter surfaces no actor candidates — dropping (fail closed).',
+        `${input.event.adapterType}: inbound requires a registered actor, but neither the source ` +
+        'adapter nor the arrival names one — dropping (fail closed).',
     };
   }
   const resolve: Resolve = input.resolve ?? resolveActingUser;
   try {
-    const user = await resolve({
-      teamId: input.teamId,
-      getCandidates: () => candidates.call(input.sourceAdapter, { event: input.event }),
-    });
+    const user = await resolve({ teamId: input.teamId, getCandidates });
     if (user) return { kind: 'proceed' };
     return {
       kind: 'drop',

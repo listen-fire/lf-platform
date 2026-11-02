@@ -17,7 +17,7 @@ jest.mock('../../../../../lib/recording', () => ({
 }));
 
 import type { TeamId } from '../../../../../generated/kysely/core/Team';
-import type { TriggerEvent } from 'movement-engine/public/inbound';
+import { arrivalTriggerOf, type TriggerEvent } from 'movement-engine/public/inbound';
 
 import { SlackAdapter } from '../index';
 
@@ -30,13 +30,20 @@ function adapterWithClient(client: unknown): SlackAdapter {
   return adapter;
 }
 
-const event = (payload: unknown): TriggerEvent => ({
-  pipelineInputId: 'trigger:t1',
-  adapterType: 'slack',
-  triggerType: 'webhook',
-  payload,
-  occurredAt: new Date().toISOString(),
-});
+/** The run trigger a Slack message's arrival makes, naming `user` as who
+ *  acted when it is given, as the module's door does. */
+const event = ({ user }: { user?: string }): TriggerEvent =>
+  arrivalTriggerOf({
+    pipelineInputId: 'listen:test:t1',
+    adapterType: 'slack',
+    now: new Date(),
+    arrival: {
+      edge: 'Messages',
+      identity: 'C1:1.0',
+      landing: { recordId: 'C1:1.0', fields: {} },
+      ...(user !== undefined ? { actor: { identifier: user, scheme: 'opaque', adapterType: 'slack', label: user } } : {}),
+    },
+  });
 
 describe('SlackAdapter#getActorCandidates — lookup failure vs genuine miss', () => {
   it('resolves an empty candidate list when the profile carries no email (genuine miss)', async () => {

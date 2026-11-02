@@ -17,7 +17,7 @@ import {
   EMAIL_ADAPTER_TYPE,
 } from '../../services/translation_graph/adapters/email';
 import { fetchResendEmailPayload } from '../../services/translation_graph/adapters/email/resend_inbound';
-import { readMailgunMessage, readResendEnvelope, resendEnvelopeRecipients } from '@listen-fire/email';
+import { readMailgunMessage, readResendEnvelope, resendEnvelopeRecipients, withoutMailgunSigning } from '@listen-fire/email';
 import { emailActingUser, inboundEmailArrival } from '../../services/translation_graph/adapters/email/arrival';
 import { findPublicInbox } from '../../services/translation_graph/adapters/email/public_inbox';
 
@@ -168,11 +168,13 @@ const acceptInboundEmail = async (
 
 /**
  * Mailgun posts the whole message as a form, so reading it is a normalisation
- * and nothing more.
+ * and nothing more. Its signing fields were read by the door's verification
+ * and go no further: not into the email's record, a run, a kept delivery or
+ * a quarantined body.
  */
 const receiveInboundEmail: RequestHandler = async (req, res) =>
   acceptInboundEmail(req, res, {
-    payload: normaliseInboundEmailPayload((req.body ?? {}) as Record<string, unknown>),
+    payload: normaliseInboundEmailPayload(withoutMailgunSigning((req.body ?? {}) as Record<string, unknown>)),
     recipients: readMailgunMessage(req.body)?.recipients ?? [],
   });
 

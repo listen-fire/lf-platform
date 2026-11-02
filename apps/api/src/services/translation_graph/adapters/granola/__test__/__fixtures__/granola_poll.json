@@ -61,7 +61,14 @@
               }
             },
             "takenApplied": true,
-            "occurredAt": "2026-06-19T10:00:00.000Z"
+            "occurredAt": "2026-06-19T10:00:00.000Z",
+            "actor": {
+              "identifier": "priya@fund.com",
+              "scheme": "email",
+              "adapterType": "granola",
+              "email": "priya@fund.com",
+              "name": "Priya Owner"
+            }
           },
           {
             "edge": "Meetings",
@@ -89,7 +96,13 @@
               }
             },
             "takenApplied": true,
-            "occurredAt": "2026-07-02T15:30:00.000Z"
+            "occurredAt": "2026-07-02T15:30:00.000Z",
+            "actor": {
+              "identifier": "sam@fund.com",
+              "scheme": "email",
+              "adapterType": "granola",
+              "email": "sam@fund.com"
+            }
           },
           {
             "edge": "Meetings",
@@ -140,7 +153,14 @@
               }
             },
             "takenApplied": true,
-            "occurredAt": "2026-08-01T11:00:00.000Z"
+            "occurredAt": "2026-08-01T11:00:00.000Z",
+            "actor": {
+              "identifier": "priya@fund.com",
+              "scheme": "email",
+              "adapterType": "granola",
+              "email": "priya@fund.com",
+              "name": "Priya Owner"
+            }
           }
         ],
         "cursor": {
@@ -202,7 +222,14 @@
               }
             },
             "takenApplied": true,
-            "occurredAt": "2026-06-19T10:00:00.000Z"
+            "occurredAt": "2026-06-19T10:00:00.000Z",
+            "actor": {
+              "identifier": "priya@fund.com",
+              "scheme": "email",
+              "adapterType": "granola",
+              "email": "priya@fund.com",
+              "name": "Priya Owner"
+            }
           }
         ],
         "cursor": {
@@ -227,27 +254,76 @@
     },
     {
       "step": "extractActor 0",
-      "answer": null
+      "answer": {
+        "identifier": "priya@fund.com",
+        "scheme": "email",
+        "adapterType": "granola",
+        "email": "priya@fund.com",
+        "name": "Priya Owner"
+      }
     },
     {
       "step": "getActorCandidates 0",
-      "answer": []
+      "answer": [
+        {
+          "identity": {
+            "identifier": "priya@fund.com",
+            "scheme": "email",
+            "adapterType": "granola",
+            "email": "priya@fund.com",
+            "name": "Priya Owner"
+          },
+          "source": "originator"
+        }
+      ]
     },
     {
       "step": "extractActor 1",
-      "answer": null
+      "answer": {
+        "identifier": "sam@fund.com",
+        "scheme": "email",
+        "adapterType": "granola",
+        "email": "sam@fund.com"
+      }
     },
     {
       "step": "getActorCandidates 1",
-      "answer": []
+      "answer": [
+        {
+          "identity": {
+            "identifier": "sam@fund.com",
+            "scheme": "email",
+            "adapterType": "granola",
+            "email": "sam@fund.com"
+          },
+          "source": "originator"
+        }
+      ]
     },
     {
       "step": "extractActor 2",
-      "answer": null
+      "answer": {
+        "identifier": "priya@fund.com",
+        "scheme": "email",
+        "adapterType": "granola",
+        "email": "priya@fund.com",
+        "name": "Priya Owner"
+      }
     },
     {
       "step": "getActorCandidates 2",
-      "answer": []
+      "answer": [
+        {
+          "identity": {
+            "identifier": "priya@fund.com",
+            "scheme": "email",
+            "adapterType": "granola",
+            "email": "priya@fund.com",
+            "name": "Priya Owner"
+          },
+          "source": "originator"
+        }
+      ]
     }
   ],
   "exchanges": [
