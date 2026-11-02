@@ -53,7 +53,7 @@ beforeAll((done) => {
   const app = express();
   app.use('/api/public/telegram', express.raw({ type: '*/*' }), telegramBuiltinRouter as Router);
   server = createServer(app);
-  server.listen(0, () => {
+  server.listen(0, '127.0.0.1', () => {
     baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
     done();
   });

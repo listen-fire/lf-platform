@@ -51,7 +51,7 @@ beforeAll((done) => {
   mountPublicInboxRoutes(router);
   app.use('/v1/automation', router);
   server = createServer(app);
-  server.listen(0, () => {
+  server.listen(0, '127.0.0.1', () => {
     baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
     done();
   });

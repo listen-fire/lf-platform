@@ -52,7 +52,7 @@ beforeAll(async () => {
   router.use(express.urlencoded({ extended: true }));
   router.use('/api/connect', connectRouter as Router);
   app = createServer(router);
-  await new Promise<void>((resolve) => app.listen(0, resolve));
+  await new Promise<void>((resolve) => app.listen(0, '127.0.0.1', resolve));
   baseUrl = `http://127.0.0.1:${(app.address() as AddressInfo).port}`;
 
   v2 = await startFakeCrmServer({ secret: SECRET });

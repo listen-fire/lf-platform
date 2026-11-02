@@ -27,8 +27,10 @@ jest.mock('../../../services/asks/doors', () => ({
 /** The rows the door queued, in order: what the drain would run. */
 let queued: { kind: string; key: string; payload: unknown }[] = [];
 let holdEnqueue: Promise<void> | undefined;
+let enqueueReached: (() => void) | undefined;
 jest.mock('../../../services/work/store', () => ({
   enqueueWork: async (row: { kind: string; key: string; payload: unknown }) => {
+    enqueueReached?.();
     await holdEnqueue;
     queued.push(row);
   },
@@ -59,7 +61,7 @@ beforeAll((done) => {
   const app = express();
   app.use('/api/public/slack-actions', express.raw({ type: '*/*' }), slackInteractivityRouter as Router);
   server = createServer(app);
-  server.listen(0, () => {
+  server.listen(0, '127.0.0.1', () => {
     baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
     done();
   });
@@ -122,12 +124,17 @@ describe('nothing runs after the answer', () => {
       release = resolve;
     });
 
+    // Wait for the door to reach the write, not for a fixed time: under a
+    // loaded machine the request can take longer than any sleep.
+    const reached = new Promise<void>((resolve) => {
+      enqueueReached = resolve;
+    });
     let answered = false;
     const response = post(ANSWER_YES).then((res) => {
       answered = true;
       return res;
     });
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await reached;
     expect(answerAskByToken).toHaveBeenCalledTimes(1);
     expect(answered).toBe(false);
 

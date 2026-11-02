@@ -109,7 +109,7 @@ beforeAll((done) => {
   app.use('/v1', meRouter);
   app.use('/v1/system', systemRouter);
   server = createServer(app);
-  server.listen(0, () => {
+  server.listen(0, '127.0.0.1', () => {
     const { port } = server.address() as AddressInfo;
     baseUrl = `http://127.0.0.1:${port}`;
     done();

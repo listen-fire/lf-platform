@@ -56,7 +56,7 @@ describe('GET /api/public/integrations', () => {
     app.use(express.json());
     app.get('/integrations', listIntegrationsHandler);
     await new Promise<void>((resolve) => {
-      server = app.listen(0, resolve);
+      server = app.listen(0, '127.0.0.1', resolve);
     });
     const { port } = server.address() as AddressInfo;
     base = `http://127.0.0.1:${port}`;

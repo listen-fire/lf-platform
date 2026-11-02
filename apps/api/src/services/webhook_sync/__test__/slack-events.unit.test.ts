@@ -198,7 +198,7 @@ describe('the route: durable, then answered; the drain does the work', () => {
     const app = express();
     app.use('/api/public/slack', express.raw({ type: 'application/json' }), slackEventsRouter);
     server = createServer(app);
-    server.listen(0, () => {
+    server.listen(0, '127.0.0.1', () => {
       baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
       done();
     });
