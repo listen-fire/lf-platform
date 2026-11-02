@@ -27,7 +27,6 @@ interface Harness {
   findTriggersByKind: jest.Mock;
   preprocessInbound: jest.Mock;
   handleTelegramCallbackQuery: jest.Mock;
-  handleWhatsappInteractiveReplies: jest.Mock;
   qbSetCalls: Array<Record<string, unknown>>;
 }
 
@@ -107,10 +106,6 @@ async function loadHandler(options: {
   /** Whether the raw delivery reads as a Telegram button tap the answer door
    *  owns (the branch that short-circuits the raw→events seam). */
   askCallback?: boolean;
-  /** Whether the raw delivery reads as carrying a WhatsApp callback-id tap
-   *  (the branch that does NOT short-circuit — see the WhatsApp describe
-   *  block below). */
-  waCallback?: boolean;
   /** What the adapter's `wakeKeys` names for the delivery; absent ⇒ the
    *  adapter has no wake door. */
   wakeKeys?: string[] | Error;
@@ -172,11 +167,6 @@ async function loadHandler(options: {
   }));
   jest.doMock('../../translation_graph/adapters/whatsapp', () => ({
     WHATSAPP_ADAPTER_TYPE: 'whatsapp',
-  }));
-  jest.doMock('../whatsapp_callback_door', () => ({
-    ownsWhatsappInteractiveReply: jest.fn(() => options.waCallback === true),
-    handleWhatsappInteractiveReplies: jest.fn(async () => [{ replyId: 'cb_abc', outcome: 'recorded' }]),
-    defaultWhatsappCallbackResponder: jest.fn(() => ({ sendReply: jest.fn(async () => {}) })),
   }));
   jest.doMock('../../../lib/recording', () => ({
     isTestHarnessTeam: jest.fn(() => options.harnessTeam === true),
@@ -254,9 +244,6 @@ async function loadHandler(options: {
   const callbackDoor = jest.requireMock('../telegram_callback_door') as {
     handleTelegramCallbackQuery: jest.Mock;
   };
-  const waCallbackDoor = jest.requireMock('../whatsapp_callback_door') as {
-    handleWhatsappInteractiveReplies: jest.Mock;
-  };
 
   return {
     handleInboundWebhook,
@@ -269,7 +256,6 @@ async function loadHandler(options: {
     findTriggersByKind: tgTable.findTriggersByKind,
     preprocessInbound,
     handleTelegramCallbackQuery: callbackDoor.handleTelegramCallbackQuery,
-    handleWhatsappInteractiveReplies: waCallbackDoor.handleWhatsappInteractiveReplies,
     qbSetCalls,
   };
 }
@@ -557,59 +543,5 @@ describe('handleInboundWebhook — the Telegram button-tap branch', () => {
 
     expect(h.handleTelegramCallbackQuery).not.toHaveBeenCalled();
     expect(result.eventsProcessed).toBe(1);
-  });
-});
-
-describe('handleInboundWebhook — the BYO WhatsApp interactive-reply branch', () => {
-  const deliverWhatsapp = (h: Harness) =>
-    h.handleInboundWebhook({
-      provider: 'INBOUND_WHATSAPP',
-      subscriptionId: 'sub-1',
-      rawBody: Buffer.from('{}'),
-      headers: {},
-    });
-
-  it('a callback-id tap is fired + acked through the door AND still reaches the events seam', async () => {
-    // Unlike Telegram's single callback_query per delivery, a WhatsApp
-    // delivery is a BATCH of messages — a tap can sit alongside an ordinary
-    // one in the SAME body, so this branch must never early-return.
-    const h = await loadHandler({
-      events: [EVENT_A],
-      provider: 'INBOUND_WHATSAPP',
-      adapterType: 'whatsapp',
-      waCallback: true,
-    });
-
-    const result = await deliverWhatsapp(h);
-
-    expect(h.handleWhatsappInteractiveReplies).toHaveBeenCalledTimes(1);
-    expect(h.handleWhatsappInteractiveReplies.mock.calls[0][0]).toMatchObject({ raw: {} });
-    // No early return: the raw→events seam still runs for whatever else the
-    // delivery carries.
-    expect(h.preprocessInbound).toHaveBeenCalledTimes(1);
-    expect(result.eventsProcessed).toBe(1);
-  });
-
-  it('a delivery with no callback-id tap never calls the door', async () => {
-    const h = await loadHandler({
-      events: [EVENT_A],
-      provider: 'INBOUND_WHATSAPP',
-      adapterType: 'whatsapp',
-      waCallback: false,
-    });
-
-    const result = await deliverWhatsapp(h);
-
-    expect(h.handleWhatsappInteractiveReplies).not.toHaveBeenCalled();
-    expect(h.preprocessInbound).toHaveBeenCalledTimes(1);
-    expect(result.eventsProcessed).toBe(1);
-  });
-
-  it('another provider is never asked whether its delivery carries a WhatsApp tap', async () => {
-    const h = await loadHandler({ events: [EVENT_A], waCallback: true });
-
-    await deliver(h);
-
-    expect(h.handleWhatsappInteractiveReplies).not.toHaveBeenCalled();
   });
 });

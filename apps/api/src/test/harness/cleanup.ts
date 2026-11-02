@@ -72,9 +72,6 @@ const TABLES_TEAM_SCOPED: readonly (readonly [
   teamColumn?: string,
 ])[] = [
   ['asks', 'ask'],
-  // Callbacks cascade from `trigger_run` too, but they are team-scoped state a
-  // test writes, so they are named here rather than left to a cascade.
-  ['automations', 'callback'],
   ['automations', 'trigger_run'],
   // Work rows carry the team only as a tag (no FK), so nothing else reaps them.
   ['automations', 'work'],

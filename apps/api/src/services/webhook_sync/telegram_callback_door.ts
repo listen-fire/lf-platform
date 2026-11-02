@@ -1,28 +1,22 @@
-// Telegram's door onto the callback router.
+// Telegram's door for a tap on an ask's answer button.
 //
 // Telegram delivers everything to a bot's single webhook, so a button tap is
 // not a new route — it is an update whose `callback_query` carries the
-// `callback_data` the author wired into the button. When that data is a
-// callback id, it goes to the router; when it isn't, the update flows on
+// `callback_data` the author wired into the button. When that data is an ask
+// answer link, the door answers the ask; when it isn't, the update flows on
 // untouched (a bot may have buttons of its own that are none of our business).
-//
-// Legacy ask answer links stay RECOGNISED for movements authored before
-// callbacks — tried after the prefix check, no longer taught — and retire once
-// those are re-authored.
 //
 // Two things Telegram makes MANDATORY, both of them acks:
 //   • `answerCallbackQuery` — the tapper's client shows a spinner on the button
 //     until this lands. It is sent on EVERY outcome, including the ones that
 //     changed nothing, and even when the fire threw.
 //   • `editMessageReplyMarkup` — the keyboard is retired only when the tap
-//     SERVED the message (`interactionServed`, the shared rule). Closed-request-
-//     wins: a late tap on a settled question gets the notice and the keyboard
-//     STAYS, because whoever acted first owns the message. A repeatable
-//     callback's keyboard stays for the same reason from the other direction —
-//     it is still live.
+//     answered the ask. Closed-request-wins: a late tap on a settled question
+//     gets the notice and the keyboard STAYS, because whoever acted first owns
+//     the message.
 //
 // It lives HERE, in the inbound layer, and not in `adapters/telegram` — a
-// platform adapter must know nothing about callbacks or questions, and neither
+// platform adapter must know nothing about questions, and questions nothing
 // must know about platforms. Only the layer that already composes both (this
 // one: Telegram's webhook door) may see them at once. Slack's equivalent is
 // `interfaces/rest/slackInteractivity.ts`, an actual route because Slack POSTs
@@ -34,13 +28,6 @@ import { z } from 'zod';
 import { logger } from 'movement-engine/public/log';
 import { answerAskByToken, type AskDoorOutcome } from '../asks/doors';
 import { parseAskLink } from '@listen-fire/ask/link';
-import { isCallbackId } from '../movement_engine/callback_store';
-import {
-  callbackAckText,
-  fireCallback,
-  interactionServed,
-  type CallbackFireOutcome,
-} from '../movement_engine/callback_fire';
 
 /** What the door needs of a bot: the two Bot API calls that close a tap.
  *  `TelegramAdapter` satisfies it structurally — narrow on purpose, so the door
@@ -81,19 +68,19 @@ export function callbackQueryOf(raw: unknown): TelegramCallbackQuery | null {
   return parsed.data.callback_query ?? null;
 }
 
-/** Whether this delivery is a button tap this door owns — a callback id, or
- *  (legacy) an ask answer link. Cheap and side-effect free, so a caller can ask
- *  before resolving a bot token. */
+/** Whether this delivery is a button tap this door owns: an ask answer link.
+ *  Cheap and side-effect free, so a caller can ask before resolving a bot
+ *  token. */
 export function ownsCallbackQuery(raw: unknown): boolean {
   const query = callbackQueryOf(raw);
   if (query === null || query.data === undefined) return false;
-  return isCallbackId(query.data) || parseAskLink(query.data) !== null;
+  return parseAskLink(query.data) !== null;
 }
 
 export interface TelegramCallbackResult {
   /** The door consumed this delivery — no movement event to parse from it. */
   handled: boolean;
-  outcome?: CallbackFireOutcome['kind'] | AskDoorOutcome['kind'] | 'malformed';
+  outcome?: AskDoorOutcome['kind'] | 'malformed';
 }
 
 /**
@@ -101,11 +88,8 @@ export interface TelegramCallbackResult {
  * `callback_data` this door does not recognise, so the caller's existing path
  * runs unchanged; `{ handled: true }` means the tap was ours and has been acked.
  *
- * Recognition is the callback prefix FIRST, then the legacy ask answer link.
  * Telegram captures nothing at tap time — an inline button's `callback_data` is
- * fixed when the message is sent — so a callback fired from here supplies no
- * values, and a callback that declares parameters is refused loudly by the
- * router (the author wanted a control Telegram does not have).
+ * fixed when the message is sent — so the answer must ride in the link.
  */
 export async function handleTelegramCallbackQuery(input: {
   raw: unknown;
@@ -114,12 +98,10 @@ export async function handleTelegramCallbackQuery(input: {
   const query = callbackQueryOf(input.raw);
   if (!query || query.data === undefined) return { handled: false };
 
-  if (isCallbackId(query.data)) return await fireAndAck(input.responder, query, query.data);
-
   const link = parseAskLink(query.data);
   if (!link) return { handled: false };
 
-  // LEGACY: a tap whose data carries an ask token but NO `?answer=` is
+  // A tap whose data carries an ask token but NO `?answer=` is
   // malformed — the author wired a bare link into `callback_data`, where nothing
   // supplies a value. It is ours, so it is acked and logged loudly rather than
   // left spinning or dropped in silence.
@@ -148,32 +130,7 @@ export async function handleTelegramCallbackQuery(input: {
   return { handled: true, outcome: outcome.kind };
 }
 
-/** The callback path: fire, ack the toast, and retire the keyboard when the tap
- *  served the message. Telegram supplies no tap-time value, so `values` is
- *  empty — the router is the one that decides whether that fits the signature. */
-async function fireAndAck(
-  responder: TelegramCallbackResponder,
-  query: TelegramCallbackQuery,
-  id: string,
-): Promise<TelegramCallbackResult> {
-  let outcome: CallbackFireOutcome;
-  try {
-    outcome = await fireCallback({ id, values: {} });
-  } catch (err) {
-    // The ack still has to go out — a spinning client is worse than a failure
-    // the person can see — but the failure itself is not swallowed.
-    logger.error('[telegram/callback] firing failed', err);
-    await ack(responder, query, 'Something went wrong recording that.');
-    return { handled: true, outcome: 'not_found' };
-  }
-
-  await ack(responder, query, callbackAckText(outcome));
-  if (interactionServed(outcome)) await retireKeyboard(responder, query);
-
-  return { handled: true, outcome: outcome.kind };
-}
-
-/** Editing the keyboard away is COSMETIC — the fire is already recorded, and a
+/** Editing the keyboard away is COSMETIC — the answer is already recorded, and a
  *  second tap on a stale keyboard gets the "already closed" notice — so a
  *  failure here is a warning, never the tapper's problem. Nothing to edit on an
  *  inline-mode message, which has no `message` to address. */
@@ -194,7 +151,7 @@ async function retireKeyboard(
   }
 }
 
-/** LEGACY: a token this store never minted reads to the tapper exactly like a
+/** A token this store never minted reads to the tapper exactly like a
  *  settled one: nothing moved, and the message says so. */
 function ackText(outcome: AskDoorOutcome): string {
   switch (outcome.kind) {

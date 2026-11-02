@@ -5,7 +5,6 @@
 
 import { SECOND } from '../../constants';
 import { registerAwaitWork } from '../movement_engine/await_resume';
-import { registerCallbackFireWork } from '../movement_engine/callback_fire';
 import { registerTimerWork } from '../movement_engine/timer_resume';
 import { registerCronWork } from '../movement_scheduler/worker';
 import { registerPollWork } from '../poll_source/worker';
@@ -25,7 +24,7 @@ const CORE_PERIODIC_WORK: ReadonlyArray<{ kind: CoreWorkKind; intervalMs: number
 /** Kinds a past build ran and this one does not. Their periodic rows would
  *  otherwise sit in the table forever, claimed and released for want of a
  *  handler, so they are deleted where the periodic rows are ensured. */
-const RETIRED_WORK_KINDS: readonly string[] = ['await_resume_sweep', 'ask_expiry_sweep'];
+const RETIRED_WORK_KINDS: readonly string[] = ['await_resume_sweep', 'ask_expiry_sweep', 'fire_callback'];
 
 /** Upsert every periodic row — the core's and each registered unit's — and
  *  delete the retired kinds' rows. Idempotent; the drain loop retries it until
@@ -47,7 +46,6 @@ function registerCoreWork(): void {
   registerDispatchWork();
   registerFireEventWork();
   registerAwaitWork();
-  registerCallbackFireWork();
   registerRunOrphanSweepWork();
 }
 

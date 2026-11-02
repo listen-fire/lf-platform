@@ -82,7 +82,6 @@ import { slackInteractivityRouter } from './interfaces/rest/slackInteractivity';
 import { filesRouter } from './interfaces/rest/files';
 import { asksRouter } from './interfaces/rest/asks';
 import { storyRouter } from './interfaces/rest/story';
-import { callbacksRouter } from './interfaces/rest/callbacks';
 import { connectRouter } from './interfaces/rest/connect';
 import { initialiseWebSockets } from './lib/webSockets';
 import { createOAuthRouter } from './interfaces/mcp/oauth';
@@ -231,11 +230,6 @@ async function main() {
     // Public story links — a movement's picture, drawn for whoever holds the
     // URL. GET-only, and there is no verb here that changes anything.
     app.use('/api/story', storyRouter);
-    // The callback door — `cb_`-prefixed opaque ids ARE the authorisation (the
-    // action's value is baked into the stored body at mint time). GET renders a
-    // confirm page and never fires; POST is the only resolving verb, and BYO
-    // servers call the same one.
-    app.use('/api/cb', callbacksRouter);
     // Author-time credential-connect links — the single-use connect token in
     // the URL is the authorisation; the landing page either drives the real
     // adapter OAuth in the user's browser or renders a key-entry form.

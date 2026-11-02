@@ -2,7 +2,7 @@
 // ask settled, now what".
 //
 // Asks publishes a notifier interface and nothing more — it does not know the
-// movement engine, parked runs, or `adapter_await` exist. Automations knows all
+// movement engine, parked runs, or their waits exist. Automations knows all
 // three and nothing about how an answer got written. This module is the only
 // place that knows both, which is the same shape as the knowledge mutation
 // subscriber and the knowledge usage sink: the two products meet here and

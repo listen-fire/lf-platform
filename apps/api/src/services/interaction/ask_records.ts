@@ -14,6 +14,7 @@ import type { AskId } from '../../generated/kysely/asks/Ask';
 import type { MovementId } from '../../generated/kysely/automations/Movement';
 
 import { getQb, getAutomationsQb } from '../../lib/kysely';
+import { ASK_ADAPTER_TYPE, RESPONSE_EDGE_NAME } from '@listen-fire/ask';
 import {
   listAsksForTeam,
   getAsk,
@@ -112,20 +113,21 @@ export async function answerAskRecordForTeam(input: {
 }
 
 /** Map each ask id (of a run-awaited open question) to the automation name of
- *  the run waiting on it — via `adapter_await` (ask-keyed) → `trigger_run` →
+ *  the run waiting on it — via the run's wait on the ask's Response → `trigger_run` →
  *  `automations.trigger`, resolved to the real movement name where one applies
  *  (`resolveAutomationName`) rather than the trigger's raw dispatch name.
  *  Asks with no waiting run are simply absent. */
 async function awaitingAutomationNames(askIds: AskId[]): Promise<Map<string, string>> {
-  const corr = await getAutomationsQb(['adapter_await'])
-    .selectFrom('adapter_await')
-    .where('adapter_type', '=', 'ask')
-    .where('correlation_key', 'in', askIds as unknown as string[])
-    .select(['correlation_key', 'run_id'])
+  const corr = await getAutomationsQb(['wait_row'])
+    .selectFrom('wait_row')
+    .where('adapter_type', '=', ASK_ADAPTER_TYPE)
+    .where('edge', '=', RESPONSE_EDGE_NAME)
+    .where('key', 'in', askIds)
+    .select(['key as correlation_key', 'run_id'])
     .execute();
   if (corr.length === 0) return new Map();
 
-  const runIds = [...new Set(corr.map((c) => c.run_id as unknown as string))];
+  const runIds = [...new Set(corr.map((c) => c.run_id))];
   const runs = await getAutomationsQb(['trigger_run'])
     .selectFrom('trigger_run')
     .where('id', 'in', runIds as never)

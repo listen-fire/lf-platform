@@ -27,12 +27,6 @@ import { readReceiptGroupOutcomes, type CapturedTriggerEvent } from '../translat
 import { deliverArrivals } from '../inbound/listen_door';
 import { TELEGRAM_ADAPTER_TYPE, TelegramAdapter } from '../translation_graph/adapters/telegram';
 import { handleTelegramCallbackQuery, ownsCallbackQuery } from './telegram_callback_door';
-import { WHATSAPP_ADAPTER_TYPE } from '../translation_graph/adapters/whatsapp';
-import {
-  defaultWhatsappCallbackResponder,
-  handleWhatsappInteractiveReplies,
-  ownsWhatsappInteractiveReply,
-} from './whatsapp_callback_door';
 import {
   enqueueLinkedObjectRefresh,
   hasBridgedLinkedObjects,
@@ -135,8 +129,8 @@ function builtInIntercept(input: {
   credentialsId: string;
 }): Pick<OpenedSource, 'intercept'> {
   // A Telegram button tap arrives on the same webhook as every message, as a
-  // `callback_query`. It fires the callback it was wired to and acks Telegram;
-  // there is no movement event in it, so the delivery ends there.
+  // `callback_query`. A tap on an ask's answer button answers the ask and acks
+  // Telegram; there is no movement event in it, so the delivery ends there.
   if (input.adapterType === TELEGRAM_ADAPTER_TYPE) {
     return {
       async intercept(body) {
@@ -146,20 +140,6 @@ function builtInIntercept(input: {
           responder: new TelegramAdapter(input.subscription.teamId as TeamId, input.credentialsId),
         });
         return handled ? 'handled' : 'continue';
-      },
-    };
-  }
-  // A WhatsApp interactive reply is an ordinary message, and a delivery can
-  // batch several, so a tap is fired here and the delivery carries on: the
-  // adapter already drops an interactive message as unclassified, so it is
-  // never dispatched twice.
-  if (input.adapterType === WHATSAPP_ADAPTER_TYPE) {
-    return {
-      async intercept(body) {
-        if (ownsWhatsappInteractiveReply(body)) {
-          await handleWhatsappInteractiveReplies({ raw: body, responder: defaultWhatsappCallbackResponder() });
-        }
-        return 'continue';
       },
     };
   }

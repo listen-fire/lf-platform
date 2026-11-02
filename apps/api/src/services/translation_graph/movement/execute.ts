@@ -31,7 +31,7 @@ import type { TriggerEvent } from 'movement-engine/public/inbound';
 
 import { describeError } from 'movement-engine/public/errors';
 import { logger } from 'movement-engine/public/log';
-import { runMovement, resumeMovement, settleRaceFrame, fireCallbackBody } from '@listen-fire/legacy-engine/dispatch';
+import { runMovement, resumeMovement, settleRaceFrame } from '@listen-fire/legacy-engine/dispatch';
 import { MovementRunFailed, runFailureCause, type CancelGate, type MovementRunResult } from 'movement-engine/public/movement-engine';
 import { makeDbCancelGate } from '../../movement_engine/cancel_gate';
 import { failRunAndCancelRequests } from '../../interaction/run_failure';
@@ -74,7 +74,7 @@ async function interpretMovementFiring(input: {
   /** The trigger run this firing is — its model calls are billed to it, and
    *  the engine's log lines name it. */
   triggerRunId: TriggerRunId;
-  /** The recorder the run's parks and callbacks persist through — present for
+  /** The recorder the run's parks persist through — present for
    *  live firings (an `ask` parks into the recorder's run). Absent under dry
    *  runs: a test run never parks and mints nothing durable. */
   parksInto?: TriggerRunRecorder;
@@ -753,146 +753,6 @@ async function resumeMovementFiringInContext(
       runId: input.runId as unknown as string,
       message,
     }).catch(() => {});
-    return { result: null, error: message };
-  }
-}
-
-/**
- * Run a fired callback's body as a SEGMENT of its owning run (callback-primitive
- * layer 2). Attribution is the plan's ruling verbatim: the run's team, the run's
- * billing, the run's step ledger — no new run identity anywhere.
- *
- * What this deliberately does NOT do is settle the run. The main continuation is
- * parked and wakes only through its own mechanism, so a completed body records
- * its segment and stops; a body that parks deeper writes its own leaf; and a
- * body that THROWS marks the SEGMENT failed and stops there — a failed side
- * entry must not kill the primary await (the whole point of running off-request
- * on the append-only step channel).
- */
-type CallbackFiringInput = {
-  teamId: TeamId;
-  triggerId: string;
-  triggerName: string;
-  firedMovementName?: string;
-  /** The pinned version's source (P11) — what the stored entry point addresses. */
-  pinnedSource: string;
-  /** The language version the run started under (see ResumeFiringInput). */
-  pinnedLanguageVersion: LanguageVersion;
-  movementVersionId: string | null;
-  runId: TriggerRunId;
-  movementId: string;
-  event: TriggerEvent;
-  recordingTriggerType: TriggerRunTriggerType;
-  /** The CALLBACK row's captured continuation (a `ParkedScopeState` whose
-   *  `address` is the callback expression). */
-  state: AnyParkedScopeState;
-  /** The fire-time values, already validated against the stored signature. */
-  values: Record<string, unknown>;
-  /** This call's index in the ledger — the body's own address frame, so
-   *  repeated fires of a repeatable callback never collide. */
-  callIndex: number;
-  /** The run lease the body runs under (see ResumeFiringInput). */
-  lease?: HeldRunLease;
-};
-
-/** A stored callback being fired against its captured continuation. */
-export async function fireCallbackFiring(
-  input: CallbackFiringInput,
-): Promise<MovementFiringOutcome> {
-  return withFiringContext(input, () => fireCallbackFiringInContext(input));
-}
-
-async function fireCallbackFiringInContext(
-  input: CallbackFiringInput,
-): Promise<MovementFiringOutcome> {
-  const recorder = new TriggerRunRecorder({
-    teamId: input.teamId,
-    triggerId: input.triggerId,
-    triggerType: input.recordingTriggerType,
-    triggerEvent: input.event,
-    movementVersionId: input.movementVersionId,
-    existingRunId: input.runId,
-  });
-  if (input.lease !== undefined) recorder.holdLease(input.lease);
-  const leaseContext = { runId: input.runId, movementId: input.movementId };
-  await recorder.adoptOpsRun();
-  const movementName =
-    input.firedMovementName ?? firedMovementNameFromTriggerName(input.triggerName);
-  const cancelGate = makeDbCancelGate(recorder.triggerRunId, {
-    ...(input.lease !== undefined ? { lease: input.lease } : {}),
-  });
-  try {
-    const languageVersion = input.pinnedLanguageVersion;
-    const teamCatalog = await runCatalogSnapshotForTeam(input.teamId, {
-      source: input.pinnedSource,
-      languageVersion,
-      imports: 'shipped',
-    });
-    const fire = () =>
-      fireCallbackBody({
-        source: input.pinnedSource,
-        languageVersion,
-        ...(movementName !== undefined ? { movementName } : {}),
-        event: engineEvent(input),
-        teamId: tenantOfTeam(input.teamId),
-        // The run's original firing instant (see the resume path) — a callback
-        // body belongs to the run that minted it, clock included.
-        firedAt: recorder.firedAt.toISOString(),
-        costCapMicrodollars: runCostCapFromEnv(),
-        priorSpentMicrodollars: recorder.priorSpentMicrodollars,
-        capBaselineMicrodollars: recorder.capBaselineMicrodollars,
-        // A body runs on the engine its run is on (see the resume path).
-        ...(recorder.parkedOnEngine !== undefined ? { parkedOnEngine: recorder.parkedOnEngine } : {}),
-        catalog: teamCatalog.snapshot,
-        credentialIds: teamCatalog.credentialIds,
-        runId: input.runId,
-        host: productionEngineHost({
-          teamId: input.teamId,
-          triggerRunId: input.runId,
-          parksInto: recorder,
-          ...(input.lease !== undefined ? { lease: input.lease } : {}),
-          cancel: cancelGate,
-        }),
-        state: input.state,
-        values: input.values,
-        callIndex: input.callIndex,
-      });
-    const result = await new LlmUsageContext({
-      teamId: input.teamId as unknown as string,
-      triggerRunId: input.runId as unknown as string,
-      cancelGate,
-    }).runAsync(fire);
-    const lostBeforeSettle = leaseLostBeforeSettle(input.lease, leaseContext);
-    if (lostBeforeSettle !== null) return lostBeforeSettle;
-    recorder.recordMovementStep({
-      movementId: input.movementId,
-      movementName: result.movementName,
-      sourceAdapterType: input.event.adapterType,
-      result,
-    });
-    await recorder.snapshotSteps();
-    return { result };
-  } catch (err) {
-    const lost = leaseLostOutcome(err, leaseContext) ?? leaseLostBeforeSettle(input.lease, leaseContext);
-    if (lost !== null) return lost;
-    const { error, partial } = unwrapRunFailure(err);
-    const message = describeError(error);
-    logger.error('[MovementEngine] callback body failed', {
-      triggerId: input.triggerId,
-      movementId: input.movementId,
-      runId: input.runId,
-      error: message,
-    });
-    // The SEGMENT fails; the run does not. `recordStepFailure` + `snapshotSteps`
-    // (never `finish()`) is exactly that distinction on the append-only channel.
-    recorder.recordStepFailure({
-      tgId: `movement:${input.movementId}`,
-      tgName: movementName ?? input.movementId,
-      sourceAdapterType: input.event.adapterType,
-      message,
-      ...(partial !== undefined ? { partial } : {}),
-    });
-    await recorder.snapshotSteps();
     return { result: null, error: message };
   }
 }

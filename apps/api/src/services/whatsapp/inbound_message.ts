@@ -1,8 +1,7 @@
 // The `whatsapp_message` work kind: everything the platform's WhatsApp number
 // door does with one inbound message. The door writes each message of a Meta
 // delivery down as a row before it answers Meta; the dispatch to the sender's
-// team, a tapped callback button's fire-and-reply, and the ops notice run when
-// that row drains. Work done after the answer would be lost to a restart, a
+// team and the ops notice run when that row drains. Work done after the answer would be lost to a restart, a
 // deploy or a frozen instance, and Meta would never resend it.
 
 import { z } from 'zod';
@@ -16,11 +15,6 @@ import { registerWorkKinds } from '../work/drain';
 import { enqueueWork } from '../work/store';
 import { dispatchWhatsappMessage } from './dispatch';
 import { resolveWhatsappSender } from './utils';
-import {
-  defaultWhatsappCallbackResponder,
-  handleWhatsappInteractiveReply,
-  interactiveReplyOf,
-} from '../webhook_sync/whatsapp_callback_door';
 
 declare module '../work/kinds' {
   interface UnitWorkKinds {
@@ -91,21 +85,13 @@ export async function enqueueWhatsappMessage(row: WhatsappMessageRow): Promise<v
 /**
  * One message, in an order that keeps a retry clean: the dispatch first (its
  * receipts make a rerun a no-op, and a failure throws so the row retries before
- * anything the tapper or ops can see has happened), then a tapped callback
- * button's fire and threaded reply, then the ops notice. Those two never throw.
+ * anything ops can see has happened), then the ops notice, which never
+ * throws.
  */
 async function runWhatsappMessage(row: WhatsappMessageRow): Promise<void> {
   const { message, profileName, businessNumber, businessPhoneNumberId } = row;
   await dispatchWhatsappMessage({ message, profileName, businessNumber, businessPhoneNumberId });
   logger.info('Dispatched WhatsApp message', { messageId: message.id });
-
-  // A tap is an ordinary message carrying `interactive.button_reply`; dispatch
-  // above drops it as unclassified, so only the callback door acts on it.
-  const reply = interactiveReplyOf(message, businessPhoneNumberId);
-  if (reply !== undefined) {
-    const result = await handleWhatsappInteractiveReply({ reply, responder: defaultWhatsappCallbackResponder() });
-    if (result !== null) logger.info('Handled WhatsApp interactive callback reply', result);
-  }
 
   if (row.announce) {
     try {

@@ -35,7 +35,6 @@ import {
 } from '../../../lib/ops/run';
 import { recordTeamMilestone } from '../../../lib/journey';
 import { describeRunAwaits } from '../../movement_engine/await_description';
-import { revokeRunCallbacks } from '../../movement_engine/callback_store';
 import OpsEventType from '../../../generated/kysely/public/OpsEventType';
 import OpsSeverity from '../../../generated/kysely/public/OpsSeverity';
 import { OpsDetailLevel } from '../../../lib/ops/types';
@@ -841,25 +840,11 @@ export class TriggerRunRecorder {
       });
       nodesWritten = persisted.nodesWritten;
       if (!persisted.settled) {
-        // The lease is another instance's now: it settles the run, revokes
-        // its callbacks and closes its feed run. Nothing here may.
+        // The lease is another instance's now: it settles the run and
+        // closes its feed run. Nothing here may.
         logger.warn('[trigger_run] not settled: the run lease is no longer this segment\'s', { runId: this.id });
         return;
       }
-
-      // Ruling (b), callback-primitive layer 1: a run that reaches its end with
-      // un-fired callbacks REVOKES them. Callbacks are ephemeral by definition —
-      // strictly things the current run can still react to; an author who wants
-      // buttons to stay live keeps the run alive by awaiting `Called`, and
-      // anything genuinely persistent is a standing endpoint (the webhook
-      // adapter's concept), not a callback. Unlike an ask this is safe to do at
-      // the terminal seam: the capability IS the run's.
-      await revokeRunCallbacks(this.id).catch((revokeErr) => {
-        logger.warn('[trigger_run] failed to revoke run callbacks', {
-          runId: this.id,
-          error: revokeErr instanceof Error ? revokeErr.message : String(revokeErr),
-        });
-      });
 
       // Best-effort live signal — a publish failure must never affect the firing.
       mq.triggerRuns.recorded

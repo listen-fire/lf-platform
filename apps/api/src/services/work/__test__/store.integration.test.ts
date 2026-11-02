@@ -532,8 +532,8 @@ describe('work store', () => {
   it('a platform claim never takes an lf row', async () => {
     const teamId = randomUUID();
     const shared = freshKey('resume_timer');
-    const lfKeys = [shared, freshKey('wake_await'), freshKey('fire_callback')];
-    const lfKinds: WorkKind[] = ['resume_timer', 'wake_await', 'fire_callback'];
+    const lfKeys = [shared, freshKey('wake_await'), freshKey('fire_event')];
+    const lfKinds: WorkKind[] = ['resume_timer', 'wake_await', 'fire_event'];
     // lf's rows as the lf store module writes them: due, unleased, this team's.
     await getAutomationsQb(['work'])
       .insertInto('work')

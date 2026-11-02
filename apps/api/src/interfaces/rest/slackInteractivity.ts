@@ -3,15 +3,11 @@
 // POST by construction, so this is the true one-tap path (GET never writes
 // anywhere — 5_build_order Ops decisions).
 //
-// What a tap CARRIES is one opaque callback id, in `value` or `action_id`; the
-// door recognises the id's namespace prefix and hands it to the router, which
-// owns everything that happens next. The door keeps only what is genuinely
+// What a tap CARRIES is an ask answer link (`<url-or-token>?answer=`), in
+// `value` or `action_id`; the door answers the ask, and the ask's answer is
+// what wakes any run waiting on it. The door keeps only what is genuinely
 // Slack-shaped: signature verification, the ack, and the message edit (queued
 // as a `slack_response` row before the ack, posted when it drains).
-//
-// Legacy ask answer links (`<url-or-token>?answer=`) stay RECOGNISED for
-// movements authored before callbacks — tried after the prefix check, no longer
-// taught — and retire once those are re-authored.
 //
 // Belongs to the SAME Slack app as the Events door (slackEvents.ts) — one signing
 // secret (SLACK_MOVEMENTS_SIGNING_SECRET), verified over the raw body. The opaque
@@ -28,13 +24,6 @@ import { logger } from 'movement-engine/public/log';
 import { verifySlackEventsRequest } from './slackEvents';
 import { answerAskByToken, type AskDoorOutcome } from '../../services/asks/doors';
 import { parseAskAction, parseAskLink } from '@listen-fire/ask/link';
-import { isCallbackId } from '../../services/movement_engine/callback_store';
-import {
-  callbackAckText,
-  fireCallback,
-  interactionServed,
-  type CallbackFireOutcome,
-} from '../../services/movement_engine/callback_fire';
 import { enqueueSlackResponse } from '../../services/webhook_sync/slack_response_url';
 import { notifyWork } from '../../services/work/drain';
 
@@ -95,55 +84,9 @@ function tapTimeValue(action: BlockAction): string | undefined {
   return typeof action.selected_option?.value === 'string' ? action.selected_option.value : undefined;
 }
 
-/** What one block action turned out to be. `null` — the ordinary case — means
- *  some other block action Slack sent, which flows through untouched. */
-export type ResolvedBlockAction =
-  | {
-      kind: 'callback';
-      id: string;
-      /** Slack's ONE tap-time capture, unnamed. The router binds it (see
-       *  `bindSuppliedValue`); the door never guesses a parameter name. */
-      suppliedValue?: string;
-    }
-  /** LEGACY: an ask answer link wired in before callbacks existed. */
-  | { kind: 'ask'; token: string; answer: string };
-
 /**
- * Recognition, in precedence order:
- *
- *  1. **A callback id** — the one prefix check, on the pre-wired slot first
- *     (`value` / `selected_option.value`: a button or a per-option select,
- *     where the id alone says what the tap meant), then on `action_id` (a
- *     control whose value does not exist until the tap — a `datepicker`,
- *     `timepicker` or text input — which has no `value` field to carry an id).
- *     From `action_id`, whatever the tap captured rides along as the supplied
- *     value.
- *  2. **A legacy ask answer link** — kept working for movements authored before
- *     callbacks, no longer taught, retiring once those are re-authored.
- *
- * A pre-wired callback id beats everything: it is the current mechanism, and an
- * author who wired one meant it.
- */
-export function resolveBlockAction(action: BlockAction): ResolvedBlockAction | null {
-  const preWired = blockActionValue(action);
-  if (preWired !== undefined && isCallbackId(preWired)) return { kind: 'callback', id: preWired };
-
-  const actionId = typeof action.action_id === 'string' ? action.action_id : undefined;
-  if (actionId !== undefined && isCallbackId(actionId)) {
-    const supplied = tapTimeValue(action);
-    return supplied === undefined
-      ? { kind: 'callback', id: actionId }
-      : { kind: 'callback', id: actionId, suppliedValue: supplied };
-  }
-
-  const ask = resolveAskAction(action);
-  return ask === null ? null : { kind: 'ask', ...ask };
-}
-
-/**
- * LEGACY (migration window): resolve one block action to an
- * ask `{ token, answer }`, or null when it isn't an ask action at all. Reached
- * only after the callback prefix check has declined. Precedence:
+ * Resolve one block action to an ask `{ token, answer }`, or null when it
+ * isn't an ask action at all. Precedence:
  *
  *  1. Pre-wired: `value` / `selected_option.value` parses to a full answer
  *     link (`?answer=` present) — today's button/select wiring.
@@ -208,12 +151,11 @@ slackInteractivityRouter.post('/', async (req: Request, res: Response) => {
     return;
   }
 
-  // Recorded, then answered. The tap is captured inside the request (a
-  // callback's claim writes its body's `fire_callback` row in the same
-  // transaction; an ask's answer settles it) and the reply to the tapper is
-  // queued as a `slack_response` row. The movement work and the post to Slack
-  // run when their rows drain: work done after the answer would be lost to a
-  // restart or a frozen instance.
+  // Recorded, then answered. The tap is captured inside the request (the
+  // ask's answer settles it) and the reply to the tapper is queued as a
+  // `slack_response` row. The movement work and the post to Slack run when
+  // their rows drain: work done after the answer would be lost to a restart
+  // or a frozen instance.
   const reply = await captureBlockActions(payload);
   const responseUrl = typeof payload.response_url === 'string' ? payload.response_url : undefined;
   if (reply !== null && responseUrl !== undefined) {
@@ -248,24 +190,14 @@ const SOMETHING_WENT_WRONG: SlackReply = {
  *  double-record. */
 async function captureBlockActions(payload: BlockActionsPayload): Promise<SlackReply | null> {
   for (const action of payload.actions ?? []) {
-    const resolved = resolveBlockAction(action);
+    const resolved = resolveAskAction(action);
     if (!resolved) continue;
     try {
-      if (resolved.kind === 'callback') {
-        return callbackReply(
-          await fireCallback({
-            id: resolved.id,
-            values: {},
-            ...(resolved.suppliedValue !== undefined ? { suppliedValue: resolved.suppliedValue } : {}),
-          }),
-        );
-      }
       return askReply(await answerAskByToken(resolved.token, resolved.answer));
     } catch (err) {
       // The tapper still hears back (silence reads as "it worked") and the
       // failure itself is not swallowed.
       logger.error('[slack/actions] recording the tap failed', {
-        action: resolved.kind,
         error: err instanceof Error ? err.message : String(err),
       });
       return SOMETHING_WENT_WRONG;
@@ -274,23 +206,7 @@ async function captureBlockActions(payload: BlockActionsPayload): Promise<SlackR
   return null;
 }
 
-/** The reply to a fired callback. The message itself is replaced only when the
- *  tap SERVED it (`interactionServed`, the shared, provisional rule);
- *  everything else is an ephemeral notice, so a message whose controls are
- *  still live keeps them, and a refusal never rewrites what the person who
- *  acted first is looking at. */
-function callbackReply(outcome: CallbackFireOutcome): SlackReply {
-  const text = callbackAckText(outcome);
-  return interactionServed(outcome)
-    ? {
-        replace_original: true,
-        text,
-        blocks: [{ type: 'section', text: { type: 'mrkdwn', text: `:white_check_mark: ${text}` } }],
-      }
-    : { response_type: 'ephemeral', replace_original: false, text };
-}
-
-/** LEGACY (migration window): the reply to a resolved (or already-closed) ask,
+/** The reply to a resolved (or already-closed) ask,
  *  replacing the buttons with a confirmation line. A late click on a
  *  settled/expired ask gets an EPHEMERAL "closed" notice instead
  *  (closed-request-wins), so the original message is left intact for whoever

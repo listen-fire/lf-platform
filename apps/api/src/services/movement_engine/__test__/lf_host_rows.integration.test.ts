@@ -21,9 +21,7 @@ import { resumeRun } from '../../interaction/operator';
 import { listParkedRuns } from '../../interaction/observability';
 import { ORPHAN_AFTER } from '../run_lease';
 import { settleCancelledTimersHandler, timerWorkKey } from '../timer_resume';
-import { postgresRunHostStore, returnLeavesOfLapsedLeases } from '../run_host_store';
-import { mintCallback } from '../callback_store';
-import { fireCallback, getDoorCallback } from '../callback_fire';
+import { returnLeavesOfLapsedLeases } from '../run_host_store';
 
 type Host = 'platform' | 'lf';
 
@@ -152,29 +150,6 @@ describe('the platform leaves lf rows alone', () => {
     const lf = await insertRun({ host: 'lf', status: 'parked' });
 
     await expect(resumeRun({ runId: lf, teamId })).rejects.toThrow('this run is stepped by lf: resume it there');
-  });
-
-  it("an lf run's await is not found by the platform's correlation lookup", async () => {
-    const lf = await insertRun({ host: 'lf', status: 'parked' });
-    const platform = await insertRun({ host: 'platform', status: 'parked' });
-    const correlationKey = `C1:${randomUUID()}`;
-    for (const runId of [lf, platform]) {
-      await postgresRunHostStore.correlations.correlate({ runId, teamId, address: 'root/0', adapterType: 'slack', correlationKey });
-    }
-
-    const found = await postgresRunHostStore.correlations.correlated({ adapterType: 'slack', teamId, correlationKey });
-
-    expect(found.map((row) => row.runId)).toEqual([platform]);
-  });
-
-  it("an lf run's callback is unknown at the platform's door", async () => {
-    const lf = await insertRun({ host: 'lf', status: 'parked' });
-    const callback = await mintCallback({ teamId, runId: lf, address: 'root/0', params: [], state: {} });
-
-    expect(await getDoorCallback(callback.id)).toBeNull();
-    expect(await fireCallback({ id: callback.id, values: {} })).toEqual({ kind: 'not_found' });
-    const after = await getAutomationsQb(['callback']).selectFrom('callback').where('id', '=', callback.id).select(['status', 'calls']).executeTakeFirst();
-    expect(after).toEqual({ status: 'live', calls: [] });
   });
 
   it('a live lf run outlives the retention prune; a settled one ages out', async () => {

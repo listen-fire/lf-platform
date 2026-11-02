@@ -21,7 +21,7 @@ import {
 
 import { neverAsAny } from 'movement-engine/public/types';
 import type { EngineHost } from 'movement-engine/public/host';
-import { fireCallbackBody, resumeMovement, runMovement, settleRaceFrame } from '@listen-fire/legacy-engine/dispatch';
+import { resumeMovement, runMovement, settleRaceFrame } from '@listen-fire/legacy-engine/dispatch';
 import { type MovementRunResult } from 'movement-engine/public/movement-engine';
 import { startHostDouble, httpHost } from './http_host_double';
 import { recordedError } from './recorder';
@@ -36,8 +36,6 @@ export function enter(recording: HostRecording, host: EngineHost): Promise<Movem
       return resumeMovement({ ...recording.input, host });
     case 'settleRace':
       return settleRaceFrame({ ...recording.input, host });
-    case 'callbackBody':
-      return fireCallbackBody({ ...recording.input, host });
     default:
       return neverAsAny(recording);
   }

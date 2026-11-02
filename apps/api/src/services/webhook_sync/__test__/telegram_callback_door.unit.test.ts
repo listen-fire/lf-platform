@@ -21,16 +21,6 @@ jest.mock('../../asks/doors', () => ({
   answerAskByToken: (...args: unknown[]) => answerAskByToken(...args),
 }));
 
-// The router is mocked; `interactionServed` / `callbackAckText` are the real
-// shared rules, since it is the door's USE of them that is under test.
-const fireCallback = jest.fn();
-jest.mock('../../movement_engine/callback_fire', () => ({
-  ...jest.requireActual('../../movement_engine/callback_fire'),
-  fireCallback: (input: unknown) => fireCallback(input),
-}));
-
-import type { CallbackRecord } from '../../movement_engine/callback_store';
-
 import { captureEngineLogs } from '../../../test/engine_logs';
 import {
   callbackQueryOf,
@@ -40,25 +30,6 @@ import {
 } from '../telegram_callback_door';
 
 const ASK: Record<string, unknown> = { id: 'ask-1' };
-
-function record(overrides: Partial<CallbackRecord> = {}): CallbackRecord {
-  return {
-    id: 'cb_abc',
-    teamId: 'team-1',
-    runId: 'run-1',
-    address: 's1',
-    params: [],
-    state: { version: 1, address: 's1', bindingName: null, scopeChain: [] },
-    calls: [],
-    singleUse: true,
-    expiresAt: null,
-    status: 'live',
-    createdAt: new Date('2026-07-31T09:00:00.000Z'),
-    firedAt: null,
-    revokedAt: null,
-    ...overrides,
-  } as CallbackRecord;
-}
 
 function responder() {
   const stub = {
@@ -87,7 +58,6 @@ const logs = captureEngineLogs();
 
 beforeEach(() => {
   answerAskByToken.mockReset();
-  fireCallback.mockReset();
   jest.clearAllMocks();
 });
 
@@ -102,8 +72,8 @@ describe('recognising a tap', () => {
     expect(callbackQueryOf(null)).toBeNull();
   });
 
-  it('claims taps whose data is a callback id, or (legacy) an answer link', () => {
-    expect(ownsCallbackQuery(tapUpdate('cb_abc'))).toBe(true);
+  it('claims taps whose data is an answer link, and no others', () => {
+    expect(ownsCallbackQuery(tapUpdate('cb_abc'))).toBe(false);
     expect(ownsCallbackQuery(tapUpdate('ask_abc?answer=true'))).toBe(true);
     expect(ownsCallbackQuery(tapUpdate('http://localhost:3500/api/asks/ask_abc?answer=true'))).toBe(true);
     expect(ownsCallbackQuery(tapUpdate('refresh_dashboard'))).toBe(false);
@@ -139,96 +109,6 @@ describe('a tap the door does not own flows on untouched', () => {
         responder: r,
       }),
     ).toEqual({ handled: false });
-  });
-});
-
-describe('a tap that fires a callback', () => {
-  it('fires by id with NO values (Telegram captures nothing at tap time), acks, and retires the keyboard', async () => {
-    fireCallback.mockResolvedValue({ kind: 'recorded', callback: record({ singleUse: true }) });
-    const r = responder();
-
-    const result = await handleTelegramCallbackQuery({ raw: tapUpdate('cb_abc'), responder: r });
-
-    expect(fireCallback).toHaveBeenCalledWith({ id: 'cb_abc', values: {} });
-    expect(answerAskByToken).not.toHaveBeenCalled();
-    expect(result).toEqual({ handled: true, outcome: 'recorded' });
-    expect(r.answerCallbackQuery).toHaveBeenCalledWith({
-      callbackQueryId: 'cbq_1',
-      text: 'Thanks — that has been recorded.',
-    });
-    expect(r.clearReplyMarkup).toHaveBeenCalledWith({ chatId: '-1001', messageId: 42 });
-  });
-
-  it('a REPEATABLE callback keeps its keyboard — the buttons are still live', async () => {
-    fireCallback.mockResolvedValue({ kind: 'recorded', callback: record({ singleUse: false }) });
-    const r = responder();
-
-    await handleTelegramCallbackQuery({ raw: tapUpdate('cb_repeat'), responder: r });
-
-    expect(r.answerCallbackQuery).toHaveBeenCalledWith({
-      callbackQueryId: 'cbq_1',
-      text: 'Thanks — that has been recorded.',
-    });
-    expect(r.clearReplyMarkup).not.toHaveBeenCalled();
-  });
-
-  it('an inline-mode tap is acked even though there is no message to edit', async () => {
-    fireCallback.mockResolvedValue({ kind: 'recorded', callback: record() });
-    const r = responder();
-
-    await handleTelegramCallbackQuery({
-      raw: tapUpdate('cb_abc', { withoutMessage: true }),
-      responder: r,
-    });
-
-    expect(r.answerCallbackQuery).toHaveBeenCalled();
-    expect(r.clearReplyMarkup).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    ['closed', 'This request was already closed.'],
-    ['not_found', 'This request was already closed.'],
-    ['expired', 'This is no longer available — the time window for it has passed.'],
-  ])('%s: acked, and the keyboard STAYS', async (kind, text) => {
-    fireCallback.mockResolvedValue({ kind, callback: record() });
-    const r = responder();
-
-    const result = await handleTelegramCallbackQuery({ raw: tapUpdate('cb_abc'), responder: r });
-
-    expect(result).toEqual({ handled: true, outcome: kind });
-    expect(r.answerCallbackQuery).toHaveBeenCalledWith({ callbackQueryId: 'cbq_1', text });
-    expect(r.clearReplyMarkup).not.toHaveBeenCalled();
-  });
-
-  it('a parameter mismatch is LOUD in the toast, naming what was wrong', async () => {
-    fireCallback.mockResolvedValue({
-      kind: 'mismatch',
-      callback: record(),
-      message: "missing 'day' — this callback expects day (date)",
-    });
-    const r = responder();
-
-    await handleTelegramCallbackQuery({ raw: tapUpdate('cb_needs_a_date'), responder: r });
-
-    expect(r.answerCallbackQuery).toHaveBeenCalledWith({
-      callbackQueryId: 'cbq_1',
-      text: "That could not be recorded: missing 'day' — this callback expects day (date)",
-    });
-    expect(r.clearReplyMarkup).not.toHaveBeenCalled();
-  });
-
-  it('a router that throws still acks — a spinning client is worse than a visible failure', async () => {
-    fireCallback.mockRejectedValue(new Error('store down'));
-    const r = responder();
-
-    const result = await handleTelegramCallbackQuery({ raw: tapUpdate('cb_abc'), responder: r });
-
-    expect(result).toEqual({ handled: true, outcome: 'not_found' });
-    expect(r.answerCallbackQuery).toHaveBeenCalledWith({
-      callbackQueryId: 'cbq_1',
-      text: 'Something went wrong recording that.',
-    });
-    expect(logs.error()).not.toHaveLength(0);
   });
 });
 
@@ -376,26 +256,5 @@ describe('loud, never silent', () => {
       handleTelegramCallbackQuery({ raw: tapUpdate('ask_abc?answer=true'), responder: r }),
     ).resolves.toEqual({ handled: true, outcome: 'answered' });
     expect(logs.messages('warn')).toContainEqual(expect.stringContaining('answerCallbackQuery failed'));
-  });
-});
-
-describe('the migration window: legacy links are tried only AFTER the prefix check', () => {
-  it('an ask answer link never reaches the router', async () => {
-    answerAskByToken.mockResolvedValue({ kind: 'answered', ask: ASK });
-    const r = responder();
-
-    await handleTelegramCallbackQuery({ raw: tapUpdate('ask_abc?answer=true'), responder: r });
-
-    expect(fireCallback).not.toHaveBeenCalled();
-    expect(answerAskByToken).toHaveBeenCalledWith('ask_abc', 'true');
-  });
-
-  it('a callback id never reaches the ask door', async () => {
-    fireCallback.mockResolvedValue({ kind: 'recorded', callback: record() });
-    const r = responder();
-
-    await handleTelegramCallbackQuery({ raw: tapUpdate('cb_abc'), responder: r });
-
-    expect(answerAskByToken).not.toHaveBeenCalled();
   });
 });

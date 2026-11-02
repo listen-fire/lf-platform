@@ -171,7 +171,6 @@ describe('execute.ts routes every firing through the seam', () => {
   it.each([
     ['runMovementFiring', 'runMovementFiringInContext'],
     ['resumeMovementFiring', 'resumeMovementFiringInContext'],
-    ['fireCallbackFiring', 'fireCallbackFiringInContext'],
   ])('%s', (_entry, inner) => {
     expect(src).toContain(`withFiringContext(input, () => ${inner}(input))`);
   });

@@ -3,33 +3,24 @@
 // `slack_response` row before the answer, and the reply posted at the
 // payload's `response_url` when that row drains.
 //
-// Four claims carry it:
+// Three claims carry it:
 //   0. Nothing runs after the answer: Slack hears 200 only once the reply row
 //      is written, and the post to Slack happens in the drain, not the request.
-//   1. The outcome the router returns is what the tapper is told — every
-//      refusal is SAID, never swallowed into a silent 200.
-//   2. The message is edited only when the tap SERVED it (`interactionServed`):
-//      recorded + single-use. A repeatable callback's message keeps its
-//      controls; a refusal never rewrites what the first tapper is looking at.
-//   3. Legacy ask answer links still resolve through the ask door, unchanged.
+//   1. The ask door's outcome is what the tapper is told — every refusal is
+//      SAID, never swallowed into a silent 200.
+//   2. The message is edited only when the tap answered the ask; a refusal
+//      never rewrites what the first tapper is looking at.
 //
-// The router and the ask door are mocked — what is under test is the door.
+// The ask door is mocked — what is under test is the door.
 
 import { createServer, type Server } from 'node:http';
 
 import express, { type Router } from 'express';
 
 import type { AddressInfo } from 'node:net';
-import type { CallbackFireOutcome } from '../../../services/movement_engine/callback_fire';
-import type { CallbackRecord } from '../../../services/movement_engine/callback_store';
 
-const fireCallback = jest.fn<Promise<CallbackFireOutcome>, [unknown]>();
 const answerAskByToken = jest.fn();
 
-jest.mock('../../../services/movement_engine/callback_fire', () => ({
-  ...jest.requireActual('../../../services/movement_engine/callback_fire'),
-  fireCallback: (input: unknown) => fireCallback(input),
-}));
 jest.mock('../../../services/asks/doors', () => ({
   answerAskByToken: (...args: unknown[]) => answerAskByToken(...args),
 }));
@@ -58,24 +49,7 @@ import { slackResponseHandler } from '../../../services/webhook_sync/slack_respo
 let server: Server;
 let baseUrl: string;
 
-function record(overrides: Partial<CallbackRecord> = {}): CallbackRecord {
-  return {
-    id: 'cb_abc',
-    teamId: 'team-1',
-    runId: 'run-1',
-    address: 's1',
-    params: [],
-    state: { version: 1, address: 's1', bindingName: null, scopeChain: [] },
-    calls: [],
-    singleUse: true,
-    expiresAt: null,
-    status: 'live',
-    createdAt: new Date('2026-07-31T09:00:00.000Z'),
-    firedAt: null,
-    revokedAt: null,
-    ...overrides,
-  } as CallbackRecord;
-}
+const ANSWER_YES = { type: 'button', action_id: 'ask_answer_0', value: 'http://localhost:3500/api/asks/ask_abc?answer=true' };
 
 /** Every POST the door made to the payload's response_url, in order. */
 let acks: Record<string, unknown>[] = [];
@@ -142,19 +116,19 @@ async function tap(action: Record<string, unknown>): Promise<void> {
 
 describe('nothing runs after the answer', () => {
   it('answers only once the reply row is written, and posts nothing in the request', async () => {
-    fireCallback.mockResolvedValue({ kind: 'recorded', callback: record({ singleUse: true }) });
+    answerAskByToken.mockResolvedValue({ kind: 'answered', ask: { id: 'ask-1' } });
     let release: () => void = () => {};
     holdEnqueue = new Promise<void>((resolve) => {
       release = resolve;
     });
 
     let answered = false;
-    const response = post({ type: 'button', action_id: 'ship', value: 'cb_abc' }).then((res) => {
+    const response = post(ANSWER_YES).then((res) => {
       answered = true;
       return res;
     });
     await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(fireCallback).toHaveBeenCalledTimes(1);
+    expect(answerAskByToken).toHaveBeenCalledTimes(1);
     expect(answered).toBe(false);
 
     release();
@@ -166,114 +140,69 @@ describe('nothing runs after the answer', () => {
   });
 
   it('keys the reply on the interaction, so a second delivery of it folds onto one row', async () => {
-    fireCallback.mockResolvedValue({ kind: 'recorded', callback: record() });
-    await post({ type: 'button', action_id: 'ship', value: 'cb_abc' });
-    await post({ type: 'button', action_id: 'ship', value: 'cb_abc' });
+    answerAskByToken.mockResolvedValue({ kind: 'answered', ask: { id: 'ask-1' } });
+    await post(ANSWER_YES);
+    await post(ANSWER_YES);
     expect(new Set(queued.map((row) => row.key))).toEqual(new Set(['slack_response:trig-1']));
   });
 });
 
-describe('a tap that fires a callback', () => {
-  it('tells the tapper something went wrong when firing throws, rather than nothing', async () => {
-    fireCallback.mockRejectedValue(new Error('lease table unreachable'));
-
-    await tap({ type: 'button', action_id: 'ship', value: 'cb_abc' });
-
-    expect(acks).toEqual([
-      { response_type: 'ephemeral', replace_original: false, text: 'Something went wrong recording that.' },
-    ]);
-  });
-
-  it('fires by id with no supplied value, and replaces the message on a single-use recorded fire', async () => {
-    fireCallback.mockResolvedValue({ kind: 'recorded', callback: record({ singleUse: true }) });
-
-    await tap({ type: 'button', action_id: 'ship', value: 'cb_abc' });
-
-    expect(fireCallback).toHaveBeenCalledWith({ id: 'cb_abc', values: {} });
-    expect(acks).toHaveLength(1);
-    expect(acks[0]).toMatchObject({
-      replace_original: true,
-      text: 'Thanks — that has been recorded.',
-    });
-  });
-
-  it('passes a datepicker`s pick as the ONE supplied value, unnamed', async () => {
-    fireCallback.mockResolvedValue({ kind: 'recorded', callback: record() });
-
-    await tap({ type: 'datepicker', action_id: 'cb_date', selected_date: '2026-08-15' });
-
-    expect(fireCallback).toHaveBeenCalledWith({
-      id: 'cb_date',
-      values: {},
-      suppliedValue: '2026-08-15',
-    });
-  });
-
-  it('leaves a REPEATABLE callback`s message alone — the controls are still live', async () => {
-    fireCallback.mockResolvedValue({ kind: 'recorded', callback: record({ singleUse: false }) });
-
-    await tap({ type: 'button', action_id: 'refresh', value: 'cb_repeat' });
-
-    expect(acks[0]).toMatchObject({
-      response_type: 'ephemeral',
-      replace_original: false,
-      text: 'Thanks — that has been recorded.',
-    });
-  });
-});
-
-describe('every refusal is said, and none of them touches the message', () => {
-  it.each([
-    ['closed', 'This request was already closed.'],
-    ['not_found', 'This request was already closed.'],
-    ['expired', 'This is no longer available — the time window for it has passed.'],
-  ])('%s → an ephemeral notice', async (kind, text) => {
-    fireCallback.mockResolvedValue({ kind, callback: record() } as CallbackFireOutcome);
-
-    await tap({ type: 'button', action_id: 'ship', value: 'cb_abc' });
-
-    expect(acks[0]).toEqual({ response_type: 'ephemeral', replace_original: false, text });
-  });
-
-  it('a mismatch says exactly what was wrong', async () => {
-    fireCallback.mockResolvedValue({
-      kind: 'mismatch',
-      callback: record(),
-      message: "this control sent a value, but the action it fires takes none",
-    });
-
-    await tap({ type: 'datepicker', action_id: 'cb_abc', selected_date: '2026-08-15' });
-
-    expect(acks[0]).toMatchObject({
-      response_type: 'ephemeral',
-      replace_original: false,
-      text: 'That could not be recorded: this control sent a value, but the action it fires takes none',
-    });
-  });
-});
-
-describe('the migration window', () => {
-  it('LEGACY: an ask answer link still resolves through the ask door', async () => {
+describe('a tap that answers an ask', () => {
+  it('answers through the ask door and replaces the message', async () => {
     answerAskByToken.mockResolvedValue({ kind: 'answered', ask: { id: 'ask-1' } });
 
-    await tap({
-      type: 'button',
-      action_id: 'ask_answer_0',
-      value: 'http://localhost:3500/api/asks/ask_abc?answer=true',
-    });
+    await tap(ANSWER_YES);
 
     expect(answerAskByToken).toHaveBeenCalledWith('ask_abc', 'true');
-    expect(fireCallback).not.toHaveBeenCalled();
     expect(acks[0]).toMatchObject({
       replace_original: true,
       text: 'Thanks — your answer was recorded.',
     });
   });
 
-  it('an ordinary block action fires nothing and queues nothing', async () => {
+  it('passes a datepicker`s pick as the answer of a bare ask token', async () => {
+    answerAskByToken.mockResolvedValue({ kind: 'answered', ask: { id: 'ask-1' } });
+
+    await tap({ type: 'datepicker', action_id: 'ask_date', selected_date: '2026-08-15' });
+
+    expect(answerAskByToken).toHaveBeenCalledWith('ask_date', '2026-08-15');
+  });
+
+  it('tells the tapper something went wrong when answering throws, rather than nothing', async () => {
+    answerAskByToken.mockRejectedValue(new Error('asks table unreachable'));
+
+    await tap(ANSWER_YES);
+
+    expect(acks).toEqual([
+      { response_type: 'ephemeral', replace_original: false, text: 'Something went wrong recording that.' },
+    ]);
+  });
+});
+
+describe('every refusal is said, and none of them touches the message', () => {
+  it('a closed ask → an ephemeral notice', async () => {
+    answerAskByToken.mockResolvedValue({ kind: 'closed' });
+
+    await tap(ANSWER_YES);
+
+    expect(acks[0]).toEqual({ response_type: 'ephemeral', replace_original: false, text: 'This request was already closed.' });
+  });
+
+  it('an invalid answer says exactly what was wrong', async () => {
+    answerAskByToken.mockResolvedValue({ kind: 'invalid', message: 'answer must be yes or no' });
+
+    await tap(ANSWER_YES);
+
+    expect(acks[0]).toEqual({
+      response_type: 'ephemeral',
+      replace_original: false,
+      text: 'That answer could not be accepted: answer must be yes or no',
+    });
+  });
+
+  it('an ordinary block action answers nothing and queues nothing', async () => {
     await tap({ type: 'button', action_id: 'open_expense_42', value: 'expense_42' });
 
-    expect(fireCallback).not.toHaveBeenCalled();
     expect(answerAskByToken).not.toHaveBeenCalled();
     expect(queued).toHaveLength(0);
     expect(acks).toHaveLength(0);

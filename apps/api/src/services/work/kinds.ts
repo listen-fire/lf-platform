@@ -1,5 +1,5 @@
-// The work kinds the core runs: dispatch, the clock, polling, wakes and
-// callbacks, and the sweeps that keep them. A unit (an adapter package, a
+// The work kinds the core runs: dispatch, the clock, polling, wakes,
+// and the sweeps that keep them. A unit (an adapter package, a
 // product's own upkeep) adds its own kinds: it declares each into
 // `UnitWorkKinds` and registers it with `registerWorkKinds` (drain.ts), so the
 // core names none of them.
@@ -10,7 +10,6 @@ export const CORE_WORK_KINDS = [
   'fire_cron', // payload: { triggerId: string }
   'poll_source', // payload: { triggerId: string }
   'wake_await', // payload: { adapterType: string; teamId: string; correlationKey: string }
-  'fire_callback', // payload: { callbackId: string; teamId: string; callIndex: number } (callback_fire.ts)
   'cron_reconcile', // periodic, payload {}
   'poll_reconcile', // periodic, payload {}
   'timer_sweep', // periodic, payload {}

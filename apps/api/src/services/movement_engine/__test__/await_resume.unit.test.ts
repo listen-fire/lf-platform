@@ -113,10 +113,6 @@ jest.mock('../../translation_graph/adapters/packages', () => ({
     },
   ],
 }));
-jest.mock('../callback_sink', () => ({
-  callbackAwaitKeeper: { adapterType: 'callback', loadResolvable: async () => [], abandon: async () => {} },
-}));
-jest.mock('../callback_store', () => ({ revokeRunCallbacks: jest.fn() }));
 jest.mock('../run_engine_record', () => ({ settleRunEngineRecord: jest.fn(async () => {}) }));
 jest.mock('../../translation_graph/movement/execute', () => ({
   resumeMovementFiring: (...a: unknown[]) => resumeMovementFiringMock(...a),

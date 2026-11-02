@@ -111,14 +111,14 @@ describe('announceWork', () => {
     installWake(slot);
 
     const started = Date.now();
-    await announceWork('fire_callback', NOW, NOW);
+    await announceWork('fire_event', NOW, NOW);
     const waited = Date.now() - started;
     expect(waited).toBeGreaterThanOrEqual(WAKE_WAIT_MS - 20);
     expect(waited).toBeLessThan(WAKE_WAIT_MS + 500);
     expect(told).toHaveLength(1);
     expect(answered).toBe(false);
     expect(notToldLines()).toEqual([
-      `[work] the wake was not told of fire_callback work (no answer within ${WAKE_WAIT_MS} ms; the call carries on); a scheduled drain will find it`,
+      `[work] the wake was not told of fire_event work (no answer within ${WAKE_WAIT_MS} ms; the call carries on); a scheduled drain will find it`,
     ]);
 
     setTimeout(() => answer(), 200);
@@ -135,7 +135,7 @@ describe('announceWork', () => {
 
   it('settleWakes gives up at its timeout on a call that never answers', async () => {
     installWake(recordingSlot(() => new Promise<void>(() => {})).slot);
-    await announceWork('fire_callback', NOW, NOW);
+    await announceWork('fire_event', NOW, NOW);
     const started = Date.now();
     await settleWakes(300);
     expect(Date.now() - started).toBeLessThan(1_000);

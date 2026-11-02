@@ -81,7 +81,6 @@ afterEach(async () => {
   // Reset after each test so tests are independent.
   await getAutomationsQb(['parked_run']).deleteFrom('parked_run').where('run_id', '=', runId).execute();
   await getAutomationsQb(['join_pending']).deleteFrom('join_pending').where('run_id', '=', runId).execute();
-  await getAutomationsQb(['adapter_await']).deleteFrom('adapter_await').where('run_id', '=', runId).execute();
   await getAutomationsQb(['work']).deleteFrom('work').where('team_id', '=', teamId).execute();
   // Reset run status to running so ensureStarted / markParked can flip it again.
   await getAutomationsQb(['trigger_run'])

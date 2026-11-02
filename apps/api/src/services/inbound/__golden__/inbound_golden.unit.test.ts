@@ -41,14 +41,6 @@ jest.mock('../../webhook_sync/linked_object_refresh', () => ({
 }));
 jest.mock('../../work/drain', () => ({ ...jest.requireActual('../../work/drain'), ...require('./fakes').workDrainFake() }));
 jest.mock('../../work/store', () => ({ ...jest.requireActual('../../work/store'), ...require('./fakes').workStoreFake() }));
-jest.mock('../../movement_engine/callback_fire', () => {
-  const actual = jest.requireActual('../../movement_engine/callback_fire');
-  return require('./fakes').callbackFireFake(actual);
-});
-jest.mock('../../movement_engine/callback_store', () => {
-  const actual = jest.requireActual('../../movement_engine/callback_store');
-  return require('./fakes').callbackStoreFake(actual);
-});
 jest.mock('../../asks/store', () => {
   const actual = jest.requireActual('../../asks/store');
   return require('./fakes').askStoreFake(actual);

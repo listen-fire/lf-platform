@@ -10,6 +10,7 @@ import type { TeamId } from '../../generated/kysely/core/Team';
 
 import { getAsk as getNewStoreAsk, listAsksForTeam as listNewStoreAsks, type AskRecord } from '../asks/store';
 import { getAutomationsQb, getQb } from '../../lib/kysely';
+import { ASK_ADAPTER_TYPE, RESPONSE_EDGE_NAME } from '@listen-fire/ask';
 import { answerAskById } from '../asks/doors';
 import {
   askInteractionType,
@@ -280,16 +281,17 @@ function newStoreAskToView(ask: AskRecord): AskView {
   };
 }
 
-/** The run (if any) currently parked on a new-store ask's Response edge — the
- *  correlation map keyed on the ask id. Null when no run is waiting (the ask's
- *  afterlife — an answer still lands as data). */
+/** The run (if any) currently waiting on an ask's Response edge, keyed by
+ *  the ask's id. Null when no run is waiting (the ask's afterlife — an answer
+ *  still lands as data). */
 async function awaitingRunIdForAsk(askId: AskId): Promise<string | null> {
-  const row = await getAutomationsQb(['adapter_await'])
-    .selectFrom('adapter_await')
-    .where('adapter_type', '=', 'ask')
-    .where('correlation_key', '=', askId as unknown as string)
+  const row = await getAutomationsQb(['wait_row'])
+    .selectFrom('wait_row')
+    .where('adapter_type', '=', ASK_ADAPTER_TYPE)
+    .where('edge', '=', RESPONSE_EDGE_NAME)
+    .where('key', '=', askId)
     .select('run_id')
     .executeTakeFirst();
-  return row ? (row.run_id as unknown as string) : null;
+  return row ? row.run_id : null;
 }
 

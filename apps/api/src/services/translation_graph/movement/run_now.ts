@@ -65,7 +65,6 @@ import {
   describeRunAwaits,
   type AwaitDescription,
 } from '../../movement_engine/await_description';
-import { callbackUrl, listRunCallbacks } from '../../movement_engine/callback_store';
 import { isWriteEffect } from 'movement-engine/public/trace';
 import {
   describeExecutedVersion,
@@ -499,25 +498,6 @@ export interface MovementRunInspection {
    *  await/timer leaf (P22). Empty for a run that is not waiting on anything an
    *  author chose (running / finished / on a spending-limit hold). */
   awaiting: AwaitDescription[];
-  /** The deferred invocations this run handed out — a button's payload, a
-   *  link's target — with what has been fired at each. A fire is a SEGMENT of
-   *  this same run, so its writes are already in `writes`; this is what says
-   *  where they came from, and what is still tappable. */
-  callbacks: MovementRunCallback[];
-}
-
-/** One minted callback, as the inspector shows it. `calls` is the ledger: what
- *  was actually fired, in order. */
-export interface MovementRunCallback {
-  id: string;
-  url: string;
-  /** live | fired (a single-use claim) | revoked (the run ended). */
-  status: string;
-  singleUse: boolean;
-  expiresAt: string | null;
-  /** The fire-time signature, declaration order. */
-  params: Array<{ name: string; type: string }>;
-  calls: Array<{ at: string; values: Record<string, unknown> }>;
 }
 
 function appliedPlanToWrite(
@@ -655,15 +635,6 @@ export async function inspectMovementRun(input: {
     trace,
     errors,
     awaiting,
-    callbacks: (await listRunCallbacks(row.id as unknown as TriggerRunId)).map((c) => ({
-      id: c.id,
-      url: callbackUrl(c.id),
-      status: c.status,
-      singleUse: c.singleUse,
-      expiresAt: c.expiresAt ? c.expiresAt.toISOString() : null,
-      params: c.params,
-      calls: c.calls,
-    })),
   };
 }
 

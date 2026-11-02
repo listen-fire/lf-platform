@@ -49,13 +49,6 @@ export interface FakeRemoteInstall {
   secret: string;
 }
 
-export interface FakeCallback {
-  id: string;
-  status: 'live' | 'fired' | 'revoked';
-  expiresAt: Date | null;
-  params: { name: string; type: string }[];
-}
-
 export interface World {
   subscriptions: Record<string, FakeSubscription>;
   adapters: Record<string, FakeAdapter>;
@@ -65,9 +58,6 @@ export interface World {
   bridgedLinkedObjects: boolean;
   /** Team ids the dev-loop harness bypass applies to. */
   harnessTeams: string[];
-  /** How the callback router answers a fired id. */
-  fireCallback: (input: { id: string; values: Record<string, unknown>; suppliedValue?: string }) => unknown;
-  callbacks: Record<string, FakeCallback>;
   /** What the ask store holds, by token. */
   asks: Record<string, unknown>;
   askAnswer: (token: string, raw: unknown) => unknown;
@@ -121,9 +111,6 @@ function defaultAdapter(adapterType: string): FakeAdapter {
   };
 }
 
-/** The record a fired callback hands back; only `singleUse` is read by the doors. */
-export const GOLDEN_CALLBACK = { id: 'cb_golden0001', singleUse: true, status: 'fired' };
-
 export function freshWorld(): World {
   return {
     subscriptions: {},
@@ -132,8 +119,6 @@ export function freshWorld(): World {
     remoteInstalls: [],
     bridgedLinkedObjects: false,
     harnessTeams: [],
-    fireCallback: () => ({ kind: 'recorded', callback: GOLDEN_CALLBACK }),
-    callbacks: {},
     asks: {},
     askAnswer: () => ({ kind: 'not_found' }),
     enqueueFails: false,

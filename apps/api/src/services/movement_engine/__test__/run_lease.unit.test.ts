@@ -20,8 +20,6 @@ jest.mock('../run_host_store', () => ({
   triggerRunIdOf: (id: string) => id,
 }));
 jest.mock('../../translation_graph/adapters/packages', () => ({ awaitKeepers: () => [] }));
-jest.mock('../callback_sink', () => ({ callbackAwaitKeeper: {} }));
-jest.mock('../callback_store', () => ({ revokeRunCallbacks: jest.fn() }));
 jest.mock('../../../lib/kysely', () => ({ getAutomationsQb: jest.fn() }));
 
 const engineWrites = { pending: Promise.resolve() };

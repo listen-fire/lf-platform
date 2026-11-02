@@ -46,8 +46,6 @@ jest.mock('../run_host_store', () => ({
   triggerRunIdOf: (id: string) => id,
 }));
 jest.mock('../../translation_graph/adapters/packages', () => ({ awaitKeepers: () => [] }));
-jest.mock('../callback_sink', () => ({ callbackAwaitKeeper: { adapterType: 'callback', loadResolvable: jest.fn(), abandon: jest.fn() } }));
-jest.mock('../callback_store', () => ({ revokeRunCallbacks: jest.fn() }));
 jest.mock('../run_engine_record', () => ({ settleRunEngineRecord: jest.fn() }));
 jest.mock('../limit_pause', () => ({ markRunLimitPaused: jest.fn() }));
 

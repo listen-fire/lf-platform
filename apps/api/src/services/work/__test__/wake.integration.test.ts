@@ -8,12 +8,10 @@ import { randomUUID } from 'node:crypto';
 import { sql } from 'kysely';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
-import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
 
 import { getAutomationsQb, getCoreQb } from '../../../lib/kysely';
 import { Context } from '../../context';
 import { userPrincipal } from '../../principal';
-import { claimCallbackFireWithBody, mintCallback } from '../../movement_engine/callback_store';
 import { WorkDeferred, drainWork, registerWorkHandler, resetWorkHandlersForTests } from '../drain';
 import { claimDueWork, completeWork, enqueueWork, ensurePeriodicWork, listWorkByKind, removeWork } from '../store';
 import { WAKE_WAIT_MS, installWake, resetWakeForTests, settleWakes, type WakeSlot } from '../wake';
@@ -273,52 +271,5 @@ describe('what the drain tells the wake', () => {
       resume_timer: released?.at?.getTime(),
       fire_cron: deferred?.at?.getTime(),
     });
-  });
-});
-
-describe('the callback body', () => {
-  let runId: TriggerRunId;
-
-  beforeAll(async () => {
-    runId = randomUUID() as TriggerRunId;
-    await getAutomationsQb(['trigger_run'])
-      .insertInto('trigger_run')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .values({ id: runId, team_id: teamId, trigger_id: 'wake-trigger', trigger_type: 'webhook', status: 'running', started_at: new Date() } as any)
-      .execute();
-  });
-
-  afterAll(async () => {
-    await getAutomationsQb(['callback']).deleteFrom('callback').where('run_id', '=', runId).execute();
-    await getAutomationsQb(['trigger_run']).deleteFrom('trigger_run').where('id', '=', runId).execute();
-  });
-
-  it('the callback body queued in a transaction is announced after commit', async () => {
-    const found: boolean[] = [];
-    const told: Told[] = [];
-    // The slot reads the row from outside the transaction, as a drain the
-    // wake started would.
-    const readRow = async (): Promise<void> => {
-      const { rows } = await sql<{ id: string }>`
-        SELECT id FROM automations.work WHERE team_id = ${teamId}::uuid AND kind = 'fire_callback'`.execute(getAutomationsQb(['work']));
-      found.push(rows.length === 1);
-    };
-    installWake({
-      async now(kind) {
-        told.push({ call: 'now', kind });
-        await readRow();
-      },
-      async at(kind, at) {
-        told.push({ call: 'at', kind, at });
-        await readRow();
-      },
-    });
-    const callback = await mintCallback({ teamId, runId, address: 's2', params: [], state: {}, singleUse: true });
-
-    const claim = await claimCallbackFireWithBody({ id: callback.id, values: {}, bodyDueAt: new Date() });
-
-    expect(claim.kind).toBe('recorded');
-    expect(told).toEqual([{ call: 'now', kind: 'fire_callback' }]);
-    expect(found).toEqual([true]);
   });
 });

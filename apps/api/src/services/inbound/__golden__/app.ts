@@ -14,7 +14,6 @@ import { adapterDoorsRouter } from '../../../interfaces/rest/adapterDoors';
 import { telegramBuiltinRouter } from '../../../interfaces/rest/telegramBuiltin';
 import { slackEventsRouter } from '../../../interfaces/rest/slackEvents';
 import { slackInteractivityRouter } from '../../../interfaces/rest/slackInteractivity';
-import { callbacksRouter } from '../../../interfaces/rest/callbacks';
 import { asksRouter } from '../../../interfaces/rest/asks';
 import { whatsappRouter } from '../../../interfaces/rest/whatsapp';
 import { receiveWebhook } from '../../../interfaces/whatsapp/webhook';
@@ -55,7 +54,6 @@ export function buildGoldenApp(): express.Express {
   app.use('/api/resend', express.raw({ type: 'application/json' }));
   app.use(jsonBodyParser);
   app.use(urlencodedBodyParser);
-  app.use('/api/cb', callbacksRouter);
   app.use('/api/asks', asksRouter);
   app.use('/api/public/whatsapp', whatsappRouter);
   // Not a production path: the WhatsApp router reads its app secret when it is

@@ -310,7 +310,6 @@ export const MANIFEST: Record<Product, TableSpec[]> = {
       table: 'join_branch_export',
       tenancy: { kind: 'via', column: 'run_id', parent: 'automations.trigger_run' },
     },
-    { table: 'adapter_await', tenancy: { kind: 'team_column' } },
     // The library texts parked runs name by hash: carried with the parks that read them.
     { table: 'park_library_source', tenancy: { kind: 'team_column' } },
     {
@@ -345,7 +344,6 @@ export const MANIFEST: Record<Product, TableSpec[]> = {
       exportExcludedBecause:
         'the pids and machines of module processes lf hosts started for the source; they name nothing on the target',
     },
-    { table: 'callback', tenancy: { kind: 'team_column' } },
     { table: 'record_binding', tenancy: { kind: 'team_column' } },
     {
       table: 'lf_secrets_lease',

@@ -99,9 +99,6 @@ const HOST_SIDE_FILES = [
   'await_description.ts',
   'await_resume.ts',
   'await_wake.ts',
-  'callback_fire.ts',
-  'callback_sink.ts',
-  'callback_store.ts',
   'cancel_gate.ts',
   'limit_pause.ts',
   'limit_resume.ts',
@@ -644,9 +641,9 @@ describe('the engine/host seam carries data', () => {
 
   // The rest of the host's families, as one run uses them: the acting-user
   // lookup names the source instance and the event (the host asks the source
-  // itself), a callback and a timer carry their instants as ISO strings, the
+  // itself), a timer carries its instant as an ISO string, the
   // write's cross-run locks go by token, and the trace is appended as data.
-  it('the lookup, callbacks, timers, locks and trace pass plain data only', async () => {
+  it('the lookup, timers, locks and trace pass plain data only', async () => {
     const teamId = '00000000-0000-0000-0000-000000000045' as TeamId;
     const calls: Array<{ call: string; input: unknown; output: unknown }> = [];
     const record = async <T>(call: string, input: unknown, answer: Promise<T>): Promise<T> => {
@@ -680,20 +677,13 @@ describe('the engine/host seam carries data', () => {
     const appended: unknown[] = [];
     const inner = makeTestHost({
       adapters: { resolve: ({ adapterType }) => (adapterType === 'kg' ? kg : manual) },
-      park: {
-        sink: parks.sink,
-        callbacks: {
-          mint: async () => ({ id: 'cb_1', url: 'https://api.test/api/cb/cb_1' }),
-          calls: async () => [],
-        },
-      },
+      park: { sink: parks.sink },
       lookup: {
         resolveActingUser: async () => ({ id: 'user-1', email: 'amy@acme.dev', name: 'Amy' }),
       },
       trace: [],
     });
     const sink = inner.park.sink!;
-    const callbacks = inner.park.callbacks!;
     const appendTrace = inner.trace!;
     const host: EngineHost = {
       ...inner,
@@ -703,10 +693,6 @@ describe('the engine/host seam carries data', () => {
           ...sink,
           commitTimerPark: (input) =>
             record('park.sink.commitTimerPark', input, sink.commitTimerPark(input)),
-        },
-        callbacks: {
-          ...callbacks,
-          mint: (input) => record('park.callbacks.mint', input, callbacks.mint(input)),
         },
       },
       lookup: {
@@ -733,7 +719,6 @@ describe('the engine/host seam carries data', () => {
         '',
         'function m(go: <runs-[:Invocation]->>) {',
         '  write graph-[:note]-> { unique by (`body`) body: "by ${@user_email}" }',
-        '  cb = callback({ write graph-[:note]-> { body: "called" } }, { ttl: 2d })',
         '  await sleep(1d)',
         '}',
         'listen to runs {} fire m',
@@ -769,7 +754,6 @@ describe('the engine/host seam carries data', () => {
       'locks.acquire',
       'locks.release',
       'lookup.resolveActingUser',
-      'park.callbacks.mint',
       'park.sink.commitTimerPark',
       'trace.append',
     ]);
@@ -781,10 +765,6 @@ describe('the engine/host seam carries data', () => {
       instance: expect.any(String),
     });
     expect(lookup?.input).not.toHaveProperty('teamId');
-    expect(calls.find((c) => c.call === 'park.callbacks.mint')?.input).toMatchObject({
-      segmentId: expect.any(String),
-      expiresAt: expect.any(String),
-    });
     expect(calls.find((c) => c.call === 'park.sink.commitTimerPark')?.input).toMatchObject({
       segmentId: expect.any(String),
       wakeAt: expect.any(String),
@@ -1176,7 +1156,6 @@ describe('the round trip', () => {
     const host = makeTestHost({
       park: {
         sink,
-        callbacks: { mint: async () => ({ id: 'cb', url: 'u' }), calls: async () => [] },
         sources: makeMemoryParkSources().sources,
       },
       trace: [],
@@ -1289,12 +1268,10 @@ describe('every family crosses as JSON', () => {
     expect(recorded).toHaveLength(1);
   });
 
-  familyRun('parks: a callback and its ledger, an all join, a race settled', async () => {
+  familyRun('parks: an all join, a race settled', async () => {
     const parks = joiningParkSink();
     const h = roundTrip(
       [
-        '  cb = callback({ write crm-[:notes]-> { title: "called" } }, { ttl: 2d })',
-        '  cb-[c:Called]-> { write crm-[:notes]-> { title: c.At } }',
         '  r = all(',
         '    () => { await sleep(1h)',
         '      return "a" },',
@@ -1308,15 +1285,7 @@ describe('every family crosses as JSON', () => {
         '  )',
         '  write crm-[:notes]-> { title: "${r[0]}${r[1]} ${w[0]}" }',
       ],
-      {
-        park: {
-          sink: parks.sink,
-          callbacks: {
-            mint: async () => ({ id: 'cb_1', url: 'https://api.test/api/cb/cb_1' }),
-            calls: async () => [{ at: '2026-10-07T10:00:00.000Z', values: {} }],
-          },
-        },
-      },
+      { park: { sink: parks.sink } },
     );
     const wake = async (): Promise<void> => {
       while (parks.parks.size > 0) {
@@ -1329,10 +1298,7 @@ describe('every family crosses as JSON', () => {
     };
     expect((await h.run()).parked).toBe(true);
     await wake();
-    expect(h.crm.creates.map((c) => c.fields.title)).toEqual([
-      '2026-10-07T10:00:00.000Z',
-      'ab first',
-    ]);
+    expect(h.crm.creates.map((c) => c.fields.title)).toEqual(['ab first']);
     expect(parks.cancelled.length).toBeGreaterThan(0);
   });
 

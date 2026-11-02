@@ -8,7 +8,6 @@ import type { Router } from 'express';
 
 import { adapterDoorsRouter } from '../../../interfaces/rest/adapterDoors';
 import { asksRouter } from '../../../interfaces/rest/asks';
-import { callbacksRouter } from '../../../interfaces/rest/callbacks';
 import { slackEventsRouter } from '../../../interfaces/rest/slackEvents';
 import { slackInteractivityRouter } from '../../../interfaces/rest/slackInteractivity';
 import { telegramBuiltinRouter } from '../../../interfaces/rest/telegramBuiltin';
@@ -46,13 +45,12 @@ export function routerTables(): Record<string, string[]> {
     '/api/public/slack': routesOf(slackEventsRouter),
     '/api/public/slack-actions': routesOf(slackInteractivityRouter),
     '/api/public/whatsapp': routesOf(whatsappRouter),
-    '/api/cb': routesOf(callbacksRouter),
     '/api/asks': routesOf(asksRouter),
     '/api/v1/valuations/webhooks': routesOf(valuationsWebhooksRouter),
   };
 }
 
-const INBOUND_LINE = /(webhook-sync|\/adapter'|\/telegram'|\/slack'|slack-actions|\/resend|\/api\/cb|\/api\/asks|whatsapp|mailgun|resend\/callback|valuations\/webhooks|'\/webhook'|'\/api', privateRouter|'\/api\/public', publicRouter|\/v1\/valuations|webhooksRouter|'\/mailgun')/;
+const INBOUND_LINE = /(webhook-sync|\/adapter'|\/telegram'|\/slack'|slack-actions|\/resend|\/api\/asks|whatsapp|mailgun|resend\/callback|valuations\/webhooks|'\/webhook'|'\/api', privateRouter|'\/api\/public', publicRouter|\/v1\/valuations|webhooksRouter|'\/mailgun')/;
 
 /** The lines of server.ts and rest/index.ts that mount an inbound door, as
  *  written: the path, the parser in front of it, and the router behind it. */

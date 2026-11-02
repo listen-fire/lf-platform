@@ -24,7 +24,7 @@ import {
 import { listOpenAsksForTeam, answerForTeam } from '../answer_surfaces';
 import { describeRunAwaits } from '../../movement_engine/await_description';
 import { notifyEngineOfSettledAsks } from '../../asks/in_process_notifier';
-import { postgresRunHostStore } from '../../movement_engine/run_host_store';
+import { ASK_ADAPTER_TYPE, RESPONSE_EDGE_NAME } from '@listen-fire/ask';
 
 async function makeTeam(): Promise<TeamId> {
   const teamId = randomUUID() as TeamId;
@@ -94,7 +94,11 @@ describe('chunk F — new-store ask surfaces (real DB)', () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .values({ run_id: runId, address: 'await-ask', status: 'parked', park_reason: 'await', state: '{}' } as any)
         .execute();
-      await postgresRunHostStore.correlations.correlate({ adapterType: 'ask', correlationKey: ask.id, runId, teamId, address: 'await-ask' });
+      const wait = await getAutomationsQb(['wait_row'])
+        .insertInto('wait_row')
+        .values({ adapter_type: ASK_ADAPTER_TYPE, edge: RESPONSE_EDGE_NAME, key: ask.id, since: '0', run_id: runId, team_id: teamId, address: 'await-ask' })
+        .returning('id')
+        .executeTakeFirstOrThrow();
 
       await answerAskRecordForTeam({ askId: ask.id, answer: 'true', teamId });
 
@@ -104,7 +108,7 @@ describe('chunk F — new-store ask surfaces (real DB)', () => {
         .where('kind', '=', 'wake_await')
         .select('payload')
         .execute();
-      expect(wakes.map((w) => w.payload)).toEqual([{ adapterType: 'ask', teamId, correlationKey: ask.id }]);
+      expect(wakes.map((w) => w.payload)).toEqual([{ waitId: wait.id, runId, address: 'await-ask' }]);
       // The run is resumed by the drain, not by the request.
       const park = await getAutomationsQb(['parked_run'])
         .selectFrom('parked_run')
@@ -121,9 +125,9 @@ describe('chunk F — new-store ask surfaces (real DB)', () => {
         .insertInto('trigger_run')
         .values({ id: runId, team_id: teamId, host: 'lf', trigger_id: 'listen:welcome.lf:greet', trigger_type: 'webhook', status: 'parked' })
         .execute();
-      await getAutomationsQb(['adapter_await'])
-        .insertInto('adapter_await')
-        .values({ adapter_type: 'ask', correlation_key: ask.id as unknown as string, run_id: runId, team_id: teamId, address: 's0' })
+      await getAutomationsQb(['wait_row'])
+        .insertInto('wait_row')
+        .values({ adapter_type: ASK_ADAPTER_TYPE, edge: RESPONSE_EDGE_NAME, key: ask.id, since: '0', run_id: runId, team_id: teamId, address: 's0' })
         .execute();
 
       const listed = await listAskRecordsForTeam(teamId);
@@ -180,16 +184,15 @@ describe('chunk F — new-store ask surfaces (real DB)', () => {
       const runId = await makeParkedRun(teamId);
       const ask = await createAsk({ teamId, family: 'Check', prompt: 'Kill Acme Corp?' });
 
-      // An await park on the ask's Response edge + its correlation row.
+      // An await park on the ask's Response edge + its wait.
       await getAutomationsQb(['parked_run'])
         .insertInto('parked_run')
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .values({ run_id: runId, address: 's0', status: 'parked', park_reason: 'await', state: JSON.stringify({}) } as any)
         .execute();
-      await getAutomationsQb(['adapter_await'])
-        .insertInto('adapter_await')
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .values({ adapter_type: 'ask', correlation_key: ask.id, run_id: runId, team_id: teamId, address: 's0' } as any)
+      await getAutomationsQb(['wait_row'])
+        .insertInto('wait_row')
+        .values({ adapter_type: ASK_ADAPTER_TYPE, edge: RESPONSE_EDGE_NAME, key: ask.id, since: '0', run_id: runId, team_id: teamId, address: 's0' })
         .execute();
 
       // A recurring `until` timer park.

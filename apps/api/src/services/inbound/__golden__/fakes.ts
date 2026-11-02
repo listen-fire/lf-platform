@@ -226,27 +226,6 @@ export function workStoreFake(): AnyRecord {
   };
 }
 
-export function callbackFireFake(actual: AnyRecord): AnyRecord {
-  return {
-    ...actual,
-    fireCallback: async (input: AnyRecord) => {
-      record({ kind: 'fire_callback', ...input });
-      return world.fireCallback(input as never);
-    },
-  };
-}
-
-export function callbackStoreFake(actual: AnyRecord): AnyRecord {
-  return {
-    ...actual,
-    getCallback: async (id: string) => {
-      if (!(actual.isCallbackId as (value: string) => boolean)(id)) return null;
-      const found = world.callbacks[id];
-      return found ? { ...found, expiresAt: found.expiresAt } : null;
-    },
-  };
-}
-
 export function askStoreFake(actual: AnyRecord): AnyRecord {
   return { ...actual, lookupAskByToken: async (token: string) => world.asks[token] ?? null };
 }

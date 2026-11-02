@@ -38,7 +38,6 @@ import { testWorkContext } from '../../../test/harness/work';
 import { makeRecorderParks } from '../park_sink';
 import { drainUntilIdle, drainWork, resetWorkHandlersForTests } from '../../work/drain';
 import { withRunLease, type HeldRunLease } from '../run_lease';
-import { getCallback, listRunCallbacks } from '../callback_store';
 import { postgresRunHostStore } from '../run_host_store';
 
 const mockedCatalog = runCatalogSnapshotForTeam as jest.Mock;
@@ -208,7 +207,6 @@ const SLEEP_THEN_LAST = [
   'chat = connect slack using acme_slack',
   '',
   'function sleep_then_last(ev: <crm-[:`Webhook Event`]->>) {',
-  '  cb = callback()',
   '  await sleep(1h)',
   '  write chat-[:messages]-> {',
   '    channel: "#alerts"',
@@ -711,16 +709,6 @@ describe('timer_resume — parks resume through the work table (real DB)', () =>
     );
     await dispatchTriggerByIdEvent({ triggerId, teamId, event: webhookEvent() });
     const { runId } = await parkedRun(teamId);
-    const [callback] = await listRunCallbacks(runId);
-    expect(callback?.status).toBe('live');
-    // A correlation of the run's, which nothing the stale holder does may drop.
-    // An ask's id, so a run abandoned in error cancels it as the real thing.
-    const keptAskId = randomUUID();
-    await getAutomationsQb(['adapter_await'])
-      .insertInto('adapter_await')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .values({ adapter_type: 'ask', correlation_key: keptAskId, run_id: runId, team_id: teamId, address: 's9' } as any)
-      .execute();
     await backdateLeafAndRow(runId);
 
     let stale: HeldRunLease | undefined;
@@ -752,8 +740,6 @@ describe('timer_resume — parks resume through the work table (real DB)', () =>
     expect(await staleStep).toEqual({ kind: 'held', value: 'lease_lost' });
     expect(texts).toEqual(['last']);
     expect((await runRow(runId)).status).toBe('parked');
-    expect((await getCallback(callback!.id))?.status).toBe('live');
-    expect(await postgresRunHostStore.correlations.correlated({ adapterType: 'ask', teamId, correlationKey: keptAskId })).toHaveLength(1);
     // The stale holder left its claimed leaf alone; the new holder's claim of
     // the lease already returned it to parked.
     const leaves = await getAutomationsQb(['parked_run']).selectFrom('parked_run').where('run_id', '=', runId).select('status').execute();
@@ -765,7 +751,6 @@ describe('timer_resume — parks resume through the work table (real DB)', () =>
     expect(fresh).toEqual({ kind: 'held', value: 'done' });
     expect(texts).toEqual(['last', 'last']);
     expect(await runRow(runId)).toEqual({ status: 'success', failure_reason: null });
-    expect((await getCallback(callback!.id))?.status).toBe('revoked');
     expect(await parkedRows(runId)).toBe(0);
   });
 
@@ -777,7 +762,6 @@ describe('timer_resume — parks resume through the work table (real DB)', () =>
     });
     await dispatchTriggerByIdEvent({ triggerId, teamId, event: webhookEvent() });
     const { runId } = await parkedRun(teamId);
-    const [callback] = await listRunCallbacks(runId);
     const holder = await postgresRunHostStore.leases.claim({ runId, ttlMs: 60_000 });
 
     const stale = new TriggerRunRecorder({
@@ -793,7 +777,6 @@ describe('timer_resume — parks resume through the work table (real DB)', () =>
     await stale.finish();
 
     expect((await runRow(runId)).status).toBe('parked');
-    expect((await getCallback(callback!.id))?.status).toBe('live');
     await postgresRunHostStore.leases.release({ runId, token: holder!.token });
   });
 });

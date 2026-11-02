@@ -69,24 +69,6 @@ model AsksWorkerHeartbeat {
   @@schema("asks")
 }
 
-model AdapterAwait {
-  id             String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  adapterType    String     @map("adapter_type")
-  correlationKey String     @map("correlation_key")
-  runId          String     @map("run_id") @db.Uuid
-  teamId         String     @map("team_id") @db.Uuid
-  address        String
-  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime   @default(now()) @map("updated_at") @db.Timestamptz(6)
-  triggerRun     TriggerRun @relation(fields: [runId], references: [id], onDelete: Cascade)
-
-  @@unique([runId, address], map: "adapter_await_run_address_unique")
-  @@index([adapterType, correlationKey, teamId], map: "adapter_await_correlation_idx")
-  @@index([runId])
-  @@map("adapter_await")
-  @@schema("automations")
-}
-
 model Arrival {
   seq         BigInt   @id @default(autoincrement())
   teamId      String   @map("team_id") @db.Uuid
@@ -173,30 +155,6 @@ model CacheEntry {
 
   @@index([expiresAt], map: "cache_entry_expires_idx")
   @@map("cache_entry")
-  @@schema("automations")
-}
-
-/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
-model Callback {
-  id         String     @id
-  teamId     String     @map("team_id") @db.Uuid
-  runId      String     @map("run_id") @db.Uuid
-  address    String
-  params     Json       @default("[]")
-  state      Json
-  calls      Json       @default("[]")
-  singleUse  Boolean    @default(true) @map("single_use")
-  expiresAt  DateTime?  @map("expires_at") @db.Timestamptz(6)
-  status     String     @default("live")
-  createdAt  DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt  DateTime   @default(now()) @map("updated_at") @db.Timestamptz(6)
-  firedAt    DateTime?  @map("fired_at") @db.Timestamptz(6)
-  revokedAt  DateTime?  @map("revoked_at") @db.Timestamptz(6)
-  triggerRun TriggerRun @relation(fields: [runId], references: [id], onDelete: Cascade)
-
-  @@index([runId])
-  @@index([teamId])
-  @@map("callback")
   @@schema("automations")
 }
 
@@ -826,8 +784,6 @@ model TriggerRun {
   returned                    Json?              @db.Json
   deliveryId                  String?            @map("delivery_id") @db.Uuid
   leaseMark                   BigInt?            @map("lease_mark")
-  adapterAwaits               AdapterAwait[]
-  callbacks                   Callback[]
   joinBranchExports           JoinBranchExport[]
   joinPendings                JoinPending[]
   parkedRuns                  ParkedRun[]

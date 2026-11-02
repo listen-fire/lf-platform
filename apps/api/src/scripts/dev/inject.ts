@@ -479,11 +479,7 @@ async function injectTelegramBuiltin(args: TelegramEventInjectArgs) {
 }
 
 interface TelegramCallbackInjectArgs {
-  /** A callback id (`cb_…`) — the CURRENT idiom, and what an author wires into
-   *  `callback_data` (comfortably inside Telegram's 64 bytes). Drives the real
-   *  PLATFORM door, not the `/api/cb/<id>` HTTP one. */
-  cbId?: string;
-  /** The bare ask token — the LEGACY idiom, still recognised. */
+  /** The bare ask token. */
   token?: string;
   answer?: string;
   /** Full `callback_data` verbatim, for probing the door's tolerance (a whole
@@ -516,10 +512,9 @@ async function latestFakeTelegramMessageId(): Promise<number | undefined> {
 /**
  * Tap an inline-keyboard button — a real `callback_query` update, the shape
  * Telegram delivers when someone presses a `callback_data` button. The door
- * recognises the payload, fires it through the router, acks
- * (`answerCallbackQuery`) and — when the tap served the message — retires the
- * keyboard (`editMessageReplyMarkup`); all three observable in
- * `dev:inspect telegram`.
+ * recognises an ask answer link, answers the ask, acks (`answerCallbackQuery`)
+ * and — when the tap answered it — retires the keyboard
+ * (`editMessageReplyMarkup`); all three observable in `dev:inspect telegram`.
  */
 async function injectTelegramCallback(args: TelegramCallbackInjectArgs) {
   const seed = await ensureDevLoopTeam();
@@ -532,7 +527,6 @@ async function injectTelegramCallback(args: TelegramCallbackInjectArgs) {
       ? Number(args.messageId)
       : ((await latestFakeTelegramMessageId()) ?? nowSec);
   const data =
-    args.cbId ??
     args.data ??
     `${args.token}?answer=${encodeURIComponent(args.answer ?? '')}`;
 
@@ -681,12 +675,6 @@ interface WhatsappInjectArgs {
   /** Send an inbound REACTION (to `reactedMessageId` ?? a synthetic wamid). */
   reaction?: string;
   reactedMessageId?: string;
-  /** Tap an interactive reply button — a real `interactive.button_reply`
-   *  message, the shape WhatsApp delivers when someone presses one. Wins over
-   *  `text`/`media`/`reaction`; drives the real callback door
-   *  (services/webhook_sync/whatsapp_callback_door.ts), not the `/api/cb/<id>`
-   *  HTTP one. */
-  cbId?: string;
 }
 
 /** A 1×1 PNG — the bytes seeded for an injected image. */
@@ -737,21 +725,9 @@ async function injectWhatsapp(args: WhatsappInjectArgs) {
     from: args.from,
     id: messageId,
     timestamp: String(nowSec),
-    type:
-      args.cbId !== undefined
-        ? 'interactive'
-        : args.reaction !== undefined
-          ? 'reaction'
-          : args.media
-            ? args.mediaType ?? 'image'
-            : 'text',
+    type: args.reaction !== undefined ? 'reaction' : args.media ? args.mediaType ?? 'image' : 'text',
   };
-  if (args.cbId !== undefined) {
-    // A tapped reply button — the shape `interactive.button_reply` delivers.
-    // This message's OWN id (`messageId`, already computed above) is what the
-    // door's ack reply threads to, via Meta's `context.message_id`.
-    message.interactive = { type: 'button_reply', button_reply: { id: args.cbId, title: 'Tap' } };
-  } else if (args.reaction !== undefined) {
+  if (args.reaction !== undefined) {  } else if (args.reaction !== undefined) {
     message.reaction = {
       message_id: args.reactedMessageId ?? `wamid.${nowSec - 60}`,
       emoji: args.reaction,
@@ -1871,12 +1847,7 @@ async function injectSlackEvent(args: SlackEventInjectArgs) {
 }
 
 interface SlackInteractivityInjectArgs {
-  /** A callback id (`cb_…`) — the CURRENT idiom. It rides the same slot the
-   *  author would have wired it into: `value` on a button, the chosen option's
-   *  `value` on a select, `action_id` on a datepicker (which has no `value`).
-   *  Drives the real PLATFORM door, not the `/api/cb/<id>` HTTP one. */
-  cbId?: string;
-  /** A full button/option value (the LEGACY ask answer link). Overrides
+  /** A full button/option value (an ask answer link). Overrides
    *  token/answer. */
   value?: string;
   /** The ask capability token (`ask_…`) — combined with `answer` to build the
@@ -1906,15 +1877,9 @@ interface SlackInteractivityInjectArgs {
  * Fire a synthetic Slack block-action — a button tap, a static_select choice,
  * or a datepicker tap-time pick — at the Listen-Fire app's interactivity door
  * (`/api/public/slack-actions`). Builds the real `block_actions` payload Slack
- * posts, so this drives the PLATFORM path end to end (recognition → router →
- * ack → message edit), not the HTTP door `dev:inject callback` uses.
- *
- * `--cb-id` is the current idiom: the opaque id rides `value` (button),
- * `selected_option.value` (select) or `action_id` (datepicker, which has no
- * `value` field), and the datepicker's `selected_date` becomes the ONE supplied
- * value the router binds to the callback's first parameter. `--token/--answer`
- * still inject the LEGACY ask answer link, which the door keeps recognising
- * during the migration window.
+ * posts, so this drives the PLATFORM path end to end (recognition → ask answer
+ * → ack → message edit). `--token/--answer` build the ask answer link; a
+ * datepicker's `selected_date` is the answer to a bare ask link.
  *
  * `response_url` points at fake-channels so the ack (the message edit, or the
  * ephemeral "closed"/refusal notice) is observable via `dev:inspect`.
@@ -1930,10 +1895,10 @@ async function injectSlackInteractivity(args: SlackInteractivityInjectArgs) {
 
   if (args.datepicker) {
     // Tap-time: the pre-wired slot can't carry the picked value, so the
-    // callback id (legacy: the bare ask link) rides `action_id` and the pick
+    // bare ask link rides `action_id` and the pick
     // arrives as `selected_date` (@slack/bolt-js's `DatepickerAction` field
     // name) — the same shape timepicker/dispatch-triggered text input use.
-    const link = args.cbId ?? args.value ?? `${getApiBaseUrl()}/api/asks/${args.token}`;
+    const link = args.value ?? `${getApiBaseUrl()}/api/asks/${args.token}`;
     action = {
       type: 'datepicker',
       action_id: link,
@@ -1943,7 +1908,6 @@ async function injectSlackInteractivity(args: SlackInteractivityInjectArgs) {
     actionValue = link;
   } else {
     const value =
-      args.cbId ??
       args.value ??
       `${getApiBaseUrl()}/api/asks/${args.token}?answer=${encodeURIComponent(args.answer ?? '')}`;
     action = args.select
@@ -2291,48 +2255,6 @@ function printResult(out: any, pretty: boolean) {
   }
 }
 
-/**
- * Fire a callback through the REAL door — `POST /api/cb/<id>` — so the dev loop
- * exercises exactly the path a platform button takes. `--param name=value` is
- * repeatable; `--param-json` supplies a whole object when a value is not a
- * plain scalar. GET is deliberately NOT offered: it never fires.
- */
-async function injectCallback(args: {
-  id: string;
-  params: Record<string, string>;
-  paramJson?: string;
-}): Promise<Awaited<ReturnType<typeof injectRaw>>> {
-  let body: Record<string, unknown> = { ...args.params };
-  if (args.paramJson) {
-    try {
-      body = { ...body, ...(JSON.parse(args.paramJson) as Record<string, unknown>) };
-    } catch {
-      console.error(`--param-json is not valid JSON: ${args.paramJson}`);
-      process.exit(2);
-    }
-  }
-  return injectRaw({ url: `/api/cb/${encodeURIComponent(args.id)}`, method: 'POST', body });
-}
-
-/** Repeated `--param name=value` flags. `parseFlags` keeps only the last of a
- *  repeated key, so the raw argv is re-scanned here rather than losing values
- *  silently. */
-function collectParams(argv: string[]): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (let i = 0; i < argv.length; i++) {
-    if (argv[i] !== '--param') continue;
-    const pair = argv[i + 1];
-    if (pair === undefined || pair.startsWith('--')) continue;
-    const eq = pair.indexOf('=');
-    if (eq <= 0) {
-      console.error(`--param expects name=value, got '${pair}'`);
-      process.exit(2);
-    }
-    out[pair.slice(0, eq)] = pair.slice(eq + 1);
-  }
-  return out;
-}
-
 async function main() {
   const [subcommand, ...rest] = process.argv.slice(2);
   const flags = parseFlags(rest);
@@ -2443,23 +2365,18 @@ async function main() {
   }
 
   if (subcommand === 'slack-interactivity' || subcommand === 'slack-action') {
-    if (!flags['cb-id'] && !flags.value && !flags.token) {
+    if (!flags.value && !flags.token) {
       console.error(
-        'Usage: pnpm dev:inject slack-interactivity --cb-id <cb_…> [--channel <C…>] [--message-ts <ts>] [--select]',
+        'Usage: pnpm dev:inject slack-interactivity --token <ask_…> --answer <v> [--channel <C…>] [--message-ts <ts>] [--select]',
       );
       console.error(
-        '   or: pnpm dev:inject slack-interactivity --cb-id <cb_…> --datepicker [--selected-date <YYYY-MM-DD>] [--message-ts <ts>]',
-      );
-      console.error(
-        '   or (legacy ask link): pnpm dev:inject slack-interactivity --token <ask_…> --answer <v> [--select]',
+        '   or: pnpm dev:inject slack-interactivity --token <ask_…> --datepicker [--selected-date <YYYY-MM-DD>] [--message-ts <ts>]',
       );
       console.error('   or: pnpm dev:inject slack-interactivity --value "<full button/option value>" [--message-ts <ts>] [--select]');
-      console.error('  Fires a real block_actions payload at the Listen-Fire app interactivity door — the PLATFORM path (recognition → router → ack), unlike `dev:inject callback`, which posts to the HTTP door.');
-      console.error('  --cb-id rides `value` (button), the chosen option (--select), or `action_id` (--datepicker, whose picked date is the supplied value).');
+      console.error('  Fires a real block_actions payload at the Listen-Fire app interactivity door — the PLATFORM path (recognition → ask answer → ack).');
       process.exit(2);
     }
     const out = await injectSlackInteractivity({
-      cbId: flags['cb-id'],
       value: flags.value,
       token: flags.token,
       answer: flags.answer,
@@ -2557,16 +2474,13 @@ async function main() {
   }
 
   if (subcommand === 'telegram-callback') {
-    if (!flags['cb-id'] && !flags.token && !flags.data) {
+    if (!flags.token && !flags.data) {
       console.error(
-        'Usage: pnpm dev:inject telegram-callback --cb-id <cb_…> [--message-id <id>] [--chat-id <id>] [--sender-id <id>] [--byo]',
-      );
-      console.error(
-        '   or (legacy ask link): pnpm dev:inject telegram-callback --token <ask_…> --answer <v> [--message-id <id>]',
+        'Usage: pnpm dev:inject telegram-callback --token <ask_…> --answer <v> [--message-id <id>] [--chat-id <id>] [--sender-id <id>] [--byo]',
       );
       console.error('   or: pnpm dev:inject telegram-callback --data "<verbatim callback_data>"');
       console.error(
-        '  Taps an inline-keyboard button — the PLATFORM path (recognition → router → ack → keyboard), unlike `dev:inject callback`, which posts to the HTTP door.',
+        '  Taps an inline-keyboard button — the PLATFORM path (recognition → ask answer → ack → keyboard).',
       );
       console.error(
         '  --byo fires at the per-subscription door instead of the shared built-in entry.',
@@ -2574,7 +2488,6 @@ async function main() {
       process.exit(2);
     }
     const out = await injectTelegramCallback({
-      cbId: flags['cb-id'],
       token: flags.token,
       answer: flags.answer,
       data: flags.data,
@@ -2604,9 +2517,6 @@ async function main() {
       console.error(
         'Usage: pnpm dev:inject whatsapp --from <phone> [--text "<t>"] [--media] [--media-type image|document|audio] [--media-id <id>] [--name "<n>"]',
       );
-      console.error(
-        '   or: pnpm dev:inject whatsapp --from <phone> --cb-id <cb_…>  (tap an interactive reply button — the PLATFORM path: door → router → ack reply)',
-      );
       process.exit(2);
     }
     const mediaType =
@@ -2626,7 +2536,6 @@ async function main() {
       mediaType,
       mediaId: flags['media-id'],
       name: flags.name,
-      cbId: flags['cb-id'],
     });
     printResult(out, PRETTY);
     return;
@@ -2737,24 +2646,6 @@ async function main() {
     return;
   }
 
-  if (subcommand === 'callback' || subcommand === 'cb') {
-    if (!flags['cb-id']) {
-      console.error(
-        "Usage: pnpm dev:inject callback --cb-id <cb_...> [--param name=value ...] [--param-json '<json>']",
-      );
-      process.exit(2);
-    }
-    printResult(
-      await injectCallback({
-        id: flags['cb-id'],
-        params: collectParams(rest),
-        paramJson: flags['param-json'],
-      }),
-      PRETTY,
-    );
-    return;
-  }
-
   if (subcommand === 'kg-mutation') {
     if (!flags['node-type']) {
       console.error(
@@ -2805,7 +2696,7 @@ async function main() {
 
   console.error(`Unknown subcommand: ${subcommand}`);
   console.error(
-    'Available: raw, attio-webhook, airtable-webhook, slack-event, slack-interactivity, mailgun-email, resend-email, telegram-event, telegram-builtin, telegram-callback, telegram-start, whatsapp, cron, granola, evertrace, evertrace-list-entry, dealroom, gmail-message, oauth-expire, oauth-config, kg-mutation, callback, crm-company, crm-comment',
+    'Available: raw, attio-webhook, airtable-webhook, slack-event, slack-interactivity, mailgun-email, resend-email, telegram-event, telegram-builtin, telegram-callback, telegram-start, whatsapp, cron, granola, evertrace, evertrace-list-entry, dealroom, gmail-message, oauth-expire, oauth-config, kg-mutation, crm-company, crm-comment',
   );
   process.exit(2);
 }

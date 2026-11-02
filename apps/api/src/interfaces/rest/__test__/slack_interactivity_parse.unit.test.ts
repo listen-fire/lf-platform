@@ -1,7 +1,7 @@
 // The block-action recognition seam — what a tap turned out to be.
 // Load-bearing: a mis-parse silently drops what the person did, so pin every
-// payload shape an author's wiring can produce (a callback id today, a
-// `"${a.Url}?answer=…"` link on the legacy movements still running), and every
+// payload shape an author's wiring can produce (a `"${a.Url}?answer=…"` link),
+// and every
 // Slack payload shape (button `value` vs static_select `selected_option.value`)
 // it can arrive in — plus the TAP-TIME shapes (datepicker/timepicker/text
 // input), whose value doesn't exist until the tap and so rides `action_id`
@@ -15,7 +15,6 @@ import {
   blockActionValue,
   parseAskAction,
   resolveAskAction,
-  resolveBlockAction,
 } from '../slackInteractivity';
 
 describe('parseAskAction', () => {
@@ -175,97 +174,5 @@ describe('resolveAskAction', () => {
 
   it('an action with neither a parseable value nor an action_id is ignored', () => {
     expect(resolveAskAction({})).toBeNull();
-  });
-});
-
-// ── Recognition, post-callback ────────────────────────────────────────────
-//
-// `resolveBlockAction` is the door's ONE entry point: the callback prefix
-// first, on both slots, then the legacy ask link. The precedence is the whole
-// migration story — a re-authored movement's callback id must never be read as
-// anything else, and a movement not yet re-authored must keep working.
-describe('resolveBlockAction — callback recognition beats legacy, legacy still works', () => {
-  it('a button whose value is a callback id resolves to a callback, no supplied value', () => {
-    expect(resolveBlockAction({ action_id: 'ship_it', value: 'cb_abc123' })).toEqual({
-      kind: 'callback',
-      id: 'cb_abc123',
-    });
-  });
-
-  it('a static_select option carrying a callback id resolves it off selected_option', () => {
-    expect(
-      resolveBlockAction({ action_id: 'tier', selected_option: { value: 'cb_seed' } }),
-    ).toEqual({ kind: 'callback', id: 'cb_seed' });
-  });
-
-  it('a datepicker carries the id on action_id and the picked date rides along', () => {
-    expect(resolveBlockAction({ action_id: 'cb_date1', selected_date: '2026-08-15' })).toEqual({
-      kind: 'callback',
-      id: 'cb_date1',
-      suppliedValue: '2026-08-15',
-    });
-  });
-
-  it('a timepicker does the same with selected_time', () => {
-    expect(resolveBlockAction({ action_id: 'cb_time1', selected_time: '14:30' })).toEqual({
-      kind: 'callback',
-      id: 'cb_time1',
-      suppliedValue: '14:30',
-    });
-  });
-
-  it('a dispatch-triggered text input supplies its entered `value`', () => {
-    expect(resolveBlockAction({ action_id: 'cb_text1', value: 'what I typed' })).toEqual({
-      kind: 'callback',
-      id: 'cb_text1',
-      suppliedValue: 'what I typed',
-    });
-  });
-
-  it('a callback id on action_id with nothing captured supplies nothing (the router refuses if it wanted one)', () => {
-    expect(resolveBlockAction({ action_id: 'cb_bare' })).toEqual({
-      kind: 'callback',
-      id: 'cb_bare',
-    });
-  });
-
-  it('PRECEDENCE: a pre-wired callback id wins over a callback id on action_id', () => {
-    expect(resolveBlockAction({ action_id: 'cb_from_action_id', value: 'cb_from_value' })).toEqual({
-      kind: 'callback',
-      id: 'cb_from_value',
-    });
-  });
-
-  it('PRECEDENCE: a callback id beats a legacy ask link sitting on the other slot', () => {
-    expect(
-      resolveBlockAction({
-        action_id: 'ask_legacy?answer=true',
-        value: 'cb_current',
-      }),
-    ).toEqual({ kind: 'callback', id: 'cb_current' });
-  });
-
-  it('LEGACY: a pre-wired ask answer link still resolves, after the prefix check declines', () => {
-    expect(
-      resolveBlockAction({
-        action_id: 'ask_answer_0',
-        value: 'http://localhost:3500/api/asks/ask_abc?answer=true',
-      }),
-    ).toEqual({ kind: 'ask', token: 'ask_abc', answer: 'true' });
-  });
-
-  it('LEGACY: the tap-time action_id pairing still resolves', () => {
-    expect(resolveBlockAction({ action_id: 'ask_date2', selected_date: '2026-08-16' })).toEqual({
-      kind: 'ask',
-      token: 'ask_date2',
-      answer: '2026-08-16',
-    });
-  });
-
-  it('an ordinary block action is neither, and flows on untouched', () => {
-    const warn = jest.spyOn(logger, 'warn').mockImplementation();
-    expect(resolveBlockAction({ action_id: 'approve_expense_42', value: 'expense_42' })).toBeNull();
-    expect(warn).not.toHaveBeenCalled();
-    warn.mockRestore();
   });
 });

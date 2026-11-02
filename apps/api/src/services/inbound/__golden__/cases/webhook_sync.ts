@@ -8,7 +8,7 @@ import type { GoldenCase } from '../harness';
 
 import { withEnv } from '../env';
 import { SECRETS, hmacBase64, hmacHex, slackSignature } from '../secrets';
-import { GOLDEN_CALLBACK, world } from '../world';
+import { world } from '../world';
 import { REMOTE_SIGNATURE_HEADER_FOR_CASES } from './names';
 import { define, givenSubscription, givenTrigger, json, post, text } from './support';
 
@@ -476,44 +476,6 @@ export const webhookSyncCases: GoldenCase[] = define('webhook_sync', [
       givenTrigger({ kind: 'TELEGRAM' });
     },
     request: post(PATH('telegram'), json({ update_id: 1, message: { message_id: 5, text: 'hi', chat: { id: 9 }, from: { id: 3 } } }), TG_BRING),
-  },
-  {
-    id: 'telegram-callback-query-fires-callback',
-    note: 'A button tap carrying a callback id fires it, answers the tap, retires the keyboard, and ends the delivery (no events).',
-    arrange: () => givenSubscription({ provider: 'TELEGRAM', webhook_secret: SECRETS.telegramBring }),
-    request: post(
-      PATH('telegram'),
-      json({ update_id: 2, callback_query: { id: 'cbq-1', data: 'cb_golden0001', message: { message_id: 11, chat: { id: 9 } } } }),
-      TG_BRING,
-    ),
-  },
-  {
-    id: 'telegram-callback-query-not-served-keeps-keyboard',
-    note: 'A tap on an already-closed callback answers the tap but leaves the keyboard.',
-    arrange: () => {
-      givenSubscription({ provider: 'TELEGRAM', webhook_secret: SECRETS.telegramBring });
-      world.fireCallback = () => ({ kind: 'closed', callback: GOLDEN_CALLBACK });
-    },
-    request: post(
-      PATH('telegram'),
-      json({ update_id: 2, callback_query: { id: 'cbq-2', data: 'cb_golden0001', message: { message_id: 11, chat: { id: 9 } } } }),
-      TG_BRING,
-    ),
-  },
-  {
-    id: 'telegram-callback-query-firing-throws',
-    note: 'A firing that throws is acked to the tapper as a failure; the delivery still ends handled with 200.',
-    arrange: () => {
-      givenSubscription({ provider: 'TELEGRAM', webhook_secret: SECRETS.telegramBring });
-      world.fireCallback = () => {
-        throw new Error('ledger down');
-      };
-    },
-    request: post(
-      PATH('telegram'),
-      json({ update_id: 2, callback_query: { id: 'cbq-3', data: 'cb_golden0001', message: { message_id: 11, chat: { id: 9 } } } }),
-      TG_BRING,
-    ),
   },
   {
     id: 'telegram-callback-query-foreign-data-falls-through',

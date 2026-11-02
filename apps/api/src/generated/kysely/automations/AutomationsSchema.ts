@@ -13,7 +13,6 @@ import type { default as InboundEmailRouteTable } from './InboundEmailRoute';
 import type { default as ExternalServiceCredentialsTable } from './ExternalServiceCredentials';
 import type { default as MovementVersionTable } from './MovementVersion';
 import type { default as JoinBranchExportTable } from './JoinBranchExport';
-import type { default as AdapterAwaitTable } from './AdapterAwait';
 import type { default as PhoneVerificationTable } from './PhoneVerification';
 import type { default as WriteLedgerTable } from './WriteLedger';
 import type { default as RemoteAdapterTable } from './RemoteAdapter';
@@ -24,7 +23,6 @@ import type { default as TeamSettingsTable } from './TeamSettings';
 import type { default as EventReceiptTable } from './EventReceipt';
 import type { default as WaitRowTable } from './WaitRow';
 import type { default as WorkTable } from './Work';
-import type { default as CallbackTable } from './Callback';
 import type { default as LfMovementsListingTable } from './LfMovementsListing';
 import type { default as ArrivalTable } from './Arrival';
 import type { default as TriggerRunTable } from './TriggerRun';
@@ -76,8 +74,6 @@ export default interface AutomationsSchema {
 
   join_branch_export: JoinBranchExportTable;
 
-  adapter_await: AdapterAwaitTable;
-
   phone_verification: PhoneVerificationTable;
 
   write_ledger: WriteLedgerTable;
@@ -97,8 +93,6 @@ export default interface AutomationsSchema {
   wait_row: WaitRowTable;
 
   work: WorkTable;
-
-  callback: CallbackTable;
 
   lf_movements_listing: LfMovementsListingTable;
 

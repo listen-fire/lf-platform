@@ -14,9 +14,7 @@
  *   pnpm dev:inspect dealroom --clear-requests → wipe the Dealroom request log first (isolate one run's calls)
  *   pnpm dev:inspect oauth                 → the fake OAuth provider's token calls + tokens, and the stored Dropbox credential
  *   pnpm dev:inspect gmail                 → the fake mailbox's change marker, its outbox, + the gmail poll trigger's checkpoint
- *   pnpm dev:inspect crm                   → the fake CRM's companies, comments, subscriptions + parks on it
- *   pnpm dev:inspect callbacks             → minted callbacks + their call ledgers
- *   pnpm dev:inspect callbacks <runId>     → one run's callbacks
+ *   pnpm dev:inspect crm                   → the fake CRM's companies, comments, subscriptions + the waits on it
  *   pnpm dev:inspect tg-runs               → recent translation-graph runs
  *   pnpm dev:inspect tg-runs <runId>       → full detail of one tg_run row
  *   pnpm dev:inspect work                  → automations work rows (every team's): kind, key, due, lease, attempts
@@ -44,11 +42,6 @@ import { ensureDevLoopTeam } from './_lib';
 import { fakeOAuthState, readDevLoopDropboxCredential } from './lib/dev_oauth';
 import { FAKE_CRM_ADAPTER_TYPE, fakeCrmBaseUrl } from './fake_crm_adapter';
 import { listAsksForTeam } from '../../services/asks/store';
-import {
-  callbackUrl,
-  listRunCallbacks,
-  listTeamCallbacks,
-} from '../../services/movement_engine/callback_store';
 
 import type { TriggerRunId } from '../../generated/kysely/automations/TriggerRun';
 
@@ -70,7 +63,6 @@ type Domain =
   | 'affinity'
   | 'valuations'
   | 'asks'
-  | 'callbacks'
   | 'crm'
   | 'tg-runs'
   | 'work'
@@ -92,7 +84,6 @@ const ALL_DOMAINS: Exclude<Domain, 'all'>[] = [
   'affinity',
   'valuations',
   'asks',
-  'callbacks',
   'crm',
   'tg-runs',
   'work',
@@ -300,37 +291,6 @@ async function inspectAsks() {
       answeredAt: a.answeredAt,
       expiredAt: a.expiredAt,
       provenance: a.provenance,
-    })),
-  };
-}
-
-/** Minted callbacks and what has been fired at them — the run-scoped view of
- *  the deferred invocations a movement handed out. */
-async function inspectCallbacks(sub?: string) {
-  const seed = await ensureDevLoopTeam();
-  const teamId = seed.teamId as TeamId;
-  const callbacks = sub
-    ? await listRunCallbacks(sub as TriggerRunId)
-    : await listTeamCallbacks(teamId, 50);
-  return {
-    service: 'callbacks',
-    teamId,
-    ...(sub ? { object: sub } : {}),
-    count: callbacks.length,
-    callbacks: callbacks.map((c) => ({
-      id: c.id,
-      runId: c.runId,
-      // The entry point: which callback expression, in the run's pinned version.
-      address: c.address,
-      status: c.status,
-      singleUse: c.singleUse,
-      params: c.params,
-      calls: c.calls,
-      url: callbackUrl(c.id),
-      expiresAt: c.expiresAt,
-      createdAt: c.createdAt,
-      firedAt: c.firedAt,
-      revokedAt: c.revokedAt,
     })),
   };
 }
@@ -688,7 +648,7 @@ async function inspectGmail() {
 }
 
 /** The fake CRM (the reference remote adapter): its own ledgers, read from
- *  its dev route, plus the runs parked on it here. */
+ *  its dev route, plus the runs' waits on it here. */
 async function inspectFakeCrm() {
   const seed = await ensureDevLoopTeam();
   let state: unknown = null;
@@ -698,13 +658,13 @@ async function inspectFakeCrm() {
   } catch (err) {
     state = { unreachable: err instanceof Error ? err.message : String(err) };
   }
-  const parks = await getAutomationsQb(['adapter_await'])
-    .selectFrom('adapter_await')
-    .where('team_id', '=', seed.teamId as TeamId)
+  const waits = await getAutomationsQb(['wait_row'])
+    .selectFrom('wait_row')
+    .where('team_id', '=', seed.teamId)
     .where('adapter_type', '=', FAKE_CRM_ADAPTER_TYPE)
     .selectAll()
     .execute();
-  return { service: 'crm', baseUrl: fakeCrmBaseUrl(), state, parks };
+  return { service: 'crm', baseUrl: fakeCrmBaseUrl(), state, waits };
 }
 
 async function inspectGeneric(svc: 'sheets' | 'affinity') {
@@ -769,7 +729,6 @@ async function main() {
     }
     results.push(await inspectValuations());
     results.push(await inspectAsks());
-    results.push(await inspectCallbacks());
     results.push(await inspectFakeCrm());
     results.push(await inspectTgRuns());
     results.push(await inspectWork());
@@ -787,8 +746,6 @@ async function main() {
     results.push(await inspectValuations(sub));
   } else if (domain === 'asks') {
     results.push(await inspectAsks());
-  } else if (domain === 'callbacks') {
-    results.push(await inspectCallbacks(sub));
   } else if (domain === 'crm') {
     results.push(await inspectFakeCrm());
   } else if (domain === 'tg-runs') {

@@ -6,7 +6,7 @@ import type { GoldenCase } from '../harness';
 
 import { withEnv } from '../env';
 import { SECRETS, hmacHex, slackSignature } from '../secrets';
-import { GOLDEN_CALLBACK, record, world } from '../world';
+import { record, world } from '../world';
 import { define, json, post, text } from './support';
 
 const SLACK_TIMESTAMP = '1760702400';
@@ -334,34 +334,6 @@ const blockActions = (action: Record<string, unknown>, extra: Record<string, unk
 });
 
 export const slackActionsCases: GoldenCase[] = define('slack_actions', [
-  {
-    id: 'button-tap-fires-callback',
-    note: 'A signed block action carrying a callback id fires it and queues the reply that replaces the original message (a slack_response row keyed on trigger_id).',
-    request: post('/api/public/slack-actions', formOf(blockActions({ action_id: 'btn', value: 'cb_golden0001' })), slackHeaders(SECRETS.slackApp, FORM)),
-  },
-  {
-    id: 'button-tap-closed-callback',
-    note: 'A tap on a closed callback is an ephemeral notice and leaves the message.',
-    arrange: () => {
-      world.fireCallback = () => ({ kind: 'closed', callback: GOLDEN_CALLBACK });
-    },
-    request: post('/api/public/slack-actions', formOf(blockActions({ action_id: 'btn', value: 'cb_golden0001' })), slackHeaders(SECRETS.slackApp, FORM)),
-  },
-  {
-    id: 'callback-firing-throws',
-    note: 'A firing failure still tells the tapper.',
-    arrange: () => {
-      world.fireCallback = () => {
-        throw new Error('ledger down');
-      };
-    },
-    request: post('/api/public/slack-actions', formOf(blockActions({ action_id: 'btn', value: 'cb_golden0001' })), slackHeaders(SECRETS.slackApp, FORM)),
-  },
-  {
-    id: 'date-picker-supplies-value',
-    note: 'A control with no value rides the callback id in action_id and the tap-time capture as the supplied value.',
-    request: post('/api/public/slack-actions', formOf(blockActions({ action_id: 'cb_golden0001', selected_date: '2026-11-02' })), slackHeaders(SECRETS.slackApp, FORM)),
-  },
   {
     id: 'legacy-ask-answer-link',
     note: 'A legacy ask answer link in value is answered through the ask door.',
