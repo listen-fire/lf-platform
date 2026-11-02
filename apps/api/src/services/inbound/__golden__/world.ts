@@ -5,6 +5,7 @@
 // effects".
 
 import type { IncomingHttpHeaders } from 'node:http';
+import type { Arrival } from 'engine-contracts';
 
 export interface FakeSubscription {
   id: string;
@@ -26,8 +27,9 @@ export interface FakeEvent {
 
 export interface FakeAdapter {
   adapterType: string;
-  /** Events one delivery carries; `throws` makes the adapter fail instead. */
-  preprocess: (raw: unknown) => { events: FakeEvent[]; checkpoint?: unknown };
+  /** Events and arrivals one delivery carries; `throws` makes the adapter
+   *  fail instead. */
+  preprocess: (raw: unknown) => { events: FakeEvent[]; arrivals?: Arrival[]; checkpoint?: unknown };
   /** Absent: the adapter has no wake door. A function that throws: a failing one. */
   wakeKeys?: (raw: unknown) => string[];
   hasPreprocess: boolean;

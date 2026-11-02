@@ -272,10 +272,21 @@ export const webhookSyncCases: GoldenCase[] = define('webhook_sync', [
   },
   {
     id: 'bridged-linked-object-refresh',
-    note: 'An event naming a record a knowledge node is bridged to also queues a linked-object refresh.',
+    note: 'An arrival about a record a knowledge node is bridged to also queues a linked-object refresh, once per record.',
     arrange: () => {
       attioArrange();
       world.bridgedLinkedObjects = true;
+      const change = (identity: string) => ({
+        edge: 'Changes',
+        identity,
+        landing: { recordId: identity, recordType: 'Company Change', fields: { Kind: 'updated' } },
+        about: { recordType: 'Companies', externalId: 'rec-1' },
+      });
+      world.adapters.attio = {
+        adapterType: 'attio',
+        hasPreprocess: true,
+        preprocess: () => ({ events: [], arrivals: [change('rec-1:updated:a'), change('rec-1:updated:b')] }),
+      };
     },
     request: post(PATH('attio'), json(ATTIO_BODY), (body) => ({ 'attio-signature': hmacHex(SECRETS.attio, body) })),
   },

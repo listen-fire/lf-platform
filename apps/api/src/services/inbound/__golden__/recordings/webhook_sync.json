@@ -715,7 +715,7 @@
   {
     "id": "bridged-linked-object-refresh",
     "door": "webhook_sync",
-    "note": "An event naming a record a knowledge node is bridged to also queues a linked-object refresh.",
+    "note": "An arrival about a record a knowledge node is bridged to also queues a linked-object refresh, once per record.",
     "request": {
       "method": "POST",
       "path": "/api/public/webhook-sync/attio/sub-1",
@@ -731,23 +731,13 @@
         "content-type": "application/json; charset=utf-8",
         "content-length": "31"
       },
-      "body": "{\"ok\":true,\"eventsProcessed\":1}"
+      "body": "{\"ok\":true,\"eventsProcessed\":2}"
     },
     "effects": [
       {
         "kind": "adapter_preprocess",
         "adapterType": "attio",
         "teamId": "team-1"
-      },
-      {
-        "kind": "enqueue_linked_object_refresh",
-        "refresh": {
-          "teamId": "team-1",
-          "provider": "ATTIO",
-          "credentialsId": "cred-1",
-          "externalId": "rec-1"
-        },
-        "eventKey": "evt-attio-1"
       },
       {
         "kind": "deliver_arrivals",
@@ -759,7 +749,49 @@
         "subscriptionId": "sub-1",
         "externalId": null,
         "source": "webhook",
-        "arrivals": []
+        "arrivals": [
+          {
+            "edge": "Changes",
+            "identity": "rec-1:updated:a",
+            "landing": {
+              "recordId": "rec-1:updated:a",
+              "recordType": "Company Change",
+              "fields": {
+                "Kind": "updated"
+              }
+            },
+            "about": {
+              "recordType": "Companies",
+              "externalId": "rec-1"
+            }
+          },
+          {
+            "edge": "Changes",
+            "identity": "rec-1:updated:b",
+            "landing": {
+              "recordId": "rec-1:updated:b",
+              "recordType": "Company Change",
+              "fields": {
+                "Kind": "updated"
+              }
+            },
+            "about": {
+              "recordType": "Companies",
+              "externalId": "rec-1"
+            }
+          }
+        ]
+      },
+      {
+        "kind": "enqueue_linked_object_refresh",
+        "refresh": {
+          "teamId": "team-1",
+          "provider": "ATTIO",
+          "credentialsId": "cred-1",
+          "externalId": "rec-1",
+          "recordType": "Companies"
+        },
+        "eventKey": "rec-1:updated:b"
       },
       {
         "kind": "notify_work"

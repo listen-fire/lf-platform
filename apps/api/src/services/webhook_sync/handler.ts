@@ -8,7 +8,7 @@ import { sql } from 'kysely';
 
 import type { WebhookSubscriptionId } from '../../generated/kysely/automations/WebhookSubscription';
 import type { TeamId } from '../../generated/kysely/core/Team';
-import type { DiscriminableEvent } from 'movement-engine/public/adapter';
+import type { Arrival } from 'engine-contracts';
 import type { HarnessDelivery, SettleReport } from '../work/harness';
 import type {
   EventError,
@@ -270,12 +270,9 @@ export const platformInboundStore: InboundStore<CapturedReceipts> = {
   verifiesSignature: (subscription) => !isTestHarnessTeam(subscription.teamId),
 
   // A module's events are no listen's: every listen is judged on the
-  // delivery's arrivals, as it is kept (listen_door.ts). An event still
-  // refreshes the knowledge graph node bridged to the record it names.
-  capture: async ({ event, subscription, source }) => {
-    await refreshBridgedLinkedObject({ event, subscription: subscriptionRow(subscription, source) });
-    return [];
-  },
+  // delivery's arrivals, as it is kept (listen_door.ts), and a bridged
+  // knowledge graph node is refreshed from them too.
+  capture: async () => [],
 
   keepDelivery: (input) => keepWebhookDelivery(input, null),
 };
@@ -331,7 +328,9 @@ async function keepWebhookDelivery(
         }
       : {}),
   });
-  return kept.kept ? { kept: true, arrivalMark: kept.arrivalMark } : { kept: false };
+  if (!kept.kept) return { kept: false };
+  await refreshBridgedLinkedObjects({ arrivals, subscription: subscriptionRow(subscription, source) });
+  return { kept: true, arrivalMark: kept.arrivalMark };
 }
 
 interface HandleResult {
@@ -372,24 +371,29 @@ async function handleInboundWebhook(options: {
   };
 }
 
-/** Queue a linked_object refresh when a knowledge graph node is bridged to
- *  the record an event names. Its own row; no provider read in the request. */
-async function refreshBridgedLinkedObject(input: {
-  event: DiscriminableEvent;
+/** Queue a linked_object refresh for each record a delivery's arrivals are
+ *  about (`about`) that a knowledge graph node is bridged to, once per record.
+ *  Its own row; no provider read in the request. */
+async function refreshBridgedLinkedObjects(input: {
+  arrivals: readonly Arrival[];
   subscription: { team_id: string; credentials_id: string; provider: string };
 }): Promise<void> {
-  const { event, subscription } = input;
-  const { externalId, recordType, idempotencyKey } = event;
-  if (externalId === undefined) return;
-  const refresh: LinkedObjectRefresh = {
-    teamId: subscription.team_id as TeamId,
-    provider: subscription.provider,
-    credentialsId: subscription.credentials_id,
-    externalId,
-    ...(recordType !== undefined ? { recordType } : {}),
-  };
-  if (await hasBridgedLinkedObjects(refresh)) {
-    await enqueueLinkedObjectRefresh({ refresh, eventKey: idempotencyKey ?? externalId });
+  const { subscription } = input;
+  const owed = new Map<string, { refresh: LinkedObjectRefresh; eventKey: string }>();
+  for (const arrival of input.arrivals) {
+    if ('gone' in arrival || arrival.about === undefined) continue;
+    const { recordType, externalId } = arrival.about;
+    const refresh: LinkedObjectRefresh = {
+      teamId: subscription.team_id as TeamId,
+      provider: subscription.provider,
+      credentialsId: subscription.credentials_id,
+      externalId,
+      recordType,
+    };
+    owed.set(JSON.stringify([recordType, externalId]), { refresh, eventKey: arrival.identity });
+  }
+  for (const { refresh, eventKey } of owed.values()) {
+    if (await hasBridgedLinkedObjects(refresh)) await enqueueLinkedObjectRefresh({ refresh, eventKey });
   }
 }
 

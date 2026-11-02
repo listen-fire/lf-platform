@@ -93,6 +93,7 @@ async function fetchRecordFromProvider(
 }
 
 async function fetchAttioRecord(
+  /** `objectId`: the object's id, slug or record type name. */
   ref: { recordId: string; objectId: string },
   credentialsId: string,
   teamId: string,
@@ -113,22 +114,14 @@ async function fetchAttioRecord(
   }
   const client = new AttioAPIClient(parsed);
 
-  const record = await client.getRecord({
-    objectId: ref.objectId,
-    recordId: ref.recordId,
-  });
+  // An arrival names its record's type as the module does (the object's
+  // plural noun, `Companies`); Attio reads a record by the object's id or slug.
+  const objects = await client.listObjects();
+  const matched = objects.find((o) => o.id === ref.objectId || o.slug === ref.objectId || o.name === ref.objectId);
+  const objectId = matched?.id ?? ref.objectId;
 
-  const data = buildRecordData(record, ref.objectId);
+  const record = await client.getRecord({ objectId, recordId: ref.recordId });
+  const data = buildRecordData(record, objectId);
 
-  // Try to resolve a friendly object type name
-  let objectTypeName: string | undefined;
-  try {
-    const objects = await client.listObjects();
-    const matched = objects.find((o) => o.id === ref.objectId || o.slug === ref.objectId);
-    objectTypeName = matched?.name;
-  } catch {
-    // Non-critical — skip
-  }
-
-  return { data, objectTypeName };
+  return { data, ...(matched !== undefined ? { objectTypeName: matched.name } : {}) };
 }
