@@ -120,10 +120,9 @@ describe('mergeInstanceSchemas', () => {
 
   it('keeps scope-invariant facts rather than re-deciding them per source', () => {
     const merged = mergeInstanceSchemas(
-      { ...described, eventPosition: 'Webhook Event', supportsInPlaceUpdate: true },
-      { ...described, eventPosition: 'Webhook Event' },
+      { ...described, supportsInPlaceUpdate: true },
+      { ...described, supportsInPlaceUpdate: false },
     );
-    expect(merged.eventPosition).toBe('Webhook Event');
     expect(merged.supportsInPlaceUpdate).toBe(true);
   });
 });

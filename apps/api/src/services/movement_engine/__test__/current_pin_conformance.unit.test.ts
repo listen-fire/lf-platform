@@ -41,7 +41,6 @@ jest.mock('@listen-fire/legacy-engine/services/movement_engine/interpretable', (
 
 import { CORE_CHAPTERS } from '@listen-fire/handbook';
 import { HANDBOOK_CATALOG, checkExemption, claimsOf } from '@listen-fire/handbook/testing';
-import { collectFileListeners } from '@listen-fire/legacy-engine/services/translation_graph/file_listeners';
 import {
   LANGUAGE_VERSION,
   checkSourceInRust,
@@ -81,11 +80,12 @@ function expectOkAsTheWasmSays(source: string) {
 }
 
 const BARE_MANUAL =
-  'function echo(run: <manual-[:Invocation]->>) {\n  return 1\n}\nlisten to manual fire echo\n';
+  'function echo(run: <manual-[:Invocations]->>) {\n  return 1\n}\nlisten to manual-[:Invocations]-> fire echo\n';
 const LISTEN_AS =
-  'function echo(run: <manual-[:Invocation]->>) {\n  return 1\n}\nlisten as "Echo it" to manual fire echo\n';
-const CONNECT_MANUAL =
-  'import { manual } from adapters\nruns = connect manual\nfunction echo(run: <runs-[:Invocation]->>) {\n  return 1\n}\nlisten to runs fire echo\n';
+  'function echo(run: <manual-[:Invocations]->>) {\n  return 1\n}\nlisten as "Echo it" to manual-[:Invocations]-> fire echo\n';
+/** The bare manual listen as versions 1 to 4 spelled it. */
+const LEGACY_BARE_MANUAL =
+  'function echo(run: <manual-[:Invocation]->>) {\n  return 1\n}\nlisten to manual fire echo\n';
 
 const book = getMovementHandbook();
 const chapters = Object.values(book.chapters);
@@ -187,12 +187,6 @@ describe('named cases', () => {
   it('a bare `listen to manual fire echo` validates and derives one manual listener', () => {
     expectOkAsTheWasmSays(BARE_MANUAL);
     const program = parseProgram(BARE_MANUAL, { languageVersion: LANGUAGE_VERSION });
-    expect(
-      collectFileListeners(program, { languageVersion: LANGUAGE_VERSION }).map((l) => [
-        l.adapter,
-        l.movementName,
-      ]),
-    ).toEqual([['manual', 'echo']]);
     expect(manualListenerMovements(program, { languageVersion: LANGUAGE_VERSION })).toEqual([
       'echo',
     ]);
@@ -201,35 +195,18 @@ describe('named cases', () => {
   it('the `listen as` form validates and derives the same listener', () => {
     expectOkAsTheWasmSays(LISTEN_AS);
     const program = parseProgram(LISTEN_AS, { languageVersion: LANGUAGE_VERSION });
-    expect(
-      collectFileListeners(program, { languageVersion: LANGUAGE_VERSION }).map((l) => [
-        l.adapter,
-        l.movementName,
-      ]),
-    ).toEqual([['manual', 'echo']]);
     expect(manualListenerMovements(program, { languageVersion: LANGUAGE_VERSION })).toEqual([
       'echo',
     ]);
   });
 
-  it("the `connect manual` form validates and keeps the file's own construction", () => {
-    expectOkAsTheWasmSays(CONNECT_MANUAL);
-    const program = parseProgram(CONNECT_MANUAL, { languageVersion: LANGUAGE_VERSION });
-    expect(
-      collectFileListeners(program, { languageVersion: LANGUAGE_VERSION }).map((l) => [
-        l.instanceName,
-        l.adapter,
-      ]),
-    ).toEqual([['runs', 'manual']]);
-  });
-
   it('the legacy checker and the scan were asked for none of them', () => {
-    for (const source of [BARE_MANUAL, LISTEN_AS, CONNECT_MANUAL]) platform(source);
+    for (const source of [BARE_MANUAL, LISTEN_AS]) platform(source);
     expect(counters).toEqual({ checkProgram: 0, checkProgramWithLink: 0, scan: 0 });
   });
 
   it("the bare text pinned '4' is refused by the scan, the only case that asks the legacy checker", () => {
-    const verdict = platform(BARE_MANUAL, '4');
+    const verdict = platform(LEGACY_BARE_MANUAL, '4');
     expect(verdict.ok).toBe(false);
     expect(verdict.diagnostics.find((d) => d.code === 'MOV_ENGINE_UNSUPPORTED')?.message).toContain(
       "a movement seeded from 'manual'",
@@ -239,7 +216,7 @@ describe('named cases', () => {
   });
 
   it('a pin from a newer line is the version diagnostic alone', () => {
-    const verdict = platform(BARE_MANUAL, '0.13.0');
+    const verdict = platform(BARE_MANUAL, '0.14.0');
     expect(verdict.ok).toBe(false);
     expect(verdict.diagnostics).toHaveLength(1);
     expect(verdict.diagnostics[0].code).toMatch(/^MOV_LANGUAGE_VERSION/);

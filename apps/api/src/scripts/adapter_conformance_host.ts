@@ -134,7 +134,7 @@ export async function startHostDouble(options: {
         return;
       }
       record({ door, path, accepted: true });
-      send(res, 202, { accepted: 'events' in parsed.data ? parsed.data.events.length : parsed.data.keys.length });
+      send(res, 202, { accepted: parsed.data.arrivals.length });
     })().catch((err: unknown) => {
       send(res, 500, { error: err instanceof Error ? err.message : String(err) });
     });

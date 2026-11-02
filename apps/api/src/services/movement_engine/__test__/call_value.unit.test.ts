@@ -77,7 +77,6 @@ jest.mock('../../../lib/anthropic', () => ({
 
 import { runMovement, resumeMovement } from '@listen-fire/legacy-engine/dispatch';
 import type { ParkSink } from '@listen-fire/legacy-engine/services/movement_engine/run';
-import type { CallbackSink } from 'movement-engine/public/host';
 import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
 
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
@@ -233,28 +232,10 @@ const PRELUDE = [
   '',
 ].join('\n');
 
-/** A fake callback sink — the cheapest REAL park: minting a callback captures
- *  the enclosing scope through the same serialiser a parked ask writes. */
-function makeFakeCallbackSink() {
-  const mints: Array<{ id: string; state: ParkedScopeState }> = [];
-  const sink = {
-    async mint(input: { state: ParkedScopeState }) {
-      const id = `cb_fake${mints.length + 1}`;
-      mints.push({ id, state: input.state });
-      return { id, url: `https://api.test/api/cb/${id}` };
-    },
-    async calls() {
-      return [];
-    },
-  } as unknown as CallbackSink;
-  return { sink, mints };
-}
-
 interface RunAdapters {
   email: Adapter;
   attio?: Adapter;
   dropbox?: Adapter;
-  callbacks?: { sink: CallbackSink };
   parkSink?: ParkSink;
 }
 
@@ -292,7 +273,6 @@ function run(source: string, payload: Record<string, unknown>, adapters: RunAdap
         }),
       },
       park: {
-        ...(adapters.callbacks ? { callbacks: adapters.callbacks.sink } : {}),
         ...(adapters.parkSink ? { sink: adapters.parkSink } : {}),
       },
     }),
@@ -455,7 +435,7 @@ describe('the utility idiom — one movement shapes, another writes', () => {
     // configuration. Read off the parked value, which is the shape itself.
     const email = makeFakeAdapter('email', { related: { files: [{ filename: 'a.pdf' }] } });
     const attio = makeFakeAdapter('attio');
-    const callbacks = makeFakeCallbackSink();
+    const { sink, timerParks } = makeFakeParkSink();
 
     await run(
       [
@@ -470,14 +450,14 @@ describe('the utility idiom — one movement shapes, another writes', () => {
         'function intake(msg: <inbox-[:message]->>) {',
         '  crm = connect attio using acme_main',
         '  doc = shape_it(msg)',
-        '  cb = callback({ write crm-[:companies]-> { name: doc.title } })',
+        '  await sleep(30d)',
         '}',
       ].join('\n'),
       { subject: 'Acme Corp' },
-      { email: email.adapter, attio: attio.adapter, callbacks },
+      { email: email.adapter, attio: attio.adapter, parkSink: sink },
     );
 
-    const value = callbacks.mints[0].state.scopeChain
+    const value = (timerParks[0].state as ParkedScopeState).scopeChain
       .flatMap((scope) => Object.entries(scope.bindings))
       .find(([name]) => name === 'doc')?.[1];
     if (value?.kind !== 'nodePosition') {
@@ -547,18 +527,18 @@ describe("a park carries a call value's deferred walk, not what it walked to", (
   it('the parked value holds the WALK — no landings, nothing walked', async () => {
     const email = makeFakeAdapter('email', { related: { files: [{ filename: 'a.pdf' }] } });
     const attio = makeFakeAdapter('attio');
-    const callbacks = makeFakeCallbackSink();
+    const { sink, timerParks } = makeFakeParkSink();
 
     const source = SHAPER + [
       'function intake(msg: <inbox-[:message]->>) {',
       '  crm = connect attio using acme_main',
       '  doc = email_to_doc(msg)',
-      '  cb = callback({ write crm-[:companies]-> { name: doc.title } })',
+      '  await sleep(30d)',
       '}',
     ].join('\n');
-    await run(source, { subject: 'x' }, { email: email.adapter, attio: attio.adapter, callbacks });
+    await run(source, { subject: 'x' }, { email: email.adapter, attio: attio.adapter, parkSink: sink });
 
-    const value = callbacks.mints[0].state.scopeChain
+    const value = (timerParks[0].state as ParkedScopeState).scopeChain
       .flatMap((scope) => Object.entries(scope.bindings))
       .find(([name]) => name === 'doc')?.[1];
     if (value?.kind !== 'nodePosition') {
@@ -577,7 +557,7 @@ describe("a park carries a call value's deferred walk, not what it walked to", (
     // The callee's scope outlives the call for the walk's purposes: the walk's
     // root resolves against what it captured THERE, and it captured it whole.
     expect(email.relatedCalls.count).toBe(0);
-    expect(() => JSON.stringify(callbacks.mints[0].state)).not.toThrow();
+    expect(() => JSON.stringify(timerParks[0].state)).not.toThrow();
   });
 
   it('a RESUMED caller re-walks the live source through the call value', async () => {

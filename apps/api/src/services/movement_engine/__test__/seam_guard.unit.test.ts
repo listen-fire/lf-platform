@@ -43,20 +43,15 @@ import { InMemoryWriteLocks } from 'movement-engine/public/write-locks';
 import {
   HOST_FAMILIES,
   hostMethodPaths,
-  type AwaitWakeRequest,
-  type Scoped,
   type EngineHost,
   type RenderFile,
   type ResolveFileText,
 } from 'movement-engine/public/host';
-import type { QueuedWake } from 'movement-engine/public/host';
 import { resumeMovement, runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { MovementRunFailed, type ParkSink, type ResumeMovementInput, type RunLimitPause, type RunMovementInput } from '@listen-fire/legacy-engine/services/movement_engine/run';
 import { makeFakeParkSink, makeMemoryParkSources, makeTestHost, type TestHostOverrides } from 'movement-engine/public/testing';
-import { awaitingSource, makeAwaitingAdapter, runAwaiting } from './awaitable_fixture';
-import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import { methodPaths, notJsonAt, roundTripHost } from './round_trip_host';
-import { HOST_FAMILIES_VERSION, tenantIdOf } from 'engine-contracts';
+import { HOST_FAMILIES_VERSION } from 'engine-contracts';
 import { tenantOfTeam } from '../../translation_graph/movement/tenant';
 
 const ENGINE_DIR = path.resolve(__dirname, '..');
@@ -413,41 +408,6 @@ describe('the engine/host seam', () => {
 });
 
 describe('the engine/host seam carries data', () => {
-  // DESIGN §6: every host call is request/response with JSON-serialisable
-  // arguments. The await park and its wake are the calls that used to carry a
-  // closure (the re-check); the engine now re-checks itself.
-  it('an await park and the wake after it pass plain data only', async () => {
-    const calls: unknown[] = [];
-    const { sink } = makeFakeParkSink();
-    const recording: ParkSink = {
-      ...sink,
-      async commitAwaitPark(input) {
-        calls.push(input);
-      },
-    };
-    const awaiting = makeAwaitingAdapter([
-      { status: 'pending', correlationKey: 'req-1' },
-      {
-        status: 'landed',
-        correlationKey: 'req-1',
-        landings: [{ recordId: 'req-1', recordType: 'Check Response', fields: { Answer: true } }],
-      },
-    ]);
-
-    await runAwaiting({
-      teamId: tenantIdOf('00000000-0000-0000-0000-000000000042'),
-      source: spelledFor(LANGUAGE_VERSION, awaitingSource()),
-      adapter: awaiting.adapter,
-      parkSink: recording,
-      wake: async (request: Scoped<AwaitWakeRequest>) => {
-        calls.push(request);
-      },
-    });
-
-    expect(calls).toHaveLength(2);
-    expect(JSON.parse(JSON.stringify(calls))).toEqual(calls);
-  });
-
   // A file crosses as its descriptor: FILE() asks the host to render and gets
   // a descriptor back; READ() hands that descriptor over and gets text back.
   // No bytes, and no closure, in either direction. The segment the run opened
@@ -1351,30 +1311,6 @@ describe('every family crosses as JSON', () => {
       { limit: 'cost', capMicrodollars: 1000, spentMicrodollars: 1100 },
     ]);
     expect([...parks.parks.values()].map((p) => p.kind)).toEqual(['suspension']);
-  });
-
-  familyRun('an await: the awaitable checked, parked, re-checked and woken', async () => {
-    const { sink } = joiningParkSink();
-    const wakes: QueuedWake[] = [];
-    const result = await runAwaiting({
-      teamId: tenantOfTeam(ROUND_TRIP_TEAM),
-      source: spelledFor(LANGUAGE_VERSION, awaitingSource()),
-      adapter: makeAwaitingAdapter([
-        { status: 'pending', correlationKey: 'req-1' },
-        {
-          status: 'landed',
-          correlationKey: 'req-1',
-          landings: [{ recordId: 'req-1', recordType: 'Check Response', fields: { Answer: true } }],
-        },
-      ]).adapter,
-      parkSink: sink,
-      wakes,
-      wrapHost: (host) => roundTripHost(host, REACHED),
-    });
-    expect(result.parked).toBe(true);
-    expect(wakes).toEqual([
-      { adapterType: 'ask', teamId: ROUND_TRIP_TEAM, correlationKey: 'req-1' },
-    ]);
   });
 
   familyRun('adapters, the lookup, locks and the trace: a paged traversal, an identity write, the acting user', async () => {

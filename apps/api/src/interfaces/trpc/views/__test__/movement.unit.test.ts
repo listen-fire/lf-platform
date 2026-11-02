@@ -400,8 +400,6 @@ listen to manual fire hello
               positions: { Invocation: { properties: { Text: 'text' }, edges: {} } },
               collections: {},
               writableRoots: {},
-              eventPosition: 'Invocation',
-              eventPositions: [{ position: 'Invocation' }],
             },
           },
           attio: {

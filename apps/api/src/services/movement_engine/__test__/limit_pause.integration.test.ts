@@ -119,8 +119,6 @@ const ATTIO_SCHEMA: InstanceSchema = {
   collections: {},
   unions: { [EVENT]: graftVariants },
   writableRoots: {},
-  eventPosition: EVENT,
-  eventPositions: [{ position: EVENT }],
 };
 
 /** A message target whose search is fuzzy, so a `unique by (FUZZY …)` key

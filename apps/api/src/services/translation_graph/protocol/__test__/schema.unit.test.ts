@@ -228,8 +228,7 @@ describe('METHODS registry', () => {
       'ensureEventSubscription',
       'refreshEventSubscription',
       'removeEventSubscription',
-      'resolveAwait',
-      'wakeKeys',
+      'awaitKeys',
       'iterateRelatedPage',
       'poll',
       'refreshCredential',
@@ -405,11 +404,12 @@ describe('v2 methods', () => {
   });
 
   it('ensureEventSubscription / removeEventSubscription', () => {
+    // One subscription per listenable edge, scoped by the record it is on.
     const ensure = {
-      events: ['record.created'],
+      edge: 'Changes',
       callbackUrl: 'https://host.example/hook/1',
-      current: { externalId: 'wh-1', events: [] },
-      scope: { base: 'b1' },
+      current: { externalId: 'wh-1' },
+      scope: 'b1',
     };
     expect(METHODS.ensureEventSubscription.params.parse(ensure)).toEqual(ensure);
     expect(METHODS.ensureEventSubscription.result.parse({ externalId: 'wh-2', secret: 's' })).toEqual({
@@ -418,33 +418,9 @@ describe('v2 methods', () => {
     });
     // null: the documented "nothing registered" no-op.
     expect(METHODS.ensureEventSubscription.result.parse(null)).toBeNull();
-    const remove = { callbackUrl: 'https://host.example/hook/1', externalId: 'wh-1' };
+    const remove = { edge: 'Changes', callbackUrl: 'https://host.example/hook/1', externalId: 'wh-1' };
     expect(METHODS.removeEventSubscription.params.parse(remove)).toEqual(remove);
     expect(METHODS.removeEventSubscription.result.parse(null)).toBeNull();
-  });
-
-  it('resolveAwait: pending and landed both carry a correlation key; empty is bare', () => {
-    const point = { recordId: 'ask-1', edge: 'Response', headData: { channel: 'C1' } };
-    expect(METHODS.resolveAwait.params.parse(point)).toEqual(point);
-    const pending = { status: 'pending', correlationKey: 'C1:123.4' };
-    expect(METHODS.resolveAwait.result.parse(pending)).toEqual(pending);
-    expect(() => METHODS.resolveAwait.result.parse({ status: 'pending' })).toThrow();
-    // The key to keep waiting on, for landings that all fail the await's WHERE.
-    const landed = {
-      status: 'landed',
-      correlationKey: 'C1:1.2',
-      landings: [{ recordId: 'r1', recordType: 'Response', fields: { Answer: 'yes' } }],
-    };
-    expect(METHODS.resolveAwait.result.parse(landed)).toEqual(landed);
-    const { correlationKey: _key, ...keyless } = landed;
-    expect(() => METHODS.resolveAwait.result.parse(keyless)).toThrow();
-    expect(METHODS.resolveAwait.result.parse({ status: 'empty' })).toEqual({ status: 'empty' });
-  });
-
-  it('wakeKeys: { raw } → string[]', () => {
-    expect(METHODS.wakeKeys.params.parse({ raw: { any: 'thing' } })).toEqual({ raw: { any: 'thing' } });
-    expect(METHODS.wakeKeys.result.parse(['C1:123.4'])).toEqual(['C1:123.4']);
-    expect(() => METHODS.wakeKeys.result.parse([1])).toThrow();
   });
 
   it('iterateRelatedPage: GetRelatedInput + cursor → a RelatedPage', () => {

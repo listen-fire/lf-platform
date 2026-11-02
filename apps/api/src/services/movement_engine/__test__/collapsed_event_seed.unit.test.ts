@@ -126,8 +126,6 @@ const CHAT_SCHEMA: InstanceSchema = {
       resultShape: { externalId: 'text', url: 'text', Text: 'text' },
     },
   },
-  eventPosition: MESSAGE,
-  eventPositions: [{ position: MESSAGE, on: ['message', 'app_mention'] }],
 };
 
 const baseCatalog = staticCatalogFromManifests({

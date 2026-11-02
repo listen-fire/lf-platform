@@ -30,7 +30,9 @@ import type { TriggerRunId } from '../../../generated/kysely/automations/Trigger
 import type { MovementId } from '../../../generated/kysely/automations/Movement';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { TriggerRunRecorder } from '../../translation_graph/runs/trigger_run';
-import { enqueueAwaitWake } from '../await_wake';
+import { makeRecorderParks } from '../park_sink';
+import { queueWake, storeDb } from '../run_host_queue';
+import type { WaitWake } from 'movement-engine/public/run-host';
 import { ensurePeriodicWork } from '../../work/store';
 import { postgresRunHostStore } from '../run_host_store';
 
@@ -115,8 +117,8 @@ beforeEach(async () => {
   await getAutomationsQb(['work']).deleteFrom('work').where('team_id', '=', teamId).execute();
 });
 
-/** A run parked on a reply in a thread, as `commitAwaitPark` leaves it. */
-async function runParkedOnReply(): Promise<{ runId: TriggerRunId; correlationKey: string }> {
+/** A run parked on a wait for a reply in a thread, as `commitAwaitPark` leaves it. */
+async function runParkedOnReply(): Promise<{ runId: TriggerRunId; wake: WaitWake }> {
   const recorder = new TriggerRunRecorder({
     teamId,
     triggerId,
@@ -131,26 +133,21 @@ async function runParkedOnReply(): Promise<{ runId: TriggerRunId; correlationKey
   });
   await recorder.ensureStarted();
   const runId = recorder.triggerRunId;
-  await getAutomationsQb(['trigger_run']).updateTable('trigger_run').set({ status: 'parked' }).where('id', '=', runId).execute();
-  await getAutomationsQb(['parked_run'])
-    .insertInto('parked_run')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .values({
-      run_id: runId,
-      address: ADDRESS,
-      status: 'parked',
-      park_reason: 'await',
-      state: JSON.stringify({ version: 1, address: ADDRESS, bindingName: null, scopeChain: [{ bindings: {} }] }),
-    } as any)
-    .execute();
-  const correlationKey = `C1:${randomUUID()}`;
-  await postgresRunHostStore.correlations.correlate({ adapterType: ADAPTER, correlationKey, runId, teamId, address: ADDRESS });
-  return { runId, correlationKey };
+  const since = await postgresRunHostStore.waits.mark();
+  const { waitId } = await postgresRunHostStore.waits.open({ runId, teamId, adapterType: ADAPTER, edge: 'Replies', key: `C1:${randomUUID()}`, since });
+  await makeRecorderParks(recorder).sink.commitAwaitPark({
+    address: ADDRESS,
+    state: { version: 3, address: ADDRESS, bindingName: null, scopeChain: [{ bindings: {} }] },
+    waitId,
+  });
+  return { runId, wake: { waitId, runId, address: ADDRESS } };
 }
 
-async function wakeTwice(correlationKey: string): Promise<void> {
-  await enqueueAwaitWake({ adapterType: ADAPTER, teamId, correlationKey });
-  await enqueueAwaitWake({ adapterType: ADAPTER, teamId, correlationKey });
+/** The wait answered twice over: two `wake_await` rows for one wait, as two
+ *  arrivals on its record queue them. */
+async function wakeTwice(wake: WaitWake): Promise<void> {
+  await queueWake(storeDb(), teamId, wake);
+  await queueWake(storeDb(), teamId, wake);
 }
 
 async function parkedLeaves(runId: TriggerRunId): Promise<unknown[]> {
@@ -176,8 +173,8 @@ async function makeWakesDue(): Promise<void> {
 
 describe('two instances wake one parked run at once', () => {
   it('one resumes it while it holds the lease; the other defers, and its retry finds nothing left', async () => {
-    const { runId, correlationKey } = await runParkedOnReply();
-    await wakeTwice(correlationKey);
+    const { runId, wake } = await runParkedOnReply();
+    await wakeTwice(wake);
     const a = startProcess();
     const b = startProcess();
 
@@ -233,8 +230,8 @@ describe('two instances wake one parked run at once', () => {
     });
     for (let round = 0; round < 5; round++) {
       resumeMovementFiringMock.mockClear();
-      const { runId, correlationKey } = await runParkedOnReply();
-      await wakeTwice(correlationKey);
+      const { runId, wake } = await runParkedOnReply();
+      await wakeTwice(wake);
 
       await Promise.all([
         a.drain.drainWork({ owner: 'instance-a', teamId, limit: 1, heartbeatMs: false }),

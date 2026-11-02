@@ -364,7 +364,6 @@ describe('remote parity with an adapter whose ids are not its names', () => {
     expect(typeof remote.translateFilter).toBe('function');
     expect(typeof remote.getDedupRules).toBe('function');
     expect(typeof remote.invokeFieldFunction).toBe('function');
-    expect(remote.awaitable).toBeUndefined();
   });
 
   it('describe("Contact") answers the descriptor with its display names', async () => {

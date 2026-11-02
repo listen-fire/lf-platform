@@ -76,7 +76,6 @@ jest.mock('../../../lib/anthropic', () => ({
 
 import { runMovement, resumeMovement } from '@listen-fire/legacy-engine/dispatch';
 import type { ParkSink } from '@listen-fire/legacy-engine/services/movement_engine/run';
-import type { CallbackSink } from 'movement-engine/public/host';
 import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
 
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
@@ -235,28 +234,10 @@ const PRELUDE = [
 /** The same prelude as versions 1–4 read it, for the cases pinned there. */
 const PRELUDE_V4 = PRELUDE.replace('inbox = connect email', 'inbox = email()');
 
-/** A fake callback sink — the cheapest REAL park: minting a callback captures
- *  the enclosing scope through the same serialiser a parked ask writes. */
-function makeFakeCallbackSink() {
-  const mints: Array<{ id: string; state: ParkedScopeState }> = [];
-  const sink = {
-    async mint(input: { state: ParkedScopeState }) {
-      const id = `cb_fake${mints.length + 1}`;
-      mints.push({ id, state: input.state });
-      return { id, url: `https://api.test/api/cb/${id}` };
-    },
-    async calls() {
-      return [];
-    },
-  } as unknown as CallbackSink;
-  return { sink, mints };
-}
-
 interface RunAdapters {
   email: Adapter;
   attio?: Adapter;
   dropbox?: Adapter;
-  callbacks?: { sink: CallbackSink };
   parkSink?: ParkSink;
   /** The run's language version, where a test pins one (`parallel` is
    *  retired under 5, so its own rules run under 4). */
@@ -297,7 +278,6 @@ function run(source: string, payload: Record<string, unknown>, adapters: RunAdap
         }),
       },
       park: {
-        ...(adapters.callbacks ? { callbacks: adapters.callbacks.sink } : {}),
         ...(adapters.parkSink ? { sink: adapters.parkSink } : {}),
       },
     }),
@@ -1030,23 +1010,23 @@ describe('a park carries the WALK, not what it walked to', () => {
   it('the captured scope holds the traversal and its own scope — no landings', async () => {
     const email = makeFakeAdapter('email', { related: { files: [{ filename: 'a.pdf' }] } });
     const attio = makeFakeAdapter('attio');
-    const callbacks = makeFakeCallbackSink();
+    const { sink, timerParks } = makeFakeParkSink();
     const source = [
       'function intake(msg: <inbox-[:message]->>) {',
       '  crm = connect attio using acme_main',
       '  files = lazy msg-[a:files]->',
-      '  cb = callback({ write crm-[:companies]-> { name: files.`filename` } })',
+      '  await sleep(30d)',
       '}',
     ].join('\n');
 
     await run(
       source,
       {},
-      { email: email.adapter, attio: attio.adapter, callbacks },
+      { email: email.adapter, attio: attio.adapter, parkSink: sink },
     );
 
-    expect(callbacks.mints).toHaveLength(1);
-    const captured = callbacks.mints[0].state.scopeChain
+    expect(timerParks).toHaveLength(1);
+    const captured = (timerParks[0].state as ParkedScopeState).scopeChain
       .flatMap((scope) => Object.entries(scope.bindings))
       .find(([name]) => name === 'files');
     expect(captured).toBeDefined();
@@ -1059,28 +1039,28 @@ describe('a park carries the WALK, not what it walked to', () => {
     // Nothing was walked to park it — the source was never touched.
     expect(email.relatedCalls.count).toBe(0);
     // And the parked blob really is a JSON wire shape.
-    expect(() => JSON.stringify(callbacks.mints[0].state)).not.toThrow();
+    expect(() => JSON.stringify(timerParks[0].state)).not.toThrow();
   });
 
   it('a synthesised node parks its deferred edge the same way', async () => {
     const email = makeFakeAdapter('email', { related: { files: [{ filename: 'a.pdf' }] } });
     const attio = makeFakeAdapter('attio');
-    const callbacks = makeFakeCallbackSink();
+    const { sink, timerParks } = makeFakeParkSink();
 
     const source = [
       'function intake(msg: <inbox-[:message]->>) {',
       '  crm = connect attio using acme_main',
       '  d = node { title: "x", files: lazy msg-[a:files]-> }',
-      '  cb = callback({ write crm-[:companies]-> { name: d.title } })',
+      '  await sleep(30d)',
       '}',
     ].join('\n');
     await run(
       source,
       {},
-      { email: email.adapter, attio: attio.adapter, callbacks },
+      { email: email.adapter, attio: attio.adapter, parkSink: sink },
     );
 
-    const node = callbacks.mints[0].state.scopeChain
+    const node = (timerParks[0].state as ParkedScopeState).scopeChain
       .flatMap((scope) => Object.entries(scope.bindings))
       .find(([name]) => name === 'd')?.[1];
     if (node?.kind !== 'nodePosition') throw new Error('expected the node to survive the park');
@@ -1093,21 +1073,21 @@ describe('a park carries the WALK, not what it walked to', () => {
   it('an EAGER edge parks what it already walked', async () => {
     const email = makeFakeAdapter('email', { related: { files: [{ filename: 'a.pdf' }] } });
     const attio = makeFakeAdapter('attio');
-    const callbacks = makeFakeCallbackSink();
+    const { sink, timerParks } = makeFakeParkSink();
 
     await run(
       [
         'function intake(msg: <inbox-[:message]->>) {',
         '  crm = connect attio using acme_main',
         '  d = node { title: "x", files: msg-[a:files]-> }',
-        '  cb = callback({ write crm-[:companies]-> { name: d.title } })',
+        '  await sleep(30d)',
         '}',
       ].join('\n'),
       {},
-      { email: email.adapter, attio: attio.adapter, callbacks },
+      { email: email.adapter, attio: attio.adapter, parkSink: sink },
     );
 
-    const node = callbacks.mints[0].state.scopeChain
+    const node = (timerParks[0].state as ParkedScopeState).scopeChain
       .flatMap((scope) => Object.entries(scope.bindings))
       .find(([name]) => name === 'd')?.[1];
     if (node?.kind !== 'nodePosition') throw new Error('expected the node to survive the park');
@@ -1487,22 +1467,22 @@ describe('a park carries the MAPPING, not what it mapped', () => {
   it('the parked edge holds the walk AND the tail literal — no landings', async () => {
     const email = makeFakeAdapter('email', { related: { files: [{ filename: 'a.pdf' }] } });
     const attio = makeFakeAdapter('attio');
-    const callbacks = makeFakeCallbackSink();
+    const { sink, timerParks } = makeFakeParkSink();
 
     const source = [
       'function intake(msg: <inbox-[:message]->>) {',
       '  crm = connect attio using acme_main',
       '  d = node { title: "x", files: lazy msg-[a:files]-> node { label: a.`filename` } }',
-      '  cb = callback({ write crm-[:companies]-> { name: d.title } })',
+      '  await sleep(30d)',
       '}',
     ].join('\n');
     await run(
       source,
       {},
-      { email: email.adapter, attio: attio.adapter, callbacks },
+      { email: email.adapter, attio: attio.adapter, parkSink: sink },
     );
 
-    const node = callbacks.mints[0].state.scopeChain
+    const node = (timerParks[0].state as ParkedScopeState).scopeChain
       .flatMap((scope) => Object.entries(scope.bindings))
       .find(([name]) => name === 'd')?.[1];
     if (node?.kind !== 'nodePosition') throw new Error('expected the node to survive the park');
@@ -1514,7 +1494,7 @@ describe('a park carries the MAPPING, not what it mapped', () => {
     ]);
     // Nothing was walked, and nothing was synthesised, to park it.
     expect(email.relatedCalls.count).toBe(0);
-    expect(() => JSON.stringify(callbacks.mints[0].state)).not.toThrow();
+    expect(() => JSON.stringify(timerParks[0].state)).not.toThrow();
   });
 
   it('a RESUMED run re-walks and re-maps — the recipe survived, the answers did not', async () => {
@@ -2021,7 +2001,7 @@ describe('a declared edge grows by `link`', () => {
   it('a park carries the appended landings — the handle survives it', async () => {
     const email = makeFakeAdapter('email');
     const attio = makeFakeAdapter('attio');
-    const callbacks = makeFakeCallbackSink();
+    const { sink, timerParks } = makeFakeParkSink();
 
     await run(
       [
@@ -2030,14 +2010,14 @@ describe('a declared edge grows by `link`', () => {
         '  sent = node { posted: <crm-[:companies]->> }',
         '  one = write crm-[:companies]-> { name: "a" }',
         '  link sent -[:posted]-> one',
-        '  cb = callback({ write crm-[:companies]-> { name: "after" } })',
+        '  await sleep(30d)',
         '}',
       ].join('\n'),
       {},
-      { email: email.adapter, attio: attio.adapter, callbacks },
+      { email: email.adapter, attio: attio.adapter, parkSink: sink },
     );
 
-    const node = callbacks.mints[0].state.scopeChain
+    const node = (timerParks[0].state as ParkedScopeState).scopeChain
       .flatMap((scope) => Object.entries(scope.bindings))
       .find(([name]) => name === 'sent')?.[1];
     if (node?.kind !== 'nodePosition') throw new Error('expected the node to survive the park');
@@ -2045,7 +2025,7 @@ describe('a declared edge grows by `link`', () => {
     if (edge.kind !== 'landed') throw new Error('expected the edge to park landed');
     expect(edge.landings).toHaveLength(1);
     expect(edge.landings[0].kind).toBe('handle');
-    expect(() => JSON.stringify(callbacks.mints[0].state)).not.toThrow();
+    expect(() => JSON.stringify(timerParks[0].state)).not.toThrow();
   });
 });
 

@@ -6,10 +6,11 @@
 // to over-claiming — and, registry-wide, so no source adapter ships without
 // one.
 
-import { SLACK_MANIFEST } from '../slack';
+import { SLACK_MANIFEST } from '@listen-fire/slack/manifest';
 import { EMAIL_MANIFEST } from '../email';
-import { ATTIO_MANIFEST } from '../attio';
-import { AIRTABLE_MANIFEST } from '../airtable';
+import { ATTIO_MANIFEST } from '@listen-fire/attio/manifest';
+import { AIRTABLE_MANIFEST } from '@listen-fire/airtable/manifest';
+import { AFFINITY_MANIFEST } from '@listen-fire/affinity/manifest';
 import { kgManifest } from '@listen-fire/kg/manifest';
 import { WHATSAPP_MANIFEST } from '../whatsapp';
 import { CRON_MANIFEST } from '../cron';
@@ -37,20 +38,20 @@ describe('adapter triggerExpectation — honest inbound semantics', () => {
     expect(t).toMatch(/not|inbox/i);
   });
 
-  it('Attio scopes to record events and warns off field-level promises', () => {
+  it('Attio scopes to record events and says a change names one attribute', () => {
     const t = ATTIO_MANIFEST.triggerExpectation;
     expect(t).toBeDefined();
     expect(t).toMatch(/record\.created/);
     expect(t).toMatch(/does not fire on notes/i); // names the non-events
-    expect(t).toMatch(/field-level|which field/i); // the over-claim to avoid
+    expect(t).toMatch(/one change per attribute/i);
   });
 
-  it('Airtable states one-table scope and notify-then-pull batching', () => {
+  it('Airtable states its per-base scope and notify-then-pull batching', () => {
     const t = AIRTABLE_MANIFEST.triggerExpectation;
     expect(t).toBeDefined();
-    expect(t).toMatch(/ONE .*table/);
+    expect(t).toMatch(/each base/);
+    expect(t).toMatch(/does not watch runs nothing/);
     expect(t).toMatch(/batch|coalesc/i);
-    expect(t).toMatch(/do not promise/i);
   });
 
   it('KG names its Changes and warns that a listen writing what it hears can wake itself', () => {
@@ -77,12 +78,11 @@ describe('adapter triggerExpectation — honest inbound semantics', () => {
   });
 
   it('Affinity states the 3-subscription cap and disclaims unmapped kinds', () => {
-    const { AFFINITY_MANIFEST } = jest.requireActual('../affinity');
     const t = AFFINITY_MANIFEST.triggerExpectation;
     expect(t).toBeDefined();
-    expect(t).toMatch(/3 webhook subscriptions/i);
-    expect(t).toMatch(/field_value|field-value/i);
-    expect(t).toMatch(/do not promise/i);
+    expect(t).toMatch(/at most 3/i);
+    expect(t).toMatch(/field value/i);
+    expect(t).toMatch(/does not fire on notes/i);
   });
 
   it('Valuations names its Changes, with the row before and after', () => {

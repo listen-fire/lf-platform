@@ -1,23 +1,17 @@
 // Real-DB proof that `commitTimerPark` writes the durable timer-park row
 // correctly. Standing gate for §3 of plans/2026-07-01-movement-sleep/3_model.md:
 // a `parked_run` row with `park_reason='timer'` and `wake_at` set, and idempotent
-// UPSERT on `(run_id, address)`. And that `commitAwaitPark` writes the park and
-// its correlation row, after which the engine re-checks once and, through the
-// host's `park.wake`, queues the wake for an answer that landed while it parked.
+// UPSERT on `(run_id, address)`. And that a park under a lapsed lease writes
+// nothing. A park on a wait is held by the store contract cases.
 
-import { LANGUAGE_VERSION } from 'movement-lang';
 import { randomUUID } from 'node:crypto';
 import { getAutomationsQb, getCoreQb } from '../../../lib/kysely';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
 import type { TriggerRunRecorder } from '../../translation_graph/runs/trigger_run';
 import { makeRecorderParks } from '../park_sink';
-import { enqueueAwaitWake } from '../await_wake';
-import { awaitingSource, makeAwaitingAdapter, runAwaiting } from './awaitable_fixture';
-import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import { RunLeaseLost } from '../run_lease';
 import { postgresRunHostStore } from '../run_host_store';
-import { tenantOfTeam } from '../../translation_graph/movement/tenant';
 
 let teamId: TeamId;
 let runId: TriggerRunId;
@@ -141,67 +135,6 @@ describe('commitTimerPark', () => {
   });
 });
 
-async function awaitWakes() {
-  return getAutomationsQb(['work'])
-    .selectFrom('work')
-    .where('team_id', '=', teamId)
-    .where('kind', '=', 'wake_await')
-    .select('payload')
-    .execute();
-}
-
-describe('commitAwaitPark', () => {
-  it('writes the await park and the correlation row from the key to it; no wake of its own', async () => {
-    const sink = makeRecorderParks(makeStubRecorder({ teamId, runId })).sink;
-
-    await sink.commitAwaitPark({
-      address: 's1',
-      state: { scope: true },
-      adapterType: 'slack',
-      correlationKey: 'C123:1700000000.000100',
-    });
-
-    expect(
-      await postgresRunHostStore.correlations.correlated({ adapterType: 'slack', teamId, correlationKey: 'C123:1700000000.000100' }),
-    ).toEqual([{ runId, teamId, address: 's1' }]);
-    const park = await getAutomationsQb(['parked_run'])
-      .selectFrom('parked_run')
-      .select(['park_reason', 'status'])
-      .where('run_id', '=', runId)
-      .where('address', '=', 's1')
-      .executeTakeFirstOrThrow();
-    expect(park).toEqual({ park_reason: 'await', status: 'parked' });
-    expect(await awaitWakes()).toEqual([]);
-  });
-
-  // Review focus: the reply that lands between the first check and the
-  // correlation row would otherwise wake nothing, and nothing else looks again.
-  it('an answer that landed while the run parked queues the wake itself, with no inbound event', async () => {
-    const awaiting = makeAwaitingAdapter([
-      { status: 'pending', correlationKey: 'req-1' },
-      {
-        status: 'landed',
-        correlationKey: 'req-1',
-        landings: [{ recordId: 'req-1', recordType: 'Check Response', fields: { Answer: true } }],
-      },
-    ]);
-
-    const result = await runAwaiting({
-      teamId: tenantOfTeam(teamId),
-      source: spelledFor(LANGUAGE_VERSION, awaitingSource()),
-      adapter: awaiting.adapter,
-      parkSink: makeRecorderParks(makeStubRecorder({ teamId, runId })).sink,
-      // The production host's wake: a `wake_await` work row.
-      wake: ({ adapterType, correlationKey }) => enqueueAwaitWake({ adapterType, teamId, correlationKey }),
-    });
-
-    expect(result.parked).toBe(true);
-    expect(awaiting.checks).toBe(2);
-    expect(await postgresRunHostStore.correlations.correlated({ adapterType: 'ask', teamId, correlationKey: 'req-1' })).toHaveLength(1);
-    expect(await awaitWakes()).toEqual([{ payload: { adapterType: 'ask', teamId, correlationKey: 'req-1' } }]);
-  });
-});
-
 describe('a park under a lease that lapsed', () => {
   const STATE = { version: 1, address: 's0', bindingName: null, scopeChain: [] };
 
@@ -225,7 +158,7 @@ describe('a park under a lease that lapsed', () => {
       stale.commitTimerPark({ address: 's0', state: { ...STATE, by: 'stale' }, wakeAt }),
     ).rejects.toBeInstanceOf(RunLeaseLost);
     await expect(
-      stale.commitAwaitPark({ address: 's1', state: STATE, adapterType: 'ask', correlationKey: 'req-9' }),
+      stale.commitAwaitPark({ address: 's1', state: STATE, waitId: randomUUID() }),
     ).rejects.toBeInstanceOf(RunLeaseLost);
     await expect(stale.commitSuspension!({ address: 's2', state: STATE })).rejects.toBeInstanceOf(RunLeaseLost);
     await expect(stale.recordJoin({ frameAddress: 's3', parkedChildren: 2 })).rejects.toBeInstanceOf(RunLeaseLost);
@@ -236,7 +169,6 @@ describe('a park under a lease that lapsed', () => {
       .select(['address', 'state'])
       .execute();
     expect(rows).toEqual([{ address: 's0', state: { ...STATE, by: 'new' } }]);
-    expect(await postgresRunHostStore.correlations.correlated({ adapterType: 'ask', teamId, correlationKey: 'req-9' })).toEqual([]);
     const joins = await getAutomationsQb(['join_pending']).selectFrom('join_pending').where('run_id', '=', runId).select('frame_address').execute();
     expect(joins).toEqual([]);
   });

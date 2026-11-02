@@ -25,8 +25,6 @@ import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import type { Adapter, RuntimeCapabilities, WriteInput } from 'movement-engine/public/adapter';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { tenantIdOf } from 'engine-contracts';
-import type { CallbackSink } from 'movement-engine/public/host';
-import type { CallbackCall } from 'engine-contracts';
 import type { BindingDescriptor, ParkedScopeState, RehydrationContext } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
 
 import { createManualAdapter } from '../../translation_graph/adapters/manual';
@@ -190,26 +188,9 @@ function makeParkSink() {
 
 type Sink = ReturnType<typeof makeParkSink>;
 
-/** A fake callback store: a ledger the test fills, as a platform reply would. */
-function makeCallbackSink() {
-  const ledger: Record<string, CallbackCall[]> = {};
-  let n = 0;
-  const sink: CallbackSink = {
-    async mint() {
-      const id = `cb_${++n}`;
-      return { id, url: `https://api.test/api/cb/${id}` };
-    },
-    async calls({ callbackId }) {
-      return ledger[callbackId] ?? [];
-    },
-  };
-  return { sink, ledger };
-}
-
 interface Harness {
   source: string;
   parks: Sink;
-  callbacks?: ReturnType<typeof makeCallbackSink>;
   languageVersion?: LanguageVersion;
 }
 
@@ -228,10 +209,7 @@ function runInput(h: Harness, kg: ReturnType<typeof makeKgFake>, suspendAt?: str
           throw new Error(`test: no fake adapter for '${adapterType}'`);
         },
       },
-      park: {
-        sink: h.parks.sink,
-        ...(h.callbacks !== undefined ? { callbacks: h.callbacks.sink } : {}),
-      },
+      park: { sink: h.parks.sink },
     }),
     ...(suspendAt !== undefined ? { suspendAt } : {}),
     ...(h.languageVersion !== undefined ? { languageVersion: h.languageVersion } : {}),
@@ -622,37 +600,6 @@ describe('authored waits (legacy version 3)', () => {
     const last = await resumeAt(h, 's0.c0.i0.s1');
     expect(bodies(last.kg.creates).filter((b) => b !== undefined)).toEqual(['answered a']);
     expect(payloadOf(last.kg.creates)).toEqual({ out: ['A', 'B', 'C'] });
-  });
-
-  it('awaiting a reply in each member: resuming one member never disturbs the others', async () => {
-    const callbacks = makeCallbackSink();
-    const h: Harness = {
-      source: program(
-        '',
-        [
-          '  cb = callback((verdict: <text>) => {})',
-          '  out = MAP(["x", "y"], { concurrency: 2 }, (t) => {',
-          '    reply = await FIRST(cb-[:Called]->)',
-          '    write graph-[:note]-> { body: "${t}: ${reply.verdict}" }',
-          '    return t',
-          '  })',
-          '  write graph-[:note]-> { payload: { out: out } }',
-        ].join('\n'),
-      ),
-      parks: makeParkSink(),
-      callbacks,
-    };
-    const first = await start(h);
-    expect([...h.parks.parks.keys()].sort()).toEqual(['s1.c0.i0.s0', 's1.c0.i1.s0']);
-
-    callbacks.ledger.cb_1 = [{ at: '2026-10-05T10:00:00.000Z', values: { verdict: 'yes' } }];
-    const y = await resumeAt(h, 's1.c0.i1.s0');
-    expect(bodies(y.kg.creates)).toEqual(['y: yes']);
-    expect([...h.parks.parks.keys()]).toEqual(['s1.c0.i0.s0']);
-
-    const x = await resumeAt(h, 's1.c0.i0.s0');
-    expect(bodies(x.kg.creates).filter((b) => b !== undefined)).toEqual(['x: yes']);
-    expect(payloadOf(x.kg.creates)).toEqual({ out: ['x', 'y'] });
   });
 
   it('`await sleep` in a movement called two calls deep', async () => {

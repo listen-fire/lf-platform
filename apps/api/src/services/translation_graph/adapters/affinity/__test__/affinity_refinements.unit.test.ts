@@ -8,7 +8,6 @@ import { parseProgram } from 'legacy-lang';
 
 import type { SourcePosition } from 'movement-engine/public/catalog';
 
-import { AFFINITY_MANIFEST } from '@listen-fire/affinity/manifest';
 import { makeAdapter } from '@listen-fire/affinity/testing';
 import { instanceSchemaFromDescriptors, makeMetaPosition, positionLabel } from 'movement-engine/public/catalog';
 import { refineInstanceSchema } from '../../../movement/refinements';
@@ -75,8 +74,6 @@ describe('an org\'s list entries narrowed by list inside EXISTS reach the checke
         affinity: {
           constructionArgs: [{ name: 'credentials', kind: 'credential', required: true }],
           canFire: true,
-          triggerConfig: ['events'],
-          triggerConfigOptions: { events: [...(AFFINITY_MANIFEST.subscribableEvents ?? [])] },
           schemas: { affinity_creds: refined.schema },
         },
       },

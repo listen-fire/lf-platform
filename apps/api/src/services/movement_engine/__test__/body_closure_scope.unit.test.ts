@@ -1142,8 +1142,6 @@ describe('a library closure two levels deep is read in the library, as one level
         positions: { Invocation: { properties: { text: 'text' }, edges: {} } },
         collections: {},
         writableRoots: {},
-        eventPosition: 'Invocation',
-        eventPositions: [{ position: 'Invocation' }],
       },
     },
   });

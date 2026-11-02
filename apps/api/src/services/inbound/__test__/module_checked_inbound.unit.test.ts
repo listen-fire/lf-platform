@@ -1,8 +1,8 @@
 // A module that checks its own inbound (`inbound.scheme: module`): the core
 // hands it the raw request, and the door answers what it decided — its events
-// queued, its refusal, or its reply sent as it is (a handshake).
+// and arrivals kept, its refusal, or its reply sent as it is (a handshake).
 
-import type { DiscriminableEvent, InboundCheck, InboundCheckInput } from 'movement-engine/public/adapter';
+import type { Arrival, DiscriminableEvent, InboundCheck, InboundCheckInput } from 'movement-engine/public/adapter';
 import type { InboundStore } from 'movement-engine/public/inbound';
 
 import { CHECKED_BY_MODULE, UNREGISTERED_SECRET, answerDelivery } from 'movement-engine/public/inbound';
@@ -10,7 +10,7 @@ import { CHECKED_BY_MODULE, UNREGISTERED_SECRET, answerDelivery } from 'movement
 function storeAnswering(answer: InboundCheck, secret = 'key') {
   const seen: InboundCheckInput[] = [];
   const queued: DiscriminableEvent[] = [];
-  const wakes: string[] = [];
+  const arrivals: Arrival[] = [];
   const store: InboundStore<DiscriminableEvent> = {
     findSubscription: async (id) =>
       id === 'sub' ? { id, teamId: 't', providerKey: 'MAIL', credentialsId: 'c', secret, grandfatheredUnsigned: false, checkpoint: null } : null,
@@ -36,11 +36,13 @@ function storeAnswering(answer: InboundCheck, secret = 'key') {
     }),
     verifiesSignature: () => true,
     capture: async ({ event }) => event,
-    saveCheckpoint: async () => {},
-    enqueue: async ({ event }) => void queued.push(event),
-    enqueueWakes: async ({ keys }) => void wakes.push(...keys),
+    keepDelivery: async (delivery) => {
+      queued.push(...delivery.captured.map(({ event }) => event));
+      arrivals.push(...delivery.arrivals);
+      return { kept: true };
+    },
   };
-  return { store, seen, queued, wakes };
+  return { store, seen, queued, arrivals };
 }
 
 const host = { notify: () => {} };
@@ -56,10 +58,11 @@ const deliver = (store: InboundStore<DiscriminableEvent>, method = 'POST') =>
   });
 
 describe('a module that checks its own inbound', () => {
-  it('is handed the raw request and its secret; its events and wakes are queued', async () => {
-    const { store, seen, queued, wakes } = storeAnswering({ outcome: 'accepted', events: [{ payload: { n: 1 } }], wakeKeys: ['k1'] });
+  it('is handed the raw request and its secret; its events and arrivals are kept', async () => {
+    const arrival: Arrival = { edge: 'Emails', key: 'k1', identity: 'm1', landing: { recordId: 'm1', recordType: 'Email', fields: { Subject: 'hi' } } };
+    const { store, seen, queued, arrivals } = storeAnswering({ outcome: 'accepted', events: [{ payload: { n: 1 } }], arrivals: [arrival] });
     const answer = await deliver(store);
-    expect([answer.status, answer.body]).toEqual([200, { ok: true, eventsProcessed: 1 }]);
+    expect([answer.status, answer.body]).toEqual([200, { ok: true, eventsProcessed: 2 }]);
     expect(seen[0]).toEqual({
       request: {
         method: 'POST',
@@ -70,7 +73,7 @@ describe('a module that checks its own inbound', () => {
       },
       secret: 'key',
     });
-    expect([queued.length, wakes]).toEqual([1, ['k1']]);
+    expect([queued.length, arrivals]).toEqual([1, [arrival]]);
   });
 
   it('is handed no secret when the subscription holds no usable one', async () => {

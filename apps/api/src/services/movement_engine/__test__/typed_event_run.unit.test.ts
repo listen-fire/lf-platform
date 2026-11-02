@@ -138,8 +138,6 @@ const ATTIO_SCHEMA: InstanceSchema = {
   collections: {},
   unions: { [EVENT]: graftVariants },
   writableRoots: {},
-  eventPosition: EVENT,
-  eventPositions: [{ position: EVENT }],
 };
 
 // The catalog: the real manifests give `attio`/`slack` their construction +

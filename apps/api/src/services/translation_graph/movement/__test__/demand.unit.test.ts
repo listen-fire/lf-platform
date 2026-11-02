@@ -1,5 +1,5 @@
 // The compile path's demand set: seed = types the program NAMES (verbatim
-// natural names + every event-position entry), closure = hop targets along
+// natural names; a listen's traversal names its own), closure = hop targets along
 // the program's traversal paths, iterated because a target only becomes
 // known once its parent is described.
 
@@ -25,7 +25,7 @@ const entries: SchemaEntryPoint[] = [
     displayName: 'Record Event',
     writable: false,
     readable: true,
-    fires: true,
+    listenable: true,
   },
 ];
 
@@ -53,9 +53,9 @@ movement m(x: <c-[:Companies]->>) {
 }`;
 
 describe('demandSeed', () => {
-  it('demands textually-named entries and every event-position entry, nothing else', () => {
+  it('demands textually-named entries, nothing else', () => {
     const demanded = demandSeed({ entries, sources: [source] });
-    expect(demanded).toEqual(new Set(['obj-companies', 'obj-events']));
+    expect(demanded).toEqual(new Set(['obj-companies']));
   });
 });
 
@@ -255,24 +255,6 @@ movement m(x: <c-[:Companies]->>) {
         { typeId: 'tbl-co', displayName: 'CRM — Companies', writable: true, readable: true },
       ];
       expect(demandSeed({ entries: airtable, mentions: ['CRM — Companies'] })).toContain('base-crm');
-    });
-
-    // THE GAP hit in production. A listen-driven movement need never spell its event
-    // type — its signature carries an address, not a bare name — so demanding
-    // only what is named left the event position undescribed and the checker
-    // called the program's own parameter type unknown
-    // ('instance' has no position type 'Invocation').
-    //
-    // This exists because the editor path briefly had its OWN copy of this
-    // rule, which dropped the `fires` clause. One rule, two input forms.
-    it('demands EVERY firing entry even when nothing mentions it', () => {
-      const demanded = demandSeed({ entries, mentions: ['Companies'] });
-      expect(demanded).toContain('obj-events');
-      expect(demanded).not.toContain('obj-invoices');
-    });
-
-    it('demands firing entries even with an EMPTY mention list', () => {
-      expect(demandSeed({ entries, mentions: [] })).toEqual(new Set(['obj-events']));
     });
   });
 });

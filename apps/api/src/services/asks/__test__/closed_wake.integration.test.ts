@@ -1,12 +1,15 @@
-// A closed ask wakes the run parked on it, against a real DB.
+// A closed ask reaches the run waiting on it, against a real DB.
 //
-// An answer and a cancel each queue their own wake at their door. The ask
-// service's periodic closed sweep is the safety net behind both: it finds a
-// closed ask a run is still parked on (its wake was lost) and queues the same
-// `wake_await` row. Sweep → row → drain → the run re-enters its await, which
-// reads the ask through the real adapter. Only the engine step itself is
-// stubbed, so the test can see what the re-entered await got back. Store-level
-// transitions stand in for a door whose wake was lost.
+// An answer and a cancel each deliver the ask's `Response` arrival at their
+// door. The ask service's periodic closed sweep is the safety net behind both:
+// it delivers each closed ask again, and the arrival's identity keeps a second
+// delivery from waking anything twice. An answer wakes the wait: a
+// `wake_await` row, then drain, then the run re-enters its await, which reads
+// the wait's arrivals. A cancel reports the ask gone: the wait is stranded
+// and its run is told so (`Wait Lost Its Record`), never woken empty. Only the
+// engine step itself is stubbed, so the test can see what the re-entered
+// await read. Store-level transitions stand in for a door whose delivery was
+// lost.
 
 import { randomUUID } from 'node:crypto';
 
@@ -23,21 +26,21 @@ import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
 import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
 import type { MovementId } from '../../../generated/kysely/automations/Movement';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
-import type { AwaitResolution } from 'engine-contracts/awaitable';
 
 import { testWorkContext } from '../../../test/harness/work';
 import { cleanupTeam } from '../../../test/harness/cleanup';
 import { getAsksQb, getAutomationsQb, getCoreQb } from '../../../lib/kysely';
 import { TriggerRunRecorder } from '../../translation_graph/runs/trigger_run';
 import { registerAwaitWork } from '../../movement_engine/await_resume';
-import { enqueueAwaitWake } from '../../movement_engine/await_wake';
+import { makeRecorderParks } from '../../movement_engine/park_sink';
 import { drainUntilIdle, inProcessNotifier, resetWorkHandlersForTests, setWorkNotifier } from '../../work/drain';
 import { askClosedSweepHandler, registerAskClosedSweepWork } from '../closed_sweep';
 import { answerAskByToken, cancelAskAndWake, createAsk } from '../doors';
 import { notifyEngineOfSettledAsks } from '../in_process_notifier';
 import { resetAskSettledNotifierForTests } from '../notifier';
-import { ASK_ADAPTER_TYPE, ASK_TOKEN_PREFIX, AskAdapter, answerAsk, cancelAsk } from '@listen-fire/ask';
+import { ASK_ADAPTER_TYPE, ASK_TOKEN_PREFIX, answerAsk, cancelAsk } from '@listen-fire/ask';
 import { getAsk, platformAskRecords, type AskRecord } from '../store';
+import type { ListedArrival } from 'movement-engine/public/run-host';
 import { postgresRunHostStore } from '../../movement_engine/run_host_store';
 
 const SOURCE = 'go = manual()';
@@ -108,12 +111,13 @@ beforeEach(async () => {
   await getAutomationsQb(['work']).deleteFrom('work').where('team_id', '=', teamId).execute();
 });
 
-/** A live run parked on an open ask, exactly as `commitAwaitPark` leaves it.
+/** A live run parked on a wait for an open ask's response, exactly as
+ *  `commitAwaitPark` leaves it.
  *  `raise` makes the ask: through the module by default. */
 async function runParkedOnAsk(
   raise: (runId: TriggerRunId) => Promise<AskRecord> = (runId) =>
     createAsk({ teamId, family: 'Check', prompt: 'Ship it?', provenance: { runId } }),
-): Promise<{ runId: TriggerRunId; ask: AskRecord }> {
+): Promise<{ runId: TriggerRunId; ask: AskRecord; waitId: string }> {
   const recorder = new TriggerRunRecorder({
     teamId,
     triggerId,
@@ -129,19 +133,21 @@ async function runParkedOnAsk(
   await recorder.ensureStarted();
   const runId = recorder.triggerRunId;
   const ask = await raise(runId);
-  await getAutomationsQb(['parked_run'])
-    .insertInto('parked_run')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .values({
-      run_id: runId,
-      address: ADDRESS,
-      status: 'parked',
-      park_reason: 'await',
-      state: JSON.stringify({ version: 1, address: ADDRESS, bindingName: null, scopeChain: [{ bindings: {} }] }),
-    } as any)
-    .execute();
-  await postgresRunHostStore.correlations.correlate({ adapterType: ASK_ADAPTER_TYPE, correlationKey: ask.id, runId, teamId, address: ADDRESS });
-  return { runId, ask };
+  const since = await postgresRunHostStore.waits.mark();
+  const { waitId } = await postgresRunHostStore.waits.open({
+    runId, teamId, adapterType: ASK_ADAPTER_TYPE, edge: 'Response', key: ask.id, recordId: ask.id, since,
+  });
+  await makeRecorderParks(recorder).sink.commitAwaitPark({
+    address: ADDRESS,
+    state: { version: 3, address: ADDRESS, bindingName: null, scopeChain: [{ bindings: {} }] },
+    waitId,
+  });
+  return { runId, ask, waitId };
+}
+
+/** Whether the run's wait was stranded (its record reported gone). */
+async function stranded(runId: TriggerRunId): Promise<unknown[]> {
+  return (await postgresRunHostStore.waits.stranded({ runId })).map(({ edge, key }) => ({ edge, key }));
 }
 
 async function wakeRows(): Promise<unknown[]> {
@@ -158,88 +164,72 @@ async function sweep(): Promise<void> {
   await askClosedSweepHandler.run({}, testWorkContext());
 }
 
-/** The re-entered await: read the ask through the real adapter, as the engine's
- *  await does, and complete the branch. */
-function awaitReadsTheAsk(askId: string, seen: AwaitResolution[]): void {
+/** The re-entered await: read the wait's arrivals, as the engine's await
+ *  does, and complete the branch. */
+function awaitReadsTheWait(waitId: string, seen: ListedArrival[][]): void {
   resumeMovementFiringMock.mockImplementation(async () => {
-    seen.push(await new AskAdapter(platformAskRecords(teamId)).awaitable.resolveAwait({ recordId: askId, edge: 'Response' }));
+    seen.push((await postgresRunHostStore.waits.arrivals({ waitId })).arrivals);
     return { result: { parked: false } };
   });
 }
 
-describe('a closed ask wakes the run parked on it', () => {
-  it('an expired ask: sweep → a wake row → draining resumes the run, and the await resolves empty', async () => {
+describe('a closed ask reaches the run waiting on it', () => {
+  it('an expired ask: the sweep reports it gone, which strands the wait and wakes nothing', async () => {
     const { runId, ask } = await runParkedOnAsk();
-    const seen: AwaitResolution[] = [];
-    awaitReadsTheAsk(ask.id, seen);
 
-    // Still open: nothing to wake.
+    // Still open: nothing delivered.
     await sweep();
     expect(await wakeRows()).toEqual([]);
+    expect(await stranded(runId)).toEqual([]);
 
     await cancelAsk(platformAskRecords(teamId), { id: ask.id });
-    // Two overlapping sweeps before the drain gets there fold onto one row.
     await sweep();
     await sweep();
-    expect(await wakeRows()).toEqual([{ adapterType: ASK_ADAPTER_TYPE, teamId, correlationKey: ask.id }]);
+    await drainUntilIdle({ owner: 'test', teamId });
+    expect(await wakeRows()).toEqual([]);
     expect(resumeMovementFiringMock).not.toHaveBeenCalled();
-
-    await drainUntilIdle({ owner: 'test', teamId });
-
-    expect(resumeMovementFiringMock).toHaveBeenCalledTimes(1);
-    expect(resumeMovementFiringMock).toHaveBeenCalledWith(expect.objectContaining({ runId, reenter: true }));
-    expect(seen).toEqual([{ status: 'empty' }]);
-    expect(await postgresRunHostStore.correlations.correlated({ adapterType: ASK_ADAPTER_TYPE, teamId, correlationKey: ask.id })).toEqual([]);
-    const park = await getAutomationsQb(['parked_run'])
-      .selectFrom('parked_run')
-      .where('run_id', '=', runId)
-      .where('address', '=', ADDRESS)
-      .select('id')
-      .executeTakeFirst();
-    expect(park).toBeUndefined();
-    expect(await wakeRows()).toEqual([]);
-
-    // Once woken the ask drops out of the sweep, and a stray wake for the
-    // already-resumed key drives nothing.
-    await sweep();
-    expect(await wakeRows()).toEqual([]);
-    await enqueueAwaitWake({ adapterType: ASK_ADAPTER_TYPE, teamId, correlationKey: ask.id });
-    await drainUntilIdle({ owner: 'test', teamId });
-    expect(resumeMovementFiringMock).toHaveBeenCalledTimes(1);
+    expect(await stranded(runId)).toEqual([{ edge: 'Response', key: ask.id }]);
   });
 
-  it('an answered ask whose wake was lost (no notifier) gets exactly one wake row', async () => {
-    const { ask } = await runParkedOnAsk();
-    // The bare lattice transition, without the door's notifier: the wake an
-    // answer would have queued never was.
+  it('an answered ask whose delivery was lost (no notifier) wakes its wait exactly once', async () => {
+    const { runId, ask, waitId } = await runParkedOnAsk();
+    const seen: ListedArrival[][] = [];
+    awaitReadsTheWait(waitId, seen);
+    // The bare lattice transition, without the door's notifier: the arrival an
+    // answer would have delivered never was.
     expect((await answerAsk(platformAskRecords(teamId), { id: ask.id, raw: 'true' })).kind).toBe('settled');
     expect(await wakeRows()).toEqual([]);
 
     await sweep();
     await sweep();
-    expect(await wakeRows()).toEqual([{ adapterType: ASK_ADAPTER_TYPE, teamId, correlationKey: ask.id }]);
-  });
-
-  it('the cancel door queues the wake itself, before any sweep', async () => {
-    // The composed deployment's wiring: the engine is here to be woken.
-    notifyEngineOfSettledAsks();
-    const { ask } = await runParkedOnAsk();
-    const seen: AwaitResolution[] = [];
-    awaitReadsTheAsk(ask.id, seen);
-
-    expect((await cancelAskAndWake({ id: ask.id })).ok).toBe(true);
-    expect(await wakeRows()).toEqual([{ adapterType: ASK_ADAPTER_TYPE, teamId, correlationKey: ask.id }]);
+    expect(await wakeRows()).toEqual([{ waitId, runId, address: ADDRESS }]);
 
     await drainUntilIdle({ owner: 'test', teamId });
-    expect(seen).toEqual([{ status: 'empty' }]);
-    expect(await postgresRunHostStore.correlations.correlated({ adapterType: ASK_ADAPTER_TYPE, teamId, correlationKey: ask.id })).toEqual([]);
+    expect(resumeMovementFiringMock).toHaveBeenCalledTimes(1);
+    expect(resumeMovementFiringMock).toHaveBeenCalledWith(expect.objectContaining({ runId, reenter: true }));
+    expect(seen).toEqual([[expect.objectContaining({ landing: expect.objectContaining({ recordId: ask.id }) })]]);
+    expect(await wakeRows()).toEqual([]);
+
+    // A later sweep delivers the same answer again: kept once, it wakes nothing.
+    await sweep();
+    expect(await wakeRows()).toEqual([]);
+  });
+
+  it('the cancel door reports the ask gone itself, before any sweep', async () => {
+    // The composed deployment's wiring: the engine is here to be told.
+    notifyEngineOfSettledAsks();
+    const { runId, ask } = await runParkedOnAsk();
+
+    expect((await cancelAskAndWake({ id: ask.id })).ok).toBe(true);
+    expect(await wakeRows()).toEqual([]);
+    expect(await stranded(runId)).toEqual([{ edge: 'Response', key: ask.id }]);
   });
 
   it('a run parked before ask was a module: the link-page answer wakes it, and the await lands', async () => {
     notifyEngineOfSettledAsks();
     // The ask row exactly as the built-in ask store wrote it (the table mints
     // the id; the token is the old store's shape).
-    const { runId, ask } = await runParkedOnAsk(async (parkedRunId) => {
+    const { runId, ask, waitId } = await runParkedOnAsk(async (parkedRunId) => {
       const row = await getAsksQb(['ask'])
         .insertInto('ask')
         .values({
@@ -256,20 +246,14 @@ describe('a closed ask wakes the run parked on it', () => {
       if (raised === null) throw new Error('the old-shape ask row did not read back');
       return raised;
     });
-    const seen: AwaitResolution[] = [];
-    awaitReadsTheAsk(ask.id, seen);
+    const seen: ListedArrival[][] = [];
+    awaitReadsTheWait(waitId, seen);
 
     expect(await answerAskByToken(ask.token, 'true')).toMatchObject({ kind: 'answered' });
-    expect(await wakeRows()).toEqual([{ adapterType: ASK_ADAPTER_TYPE, teamId, correlationKey: ask.id }]);
+    expect(await wakeRows()).toEqual([{ waitId, runId, address: ADDRESS }]);
 
     await drainUntilIdle({ owner: 'test', teamId });
     expect(resumeMovementFiringMock).toHaveBeenCalledWith(expect.objectContaining({ runId, reenter: true }));
-    expect(seen).toEqual([
-      {
-        status: 'landed',
-        correlationKey: ask.id,
-        landings: [{ recordId: ask.id, recordType: 'Check Response', fields: { Answer: true } }],
-      },
-    ]);
+    expect(seen).toEqual([[expect.objectContaining({ landing: expect.objectContaining({ recordId: ask.id }) })]]);
   });
 });

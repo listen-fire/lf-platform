@@ -4,17 +4,17 @@
 //   open → expired    the explicit cancel; answering an expired ask loses too
 //
 // Plus what the table adds to the module's lattice: the guard that refuses a
-// settle another door beat, the wake a settle queues (and the one a refused
-// settle does not), and asks raised before ask was a module — the same rows,
+// settle another door beat, the arrival a settle delivers (and the one a
+// refused settle does not), and asks raised before ask was a module — the same rows,
 // answered and awaited exactly as before.
 
 import { randomBytes, randomUUID } from 'node:crypto';
 
-const enqueueAwaitWakeMock = jest.fn();
+const deliverArrivalsMock = jest.fn();
 const notifyWorkMock = jest.fn();
-jest.mock('../../movement_engine/await_wake', () => ({
-  ...jest.requireActual('../../movement_engine/await_wake'),
-  enqueueAwaitWake: (...a: unknown[]) => enqueueAwaitWakeMock(...a),
+jest.mock('../../inbound/listen_door', () => ({
+  ...jest.requireActual('../../inbound/listen_door'),
+  deliverArrivals: (...a: unknown[]) => deliverArrivalsMock(...a),
 }));
 jest.mock('../../work/drain', () => ({
   ...jest.requireActual('../../work/drain'),
@@ -143,32 +143,37 @@ describe('the asks table as the ask module\'s kv (real DB)', () => {
     expect(await other.get(`token:${ask.token}`)).toBeUndefined();
   });
 
-  describe('the wake a settle queues', () => {
-    it('with the engine notifier registered, a cancel queues one wake for the ask and kicks the drain', async () => {
+  describe('the arrival a settle delivers', () => {
+    // A settle is the ask's `Response` arrival, keyed by the ask's id: an
+    // answer lands the response; a cancel reports the ask gone.
+    const deliveredFor = (askId: string, arrival: Record<string, unknown>) =>
+      expect.objectContaining({ teamId, arrivals: [expect.objectContaining({ edge: 'Response', key: askId, ...arrival })] });
+
+    it('with the engine notifier registered, a cancel delivers the ask gone and kicks the drain', async () => {
       notifyEngineOfSettledAsks();
       const ask = await createAsk({ teamId, family: 'Check', prompt: 'Ship it?' });
       expect(await cancelAskAndWake({ id: ask.id })).toMatchObject({ ok: true });
-      expect(enqueueAwaitWakeMock).toHaveBeenCalledTimes(1);
-      expect(enqueueAwaitWakeMock).toHaveBeenCalledWith({ adapterType: 'ask', teamId, correlationKey: ask.id });
+      expect(deliverArrivalsMock).toHaveBeenCalledTimes(1);
+      expect(deliverArrivalsMock).toHaveBeenCalledWith(deliveredFor(ask.id, { gone: true }));
       expect(notifyWorkMock).toHaveBeenCalledTimes(1);
     });
 
-    it('with nothing registered (asks-only), a cancel queues no wake', async () => {
+    it('with nothing registered (asks-only), a cancel delivers nothing', async () => {
       const ask = await createAsk({ teamId, family: 'Check', prompt: 'Ship it?' });
       expect(await cancelAskAndWake({ id: ask.id })).toMatchObject({ ok: true });
-      expect(enqueueAwaitWakeMock).not.toHaveBeenCalled();
+      expect(deliverArrivalsMock).not.toHaveBeenCalled();
       expect(notifyWorkMock).not.toHaveBeenCalled();
     });
 
-    it('a refused cancel (already settled) wakes nothing', async () => {
+    it('a refused cancel (already settled) delivers nothing', async () => {
       const ask = await createAsk({ teamId, family: 'Check', prompt: 'Ship it?' });
       await answerAskByToken(ask.token, true);
       notifyEngineOfSettledAsks();
       expect(await cancelAskAndWake({ id: ask.id })).toMatchObject({ ok: false, reason: 'settled' });
-      expect(enqueueAwaitWakeMock).not.toHaveBeenCalled();
+      expect(deliverArrivalsMock).not.toHaveBeenCalled();
     });
 
-    it('a Response written in movement code wakes like any other door', async () => {
+    it('a Response written in movement code is delivered like any other door', async () => {
       notifyEngineOfSettledAsks();
       const ask = await createAsk({ teamId, family: 'Check', prompt: 'Ship it?' });
       const adapter = await resolveAdapter({ adapterType: 'ask', teamId });
@@ -178,16 +183,15 @@ describe('the asks table as the ask module\'s kv (real DB)', () => {
         parentLinks: [{ recordType: 'Check', externalId: ask.id, edgeName: 'Response' }],
         mutationContext: { source: { type: 'agent' }, occurredAt: new Date().toISOString() },
       });
-      expect(enqueueAwaitWakeMock).toHaveBeenCalledWith({ adapterType: 'ask', teamId, correlationKey: ask.id });
+      expect(deliverArrivalsMock).toHaveBeenCalledWith(deliveredFor(ask.id, {}));
     });
   });
 
-  it('an ask raised before ask was a module answers, wakes and resolves as before', async () => {
+  it('an ask raised before ask was a module answers and is delivered as before', async () => {
     notifyEngineOfSettledAsks();
     // The row exactly as the built-in ask store wrote it: the table mints the
-    // id and the token is the old store's shape. A run parked on it holds only
-    // the ask's id (its correlation key), which is all the wake and the
-    // re-entered await read.
+    // id and the token is the old store's shape. A run waiting on it waits on
+    // the ask's id, which is all its arrival is keyed by.
     const token = ASK_TOKEN_PREFIX + randomBytes(24).toString('base64url');
     const row = await getAsksQb(['ask'])
       .insertInto('ask')
@@ -204,8 +208,6 @@ describe('the asks table as the ask module\'s kv (real DB)', () => {
       .executeTakeFirstOrThrow();
 
     const adapter = await resolveAdapter({ adapterType: 'ask', teamId });
-    const point = { recordId: row.id, edge: 'Response' };
-    expect(await adapter.awaitable!.resolveAwait(point)).toEqual({ status: 'pending', correlationKey: row.id });
     expect(await adapter.getFieldValue({
       position: makeStablePosition({ adapterType: 'ask', recordType: 'Choose', recordId: row.id }),
       fieldId: 'Url',
@@ -213,11 +215,8 @@ describe('the asks table as the ask module\'s kv (real DB)', () => {
 
     const outcome = await answerAskByToken(token, 'Fund II');
     expect(outcome).toMatchObject({ kind: 'answered', ask: { id: row.id, answer: 'Fund II' } });
-    expect(enqueueAwaitWakeMock).toHaveBeenCalledWith({ adapterType: 'ask', teamId, correlationKey: row.id });
-    expect(await adapter.awaitable!.resolveAwait(point)).toEqual({
-      status: 'landed',
-      correlationKey: row.id,
-      landings: [{ recordId: row.id, recordType: 'Choose Response', fields: { Answer: 'Fund II' } }],
-    });
+    expect(deliverArrivalsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ teamId, arrivals: [expect.objectContaining({ edge: 'Response', key: row.id })] }),
+    );
   });
 });

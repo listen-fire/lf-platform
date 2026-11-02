@@ -167,24 +167,6 @@ export function mergeInstanceSchemas(
     if (!described(positions[name])) positions[name] = position;
   }
 
-  const eventNarrowingValues =
-    base.eventNarrowingValues === undefined || next.eventNarrowingValues === undefined
-      ? (base.eventNarrowingValues ?? next.eventNarrowingValues)
-      : Object.fromEntries(
-          [
-            ...new Set([
-              ...Object.keys(base.eventNarrowingValues),
-              ...Object.keys(next.eventNarrowingValues),
-            ]),
-          ].map((prefix) => [
-            prefix,
-            {
-              ...(base.eventNarrowingValues?.[prefix] ?? {}),
-              ...(next.eventNarrowingValues?.[prefix] ?? {}),
-            },
-          ]),
-        );
-
   const unions = mergeRecords(base.unions, next.unions);
   const unionDisplayNames = mergeRecords(base.unionDisplayNames, next.unionDisplayNames);
   const createShapes = mergeRecords(base.createShapes, next.createShapes);
@@ -193,9 +175,6 @@ export function mergeInstanceSchemas(
   // Scope-invariant facts (the projection derives them from the FULL entry list,
   // never from what a scope happened to describe) — first answer wins.
   const supportsInPlaceUpdate = base.supportsInPlaceUpdate ?? next.supportsInPlaceUpdate;
-  const eventPosition = base.eventPosition ?? next.eventPosition;
-  const eventPositions = base.eventPositions ?? next.eventPositions;
-  const eventNarrowingKeys = base.eventNarrowingKeys ?? next.eventNarrowingKeys;
 
   return {
     positions,
@@ -207,9 +186,5 @@ export function mergeInstanceSchemas(
     ...(supportsInPlaceUpdate !== undefined ? { supportsInPlaceUpdate } : {}),
     ...(refinements !== undefined ? { refinements } : {}),
     ...(genericLandings !== undefined ? { genericLandings } : {}),
-    ...(eventPosition !== undefined ? { eventPosition } : {}),
-    ...(eventPositions !== undefined ? { eventPositions } : {}),
-    ...(eventNarrowingKeys !== undefined ? { eventNarrowingKeys } : {}),
-    ...(eventNarrowingValues !== undefined ? { eventNarrowingValues } : {}),
   };
 }

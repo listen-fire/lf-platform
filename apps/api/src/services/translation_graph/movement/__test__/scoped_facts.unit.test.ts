@@ -54,14 +54,6 @@ const base = { adapterType: 'attio', teamId: 'team-1' as TeamId };
 beforeEach(() => clearIntrospectionCache());
 
 describe('scoped describes state the same facts as full describes', () => {
-  it('eventPosition is scope-invariant (never recomputed from the scoped subset)', async () => {
-    const scoped = await cachedAdapterInstance({ ...base, types: ['Companies'] });
-    clearIntrospectionCache();
-    const full = await cachedAdapterInstance(base);
-    expect(full.projection.schema.eventPosition).toBe('Webhook Event');
-    expect(scoped.projection.schema.eventPosition).toBe('Webhook Event'); // NOT 'Companies'
-  });
-
   it('out-of-scope edge targets resolve to natural names, exactly as in the full describe', async () => {
     const scoped = await cachedAdapterInstance({ ...base, types: ['Companies'] });
     const edges = scoped.projection.schema.positions['Companies'].edges;

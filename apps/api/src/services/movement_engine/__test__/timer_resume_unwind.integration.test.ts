@@ -91,8 +91,6 @@ const ATTIO_SCHEMA: InstanceSchema = {
   collections: {},
   unions: { [EVENT]: graftVariants },
   writableRoots: {},
-  eventPosition: EVENT,
-  eventPositions: [{ position: EVENT }],
 };
 
 function buildCatalog(): CatalogSnapshot {

@@ -157,7 +157,6 @@ const manualSchema: InstanceSchema = {
   positions: { Invocation: { properties: { Text: 'text' }, edges: {} } },
   collections: {},
   writableRoots: {},
-  eventPosition: 'Invocation',
 };
 
 const catalog = staticCatalogSnapshot({

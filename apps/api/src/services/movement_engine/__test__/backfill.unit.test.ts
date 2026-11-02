@@ -363,7 +363,7 @@ const BACKFILL = [
   '  }',
   '}',
   '',
-  'listen to runs {} fire backfill',
+  'listen to runs-[:Invocations]-> fire backfill',
 ].join('\n');
 
 const COMPANIES: CompanyRow[] = [
@@ -573,7 +573,7 @@ const BACKFILL_BINDING_WHERE = [
   '  }',
   '}',
   '',
-  'listen to runs {} fire backfill',
+  'listen to runs-[:Invocations]-> fire backfill',
 ].join('\n');
 
 describe('a local `=` binding resolves inside a hop WHERE', () => {
@@ -627,7 +627,7 @@ describe('a local `=` binding resolves inside a hop WHERE', () => {
       '  }',
       '}',
       '',
-      'listen to runs {} fire backfill',
+      'listen to runs-[:Invocations]-> fire backfill',
     ].join('\n');
     const source = makeCollectionSource(COMPANIES);
     const kg = makeFakeKg();

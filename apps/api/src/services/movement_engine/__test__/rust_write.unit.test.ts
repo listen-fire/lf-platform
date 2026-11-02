@@ -1478,7 +1478,7 @@ describe('parks in the Rust engine', () => {
     // A block's meta edges bound as a name: the one kind besides a body's
     // own shape (the crate's tests) this engine does not rebuild.
     const state: AnyParkedScopeState = {
-      version: 2,
+      version: 3,
       address: 's2.b0.s0',
       bindingName: null,
       scopeChain: [{ bindings: {} }, { bindings: { x: { kind: 'blockMeta', edges: {} } } }],

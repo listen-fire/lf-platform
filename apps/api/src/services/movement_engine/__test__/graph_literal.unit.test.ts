@@ -76,7 +76,6 @@ import { runMovement, resumeMovement } from '@listen-fire/legacy-engine/dispatch
 import { LANGUAGE_VERSION, fromCatalogSnapshot } from 'movement-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import type { ParkSink } from '@listen-fire/legacy-engine/services/movement_engine/run';
-import type { CallbackSink } from 'movement-engine/public/host';
 import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
 
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
@@ -260,28 +259,10 @@ const PRELUDE = [
   '',
 ].join('\n');
 
-/** A fake callback sink — the cheapest REAL park: minting a callback captures
- *  the enclosing scope through the same serialiser a parked ask writes. */
-function makeFakeCallbackSink() {
-  const mints: Array<{ id: string; state: ParkedScopeState }> = [];
-  const sink = {
-    async mint(input: { state: ParkedScopeState }) {
-      const id = `cb_fake${mints.length + 1}`;
-      mints.push({ id, state: input.state });
-      return { id, url: `https://api.test/api/cb/${id}` };
-    },
-    async calls() {
-      return [];
-    },
-  } as unknown as CallbackSink;
-  return { sink, mints };
-}
-
 interface RunAdapters {
   email: Adapter;
   attio?: Adapter;
   dropbox?: Adapter;
-  callbacks?: { sink: CallbackSink };
   parkSink?: ParkSink;
 }
 
@@ -308,7 +289,6 @@ function run(source: string, payload: Record<string, unknown>, adapters: RunAdap
         }),
       },
       park: {
-        ...(adapters.callbacks ? { callbacks: adapters.callbacks.sink } : {}),
         ...(adapters.parkSink ? { sink: adapters.parkSink } : {}),
       },
     }),

@@ -1,5 +1,5 @@
 // A parked state names its contract version, and every entry that reads one
-// back (a resume, a race settlement, a callback body) checks it before it
+// back (a resume, a race settlement) checks it before it
 // rehydrates anything. Each engine reads its own version: the TypeScript
 // engine (language versions 1–4) writes and reads 1, the Rust engine (5 on)
 // writes and reads 2. A version neither reads, or the other engine's, is
@@ -12,7 +12,7 @@ import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { createManualAdapter } from '../../translation_graph/adapters/manual';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import { teamOfTenant } from '../../translation_graph/movement/tenant';
-import { fireCallbackBody, resumeMovement, runMovement, settleRaceFrame } from '@listen-fire/legacy-engine/dispatch';
+import { resumeMovement, runMovement, settleRaceFrame } from '@listen-fire/legacy-engine/dispatch';
 import { makeFakeParkSink, makeTestHost } from 'movement-engine/public/testing';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000078');
@@ -136,13 +136,6 @@ describe.each(ENGINES)('a parked state on the $engine engine (language version $
     const state = restamped(await parkedState(pin), 3);
     const refused = runInput(pin);
     await expect(settleRaceFrame({ ...refused.input, state, frameAddress: 's0' })).rejects.toThrow(UNREAD);
-    expect(refused.resolved).toEqual([]);
-  });
-
-  it('refuses a version this release does not read on a callback body, before anything is rehydrated', async () => {
-    const state = restamped(await parkedState(pin), 3);
-    const refused = runInput(pin);
-    await expect(fireCallbackBody({ ...refused.input, state, values: {}, callIndex: 0 })).rejects.toThrow(UNREAD);
     expect(refused.resolved).toEqual([]);
   });
 });

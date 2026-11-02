@@ -226,7 +226,7 @@ describe('EmailAdapter — schema introspection', () => {
     expect(email?.displayName).toBe('Email');
     expect(email?.readable).toBe(false);
     expect(email?.writable).toBe(false);
-    expect(email?.fires).toBe(true);
+    expect(email?.listenable).toBe(true);
     // The retired indirection stays retired: nothing describes it.
     expect(await adapter.describe('Email Received')).toBeNull();
   });
