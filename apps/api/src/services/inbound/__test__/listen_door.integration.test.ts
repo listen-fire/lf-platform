@@ -16,7 +16,8 @@ import type { TriggerRunId } from '../../../generated/kysely/automations/Trigger
 import { arrivalReceiptKey } from 'movement-engine/public/inbound';
 
 import { getAutomationsQb } from '../../../lib/kysely';
-import { claimReceipt, keepJudgedDelivery, type FireRow, type SavedListen } from '../listen_door';
+import { recordWrite } from '../../lf_store/listens';
+import { claimReceipt, keepJudgedDelivery, type FireRow, type SavedListen, type Undecided } from '../listen_door';
 
 const PIPELINE = 'listen:polls.lf:tally:0a1b2c3d';
 const RUN = { triggerType: 'webhook', recordId: 't1', payload: { pressed: 't1' }, movementVersionId: null };
@@ -35,6 +36,7 @@ afterEach(async () => {
   await sql`delete from automations.arrival where team_id = ${teamId}::uuid`.execute(getAutomationsQb(['arrival']));
   await sql`delete from automations.arrival_identity where team_id = ${teamId}::uuid`.execute(getAutomationsQb(['arrival_identity']));
   await sql`delete from automations.delivery where team_id = ${teamId}::uuid`.execute(getAutomationsQb(['delivery']));
+  await sql`delete from automations.write_ledger where team_id = ${teamId}::uuid`.execute(getAutomationsQb(['write_ledger']));
 });
 
 const ARRIVAL: Exclude<Arrival, { gone: true }> = {
@@ -142,18 +144,21 @@ describe('keepJudgedDelivery: a judged delivery in one write', () => {
         minted: [{ listen: saved, arrival: ARRIVAL, index: 0, runId, receipt: RECEIPT }],
         unjudged: [
           {
-            pipeline: 'listen:polls.lf:count:9f8e7d6c',
-            arrival: RECEIPT,
-            file: 'polls.lf',
-            movement: 'count',
-            edge: 'Interactions',
-            adapter: 'chat',
-            recordId: 't1',
-            landing: ARRIVAL.landing,
-            reason: 'the arrival carries no Messages record',
-            cause: null,
-            at: now.toISOString(),
-            attempt: 0,
+            listen: saved,
+            arrival: ARRIVAL,
+            fact: {
+              pipeline: 'listen:polls.lf:count:9f8e7d6c',
+              arrival: RECEIPT,
+              file: 'polls.lf',
+              movement: 'count',
+              edge: 'Interactions',
+              adapter: 'chat',
+              recordId: 't1',
+              landing: ARRIVAL.landing,
+              reason: 'the arrival carries no Messages record',
+              at: now.toISOString(),
+              attempt: 0,
+            },
           },
         ],
         lines: [],
@@ -177,6 +182,41 @@ describe('keepJudgedDelivery: a judged delivery in one write', () => {
     const facts = await sql<{ pipeline: string; adapter: string | null; landing: unknown; delivery_id: string }>`
       select pipeline, adapter, landing, delivery_id::text from automations.arrival_unjudged where team_id = ${teamId}::uuid`.execute(getAutomationsQb(['arrival_unjudged']));
     expect(facts.rows).toEqual([{ pipeline: 'listen:polls.lf:count:9f8e7d6c', adapter: 'chat', landing: ARRIVAL.landing, delivery_id: deliveryId }]);
+  });
+
+  it('an arrival a listen could not judge names the run whose write of its record caused it', async () => {
+    const saved = listen();
+    const writer = fire();
+    await claimReceipt({ fire: writer, run: RUN, chain: [] });
+    const now = new Date();
+    await recordWrite(
+      { tenant: teamId },
+      { adapter: 'chat', recordType: 'Interaction', externalId: 't1', runId: writer.runId, depth: 0, at: new Date(now.getTime() - 1000).toISOString(), forgetBefore: new Date(now.getTime() - 60_000).toISOString() },
+    );
+    const undecided = (arrival: Exclude<Arrival, { gone: true }>): Undecided => ({
+      listen: saved,
+      arrival,
+      fact: { pipeline: PIPELINE, arrival: arrivalReceiptKey(arrival), file: 'polls.lf', movement: 'tally', edge: 'Interactions', adapter: 'chat', recordId: arrival.landing.recordId ?? null, landing: arrival.landing, reason: 'a lookup failed', at: now.toISOString(), attempt: 0 },
+    });
+    const elsewhere: Exclude<Arrival, { gone: true }> = { ...ARRIVAL, identity: 'press-2', landing: { recordId: 't2', recordType: 'Interaction', fields: { Id: 't2' } } };
+
+    await keepJudgedDelivery({
+      teamId,
+      subscriptionId: 'sub-1',
+      adapterType: 'chat',
+      externalId: 'ext-3',
+      source: 'webhook',
+      arrivals: [ARRIVAL, elsewhere],
+      judged: { minted: [], unjudged: [undecided(ARRIVAL), undecided(elsewhere)], lines: [] },
+      now,
+    });
+
+    const facts = await sql<{ record_id: string; cause: string | null }>`
+      select record_id, cause from automations.arrival_unjudged where team_id = ${teamId}::uuid order by record_id`.execute(getAutomationsQb(['arrival_unjudged']));
+    expect(facts.rows).toEqual([
+      { record_id: 't1', cause: writer.runId },
+      { record_id: 't2', cause: null },
+    ]);
   });
 
   it('a redelivery under the same external id keeps nothing more', async () => {

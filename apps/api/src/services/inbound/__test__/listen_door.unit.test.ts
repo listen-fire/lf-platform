@@ -83,7 +83,9 @@ describe('judgeArrivals', () => {
     const judged = judgeArrivals({ listens: [saved], delivery: { adapterType: 'chat', credentialsId: null }, arrivals: [arrival], now: NOW });
 
     expect(judged.minted).toEqual([]);
-    expect(judged.unjudged).toEqual([
+    expect(judged.unjudged.map((u) => u.listen)).toEqual([saved]);
+    expect(judged.unjudged.map((u) => u.arrival)).toEqual([arrival]);
+    expect(judged.unjudged.map((u) => u.fact)).toEqual([
       {
         pipeline: saved.pipeline,
         arrival: arrivalReceiptKey(arrival),
@@ -94,7 +96,6 @@ describe('judgeArrivals', () => {
         recordId: null,
         landing: arrival.landing,
         reason: "the arrival carries no Messages record, which this listen's filter on it reads",
-        cause: null,
         at: NOW.toISOString(),
         attempt: 0,
       },
@@ -107,7 +108,7 @@ describe('judgeArrivals', () => {
   it('a replay`s facts carry its attempt', () => {
     const judged = judgeArrivals({ listens: [listen()], delivery: { adapterType: 'chat', credentialsId: null }, arrivals: [arrivalOf(UNDECIDED)], now: NOW, attempt: 2 });
 
-    expect(judged.unjudged.map((fact) => fact.attempt)).toEqual([2]);
+    expect(judged.unjudged.map((u) => u.fact.attempt)).toEqual([2]);
   });
 
   it('a connection`s delivery is heard by its own listens and those of no connection, never another`s', () => {

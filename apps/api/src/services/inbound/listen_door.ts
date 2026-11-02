@@ -49,6 +49,7 @@ import { getAutomationsQb } from '../../lib/kysely';
 import { getAdapterManifest } from '../translation_graph/adapters/registry';
 import { resolveAdapter } from '../translation_graph/adapters/resolve';
 import { deliveryRowStore } from '../movement_engine/run_host_deliveries';
+import { chainBefore, loopSettings } from './loop_breaker';
 
 // ── A saved listen, as its trigger row keeps it ─────────────────────────────
 
@@ -143,11 +144,19 @@ export interface DeliveredBy {
   credentialsId: string | null;
 }
 
+/** A listen that could not judge an arrival: the fact `unjudged.note` keeps
+ *  (its delivery and the run that caused it are found as it is kept), and the
+ *  listen and arrival that cause is found by. */
+export interface Undecided {
+  listen: SavedListen;
+  arrival: Exclude<Arrival, { gone: true }>;
+  fact: Omit<UnjudgedArrival, 'deliveryId' | 'cause'>;
+}
+
 export interface Judged {
   minted: MintedRun[];
-  /** The listens that could not judge an arrival, as `unjudged.note` keeps
-   *  each (the delivery's id is set as it is kept). */
-  unjudged: Array<Omit<UnjudgedArrival, 'deliveryId'>>;
+  /** The listens that could not judge an arrival. */
+  unjudged: Undecided[];
   /** What ran nothing, said once per delivery. */
   lines: string[];
 }
@@ -196,18 +205,21 @@ export function judgeArrivals(input: {
         taken = true;
         say(`${named}: an arrival on ${arrival.edge} cannot be judged (${verdict.undecided}): it runs nothing`);
         unjudged.push({
-          pipeline: listen.pipeline,
-          arrival: arrivalReceiptKey(arrival),
-          file: listen.file,
-          movement: listen.plan.movement,
-          edge: arrival.edge,
-          adapter: delivery.adapterType,
-          recordId: arrival.landing.recordId ?? null,
-          landing: arrival.landing,
-          reason: verdict.undecided,
-          cause: null,
-          at: now.toISOString(),
-          attempt: input.attempt ?? 0,
+          listen,
+          arrival,
+          fact: {
+            pipeline: listen.pipeline,
+            arrival: arrivalReceiptKey(arrival),
+            file: listen.file,
+            movement: listen.plan.movement,
+            edge: arrival.edge,
+            adapter: delivery.adapterType,
+            recordId: arrival.landing.recordId ?? null,
+            landing: arrival.landing,
+            reason: verdict.undecided,
+            at: now.toISOString(),
+            attempt: input.attempt ?? 0,
+          },
         });
         continue;
       }
@@ -229,6 +241,27 @@ export function judgeArrivals(input: {
     if (!taken) for (const line of misfitLines) say(line);
   }
   return { minted, unjudged, lines };
+}
+
+/**
+ * The facts of `undecided`, kept with the delivery `deliveryId`, each naming
+ * the run whose write caused its arrival (the loop breaker's ledger, as a run
+ * the arrival fired would continue that run's chain), else none. A ledger
+ * that cannot answer fails the caller, so the delivery is tried again.
+ */
+export async function unjudgedFacts(input: {
+  teamId: TeamId;
+  undecided: readonly Undecided[];
+  deliveryId: string;
+  now: Date;
+}): Promise<UnjudgedArrival[]> {
+  const settings = loopSettings();
+  const facts: UnjudgedArrival[] = [];
+  for (const { listen, arrival, fact } of input.undecided) {
+    const chain = await chainBefore({ teamId: input.teamId, listen, arrival, now: input.now, settings });
+    facts.push({ ...fact, deliveryId: input.deliveryId, cause: chain.at(-1) ?? null });
+  }
+  return facts;
 }
 
 function credentialOf(listen: SavedListen): { credentialName?: string } {
@@ -400,7 +433,7 @@ export async function keepJudgedDelivery(input: {
       resendWindowMs: resendSeconds !== undefined ? resendSeconds * 1000 : DEFAULT_RESEND_WINDOW_MS,
     },
     waits,
-    unjudged: judged.unjudged.map((fact) => ({ ...fact, deliveryId: input.replayOf ?? deliveryId })),
+    unjudged: await unjudgedFacts({ teamId, undecided: judged.unjudged, deliveryId: input.replayOf ?? deliveryId, now }),
   });
   if (kept.kept) for (const line of judged.lines) logger.warn(`[ListenDoor] ${line}`);
   return { kept, deliveryId, fires };

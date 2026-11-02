@@ -35,7 +35,7 @@ import { notifyWork } from '../work/drain';
 import { pollSubscriptionId } from '../poll_source/worker';
 import { readKeptRequest, type CapturedRequest } from './captured_request';
 import { listenEdgeDigest, listenEdgeKeyOf } from './listen_edge';
-import { judgeArrivals, keepJudgedDelivery, savedListenOf, type SavedListen } from './listen_door';
+import { judgeArrivals, keepJudgedDelivery, savedListenOf, unjudgedFacts, type SavedListen } from './listen_door';
 
 /** What a replay did, said in lines a person reads. */
 export type ReplayOutcome =
@@ -179,7 +179,7 @@ export async function replayThroughListen(input: { teamId: TeamId; triggerId: Tr
   const lines: string[] = [];
   const attempt = await nextAttempt(teamId, listen.pipeline, arrivals);
   const judged = judgeArrivals({ listens: [listen], delivery: { adapterType, credentialsId }, arrivals, now, attempt });
-  for (const fact of judged.unjudged) {
+  for (const { fact } of judged.unjudged) {
     lines.push(`${named}: the arrival ${fact.arrival} on ${fact.edge} still cannot be judged (${fact.reason}): reported again, attempt ${attempt}`);
   }
   const stillUndecided = judged.unjudged.length > 0;
@@ -193,8 +193,9 @@ export async function replayThroughListen(input: { teamId: TeamId; triggerId: Tr
   }
   if (judged.minted.length === 0) {
     if (judged.unjudged.length > 0) {
+      const facts = await unjudgedFacts({ teamId, undecided: judged.unjudged, deliveryId: row.id, now });
       await inTransaction(async (trx) => {
-        for (const fact of judged.unjudged) await keepUnjudgedIn(trx, { tenant: teamId }, { ...fact, deliveryId: row.id });
+        for (const fact of facts) await keepUnjudgedIn(trx, { tenant: teamId }, fact);
       });
     } else if (lines.length === 0) {
       lines.push(`${named}: its filter does not take what delivery ${row.id} brought: nothing to run`);
