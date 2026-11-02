@@ -3,7 +3,9 @@
 // delivery's arrivals, through the platform's ordinary firing (the router's
 // gates, the run recorder, the engine host). A listen that changed or went
 // since the delivery judged the arrival runs nothing, and the waits the
-// delivery opened for a run that never started go with its row.
+// delivery opened for a run that never started go with its row. So does a
+// listen the loop breaker paused (loop_breaker.ts): the arrival is counted
+// as held, and its receipt taken, so a redelivery is not counted twice.
 
 import { arrivalTriggerOf } from 'movement-engine/public/inbound';
 import { logger } from 'movement-engine/public/log';
@@ -14,7 +16,6 @@ import type { TriggerRunId } from '../../generated/kysely/automations/TriggerRun
 import type { WorkHandler } from '../work/kinds';
 
 import { registerWorkHandler, WorkDeferred } from '../work/drain';
-import { platformTokenRegistry } from '../translation_graph/engine/platform_token_registry_db';
 import {
   dispatchTriggerByIdEvent,
   mapRecordingTriggerType,
@@ -26,7 +27,9 @@ import { shippedMovementForTrigger } from '../translation_graph/movement/execute
 import { getAutomationsQb } from '../../lib/kysely';
 import { dropUnstartedWaits } from '../movement_engine/run_host_waits';
 import { storeDb } from '../movement_engine/run_host_queue';
-import { claimReceipt, fireKeyOf, fireRowSchema, savedListenOf, type FireRow } from './listen_door';
+import { claimReceipt, fireKeyOf, fireRowSchema, savedListenOf, takeReceiptUnrun, type FireRow } from './listen_door';
+import { chainBefore, loopLine, loopSettings } from './loop_breaker';
+import { hold as holdListenArrival, setPaused as setListenPaused, states as listenStates } from '../lf_store/listens';
 
 async function runFireRow(payload: unknown): Promise<void> {
   const fire = fireRowSchema.parse(payload);
@@ -41,7 +44,33 @@ async function runFireRow(payload: unknown): Promise<void> {
     await dropUnstarted(fire);
     return;
   }
-  const event = arrivalTriggerOf({ pipelineInputId: listen.pipeline, adapterType: listen.plan.adapter, arrival: fire.arrival, now: new Date() });
+  const now = new Date();
+  const named = `${listen.file}:${listen.plan.movement}`;
+  const about = `the arrival ${fire.arrival.identity} on ${fire.arrival.edge}`;
+  // The loop breaker (loop_breaker.ts): a paused listen holds the arrival; one
+  // whose run would be past the loop depth is paused and holds it. A row
+  // taken again after its run row was written was judged then.
+  const scope = { tenant: teamId };
+  const judgedBefore = await runRowExists(runId);
+  const paused = judgedBefore ? null : ((await listenStates(scope, { pipelines: [listen.pipeline] }))[listen.pipeline]?.paused ?? null);
+  const settings = loopSettings();
+  const chain = judgedBefore || paused !== null ? [] : await chainBefore({ teamId, listen, arrival: fire.arrival, now, settings });
+  if (paused !== null || chain.length >= settings.depth) {
+    if (!(await takeReceiptUnrun(fire))) {
+      logger.warn(`[FireEvent] ${named} has taken ${about} before: this delivery runs nothing`);
+    } else {
+      if (paused === null) {
+        const line = loopLine(named, chain);
+        await setListenPaused(scope, { pipeline: listen.pipeline, paused: line });
+        logger.warn(`[FireEvent] ${line}`, { triggerId: fire.triggerId });
+      }
+      await holdListenArrival(scope, { pipeline: listen.pipeline });
+      logger.warn(`[FireEvent] ${named}: ${about} runs nothing, held: the listen is paused (LISTEN_LOOP)`);
+    }
+    await dropUnstarted(fire);
+    return;
+  }
+  const event = arrivalTriggerOf({ pipelineInputId: listen.pipeline, adapterType: listen.plan.adapter, arrival: fire.arrival, now });
   const movementRow = await getAutomationsQb(['trigger'])
     .selectFrom('trigger')
     .where('id', '=', fire.triggerId as TriggerId)
@@ -59,10 +88,11 @@ async function runFireRow(payload: unknown): Promise<void> {
       payload: JSON.parse(JSON.stringify(event)),
       movementVersionId: shipped.kind === 'shipped' ? shipped.movement.version.id : null,
     },
+    chain,
   });
   if (claim.kind === 'ran_before') {
     logger.warn(
-      `[FireEvent] ${listen.file}:${listen.plan.movement} has run the arrival ${fire.arrival.identity} on ${fire.arrival.edge} before: this delivery runs nothing`,
+      `[FireEvent] ${named} has run ${about} before: this delivery runs nothing`,
     );
     await dropUnstarted(fire);
     return;
@@ -72,7 +102,6 @@ async function runFireRow(payload: unknown): Promise<void> {
     triggerId: fire.triggerId,
     event,
     teamId,
-    platformTokenRegistry,
     existingRunId: runId,
     ...(fire.arrivalMark !== undefined ? { triggerMark: fire.arrivalMark } : {}),
   });
@@ -116,6 +145,11 @@ async function settleQueuedRun(input: { runId: TriggerRunId; teamId: TeamId; res
     .where('team_id', '=', input.teamId)
     .where('status', '=', 'running')
     .execute();
+}
+
+async function runRowExists(runId: TriggerRunId): Promise<boolean> {
+  const row = await getAutomationsQb(['trigger_run']).selectFrom('trigger_run').where('id', '=', runId).select('id').executeTakeFirst();
+  return row !== undefined;
 }
 
 /** The waits the delivery opened for this row's run, when the run never

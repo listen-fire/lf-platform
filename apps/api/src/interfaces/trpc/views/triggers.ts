@@ -29,6 +29,7 @@ import type { MovementId } from '../../../generated/kysely/automations/Movement'
 import { currentContext } from '../../../services/context';
 import { replayThroughListen, type ReplayOutcome } from '../../../services/inbound/listen_replay';
 import { showDeliveryRequest, type ShownRequest } from '../../../services/inbound/show_request';
+import { resumeLoopPaused } from '../../../services/inbound/loop_breaker';
 import { mq } from '../../../lib/message_queue';
 import { trpc } from '../trpc';
 import { getAutomationsQb, getKnowledgeQb } from '../../../lib/kysely';
@@ -731,10 +732,12 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
     // `listen` line out. See services/translation_graph/triggers/run_mode.ts.
 
     /**
-     * Resume an automation the loop guard paused (manual recovery, P7). Clears
-     * the guard-paused state, resets the guard's rate/budget windows so it
-     * starts clean, and logs who resumed it. Auto-resume is deliberately NOT the
-     * default — the looping condition usually persists and would oscillate.
+     * Resume an automation the loop guard or the loop breaker paused (manual
+     * recovery, P7). Clears the guard-paused state, resets the guard's
+     * rate/budget windows so it starts clean, clears the listen's
+     * `LISTEN_LOOP` pause and its count of held arrivals, and logs who resumed
+     * it. Auto-resume is deliberately NOT the default — the looping condition
+     * usually persists and would oscillate.
      *
      * The deliveries that arrived while paused are kept; `replayDelivery`
      * puts one through its listen again.
@@ -752,11 +755,13 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
           .select('id')
           .executeTakeFirst();
         if (!owned) throw new Error(`Automation ${input.triggerId} not found`);
-        return clearGuardPaused({
+        const guard = await clearGuardPaused({
           triggerId: input.triggerId,
           teamId: teamId as unknown as string,
           resumedBy: ctx.user.id,
         });
+        const loop = await resumeLoopPaused({ teamId, triggerId: input.triggerId as TriggerId, resumedBy: ctx.user.id });
+        return { resumed: guard.resumed || loop.resumed };
       }),
 
     /**

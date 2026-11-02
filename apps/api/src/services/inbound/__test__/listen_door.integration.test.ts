@@ -70,45 +70,45 @@ describe('claimReceipt: the run a fire_event row starts', () => {
   it('the first run of an arrival by a listen takes the receipt and is written queued', async () => {
     const first = fire();
 
-    expect(await claimReceipt({ fire: first, run: RUN })).toEqual({ kind: 'run' });
+    expect(await claimReceipt({ fire: first, run: RUN, chain: [] })).toEqual({ kind: 'run' });
 
     expect(await runRow(first.runId)).toEqual({ status: 'running', last_heartbeat_at: null, record_id: 't1' });
   });
 
   it('a row taken again before its run started runs it; once started, it is in hand', async () => {
     const first = fire();
-    await claimReceipt({ fire: first, run: RUN });
+    await claimReceipt({ fire: first, run: RUN, chain: [] });
 
-    expect(await claimReceipt({ fire: first, run: RUN })).toEqual({ kind: 'run' });
+    expect(await claimReceipt({ fire: first, run: RUN, chain: [] })).toEqual({ kind: 'run' });
 
     await getAutomationsQb(['trigger_run'])
       .updateTable('trigger_run')
       .set({ last_heartbeat_at: new Date() })
       .where('id', '=', first.runId as TriggerRunId)
       .execute();
-    expect(await claimReceipt({ fire: first, run: RUN })).toEqual({ kind: 'in_hand' });
+    expect(await claimReceipt({ fire: first, run: RUN, chain: [] })).toEqual({ kind: 'in_hand' });
   });
 
   it('another run of the same arrival by the same listen ran before, and writes no run', async () => {
-    await claimReceipt({ fire: fire(), run: RUN });
+    await claimReceipt({ fire: fire(), run: RUN, chain: [] });
     const again = fire();
 
-    expect(await claimReceipt({ fire: again, run: RUN })).toEqual({ kind: 'ran_before' });
+    expect(await claimReceipt({ fire: again, run: RUN, chain: [] })).toEqual({ kind: 'ran_before' });
     expect(await runRow(again.runId)).toBeUndefined();
   });
 
   it('another listen hearing the same arrival runs under its own receipt', async () => {
-    await claimReceipt({ fire: fire(), run: RUN });
+    await claimReceipt({ fire: fire(), run: RUN, chain: [] });
 
-    expect(await claimReceipt({ fire: fire({ pipeline: 'listen:polls.lf:count:9f8e7d6c' }), run: RUN })).toEqual({ kind: 'run' });
+    expect(await claimReceipt({ fire: fire({ pipeline: 'listen:polls.lf:count:9f8e7d6c' }), run: RUN, chain: [] })).toEqual({ kind: 'run' });
   });
 
   it('a forced replay runs past the listen`s receipt, under one of its own', async () => {
-    await claimReceipt({ fire: fire(), run: RUN });
+    await claimReceipt({ fire: fire(), run: RUN, chain: [] });
     const forced = fire({ forced: true });
 
-    expect(await claimReceipt({ fire: forced, run: RUN })).toEqual({ kind: 'run' });
-    expect(await claimReceipt({ fire: fire({ forced: true }), run: RUN })).toEqual({ kind: 'run' });
+    expect(await claimReceipt({ fire: forced, run: RUN, chain: [] })).toEqual({ kind: 'run' });
+    expect(await claimReceipt({ fire: fire({ forced: true }), run: RUN, chain: [] })).toEqual({ kind: 'run' });
   });
 });
 

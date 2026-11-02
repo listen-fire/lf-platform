@@ -417,6 +417,11 @@ export type ReceiptClaim =
   /** This run is in hand already (a row taken again after it started). */
   | { kind: 'in_hand' };
 
+/** The receipt a run of `fire` runs under: a forced replay's is its own. */
+function receiptKeyOf(fire: FireRow): string {
+  return fire.forced === true ? `${fire.receipt}#${fire.runId}` : fire.receipt;
+}
+
 /**
  * The receipt `(team, listen, arrival)` and the run's queued row, as one
  * write: the first run of an arrival by a listen takes it, and a redelivery,
@@ -430,9 +435,11 @@ export async function claimReceipt(input: {
    *  inserts a queued run (`running`, no heartbeat yet), which the firing
    *  then adopts by its id. */
   run: { triggerType: string; recordId: string | null; payload: unknown; movementVersionId: string | null };
+  /** The runs before it in its chain of writes and arrivals (loop_breaker.ts). */
+  chain: readonly string[];
 }): Promise<ReceiptClaim> {
   const { fire, run } = input;
-  const key = fire.forced === true ? `${fire.receipt}#${fire.runId}` : fire.receipt;
+  const key = receiptKeyOf(fire);
   return getAutomationsQb(['event_receipt', 'trigger_run'])
     .transaction()
     .execute(async (trx): Promise<ReceiptClaim> => {
@@ -445,15 +452,28 @@ export async function claimReceipt(input: {
       if (rows.length === 1) {
         if (existing === undefined) {
           await sql`
-            insert into automations.trigger_run (id, team_id, trigger_id, trigger_type, status, record_id, movement_version_id, trigger_payload, started_at, last_heartbeat_at, delivery_id)
+            insert into automations.trigger_run (id, team_id, trigger_id, trigger_type, status, record_id, movement_version_id, trigger_payload, started_at, last_heartbeat_at, delivery_id, chain)
             values (${fire.runId}::uuid, ${fire.teamId}::uuid, ${fire.triggerId}::text, ${run.triggerType}::text, 'running', ${run.recordId}::text,
-                    ${run.movementVersionId}::uuid, ${JSON.stringify(run.payload)}::text::jsonb, now(), null, ${fire.deliveryId}::uuid)`.execute(trx);
+                    ${run.movementVersionId}::uuid, ${JSON.stringify(run.payload)}::text::jsonb, now(), null, ${fire.deliveryId}::uuid, ${[...input.chain]}::text[])`.execute(trx);
         }
         return { kind: 'run' };
       }
       if (existing === undefined) return { kind: 'ran_before' };
       return existing.queued ? { kind: 'run' } : { kind: 'in_hand' };
     });
+}
+
+/**
+ * The receipt `(team, listen, arrival)` taken with no run, for an arrival
+ * its listen does not run (paused, or past the loop depth): a redelivery of
+ * it is then neither counted twice nor taken for the start of a new chain.
+ * `false` when a run of the listen took it before.
+ */
+export async function takeReceiptUnrun(fire: FireRow): Promise<boolean> {
+  const { rows } = await sql`
+    insert into automations.event_receipt (team_id, listen, key) values (${fire.teamId}::uuid, ${fire.pipeline}::text, ${receiptKeyOf(fire)}::text)
+    on conflict do nothing returning 1`.execute(getAutomationsQb(['event_receipt']));
+  return rows.length === 1;
 }
 
 export { arrivalTriggerOf };

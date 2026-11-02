@@ -37,6 +37,7 @@ import {
   SegmentDirectory,
   type ActingUserLookup,
 } from 'movement-engine/public/host';
+import { ledgeredAdapters } from '../../inbound/loop_breaker';
 import { makeRecorderParks } from '../../movement_engine/park_sink';
 import { postgresRunHostStore } from '../../movement_engine/run_host_store';
 import { parkSources } from 'movement-engine/public/run-host';
@@ -141,7 +142,12 @@ export function productionEngineHost(input: {
       close: (closing) =>
         closeSegmentWith(closing, { segments, table: adapters, locks, close: hostSegments.close }),
     },
-    adapters: { resolve: (resolution) => adapters.resolve(resolution), call: (call) => adapters.call(call) },
+    // A run's record writes go into the loop breaker's ledger; a test run has
+    // no run, and its writes are rehearsed.
+    adapters:
+      input.triggerRunId !== undefined
+        ? ledgeredAdapters(adapters, { teamId: input.teamId, runId: input.triggerRunId })
+        : { resolve: (resolution) => adapters.resolve(resolution), call: (call) => adapters.call(call) },
     llm: {
       client: billedLlmClient(makeAnthropicLlmClient({ cancel }), usage),
       extractCall: billedExtractCallClient(makeAnthropicExtractCallClient({ cancel }), usage),

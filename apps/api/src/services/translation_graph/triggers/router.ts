@@ -15,17 +15,12 @@ import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { handleError } from '../../../lib/errors';
 import { logger } from 'movement-engine/public/log';
 import { resolveAdapter } from '../adapters/resolve';
-import {
-  shouldDropAsNativeEcho,
-  type PlatformTokenRegistry,
-} from '../engine/platform_token_registry';
 import { loadTriggerById } from '../storage/tg_table';
 import {
   TriggerRunRecorder,
   type TriggerRunTriggerType,
 } from '../runs/trigger_run';
 import { runModeGate } from './run_mode';
-import { consultEchoSuppression } from './echo_suppression';
 import { consultActorGate } from './actor_gate';
 import * as loopGuard from '../../loop_guard';
 import { isWriteEffect } from 'movement-engine/public/trace';
@@ -53,8 +48,6 @@ export interface TriggerIdDispatchInput {
   event: TriggerEvent;
   /** Team scope (matches the trigger's team_id). */
   teamId: TeamId;
-  /** Layer 14.4 echo-drop registry. */
-  platformTokenRegistry?: PlatformTokenRegistry;
   /** Optional override for the trigger_type recorded on tg_run rows. */
   recordingTriggerType?: TriggerRunTriggerType;
   /** Dry-run mode — captures writes instead of committing. */
@@ -120,23 +113,6 @@ export async function dispatchTriggerByIdEvent(
     return { evaluations: [], droppedReason: 'engine_lf' };
   }
 
-  // 1. Layer 14.4 echo-drop at entry (matches `routeTrigger`).
-  if (input.platformTokenRegistry && input.event.actor) {
-    const drop = await shouldDropAsNativeEcho({
-      registry: input.platformTokenRegistry,
-      teamId: input.teamId,
-      adapterType: input.event.adapterType,
-      actor: input.event.actor,
-    });
-    if (drop) {
-      logger.info('[TGRouter] dispatchTriggerByIdEvent dropped as Listen-Fire echo', {
-        triggerId: input.triggerId,
-        adapterType: input.event.adapterType,
-      });
-      return { evaluations: [], droppedReason: 'native_echo' };
-    }
-  }
-
   const triggerRow = await loadTriggerById(input.triggerId);
   if (!triggerRow) {
     logger.warn('[TGRouter] dispatchTriggerByIdEvent: trigger not found', {
@@ -179,45 +155,17 @@ export async function dispatchTriggerByIdEvent(
     if (guardDisposition) return { evaluations: [], droppedReason: guardDisposition };
   }
 
-  // ── OPT-IN ECHO-SUPPRESSION (Phase 2, the 2-way-sync tool — NOT a guard) ──
-  // Sits at the inbound boundary alongside the floor + run_mode gate. If this
-  // listen has `suppress_self` on AND the source adapter confirms WE authored
-  // this change, skip the firing so the author's A↔B sync doesn't self-echo.
-  // Default off (no flag) → no consult. On but the adapter can't answer → a
-  // clearly-logged no-op (the author asked for something this source can't do).
-  // Skipped under dry-run (a rehearsal can't echo into production).
+  // A run's own echo is the loop breaker's (inbound/loop_breaker.ts): it
+  // caps every chain of writes and arrivals as a queued run starts.
   if (!dryRun) {
     const sourceAdapter = await resolveAdapter({
       adapterType: input.event.adapterType,
       teamId: input.teamId,
       credentialsId: triggerRow.credentialsId ?? undefined,
     });
-    const disposition = await consultEchoSuppression({
-      triggerConfig: triggerRow.config,
-      sourceAdapter,
-      event: input.event,
-      triggerId: input.triggerId,
-    });
-    if (disposition.kind === 'suppress') {
-      logger.info('[TGRouter] dispatch suppressed as the author\'s own echo (suppress_self)', {
-        triggerId: input.triggerId,
-        adapterType: input.event.adapterType,
-        reason: disposition.reason,
-      });
-      // Not dropped: the delivery stays kept and replayable; the queued
-      // run is settled naming the disposition (inbound/fire_event.ts).
-      return { evaluations: [], droppedReason: 'echo_suppressed' };
-    }
-    if (disposition.kind === 'no-op') {
-      logger.warn('[TGRouter] suppress_self on but unanswerable — firing as normal', {
-        triggerId: input.triggerId,
-        note: disposition.note,
-      });
-    }
 
     // ── OWNERSHIP GATE (§6.4b — registered actors only, where declared) ────
-    // After echo suppression (both consult the source adapter; echo answers
-    // "did WE write this", this answers "is the sender one of ours"). Slack
+    // It asks the source adapter "is the sender one of ours". Slack
     // is the declaring adapter today: its parser forwards every inner event,
     // bots included, so without this a listen+reply movement replies to its
     // own replies forever. Fail closed; the delivery stays replayable.

@@ -5,7 +5,6 @@ import { neverAsAny } from 'movement-engine/public/types';
 
 /** Why the dispatch produced no evaluations. */
 export type DroppedReason =
-  | 'native_echo'
   | 'trigger_not_found'
   | 'no_bound_tgs'
   | 'run_mode_off'
@@ -16,13 +15,6 @@ export type DroppedReason =
   // drop), or flagged for replay when no receipt was provided.
   | 'loop_guard_paused'
   | 'loop_guard_throttled'
-  // Opt-in echo-suppression (Phase 2). `echo_suppressed`: this listen has
-  // `suppress_self` on and the SOURCE adapter confirmed WE authored this
-  // inbound change — the firing is skipped so the author's 2-way sync
-  // doesn't self-echo. The event is RECORDED as suppressed (replayable),
-  // not dropped. Distinct from `native_echo` (the always-on Layer 14.4
-  // token-registry drop) — this one is opt-in and capability-gated.
-  | 'echo_suppressed'
   // Ownership gate (§6.4b): the source adapter requires a REGISTERED actor
   // on inbound events, and this event's actor didn't resolve to one — the
   // bot's own echo and unregistered senders drop by the same rule. The
@@ -55,12 +47,8 @@ export function describeDroppedReason(reason: DroppedReason): string {
       return 'held by the runaway-automation guard — a prior usage breach paused this automation; resume it from the app';
     case 'loop_guard_throttled':
       return 'throttled by the runaway-automation guard (rate limit) — this run was skipped; try again in a minute';
-    case 'echo_suppressed':
-      return "suppressed as this automation's own echo (suppress_self is on and the source change was written by it)";
     case 'actor_unregistered':
       return 'dropped — the person or bot behind the inbound event is not a registered user of this workspace';
-    case 'native_echo':
-      return "dropped as this workspace's own echo — the inbound change was made by its automations";
     case 'trigger_not_found':
       return 'the listener row was not found — re-save the automation, then run it again';
     case 'engine_lf':

@@ -3305,7 +3305,13 @@ CREATE TABLE automations.trigger_run (
     -- lease was claimed, in the claim's write. While the lease is unexpired the
     -- arrival sweep forgets nothing above the lowest such mark, so the step the
     -- lease covers misses no arrival.
-    lease_mark bigint
+    lease_mark bigint,
+    -- The runs before this one in its chain of writes and arrivals, oldest
+    -- first (the platform host's runs; lf keeps its own in its facts): its
+    -- arrival landed on a record the last of them wrote within the loop
+    -- window. Empty for a run nothing in the write ledger caused; its length
+    -- is the depth its writes are kept at.
+    chain text[] NOT NULL DEFAULT '{}'
 );
 
 ALTER TABLE ONLY automations.trigger_run
