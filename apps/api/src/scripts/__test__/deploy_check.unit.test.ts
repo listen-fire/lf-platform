@@ -21,7 +21,7 @@ describe('renderSummary', () => {
       languageRelease: 'current=0.12.0;legacy=1,2,3,4',
       current: INSTALLED,
       ranAt: '2026-09-29T12:00:00.000Z',
-      counts: { upgradable: 1, current: 2, warned: 1, refused: 0, unverified: 0 },
+      counts: { upgradable: 1, current: 2, warned: 1, stopped: 0, refused: 0, unverified: 0 },
       automations: [
         { id: 'a', teamId: 't', name: 'Sync CRM', outcome: 'upgradable', from: LEGACY, to: INSTALLED, deprecated: false, detail: '' },
         { id: 'b', teamId: 't', name: 'Digest', outcome: 'current', from: INSTALLED, to: INSTALLED, deprecated: false, detail: '' },

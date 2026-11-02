@@ -24,6 +24,7 @@ import { logger } from 'movement-engine/public/log';
 import { verifySlackEventsRequest } from './slackEvents';
 import { answerAskByToken, type AskDoorOutcome } from '../../services/asks/doors';
 import { parseAskAction, parseAskLink } from '@listen-fire/ask/link';
+import { isRetiredCallbackId, RETIRED_CALLBACK_TEXT } from '../../services/interaction/retired_callback';
 import { enqueueSlackResponse } from '../../services/webhook_sync/slack_response_url';
 import { notifyWork } from '../../services/work/drain';
 
@@ -190,6 +191,9 @@ const SOMETHING_WENT_WRONG: SlackReply = {
  *  double-record. */
 async function captureBlockActions(payload: BlockActionsPayload): Promise<SlackReply | null> {
   for (const action of payload.actions ?? []) {
+    if (isRetiredCallbackId(blockActionValue(action)) || isRetiredCallbackId(typeof action.action_id === 'string' ? action.action_id : undefined)) {
+      return { response_type: 'ephemeral', replace_original: false, text: RETIRED_CALLBACK_TEXT };
+    }
     const resolved = resolveAskAction(action);
     if (!resolved) continue;
     try {

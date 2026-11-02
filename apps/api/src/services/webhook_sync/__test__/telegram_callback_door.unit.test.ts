@@ -72,8 +72,8 @@ describe('recognising a tap', () => {
     expect(callbackQueryOf(null)).toBeNull();
   });
 
-  it('claims taps whose data is an answer link, and no others', () => {
-    expect(ownsCallbackQuery(tapUpdate('cb_abc'))).toBe(false);
+  it('claims taps whose data is an answer link or a retired callback id, and no others', () => {
+    expect(ownsCallbackQuery(tapUpdate('cb_abc'))).toBe(true);
     expect(ownsCallbackQuery(tapUpdate('ask_abc?answer=true'))).toBe(true);
     expect(ownsCallbackQuery(tapUpdate('http://localhost:3500/api/asks/ask_abc?answer=true'))).toBe(true);
     expect(ownsCallbackQuery(tapUpdate('refresh_dashboard'))).toBe(false);
@@ -256,5 +256,19 @@ describe('loud, never silent', () => {
       handleTelegramCallbackQuery({ raw: tapUpdate('ask_abc?answer=true'), responder: r }),
     ).resolves.toEqual({ handled: true, outcome: 'answered' });
     expect(logs.messages('warn')).toContainEqual(expect.stringContaining('answerCallbackQuery failed'));
+  });
+});
+
+describe('a tap on a callback button an automation wired before 0.13', () => {
+  it('is ours: the tapper is told it was retired, and its keyboard comes off', async () => {
+    const r = responder();
+    expect(ownsCallbackQuery(tapUpdate('cb_abc'))).toBe(true);
+
+    const result = await handleTelegramCallbackQuery({ raw: tapUpdate('cb_abc'), responder: r });
+
+    expect(result).toEqual({ handled: true, outcome: 'retired' });
+    expect(answerAskByToken).not.toHaveBeenCalled();
+    expect(r.answerCallbackQuery).toHaveBeenCalledWith({ callbackQueryId: 'cbq_1', text: expect.stringContaining('upgrade the automation') });
+    expect(r.clearReplyMarkup).toHaveBeenCalledWith({ chatId: '-1001', messageId: 42 });
   });
 });

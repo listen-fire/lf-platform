@@ -59,8 +59,10 @@ import {
 } from 'legacy-lang';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
+import type { MovementId } from '../../../generated/kysely/automations/Movement';
 
 import { getAutomationsQb } from '../../../lib/kysely';
+import { settleRunsParkedOnTriggers } from '../../interaction/run_failure';
 import { logger } from 'movement-engine/public/log';
 import {
   automationUrl,
@@ -254,9 +256,13 @@ export type DeployCheckOutcome =
    *  installed language: the pin stays, the diagnostics are stored, a
    *  `Validation Issue` is emitted. */
   | 'warned'
-  /** A release pin the installed language does not read (an older line, or a
-   *  newer release), or a legacy id that does not validate under its own pin
-   *  (the release failed to preserve that version's behaviour). The pin stays. */
+  /** A release pin of an older compatibility key: the installed language
+   *  refuses it by name, so its listens are unprovisioned and it does not
+   *  fire until someone upgrades it (ruling 2). The pin stays. */
+  | 'stopped'
+  /** A release pin the installed language does not read because it is newer,
+   *  or a legacy id that does not validate under its own pin (the release
+   *  failed to preserve that version's behaviour). The pin stays. */
   | 'refused'
   /** Could not be checked (a connected system could not be read, or the check
    *  itself failed): the pin stays and nothing is claimed. */
@@ -266,6 +272,7 @@ export const DEPLOY_CHECK_OUTCOMES: readonly DeployCheckOutcome[] = [
   'upgradable',
   'current',
   'warned',
+  'stopped',
   'refused',
   'unverified',
 ];
@@ -355,6 +362,9 @@ export interface DeployCheckDeps {
     checkedAgainst: LanguageVersion;
   }): Promise<void>;
   emit(input: { teamId: string; kind: SystemEventKind; payload: SystemEventPayload }): Promise<void>;
+  /** Remove a movement's listens, so it fires nothing (an automation the
+   *  installed language refuses). Its runs' history stays. */
+  unprovision(movement: MovementRow): Promise<void>;
   /** Record the run — what makes a second run on this release a no-op. */
   recordRun(input: { tag: string; languageRelease: string; summary: DeployCheckSummary }): Promise<void>;
   now(): Date;
@@ -402,7 +412,9 @@ export async function runDeployCheck(deps: DeployCheckDeps): Promise<DeployCheck
   // One per workspace that has automations — a listener lives in a team, and
   // a team is told only about its own.
   for (const teamId of [...new Set(entries.map((e) => e.teamId))]) {
-    const counts = countOutcomes(entries.filter((e) => e.teamId === teamId));
+    const teams = entries.filter((e) => e.teamId === teamId);
+    const counts = countOutcomes(teams);
+    const stopped = teams.filter((e) => e.outcome === 'stopped').map((e) => e.name);
     await emitSafely(deps, () => ({
       teamId,
       kind: RELEASE_APPLIED,
@@ -411,7 +423,7 @@ export async function runDeployCheck(deps: DeployCheckDeps): Promise<DeployCheck
         automationId: '',
         runId: '',
         version: summary.current.name,
-        reason: releaseAppliedReason(release.tag, current, counts),
+        reason: releaseAppliedReason(release.tag, current, counts, stopped),
         url: automationsUrl(),
         at,
       },
@@ -527,6 +539,25 @@ async function checkReleasePin(input: {
   const { deps, movement, current, at } = input;
   const releaseLanguage = deps.release.language;
   const pin = movement.languageVersion;
+
+  if (releaseVersionStanding(pin, current) === 'olderKey') {
+    const detail =
+      `${releaseVersionDiagnostic(pin, current)?.message ?? `this automation pins language ${pin}, which the installed language ${current} does not read`}; ` +
+      'it does not fire until it is upgraded';
+    logger.warn('[DeployCheck] an automation written for an earlier release stops firing until it is upgraded', {
+      movementId: movement.id,
+      teamId: movement.teamId,
+      languageVersion: pin,
+      current,
+    });
+    await deps.unprovision(movement);
+    await emitSafely(deps, () => ({
+      teamId: movement.teamId,
+      kind: VALIDATION_ISSUE,
+      payload: payloadFor(movement, pin, at, { reason: `After release ${deps.release.tag}: ${detail}` }),
+    }));
+    return entryFor(movement, 'stopped', pin, releaseLanguage, detail);
+  }
 
   if (!compatible(pin, current)) {
     const detail =
@@ -655,6 +686,7 @@ function countOutcomes(entries: DeployCheckEntry[]): Record<DeployCheckOutcome, 
     upgradable: 0,
     current: 0,
     warned: 0,
+    stopped: 0,
     refused: 0,
     unverified: 0,
   };
@@ -666,11 +698,17 @@ function releaseAppliedReason(
   tag: string,
   current: LanguageVersion,
   counts: Record<DeployCheckOutcome, number>,
+  stopped: readonly string[],
 ): string {
+  const stoppedLine =
+    stopped.length > 0
+      ? ` Stopped firing until you upgrade them, written for an earlier release: ${stopped.join(', ')}.`
+      : '';
   return (
     `Release ${tag} applied. Clean under ${describeVersion(current)}, upgraded when you ask: ${counts.upgradable}. ` +
     `Already on it: ${counts.current}. Not clean under it: ${counts.warned}. ` +
-    `Not validating or not read: ${counts.refused}. Could not be checked: ${counts.unverified}.`
+    `Not validating or not read: ${counts.refused}. Could not be checked: ${counts.unverified}.` +
+    stoppedLine
   );
 }
 
@@ -720,6 +758,23 @@ export function liveDeployCheckDeps(release: DeployCheckRelease): DeployCheckDep
     recordUpgradeCheck: ({ movement, diagnostics, checkedAgainst }) =>
       recordUpgradeCheck({ id: movement.id, diagnostics, checkedAgainst }),
     emit: recordSystemEvent,
+    unprovision: async (movement) => {
+      const triggers = await getAutomationsQb(['trigger'])
+        .selectFrom('trigger')
+        .where('movement_id', '=', movement.id as MovementId)
+        .where('team_id', '=', movement.teamId as TeamId)
+        .select('id')
+        .execute();
+      if (triggers.length === 0) return;
+      await settleRunsParkedOnTriggers({
+        triggerIds: triggers.map((t) => t.id),
+        reason: 'This run was waiting under an earlier release; its automation stopped at the upgrade. Upgrade the automation, then run it again.',
+      });
+      await getAutomationsQb(['trigger'])
+        .deleteFrom('trigger')
+        .where('id', 'in', triggers.map((t) => t.id))
+        .execute();
+    },
     recordRun: async ({ tag, languageRelease, summary }) => {
       await getAutomationsQb(['deploy_check'])
         .insertInto('deploy_check')

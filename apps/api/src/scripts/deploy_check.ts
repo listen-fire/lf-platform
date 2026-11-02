@@ -42,8 +42,10 @@ function outcomeHeading(outcome: DeployCheckOutcome): string {
       return 'On the installed language';
     case 'warned':
       return 'Kept on a legacy version — not clean under the installed language';
+    case 'stopped':
+      return 'Written for an earlier release — refused by name, their listens removed: they do not fire until upgraded';
     case 'refused':
-      return 'NOT VALIDATING under their own version, or pinned to a language this release does not read (a legacy version failing, unless marked already failing, is a bug — report it)';
+      return 'NOT VALIDATING under their own version, or pinned to a newer language than this release reads (a legacy version failing, unless marked already failing, is a bug — report it)';
     case 'unverified':
       return 'Could not be checked — kept where they were';
     default:

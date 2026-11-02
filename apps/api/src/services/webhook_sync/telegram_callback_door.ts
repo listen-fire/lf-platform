@@ -3,8 +3,10 @@
 // Telegram delivers everything to a bot's single webhook, so a button tap is
 // not a new route — it is an update whose `callback_query` carries the
 // `callback_data` the author wired into the button. When that data is an ask
-// answer link, the door answers the ask; when it isn't, the update flows on
-// untouched (a bot may have buttons of its own that are none of our business).
+// answer link, the door answers the ask; when it is a callback id an
+// automation wired before 0.13, the tapper is told the button was retired
+// (interaction/retired_callback.ts); otherwise the update flows on untouched
+// (a bot may have buttons of its own that are none of our business).
 //
 // Two things Telegram makes MANDATORY, both of them acks:
 //   • `answerCallbackQuery` — the tapper's client shows a spinner on the button
@@ -28,6 +30,7 @@ import { z } from 'zod';
 import { logger } from 'movement-engine/public/log';
 import { answerAskByToken, type AskDoorOutcome } from '../asks/doors';
 import { parseAskLink } from '@listen-fire/ask/link';
+import { isRetiredCallbackId, RETIRED_CALLBACK_TEXT } from '../interaction/retired_callback';
 
 /** What the door needs of a bot: the two Bot API calls that close a tap.
  *  `TelegramAdapter` satisfies it structurally — narrow on purpose, so the door
@@ -68,19 +71,20 @@ export function callbackQueryOf(raw: unknown): TelegramCallbackQuery | null {
   return parsed.data.callback_query ?? null;
 }
 
-/** Whether this delivery is a button tap this door owns: an ask answer link.
+/** Whether this delivery is a button tap this door owns: an ask answer link,
+ *  or a retired callback's id.
  *  Cheap and side-effect free, so a caller can ask before resolving a bot
  *  token. */
 export function ownsCallbackQuery(raw: unknown): boolean {
   const query = callbackQueryOf(raw);
   if (query === null || query.data === undefined) return false;
-  return parseAskLink(query.data) !== null;
+  return parseAskLink(query.data) !== null || isRetiredCallbackId(query.data);
 }
 
 export interface TelegramCallbackResult {
   /** The door consumed this delivery — no movement event to parse from it. */
   handled: boolean;
-  outcome?: AskDoorOutcome['kind'] | 'malformed';
+  outcome?: AskDoorOutcome['kind'] | 'malformed' | 'retired';
 }
 
 /**
@@ -97,6 +101,12 @@ export async function handleTelegramCallbackQuery(input: {
 }): Promise<TelegramCallbackResult> {
   const query = callbackQueryOf(input.raw);
   if (!query || query.data === undefined) return { handled: false };
+
+  if (isRetiredCallbackId(query.data)) {
+    await ack(input.responder, query, RETIRED_CALLBACK_TEXT);
+    await retireKeyboard(input.responder, query);
+    return { handled: true, outcome: 'retired' };
+  }
 
   const link = parseAskLink(query.data);
   if (!link) return { handled: false };

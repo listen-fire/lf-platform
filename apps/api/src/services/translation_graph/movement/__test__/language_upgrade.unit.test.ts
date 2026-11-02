@@ -107,6 +107,7 @@ function fakeStore(input: {
   const events: Array<{ teamId: string; kind: string; reason: string; version: string }> = [];
   const runs: Array<{ tag: string; languageRelease: string; summary: DeployCheckSummary }> = [];
   const validations: Array<Parameters<ValidateUnder>[0]> = [];
+  const unprovisioned: string[] = [];
 
   const deps: DeployCheckDeps = {
     release: { tag: 'v0.8.0', language: input.release ?? RELEASE },
@@ -130,12 +131,15 @@ function fakeStore(input: {
     emit: async ({ teamId, kind, payload }) => {
       events.push({ teamId, kind: kind.id, reason: payload.reason, version: payload.version });
     },
+    unprovision: async (m) => {
+      unprovisioned.push(m.id);
+    },
     recordRun: async (run) => {
       runs.push(run);
     },
     now: () => new Date('2026-09-29T12:00:00.000Z'),
   };
-  return { deps, upgradeDiagnostics, validity, events, runs, validations };
+  return { deps, upgradeDiagnostics, validity, events, runs, validations, unprovisioned };
 }
 
 /** The check has no seam that moves a pin; this proves it reached for no
@@ -328,7 +332,7 @@ describe('the deploy check', () => {
 });
 
 describe('a pin by the compatibility rule', () => {
-  it('a legacy id takes the legacy path; a release pin is current when the installed language reads it, refused otherwise', async () => {
+  it('a legacy id takes the legacy path; a release pin is current when the installed language reads it, stopped when older, refused when newer', async () => {
     const store = fakeStore({
       movements: [
         movement({ id: 'legacy', languageVersion: '4' }),
@@ -345,11 +349,16 @@ describe('a pin by the compatibility rule', () => {
     expect(summary?.automations.map((a) => [a.name, a.outcome])).toEqual([
       ['legacy', 'upgradable'],
       ['same-line', 'current'],
-      ['older-line', 'refused'],
+      ['older-line', 'stopped'],
       ['newer', 'refused'],
     ]);
-    const refused = summary?.automations.filter((a) => a.outcome === 'refused') ?? [];
-    for (const entry of refused) expect(entry.detail).toContain(entry.from.version);
+    const unread = summary?.automations.filter((a) => a.outcome === 'refused' || a.outcome === 'stopped') ?? [];
+    for (const entry of unread) expect(entry.detail).toContain(entry.from.version);
+    // Only the older line's listens are removed: it fires nothing until upgraded.
+    expect(store.unprovisioned).toEqual(['older-line']);
+    // Its team is told, by name, that it stopped firing.
+    const applied = store.events.filter((e) => e.kind === RELEASE_APPLIED.id).map((e) => e.reason);
+    expect(applied).toEqual([expect.stringContaining('Stopped firing until you upgrade them, written for an earlier release: older-line.')]);
     // A pin the installed language does not read is never validated.
     expect(store.validations.map((v) => v.movement.id)).toEqual(['legacy', 'legacy', 'same-line']);
     expect(store.events.filter((e) => e.kind === VALIDATION_ISSUE.id).map((e) => e.version)).toEqual([

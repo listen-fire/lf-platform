@@ -1,7 +1,8 @@
 // The `whatsapp_message` work kind: everything the platform's WhatsApp number
 // door does with one inbound message. The door writes each message of a Meta
 // delivery down as a row before it answers Meta; the dispatch to the sender's
-// team and the ops notice run when that row drains. Work done after the answer would be lost to a restart, a
+// team, the answer to a tap on a retired callback button
+// (interaction/retired_callback.ts) and the ops notice run when that row drains. Work done after the answer would be lost to a restart, a
 // deploy or a frozen instance, and Meta would never resend it.
 
 import { z } from 'zod';
@@ -15,6 +16,8 @@ import { registerWorkKinds } from '../work/drain';
 import { enqueueWork } from '../work/store';
 import { dispatchWhatsappMessage } from './dispatch';
 import { resolveWhatsappSender } from './utils';
+import { getMetaWhatsappApi } from './metaApi';
+import { isRetiredCallbackId, RETIRED_CALLBACK_TEXT } from '../interaction/retired_callback';
 
 declare module '../work/kinds' {
   interface UnitWorkKinds {
@@ -92,6 +95,18 @@ async function runWhatsappMessage(row: WhatsappMessageRow): Promise<void> {
   const { message, profileName, businessNumber, businessPhoneNumberId } = row;
   await dispatchWhatsappMessage({ message, profileName, businessNumber, businessPhoneNumberId });
   logger.info('Dispatched WhatsApp message', { messageId: message.id });
+
+  const tapped = message.interactive?.button_reply?.id ?? message.interactive?.list_reply?.id;
+  if (isRetiredCallbackId(tapped)) {
+    try {
+      await getMetaWhatsappApi(businessPhoneNumberId).sendTextMessage(message.from, RETIRED_CALLBACK_TEXT, { replyToMessageId: message.id });
+    } catch (error) {
+      logger.warn('[whatsapp/webhook] telling the tapper a callback button was retired failed', {
+        messageId: message.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
 
   if (row.announce) {
     try {

@@ -180,6 +180,13 @@ describe('a tap that answers an ask', () => {
 });
 
 describe('every refusal is said, and none of them touches the message', () => {
+  it('a callback button an automation wired before 0.13 → an ephemeral notice that it was retired', async () => {
+    await tap({ type: 'button', action_id: 'cb_abc', value: 'cb_abc' });
+
+    expect(answerAskByToken).not.toHaveBeenCalled();
+    expect(acks[0]).toEqual({ response_type: 'ephemeral', replace_original: false, text: expect.stringContaining('upgrade the automation') });
+  });
+
   it('a closed ask → an ephemeral notice', async () => {
     answerAskByToken.mockResolvedValue({ kind: 'closed' });
 
