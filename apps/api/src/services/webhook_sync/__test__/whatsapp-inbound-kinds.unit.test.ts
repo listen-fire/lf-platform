@@ -1,23 +1,16 @@
-// Inbound WhatsApp classification — every Meta message kind either becomes a
-// TYPED event or is dropped; nothing falls through as an empty message (the
+// Inbound WhatsApp classification — every Meta message kind either arrives on
+// the edge of its own kind or is dropped; nothing falls through as an empty message (the
 // spurious-firing bug: a 👍 reaction used to parse as a blank message and run
 // every whatsapp movement).
 
-import {
-  WHATSAPP_INBOUND_LOCATION_TYPE,
-  WHATSAPP_INBOUND_REACTION_TYPE,
-  WHATSAPP_RECORD_TYPE_ID,
-  classifyMetaMessage,
-  triggerAcceptsWhatsappKind,
-  whatsappInboundEvents,
-} from '@listen-fire/whatsapp';
+import { classifyMetaMessage, whatsappInboundArrivals } from '@listen-fire/whatsapp';
 
 const base = { from: '15551234567', id: 'wamid.IN', timestamp: '1700000000' };
 
 describe('classifyMetaMessage', () => {
   it('text → message kind with the flattened payload', () => {
     const out = classifyMetaMessage({ ...base, type: 'text', text: { body: 'hi' } });
-    expect(out).toMatchObject({ kind: 'message', rootRecordType: WHATSAPP_RECORD_TYPE_ID });
+    expect(out?.kind).toBe('message');
     expect(out?.payload).toMatchObject({ body: 'hi', messageId: 'wamid.IN' });
   });
 
@@ -27,7 +20,7 @@ describe('classifyMetaMessage', () => {
       type: 'reaction',
       reaction: { message_id: 'wamid.TARGET', emoji: '👍' },
     });
-    expect(out).toMatchObject({ kind: 'reaction', rootRecordType: WHATSAPP_INBOUND_REACTION_TYPE });
+    expect(out?.kind).toBe('reaction');
     expect(out?.payload).toMatchObject({ emoji: '👍', reactedMessageId: 'wamid.TARGET' });
   });
 
@@ -37,7 +30,7 @@ describe('classifyMetaMessage', () => {
       type: 'location',
       location: { latitude: 51.5, longitude: -0.12, name: 'Office' },
     });
-    expect(out).toMatchObject({ kind: 'location', rootRecordType: WHATSAPP_INBOUND_LOCATION_TYPE });
+    expect(out?.kind).toBe('location');
     expect(out?.payload).toMatchObject({ latitude: 51.5, longitude: -0.12, name: 'Office' });
   });
 
@@ -75,21 +68,7 @@ describe('classifyMetaMessage', () => {
   });
 });
 
-describe('triggerAcceptsWhatsappKind — the listen `events` gate', () => {
-  it('no events config subscribes to messages ONLY', () => {
-    expect(triggerAcceptsWhatsappKind(undefined, 'message')).toBe(true);
-    expect(triggerAcceptsWhatsappKind({}, 'reaction')).toBe(false);
-    expect(triggerAcceptsWhatsappKind(null, 'location')).toBe(false);
-  });
-
-  it('an explicit events list is honoured verbatim', () => {
-    expect(triggerAcceptsWhatsappKind({ events: ['reaction'] }, 'reaction')).toBe(true);
-    expect(triggerAcceptsWhatsappKind({ events: ['reaction'] }, 'message')).toBe(false);
-    expect(triggerAcceptsWhatsappKind({ events: ['message', 'location'] }, 'location')).toBe(true);
-  });
-});
-
-describe('whatsappInboundEvents (BYO door) — typed, drop-not-blank', () => {
+describe('whatsappInboundArrivals (BYO door) — each kind on its own edge, drop-not-blank', () => {
   const envelope = (message: Record<string, unknown>) => ({
     object: 'whatsapp_business_account',
     entry: [
@@ -108,20 +87,30 @@ describe('whatsappInboundEvents (BYO door) — typed, drop-not-blank', () => {
     ],
   });
 
-  it('a reaction parses to a reaction-typed event', () => {
-    const events = whatsappInboundEvents(
-      envelope({ ...base, type: 'reaction', reaction: { message_id: 'wamid.T', emoji: '🔥' } }),
-    );
-    expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({
-      eventType: 'reaction',
-      tag: 'reaction',
-      recordType: WHATSAPP_INBOUND_REACTION_TYPE,
-      externalId: 'wamid.IN',
+  it('a message arrives on Messages, named by its WhatsApp id so a resend runs a listen once', () => {
+    const arrivals = whatsappInboundArrivals(envelope({ ...base, type: 'text', text: { body: 'hi' } }));
+    expect(arrivals).toHaveLength(1);
+    expect(arrivals[0]).toMatchObject({
+      edge: 'Messages',
+      identity: 'wamid.IN',
+      landing: { recordType: 'Message', fields: { From: '15551234567' } },
     });
   });
 
-  it('an unsupported kind yields NO event', () => {
-    expect(whatsappInboundEvents(envelope({ ...base, type: 'contacts' }))).toEqual([]);
+  it('a reaction arrives on Reactions, about the message it is on', () => {
+    const arrivals = whatsappInboundArrivals(
+      envelope({ ...base, type: 'reaction', reaction: { message_id: 'wamid.T', emoji: '🔥' } }),
+    );
+    expect(arrivals).toHaveLength(1);
+    expect(arrivals[0]).toMatchObject({
+      edge: 'Reactions',
+      identity: 'wamid.IN',
+      landing: { recordType: 'Reaction', fields: { Emoji: '🔥' } },
+      about: { recordType: 'Message', externalId: 'wamid.T' },
+    });
+  });
+
+  it('an unsupported kind is no arrival', () => {
+    expect(whatsappInboundArrivals(envelope({ ...base, type: 'contacts' }))).toEqual([]);
   });
 });

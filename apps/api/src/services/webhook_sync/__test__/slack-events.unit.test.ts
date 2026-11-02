@@ -76,6 +76,8 @@ import express from 'express';
 import { handleSlackEventsInbound, slackEventHandler } from '../slack_events';
 import { slackEventsRouter, verifySlackEventsRequest } from '../../../interfaces/rest/slackEvents';
 
+const nowSeconds = (): string => String(Math.floor(Date.now() / 1000));
+
 const TEAM = '00000000-0000-4000-8000-000000000001';
 
 function eventCallback(teamId: string) {
@@ -132,7 +134,9 @@ describe('verifySlackEventsRequest — signature auth (fail-closed)', () => {
     process.env = { ...OLD_ENV };
   });
 
-  function signed(body: Buffer, secret: string, ts = '1700000000'): Record<string, string> {
+  // Slack's replay window is five minutes (enforced by the core's verifier),
+  // so a delivery is signed on the test's own clock.
+  function signed(body: Buffer, secret: string, ts = nowSeconds()): Record<string, string> {
     const sig = 'v0=' + crypto.createHmac('sha256', secret).update(`v0:${ts}:${body}`).digest('hex');
     return { 'x-slack-request-timestamp': ts, 'x-slack-signature': sig };
   }
@@ -141,6 +145,16 @@ describe('verifySlackEventsRequest — signature auth (fail-closed)', () => {
     process.env.SLACK_MOVEMENTS_SIGNING_SECRET = 'shh';
     const body = Buffer.from(JSON.stringify(eventCallback('T')));
     expect(verifySlackEventsRequest(body, signed(body, 'shh'))).toEqual({ authorized: true });
+  });
+
+  it('refuses a delivery signed more than five minutes ago as a replay', () => {
+    process.env.SLACK_MOVEMENTS_SIGNING_SECRET = 'shh';
+    const body = Buffer.from(JSON.stringify(eventCallback('T')));
+    const stale = String(Number(nowSeconds()) - 6 * 60);
+    expect(verifySlackEventsRequest(body, signed(body, 'shh', stale))).toEqual({
+      authorized: false,
+      reason: 'signature_invalid',
+    });
   });
 
   it('rejects a bad signature', () => {
@@ -201,7 +215,7 @@ describe('the route: durable, then answered; the drain does the work', () => {
 
   function deliver(envelope: unknown, extraHeaders: Record<string, string> = {}): Promise<Response> {
     const body = JSON.stringify(envelope);
-    const ts = '1700000000';
+    const ts = nowSeconds();
     const sig = 'v0=' + crypto.createHmac('sha256', 'shh').update(`v0:${ts}:${body}`).digest('hex');
     return fetch(`${baseUrl}/api/public/slack/events`, {
       method: 'POST',

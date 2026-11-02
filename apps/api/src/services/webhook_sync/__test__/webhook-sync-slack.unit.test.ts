@@ -152,6 +152,9 @@ describe('slackProvider.parseEvents — non-dispatchable envelopes', () => {
 
 describe('Slack v0 HMAC scheme', () => {
   const SECRET = 'slack-signing-secret';
+  // The core's verifier refuses a timestamp outside Slack's five-minute replay
+  // window, so each case signs on the test's own clock.
+  const nowSeconds = (): string => String(Math.floor(Date.now() / 1000));
 
   function signWith(rawBody: Buffer, secret: string, timestamp: string): string {
     const base = `v0:${timestamp}:${rawBody.toString('utf-8')}`;
@@ -161,14 +164,14 @@ describe('Slack v0 HMAC scheme', () => {
 
   it('accepts a correctly signed request', () => {
     const rawBody = fixtureRawBody();
-    const ts = '1700000000';
+    const ts = nowSeconds();
     const header = signWith(rawBody, SECRET, ts);
     expect(verifyAsProvider('SLACK', rawBody, header, SECRET)).toBe(true);
   });
 
   it('accepts a signature without the `v0=` prefix (raw hex)', () => {
     const rawBody = fixtureRawBody();
-    const ts = '1700000000';
+    const ts = nowSeconds();
     const base = `v0:${ts}:${rawBody.toString('utf-8')}`;
     const digest = crypto.createHmac('sha256', SECRET).update(base).digest('hex');
     const header = `${ts}:${digest}`;
@@ -176,7 +179,7 @@ describe('Slack v0 HMAC scheme', () => {
   });
 
   it('rejects when the body has been tampered with', () => {
-    const ts = '1700000000';
+    const ts = nowSeconds();
     const header = signWith(fixtureRawBody(), SECRET, ts);
     const tampered = Buffer.from(fixtureRawBody().toString('utf-8') + ' '); // extra byte
     expect(verifyAsProvider('SLACK', tampered, header, SECRET)).toBe(false);
@@ -184,9 +187,15 @@ describe('Slack v0 HMAC scheme', () => {
 
   it('rejects when the secret is wrong', () => {
     const rawBody = fixtureRawBody();
-    const ts = '1700000000';
+    const ts = nowSeconds();
     const header = signWith(rawBody, SECRET, ts);
     expect(verifyAsProvider('SLACK', rawBody, header, 'wrong-secret')).toBe(false);
+  });
+
+  it('rejects a delivery signed more than five minutes ago', () => {
+    const rawBody = fixtureRawBody();
+    const header = signWith(rawBody, SECRET, String(Number(nowSeconds()) - 6 * 60));
+    expect(verifyAsProvider('SLACK', rawBody, header, SECRET)).toBe(false);
   });
 
   it('rejects when the timestamp is missing from the packed header', () => {
