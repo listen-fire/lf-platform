@@ -24,7 +24,7 @@ import { uniformWalk } from 'module-kit/adapter/hop';
 import { CRON_HANDBOOK_SECTION } from './handbook_section';
 import { META_RECORD_TYPE, positionData } from 'movement-engine/public/catalog';
 import { BaseAdapter } from 'module-kit/adapter/base';
-import { CronParseError, nextCronOccurrence, parseCron } from 'legacy-lang/cron';
+import { CronParseError, cronMatches, nextCronOccurrence, parseCron, type CronSchedule } from 'legacy-lang/cron';
 
 /** Stable adapter identifier — the trigger `kind` of cron-derived rows. */
 export const CRON_ADAPTER_TYPE = 'cron';
@@ -223,7 +223,7 @@ export class CronAdapter extends BaseAdapter implements Adapter {
   }
 
   /** A poll of `Ticks` (adapter protocol 2.6), answered by the unit itself. */
-  async poll(input: PollEdgeInput): Promise<PollEdgeAnswer> {
+  async poll(input: PollEdgeInput): Promise<PollAgainAnswer> {
     return pollTicks(input, { now: new Date(), everyMs: CRON_POLL_EVERY_SECONDS * 1000 }).answer;
   }
 }
@@ -279,11 +279,26 @@ export function valuesOf(filter: unknown, field: { name: string; id: string }): 
   return undefined;
 }
 
+/** A poll's answer as adapter protocol 2.7 has it: it may say when the edge
+ *  is next worth polling (`pollAgainAt`, an ISO instant). */
+export type PollAgainAnswer = PollEdgeAnswer & { pollAgainAt?: string };
+
 /** What a poll of `Ticks` answered, and a line for each schedule and zone it
  *  could not read (that pair fires nothing; the rest of the poll still does). */
 export interface Ticked {
-  answer: PollEdgeAnswer;
+  answer: PollAgainAnswer;
   unread: string[];
+}
+
+const MINUTE_MS = 60_000;
+
+/** The earliest occurrence after `afterMs` and no later than `untilMs`, when
+ *  there is one (a bounded walk, where nextCronOccurrence walks years). */
+function nextWithin(schedule: CronSchedule, afterMs: number, untilMs: number): number | undefined {
+  for (let at = afterMs - (afterMs % MINUTE_MS) + MINUTE_MS; at <= untilMs; at += MINUTE_MS) {
+    if (cronMatches(schedule, new Date(at))) return at;
+  }
+  return undefined;
 }
 
 /** No more than this many occurrences of one schedule are walked to find the
@@ -299,46 +314,61 @@ const BACKLOG_WALK_LIMIT = 100_000;
  * many workers find it due, a listen runs it once. The first poll (no cursor)
  * only sets the cursor. The cursor is the instant it polled to. The unit
  * applies the filter itself (`takenApplied`).
+ *
+ * Each answer, the first included, says when the next occurrence is due
+ * (`pollAgainAt`, adapter protocol 2.7), so the host polls then rather than
+ * up to an interval after it. It looks no further than one interval ahead:
+ * the host polls by then anyway.
  */
 export function pollTicks(input: PollEdgeInput, clock: { now: Date; everyMs: number }): Ticked {
   const nowMs = clock.now.getTime();
   const cursor = typeof input.cursor === 'string' ? Date.parse(input.cursor) : Number.NaN;
   if (input.edge !== CRON_TICKS_EDGE) throw new Error(`cron: no edge ${input.edge} to poll (its one edge is ${CRON_TICKS_EDGE})`);
-  if (Number.isNaN(cursor)) return { answer: { arrivals: [], cursor: clock.now.toISOString() }, unread: [] };
   const schedules = valuesOf(input.filter, { name: 'Schedule', id: 'schedule' });
   if (schedules === undefined) throw new Error(`cron: a poll of ${CRON_TICKS_EDGE} names no schedule it can read`);
   const zones = valuesOf(input.filter, { name: 'Zone', id: 'zone' }) ?? [DEFAULT_ZONE];
-  const backlogUntil = nowMs - clock.everyMs;
-  const due = new Map<number, { schedule: string; zone: string }>();
   const unread: string[] = [];
+  const clocks: Array<{ schedule: string; zone: string; parsed: CronSchedule }> = [];
   for (const schedule of schedules) {
     for (const zone of zones) {
-      let parsed;
       try {
-        parsed = parseCron(schedule, { timezone: zone });
+        clocks.push({ schedule, zone, parsed: parseCron(schedule, { timezone: zone }) });
       } catch (error) {
         if (!(error instanceof CronParseError)) throw error;
         unread.push(`cron: schedule "${schedule}" in ${zone} fires nothing: ${error.message}`);
-        continue;
       }
-      const at: number[] = [];
-      let from = cursor;
-      if (cursor < backlogUntil) {
-        let latest: number | undefined;
-        for (let walked = 0; walked < BACKLOG_WALK_LIMIT; walked++) {
-          const next = nextCronOccurrence(parsed, new Date(from));
-          if (next === null || next.getTime() > backlogUntil) break;
-          latest = next.getTime();
-          from = latest;
-        }
-        if (latest !== undefined) at.push(latest);
-        from = Math.max(from, backlogUntil);
-      }
-      for (let next = nextCronOccurrence(parsed, new Date(from)); next !== null && next.getTime() <= nowMs; next = nextCronOccurrence(parsed, next)) {
-        at.push(next.getTime());
-      }
-      for (const instant of at) if (!due.has(instant)) due.set(instant, { schedule, zone });
     }
+  }
+  const next = clocks
+    .map(({ parsed }) => nextWithin(parsed, nowMs, nowMs + clock.everyMs))
+    .filter((at): at is number => at !== undefined)
+    .reduce<number | undefined>((soonest, at) => (soonest === undefined || at < soonest ? at : soonest), undefined);
+  const answer = (arrivals: Arrival[]): PollAgainAnswer => ({
+    arrivals,
+    cursor: clock.now.toISOString(),
+    ...(next !== undefined ? { pollAgainAt: new Date(next).toISOString() } : {}),
+  });
+  if (Number.isNaN(cursor)) return { answer: answer([]), unread };
+  const backlogUntil = nowMs - clock.everyMs;
+  const due = new Map<number, { schedule: string; zone: string }>();
+  for (const { schedule, zone, parsed } of clocks) {
+    const at: number[] = [];
+    let from = cursor;
+    if (cursor < backlogUntil) {
+      let latest: number | undefined;
+      for (let walked = 0; walked < BACKLOG_WALK_LIMIT; walked++) {
+        const occurrence = nextCronOccurrence(parsed, new Date(from));
+        if (occurrence === null || occurrence.getTime() > backlogUntil) break;
+        latest = occurrence.getTime();
+        from = latest;
+      }
+      if (latest !== undefined) at.push(latest);
+      from = Math.max(from, backlogUntil);
+    }
+    for (let occurrence = nextCronOccurrence(parsed, new Date(from)); occurrence !== null && occurrence.getTime() <= nowMs; occurrence = nextCronOccurrence(parsed, occurrence)) {
+      at.push(occurrence.getTime());
+    }
+    for (const instant of at) if (!due.has(instant)) due.set(instant, { schedule, zone });
   }
   const arrivals: Arrival[] = [...due.entries()]
     .sort(([a], [b]) => a - b)
@@ -353,7 +383,7 @@ export function pollTicks(input: PollEdgeInput, clock: { now: Date; everyMs: num
         takenApplied: true,
       };
     });
-  return { answer: { arrivals, cursor: clock.now.toISOString() }, unread };
+  return { answer: answer(arrivals), unread };
 }
 
 /** Factory matching the registry's AdapterFactory signature. */

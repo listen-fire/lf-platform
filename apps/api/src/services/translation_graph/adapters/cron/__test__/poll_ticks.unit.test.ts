@@ -67,6 +67,21 @@ describe('a poll of Ticks', () => {
     expect(ticked.unread).toEqual([expect.stringContaining('schedule "61 * * * *" in UTC fires nothing')]);
   });
 
+  it('says when its next occurrence is due, looking one interval ahead, the arming poll too', () => {
+    // 2026-10-19 is a Monday: armed at 08:29:45, the next tick is 15 seconds on.
+    const weekdays = on('Schedule', '30 8 * * 1-5');
+    const armed = pollTicks({ edge: CRON_TICKS_EDGE, filter: weekdays }, clock('2026-10-19T08:29:45.000Z'));
+    expect(armed.answer.pollAgainAt).toBe('2026-10-19T08:30:00.000Z');
+    const fired = pollTicks({ edge: CRON_TICKS_EDGE, filter: weekdays, cursor: '2026-10-19T08:29:45.000Z' }, clock('2026-10-19T08:30:00.500Z'));
+    expect(fired.answer.arrivals).toHaveLength(1);
+    expect(fired.answer).not.toHaveProperty('pollAgainAt');
+    // Every minute: the next minute's start, whatever the second.
+    expect(pollTicks({ edge: CRON_TICKS_EDGE, filter: on('Schedule', '* * * * *') }, clock('2026-10-19T08:30:00.000Z')).answer.pollAgainAt).toBe('2026-10-19T08:31:00.000Z');
+    // The soonest of the schedules it names.
+    const either = { type: 'logical', op: 'or', operands: [on('Schedule', '45 8 * * *'), on('Schedule', '30 8 * * *')] };
+    expect(pollTicks({ edge: CRON_TICKS_EDGE, filter: either }, { now: new Date('2026-10-19T08:29:30.000Z'), everyMs: 30 * MINUTE }).answer.pollAgainAt).toBe('2026-10-19T08:30:00.000Z');
+  });
+
   it('refuses a poll naming no schedule', () => {
     expect(() => pollTicks({ edge: CRON_TICKS_EDGE, cursor: '2026-11-02T10:00:00.000Z' }, clock('2026-11-02T10:05:00.000Z'))).toThrow(/names no schedule/);
   });

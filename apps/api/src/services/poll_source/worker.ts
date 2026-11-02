@@ -37,6 +37,21 @@ import { listenEdgeDigest, listenEdgeKeyOf, type ListenEdgeKey } from '../inboun
 /** The interval of a polled edge that declares none. */
 const DEFAULT_POLL_EVERY_SECONDS = 60;
 
+/** The least time between two polls of one key, whatever its module
+ *  answers: a `pollAgainAt` already past never has a key polled without
+ *  pause. */
+export const POLL_AGAIN_FLOOR_MS = SECOND;
+
+/** When a key polled at `polledAt` is polled next: when its module said the
+ *  edge is next worth polling (`pollAgainAt`, adapter protocol 2.7), if that
+ *  is sooner than its interval and no sooner than the floor; else one
+ *  interval on. listen-fire's `next_poll_at` (crates/lf/src/edge_polls.rs). */
+export function nextPollAt(polledAt: Date, everyMs: number, pollAgainAt?: Date): Date {
+  const usual = polledAt.getTime() + everyMs;
+  if (pollAgainAt === undefined) return new Date(usual);
+  return new Date(Math.min(Math.max(pollAgainAt.getTime(), polledAt.getTime() + POLL_AGAIN_FLOOR_MS), usual));
+}
+
 /** One key, the listens sharing it, and how often it is polled. */
 export interface SharedPoll {
   key: ListenEdgeKey;
@@ -108,8 +123,9 @@ async function keepCursor(teamId: TeamId, subscriptionId: string, cursor: unknow
 }
 
 /** Poll one shared key once: a first poll arms; a later one keeps what
- *  arrived as a delivery judged by the key's listens, its cursor with it. */
-export async function pollShared(poll: SharedPoll): Promise<{ arrivals: number; armed: boolean }> {
+ *  arrived as a delivery judged by the key's listens, its cursor with it.
+ *  `pollAgainAt`: when its module said the edge is next worth polling. */
+export async function pollShared(poll: SharedPoll): Promise<{ arrivals: number; armed: boolean; pollAgainAt?: Date }> {
   const { key, digest } = poll;
   const subscriptionId = pollSubscriptionId(digest);
   const poller = await edgePollerOf({
@@ -125,9 +141,10 @@ export async function pollShared(poll: SharedPoll): Promise<{ arrivals: number; 
     ...(key.taken !== undefined ? { filter: key.taken } : {}),
     ...(before !== null && before.cursor !== null ? { cursor: before.cursor } : {}),
   });
+  const again = polled.pollAgainAt !== undefined ? { pollAgainAt: polled.pollAgainAt } : {};
   if (before === null || polled.arrivals.length === 0) {
     await keepCursor(key.teamId, subscriptionId, polled.cursor);
-    return { arrivals: 0, armed: before === null };
+    return { arrivals: 0, armed: before === null, ...again };
   }
   await deliverArrivals({
     teamId: key.teamId,
@@ -141,7 +158,7 @@ export async function pollShared(poll: SharedPoll): Promise<{ arrivals: number; 
     listens: poll.listens,
   });
   notifyWork();
-  return { arrivals: polled.arrivals.length, armed: false };
+  return { arrivals: polled.arrivals.length, armed: false, ...again };
 }
 
 const pollEdgePayloadSchema = z.object({ teamId: teamIdSchema, digest: z.string() });
@@ -150,15 +167,16 @@ async function armPoll(poll: SharedPoll, dueAt: Date): Promise<void> {
   await enqueueWork({ kind: 'poll_edge', key: pollWorkKey(poll.digest), teamId: poll.key.teamId, payload: { teamId: poll.key.teamId, digest: poll.digest }, dueAt });
 }
 
-/** Polls one key, then arms its row one interval later. A key no listen
+/** Polls one key, then arms its row for its next poll: one interval on, or
+ *  sooner when its module said so (a schedule's next tick). A key no listen
  *  shares any more is not re-armed (the reconcile removes its row). */
 export const pollEdgeHandler: WorkHandler = {
-  async run(payload, ctx) {
+  async run(payload) {
     const { teamId, digest } = pollEdgePayloadSchema.parse(payload);
     const poll = (await sharedPolls({ teamId })).find((shared) => shared.digest === digest);
     if (poll === undefined) return;
-    await pollShared(poll);
-    await armPoll(poll, new Date(ctx.now.getTime() + poll.everyMs));
+    const { pollAgainAt } = await pollShared(poll);
+    await armPoll(poll, nextPollAt(new Date(), poll.everyMs, pollAgainAt));
   },
 };
 

@@ -1,5 +1,6 @@
 // Who answers a poll of one listenable edge (adapter protocol 2.6's
-// `poll({ edge, filter?, scope?, cursor? }) → { arrivals, cursor? }`): a
+// `poll({ edge, filter?, scope?, cursor? }) → { arrivals, cursor? }`, which
+// 2.7 lets say when the edge is next worth polling, `pollAgainAt`): a
 // built-in on a module line answers through its module; a remote install, or
 // an in-process adapter that polls (the cron unit), through its adapter.
 // Whatever answers, the answer is read at this boundary: an answer in the
@@ -13,10 +14,12 @@ import type { PollEdgeAnswer, PollEdgeInput } from 'module-kit';
 import { builtinModulePoll } from '../translation_graph/adapters/builtin_modules';
 import { resolveAdapter } from '../translation_graph/adapters/resolve';
 
-/** One poll of an edge: what arrived since the cursor, and the next cursor. */
+/** One poll of an edge: what arrived since the cursor, the next cursor, and
+ *  when the module said the edge is next worth polling. */
 export interface EdgePolled {
   arrivals: Arrival[];
   cursor?: unknown;
+  pollAgainAt?: Date;
 }
 
 export type EdgePoller = (input: PollEdgeInput) => Promise<EdgePolled>;
@@ -36,7 +39,26 @@ export function readPollAnswer(adapterType: string, answer: unknown): EdgePolled
   }
   const parsed = WirePollEdgeResult.safeParse(answer);
   if (!parsed.success) throw new Error(`${adapterType}: a poll's answer is not { arrivals, cursor }: ${parsed.error.message}`);
-  return { arrivals: parsed.data.arrivals, ...('cursor' in parsed.data ? { cursor: parsed.data.cursor } : {}) };
+  const pollAgainAt = pollAgainAtOf(adapterType, answer);
+  return {
+    arrivals: parsed.data.arrivals,
+    ...('cursor' in parsed.data ? { cursor: parsed.data.cursor } : {}),
+    ...(pollAgainAt !== undefined ? { pollAgainAt } : {}),
+  };
+}
+
+const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/;
+
+/** The answer's `pollAgainAt` (adapter protocol 2.7), read here because the
+ *  0.13.0 wire schema predates it. One that is not an instant refuses the
+ *  whole answer, by name, so its cursor is not kept and the next poll reads
+ *  the same page. */
+function pollAgainAtOf(adapterType: string, answer: unknown): Date | undefined {
+  if (typeof answer !== 'object' || answer === null || !('pollAgainAt' in answer) || answer.pollAgainAt === undefined) return undefined;
+  const at = answer.pollAgainAt;
+  const instant = typeof at === 'string' && ISO_INSTANT.test(at) ? Date.parse(at) : Number.NaN;
+  if (Number.isNaN(instant)) throw new Error(`${adapterType}: a poll answered pollAgainAt ${JSON.stringify(at)}: expected an instant (ISO 8601)`);
+  return new Date(instant);
 }
 
 /** What polls `adapterType`'s edges for one connection; null for a module

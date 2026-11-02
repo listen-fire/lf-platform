@@ -2,8 +2,9 @@
 // write; the module's poll faked). Listens on one polled edge of one
 // connection with the same taken filter share one poll; what a later poll
 // finds is kept as one delivery judged only by them; a first poll arms; a
-// team on lf is not polled; the handler re-arms its row one interval on and
-// the reconcile keeps one row per shared poll.
+// team on lf is not polled; the handler re-arms its row one interval on, or
+// when its module said to poll again if that is sooner, and the reconcile
+// keeps one row per shared poll.
 
 import { randomUUID } from 'node:crypto';
 
@@ -12,7 +13,7 @@ import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { MovementId } from '../../../generated/kysely/automations/Movement';
 import type { PollEdgeInput } from 'module-kit';
 
-const polled = jest.fn<Promise<{ arrivals: Arrival[]; cursor?: unknown }>, [PollEdgeInput]>();
+const polled = jest.fn<Promise<{ arrivals: Arrival[]; cursor?: unknown; pollAgainAt?: Date }>, [PollEdgeInput]>();
 jest.mock('../edge_poller', () => ({
   edgePollerOf: async (input: { adapterType: string }) => (input.adapterType === 'poll_test' ? polled : null),
 }));
@@ -105,16 +106,27 @@ describe('shared polls of a listenable edge', () => {
     expect((await firesOf()).map((fire) => fire.triggerId).sort()).toEqual([open, alsoOpen].sort());
   });
 
+  const dueOf = async () => (await listWorkByKind('poll_edge')).find((each) => each.key === pollWorkKey(shared.digest))?.dueAt.getTime();
+
   it('re-arms its row one interval after a poll, and the reconcile keeps one row per shared poll', async () => {
     const now = new Date();
     polled.mockResolvedValueOnce({ arrivals: [], cursor: 'c3' });
     await pollEdgeHandler.run({ teamId, digest: shared.digest }, testWorkContext(now));
-    const row = (await listWorkByKind('poll_edge')).find((each) => each.key === pollWorkKey(shared.digest));
-    expect(row?.dueAt.getTime()).toBe(now.getTime() + 60_000);
+    const after = Date.now();
+    expect(await dueOf()).toBeGreaterThanOrEqual(now.getTime() + 60_000);
+    expect(await dueOf()).toBeLessThanOrEqual(after + 60_000);
 
     await pollReconcileHandler.run({}, testWorkContext(now));
     const mine = (await listWorkByKind('poll_edge')).filter((each) => each.teamId === teamId);
     expect(mine).toHaveLength(2);
+  });
+
+  it('re-arms its row when the module said the edge is next worth polling, within its interval', async () => {
+    await removeWork({ key: pollWorkKey(shared.digest) });
+    const soon = new Date(Date.now() + 15_000);
+    polled.mockResolvedValueOnce({ arrivals: [], cursor: 'c4', pollAgainAt: soon });
+    await pollEdgeHandler.run({ teamId, digest: shared.digest }, testWorkContext(new Date()));
+    expect(await dueOf()).toBe(soon.getTime());
   });
 
   it('polls nothing for a team whose engine is lf', async () => {
