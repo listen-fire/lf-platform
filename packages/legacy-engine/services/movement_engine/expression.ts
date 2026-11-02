@@ -134,7 +134,6 @@ import {
   type SourcePosition,
 } from 'engine-contracts/catalog';
 import { stampedPositionName } from './kg';
-import type { CallbackParamSpec } from 'engine-contracts';
 import {
   NO_PROVENANCE,
   fromOrigin,
@@ -419,7 +418,6 @@ export const describeBinding: Record<Binding['kind'], string> = {
   shapePosition: 'an in-memory shape position',
   nodePosition: 'a synthesised node',
   lazyWalk: 'a deferred traversal',
-  callback: 'a callback',
   plugin: 'a plugin',
   opaque: 'an import',
 };
@@ -451,7 +449,6 @@ const BINDING_IS_POSITION: Record<Binding['kind'], boolean> = {
   shapePosition: true,
   nodePosition: true,
   lazyWalk: true,
-  callback: true,
   plugin: false,
   opaque: false,
 };
@@ -468,7 +465,6 @@ function isOneRecord(binding: Binding): boolean {
     case 'resource':
     case 'shapePosition':
     case 'nodePosition':
-    case 'callback':
       return true;
     case 'event':
     case 'instance':
@@ -486,17 +482,6 @@ function isOneRecord(binding: Binding): boolean {
     default:
       return neverAsAny(binding);
   }
-}
-
-/** The dot plane of a callback binding — the two reads the construct declares
- *  (`CALLBACK_READS` in the checker says the same thing, statically). */
-export function readCallbackField(
-  binding: Extract<Binding, { kind: 'callback' }>,
-  field: string,
-): unknown {
-  if (field === 'id') return binding.callbackId;
-  if (field === 'url') return binding.url;
-  return null;
 }
 
 
@@ -1982,14 +1967,6 @@ async function traverseFrom(
       return readLandings(expr, reached, { name, what: "a block's returned records", ctx });
     }
 
-    case 'callback': {
-      // `cb.id` (the payload a button carries) / `cb.url` (the human link).
-      // The ARROW plane (`cb-[:Called]->`) is not read here: its landings live
-      // in the store, so the interpreter resolves them as block iterations /
-      // an await, where a live read is available.
-      const field = directFieldRead(expr, name, 'a callback');
-      return { value: readCallbackField(binding, field), provenance: NO_PROVENANCE };
-    }
 
     case 'value': {
       // A RECORD held on the value plane (`top = FIRST(rows)`, a list a
@@ -3511,8 +3488,6 @@ export function recordFields(binding: Binding): Record<string, unknown> {
       };
     case 'resource':
       return { ...((binding.resource.data as Record<string, unknown> | undefined) ?? {}) };
-    case 'callback':
-      return { id: readCallbackField(binding, 'id'), url: readCallbackField(binding, 'url') };
     case 'value': {
       if (isDictValue(binding.value)) return { ...binding.value };
       throw unsupported(`reading every field of ${describeHeldValue(binding.value)}`);
@@ -3590,8 +3565,6 @@ function readBindingField(
       return readShapePositionField(binding, field);
     case 'nodePosition':
       return readNodePositionField(binding, field);
-    case 'callback':
-      return { value: readCallbackField(binding, field), provenance: NO_PROVENANCE };
     case 'positions':
       // One field across every returned landing — the ordinary many-position
       // collapse, so zero, one and many read the way a traversal reads.

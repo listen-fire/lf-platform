@@ -6,7 +6,7 @@
 // fallback between the two.
 
 import { LANGUAGE_VERSION } from 'movement-lang';
-import { refuseUnsupportedParkStateVersion, type CallbackBodyInput, type SettleRaceInput } from 'engine-contracts';
+import { refuseUnsupportedParkStateVersion, type SettleRaceInput } from 'engine-contracts';
 import * as rust from 'movement-engine/public/movement-engine';
 import type { EngineHost } from 'movement-engine/public/host';
 
@@ -29,11 +29,6 @@ export async function resumeMovement(input: rust.ResumeMovementInput): Promise<M
 export async function settleRaceFrame(input: SettleRaceInput & { host: EngineHost }): Promise<MovementRunResult> {
   refuseUnsupportedParkStateVersion(input.state.version);
   return engineOf(input) === 'rust' ? rust.settleRaceFrame(input) : typescript.settleRaceFrame(input);
-}
-
-export async function fireCallbackBody(input: CallbackBodyInput & { host: EngineHost }): Promise<MovementRunResult> {
-  refuseUnsupportedParkStateVersion(input.state.version);
-  return engineOf(input) === 'rust' ? rust.fireCallbackBody(input) : typescript.fireCallbackBody(input);
 }
 
 /** The engine a segment of `input`'s run runs on: the run's pin, and, for a

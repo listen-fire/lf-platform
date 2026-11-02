@@ -512,7 +512,6 @@ function indexDescriptor(descriptor: BindingDescriptor, park: ParkReader): void 
     case 'sourcePosition':
     case 'resource':
     case 'value':
-    case 'callback':
     case 'shape':
     case 'localShape':
     case 'movement':
@@ -793,13 +792,6 @@ export function serializeBinding(binding: Binding, park: ParkWriter = newParkWri
     }
     case 'lazyWalk':
       return { kind: 'lazyWalk', walk: serializeDeferredWalk(binding.walk, park) };
-    case 'callback':
-      return {
-        kind: 'callback',
-        callbackId: binding.callbackId,
-        url: binding.url,
-        params: binding.params,
-      };
     // ── Bucket 2 — live ref behind a serialisable identity ──
     case 'instance':
       return { kind: 'instance', instance: serializeInstanceIdentity(binding) };
@@ -1084,13 +1076,6 @@ async function rehydrateInPark(
     case 'recordValue':
       return bindValue(await rehydrateValue(descriptor.value, ctx, park), descriptor.provenance, {
         many: descriptor.many === true,
-      });
-    case 'callback':
-      return binding({
-        kind: 'callback',
-        callbackId: descriptor.callbackId,
-        url: descriptor.url,
-        params: descriptor.params,
       });
     // ── Bucket 2 — live ref ──
     case 'instance':

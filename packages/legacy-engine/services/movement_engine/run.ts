@@ -71,11 +71,11 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { BridgeError, writtenArms, type PluginOutput, type CombinatorKind, credentialArgOf, mapTargetRoots, memberPathBindingName, pathRootName, probePathHead, spellPathHead, spellPathRoot, splitUniquenessConjuncts, identityKeyOf, unwrapCredentialArg, constructionAsCall, argumentBindings, isPositionalCall, isValueTypeRef, spellParamType, typeNameOf, expandWriteSpreads, slotOfTree } from 'movement-lang';
 import { CURRENT_LANGUAGE_VERSION } from 'legacy-lang';
 import { conditionOfSlot, expressionOfSlot, languageVersionDiagnostic, parseMovementExpression, treeOfSlot } from 'legacy-lang';
-import { DiagnosticCodes, readCollectionConfig, readSortSettings, ALL_SETTING_KEYS, SEQUENTIAL_COLLECTION_SETTINGS, type CollectionRunSettings, pluginOutputUnder, before, aggregatedBarePath, bareName, isWalkProjection, EVENT_ACTION_FIELD, fieldTypeOfSchema, eventAddressKey, eventAddressOfHops, isEnumType, readExtractCallConfig, resolveBorrowedField, borrowedTypeSegments, durationToMs, CALLBACK_CALLED_EDGE, CALLBACK_CALL_AT, parseFieldTypeName, schemaSurface, declaredTypesIn, surfaceMisfit, readCall, resolveCallee, since, conjunctsOf, hoistingMemberReads, holdsNestedCall, nameNode, runsAsCall, shortCircuitOf, valueChildren, withValueChildren, bindPluginArgs, memberLocal, packageMembers, pluginArgMisfitMessage, pluginPositionalParams, pluginSpecUnder, EXTRACTED_RECORD_PARAM } from 'legacy-lang';
+import { DiagnosticCodes, readCollectionConfig, readSortSettings, ALL_SETTING_KEYS, SEQUENTIAL_COLLECTION_SETTINGS, type CollectionRunSettings, pluginOutputUnder, before, aggregatedBarePath, bareName, isWalkProjection, EVENT_ACTION_FIELD, fieldTypeOfSchema, eventAddressKey, eventAddressOfHops, isEnumType, readExtractCallConfig, resolveBorrowedField, borrowedTypeSegments, durationToMs, parseFieldTypeName, schemaSurface, declaredTypesIn, surfaceMisfit, readCall, resolveCallee, since, conjunctsOf, hoistingMemberReads, holdsNestedCall, nameNode, runsAsCall, shortCircuitOf, valueChildren, withValueChildren, bindPluginArgs, memberLocal, packageMembers, pluginArgMisfitMessage, pluginPositionalParams, pluginSpecUnder, EXTRACTED_RECORD_PARAM } from 'legacy-lang';
 import { MovementParseError } from 'movement-lang';
 import { parseNestedCall } from 'legacy-lang';
-import type { MExpr, AwaitExpression, AwaitSource, LanguageVersion, ClosureExpression, DurationLiteral, RValue, RefreshStatement, CombinatorExpression, CollectionOpExpression, MembersExpression, ArmExpression, CallArg, PluginSpec, CallStatement, Catalog, CatalogSnapshot, ConstructionCall, ExprSlot, CallbackExpression, CallbackSubject, ExtractCallExpression, ExtractExpression, InstanceSchema, LinkExpression, LinkTarget, LinkedExport, MatchExpression, MatchTarget, LinkedFile, MovementCondition, MovementDeclaration, MovementParam, NodeLiteral, CopyPlan, MapSpread, PathHead, Program, ShapeDeclaration, ShapeNode, Statement, TraversalBlock, WriteExpression, WriteSpread, WriteTarget, FieldWriteMode } from 'movement-lang';
-import type { CallNode, ShortCircuit, CallPosition, CallReading, CallScope, EventAddress, ProgramLink, SuppliedSurface, SurfaceFieldType } from 'legacy-lang';
+import type { MExpr, AwaitExpression, AwaitSource, LanguageVersion, ClosureExpression, DurationLiteral, RValue, RefreshStatement, CombinatorExpression, CollectionOpExpression, MembersExpression, ArmExpression, CallArg, PluginSpec, CallStatement, Catalog, CatalogSnapshot, ConstructionCall, ExprSlot, ExtractCallExpression, ExtractExpression, InstanceSchema, LinkExpression, LinkTarget, LinkedExport, MatchExpression, MatchTarget, LinkedFile, MovementCondition, MovementDeclaration, MovementParam, NodeLiteral, CopyPlan, MapSpread, PathHead, Program, ShapeDeclaration, ShapeNode, Statement, TraversalBlock, WriteExpression, WriteSpread, WriteTarget, FieldWriteMode } from 'movement-lang';
+import type { CallNode, ShortCircuit, CallPosition, CallReading, CallScope, ProgramLink, SuppliedSurface, SurfaceFieldType } from 'legacy-lang';
 import type { Expression, TraversalStep } from 'movement-lang/expression/types';
 import { compareOrderValues } from 'movement-lang/expression/order_limit';
 import {
@@ -84,7 +84,7 @@ import {
   pureLeafReads,
 } from 'movement-lang/expression/filter';
 import { neverAsAny } from 'movement-engine/public/types';
-import type { CallbackBodyInput, ResumeInput, RunInput, SettleRaceInput } from 'engine-contracts';
+import type { ResumeInput, RunInput, SettleRaceInput } from 'engine-contracts';
 import type {
   CancelGate,
   MovementRunResult,
@@ -118,7 +118,6 @@ import { foldedShape } from './declared_shape';
 import type {
   AdapterResolution,
   BindingEndpoint,
-  CallbackSink,
   EngineHost,
 } from 'movement-engine/public/host';
 import {
@@ -273,11 +272,7 @@ import {
   typescriptParkState,
 } from './serialize';
 import {
-  CALLBACK_AWAIT_TYPE,
-  isCallbackParamType,
   refuseUnsupportedParkStateVersion,
-  type CallbackCall,
-  type CallbackParamSpec,
   type WriteRecord as RecordedWrite,
 } from 'engine-contracts';
 import { checkPinnedInRust, type CheckInput, recordRunEngine, checkInputOf } from 'movement-engine/public/movement-engine';
@@ -297,10 +292,15 @@ import {
 } from './run_context';
 import { CallDepthExceeded, isCallDepthExceeded, maxCallDepth } from 'movement-engine/public/limits';
 
-/** The in-memory graph a `Called` landing belongs to. A callback belongs to no
- *  SYSTEM, so this names the construct, never an adapter — it is what an `IS`
- *  test would compare against, and it is derived in one place. */
-const CALLBACK_LANDING_SHAPE = 'callback';
+/** What a legacy pin meets at a construct listen-fire 0.13 retired: the
+ *  0.13 engine keeps no callbacks and waits only on listenable edges, so the
+ *  remedy is the automation's upgrade (rulings 7 and 11). */
+function retiredForLegacyPins(construct: string): MovementEngineError {
+  return new MovementEngineError(
+    'MOVENG_UNSUPPORTED',
+    `${construct} was retired in listen-fire 0.13 for automations on a legacy language version: upgrade this automation`,
+  );
+}
 // ── Public surface ──────────────────────────────────────────────────────────
 
 // Re-exported for the engine's public surface, alongside `CancelGate`.
@@ -438,30 +438,6 @@ export async function settleRaceFrame(
       program,
       state: typescriptParkState(input.state),
       frameAddress: input.frameAddress,
-    }),
-  );
-}
-
-/**
- * Run a fired callback's body against its captured continuation (callback-
- * primitive layer 2). `state` is the callback row's stored state — the same
- * `ParkedScopeState` a park writes, whose `address` is the callback expression's
- * entry point. `source` MUST be the run's version-pinned source (P11), so the
- * address resolves to the same expression it was minted from.
- */
-export async function fireCallbackBody(
-  given: CallbackBodyInput & { host: EngineHost },
-): Promise<MovementRunResult> {
-  const input = withIsoEvent(given);
-  refuseUnsupportedParkStateVersion(input.state.version);
-  onTheTypeScriptEngine(input);
-  const { program, prepared } = parseAndCheck(input);
-  return inRunContext(input, (context) =>
-    new Interpreter(input, { ...prepared, context }).fireCallback({
-      program,
-      state: typescriptParkState(input.state),
-      values: input.values,
-      callIndex: input.callIndex,
     }),
   );
 }
@@ -1099,72 +1075,6 @@ function literalArmsOf(expr: CombinatorExpression | undefined): ArmExpression[] 
   return expr !== undefined ? writtenArms(expr.arms) : [];
 }
 
-/** The edge name of an awaited traversal's single hop — `-[:Response]->` and
- *  `-[got:Response]->` both yield `Response`. Backtick-quoted names are
- *  unwrapped. The checker has already validated the hop; this only extracts the
- *  name the awaitable capability keys on. */
-function awaitEdgeName(hopsRaw: string): string {
-  // -[ <alias>? : <name> <WHERE …>? ]-> — the alias (if any) precedes the FIRST
-  // colon; the edge name follows it (optionally backtick-quoted).
-  const inner = hopsRaw.replace(/^-\[/, '').replace(/\]->\s*$/, '');
-  const colon = inner.indexOf(':');
-  const afterColon = (colon >= 0 ? inner.slice(colon + 1) : inner).trim();
-  const nameMatch = /^`([^`]+)`|^([^\s\]]+)/.exec(afterColon);
-  return (nameMatch?.[1] ?? nameMatch?.[2] ?? afterColon).trim();
-}
-
-/** The pure WHERE predicate of an awaited hop (`q-[r:Response WHERE r.answer]->`)
- *  as an Expression — parsed off the head by probing the traversal with a
- *  sentinel terminal (the formula parser needs one). Undefined when the hop
- *  carries no WHERE or doesn't parse to a traversal. */
-function awaitHopFilter(head: PathHead, languageVersion: LanguageVersion): Expression | undefined {
-  const traverse = parseMovementExpression(
-    `${probePathHead(head)}.\`__await_where_probe__\``,
-    languageVersion,
-  );
-  if (traverse.type !== 'traverse') return undefined;
-  const last = traverse.steps[traverse.steps.length - 1];
-  return last !== undefined && last.type === 'edge' ? last.expressionFilter : undefined;
-}
-
-/**
- * Does one candidate landing satisfy the awaited hop's pure WHERE (B.1)? The
- * predicate is checker-guaranteed PURE, so its leaf reads resolve THROUGH the
- * adapter's `getFieldValue` for the landing's own type — the same read path the
- * bound body uses. Reading candidates the same way they'll be read post-bind is
- * what keeps an adapter that translates field names (Slack: `User` → `user`)
- * honest under a WHERE without the engine knowing any adapter's internal keys.
- *
- * Decided as a hop WHERE is (`decidePurePredicate`): an AND stops at its first
- * false conjunct, so a field the rest of the WHERE names is never asked of a
- * candidate that has already failed — an adapter may rightly refuse to read it.
- */
-export async function awaitLandingMatches(input: {
-  filter: Expression;
-  /** The host's clock, which a `WITHIN` measures from; absent, the wall
-   *  clock. */
-  clock?: EngineClock;
-  adapter: Adapter;
-  adapterType: string;
-  landing: { recordType?: string; fields: Record<string, unknown> };
-}): Promise<boolean> {
-  const position = makeUnstablePosition({
-    adapterType: input.adapterType,
-    recordType: input.landing.recordType ?? 'Response',
-    data: input.landing.fields,
-  });
-  return Boolean(
-    await decidePurePredicate(input.filter, (leaf) => {
-      const key = leafReadKey(leaf);
-      const dot = key.indexOf('.');
-      // A leaf reads `<alias>.field` or a bare `field` — the alias IS the
-      // landing, so strip it to the field name the adapter keys by.
-      const field = dot >= 0 ? key.slice(dot + 1) : key;
-      return input.adapter.getFieldValue({ position, fieldId: field });
-    }, input.clock),
-  );
-}
-
 // ── The interpreter ─────────────────────────────────────────────────────────
 
 /** Per-body interpretation context. `atAnchor` is true while statements
@@ -1675,8 +1585,6 @@ const STOPPED: SpineCompletion = { done: false };
 type ResumeLeaf =
   /** Bind the answer and step past the leaf, or re-enter it (§4.4). */
   | { kind: 'continue'; answer?: Binding; reenter: boolean }
-  /** Run a fired callback's body (the leaf is its mint). */
-  | { kind: 'fireCallback'; values: Record<string, unknown>; callIndex: number }
   /** Settle a race whose arms completed in a batch (the leaf is the race). */
   | { kind: 'settleRace'; frameAddress: string };
 
@@ -2099,11 +2007,6 @@ class Interpreter {
   private mutationContext: MutationContext;
   /** Set once the movement's source instance is known. */
   private source?: MovementExprContext['source'];
-  /** The seeded event node's canonical address, when the source's schema
-   *  declares event edges — what a runtime IS on an event subject compares
-   *  against (test pins ⊆ seed pins), and the same derivation that typed the
-   *  seed (`eventSeedAddress`), so the two can never disagree. */
-  private sourceEventAddress?: EventAddress;
   /** The constructed instance binding the entry movement's parameter is
    *  typed against — runtime IS tests on the event compare graph
    *  identity against it (binding objects are declared once, so object
@@ -2144,8 +2047,6 @@ class Interpreter {
    *  (`RunMovementInput.limitPaused`). Never cleared within a segment: only
    *  resuming the run lifts a pause, and that is a new segment. */
   private limitPaused: boolean;
-  /** This segment runs a fired callback's body, which cannot suspend. */
-  private firingCallback = false;
   /** The running movement's body — the extraction module's backward
    *  type adoption scans it for writes the extracted fields flow into. */
   private movementBody: Statement[] = [];
@@ -2403,47 +2304,6 @@ class Interpreter {
       }
     }
 
-    await this.checkCancelBeforeFinishing();
-    return this.assembleResult(movement.name);
-  }
-
-  /**
-   * Run a fired callback's body as a SEGMENT of its owning run (callback-
-   * primitive layer 2). The run keeps its identity, its team, its billing and
-   * its step ledger — no new run identity anywhere. The main continuation stays
-   * parked throughout: this entry runs the body and returns, and if the body
-   * itself parks that is a leaf of its own.
-   */
-  async fireCallback(input: {
-    program: Program;
-    state: ParkedScopeState;
-    values: Record<string, unknown>;
-    callIndex: number;
-  }): Promise<MovementRunResult> {
-    const { movement, movementEnv } = await this.prepareMovement(input.program);
-    this.movementBody = movement.body;
-    this.callStack.push({ name: movement.name, declaration: movement });
-    // A resume cannot get back inside a callback body (its frame is not a
-    // step the resume descent knows), so nothing here may suspend: a body
-    // that meets the cost cap fails this fire, as it always has.
-    this.firingCallback = true;
-    try {
-      await this.resumeAlongAddress({
-        body: movement.body,
-        address: parseAddress(input.state.address),
-        state: input.state,
-        movementEnv,
-        leaf: { kind: 'fireCallback', values: input.values, callIndex: input.callIndex },
-      });
-    } catch (e) {
-      if (e instanceof RunCancelledSignal) this.cancelled = true;
-      else if (e instanceof RunParked) {
-        this.parked = true;
-        this.parkedAddress = e.address;
-      } else if (!(e instanceof ScopeEndedQuietly)) {
-        throw new MovementRunFailed(e, this.assembleResult(movement.name));
-      }
-    }
     await this.checkCancelBeforeFinishing();
     return this.assembleResult(movement.name);
   }
@@ -2794,25 +2654,6 @@ class Interpreter {
     assertParkRead(park);
     const replay = leaf.kind === 'continue' && leaf.reenter ? journal : undefined;
     switch (leaf.kind) {
-      case 'fireCallback':
-        // CALLBACK FIRE (callback-primitive layer 2) — the leaf statement is a
-        // `callback(…)` mint, already run; what this entry runs is its BODY, in
-        // a child scope carrying the fire-time values. It deliberately does NOT
-        // continue the enclosing sequence and does NOT finish the spine: that
-        // continuation is the MAIN one, still parked, and it wakes only through
-        // its own mechanism. One run, multiple entry points.
-        await this.insideSpine(spine, () =>
-          this.runCallbackBody({
-            statement: leafStatements[leafIndex],
-            stmtAddress: childStmt(frameAddress, leafIndex),
-            env: leafEnv,
-            atAnchor: leafBody.atAnchor,
-            position: leafBody.position,
-            values: leaf.values,
-            callIndex: leaf.callIndex,
-          }),
-        );
-        return;
       case 'settleRace':
         await this.completeSpine(spine, 0, state.address, async () => {
           await this.settleRaceAt({
@@ -3667,25 +3508,11 @@ class Interpreter {
       // the event (including the hop to its own record) becomes unresolvable.
       const rootSurfaceType =
         (await naturalRootTypeName(sourceAdapter, this.input.event.rootRecordType)) ??
-        (this.input.event.triggerType === 'mutation'
-          ? (soleEventPosition(sourceBinding.schema) ?? paramType.position)
-          : undefined);
-      // A typed event seeds the EVENT NODE, typed by its canonical narrowed
-      // address (the node the event edge lands on, its pins read off the
-      // payload's own address fields + `action`) — an unstable occurrence
-      // whose record is reached by its `record` edge. Otherwise the
-      // discriminated object type names the root.
-      const eventAddress = eventSeedAddress({
-        schema: sourceBinding.schema,
-        event: this.input.event,
-        rootTypeName: rootSurfaceType,
-      });
-      this.sourceEventAddress = eventAddress;
+        (this.input.event.triggerType === 'mutation' ? paramType.position : undefined);
       this.source = {
         adapter: wrapped,
         position: seedEventPosition(this.input.event, sourceBinding.adapterSlug, {
           ...(rootSurfaceType !== undefined ? { surfaceType: rootSurfaceType } : {}),
-          ...(eventAddress !== undefined ? { eventAddress } : {}),
         }),
         instanceName: sourceBinding.name,
         ...(sourceBinding.schema !== undefined ? { schema: sourceBinding.schema } : {}),
@@ -4410,11 +4237,7 @@ class Interpreter {
         }));
         break;
       case 'callback':
-        env.declare(
-          name,
-          await this.mintCallback(value.callback, env, stmtAddress),
-        );
-        break;
+        throw retiredForLegacyPins('callback(…)');
       case 'node':
         env.declare(
           name,
@@ -5328,12 +5151,10 @@ class Interpreter {
 
   /** Whether this flow can suspend here: inside a statement, with somewhere
    *  durable to park, and somewhere a resume can get back to. A rehearsal has
-   *  no park sink and a callback body no way back: both meet the cap as a
-   *  failure. */
+   *  no park sink, so it meets the cap as a failure. */
   private canSuspend(): boolean {
     return (
-      !this.firingCallback
-      && this.statementSites.getStore() !== undefined
+      this.statementSites.getStore() !== undefined
       && this.context.host.park.sink?.commitSuspension !== undefined
     );
   }
@@ -6057,159 +5878,6 @@ class Interpreter {
     throw new RunParked(address);
   }
 
-  // ── callback (the deferred, addressable invocation) ──
-
-  /**
-   * `cb = callback(<subject>, { once, ttl })` — MINT. The body is not run now;
-   * what happens now is a CAPTURE: the enclosing scope chain is serialized with
-   * the park machinery's own serializer (a callback body IS a parked
-   * continuation with a different entry point — JS closure semantics, which is
-   * the park's capture rule verbatim), and stored against this callback
-   * expression's canonical lexical address. A fire resumes the run there.
-   *
-   * The binding it yields is checker-local: `.id` (the payload every platform
-   * button carries) and `.url` (the human link), plus a `Called` edge read live
-   * from the ledger.
-   *
-   */
-  private async mintCallback(
-    callback: CallbackExpression,
-    env: Environment,
-    stmtAddress: Address,
-  ): Promise<Binding> {
-    const sink = this.context.host.park.callbacks;
-    if (!sink) {
-      throw unsupported(
-        'callback(…)',
-        'this run has no callback sink — a callback needs the durable trigger-run substrate',
-      );
-    }
-    const address = encodeAddress(stmtAddress);
-    const params = this.callbackParams(callback.subject, env);
-    const config = await this.callbackConfig(callback, env);
-    // The CAPTURE. Same shape a park writes, so resume-at-entry is the resume
-    // path with a different leaf rule and nothing bespoke to keep in step.
-    const state = this.parkedState((park) => ({
-      version: 1,
-      address,
-      // A callback binds nothing at fire time beyond its parameters, which the
-      // fire binds into a child scope of this one.
-      bindingName: null,
-      scopeChain: serializeScopeChain(env.chainFromRoot(), park),
-    }));
-    const minted = await sink.mint({
-      address,
-      params,
-      state,
-      singleUse: config.singleUse,
-      ...(config.expiresAt !== undefined ? { expiresAt: config.expiresAt } : {}),
-    });
-    return binding({
-      kind: 'callback',
-      callbackId: minted.id,
-      url: minted.url,
-      params,
-    });
-  }
-
-  /**
-   * A callback's FIRE-TIME signature — the values a platform supplies when it
-   * fires, in DECLARATION order (which is the order the `Called` landing's
-   * fields and the confirm page's controls take).
-   *
-   * Inline: every declared parameter. Named: the callee's parameters MINUS the
-   * ones the author fixed as arguments — an unsupplied parameter is not
-   * missing, it is deferred (the checker types it the same way).
-   */
-  private callbackParams(subject: CallbackSubject, env: Environment): CallbackParamSpec[] {
-    const declared =
-      subject.kind === 'inline'
-        ? subject.closure.params
-        : (() => {
-            const binding = env.resolve(this.calleeName(subject.movement, env));
-            if (binding?.kind !== 'movement') {
-              throw new MovementEngineError(
-                'MOVENG_RUNTIME',
-                `callback(${subject.movement}): '${subject.movement}' is not a movement in scope — the checker should have caught this`,
-              );
-            }
-            const supplied = new Set(
-              argumentBindings(subject.args, binding.declaration.params.map((p) => p.name)).map((b) => b.param),
-            );
-            const deferred = binding.declaration.params.filter((p) => !supplied.has(p.name));
-            if (deferred.length > 0) {
-              // The named form's fire-time binding is not built (a movement
-              // parameter is a record position today, so nothing a platform
-              // sends can fill one). Refuse AT MINT rather than minting a
-              // callback that could only ever fail when tapped.
-              throw unsupported(
-                `callback(${subject.movement}(…)) leaving '${deferred.map((p) => p.name).join("', '")}' unsupplied`,
-                'a named callback binds no values at fire time yet — supply every argument, or use the inline form (`callback((x: <text>) => { … })`)',
-              );
-            }
-            return deferred;
-          })();
-
-    return declared.map((param) => {
-      // The checker refuses a record position here (no platform can hand us
-      // one), so anything unrecognised is a checker escape — say so loudly
-      // rather than defaulting the type and mis-coercing at fire time.
-      const type = typeNameOf(param.type);
-      if (type === undefined || !isCallbackParamType(type.graph) || type.hopsRaw !== undefined) {
-        throw new MovementEngineError(
-          'MOVENG_RUNTIME',
-          `a callback's parameter '${param.name}' must be a scalar type, got '<${param.type !== undefined ? spellParamType(param.type) : '?'}>' — the checker should have caught this`,
-        );
-      }
-      return { name: param.name, type: type.graph };
-    });
-  }
-
-  /** `{ once: <boolean>, ttl: <duration> }` — the config. `once` DEFAULTS TRUE,
-   *  and the default lives here (the engine owns it) rather than in the AST. */
-  private async callbackConfig(
-    callback: CallbackExpression,
-    env: Environment,
-  ): Promise<{ singleUse: boolean; expiresAt?: string }> {
-    let singleUse = true;
-    let expiresAt: string | undefined;
-    for (const entry of callback.config) {
-      switch (entry.name) {
-        case 'once': {
-          const { value } = await this.evaluateSlot(entry.value, { env });
-          singleUse = value !== false;
-          break;
-        }
-        case 'ttl':
-          // Checker-validated duration literal, so the raw spelling parses.
-          expiresAt = new Date(
-            (await this.context.clock.now()).getTime() + durationToMs(entry.value.raw.trim()),
-          ).toISOString();
-          break;
-        default:
-          throw new MovementEngineError(
-            'MOVENG_RUNTIME',
-            `'${entry.name}' is not a callback setting — the checker should have caught this`,
-          );
-      }
-    }
-    return { singleUse, ...(expiresAt !== undefined ? { expiresAt } : {}) };
-  }
-
-  /** The `Called` landing — `At` plus one field per fire-time parameter, which
-   *  is exactly what the checker derived at the construction site. An in-memory
-   *  record: a callback belongs to no graph, so there is no adapter to read
-   *  through. */
-  private callbackCallBinding(call: CallbackCall): Binding {
-    return binding({
-      kind: 'shapePosition',
-      shape: CALLBACK_LANDING_SHAPE,
-      node: CALLBACK_CALLED_EDGE,
-      fields: { [CALLBACK_CALL_AT]: call.at, ...call.values },
-      fieldProvenance: {},
-    });
-  }
-
   /**
    * `await <traversal>` / `await sleep(<duration>)` — the wake primitive
    * (asks-as-adapter §A, P18). Two sources:
@@ -6263,374 +5931,7 @@ class Interpreter {
       return;
     }
 
-    const address = encodeAddress(stmtAddress);
-    const edge = awaitEdgeName(source.head.hopsRaw);
-    // The awaited WHERE (`-[:Response WHERE r.answer]->`) — checker-guaranteed
-    // PURE (MOV_AWAIT_IMPURE_WHERE). Evaluated at RESOLUTION time against each
-    // candidate landing's fields (B.1): a matching landing resolves the await,
-    // an unmatched set leaves it armed. Undefined ⇒ no narrowing.
-    const hopFilter = /\bWHERE\b/i.test(source.head.hopsRaw)
-      ? awaitHopFilter(source.head, this.languageVersion)
-      : undefined;
-
-    // Resolve the awaited head to a record identity. The head is a bound handle
-    // whose adapter carries the awaitable capability (the checker guaranteed the
-    // edge is awaitable, hence the adapter advertises it).
-    const headBinding = env.resolve(pathRootName(source.head) ?? '');
-    if (headBinding?.kind === 'callback') {
-      await this.interpretCallbackAwait({
-        binding: headBinding,
-        edge,
-        ...(hopFilter !== undefined ? { hopFilter } : {}),
-        bindingName,
-        env,
-        address,
-      });
-      return;
-    }
-    if (headBinding === undefined || headBinding.kind !== 'handle') {
-      throw unsupported(
-        `await '${pathRootName(source.head) ?? ''}-[:${edge}]->'`,
-        'await needs a written record handle as its head (e.g. an ask written with `write asks-[:Check]->`)',
-      );
-    }
-    const recordId = headBinding.handle.externalId;
-    const adapterType = headBinding.handle.adapterType;
-    // The FILE-SCOPE instance name the awaited head's adapter came from — the
-    // SAME identity a rehydrated `sourcePosition` re-resolves its read seam
-    // through after a serialize→DB→deserialize round trip (`resolveSourceRead`
-    // looks it up in the re-parsed file scope). Derive it from the head's graph
-    // exactly as `graphReadFor` does, NOT from the local binding name (which is
-    // absent from file scope and crashes rehydration — chunk C branch-export).
-    const instanceName = headBinding.graph.instance.name;
-    if (recordId === undefined) {
-      // dry_run / rehearsed write — no real record to await; settle empty (F3).
-      this.declareAwaitResult(env, bindingName, adapterType, undefined, null, instanceName);
-      return;
-    }
-
-    // Resolve the awaitable adapter with the AWAITED HEAD's own credential +
-    // construction args — the same instance the write went through — so
-    // `resolveAwait` can drive the live re-check (Slack's `conversations.replies`
-    // needs the bot token). A bare source resolution (no credential) left the
-    // Slack client null and the reply never resolved. `credentialsIdFor` is a
-    // no-op for credential-free intrinsics (the ask adapter), so this is
-    // uniformly correct.
-    const headInstance =
-      headBinding.graph.kind === 'instance' ? headBinding.graph.instance : undefined;
-    const headCredentialsId =
-      headInstance !== undefined ? this.credentialsIdFor(headInstance) : undefined;
-    const headConstructionArgs =
-      headInstance !== undefined ? constructionArgsOf(headInstance) : {};
-    const adapter = await this.resolveAdapterFn({
-      adapterType,
-            ...(headCredentialsId !== undefined ? { credentialsId: headCredentialsId } : {}),
-      ...(Object.keys(headConstructionArgs).length ? { constructionArgs: headConstructionArgs } : {}),
-      role: 'source',
-    });
-    if (!adapter.awaitable) {
-      throw unsupported(
-        `await '-[:${edge}]->' on '${adapterType}'`,
-        `the '${adapterType}' adapter does not implement the awaitable capability`,
-      );
-    }
-
-    // Under dry_run the faked write minted no resolvable record; settle empty.
-    if (this.input.dryRun) {
-      this.declareAwaitResult(env, bindingName, adapterType, adapter, {}, instanceName);
-      logger.info(`await ${edge} (dry-run: resolves empty)`);
-      return;
-    }
-
-    // The head's inline data — everything a normal traversal gets (correlation,
-    // not stability). An adapter whose correlation identity isn't the bare
-    // `recordId` reads it here (Slack's `Replies`: channel + thread ride the
-    // write handle's data, not its `ts`).
-    const headData = headBinding.handle.resultData ?? undefined;
-    const awaitable = adapter.awaitable;
-    const point = { recordId, edge, ...(headData !== undefined ? { headData } : {}) };
-    // The whole check, WHERE included: the re-check after parking asks the same
-    // question, so landings that all fail the WHERE never count as a wake.
-    const check = async (): Promise<
-      | { status: 'bind'; landing: { recordType?: string; fields: Record<string, unknown> } }
-      | { status: 'empty' }
-      | { status: 'wait'; correlationKey: string }
-    > => {
-      const resolution = await awaitable.resolveAwait(point);
-      switch (resolution.status) {
-        case 'pending':
-          return { status: 'wait', correlationKey: resolution.correlationKey };
-        case 'empty':
-          return { status: 'empty' };
-        case 'landed':
-          // Apply the awaited WHERE to each candidate (B.1) THROUGH the adapter's
-          // own getFieldValue — the exact read path the resumed body uses — so the
-          // predicate reads a candidate identically to `o.User` post-bind, with no
-          // name/keying skew between the WHERE and the binding. The first landing
-          // to pass wins (v1 edges are cardinality-one).
-          for (const landing of resolution.landings) {
-            if (
-              hopFilter === undefined ||
-              (await awaitLandingMatches({ filter: hopFilter, adapter, adapterType, landing, clock: this.context.clock }))
-            ) {
-              return { status: 'bind', landing };
-            }
-          }
-          // Landings exist but NONE match the WHERE — the await stays ARMED,
-          // exactly like pending; a later matching arrival resumes it (F10/B.1).
-          return { status: 'wait', correlationKey: resolution.correlationKey };
-        default:
-          return neverAsAny(resolution);
-      }
-    };
-
-    const outcome = await check();
-    if (outcome.status === 'bind') {
-      // The resolved shortcut (S2): continue inline.
-      this.declareAwaitResult(
-        env,
-        bindingName,
-        adapterType,
-        adapter,
-        outcome.landing.fields,
-        instanceName,
-        outcome.landing.recordType,
-      );
-      return;
-    }
-    if (outcome.status === 'empty') {
-      // A resolvesEmpty settlement — bind an empty match; downstream runs zero
-      // times (F6). Awaiting an already-settled-empty edge is instant.
-      this.declareAwaitResult(env, bindingName, adapterType, adapter, {}, instanceName);
-      return;
-    }
-    // Pending: record the await park under the adapter's key, and suspend.
-    // Resume re-enters here.
-    const parkSink = this.context.host.park.sink;
-    if (!parkSink) {
-      throw unsupported(
-        'await (a durable park)',
-        'this run has no park sink — an await needs the durable trigger-run substrate',
-      );
-    }
-    const state = this.parkedState((park) => ({
-      version: 1,
-      address,
-      // An await binds nothing at park time: resume RE-ENTERS here and the await
-      // re-checks live, binding the landing itself (`reenter` semantics).
-      bindingName: null,
-      scopeChain: serializeScopeChain(env.chainFromRoot(), park),
-    }));
-    await parkSink.commitAwaitPark({
-      address,
-      state,
-      adapterType: adapter.adapterType,
-      correlationKey: outcome.correlationKey,
-    });
-    await this.wakeIfResolvedWhileParking({
-      adapterType: adapter.adapterType,
-      correlationKey: outcome.correlationKey,
-      resolvesNow: async () => (await check()).status !== 'wait',
-    });
-    this.trace.push({ kind: 'gate', outcome: false });
-    throw new RunParked(address);
-  }
-
-  /**
-   * `await cb-[:Called]->` — CHECK-NOW, ELSE PARK, exactly as an adapter await
-   * does, with the CALL LEDGER standing in for `resolveAwait` and the callback id
-   * for its key: a call already recorded resolves inline; nothing recorded
-   * parks. Resume RE-ENTERS here and re-reads the ledger live — which is why
-   * the calls are never carried on the captured binding.
-   *
-   * This is also the author's keep-alive: a run that awaits `Called` stays
-   * parked, which is how buttons stay live under ruling (b).
-   */
-  private async interpretCallbackAwait(input: {
-    binding: Extract<Binding, { kind: 'callback' }>;
-    edge: string;
-    hopFilter?: Expression;
-    bindingName: string | undefined;
-    env: Environment;
-    address: string;
-  }): Promise<void> {
-    const { binding, bindingName, env, address } = input;
-    if (input.edge !== CALLBACK_CALLED_EDGE) {
-      throw unsupported(
-        `await '-[:${input.edge}]->' on a callback`,
-        `a callback has one edge, '${CALLBACK_CALLED_EDGE}'`,
-      );
-    }
-    const sink = this.context.host.park.callbacks;
-    if (!sink) {
-      throw unsupported(
-        `await cb-[:${CALLBACK_CALLED_EDGE}]->`,
-        'this run has no callback sink — a callback needs the durable trigger-run substrate',
-      );
-    }
-
-    const firstMatch = async (): Promise<CallbackCall | undefined> => {
-      for (const call of await sink.calls({ callbackId: binding.callbackId })) {
-        if (await this.callbackCallMatches(call, input.hopFilter)) return call;
-      }
-      return undefined;
-    };
-    const matched = await firstMatch();
-    if (matched !== undefined) {
-      // The resolved shortcut (S2): a fire already landed — continue inline.
-      if (bindingName !== undefined) env.declare(bindingName, this.callbackCallBinding(matched));
-      return;
-    }
-
-    const parkSink = this.context.host.park.sink;
-    if (!parkSink) {
-      throw unsupported(
-        `await cb-[:${CALLBACK_CALLED_EDGE}]-> (a durable park)`,
-        'this run has no park sink — an await needs the durable trigger-run substrate',
-      );
-    }
-    const state = this.parkedState((park) => ({
-      version: 1,
-      address,
-      // Re-enter: the await re-reads the ledger and binds its own landing.
-      bindingName: null,
-      scopeChain: serializeScopeChain(env.chainFromRoot(), park),
-    }));
-    await parkSink.commitAwaitPark({
-      address,
-      state,
-      adapterType: CALLBACK_AWAIT_TYPE,
-      correlationKey: binding.callbackId,
-    });
-    await this.wakeIfResolvedWhileParking({
-      adapterType: CALLBACK_AWAIT_TYPE,
-      correlationKey: binding.callbackId,
-      resolvesNow: async () => (await firstMatch()) !== undefined,
-    });
-    this.trace.push({ kind: 'gate', outcome: false });
-    throw new RunParked(address);
-  }
-
-  /**
-   * The lost-wake closure. The first check said "not yet", then the park went
-   * in; a landing between the two woke nothing, because a wake for a key with
-   * no parked run is a no-op. Asking the await's whole question once more
-   * (WHERE included) now that the park is durable covers that gap: anything
-   * landing after this is seen by its own wake.
-   *
-   * A re-check that cannot answer (the remote is down) leaves the run parked
-   * and wakes nothing: waking would resume into the same failure and fail the
-   * run. The vendor's at-least-once wake covers later landings. The known gap
-   * is a landing whose only wake arrived before the correlation existed AND
-   * whose re-check failed — logged loudly here. A wake that cannot be queued
-   * leaves the park as durable as before, so it is logged, not raised.
-   */
-  private async wakeIfResolvedWhileParking(input: {
-    adapterType: string;
-    correlationKey: string;
-    resolvesNow: () => Promise<boolean>;
-  }): Promise<void> {
-    const wake = { adapterType: input.adapterType, correlationKey: input.correlationKey };
-    let resolved: boolean;
-    try {
-      resolved = await input.resolvesNow();
-    } catch (err) {
-      logger.error('[MovementEngine] await re-check after parking failed; the run stays parked without a wake', {
-        ...wake,
-        teamId: this.input.teamId,
-        error: err instanceof Error ? err.message : String(err),
-      });
-      return;
-    }
-    if (!resolved) return;
-    try {
-      await this.context.host.park.wake(wake);
-    } catch (err) {
-      logger.error('[MovementEngine] await wake after parking could not be queued', {
-        ...wake,
-        teamId: this.input.teamId,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
-
-  /**
-   * Run a fired callback's BODY — the side entry. The scope chain up to the
-   * callback statement is already rehydrated; the body runs in a CHILD of it
-   * (closure semantics) carrying the fire-time values, at its own address frame
-   * so a body that parks gets a leaf of its own and repeated fires of a
-   * repeatable callback never collide.
-   *
-   * A body-less `callback()` has nothing to run: the fire IS the recorded call,
-   * and whoever awaits `Called` is woken by the caller. Not a variant — an
-   * empty body does exactly this by construction.
-   */
-  private async runCallbackBody(input: {
-    statement: Statement | undefined;
-    stmtAddress: Address;
-    env: Environment;
-    atAnchor: boolean;
-    position: SourcePosition | undefined;
-    values: Record<string, unknown>;
-    callIndex: number;
-  }): Promise<void> {
-    const statement = input.statement;
-    if (
-      statement === undefined ||
-      statement.kind !== 'assign' ||
-      statement.value.kind !== 'callback'
-    ) {
-      throw new MovementEngineError(
-        'MOVENG_RUNTIME',
-        `fireCallback: no callback statement at '${encodeAddress(input.stmtAddress)}' — the run's pinned version and the stored entry point disagree`,
-      );
-    }
-    const subject = statement.value.callback.subject;
-    const frameAddress = childIter(input.stmtAddress, input.callIndex);
-    const body: BodyContext = {
-      atAnchor: input.atAnchor,
-      ...(input.position !== undefined ? { position: input.position } : {}),
-      address: frameAddress,
-    };
-
-    if (subject.kind === 'named') {
-      // The named form defers a whole movement with its fixed arguments — the
-      // ordinary call path.
-      await this.executeCall(
-        { kind: 'call', callee: subject.movement, args: subject.args, span: subject.span },
-        input.env,
-        body,
-      );
-      return;
-    }
-
-    // The inline subject is an ordinary closure, invoked with what the
-    // platform sent. What it returns goes nowhere: firing a callback resumes a
-    // run, it does not hand a value to whoever minted it.
-    const child = input.env.child();
-    for (const param of subject.closure.params) {
-      child.declare(param.name, binding({
-        kind: 'value',
-        value: input.values[param.name] ?? null,
-        provenance: NO_PROVENANCE,
-      }));
-    }
-    await this.interpretBody(subject.closure.body, child, body);
-  }
-
-  /** The awaited hop's pure WHERE against one recorded call. A call's fields are
-   *  plain data (no adapter translates them), so the predicate reads them
-   *  directly — the same values the bound landing will read. */
-  private async callbackCallMatches(call: CallbackCall, filter: Expression | undefined): Promise<boolean> {
-    if (filter === undefined) return true;
-    const fields: Record<string, unknown> = { [CALLBACK_CALL_AT]: call.at, ...call.values };
-    const reads = new Map<string, unknown>();
-    for (const leaf of pureLeafReads(filter)) {
-      const key = leafReadKey(leaf);
-      const dot = key.indexOf('.');
-      reads.set(key, fields[dot >= 0 ? key.slice(dot + 1) : key]);
-    }
-    return Boolean(await decideWithClock(filter, { read: (name) => reads.get(name) }, this.context.clock));
+    throw retiredForLegacyPins(`await '${spellPathHead(source.head)}'`);
   }
 
   /**
@@ -6768,42 +6069,6 @@ class Interpreter {
       child.declare(param.name, bindValue(values[param.name] ?? null));
     }
     return this.interpretBody(binding.closure.body, child, body);
-  }
-
-  /**
-   * Bind an awaited edge's resolution as the landed node — a source-position
-   * over the awaitable adapter carrying the landing's fields inline (`r.answer`
-   * reads through the adapter's `getFieldValue`). An EMPTY resolution binds a
-   * fields-less node: `r.answer` reads null and downstream blocks run zero
-   * times. `null` fields (no adapter) is the dry-run / no-record case.
-   */
-  private declareAwaitResult(
-    env: Environment,
-    bindingName: string | undefined,
-    adapterType: string,
-    adapter: Adapter | undefined,
-    fields: Record<string, unknown> | null,
-    instanceName: string,
-    // The landing node's natural type (`Response` for an ask, `Message` for a
-    // Slack reply). The bound position types AS this, so field reads dispatch to
-    // the adapter's `getFieldValue` for the right type. Absent (empty/dry-run) ⇒
-    // the ask `Response` default — a fields-less node reads null regardless.
-    recordType: string = 'Response',
-  ): void {
-    if (bindingName === undefined) return;
-    if (fields === null || adapter === undefined) {
-      env.declare(bindingName, binding({ kind: 'value', value: null, provenance: NO_PROVENANCE }));
-      return;
-    }
-    const position = makeUnstablePosition({
-      adapterType,
-      recordType,
-      data: fields,
-    });
-    // `instanceName` is the awaited head's FILE-SCOPE instance (not the local
-    // binding name) — the identity a rehydrated read seam re-resolves through.
-    const read: SourceRead = { adapter, instanceName };
-    env.declare(bindingName, binding({ kind: 'sourcePosition', position, read }));
   }
 
   // ── refresh (asks-as-adapter F5/F22) ──
@@ -7074,45 +6339,14 @@ class Interpreter {
         if (condition.type.position === undefined && condition.type.hopsRaw === undefined) {
           return true;
         }
-        const seedAddress = this.sourceEventAddress;
         // An ADDRESS test (`IS <at-[:`Record Change` WHERE `action` == …]->>`)
-        // against a typed event: the test is TRUE when its pins are a SUBSET
-        // of the seed's own address, agreeing on every value — the same
-        // intersection semantics the checker narrows by, over the same two
-        // derivations (`eventAddressOfHops` / `eventSeedAddress`), so check
-        // time and fire time cannot disagree.
+        // against the seeded event: the test's key against the seed's type.
         if (condition.type.hopsRaw !== undefined) {
           const test = eventAddressOfHops(condition.type.hopsRaw);
           if (test === undefined) return false;
-          if (seedAddress !== undefined) {
-            if (test.event !== seedAddress.event) return false;
-            // An axis the seed never pinned is "can't tell", not "not that
-            // one" — the same distinction the record plane draws, on the plane
-            // where the kind is an ADDRESS rather than a type name. The seed's
-            // pins come off the payload, so a trigger that delivered the event
-            // without its `action` (or without a declared narrowing key) leaves
-            // every pinned test unanswerable; returning false there would route
-            // the run into an `else` the checker has typed as "none of the
-            // tested addresses", which is the elimination reading a silence as
-            // a fact. A pin the seed HAS, disagreeing, is an ordinary false.
-            const unpinned = Object.keys(test.narrowing).filter(
-              key => seedAddress.narrowing[key] === undefined,
-            );
-            if (unpinned.length > 0) {
-              throw this.undiscriminatedIsTest(subjectName, unpinnedAxis(unpinned));
-            }
-            return Object.entries(test.narrowing).every(
-              ([key, value]) => seedAddress.narrowing[key] === value,
-            );
-          }
           const keyed = this.source?.position?.recordType ?? undefined;
           if (keyed == null) throw this.undiscriminatedIsTest(subjectName, UNDISCRIMINATED_EVENT);
           return eventAddressKey(test) === keyed;
-        }
-        // Position-form (`IS <chat-[:`Message Received`]->>`): an unpinned
-        // event-node name is a subset test with no pins.
-        if (seedAddress !== undefined && condition.type.position === seedAddress.event) {
-          return true;
         }
         const position = this.source?.position;
         // A typed webhook event is an UNSTABLE position — the live record is
@@ -7699,41 +6933,6 @@ class Interpreter {
         );
       }
       return perLanding;
-    }
-
-    if (rootBinding.kind === 'callback') {
-      // `cb-[c:Called]-> { … }` — the SYNCHRONOUS read of the calls so far.
-      // Zero of them before anything fires is an empty traversal (the block runs
-      // zero times), not a special state; a repeatable callback simply
-      // accumulates, and traversals are many-valued already.
-      if (probe?.type !== 'traverse' || probe.steps.length !== 1) {
-        throw unsupported('this block head over a callback');
-      }
-      const step = probe.steps[0];
-      if (step.type !== 'edge' || step.edgeTypeId !== CALLBACK_CALLED_EDGE) {
-        throw unsupported(
-          `'${head.hopsRaw}' on a callback`,
-          `a callback has one edge, '${CALLBACK_CALLED_EDGE}'`,
-        );
-      }
-      const sink = this.context.host.park.callbacks;
-      if (!sink) {
-        throw unsupported(
-          `cb-[:${CALLBACK_CALLED_EDGE}]->`,
-          'this run has no callback sink — a callback needs the durable trigger-run substrate',
-        );
-      }
-      const calls: CallbackCall[] = [];
-      for (const call of await sink.calls({ callbackId: rootBinding.callbackId })) {
-        if (await this.callbackCallMatches(call, step.expressionFilter)) calls.push(call);
-      }
-      return calls
-        .map((call) => {
-          const landing = this.callbackCallBinding(call);
-          const bindings = new Map<string, Binding>();
-          if (step.alias !== undefined) bindings.set(step.alias, landing);
-          return { bindings, landing };
-        });
     }
 
     if (rootBinding.kind === 'nodePosition' || rootBinding.kind === 'lazyWalk') {
@@ -9842,7 +9041,6 @@ class Interpreter {
       case 'tuple':
       case 'lazyWalk':
       case 'closure':
-      case 'callback':
       case 'blockMeta':
       case 'instance':
       case 'shape':
@@ -11817,7 +11015,6 @@ class Interpreter {
       case 'shapePosition':
       case 'nodePosition':
       case 'lazyWalk':
-      case 'callback':
       case 'positions':
       case 'closure':
       case 'tuple':
@@ -12123,69 +11320,6 @@ async function naturalRootTypeName(
   }
 }
 
-/**
- * The canonical address of the EVENT NODE a typed inbound event seeds, or
- * undefined when the source's schema declares no event edges (such a source
- * keeps its stable record seed).
- *
- * THE EVENT IS JUST A NODE, so the seed's type is that node narrowed by what
- * the event itself says: each declared address hop (`eventNarrowingKeys`)
- * read off the payload's same-named field (`base`, `table` — the adapter
- * publishes them ON the event node precisely so the same values narrow both),
- * plus the payload's `action` when the node declares that axis. The node is
- * picked by the event's own discrimination (`rootTypeName`, the natural name
- * of `rootRecordType`) — the multi-edge case (whatsapp's message / reaction /
- * location) — falling back to the sole declared edge.
- *
- * The same derivation types the seed (`eventAddressKey`) and answers runtime
- * IS tests (pin subset), so check time and fire time cannot disagree.
- *
- */
-/**
- * The one event node an adapter publishes, when it publishes exactly one.
- *
- * Derived, not named: an adapter with a single event surface has no ambiguity
- * about which node an event of its is, and one with several must discriminate
- * (which is what `rootRecordType` is for). Nothing here knows which adapter it
- * is looking at.
- */
-function soleEventPosition(schema: InstanceSchema | undefined): string | undefined {
-  const nodes = schema?.eventPositions;
-  return nodes !== undefined && nodes.length === 1 ? nodes[0].position : undefined;
-}
-
-function eventSeedAddress(input: {
-  schema: InstanceSchema | undefined;
-  event: TriggerEvent;
-  rootTypeName: string | undefined;
-}): EventAddress | undefined {
-  const schema = input.schema;
-  const nodes = schema?.eventPositions;
-  if (schema === undefined || nodes === undefined || nodes.length === 0) return undefined;
-  if (input.event.triggerType !== 'webhook' && input.event.triggerType !== 'poll') {
-    return undefined;
-  }
-  const node =
-    nodes.find((n) => n.position === input.rootTypeName)?.position
-    ?? (nodes.length === 1 ? nodes[0].position : undefined);
-  if (node === undefined) return undefined;
-  const payload =
-    typeof input.event.payload === 'object' && input.event.payload !== null
-      ? (input.event.payload as Record<string, unknown>)
-      : undefined;
-  const narrowing: Record<string, string> = {};
-  for (const key of schema.eventNarrowingKeys ?? []) {
-    const value = payload?.[key];
-    if (typeof value === 'string' && value.length > 0) narrowing[key] = value;
-  }
-  const declaredAction = schema.positions[node]?.properties[EVENT_ACTION_FIELD];
-  if (declaredAction !== undefined && isEnumType(fieldTypeOfSchema(declaredAction, schema))) {
-    const value = payload?.[EVENT_ACTION_FIELD];
-    if (typeof value === 'string' && value.length > 0) narrowing[EVENT_ACTION_FIELD] = value;
-  }
-  return { event: node, narrowing };
-}
-
 function seedEventPosition(
   event: TriggerEvent,
   sourceAdapterSlug: string,
@@ -12199,15 +11333,6 @@ function seedEventPosition(
      *  keys nothing on (it keys by displayName) — the
      *  `'<field>' is not a known field of '<typeId>'` drift. */
     surfaceType?: string;
-    /** The delivered NODE's canonical narrowed address (`eventSeedAddress`).
-     *  When set, the seed is that node, typed by `eventAddressKey(address)` —
-     *  the same identity the checker grafts — with the payload riding in
-     *  `data`. STABLE when the fires edge lands straight on the discriminated
-     *  record (`surfaceType === address.event` and the dispatcher recorded its
-     *  id); an event node distinct from its record seeds UNSTABLE (an
-     *  occurrence — its record is reached by the record edge on demand).
-     *  Supersedes `surfaceType` for the webhook/poll branch. */
-    eventAddress?: EventAddress;
   } = {},
 ): SourcePosition {
   // Webhook (unsolicited) and poll (solicited PollSource pull) seed the same
@@ -12216,36 +11341,6 @@ function seedEventPosition(
   // rides an unstable position. Property/edge reads then go through the source
   // adapter identically.
   if (event.triggerType === 'webhook' || event.triggerType === 'poll') {
-    if (options.eventAddress !== undefined) {
-      // A typed event: the seed IS the delivered node, typed by its canonical
-      // narrowed address (an unpinned address keys as the bare node name —
-      // `Message`), so `ev IS <chat-[:Message]->>` and the
-      // pinned forms resolve.
-      //
-      // Stability follows from WHAT the edge delivers. Where the fires edge
-      // lands straight on the record (rule 1's collapse — the adapter's own
-      // discrimination named the delivered node, and the dispatcher recorded
-      // its durable id), the seed IS that record: stable, so a linked write
-      // can anchor off the parameter (`write e-[:replies]->`) exactly as it
-      // anchored off the retired record-edge hop. An event node DISTINCT from
-      // its record (airtable/attio — the discrimination names the RECORD's
-      // type, not the event node) stays an unstable occurrence whose record
-      // is reached by its own edge on demand.
-      const externalId = event.externalRecordRef?.externalId;
-      if (externalId !== undefined && options.surfaceType === options.eventAddress.event) {
-        return makeStablePosition({
-          adapterType: event.adapterType,
-          recordType: eventAddressKey(options.eventAddress),
-          recordId: externalId,
-          data: event.payload,
-        });
-      }
-      return makeUnstablePosition({
-        adapterType: event.adapterType,
-        recordType: eventAddressKey(options.eventAddress),
-        data: event.payload,
-      });
-    }
     const externalId = event.externalRecordRef?.externalId;
     if (event.rootRecordType && externalId) {
       return makeStablePosition({

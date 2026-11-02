@@ -136,11 +136,11 @@ describe('the engine a segment runs on', () => {
   });
 
   it('runs a patch release of the installed language on Rust', () => {
-    expect(engineFor({ languageVersion: '0.12.3' })).toBe('rust');
+    expect(engineFor({ languageVersion: '0.13.7' })).toBe('rust');
   });
 
   it('refuses a release the installed language does not read, on either side of it', () => {
-    for (const languageVersion of ['0.11.0', '0.13.0']) {
+    for (const languageVersion of ['0.12.0', '0.14.0']) {
       expect(() => engineFor({ languageVersion })).toThrow(MovementEngineError);
       expect(() => engineFor({ languageVersion })).toThrow(/^MOVENG_LANGUAGE_VERSION/);
     }
@@ -268,7 +268,7 @@ describe('a host without the clock and ids', () => {
       host: host as unknown as RunMovementInput['host'],
     });
     await expect(run).rejects.toThrow(
-      'the host does not serve clock.now, ids.mint, which host families version 1 requires (the clock, ids families); no segment was opened',
+      'the host does not serve clock.now, ids.mint, which host families version 2 requires (the clock, ids families); no segment was opened',
     );
     expect(rustRunStats.segments).toBe(0);
   });

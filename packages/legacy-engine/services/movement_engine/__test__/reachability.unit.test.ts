@@ -91,7 +91,6 @@ function plainHost() {
     },
     park: {
       sink: makeFakeParkSink().sink,
-      callbacks: { mint: async ({ address }) => ({ id: `cb-${address}`, url: `https://callbacks.example/${address}` }), calls: async () => [] },
     },
     files: { resolveFileText: async () => ({ text: 'the text of a file', rawTextId: 'rt-1' }) },
     lookup: { resolveActingUser: async () => ({ id: 'user-1', email: 'ada@acme.example', name: 'Ada' }) },

@@ -435,55 +435,13 @@ movement intake(m: <inbox-[:message]->>) {
   // path exist, so `callback(…)` is an INTERPRETABLE construct. What a callback
   // DEFERS is still scanned — a body that cannot run is a movement that cannot
   // run, whenever it runs.
-  describe('callback — interpretable; its body is still scanned', () => {
-    it('a movement minting a callback is not flagged', () => {
-      const source = `${PRELUDE}
+  it('a callback is named: listen-fire 0.13 retired it', () => {
+    const source = `${PRELUDE}
 movement intake(m: <inbox-[:message]->>) {
   cb = callback({ write crm-[:companies]-> { name: m.\`subject\` } })
-  write crm-[:note]-> { text: cb.\`id\` }
 }
 `;
-      expect(listUnsupportedConstructs(source)).toEqual([]);
-    });
-
-    it('the named form and the body-less form are equally interpretable', () => {
-      const named = `${PRELUDE}
-movement helper(m: <inbox-[:message]->>) {
-  write crm-[:companies]-> { name: m.\`subject\` }
-}
-
-movement intake(m: <inbox-[:message]->>) {
-  cb = callback(helper(m: m))
-}
-`;
-      const bodyless = `${PRELUDE}
-movement intake(m: <inbox-[:message]->>) {
-  cb = callback()
-}
-`;
-      expect(listUnsupportedConstructs(named)).toEqual([]);
-      expect(listUnsupportedConstructs(bodyless)).toEqual([]);
-    });
-
-    it("a callback BODY's own unsupported constructs are still named", () => {
-      const source = `${PRELUDE}
-movement intake(m: <inbox-[:message]->>) {
-  cb = callback({ write crm-[:companies]-> { name: @parent.created } })
-}
-`;
-      expect(listUnsupportedConstructs(source)).toEqual([
-        "'@parent.*' reads (read the parent write's handle instead)",
-      ]);
-    });
-
-    it('a movement using no callback is unaffected', () => {
-      const source = `${PRELUDE}
-movement intake(m: <inbox-[:message]->>) {
-  write crm-[:companies]-> { name: m.\`subject\` }
-}
-`;
-      expect(listUnsupportedConstructs(source)).toEqual([]);
-    });
+    expect(listUnsupportedConstructs(source)).toEqual(['callbacks (retired in listen-fire 0.13)']);
   });
 
   it('the `function` spelling of a movement declaration scans exactly like `movement`', () => {

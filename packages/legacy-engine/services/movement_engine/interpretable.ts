@@ -244,9 +244,7 @@ class InterpretabilityScan {
             this.scanSlot(value.expr);
             return;
           case 'callback':
-            // The engine mints it, the router fires it — an interpretable
-            // construct since chunk 2. Nothing to scan at file scope (a
-            // callback lives inside a movement body).
+            this.flag('callbacks (retired in listen-fire 0.13)');
             return;
           case 'construct':
             // The construction spelling of a CALL (`page = fetch_url(url: …)`)
@@ -347,17 +345,9 @@ class InterpretabilityScan {
         this.scanHead(value.lazy.head);
         if (value.lazy.mapping) this.scanNode(value.lazy.mapping);
         break;
-      case 'callback': {
-        // Interpretable since chunk 2 — but what it DEFERS is scanned
-        // like any other body: an unsupported construct inside a callback
-        // body is one this movement cannot run, whenever it runs.
-        const subject = value.callback.subject;
-        if (subject.kind === 'inline') this.scanBody(subject.closure.body);
-        else {
-          for (const arg of subject.args) this.scanCallArg(arg);
-        }
+      case 'callback':
+        this.flag('callbacks (retired in listen-fire 0.13)');
         break;
-      }
       case 'closure':
         // A closure's body runs when it is CALLED, and an unsupported
         // construct inside one is unsupported whenever that happens.

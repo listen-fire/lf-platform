@@ -6,4 +6,4 @@
 // with this file.
 
 export * from '../services/movement_engine/run';
-export { fireCallbackBody, resumeMovement, runMovement, settleRaceFrame } from '../dispatch';
+export { resumeMovement, runMovement, settleRaceFrame } from '../dispatch';
