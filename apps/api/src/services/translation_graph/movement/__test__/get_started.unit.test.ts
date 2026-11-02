@@ -53,7 +53,7 @@ const credential = { name: 'credentials', kind: 'credential' as const, required:
 
 const ATTIO: SystemDigestInput = {
   system: 'attio',
-  spec: { constructionArgs: [credential] },
+  spec: { package: '@lf/attio', constructionArgs: [credential] },
   connections: ['acme'],
   node: root([
     edge('Companies', {
@@ -78,7 +78,7 @@ const ATTIO: SystemDigestInput = {
 
 const EMAIL: SystemDigestInput = {
   system: 'email',
-  spec: { constructionArgs: [] },
+  spec: { package: '@lf/email', constructionArgs: [] },
   connections: [],
   node: root([
     edge(
@@ -102,8 +102,9 @@ function wideSystem(system: string): SystemDigestInput {
 
 describe('the connections digest', () => {
   it('spells how to construct each system', () => {
-    expect(renderSystemDigest(ATTIO)).toContain('### attio — `attio(credentials: acme)`');
-    expect(renderSystemDigest(EMAIL)).toContain('### email — `email()`');
+    expect(renderSystemDigest(ATTIO)).toContain('### attio — `` connect `@lf/attio` using acme ``');
+    expect(renderSystemDigest(EMAIL)).toContain('### email — `` connect `@lf/email` ``');
+    expect(renderSystemDigest({ ...EMAIL, system: 'kg', spec: { constructionArgs: [] } })).toContain('### kg — `connect #kg`');
   });
 
   it('lists record types with fields, required and identifying ones first, marked', () => {
@@ -175,7 +176,7 @@ function stubTeamCatalog() {
     snapshot: {
       adapters: {
         attio: ATTIO.spec,
-        slack: { constructionArgs: [credential] },
+        slack: { package: '@lf/slack', constructionArgs: [credential] },
         airtable: { constructionArgs: [credential], connect: 'oauth' },
         email: EMAIL.spec,
         ask: { constructionArgs: [] },
@@ -271,7 +272,7 @@ describe('getStarted', () => {
 
     expect(page.startsWith('## Team: Acme Ventures — `team-1`')).toBe(true);
     expect(page.indexOf('### attio')).toBeLessThan(page.indexOf('### email'));
-    expect(page).toContain('### slack — `slack(credentials: team_chat)`');
+    expect(page).toContain('### slack — `` connect `@lf/slack` using team_chat ``');
     expect(page).toContain('Not connected yet (connectSystem first): airtable.');
     expect(page).toContain('## Writing automations: it is TypeScript, except…');
     expect(describeMock).toHaveBeenCalledWith(expect.objectContaining({ adapter: 'attio', credentialName: 'acme' }));

@@ -13,7 +13,7 @@
 // Pure: describe_connection.ts and get_started.ts gather the catalog and the
 // describes, this module turns them into text.
 
-import { spellName, type AdapterSpec, type InstanceSchema } from 'movement-lang';
+import { RUN_HOST_UNITS, spellName, type AdapterSpec, type InstanceSchema } from 'movement-lang';
 import { type FieldType } from 'legacy-lang';
 
 import type { WalkedDescribedNode, WalkedEdge, WalkedNode, WalkedProperty } from './walk';
@@ -35,7 +35,7 @@ const ENUM_OPTIONS_SHOWN = 4;
 export interface SystemDigestInput {
   /** The adapter name, as imported from `adapters`. */
   system: string;
-  spec: Pick<AdapterSpec, 'constructionArgs'>;
+  spec: Pick<AdapterSpec, 'constructionArgs' | 'package'>;
   /** The credential import names that serve this system; empty when it needs none. */
   connections: string[];
   /** The root of a describe, its stubs resolved where they could be: absent
@@ -81,14 +81,25 @@ export function compactType(type: FieldType): string {
   }
 }
 
-/** `attio(credentials: acme)`; a second connection is named after it. */
+/** ``connect `@lf/attio` using acme { list: … }``: the system, by its package
+ *  else `#` and its key, and its connection; a second connection is named
+ *  after it. A run host unit is in every program's scope, never connected. */
 function constructionSpelling(input: Pick<SystemDigestInput, 'system' | 'spec' | 'connections'>): string {
-  const args = input.spec.constructionArgs.flatMap((arg) => {
-    if (arg.kind === 'credential') return [`${arg.name}: ${input.connections[0] ?? '…'}`];
-    return arg.required ? [`${arg.name}: …`] : [];
-  });
-  const others = input.connections.slice(1);
-  return `\`${input.system}(${args.join(', ')})\`${others.length > 0 ? ` (other connections: ${others.join(', ')})` : ''}`;
+  if (RUN_HOST_UNITS.includes(input.system)) return `\`listen to ${input.system}-[:…]->\` (in scope with no connect)`;
+  const { spec, connections } = input;
+  const first = connections[0];
+  const using = spec.constructionArgs.some((arg) => arg.kind === 'credential') ? ` using ${first !== undefined ? spellName(first) : '…'}` : '';
+  const settings = spec.constructionArgs.filter((arg) => arg.kind !== 'credential' && arg.required).map((arg) => `${settingName(arg.name)}: …`);
+  const adapter = spec.package !== undefined ? `\`${spec.package}\`` : `#${spellName(input.system)}`;
+  const code = `connect ${adapter}${using}${settings.length > 0 ? ` { ${settings.join(', ')} }` : ''}`;
+  const others = connections.slice(1);
+  // A span holding a backtick is fenced by two, padded so one at its edge reads as code.
+  return `${code.includes('`') ? `\`\` ${code} \`\`` : `\`${code}\``}${others.length > 0 ? ` (other connections: ${others.join(', ')})` : ''}`;
+}
+
+/** A setting as `connect` writes it (`base_id` → `baseId`). */
+function settingName(name: string): string {
+  return name.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
 }
 
 /** The landing's own identity rules first; the schema's write shape for a
@@ -258,13 +269,17 @@ export function renderConnectionsDigest(input: {
       ? `Not connected yet (connectSystem first): ${input.notConnected.join(', ')}.`
       : '';
   const budget = CONNECTIONS_DIGEST_CHAR_CAP - DIGEST_LEGEND.length - footer.length - 4;
+  const more = (left: number) => `… ${left} more systems — listConnections names them.`;
+  // Room kept for the line that names the systems cut, whichever one is cut first.
+  const kept = more(input.systems.length).length + 2;
   const blocks: string[] = [];
   let used = 0;
   for (const [index, system] of input.systems.entries()) {
+    const room = index === input.systems.length - 1 ? budget : budget - kept;
     const full = renderSystemDigest(system);
-    const block = used + full.length + 2 <= budget ? full : `### ${system.system} — ${constructionSpelling(system)}`;
-    if (used + block.length + 2 > budget) {
-      blocks.push(`… ${input.systems.length - index} more systems — listConnections names them.`);
+    const block = used + full.length + 2 <= room ? full : `### ${system.system} — ${constructionSpelling(system)}`;
+    if (used + block.length + 2 > room) {
+      blocks.push(more(input.systems.length - index));
       break;
     }
     blocks.push(block);

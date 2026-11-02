@@ -72,12 +72,10 @@ A record, every field of which may be absent: \`summary\` (the answer to \`quest
       construct: 'research called per record inside map, its resolved address written and its dossier read by a second extraction',
       status: 'runs',
       probe: `
-import { \`@lf/email\` as email, \`@lf/attio\` as attio } from adapters
-import { acme } from credentials
 import { research } from plugins
 
-inbox = connect email
-crm   = connect attio using acme
+inbox = connect \`@lf/email\`
+crm   = connect \`@lf/attio\` using acme
 
 node Company: "each company named in this message" {
   name:        <text> "the company's name"

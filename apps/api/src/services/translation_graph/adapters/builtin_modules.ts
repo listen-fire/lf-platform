@@ -152,6 +152,10 @@ export type BuiltinModuleLine =
       /** The dev loop's fake for this module, by its service name in the
        *  recording layer. Default: the manifest's credential type. */
       harnessService?: string;
+      /** The package the module is installed from, which a program's
+       *  `connect` names it by (``connect `@lf/slack` ``). Absent for the
+       *  platform's own module, connected as `#` and its key (`connect #kg`). */
+      package?: `@lf/${string}`;
     })
   | (ModuleLineHost & { kind: 'plugin'; line: 'module'; load: () => PluginModuleDefinition });
 
@@ -226,6 +230,7 @@ export const BUILTIN_MODULES: BuiltinModuleTable = {
     kind: 'adapter',
     line: 'module',
     manifest: DEALROOM_MANIFEST,
+    package: '@lf/dealroom',
     load: () => {
       const { dealroomModule }: typeof import('@listen-fire/dealroom') = require('@listen-fire/dealroom');
       return dealroomModule;
@@ -235,6 +240,7 @@ export const BUILTIN_MODULES: BuiltinModuleTable = {
     kind: 'adapter',
     line: 'module',
     manifest: GRANOLA_MANIFEST,
+    package: '@lf/granola',
     load: () => {
       const { granolaModule }: typeof import('@listen-fire/granola') = require('@listen-fire/granola');
       return granolaModule;
@@ -244,6 +250,7 @@ export const BUILTIN_MODULES: BuiltinModuleTable = {
     kind: 'adapter',
     line: 'module',
     manifest: EVERTRACE_MANIFEST,
+    package: '@lf/evertrace',
     load: () => {
       const { evertraceModule }: typeof import('@listen-fire/evertrace') = require('@listen-fire/evertrace');
       return evertraceModule;
@@ -253,6 +260,7 @@ export const BUILTIN_MODULES: BuiltinModuleTable = {
     kind: 'adapter',
     line: 'module',
     manifest: AFFINITY_MANIFEST,
+    package: '@lf/affinity',
     load: () => {
       require('./affinity/write_failure_alerts');
       const { affinityModule }: typeof import('@listen-fire/affinity') = require('@listen-fire/affinity');
@@ -264,6 +272,7 @@ export const BUILTIN_MODULES: BuiltinModuleTable = {
     kind: 'adapter',
     line: 'module',
     manifest: AIRTABLE_MANIFEST,
+    package: '@lf/airtable',
     load: () => {
       const { airtableModule }: typeof import('@listen-fire/airtable') = require('@listen-fire/airtable');
       return airtableModule;
@@ -277,6 +286,7 @@ export const BUILTIN_MODULES: BuiltinModuleTable = {
     kind: 'adapter',
     line: 'module',
     manifest: ATTIO_MANIFEST,
+    package: '@lf/attio',
     load: () => {
       require('./attio_field_rejection_alerts');
       const { attioModule }: typeof import('@listen-fire/attio') = require('@listen-fire/attio');
@@ -290,6 +300,7 @@ export const BUILTIN_MODULES: BuiltinModuleTable = {
     kind: 'adapter',
     line: 'module',
     manifest: GOOGLE_SHEETS_MANIFEST,
+    package: '@lf/google-sheets',
     load: () => {
       const { googleSheetsModule }: typeof import('@listen-fire/google-sheets') = require('@listen-fire/google-sheets');
       return googleSheetsModule;
@@ -307,6 +318,7 @@ export const BUILTIN_MODULES: BuiltinModuleTable = {
     kind: 'adapter',
     line: 'module',
     manifest: GOOGLE_DRIVE_MANIFEST,
+    package: '@lf/google-drive',
     load: () => {
       const { googleDriveModule }: typeof import('@listen-fire/google-drive') = require('@listen-fire/google-drive');
       return googleDriveModule;
@@ -325,6 +337,7 @@ export const BUILTIN_MODULES: BuiltinModuleTable = {
     kind: 'adapter',
     line: 'module',
     manifest: DROPBOX_MANIFEST,
+    package: '@lf/dropbox',
     load: () => {
       const { dropboxModule }: typeof import('@listen-fire/dropbox') = require('@listen-fire/dropbox');
       return dropboxModule;
@@ -338,6 +351,7 @@ export const BUILTIN_MODULES: BuiltinModuleTable = {
     kind: 'adapter',
     line: 'module',
     manifest: GMAIL_MANIFEST,
+    package: '@lf/gmail',
     load: () => {
       const { gmailModule }: typeof import('@listen-fire/gmail') = require('@listen-fire/gmail');
       return gmailModule;
@@ -352,6 +366,7 @@ export const BUILTIN_MODULES: BuiltinModuleTable = {
     kind: 'adapter',
     line: 'module',
     manifest: TELEGRAM_MANIFEST,
+    package: '@lf/telegram',
     load: () => {
       const { telegramModule }: typeof import('@listen-fire/telegram') = require('@listen-fire/telegram');
       return telegramModule;
@@ -368,6 +383,7 @@ export const BUILTIN_MODULES: BuiltinModuleTable = {
     kind: 'adapter',
     line: 'module',
     manifest: SLACK_MANIFEST,
+    package: '@lf/slack',
     // The platform's own definition: its model for the composition function,
     // its redemption of a file any owner holds.
     load: () => {
@@ -390,6 +406,7 @@ export const BUILTIN_MODULES: BuiltinModuleTable = {
     kind: 'adapter',
     line: 'module',
     manifest: ASK_MANIFEST,
+    package: '@lf/ask',
     load: () => {
       if (platformAskModule === undefined) {
         const { askModuleWith }: typeof import('@listen-fire/ask') = require('@listen-fire/ask');
@@ -403,6 +420,7 @@ export const BUILTIN_MODULES: BuiltinModuleTable = {
     kind: 'adapter',
     line: 'module',
     manifest: WHATSAPP_MANIFEST,
+    package: '@lf/whatsapp',
     // The platform's own definition: its shared number quoted, and the URLs
     // its Meta door exposes downloaded media at owned.
     load: () => {
@@ -424,6 +442,7 @@ export const BUILTIN_MODULES: BuiltinModuleTable = {
     kind: 'adapter',
     line: 'module',
     manifest: SYSTEM_MANIFEST,
+    package: '@lf/system',
     load: () => {
       if (platformSystemModule === undefined) {
         const { systemModuleWith }: typeof import('@listen-fire/system') = require('@listen-fire/system');
@@ -456,6 +475,7 @@ export const BUILTIN_MODULES: BuiltinModuleTable = {
     kind: 'adapter',
     line: 'module',
     manifest: MCP_PLATFORM_MANIFEST,
+    package: '@lf/mcp',
     load: () => {
       const { mcpModule }: typeof import('@listen-fire/mcp') = require('@listen-fire/mcp');
       return mcpModule;
@@ -469,6 +489,7 @@ export const BUILTIN_MODULES: BuiltinModuleTable = {
     kind: 'adapter',
     line: 'module',
     manifest: EMAIL_MANIFEST,
+    package: '@lf/email',
     load: () => {
       const { emailModule }: typeof import('@listen-fire/email') = require('@listen-fire/email');
       return emailModule;
@@ -682,6 +703,20 @@ export function loadBuiltinModule(entry: AdapterModuleLine, install: BuiltinInst
     ...(install.constructionArgs !== undefined ? { constructionArgs: install.constructionArgs } : {}),
   };
   return { ...loaded, adapter: ownedFilesAdapter(loaded.adapter, owner) };
+}
+
+/** The package a built-in is installed from, as its catalog entry names it;
+ *  undefined for the platform's own module. */
+export function builtinModulePackage(adapterType: string): string | undefined {
+  return moduleLineOf(adapterType)?.package;
+}
+
+/** The adapter key a `connect` names as written: the built-in installed
+ *  from that package (compared whole), else the name itself (`#kg`'s `kg`, a
+ *  team's remote install, a legacy construction). */
+export function adapterKeyNamed(written: string): string {
+  const installed = Object.entries(BUILTIN_MODULES).find(([, entry]) => entry.kind === 'adapter' && entry.line === 'module' && entry.package === written);
+  return installed?.[0] ?? written;
 }
 
 /** The manifest of a built-in on a module line, without loading it. */

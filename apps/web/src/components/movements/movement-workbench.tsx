@@ -90,13 +90,17 @@ function formatFileSize(bytes: number): string {
 }
 
 const FALLBACK_SOURCE = `# A movement reacts to each new item from a source and writes the
-# results wherever they belong. Start by importing what it touches:
+# results wherever they belong. Start by connecting what it touches:
 #
-#   import { email } from adapters
-#   import { my_inbox } from credentials
+#   inbox = connect \`@lf/email\`
 #
 # Connect a source under Credentials to get started.
 `;
+
+/** A name as a program writes it: backticked unless it is an identifier. */
+function spelled(name: string): string {
+  return /^[A-Za-z_]\w*$/.test(name) ? name : `\`${name}\``;
+}
 
 function starterSource(snapshot: CatalogSnapshot): string {
   const credentialEntry = Object.entries(snapshot.credentials)[0];
@@ -107,19 +111,19 @@ function starterSource(snapshot: CatalogSnapshot): string {
   // the starter uses the primary one.
   const adapter = "adapters" in cred ? cred.adapters[0] : cred.adapter;
   if (adapter === undefined) return FALLBACK_SOURCE;
-  const schemas = snapshot.adapters[adapter]?.schemas ?? {};
+  const spec = snapshot.adapters[adapter];
+  const schemas = spec?.schemas ?? {};
   const schema = schemas[credentialName] ?? Object.values(schemas)[0];
   // The listener makes the starter a complete automation: it listens to the
   // first edge off the connection its module announces arrivals on.
   const listened = Object.entries(schema?.collections ?? {}).find(([, collection]) => collection.listenable === true);
   if (listened === undefined) return FALLBACK_SOURCE;
   const [edge, collection] = listened;
-  // An edge name that isn't identifier-safe wears backticks, as anywhere else.
-  const edgeRef = /^[A-Za-z_]\w*$/.test(edge) ? edge : `\`${edge}\``;
-  return `import { ${adapter} } from adapters
-import { ${credentialName} } from credentials
-
-source = connect ${adapter} using ${credentialName}
+  // A module installed from a package is connected by its package name, the
+  // platform's own by `#` and its key.
+  const connected = spec?.package !== undefined ? `\`${spec.package}\`` : `#${spelled(adapter)}`;
+  const edgeRef = spelled(edge);
+  return `source = connect ${connected} using ${spelled(credentialName)}
 
 function my_movement(item: <source-[:${edgeRef}]->>) {
   # describe what should happen for each ${collection.target}

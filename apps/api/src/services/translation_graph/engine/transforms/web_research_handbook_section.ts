@@ -56,12 +56,10 @@ Give it a real sentence and it resolves; give it a bare name and it declines. Bo
       construct: 'webResearch called per record beside a targeted fetch, the resolved address written and the page read by a second extraction',
       status: 'runs',
       probe: `
-import { \`@lf/email\` as email, \`@lf/attio\` as attio } from adapters
-import { acme } from credentials
 import { fetchUrl, webResearch } from plugins
 
-inbox = connect email
-crm   = connect attio using acme
+inbox = connect \`@lf/email\`
+crm   = connect \`@lf/attio\` using acme
 
 node Company: "each company named in this message" {
   name:        <text> "the company's name"

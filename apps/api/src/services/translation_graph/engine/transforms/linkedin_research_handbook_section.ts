@@ -56,12 +56,10 @@ A result counts as this person's only when it is consistent with their own profi
       construct: 'linkedinResearch called per person inside map, its write-up filled into a record',
       status: 'runs',
       probe: `
-import { \`@lf/email\` as email, \`@lf/attio\` as attio } from adapters
-import { acme } from credentials
 import { linkedinResearch } from plugins
 
-inbox = connect email
-crm   = connect attio using acme
+inbox = connect \`@lf/email\`
+crm   = connect \`@lf/attio\` using acme
 
 node Person: "each person named in this message" {
   name:     <text> "the person's name"

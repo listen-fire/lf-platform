@@ -11,10 +11,7 @@ export const MANUAL_HANDBOOK_SECTION: HandbookSection = {
 Listen to \`manual\` to let a person — or an agent — start a run by hand. It is the host's own — no import, no \`connect\`. "Run now", pasted text, and uploaded files all arrive on its \`Invocations\`, each one an \`Invocation\`:
 
 \`\`\`
-import { \`@lf/attio\` as attio } from adapters
-import { acme_main } from credentials
-
-crm = connect attio using acme_main
+crm = connect \`@lf/attio\` using acme_main
 
 node Company: "each company named in the supplied text or files" {
   name:   <text> "the company's name"
@@ -44,10 +41,7 @@ listen as "Import companies" to manual-[:Invocations]-> fire \`Import Companies\
       construct: 'manual-channel backfills (instance-rooted traversal in the body)',
       status: 'runs',
       probe: `
-import { \`@lf/attio\` as attio } from adapters
-import { acme } from credentials
-
-crm = connect attio using acme
+crm = connect \`@lf/attio\` using acme
 
 function \`Nightly Backfill\`(go: <manual-[:Invocations]->>) {
   crm-[c:Companies]-> {
@@ -62,10 +56,7 @@ listen to manual-[:Invocations]-> fire \`Nightly Backfill\`
       construct: 'manual runs carrying text + files (reading the invocation text and extracting from the supplied files)',
       status: 'runs',
       probe: `
-import { \`@lf/attio\` as attio } from adapters
-import { acme } from credentials
-
-crm = connect attio using acme
+crm = connect \`@lf/attio\` using acme
 
 node Company: "each company named in the supplied text or files" {
   name:   <text> "the company's name"

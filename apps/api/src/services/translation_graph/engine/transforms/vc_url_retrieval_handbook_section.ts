@@ -58,12 +58,10 @@ pages = vcUrlRetrieval(msg.Body, { email: @user_email })
       construct: 'linked pages loaded once over the message into the content, and a downloaded document attached to the record',
       status: 'runs',
       probe: `
-import { \`@lf/email\` as email, \`@lf/attio\` as attio } from adapters
-import { acme } from credentials
 import { vcUrlRetrieval } from plugins
 
-inbox = connect email
-crm   = connect attio using acme
+inbox = connect \`@lf/email\`
+crm   = connect \`@lf/attio\` using acme
 
 node Company: "each company named in this message" {
   name:    <text> "the company's name"

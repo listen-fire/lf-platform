@@ -23,12 +23,10 @@ export const KNOWLEDGE_GRAPH_HANDBOOK_SECTION: HandbookSection = {
   title: 'Knowledge graph — the workspace\'s own store',
   content: `## Knowledge graph — the workspace's own store
 
-Import the graph and name it, the same two lines every system takes:
+Connect the graph and name it, as every system is connected:
 
 \`\`\`
-import { \`@lf/kg\` as kg } from adapters
-
-graph = connect kg
+graph = connect #kg
 \`\`\`
 
 That is the whole setup — no credentials to paste and nothing to connect, because the graph is part of Listen-Fire rather than somewhere else. The name is yours: \`graph\` is what every walk, write and listener below spells, and another automation may pick a different one. It is the same store either way.
@@ -112,10 +110,8 @@ Both are places records live, so the question is which one owns the answer. A co
       construct: 'a knowledge-graph root write with fuzzy identity, plus a linked write scoped to its parent',
       status: 'runs',
       probe: `
-import { \`@lf/kg\` as kg, \`@lf/email\` as email } from adapters
-
-inbox = connect email
-graph = connect kg
+inbox = connect \`@lf/email\`
+graph = connect #kg
 
 node Company: "the company this message is about" {
   name:   <text> "the company's name"
@@ -152,11 +148,8 @@ listen to inbox { key: "intake" } fire \`Record The Company\`
       construct: 'a listen on a knowledge-graph record\'s Changes — the change type, its Current record, and the walk to the record now',
       status: 'runs',
       probe: `
-import { \`@lf/kg\` as kg, \`@lf/slack\` as slack } from adapters
-import { team_workspace } from credentials
-
-team = connect slack using team_workspace
-graph = connect kg
+team = connect \`@lf/slack\` using team_workspace
+graph = connect #kg
 
 function \`Announce The Ticket\`(change: <graph-[:\`Support Ticket Change\`]->>) {
   general = only(team-[ch:Channels WHERE ch.Name == "general"]->)
@@ -175,14 +168,10 @@ listen to graph-[t:\`Support Ticket\`]->-[c:Changes WHERE c.Kind == "updated" AN
       construct: 'a knowledge-graph rooted read — query the graph, walk an edge off the landing, and link an existing record',
       status: 'runs',
       probe: `
-import { \`@lf/kg\` as kg, \`@lf/slack\` as slack, \`@lf/manual\` as manual } from adapters
-import { team_workspace } from credentials
+team = connect \`@lf/slack\` using team_workspace
+graph = connect #kg
 
-team = connect slack using team_workspace
-runs = connect manual
-graph = connect kg
-
-function \`Weekly Graph Digest\`(go: <runs-[:Invocation]->>) {
+function \`Weekly Graph Digest\`(go: <manual-[:Invocations]->>) {
   lines = graph-[c:Company WHERE c.Stage == "Active" ORDER BY c.Name ASC LIMIT 10]-> {
     graph-[p:Person WHERE p.Email == go.Text]-> {
       link c-[:Team]-> p
@@ -198,7 +187,7 @@ function \`Weekly Graph Digest\`(go: <runs-[:Invocation]->>) {
   }
 }
 
-listen to runs {} fire \`Weekly Graph Digest\`
+listen to manual-[:Invocations]-> fire \`Weekly Graph Digest\`
 `,
     },
   ],

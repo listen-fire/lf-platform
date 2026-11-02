@@ -30,6 +30,7 @@ const batchFull: { connections: Array<DescribedInstance & { system: string }> } 
 const TEAM = 'team-1' as TeamId;
 
 const ATTIO_SPEC = {
+  package: '@lf/attio',
   constructionArgs: [{ name: 'credentials', kind: 'credential' as const, required: true }],
 };
 
@@ -96,7 +97,7 @@ describe('describeConnection, compact', () => {
     });
     const text = await describeConnectionCompact({ teamId: TEAM, system: 'attio' });
 
-    expect(text).toContain('### attio — `attio(credentials: Dev Loop Attio)`');
+    expect(text).toContain('### attio — `` connect `@lf/attio` using `Dev Loop Attio` ``');
     expect(text).toContain('- What a listen fires on: ');
     expect(text).toContain('- Hint: For any owner field');
     expect(landingsMock).toHaveBeenCalledWith(expect.objectContaining({ adapter: 'attio', types: expect.arrayContaining(['Companies', 'People']) }));

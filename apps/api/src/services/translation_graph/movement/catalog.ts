@@ -31,7 +31,7 @@
 //   - construction args beyond `credentials` — manifests don't declare a
 //     construction-config block yet (same TODO as the static catalog).
 
-import { LANGUAGE_VERSION, RUN_HOST_UNITS, entryPositionKeyOf, instanceSchemaKey, catalogSnapshotOf, type AdapterSpec, type Catalog, type CatalogSnapshot, type CredentialSpec, type SchemaFieldType, type InstanceSchema, type LanguageVersion, type PluginSpec, type ResolveFile } from 'movement-lang';
+import { LANGUAGE_VERSION, RUN_HOST_UNITS, entryPositionKeyOf, spellName, instanceSchemaKey, catalogSnapshotOf, type AdapterSpec, type Catalog, type CatalogSnapshot, type CredentialSpec, type SchemaFieldType, type InstanceSchema, type LanguageVersion, type PluginSpec, type ResolveFile } from 'movement-lang';
 import { isLegacyLanguageVersion, parseMovementExpression } from 'legacy-lang';
 import { parseTraversalPath, referencedConstructions, scanInstanceChains, surfaceNotEnumerated, type ConstructionRef, type InstanceChain } from 'legacy-lang';
 
@@ -52,6 +52,7 @@ import { connectMethodForType } from '../../credentials/connect_link';
 import { isLegacyApp } from '../../credentials/app_id';
 import { isCredentialType } from '../adapters/credential_type';
 import { indexManifestsByName, listAdapterManifests } from '../adapters/registry';
+import { adapterKeyNamed, builtinModulePackage } from '../adapters/builtin_modules';
 import { mcpDisabledRefusal } from '../adapters/mcp/enabled';
 import { listRemoteAdapters } from '../adapters/remote/store';
 import { teamAdapterManifests } from '../adapters/team_manifests';
@@ -207,6 +208,20 @@ function listenVocabularyOf(manifest: AdapterManifest): Pick<AdapterSpec, 'canFi
   };
 }
 
+/** The package a manifest's module is installed from, which a program's
+ *  `connect` names it by. A remote install never shares a built-in's key
+ *  (`remote/slugs`), so the key alone tells. */
+function packageOf(manifest: AdapterManifest): Pick<AdapterSpec, 'package'> {
+  const installedFrom = builtinModulePackage(manifest.adapterType);
+  return installedFrom !== undefined ? { package: installedFrom } : {};
+}
+
+/** What `source` constructs, each by its adapter's key: a `connect` names a
+ *  module installed from a package by that package (``connect `@lf/slack` ``). */
+function constructionsOf(source: string): ConstructionRef[] {
+  return referencedConstructions(source).map((ref) => ({ ...ref, adapter: adapterKeyNamed(ref.adapter) }));
+}
+
 /**
  * A real `Catalog` over the host's static registries. Adapter existence
  * and construction arguments come from the manifests; plugins from the
@@ -230,6 +245,7 @@ export function staticCatalogFromManifests(
       const manifest = manifests.get(name);
       if (!manifest) return undefined;
       return {
+        ...packageOf(manifest),
         constructionArgs: constructionArgsOf(manifest),
         ...listenVocabularyOf(manifest),
       };
@@ -507,7 +523,7 @@ function namedInstances(input: {
   unitsInScope: boolean;
   manifestBySlug: ReturnType<typeof indexManifestsByName>;
 }): ConstructionRef[] {
-  const constructed = input.sources.flatMap((source) => referencedConstructions(source));
+  const constructed = input.sources.flatMap(constructionsOf);
   if (!input.unitsInScope) return constructed;
   const units = RUN_HOST_UNITS.filter((unit) => {
     const manifest = input.manifestBySlug.get(unit);
@@ -732,7 +748,7 @@ async function assembleTeamCatalog(
   // Each chain's pin, so a write body is read under its own program's version.
   const chainPins = new Map<InstanceChain, LanguageVersion>();
   const scanPinned = (source: string, languageVersion: LanguageVersion | undefined) => {
-    const chains = scanInstanceChains(source, pinnedOf(languageVersion));
+    const chains = scanInstanceChains(source, pinnedOf(languageVersion)).map((chain) => ({ ...chain, adapter: adapterKeyNamed(chain.adapter) }));
     for (const chain of chains) chainPins.set(chain, languageVersion ?? LANGUAGE_VERSION);
     return chains;
   };
@@ -957,7 +973,7 @@ async function assembleTeamCatalog(
   // is the ordinary shape of a listen-driven movement. Keying off chains
   // introspected such an instance UNPOSITIONED, so `instantiate` fell through
   // to the meta-position schema and the parameter's type didn't resolve.
-  for (const ref of scanSources.flatMap((source) => referencedConstructions(source))) {
+  for (const ref of scanSources.flatMap(constructionsOf)) {
     const manifest = manifestBySlug.get(ref.adapter);
     if (!manifest) continue;
     const values = positionArgValues(manifest, ref.constructionArgs);
@@ -1055,6 +1071,7 @@ async function assembleTeamCatalog(
       const manifest = manifestBySlug.get(name);
       if (!manifest) return undefined;
       return {
+        ...packageOf(manifest),
         constructionArgs: constructionArgsOf(manifest),
         ...(manifest.declaredCredentials !== undefined ? { declaredCredentials: [...manifest.declaredCredentials] } : {}),
         ...listenVocabularyOf(manifest),
@@ -1309,6 +1326,10 @@ export function toAgentCatalogView(input: {
             // true only when the folded-in credential slot is REQUIRED (a
             // credential-free adapter exposes an optional slot, not a demand).
             constructionArgs: spec.constructionArgs,
+            // How a program's `connect` names it: a package module by its
+            // package, the platform's own by `#` and its key. A unit is
+            // listened to by name, never connected.
+            ...(RUN_HOST_UNITS.includes(slug) ? {} : { writtenAs: spec.package !== undefined ? `\`${spec.package}\`` : `#${spellName(slug)}` }),
             requiresCredential: spec.constructionArgs.some(
               (a) => a.kind === 'credential' && a.required,
             ),
@@ -1351,6 +1372,7 @@ function skeletonAdapters(input: {
       declared === undefined ? undefined : isCredentialType(declared) ? connectMethodForType(declared) : 'app-only';
     const entry: CatalogAdapterInput & { schemas: Record<string, InstanceSchema> } = {
       manifest,
+      ...packageOf(manifest),
       ...(connect !== undefined ? { connect } : {}),
       schemas: {},
     };

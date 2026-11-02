@@ -66,12 +66,10 @@ Access that arrives INSIDE the content — a passcode someone wrote in a message
       construct: "fetchUrl called per record inside map, its page read by that record's own extraction",
       status: 'runs',
       probe: `
-import { \`@lf/email\` as email, \`@lf/attio\` as attio } from adapters
-import { acme } from credentials
 import { fetchUrl } from plugins
 
-inbox = connect email
-crm   = connect attio using acme
+inbox = connect \`@lf/email\`
+crm   = connect \`@lf/attio\` using acme
 
 node Company: "each company named in this message" {
   name:    <text> "the company's name"
@@ -100,12 +98,10 @@ function \`Intake\`(m: <inbox-[:Email]->>) {
       construct: 'a gated link whose way in was extracted from the same message',
       status: 'runs',
       probe: `
-import { \`@lf/email\` as email, \`@lf/attio\` as attio } from adapters
-import { acme } from credentials
 import { fetchUrl } from plugins
 
-inbox = connect email
-crm   = connect attio using acme
+inbox = connect \`@lf/email\`
+crm   = connect \`@lf/attio\` using acme
 
 node Opportunity: "each opportunity this message is about" {
   company:       <text> "the company's name"

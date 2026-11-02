@@ -24,10 +24,7 @@ listen as "Weekly digest" to cron-[t:Ticks WHERE t.Schedule == "0 9 * * 1"]-> fi
       construct: 'cron-channel listeners (scheduled movements over the Tick position)',
       status: 'runs',
       probe: `
-import { \`@lf/slack\` as slack } from adapters
-import { team_workspace } from credentials
-
-team  = connect slack using team_workspace
+team  = connect \`@lf/slack\` using team_workspace
 
 function \`Weekly Digest\`(t: <cron-[:Ticks]->>) {
   updates = only(team-[ch:Channels WHERE ch.Name == "updates"]->)
