@@ -1,12 +1,10 @@
 // Shared polls of listenable edges (adapter protocol 2.6). Every listen whose
-// last edge is declared polled, on the same connection (module, credential
-// and construction), with the same filter the module takes on that edge,
-// shares one poll: one `poll_edge` work row, one cursor, one call to the
-// module per interval. What a poll returns is kept as a delivery of its own
-// (inbound/listen_door.ts), judged by the listens sharing the poll only: an
-// arrival its module filtered (`takenApplied`) is judged without that
-// filter, so another listen on the edge must never hear it. A schedule is
-// such a poll too: the cron unit's `Ticks`, its schedule in the filter.
+// last edge is declared polled shares one poll with the listens of the same
+// key (inbound/listen_edge.ts): one `poll_edge` work row, one cursor, one call
+// to the module per interval. What a poll returns is kept as a delivery of its
+// own (inbound/listen_door.ts), judged by the listens sharing the poll only. A
+// schedule is such a poll too: the cron unit's `Ticks`, its schedule in the
+// filter.
 //
 // A first poll only arms: its cursor is kept and nothing fires, since what
 // was there before the listen is not news. The cursor advances with the
@@ -14,14 +12,9 @@
 // from the same cursor. A failed poll throws, and the drain retries that row
 // alone with backoff. The periodic `poll_reconcile` keeps one row per key.
 //
-// The platform's listens are never resolved (a `resolved` hop is refused at
-// save), so no poll is scoped by a record an earlier hop landed on.
-//
 // A team whose engine is lf is not polled: a cloud lf polls for it. A switch
 // back to the platform forgets its cursors (`forgetPollProgress`), so the
 // next poll of each is a first poll and replays nothing lf already handled.
-
-import { createHash } from 'node:crypto';
 
 import { sql } from 'kysely';
 import { z } from 'zod';
@@ -38,44 +31,17 @@ import { lfEngineTeams } from '../lf_engine/team_engine';
 import { notifyWork, registerWorkHandler } from '../work/drain';
 import { enqueueWork, listWorkByKind, removeWork } from '../work/store';
 import { edgePollerOf } from './edge_poller';
+import { listenEdgeDigest, listenEdgeKeyOf, type ListenEdgeKey } from '../inbound/listen_edge';
 
 /** The interval of a polled edge that declares none. */
 const DEFAULT_POLL_EVERY_SECONDS = 60;
 
-/** What the listens sharing one poll share. */
-export interface PollKey {
-  teamId: TeamId;
-  adapterType: string;
-  credentialsId: string | null;
-  constructionArgs: Record<string, string> | undefined;
-  edge: string;
-  /** The part of the last hop's filter the module takes; undefined for none. */
-  taken: unknown;
-}
-
 /** One key, the listens sharing it, and how often it is polled. */
 export interface SharedPoll {
-  key: PollKey;
+  key: ListenEdgeKey;
   digest: string;
   listens: SavedListen[];
   everyMs: number;
-}
-
-function canonical(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
-  if (typeof value === 'object' && value !== null) {
-    const entries = Object.entries(value)
-      .filter(([, v]) => v !== undefined)
-      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-    return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`).join(',')}}`;
-  }
-  return JSON.stringify(value) ?? 'null';
-}
-
-/** 16 hex digits of the sha256 of the key: what its row, its cursor and its
- *  deliveries are named by. */
-export function pollDigest(key: PollKey): string {
-  return createHash('sha256').update(canonical(key)).digest('hex').slice(0, 16);
 }
 
 export function pollWorkKey(digest: string): string {
@@ -86,21 +52,6 @@ export function pollWorkKey(digest: string): string {
  *  deliveries are kept under. */
 export function pollSubscriptionId(digest: string): string {
   return `edge-poll:${digest}`;
-}
-
-/** The key `listen` is polled under; null for a listen whose last edge is
- *  not polled. */
-export function pollKeyOf(listen: SavedListen): PollKey | null {
-  const last = listen.plan.hops.at(-1);
-  if (last === undefined || listen.delivery?.kind !== 'polled') return null;
-  return {
-    teamId: listen.teamId,
-    adapterType: listen.plan.adapter,
-    credentialsId: listen.credentialsId,
-    constructionArgs: listen.constructionArgs,
-    edge: last.edge,
-    taken: last.taken,
-  };
 }
 
 /** The listens on polled edges, of one team or of every team the platform
@@ -124,9 +75,9 @@ export async function sharedPolls(input: { teamId?: TeamId } = {}): Promise<Shar
     const parsed = listenConfigSchema.safeParse(row.config);
     if (!parsed.success) continue;
     const listen: SavedListen = { ...parsed.data.listen, triggerId: row.id, teamId: teamIdSchema.parse(row.teamId), file: row.file, credentialsId: row.credentialsId ?? null };
-    const key = pollKeyOf(listen);
+    const key = listenEdgeKeyOf(listen, ['polled']);
     if (key === null) continue;
-    const digest = pollDigest(key);
+    const digest = listenEdgeDigest(key);
     const everyMs = (listen.delivery?.pollEverySeconds ?? DEFAULT_POLL_EVERY_SECONDS) * SECOND;
     const shared = polls.get(digest);
     if (shared === undefined) polls.set(digest, { key, digest, listens: [listen], everyMs });

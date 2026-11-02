@@ -200,7 +200,8 @@ describe('a work row written in a request transaction', () => {
 
     await settleWakes(WAKE_WAIT_MS);
     expect(told).toEqual([]);
-    expect(await listWorkByKind('poll_edge')).toEqual([]);
+    // Other suites' shared polls may be armed in the same table: only this key is this test's.
+    expect((await listWorkByKind('poll_edge')).filter((row) => row.key === key)).toEqual([]);
   });
 });
 

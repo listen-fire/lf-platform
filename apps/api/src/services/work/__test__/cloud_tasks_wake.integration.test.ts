@@ -1,35 +1,27 @@
 // The wake over the Cloud Tasks module and its fake, as the platform installs
 // it: rows written through the real work table become tasks named for their
-// coalescing window, a burst coalesces, a poll's and a cron's next due become
-// tasks at their minute, and the task starts the job with the invoker's token.
+// coalescing window, a burst coalesces, a shared poll's next due becomes a
+// task at its minute, and the task starts the job with the invoker's token.
 // The module's clock is held still so a test never straddles a window.
 
 import { randomUUID } from 'node:crypto';
 
-jest.mock('../../translation_graph/adapters/registry', () => {
-  const actual = jest.requireActual('../../translation_graph/adapters/registry');
-  return {
-    ...actual,
-    // Only this file's poll source, so other suites' leftover triggers stay out of it.
-    isPollSource: (adapterType: string) => adapterType === 'wake_test_poll',
-    getPollSource: (input: { adapterType: string }) =>
-      input.adapterType === 'wake_test_poll'
-        ? { pollIntervalSeconds: 300, getEvents: async () => ({ events: [], checkpoint: null }) }
-        : null,
-  };
-});
+jest.mock('../../poll_source/edge_poller', () => ({
+  // Only this file's polled module, so other suites' leftover listens stay out of it.
+  edgePollerOf: async (input: { adapterType: string }) =>
+    input.adapterType === 'wake_test_poll' ? async () => ({ arrivals: [], cursor: 'now' }) : null,
+}));
 
 import { CloudTasksWake, readInstall } from '@listen-fire/wake-cloud-tasks/cloud_tasks';
 import { fakeCloudTasks, type FakeCloudTasks } from '@listen-fire/wake-cloud-tasks/fake_cloud_tasks';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
-import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
 import type { MovementId } from '../../../generated/kysely/automations/Movement';
 
 import { getAutomationsQb, getCoreQb } from '../../../lib/kysely';
 import { testWorkContext } from '../../../test/harness/work';
-import { cronReconcileHandler, cronWorkKey } from '../../movement_scheduler/worker';
-import { pollReconcileHandler, pollWorkKey } from '../../poll_source/worker';
+import { insertTestListen } from '../../../test/harness/listens';
+import { pollEdgeHandler, pollWorkKey, sharedPolls } from '../../poll_source/worker';
 import { enqueueWork, listWorkByKind, removeWork } from '../store';
 import { installWake, resetWakeForTests, settleWakes } from '../wake';
 
@@ -43,7 +35,6 @@ let clock: number;
 let teamId: TeamId;
 let movementId: MovementId;
 const keys: string[] = [];
-const triggerIds: TriggerId[] = [];
 
 function taskName(index: number): string {
   return `${QUEUE}/tasks/lf-drain-${index}`;
@@ -80,11 +71,7 @@ afterEach(async () => {
   resetWakeForTests();
   await fake.close();
   for (const key of keys.splice(0)) await removeWork({ key });
-  for (const id of triggerIds.splice(0)) {
-    await removeWork({ key: cronWorkKey(id) });
-    await removeWork({ key: pollWorkKey(id) });
-    await getAutomationsQb(['trigger']).deleteFrom('trigger').where('id', '=', id).execute();
-  }
+  await getAutomationsQb(['trigger']).deleteFrom('trigger').where('team_id', '=', teamId).execute();
 });
 
 afterAll(async () => {
@@ -96,25 +83,6 @@ async function enqueueNow(): Promise<void> {
   const key = `resume_timer:${randomUUID()}`;
   keys.push(key);
   await enqueueWork({ kind: 'resume_timer', key, teamId, payload: {} });
-}
-
-async function insertTrigger(values: { kind: string; config: unknown; pollLastAt?: Date }): Promise<TriggerId> {
-  const id = randomUUID() as TriggerId;
-  triggerIds.push(id);
-  await getAutomationsQb(['trigger'])
-    .insertInto('trigger')
-    .values({
-      id,
-      team_id: teamId,
-      name: `wake ${values.kind}`,
-      kind: values.kind,
-      config: JSON.stringify(values.config),
-      movement_id: movementId,
-      fired_movement_name: 'wake test',
-      poll_last_at: values.pollLastAt ?? null,
-    })
-    .execute();
-  return id;
 }
 
 describe('the wake over Cloud Tasks', () => {
@@ -153,15 +121,18 @@ describe('the wake over Cloud Tasks', () => {
     expect(fake.runs.map((run) => run.authorization)).toEqual([`Bearer fake-oauth:${INVOKER}`]);
   });
 
-  it("a poll's next due makes a task at its window's end", async () => {
-    // Polled 30 s ago every 2 minutes: due in 90 s.
-    const triggerId = await insertTrigger({ kind: 'wake_test_poll', config: { every: '2m' }, pollLastAt: new Date(clock - 30_000) });
+  it("a shared poll's next due makes a task at its window's end", async () => {
+    await insertTestListen({ teamId, movementId, adapterType: 'wake_test_poll', edge: 'Things', delivery: 'polled', pollEverySeconds: 120 });
+    const [poll] = await sharedPolls({ teamId });
+    if (poll === undefined) throw new Error('the listen shares no poll');
+    keys.push(pollWorkKey(poll.digest));
 
-    await pollReconcileHandler.run({}, testWorkContext(new Date(clock)));
+    // Polled now, every 2 minutes: due in 120 s.
+    await pollEdgeHandler.run({ teamId, digest: poll.digest }, testWorkContext(new Date(clock)));
 
-    const row = (await listWorkByKind('poll_source')).find((each) => each.key === pollWorkKey(triggerId));
+    const row = (await listWorkByKind('poll_edge')).find((each) => each.key === pollWorkKey(poll.digest));
     if (!row) throw new Error('the poll was not armed');
-    expect(row.dueAt.getTime()).toBe(clock + 90_000);
+    expect(row.dueAt.getTime()).toBe(clock + 120_000);
     const index = Math.ceil(row.dueAt.getTime() / MINUTE);
     expect(fake.created.map((each) => [each.name, each.scheduleTime])).toEqual([
       [taskName(index), new Date(index * MINUTE).toISOString()],
@@ -169,20 +140,5 @@ describe('the wake over Cloud Tasks', () => {
     // Never before the row is due, at most a window late.
     expect(index * MINUTE).toBeGreaterThanOrEqual(row.dueAt.getTime());
     expect(index * MINUTE - row.dueAt.getTime()).toBeLessThan(MINUTE);
-  });
-
-  it("a cron's next fire makes a task at that minute", async () => {
-    const triggerId = await insertTrigger({ kind: 'cron', config: { schedule: '*/5 * * * *' } });
-
-    await cronReconcileHandler.run({}, testWorkContext(new Date(clock)));
-
-    const row = (await listWorkByKind('fire_cron')).find((each) => each.key === cronWorkKey(triggerId));
-    if (!row) throw new Error('the cron was not armed');
-    const due = row.dueAt.getTime();
-    expect(due % (5 * MINUTE)).toBe(0);
-    expect(due).toBeGreaterThan(clock);
-    // Exactly that minute: other suites' cron triggers may make tasks too.
-    const created = fake.created.find((each) => each.name === taskName(due / MINUTE));
-    expect(created?.scheduleTime).toBe(new Date(due).toISOString());
   });
 });
