@@ -4846,13 +4846,15 @@ class Checker {
     report: boolean,
   ): { type: FieldType | undefined } | undefined {
     if (isValueTypeRef(type)) return { type: this.valueMemberType(type, scope, report) };
-    if (type.hopsRaw !== undefined) return undefined;
-    const scalar = parseFieldTypeName(type.graph);
+    // A union of records names no one graph, and no pin before 0.13 writes one.
+    const named = typeNameOf(type);
+    if (named === undefined || named.hopsRaw !== undefined) return undefined;
+    const scalar = parseFieldTypeName(named.graph);
     if (scalar !== undefined) return { type: scalar };
     // A refinement-typed parameter is a value from version 3; before it the
     // name resolved as a position source, as every non-scalar name did.
     if (!since(this.languageVersion, 3)) return undefined;
-    const declared = this.declaredTypeIn(type.graph, scope);
+    const declared = this.declaredTypeIn(named.graph, scope);
     return declared !== undefined ? { type: declared } : undefined;
   }
 
@@ -7506,10 +7508,11 @@ class Checker {
     if (written === undefined) return {};
     const value = this.paramValueType(written, scope, true);
     if (value !== undefined) return value.type !== undefined ? { fieldType: value.type } : {};
-    if (isValueTypeRef(written)) return {};
-    const graphSymbol = this.resolveName(written.graph, written.span, scope);
+    const named = typeNameOf(written);
+    if (named === undefined) return {};
+    const graphSymbol = this.resolveName(named.graph, named.span, scope);
     if (graphSymbol === undefined || graphSymbol.kind === 'adapter') return {};
-    const posType = this.positionFromTypeRefStrict(graphSymbol, written, written.span);
+    const posType = this.positionFromTypeRefStrict(graphSymbol, named, named.span);
     if (posType === undefined) return {};
     if (closure === undefined) return { posType };
     let cells = this.closureParamNeeds.get(closure);
@@ -9349,14 +9352,17 @@ class Checker {
       );
       return undefined;
     }
-    const scalar = type.hopsRaw === undefined ? parseFieldTypeName(type.graph) : undefined;
+    // A union of records names no one graph, and no pin before 0.13 writes one.
+    const named = typeNameOf(type);
+    if (named === undefined) return undefined;
+    const scalar = named.hopsRaw === undefined ? parseFieldTypeName(named.graph) : undefined;
     if (scalar !== undefined) return scalar;
     // Keep the graph name honest (an unresolvable one is still reported), then
     // refuse it as a fire-time value.
-    if (scope !== undefined) this.resolveName(type.graph, at ?? type.span, scope);
+    if (scope !== undefined) this.resolveName(named.graph, at ?? named.span, scope);
     this.report(
       DiagnosticCodes.CALLBACK_PARAM_NOT_VALUE,
-      `a callback's parameter '${name}' is a value the platform sends when the callback fires, so it has to be a scalar type (<text>, <number>, <boolean>, <date>, <datetime>, <json>, <file>) — '<${type.graph}${type.hopsRaw ?? ''}>' is a record position, which nothing can hand us. Supply it as a fixed argument instead.`,
+      `a callback's parameter '${name}' is a value the platform sends when the callback fires, so it has to be a scalar type (<text>, <number>, <boolean>, <date>, <datetime>, <json>, <file>) — '<${named.graph}${named.hopsRaw ?? ''}>' is a record position, which nothing can hand us. Supply it as a fixed argument instead.`,
       at ?? type.span,
     );
     return undefined;

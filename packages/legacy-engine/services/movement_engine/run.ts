@@ -12555,6 +12555,7 @@ function isValueParam(param: MovementParam, declaredTypes: ReadonlyMap<string, S
   const type = param.type;
   if (type === undefined) return false;
   if (isValueTypeRef(type)) return true;
-  if (type.hopsRaw !== undefined) return false;
-  return parseFieldTypeName(type.graph) !== undefined || declaredTypes.has(type.graph);
+  const named = typeNameOf(type);
+  if (named === undefined || named.hopsRaw !== undefined) return false;
+  return parseFieldTypeName(named.graph) !== undefined || declaredTypes.has(named.graph);
 }

@@ -120,7 +120,7 @@ const MANUAL_PLAN: ListenPlan = {
 const LISTEN: SavedListen = {
   pipeline: 'listen:backfill:backfill:6761be48',
   plan: MANUAL_PLAN,
-  awaits: { own: [], carried: [] },
+  awaits: { own: [], carried: {} },
   fieldIds: {},
   triggerId: TRIGGER_ID as TriggerId,
   teamId: TEAM as TeamId,

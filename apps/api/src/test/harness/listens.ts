@@ -46,7 +46,7 @@ export async function insertTestListen(input: TestListen): Promise<TriggerId> {
       adapter: input.adapterType,
       hops: [{ edge: input.edge, from: '', to: 'Thing', judged: 'arrival', ...(input.taken !== undefined ? { taken: input.taken } : {}) }],
     },
-    awaits: { own: [], carried: [] },
+    awaits: { own: [], carried: {} },
     fieldIds: {},
     delivery: { kind: input.delivery, ...(input.pollEverySeconds !== undefined ? { pollEverySeconds: input.pollEverySeconds } : {}) },
   };

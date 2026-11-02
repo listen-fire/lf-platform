@@ -119,7 +119,7 @@ describe('keepJudgedDelivery: a judged delivery in one write', () => {
     return {
       pipeline: PIPELINE,
       plan: { adapter: 'chat', connection: 'chat', movement: 'tally', carries: [], hops: [] } as unknown as SavedListen['plan'],
-      awaits: { own: [], carried: [] },
+      awaits: { own: [], carried: {} },
       fieldIds: {},
       triggerId: randomUUID() as TriggerId,
       teamId,

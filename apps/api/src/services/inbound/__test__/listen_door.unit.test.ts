@@ -35,7 +35,7 @@ function listen(overrides: Partial<SavedListen> = {}): SavedListen {
   return {
     pipeline: 'listen:polls.lf:tally:0a1b2c3d',
     plan: lunch,
-    awaits: { own: [], carried: [] },
+    awaits: { own: [], carried: {} },
     fieldIds: {},
     triggerId: randomUUID() as TriggerId,
     teamId: randomUUID() as TeamId,

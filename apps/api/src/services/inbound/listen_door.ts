@@ -67,7 +67,7 @@ export const listenConfigSchema = z.object({
     plan: listenPlanSchema,
     credentialName: z.string().optional(),
     constructionArgs: z.record(z.string(), z.string()).optional(),
-    awaits: z.object({ own: z.array(z.string()), carried: z.array(z.array(z.string())) }),
+    awaits: z.object({ own: z.array(z.string()), carried: z.record(z.string(), z.array(z.string()).readonly()).readonly() }),
     fieldIds: z.record(z.string(), z.record(z.string(), z.string())),
     landing: landingSchema.optional(),
     /** How its last edge's arrivals reach the host, as its module declares
@@ -293,10 +293,10 @@ export async function deliveryWaitsOf(input: { teamId: TeamId; adapterType: stri
     const awaits: TriggerAwaits = run.listen.awaits;
     const handed: Array<[string, AwaitHead | undefined, readonly string[]]> = [
       [`${run.index}`, headOf(run.arrival.landing), awaits.own],
-      ...awaits.carried.map((edges, place): [string, AwaitHead | undefined, readonly string[]] => [
+      ...(run.arrival.parents ?? []).map((parent, place): [string, AwaitHead | undefined, readonly string[]] => [
         `${run.index}:${place}`,
-        headOf(run.arrival.parents?.[place]),
-        edges,
+        headOf(parent),
+        (parent?.recordType !== undefined ? awaits.carried[parent.recordType] : undefined) ?? [],
       ]),
     ];
     for (const [at, head, edges] of handed) {
