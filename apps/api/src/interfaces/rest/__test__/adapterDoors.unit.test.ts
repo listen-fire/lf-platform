@@ -316,6 +316,8 @@ describe('wake', () => {
       externalId: null,
       source: 'emit',
       arrivals: [ARRIVAL, second],
+      // A push is kept as the arrivals it pushed, which a replay judges again.
+      request: { adapter: 'acme_crm', arrivals: [ARRIVAL, second] },
     });
     expect(notifyWork).toHaveBeenCalled();
   });

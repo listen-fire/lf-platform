@@ -20,8 +20,10 @@ import { isLegacyLanguageVersion } from 'legacy-lang';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { UserId } from '../../../generated/kysely/core/User';
 import type { NodeId } from '../../../generated/kysely/knowledge/Node';
+import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
 
-import { getKnowledgeQb } from '../../../lib/kysely';
+import { getAutomationsQb, getKnowledgeQb } from '../../../lib/kysely';
+import { teamIdSchema } from '../../../lib/team_id';
 import { mintConnectLink } from '../../../services/credentials/connect_link';
 import { mintGrantAccessLink } from '../../../services/credentials/grant_access';
 import {
@@ -99,6 +101,8 @@ import {
   inspectMovementRun,
 } from '../../../services/translation_graph/movement/run_now';
 import { abortRun, resumeRun } from '../../../services/interaction/operator';
+import { movementEventsImpl } from '../../../services/inbound/arrival_ledger';
+import { replayThroughListen } from '../../../services/inbound/listen_replay';
 import { RunBusy } from '../../../services/movement_engine/run_lease';
 import { MovementEngineError } from 'movement-engine/public/errors';
 import { UserService } from '../../../services/user';
@@ -1525,6 +1529,60 @@ const resumeRunHandler: RequestHandler = jsonHandler(resumeRunSchema, 'body', as
 });
 
 // ---------------------------------------------------------------------------
+// The arrival ledger and a replay (ruling 4): what reached an automation's
+// listens, each with the delivery and listen a replay names, and the replay of
+// that delivery through that listen. Never the request a delivery kept: that
+// is shown only to a team admin who asks for it in the app (ruling 3).
+// ---------------------------------------------------------------------------
+
+const listArrivalsHandler: RequestHandler = async (req, res) => {
+  try {
+    const idOrName = String(req.params.idOrName ?? '');
+    const ref = await resolveMovementRef(idOrName);
+    if (!ref) return res.status(404).json({ error: `No automation '${idOrName}'.` });
+    const items = await movementEventsImpl({ teamId: ref.teamId as TeamId, movementId: ref.movementId });
+    const arrivals = items.map((item) => ({
+      listen: item.triggerId,
+      lane: item.lane,
+      deliveryId: item.deliveryId,
+      system: item.adapterType,
+      status: item.status,
+      ...(item.status === 'not_judged' ? { attempt: item.attempt } : { runId: item.id }),
+      ...(item.failureReason !== null ? { reason: item.failureReason } : {}),
+      at: item.occurredAt,
+    }));
+    return res.status(200).json({ arrivals });
+  } catch (err) {
+    return internalError(res, err);
+  }
+};
+
+const replayDeliverySchema = z.object({
+  listen: z.string(),
+  deliveryId: z.string(),
+  force: z.boolean().optional(),
+  team: z.string().optional(),
+});
+
+const replayDeliveryHandler: RequestHandler = jsonHandler(replayDeliverySchema, 'body', async (input) => {
+  const teams = input.team !== undefined ? [await resolveToolTeam(input.team)] : await teamSetForReads();
+  const owner = await getAutomationsQb(['trigger'])
+    .selectFrom('trigger')
+    .where('id', '=', input.listen as TriggerId)
+    .where('team_id', 'in', teams)
+    .select('team_id')
+    .executeTakeFirst();
+  if (owner === undefined) return { error: `listen ${input.listen} not found` };
+  const outcome = await replayThroughListen({
+    teamId: teamIdSchema.parse(owner.team_id),
+    triggerId: input.listen as TriggerId,
+    deliveryId: input.deliveryId,
+    ...(input.force !== undefined ? { force: input.force } : {}),
+  });
+  return outcome.outcome === 'refused' ? { error: outcome.reason } : outcome;
+});
+
+// ---------------------------------------------------------------------------
 // Mount + register
 // ---------------------------------------------------------------------------
 //
@@ -1577,6 +1635,8 @@ function mountAutomationToolRoutes(router: ReturnType<typeof Router>): void {
   router.post('/automations/inspect-run', inspectRunHandler);
   router.post('/automations/cancel-run', cancelRunHandler);
   router.post('/automations/resume-run', resumeRunHandler);
+  router.get('/automations/:idOrName/arrivals', listArrivalsHandler);
+  router.post('/automations/replay-delivery', replayDeliveryHandler);
 }
 
 /** Knowledge connector routes: KG read + validated edits, ontology, recipes, teams. */
@@ -1688,6 +1748,8 @@ function registerAutomationToolRoutes(): void {
   reg('GET', '/automations/:idOrName/runs', 'List an automation\'s recent runs (every listener / "Run now" firing), newest first. Returns each run\'s { runId, lane, triggerType, status, committed, captured, recordCount, timestamps, costUsd, modelCalls } — `committed` = writes that landed, `captured` = writes rehearsed (a `dry_run` target, or a whole-run rehearsal), `costUsd`/`modelCalls` = the run\'s model-call spend and call count. Use a runId with inspectRun to see what the run actually captured and wrote. Query: ?limit= (default 20), ?team=. Also the top-level "listRuns" tool.', { readOnly: true, latency: 'fast' });
   reg('POST', '/automations/inspect-run', 'Read one run\'s full captured detail by id: the source event that fired it, the resolved write-plan (every target record + the FINAL field values it wrote, with every `?:` and enum coercion applied, each write flagged `committed` or captured), the decision trace (gate/branch outcomes, extraction emissions), errors, and the run\'s `committed`/`captured` counts plus its `costUsd`/`modelCalls` model-call spend. The "did it actually do what I meant" surface — including exactly which writes a rehearsal captured versus committed. Body: { runId, team? }. Get runIds from listRuns. Also the top-level "inspectRun" tool.', { inputSchema: inspectRunSchema, readOnly: true, latency: 'fast' });
   reg('POST', '/automations/resume-run', 'Resume a run that paused because it reached its cost limit (checkRun shows it as status "parked" with `paused` set). Every part of the run that stopped carries on from where it stopped, and its usage resets, so the limit applies afresh. Body: { runId, team? }. Also the top-level "resumeRun" tool.', { inputSchema: resumeRunSchema, latency: 'fast' });
+  reg('GET', '/automations/:idOrName/arrivals', 'List what reached an automation\'s listens, newest first: each run an arrival started and each arrival a listen could not judge (status `not_judged`, with the reason and its attempt). Each names its `listen` and `deliveryId`, which replayDelivery takes. Query: ?team=. Also the top-level "listArrivals" tool.', { readOnly: true, latency: 'fast' });
+  reg('POST', '/automations/replay-delivery', 'Put one kept delivery through one listen again: the way out of an arrival the listen could not judge once the system it needed answers again. Only the arrivals that delivery brought are judged, by that listen alone. A listen that ran the arrival before runs nothing unless `force` is true. Body: { listen, deliveryId, force?, team? }. Returns { outcome, runIds, attempt, stillUndecided, lines }; the runs are queued, so poll checkRun. Also the top-level "replayDelivery" tool.', { inputSchema: replayDeliverySchema, latency: 'fast' });
   reg('POST', '/automations/cancel-run', 'Stop a run by id — one that\'s executing or one that\'s paused waiting on something. Everything the run already did stays done; it just won\'t do anything more. An executing run stops at its next safe point (usually within seconds). Body: { runId, team? }. Also the top-level "cancelRun" tool.', { inputSchema: cancelRunSchema, latency: 'fast' });
 }
 

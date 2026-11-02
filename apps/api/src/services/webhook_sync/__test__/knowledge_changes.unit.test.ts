@@ -56,6 +56,11 @@ describe('queueKnowledgeChange: a graph change through the inbound path', () => 
       externalId: 'knowledge_outbox:ob-1',
       source: 'emit',
       arrivals: [CHANGE],
+      // The change as the graph wrote it, so a replay reads it again.
+      request: expect.objectContaining({
+        headers: { 'content-type': 'application/json' },
+        body: Buffer.from(JSON.stringify(ENVELOPE), 'utf8').toString('base64'),
+      }),
     });
     expect(notifyWork).toHaveBeenCalledTimes(1);
   });

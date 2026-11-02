@@ -24,6 +24,7 @@ import { drainOnce } from '../knowledge/mutation_outbox/worker';
 import { notifyWork, registerWorkKinds } from '../work/drain';
 import { resolveAdapter } from '../translation_graph/adapters/resolve';
 import { deliverArrivals } from '../inbound/listen_door';
+import { capturedRequest } from '../inbound/captured_request';
 import { NATIVE_KNOWLEDGE_PROVIDER_KEY } from './providers/native_knowledge';
 
 declare module '../work/kinds' {
@@ -65,6 +66,13 @@ export async function queueKnowledgeChange(input: {
     externalId: `knowledge_outbox:${input.outboxId}`,
     source: 'emit',
     arrivals,
+    // The change as the graph wrote it, read again by the module on a replay.
+    request: capturedRequest({
+      keeping: undefined,
+      headers: { 'content-type': 'application/json' },
+      rawBody: Buffer.from(JSON.stringify(input.envelope), 'utf8'),
+      arrivals,
+    }),
   });
   if (!kept.kept) return { queued: 0 };
   notifyWork();

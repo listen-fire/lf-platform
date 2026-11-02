@@ -3502,6 +3502,20 @@ CREATE TABLE automations.delivery (
 CREATE UNIQUE INDEX delivery_external_idx ON automations.delivery (team_id, subscription_id, external_id) WHERE external_id IS NOT NULL;
 CREATE INDEX delivery_received_idx ON automations.delivery (team_id, received_at);
 
+-- delivery_request_read — each time a person was shown a delivery's kept
+-- request (ruling 3: only a team's admins, each read recorded). It outlives the
+-- delivery it names, which the delivery sweep forgets.
+CREATE TABLE automations.delivery_request_read (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    team_id uuid NOT NULL,
+    delivery_id uuid NOT NULL,
+    read_by uuid NOT NULL,
+    -- The API key the read came through, when it was not a signed-in session.
+    credential_id text,
+    read_at timestamptz DEFAULT now() NOT NULL
+);
+CREATE INDEX delivery_request_read_delivery_idx ON automations.delivery_request_read (team_id, delivery_id);
+
 -- ── The store's waits, arrivals, ledger and listen states (listen-fire 0.13) ─
 -- The tables of listen-fire 0.13's store slot that both hosts write: the
 -- platform's run host in process (services/movement_engine/run_host_store.ts)

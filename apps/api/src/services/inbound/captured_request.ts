@@ -8,8 +8,12 @@
 //   query lose the fields its module names as carrying a credential
 //   (`inbound.redactFields`); a header that may carry one is never kept, and
 //   neither is the signature, since a replay is not verified again.
-// - a poll's page: a poll made no request, so it keeps what it read, the
-//   arrivals and the connection they were read for.
+// - a page: what a door read itself, when there is no request a module could
+//   read again: a poll's page, a module's push of its arrivals, and the doors
+//   that build their arrivals themselves (WhatsApp's media resolved to the
+//   team's documents, email's routing key). It keeps the arrivals and the
+//   connection they were read for. listen-fire keeps a push as the request
+//   whose body names its arrivals; either reads the same arrivals.
 //
 // Sensitive (a message's text, a person's address): read only by one
 // explicit read of the delivery (ruling 3), forgotten with the delivery.
@@ -157,7 +161,7 @@ export function capturedRequest(input: {
   };
 }
 
-/** A poll's page as its delivery keeps it: what the poll read, for whom. */
+/** A page as its delivery keeps it: what the poll or door read, for whom. */
 export function keptPage(input: { adapterType: string; credentialsId: string | null; arrivals: readonly Arrival[] }): KeptPage {
   return {
     adapter: input.adapterType,

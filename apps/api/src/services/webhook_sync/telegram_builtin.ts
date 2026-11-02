@@ -46,6 +46,8 @@ import {
   parseTelegramEvents,
 } from '../translation_graph/adapters/telegram';
 import { deliverArrivals } from '../inbound/listen_door';
+import { capturedRequest } from '../inbound/captured_request';
+import { builtinModuleRequestKeeping } from '../translation_graph/adapters/builtin_modules';
 import { resolveAdapter } from '../translation_graph/adapters/resolve';
 import { notifyWork } from '../work/drain';
 import { isTestHarnessTeam } from '../../lib/recording';
@@ -274,6 +276,14 @@ export async function handleSharedBotInbound(raw: unknown): Promise<SharedBotDel
         externalId: updateIdOf(raw),
         source: 'webhook',
         arrivals,
+        // The update as Telegram sent it, so a listen can be put through it
+        // again (listen_replay.ts).
+        request: capturedRequest({
+          keeping: builtinModuleRequestKeeping(TELEGRAM_ADAPTER_TYPE),
+          headers: { 'content-type': 'application/json' },
+          rawBody: Buffer.from(JSON.stringify(raw), 'utf8'),
+          arrivals,
+        }),
       });
       if (kept.kept) delivered.push(teamId);
     } catch (err) {

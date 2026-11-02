@@ -9,7 +9,9 @@ import { logger } from 'movement-engine/public/log';
 import { sendSlackNotification } from '../../lib/slack';
 import { getQb } from '../../lib/kysely';
 import { TeamId } from '../../generated/kysely/core/Team';
+import type { Arrival } from 'engine-contracts';
 import { deliverArrivals } from '../../services/inbound/listen_door';
+import { keptPage } from '../../services/inbound/captured_request';
 import { notifyWork } from '../../services/work/drain';
 import {
   createEmailAdapter,
@@ -125,19 +127,23 @@ const acceptInboundEmail = async (
   const recipient = typeof emailPayload['recipient'] === 'string' ? emailPayload['recipient'] : undefined;
   let fired: number;
   try {
+    const arrivals: Arrival[] = [
+      {
+        edge: EMAILS_EDGE,
+        identity: messageId ?? ctx.id,
+        landing: { recordType: 'Email', fields: { ...emailPayload, content: normalisedBody(emailPayload), [EMAIL_KEY_FIELD]: inboxKeyOf(recipient) } },
+      },
+    ];
     const { kept, fires } = await deliverArrivals({
       teamId,
       delivered: { adapterType: EMAIL_ADAPTER_TYPE, credentialsId: null },
       subscriptionId: EMAIL_ADAPTER_TYPE,
       externalId: messageId !== undefined ? `email:${messageId}` : null,
       source: 'webhook',
-      arrivals: [
-        {
-          edge: EMAILS_EDGE,
-          identity: messageId ?? ctx.id,
-          landing: { recordType: 'Email', fields: { ...emailPayload, content: normalisedBody(emailPayload), [EMAIL_KEY_FIELD]: inboxKeyOf(recipient) } },
-        },
-      ],
+      arrivals,
+      // The provider's message is read by this door, not a module: a replay
+      // judges the arrival it read again.
+      request: keptPage({ adapterType: EMAIL_ADAPTER_TYPE, credentialsId: null, arrivals }),
     });
     if (!kept.kept) return res.status(201).send();
     fired = fires.length;

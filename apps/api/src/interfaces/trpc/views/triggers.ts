@@ -28,6 +28,7 @@ import type { MovementId } from '../../../generated/kysely/automations/Movement'
 
 import { currentContext } from '../../../services/context';
 import { replayThroughListen, type ReplayOutcome } from '../../../services/inbound/listen_replay';
+import { showDeliveryRequest, type ShownRequest } from '../../../services/inbound/show_request';
 import { mq } from '../../../lib/message_queue';
 import { trpc } from '../trpc';
 import { getAutomationsQb, getKnowledgeQb } from '../../../lib/kysely';
@@ -984,6 +985,25 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
           triggerId: input.triggerId as TriggerId,
           deliveryId: input.deliveryId,
           ...(input.force !== undefined ? { force: input.force } : {}),
+        });
+      }),
+
+    /**
+     * Show one delivery's kept request (ruling 3): only to the team's admins,
+     * each read recorded. A mutation, so nothing refetches it unasked.
+     */
+    showDeliveryRequest: userProcedure
+      .input(z.object({ deliveryId: z.string().min(1) }))
+      .mutation(async ({ input }): Promise<ShownRequest> => {
+        const { user } = currentContext();
+        return showDeliveryRequest({
+          teamId: user.teamId as TeamId,
+          deliveryId: input.deliveryId,
+          reader: {
+            userId: user.id,
+            access: user.isTeamReadonly ? 'read' : 'write',
+            ...(user.apiKeyId !== undefined ? { credentialId: user.apiKeyId } : {}),
+          },
         });
       }),
   });

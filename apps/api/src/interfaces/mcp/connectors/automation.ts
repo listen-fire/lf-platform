@@ -587,6 +587,30 @@ function automationConnectorOptions(): McpRouterOptions {
         title: 'Resume a paused run',
         endpoint: { method: 'POST', path: '/v1/automation/automations/resume-run' },
       },
+      listArrivals: {
+        description:
+          "List what reached an automation's listeners, newest first: each run an arrival started (with its runId) and each arrival a listener could not judge (status \"not_judged\", with the reason — usually a system that did not answer a lookup — and which attempt). Each entry names its `listen` and `deliveryId`: pass both to replayDelivery. Pass the automation id or its exact name.",
+        annotations: { readOnlyHint: true },
+        inputSchema: {
+          idOrName: z.string().describe('The automation id (from listAutomations) or its exact name.'),
+          team: z.string().optional().describe('Team id (see instructions); omit to search across your teams.'),
+        },
+        title: 'List what reached an automation',
+        endpoint: { method: 'GET', path: '/v1/automation/automations/:idOrName/arrivals' },
+      },
+      replayDelivery: {
+        description:
+          'Put one delivery through one listener again — the way out of an arrival the listener could not judge (listArrivals shows it as "not_judged"), once the system it needed answers again. Only what that delivery brought is judged, by that listener alone. A listener that already ran the arrival runs nothing and says so; `force: true` runs it again, so confirm with the user first. Returns { outcome, runIds, attempt, stillUndecided, lines }: the runs are queued, so poll checkRun with each runId.',
+        annotations: { destructiveHint: true },
+        inputSchema: {
+          listen: z.string().describe('The listener, as listArrivals names it (`listen`).'),
+          deliveryId: z.string().describe('The delivery, as listArrivals names it (`deliveryId`).'),
+          force: z.boolean().optional().describe('Run it again even if this listener already ran the arrival.'),
+          team: z.string().optional().describe('Team id (see instructions); omit to search across your teams.'),
+        },
+        title: 'Replay a delivery through a listener',
+        endpoint: { method: 'POST', path: '/v1/automation/automations/replay-delivery' },
+      },
     },
   };
 }

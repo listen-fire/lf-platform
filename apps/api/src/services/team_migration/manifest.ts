@@ -338,6 +338,12 @@ export const MANIFEST: Record<Product, TableSpec[]> = {
     { table: 'event_receipt', tenancy: { kind: 'team_column' }, history: true },
     { table: 'delivery', tenancy: { kind: 'team_column' }, history: true },
     {
+      table: 'delivery_request_read',
+      tenancy: { kind: 'team_column' },
+      exportExcludedBecause:
+        'who was shown a delivery’s kept request on the source deployment; like the audit trail, importing it would attribute to the target reads it never served',
+    },
+    {
       table: 'module_processes',
       tenancy: { kind: 'team_column' },
       exportExcludedBecause:

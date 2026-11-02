@@ -196,6 +196,19 @@ model Delivery {
   @@schema("automations")
 }
 
+model DeliveryRequestRead {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  teamId       String   @map("team_id") @db.Uuid
+  deliveryId   String   @map("delivery_id") @db.Uuid
+  readBy       String   @map("read_by") @db.Uuid
+  credentialId String?  @map("credential_id")
+  readAt       DateTime @default(now()) @map("read_at") @db.Timestamptz(6)
+
+  @@index([teamId, deliveryId], map: "delivery_request_read_delivery_idx")
+  @@map("delivery_request_read")
+  @@schema("automations")
+}
+
 model DeployCheck {
   id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   releaseTag      String   @map("release_tag")

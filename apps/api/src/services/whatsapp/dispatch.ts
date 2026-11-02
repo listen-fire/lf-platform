@@ -22,6 +22,7 @@ import { exposeFile } from '../translation_graph/engine/files/expose';
 import { classifyMetaMessage, whatsappInboundArrivals } from '@listen-fire/whatsapp/inbound';
 import { WHATSAPP_ADAPTER_TYPE } from '../translation_graph/adapters/whatsapp';
 import { deliverArrivals } from '../inbound/listen_door';
+import { keptPage } from '../inbound/captured_request';
 import { notifyWork } from '../work/drain';
 import { getMetaWhatsappApi, movementsPhoneNumberId } from './metaApi';
 import { resolveWhatsappRoute } from './route';
@@ -206,6 +207,9 @@ export async function dispatchWhatsappMessage(input: {
       externalId: `whatsapp:${message.id}`,
       source: 'webhook',
       arrivals,
+      // Its media are already the team's documents: a replay judges these
+      // arrivals again rather than reading Meta's delivery afresh.
+      request: keptPage({ adapterType: WHATSAPP_ADAPTER_TYPE, credentialsId: null, arrivals }),
     });
     if (!kept.kept) return;
     notifyWork();

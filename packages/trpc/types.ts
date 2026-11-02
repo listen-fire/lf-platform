@@ -1,4 +1,5 @@
 import { CapturedWrite } from 'movement-engine/public/adapter';
+import { Arrival } from 'engine-contracts';
 import * as engine_contracts_trigger_config from 'engine-contracts/trigger_config';
 import * as _prisma_client_runtime_library from '@prisma/client/runtime/library';
 import { StoryValidity, Chip, StoryFilter, StoryShapeNode, StoryEdge, Step, StoryProblem, FieldType } from 'legacy-lang';
@@ -1306,6 +1307,35 @@ type ReplayOutcome = {
     attempt: number;
     stillUndecided: boolean;
     lines: string[];
+};
+type ShownKept = {
+    kind: 'request';
+    method: string;
+    path: string;
+    query: string;
+    headers: Record<string, string>;
+    /** The body as text when it is UTF-8, else base64. */
+    body: string;
+    bodyEncoding: 'utf8' | 'base64';
+    /** The arrivals it brought, by receipt key. */
+    arrivalIds: string[];
+} | {
+    /** What a poll or a door read itself: there was no request to keep. */
+    kind: 'page';
+    adapter: string;
+    credential: string | null;
+    arrivals: Arrival[];
+};
+type ShownRequest = {
+    outcome: 'refused';
+    reason: string;
+} | {
+    outcome: 'shown';
+    deliveryId: string;
+    receivedAt: Date;
+    source: string;
+    replayOf: string | null;
+    kept: ShownKept;
 };
 /**
  * How the editor treats a pin. `kind`: whose checker lints it (`legacy`: the
@@ -12267,6 +12297,32 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
             }, ReplayOutcome>;
+            showDeliveryRequest: _trpc_server.BuildProcedure<"mutation", {
+                _config: _trpc_server.RootConfig<{
+                    ctx: {
+                        authorise: () => Promise<void>;
+                    };
+                    meta: object;
+                    errorShape: {
+                        message: string;
+                        code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
+                        data: _trpc_server_dist_error_formatter.DefaultErrorData;
+                    };
+                    transformer: _trpc_server.DefaultDataTransformer;
+                }>;
+                _meta: object;
+                _ctx_out: {
+                    authorise: () => Promise<void>;
+                };
+                _input_in: {
+                    deliveryId: string;
+                };
+                _input_out: {
+                    deliveryId: string;
+                };
+                _output_in: typeof _trpc_server.unsetMarker;
+                _output_out: typeof _trpc_server.unsetMarker;
+            }, ShownRequest>;
             onRunActivity: _trpc_server.BuildProcedure<"subscription", {
                 _config: _trpc_server.RootConfig<{
                     ctx: {

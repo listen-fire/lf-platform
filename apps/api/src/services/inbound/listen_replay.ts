@@ -6,8 +6,10 @@
 //   was received, its lookups made afresh. Its signature is not checked: the
 //   request is the platform's own capture. A module that checks its own
 //   requests is told it is a replay.
-// - A poll's page made no request: the arrivals it read are judged again,
-//   the module asked nothing, and only by a listen that shared the poll.
+// - A page made no request a module could read again (a poll's, a module's
+//   push, a door that built its own arrivals): the arrivals it read are judged
+//   again, the module asked nothing. A poll's, only by a listen that shared
+//   the poll; any other, only by a listen on the module it came from.
 // - Only the arrivals the delivery brought are judged, by the named listen
 //   alone. Every other listen on the delivery is left as it is.
 // - A run it fires is kept as a delivery's is, in one write: a replay
@@ -56,17 +58,20 @@ export type ReplayOutcome =
 interface KeptDeliveryRow {
   id: string;
   subscriptionId: string;
+  source: string;
   replayOf: string | null;
   request: unknown;
 }
 
 async function deliveryOf(teamId: TeamId, deliveryId: string): Promise<KeptDeliveryRow | null> {
-  const { rows } = await sql<{ id: string; subscription_id: string; replay_of: string | null; request: unknown }>`
-    select id::text as id, subscription_id, replay_of::text as replay_of, request
+  const { rows } = await sql<{ id: string; subscription_id: string; source: string; replay_of: string | null; request: unknown }>`
+    select id::text as id, subscription_id, source, replay_of::text as replay_of, request
     from automations.delivery
     where team_id = ${teamId}::uuid and id::text = ${deliveryId}::text`.execute(getAutomationsQb(['delivery']));
   const row = rows[0];
-  return row === undefined ? null : { id: row.id, subscriptionId: row.subscription_id, replayOf: row.replay_of, request: row.request };
+  return row === undefined
+    ? null
+    : { id: row.id, subscriptionId: row.subscription_id, source: row.source, replayOf: row.replay_of, request: row.request };
 }
 
 async function adapterTypeOf(triggerId: TriggerId): Promise<string | null> {
@@ -153,12 +158,16 @@ export async function replayThroughListen(input: { teamId: TeamId; triggerId: Tr
   let arrivals: Arrival[];
   let credentialsId: string | null;
   if ('page' in kept) {
-    const key = listenEdgeKeyOf(listen, ['polled']);
-    if (key === null || pollSubscriptionId(listenEdgeDigest(key)) !== row.subscriptionId) {
-      return {
-        outcome: 'refused',
-        reason: `delivery ${row.id} is a poll's page, read for the listens that shared that poll: ${named} is not one of them (it may have been edited since, or its connection changed)`,
-      };
+    if (row.source === 'poll') {
+      const key = listenEdgeKeyOf(listen, ['polled']);
+      if (key === null || pollSubscriptionId(listenEdgeDigest(key)) !== row.subscriptionId) {
+        return {
+          outcome: 'refused',
+          reason: `delivery ${row.id} is a poll's page, read for the listens that shared that poll: ${named} is not one of them (it may have been edited since, or its connection changed)`,
+        };
+      }
+    } else if (kept.page.adapter !== adapterType) {
+      return { outcome: 'refused', reason: `delivery ${row.id} came from ${kept.page.adapter}: ${named} listens on ${adapterType}` };
     }
     arrivals = kept.page.arrivals;
     credentialsId = kept.page.credential ?? null;

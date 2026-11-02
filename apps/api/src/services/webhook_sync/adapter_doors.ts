@@ -22,6 +22,7 @@ import { mayBeRemoteSlug } from '../translation_graph/adapters/remote/slugs';
 import { listRemoteAdaptersOfType, type RemoteAdapterRow } from '../translation_graph/adapters/remote/store';
 import { ADAPTER_TEAM_HEADER, authHeader } from 'movement-engine/public/adapter';
 import { deliverArrivals } from '../inbound/listen_door';
+import { keptPage } from '../inbound/captured_request';
 import { notifyWork } from '../work/drain';
 import { logger } from 'movement-engine/public/log';
 import { webhookProviderKey } from './urls';
@@ -126,6 +127,9 @@ export const platformPushStore: PushStore = {
       externalId: null,
       source: 'emit',
       arrivals,
+      // The module pushed arrivals, not a provider's request: a replay judges
+      // them again as pushed.
+      request: keptPage({ adapterType, credentialsId: null, arrivals }),
     });
   },
 

@@ -42,6 +42,7 @@ import type { default as DeployCheckTable } from './DeployCheck';
 import type { default as GoogleGrantedItemTable } from './GoogleGrantedItem';
 import type { default as TelegramIdentityTable } from './TelegramIdentity';
 import type { default as DeliveryTable } from './Delivery';
+import type { default as DeliveryRequestReadTable } from './DeliveryRequestRead';
 import type { default as OutboundEmailTable } from './OutboundEmail';
 import type { default as TeamEngineTable } from './TeamEngine';
 import type { default as ArrivalIdentityTable } from './ArrivalIdentity';
@@ -130,6 +131,8 @@ export default interface AutomationsSchema {
   telegram_identity: TelegramIdentityTable;
 
   delivery: DeliveryTable;
+
+  delivery_request_read: DeliveryRequestReadTable;
 
   outbound_email: OutboundEmailTable;
 
