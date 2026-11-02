@@ -44,7 +44,9 @@ jest.mock('../../../../../lib/credentials', () => ({
   encryptToken: async () => '',
 }));
 
-/** `telegram_identity`: one linked user per team, Ada (777). */
+/** `telegram_identity`: one linked user per team, Ada (777), on a host that
+ *  keeps linked identities (not the bare install's). */
+const identities = { kept: true };
 const LINKED_AT = new Date(Date.UTC(2026, 5, 1, 12));
 jest.mock('../../../../../lib/kysely', () => {
   const qb = () => ({
@@ -56,6 +58,7 @@ jest.mock('../../../../../lib/kysely', () => {
           return typeof id === 'string' && storedCredentials.has(id) ? [{ id, credentials: Buffer.from('x') }] : [];
         }
         if (table === 'telegram_identity') {
+          if (!identities.kept) return [];
           const all = [{ team_id: filters.team_id, telegram_user_id: '777', email: 'Ada@Example.com ', linked_at: LINKED_AT }];
           return all.filter((row) => filters.telegram_user_id === undefined || row.telegram_user_id === filters.telegram_user_id);
         }
@@ -126,6 +129,7 @@ const INSTALL: Record<InstallName, Install> = {
 function seed(name: InstallName, baseUrl: string): Install {
   const install = INSTALL[name];
   provider.baseUrl = baseUrl;
+  identities.kept = install.hostHasDoors;
   storedCredentials.clear();
   if (install.credentialsId !== undefined && install.credential !== undefined) {
     storedCredentials.set(install.credentialsId, install.credential(baseUrl));

@@ -9,6 +9,7 @@ import type { Adapter, FileRef } from 'movement-engine/public/adapter';
 import type { SourcePosition } from 'movement-engine/public/catalog';
 
 import { makeMetaPosition, makeStablePosition, makeUnstablePosition } from 'movement-engine/public/catalog';
+import { arrivalTriggerOf } from 'movement-engine/public/inbound';
 
 /** The calls the doors make as the bot, beside the adapter's own. */
 export interface TelegramDoorCalls {
@@ -99,7 +100,6 @@ export async function runTelegramParityScript(subject: TelegramParitySubject): P
   }
   const meta = makeMetaPosition('telegram');
   await step('edgesFrom meta', async () => (await adapter.edgesFrom?.(meta)) ?? null);
-  await step('listEventTypes', async () => (await adapter.listEventTypes?.()) ?? null);
   await step('runtimeCapabilities', async () => adapter.runtimeCapabilities?.() ?? null);
 
   // ── Inbound ──
@@ -115,7 +115,8 @@ export async function runTelegramParityScript(subject: TelegramParitySubject): P
 
   // ── Fields and walks on a delivered message ──
   const inbound = await adapter.preprocessInbound?.({ raw: MEDIA_UPDATE });
-  const mediaPayload = inbound?.events[0]?.payload as Record<string, unknown> | undefined;
+  const arrival = inbound?.arrivals[0];
+  const mediaPayload = arrival !== undefined && 'landing' in arrival ? arrival.landing.fields : undefined;
   const message: SourcePosition = makeStablePosition({
     adapterType: 'telegram',
     recordType: 'Message',
@@ -167,11 +168,16 @@ export async function runTelegramParityScript(subject: TelegramParitySubject): P
     linkedUser = users?.[0]?.position;
     await step('Message Sender linked', () => adapter.getRelated({ position: linkedSender, fieldId: 'Sender', direction: 'outgoing' }));
     await step('Message Sender unlinked', () => adapter.getRelated({ position: message, fieldId: 'Sender', direction: 'outgoing' }));
-    const event = (payload: unknown) => ({ payload }) as never;
-    await step('extractActor linked', async () => (await adapter.extractActor?.({ event: event(linkedSender.identity.data) })) ?? null);
-    await step('extractActor unlinked', async () => (await adapter.extractActor?.({ event: event(mediaPayload) })) ?? null);
-    await step('getActorCandidates linked', async () => (await adapter.getActorCandidates?.({ event: event(linkedSender.identity.data) })) ?? null);
-    await step('getActorCandidates no sender', async () => (await adapter.getActorCandidates?.({ event: event({}) })) ?? null);
+    // Who acted rides on the arrival the door made (adapter protocol 2.7).
+    const fired = async (raw: unknown) => {
+      const [first] = (await adapter.preprocessInbound?.({ raw }))?.arrivals ?? [];
+      if (first === undefined || !('landing' in first)) throw new Error('the update made no arrival');
+      return arrivalTriggerOf({ pipelineInputId: 'parity', adapterType: 'telegram', now: new Date('2026-10-17T00:00:00.000Z'), arrival: first });
+    };
+    await step('extractActor linked', async () => (await adapter.extractActor?.({ event: await fired(TEXT_UPDATE) })) ?? null);
+    await step('extractActor unlinked', async () => (await adapter.extractActor?.({ event: await fired(MEDIA_UPDATE) })) ?? null);
+    await step('getActorCandidates linked', async () => (await adapter.getActorCandidates?.({ event: await fired(TEXT_UPDATE) })) ?? null);
+    await step('getActorCandidates unlinked', async () => (await adapter.getActorCandidates?.({ event: await fired(MEDIA_UPDATE) })) ?? null);
   }
   await step('meta other edge', () => adapter.getRelated({ position: meta, fieldId: 'Message', direction: 'outgoing' }));
 

@@ -7,9 +7,12 @@
           {
             "typeId": "telegram:message",
             "displayName": "Message",
+            "collectionName": "Messages",
             "writable": false,
             "readable": false,
-            "fires": true
+            "listenable": true,
+            "delivery": "connection",
+            "identity": "Id"
           },
           {
             "typeId": "telegram:attachment",
@@ -32,15 +35,23 @@
         "answer": {
           "typeId": "telegram:message",
           "displayName": "Message",
-          "description": "A Telegram message — what a listen delivers, whole: read `e.`Text`` straight off the event, reply along its `Replies` edge. Created only along an edge: DM a linked user via their `Messages` edge, reply via a message's `Replies` edge — the chat and the reply target come from the parent, never from fields.",
+          "description": "A Telegram message — what a listen on `Messages` delivers, whole: read `e.`Text`` straight off the arrival, reply along its `Replies` edge. Created only along an edge: DM a linked user via their `Messages` edge, reply via a message's `Replies` edge — the chat and the reply target come from the parent, never from fields.",
           "fields": [
+            {
+              "fieldId": "id",
+              "displayName": "Id",
+              "kind": "string",
+              "writable": false,
+              "required": false,
+              "description": "Names an arriving message across chats: `<Chat Id>:<Message Id>`, since Telegram numbers a message within its chat. The same on every redelivery."
+            },
             {
               "fieldId": "message_id",
               "displayName": "Message Id",
               "kind": "string",
               "writable": false,
               "required": true,
-              "description": "The Telegram message id."
+              "description": "The Telegram message id, within its chat."
             },
             {
               "fieldId": "text",
@@ -58,7 +69,7 @@
               "writable": true,
               "readable": false,
               "required": false,
-              "description": "Telegram's `reply_markup`, exactly as the Bot API spells it — passed through verbatim (no wrapping, no typed shape here; a malformed keyboard surfaces as a loud Telegram error at run time). Usually an inline keyboard: rows of buttons, each `{ text, url }` (opens a link) or `{ text, callback_data }` (a tap this bot handles, capped by Telegram at 64 BYTES). To make a tap DO something, mint a callback (`c = callback({ … })`) and put `\"${c.id}\"` in `callback_data` — it fits the 64-byte cap comfortably — one callback per button, since its body is what that button means. Telegram captures nothing at tap time, so a callback fired from a keyboard takes no values; anything a person has to fill in needs a `url` button instead. Buttons compose with everything else on the send. Build strings with \"${…}\" interpolation (never `+`, which is numeric addition). Example:\n{ inline_keyboard: [\n  [ { text: \"Approve\", callback_data: \"${approve.id}\" },\n    { text: \"Decline\", callback_data: \"${decline.id}\" } ],\n] }"
+              "description": "Telegram's `reply_markup`, exactly as the Bot API spells it — passed through verbatim (no wrapping, no typed shape here; a malformed keyboard surfaces as a loud Telegram error at run time). Usually an inline keyboard: rows of buttons, each `{ text, url }` (opens a link). To make a tap DO something, write a form from the `@lf/forms` adapter (`form = write forms-[:Forms]-> { Title: …, Fields: … }`), put its `form.Url` on a `url` button, and `await form-[:Submissions]->`: the form also asks for anything a person has to fill in, which Telegram does not capture at tap time. A `{ text, callback_data }` button reaches no run. Buttons compose with everything else on the send. Build strings with \"${…}\" interpolation (never `+`, which is numeric addition). Example:\n{ inline_keyboard: [\n  [ { text: \"Answer\", url: \"${form.Url}\" } ],\n] }"
             },
             {
               "fieldId": "chat_id",
@@ -66,7 +77,7 @@
               "kind": "string",
               "writable": false,
               "required": true,
-              "description": "The id of the chat the message belongs to — the value to send a reply back to."
+              "description": "The id of the chat the message belongs to — the value to send a reply back to, and what a listen narrows to one chat by (`m.`Chat Id` == \"42\"`)."
             },
             {
               "fieldId": "chat_type",
@@ -237,15 +248,23 @@
         "answer": {
           "typeId": "telegram:message",
           "displayName": "Message",
-          "description": "A Telegram message — what a listen delivers, whole: read `e.`Text`` straight off the event, reply along its `Replies` edge. Created only along an edge: DM a linked user via their `Messages` edge, reply via a message's `Replies` edge — the chat and the reply target come from the parent, never from fields.",
+          "description": "A Telegram message — what a listen on `Messages` delivers, whole: read `e.`Text`` straight off the arrival, reply along its `Replies` edge. Created only along an edge: DM a linked user via their `Messages` edge, reply via a message's `Replies` edge — the chat and the reply target come from the parent, never from fields.",
           "fields": [
+            {
+              "fieldId": "id",
+              "displayName": "Id",
+              "kind": "string",
+              "writable": false,
+              "required": false,
+              "description": "Names an arriving message across chats: `<Chat Id>:<Message Id>`, since Telegram numbers a message within its chat. The same on every redelivery."
+            },
             {
               "fieldId": "message_id",
               "displayName": "Message Id",
               "kind": "string",
               "writable": false,
               "required": true,
-              "description": "The Telegram message id."
+              "description": "The Telegram message id, within its chat."
             },
             {
               "fieldId": "text",
@@ -263,7 +282,7 @@
               "writable": true,
               "readable": false,
               "required": false,
-              "description": "Telegram's `reply_markup`, exactly as the Bot API spells it — passed through verbatim (no wrapping, no typed shape here; a malformed keyboard surfaces as a loud Telegram error at run time). Usually an inline keyboard: rows of buttons, each `{ text, url }` (opens a link) or `{ text, callback_data }` (a tap this bot handles, capped by Telegram at 64 BYTES). To make a tap DO something, mint a callback (`c = callback({ … })`) and put `\"${c.id}\"` in `callback_data` — it fits the 64-byte cap comfortably — one callback per button, since its body is what that button means. Telegram captures nothing at tap time, so a callback fired from a keyboard takes no values; anything a person has to fill in needs a `url` button instead. Buttons compose with everything else on the send. Build strings with \"${…}\" interpolation (never `+`, which is numeric addition). Example:\n{ inline_keyboard: [\n  [ { text: \"Approve\", callback_data: \"${approve.id}\" },\n    { text: \"Decline\", callback_data: \"${decline.id}\" } ],\n] }"
+              "description": "Telegram's `reply_markup`, exactly as the Bot API spells it — passed through verbatim (no wrapping, no typed shape here; a malformed keyboard surfaces as a loud Telegram error at run time). Usually an inline keyboard: rows of buttons, each `{ text, url }` (opens a link). To make a tap DO something, write a form from the `@lf/forms` adapter (`form = write forms-[:Forms]-> { Title: …, Fields: … }`), put its `form.Url` on a `url` button, and `await form-[:Submissions]->`: the form also asks for anything a person has to fill in, which Telegram does not capture at tap time. A `{ text, callback_data }` button reaches no run. Buttons compose with everything else on the send. Build strings with \"${…}\" interpolation (never `+`, which is numeric addition). Example:\n{ inline_keyboard: [\n  [ { text: \"Answer\", url: \"${form.Url}\" } ],\n] }"
             },
             {
               "fieldId": "chat_id",
@@ -271,7 +290,7 @@
               "kind": "string",
               "writable": false,
               "required": true,
-              "description": "The id of the chat the message belongs to — the value to send a reply back to."
+              "description": "The id of the chat the message belongs to — the value to send a reply back to, and what a listen narrows to one chat by (`m.`Chat Id` == \"42\"`)."
             },
             {
               "fieldId": "chat_type",
@@ -355,18 +374,18 @@
           "descriptor": {
             "typeId": "meta",
             "displayName": "Telegram",
-            "description": "A Telegram connection. The people who have linked their account can be listed; conversations cannot — a message has to arrive.",
+            "description": "A Telegram connection. The people who have linked their account can be listed; conversations cannot — a message has to arrive, on `Messages`.",
             "fields": [],
             "references": [
               {
                 "fieldId": "telegram:message",
                 "targetTypeId": "telegram:message",
-                "cardinality": "one",
+                "cardinality": "many",
                 "direction": "outgoing",
-                "name": "Message",
-                "fires": true,
+                "name": "Messages",
+                "listenable": true,
                 "readable": false,
-                "description": "Somebody messaging the bot — what a listen delivers."
+                "description": "Each message somebody sends the bot, whole — what a listen delivers."
               },
               {
                 "fieldId": "telegram:linked_user",
@@ -401,15 +420,23 @@
             "telegram:message": {
               "typeId": "telegram:message",
               "displayName": "Message",
-              "description": "A Telegram message — what a listen delivers, whole: read `e.`Text`` straight off the event, reply along its `Replies` edge. Created only along an edge: DM a linked user via their `Messages` edge, reply via a message's `Replies` edge — the chat and the reply target come from the parent, never from fields.",
+              "description": "A Telegram message — what a listen on `Messages` delivers, whole: read `e.`Text`` straight off the arrival, reply along its `Replies` edge. Created only along an edge: DM a linked user via their `Messages` edge, reply via a message's `Replies` edge — the chat and the reply target come from the parent, never from fields.",
               "fields": [
+                {
+                  "fieldId": "id",
+                  "displayName": "Id",
+                  "kind": "string",
+                  "writable": false,
+                  "required": false,
+                  "description": "Names an arriving message across chats: `<Chat Id>:<Message Id>`, since Telegram numbers a message within its chat. The same on every redelivery."
+                },
                 {
                   "fieldId": "message_id",
                   "displayName": "Message Id",
                   "kind": "string",
                   "writable": false,
                   "required": true,
-                  "description": "The Telegram message id."
+                  "description": "The Telegram message id, within its chat."
                 },
                 {
                   "fieldId": "text",
@@ -427,7 +454,7 @@
                   "writable": true,
                   "readable": false,
                   "required": false,
-                  "description": "Telegram's `reply_markup`, exactly as the Bot API spells it — passed through verbatim (no wrapping, no typed shape here; a malformed keyboard surfaces as a loud Telegram error at run time). Usually an inline keyboard: rows of buttons, each `{ text, url }` (opens a link) or `{ text, callback_data }` (a tap this bot handles, capped by Telegram at 64 BYTES). To make a tap DO something, mint a callback (`c = callback({ … })`) and put `\"${c.id}\"` in `callback_data` — it fits the 64-byte cap comfortably — one callback per button, since its body is what that button means. Telegram captures nothing at tap time, so a callback fired from a keyboard takes no values; anything a person has to fill in needs a `url` button instead. Buttons compose with everything else on the send. Build strings with \"${…}\" interpolation (never `+`, which is numeric addition). Example:\n{ inline_keyboard: [\n  [ { text: \"Approve\", callback_data: \"${approve.id}\" },\n    { text: \"Decline\", callback_data: \"${decline.id}\" } ],\n] }"
+                  "description": "Telegram's `reply_markup`, exactly as the Bot API spells it — passed through verbatim (no wrapping, no typed shape here; a malformed keyboard surfaces as a loud Telegram error at run time). Usually an inline keyboard: rows of buttons, each `{ text, url }` (opens a link). To make a tap DO something, write a form from the `@lf/forms` adapter (`form = write forms-[:Forms]-> { Title: …, Fields: … }`), put its `form.Url` on a `url` button, and `await form-[:Submissions]->`: the form also asks for anything a person has to fill in, which Telegram does not capture at tap time. A `{ text, callback_data }` button reaches no run. Buttons compose with everything else on the send. Build strings with \"${…}\" interpolation (never `+`, which is numeric addition). Example:\n{ inline_keyboard: [\n  [ { text: \"Answer\", url: \"${form.Url}\" } ],\n] }"
                 },
                 {
                   "fieldId": "chat_id",
@@ -435,7 +462,7 @@
                   "kind": "string",
                   "writable": false,
                   "required": true,
-                  "description": "The id of the chat the message belongs to — the value to send a reply back to."
+                  "description": "The id of the chat the message belongs to — the value to send a reply back to, and what a listen narrows to one chat by (`m.`Chat Id` == \"42\"`)."
                 },
                 {
                   "fieldId": "chat_type",
@@ -514,15 +541,6 @@
         }
       },
       {
-        "step": "listEventTypes",
-        "answer": [
-          {
-            "tag": "message",
-            "positionType": "telegram:message"
-          }
-        ]
-      },
-      {
         "step": "runtimeCapabilities",
         "answer": {
           "traversal": {
@@ -535,24 +553,45 @@
       {
         "step": "preprocessInbound text",
         "answer": {
-          "events": [
+          "events": [],
+          "arrivals": [
             {
-              "payload": {
-                "message_id": "42",
-                "text": "Closed the round!",
-                "chat_id": "777",
-                "chat_type": "private",
-                "sender_id": "777",
-                "sender_username": "adas",
-                "sender_first_name": "Ada",
-                "date": "2023-11-14T22:13:20.000Z",
-                "attachments": []
+              "edge": "Messages",
+              "identity": "777:42",
+              "landing": {
+                "recordId": "42",
+                "recordType": "Message",
+                "fields": {
+                  "message_id": "42",
+                  "text": "Closed the round!",
+                  "chat_id": "777",
+                  "chat_type": "private",
+                  "sender_id": "777",
+                  "sender_username": "adas",
+                  "sender_first_name": "Ada",
+                  "date": "2023-11-14T22:13:20.000Z",
+                  "attachments": [],
+                  "id": "777:42",
+                  "Id": "777:42",
+                  "Message Id": "42",
+                  "Text": "Closed the round!",
+                  "Chat Id": "777",
+                  "Chat Type": "private",
+                  "Sender Id": "777",
+                  "Sender Username": "adas",
+                  "Sender First Name": "Ada",
+                  "Date": "2023-11-14T22:13:20.000Z"
+                }
               },
-              "externalId": "42",
-              "recordType": "telegram:message",
-              "eventType": "message",
-              "tag": "message",
-              "changeType": "create"
+              "occurredAt": "2023-11-14T22:13:20.000Z",
+              "actor": {
+                "identifier": "777",
+                "scheme": "email",
+                "adapterType": "telegram",
+                "email": "ada@example.com",
+                "name": "Ada",
+                "label": "@adas"
+              }
             }
           ]
         }
@@ -560,48 +599,60 @@
       {
         "step": "preprocessInbound media",
         "answer": {
-          "events": [
+          "events": [],
+          "arrivals": [
             {
-              "payload": {
-                "message_id": "43",
-                "text": "the deck",
-                "chat_id": "-1001",
-                "chat_type": "supergroup",
-                "sender_id": "888",
-                "sender_first_name": "Bo",
-                "date": "2023-11-14T22:15:00.000Z",
-                "attachments": [
-                  {
-                    "file_id": "DOC1",
-                    "name": "deck.pdf",
-                    "contentType": "application/pdf",
-                    "size": 1234
-                  },
-                  {
-                    "file_id": "PH_L",
-                    "name": "photo_PHl.jpg",
-                    "contentType": "image/jpeg",
-                    "size": 9000
-                  },
-                  {
-                    "file_id": "VO1",
-                    "name": "voice_VO1u.ogg",
-                    "contentType": "audio/ogg",
-                    "size": 55
-                  },
-                  {
-                    "file_id": "AU1",
-                    "name": "song.mp3",
-                    "contentType": "audio/mpeg",
-                    "size": 77
-                  }
-                ]
+              "edge": "Messages",
+              "identity": "-1001:43",
+              "landing": {
+                "recordId": "43",
+                "recordType": "Message",
+                "fields": {
+                  "message_id": "43",
+                  "text": "the deck",
+                  "chat_id": "-1001",
+                  "chat_type": "supergroup",
+                  "sender_id": "888",
+                  "sender_first_name": "Bo",
+                  "date": "2023-11-14T22:15:00.000Z",
+                  "attachments": [
+                    {
+                      "file_id": "DOC1",
+                      "name": "deck.pdf",
+                      "contentType": "application/pdf",
+                      "size": 1234
+                    },
+                    {
+                      "file_id": "PH_L",
+                      "name": "photo_PHl.jpg",
+                      "contentType": "image/jpeg",
+                      "size": 9000
+                    },
+                    {
+                      "file_id": "VO1",
+                      "name": "voice_VO1u.ogg",
+                      "contentType": "audio/ogg",
+                      "size": 55
+                    },
+                    {
+                      "file_id": "AU1",
+                      "name": "song.mp3",
+                      "contentType": "audio/mpeg",
+                      "size": 77
+                    }
+                  ],
+                  "id": "-1001:43",
+                  "Id": "-1001:43",
+                  "Message Id": "43",
+                  "Text": "the deck",
+                  "Chat Id": "-1001",
+                  "Chat Type": "supergroup",
+                  "Sender Id": "888",
+                  "Sender First Name": "Bo",
+                  "Date": "2023-11-14T22:15:00.000Z"
+                }
               },
-              "externalId": "43",
-              "recordType": "telegram:message",
-              "eventType": "message",
-              "tag": "message",
-              "changeType": "create"
+              "occurredAt": "2023-11-14T22:15:00.000Z"
             }
           ]
         }
@@ -609,19 +660,22 @@
       {
         "step": "preprocessInbound callback_query",
         "answer": {
-          "events": []
+          "events": [],
+          "arrivals": []
         }
       },
       {
         "step": "preprocessInbound malformed",
         "answer": {
-          "events": []
+          "events": [],
+          "arrivals": []
         }
       },
       {
         "step": "preprocessInbound not an object",
         "answer": {
-          "events": []
+          "events": [],
+          "arrivals": []
         }
       },
       {
@@ -950,7 +1004,7 @@
         ]
       },
       {
-        "step": "getActorCandidates no sender",
+        "step": "getActorCandidates unlinked",
         "answer": []
       },
       {
@@ -1089,7 +1143,7 @@
           "text": "Hello Ada"
         },
         "status": 200,
-        "response": "{\"ok\":true,\"result\":{\"message_id\":1,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1792263158,\"text\":\"Hello Ada\"}}"
+        "response": "{\"ok\":true,\"result\":{\"message_id\":1,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1793639764,\"text\":\"Hello Ada\"}}"
       },
       {
         "method": "POST",
@@ -1114,7 +1168,7 @@
           }
         },
         "status": 200,
-        "response": "{\"ok\":true,\"result\":{\"message_id\":2,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1792263158,\"text\":\"Approve?\",\"reply_to_message_id\":42,\"reply_markup\":{\"inline_keyboard\":[[{\"text\":\"Yes\",\"callback_data\":\"cb_1\"}]]}}}"
+        "response": "{\"ok\":true,\"result\":{\"message_id\":2,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1793639764,\"text\":\"Approve?\",\"reply_to_message_id\":42,\"reply_markup\":{\"inline_keyboard\":[[{\"text\":\"Yes\",\"callback_data\":\"cb_1\"}]]}}}"
       },
       {
         "method": "POST",
@@ -1129,7 +1183,7 @@
           "reply_to_message_id": 42
         },
         "status": 200,
-        "response": "{\"ok\":true,\"result\":{\"message_id\":3,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1792263158,\"text\":\"plain\",\"reply_to_message_id\":42}}"
+        "response": "{\"ok\":true,\"result\":{\"message_id\":3,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1793639764,\"text\":\"plain\",\"reply_to_message_id\":42}}"
       },
       {
         "method": "POST",
@@ -1182,9 +1236,12 @@
           {
             "typeId": "telegram:message",
             "displayName": "Message",
+            "collectionName": "Messages",
             "writable": false,
             "readable": false,
-            "fires": true
+            "listenable": true,
+            "delivery": "connection",
+            "identity": "Id"
           },
           {
             "typeId": "telegram:attachment",
@@ -1207,15 +1264,23 @@
         "answer": {
           "typeId": "telegram:message",
           "displayName": "Message",
-          "description": "A Telegram message — what a listen delivers, whole: read `e.`Text`` straight off the event, reply along its `Replies` edge. Created only along an edge: DM a linked user via their `Messages` edge, reply via a message's `Replies` edge — the chat and the reply target come from the parent, never from fields.",
+          "description": "A Telegram message — what a listen on `Messages` delivers, whole: read `e.`Text`` straight off the arrival, reply along its `Replies` edge. Created only along an edge: DM a linked user via their `Messages` edge, reply via a message's `Replies` edge — the chat and the reply target come from the parent, never from fields.",
           "fields": [
+            {
+              "fieldId": "id",
+              "displayName": "Id",
+              "kind": "string",
+              "writable": false,
+              "required": false,
+              "description": "Names an arriving message across chats: `<Chat Id>:<Message Id>`, since Telegram numbers a message within its chat. The same on every redelivery."
+            },
             {
               "fieldId": "message_id",
               "displayName": "Message Id",
               "kind": "string",
               "writable": false,
               "required": true,
-              "description": "The Telegram message id."
+              "description": "The Telegram message id, within its chat."
             },
             {
               "fieldId": "text",
@@ -1233,7 +1298,7 @@
               "writable": true,
               "readable": false,
               "required": false,
-              "description": "Telegram's `reply_markup`, exactly as the Bot API spells it — passed through verbatim (no wrapping, no typed shape here; a malformed keyboard surfaces as a loud Telegram error at run time). Usually an inline keyboard: rows of buttons, each `{ text, url }` (opens a link) or `{ text, callback_data }` (a tap this bot handles, capped by Telegram at 64 BYTES). To make a tap DO something, mint a callback (`c = callback({ … })`) and put `\"${c.id}\"` in `callback_data` — it fits the 64-byte cap comfortably — one callback per button, since its body is what that button means. Telegram captures nothing at tap time, so a callback fired from a keyboard takes no values; anything a person has to fill in needs a `url` button instead. Buttons compose with everything else on the send. Build strings with \"${…}\" interpolation (never `+`, which is numeric addition). Example:\n{ inline_keyboard: [\n  [ { text: \"Approve\", callback_data: \"${approve.id}\" },\n    { text: \"Decline\", callback_data: \"${decline.id}\" } ],\n] }"
+              "description": "Telegram's `reply_markup`, exactly as the Bot API spells it — passed through verbatim (no wrapping, no typed shape here; a malformed keyboard surfaces as a loud Telegram error at run time). Usually an inline keyboard: rows of buttons, each `{ text, url }` (opens a link). To make a tap DO something, write a form from the `@lf/forms` adapter (`form = write forms-[:Forms]-> { Title: …, Fields: … }`), put its `form.Url` on a `url` button, and `await form-[:Submissions]->`: the form also asks for anything a person has to fill in, which Telegram does not capture at tap time. A `{ text, callback_data }` button reaches no run. Buttons compose with everything else on the send. Build strings with \"${…}\" interpolation (never `+`, which is numeric addition). Example:\n{ inline_keyboard: [\n  [ { text: \"Answer\", url: \"${form.Url}\" } ],\n] }"
             },
             {
               "fieldId": "chat_id",
@@ -1241,7 +1306,7 @@
               "kind": "string",
               "writable": false,
               "required": true,
-              "description": "The id of the chat the message belongs to — the value to send a reply back to."
+              "description": "The id of the chat the message belongs to — the value to send a reply back to, and what a listen narrows to one chat by (`m.`Chat Id` == \"42\"`)."
             },
             {
               "fieldId": "chat_type",
@@ -1412,15 +1477,23 @@
         "answer": {
           "typeId": "telegram:message",
           "displayName": "Message",
-          "description": "A Telegram message — what a listen delivers, whole: read `e.`Text`` straight off the event, reply along its `Replies` edge. Created only along an edge: DM a linked user via their `Messages` edge, reply via a message's `Replies` edge — the chat and the reply target come from the parent, never from fields.",
+          "description": "A Telegram message — what a listen on `Messages` delivers, whole: read `e.`Text`` straight off the arrival, reply along its `Replies` edge. Created only along an edge: DM a linked user via their `Messages` edge, reply via a message's `Replies` edge — the chat and the reply target come from the parent, never from fields.",
           "fields": [
+            {
+              "fieldId": "id",
+              "displayName": "Id",
+              "kind": "string",
+              "writable": false,
+              "required": false,
+              "description": "Names an arriving message across chats: `<Chat Id>:<Message Id>`, since Telegram numbers a message within its chat. The same on every redelivery."
+            },
             {
               "fieldId": "message_id",
               "displayName": "Message Id",
               "kind": "string",
               "writable": false,
               "required": true,
-              "description": "The Telegram message id."
+              "description": "The Telegram message id, within its chat."
             },
             {
               "fieldId": "text",
@@ -1438,7 +1511,7 @@
               "writable": true,
               "readable": false,
               "required": false,
-              "description": "Telegram's `reply_markup`, exactly as the Bot API spells it — passed through verbatim (no wrapping, no typed shape here; a malformed keyboard surfaces as a loud Telegram error at run time). Usually an inline keyboard: rows of buttons, each `{ text, url }` (opens a link) or `{ text, callback_data }` (a tap this bot handles, capped by Telegram at 64 BYTES). To make a tap DO something, mint a callback (`c = callback({ … })`) and put `\"${c.id}\"` in `callback_data` — it fits the 64-byte cap comfortably — one callback per button, since its body is what that button means. Telegram captures nothing at tap time, so a callback fired from a keyboard takes no values; anything a person has to fill in needs a `url` button instead. Buttons compose with everything else on the send. Build strings with \"${…}\" interpolation (never `+`, which is numeric addition). Example:\n{ inline_keyboard: [\n  [ { text: \"Approve\", callback_data: \"${approve.id}\" },\n    { text: \"Decline\", callback_data: \"${decline.id}\" } ],\n] }"
+              "description": "Telegram's `reply_markup`, exactly as the Bot API spells it — passed through verbatim (no wrapping, no typed shape here; a malformed keyboard surfaces as a loud Telegram error at run time). Usually an inline keyboard: rows of buttons, each `{ text, url }` (opens a link). To make a tap DO something, write a form from the `@lf/forms` adapter (`form = write forms-[:Forms]-> { Title: …, Fields: … }`), put its `form.Url` on a `url` button, and `await form-[:Submissions]->`: the form also asks for anything a person has to fill in, which Telegram does not capture at tap time. A `{ text, callback_data }` button reaches no run. Buttons compose with everything else on the send. Build strings with \"${…}\" interpolation (never `+`, which is numeric addition). Example:\n{ inline_keyboard: [\n  [ { text: \"Answer\", url: \"${form.Url}\" } ],\n] }"
             },
             {
               "fieldId": "chat_id",
@@ -1446,7 +1519,7 @@
               "kind": "string",
               "writable": false,
               "required": true,
-              "description": "The id of the chat the message belongs to — the value to send a reply back to."
+              "description": "The id of the chat the message belongs to — the value to send a reply back to, and what a listen narrows to one chat by (`m.`Chat Id` == \"42\"`)."
             },
             {
               "fieldId": "chat_type",
@@ -1530,18 +1603,18 @@
           "descriptor": {
             "typeId": "meta",
             "displayName": "Telegram",
-            "description": "A Telegram connection. The people who have linked their account can be listed; conversations cannot — a message has to arrive.",
+            "description": "A Telegram connection. The people who have linked their account can be listed; conversations cannot — a message has to arrive, on `Messages`.",
             "fields": [],
             "references": [
               {
                 "fieldId": "telegram:message",
                 "targetTypeId": "telegram:message",
-                "cardinality": "one",
+                "cardinality": "many",
                 "direction": "outgoing",
-                "name": "Message",
-                "fires": true,
+                "name": "Messages",
+                "listenable": true,
                 "readable": false,
-                "description": "Somebody messaging the bot — what a listen delivers."
+                "description": "Each message somebody sends the bot, whole — what a listen delivers."
               },
               {
                 "fieldId": "telegram:linked_user",
@@ -1576,15 +1649,23 @@
             "telegram:message": {
               "typeId": "telegram:message",
               "displayName": "Message",
-              "description": "A Telegram message — what a listen delivers, whole: read `e.`Text`` straight off the event, reply along its `Replies` edge. Created only along an edge: DM a linked user via their `Messages` edge, reply via a message's `Replies` edge — the chat and the reply target come from the parent, never from fields.",
+              "description": "A Telegram message — what a listen on `Messages` delivers, whole: read `e.`Text`` straight off the arrival, reply along its `Replies` edge. Created only along an edge: DM a linked user via their `Messages` edge, reply via a message's `Replies` edge — the chat and the reply target come from the parent, never from fields.",
               "fields": [
+                {
+                  "fieldId": "id",
+                  "displayName": "Id",
+                  "kind": "string",
+                  "writable": false,
+                  "required": false,
+                  "description": "Names an arriving message across chats: `<Chat Id>:<Message Id>`, since Telegram numbers a message within its chat. The same on every redelivery."
+                },
                 {
                   "fieldId": "message_id",
                   "displayName": "Message Id",
                   "kind": "string",
                   "writable": false,
                   "required": true,
-                  "description": "The Telegram message id."
+                  "description": "The Telegram message id, within its chat."
                 },
                 {
                   "fieldId": "text",
@@ -1602,7 +1683,7 @@
                   "writable": true,
                   "readable": false,
                   "required": false,
-                  "description": "Telegram's `reply_markup`, exactly as the Bot API spells it — passed through verbatim (no wrapping, no typed shape here; a malformed keyboard surfaces as a loud Telegram error at run time). Usually an inline keyboard: rows of buttons, each `{ text, url }` (opens a link) or `{ text, callback_data }` (a tap this bot handles, capped by Telegram at 64 BYTES). To make a tap DO something, mint a callback (`c = callback({ … })`) and put `\"${c.id}\"` in `callback_data` — it fits the 64-byte cap comfortably — one callback per button, since its body is what that button means. Telegram captures nothing at tap time, so a callback fired from a keyboard takes no values; anything a person has to fill in needs a `url` button instead. Buttons compose with everything else on the send. Build strings with \"${…}\" interpolation (never `+`, which is numeric addition). Example:\n{ inline_keyboard: [\n  [ { text: \"Approve\", callback_data: \"${approve.id}\" },\n    { text: \"Decline\", callback_data: \"${decline.id}\" } ],\n] }"
+                  "description": "Telegram's `reply_markup`, exactly as the Bot API spells it — passed through verbatim (no wrapping, no typed shape here; a malformed keyboard surfaces as a loud Telegram error at run time). Usually an inline keyboard: rows of buttons, each `{ text, url }` (opens a link). To make a tap DO something, write a form from the `@lf/forms` adapter (`form = write forms-[:Forms]-> { Title: …, Fields: … }`), put its `form.Url` on a `url` button, and `await form-[:Submissions]->`: the form also asks for anything a person has to fill in, which Telegram does not capture at tap time. A `{ text, callback_data }` button reaches no run. Buttons compose with everything else on the send. Build strings with \"${…}\" interpolation (never `+`, which is numeric addition). Example:\n{ inline_keyboard: [\n  [ { text: \"Answer\", url: \"${form.Url}\" } ],\n] }"
                 },
                 {
                   "fieldId": "chat_id",
@@ -1610,7 +1691,7 @@
                   "kind": "string",
                   "writable": false,
                   "required": true,
-                  "description": "The id of the chat the message belongs to — the value to send a reply back to."
+                  "description": "The id of the chat the message belongs to — the value to send a reply back to, and what a listen narrows to one chat by (`m.`Chat Id` == \"42\"`)."
                 },
                 {
                   "fieldId": "chat_type",
@@ -1689,15 +1770,6 @@
         }
       },
       {
-        "step": "listEventTypes",
-        "answer": [
-          {
-            "tag": "message",
-            "positionType": "telegram:message"
-          }
-        ]
-      },
-      {
         "step": "runtimeCapabilities",
         "answer": {
           "traversal": {
@@ -1710,24 +1782,45 @@
       {
         "step": "preprocessInbound text",
         "answer": {
-          "events": [
+          "events": [],
+          "arrivals": [
             {
-              "payload": {
-                "message_id": "42",
-                "text": "Closed the round!",
-                "chat_id": "777",
-                "chat_type": "private",
-                "sender_id": "777",
-                "sender_username": "adas",
-                "sender_first_name": "Ada",
-                "date": "2023-11-14T22:13:20.000Z",
-                "attachments": []
+              "edge": "Messages",
+              "identity": "777:42",
+              "landing": {
+                "recordId": "42",
+                "recordType": "Message",
+                "fields": {
+                  "message_id": "42",
+                  "text": "Closed the round!",
+                  "chat_id": "777",
+                  "chat_type": "private",
+                  "sender_id": "777",
+                  "sender_username": "adas",
+                  "sender_first_name": "Ada",
+                  "date": "2023-11-14T22:13:20.000Z",
+                  "attachments": [],
+                  "id": "777:42",
+                  "Id": "777:42",
+                  "Message Id": "42",
+                  "Text": "Closed the round!",
+                  "Chat Id": "777",
+                  "Chat Type": "private",
+                  "Sender Id": "777",
+                  "Sender Username": "adas",
+                  "Sender First Name": "Ada",
+                  "Date": "2023-11-14T22:13:20.000Z"
+                }
               },
-              "externalId": "42",
-              "recordType": "telegram:message",
-              "eventType": "message",
-              "tag": "message",
-              "changeType": "create"
+              "occurredAt": "2023-11-14T22:13:20.000Z",
+              "actor": {
+                "identifier": "777",
+                "scheme": "email",
+                "adapterType": "telegram",
+                "email": "ada@example.com",
+                "name": "Ada",
+                "label": "@adas"
+              }
             }
           ]
         }
@@ -1735,48 +1828,60 @@
       {
         "step": "preprocessInbound media",
         "answer": {
-          "events": [
+          "events": [],
+          "arrivals": [
             {
-              "payload": {
-                "message_id": "43",
-                "text": "the deck",
-                "chat_id": "-1001",
-                "chat_type": "supergroup",
-                "sender_id": "888",
-                "sender_first_name": "Bo",
-                "date": "2023-11-14T22:15:00.000Z",
-                "attachments": [
-                  {
-                    "file_id": "DOC1",
-                    "name": "deck.pdf",
-                    "contentType": "application/pdf",
-                    "size": 1234
-                  },
-                  {
-                    "file_id": "PH_L",
-                    "name": "photo_PHl.jpg",
-                    "contentType": "image/jpeg",
-                    "size": 9000
-                  },
-                  {
-                    "file_id": "VO1",
-                    "name": "voice_VO1u.ogg",
-                    "contentType": "audio/ogg",
-                    "size": 55
-                  },
-                  {
-                    "file_id": "AU1",
-                    "name": "song.mp3",
-                    "contentType": "audio/mpeg",
-                    "size": 77
-                  }
-                ]
+              "edge": "Messages",
+              "identity": "-1001:43",
+              "landing": {
+                "recordId": "43",
+                "recordType": "Message",
+                "fields": {
+                  "message_id": "43",
+                  "text": "the deck",
+                  "chat_id": "-1001",
+                  "chat_type": "supergroup",
+                  "sender_id": "888",
+                  "sender_first_name": "Bo",
+                  "date": "2023-11-14T22:15:00.000Z",
+                  "attachments": [
+                    {
+                      "file_id": "DOC1",
+                      "name": "deck.pdf",
+                      "contentType": "application/pdf",
+                      "size": 1234
+                    },
+                    {
+                      "file_id": "PH_L",
+                      "name": "photo_PHl.jpg",
+                      "contentType": "image/jpeg",
+                      "size": 9000
+                    },
+                    {
+                      "file_id": "VO1",
+                      "name": "voice_VO1u.ogg",
+                      "contentType": "audio/ogg",
+                      "size": 55
+                    },
+                    {
+                      "file_id": "AU1",
+                      "name": "song.mp3",
+                      "contentType": "audio/mpeg",
+                      "size": 77
+                    }
+                  ],
+                  "id": "-1001:43",
+                  "Id": "-1001:43",
+                  "Message Id": "43",
+                  "Text": "the deck",
+                  "Chat Id": "-1001",
+                  "Chat Type": "supergroup",
+                  "Sender Id": "888",
+                  "Sender First Name": "Bo",
+                  "Date": "2023-11-14T22:15:00.000Z"
+                }
               },
-              "externalId": "43",
-              "recordType": "telegram:message",
-              "eventType": "message",
-              "tag": "message",
-              "changeType": "create"
+              "occurredAt": "2023-11-14T22:15:00.000Z"
             }
           ]
         }
@@ -1784,19 +1889,22 @@
       {
         "step": "preprocessInbound callback_query",
         "answer": {
-          "events": []
+          "events": [],
+          "arrivals": []
         }
       },
       {
         "step": "preprocessInbound malformed",
         "answer": {
-          "events": []
+          "events": [],
+          "arrivals": []
         }
       },
       {
         "step": "preprocessInbound not an object",
         "answer": {
-          "events": []
+          "events": [],
+          "arrivals": []
         }
       },
       {
@@ -2125,7 +2233,7 @@
         ]
       },
       {
-        "step": "getActorCandidates no sender",
+        "step": "getActorCandidates unlinked",
         "answer": []
       },
       {
@@ -2264,7 +2372,7 @@
           "text": "Hello Ada"
         },
         "status": 200,
-        "response": "{\"ok\":true,\"result\":{\"message_id\":4,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1792263158,\"text\":\"Hello Ada\"}}"
+        "response": "{\"ok\":true,\"result\":{\"message_id\":4,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1793639764,\"text\":\"Hello Ada\"}}"
       },
       {
         "method": "POST",
@@ -2289,7 +2397,7 @@
           }
         },
         "status": 200,
-        "response": "{\"ok\":true,\"result\":{\"message_id\":5,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1792263158,\"text\":\"Approve?\",\"reply_to_message_id\":42,\"reply_markup\":{\"inline_keyboard\":[[{\"text\":\"Yes\",\"callback_data\":\"cb_1\"}]]}}}"
+        "response": "{\"ok\":true,\"result\":{\"message_id\":5,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1793639764,\"text\":\"Approve?\",\"reply_to_message_id\":42,\"reply_markup\":{\"inline_keyboard\":[[{\"text\":\"Yes\",\"callback_data\":\"cb_1\"}]]}}}"
       },
       {
         "method": "POST",
@@ -2304,7 +2412,7 @@
           "reply_to_message_id": 42
         },
         "status": 200,
-        "response": "{\"ok\":true,\"result\":{\"message_id\":6,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1792263158,\"text\":\"plain\",\"reply_to_message_id\":42}}"
+        "response": "{\"ok\":true,\"result\":{\"message_id\":6,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1793639764,\"text\":\"plain\",\"reply_to_message_id\":42}}"
       },
       {
         "method": "POST",
@@ -2357,9 +2465,12 @@
           {
             "typeId": "telegram:message",
             "displayName": "Message",
+            "collectionName": "Messages",
             "writable": false,
             "readable": false,
-            "fires": true
+            "listenable": true,
+            "delivery": "connection",
+            "identity": "Id"
           },
           {
             "typeId": "telegram:attachment",
@@ -2382,15 +2493,23 @@
         "answer": {
           "typeId": "telegram:message",
           "displayName": "Message",
-          "description": "A Telegram message — what a listen delivers, whole: read `e.`Text`` straight off the event, reply along its `Replies` edge. Created only along an edge: DM a linked user via their `Messages` edge, reply via a message's `Replies` edge — the chat and the reply target come from the parent, never from fields.",
+          "description": "A Telegram message — what a listen on `Messages` delivers, whole: read `e.`Text`` straight off the arrival, reply along its `Replies` edge. Created only along an edge: DM a linked user via their `Messages` edge, reply via a message's `Replies` edge — the chat and the reply target come from the parent, never from fields.",
           "fields": [
+            {
+              "fieldId": "id",
+              "displayName": "Id",
+              "kind": "string",
+              "writable": false,
+              "required": false,
+              "description": "Names an arriving message across chats: `<Chat Id>:<Message Id>`, since Telegram numbers a message within its chat. The same on every redelivery."
+            },
             {
               "fieldId": "message_id",
               "displayName": "Message Id",
               "kind": "string",
               "writable": false,
               "required": true,
-              "description": "The Telegram message id."
+              "description": "The Telegram message id, within its chat."
             },
             {
               "fieldId": "text",
@@ -2408,7 +2527,7 @@
               "writable": true,
               "readable": false,
               "required": false,
-              "description": "Telegram's `reply_markup`, exactly as the Bot API spells it — passed through verbatim (no wrapping, no typed shape here; a malformed keyboard surfaces as a loud Telegram error at run time). Usually an inline keyboard: rows of buttons, each `{ text, url }` (opens a link) or `{ text, callback_data }` (a tap this bot handles, capped by Telegram at 64 BYTES). To make a tap DO something, mint a callback (`c = callback({ … })`) and put `\"${c.id}\"` in `callback_data` — it fits the 64-byte cap comfortably — one callback per button, since its body is what that button means. Telegram captures nothing at tap time, so a callback fired from a keyboard takes no values; anything a person has to fill in needs a `url` button instead. Buttons compose with everything else on the send. Build strings with \"${…}\" interpolation (never `+`, which is numeric addition). Example:\n{ inline_keyboard: [\n  [ { text: \"Approve\", callback_data: \"${approve.id}\" },\n    { text: \"Decline\", callback_data: \"${decline.id}\" } ],\n] }"
+              "description": "Telegram's `reply_markup`, exactly as the Bot API spells it — passed through verbatim (no wrapping, no typed shape here; a malformed keyboard surfaces as a loud Telegram error at run time). Usually an inline keyboard: rows of buttons, each `{ text, url }` (opens a link). To make a tap DO something, write a form from the `@lf/forms` adapter (`form = write forms-[:Forms]-> { Title: …, Fields: … }`), put its `form.Url` on a `url` button, and `await form-[:Submissions]->`: the form also asks for anything a person has to fill in, which Telegram does not capture at tap time. A `{ text, callback_data }` button reaches no run. Buttons compose with everything else on the send. Build strings with \"${…}\" interpolation (never `+`, which is numeric addition). Example:\n{ inline_keyboard: [\n  [ { text: \"Answer\", url: \"${form.Url}\" } ],\n] }"
             },
             {
               "fieldId": "chat_id",
@@ -2416,7 +2535,7 @@
               "kind": "string",
               "writable": false,
               "required": true,
-              "description": "The id of the chat the message belongs to — the value to send a reply back to."
+              "description": "The id of the chat the message belongs to — the value to send a reply back to, and what a listen narrows to one chat by (`m.`Chat Id` == \"42\"`)."
             },
             {
               "fieldId": "chat_type",
@@ -2587,15 +2706,23 @@
         "answer": {
           "typeId": "telegram:message",
           "displayName": "Message",
-          "description": "A Telegram message — what a listen delivers, whole: read `e.`Text`` straight off the event, reply along its `Replies` edge. Created only along an edge: DM a linked user via their `Messages` edge, reply via a message's `Replies` edge — the chat and the reply target come from the parent, never from fields.",
+          "description": "A Telegram message — what a listen on `Messages` delivers, whole: read `e.`Text`` straight off the arrival, reply along its `Replies` edge. Created only along an edge: DM a linked user via their `Messages` edge, reply via a message's `Replies` edge — the chat and the reply target come from the parent, never from fields.",
           "fields": [
+            {
+              "fieldId": "id",
+              "displayName": "Id",
+              "kind": "string",
+              "writable": false,
+              "required": false,
+              "description": "Names an arriving message across chats: `<Chat Id>:<Message Id>`, since Telegram numbers a message within its chat. The same on every redelivery."
+            },
             {
               "fieldId": "message_id",
               "displayName": "Message Id",
               "kind": "string",
               "writable": false,
               "required": true,
-              "description": "The Telegram message id."
+              "description": "The Telegram message id, within its chat."
             },
             {
               "fieldId": "text",
@@ -2613,7 +2740,7 @@
               "writable": true,
               "readable": false,
               "required": false,
-              "description": "Telegram's `reply_markup`, exactly as the Bot API spells it — passed through verbatim (no wrapping, no typed shape here; a malformed keyboard surfaces as a loud Telegram error at run time). Usually an inline keyboard: rows of buttons, each `{ text, url }` (opens a link) or `{ text, callback_data }` (a tap this bot handles, capped by Telegram at 64 BYTES). To make a tap DO something, mint a callback (`c = callback({ … })`) and put `\"${c.id}\"` in `callback_data` — it fits the 64-byte cap comfortably — one callback per button, since its body is what that button means. Telegram captures nothing at tap time, so a callback fired from a keyboard takes no values; anything a person has to fill in needs a `url` button instead. Buttons compose with everything else on the send. Build strings with \"${…}\" interpolation (never `+`, which is numeric addition). Example:\n{ inline_keyboard: [\n  [ { text: \"Approve\", callback_data: \"${approve.id}\" },\n    { text: \"Decline\", callback_data: \"${decline.id}\" } ],\n] }"
+              "description": "Telegram's `reply_markup`, exactly as the Bot API spells it — passed through verbatim (no wrapping, no typed shape here; a malformed keyboard surfaces as a loud Telegram error at run time). Usually an inline keyboard: rows of buttons, each `{ text, url }` (opens a link). To make a tap DO something, write a form from the `@lf/forms` adapter (`form = write forms-[:Forms]-> { Title: …, Fields: … }`), put its `form.Url` on a `url` button, and `await form-[:Submissions]->`: the form also asks for anything a person has to fill in, which Telegram does not capture at tap time. A `{ text, callback_data }` button reaches no run. Buttons compose with everything else on the send. Build strings with \"${…}\" interpolation (never `+`, which is numeric addition). Example:\n{ inline_keyboard: [\n  [ { text: \"Answer\", url: \"${form.Url}\" } ],\n] }"
             },
             {
               "fieldId": "chat_id",
@@ -2621,7 +2748,7 @@
               "kind": "string",
               "writable": false,
               "required": true,
-              "description": "The id of the chat the message belongs to — the value to send a reply back to."
+              "description": "The id of the chat the message belongs to — the value to send a reply back to, and what a listen narrows to one chat by (`m.`Chat Id` == \"42\"`)."
             },
             {
               "fieldId": "chat_type",
@@ -2705,18 +2832,18 @@
           "descriptor": {
             "typeId": "meta",
             "displayName": "Telegram",
-            "description": "A Telegram connection. The people who have linked their account can be listed; conversations cannot — a message has to arrive.",
+            "description": "A Telegram connection. The people who have linked their account can be listed; conversations cannot — a message has to arrive, on `Messages`.",
             "fields": [],
             "references": [
               {
                 "fieldId": "telegram:message",
                 "targetTypeId": "telegram:message",
-                "cardinality": "one",
+                "cardinality": "many",
                 "direction": "outgoing",
-                "name": "Message",
-                "fires": true,
+                "name": "Messages",
+                "listenable": true,
                 "readable": false,
-                "description": "Somebody messaging the bot — what a listen delivers."
+                "description": "Each message somebody sends the bot, whole — what a listen delivers."
               },
               {
                 "fieldId": "telegram:linked_user",
@@ -2751,15 +2878,23 @@
             "telegram:message": {
               "typeId": "telegram:message",
               "displayName": "Message",
-              "description": "A Telegram message — what a listen delivers, whole: read `e.`Text`` straight off the event, reply along its `Replies` edge. Created only along an edge: DM a linked user via their `Messages` edge, reply via a message's `Replies` edge — the chat and the reply target come from the parent, never from fields.",
+              "description": "A Telegram message — what a listen on `Messages` delivers, whole: read `e.`Text`` straight off the arrival, reply along its `Replies` edge. Created only along an edge: DM a linked user via their `Messages` edge, reply via a message's `Replies` edge — the chat and the reply target come from the parent, never from fields.",
               "fields": [
+                {
+                  "fieldId": "id",
+                  "displayName": "Id",
+                  "kind": "string",
+                  "writable": false,
+                  "required": false,
+                  "description": "Names an arriving message across chats: `<Chat Id>:<Message Id>`, since Telegram numbers a message within its chat. The same on every redelivery."
+                },
                 {
                   "fieldId": "message_id",
                   "displayName": "Message Id",
                   "kind": "string",
                   "writable": false,
                   "required": true,
-                  "description": "The Telegram message id."
+                  "description": "The Telegram message id, within its chat."
                 },
                 {
                   "fieldId": "text",
@@ -2777,7 +2912,7 @@
                   "writable": true,
                   "readable": false,
                   "required": false,
-                  "description": "Telegram's `reply_markup`, exactly as the Bot API spells it — passed through verbatim (no wrapping, no typed shape here; a malformed keyboard surfaces as a loud Telegram error at run time). Usually an inline keyboard: rows of buttons, each `{ text, url }` (opens a link) or `{ text, callback_data }` (a tap this bot handles, capped by Telegram at 64 BYTES). To make a tap DO something, mint a callback (`c = callback({ … })`) and put `\"${c.id}\"` in `callback_data` — it fits the 64-byte cap comfortably — one callback per button, since its body is what that button means. Telegram captures nothing at tap time, so a callback fired from a keyboard takes no values; anything a person has to fill in needs a `url` button instead. Buttons compose with everything else on the send. Build strings with \"${…}\" interpolation (never `+`, which is numeric addition). Example:\n{ inline_keyboard: [\n  [ { text: \"Approve\", callback_data: \"${approve.id}\" },\n    { text: \"Decline\", callback_data: \"${decline.id}\" } ],\n] }"
+                  "description": "Telegram's `reply_markup`, exactly as the Bot API spells it — passed through verbatim (no wrapping, no typed shape here; a malformed keyboard surfaces as a loud Telegram error at run time). Usually an inline keyboard: rows of buttons, each `{ text, url }` (opens a link). To make a tap DO something, write a form from the `@lf/forms` adapter (`form = write forms-[:Forms]-> { Title: …, Fields: … }`), put its `form.Url` on a `url` button, and `await form-[:Submissions]->`: the form also asks for anything a person has to fill in, which Telegram does not capture at tap time. A `{ text, callback_data }` button reaches no run. Buttons compose with everything else on the send. Build strings with \"${…}\" interpolation (never `+`, which is numeric addition). Example:\n{ inline_keyboard: [\n  [ { text: \"Answer\", url: \"${form.Url}\" } ],\n] }"
                 },
                 {
                   "fieldId": "chat_id",
@@ -2785,7 +2920,7 @@
                   "kind": "string",
                   "writable": false,
                   "required": true,
-                  "description": "The id of the chat the message belongs to — the value to send a reply back to."
+                  "description": "The id of the chat the message belongs to — the value to send a reply back to, and what a listen narrows to one chat by (`m.`Chat Id` == \"42\"`)."
                 },
                 {
                   "fieldId": "chat_type",
@@ -2864,15 +2999,6 @@
         }
       },
       {
-        "step": "listEventTypes",
-        "answer": [
-          {
-            "tag": "message",
-            "positionType": "telegram:message"
-          }
-        ]
-      },
-      {
         "step": "runtimeCapabilities",
         "answer": {
           "traversal": {
@@ -2885,24 +3011,45 @@
       {
         "step": "preprocessInbound text",
         "answer": {
-          "events": [
+          "events": [],
+          "arrivals": [
             {
-              "payload": {
-                "message_id": "42",
-                "text": "Closed the round!",
-                "chat_id": "777",
-                "chat_type": "private",
-                "sender_id": "777",
-                "sender_username": "adas",
-                "sender_first_name": "Ada",
-                "date": "2023-11-14T22:13:20.000Z",
-                "attachments": []
+              "edge": "Messages",
+              "identity": "777:42",
+              "landing": {
+                "recordId": "42",
+                "recordType": "Message",
+                "fields": {
+                  "message_id": "42",
+                  "text": "Closed the round!",
+                  "chat_id": "777",
+                  "chat_type": "private",
+                  "sender_id": "777",
+                  "sender_username": "adas",
+                  "sender_first_name": "Ada",
+                  "date": "2023-11-14T22:13:20.000Z",
+                  "attachments": [],
+                  "id": "777:42",
+                  "Id": "777:42",
+                  "Message Id": "42",
+                  "Text": "Closed the round!",
+                  "Chat Id": "777",
+                  "Chat Type": "private",
+                  "Sender Id": "777",
+                  "Sender Username": "adas",
+                  "Sender First Name": "Ada",
+                  "Date": "2023-11-14T22:13:20.000Z"
+                }
               },
-              "externalId": "42",
-              "recordType": "telegram:message",
-              "eventType": "message",
-              "tag": "message",
-              "changeType": "create"
+              "occurredAt": "2023-11-14T22:13:20.000Z",
+              "actor": {
+                "identifier": "777",
+                "scheme": "email",
+                "adapterType": "telegram",
+                "email": "ada@example.com",
+                "name": "Ada",
+                "label": "@adas"
+              }
             }
           ]
         }
@@ -2910,48 +3057,60 @@
       {
         "step": "preprocessInbound media",
         "answer": {
-          "events": [
+          "events": [],
+          "arrivals": [
             {
-              "payload": {
-                "message_id": "43",
-                "text": "the deck",
-                "chat_id": "-1001",
-                "chat_type": "supergroup",
-                "sender_id": "888",
-                "sender_first_name": "Bo",
-                "date": "2023-11-14T22:15:00.000Z",
-                "attachments": [
-                  {
-                    "file_id": "DOC1",
-                    "name": "deck.pdf",
-                    "contentType": "application/pdf",
-                    "size": 1234
-                  },
-                  {
-                    "file_id": "PH_L",
-                    "name": "photo_PHl.jpg",
-                    "contentType": "image/jpeg",
-                    "size": 9000
-                  },
-                  {
-                    "file_id": "VO1",
-                    "name": "voice_VO1u.ogg",
-                    "contentType": "audio/ogg",
-                    "size": 55
-                  },
-                  {
-                    "file_id": "AU1",
-                    "name": "song.mp3",
-                    "contentType": "audio/mpeg",
-                    "size": 77
-                  }
-                ]
+              "edge": "Messages",
+              "identity": "-1001:43",
+              "landing": {
+                "recordId": "43",
+                "recordType": "Message",
+                "fields": {
+                  "message_id": "43",
+                  "text": "the deck",
+                  "chat_id": "-1001",
+                  "chat_type": "supergroup",
+                  "sender_id": "888",
+                  "sender_first_name": "Bo",
+                  "date": "2023-11-14T22:15:00.000Z",
+                  "attachments": [
+                    {
+                      "file_id": "DOC1",
+                      "name": "deck.pdf",
+                      "contentType": "application/pdf",
+                      "size": 1234
+                    },
+                    {
+                      "file_id": "PH_L",
+                      "name": "photo_PHl.jpg",
+                      "contentType": "image/jpeg",
+                      "size": 9000
+                    },
+                    {
+                      "file_id": "VO1",
+                      "name": "voice_VO1u.ogg",
+                      "contentType": "audio/ogg",
+                      "size": 55
+                    },
+                    {
+                      "file_id": "AU1",
+                      "name": "song.mp3",
+                      "contentType": "audio/mpeg",
+                      "size": 77
+                    }
+                  ],
+                  "id": "-1001:43",
+                  "Id": "-1001:43",
+                  "Message Id": "43",
+                  "Text": "the deck",
+                  "Chat Id": "-1001",
+                  "Chat Type": "supergroup",
+                  "Sender Id": "888",
+                  "Sender First Name": "Bo",
+                  "Date": "2023-11-14T22:15:00.000Z"
+                }
               },
-              "externalId": "43",
-              "recordType": "telegram:message",
-              "eventType": "message",
-              "tag": "message",
-              "changeType": "create"
+              "occurredAt": "2023-11-14T22:15:00.000Z"
             }
           ]
         }
@@ -2959,19 +3118,22 @@
       {
         "step": "preprocessInbound callback_query",
         "answer": {
-          "events": []
+          "events": [],
+          "arrivals": []
         }
       },
       {
         "step": "preprocessInbound malformed",
         "answer": {
-          "events": []
+          "events": [],
+          "arrivals": []
         }
       },
       {
         "step": "preprocessInbound not an object",
         "answer": {
-          "events": []
+          "events": [],
+          "arrivals": []
         }
       },
       {
@@ -3296,7 +3458,7 @@
         ]
       },
       {
-        "step": "getActorCandidates no sender",
+        "step": "getActorCandidates unlinked",
         "answer": []
       },
       {
@@ -3435,7 +3597,7 @@
           "text": "Hello Ada"
         },
         "status": 200,
-        "response": "{\"ok\":true,\"result\":{\"message_id\":7,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1792263158,\"text\":\"Hello Ada\"}}"
+        "response": "{\"ok\":true,\"result\":{\"message_id\":7,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1793639764,\"text\":\"Hello Ada\"}}"
       },
       {
         "method": "POST",
@@ -3460,7 +3622,7 @@
           }
         },
         "status": 200,
-        "response": "{\"ok\":true,\"result\":{\"message_id\":8,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1792263158,\"text\":\"Approve?\",\"reply_to_message_id\":42,\"reply_markup\":{\"inline_keyboard\":[[{\"text\":\"Yes\",\"callback_data\":\"cb_1\"}]]}}}"
+        "response": "{\"ok\":true,\"result\":{\"message_id\":8,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1793639764,\"text\":\"Approve?\",\"reply_to_message_id\":42,\"reply_markup\":{\"inline_keyboard\":[[{\"text\":\"Yes\",\"callback_data\":\"cb_1\"}]]}}}"
       },
       {
         "method": "POST",
@@ -3475,7 +3637,7 @@
           "reply_to_message_id": 42
         },
         "status": 200,
-        "response": "{\"ok\":true,\"result\":{\"message_id\":9,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1792263158,\"text\":\"plain\",\"reply_to_message_id\":42}}"
+        "response": "{\"ok\":true,\"result\":{\"message_id\":9,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1793639764,\"text\":\"plain\",\"reply_to_message_id\":42}}"
       },
       {
         "method": "POST",
@@ -3528,9 +3690,12 @@
           {
             "typeId": "telegram:message",
             "displayName": "Message",
+            "collectionName": "Messages",
             "writable": false,
             "readable": false,
-            "fires": true
+            "listenable": true,
+            "delivery": "connection",
+            "identity": "Id"
           },
           {
             "typeId": "telegram:attachment",
@@ -3553,15 +3718,23 @@
         "answer": {
           "typeId": "telegram:message",
           "displayName": "Message",
-          "description": "A Telegram message — what a listen delivers, whole: read `e.`Text`` straight off the event, reply along its `Replies` edge. Created only along an edge: DM a linked user via their `Messages` edge, reply via a message's `Replies` edge — the chat and the reply target come from the parent, never from fields.",
+          "description": "A Telegram message — what a listen on `Messages` delivers, whole: read `e.`Text`` straight off the arrival, reply along its `Replies` edge. Created only along an edge: DM a linked user via their `Messages` edge, reply via a message's `Replies` edge — the chat and the reply target come from the parent, never from fields.",
           "fields": [
+            {
+              "fieldId": "id",
+              "displayName": "Id",
+              "kind": "string",
+              "writable": false,
+              "required": false,
+              "description": "Names an arriving message across chats: `<Chat Id>:<Message Id>`, since Telegram numbers a message within its chat. The same on every redelivery."
+            },
             {
               "fieldId": "message_id",
               "displayName": "Message Id",
               "kind": "string",
               "writable": false,
               "required": true,
-              "description": "The Telegram message id."
+              "description": "The Telegram message id, within its chat."
             },
             {
               "fieldId": "text",
@@ -3579,7 +3752,7 @@
               "writable": true,
               "readable": false,
               "required": false,
-              "description": "Telegram's `reply_markup`, exactly as the Bot API spells it — passed through verbatim (no wrapping, no typed shape here; a malformed keyboard surfaces as a loud Telegram error at run time). Usually an inline keyboard: rows of buttons, each `{ text, url }` (opens a link) or `{ text, callback_data }` (a tap this bot handles, capped by Telegram at 64 BYTES). To make a tap DO something, mint a callback (`c = callback({ … })`) and put `\"${c.id}\"` in `callback_data` — it fits the 64-byte cap comfortably — one callback per button, since its body is what that button means. Telegram captures nothing at tap time, so a callback fired from a keyboard takes no values; anything a person has to fill in needs a `url` button instead. Buttons compose with everything else on the send. Build strings with \"${…}\" interpolation (never `+`, which is numeric addition). Example:\n{ inline_keyboard: [\n  [ { text: \"Approve\", callback_data: \"${approve.id}\" },\n    { text: \"Decline\", callback_data: \"${decline.id}\" } ],\n] }"
+              "description": "Telegram's `reply_markup`, exactly as the Bot API spells it — passed through verbatim (no wrapping, no typed shape here; a malformed keyboard surfaces as a loud Telegram error at run time). Usually an inline keyboard: rows of buttons, each `{ text, url }` (opens a link). To make a tap DO something, write a form from the `@lf/forms` adapter (`form = write forms-[:Forms]-> { Title: …, Fields: … }`), put its `form.Url` on a `url` button, and `await form-[:Submissions]->`: the form also asks for anything a person has to fill in, which Telegram does not capture at tap time. A `{ text, callback_data }` button reaches no run. Buttons compose with everything else on the send. Build strings with \"${…}\" interpolation (never `+`, which is numeric addition). Example:\n{ inline_keyboard: [\n  [ { text: \"Answer\", url: \"${form.Url}\" } ],\n] }"
             },
             {
               "fieldId": "chat_id",
@@ -3587,7 +3760,7 @@
               "kind": "string",
               "writable": false,
               "required": true,
-              "description": "The id of the chat the message belongs to — the value to send a reply back to."
+              "description": "The id of the chat the message belongs to — the value to send a reply back to, and what a listen narrows to one chat by (`m.`Chat Id` == \"42\"`)."
             },
             {
               "fieldId": "chat_type",
@@ -3758,15 +3931,23 @@
         "answer": {
           "typeId": "telegram:message",
           "displayName": "Message",
-          "description": "A Telegram message — what a listen delivers, whole: read `e.`Text`` straight off the event, reply along its `Replies` edge. Created only along an edge: DM a linked user via their `Messages` edge, reply via a message's `Replies` edge — the chat and the reply target come from the parent, never from fields.",
+          "description": "A Telegram message — what a listen on `Messages` delivers, whole: read `e.`Text`` straight off the arrival, reply along its `Replies` edge. Created only along an edge: DM a linked user via their `Messages` edge, reply via a message's `Replies` edge — the chat and the reply target come from the parent, never from fields.",
           "fields": [
+            {
+              "fieldId": "id",
+              "displayName": "Id",
+              "kind": "string",
+              "writable": false,
+              "required": false,
+              "description": "Names an arriving message across chats: `<Chat Id>:<Message Id>`, since Telegram numbers a message within its chat. The same on every redelivery."
+            },
             {
               "fieldId": "message_id",
               "displayName": "Message Id",
               "kind": "string",
               "writable": false,
               "required": true,
-              "description": "The Telegram message id."
+              "description": "The Telegram message id, within its chat."
             },
             {
               "fieldId": "text",
@@ -3784,7 +3965,7 @@
               "writable": true,
               "readable": false,
               "required": false,
-              "description": "Telegram's `reply_markup`, exactly as the Bot API spells it — passed through verbatim (no wrapping, no typed shape here; a malformed keyboard surfaces as a loud Telegram error at run time). Usually an inline keyboard: rows of buttons, each `{ text, url }` (opens a link) or `{ text, callback_data }` (a tap this bot handles, capped by Telegram at 64 BYTES). To make a tap DO something, mint a callback (`c = callback({ … })`) and put `\"${c.id}\"` in `callback_data` — it fits the 64-byte cap comfortably — one callback per button, since its body is what that button means. Telegram captures nothing at tap time, so a callback fired from a keyboard takes no values; anything a person has to fill in needs a `url` button instead. Buttons compose with everything else on the send. Build strings with \"${…}\" interpolation (never `+`, which is numeric addition). Example:\n{ inline_keyboard: [\n  [ { text: \"Approve\", callback_data: \"${approve.id}\" },\n    { text: \"Decline\", callback_data: \"${decline.id}\" } ],\n] }"
+              "description": "Telegram's `reply_markup`, exactly as the Bot API spells it — passed through verbatim (no wrapping, no typed shape here; a malformed keyboard surfaces as a loud Telegram error at run time). Usually an inline keyboard: rows of buttons, each `{ text, url }` (opens a link). To make a tap DO something, write a form from the `@lf/forms` adapter (`form = write forms-[:Forms]-> { Title: …, Fields: … }`), put its `form.Url` on a `url` button, and `await form-[:Submissions]->`: the form also asks for anything a person has to fill in, which Telegram does not capture at tap time. A `{ text, callback_data }` button reaches no run. Buttons compose with everything else on the send. Build strings with \"${…}\" interpolation (never `+`, which is numeric addition). Example:\n{ inline_keyboard: [\n  [ { text: \"Answer\", url: \"${form.Url}\" } ],\n] }"
             },
             {
               "fieldId": "chat_id",
@@ -3792,7 +3973,7 @@
               "kind": "string",
               "writable": false,
               "required": true,
-              "description": "The id of the chat the message belongs to — the value to send a reply back to."
+              "description": "The id of the chat the message belongs to — the value to send a reply back to, and what a listen narrows to one chat by (`m.`Chat Id` == \"42\"`)."
             },
             {
               "fieldId": "chat_type",
@@ -3876,18 +4057,18 @@
           "descriptor": {
             "typeId": "meta",
             "displayName": "Telegram",
-            "description": "A Telegram connection. The people who have linked their account can be listed; conversations cannot — a message has to arrive.",
+            "description": "A Telegram connection. The people who have linked their account can be listed; conversations cannot — a message has to arrive, on `Messages`.",
             "fields": [],
             "references": [
               {
                 "fieldId": "telegram:message",
                 "targetTypeId": "telegram:message",
-                "cardinality": "one",
+                "cardinality": "many",
                 "direction": "outgoing",
-                "name": "Message",
-                "fires": true,
+                "name": "Messages",
+                "listenable": true,
                 "readable": false,
-                "description": "Somebody messaging the bot — what a listen delivers."
+                "description": "Each message somebody sends the bot, whole — what a listen delivers."
               },
               {
                 "fieldId": "telegram:linked_user",
@@ -3922,15 +4103,23 @@
             "telegram:message": {
               "typeId": "telegram:message",
               "displayName": "Message",
-              "description": "A Telegram message — what a listen delivers, whole: read `e.`Text`` straight off the event, reply along its `Replies` edge. Created only along an edge: DM a linked user via their `Messages` edge, reply via a message's `Replies` edge — the chat and the reply target come from the parent, never from fields.",
+              "description": "A Telegram message — what a listen on `Messages` delivers, whole: read `e.`Text`` straight off the arrival, reply along its `Replies` edge. Created only along an edge: DM a linked user via their `Messages` edge, reply via a message's `Replies` edge — the chat and the reply target come from the parent, never from fields.",
               "fields": [
+                {
+                  "fieldId": "id",
+                  "displayName": "Id",
+                  "kind": "string",
+                  "writable": false,
+                  "required": false,
+                  "description": "Names an arriving message across chats: `<Chat Id>:<Message Id>`, since Telegram numbers a message within its chat. The same on every redelivery."
+                },
                 {
                   "fieldId": "message_id",
                   "displayName": "Message Id",
                   "kind": "string",
                   "writable": false,
                   "required": true,
-                  "description": "The Telegram message id."
+                  "description": "The Telegram message id, within its chat."
                 },
                 {
                   "fieldId": "text",
@@ -3948,7 +4137,7 @@
                   "writable": true,
                   "readable": false,
                   "required": false,
-                  "description": "Telegram's `reply_markup`, exactly as the Bot API spells it — passed through verbatim (no wrapping, no typed shape here; a malformed keyboard surfaces as a loud Telegram error at run time). Usually an inline keyboard: rows of buttons, each `{ text, url }` (opens a link) or `{ text, callback_data }` (a tap this bot handles, capped by Telegram at 64 BYTES). To make a tap DO something, mint a callback (`c = callback({ … })`) and put `\"${c.id}\"` in `callback_data` — it fits the 64-byte cap comfortably — one callback per button, since its body is what that button means. Telegram captures nothing at tap time, so a callback fired from a keyboard takes no values; anything a person has to fill in needs a `url` button instead. Buttons compose with everything else on the send. Build strings with \"${…}\" interpolation (never `+`, which is numeric addition). Example:\n{ inline_keyboard: [\n  [ { text: \"Approve\", callback_data: \"${approve.id}\" },\n    { text: \"Decline\", callback_data: \"${decline.id}\" } ],\n] }"
+                  "description": "Telegram's `reply_markup`, exactly as the Bot API spells it — passed through verbatim (no wrapping, no typed shape here; a malformed keyboard surfaces as a loud Telegram error at run time). Usually an inline keyboard: rows of buttons, each `{ text, url }` (opens a link). To make a tap DO something, write a form from the `@lf/forms` adapter (`form = write forms-[:Forms]-> { Title: …, Fields: … }`), put its `form.Url` on a `url` button, and `await form-[:Submissions]->`: the form also asks for anything a person has to fill in, which Telegram does not capture at tap time. A `{ text, callback_data }` button reaches no run. Buttons compose with everything else on the send. Build strings with \"${…}\" interpolation (never `+`, which is numeric addition). Example:\n{ inline_keyboard: [\n  [ { text: \"Answer\", url: \"${form.Url}\" } ],\n] }"
                 },
                 {
                   "fieldId": "chat_id",
@@ -3956,7 +4145,7 @@
                   "kind": "string",
                   "writable": false,
                   "required": true,
-                  "description": "The id of the chat the message belongs to — the value to send a reply back to."
+                  "description": "The id of the chat the message belongs to — the value to send a reply back to, and what a listen narrows to one chat by (`m.`Chat Id` == \"42\"`)."
                 },
                 {
                   "fieldId": "chat_type",
@@ -4035,15 +4224,6 @@
         }
       },
       {
-        "step": "listEventTypes",
-        "answer": [
-          {
-            "tag": "message",
-            "positionType": "telegram:message"
-          }
-        ]
-      },
-      {
         "step": "runtimeCapabilities",
         "answer": {
           "traversal": {
@@ -4056,24 +4236,37 @@
       {
         "step": "preprocessInbound text",
         "answer": {
-          "events": [
+          "events": [],
+          "arrivals": [
             {
-              "payload": {
-                "message_id": "42",
-                "text": "Closed the round!",
-                "chat_id": "777",
-                "chat_type": "private",
-                "sender_id": "777",
-                "sender_username": "adas",
-                "sender_first_name": "Ada",
-                "date": "2023-11-14T22:13:20.000Z",
-                "attachments": []
+              "edge": "Messages",
+              "identity": "777:42",
+              "landing": {
+                "recordId": "42",
+                "recordType": "Message",
+                "fields": {
+                  "message_id": "42",
+                  "text": "Closed the round!",
+                  "chat_id": "777",
+                  "chat_type": "private",
+                  "sender_id": "777",
+                  "sender_username": "adas",
+                  "sender_first_name": "Ada",
+                  "date": "2023-11-14T22:13:20.000Z",
+                  "attachments": [],
+                  "id": "777:42",
+                  "Id": "777:42",
+                  "Message Id": "42",
+                  "Text": "Closed the round!",
+                  "Chat Id": "777",
+                  "Chat Type": "private",
+                  "Sender Id": "777",
+                  "Sender Username": "adas",
+                  "Sender First Name": "Ada",
+                  "Date": "2023-11-14T22:13:20.000Z"
+                }
               },
-              "externalId": "42",
-              "recordType": "telegram:message",
-              "eventType": "message",
-              "tag": "message",
-              "changeType": "create"
+              "occurredAt": "2023-11-14T22:13:20.000Z"
             }
           ]
         }
@@ -4081,48 +4274,60 @@
       {
         "step": "preprocessInbound media",
         "answer": {
-          "events": [
+          "events": [],
+          "arrivals": [
             {
-              "payload": {
-                "message_id": "43",
-                "text": "the deck",
-                "chat_id": "-1001",
-                "chat_type": "supergroup",
-                "sender_id": "888",
-                "sender_first_name": "Bo",
-                "date": "2023-11-14T22:15:00.000Z",
-                "attachments": [
-                  {
-                    "file_id": "DOC1",
-                    "name": "deck.pdf",
-                    "contentType": "application/pdf",
-                    "size": 1234
-                  },
-                  {
-                    "file_id": "PH_L",
-                    "name": "photo_PHl.jpg",
-                    "contentType": "image/jpeg",
-                    "size": 9000
-                  },
-                  {
-                    "file_id": "VO1",
-                    "name": "voice_VO1u.ogg",
-                    "contentType": "audio/ogg",
-                    "size": 55
-                  },
-                  {
-                    "file_id": "AU1",
-                    "name": "song.mp3",
-                    "contentType": "audio/mpeg",
-                    "size": 77
-                  }
-                ]
+              "edge": "Messages",
+              "identity": "-1001:43",
+              "landing": {
+                "recordId": "43",
+                "recordType": "Message",
+                "fields": {
+                  "message_id": "43",
+                  "text": "the deck",
+                  "chat_id": "-1001",
+                  "chat_type": "supergroup",
+                  "sender_id": "888",
+                  "sender_first_name": "Bo",
+                  "date": "2023-11-14T22:15:00.000Z",
+                  "attachments": [
+                    {
+                      "file_id": "DOC1",
+                      "name": "deck.pdf",
+                      "contentType": "application/pdf",
+                      "size": 1234
+                    },
+                    {
+                      "file_id": "PH_L",
+                      "name": "photo_PHl.jpg",
+                      "contentType": "image/jpeg",
+                      "size": 9000
+                    },
+                    {
+                      "file_id": "VO1",
+                      "name": "voice_VO1u.ogg",
+                      "contentType": "audio/ogg",
+                      "size": 55
+                    },
+                    {
+                      "file_id": "AU1",
+                      "name": "song.mp3",
+                      "contentType": "audio/mpeg",
+                      "size": 77
+                    }
+                  ],
+                  "id": "-1001:43",
+                  "Id": "-1001:43",
+                  "Message Id": "43",
+                  "Text": "the deck",
+                  "Chat Id": "-1001",
+                  "Chat Type": "supergroup",
+                  "Sender Id": "888",
+                  "Sender First Name": "Bo",
+                  "Date": "2023-11-14T22:15:00.000Z"
+                }
               },
-              "externalId": "43",
-              "recordType": "telegram:message",
-              "eventType": "message",
-              "tag": "message",
-              "changeType": "create"
+              "occurredAt": "2023-11-14T22:15:00.000Z"
             }
           ]
         }
@@ -4130,19 +4335,22 @@
       {
         "step": "preprocessInbound callback_query",
         "answer": {
-          "events": []
+          "events": [],
+          "arrivals": []
         }
       },
       {
         "step": "preprocessInbound malformed",
         "answer": {
-          "events": []
+          "events": [],
+          "arrivals": []
         }
       },
       {
         "step": "preprocessInbound not an object",
         "answer": {
-          "events": []
+          "events": [],
+          "arrivals": []
         }
       },
       {
@@ -4517,7 +4725,7 @@
           "text": "Hello Ada"
         },
         "status": 200,
-        "response": "{\"ok\":true,\"result\":{\"message_id\":10,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1792263158,\"text\":\"Hello Ada\"}}"
+        "response": "{\"ok\":true,\"result\":{\"message_id\":10,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1793639764,\"text\":\"Hello Ada\"}}"
       },
       {
         "method": "POST",
@@ -4542,7 +4750,7 @@
           }
         },
         "status": 200,
-        "response": "{\"ok\":true,\"result\":{\"message_id\":11,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1792263158,\"text\":\"Approve?\",\"reply_to_message_id\":42,\"reply_markup\":{\"inline_keyboard\":[[{\"text\":\"Yes\",\"callback_data\":\"cb_1\"}]]}}}"
+        "response": "{\"ok\":true,\"result\":{\"message_id\":11,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1793639764,\"text\":\"Approve?\",\"reply_to_message_id\":42,\"reply_markup\":{\"inline_keyboard\":[[{\"text\":\"Yes\",\"callback_data\":\"cb_1\"}]]}}}"
       },
       {
         "method": "POST",
@@ -4557,7 +4765,7 @@
           "reply_to_message_id": 42
         },
         "status": 200,
-        "response": "{\"ok\":true,\"result\":{\"message_id\":12,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1792263158,\"text\":\"plain\",\"reply_to_message_id\":42}}"
+        "response": "{\"ok\":true,\"result\":{\"message_id\":12,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1793639764,\"text\":\"plain\",\"reply_to_message_id\":42}}"
       }
     ]
   }
