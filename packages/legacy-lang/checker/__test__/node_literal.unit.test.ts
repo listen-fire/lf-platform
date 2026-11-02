@@ -27,7 +27,7 @@ const inboxSchema: InstanceSchema = {
       properties: { Name: 'text', File: 'file', Pages: { kind: 'maybeAbsent', of: 'number' } },
       edges: {
         Versions: { target: 'version', readable: true },
-        Answer: { target: 'answer', readable: true, awaitable: true, watchable: true },
+        Answer: { target: 'answer', readable: true, listenable: true },
       },
     },
     version: { properties: { Label: 'text' }, edges: {} },
@@ -247,11 +247,14 @@ describe('a bare-name binding of a node is an ALIAS (2026-08-05 ruling)', () => 
   });
 
   // The chain types the walk; the await itself parks on one record, and a
-  // block's collected records are a list (version 5).
+  // block's collected records are a list (version 5). The installed parser
+  // reads `await first(…)` as 0.13 does, respelled to the bare walk, so the
+  // spelling and bare-walk refusals ride along; neither is this test's point.
   it('await through the chain reaches a real awaitable edge, and is refused as a wait on a list', () => {
-    expect(
-      codes('  x = e-[a:Attachments]-> {\n    btn = a\n    return btn\n  }\n  w = await first(x-[ans:Answer]->)'),
-    ).toEqual([C.AWAIT_ON_LIST]);
+    const found = codes('  x = e-[a:Attachments]-> {\n    btn = a\n    return btn\n  }\n  w = await first(x-[ans:Answer]->)');
+    expect(found).toContain(C.AWAIT_ON_LIST);
+    expect(found).not.toContain(C.AWAIT_NOT_AWAITABLE);
+    expect(found).not.toContain(C.TRAVERSE_UNKNOWN_EDGE);
   });
 
   it('await through the chain onto a non-awaitable edge is now caught', () => {

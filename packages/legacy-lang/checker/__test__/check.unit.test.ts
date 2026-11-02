@@ -1381,34 +1381,6 @@ describe('listen statements', () => {
     expect(codes(source)).toEqual([C.LISTEN_DUPLICATE]);
   });
 
-  it('a config key outside the adapter vocabulary is MOV_LISTEN_BAD_CONFIG', () => {
-    const diagnostics = check(
-      `${PRELUDE}\n${INTAKE}\nlisten to inbox { channel: "#x" } fire intake`,
-    );
-    expect(diagnostics.map(d => d.code)).toEqual([C.LISTEN_BAD_CONFIG]);
-    expect(diagnostics[0].message).toContain("'channel'");
-    expect(diagnostics[0].message).toContain('key');
-  });
-
-  it('an adapter with no trigger-config vocabulary rejects any config key', () => {
-    const source = [
-      PRELUDE,
-      'function sync(rec: <crm-[:company]->>) {',
-      '  write team-[:message]-> { text: rec.`name` }',
-      '}',
-      'listen to crm { anything_goes: "x" } fire sync',
-    ].join('\n');
-    // A resolved adapter that declares no config vocabulary accepts NONE — an
-    // unknown key is an error, not silently passed through.
-    expect(codes(source)).toEqual([C.LISTEN_BAD_CONFIG]);
-  });
-
-  it('config values resolve names like any expression slot', () => {
-    expect(
-      codes(`${PRELUDE}\n${INTAKE}\nlisten to inbox { key: mystery } fire intake`),
-    ).toContain(C.NAME_UNRESOLVED);
-  });
-
   it("a listen inside a movement body is MOV_LISTEN_FILE_LEVEL", () => {
     expect(codes(inMovement('  listen to inbox fire m'))).toContain(C.LISTEN_FILE_LEVEL);
   });
@@ -1424,11 +1396,9 @@ describe('MOV_LISTEN_MISSING', () => {
     expect(diagnostics).toHaveLength(1);
     expect(diagnostics[0].code).toBe(C.LISTEN_MISSING);
     expect(diagnostics[0].severity).toBe('info');
-    // The suggestion is ready to paste: instance + key (the email adapter's
-    // vocabulary includes 'key') + the movement name.
-    expect(diagnostics[0].message).toContain(
-      'listen to inbox { key: "dealflow-intake" } fire dealflow_intake',
-    );
+    // The suggestion is ready to paste: the bare listen, since a 0.13 catalog
+    // does not say which config keys an adapter's listen takes.
+    expect(diagnostics[0].message).toContain('listen to inbox fire dealflow_intake');
   });
 
   it('any listen in the file suppresses it', () => {
@@ -1559,24 +1529,6 @@ describe('cron and manual listeners', () => {
     expect(unknown?.message).toContain('invocation');
   });
 
-  it('a schedule-less cron listener is MOV_LISTEN_BAD_CONFIG with the fix-it', () => {
-    const diagnostics = check(
-      [
-        'import { cron, slack } from adapters',
-        'import { acme_workspace } from credentials',
-        'team  = connect slack using acme_workspace',
-        'timer = connect cron',
-        'function digest(t: <timer-[:tick]->>) {',
-        '  write team-[:message]-> { text: t.`firedAt` }',
-        '}',
-        'listen to timer {} fire digest',
-      ].join('\n'),
-    );
-    expect(diagnostics.map(d => d.code)).toEqual([C.LISTEN_BAD_CONFIG]);
-    expect(diagnostics[0].message).toContain("requires a 'schedule' config");
-    expect(diagnostics[0].message).toContain('schedule: "0 9 * * 1"');
-  });
-
   it('a required address hop is satisfied by the instance POSITION pinning it', () => {
     // `shelf` is required, but the construction pins the `shelf` position arg —
     // the position supplies the leading hop, so the listen names only `crate`.
@@ -1594,40 +1546,6 @@ describe('cron and manual listeners', () => {
     );
   });
 
-  it('an UNPOSITIONED instance still requires the hop on the listen', () => {
-    const diagnostics = check(
-      [
-        'import { pantry, slack } from adapters',
-        'import { pantry_main, acme_workspace } from credentials',
-        'team = connect slack using acme_workspace',
-        'p = connect pantry using pantry_main',
-        'function intake(e: <p-[:thing]->>) {',
-        '  write team-[:message]-> { text: "stocked" }',
-        '}',
-        'listen to p { crate: "crt_apples" } fire intake',
-      ].join('\n'),
-    );
-    expect(diagnostics.map(d => d.code)).toEqual([C.LISTEN_BAD_CONFIG]);
-    expect(diagnostics[0].message).toContain("requires a 'shelf' config");
-  });
-
-  it('the position supplies only ITS hop — the rest stay required', () => {
-    const diagnostics = check(
-      [
-        'import { pantry, slack } from adapters',
-        'import { pantry_main, acme_workspace } from credentials',
-        'team = connect slack using acme_workspace',
-        'p = connect pantry using pantry_main { shelf: "North Wall" }',
-        'function intake(e: <p-[:thing]->>) {',
-        '  write team-[:message]-> { text: "stocked" }',
-        '}',
-        'listen to p {} fire intake',
-      ].join('\n'),
-    );
-    expect(diagnostics.map(d => d.code)).toEqual([C.LISTEN_BAD_CONFIG]);
-    expect(diagnostics[0].message).toContain("requires a 'crate' config");
-  });
-
   it('a cron listener with a valid IANA timezone checks clean', () => {
     expectClean(
       [
@@ -1641,62 +1559,6 @@ describe('cron and manual listeners', () => {
         'listen to timer { schedule: "0 9 * * 1", timezone: "Europe/London" } fire digest',
       ].join('\n'),
     );
-  });
-
-  it('a strings-format listen key takes a non-empty list of quoted names', () => {
-    const program = (slots: string) =>
-      [
-        'import { postbox, slack } from adapters',
-        'import { acme_workspace } from credentials',
-        'team = connect slack using acme_workspace',
-        'box  = connect postbox',
-        'function sort_mail(l: <box-[:letter]->>) {',
-        '  write team-[:message]-> { text: l.`sender` }',
-        '}',
-        `listen to box { slots: ${slots} } fire sort_mail`,
-      ].join('\n');
-    expectClean(program('["A", "B"]'));
-    for (const bad of ['[]', '"A"', '["A", ""]', '[1]']) {
-      const diagnostics = check(program(bad));
-      expect(diagnostics.map(d => d.code)).toEqual([C.LISTEN_BAD_CONFIG]);
-      expect(diagnostics[0].message).toContain("'slots' is a non-empty list of quoted, non-empty names");
-    }
-  });
-
-  it('an invalid timezone is MOV_LISTEN_BAD_CONFIG naming the zone', () => {
-    const diagnostics = check(
-      [
-        'import { cron, slack } from adapters',
-        'import { acme_workspace } from credentials',
-        'team  = connect slack using acme_workspace',
-        'timer = connect cron',
-        'function digest(t: <timer-[:tick]->>) {',
-        '  write team-[:message]-> { text: t.`firedAt` }',
-        '}',
-        'listen to timer { schedule: "0 9 * * 1", timezone: "Narnia/Cair" } fire digest',
-      ].join('\n'),
-    );
-    expect(diagnostics.map(d => d.code)).toEqual([C.LISTEN_BAD_CONFIG]);
-    expect(diagnostics[0].message).toContain('not a recognised IANA time zone');
-    expect(diagnostics[0].message).toContain('Narnia/Cair');
-  });
-
-  it('an invalid cron expression is MOV_LISTEN_BAD_CONFIG naming the field', () => {
-    const diagnostics = check(
-      [
-        'import { cron, slack } from adapters',
-        'import { acme_workspace } from credentials',
-        'team  = connect slack using acme_workspace',
-        'timer = connect cron',
-        'function digest(t: <timer-[:tick]->>) {',
-        '  write team-[:message]-> { text: t.`firedAt` }',
-        '}',
-        'listen to timer { schedule: "99 9 * * 1" } fire digest',
-      ].join('\n'),
-    );
-    expect(diagnostics.map(d => d.code)).toEqual([C.LISTEN_BAD_CONFIG]);
-    expect(diagnostics[0].message).toContain('not a valid schedule');
-    expect(diagnostics[0].message).toContain('minute');
   });
 
   it('an inline construction in a listen is MOV_ADAPTER_NOT_CONSTRUCTED', () => {

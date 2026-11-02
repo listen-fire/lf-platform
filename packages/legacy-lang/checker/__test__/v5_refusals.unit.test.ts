@@ -12,7 +12,7 @@ import { checkProgram } from '../check';
 import { fromCatalogSnapshot } from 'movement-lang/service/snapshot';
 import type { LanguageVersion } from 'movement-lang/language_version';
 
-const CATALOG = fromCatalogSnapshot(JSON.parse('{"contractVersion":1,"adapters":{"attio":{"canFire":true,"constructionArgs":[{"name":"credentials","kind":"credential","required":true}],"schemas":{"crm_cred":{"positions":{"company":{"properties":{"name":"text"},"edges":{"deals":{"target":"deal"},"notes":{"target":"note","writable":true}}},"deal":{"properties":{"title":"text"},"edges":{}},"note":{"properties":{"body":"text"},"edges":{}}},"collections":{"companies":{"target":"company"},"notes":{"target":"note"}},"writableRoots":{"note":{"fields":{"body":"text"},"resultShape":{"externalId":"text"}},"company":{"fields":{"name":"text"},"resultShape":{"externalId":"text"}}}}}}},"credentials":{"crm_cred":{"adapters":["attio"]}},"plugins":{}}'));
+const CATALOG = fromCatalogSnapshot(JSON.parse('{"contractVersion":3,"adapters":{"attio":{"canFire":true,"constructionArgs":[{"name":"credentials","kind":"credential","required":true}],"schemas":{"crm_cred":{"positions":{"company":{"properties":{"name":"text"},"edges":{"deals":{"target":"deal"},"notes":{"target":"note","writable":true}}},"deal":{"properties":{"title":"text"},"edges":{}},"note":{"properties":{"body":"text"},"edges":{}}},"collections":{"companies":{"target":"company"},"notes":{"target":"note"}},"writableRoots":{"note":{"fields":{"body":"text"},"resultShape":{"externalId":"text"}},"company":{"fields":{"name":"text"},"resultShape":{"externalId":"text"}}}}}}},"credentials":{"crm_cred":{"adapters":["attio"]}},"plugins":{}}'));
 
 const CODES = [
   'MOV_WRITE_MULTI_HOP',

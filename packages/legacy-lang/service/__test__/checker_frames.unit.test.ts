@@ -18,7 +18,7 @@ const OPS: InstanceSchema = {
   positions: {
     ticket: {
       properties: { subject: 'text', requester: 'text' },
-      edges: { Reply: { target: 'reply', awaitable: true, watchable: true }, Owner: { target: 'agent' } },
+      edges: { Reply: { target: 'reply', listenable: true }, Owner: { target: 'agent' } },
     },
     agent: { properties: { fullName: 'text', rota: 'text' }, edges: {} },
     reply: { properties: { body: 'text', channel: 'text' }, edges: {} },

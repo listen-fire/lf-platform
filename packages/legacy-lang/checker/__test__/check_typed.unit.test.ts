@@ -4088,28 +4088,24 @@ ${body}
 // ── Per-listen shape conformance ──
 
 describe('per-listen shape conformance', () => {
-  const folderEnum: SchemaFieldType = { kind: 'enum', options: ['Sales', 'Eng'] };
-  const itemSchema = (props: Record<string, SchemaFieldType>): InstanceSchema => ({
-    positions: { item: { properties: props, edges: {} } },
-    collections: { items: { target: 'item' } },
-    writableRoots: {},
-    eventPosition: 'item',
-  });
-
+  // A 0.13 catalog has no event position for a settings listen (catalog
+  // snapshot version 3), so a declared-node parameter's fit to the lane is
+  // unknown: said as an info, never an error — even for a lane that lacks a
+  // declared field.
   const conf = mockCatalog({
     adapters: {
-      full: { constructionArgs: [], schema: itemSchema({ Title: 'text', Folder: 'text' }) },
-      lean: { constructionArgs: [], schema: itemSchema({ Title: 'text' }) },
-      enumic: { constructionArgs: [], schema: itemSchema({ Title: 'text', Folder: folderEnum }) },
-      opaque: { constructionArgs: [], schema: { positions: { item: { properties: {}, edges: {}, openProperties: true } }, collections: { items: { target: 'item' } }, writableRoots: {}, eventPosition: 'item' } },
+      lean: {
+        constructionArgs: [],
+        schema: { positions: { item: { properties: { Title: 'text' }, edges: {} } }, collections: { items: { target: 'item' } }, writableRoots: {} },
+      },
       kg: { constructionArgs: [], schema: kgSchema },
     },
     credentials: {},
   });
 
-  const prog = (adapter: string) => `
-import { ${adapter}, kg } from adapters
-src = ${adapter}()
+  const prog = `
+import { lean, kg } from adapters
+src = lean()
 graph = connect kg
 node Meeting {
   \`Title\`: <text>
@@ -4118,155 +4114,10 @@ node Meeting {
 movement log(m: <Meeting>) { write graph-[:people]-> { name: m.\`Title\` } }
 listen to src {} fire log`;
 
-  const errorCodes = (adapter: string) =>
-    checkProgram(parseProgram(prog(adapter)), conf).filter(notKeywordRetirement)
-      .filter(d => (d.severity ?? 'error') === 'error')
-      .map(d => d.code);
-
-  it('a conforming lane is clean', () => {
-    expect(errorCodes('full')).not.toContain('MOV_LISTEN_SHAPE_MISMATCH');
-  });
-  it('a lane missing a declared field errors', () => {
-    expect(errorCodes('lean')).toContain('MOV_LISTEN_SHAPE_MISMATCH');
-  });
-  it('an enum source widens to a text declared field (clean)', () => {
-    expect(errorCodes('enumic')).not.toContain('MOV_LISTEN_SHAPE_MISMATCH');
-  });
-  it("an un-introspectable (open) event position is unchecked, not an error", () => {
-    expect(errorCodes('opaque')).not.toContain('MOV_LISTEN_SHAPE_MISMATCH');
-  });
-});
-
-describe('per-listen shape conformance — recursive edge target checking', () => {
-  // A declaration whose root reaches a nested node: the nesting IS the
-  // `attendees` edge, and the nested node requires `Email`.
-  const withAttendeesShape = `
-node WithAttendees {
-  \`Title\`: <text>
-  node attendees {
-    \`Email\`: <text>
-  }
-}
-`;
-
-  // Helper: build a two-position InstanceSchema for testing recursive checks.
-  const meetingSchema = (opts: {
-    meetingEdges?: Record<string, { target: string }>;
-    attendeeProps?: Record<string, SchemaFieldType>;
-  }): InstanceSchema => ({
-    positions: {
-      meeting: {
-        properties: { Title: 'text' },
-        edges: opts.meetingEdges ?? {},
-      },
-      attendee: {
-        properties: opts.attendeeProps ?? {},
-        edges: {},
-      },
-    },
-    collections: { meetings: { target: 'meeting' } },
-    writableRoots: {},
-    eventPosition: 'meeting',
-  });
-
-  const recursiveConf = mockCatalog({
-    adapters: {
-      // meeting has attendees edge → attendee has Email ✓
-      good: {
-        constructionArgs: [],
-        schema: meetingSchema({
-          meetingEdges: { attendees: { target: 'attendee' } },
-          attendeeProps: { Email: 'text' },
-        }),
-      },
-      // meeting has attendees edge → attendee LACKS Email ✗ (new recursive check)
-      badTarget: {
-        constructionArgs: [],
-        schema: meetingSchema({
-          meetingEdges: { attendees: { target: 'attendee' } },
-          attendeeProps: {}, // Email missing
-        }),
-      },
-      // meeting LACKS attendees edge ✗ (existing existence check)
-      missingEdge: {
-        constructionArgs: [],
-        schema: meetingSchema({
-          meetingEdges: {},
-          attendeeProps: { Email: 'text' },
-        }),
-      },
-      kg: { constructionArgs: [], schema: kgSchema },
-    },
-    credentials: {},
-  });
-
-  const prog = (adapter: string) => `
-import { ${adapter}, kg } from adapters
-src = ${adapter}()
-graph = connect kg
-${withAttendeesShape}
-movement log(m: <WithAttendees>) { write graph-[:people]-> { name: m.\`Title\` } }
-listen to src {} fire log`;
-
-  const errorCodes = (adapter: string) =>
-    checkProgram(parseProgram(prog(adapter)), recursiveConf).filter(notKeywordRetirement)
-      .filter(d => (d.severity ?? 'error') === 'error')
-      .map(d => d.code);
-
-  it('conforming edge + target with required field is clean', () => {
-    expect(errorCodes('good')).not.toContain('MOV_LISTEN_SHAPE_MISMATCH');
-  });
-
-  it('edge exists but target position lacks required field errors (recursive check)', () => {
-    // This is the key new behavior: existence-only would have passed here.
-    expect(errorCodes('badTarget')).toContain('MOV_LISTEN_SHAPE_MISMATCH');
-  });
-
-  it('missing edge errors (existing existence check still holds)', () => {
-    expect(errorCodes('missingEdge')).toContain('MOV_LISTEN_SHAPE_MISMATCH');
-  });
-
-  it('a self-referential INSTANCE edge terminates without hanging (cycle guard)', () => {
-    // Declarations are trees, so the cycle can only come from the instance.
-    const selfRefConf = mockCatalog({
-      adapters: {
-        selfref: {
-          constructionArgs: [],
-          schema: {
-            positions: {
-              n: {
-                properties: { name: 'text' },
-                edges: { self: { target: 'n' } },
-              },
-            },
-            collections: { items: { target: 'n' } },
-            writableRoots: {},
-            eventPosition: 'n',
-          },
-        },
-        kg: { constructionArgs: [], schema: kgSchema },
-      },
-      credentials: {},
-    });
-
-    const selfProg = `
-import { selfref, kg } from adapters
-src = selfref()
-graph = connect kg
-node Loop {
-  \`name\`: <text>
-  node self {
-    \`name\`: <text>
-  }
-}
-movement log(m: <Loop>) { write graph-[:people]-> { name: m.\`name\` } }
-listen to src {} fire log`;
-
-    // Test simply completing (no infinite loop / stack overflow) proves the cycle guard works.
-    const result = checkProgram(parseProgram(selfProg), selfRefConf).filter(notKeywordRetirement)
-      .filter(d => (d.severity ?? 'error') === 'error')
-      .map(d => d.code);
-    expect(result).not.toContain('MOV_LISTEN_SHAPE_MISMATCH');
+  it('is unchecked for the lane: an info, never an error', () => {
+    const found = checkProgram(parseProgram(prog), conf).filter(d => d.code === C.LISTEN_SHAPE_MISMATCH);
+    expect(found.map(d => d.severity)).toEqual(['info']);
+    expect(found[0].message).toContain('is unchecked for this lane');
   });
 });
 

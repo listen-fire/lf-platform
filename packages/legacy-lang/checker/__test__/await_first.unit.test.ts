@@ -4,6 +4,10 @@
 // `await FIRST(walk)` is `T` (the park strips the "not yet" arm), legal only
 // where the final edge can end the wait (awaitable). The bare `await <walk>`
 // spelling is retired: still parses, refused with the rewrite.
+//
+// Pinned to version 4, the last that spells the parked read `await FIRST(…)`:
+// the installed language's parser reads the dialect '5' as 0.13 does, where
+// `await first(…)` is respelled to the bare walk.
 
 import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic, DiagnosticCodes as C } from '../check';
@@ -18,7 +22,7 @@ const askSchema: InstanceSchema = {
     check: {
       properties: { Label: 'text' },
       edges: {
-        Answer: { target: 'answer', readable: true, awaitable: true, watchable: true },
+        Answer: { target: 'answer', readable: true, listenable: true },
         Versions: { target: 'version', readable: true },
       },
     },
@@ -35,12 +39,12 @@ const catalog = mockCatalog({
 
 function check(body: string): Diagnostic[] {
   const source = `import { email } from adapters
-inbox = connect email
+inbox = email()
 
 function m(e: <inbox-[:message]->>) {
 ${body}
 }`;
-  return checkProgram(parseProgram(source), catalog).filter(
+  return checkProgram(parseProgram(source, { languageVersion: '4' }), catalog, { languageVersion: '4' }).filter(
     (d) => (d.severity ?? 'error') === 'error',
   );
 }
@@ -50,41 +54,41 @@ const messages = (body: string): string => check(body).map((d) => d.message).joi
 describe('await FIRST — the parked read', () => {
   it('parses and checks clean over an awaitable edge, and the landing reads', () => {
     expect(
-      codes('  c = only(e-[k:Checks]->)\n  w = await first(c-[:Answer]->)\n  t = w.`Text`'),
+      codes('  c = ONLY(e-[k:Checks]->)\n  w = await FIRST(c-[:Answer]->)\n  t = w.`Text`'),
     ).toEqual([]);
   });
 
   it('the unbound statement form is legal too', () => {
-    expect(codes('  c = only(e-[k:Checks]->)\n  await first(c-[:Answer]->)')).toEqual([]);
+    expect(codes('  c = ONLY(e-[k:Checks]->)\n  await FIRST(c-[:Answer]->)')).toEqual([]);
   });
 
   it('a WHERE rides inside the head unchanged', () => {
     expect(
       codes(
-        '  c = only(e-[k:Checks]->)\n  w = await first(c-[ans:Answer WHERE ans.`Text` == "yes"]->)',
+        '  c = ONLY(e-[k:Checks]->)\n  w = await FIRST(c-[ans:Answer WHERE ans.`Text` == "yes"]->)',
       ),
     ).toEqual([]);
   });
 
   it('FIRST over a non-awaitable edge is refused — the wait could never end', () => {
     expect(
-      codes('  c = only(e-[k:Checks]->)\n  w = await first(c-[:Versions]->)'),
+      codes('  c = ONLY(e-[k:Checks]->)\n  w = await FIRST(c-[:Versions]->)'),
     ).toContain(C.AWAIT_NOT_AWAITABLE);
   });
 });
 
 describe('the bare walk under await is retired', () => {
   it('refused, and the message carries the rewrite', () => {
-    const out = messages('  c = only(e-[k:Checks]->)\n  w = await c-[:Answer]->');
-    expect(codes('  c = only(e-[k:Checks]->)\n  w = await c-[:Answer]->')).toContain(
+    const out = messages('  c = ONLY(e-[k:Checks]->)\n  w = await c-[:Answer]->');
+    expect(codes('  c = ONLY(e-[k:Checks]->)\n  w = await c-[:Answer]->')).toContain(
       C.AWAIT_BARE_WALK,
     );
-    expect(out).toContain('await first(');
+    expect(out).toContain('await FIRST(');
   });
 
   it('the refusal does not cascade — the binding still types for recovery', () => {
     const out = codes(
-      '  c = only(e-[k:Checks]->)\n  w = await c-[:Answer]->\n  t = w.`Text`',
+      '  c = ONLY(e-[k:Checks]->)\n  w = await c-[:Answer]->\n  t = w.`Text`',
     );
     expect(out).toContain(C.AWAIT_BARE_WALK);
     expect(out).not.toContain('MOV_UNKNOWN_PROPERTY');

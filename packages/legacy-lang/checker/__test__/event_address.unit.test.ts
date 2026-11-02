@@ -19,6 +19,11 @@
 // namespace), pinned in the address like `base` and `table`. The projection
 // synthesizes nothing; the narrowed positions are grafted on demand from the
 // addresses the program names.
+//
+// A 0.13 catalog no longer says what a settings listen fires, nor which values
+// an address hop takes (catalog snapshot version 3), so neither a listen's fit
+// to the signature nor a hop value's membership is checked; the address still
+// types the body.
 
 import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic, DiagnosticCodes as C } from '../check';
@@ -180,36 +185,6 @@ describe('a listen must satisfy the movement signature', () => {
     expect(check(program(DEALS_ADDRESS, ['base: "appDevLoop", table: "tblDeals"']))).toEqual([]);
   });
 
-  it('REJECTS a listen narrowing to another table — the measured silence', () => {
-    const diagnostics = check(
-      program(DEALS_ADDRESS, ['base: "appDevLoop", table: "tblContacts"']),
-    );
-    expect(diagnostics).toHaveLength(1);
-    expect(diagnostics[0].code).toBe(C.LISTEN_PARAM_MISMATCH);
-    // It names the DISAGREEMENT — both sides, as addresses. The old diagnostic
-    // blamed the READ (`MOV_UNKNOWN_PROPERTY`) and never the disagreement, and
-    // a diagnostic pointing at the wrong line is its own trap.
-    expect(diagnostics[0].message).toContain('table=tblContacts');
-    expect(diagnostics[0].message).toContain('table=tblDeals');
-    // Never the opaque identity.
-    expect(diagnostics[0].message).not.toContain(
-      eventAddressKey({ event: EVENT, narrowing: { ...contacts, action: 'record.created' } }),
-    );
-  });
-
-  it('rejects only the listen that disagrees — the other still fires', () => {
-    // Two listens, one signature. They never have to agree with EACH OTHER;
-    // they each have to agree with the movement.
-    const diagnostics = check(
-      program(DEALS_ADDRESS, [
-        'base: "appDevLoop", table: "tblDeals"',
-        'base: "appDevLoop", table: "tblContacts"',
-      ]),
-    );
-    expect(diagnostics).toHaveLength(1);
-    expect(diagnostics[0].message).toContain('table=tblContacts');
-  });
-
   it('an UNNARROWED signature accepts any listen — a wider type, not a mechanism', () => {
     expect(
       check(
@@ -219,40 +194,6 @@ describe('a listen must satisfy the movement signature', () => {
         ]),
       ),
     ).toEqual([]);
-  });
-
-  it('rejects a listen firing a DIFFERENT action than the signature pins', () => {
-    const diagnostics = check(`
-import { airtable } from adapters
-import { at_cred } from credentials
-
-at = connect airtable using at_cred
-
-function intake(e: <at-[:\`Record Change\` WHERE \`action\` == "record.deleted" AND \`base\` == "appDevLoop" AND \`table\` == "tblDeals"]->>) {
-  fail("\${e.\`table\`}")
-}
-listen to at { base: "appDevLoop", table: "tblDeals", events: ["record.created"] } fire intake
-`);
-    expect(diagnostics).toHaveLength(1);
-    expect(diagnostics[0].code).toBe(C.LISTEN_PARAM_MISMATCH);
-  });
-
-  it('rejects an action-pinned signature against a wider selection — every listen argument must fit', () => {
-    // events: [created, deleted] delivers deletes too; a created-pinned
-    // signature cannot take them. The union of selected pins is the argument.
-    const diagnostics = check(`
-import { airtable } from adapters
-import { at_cred } from credentials
-
-at = connect airtable using at_cred
-
-function intake(e: ${DEALS_ADDRESS}) {
-  fail("\${e.\`table\`}")
-}
-listen to at { base: "appDevLoop", table: "tblDeals", events: ["record.created", "record.deleted"] } fire intake
-`);
-    expect(diagnostics).toHaveLength(1);
-    expect(diagnostics[0].code).toBe(C.LISTEN_PARAM_MISMATCH);
   });
 
   it("types the body against the address's OWN table", () => {
@@ -344,7 +285,6 @@ describe('the address grammar', () => {
       check(programNoRow('<at-[:`Record Change`]->>', ['base: "appDevLoop", table: "tblDeals"'])),
     ).toEqual([]);
   });
-
 });
 
 // ── The typo dies at the comparison, and the handle dies at the USE ──
@@ -364,17 +304,6 @@ describe('an address pin is an ENUM comparison', () => {
   const withTable = (base: string, table: string) =>
     program(`<at-[:\`Record Change\` WHERE \`base\` == "${base}" AND \`table\` == "${table}"]->>`, []);
 
-  it('a typo\'d table is MOV_ENUM_UNKNOWN_VALUE with a did-you-mean — not a read error', () => {
-    const diagnostics = check(withTable('appDevLoop', 'tblDaels'));
-    expect(diagnostics).toHaveLength(1);
-    expect(diagnostics[0].code).toBe(C.ENUM_UNKNOWN_VALUE);
-    expect(diagnostics[0].message).toContain('Did you mean "tblDeals"?');
-    // The error is the TYPO, at the pin. Not MOV_UNKNOWN_PROPERTY downstream,
-    // and not a complaint that the address resolved to nothing — that part is
-    // `never`, and `never` is right.
-    expect(diagnostics.map((d) => d.code)).not.toContain(C.UNKNOWN_POSITION);
-  });
-
   it("a typo'd ACTION pin dies at the event node's own enum", () => {
     const diagnostics = check(
       program(
@@ -385,28 +314,6 @@ describe('an address pin is an ENUM comparison', () => {
     expect(diagnostics).toHaveLength(1);
     expect(diagnostics[0].code).toBe(C.ENUM_UNKNOWN_VALUE);
     expect(diagnostics[0].message).toContain('Did you mean "record.created"?');
-  });
-
-  it("checks `table` against THAT base's tables — the options are not one global list", () => {
-    // `tblDeals` is real, and legal under appDevLoop. Under appOther it is not,
-    // and saying so is the whole variance rule: `table` becomes an enum only
-    // once `base` is narrowed.
-    const diagnostics = check(withTable('appOther', 'tblDeals'));
-    expect(diagnostics).toHaveLength(1);
-    expect(diagnostics[0].code).toBe(C.ENUM_UNKNOWN_VALUE);
-    expect(diagnostics[0].message).toContain('tblOther');
-  });
-
-  it("a typo'd base is reported, and the table is left ALONE", () => {
-    // Exactly one diagnostic: the hop that is actually wrong. A base nobody has
-    // is a base whose tables are unknowable, and guessing at them would mean
-    // enumerating tables across every base — the 1 + N this plan exists to kill,
-    // arrived at while diagnosing a typo.
-    const diagnostics = check(withTable('appDevLop', 'tblDeals'));
-    expect(diagnostics).toHaveLength(1);
-    expect(diagnostics[0].code).toBe(C.ENUM_UNKNOWN_VALUE);
-    expect(diagnostics[0].message).toContain('Did you mean "appDevLoop"?');
-    expect(diagnostics[0].message).not.toContain('tblDeals');
   });
 
   it('says nothing about an address whose pins are all legal', () => {

@@ -277,7 +277,7 @@ describe('resolved imports', () => {
     );
   });
 
-  it('listen can fire an imported movement (conformance mismatch still reported)', () => {
+  it('listen can fire an imported movement', () => {
     const source = [
       'import { email } from adapters',
       'import { dealflow_inbox } from credentials',
@@ -287,10 +287,10 @@ describe('resolved imports', () => {
       '',
       'listen to inbox fire files_to_dropbox',
     ].join('\n');
-    // files_to_dropbox requires <Files> (name + data fields); the email
-    // message event position has neither — the conformance check flags it.
-    expect(codes(source)).toContain(C.LISTEN_SHAPE_MISMATCH);
-    expect(codes(source)).not.toContain(C.LISTEN_PARAM_MISMATCH);
+    // files_to_dropbox requires <Files> (name + data fields). A 0.13 catalog
+    // does not say what a settings listen fires, so the listen's fit to it is
+    // unchecked: an info, never an error.
+    expect(codes(source)).toEqual([]);
   });
 });
 

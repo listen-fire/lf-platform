@@ -1,12 +1,13 @@
-// `checkListen` derives the type(s) a listen fires from its config and
-// enforces event-satisfies-param via the existing union machinery. THE EVENT
-// IS JUST A NODE: an Attio webhook event is a `Webhook Event` node whose
-// change kind is its own `action` enum field — `Record Created` was only ever
-// a nominal name for `` Webhook Event WHERE `action` == "record.created" ``.
-// So a `<crm-[:Companies]->>` listen parameter is rejected, a
-// `<crm-[:`Webhook Event`]->>` parameter is accepted, and traversing a
+// THE EVENT IS JUST A NODE: an Attio webhook event is a `Webhook Event` node
+// whose change kind is its own `action` enum field — `Record Created` was only
+// ever a nominal name for `` Webhook Event WHERE `action` == "record.created" ``.
+// So a `<crm-[:`Webhook Event`]->>` parameter is accepted, and traversing a
 // record edge on a delete-inclusive event errors "narrow first" (the deleted
 // pin drops `requiresLiveRecord` edges — keyed on the pin, not on a name).
+//
+// A 0.13 catalog no longer says which event types a settings listen fires
+// (catalog snapshot version 3), so the checker no longer derives them from a
+// listen's config, nor holds the parameter to them.
 
 import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic, DiagnosticCodes as C } from '../check';
@@ -118,23 +119,6 @@ const program = (movement: string, listen: string): string =>
 const CREATED = '<crm-[:`Webhook Event` WHERE `action` == "record.created"]->>';
 
 describe('typed listen events — event-satisfies-param', () => {
-  it('rejects a record-position param for a record-event listen', () => {
-    const diags = check(
-      program(
-        [
-          'function m(co: <crm-[:Companies]->>) {',
-          '  write chat-[:message]-> { channel: "#x", text: co.Name }',
-          '}',
-        ].join('\n'),
-        'listen to crm { events: ["record.created"] } fire m',
-      ),
-    );
-    expect(diags.map(d => d.code)).toContain(C.LISTEN_PARAM_MISMATCH);
-    expect(
-      diags.find(d => d.code === C.LISTEN_PARAM_MISMATCH)?.message,
-    ).toMatch(/fires .*Webhook Event where action=record\.created/);
-  });
-
   it('accepts the event-node param', () => {
     const diags = check(
       program(
@@ -337,23 +321,6 @@ describe('typed listen events — event-satisfies-param', () => {
     expect(diags).toEqual([]);
   });
 
-  it('rejects a param narrower than the config can deliver', () => {
-    const diags = check(
-      program(
-        [
-          `function m(co: ${CREATED}) {`,
-          '  write chat-[:message]-> { channel: "#x", text: co.action }',
-          '}',
-        ].join('\n'),
-        'listen to crm { events: ["record.created", "record.deleted"] } fire m',
-      ),
-    );
-    expect(diags.map(d => d.code)).toContain(C.LISTEN_PARAM_MISMATCH);
-    expect(
-      diags.find(d => d.code === C.LISTEN_PARAM_MISMATCH)?.message,
-    ).toMatch(/fires .*action=record\.created.* \| .*action=record\.deleted/);
-  });
-
   it('accepts a single-action param matching a single-event listen', () => {
     const diags = check(
       program(
@@ -371,7 +338,7 @@ describe('typed listen events — event-satisfies-param', () => {
 
 // Event subscriptions are authored as a list of quoted strings — even for a
 // single event — so the syntax is uniform and every downstream reader sees an
-// array. A bare-string `events` is rejected with a wrap-in-brackets fix-it.
+// array.
 describe('typed listen events — events is always a list', () => {
   const MOVEMENT = [
     `function m(co: ${CREATED}) {`,
@@ -379,95 +346,10 @@ describe('typed listen events — events is always a list', () => {
     '}',
   ].join('\n');
 
-  it('rejects a bare-string events value with a list fix-it', () => {
-    const diags = check(
-      program(MOVEMENT, 'listen to crm { events: "record.created" } fire m'),
-    );
-    const bad = diags.find(d => d.code === C.LISTEN_BAD_CONFIG);
-    expect(bad).toBeDefined();
-    expect(bad?.message).toMatch(/list of events/);
-    expect(bad?.message).toMatch(/events: \["record\.created"\]/);
-  });
-
   it('accepts the same single event as a one-element list', () => {
     const diags = check(
       program(MOVEMENT, 'listen to crm { events: ["record.created"] } fire m'),
     );
     expect(diags.filter(d => d.code === C.LISTEN_BAD_CONFIG)).toEqual([]);
-  });
-
-  // The example must be DERIVED from the instance's own event surface, never
-  // hardcoded. It used to name Attio's `Companies` edge unconditionally, which
-  // is a real edge there and a fiction anywhere else — an Airtable author would
-  // read it and go looking for a `Companies` edge on an event whose only edge is
-  // `record`. A suggestion that can't execute where it's aimed is worse than no
-  // suggestion. plans/2026-07-10-adapter-entry-positions/8_event_edges.md
-  it('names an edge the instance ACTUALLY has, not a hardcoded one', () => {
-    const airtableish: InstanceSchema = {
-      positions: {
-        Deals: { properties: { Stage: 'text' }, edges: {} },
-        'Record Change': {
-          properties: { action: { kind: 'enum', options: ACTIONS } },
-          edges: { record: { target: 'Deals' } },
-        },
-      },
-      collections: {},
-      writableRoots: {},
-      eventPosition: 'Record Change',
-      eventPositions: [{ position: 'Record Change' }],
-    };
-    const diags = checkWithSchema(
-      airtableish,
-      [
-        'import { crm } from adapters',
-        'import { creds } from credentials',
-        'c = crm(credentials: creds)',
-        'function m(d: <c-[:Deals]->>) {',
-        '  y = 1',
-        '}',
-        'listen to c { events: ["record.created"] } fire m',
-      ].join('\n'),
-    );
-    const message = diags.find(d => d.code === C.LISTEN_PARAM_MISMATCH)?.message ?? '';
-    expect(message).toContain('d-[r:record]->');
-    expect(message).toContain('r.`Stage`');
-    // The fiction is gone.
-    expect(message).not.toContain('Companies');
-  });
-
-  // No example beats a wrong one: an event node with no edge can't be shown a
-  // traversal, so the diagnostic stops rather than invent one.
-  it('omits the example entirely when there is no edge to name', () => {
-    const edgeless: InstanceSchema = {
-      positions: {
-        Companies: { properties: { Name: 'text' }, edges: {} },
-        'Record Change': {
-          properties: { action: { kind: 'enum', options: ACTIONS } },
-          edges: {},
-        },
-      },
-      collections: {},
-      writableRoots: {},
-      eventPosition: 'Record Change',
-      eventPositions: [{ position: 'Record Change' }],
-    };
-    const diags = checkWithSchema(
-      edgeless,
-      [
-        'import { crm } from adapters',
-        'import { creds } from credentials',
-        'c = crm(credentials: creds)',
-        'function m(co: <c-[:Companies]->>) {',
-        '  y = 1',
-        '}',
-        'listen to c { events: ["record.created"] } fire m',
-      ].join('\n'),
-    );
-    const message = diags.find(d => d.code === C.LISTEN_PARAM_MISMATCH)?.message ?? '';
-    // The message still lands, and still ENDS cleanly — no example, because
-    // there is no edge to name and a suggestion that doesn't execute in the
-    // instance it's aimed at is worse than no suggestion.
-    expect(message).toContain('widen the signature.');
-    expect(message).not.toContain('e.g.');
   });
 });

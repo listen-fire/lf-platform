@@ -211,25 +211,6 @@ describe('MOV_FUNCTION_UNKNOWN — the did-you-mean as the whole corrected call'
   });
 });
 
-describe('MOV_LISTEN_BAD_CONFIG — the routing key a listener requires', () => {
-  const source = [
-    'import { mail } from adapters',
-    'inbox = connect mail',
-    'function `Log Sender`(m: <inbox-[:message]->>) {',
-    '}',
-    'listen to inbox {} fire `Log Sender`',
-  ].join('\n');
-
-  it('the whole listen statement, with a key derived from the movement', () => {
-    const { diagnostic, after, repaired } = fixed(source, C.LISTEN_BAD_CONFIG);
-    expect(diagnostic.message).toBe(
-      "a 'mail' listener requires a 'key' config — e.g. listen to inbox { key: \"log-sender\" } fire `Log Sender`",
-    );
-    expect(repaired.split('\n').at(-1)).toBe('listen to inbox { key: "log-sender" } fire `Log Sender`');
-    expect(after.map(d => d.code)).not.toContain(C.LISTEN_BAD_CONFIG);
-  });
-});
-
 describe('MOV_CALL_ARG_TYPE — one value where a list of them is taken', () => {
   const source = (arg: string): string =>
     [

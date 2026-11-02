@@ -17,6 +17,10 @@
 // `type` and files its filter under `fields`; `vault` pins a `folder`, files
 // its filter under `watch`, and subscribes to a `file.*` vocabulary. Wherever
 // a diagnostic quotes a key, a value, or a property, both shapes are asserted.
+//
+// A 0.13 catalog no longer says which keys, hop values, kinds or names a
+// listen takes (catalog snapshot version 3), so the checker validates none of
+// them: what stays here is what still holds.
 
 import { parseProgram } from '../../parser/parse';
 import { checkProgram, Diagnostic, DiagnosticCodes as C } from '../check';
@@ -185,65 +189,6 @@ describe('a narrows hop is an ordinary quoted config value', () => {
     expectClean(vaultProgram(['{ folder: "inbox", events: ["file.added"], watch: [size] }']));
   });
 
-  it('a listen pinning a DIFFERENT hop value cannot fire the movement', () => {
-    const kgDiag = check(kgProgram(['{ type: "person", events: ["record.created"] }']));
-    expect(kgDiag.map(d => d.code)).toEqual([C.LISTEN_PARAM_MISMATCH]);
-    expect(kgDiag[0].message).toContain('type=person');
-    expect(kgDiag[0].message).toContain('type=company');
-
-    const vaultDiag = check(vaultProgram(['{ folder: "archive", events: ["file.added"] }']));
-    expect(vaultDiag.map(d => d.code)).toEqual([C.LISTEN_PARAM_MISMATCH]);
-    expect(vaultDiag[0].message).toContain('folder=archive');
-    expect(vaultDiag[0].message).toContain('folder=inbox');
-  });
-
-  // A hop value the adapter doesn't offer is a typo, and a typo against a known
-  // value set is an enum error with a did-you-mean — the same rule everywhere
-  // an address is written. A signature and a listen are the same address in
-  // two spellings, so the typo dies the same way in both.
-  it("a typo'd hop value in the signature is MOV_ENUM_UNKNOWN_VALUE, per adapter", () => {
-    const kgDiag = check(
-      kgProgram([], '<graph-[:`Record Change` WHERE `type` == "compnay"]->>'),
-    );
-    expect(kgDiag.map(d => d.code)).toContain(C.ENUM_UNKNOWN_VALUE);
-    expect(kgDiag[0].message).toContain('Did you mean "company"?');
-
-    const vaultDiag = check(
-      vaultProgram([], '<files-[:`Change` WHERE `folder` == "inbx"]->>'),
-    );
-    expect(vaultDiag.map(d => d.code)).toContain(C.ENUM_UNKNOWN_VALUE);
-    expect(vaultDiag[0].message).toContain('Did you mean "inbox"?');
-  });
-
-  // The listen-side twin. This is the check the graph's deleted privilege used
-  // to do for itself ("'<ghost>' is not a node type of this workspace's
-  // knowledge graph"); losing it would have made the general mechanism WEAKER
-  // than the privilege it replaced, which is the one thing the swap may not do.
-  it("a typo'd hop value in the LISTEN's config is MOV_ENUM_UNKNOWN_VALUE, per adapter", () => {
-    const kgDiag = check(kgProgram(['{ type: "compnay" }']));
-    expect(kgDiag.map(d => d.code)).toContain(C.ENUM_UNKNOWN_VALUE);
-    expect(messageOf(kgProgram(['{ type: "compnay" }']), C.ENUM_UNKNOWN_VALUE)).toContain(
-      'Did you mean "company"?',
-    );
-
-    const vaultDiag = check(vaultProgram(['{ folder: "inbx" }']));
-    expect(vaultDiag.map(d => d.code)).toContain(C.ENUM_UNKNOWN_VALUE);
-    expect(messageOf(vaultProgram(['{ folder: "inbx" }']), C.ENUM_UNKNOWN_VALUE)).toContain(
-      'Did you mean "inbox"?',
-    );
-  });
-
-  it('a listen omitting a REQUIRED hop names that adapter\'s key', () => {
-    const kgMessage = messageOf(kgProgram(['{ events: ["record.created"] }']), C.LISTEN_BAD_CONFIG);
-    expect(kgMessage).toContain("a 'kg' listener requires a 'type' config");
-
-    const vaultMessage = messageOf(
-      vaultProgram(['{ events: ["file.added"] }']),
-      C.LISTEN_BAD_CONFIG,
-    );
-    expect(vaultMessage).toContain("a 'vault' listener requires a 'folder' config");
-  });
-
   // The graph's `type: <company>` was the last angle-bracketed listen config in
   // the language. The fix-it now runs the other way.
   it('an angle-bracketed hop value is MOV_LISTEN_BAD_CONFIG with the quoted fix-it', () => {
@@ -253,21 +198,6 @@ describe('a narrows hop is an ordinary quoted config value', () => {
 
     const vaultMessage = messageOf(vaultProgram(['{ folder: <inbox> }']), C.LISTEN_BAD_CONFIG);
     expect(vaultMessage).toContain('folder: "inbox"');
-  });
-
-  it("an unknown config key names that adapter's own vocabulary", () => {
-    const kgMessage = messageOf(
-      kgProgram(['{ type: "company", colour: "red" }']),
-      C.LISTEN_BAD_CONFIG,
-    );
-    expect(kgMessage).toContain("'kg' listeners do not accept a config key 'colour'");
-    expect(kgMessage).toContain('type, events, fields');
-
-    const vaultMessage = messageOf(
-      vaultProgram(['{ folder: "inbox", colour: "red" }']),
-      C.LISTEN_BAD_CONFIG,
-    );
-    expect(vaultMessage).toContain('folder, events, watch');
   });
 
   it('two listens on different hop values are not duplicates; two on the same one are', () => {
@@ -302,45 +232,6 @@ describe('events is the subscribable-kind vocabulary (triggerConfigOptions)', ()
     expectClean(kgProgram(['{ type: "company", events: ["record.created"] }']));
     expectClean(vaultProgram(['{ folder: "inbox", events: ["file.added"] }']));
   });
-
-  it('a bare-string kind is MOV_LISTEN_BAD_CONFIG — events is always a list', () => {
-    const kgMessage = messageOf(
-      kgProgram(['{ type: "company", events: "record.created" }']),
-      C.LISTEN_BAD_CONFIG,
-    );
-    expect(kgMessage).toContain('events: ["record.created"]');
-
-    const vaultMessage = messageOf(
-      vaultProgram(['{ folder: "inbox", events: "file.added" }']),
-      C.LISTEN_BAD_CONFIG,
-    );
-    expect(vaultMessage).toContain('events: ["file.added"]');
-  });
-
-  it("an undeclared kind names THAT adapter's vocabulary", () => {
-    const kgMessage = messageOf(
-      kgProgram(['{ type: "company", events: ["record.exploded"] }']),
-      C.LISTEN_BAD_CONFIG,
-    );
-    expect(kgMessage).toContain("'record.exploded'");
-    expect(kgMessage).toContain('record.created, record.updated, record.deleted');
-
-    const vaultMessage = messageOf(
-      vaultProgram(['{ folder: "inbox", events: ["file.exploded"] }']),
-      C.LISTEN_BAD_CONFIG,
-    );
-    expect(vaultMessage).toContain("'file.exploded'");
-    expect(vaultMessage).toContain('file.added, file.removed');
-  });
-
-  it('a non-literal kind is MOV_LISTEN_BAD_CONFIG', () => {
-    expect(codes(kgProgram(['{ type: "company", events: [TRUE] }']))).toContain(
-      C.LISTEN_BAD_CONFIG,
-    );
-    expect(codes(vaultProgram(['{ folder: "inbox", events: [TRUE] }']))).toContain(
-      C.LISTEN_BAD_CONFIG,
-    );
-  });
 });
 
 // ── The changed-attribute filter ──
@@ -349,44 +240,6 @@ describe("a 'fields'-format key is bare property names of the landed address", (
   it('names the address lands on check clean, under either adapter\'s key', () => {
     expectClean(kgProgram(['{ type: "company", events: ["record.created"], fields: [name, domains] }']));
     expectClean(vaultProgram(['{ folder: "inbox", events: ["file.added"], watch: [title, size] }']));
-  });
-
-  it("a name the landed position doesn't carry lists that position's properties", () => {
-    // `email` is a property of the graph's PERSON landing, not its company one
-    // — which is the whole point of checking against the landed address rather
-    // than against the instance.
-    const kgMessage = messageOf(
-      kgProgram(['{ type: "company", events: ["record.created"], fields: [email] }']),
-      C.LISTEN_BAD_CONFIG,
-    );
-    expect(kgMessage).toContain("'email' is not a property of what this listener watches");
-    expect(kgMessage).toContain('domains');
-    expect(kgMessage).toContain('name');
-
-    // `size` is a property of the vault's INBOX landing, not its archive one.
-    const vaultMessage = messageOf(
-      vaultProgram(
-        ['{ folder: "archive", events: ["file.added"], watch: [size] }'],
-        '<files-[:`Change` WHERE `action` == "file.added" AND `folder` == "archive"]->>',
-      ),
-      C.LISTEN_BAD_CONFIG,
-    );
-    expect(vaultMessage).toContain("'size' is not a property of what this listener watches");
-    expect(vaultMessage).toContain('title');
-  });
-
-  it('a value that is not a list of bare names carries the bare-list fix-it', () => {
-    const kgMessage = messageOf(
-      kgProgram(['{ type: "company", events: ["record.created"], fields: "domains" }']),
-      C.LISTEN_BAD_CONFIG,
-    );
-    expect(kgMessage).toContain("'fields' is a list of the watched type's properties, bare");
-
-    const vaultMessage = messageOf(
-      vaultProgram(['{ folder: "inbox", events: ["file.added"], watch: "size" }']),
-      C.LISTEN_BAD_CONFIG,
-    );
-    expect(vaultMessage).toContain("'watch' is a list of the watched type's properties, bare");
   });
 
   it('an adapter with no schema leaves the names unvalidated — unknown stays silent', () => {

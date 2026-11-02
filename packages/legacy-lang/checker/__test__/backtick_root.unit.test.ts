@@ -16,7 +16,7 @@ const schema: InstanceSchema = {
     },
     check: {
       properties: { Label: 'text' },
-      edges: { Answer: { target: 'answer', readable: true, awaitable: true, watchable: true } },
+      edges: { Answer: { target: 'answer', readable: true, listenable: true } },
     },
     answer: { properties: { Text: 'text' }, edges: {} },
   },
@@ -25,9 +25,13 @@ const schema: InstanceSchema = {
 };
 const catalog = mockCatalog({ adapters: { email: { constructionArgs: [], schema } } });
 
-function codes(body: string): string[] {
-  const src = `import { email } from adapters\ninbox = connect email\n\nfunction m(e: <inbox-[:message]->>) {\n${body}\n}`;
-  return checkProgram(parseProgram(src), catalog)
+// Version 4 is the last that spells the parked read `await FIRST(…)`: the
+// installed language's parser reads the dialect '5' as 0.13 does, where
+// `await first(…)` is respelled to the bare walk.
+function codes(body: string, languageVersion: '4' | '5' = '5'): string[] {
+  const construct = languageVersion === '4' ? 'email()' : 'connect email';
+  const src = `import { email } from adapters\ninbox = ${construct}\n\nfunction m(e: <inbox-[:message]->>) {\n${body}\n}`;
+  return checkProgram(parseProgram(src, { languageVersion }), catalog, { languageVersion })
     .filter((d: Diagnostic) => (d.severity ?? 'error') === 'error')
     .map((d) => d.code);
 }
@@ -40,9 +44,9 @@ describe('a backticked binding walks like a bare one', () => {
   });
 
   it('under await FIRST', () => {
-    expect(codes(BOUND + '  w = await first(`The Check`-[a:Answer]->)\n  t = w.`Text`')).toEqual(
-      [],
-    );
+    expect(
+      codes('  `The Check` = ONLY(e-[k:Checks]->)\n  w = await FIRST(`The Check`-[a:Answer]->)\n  t = w.`Text`', '4'),
+    ).toEqual([]);
   });
 
   it('as an expression traversal', () => {

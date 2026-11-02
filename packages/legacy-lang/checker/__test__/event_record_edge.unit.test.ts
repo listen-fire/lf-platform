@@ -1,12 +1,9 @@
 // The SUBJECT edge — the declared hop from an event to the record it is about
-// (D40(b)) — and the two checks that hang off it.
-//
-//   1. `fields:` names properties of the RECORD, one hop along that edge, not
-//      of the event node the listen lands on. An adapter whose listen fires
-//      the record itself declares no such edge and keeps the plain reading.
-//   2. A signature typed against the RECORD when the listen fires the EVENT
-//      gets the exact rewrite — the event-position signature plus the body
-//      traversal that reaches the record (D40(a)).
+// (D40(b)). Two checks hung off it: `fields:` named properties of the RECORD,
+// and a signature typed against the record when the listen fired the event got
+// the exact rewrite. A 0.13 catalog no longer says what a settings listen
+// takes or fires (catalog snapshot version 3), so neither is checked; such a
+// listen checks clean.
 //
 // THREE differently-shaped mock adapters throughout, because a fixture that
 // matches one adapter's shape cannot tell derived from hardcoded: `graph` and
@@ -126,9 +123,6 @@ const catalog = mockCatalog({
 const errors = (source: string): Diagnostic[] =>
   checkProgram(parseProgram(source), catalog).filter((d) => (d.severity ?? 'error') === 'error');
 
-const message = (source: string, code: string): string | undefined =>
-  errors(source).find((d) => d.code === code)?.message;
-
 const program = (lines: string[]): string => lines.join('\n');
 
 describe("`fields:` names the record the event is about", () => {
@@ -146,134 +140,6 @@ describe("`fields:` names the record the event is about", () => {
         ]),
       ),
     ).toEqual([]);
-  });
-
-  it.each([
-    ['kg', 'type', 'Support Ticket', 'Record Change', 'Status, Priority'],
-    ['tracker', 'collection', 'Task', 'Change Notice', 'Owner, Due'],
-  ])('rejects an unknown name on %s, naming the record surface', (adapter, key, record, event, known) => {
-    const msg = message(
-      program([
-        `import { ${adapter} } from adapters`,
-        `inst = connect ${adapter}`,
-        `function m(e: <inst-[:\`${event}\` WHERE e.\`${key}\` == "${record}" && e.\`action\` == "record.created"]->>) { }`,
-        `listen to inst { ${key}: "${record}", events: ["record.created"], fields: [Nope] } fire m`,
-      ]),
-      C.LISTEN_BAD_CONFIG,
-    );
-    expect(msg).toContain("'Nope' is not a property of what this listener watches");
-    for (const name of known.split(', ')) expect(msg).toContain(name);
-  });
-
-  it.each([
-    ['kg', 'type', 'Support Ticket', 'Record Change'],
-    ['tracker', 'collection', 'Task', 'Change Notice'],
-  ])("rejects the EVENT node's own property on %s — the address is not a filter", (adapter, key, record, event) => {
-    // `action` is a real property of the event node and NOT of the record. It
-    // was accepted before the subject edge was declared, which is the bug the
-    // marker closes: the names belong one hop along.
-    const msg = message(
-      program([
-        `import { ${adapter} } from adapters`,
-        `inst = connect ${adapter}`,
-        `function m(e: <inst-[:\`${event}\` WHERE e.\`${key}\` == "${record}" && e.\`action\` == "record.created"]->>) { }`,
-        `listen to inst { ${key}: "${record}", events: ["record.created"], fields: [action] } fire m`,
-      ]),
-      C.LISTEN_BAD_CONFIG,
-    );
-    expect(msg).toContain("'action' is not a property of what this listener watches");
-  });
-
-  it('checks against the landed position itself when no subject edge is declared', () => {
-    expect(
-      errors(
-        program([
-          'import { notes } from adapters',
-          'inst = connect notes',
-          'function m(n: <inst-[:`Meeting Note`]->>) { }',
-          'listen to inst { fields: [Title] } fire m',
-        ]),
-      ),
-    ).toEqual([]);
-    expect(
-      message(
-        program([
-          'import { notes } from adapters',
-          'inst = connect notes',
-          'function m(n: <inst-[:`Meeting Note`]->>) { }',
-          'listen to inst { fields: [Status] } fire m',
-        ]),
-        C.LISTEN_BAD_CONFIG,
-      ),
-    ).toContain('one of: Attendees, Title');
-  });
-});
-
-describe('a record-shaped signature gets the exact rewrite', () => {
-  const legacy = (adapter: string, key: string, record: string): string =>
-    program([
-      `import { ${adapter} } from adapters`,
-      `graph = ${adapter}()`,
-      `function m(t: <graph-[:\`${record}\`]->>) { }`,
-      `listen to graph { ${key}: "${record}", events: ["record.created"] } fire m`,
-    ]);
-
-  it.each([
-    ['kg', 'type', 'Support Ticket', 'Record Change', 'Record'],
-    ['tracker', 'collection', 'Task', 'Change Notice', 'Subject'],
-  ])('shows the new signature and the body hop for %s', (adapter, key, record, event, edge) => {
-    const msg = message(legacy(adapter, key, record), C.LISTEN_PARAM_MISMATCH);
-    expect(msg).toContain('the EVENT, not the record it is about');
-    // The signature, pasteable, with THIS instance's event name and pins.
-    expect(msg).toContain(
-      `'m(event: <graph-[e:\`${event}\` WHERE e.action == "record.created" && e.${key} == "${record}"]->>)'`,
-    );
-    // The body hop, over THIS adapter's subject edge, rebinding the author's
-    // own parameter name — the block form, which is the one the language has.
-    expect(msg).toContain(`'event-[t:${edge}]-> { … }'`);
-  });
-
-  it('names no other adapter — every identifier comes from the instance', () => {
-    const kg = message(legacy('kg', 'type', 'Support Ticket'), C.LISTEN_PARAM_MISMATCH) ?? '';
-    const tracker = message(legacy('tracker', 'collection', 'Task'), C.LISTEN_PARAM_MISMATCH) ?? '';
-    for (const foreign of ['Change Notice', 'Subject', 'collection', 'Task']) {
-      expect(kg).not.toContain(foreign);
-    }
-    for (const foreign of ['Record Change', 'Support Ticket']) {
-      expect(tracker).not.toContain(foreign);
-    }
-  });
-
-  it('leaves the wide event address unpinned when the listen selects every kind', () => {
-    const msg = message(
-      program([
-        'import { kg } from adapters',
-        'graph = connect kg',
-        'function m(t: <graph-[:`Support Ticket`]->>) { }',
-        'listen to graph { type: "Support Ticket", events: ["record.created", "record.updated", "record.deleted"] } fire m',
-      ]),
-      C.LISTEN_PARAM_MISMATCH,
-    );
-    // The whole action axis is selected, so the address pins the type alone —
-    // exactly the signature that satisfies all three kinds.
-    expect(msg).toContain(
-      "'m(event: <graph-[e:`Record Change` WHERE e.type == \"Support Ticket\"]->>)'",
-    );
-  });
-
-  it('falls back to the general advice when the signature names something else', () => {
-    // Not the record this event is about — nothing certain to rewrite to.
-    const msg = message(
-      program([
-        'import { kg } from adapters',
-        'graph = connect kg',
-        'function m(t: <graph-[:`Node Type`]->>) { }',
-        'listen to graph { type: "Support Ticket", events: ["record.created"] } fire m',
-      ]),
-      C.LISTEN_PARAM_MISMATCH,
-    );
-    expect(msg).toContain('Every listen firing a function must satisfy its signature');
-    expect(msg).not.toContain('the EVENT, not the record it is about');
   });
 });
 

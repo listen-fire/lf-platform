@@ -24,7 +24,7 @@ const askSchema: InstanceSchema = {
     },
     check: {
       properties: { Label: 'text' },
-      edges: { Answer: { target: 'answer', readable: true, awaitable: true, watchable: true } },
+      edges: { Answer: { target: 'answer', readable: true, listenable: true } },
     },
     answer: { properties: { Text: 'text' }, edges: {} },
     log: { properties: { note: 'text' }, edges: {} },

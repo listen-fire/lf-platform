@@ -1702,12 +1702,12 @@ describe('run retirement', () => {
       'run backfill(root: crm)',
       /'run' is not a statement — movements are invoked only by listeners/,
     );
-    expect(err.message).toContain('listen to go {} fire <movement>');
+    expect(err.message).toContain('listen to manual-[:Invocations]-> fire <movement>');
     expect(err.loc).toEqual({ line: 1, col: 1 });
   });
 
   it('points schedules at the cron channel', () => {
-    expectParseError('run tidy()', /timer = cron\(\)/);
+    expectParseError('run tidy()', /listen to cron-\[t:Ticks WHERE t\.Schedule == "0 9 \* \* 1"\]-> fire <movement>/);
   });
 });
 

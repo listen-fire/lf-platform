@@ -60,6 +60,26 @@ ${body}
 const codes = (body: string, extra = ''): string[] => check(body, extra).map((d) => d.code);
 const messages = (body: string, extra = ''): string => check(body, extra).map((d) => d.message).join('\n');
 
+// The landing is read through the parked read, which version 4 is the last to
+// spell (`await FIRST(…)`): the installed language's parser reads the dialect
+// '5' as 0.13 does, where `await first(…)` is respelled to the bare walk. So
+// those cases are pinned to 4, as 4 spells them.
+function checkUnder4(body: string, extra = ''): Diagnostic[] {
+  const source = `import { email } from adapters
+import { dealflow_inbox } from credentials
+inbox = email(credentials: dealflow_inbox)
+${extra}
+movement m(msg: <inbox-[:message]->>) {
+${body}
+}`;
+  return checkProgram(parseProgram(source, { languageVersion: '4' }), catalog, { languageVersion: '4' }).filter(
+    (d) => (d.severity ?? 'error') === 'error',
+  );
+}
+
+const codesUnder4 = (body: string, extra = ''): string[] => checkUnder4(body, extra).map((d) => d.code);
+const messagesUnder4 = (body: string, extra = ''): string => checkUnder4(body, extra).map((d) => d.message).join('\n');
+
 describe('the binding: .id and .url read as text; nothing else does', () => {
   it('`.id` and `.url` check clean and type as text (written into a text field)', () => {
     expect(codes([
@@ -89,66 +109,66 @@ describe('the binding: .id and .url read as text; nothing else does', () => {
 
 describe('the Called landing is DERIVED from the callback signature', () => {
   it('a zero-parameter callback lands `At` only', () => {
-    expect(codes([
+    expect(codesUnder4([
       '  cb = callback({ write inbox-[:note]-> { text: "x" } })',
-      '  c = await first(cb-[:Called]->)',
+      '  c = await FIRST(cb-[:Called]->)',
       '  write inbox-[:note]-> { at ?: c.`At` }',
     ].join('\n'))).toEqual([]);
 
     const body = [
       '  cb = callback({ write inbox-[:note]-> { text: "x" } })',
-      '  c = await first(cb-[:Called]->)',
+      '  c = await FIRST(cb-[:Called]->)',
       '  write inbox-[:note]-> { text ?: c.`whatever` }',
     ].join('\n');
-    expect(messages(body)).toMatch(/a callback's call has no 'whatever' — it carries: At/);
+    expect(messagesUnder4(body)).toMatch(/a callback's call has no 'whatever' — it carries: At/);
   });
 
   it("shape 1: a (picked: <date>, note: <text>) signature lands At + picked + note", () => {
-    expect(codes([
+    expect(codesUnder4([
       '  cb = callback((picked: <date>, note: <text>) => { write inbox-[:note]-> { text: note } })',
-      '  c = await first(cb-[:Called]->)',
+      '  c = await FIRST(cb-[:Called]->)',
       '  write inbox-[:note]-> { due ?: c.`picked`, text ?: c.`note` }',
     ].join('\n'))).toEqual([]);
   });
 
   it('shape 2: a different signature lands DIFFERENT fields (and shape 1\'s names are unknown here)', () => {
-    expect(codes([
+    expect(codesUnder4([
       '  cb = callback((amount: <number>) => { write inbox-[:note]-> { text: "x" } })',
-      '  c = await first(cb-[:Called]->)',
+      '  c = await FIRST(cb-[:Called]->)',
       '  write inbox-[:note]-> { at ?: c.`At` }',
     ].join('\n'))).toEqual([]);
 
     const body = [
       '  cb = callback((amount: <number>) => { write inbox-[:note]-> { text: "x" } })',
-      '  c = await first(cb-[:Called]->)',
+      '  c = await FIRST(cb-[:Called]->)',
       '  write inbox-[:note]-> { due ?: c.`picked` }',
     ].join('\n');
-    expect(messages(body)).toMatch(/has no 'picked' — it carries: At, amount/);
+    expect(messagesUnder4(body)).toMatch(/has no 'picked' — it carries: At, amount/);
   });
 
   it('a landing field carries its DECLARED type — same name, two declarations, two answers', () => {
     const withType = (type: string) => [
       `  cb = callback((stamp: ${type}) => { write inbox-[:note]-> { text: "x" } })`,
-      '  c = await first(cb-[:Called]->)',
+      '  c = await FIRST(cb-[:Called]->)',
       '  write inbox-[:note]-> { due ?: c.`stamp` }',
     ].join('\n');
-    expect(codes(withType('<date>'))).toEqual([]);
-    expect(codes(withType('<datetime>'))).toContain('MOV_WRITE_FIELD_TYPE');
+    expect(codesUnder4(withType('<date>'))).toEqual([]);
+    expect(codesUnder4(withType('<datetime>'))).toContain('MOV_WRITE_FIELD_TYPE');
   });
 
   it('`At` is a datetime whatever the signature (a date field rejects it)', () => {
     const body = [
       '  cb = callback()',
-      '  c = await first(cb-[:Called]->)',
+      '  c = await FIRST(cb-[:Called]->)',
       '  write inbox-[:note]-> { due ?: c.`At` }',
     ].join('\n');
-    expect(codes(body)).toContain('MOV_WRITE_FIELD_TYPE');
+    expect(codesUnder4(body)).toContain('MOV_WRITE_FIELD_TYPE');
   });
 
   it('a body-less callback is a full participant — signature, landing and all', () => {
-    expect(codes([
+    expect(codesUnder4([
       '  cb = callback((picked: <date>))',
-      '  c = await first(cb-[:Called]->)',
+      '  c = await FIRST(cb-[:Called]->)',
       '  write inbox-[:note]-> { due ?: c.`picked` }',
     ].join('\n'))).toEqual([]);
   });
@@ -251,22 +271,24 @@ describe('the named form types against the movement signature', () => {
     '}',
   ].join('\n');
 
+  const HELPER_UNDER_4 = HELPER.replace('function send_reminder', 'movement send_reminder');
+
   it('a movement by name, with its fixed arguments, checks clean', () => {
     expect(codes('  cb = callback(() => send_reminder(subject: msg))', HELPER)).toEqual([]);
   });
 
   it('every parameter supplied ⇒ the landing carries `At` alone', () => {
-    expect(codes([
-      '  cb = callback(() => send_reminder(subject: msg))',
-      '  c = await first(cb-[:Called]->)',
+    expect(codesUnder4([
+      '  cb = callback(send_reminder(subject: msg))',
+      '  c = await FIRST(cb-[:Called]->)',
       '  write inbox-[:note]-> { at ?: c.`At` }',
-    ].join('\n'), HELPER)).toEqual([]);
+    ].join('\n'), HELPER_UNDER_4)).toEqual([]);
     // …and a SUPPLIED parameter is not on the landing: it was fixed at mint time.
-    expect(messages([
-      '  cb = callback(() => send_reminder(subject: msg))',
-      '  c = await first(cb-[:Called]->)',
+    expect(messagesUnder4([
+      '  cb = callback(send_reminder(subject: msg))',
+      '  c = await FIRST(cb-[:Called]->)',
       '  write inbox-[:note]-> { text ?: c.`subject` }',
-    ].join('\n'), HELPER)).toMatch(/has no 'subject' — it carries: At/);
+    ].join('\n'), HELPER_UNDER_4)).toMatch(/has no 'subject' — it carries: At/);
   });
 
   it('a parameter left unsupplied that a platform CANNOT send is refused, pointing at the fix', () => {

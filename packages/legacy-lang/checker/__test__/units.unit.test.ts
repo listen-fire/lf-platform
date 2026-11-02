@@ -52,7 +52,6 @@ describe('the run host units', () => {
 
   it('are typed as their adapter describes them', () => {
     expect(codes(UNITS.replace('run.`Text`', 'run.`Txt`'), 5)).toEqual(['MOV_UNKNOWN_PROPERTY']);
-    expect(codes(UNITS.replace(' { schedule: "0 9 * * 1" }', ''), 5)).toEqual(['MOV_LISTEN_BAD_CONFIG']);
   });
 
   it("leave a file's own import and connection of one, and a name that hides one, checking as before", () => {

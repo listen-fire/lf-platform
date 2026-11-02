@@ -1567,12 +1567,11 @@ listen to inbox fire ¦`,
     expect(labels(result)).toEqual(['intake']);
   });
 
-  it('offers the adapter trigger-config vocabulary inside the config block', () => {
-    const withVocabulary: CatalogSnapshot = JSON.parse(JSON.stringify(snapshot));
-    withVocabulary.adapters.email.triggerConfig = ['key'];
+  // A 0.13 catalog does not say which keys a settings listen takes.
+  it('offers nothing inside the config block', () => {
     const { source, offset } = caret(`${HEADER}\nlisten to inbox { ¦`);
-    const result = getMovementCompletions(source, offset, withVocabulary, VERSION_4);
-    expect(result.items.map(i => i.label)).toEqual(['key']);
+    const result = getMovementCompletions(source, offset, snapshot, VERSION_4);
+    expect(result.items).toEqual([]);
   });
 });
 

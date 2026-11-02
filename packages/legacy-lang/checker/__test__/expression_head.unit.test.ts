@@ -31,7 +31,7 @@ const inboxSchema: InstanceSchema = {
   positions: {
     message: {
       properties: { Subject: 'text' },
-      edges: { Response: { target: 'message', readable: true, awaitable: true } },
+      edges: { Response: { target: 'message', readable: true, listenable: true } },
     },
   },
   collections: { Messages: { target: 'message' } },

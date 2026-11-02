@@ -107,9 +107,20 @@ describe('readByLanguage', () => {
     const spy = spies();
     expect(readByLanguage('0.12.0')).toBe(true);
     expect(readByLanguage(LANGUAGE_VERSION)).toBe(true);
-    parseProgram(SOURCE, { languageVersion: '0.12.0' });
+    parseProgram(SOURCE, { languageVersion: LANGUAGE_VERSION });
     expect(spy.calls()).toEqual({ live: ['parse_program_eager'], frozen: [] });
     expect(spy.frozenExtras()).toEqual([]);
+    spy.restore();
+  });
+
+  // A release reads its own compatibility key only: an earlier release's pin
+  // is the live release's to refuse, by name, never the frozen parser's.
+  it("an earlier release's semver is refused by name by the live release", () => {
+    const spy = spies();
+    expect(() => parseProgram(SOURCE, { languageVersion: '0.12.0' })).toThrow(
+      `pins language 0.12.0, which this release (${LANGUAGE_VERSION}) does not read`,
+    );
+    expect(spy.calls().frozen).toEqual([]);
     spy.restore();
   });
 });

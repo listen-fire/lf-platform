@@ -9,7 +9,7 @@ import { parseProgram } from '../../parser/parse';
 import { checkProgram } from '../check';
 import { fromCatalogSnapshot } from 'movement-lang/service/snapshot';
 
-const CATALOG = fromCatalogSnapshot(JSON.parse('{"contractVersion":1,"adapters":{"attio":{"canFire":true,"constructionArgs":[{"name":"credentials","kind":"credential","required":true}],"schemas":{"crm_cred":{"positions":{"note":{"properties":{"body":"text","title":"text","payload":"json"},"edges":{}}},"collections":{"notes":{"target":"note"}},"writableRoots":{"note":{"fields":{"body":"text","title":"text","payload":"json"},"resultShape":{"externalId":"text"}}}}}}},"credentials":{"crm_cred":{"adapters":["attio"]}},"plugins":{}}'));
+const CATALOG = fromCatalogSnapshot(JSON.parse('{"contractVersion":3,"adapters":{"attio":{"canFire":true,"constructionArgs":[{"name":"credentials","kind":"credential","required":true}],"schemas":{"crm_cred":{"positions":{"note":{"properties":{"body":"text","title":"text","payload":"json"},"edges":{}}},"collections":{"notes":{"target":"note"}},"writableRoots":{"note":{"fields":{"body":"text","title":"text","payload":"json"},"resultShape":{"externalId":"text"}}}}}}},"credentials":{"crm_cred":{"adapters":["attio"]}},"plugins":{}}'));
 
 function codes(body: string, version: 3 | 4 | 5): string[] {
   const source = [

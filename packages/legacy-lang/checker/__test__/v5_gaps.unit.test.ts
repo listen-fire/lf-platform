@@ -94,8 +94,11 @@ describe('language version 5: the spine gaps', () => {
     same('  write crm-[:companies]-> { name: xs[0] }', '  write crm-[:companies]-> { name: AT(xs, 0) }');
   });
 
-  it('await first is lower case', () => {
-    same('  q = co\n  x = await first(q-[:companies]->)', '  q = co\n  x = await FIRST(q-[:companies]->)');
+  // The installed parser reads the dialect '5' as 0.13 does, where
+  // `await first(…)` is retired for the bare walk: an old spelling, refused
+  // with the rewrite.
+  it('await first is an old spelling under the installed parser', () => {
+    expect(codes(v5('  q = co\n  x = await first(q-[:companies]->)'), 5)).toContain('MOV_V5_SPELLING');
   });
 
   it('callback takes a deferred call', () => {

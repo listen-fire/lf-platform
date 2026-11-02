@@ -28,12 +28,11 @@ const RATING_RESULT = 'Rating Result';
 const pollLandingName = genericLandingName({ target: POLL_RESULT, values: CHOICES });
 const ratingLandingName = genericLandingName({ target: RATING_RESULT, values: ['number'] });
 
-/** The awaitable, resolvesEmpty promise both families carry — same shape as the
- *  ask `Response` edge, so the `maybe-absent` composition is exercised too. */
+/** The listenable promise both families carry — same shape as the ask
+ *  `Response` edge. */
 const promise = (target: string, genericOver: { field: string; onNonLiteral?: 'error' | 'warn' }) => ({
   target,
-  awaitable: true, watchable: true,
-  resolvesEmpty: true,
+  listenable: true,
   readable: false,
   genericOver,
 });
@@ -82,25 +81,26 @@ const snapshot: CatalogSnapshot = {
   plugins: {},
 };
 
+// Version 4 is the last that spells the parked read `await FIRST(…)`: the
+// installed language's parser reads the dialect '5' as 0.13 does, where
+// `await first(…)` is respelled to the bare walk.
 const PRELUDE = `import { polls } from adapters
 import { probe } from credentials
 
-p = connect polls using probe
+p = polls(credentials: probe)
 `;
 
 const diagnosticsFor = (body: string): Diagnostic[] =>
   checkProgram(
-    parseProgram(`${PRELUDE}\nfunction m() {\n${body}\n}`),
+    parseProgram(`${PRELUDE}\nmovement m() {\n${body}\n}`, { languageVersion: '4' }),
     fromCatalogSnapshot(snapshot),
+    { languageVersion: '4' },
   ).filter((d) => (d.severity ?? 'error') === 'error');
 
 const codesFor = (body: string): string[] => diagnosticsFor(body).map((d) => d.code);
 
-/** `await` the promise off a write and read its answer. The landing is
- *  `resolvesEmpty`, so the answer is `T | absent` — which equality tolerates
- *  (layer 6), leaving the enum diagnostics below as the only thing a comparison
- *  can say. */
-const awaited = (write: string) => `  a = write ${write}\n  r = await first(a-[:Result]->)`;
+/** `await` the promise off a write and read its answer. */
+const awaited = (write: string) => `  a = write ${write}\n  r = await FIRST(a-[:Result]->)`;
 const LITERAL_POLL = 'p-[:Poll]-> { Question: "Round?", Choices: ["Seed", "Series A"] }';
 
 describe('a landing generic over its construction site (checker)', () => {
@@ -163,28 +163,8 @@ describe('a landing generic over its construction site (checker)', () => {
     ).not.toContain('MOV_ENUM_UNKNOWN_VALUE');
   });
 
-  it('resolvesEmpty still wraps the SPECIALIZED landing — absence composes over the enum', () => {
-    // No guard: the awaited answer is `enum | absent`, and using it where a
-    // present value is required is the same F19 error it is for any landing.
-    expect(
-      codesFor(
-        `  a = write p-[:Poll]-> { Question: "Round?", Choices: ["Seed", "Series A"] }\n  r = await first(a-[:Result]->)\n  write p-[:Poll]-> { Question: r.Answer }`,
-      ),
-    ).toContain('MOV_ABSENT_REQUIRED');
-  });
-
-  it('…and an `==` against a member is the guard — the arm reads the enum, present', () => {
-    // Layer 6: comparison IS the handling, and the true branch discharges the
-    // absence, so the very write that errored above is clean inside the arm.
-    expect(
-      codesFor(
-        `${awaited(LITERAL_POLL)}\n  if (r.Answer == "Seed") { write p-[:Poll]-> { Question: r.Answer } }`,
-      ),
-    ).toEqual([]);
-  });
-
   it('a comparison against a NON-member says only the enum thing — no absence noise', () => {
-    // The point of the layer: one diagnostic, about the typo, not two.
+    // One diagnostic, about the typo.
     expect(codesFor(`${awaited(LITERAL_POLL)}\n  if (r.Answer == "Sead") { }`)).toEqual([
       'MOV_ENUM_UNKNOWN_VALUE',
     ]);

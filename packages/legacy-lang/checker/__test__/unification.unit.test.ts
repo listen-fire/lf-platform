@@ -4,7 +4,7 @@
 //     what makes calling it ordinary — and not declaring one keeps it to the
 //     `through [ … ]` stage it is legal in today;
 //   - an `await` states no cadence only where the source PUSHES, and where it
-//     doesn't the refusal names the form that does;
+//     doesn't the await is refused;
 //   - a bracket predicate the source can't run is a NOTE about the fetch, not
 //     a refusal — unless nothing at all narrows, which is boundedness.
 
@@ -20,7 +20,7 @@ const PUSHED: InstanceSchema = {
     ticket: {
       properties: { Title: 'text' },
       // Resolves AND announces — the ask/Slack shape.
-      edges: { Reply: { target: 'reply', readable: true, awaitable: true, watchable: true } },
+      edges: { Reply: { target: 'reply', readable: true, listenable: true } },
     },
     reply: { properties: { Text: 'text' }, edges: {} },
   },
@@ -32,8 +32,8 @@ const POLLED: InstanceSchema = {
   positions: {
     order: {
       properties: { Ref: 'text' },
-      // Resolves, and nobody is told — the shape that has to be looked at.
-      edges: { Shipment: { target: 'shipment', readable: true, awaitable: true } },
+      // Nobody is told — the shape that has to be looked at.
+      edges: { Shipment: { target: 'shipment', readable: true } },
     },
     shipment: { properties: { Code: 'text' }, edges: {} },
   },
@@ -346,16 +346,18 @@ movement wait(t: <svc-[:${instancePosition}]->>) {
 ${body}
 }`;
 
+// The parked read is spelled `await FIRST(…)` through version 4: the
+// installed parser reads the dialect '5' as 0.13 does, where it is the bare
+// walk. A 0.13 catalog says only whether an edge is listenable, so an edge
+// nobody announces is not awaitable at all; 0.12's awaitable edge that was
+// not watchable (MOV_AWAIT_NEEDS_CADENCE) has no spelling there.
 describe('await states a cadence exactly where the source states nothing', () => {
   it('a push-backed edge is awaited bare', () => {
-    expect(errors(AWAIT_PROGRAM('ticket', '  r = await FIRST(t-[:Reply]->)'), PUSHED)).toEqual([]);
+    expect(errorsBefore5(AWAIT_PROGRAM('ticket', '  r = await FIRST(t-[:Reply]->)'), PUSHED)).toEqual([]);
   });
 
-  it('an edge nobody announces is refused, naming until', () => {
-    const source = AWAIT_PROGRAM('order', '  s = await FIRST(t-[:Shipment]->)');
-    expect(errors(source, POLLED)).toEqual([C.AWAIT_NEEDS_CADENCE]);
-    expect(messages(source, POLLED)).toContain('await until(');
-    expect(messages(source, POLLED)).toContain('every:');
+  it('an edge nobody announces is refused as not awaitable', () => {
+    expect(errorsBefore5(AWAIT_PROGRAM('order', '  s = await FIRST(t-[:Shipment]->)'), POLLED)).toEqual([C.AWAIT_NOT_AWAITABLE]);
   });
 
   it('…and the cadence form over that same edge is clean', () => {

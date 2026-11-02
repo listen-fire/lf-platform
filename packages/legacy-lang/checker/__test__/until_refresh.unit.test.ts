@@ -25,7 +25,7 @@ const askSchema: InstanceSchema = {
       fields: { prompt: 'text' },
       resultShape: { externalId: 'text', url: 'text', state: 'text', answer: 'boolean' },
       edges: {
-        Response: { target: 'response', awaitable: true, watchable: true, resolvesEmpty: true },
+        Response: { target: 'response', listenable: true },
       },
     },
   },
