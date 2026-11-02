@@ -62,7 +62,7 @@ import { PUBLIC_TEAM_ID } from '../../startup/core';
 import { platformModuleFiles } from '../../services/translation_graph/engine/files/module_files';
 import { saveMovement } from '../../services/translation_graph/movement/provision';
 import { runMovementAsync } from '../../services/translation_graph/movement/run_now';
-import { registerDispatchWork } from '../../services/translation_graph/triggers/dispatch_event';
+import { registerFireEventWork } from '../../services/inbound/fire_event';
 import { notifyWork, startDrainLoop } from '../../services/work/drain';
 
 // ── The deck the movement fetches ─────────────────────────────────────────
@@ -154,16 +154,13 @@ const MOVEMENT_NAME = 'background_run_context_probe';
 // The manual invocation's text is the deck link itself, so no model is needed
 // to find it.
 const PROGRAM = `
-import { manual } from adapters
 import { fetchUrl } from plugins
 
-runs = connect manual
-
-function ${MOVEMENT_NAME}(go: <runs-[:Invocation]->>) {
+function ${MOVEMENT_NAME}(go: <manual-[:Invocations]->>) {
   deck = fetchUrl(go.\`Text\`, { email: "x@y.z" })
 }
 
-listen to runs {} fire ${MOVEMENT_NAME}
+listen to manual-[:Invocations]-> fire ${MOVEMENT_NAME}
 `;
 
 // ── The run's team, and another for the request that wakes the loop ───────
@@ -297,7 +294,7 @@ async function main() {
     if (unsafeCurrentContext() !== undefined) {
       throw new Error('a Context is in scope — this script must queue and drain without one');
     }
-    registerDispatchWork();
+    registerFireEventWork();
 
     const probes: Probe[] = [];
     for (const [label, kicker] of [
