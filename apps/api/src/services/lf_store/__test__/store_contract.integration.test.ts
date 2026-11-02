@@ -1,5 +1,6 @@
-// The store slot's contract suites (the engine's run_host/contract.ts: 50
-// cases) against the platform's store module, over three bridges:
+// The store slot's contract suites (the engine's run_host/contract.ts: 48
+// cases; engine-contracts' conformance/store-waits.json: 38) against the
+// platform's store module, over three bridges:
 //   a. direct: the module's answer served in-process under one fixed tenant,
 //      spoken to by the engine's RpcStoreBackend;
 //   b. through listen-fire's own client of a store module (`listen-fire --contract-store-slot`),
@@ -8,6 +9,9 @@
 //   c. the real route of a running platform (LF_STORE_SLOT_URL, with
 //      LF_STORE_SLOT_KEY), as the gate and the agent stack run it.
 // Cases a and b get a fresh throwaway team each; c runs in the key's team.
+// A waits case may name a second team: each team it names is reached as a
+// tenant of its own (on the real route, which has one key, such a case is
+// skipped).
 
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
@@ -15,13 +19,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
-  callbackContractCases,
   cancelContractCases,
   deliveryContractCases,
   RpcStoreBackend,
   runHostContractCases,
+  storeWaitsCases,
   type DeliveryContractBackend,
   type RecordsContractBackend,
+  type StoreWaitsBackend,
 } from 'movement-engine/public/testing';
 import { commonSlotCases } from 'module-runtime/module_wire/conformance';
 import { serveSlot, SlotClient, startModule, type SlotAddress } from 'module-runtime/module_wire/wire';
@@ -68,7 +73,7 @@ function scratchProject(url: string): string {
     join(dir, 'externals/platform_store/lf-external.yaml'),
     `name: platform_store\nkind: core\nslot: store\nurl: ${url}\nauth: { kind: bearer, field: key }\n`,
   );
-  writeFileSync(join(dir, 'lf.yaml'), 'engine: 0.12.0\ncore:\n  store: platform_store\n');
+  writeFileSync(join(dir, 'lf.yaml'), 'engine: 0.13.0\ncore:\n  store: platform_store\n');
   return dir;
 }
 
@@ -122,7 +127,6 @@ const bridges: Bridge[] = [
 function recordsBackend(backend: RpcStoreBackend, tenant: string): RecordsContractBackend {
   return {
     store: backend.store,
-    callbacks: backend.callbacks,
     runs: backend.runs,
     teamId: tenant,
     newRun: async () => {
@@ -151,11 +155,88 @@ function deliveryBackend(backend: RpcStoreBackend, tenant: string): DeliveryCont
   };
 }
 
-const recordCases = [...runHostContractCases, ...callbackContractCases, ...cancelContractCases];
+/**
+ * The waits cases' store: each team a case names is a tenant reached of its
+ * own, the first the one its runs are started under. A team id in a call is
+ * the tenant's it was reached as; a call that names none is the first's.
+ */
+async function teamsOf(reach: () => Promise<Reached>): Promise<{ backend: StoreWaitsBackend; teams: () => number; close(): Promise<void> }> {
+  const first = await reach();
+  const reached: Reached[] = [first];
+  const home = { tenant: first.tenant, rpc: first.backend() };
+  const rpcs = [home.rpc];
+  const byTeam = new Map<string, typeof home>();
+  async function of(teamId: string | null | undefined) {
+    if (teamId === null || teamId === undefined) return home;
+    const known = byTeam.get(teamId);
+    if (known !== undefined) return known;
+    let one = home;
+    if (byTeam.size > 0) {
+      const next = await reach();
+      reached.push(next);
+      one = { tenant: next.tenant, rpc: next.backend() };
+      rpcs.push(one.rpc);
+    }
+    byTeam.set(teamId, one);
+    return one;
+  }
+  const { store, runRows, deliveryRows } = home.rpc;
+  const backend: StoreWaitsBackend = {
+    runRows,
+    store: {
+      ...store,
+      parks: {
+        ...store.parks,
+        commit: async (input) => (await of(input.teamId)).rpc.store.parks.commit(input),
+        commitSegment: async (input) => {
+          const team = await of(input.teamId);
+          return team.rpc.store.parks.commitSegment({ ...input, teamId: team.tenant });
+        },
+      },
+      waits: {
+        ...store.waits,
+        log: async (input) => {
+          const team = await of(input.teamId);
+          return team.rpc.store.waits.log({ ...input, teamId: team.tenant });
+        },
+        open: async (input) => {
+          const team = await of(input.teamId);
+          return team.rpc.store.waits.open({ ...input, teamId: team.tenant });
+        },
+      },
+      work: {
+        ...store.work,
+        claimDue: async (input) => (await of(input.teamId)).rpc.store.work.claimDue(input),
+      },
+    },
+    deliveries: {
+      ...deliveryRows,
+      keepDelivery: async (input) => {
+        const team = await of(input.arrivals?.teamId ?? input.work.find((row) => row.teamId != null)?.teamId);
+        return team.rpc.keepDelivery({
+          ...input,
+          work: input.work.map((row) => ({ ...row, teamId: row.teamId == null ? row.teamId : team.tenant })),
+          ...(input.arrivals !== undefined ? { arrivals: { ...input.arrivals, teamId: team.tenant } } : {}),
+        });
+      },
+    },
+  };
+  return {
+    backend,
+    teams: () => reached.length,
+    close: async () => {
+      for (const rpc of rpcs) await rpc.close();
+      for (const one of reached) await one.close();
+    },
+  };
+}
+
+const recordCases = [...runHostContractCases, ...cancelContractCases];
 
 describe('the store slot over the platform module', () => {
-  it('holds the engine contract to its 51 cases', () => {
-    expect(recordCases.length + deliveryContractCases.length).toBe(51);
+  it('holds the engine contract to its 48 cases and the waits conformance to its 38', () => {
+    expect(recordCases.length + deliveryContractCases.length).toBe(48);
+    expect(storeWaitsCases()).toHaveLength(38);
   });
 
   for (const bridge of bridges) {
@@ -211,6 +292,24 @@ describe('the store slot over the platform module', () => {
             await contractCase.run(deliveryBackend(backend, one.tenant));
           } finally {
             await backend.close();
+          }
+        });
+      }
+
+      for (const waitsCase of storeWaitsCases()) {
+        const another = /\bteam\b/.test(waitsCase.name);
+        const run = bridge.over === 'the real route' && another ? it.skip : it;
+        run(`waits: ${waitsCase.name}`, async () => {
+          const teams = await teamsOf(async () => {
+            const one = await bridge.reach();
+            tenants.push(one.tenant);
+            return one;
+          });
+          try {
+            await waitsCase.run(teams.backend);
+            expect(teams.teams()).toBe(another ? 2 : 1);
+          } finally {
+            await teams.close();
           }
         });
       }

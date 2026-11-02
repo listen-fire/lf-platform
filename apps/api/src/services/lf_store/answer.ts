@@ -9,16 +9,19 @@
 import { z } from 'zod';
 import { SlotRefusal, type SlotAnswer } from 'module-runtime/module_wire/wire';
 import { MANIFEST_PROTOCOL_VERSION } from 'engine-contracts';
+import { RunLeaseLost } from 'movement-engine/public/errors';
 
 import type { WireSlotManifestShape } from 'engine-contracts/slots';
 
-import * as callbacks from './callbacks';
 import * as inbound from './inbound';
+import * as listens from './listens';
 import * as live from './live_state';
+import * as door from './records_door';
 import * as runs from './runs';
+import * as waits from './waits';
 import * as work from './work';
 import { LF_STORE_METHODS, isLfStoreMethod, type LfStoreMethod } from './methods';
-import { pool, type LfTenant } from './scope';
+import { leaseLost, pool, type LfTenant } from './scope';
 
 export const LF_STORE_MANIFEST: WireSlotManifestShape = {
   protocolVersion: MANIFEST_PROTOCOL_VERSION,
@@ -41,6 +44,9 @@ const value = z.unknown().optional().transform((v) => v ?? null);
 const strings = z.array(z.string());
 const optStrings = z.array(z.string()).nullish().transform((v) => v ?? null);
 
+/** A whole number, at least 0. */
+const count = int.min(0);
+
 const RunStartParams = z.object({
   id: str,
   file: str,
@@ -48,22 +54,65 @@ const RunStartParams = z.object({
   startedAt: str,
   input: str,
   deliveryId: optStr,
+  teamId: optStr,
 });
 
 const ParkParams = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('timer'), wakeAt: str }),
-  z.object({ kind: z.literal('await'), teamId: str, adapterType: str, correlationKey: str }),
+  z.object({ kind: z.literal('wait'), waitId: str }),
   z.object({ kind: z.literal('limit') }),
 ]);
+
+const ArrivalParams = z.object({
+  edge: str,
+  key: str,
+  identity: optStr,
+  version: optStr,
+  landing: value,
+  gone: z.boolean(),
+});
+
+const ArrivalsParams = z.object({
+  teamId: str,
+  adapterType: str,
+  arrivals: z.array(ArrivalParams),
+  at: str,
+  resendWindowMs: count,
+});
+
+const DeliveryWaitParams = z.object({
+  runId: str,
+  edge: str,
+  key: optStr,
+  fireKey: str,
+  preNoted: z.object({ identity: str, version: optStr }).optional(),
+});
+
+/** One fact of a listen that could not judge an arrival (`unjudged.note`'s,
+ *  without `forgetBefore`). */
+const UnjudgedParams = z.object({
+  pipeline: str,
+  arrival: str,
+  file: str,
+  movement: str,
+  deliveryId: optStr,
+  edge: str,
+  recordId: optStr,
+  reason: str,
+  cause: optStr,
+  at: str,
+  attempt: count.nullish().transform((v) => v ?? 0),
+});
 
 const DeliveryParams = z.object({
   id: str,
   externalId: optStr,
   receivedAt: str,
-  source: z.enum(['webhook', 'hook', 'emit', 'cli']),
+  source: z.enum(['webhook', 'hook', 'emit', 'cli', 'poll']),
   inline: z.boolean(),
   replayOf: optStr,
   events: z.array(z.unknown()),
+  request: value,
 });
 
 const WorkRowParams = z.object({
@@ -87,8 +136,44 @@ const KeepDeliveryParams = z.preprocess(
     checkpoint: z.object({ saved: z.unknown() }).nullable(),
     delivery: DeliveryParams,
     work: z.array(WorkRowParams),
+    arrivals: ArrivalsParams.nullish().transform((v) => v ?? null),
+    waits: z.array(DeliveryWaitParams).nullish().transform((v) => v ?? []),
+    unjudged: z.array(UnjudgedParams).nullish().transform((v) => v ?? []),
   }),
 );
+
+const CommitSegmentParams = z.object({
+  runId: str,
+  teamId: str,
+  fence: optStr,
+  resumed: optStr,
+  joins: z.array(z.object({ frameAddress: str, pending: int })),
+  parks: z.array(z.object({ address: str, state: value, park: ParkParams })),
+  settle: z.object({ status: str, outcome: value, at: str }).nullish().transform((v) => v ?? null),
+  // Absent: none owed, none settled.
+  owedRaces: z.array(z.object({ frameAddress: str, state: value })).nullish().transform((v) => v ?? []),
+  settledRace: optStr,
+});
+
+const StrandedParams = z.union([
+  z.object({ runId: str }),
+  z.object({ after: z.object({ at: str, waitId: str }).nullish(), limit: int }).transform(({ after, limit }) => ({
+    limit,
+    ...(after !== null && after !== undefined ? { after } : {}),
+  })),
+]);
+
+/** A page's `after`: absent and `null` alike are the first page. */
+function after<S extends z.ZodType>(shape: S) {
+  return shape.nullish().transform((v) => v ?? null);
+}
+
+const ResolutionParams = z.object({
+  heads: strings,
+  resolvedAt: optStr,
+  failure: optStr,
+  parents: z.record(z.string(), strings).nullish().transform((v) => v ?? undefined),
+});
 
 // ── Dispatch ────────────────────────────────────────────────────────────────
 
@@ -135,17 +220,6 @@ const HANDLERS: { readonly [M in LfStoreMethod]: Handler } = {
   'runs.resetSpendBaseline': handler(runId, runs.resetSpendBaseline),
   'records.cancelRequest': handler(runId, runs.cancelRequest),
   'records.markFailed': handler(z.object({ runId: str, message: str }), runs.markFailed),
-  'records.closeRun': handler(runId, (scope, p) => callbacks.revokeRunCallbacks(pool(), scope, p.runId)),
-
-  'callbacks.mint': handler(
-    z.object({ teamId: str, runId: str, address: str, params: value, state: value, singleUse: flag, expiresAt: optStr }),
-    callbacks.mint,
-  ),
-  'callbacks.get': handler(z.object({ id: str }), callbacks.get),
-  'callbacks.record': handler(z.object({ id: str, values: value, bodyDueAt: str }), callbacks.record),
-  'callbacks.markBodyStarted': handler(z.object({ id: str, callIndex: int, fence: optStr }), callbacks.markBodyStarted),
-  'callbacks.landed': handler(z.object({ ids: strings }), callbacks.landed),
-  'callbacks.revokeRun': handler(runId, (scope, p) => callbacks.revokeRunCallbacks(pool(), scope, p.runId)),
 
   'parks.putLeaf': handler(
     z.object({ runId: str, address: str, reason: str, wakeAt: optStr, state: value, fence: optStr }),
@@ -155,6 +229,8 @@ const HANDLERS: { readonly [M in LfStoreMethod]: Handler } = {
   'parks.finishLeaf': handler(z.object({ runId: str, address: str, fence: optStr }), live.finishLeaf),
   'parks.leaves': handler(z.object({ runId: str, parkedOnly: flag, reason: optStr, dueBy: optStr }), live.leaves),
   'parks.deleteLeaves': handler(z.object({ runId: str, addresses: strings }), live.deleteLeaves),
+  'parks.commitSegment': handler(CommitSegmentParams, live.commitSegment),
+  'parks.owedRaces': handler(runId, live.owedRaces),
 
   'joins.recordJoin': handler(z.object({ runId: str, frameAddress: str, pending: int, fence: optStr }), live.recordJoin),
   'joins.decrementJoin': handler(
@@ -170,22 +246,12 @@ const HANDLERS: { readonly [M in LfStoreMethod]: Handler } = {
   'joins.frames': handler(runId, live.frames),
   'joins.deleteFrames': handler(z.object({ runId: str, frameAddresses: strings }), live.deleteFrames),
 
-  'correlations.correlate': handler(
-    z.object({ runId: str, teamId: str, address: str, adapterType: str, correlationKey: str }),
-    live.correlate,
-  ),
-  'correlations.correlated': handler(z.object({ adapterType: str, teamId: str, correlationKey: str }), live.correlated),
-  'correlations.ofRun': handler(z.object({ runId: str, adapterType: str }), live.ofRun),
-  'correlations.drop': handler(z.object({ runId: str, address: str }), live.dropCorrelation),
-  'correlations.dropRun': handler(runId, live.dropRunCorrelations),
-
   'leases.claim': handler(z.object({ runId: str, ttlMs: int }), live.claimLease),
   'leases.renew': handler(z.object({ runId: str, token: str, ttlMs: int }), live.renewLease),
   'leases.release': handler(z.object({ runId: str, token: str }), live.releaseLease),
   'leases.dropRunState': handler(z.object({ runId: str, fence: optStr }), live.dropRunState),
 
   'work.enqueue': handler(z.object({ kind: str, key: str, payload: value, dueAt: optStr, teamId: optStr }), work.enqueue),
-  'work.enqueueIfAbsent': handler(z.object({ kind: str, key: str, payload: value, dueAt: optStr, teamId: optStr }), work.enqueueIfAbsent),
   'work.claimDue': handler(z.object({ limit: int, leaseMs: int, dueBy: optStr, kinds: optStrings }), work.claimDue),
   'work.complete': handler(z.object({ id: str, claim: str }), work.complete),
   'work.release': handler(z.object({ id: str, claim: str, dueAt: optStr, why: optStr }), work.release),
@@ -195,12 +261,24 @@ const HANDLERS: { readonly [M in LfStoreMethod]: Handler } = {
 
   'inbound.checkpoint': handler(z.object({ subscriptionId: str }), inbound.checkpoint),
   'inbound.saveCheckpoint': handler(z.object({ subscriptionId: str, checkpoint: value }), inbound.saveCheckpoint),
+
+  'listens.states': handler(z.object({ pipelines: strings }), listens.states),
+  'listens.claimResolve': handler(z.object({ pipeline: str, ttlMs: int }), listens.claimResolve),
+  'listens.saveResolution': handler(z.object({ pipeline: str, token: str, resolution: ResolutionParams }), listens.saveResolution),
+  'listens.setPaused': handler(z.object({ pipeline: str, paused: optStr }), listens.setPaused),
+  'listens.hold': handler(z.object({ pipeline: str }), listens.hold),
+  'writes.record': handler(
+    z.object({ adapter: str, recordType: str, externalId: str, runId: str, depth: count, at: str, forgetBefore: str }),
+    listens.recordWrite,
+  ),
+  'writes.depth': handler(z.object({ adapter: str, recordType: str, externalId: str, since: str }), listens.writeDepth),
+
   'processes.list': handler(z.object({}).passthrough(), (scope) => inbound.listProcesses(scope)),
   'processes.swap': handler(z.object({ version: int, processes: value }), inbound.swapProcesses),
-  'events.claim': handler(z.object({ listen: str, key: str }), inbound.claimEvent),
+  'events.claim': handler(z.object({ listen: str, key: str, teamId: optStr }), inbound.claimEvent),
   'events.startRun': handler(RunStartParams.extend({ listen: str, key: str }), (scope, p) => {
     const { listen, key, ...run } = p;
-    return inbound.startEventRun(scope, { listen, key, run });
+    return inbound.startEventRun(scope, { listen, key, teamId: run.teamId, run });
   }),
   'runs.lapsed': handler(z.object({ staleMs: int, limit: int }), runs.lapsedRuns),
   'parks.commit': handler(
@@ -213,6 +291,38 @@ const HANDLERS: { readonly [M in LfStoreMethod]: Handler } = {
   'inbound.delivery': handler(z.object({ id: str }), inbound.delivery),
   'inbound.sweepDeliveries': handler(z.object({ before: str, limit: int }), inbound.sweepDeliveries),
   'inbound.forgetDeliveryId': handler(z.object({ id: str }), inbound.forgetDeliveryId),
+  'work.enqueueIfAbsent': handler(z.object({ kind: str, key: str, payload: value, dueAt: optStr, teamId: optStr }), work.enqueueIfAbsent),
+  'work.completeKey': handler(z.object({ key: str }), work.completeKey),
+
+  'waits.mark': handler(z.object({}).passthrough(), () => waits.mark()),
+  'waits.log': handler(ArrivalsParams, waits.log),
+  'waits.open': handler(
+    z.object({ runId: str, teamId: str, adapterType: str, edge: str, key: optStr, recordId: optStr, since: count }),
+    waits.open,
+  ),
+  'waits.arrivals': handler(z.object({ waitId: str }), waits.arrivals),
+  'waits.note': handler(
+    z.object({ waitId: str, identity: str, version: optStr, matched: flag, leaf: optStr, fence: optStr }),
+    waits.note,
+  ),
+  'waits.sweep': handler(z.object({ limit: int, floor: count.nullish().transform((v) => v ?? null) }), waits.sweep),
+  'waits.stranded': handler(StrandedParams, waits.stranded),
+
+  'runs.failed': handler(
+    z.object({ after: after(z.object({ at: str, runId: str })), until: str, limit: int }),
+    runs.failedRuns,
+  ),
+  'releases.note': handler(z.object({ version: str, at: str }), door.noteRelease),
+  'releases.list': handler(z.object({ after: after(z.object({ at: str, version: str })), limit: int }), door.releases),
+  'unjudged.note': handler(UnjudgedParams.extend({ forgetBefore: str }), door.noteUnjudged),
+  'unjudged.list': handler(
+    z.object({
+      after: after(z.object({ at: str, pipeline: str, arrival: str, attempt: count.nullish().transform((v) => v ?? 0) })),
+      pipeline: optStr,
+      limit: int,
+    }),
+    door.unjudged,
+  ),
 };
 
 /** Whether a method has a handler: the unit test's check over the list. */
@@ -231,6 +341,9 @@ export function answerFor(scope: LfTenant): SlotAnswer {
       if (error instanceof SlotRefusal && error.code === 'bad_request') {
         throw new SlotRefusal('bad_request', `${method}: ${error.message}`, error.data);
       }
+      // The waits family's statements are the in-process store's, which
+      // refuse a lost fence as the core does.
+      if (error instanceof RunLeaseLost) throw leaseLost(error.runId);
       throw error;
     }
   };

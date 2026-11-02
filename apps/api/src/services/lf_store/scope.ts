@@ -4,7 +4,7 @@
 // statement is held to that team and to lf's rows (host = 'lf'): the tables are
 // the platform's own, so a statement that forgot either would reach another
 // tenant's runs or the platform's. Rows that carry no team of their own (a
-// leaf, a join, a correlation's run) are reached through their run.
+// leaf, a join) are reached through their run; a wait carries its team.
 //
 // The module keeps no state between requests: a cloud lf talks to it with
 // `RpcStoreBackend(address)`, which never sends `store.open`, so the tenant is
@@ -28,10 +28,8 @@ const TABLES = [
   'parked_run',
   'join_pending',
   'join_branch_export',
-  'adapter_await',
   'park_library_source',
   'work',
-  'callback',
   'inbound_checkpoint',
   'event_receipt',
   'module_processes',

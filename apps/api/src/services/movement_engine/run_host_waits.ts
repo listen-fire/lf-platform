@@ -299,14 +299,17 @@ export async function noteArrivalIn(
  * live while its run exists or its `fire_event` row is queued, not buried.
  * Identities past their re-send window go in the same write.
  */
-export async function sweepArrivalsIn(exec: Exec, input: { limit: number; floor?: number }): Promise<number> {
+export async function sweepArrivalsIn(exec: Exec, input: { limit: number; floor?: number; teamId?: string }): Promise<number> {
   const floor = input.floor ?? null;
+  // One team's sweep (a tenant's, through the store module) forgets only its own.
+  const teamId = input.teamId ?? null;
   const result = await sql`
     delete from automations.arrival where seq in (
       select a.seq from automations.arrival a
       where a.seq <= coalesce((select min(lease_mark) from automations.trigger_run where lease_until > now() and lease_mark is not null),
                               (select coalesce(max(seq), 0) from automations.arrival))
         and (${floor}::int8 is null or a.seq <= ${floor}::int8)
+        and (${teamId}::uuid is null or a.team_id = ${teamId}::uuid)
         and not exists (select 1 from automations.wait_row w
           where w.team_id = a.team_id and w.adapter_type = a.adapter_type and w.edge = a.edge and w.key = a.key and w.since < a.seq
             and (w.fire_key is null or exists (select 1 from automations.trigger_run r where r.id = w.run_id)
@@ -314,7 +317,8 @@ export async function sweepArrivalsIn(exec: Exec, input: { limit: number; floor?
       order by a.seq limit ${input.limit}::int8)`.execute(exec);
   await sql`
     delete from automations.arrival_identity
-    where ctid in (select ctid from automations.arrival_identity where kept_until < now() limit ${input.limit}::int8)`.execute(exec);
+    where ctid in (select ctid from automations.arrival_identity
+      where kept_until < now() and (${teamId}::uuid is null or team_id = ${teamId}::uuid) limit ${input.limit}::int8)`.execute(exec);
   return Number(result.numAffectedRows ?? 0);
 }
 

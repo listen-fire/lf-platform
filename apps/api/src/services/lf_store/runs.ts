@@ -13,8 +13,7 @@
 
 import { sql } from 'kysely';
 
-import { revokeRunCallbacks } from './callbacks';
-import { inTransaction, iso, lfRunRow, pool, type Exec, type LfTenant } from './scope';
+import { iso, lfRunRow, pool, refuseAnotherTenant, type Exec, type LfTenant } from './scope';
 
 /** The platform names a completed run `success`; lf names it `completed`.
  *  Every other status is the same word on both. */
@@ -37,6 +36,8 @@ export interface RunStart {
   startedAt: string;
   input: string;
   deliveryId: string | null;
+  /** The team the run is kept under: the tenant's (null: the tenant). */
+  teamId: string | null;
 }
 
 /** A run row as the store wire carries it (store_wire.rs `RunRow`). */
@@ -95,6 +96,7 @@ function runOf(row: RunColumns): RunRow {
 }
 
 export async function startRunRow(exec: Exec, scope: LfTenant, run: RunStart): Promise<void> {
+  refuseAnotherTenant(scope, run.teamId);
   const trigger = `listen:${run.file}:${run.movement}`;
   await sql`
     insert into automations.trigger_run
@@ -119,27 +121,33 @@ export async function lapsedRuns(scope: LfTenant, input: { staleMs: number; limi
   return rows.map((r) => r.id);
 }
 
-export async function settleRun(
-  scope: LfTenant,
-  input: { runId: string; status: string; outcome: unknown; at: string },
-): Promise<null> {
+export interface RunSettle {
+  status: string;
+  outcome: unknown;
+  at: string;
+}
+
+/** The run settled, in the caller's transaction; `completed` is the hosted
+ *  product's `success`. */
+export async function settleRunIn(exec: Exec, scope: LfTenant, input: RunSettle & { runId: string }): Promise<void> {
   const status = hostedStatus(input.status);
   const outcome = input.outcome !== null && typeof input.outcome === 'object' && !Array.isArray(input.outcome) ? input.outcome : {};
   const writes = Reflect.get(outcome, 'writes');
   const error = Reflect.get(outcome, 'error');
   const returned = 'returned' in outcome ? JSON.stringify(Reflect.get(outcome, 'returned')) : null;
-  await inTransaction(async (trx) => {
-    await sql`
-      update automations.trigger_run r set
-        status = ${status}::text,
-        nodes_written = coalesce(${Number.isInteger(writes) ? writes : null}::int, r.nodes_written),
-        failure_reason = case when ${status}::text = 'failed' then ${typeof error === 'string' ? error : null}::text else r.failure_reason end,
-        completed_at = case when ${status}::text = 'success' then ${input.at}::timestamptz else r.completed_at end,
-        failed_at = case when ${status}::text = 'failed' then ${input.at}::timestamptz else r.failed_at end,
-        returned = ${returned}::text::json
-      where r.id = ${input.runId}::uuid and ${lfRunRow(scope, 'r')}`.execute(trx);
-    if (status === 'success' || status === 'failed') await revokeRunCallbacks(trx, scope, input.runId);
-  });
+  await sql`
+    update automations.trigger_run r set
+      status = ${status}::text,
+      nodes_written = coalesce(${Number.isInteger(writes) ? writes : null}::int, r.nodes_written),
+      failure_reason = case when ${status}::text = 'failed' then ${typeof error === 'string' ? error : null}::text else r.failure_reason end,
+      completed_at = case when ${status}::text = 'success' then ${input.at}::timestamptz else r.completed_at end,
+      failed_at = case when ${status}::text = 'failed' then ${input.at}::timestamptz else r.failed_at end,
+      returned = ${returned}::text::json
+    where r.id = ${input.runId}::uuid and ${lfRunRow(scope, 'r')}`.execute(exec);
+}
+
+export async function settleRun(scope: LfTenant, input: RunSettle & { runId: string }): Promise<null> {
+  await settleRunIn(pool(), scope, input);
   return null;
 }
 
@@ -151,12 +159,9 @@ export async function markParked(exec: Exec, scope: LfTenant, runId: string): Pr
 }
 
 export async function markFailed(scope: LfTenant, input: { runId: string; message: string }): Promise<null> {
-  await inTransaction(async (trx) => {
-    await sql`
-      update automations.trigger_run r set status = 'failed', failed_at = now(), failure_reason = ${input.message}::text
-      where r.id = ${input.runId}::uuid and ${lfRunRow(scope, 'r')} and r.status in ('running', 'parked')`.execute(trx);
-    await revokeRunCallbacks(trx, scope, input.runId);
-  });
+  await sql`
+    update automations.trigger_run r set status = 'failed', failed_at = now(), failure_reason = ${input.message}::text
+    where r.id = ${input.runId}::uuid and ${lfRunRow(scope, 'r')} and r.status in ('running', 'parked')`.execute(pool());
   return null;
 }
 
@@ -189,6 +194,28 @@ export async function listRuns(scope: LfTenant, input: { limit: number }): Promi
     order by r.started_at desc limit ${input.limit}::int8`.execute(pool());
   return rows.map(runOf);
 }
+
+/** The tenant's runs settled `failed` at or before `until`, after the run
+ *  `after` names, oldest failure first (ties by id): the records door's page. */
+export async function failedRuns(
+  scope: LfTenant,
+  input: { after: { at: string; runId: string } | null; until: string; limit: number },
+): Promise<RunRow[]> {
+  const failed = sql`${lfRunRow(scope, 'r')} and r.status = 'failed' and r.failed_at <= ${input.until}::timestamptz`;
+  // A run id that is no uuid sorts before every one: the page starts at its instant.
+  const { rows } =
+    input.after === null
+      ? await sql<RunColumns>`
+          select ${RUN_COLUMNS} from automations.trigger_run r where ${failed}
+          order by r.failed_at, r.id limit ${input.limit}::int8`.execute(pool())
+      : await sql<RunColumns>`
+          select ${RUN_COLUMNS} from automations.trigger_run r
+          where ${failed} and (r.failed_at, r.id) > (${input.after.at}::timestamptz, ${isUuid(input.after.runId) ? input.after.runId : NIL_UUID}::uuid)
+          order by r.failed_at, r.id limit ${input.limit}::int8`.execute(pool());
+  return rows.map(runOf);
+}
+
+const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
 /** The run's status, or `missing`: the contract suite's helper. */
 export async function runStatus(scope: LfTenant, input: { runId: string }): Promise<string> {

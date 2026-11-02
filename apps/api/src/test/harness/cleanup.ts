@@ -84,6 +84,15 @@ const TABLES_TEAM_SCOPED: readonly (readonly [
   ['automations', 'event_receipt'],
   ['automations', 'module_processes'],
   ['automations', 'park_library_source'],
+  // A team's arrival log and waits (a wait a delivery opened for a run that
+  // never started has no run to go with), its listens' states and its ledgers.
+  ['automations', 'arrival'],
+  ['automations', 'arrival_identity'],
+  ['automations', 'wait_row'],
+  ['automations', 'listen_state'],
+  ['automations', 'write_ledger'],
+  ['automations', 'release_seen'],
+  ['automations', 'arrival_unjudged'],
   // Remote-adapter installs (the credentials_id FK is SET NULL in-schema).
   ['automations', 'remote_adapter'],
   ['automations', 'external_service_credentials'],

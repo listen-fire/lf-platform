@@ -1,22 +1,31 @@
-// An lf run's live state (parks.*, joins.*, correlations.*, leases.*,
-// sources.*), ported from pg_store.rs over the platform's tables of the same
-// shapes. The run lease is a fence on every live-state write: a write naming
-// the token it holds lands only while the run is still leased to it. Every
-// statement reaches a row only through a run that is one of the tenant's lf
-// runs.
+// An lf run's live state (parks.*, joins.*, leases.*, sources.*), ported from
+// pg_store.rs over the platform's tables of the same shapes; a wait's park and
+// notes are the in-process store's own statements (run_host_waits.ts). The run
+// lease is a fence on every live-state write: a write naming the token it
+// holds lands only while the run is still leased to it. Every statement
+// reaches a row only through a run that is one of the tenant's lf runs.
 
 import { randomUUID } from 'node:crypto';
 import { hostname } from 'node:os';
 
 import { sql } from 'kysely';
+import {
+  RESUME_TIMER_WORK_KIND,
+  SETTLE_RACE_WORK_KIND,
+  settleRaceWorkKey,
+  timerWorkKey,
+  type WaitWake,
+} from 'movement-engine/public/run-host';
 import { neverAsAny } from 'movement-engine/public/types';
+import { z } from 'zod';
 
-import { markParked } from './runs';
-import { enqueueRow } from './work';
+import { queueWake } from '../movement_engine/run_host_queue';
+import { keepNotesOf, lockWaitEdges, parkWaitIn, unparkWaitsAt, waitArrivals } from '../movement_engine/run_host_waits';
+import { markParked, settleRunIn, type RunSettle } from './runs';
+import { enqueueRow, lfWorkOf, storedKey } from './work';
 import {
   inTransaction,
   iso,
-  leaseLost,
   leasedTo,
   lfRunOf,
   lfRunRow,
@@ -60,20 +69,44 @@ export async function claimLeaf(
   scope: LfTenant,
   input: { runId: string; address: string; reason: string | null },
 ): Promise<{ reason: string; state: unknown } | null> {
+  // Claiming the leaf drops the notes a segment that resumed it before made
+  // and never kept (it died), so their arrivals are read again.
   const { rows } = await sql<{ reason: string; state: unknown }>`
-    update automations.parked_run p set status = 'resuming', updated_at = now()
-    where p.run_id = ${input.runId}::uuid and ${lfRunOf(scope, 'p.run_id')} and p.address = ${input.address}::text and p.status = 'parked'
-      and (${input.reason}::text is null or p.park_reason = ${input.reason}::text)
-    returning p.park_reason as reason, coalesce(p.state, 'null'::jsonb) as state`.execute(pool());
+    with claimed as (
+      update automations.parked_run p set status = 'resuming', updated_at = now()
+      where p.run_id = ${input.runId}::uuid and ${lfRunOf(scope, 'p.run_id')} and p.address = ${input.address}::text and p.status = 'parked'
+        and (${input.reason}::text is null or p.park_reason = ${input.reason}::text)
+      returning p.park_reason as reason, coalesce(p.state, 'null'::jsonb) as state
+    ), dropped as (
+      delete from automations.wait_seen s using automations.wait_row w
+      where s.wait_id = w.id and w.run_id = ${input.runId}::uuid and s.leaf = ${input.address}::text and exists (select 1 from claimed)
+    )
+    select reason, state from claimed`.execute(pool());
   const row = rows[0];
   return row === undefined ? null : { reason: row.reason, state: row.state };
 }
 
-export async function finishLeaf(scope: LfTenant, input: { runId: string; address: string; fence: string | null }): Promise<null> {
+/** The leaf a segment resumed is over: deleted if resuming, and the notes the
+ *  segment made kept. */
+async function finishLeafIn(exec: Exec, input: { runId: string; address: string }): Promise<void> {
   await sql`
-    delete from automations.parked_run p
-    where p.run_id = ${input.runId}::uuid and ${lfRunOf(scope, 'p.run_id')} and p.address = ${input.address}::text and p.status = 'resuming'
-      and (${input.fence}::text is null or exists (select 1 from automations.trigger_run r where r.id = p.run_id and ${leasedTo('r', input.fence ?? '')}))`.execute(pool());
+    delete from automations.parked_run where run_id = ${input.runId}::uuid and address = ${input.address}::text and status = 'resuming'`.execute(exec);
+  await keepNotesOf(exec, { runId: input.runId, leaf: input.address });
+}
+
+/** The tenant's lf run held for the transaction, under `fence` when given: the
+ *  lease cannot change hands between the check and the writes. */
+async function holdRun(exec: Exec, scope: LfTenant, runId: string, fence: string | null): Promise<boolean> {
+  const { rows } = await sql`
+    select r.id from automations.trigger_run r
+    where r.id = ${runId}::uuid and ${lfRunRow(scope, 'r')} and (${fence}::text is null or ${leasedTo('r', fence ?? '')}) for update`.execute(exec);
+  return rows.length > 0;
+}
+
+export async function finishLeaf(scope: LfTenant, input: { runId: string; address: string; fence: string | null }): Promise<null> {
+  await inTransaction(async (trx) => {
+    if (await holdRun(trx, scope, input.runId, input.fence)) await finishLeafIn(trx, input);
+  });
   return null;
 }
 
@@ -98,49 +131,130 @@ export async function deleteLeaves(scope: LfTenant, input: { runId: string; addr
   return null;
 }
 
-export type ParkKind =
-  | { kind: 'timer'; wakeAt: string }
-  | { kind: 'await'; teamId: string; adapterType: string; correlationKey: string }
-  | { kind: 'limit' };
+export type ParkKind = { kind: 'timer'; wakeAt: string } | { kind: 'wait'; waitId: string } | { kind: 'limit' };
 
 /**
- * One park, kept as one with what wakes it: the leaf; for a timer the run's
- * `resume_timer` row, for an await its correlation, for a limit the address's
- * correlation dropped; and the run marked parked. A fenced one holds the run's
- * row for the transaction, so the lease cannot change hands between the check
- * and the writes. A lost fence writes nothing.
+ * One park's leaf and what wakes it, in the caller's transaction (which holds
+ * the run, and the edges of the waits it parks). Whatever parks at the
+ * address now, no wait parked there before is, and the notes the segment
+ * that resumed the leaf there made are kept; a timer arms the run's
+ * `resume_timer` row; a wait is parked there (stranded as it parks when its
+ * record is already gone; a run without the wait fails, writing nothing).
+ */
+async function parkIn(exec: Exec, scope: LfTenant, input: { runId: string; address: string; state: unknown; park: ParkKind }): Promise<void> {
+  const { runId, address, state, park } = input;
+  const reason = park.kind === 'wait' ? 'await' : park.kind;
+  await putLeaf(exec, scope, { runId, address, reason, wakeAt: park.kind === 'timer' ? park.wakeAt : null, state, fence: null });
+  await unparkWaitsAt(exec, { runId, address });
+  switch (park.kind) {
+    case 'timer':
+      // The leaf is the truth; the work row only says when to look.
+      await enqueueRow(exec, { kind: RESUME_TIMER_WORK_KIND, key: timerWorkKey(runId), payload: { runId }, dueAt: park.wakeAt, teamId: scope.tenant });
+      return;
+    case 'wait':
+      await parkWaitIn(exec, { runId, waitId: park.waitId, address });
+      return;
+    case 'limit':
+      return;
+    default:
+      neverAsAny(park);
+  }
+}
+
+function waitsOf(parks: readonly { park: ParkKind }[]): string[] {
+  return parks.flatMap(({ park }) => (park.kind === 'wait' ? [park.waitId] : []));
+}
+
+/**
+ * One park, kept as one with what wakes it, and the run marked parked. A
+ * fenced one holds the run's row for the transaction; a lost fence writes
+ * nothing. A wait's park takes its record's edge as a log does, so the two
+ * never interleave.
  */
 export async function commitPark(
   scope: LfTenant,
   input: { runId: string; address: string; state: unknown; fence: string | null; park: ParkKind },
 ): Promise<null> {
-  const { runId, address, state, fence, park } = input;
-  if (park.kind === 'await') refuseAnotherTenant(scope, park.teamId);
+  const { runId, fence } = input;
   await inTransaction(async (trx) => {
-    if (fence !== null) {
-      const { rows } = await sql<{ id: string }>`
-        select r.id::text as id from automations.trigger_run r
-        where r.id = ${runId}::uuid and ${lfRunRow(scope, 'r')} and ${leasedTo('r', fence)} for update`.execute(trx);
-      if (rows.length === 0) throw leaseLost(runId);
-    }
-    await putLeaf(trx, scope, { runId, address, reason: park.kind, wakeAt: park.kind === 'timer' ? park.wakeAt : null, state, fence });
-    switch (park.kind) {
-      case 'timer':
-        // The leaf is the truth; the work row only says when to look.
-        await enqueueRow(trx, { kind: 'resume_timer', key: `resume_timer:${runId}`, payload: { runId }, dueAt: park.wakeAt, teamId: scope.tenant });
-        break;
-      case 'await':
-        await correlateRow(trx, scope, { runId, teamId: park.teamId, address, adapterType: park.adapterType, correlationKey: park.correlationKey });
-        break;
-      case 'limit':
-        await dropCorrelationRow(trx, scope, { runId, address });
-        break;
-      default:
-        neverAsAny(park);
-    }
+    if (!(await holdRun(trx, scope, runId, fence))) throw notWritten(runId, fence);
+    await lockWaitEdges(trx, runId, waitsOf([input]));
+    await parkIn(trx, scope, input);
     await markParked(trx, scope, runId);
   });
   return null;
+}
+
+export interface SegmentCommit {
+  runId: string;
+  teamId: string;
+  fence: string | null;
+  resumed: string | null;
+  joins: { frameAddress: string; pending: number }[];
+  parks: { address: string; state: unknown; park: ParkKind }[];
+  settle: RunSettle | null;
+  owedRaces: { frameAddress: string; state: unknown }[];
+  settledRace: string | null;
+}
+
+/**
+ * A segment's held writes in one: its joins, its parks, the end of the leaf
+ * it resumed (unless it parks there again), the run marked parked, its
+ * settle, the race it settled and the races it owes. Each wait it parks whose
+ * arrivals are unread, read in the write, gets a wake: the wakes it answers.
+ */
+export async function commitSegment(scope: LfTenant, input: SegmentCommit): Promise<WaitWake[]> {
+  const { runId, fence, resumed, parks } = input;
+  refuseAnotherTenant(scope, input.teamId);
+  return inTransaction(async (trx) => {
+    if (!(await holdRun(trx, scope, runId, fence))) throw notWritten(runId, fence);
+    await lockWaitEdges(trx, runId, waitsOf(parks));
+    for (const join of input.joins) await recordJoinIn(trx, scope, { runId, ...join, fence: null });
+    for (const park of parks) await parkIn(trx, scope, { runId, ...park });
+    if (resumed !== null && !parks.some((park) => park.address === resumed)) await finishLeafIn(trx, { runId, address: resumed });
+    if (parks.length > 0) await markParked(trx, scope, runId);
+    if (input.settle !== null) await settleRunIn(trx, scope, { runId, ...input.settle });
+    if (input.settledRace !== null) {
+      await sql`
+        delete from automations.work work
+        where ${lfWorkOf(scope, 'work')} and work.key = ${storedKey(scope.tenant, settleRaceWorkKey(runId, input.settledRace))}::text`.execute(trx);
+    }
+    for (const race of input.owedRaces) {
+      await enqueueRow(trx, {
+        kind: SETTLE_RACE_WORK_KIND,
+        key: settleRaceWorkKey(runId, race.frameAddress),
+        payload: { runId, frameAddress: race.frameAddress, state: race.state },
+        dueAt: null,
+        teamId: scope.tenant,
+      });
+    }
+    // Read in the write: an arrival logged before it is read here, and one
+    // logged after it finds the wait parked.
+    const wakes: WaitWake[] = [];
+    for (const { address, park } of parks) {
+      if (park.kind !== 'wait') continue;
+      const { arrivals } = await waitArrivals(trx, park.waitId);
+      if (arrivals.length === 0) continue;
+      const wake = { runId, waitId: park.waitId, address };
+      await queueWake(trx, scope.tenant, wake);
+      wakes.push(wake);
+    }
+    return wakes;
+  });
+}
+
+const OwedRacePayload = z.object({ runId: z.string(), frameAddress: z.string(), state: z.unknown() });
+
+/** The run's `settle_race` rows' payloads, oldest first. */
+export async function owedRaces(scope: LfTenant, input: { runId: string }): Promise<{ frameAddress: string; state: unknown }[]> {
+  const { rows } = await sql<{ payload: unknown }>`
+    select work.payload from automations.work work
+    where ${lfWorkOf(scope, 'work')} and work.kind = ${SETTLE_RACE_WORK_KIND}::text and work.payload->>'runId' = ${input.runId}::text
+    order by work.created_at, work.key`.execute(pool());
+  return rows.map(({ payload }) => {
+    const race = OwedRacePayload.parse(payload);
+    return { frameAddress: race.frameAddress, state: race.state ?? null };
+  });
 }
 
 // ── Joins ───────────────────────────────────────────────────────────────────
@@ -149,14 +263,22 @@ export async function recordJoin(
   scope: LfTenant,
   input: { runId: string; frameAddress: string; pending: number; fence: string | null },
 ): Promise<null> {
+  await recordJoinIn(pool(), scope, input);
+  return null;
+}
+
+async function recordJoinIn(
+  exec: Exec,
+  scope: LfTenant,
+  input: { runId: string; frameAddress: string; pending: number; fence: string | null },
+): Promise<void> {
   const { rows } = await sql<{ run_id: string }>`
     insert into automations.join_pending (run_id, frame_address, pending)
     select r.id, ${input.frameAddress}::text, ${input.pending}::int from automations.trigger_run r
     where r.id = ${input.runId}::uuid and ${lfRunRow(scope, 'r')} and (${input.fence}::text is null or ${leasedTo('r', input.fence ?? '')})
     on conflict (run_id, frame_address) do update set pending = excluded.pending, updated_at = now()
-    returning run_id::text`.execute(pool());
+    returning run_id::text`.execute(exec);
   if (rows.length === 0) throw notWritten(input.runId, input.fence);
-  return null;
 }
 
 /** Whether the run is one of the tenant's lf runs. A run's team and host never
@@ -251,93 +373,27 @@ export async function deleteFrames(scope: LfTenant, input: { runId: string; fram
     await sql`
       delete from automations.join_branch_export e
       where e.run_id = ${input.runId}::uuid and ${lfRunOf(scope, 'e.run_id')} and e.frame_address = any(${input.frameAddresses}::text[])`.execute(trx);
+    // A race inside an arm another race withdrew is settled by nobody.
+    const owed = input.frameAddresses.map((frame) => storedKey(scope.tenant, settleRaceWorkKey(input.runId, frame)));
+    await sql`delete from automations.work work where ${lfWorkOf(scope, 'work')} and work.key = any(${owed}::text[])`.execute(trx);
   });
-  return null;
-}
-
-// ── Await correlations ──────────────────────────────────────────────────────
-
-interface Correlate {
-  runId: string;
-  teamId: string;
-  address: string;
-  adapterType: string;
-  correlationKey: string;
-}
-
-async function correlateRow(exec: Exec, scope: LfTenant, input: Correlate): Promise<void> {
-  const { rows } = await sql`
-    insert into automations.adapter_await (adapter_type, correlation_key, run_id, team_id, address)
-    select ${input.adapterType}::text, ${input.correlationKey}::text, r.id, ${input.teamId}::uuid, ${input.address}::text
-    from automations.trigger_run r where r.id = ${input.runId}::uuid and ${lfRunRow(scope, 'r')}
-    on conflict (run_id, address) do update set
-      adapter_type = excluded.adapter_type, correlation_key = excluded.correlation_key, updated_at = now()
-    returning 1`.execute(exec);
-  if (rows.length === 0) throw notThisTenantsRun(input.runId);
-}
-
-export async function correlate(scope: LfTenant, input: Correlate): Promise<null> {
-  refuseAnotherTenant(scope, input.teamId);
-  await correlateRow(pool(), scope, input);
-  return null;
-}
-
-/** The tenant's lf runs waiting on a key; another team's answers none. The
- *  platform's own awaits are the platform's to wake. */
-export async function correlated(
-  scope: LfTenant,
-  input: { adapterType: string; teamId: string; correlationKey: string },
-): Promise<{ runId: string; teamId: string; address: string }[]> {
-  if (!namesTenant(scope, input.teamId)) return [];
-  const { rows } = await sql<{ run_id: string; team_id: string; address: string }>`
-    select a.run_id::text as run_id, a.team_id::text as team_id, a.address from automations.adapter_await a
-    join automations.trigger_run r on r.id = a.run_id
-    where ${lfRunRow(scope, 'r')} and a.adapter_type = ${input.adapterType}::text and a.team_id = ${input.teamId}::uuid
-      and a.correlation_key = ${input.correlationKey}::text
-    order by a.created_at`.execute(pool());
-  return rows.map((r) => ({ runId: r.run_id, teamId: r.team_id, address: r.address }));
-}
-
-export async function ofRun(
-  scope: LfTenant,
-  input: { runId: string; adapterType: string },
-): Promise<{ runId: string; teamId: string; address: string; correlationKey: string }[]> {
-  const { rows } = await sql<{ run_id: string; team_id: string; address: string; correlation_key: string }>`
-    select a.run_id::text as run_id, a.team_id::text as team_id, a.address, a.correlation_key from automations.adapter_await a
-    where a.run_id = ${input.runId}::uuid and ${lfRunOf(scope, 'a.run_id')} and a.adapter_type = ${input.adapterType}::text
-    order by a.address`.execute(pool());
-  return rows.map((r) => ({ runId: r.run_id, teamId: r.team_id, address: r.address, correlationKey: r.correlation_key }));
-}
-
-async function dropCorrelationRow(exec: Exec, scope: LfTenant, input: { runId: string; address: string }): Promise<void> {
-  await sql`
-    delete from automations.adapter_await a
-    where a.run_id = ${input.runId}::uuid and ${lfRunOf(scope, 'a.run_id')} and a.address = ${input.address}::text`.execute(exec);
-}
-
-export async function dropCorrelation(scope: LfTenant, input: { runId: string; address: string }): Promise<null> {
-  await dropCorrelationRow(pool(), scope, input);
-  return null;
-}
-
-export async function dropRunCorrelations(scope: LfTenant, input: { runId: string }): Promise<null> {
-  await sql`
-    delete from automations.adapter_await a where a.run_id = ${input.runId}::uuid and ${lfRunOf(scope, 'a.run_id')}`.execute(pool());
   return null;
 }
 
 // ── The run lease ───────────────────────────────────────────────────────────
 
 /** One statement: taken only while free or lapsed, stamping the run's
- *  heartbeat, and in the same statement every leaf a dead holder left
- *  claimed goes back to parked. */
+ *  heartbeat and keeping the arrival mark as it is claimed (while the lease
+ *  is unexpired the sweep keeps every arrival above it), and in the same
+ *  statement every leaf a dead holder left claimed goes back to parked. */
 export async function claimLease(scope: LfTenant, input: { runId: string; ttlMs: number }): Promise<{ token: string } | null> {
   const token = randomUUID();
   const { rows } = await sql<{ id: string }>`
     with claimed as (
       update automations.trigger_run r
       set lease_owner = ${LEASE_OWNER}::text, lease_until = now() + ${input.ttlMs}::int8 * interval '1 millisecond',
-          lease_token = ${token}::uuid, last_heartbeat_at = now()
+          lease_token = ${token}::uuid, last_heartbeat_at = now(),
+          lease_mark = (select coalesce(max(seq), 0) from automations.arrival)
       where r.id = ${input.runId}::uuid and ${lfRunRow(scope, 'r')} and (r.lease_until is null or r.lease_until < now())
       returning r.id
     ), returned as (
@@ -364,6 +420,7 @@ export async function releaseLease(scope: LfTenant, input: { runId: string; toke
   return null;
 }
 
+/** The run's leaves, joins, waits (with their notes) and owed races. */
 export async function dropRunState(scope: LfTenant, input: { runId: string; fence: string | null }): Promise<boolean> {
   const { runId, fence } = input;
   return inTransaction(async (trx) => {
@@ -378,6 +435,10 @@ export async function dropRunState(scope: LfTenant, input: { runId: string; fenc
     await sql`delete from automations.parked_run t where t.run_id = ${runId}::uuid and ${lfRunOf(scope, 't.run_id')}`.execute(trx);
     await sql`delete from automations.join_pending t where t.run_id = ${runId}::uuid and ${lfRunOf(scope, 't.run_id')}`.execute(trx);
     await sql`delete from automations.join_branch_export t where t.run_id = ${runId}::uuid and ${lfRunOf(scope, 't.run_id')}`.execute(trx);
+    await sql`delete from automations.wait_row t where t.run_id = ${runId}::uuid and ${lfRunOf(scope, 't.run_id')}`.execute(trx);
+    await sql`
+      delete from automations.work work
+      where ${lfWorkOf(scope, 'work')} and work.kind = ${SETTLE_RACE_WORK_KIND}::text and work.payload->>'runId' = ${runId}::text`.execute(trx);
     return true;
   });
 }

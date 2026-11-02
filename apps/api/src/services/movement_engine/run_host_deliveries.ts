@@ -30,7 +30,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** A `fire_event` row's payload gains the mark before its delivery's
  *  arrivals: a run it starts reads its trigger's waits from there. */
-function markedPayload(kind: string, payload: unknown, mark: number): unknown {
+export function markedPayload(kind: string, payload: unknown, mark: number): unknown {
   if (kind !== FIRE_EVENT || typeof payload !== 'object' || payload === null || Array.isArray(payload)) return payload;
   return { ...payload, arrivalMark: mark };
 }

@@ -9,10 +9,20 @@ import { hostname } from 'node:os';
 
 import { sql } from 'kysely';
 
+import { storedWorkKey } from '../movement_engine/run_host_queue';
+import { dropUnstartedWaits } from '../movement_engine/run_host_waits';
 import { inTransaction, iso, pool, refuseAnotherTenant, type Exec, type LfTenant } from './scope';
 
 /** lf's work kinds (crates/lf/src/store.rs `WORK_KINDS`). */
-export const LF_WORK_KINDS = ['resume_timer', 'wake_await', 'fire_event', 'fire_callback', 'poll_listen'] as const;
+export const LF_WORK_KINDS = [
+  'resume_timer',
+  'wake_await',
+  'fire_event',
+  'poll_edge',
+  'resolve_listen',
+  'refresh_subscription',
+  'settle_race',
+] as const;
 
 function isLfWorkKind(kind: string): boolean {
   return (LF_WORK_KINDS as readonly string[]).includes(kind);
@@ -27,14 +37,13 @@ const NEXT_VERSION_OF_WORK = sql`greatest(date_trunc('milliseconds', clock_times
 const NEXT_VERSION_OF_W = sql`greatest(date_trunc('milliseconds', clock_timestamp()), date_trunc('milliseconds', w.updated_at) + interval '1 millisecond')`;
 
 /**
- * A work key as it is stored: under its tenant's namespace. The table's keys
- * are unique per host, not per team, and not every key lf derives names
- * something only one tenant has (`poll_listen:<subscription>`), so two
- * tenants' rows would otherwise be one. lf never sees the prefix: every key
- * this module answers is stripped of it.
+ * A work key as it is stored: under its tenant's namespace (`storedWorkKey`).
+ * The table's keys are unique per host, not per team, and lf names its keys
+ * itself, so two tenants' rows would otherwise be one. lf never sees the
+ * prefix: every key this module answers is stripped of it.
  */
-function storedKey(teamId: string, key: string): string {
-  return `lf:${teamId}:${key}`;
+export function storedKey(teamId: string, key: string): string {
+  return storedWorkKey('lf', teamId, key);
 }
 
 function lfKey(scope: LfTenant, stored: string): string {
@@ -44,7 +53,7 @@ function lfKey(scope: LfTenant, stored: string): string {
 }
 
 /** The rows of this tenant's that are lf's. */
-function lfWorkOf(scope: LfTenant, alias: string) {
+export function lfWorkOf(scope: LfTenant, alias: string) {
   return sql`(${sql.raw(alias)}.host = 'lf' and ${sql.raw(alias)}.team_id = ${scope.tenant}::uuid)`;
 }
 
@@ -207,16 +216,37 @@ export async function release(scope: LfTenant, input: { id: string; claim: strin
 }
 
 /** The row gave up: kept dead with why, never claimed again; unless it was
- *  re-armed since the claim, when it is only unleased. */
+ *  re-armed since the claim, when it is only unleased. Burying a `fire_event`
+ *  row drops the waits its delivery opened for runs that never started. */
 export async function bury(scope: LfTenant, input: { id: string; claim: string; reason: string }): Promise<null> {
   const { token, version } = workClaim(input.claim);
   await inTransaction(async (trx) => {
-    await sql`
+    const { rows } = await sql<{ key: string }>`
       update automations.work work set dead_at = now(), dead_reason = ${input.reason}::text
-      where ${held(scope, input.id, token)} and work.updated_at = ${version}::timestamptz`.execute(trx);
+      where ${held(scope, input.id, token)} and work.updated_at = ${version}::timestamptz
+      returning work.key`.execute(trx);
     await sql`
       update automations.work work set lease_owner = null, lease_until = null, lease_token = null
       where ${held(scope, input.id, token)}`.execute(trx);
+    const buried = rows[0];
+    if (buried !== undefined) await dropUnstartedWaits(trx, buried.key);
   });
   return null;
+}
+
+/** A row its caller queued a run lease out and ran itself, done: deleted
+ *  unless a live claim holds it (its holder completes it), with the waits its
+ *  delivery opened for runs that never started. Whether it was deleted. */
+export async function completeKey(scope: LfTenant, input: { key: string }): Promise<boolean> {
+  const stored = storedKey(scope.tenant, input.key);
+  return inTransaction(async (trx) => {
+    const { rows } = await sql`
+      delete from automations.work work
+      where ${lfWorkOf(scope, 'work')} and work.key = ${stored}::text and work.dead_at is null
+        and (work.lease_until is null or work.lease_until < now())
+      returning 1`.execute(trx);
+    if (rows.length === 0) return false;
+    await dropUnstartedWaits(trx, stored);
+    return true;
+  });
 }

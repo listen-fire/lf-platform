@@ -10,7 +10,7 @@
 
 import { randomUUID } from 'node:crypto';
 
-import { sql, type QueryExecutorProvider } from 'kysely';
+import { sql, type QueryExecutorProvider, type RawBuilder } from 'kysely';
 import { WAKE_AWAIT_WORK_KIND, type ClaimedWork, type WaitWake } from 'movement-engine/public/run-host';
 import { z } from 'zod';
 
@@ -66,10 +66,25 @@ export interface Queued {
 /** Whose row it is: a run's (its host's), or a host's own. */
 export type RowOwner = { runId: string } | { host: Host };
 
-function hostOf(owner: RowOwner) {
+function hostOf(owner: RowOwner): RawBuilder<Host> {
   return 'runId' in owner
     ? sql<Host>`(select r.host from automations.trigger_run r where r.id = ${owner.runId}::uuid)`
     : sql<Host>`${owner.host}::text`;
+}
+
+/**
+ * A work key as the table keeps it. Keys are unique per host, not per team,
+ * and a cloud lf names its rows itself, so an lf row's key is kept under its
+ * team (`lf:<team>:<key>`): no tenant's key reaches another's row. The store
+ * module answers lf the key without it.
+ */
+export function storedWorkKey(host: Host, teamId: string, key: string): string {
+  return host === 'lf' ? `lf:${teamId}:${key}` : key;
+}
+
+/** `storedWorkKey`, the host read in the statement. An lf row names its team. */
+function storedKeyOf(host: RawBuilder<Host>, teamId: string | null, key: string): RawBuilder<string> {
+  return sql<string>`case when ${host} = 'lf' then 'lf:' || ${teamId}::uuid::text || ':' || ${key}::text else ${key}::text end`;
 }
 
 const HOSTS: ReadonlySet<string> = new Set<Host>(['platform', 'lf']);
@@ -87,7 +102,7 @@ function isHost(value: string): value is Host {
 export async function queueRow(exec: Exec, owner: RowOwner, row: QueuedRow): Promise<Queued> {
   const { rows } = await sql<{ host: string; due_at: Date }>`
     insert into automations.work (host, kind, key, team_id, payload, due_at, updated_at)
-    values (${hostOf(owner)}, ${row.kind}::text, ${row.key}::text, ${row.teamId ?? null}::uuid,
+    values (${hostOf(owner)}, ${row.kind}::text, ${storedKeyOf(hostOf(owner), row.teamId ?? null, row.key)}, ${row.teamId ?? null}::uuid,
             ${JSON.stringify(row.payload ?? {})}::text::jsonb, coalesce(${row.dueAt ?? null}::timestamptz, now()),
             date_trunc('milliseconds', clock_timestamp()))
     on conflict (host, key) do update set
