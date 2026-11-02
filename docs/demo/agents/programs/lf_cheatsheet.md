@@ -8,24 +8,26 @@ the rest.
 ## A file
 
 ```
-import { stripe, mcp, gmail, slack } from adapters    # adapter types
-import { my_stripe, my_crm } from credentials         # connections, by their saved names
+pay = connect `@lf/stripe` using my_stripe       # each system connected once, at file scope:
+crm = connect `@lf/mcp` using my_crm             # its module, and the saved connection it signs in with
 
-pay = connect stripe using my_stripe                  # connect once, at file scope
-crm = connect mcp using my_crm
+function `On Change`(c: <pay-[:InvoiceChange]->>) { … }   # one typed parameter: what the listen arrives at
 
-function `On Event`(e: <pay-[:Event]->>) { … }        # one typed parameter: the connection's event
-
-listen to pay { events: ["…"] } fire `On Event`       # the one way an automation runs
+listen to pay-[:Invoices]->-[c:Changes WHERE c.Kind == "…"]-> fire `On Change`   # the one way an automation runs
 ```
 
-A connection's events are typed by its module: the event's fields, and its
-edges to the records it is about, are in `describe_systems` and the module's
-handbook chapter (`system:<module>`). `events` names the event types to run on.
+Nothing is imported: a module is named where it is connected, a connection by
+the name it was saved under (`listen-fire credential list`). A listen is a
+walk from a connection to the edge its system announces arrivals on; its
+`WHERE` picks which arrivals run. The parameter is typed by what lands: the
+edge, or its record type, addressed from the connection. Each system's
+arrival edges, their records' fields and their edges to the records they are
+about are in `describe_systems` and the module's handbook chapter
+(`system:<module>`).
 
 - Comments start with `#`. No semicolons. A name is bound once: `x = …` (no `let`/`const`).
 - Backticks quote a name with spaces; double quotes are always a string.
-- Types wear angle brackets: `<text>`, `<number>`, `<boolean>`, `<date>`, `<json>`, `<conn-[:Event]->>`.
+- Types wear angle brackets: `<text>`, `<number>`, `<boolean>`, `<date>`, `<json>`, `<conn-[:Things]->>`.
   `<text | null>` for a field that may be missing.
 - `type Kind = <"a" | "b">` declares a set of values; `<Kind>` uses it.
 

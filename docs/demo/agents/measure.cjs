@@ -28,8 +28,8 @@
 //    crm.callTool, crm.listTools, crm.request, email.send, slack.post, fetch. lf: write
 //    statements and walks from a connection (`<connection>-[`). madeBy says
 //    who makes those calls: the code itself (JS) or lf's modules (lf).
-// 6. credentials: credential names the code references (lf's `import { … }
-//    from credentials`; JS none exist to reference), and any literal or
+// 6. credentials: credential names the code references (lf's `connect …
+//    using <name>`; JS none exist to reference), and any literal or
 //    identifier in code or strings matching token / secret / api key /
 //    password / bearer / authorization, or a URL (http:// or https://).
 const fs = require('fs');
@@ -146,7 +146,7 @@ function measure(kind, source) {
       ? { count: count(/\b(crm\.callTool|crm\.listTools|crm\.request|email\.send|slack\.post|fetch)\s*\(/g, code), madeBy: 'the code' }
       : { count: count(/\bwrite\b/g, code) + count(fromSystem, code), madeBy: "lf's modules (the program declares the reads and writes)" };
 
-  const credentialNames = kind === 'lf' ? [...code.matchAll(/import\s*\{([^}]*)\}\s*from\s+credentials/g)].flatMap((m) => m[1].split(',').map((s) => s.trim()).filter(Boolean)) : [];
+  const credentialNames = kind === 'lf' ? [...code.matchAll(/^\s*\w+\s*=\s*connect\b[^\n]*?\busing\s+(\w+)/gm)].map((m) => m[1]) : [];
   const sensitive = /\b\w*(token|secret|api[_-]?key|password|bearer|authorization)\w*\b/gi;
   const urls = /https?:\/\/[^\s"'`)]+/g;
   const credentials = {

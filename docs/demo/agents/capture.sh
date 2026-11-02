@@ -111,11 +111,11 @@ human() {
 printf 'stripe\n%s\n\n\n\n' "$STRIPE_SECRET" | "$LF_BIN" credential add --module webhook stripe_events >/dev/null
 "$LF_BIN" connect @lf/mcp --yes >/dev/null
 printf '%s\n%s\n\n' "$CRM_URL" "$CRM_TOKEN" | "$LF_BIN" credential add --module @lf/mcp crm --credential mcp_token >/dev/null
-printf 'stub-gmail-client\nstub-gmail-secret\n8979\n' | "$LF_BIN" connect @lf/gmail --yes --base-url "$F" \
+"$LF_BIN" connect @lf/gmail --yes --base-url "$F" --client-id stub-gmail-client --client-secret stub-gmail-secret --redirect-port 0 \
   --oauth-authorize-url "$F/oauth/authorize" --oauth-token-url "$F/oauth/token" >/dev/null
-node "$HERE/signin.cjs" "$LF_BIN" gmail billing_mail gmail billing@ledgerline.io '' '' '' '' '' '' >/dev/null
-printf '\n' | "$LF_BIN" connect @lf/slack --base-url "$F/slack" >/dev/null
-printf 'xoxb-stub\n\n\n\n' | "$LF_BIN" credential add --module slack team_slack >/dev/null
+node "$HERE/signin.cjs" "$LF_BIN" @lf/gmail:gmail billing_mail mailbox=billing@ledgerline.io >/dev/null
+"$LF_BIN" connect @lf/slack --yes >/dev/null
+printf 'xoxb-stub\n\n\n%s\n' "$F/slack/" | "$LF_BIN" credential add --module slack team_slack >/dev/null
 
 # The draft, refused; the fix, clean.
 cp "$HERE/programs/draft.mvt" "$PROGRAM"

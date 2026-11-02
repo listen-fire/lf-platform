@@ -67,6 +67,12 @@
 #                                 stand in for every attempt, and the
 #                                 per-event agent is left out (a woken agent
 #                                 still calls the model)
+#   SPEND_CAP_USD                 stop before a listen-fire attempt that could
+#                                 take the model spend past this: the spend so
+#                                 far (this run's authoring and wakes, plus
+#                                 SPEND_BEFORE_USD, spent elsewhere) plus the
+#                                 dearest attempt so far (SPEND_ESTIMATE_USD,
+#                                 default 0.35, before any)
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/../../.." && pwd)"
@@ -182,34 +188,30 @@ rm -f "$TEMPLATE/movements/"*.mvt
   "$LF_BIN" connect @lf/stripe --yes --base-url "$STRIPE_API_URL" >/dev/null
   printf '%s\n%s\n' "$STRIPE_API_KEY" "$STRIPE_SECRET" | "$LF_BIN" credential add --module stripe stripe_account >/dev/null
   if [ "$SCENARIO" = attio ]; then
-    printf '\n\n' | "$LF_BIN" connect @lf/attio --yes >/dev/null
+    "$LF_BIN" connect @lf/attio --yes >/dev/null
     printf '%s\n%s\n' "$CRM_TOKEN" "$CRM_URL" | "$LF_BIN" credential add --module attio crm --credential attio_token >/dev/null
   else
     "$LF_BIN" connect @lf/mcp --yes >/dev/null
     printf '%s\n%s\n\n' "$CRM_URL" "$CRM_TOKEN" | "$LF_BIN" credential add --module @lf/mcp crm --credential mcp_token >/dev/null
   fi
-  printf 'stub-gmail-client\nstub-gmail-secret\n8979\n' | "$LF_BIN" connect @lf/gmail --yes --base-url "$F" \
+  "$LF_BIN" connect @lf/gmail --yes --base-url "$F" --client-id stub-gmail-client --client-secret stub-gmail-secret --redirect-port 0 \
     --oauth-authorize-url "$F/oauth/authorize" --oauth-token-url "$F/oauth/token" >/dev/null
-  node "$HERE/signin.cjs" "$LF_BIN" gmail billing_mail gmail billing@ledgerline.io '' '' '' '' '' '' >/dev/null
-  printf '\n' | "$LF_BIN" connect @lf/slack --base-url "$F/slack" >/dev/null
-  printf 'xoxb-stub\n\n\n\n' | "$LF_BIN" credential add --module slack team_slack >/dev/null
+  node "$HERE/signin.cjs" "$LF_BIN" @lf/gmail:gmail billing_mail mailbox=billing@ledgerline.io >/dev/null
+  "$LF_BIN" connect @lf/slack --yes >/dev/null
+  printf 'xoxb-stub\n\n\n%s\n' "$F/slack/" | "$LF_BIN" credential add --module slack team_slack >/dev/null
 )
 [ -n "${STOP_AFTER_SETUP:-}" ] && { echo "F=$F CRM_URL=$CRM_URL PIDS=${PIDS[*]}"; trap - EXIT; exit 0; }
 
 # What every system looks like before any program exists: `listen-fire catalog` over
-# a scratch program that imports every credential the project has, made from
-# the empty project's own catalog (its credentials and their adapters).
+# a scratch program that connects every credential the project has, made from
+# the empty project's own catalog (its credentials and their modules).
 scratch="$WORK/describe/billing"
 mkdir -p "$(dirname "$scratch")"
 cp -R "$TEMPLATE" "$scratch"
 (
   cd "$scratch"
   "$LF_BIN" catalog | jq -r '
-    .credentials | to_entries as $c
-    | "import { \([$c[].value.adapters[0]] | unique | join(", ")) } from adapters",
-      "import { \([$c[].key] | join(", ")) } from credentials",
-      "",
-      ($c[] | "\(.key)_connection = connect \(.value.adapters[0]) using \(.key)")' >movements/describe.mvt
+    .credentials | to_entries[] | "\(.key)_connection = connect `@lf/\(.value.adapters[0])` using \(.key)"' >movements/describe.mvt
   cp movements/describe.mvt "$CAP/04_describe_scratch.mvt"
   "$LF_BIN" catalog >"$CAP/04_describe_systems.json"
 )
@@ -298,7 +300,29 @@ done
 
 # 3. listen-fire.
 mkdir -p "$CAP/lf"
+# What this run's listen-fire attempts have cost so far, per attempt: the
+# authoring session and every wake.
+lf_spend() {
+  node -e '
+    const fs = require("fs"), path = require("path"), dir = process.argv[1];
+    const per = fs.readdirSync(dir).filter((f) => /^attempt_\d+\.json$/.test(f)).map((f) => {
+      const k = /\d+/.exec(f)[0];
+      const wakes = path.join(dir, `stress_${k}`, "wakes.jsonl");
+      const woke = fs.existsSync(wakes) ? fs.readFileSync(wakes, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l).costUsd) : [];
+      return [JSON.parse(fs.readFileSync(path.join(dir, f), "utf8")).costUsd, ...woke].reduce((a, b) => a + b, 0);
+    });
+    console.log(JSON.stringify({ spent: per.reduce((a, b) => a + b, 0), dearest: Math.max(0, ...per), per }));
+  ' "$CAP/lf"
+}
 for k in $(seq "$ATTEMPTS"); do
+  if [ -n "${SPEND_CAP_USD:-}" ] && [ -z "${REHEARSE_LF:-}" ]; then
+    spend="$(lf_spend)"
+    if ! jq -e --argjson cap "$SPEND_CAP_USD" --argjson before "${SPEND_BEFORE_USD:-0}" --argjson estimate "${SPEND_ESTIMATE_USD:-0.35}" \
+      '$before + .spent + (if .dearest > 0 then .dearest else $estimate end) <= $cap' <<<"$spend" >/dev/null; then
+      echo "lf attempt $k not started: it could take the spend past \$$SPEND_CAP_USD ($spend, \$${SPEND_BEFORE_USD:-0} before this run)"
+      break
+    fi
+  fi
   reset
   project="$WORK/lf/$k/billing"
   mkdir -p "$(dirname "$project")"
@@ -335,6 +359,7 @@ for k in $(seq "$ATTEMPTS"); do
 done
 for k in $( [ -n "${ONLY_LF:-}" ] || seq "$ATTEMPTS"); do [ -f "$CAP/js/handler_$k.js" ] && cp "$CAP/js/handler_$k.js" "$CAP/js/handler_${k}_final.js"; done
 unset ANTHROPIC_KEY
+[ -n "${REHEARSE_LF:-}" ] || echo "listen-fire's model spend: $(lf_spend)"
 cp "$CRM_CALLS" "$CAP/crm_calls.jsonl"
 cp "$STRIPE_READS" "$CAP/stripe_reads.jsonl"
 echo "captured in $CAP"

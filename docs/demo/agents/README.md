@@ -51,9 +51,10 @@ node build_data.cjs ../../../../listen-fire-site/video/agents/data.js
 
 ## The three options (compare.sh)
 
-The video's comparison is a second recording, `compare.sh`, run after
-`capture.sh` (whose review it keeps for the closing note). It records on listen-fire
-built from listen-fire's main (a detached checkout names the branch as
+The video's comparison is a second recording, `compare.sh`. The video is built
+from it alone; the review recording (`capture.sh`) no longer goes into
+`data.js`. It records on a listen-fire build and its checkout (`LF_BRANCHES`
+names a branch it was built from; a detached checkout names it as
 `LF_BRANCHES=main=<commit>`):
 
 ```bash
@@ -70,6 +71,10 @@ node build_data.cjs ../../../../listen-fire-site/video/agents/data.js
 - `ONLY_LF=1` re-records listen-fire alone. It keeps the scenario's
   `capture/agent` and `capture/js` as they are and makes everything else anew.
   The events are the same each time, because `make_events.cjs` is seeded.
+- `SPEND_CAP_USD` stops before a listen-fire attempt that could take the model
+  spend past it: what this run's attempts have cost (authoring and every
+  wake), plus `SPEND_BEFORE_USD` spent elsewhere, plus the dearest attempt so
+  far (`SPEND_ESTIMATE_USD` before any, 0.35 by default).
 
 It is recorded twice, in two scenarios, all three options in each, so that
 each comparison is like for like (`SCENARIO`; outputs in
@@ -110,9 +115,10 @@ or acts.
   handbook, `listen-fire check` and a dry run.
   - Stripe is connected through listen-fire's Stripe module, `@lf/stripe`
     (credential `stripe_account`: an API key and the endpoint's signing
-    secret). The program listens with
-    `listen to pay { events: ["invoice.payment_failed"] }` and reads typed
-    Invoice fields, amounts already in major units with their `Currency`.
+    secret). The program listens on an invoice's changes
+    (`listen to pay-[:Invoices]->-[c:Changes WHERE c.Kind == "payment_failed"]->`)
+    and reads typed Invoice fields, amounts already in major units with their
+    `Currency`.
   - The module's reads beyond the event (an invoice's customer or
     subscription) reach listen-fire's own fake Stripe API, seeded with the same
     customers (`stripe_api.cjs`; every read is kept in
@@ -199,7 +205,7 @@ The review recording (`capture.sh`) predates this: its request says "yearly"
 - `build_data.cjs`: both recordings into the video's `data.js` (its shape and the
   source of every figure are at its top). It refuses to build when a payment
   is missing from an option, the used listen-fire attempt does not check clean
-  or made a model call, or the chosen review revision does not check.
+  or made a model call, or the two scenarios were recorded on different builds.
 
 ## How it differs from the story
 

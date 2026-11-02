@@ -1,10 +1,7 @@
-import { webhook, mcp, `@lf/gmail` as gmail, `@lf/slack` as slack } from adapters
-import { stripe_events, crm, billing_mail, team_slack } from credentials
-
-stripe    = connect webhook using stripe_events
-customers = connect mcp using crm
-mail      = connect gmail using billing_mail
-team      = connect slack using team_slack
+stripe    = connect `@lf/webhook` using stripe_events
+customers = connect `@lf/mcp` using crm
+mail      = connect `@lf/gmail` using billing_mail
+team      = connect `@lf/slack` using team_slack
 
 type EventType = <"invoice.payment_failed">
 
@@ -48,4 +45,4 @@ function `Payment Failed`(event: <`Invoice Payment Failed`>) {
   }
 }
 
-listen to stripe { payload: <`Invoice Payment Failed`> } fire `Payment Failed`
+listen to stripe-[:Requests]-><`Invoice Payment Failed`> fire `Payment Failed`

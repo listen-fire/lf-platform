@@ -7,8 +7,8 @@
 //
 //   handbook_search   the handbook's language search (@listen-fire/handbook)
 //   handbook_read     a handbook chapter or section, including each installed
-//                     module's own chapter (system:webhook, system:mcp, …)
-//   lf_catalog        `listen-fire catalog`: what each connection the program imports
+//                     module's own chapter (system:stripe, system:mcp, …)
+//   lf_catalog        `listen-fire catalog`: what each connection the program makes
 //                     holds, as listen-fire describes it (the CRM's from its MCP tools)
 //   read_program      movements/payment_failed.mvt as it stands
 //   write_program     replace it
@@ -111,7 +111,7 @@ async function main() {
       description: 'Read the handbook: "index" for its index, a chapter ("anatomy", "system:mcp"), one section ("branching#if-else"), or a front page section ("front#maybe-absent").',
       input_schema: { type: 'object', properties: { route: { type: 'string' } }, required: ['route'] },
     },
-    { name: 'lf_catalog', description: 'Run `listen-fire catalog`: the catalog the program is checked against, as JSON (each imported connection, its types and fields).', input_schema: { type: 'object', properties: {} } },
+    { name: 'lf_catalog', description: 'Run `listen-fire catalog`: the catalog the program is checked against, as JSON (each connection the program makes, its types and fields).', input_schema: { type: 'object', properties: {} } },
     { name: 'read_program', description: `${PROGRAM} as it stands.`, input_schema: { type: 'object', properties: {} } },
     { name: 'write_program', description: `Replace ${PROGRAM} with this source, whole.`, input_schema: { type: 'object', properties: { source: { type: 'string' } }, required: ['source'] } },
     { name: 'lf_check', description: 'Run `listen-fire check`: every diagnostic the program has.', input_schema: { type: 'object', properties: {} } },

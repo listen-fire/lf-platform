@@ -1,6 +1,5 @@
-// .work/compare/<scenario>/capture/* (compare.sh, once per scenario) and
-// .work/capture/* (capture.sh, the review)  →  data.js, the only input the
-// video page reads. Nothing in it is written by hand. The video is rendered in
+// .work/compare/<scenario>/capture/* (compare.sh, once per scenario)  →
+// data.js, the only input the video page reads. Nothing in it is written by hand. The video is rendered in
 // the site repo:
 //   node build_data.cjs ../../../../listen-fire-site/video/agents/data.js
 //
@@ -58,8 +57,6 @@
 //       attempts[]        (js, lf) every authoring attempt, the same measures and
 //                         costs; `used` names the one the rest shows
 //       transcript        (js, lf) the used authoring session condensed
-//   review           the daily review (capture.sh, earlier, request worded
-//                    "yearly"): chosen, attempts, cost, diff, note
 //   labels           { real[], standIn[] }
 //
 // Where each figure comes from:
@@ -91,9 +88,6 @@ if (!OUT) {
   console.error('usage: node build_data.cjs <path to listen-fire-site/video/agents/data.js>');
   process.exit(1);
 }
-const R = path.join(__dirname, '.work', 'capture');
-const r = (f) => JSON.parse(fs.readFileSync(path.join(R, f), 'utf8'));
-const rt = (f) => fs.readFileSync(path.join(R, f), 'utf8').replace(/\s+$/, '');
 const sum = (xs) => xs.reduce((a, b) => a + b, 0);
 const median = (xs) => {
   const s = [...xs].sort((a, b) => a - b);
@@ -457,18 +451,6 @@ return {
 };
 }
 
-// The review, as capture.sh recorded it.
-const chosen = Number(rt('40_review/chosen.txt'));
-const reviewAttempts = fs
-  .readdirSync(path.join(R, '40_review'))
-  .filter((f) => /^attempt_\d+\.json$/.test(f))
-  .map((f) => Number(/\d+/.exec(f)[0]))
-  .sort((a, b) => a - b)
-  .map((k) => {
-    const s = r(`40_review/attempt_${k}.json`);
-    return { attempt: k, modelCalls: s.modelCalls, usage: s.usage, costUsd: s.costUsd, ms: s.ms, checkOk: r(`40_review/attempt_${k}_check.json`).ok === true, exceptionsHandled: (rt(`40_review/attempt_${k}_dry_runs.txt`).match(/^run .* completed/gm) ?? []).length, diff: rt(`40_review/attempt_${k}.diff`) };
-  });
-const chosenReview = r(`40_review/attempt_${chosen}.json`);
 const prompts = require('./prompts.cjs');
 
 const SCENARIOS = ['mcp', 'attio'];
@@ -483,20 +465,8 @@ const data = {
   cheatsheet: prompts.cheatsheet,
   validatedUnder: validatedUnder[0],
   scenarios: Object.fromEntries(SCENARIOS.map((name) => [name, built[name].data])),
-  review: {
-    request: rt('01_request.txt'),
-    chosen,
-    prices: chosenReview.prices,
-    attempts: reviewAttempts,
-    modelCalls: chosenReview.modelCalls,
-    usage: chosenReview.usage,
-    costUsd: chosenReview.costUsd,
-    ms: chosenReview.ms,
-    diff: rt(`40_review/attempt_${chosen}.diff`),
-    note: closingNote(chosenReview.steps),
-  },
   labels: {
-    real: ['every model session: claude-sonnet-5-5, live (authoring, per-event, woken)', 'the JavaScript handler, run in node on every delivery against the stand-ins', 'lf check, listen-fire serve, listen-fire drain and every listen-fire run, with its real modules (@lf/stripe, @lf/mcp, @lf/attio, @lf/gmail, @lf/slack)', 'the daily review, a live session over the real listen-fire runs and listen-fire check'],
+    real: ['every model session: claude-sonnet-5-5, live (authoring, per-event, woken)', 'the JavaScript handler, run in node on every delivery against the stand-ins', 'lf check, listen-fire serve, listen-fire drain and every listen-fire run, with its real modules (@lf/stripe, @lf/mcp, @lf/attio, @lf/gmail, @lf/slack)'],
     standIn: ['Stripe (signed invoice.payment_failed deliveries from a local sender)', "Stripe's API, for any read @lf/stripe makes beyond the event (listen-fire's fake Stripe, seeded with the same customers)", 'the MCP scenario\'s CRM (a local MCP server with generic tools: plan a plain string, the options answered as data)', 'the Attio scenario\'s CRM (fake-channels\' Attio, behind a local door that adds the token check, the call log and the injected 503 and 429)', 'Gmail and Slack (fake-channels)', 'the sandbox (node vm with crm, email, slack and kv, behind a store-then-acknowledge endpoint)', "the agent provider's host (stress.cjs: the worker, the periodic listen-fire check, waking the agent)"],
   },
 };
@@ -504,7 +474,6 @@ const data = {
 const problems = [
   ...SCENARIOS.flatMap((name) => built[name].problems),
   ...(validatedUnder.length > 1 ? [`the scenarios were recorded on different listen-fire builds: ${validatedUnder.join(' / ')}`] : []),
-  ...(!reviewAttempts.find((a) => a.attempt === chosen)?.checkOk ? ['the chosen review revision does not check clean'] : []),
 ];
 if (problems.length > 0) throw new Error(`refusing to build data.js: ${problems.join('; ')}`);
 
