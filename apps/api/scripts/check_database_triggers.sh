@@ -127,6 +127,18 @@ audit_triggers=`psql -v ON_ERROR_STOP=ON "$DATABASE_URL" <<-EOSQL
       'automations.join_pending', 'automations.join_branch_export', 'automations.adapter_await',
       'automations.callback', 'automations.record_binding', 'automations.exposed_file',
       'automations.work',
+      -- listen-fire 0.13's store tables are the same shape: the arrival log
+      -- and the identities it was heard under, the waits and what they have
+      -- seen, a listen's resolve claim and loop pause, the write ledger, the
+      -- releases a team has seen, and the arrivals no listen could judge are
+      -- all written by the engine host and swept by it. Resuming a paused
+      -- listen is an action through the API, not an edit to undo.
+      -- delivery_request_read is itself a trail: who read a kept request.
+      'automations.arrival', 'automations.arrival_identity',
+      'automations.wait_row', 'automations.wait_seen',
+      'automations.listen_state', 'automations.write_ledger',
+      'automations.release_seen', 'automations.arrival_unjudged',
+      'automations.delivery_request_read',
       -- cache_entry: the expiring key-value store standing in for Redis (icons, MCP
       -- OAuth state, loop guard counters). Every row dies within days and the loop
       -- guard writes it on the dispatch hot path; a trail would only double that.
