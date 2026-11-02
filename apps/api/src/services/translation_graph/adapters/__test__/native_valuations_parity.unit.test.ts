@@ -154,7 +154,7 @@ async function expectValuationsParity(subject: () => Promise<Adapter> | Adapter,
       'iterateRelated root Investment (reached through its parents)',
     ]);
     expect(answered('Legal Entity -[Valuations WHERE date AND currency]->')).toHaveLength(1);
-    expect(answered('ensureEventSubscription create')).toEqual({
+    expect(answered('ensureEventSubscription Changes')).toEqual({
       externalId: 'https://example.test/api/public/webhook-sync/native_valuations/sub-1',
       secret: '<64 hex>',
     });

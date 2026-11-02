@@ -138,6 +138,48 @@
           "scope": "self-configured",
           "writable": false,
           "readable": false
+        },
+        {
+          "typeId": "Legal Entity Change",
+          "displayName": "Legal Entity Change",
+          "writable": false,
+          "readable": false
+        },
+        {
+          "typeId": "Asset Change",
+          "displayName": "Asset Change",
+          "writable": false,
+          "readable": false
+        },
+        {
+          "typeId": "Investment Change",
+          "displayName": "Investment Change",
+          "writable": false,
+          "readable": false
+        },
+        {
+          "typeId": "Transaction Change",
+          "displayName": "Transaction Change",
+          "writable": false,
+          "readable": false
+        },
+        {
+          "typeId": "Asset Transfer Change",
+          "displayName": "Asset Transfer Change",
+          "writable": false,
+          "readable": false
+        },
+        {
+          "typeId": "Price Change",
+          "displayName": "Price Change",
+          "writable": false,
+          "readable": false
+        },
+        {
+          "typeId": "Event Change",
+          "displayName": "Event Change",
+          "writable": false,
+          "readable": false
         }
       ]
     },
@@ -1044,6 +1086,24 @@
               "supportsLimit": false
             },
             "backingFields": []
+          },
+          {
+            "fieldId": "native-valuations:changes",
+            "name": "Changes",
+            "targetTypeId": "Legal Entity Change",
+            "cardinality": "many",
+            "direction": "outgoing",
+            "readable": false,
+            "writable": false,
+            "listenable": true,
+            "delivery": "connection",
+            "identity": "Id",
+            "attributes": true,
+            "carries": [
+              "Legal Entity"
+            ],
+            "backingFields": [],
+            "description": "What happens to a legal entity in Valuations, each change once: created, updated (`Changed Fields` names what moved), deleted."
           }
         ]
       }
@@ -1251,6 +1311,24 @@
             "description": "The outstanding-commitment asset being drawn down.",
             "writable": true,
             "backingFields": []
+          },
+          {
+            "fieldId": "native-valuations:changes",
+            "name": "Changes",
+            "targetTypeId": "Asset Change",
+            "cardinality": "many",
+            "direction": "outgoing",
+            "readable": false,
+            "writable": false,
+            "listenable": true,
+            "delivery": "connection",
+            "identity": "Id",
+            "attributes": true,
+            "carries": [
+              "Asset"
+            ],
+            "backingFields": [],
+            "description": "What happens to a asset in Valuations, each change once: created, updated (`Changed Fields` names what moved), deleted."
           }
         ]
       }
@@ -1405,6 +1483,21 @@
               "supportsLimit": false
             },
             "backingFields": []
+          },
+          {
+            "fieldId": "native-valuations:changes",
+            "name": "Changes",
+            "targetTypeId": "Investment Change",
+            "cardinality": "many",
+            "direction": "outgoing",
+            "readable": false,
+            "writable": false,
+            "listenable": true,
+            "delivery": "connection",
+            "identity": "Id",
+            "attributes": true,
+            "backingFields": [],
+            "description": "What happens to a investment in Valuations, each change once: created, updated (`Changed Fields` names what moved), deleted."
           }
         ]
       }
@@ -1492,6 +1585,21 @@
             "writable": true,
             "sequenced": "chronological",
             "backingFields": []
+          },
+          {
+            "fieldId": "native-valuations:changes",
+            "name": "Changes",
+            "targetTypeId": "Transaction Change",
+            "cardinality": "many",
+            "direction": "outgoing",
+            "readable": false,
+            "writable": false,
+            "listenable": true,
+            "delivery": "connection",
+            "identity": "Id",
+            "attributes": true,
+            "backingFields": [],
+            "description": "What happens to a transaction in Valuations, each change once: created, updated (`Changed Fields` names what moved), deleted."
           }
         ]
       }
@@ -1579,6 +1687,21 @@
             "backingFields": [
               "to_legal_entity_id"
             ]
+          },
+          {
+            "fieldId": "native-valuations:changes",
+            "name": "Changes",
+            "targetTypeId": "Asset Transfer Change",
+            "cardinality": "many",
+            "direction": "outgoing",
+            "readable": false,
+            "writable": false,
+            "listenable": true,
+            "delivery": "connection",
+            "identity": "Id",
+            "attributes": true,
+            "backingFields": [],
+            "description": "What happens to a asset transfer in Valuations, each change once: created, updated (`Changed Fields` names what moved), deleted."
           }
         ]
       }
@@ -1682,6 +1805,21 @@
             "backingFields": [
               "event_id"
             ]
+          },
+          {
+            "fieldId": "native-valuations:changes",
+            "name": "Changes",
+            "targetTypeId": "Price Change",
+            "cardinality": "many",
+            "direction": "outgoing",
+            "readable": false,
+            "writable": false,
+            "listenable": true,
+            "delivery": "connection",
+            "identity": "Id",
+            "attributes": true,
+            "backingFields": [],
+            "description": "What happens to a price in Valuations, each change once: created, updated (`Changed Fields` names what moved), deleted."
           }
         ]
       }
@@ -1876,6 +2014,21 @@
             "writable": true,
             "sequenced": "chronological",
             "backingFields": []
+          },
+          {
+            "fieldId": "native-valuations:changes",
+            "name": "Changes",
+            "targetTypeId": "Event Change",
+            "cardinality": "many",
+            "direction": "outgoing",
+            "readable": false,
+            "writable": false,
+            "listenable": true,
+            "delivery": "connection",
+            "identity": "Id",
+            "attributes": true,
+            "backingFields": [],
+            "description": "What happens to a event in Valuations, each change once: created, updated (`Changed Fields` names what moved), deleted."
           }
         ]
       }
@@ -2508,134 +2661,705 @@
       }
     },
     {
-      "step": "describe native-valuations:webhook_event",
+      "step": "describe Legal Entity Change",
       "answer": {
-        "typeId": "native-valuations:webhook_event",
-        "displayName": "Webhook Event",
+        "typeId": "Legal Entity Change",
+        "displayName": "Legal Entity Change",
+        "description": "A change to a legal entity in Valuations: what happened (`Kind`), which fields moved (`Changed Fields`), and the row as it was (`Previous`) and as the change left it (`Current`). Test a row present before reading through it (`exists(c.Current) AND c.Current.Name == \"Acme\"`); walk `Record` for the legal entity as it is now.",
         "fields": [
           {
-            "fieldId": "event",
-            "displayName": "Event",
-            "kind": "enum",
-            "writable": false,
-            "required": false,
-            "enumValues": [
-              "valuations:legal_entity:create",
-              "valuations:legal_entity:update",
-              "valuations:legal_entity:delete",
-              "valuations:asset:create",
-              "valuations:asset:update",
-              "valuations:asset:delete",
-              "valuations:investment:create",
-              "valuations:investment:update",
-              "valuations:investment:delete",
-              "valuations:transaction:create",
-              "valuations:transaction:update",
-              "valuations:transaction:delete",
-              "valuations:asset_transfer:create",
-              "valuations:asset_transfer:update",
-              "valuations:asset_transfer:delete",
-              "valuations:price:create",
-              "valuations:price:update",
-              "valuations:price:delete",
-              "valuations:event:create",
-              "valuations:event:update",
-              "valuations:event:delete"
-            ]
-          },
-          {
-            "fieldId": "timestamp",
-            "displayName": "Timestamp",
-            "kind": "date",
-            "writable": false,
-            "required": false
-          },
-          {
-            "fieldId": "actor.type",
-            "displayName": "Actor Type",
-            "kind": "enum",
-            "writable": false,
-            "required": false,
-            "enumValues": [
-              "user",
-              "api-token",
-              "system"
-            ]
-          },
-          {
-            "fieldId": "actor.id",
-            "displayName": "Actor Id",
+            "fieldId": "Id",
+            "displayName": "Id",
             "kind": "string",
             "writable": false,
-            "required": false
+            "required": true,
+            "description": "Names the change: the same each time Valuations sends it."
           },
           {
-            "fieldId": "data.id",
+            "fieldId": "Kind",
+            "displayName": "Kind",
+            "kind": "enum",
+            "writable": false,
+            "required": true,
+            "enumValues": [
+              "created",
+              "updated",
+              "deleted"
+            ],
+            "description": "What happened to the legal entity."
+          },
+          {
+            "fieldId": "Changed Fields",
+            "displayName": "Changed Fields",
+            "kind": "enum",
+            "writable": false,
+            "required": false,
+            "cardinality": "many",
+            "enumValues": [
+              "Id",
+              "Created At",
+              "Updated At",
+              "Type",
+              "Name",
+              "Legal Name",
+              "Also Known As",
+              "Email",
+              "Website",
+              "LinkedIn",
+              "Image URL",
+              "Slug",
+              "Description",
+              "Short Description",
+              "City",
+              "Country",
+              "Other Names",
+              "Themes",
+              "Sectors",
+              "Markets",
+              "Customers",
+              "Business Model",
+              "Locations",
+              "Stages",
+              "Is Portfolio",
+              "Is Own Investing Entity",
+              "Investment Status",
+              "Legal Status"
+            ],
+            "description": "The fields the change moved, by name: every one a created row was given, none for a deleted one."
+          },
+          {
+            "fieldId": "Record Id",
             "displayName": "Record Id",
             "kind": "string",
             "writable": false,
-            "required": false
+            "required": true,
+            "description": "Valuations' id for the legal entity, a deleted one's too."
+          },
+          {
+            "fieldId": "Current",
+            "displayName": "Current",
+            "kind": "record",
+            "writable": false,
+            "required": false,
+            "record": {
+              "typeId": "Legal Entity"
+            },
+            "mayBeAbsent": true,
+            "description": "The row as the change left it, every field by name. Absent when it was deleted."
+          },
+          {
+            "fieldId": "Previous",
+            "displayName": "Previous",
+            "kind": "record",
+            "writable": false,
+            "required": false,
+            "record": {
+              "typeId": "Legal Entity"
+            },
+            "mayBeAbsent": true,
+            "description": "The row as it was before the change, every field by name. Absent when it was created."
           }
         ],
         "references": [
           {
-            "fieldId": "Legal Entity",
+            "fieldId": "Record",
+            "name": "Record",
             "targetTypeId": "Legal Entity",
             "cardinality": "one",
-            "backingFields": [
-              "Legal Entity"
-            ]
-          },
-          {
-            "fieldId": "Asset",
-            "targetTypeId": "Asset",
-            "cardinality": "one",
-            "backingFields": [
-              "Asset"
-            ]
-          },
-          {
-            "fieldId": "Investment",
-            "targetTypeId": "Investment",
-            "cardinality": "one",
-            "backingFields": [
-              "Investment"
-            ]
-          },
-          {
-            "fieldId": "Transaction",
-            "targetTypeId": "Transaction",
-            "cardinality": "one",
-            "backingFields": [
-              "Transaction"
-            ]
-          },
-          {
-            "fieldId": "Asset Transfer",
-            "targetTypeId": "Asset Transfer",
-            "cardinality": "one",
-            "backingFields": [
-              "Asset Transfer"
-            ]
-          },
-          {
-            "fieldId": "Price",
-            "targetTypeId": "Price",
-            "cardinality": "one",
-            "backingFields": [
-              "Price"
-            ]
-          },
-          {
-            "fieldId": "Event",
-            "targetTypeId": "Event",
-            "cardinality": "one",
-            "backingFields": [
-              "Event"
-            ]
+            "direction": "outgoing",
+            "readable": true,
+            "writable": false,
+            "requiresLiveRecord": true,
+            "backingFields": [],
+            "description": "The legal entity as it is now, read from Valuations: none once it is deleted."
           }
         ]
       }
+    },
+    {
+      "step": "describe Asset Change",
+      "answer": {
+        "typeId": "Asset Change",
+        "displayName": "Asset Change",
+        "description": "A change to a asset in Valuations: what happened (`Kind`), which fields moved (`Changed Fields`), and the row as it was (`Previous`) and as the change left it (`Current`). Test a row present before reading through it (`exists(c.Current) AND c.Current.Name == \"Acme\"`); walk `Record` for the asset as it is now.",
+        "fields": [
+          {
+            "fieldId": "Id",
+            "displayName": "Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "Names the change: the same each time Valuations sends it."
+          },
+          {
+            "fieldId": "Kind",
+            "displayName": "Kind",
+            "kind": "enum",
+            "writable": false,
+            "required": true,
+            "enumValues": [
+              "created",
+              "updated",
+              "deleted"
+            ],
+            "description": "What happened to the asset."
+          },
+          {
+            "fieldId": "Changed Fields",
+            "displayName": "Changed Fields",
+            "kind": "enum",
+            "writable": false,
+            "required": false,
+            "cardinality": "many",
+            "enumValues": [
+              "Id",
+              "Created At",
+              "Updated At",
+              "Type",
+              "Name",
+              "Convertible Type",
+              "Convertible Amount",
+              "Convertible Currency",
+              "Valuation Cap",
+              "Discount Rate",
+              "Interest",
+              "Annualised Interest Rate",
+              "Maturity Date",
+              "Conversion Date",
+              "Conversion Price",
+              "Properties"
+            ],
+            "description": "The fields the change moved, by name: every one a created row was given, none for a deleted one."
+          },
+          {
+            "fieldId": "Record Id",
+            "displayName": "Record Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "Valuations' id for the asset, a deleted one's too."
+          },
+          {
+            "fieldId": "Current",
+            "displayName": "Current",
+            "kind": "record",
+            "writable": false,
+            "required": false,
+            "record": {
+              "typeId": "Asset"
+            },
+            "mayBeAbsent": true,
+            "description": "The row as the change left it, every field by name. Absent when it was deleted."
+          },
+          {
+            "fieldId": "Previous",
+            "displayName": "Previous",
+            "kind": "record",
+            "writable": false,
+            "required": false,
+            "record": {
+              "typeId": "Asset"
+            },
+            "mayBeAbsent": true,
+            "description": "The row as it was before the change, every field by name. Absent when it was created."
+          }
+        ],
+        "references": [
+          {
+            "fieldId": "Record",
+            "name": "Record",
+            "targetTypeId": "Asset",
+            "cardinality": "one",
+            "direction": "outgoing",
+            "readable": true,
+            "writable": false,
+            "requiresLiveRecord": true,
+            "backingFields": [],
+            "description": "The asset as it is now, read from Valuations: none once it is deleted."
+          }
+        ]
+      }
+    },
+    {
+      "step": "describe Investment Change",
+      "answer": {
+        "typeId": "Investment Change",
+        "displayName": "Investment Change",
+        "description": "A change to a investment in Valuations: what happened (`Kind`), which fields moved (`Changed Fields`), and the row as it was (`Previous`) and as the change left it (`Current`). Test a row present before reading through it (`exists(c.Current) AND c.Current.Name == \"Acme\"`); walk `Record` for the investment as it is now.",
+        "fields": [
+          {
+            "fieldId": "Id",
+            "displayName": "Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "Names the change: the same each time Valuations sends it."
+          },
+          {
+            "fieldId": "Kind",
+            "displayName": "Kind",
+            "kind": "enum",
+            "writable": false,
+            "required": true,
+            "enumValues": [
+              "created",
+              "updated",
+              "deleted"
+            ],
+            "description": "What happened to the investment."
+          },
+          {
+            "fieldId": "Changed Fields",
+            "displayName": "Changed Fields",
+            "kind": "enum",
+            "writable": false,
+            "required": false,
+            "cardinality": "many",
+            "enumValues": [
+              "Id",
+              "Created At",
+              "Updated At",
+              "Round Type",
+              "Type",
+              "Invested At",
+              "Verified",
+              "Fully Exited At"
+            ],
+            "description": "The fields the change moved, by name: every one a created row was given, none for a deleted one."
+          },
+          {
+            "fieldId": "Record Id",
+            "displayName": "Record Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "Valuations' id for the investment, a deleted one's too."
+          },
+          {
+            "fieldId": "Current",
+            "displayName": "Current",
+            "kind": "record",
+            "writable": false,
+            "required": false,
+            "record": {
+              "typeId": "Investment"
+            },
+            "mayBeAbsent": true,
+            "description": "The row as the change left it, every field by name. Absent when it was deleted."
+          },
+          {
+            "fieldId": "Previous",
+            "displayName": "Previous",
+            "kind": "record",
+            "writable": false,
+            "required": false,
+            "record": {
+              "typeId": "Investment"
+            },
+            "mayBeAbsent": true,
+            "description": "The row as it was before the change, every field by name. Absent when it was created."
+          }
+        ],
+        "references": [
+          {
+            "fieldId": "Record",
+            "name": "Record",
+            "targetTypeId": "Investment",
+            "cardinality": "one",
+            "direction": "outgoing",
+            "readable": true,
+            "writable": false,
+            "requiresLiveRecord": true,
+            "backingFields": [],
+            "description": "The investment as it is now, read from Valuations: none once it is deleted."
+          }
+        ]
+      }
+    },
+    {
+      "step": "describe Transaction Change",
+      "answer": {
+        "typeId": "Transaction Change",
+        "displayName": "Transaction Change",
+        "description": "A change to a transaction in Valuations: what happened (`Kind`), which fields moved (`Changed Fields`), and the row as it was (`Previous`) and as the change left it (`Current`). Test a row present before reading through it (`exists(c.Current) AND c.Current.Name == \"Acme\"`); walk `Record` for the transaction as it is now.",
+        "fields": [
+          {
+            "fieldId": "Id",
+            "displayName": "Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "Names the change: the same each time Valuations sends it."
+          },
+          {
+            "fieldId": "Kind",
+            "displayName": "Kind",
+            "kind": "enum",
+            "writable": false,
+            "required": true,
+            "enumValues": [
+              "created",
+              "updated",
+              "deleted"
+            ],
+            "description": "What happened to the transaction."
+          },
+          {
+            "fieldId": "Changed Fields",
+            "displayName": "Changed Fields",
+            "kind": "enum",
+            "writable": false,
+            "required": false,
+            "cardinality": "many",
+            "enumValues": [
+              "Id",
+              "Created At",
+              "Updated At",
+              "Close Date"
+            ],
+            "description": "The fields the change moved, by name: every one a created row was given, none for a deleted one."
+          },
+          {
+            "fieldId": "Record Id",
+            "displayName": "Record Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "Valuations' id for the transaction, a deleted one's too."
+          },
+          {
+            "fieldId": "Current",
+            "displayName": "Current",
+            "kind": "record",
+            "writable": false,
+            "required": false,
+            "record": {
+              "typeId": "Transaction"
+            },
+            "mayBeAbsent": true,
+            "description": "The row as the change left it, every field by name. Absent when it was deleted."
+          },
+          {
+            "fieldId": "Previous",
+            "displayName": "Previous",
+            "kind": "record",
+            "writable": false,
+            "required": false,
+            "record": {
+              "typeId": "Transaction"
+            },
+            "mayBeAbsent": true,
+            "description": "The row as it was before the change, every field by name. Absent when it was created."
+          }
+        ],
+        "references": [
+          {
+            "fieldId": "Record",
+            "name": "Record",
+            "targetTypeId": "Transaction",
+            "cardinality": "one",
+            "direction": "outgoing",
+            "readable": true,
+            "writable": false,
+            "requiresLiveRecord": true,
+            "backingFields": [],
+            "description": "The transaction as it is now, read from Valuations: none once it is deleted."
+          }
+        ]
+      }
+    },
+    {
+      "step": "describe Asset Transfer Change",
+      "answer": {
+        "typeId": "Asset Transfer Change",
+        "displayName": "Asset Transfer Change",
+        "description": "A change to a asset transfer in Valuations: what happened (`Kind`), which fields moved (`Changed Fields`), and the row as it was (`Previous`) and as the change left it (`Current`). Test a row present before reading through it (`exists(c.Current) AND c.Current.Name == \"Acme\"`); walk `Record` for the asset transfer as it is now.",
+        "fields": [
+          {
+            "fieldId": "Id",
+            "displayName": "Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "Names the change: the same each time Valuations sends it."
+          },
+          {
+            "fieldId": "Kind",
+            "displayName": "Kind",
+            "kind": "enum",
+            "writable": false,
+            "required": true,
+            "enumValues": [
+              "created",
+              "updated",
+              "deleted"
+            ],
+            "description": "What happened to the asset transfer."
+          },
+          {
+            "fieldId": "Changed Fields",
+            "displayName": "Changed Fields",
+            "kind": "enum",
+            "writable": false,
+            "required": false,
+            "cardinality": "many",
+            "enumValues": [
+              "Id",
+              "Created At",
+              "Updated At",
+              "Date",
+              "Num Assets"
+            ],
+            "description": "The fields the change moved, by name: every one a created row was given, none for a deleted one."
+          },
+          {
+            "fieldId": "Record Id",
+            "displayName": "Record Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "Valuations' id for the asset transfer, a deleted one's too."
+          },
+          {
+            "fieldId": "Current",
+            "displayName": "Current",
+            "kind": "record",
+            "writable": false,
+            "required": false,
+            "record": {
+              "typeId": "Asset Transfer"
+            },
+            "mayBeAbsent": true,
+            "description": "The row as the change left it, every field by name. Absent when it was deleted."
+          },
+          {
+            "fieldId": "Previous",
+            "displayName": "Previous",
+            "kind": "record",
+            "writable": false,
+            "required": false,
+            "record": {
+              "typeId": "Asset Transfer"
+            },
+            "mayBeAbsent": true,
+            "description": "The row as it was before the change, every field by name. Absent when it was created."
+          }
+        ],
+        "references": [
+          {
+            "fieldId": "Record",
+            "name": "Record",
+            "targetTypeId": "Asset Transfer",
+            "cardinality": "one",
+            "direction": "outgoing",
+            "readable": true,
+            "writable": false,
+            "requiresLiveRecord": true,
+            "backingFields": [],
+            "description": "The asset transfer as it is now, read from Valuations: none once it is deleted."
+          }
+        ]
+      }
+    },
+    {
+      "step": "describe Price Change",
+      "answer": {
+        "typeId": "Price Change",
+        "displayName": "Price Change",
+        "description": "A change to a price in Valuations: what happened (`Kind`), which fields moved (`Changed Fields`), and the row as it was (`Previous`) and as the change left it (`Current`). Test a row present before reading through it (`exists(c.Current) AND c.Current.Name == \"Acme\"`); walk `Record` for the price as it is now.",
+        "fields": [
+          {
+            "fieldId": "Id",
+            "displayName": "Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "Names the change: the same each time Valuations sends it."
+          },
+          {
+            "fieldId": "Kind",
+            "displayName": "Kind",
+            "kind": "enum",
+            "writable": false,
+            "required": true,
+            "enumValues": [
+              "created",
+              "updated",
+              "deleted"
+            ],
+            "description": "What happened to the price."
+          },
+          {
+            "fieldId": "Changed Fields",
+            "displayName": "Changed Fields",
+            "kind": "enum",
+            "writable": false,
+            "required": false,
+            "cardinality": "many",
+            "enumValues": [
+              "Id",
+              "Created At",
+              "Updated At",
+              "Date",
+              "Price",
+              "Currency",
+              "Type"
+            ],
+            "description": "The fields the change moved, by name: every one a created row was given, none for a deleted one."
+          },
+          {
+            "fieldId": "Record Id",
+            "displayName": "Record Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "Valuations' id for the price, a deleted one's too."
+          },
+          {
+            "fieldId": "Current",
+            "displayName": "Current",
+            "kind": "record",
+            "writable": false,
+            "required": false,
+            "record": {
+              "typeId": "Price"
+            },
+            "mayBeAbsent": true,
+            "description": "The row as the change left it, every field by name. Absent when it was deleted."
+          },
+          {
+            "fieldId": "Previous",
+            "displayName": "Previous",
+            "kind": "record",
+            "writable": false,
+            "required": false,
+            "record": {
+              "typeId": "Price"
+            },
+            "mayBeAbsent": true,
+            "description": "The row as it was before the change, every field by name. Absent when it was created."
+          }
+        ],
+        "references": [
+          {
+            "fieldId": "Record",
+            "name": "Record",
+            "targetTypeId": "Price",
+            "cardinality": "one",
+            "direction": "outgoing",
+            "readable": true,
+            "writable": false,
+            "requiresLiveRecord": true,
+            "backingFields": [],
+            "description": "The price as it is now, read from Valuations: none once it is deleted."
+          }
+        ]
+      }
+    },
+    {
+      "step": "describe Event Change",
+      "answer": {
+        "typeId": "Event Change",
+        "displayName": "Event Change",
+        "description": "A change to a event in Valuations: what happened (`Kind`), which fields moved (`Changed Fields`), and the row as it was (`Previous`) and as the change left it (`Current`). Test a row present before reading through it (`exists(c.Current) AND c.Current.Name == \"Acme\"`); walk `Record` for the event as it is now.",
+        "fields": [
+          {
+            "fieldId": "Id",
+            "displayName": "Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "Names the change: the same each time Valuations sends it."
+          },
+          {
+            "fieldId": "Kind",
+            "displayName": "Kind",
+            "kind": "enum",
+            "writable": false,
+            "required": true,
+            "enumValues": [
+              "created",
+              "updated",
+              "deleted"
+            ],
+            "description": "What happened to the event."
+          },
+          {
+            "fieldId": "Changed Fields",
+            "displayName": "Changed Fields",
+            "kind": "enum",
+            "writable": false,
+            "required": false,
+            "cardinality": "many",
+            "enumValues": [
+              "Id",
+              "Created At",
+              "Updated At",
+              "Date",
+              "Type",
+              "Name",
+              "Raised Amount",
+              "Raised Currency",
+              "Valuation",
+              "Valuation Currency",
+              "Valuation Type",
+              "Round Type",
+              "Investment Round Type"
+            ],
+            "description": "The fields the change moved, by name: every one a created row was given, none for a deleted one."
+          },
+          {
+            "fieldId": "Record Id",
+            "displayName": "Record Id",
+            "kind": "string",
+            "writable": false,
+            "required": true,
+            "description": "Valuations' id for the event, a deleted one's too."
+          },
+          {
+            "fieldId": "Current",
+            "displayName": "Current",
+            "kind": "record",
+            "writable": false,
+            "required": false,
+            "record": {
+              "typeId": "Event"
+            },
+            "mayBeAbsent": true,
+            "description": "The row as the change left it, every field by name. Absent when it was deleted."
+          },
+          {
+            "fieldId": "Previous",
+            "displayName": "Previous",
+            "kind": "record",
+            "writable": false,
+            "required": false,
+            "record": {
+              "typeId": "Event"
+            },
+            "mayBeAbsent": true,
+            "description": "The row as it was before the change, every field by name. Absent when it was created."
+          }
+        ],
+        "references": [
+          {
+            "fieldId": "Record",
+            "name": "Record",
+            "targetTypeId": "Event",
+            "cardinality": "one",
+            "direction": "outgoing",
+            "readable": true,
+            "writable": false,
+            "requiresLiveRecord": true,
+            "backingFields": [],
+            "description": "The event as it is now, read from Valuations: none once it is deleted."
+          }
+        ]
+      }
+    },
+    {
+      "step": "describe native-valuations:webhook_event",
+      "answer": null
     },
     {
       "step": "describe Nonexistent",
@@ -3196,6 +3920,24 @@
                 "supportsLimit": false
               },
               "backingFields": []
+            },
+            {
+              "fieldId": "native-valuations:changes",
+              "name": "Changes",
+              "targetTypeId": "Legal Entity Change",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "readable": false,
+              "writable": false,
+              "listenable": true,
+              "delivery": "connection",
+              "identity": "Id",
+              "attributes": true,
+              "carries": [
+                "Legal Entity"
+              ],
+              "backingFields": [],
+              "description": "What happens to a legal entity in Valuations, each change once: created, updated (`Changed Fields` names what moved), deleted."
             }
           ]
         },
@@ -3379,6 +4121,14 @@
           "valuations": {
             "adapterType": "native-valuations",
             "recordType": "Valuation",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "native-valuations:changes": {
+            "adapterType": "native-valuations",
+            "recordType": "Legal Entity Change",
             "identity": {
               "kind": "unstable",
               "data": {}
@@ -5359,6 +6109,105 @@
                 "required": false
               }
             ]
+          },
+          "native-valuations:changes": {
+            "typeId": "Legal Entity Change",
+            "displayName": "Legal Entity Change",
+            "description": "A change to a legal entity in Valuations: what happened (`Kind`), which fields moved (`Changed Fields`), and the row as it was (`Previous`) and as the change left it (`Current`). Test a row present before reading through it (`exists(c.Current) AND c.Current.Name == \"Acme\"`); walk `Record` for the legal entity as it is now.",
+            "fields": [
+              {
+                "fieldId": "Id",
+                "displayName": "Id",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "Names the change: the same each time Valuations sends it."
+              },
+              {
+                "fieldId": "Kind",
+                "displayName": "Kind",
+                "kind": "enum",
+                "writable": false,
+                "required": true,
+                "enumValues": [
+                  "created",
+                  "updated",
+                  "deleted"
+                ],
+                "description": "What happened to the legal entity."
+              },
+              {
+                "fieldId": "Changed Fields",
+                "displayName": "Changed Fields",
+                "kind": "enum",
+                "writable": false,
+                "required": false,
+                "cardinality": "many",
+                "enumValues": [
+                  "Id",
+                  "Created At",
+                  "Updated At",
+                  "Type",
+                  "Name",
+                  "Legal Name",
+                  "Also Known As",
+                  "Email",
+                  "Website",
+                  "LinkedIn",
+                  "Image URL",
+                  "Slug",
+                  "Description",
+                  "Short Description",
+                  "City",
+                  "Country",
+                  "Other Names",
+                  "Themes",
+                  "Sectors",
+                  "Markets",
+                  "Customers",
+                  "Business Model",
+                  "Locations",
+                  "Stages",
+                  "Is Portfolio",
+                  "Is Own Investing Entity",
+                  "Investment Status",
+                  "Legal Status"
+                ],
+                "description": "The fields the change moved, by name: every one a created row was given, none for a deleted one."
+              },
+              {
+                "fieldId": "Record Id",
+                "displayName": "Record Id",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "Valuations' id for the legal entity, a deleted one's too."
+              },
+              {
+                "fieldId": "Current",
+                "displayName": "Current",
+                "kind": "record",
+                "writable": false,
+                "required": false,
+                "record": {
+                  "typeId": "Legal Entity"
+                },
+                "mayBeAbsent": true,
+                "description": "The row as the change left it, every field by name. Absent when it was deleted."
+              },
+              {
+                "fieldId": "Previous",
+                "displayName": "Previous",
+                "kind": "record",
+                "writable": false,
+                "required": false,
+                "record": {
+                  "typeId": "Legal Entity"
+                },
+                "mayBeAbsent": true,
+                "description": "The row as it was before the change, every field by name. Absent when it was created."
+              }
+            ]
           }
         }
       }
@@ -5695,6 +6544,21 @@
                 "supportsLimit": false
               },
               "backingFields": []
+            },
+            {
+              "fieldId": "native-valuations:changes",
+              "name": "Changes",
+              "targetTypeId": "Investment Change",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "readable": false,
+              "writable": false,
+              "listenable": true,
+              "delivery": "connection",
+              "identity": "Id",
+              "attributes": true,
+              "backingFields": [],
+              "description": "What happens to a investment in Valuations, each change once: created, updated (`Changed Fields` names what moved), deleted."
             }
           ]
         },
@@ -5742,6 +6606,14 @@
           "valuations": {
             "adapterType": "native-valuations",
             "recordType": "Valuation",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "native-valuations:changes": {
+            "adapterType": "native-valuations",
+            "recordType": "Investment Change",
             "identity": {
               "kind": "unstable",
               "data": {}
@@ -6666,6 +7538,85 @@
                 "required": false
               }
             ]
+          },
+          "native-valuations:changes": {
+            "typeId": "Investment Change",
+            "displayName": "Investment Change",
+            "description": "A change to a investment in Valuations: what happened (`Kind`), which fields moved (`Changed Fields`), and the row as it was (`Previous`) and as the change left it (`Current`). Test a row present before reading through it (`exists(c.Current) AND c.Current.Name == \"Acme\"`); walk `Record` for the investment as it is now.",
+            "fields": [
+              {
+                "fieldId": "Id",
+                "displayName": "Id",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "Names the change: the same each time Valuations sends it."
+              },
+              {
+                "fieldId": "Kind",
+                "displayName": "Kind",
+                "kind": "enum",
+                "writable": false,
+                "required": true,
+                "enumValues": [
+                  "created",
+                  "updated",
+                  "deleted"
+                ],
+                "description": "What happened to the investment."
+              },
+              {
+                "fieldId": "Changed Fields",
+                "displayName": "Changed Fields",
+                "kind": "enum",
+                "writable": false,
+                "required": false,
+                "cardinality": "many",
+                "enumValues": [
+                  "Id",
+                  "Created At",
+                  "Updated At",
+                  "Round Type",
+                  "Type",
+                  "Invested At",
+                  "Verified",
+                  "Fully Exited At"
+                ],
+                "description": "The fields the change moved, by name: every one a created row was given, none for a deleted one."
+              },
+              {
+                "fieldId": "Record Id",
+                "displayName": "Record Id",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "Valuations' id for the investment, a deleted one's too."
+              },
+              {
+                "fieldId": "Current",
+                "displayName": "Current",
+                "kind": "record",
+                "writable": false,
+                "required": false,
+                "record": {
+                  "typeId": "Investment"
+                },
+                "mayBeAbsent": true,
+                "description": "The row as the change left it, every field by name. Absent when it was deleted."
+              },
+              {
+                "fieldId": "Previous",
+                "displayName": "Previous",
+                "kind": "record",
+                "writable": false,
+                "required": false,
+                "record": {
+                  "typeId": "Investment"
+                },
+                "mayBeAbsent": true,
+                "description": "The row as it was before the change, every field by name. Absent when it was created."
+              }
+            ]
           }
         }
       }
@@ -6940,6 +7891,21 @@
               "backingFields": [
                 "to_legal_entity_id"
               ]
+            },
+            {
+              "fieldId": "native-valuations:changes",
+              "name": "Changes",
+              "targetTypeId": "Asset Transfer Change",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "readable": false,
+              "writable": false,
+              "listenable": true,
+              "delivery": "connection",
+              "identity": "Id",
+              "attributes": true,
+              "backingFields": [],
+              "description": "What happens to a asset transfer in Valuations, each change once: created, updated (`Changed Fields` names what moved), deleted."
             }
           ]
         },
@@ -6971,6 +7937,14 @@
           "to_legal_entity_id": {
             "adapterType": "native-valuations",
             "recordType": "Legal Entity",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "native-valuations:changes": {
+            "adapterType": "native-valuations",
+            "recordType": "Asset Transfer Change",
             "identity": {
               "kind": "unstable",
               "data": {}
@@ -7634,6 +8608,82 @@
                 ]
               }
             ]
+          },
+          "native-valuations:changes": {
+            "typeId": "Asset Transfer Change",
+            "displayName": "Asset Transfer Change",
+            "description": "A change to a asset transfer in Valuations: what happened (`Kind`), which fields moved (`Changed Fields`), and the row as it was (`Previous`) and as the change left it (`Current`). Test a row present before reading through it (`exists(c.Current) AND c.Current.Name == \"Acme\"`); walk `Record` for the asset transfer as it is now.",
+            "fields": [
+              {
+                "fieldId": "Id",
+                "displayName": "Id",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "Names the change: the same each time Valuations sends it."
+              },
+              {
+                "fieldId": "Kind",
+                "displayName": "Kind",
+                "kind": "enum",
+                "writable": false,
+                "required": true,
+                "enumValues": [
+                  "created",
+                  "updated",
+                  "deleted"
+                ],
+                "description": "What happened to the asset transfer."
+              },
+              {
+                "fieldId": "Changed Fields",
+                "displayName": "Changed Fields",
+                "kind": "enum",
+                "writable": false,
+                "required": false,
+                "cardinality": "many",
+                "enumValues": [
+                  "Id",
+                  "Created At",
+                  "Updated At",
+                  "Date",
+                  "Num Assets"
+                ],
+                "description": "The fields the change moved, by name: every one a created row was given, none for a deleted one."
+              },
+              {
+                "fieldId": "Record Id",
+                "displayName": "Record Id",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "Valuations' id for the asset transfer, a deleted one's too."
+              },
+              {
+                "fieldId": "Current",
+                "displayName": "Current",
+                "kind": "record",
+                "writable": false,
+                "required": false,
+                "record": {
+                  "typeId": "Asset Transfer"
+                },
+                "mayBeAbsent": true,
+                "description": "The row as the change left it, every field by name. Absent when it was deleted."
+              },
+              {
+                "fieldId": "Previous",
+                "displayName": "Previous",
+                "kind": "record",
+                "writable": false,
+                "required": false,
+                "record": {
+                  "typeId": "Asset Transfer"
+                },
+                "mayBeAbsent": true,
+                "description": "The row as it was before the change, every field by name. Absent when it was created."
+              }
+            ]
           }
         }
       }
@@ -8074,6 +9124,24 @@
               "description": "The outstanding-commitment asset being drawn down.",
               "writable": true,
               "backingFields": []
+            },
+            {
+              "fieldId": "native-valuations:changes",
+              "name": "Changes",
+              "targetTypeId": "Asset Change",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "readable": false,
+              "writable": false,
+              "listenable": true,
+              "delivery": "connection",
+              "identity": "Id",
+              "attributes": true,
+              "carries": [
+                "Asset"
+              ],
+              "backingFields": [],
+              "description": "What happens to a asset in Valuations, each change once: created, updated (`Changed Fields` names what moved), deleted."
             }
           ]
         },
@@ -8113,6 +9181,14 @@
           "add_fund_drawdown_asset": {
             "adapterType": "native-valuations",
             "recordType": "AddFundDrawdown",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "native-valuations:changes": {
+            "adapterType": "native-valuations",
+            "recordType": "Asset Change",
             "identity": {
               "kind": "unstable",
               "data": {}
@@ -8744,6 +9820,93 @@
                 ]
               }
             ]
+          },
+          "native-valuations:changes": {
+            "typeId": "Asset Change",
+            "displayName": "Asset Change",
+            "description": "A change to a asset in Valuations: what happened (`Kind`), which fields moved (`Changed Fields`), and the row as it was (`Previous`) and as the change left it (`Current`). Test a row present before reading through it (`exists(c.Current) AND c.Current.Name == \"Acme\"`); walk `Record` for the asset as it is now.",
+            "fields": [
+              {
+                "fieldId": "Id",
+                "displayName": "Id",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "Names the change: the same each time Valuations sends it."
+              },
+              {
+                "fieldId": "Kind",
+                "displayName": "Kind",
+                "kind": "enum",
+                "writable": false,
+                "required": true,
+                "enumValues": [
+                  "created",
+                  "updated",
+                  "deleted"
+                ],
+                "description": "What happened to the asset."
+              },
+              {
+                "fieldId": "Changed Fields",
+                "displayName": "Changed Fields",
+                "kind": "enum",
+                "writable": false,
+                "required": false,
+                "cardinality": "many",
+                "enumValues": [
+                  "Id",
+                  "Created At",
+                  "Updated At",
+                  "Type",
+                  "Name",
+                  "Convertible Type",
+                  "Convertible Amount",
+                  "Convertible Currency",
+                  "Valuation Cap",
+                  "Discount Rate",
+                  "Interest",
+                  "Annualised Interest Rate",
+                  "Maturity Date",
+                  "Conversion Date",
+                  "Conversion Price",
+                  "Properties"
+                ],
+                "description": "The fields the change moved, by name: every one a created row was given, none for a deleted one."
+              },
+              {
+                "fieldId": "Record Id",
+                "displayName": "Record Id",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "Valuations' id for the asset, a deleted one's too."
+              },
+              {
+                "fieldId": "Current",
+                "displayName": "Current",
+                "kind": "record",
+                "writable": false,
+                "required": false,
+                "record": {
+                  "typeId": "Asset"
+                },
+                "mayBeAbsent": true,
+                "description": "The row as the change left it, every field by name. Absent when it was deleted."
+              },
+              {
+                "fieldId": "Previous",
+                "displayName": "Previous",
+                "kind": "record",
+                "writable": false,
+                "required": false,
+                "record": {
+                  "typeId": "Asset"
+                },
+                "mayBeAbsent": true,
+                "description": "The row as it was before the change, every field by name. Absent when it was created."
+              }
+            ]
           }
         }
       }
@@ -9317,6 +10480,24 @@
                 "supportsLimit": false
               },
               "backingFields": []
+            },
+            {
+              "fieldId": "native-valuations:changes",
+              "name": "Changes",
+              "targetTypeId": "Legal Entity Change",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "readable": false,
+              "writable": false,
+              "listenable": true,
+              "delivery": "connection",
+              "identity": "Id",
+              "attributes": true,
+              "carries": [
+                "Legal Entity"
+              ],
+              "backingFields": [],
+              "description": "What happens to a legal entity in Valuations, each change once: created, updated (`Changed Fields` names what moved), deleted."
             }
           ]
         },
@@ -9500,6 +10681,14 @@
           "valuations": {
             "adapterType": "native-valuations",
             "recordType": "Valuation",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "native-valuations:changes": {
+            "adapterType": "native-valuations",
+            "recordType": "Legal Entity Change",
             "identity": {
               "kind": "unstable",
               "data": {}
@@ -11480,6 +12669,105 @@
                 "required": false
               }
             ]
+          },
+          "native-valuations:changes": {
+            "typeId": "Legal Entity Change",
+            "displayName": "Legal Entity Change",
+            "description": "A change to a legal entity in Valuations: what happened (`Kind`), which fields moved (`Changed Fields`), and the row as it was (`Previous`) and as the change left it (`Current`). Test a row present before reading through it (`exists(c.Current) AND c.Current.Name == \"Acme\"`); walk `Record` for the legal entity as it is now.",
+            "fields": [
+              {
+                "fieldId": "Id",
+                "displayName": "Id",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "Names the change: the same each time Valuations sends it."
+              },
+              {
+                "fieldId": "Kind",
+                "displayName": "Kind",
+                "kind": "enum",
+                "writable": false,
+                "required": true,
+                "enumValues": [
+                  "created",
+                  "updated",
+                  "deleted"
+                ],
+                "description": "What happened to the legal entity."
+              },
+              {
+                "fieldId": "Changed Fields",
+                "displayName": "Changed Fields",
+                "kind": "enum",
+                "writable": false,
+                "required": false,
+                "cardinality": "many",
+                "enumValues": [
+                  "Id",
+                  "Created At",
+                  "Updated At",
+                  "Type",
+                  "Name",
+                  "Legal Name",
+                  "Also Known As",
+                  "Email",
+                  "Website",
+                  "LinkedIn",
+                  "Image URL",
+                  "Slug",
+                  "Description",
+                  "Short Description",
+                  "City",
+                  "Country",
+                  "Other Names",
+                  "Themes",
+                  "Sectors",
+                  "Markets",
+                  "Customers",
+                  "Business Model",
+                  "Locations",
+                  "Stages",
+                  "Is Portfolio",
+                  "Is Own Investing Entity",
+                  "Investment Status",
+                  "Legal Status"
+                ],
+                "description": "The fields the change moved, by name: every one a created row was given, none for a deleted one."
+              },
+              {
+                "fieldId": "Record Id",
+                "displayName": "Record Id",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "Valuations' id for the legal entity, a deleted one's too."
+              },
+              {
+                "fieldId": "Current",
+                "displayName": "Current",
+                "kind": "record",
+                "writable": false,
+                "required": false,
+                "record": {
+                  "typeId": "Legal Entity"
+                },
+                "mayBeAbsent": true,
+                "description": "The row as the change left it, every field by name. Absent when it was deleted."
+              },
+              {
+                "fieldId": "Previous",
+                "displayName": "Previous",
+                "kind": "record",
+                "writable": false,
+                "required": false,
+                "record": {
+                  "typeId": "Legal Entity"
+                },
+                "mayBeAbsent": true,
+                "description": "The row as it was before the change, every field by name. Absent when it was created."
+              }
+            ]
           }
         }
       }
@@ -11914,6 +13202,21 @@
               "backingFields": [
                 "to_legal_entity_id"
               ]
+            },
+            {
+              "fieldId": "native-valuations:changes",
+              "name": "Changes",
+              "targetTypeId": "Asset Transfer Change",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "readable": false,
+              "writable": false,
+              "listenable": true,
+              "delivery": "connection",
+              "identity": "Id",
+              "attributes": true,
+              "backingFields": [],
+              "description": "What happens to a asset transfer in Valuations, each change once: created, updated (`Changed Fields` names what moved), deleted."
             }
           ]
         },
@@ -11945,6 +13248,14 @@
           "to_legal_entity_id": {
             "adapterType": "native-valuations",
             "recordType": "Legal Entity",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "native-valuations:changes": {
+            "adapterType": "native-valuations",
+            "recordType": "Asset Transfer Change",
             "identity": {
               "kind": "unstable",
               "data": {}
@@ -12608,6 +13919,82 @@
                 ]
               }
             ]
+          },
+          "native-valuations:changes": {
+            "typeId": "Asset Transfer Change",
+            "displayName": "Asset Transfer Change",
+            "description": "A change to a asset transfer in Valuations: what happened (`Kind`), which fields moved (`Changed Fields`), and the row as it was (`Previous`) and as the change left it (`Current`). Test a row present before reading through it (`exists(c.Current) AND c.Current.Name == \"Acme\"`); walk `Record` for the asset transfer as it is now.",
+            "fields": [
+              {
+                "fieldId": "Id",
+                "displayName": "Id",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "Names the change: the same each time Valuations sends it."
+              },
+              {
+                "fieldId": "Kind",
+                "displayName": "Kind",
+                "kind": "enum",
+                "writable": false,
+                "required": true,
+                "enumValues": [
+                  "created",
+                  "updated",
+                  "deleted"
+                ],
+                "description": "What happened to the asset transfer."
+              },
+              {
+                "fieldId": "Changed Fields",
+                "displayName": "Changed Fields",
+                "kind": "enum",
+                "writable": false,
+                "required": false,
+                "cardinality": "many",
+                "enumValues": [
+                  "Id",
+                  "Created At",
+                  "Updated At",
+                  "Date",
+                  "Num Assets"
+                ],
+                "description": "The fields the change moved, by name: every one a created row was given, none for a deleted one."
+              },
+              {
+                "fieldId": "Record Id",
+                "displayName": "Record Id",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "Valuations' id for the asset transfer, a deleted one's too."
+              },
+              {
+                "fieldId": "Current",
+                "displayName": "Current",
+                "kind": "record",
+                "writable": false,
+                "required": false,
+                "record": {
+                  "typeId": "Asset Transfer"
+                },
+                "mayBeAbsent": true,
+                "description": "The row as the change left it, every field by name. Absent when it was deleted."
+              },
+              {
+                "fieldId": "Previous",
+                "displayName": "Previous",
+                "kind": "record",
+                "writable": false,
+                "required": false,
+                "record": {
+                  "typeId": "Asset Transfer"
+                },
+                "mayBeAbsent": true,
+                "description": "The row as it was before the change, every field by name. Absent when it was created."
+              }
+            ]
           }
         }
       }
@@ -12890,6 +14277,21 @@
               "backingFields": [
                 "event_id"
               ]
+            },
+            {
+              "fieldId": "native-valuations:changes",
+              "name": "Changes",
+              "targetTypeId": "Price Change",
+              "cardinality": "many",
+              "direction": "outgoing",
+              "readable": false,
+              "writable": false,
+              "listenable": true,
+              "delivery": "connection",
+              "identity": "Id",
+              "attributes": true,
+              "backingFields": [],
+              "description": "What happens to a price in Valuations, each change once: created, updated (`Changed Fields` names what moved), deleted."
             }
           ]
         },
@@ -12913,6 +14315,14 @@
           "event_id": {
             "adapterType": "native-valuations",
             "recordType": "Event",
+            "identity": {
+              "kind": "unstable",
+              "data": {}
+            }
+          },
+          "native-valuations:changes": {
+            "adapterType": "native-valuations",
+            "recordType": "Price Change",
             "identity": {
               "kind": "unstable",
               "data": {}
@@ -13463,6 +14873,84 @@
                   "CONVERTIBLE",
                   "OTHER"
                 ]
+              }
+            ]
+          },
+          "native-valuations:changes": {
+            "typeId": "Price Change",
+            "displayName": "Price Change",
+            "description": "A change to a price in Valuations: what happened (`Kind`), which fields moved (`Changed Fields`), and the row as it was (`Previous`) and as the change left it (`Current`). Test a row present before reading through it (`exists(c.Current) AND c.Current.Name == \"Acme\"`); walk `Record` for the price as it is now.",
+            "fields": [
+              {
+                "fieldId": "Id",
+                "displayName": "Id",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "Names the change: the same each time Valuations sends it."
+              },
+              {
+                "fieldId": "Kind",
+                "displayName": "Kind",
+                "kind": "enum",
+                "writable": false,
+                "required": true,
+                "enumValues": [
+                  "created",
+                  "updated",
+                  "deleted"
+                ],
+                "description": "What happened to the price."
+              },
+              {
+                "fieldId": "Changed Fields",
+                "displayName": "Changed Fields",
+                "kind": "enum",
+                "writable": false,
+                "required": false,
+                "cardinality": "many",
+                "enumValues": [
+                  "Id",
+                  "Created At",
+                  "Updated At",
+                  "Date",
+                  "Price",
+                  "Currency",
+                  "Type"
+                ],
+                "description": "The fields the change moved, by name: every one a created row was given, none for a deleted one."
+              },
+              {
+                "fieldId": "Record Id",
+                "displayName": "Record Id",
+                "kind": "string",
+                "writable": false,
+                "required": true,
+                "description": "Valuations' id for the price, a deleted one's too."
+              },
+              {
+                "fieldId": "Current",
+                "displayName": "Current",
+                "kind": "record",
+                "writable": false,
+                "required": false,
+                "record": {
+                  "typeId": "Price"
+                },
+                "mayBeAbsent": true,
+                "description": "The row as the change left it, every field by name. Absent when it was deleted."
+              },
+              {
+                "fieldId": "Previous",
+                "displayName": "Previous",
+                "kind": "record",
+                "writable": false,
+                "required": false,
+                "record": {
+                  "typeId": "Price"
+                },
+                "mayBeAbsent": true,
+                "description": "The row as it was before the change, every field by name. Absent when it was created."
               }
             ]
           }
@@ -14024,56 +15512,80 @@
     {
       "step": "preprocessInbound legal_entity create",
       "answer": {
-        "events": [
+        "events": [],
+        "arrivals": [
           {
-            "payload": {
-              "event": "valuations:legal_entity:create",
-              "timestamp": "2026-10-01T08:59:00.000Z",
-              "actor": {
-                "type": "user",
-                "id": "user-1"
-              },
-              "data": {
-                "id": "le-acme",
-                "before": null,
-                "after": {
+            "edge": "Changes",
+            "key": "le-acme",
+            "identity": "legal_entity:le-acme:created:2026-10-01T08:59:00.000Z",
+            "landing": {
+              "recordId": "legal_entity:le-acme:created:2026-10-01T08:59:00.000Z",
+              "recordType": "Legal Entity Change",
+              "fields": {
+                "Id": "legal_entity:le-acme:created:2026-10-01T08:59:00.000Z",
+                "Kind": "created",
+                "Changed Fields": [
+                  "Id",
+                  "Type",
+                  "Name"
+                ],
+                "Record Id": "le-acme",
+                "Current": {
+                  "Id": "le-acme",
+                  "Type": "PORTFOLIO_COMPANY",
+                  "Name": "Acme Robotics"
+                }
+              }
+            },
+            "parents": [
+              {
+                "recordId": "le-acme",
+                "recordType": "Legal Entity",
+                "fields": {
                   "id": "le-acme",
                   "name": "Acme Robotics",
                   "type": "PORTFOLIO_COMPANY",
                   "investing_entity_id": "le-fund"
                 }
               }
+            ],
+            "about": {
+              "recordType": "Legal Entity",
+              "externalId": "le-acme"
             },
-            "externalId": "le-acme",
-            "recordType": "legal_entity",
-            "eventType": "valuations:legal_entity:create",
-            "actor": {
-              "type": "user",
-              "id": "user-1"
-            }
+            "occurredAt": "2026-10-01T08:59:00.000Z"
           }
         ]
       }
     },
     {
-      "step": "legal_entity create: Name",
-      "answer": "Acme Robotics"
+      "step": "legal_entity create: Kind",
+      "answer": "created"
     },
     {
-      "step": "legal_entity create: -[Events]->",
+      "step": "legal_entity create: -[Record]->",
       "answer": [
         {
           "position": {
             "adapterType": "native-valuations",
-            "recordType": "Event",
+            "recordType": "Legal Entity",
             "identity": {
               "kind": "stable",
-              "recordId": "event-1",
+              "recordId": "le-acme",
               "data": {
-                "id": "event-1",
-                "type": "INVESTMENT_ROUND",
-                "date": "2024-03-01",
-                "legal_entity_id": "le-acme",
+                "id": "le-acme",
+                "type": "PORTFOLIO_COMPANY",
+                "name": "Acme Robotics",
+                "legal_name": "Acme Robotics GmbH",
+                "also_known_as": "Acme",
+                "personal_website": "https://www.acme.example/",
+                "other_names": [
+                  "ACME Bots"
+                ],
+                "investing_entity_id": "le-fund",
+                "underlying_company_id": null,
+                "acquired_by_legal_entity_id": null,
+                "is_portfolio": true,
                 "created_at": "2026-09-01T09:00:00.000Z",
                 "updated_at": "2026-09-01T09:00:00.000Z"
               }
@@ -14085,61 +15597,83 @@
     {
       "step": "preprocessInbound legal_entity update",
       "answer": {
-        "events": [
+        "events": [],
+        "arrivals": [
           {
-            "payload": {
-              "event": "valuations:legal_entity:update",
-              "timestamp": "2026-10-01T08:59:00.000Z",
-              "actor": {
-                "type": "user",
-                "id": "user-1"
-              },
-              "data": {
-                "id": "le-acme",
-                "before": {
-                  "id": "le-acme",
-                  "name": "Acme Robotics",
-                  "type": "PORTFOLIO_COMPANY",
-                  "investing_entity_id": "le-fund"
+            "edge": "Changes",
+            "key": "le-acme",
+            "identity": "legal_entity:le-acme:updated:2026-10-01T08:59:00.000Z",
+            "landing": {
+              "recordId": "legal_entity:le-acme:updated:2026-10-01T08:59:00.000Z",
+              "recordType": "Legal Entity Change",
+              "fields": {
+                "Id": "legal_entity:le-acme:updated:2026-10-01T08:59:00.000Z",
+                "Kind": "updated",
+                "Changed Fields": [
+                  "Name"
+                ],
+                "Record Id": "le-acme",
+                "Current": {
+                  "Id": "le-acme",
+                  "Type": "PORTFOLIO_COMPANY",
+                  "Name": "Acme Robotics AG"
                 },
-                "after": {
+                "Previous": {
+                  "Id": "le-acme",
+                  "Type": "PORTFOLIO_COMPANY",
+                  "Name": "Acme Robotics"
+                }
+              }
+            },
+            "parents": [
+              {
+                "recordId": "le-acme",
+                "recordType": "Legal Entity",
+                "fields": {
                   "id": "le-acme",
                   "name": "Acme Robotics AG",
                   "type": "PORTFOLIO_COMPANY",
                   "investing_entity_id": "le-fund"
                 }
               }
+            ],
+            "about": {
+              "recordType": "Legal Entity",
+              "externalId": "le-acme"
             },
-            "externalId": "le-acme",
-            "recordType": "legal_entity",
-            "eventType": "valuations:legal_entity:update",
-            "actor": {
-              "type": "user",
-              "id": "user-1"
-            }
+            "occurredAt": "2026-10-01T08:59:00.000Z"
           }
         ]
       }
     },
     {
-      "step": "legal_entity update: Name",
-      "answer": "Acme Robotics AG"
+      "step": "legal_entity update: Kind",
+      "answer": "updated"
     },
     {
-      "step": "legal_entity update: -[Events]->",
+      "step": "legal_entity update: -[Record]->",
       "answer": [
         {
           "position": {
             "adapterType": "native-valuations",
-            "recordType": "Event",
+            "recordType": "Legal Entity",
             "identity": {
               "kind": "stable",
-              "recordId": "event-1",
+              "recordId": "le-acme",
               "data": {
-                "id": "event-1",
-                "type": "INVESTMENT_ROUND",
-                "date": "2024-03-01",
-                "legal_entity_id": "le-acme",
+                "id": "le-acme",
+                "type": "PORTFOLIO_COMPANY",
+                "name": "Acme Robotics",
+                "legal_name": "Acme Robotics GmbH",
+                "also_known_as": "Acme",
+                "personal_website": "https://www.acme.example/",
+                "other_names": [
+                  "ACME Bots"
+                ],
+                "investing_entity_id": "le-fund",
+                "underlying_company_id": null,
+                "acquired_by_legal_entity_id": null,
+                "is_portfolio": true,
                 "created_at": "2026-09-01T09:00:00.000Z",
                 "updated_at": "2026-09-01T09:00:00.000Z"
               }
@@ -14151,56 +15685,76 @@
     {
       "step": "preprocessInbound legal_entity delete",
       "answer": {
-        "events": [
+        "events": [],
+        "arrivals": [
           {
-            "payload": {
-              "event": "valuations:legal_entity:delete",
-              "timestamp": "2026-10-01T08:59:00.000Z",
-              "actor": {
-                "type": "user",
-                "id": "user-1"
-              },
-              "data": {
-                "id": "le-acme",
-                "before": {
+            "edge": "Changes",
+            "key": "le-acme",
+            "identity": "legal_entity:le-acme:deleted:2026-10-01T08:59:00.000Z",
+            "landing": {
+              "recordId": "legal_entity:le-acme:deleted:2026-10-01T08:59:00.000Z",
+              "recordType": "Legal Entity Change",
+              "fields": {
+                "Id": "legal_entity:le-acme:deleted:2026-10-01T08:59:00.000Z",
+                "Kind": "deleted",
+                "Changed Fields": [],
+                "Record Id": "le-acme",
+                "Previous": {
+                  "Id": "le-acme",
+                  "Type": "PORTFOLIO_COMPANY",
+                  "Name": "Acme Robotics"
+                }
+              }
+            },
+            "parents": [
+              {
+                "recordId": "le-acme",
+                "recordType": "Legal Entity",
+                "fields": {
                   "id": "le-acme",
                   "name": "Acme Robotics",
                   "type": "PORTFOLIO_COMPANY",
                   "investing_entity_id": "le-fund"
-                },
-                "after": null
+                }
               }
+            ],
+            "about": {
+              "recordType": "Legal Entity",
+              "externalId": "le-acme"
             },
-            "externalId": "le-acme",
-            "recordType": "legal_entity",
-            "eventType": "valuations:legal_entity:delete",
-            "actor": {
-              "type": "user",
-              "id": "user-1"
-            }
+            "occurredAt": "2026-10-01T08:59:00.000Z"
           }
         ]
       }
     },
     {
-      "step": "legal_entity delete: Name",
-      "answer": "Acme Robotics"
+      "step": "legal_entity delete: Kind",
+      "answer": "deleted"
     },
     {
-      "step": "legal_entity delete: -[Events]->",
+      "step": "legal_entity delete: -[Record]->",
       "answer": [
         {
           "position": {
             "adapterType": "native-valuations",
-            "recordType": "Event",
+            "recordType": "Legal Entity",
             "identity": {
               "kind": "stable",
-              "recordId": "event-1",
+              "recordId": "le-acme",
               "data": {
-                "id": "event-1",
-                "type": "INVESTMENT_ROUND",
-                "date": "2024-03-01",
-                "legal_entity_id": "le-acme",
+                "id": "le-acme",
+                "type": "PORTFOLIO_COMPANY",
+                "name": "Acme Robotics",
+                "legal_name": "Acme Robotics GmbH",
+                "also_known_as": "Acme",
+                "personal_website": "https://www.acme.example/",
+                "other_names": [
+                  "ACME Bots"
+                ],
+                "investing_entity_id": "le-fund",
+                "underlying_company_id": null,
+                "acquired_by_legal_entity_id": null,
+                "is_portfolio": true,
                 "created_at": "2026-09-01T09:00:00.000Z",
                 "updated_at": "2026-09-01T09:00:00.000Z"
               }
@@ -14212,56 +15766,80 @@
     {
       "step": "preprocessInbound an api-token actor with no id",
       "answer": {
-        "events": [
+        "events": [],
+        "arrivals": [
           {
-            "payload": {
-              "event": "valuations:legal_entity:update",
-              "timestamp": "2026-10-01T08:59:00.000Z",
-              "actor": {
-                "type": "api-token",
-                "id": null
-              },
-              "data": {
-                "id": "le-acme",
-                "before": null,
-                "after": {
+            "edge": "Changes",
+            "key": "le-acme",
+            "identity": "legal_entity:le-acme:updated:2026-10-01T08:59:00.000Z",
+            "landing": {
+              "recordId": "legal_entity:le-acme:updated:2026-10-01T08:59:00.000Z",
+              "recordType": "Legal Entity Change",
+              "fields": {
+                "Id": "legal_entity:le-acme:updated:2026-10-01T08:59:00.000Z",
+                "Kind": "updated",
+                "Changed Fields": [
+                  "Id",
+                  "Type",
+                  "Name"
+                ],
+                "Record Id": "le-acme",
+                "Current": {
+                  "Id": "le-acme",
+                  "Type": "PORTFOLIO_COMPANY",
+                  "Name": "Acme Robotics"
+                }
+              }
+            },
+            "parents": [
+              {
+                "recordId": "le-acme",
+                "recordType": "Legal Entity",
+                "fields": {
                   "id": "le-acme",
                   "name": "Acme Robotics",
                   "type": "PORTFOLIO_COMPANY",
                   "investing_entity_id": "le-fund"
                 }
               }
+            ],
+            "about": {
+              "recordType": "Legal Entity",
+              "externalId": "le-acme"
             },
-            "externalId": "le-acme",
-            "recordType": "legal_entity",
-            "eventType": "valuations:legal_entity:update",
-            "actor": {
-              "type": "api-token",
-              "id": null
-            }
+            "occurredAt": "2026-10-01T08:59:00.000Z"
           }
         ]
       }
     },
     {
-      "step": "an api-token actor with no id: Name",
-      "answer": "Acme Robotics"
+      "step": "an api-token actor with no id: Kind",
+      "answer": "updated"
     },
     {
-      "step": "an api-token actor with no id: -[Events]->",
+      "step": "an api-token actor with no id: -[Record]->",
       "answer": [
         {
           "position": {
             "adapterType": "native-valuations",
-            "recordType": "Event",
+            "recordType": "Legal Entity",
             "identity": {
               "kind": "stable",
-              "recordId": "event-1",
+              "recordId": "le-acme",
               "data": {
-                "id": "event-1",
-                "type": "INVESTMENT_ROUND",
-                "date": "2024-03-01",
-                "legal_entity_id": "le-acme",
+                "id": "le-acme",
+                "type": "PORTFOLIO_COMPANY",
+                "name": "Acme Robotics",
+                "legal_name": "Acme Robotics GmbH",
+                "also_known_as": "Acme",
+                "personal_website": "https://www.acme.example/",
+                "other_names": [
+                  "ACME Bots"
+                ],
+                "investing_entity_id": "le-fund",
+                "underlying_company_id": null,
+                "acquired_by_legal_entity_id": null,
+                "is_portfolio": true,
                 "created_at": "2026-09-01T09:00:00.000Z",
                 "updated_at": "2026-09-01T09:00:00.000Z"
               }
@@ -14273,103 +15851,16 @@
     {
       "step": "preprocessInbound not a delivery",
       "answer": {
-        "events": []
+        "events": [],
+        "arrivals": []
       }
     },
     {
       "step": "preprocessInbound a delivery missing its data",
       "answer": {
-        "events": []
+        "events": [],
+        "arrivals": []
       }
-    },
-    {
-      "step": "listEventTypes",
-      "answer": [
-        {
-          "tag": "Legal Entity",
-          "positionType": "Legal Entity",
-          "match": {
-            "path": "event",
-            "equals": [
-              "valuations:legal_entity:create",
-              "valuations:legal_entity:update",
-              "valuations:legal_entity:delete"
-            ]
-          }
-        },
-        {
-          "tag": "Asset",
-          "positionType": "Asset",
-          "match": {
-            "path": "event",
-            "equals": [
-              "valuations:asset:create",
-              "valuations:asset:update",
-              "valuations:asset:delete"
-            ]
-          }
-        },
-        {
-          "tag": "Investment",
-          "positionType": "Investment",
-          "match": {
-            "path": "event",
-            "equals": [
-              "valuations:investment:create",
-              "valuations:investment:update",
-              "valuations:investment:delete"
-            ]
-          }
-        },
-        {
-          "tag": "Transaction",
-          "positionType": "Transaction",
-          "match": {
-            "path": "event",
-            "equals": [
-              "valuations:transaction:create",
-              "valuations:transaction:update",
-              "valuations:transaction:delete"
-            ]
-          }
-        },
-        {
-          "tag": "Asset Transfer",
-          "positionType": "Asset Transfer",
-          "match": {
-            "path": "event",
-            "equals": [
-              "valuations:asset_transfer:create",
-              "valuations:asset_transfer:update",
-              "valuations:asset_transfer:delete"
-            ]
-          }
-        },
-        {
-          "tag": "Price",
-          "positionType": "Price",
-          "match": {
-            "path": "event",
-            "equals": [
-              "valuations:price:create",
-              "valuations:price:update",
-              "valuations:price:delete"
-            ]
-          }
-        },
-        {
-          "tag": "Event",
-          "positionType": "Event",
-          "match": {
-            "path": "event",
-            "equals": [
-              "valuations:event:create",
-              "valuations:event:update",
-              "valuations:event:delete"
-            ]
-          }
-        }
-      ]
     },
     {
       "step": "iterateRelated root Legal Entity",
@@ -14460,22 +15951,15 @@
       }
     },
     {
-      "step": "ensureEventSubscription create",
+      "step": "ensureEventSubscription Changes",
       "answer": {
         "externalId": "https://example.test/api/public/webhook-sync/native_valuations/sub-1",
         "secret": "<64 hex>"
       }
     },
     {
-      "step": "ensureEventSubscription unchanged",
+      "step": "ensureEventSubscription Changes held",
       "answer": null
-    },
-    {
-      "step": "ensureEventSubscription widened",
-      "answer": {
-        "externalId": "https://example.test/api/public/webhook-sync/native_valuations/sub-1",
-        "secret": "<64 hex>"
-      }
     },
     {
       "step": "removeEventSubscription",
@@ -14963,35 +16447,35 @@
     },
     {
       "method": "GET",
-      "path": "/api/v1/valuations/events?legal_entity_id=le-acme&limit=100&offset=0",
+      "path": "/api/v1/valuations/legal-entities/le-acme",
       "authorization": "Bearer parity-valuations-key",
       "body": null,
       "status": 200,
-      "response": "{\"data\":[{\"id\":\"event-1\",\"type\":\"INVESTMENT_ROUND\",\"date\":\"2024-03-01\",\"legal_entity_id\":\"le-acme\",\"created_at\":\"2026-09-01T09:00:00.000Z\",\"updated_at\":\"2026-09-01T09:00:00.000Z\"}],\"pagination\":{\"limit\":100,\"offset\":0,\"total\":1}}"
+      "response": "{\"data\":{\"id\":\"le-acme\",\"type\":\"PORTFOLIO_COMPANY\",\"name\":\"Acme Robotics\",\"legal_name\":\"Acme Robotics GmbH\",\"also_known_as\":\"Acme\",\"personal_website\":\"https://www.acme.example/\",\"other_names\":[\"ACME Bots\"],\"investing_entity_id\":\"le-fund\",\"underlying_company_id\":null,\"acquired_by_legal_entity_id\":null,\"is_portfolio\":true,\"created_at\":\"2026-09-01T09:00:00.000Z\",\"updated_at\":\"2026-09-01T09:00:00.000Z\"}}"
     },
     {
       "method": "GET",
-      "path": "/api/v1/valuations/events?legal_entity_id=le-acme&limit=100&offset=0",
+      "path": "/api/v1/valuations/legal-entities/le-acme",
       "authorization": "Bearer parity-valuations-key",
       "body": null,
       "status": 200,
-      "response": "{\"data\":[{\"id\":\"event-1\",\"type\":\"INVESTMENT_ROUND\",\"date\":\"2024-03-01\",\"legal_entity_id\":\"le-acme\",\"created_at\":\"2026-09-01T09:00:00.000Z\",\"updated_at\":\"2026-09-01T09:00:00.000Z\"}],\"pagination\":{\"limit\":100,\"offset\":0,\"total\":1}}"
+      "response": "{\"data\":{\"id\":\"le-acme\",\"type\":\"PORTFOLIO_COMPANY\",\"name\":\"Acme Robotics\",\"legal_name\":\"Acme Robotics GmbH\",\"also_known_as\":\"Acme\",\"personal_website\":\"https://www.acme.example/\",\"other_names\":[\"ACME Bots\"],\"investing_entity_id\":\"le-fund\",\"underlying_company_id\":null,\"acquired_by_legal_entity_id\":null,\"is_portfolio\":true,\"created_at\":\"2026-09-01T09:00:00.000Z\",\"updated_at\":\"2026-09-01T09:00:00.000Z\"}}"
     },
     {
       "method": "GET",
-      "path": "/api/v1/valuations/events?legal_entity_id=le-acme&limit=100&offset=0",
+      "path": "/api/v1/valuations/legal-entities/le-acme",
       "authorization": "Bearer parity-valuations-key",
       "body": null,
       "status": 200,
-      "response": "{\"data\":[{\"id\":\"event-1\",\"type\":\"INVESTMENT_ROUND\",\"date\":\"2024-03-01\",\"legal_entity_id\":\"le-acme\",\"created_at\":\"2026-09-01T09:00:00.000Z\",\"updated_at\":\"2026-09-01T09:00:00.000Z\"}],\"pagination\":{\"limit\":100,\"offset\":0,\"total\":1}}"
+      "response": "{\"data\":{\"id\":\"le-acme\",\"type\":\"PORTFOLIO_COMPANY\",\"name\":\"Acme Robotics\",\"legal_name\":\"Acme Robotics GmbH\",\"also_known_as\":\"Acme\",\"personal_website\":\"https://www.acme.example/\",\"other_names\":[\"ACME Bots\"],\"investing_entity_id\":\"le-fund\",\"underlying_company_id\":null,\"acquired_by_legal_entity_id\":null,\"is_portfolio\":true,\"created_at\":\"2026-09-01T09:00:00.000Z\",\"updated_at\":\"2026-09-01T09:00:00.000Z\"}}"
     },
     {
       "method": "GET",
-      "path": "/api/v1/valuations/events?legal_entity_id=le-acme&limit=100&offset=0",
+      "path": "/api/v1/valuations/legal-entities/le-acme",
       "authorization": "Bearer parity-valuations-key",
       "body": null,
       "status": 200,
-      "response": "{\"data\":[{\"id\":\"event-1\",\"type\":\"INVESTMENT_ROUND\",\"date\":\"2024-03-01\",\"legal_entity_id\":\"le-acme\",\"created_at\":\"2026-09-01T09:00:00.000Z\",\"updated_at\":\"2026-09-01T09:00:00.000Z\"}],\"pagination\":{\"limit\":100,\"offset\":0,\"total\":1}}"
+      "response": "{\"data\":{\"id\":\"le-acme\",\"type\":\"PORTFOLIO_COMPANY\",\"name\":\"Acme Robotics\",\"legal_name\":\"Acme Robotics GmbH\",\"also_known_as\":\"Acme\",\"personal_website\":\"https://www.acme.example/\",\"other_names\":[\"ACME Bots\"],\"investing_entity_id\":\"le-fund\",\"underlying_company_id\":null,\"acquired_by_legal_entity_id\":null,\"is_portfolio\":true,\"created_at\":\"2026-09-01T09:00:00.000Z\",\"updated_at\":\"2026-09-01T09:00:00.000Z\"}}"
     },
     {
       "method": "GET",
@@ -15009,35 +16493,31 @@
         "url": "https://example.test/api/public/webhook-sync/native_valuations/sub-1",
         "eventTypes": [
           "valuations:legal_entity:create",
-          "valuations:legal_entity:update"
+          "valuations:legal_entity:update",
+          "valuations:legal_entity:delete",
+          "valuations:asset:create",
+          "valuations:asset:update",
+          "valuations:asset:delete",
+          "valuations:investment:create",
+          "valuations:investment:update",
+          "valuations:investment:delete",
+          "valuations:transaction:create",
+          "valuations:transaction:update",
+          "valuations:transaction:delete",
+          "valuations:asset_transfer:create",
+          "valuations:asset_transfer:update",
+          "valuations:asset_transfer:delete",
+          "valuations:price:create",
+          "valuations:price:update",
+          "valuations:price:delete",
+          "valuations:event:create",
+          "valuations:event:update",
+          "valuations:event:delete"
         ],
         "secret": "<64 hex>"
       },
       "status": 201,
-      "response": "{\"data\":{\"id\":\"webhook-1\",\"url\":\"https://example.test/api/public/webhook-sync/native_valuations/sub-1\",\"eventTypes\":[\"valuations:legal_entity:create\",\"valuations:legal_entity:update\"]}}"
-    },
-    {
-      "method": "DELETE",
-      "path": "/api/v1/valuations/webhooks?url=https%3A%2F%2Fexample.test%2Fapi%2Fpublic%2Fwebhook-sync%2Fnative_valuations%2Fsub-1",
-      "authorization": "Bearer parity-valuations-key",
-      "body": null,
-      "status": 204,
-      "response": ""
-    },
-    {
-      "method": "POST",
-      "path": "/api/v1/valuations/webhooks",
-      "authorization": "Bearer parity-valuations-key",
-      "body": {
-        "url": "https://example.test/api/public/webhook-sync/native_valuations/sub-1",
-        "eventTypes": [
-          "valuations:legal_entity:create",
-          "valuations:legal_entity:delete"
-        ],
-        "secret": "<64 hex>"
-      },
-      "status": 201,
-      "response": "{\"data\":{\"id\":\"webhook-2\",\"url\":\"https://example.test/api/public/webhook-sync/native_valuations/sub-1\",\"eventTypes\":[\"valuations:legal_entity:create\",\"valuations:legal_entity:delete\"]}}"
+      "response": "{\"data\":{\"id\":\"webhook-1\",\"url\":\"https://example.test/api/public/webhook-sync/native_valuations/sub-1\",\"eventTypes\":[\"valuations:legal_entity:create\",\"valuations:legal_entity:update\",\"valuations:legal_entity:delete\",\"valuations:asset:create\",\"valuations:asset:update\",\"valuations:asset:delete\",\"valuations:investment:create\",\"valuations:investment:update\",\"valuations:investment:delete\",\"valuations:transaction:create\",\"valuations:transaction:update\",\"valuations:transaction:delete\",\"valuations:asset_transfer:create\",\"valuations:asset_transfer:update\",\"valuations:asset_transfer:delete\",\"valuations:price:create\",\"valuations:price:update\",\"valuations:price:delete\",\"valuations:event:create\",\"valuations:event:update\",\"valuations:event:delete\"]}}"
     },
     {
       "method": "DELETE",

@@ -195,15 +195,15 @@ export async function runValuationsParityScript(adapter: Adapter): Promise<Trans
 
   for (const [name, raw] of INBOUND) {
     const answer = await t.step(`preprocessInbound ${name}`, () => adapter.preprocessInbound?.({ raw }) ?? null);
-    const event = answer?.events[0];
-    if (event !== undefined && event.recordType !== undefined) {
-      // The record the delivery is about, as the engine seeds it.
-      const delivered = makeStablePosition({ adapterType: ADAPTER_TYPE, recordId: event.externalId ?? '', recordType: 'Legal Entity', data: event.payload });
-      await t.step(`${name}: Name`, () => adapter.getFieldValue({ position: delivered, fieldId: 'Name' }));
-      await t.step(`${name}: -[Events]->`, () => adapter.getRelated({ position: delivered, fieldId: 'Events', direction: 'outgoing' }));
+    const arrival = answer?.arrivals[0];
+    if (arrival !== undefined && 'landing' in arrival) {
+      // The change the delivery lands, as the engine seeds it, and the walk
+      // from it to the record now.
+      const change = makeStablePosition({ adapterType: ADAPTER_TYPE, recordId: arrival.landing.recordId ?? '', recordType: arrival.landing.recordType ?? 'Legal Entity Change', data: arrival.landing.fields });
+      await t.step(`${name}: Kind`, () => adapter.getFieldValue({ position: change, fieldId: 'Kind' }));
+      await t.step(`${name}: -[Record]->`, () => adapter.getRelated({ position: change, fieldId: 'Record', direction: 'outgoing' }));
     }
   }
-  await t.step('listEventTypes', () => adapter.listEventTypes?.() ?? null);
 
   // The streamed root read, which pages the entity's whole collection.
   await t.step('iterateRelated root Legal Entity', () => collect(adapter.iterateRelated?.({ position: meta, fieldId: 'Legal Entity', direction: 'outgoing' })));
@@ -212,28 +212,15 @@ export async function runValuationsParityScript(adapter: Adapter): Promise<Trans
   );
 
   const callbackUrl = 'https://example.test/api/public/webhook-sync/native_valuations/sub-1';
-  const registered = await t.step('ensureEventSubscription create', async () =>
-    withSecretShape(await (adapter.ensureEventSubscription?.({ callbackUrl, events: ['valuations:legal_entity:create', 'valuations:legal_entity:update'] } as never) ?? null)),
+  // One subscription per listenable edge (adapter protocol 2.6): every
+  // entity's Changes, under one webhook.
+  const registered = await t.step('ensureEventSubscription Changes', async () =>
+    withSecretShape(await (adapter.ensureEventSubscription?.({ edge: 'Changes', callbackUrl }) ?? null)),
   );
   const externalId = (registered as { externalId?: string } | null | undefined)?.externalId;
   if (externalId !== undefined) {
-    await t.step('ensureEventSubscription unchanged', async () =>
-      withSecretShape(
-        await (adapter.ensureEventSubscription?.({
-          callbackUrl,
-          events: ['valuations:legal_entity:update', 'valuations:legal_entity:create'],
-          current: { externalId, events: ['valuations:legal_entity:create', 'valuations:legal_entity:update'] },
-        } as never) ?? null),
-      ),
-    );
-    await t.step('ensureEventSubscription widened', async () =>
-      withSecretShape(
-        await (adapter.ensureEventSubscription?.({
-          callbackUrl,
-          events: ['valuations:legal_entity:create', 'valuations:legal_entity:delete'],
-          current: { externalId, events: ['valuations:legal_entity:create'] },
-        } as never) ?? null),
-      ),
+    await t.step('ensureEventSubscription Changes held', async () =>
+      withSecretShape(await (adapter.ensureEventSubscription?.({ edge: 'Changes', callbackUrl, current: { externalId } }) ?? null)),
     );
     await t.step('removeEventSubscription', () => adapter.removeEventSubscription?.({ callbackUrl, externalId }) ?? null);
   }
@@ -260,7 +247,7 @@ export async function runValuationsWithoutCredentialScript(adapter: Adapter): Pr
   );
   await t.step('readRecord', () => adapter.readRecord?.({ recordType: 'Legal Entity', externalId: 'le-acme' }) ?? null);
   await t.step('ensureEventSubscription', () =>
-    adapter.ensureEventSubscription?.({ callbackUrl: 'https://example.test/x', events: ['valuations:legal_entity:create'] } as never) ?? null,
+    adapter.ensureEventSubscription?.({ edge: 'Changes', callbackUrl: 'https://example.test/x' }) ?? null,
   );
   await t.step('removeEventSubscription', () => adapter.removeEventSubscription?.({ callbackUrl: 'https://example.test/x', externalId: 'https://example.test/x' }) ?? null);
   return t.entries;
