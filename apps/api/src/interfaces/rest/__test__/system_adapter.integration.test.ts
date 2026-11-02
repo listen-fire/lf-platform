@@ -1,14 +1,17 @@
 // The `system` adapter's route, as a cloud lf reaches it (real DB): adapter
 // protocol 2's envelope at `POST /api/v1/system/adapters/system`, behind the
 // host's own authentication and the system caller gate, acting in the tenant
-// of the key's owner. lf's runs are written as the store slot writes them
-// (lf_store/runs.ts), and the poll is asked as lf asks it: the listen's
-// config, its checkpoint, and the movement the listen fires as `movementId`.
+// of the key's owner. The poll is asked as 0.13 asks it: one listenable edge
+// (`Events`), the listen's taken filter on `Kind`, and the cursor the last
+// poll answered. The facts are written where their writers leave them: lf's
+// runs as the store slot writes them, the platform's runs and triggers, the
+// `system_event` rows, stranded waits and the listen door's unjudged facts.
 
 import { randomUUID } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 
 import express from 'express';
+import { sql } from 'kysely';
 
 import type { AddressInfo } from 'node:net';
 import type { TeamId } from '../../../generated/kysely/core/Team';
@@ -25,8 +28,9 @@ import { authorisationHandler } from '../../../lib/middleware/authorisation';
 import { defersToSystemCaller } from '../../../services/system_auth';
 import { upsertMovementRow } from '../../../services/translation_graph/movement/store';
 import { settleRun, startRun } from '../../../services/lf_store/runs';
-import { failedRunsUrl } from '@listen-fire/system';
-import { automationUrl, automationsUrl, webBaseUrl } from '../../../services/translation_graph/adapters/system/events';
+import { noteUnjudged } from '../../../services/lf_store/records_door';
+import { RELEASE_APPLIED, RUN_PAUSED } from '@listen-fire/system';
+import { automationUrl, automationsUrl, recordSystemEvent, webBaseUrl } from '../../../services/translation_graph/adapters/system/events';
 import { systemRouter } from '../v1/system';
 
 interface Owner {
@@ -43,7 +47,6 @@ let knowledgeKey: string;
 let syncMovementId: string;
 
 const NIL = '00000000-0000-0000-0000-000000000000';
-const HOUR_AGO = new Date(Date.now() - 60 * 60_000).toISOString();
 const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
 
 async function makeOwner(): Promise<Owner> {
@@ -60,12 +63,16 @@ async function makeOwner(): Promise<Owner> {
   return { teamId, userId, key };
 }
 
-/** One lf run of `file`'s listen firing `movement`, as the store slot records
- *  it: started, then settled `status` at `at`. */
-async function lfRun(teamId: string, input: { file: string; movement: string; status: 'failed' | 'completed'; at: string; error?: string }): Promise<string> {
+/** One lf run of `file`'s `movement`, as the store slot records it: started
+ *  by the listen `listen`, then settled `status` at `at`. */
+async function lfRun(
+  teamId: string,
+  input: { file: string; movement: string; status: 'failed' | 'completed'; at: string; error?: string; listen?: string },
+): Promise<string> {
   const id = randomUUID();
   const scope = { tenant: teamId };
-  await startRun(scope, { id, file: input.file, movement: input.movement, startedAt: input.at, input: '{}', deliveryId: null });
+  const facts = input.listen === undefined ? {} : { event: { pipelineInputId: input.listen } };
+  await startRun(scope, { id, file: input.file, movement: input.movement, startedAt: input.at, input: JSON.stringify(facts), deliveryId: null, teamId: null });
   await settleRun(scope, { runId: id, status: input.status, outcome: { writes: 0, ...(input.error !== undefined ? { error: input.error } : {}) }, at: input.at });
   return id;
 }
@@ -92,6 +99,8 @@ afterAll(async () => {
   for (const { teamId } of [teamA, teamB]) {
     await getCoreQb(['api_key']).deleteFrom('api_key').where('team_id', '=', teamId).execute();
     await getAutomationsQb(['movement']).deleteFrom('movement').where('team_id', '=', teamId).execute();
+    await getAutomationsQb(['system_event']).deleteFrom('system_event').where('team_id', '=', teamId).execute();
+    await getAutomationsQb(['trigger']).deleteFrom('trigger').where('team_id', '=', teamId).execute();
     await cleanupTeam(teamId);
   }
 });
@@ -115,39 +124,34 @@ async function call(owner: Owner, method: string, params: Record<string, unknown
   return res.json();
 }
 
-interface PollResult {
-  events: { payload: Record<string, string>; externalId: string; tag: string; eventType?: string }[];
-  checkpoint: { runFailed?: { failedAt: string; runId: string } };
+interface Arrival {
+  identity: string;
+  landing: { recordId: string; recordType: string; fields: Record<string, unknown> };
+  notFor?: string;
+  about?: { recordType: string; externalId: string };
 }
 
-async function poll(owner: Owner, params: Record<string, unknown>): Promise<PollResult> {
-  const answered = await call(owner, 'poll', params);
-  expect(answered.ok).toBe(true);
+interface PollAnswer {
+  arrivals: Arrival[];
+  cursor: Record<string, { at: string } & Record<string, unknown>>;
+}
+
+const kindIs = (kind: string) => ({ type: 'compare', op: 'eq', left: { type: 'property', propertyTypeId: 'Kind' }, right: { type: 'static', value: kind } });
+
+async function poll(owner: Owner, input: { kind: string; cursor?: unknown }): Promise<PollAnswer> {
+  const answered = await call(owner, 'poll', { edge: 'Events', filter: kindIs(input.kind), ...(input.cursor !== undefined ? { cursor: input.cursor } : {}) });
+  expect(answered).toMatchObject({ ok: true });
   return answered.result;
 }
 
-const RUN_FAILED_LISTEN = { config: { events: ['Run Failed'] }, movementId: 'Run Failed' };
+const fieldsOf = (answer: PollAnswer) => answer.arrivals.map((a) => a.landing.fields);
 
 describe('the system adapter route', () => {
-  it('answers its manifest first, with no listen, checkpoint or setting before it: a polled adapter on protocol 2.0', async () => {
+  it('answers its manifest: a polled adapter on protocol 2.6', async () => {
     const answered = await call(teamA, 'manifest');
 
     expect(answered.ok).toBe(true);
-    expect(answered.result).toMatchObject({
-      protocolVersion: 2,
-      protocolMinor: 0,
-      adapterType: 'system',
-      supportedTriggers: ['poll'],
-      poll: { intervalSeconds: 60 },
-      subscribableEvents: ['Run Failed', 'Run Paused', 'Validation Issue', 'Deprecated Version', 'Release Applied'],
-    });
-    expect(answered.result.methods).toEqual(expect.arrayContaining(['manifest', 'describe', 'listEntryPoints']));
-  });
-
-  it('describes an event kind by its natural name', async () => {
-    const answered = await call(teamA, 'describe', { typeId: 'Run Failed' });
-    expect(answered.ok).toBe(true);
-    expect(answered.result.fields.map((f: { displayName: string }) => f.displayName)).toEqual(['Automation', 'Automation Id', 'Run Id', 'Version', 'Reason', 'Url', 'At']);
+    expect(answered.result).toMatchObject({ protocolVersion: 2, protocolMinor: 6, adapterType: 'system', supportedTriggers: ['poll'] });
   });
 
   it('is refused without a key, with an unknown key, and with a key that does not hold the system scope', async () => {
@@ -165,74 +169,189 @@ describe('the system adapter route', () => {
     expect((await post({ method: 'manifest' }, teamA.key)).status).toBe(400);
   });
 
-  it('sets the mark on the first poll and emits nothing', async () => {
+  it('arms on the first poll and emits nothing', async () => {
     await lfRun(teamA.teamId, { file: 'Nightly Sync', movement: 'sync', status: 'failed', at: minutesAgo(30), error: 'before anyone listened' });
-    const first = await poll(teamA, RUN_FAILED_LISTEN);
-    expect(first.events).toEqual([]);
-    expect(first.checkpoint.runFailed?.runId).toBe(NIL);
+    const first = await poll(teamA, { kind: 'Run Failed' });
+    expect(first.arrivals).toEqual([]);
+    expect(first.cursor.failed).toMatchObject({ runId: NIL });
   });
 
-  it("reports the tenant's lf failures by file, skips the listener's own, never reads another tenant's, and advances the mark", async () => {
-    const after = { runFailed: { failedAt: minutesAgo(20), runId: NIL } };
+  it("reports the tenant's lf failures, marks each not for the listen that started it, never reads another tenant's, and advances the mark", async () => {
+    const cursor = { failed: { at: minutesAgo(20), runId: NIL } };
     const syncFailedAt = minutesAgo(15);
     const sync = await lfRun(teamA.teamId, { file: 'Nightly Sync', movement: 'sync', status: 'failed', at: syncFailedAt, error: 'Attio refused the write: 403' });
     const loose = await lfRun(teamA.teamId, { file: 'scratch/probe', movement: 'probe', status: 'failed', at: minutesAgo(14), error: 'probe fails by design' });
     await lfRun(teamA.teamId, { file: 'Nightly Sync', movement: 'sync', status: 'completed', at: minutesAgo(13) });
-    const own = await lfRun(teamA.teamId, { file: 'Automation Alerts', movement: 'Run Failed', status: 'failed', at: minutesAgo(12), error: 'Slack channel not found' });
+    const alerts = 'listen:Automation Alerts:alert:0a1b2c3d';
+    const own = await lfRun(teamA.teamId, { file: 'Automation Alerts', movement: 'alert', status: 'failed', at: minutesAgo(12), error: 'Slack channel not found', listen: alerts });
     const theirs = await lfRun(teamB.teamId, { file: 'Nightly Sync', movement: 'sync', status: 'failed', at: minutesAgo(11), error: 'team B only' });
 
-    const polled = await poll(teamA, { ...RUN_FAILED_LISTEN, checkpoint: after });
+    const polled = await poll(teamA, { kind: 'Run Failed', cursor });
 
-    expect(polled.events.map((e) => e.externalId)).toEqual([sync, loose]);
-    expect(polled.events[0]).toMatchObject({
-      tag: 'system:run_failed',
-      // The module labels it with the name a listen's `events:` selects with.
-      eventType: 'Run Failed',
-      payload: {
-        automation: 'Nightly Sync',
-        automationId: 'listen:Nightly Sync:sync',
-        runId: sync,
-        reason: 'Attio refused the write: 403',
-        url: automationUrl(syncMovementId),
-        at: syncFailedAt,
+    expect(fieldsOf(polled).map((f) => f['Run Id'])).toEqual([sync, loose, own]);
+    expect(polled.arrivals[0]).toMatchObject({
+      about: { recordType: 'Run', externalId: sync },
+      landing: {
+        fields: {
+          Kind: 'Run Failed',
+          Automation: 'sync',
+          'Automation Id': 'Nightly Sync:sync',
+          Reason: 'Attio refused the write: 403',
+          Url: automationUrl(syncMovementId),
+          At: syncFailedAt,
+        },
       },
     });
+    expect(polled.arrivals[0]?.notFor).toBeUndefined();
     // No movement here is named by the file: the link is the automations list.
-    expect(polled.events[1]?.payload).toMatchObject({ automation: 'scratch/probe', url: automationsUrl() });
-    // The listener's own failure is passed, not delivered.
-    expect(polled.checkpoint.runFailed?.runId).toBe(own);
+    expect(polled.arrivals[1]?.landing.fields).toMatchObject({ Automation: 'probe', Url: automationsUrl() });
+    // A failure is never told to the listen whose arrival started the run.
+    expect(polled.arrivals[2]?.notFor).toBe(alerts);
+    expect(polled.cursor.failed).toMatchObject({ runId: own });
 
-    const again = await poll(teamA, { ...RUN_FAILED_LISTEN, checkpoint: polled.checkpoint });
-    expect(again.events).toEqual([]);
-    expect(again.checkpoint).toEqual(polled.checkpoint);
+    const again = await poll(teamA, { kind: 'Run Failed', cursor: polled.cursor });
+    expect(again.arrivals).toEqual([]);
+    expect(again.cursor).toEqual(polled.cursor);
 
-    const asB = await poll(teamB, { ...RUN_FAILED_LISTEN, checkpoint: after });
-    expect(asB.events.map((e) => e.externalId)).toEqual([theirs]);
+    const asB = await poll(teamB, { kind: 'Run Failed', cursor });
+    expect(fieldsOf(asB).map((f) => f['Run Id'])).toEqual([theirs]);
   });
 
-  it("reports the platform's own failed runs as before, beside lf's", async () => {
+  it("reports the platform's own failed runs by their movement, passes a rehearsal, and reads a failure kept finer than a millisecond once", async () => {
     const trigger = await getAutomationsQb(['trigger'])
       .insertInto('trigger')
       .values({ team_id: teamA.teamId, name: 'movement/Nightly Sync/sync', kind: 'cron', movement_id: syncMovementId as MovementId })
       .returning('id')
       .executeTakeFirstOrThrow();
-    const failedAt = new Date(Date.now() - 5 * 60_000);
-    const run = await getAutomationsQb(['trigger_run'])
-      .insertInto('trigger_run')
-      .values({ team_id: teamA.teamId, trigger_id: trigger.id, trigger_type: 'cron', status: 'failed', failed_at: failedAt, failure_reason: 'the platform run failed' })
+    const listen = 'listen:Nightly Sync:sync:9f8e7d6c';
+    const insertRun = (input: { dryRun: boolean; reason: string }) =>
+      getAutomationsQb(['trigger_run'])
+        .insertInto('trigger_run')
+        .values({
+          team_id: teamA.teamId,
+          trigger_id: trigger.id,
+          trigger_type: 'cron',
+          status: 'failed',
+          // now(): microseconds, finer than the mark's ISO text carries.
+          failed_at: sql<Date>`now() - interval '5 minutes'`,
+          failure_reason: input.reason,
+          dry_run: input.dryRun,
+          trigger_payload: { pipelineInputId: listen },
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+    const run = await insertRun({ dryRun: false, reason: 'the platform run failed' });
+    await insertRun({ dryRun: true, reason: 'a rehearsal' });
+
+    const polled = await poll(teamA, { kind: 'Run Failed', cursor: { failed: { at: minutesAgo(6), runId: NIL } } });
+
+    expect(polled.arrivals).toHaveLength(1);
+    expect(polled.arrivals[0]).toMatchObject({
+      notFor: listen,
+      landing: {
+        fields: {
+          Automation: 'Nightly Sync',
+          'Automation Id': syncMovementId,
+          'Run Id': run.id,
+          Reason: 'the platform run failed',
+          Url: `${webBaseUrl()}/movements/${syncMovementId}?view=activity&status=failed`,
+        },
+      },
+    });
+    const again = await poll(teamA, { kind: 'Run Failed', cursor: polled.cursor });
+    expect(again.arrivals).toEqual([]);
+  });
+
+  it('reports a run paused at its cost limit and a release, from the rows kept for them', async () => {
+    const paused = await lfRun(teamA.teamId, { file: 'Nightly Sync', movement: 'sync', status: 'completed', at: minutesAgo(9), listen: 'listen:Nightly Sync:sync:1' });
+    const pausedAt = minutesAgo(8);
+    await recordSystemEvent({
+      teamId: teamA.teamId,
+      kind: RUN_PAUSED,
+      payload: { automation: 'Nightly Sync', automationId: syncMovementId, runId: paused, version: '', reason: 'spent $5.00 of a $5.00 limit', url: `${automationUrl(syncMovementId)}?view=activity`, at: pausedAt },
+    });
+    await recordSystemEvent({
+      teamId: teamA.teamId,
+      kind: RELEASE_APPLIED,
+      payload: { automation: '', automationId: '', runId: '', version: '0.13.0', reason: 'release 0.13.0', url: automationsUrl(), at: minutesAgo(7) },
+    });
+
+    const pausedPoll = await poll(teamA, { kind: 'Run Paused', cursor: { paused: { at: minutesAgo(10), runId: NIL } } });
+    expect(pausedPoll.arrivals).toHaveLength(1);
+    expect(pausedPoll.arrivals[0]).toMatchObject({
+      notFor: 'listen:Nightly Sync:sync:1',
+      landing: { fields: { Kind: 'Run Paused', 'Run Id': paused, 'Automation Id': syncMovementId, Reason: 'spent $5.00 of a $5.00 limit', At: pausedAt } },
+    });
+    expect(pausedPoll.cursor.paused).toEqual({ at: pausedAt, runId: paused });
+
+    const releasePoll = await poll(teamA, { kind: 'Release Applied', cursor: { releases: { at: minutesAgo(10), version: '' } } });
+    expect(fieldsOf(releasePoll)).toEqual([expect.objectContaining({ Kind: 'Release Applied', Version: '0.13.0' })]);
+    expect((await poll(teamB, { kind: 'Release Applied', cursor: { releases: { at: minutesAgo(10), version: '' } } })).arrivals).toEqual([]);
+  });
+
+  it('reports a wait whose record was deleted, by its module, edge and record', async () => {
+    const run = await lfRun(teamA.teamId, { file: 'Nightly Sync', movement: 'sync', status: 'completed', at: minutesAgo(9), listen: 'listen:Nightly Sync:sync:2' });
+    const wait = await getAutomationsQb(['wait_row'])
+      .insertInto('wait_row')
+      .values({ run_id: run, team_id: teamA.teamId, adapter_type: 'attio', edge: 'Changes', key: 'rec-1', since: '0', record_id: 'rec-1', stranded_at: sql<Date>`now() - interval '3 minutes'` })
       .returning('id')
       .executeTakeFirstOrThrow();
 
-    const polled = await poll(teamA, { ...RUN_FAILED_LISTEN, checkpoint: { runFailed: { failedAt: minutesAgo(6), runId: NIL } } });
+    const polled = await poll(teamA, { kind: 'Wait Lost Its Record', cursor: { stranded: { at: minutesAgo(5), waitId: NIL } } });
 
-    expect(polled.events.map((e) => e.payload)).toEqual([
-      expect.objectContaining({ automation: 'Nightly Sync', automationId: syncMovementId, runId: run.id, url: failedRunsUrl(webBaseUrl(), syncMovementId) }),
-    ]);
+    expect(polled.arrivals).toHaveLength(1);
+    expect(polled.arrivals[0]).toMatchObject({
+      notFor: 'listen:Nightly Sync:sync:2',
+      landing: { fields: { Kind: 'Wait Lost Its Record', 'Run Id': run, Adapter: 'attio', Edge: 'Changes', 'Record Id': 'rec-1', Automation: 'sync' } },
+    });
+    expect(polled.cursor.stranded).toMatchObject({ waitId: wait.id });
+    expect((await poll(teamA, { kind: 'Wait Lost Its Record', cursor: polled.cursor })).arrivals).toEqual([]);
+    expect((await poll(teamB, { kind: 'Wait Lost Its Record', cursor: { stranded: { at: minutesAgo(5), waitId: NIL } } })).arrivals).toEqual([]);
   });
 
-  it("tells a listener in another file about a failure of a movement that is not the one it fires", async () => {
-    const after = { runFailed: { failedAt: HOUR_AGO, runId: NIL } };
-    const polled = await poll(teamA, { config: { events: ['Run Failed'] }, movementId: 'Report', checkpoint: after });
-    expect(polled.events.map((e) => e.payload.automation)).toContain('Automation Alerts');
+  it("reports an arrival a listen could not judge, with the listen's movement, and never its own reports of one", async () => {
+    const at = minutesAgo(4);
+    const fact = {
+      pipeline: 'listen:Nightly Sync:sync:3',
+      arrival: 'Messages:C1:C1:1700.1:',
+      file: 'Nightly Sync',
+      movement: 'sync',
+      deliveryId: null,
+      edge: 'Messages',
+      adapter: 'slack',
+      recordId: 'C1:1700.1',
+      landing: { recordType: 'Message', fields: {} },
+      reason: 'slack could not read Name of the Channels record',
+      cause: null,
+      at,
+      attempt: 0,
+    };
+    await noteUnjudged({ tenant: teamA.teamId }, { ...fact, forgetBefore: minutesAgo(600) });
+    // A listen on `Events` that could not judge one of this module's own reports.
+    await noteUnjudged(
+      { tenant: teamA.teamId },
+      { ...fact, at: minutesAgo(3), pipeline: 'listen:Alerts:alert:4', edge: 'Events', adapter: 'system', arrival: 'Events:x', landing: { recordType: 'Event', fields: { Kind: 'Arrival Not Judged' } }, forgetBefore: minutesAgo(600) },
+    );
+
+    const polled = await poll(teamA, { kind: 'Arrival Not Judged', cursor: { unjudged: { at: minutesAgo(5), listen: '', arrival: '', attempt: 0 } } });
+
+    expect(polled.arrivals).toHaveLength(1);
+    expect(polled.arrivals[0]).toMatchObject({
+      notFor: fact.pipeline,
+      landing: {
+        fields: {
+          Kind: 'Arrival Not Judged',
+          Automation: 'Nightly Sync',
+          'Automation Id': syncMovementId,
+          Listen: fact.pipeline,
+          'Arrival Id': fact.arrival,
+          Edge: 'Messages',
+          'Record Id': 'C1:1700.1',
+          Attempt: 0,
+        },
+      },
+    });
+    // The mark passes the report it did not deliver.
+    expect(polled.cursor.unjudged).toMatchObject({ listen: 'listen:Alerts:alert:4' });
   });
 });

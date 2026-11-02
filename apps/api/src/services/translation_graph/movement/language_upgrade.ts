@@ -66,13 +66,13 @@ import {
   automationUrl,
   automationsUrl,
   recordSystemEvent,
+  type SystemEventPayload,
 } from '../adapters/system/events';
 import {
   DEPRECATED_VERSION,
   RELEASE_APPLIED,
   VALIDATION_ISSUE,
   type SystemEventKind,
-  type SystemEventPayload,
 } from '@listen-fire/system';
 import {
   assessMovementValidity,

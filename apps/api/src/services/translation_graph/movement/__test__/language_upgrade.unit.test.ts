@@ -128,7 +128,7 @@ function fakeStore(input: {
       upgradeDiagnostics.set(m.id, diagnostics);
     },
     emit: async ({ teamId, kind, payload }) => {
-      events.push({ teamId, kind: kind.typeId, reason: payload.reason, version: payload.version });
+      events.push({ teamId, kind: kind.id, reason: payload.reason, version: payload.version });
     },
     recordRun: async (run) => {
       runs.push(run);
@@ -164,7 +164,7 @@ describe('the deploy check', () => {
         to: { version: CUR, name: CUR },
       }),
     ]);
-    expect(store.events.map((e) => e.kind)).toEqual([RELEASE_APPLIED.typeId]);
+    expect(store.events.map((e) => e.kind)).toEqual([RELEASE_APPLIED.id]);
   });
 
   it('offers the upgrade when the only warning is a cost note, and prints the note', async () => {
@@ -178,7 +178,7 @@ describe('the deploy check', () => {
 
     expectNoPinMoved();
     expect(store.upgradeDiagnostics.get('noted')).toEqual([]);
-    expect(store.events.map((e) => e.kind)).toEqual([RELEASE_APPLIED.typeId]);
+    expect(store.events.map((e) => e.kind)).toEqual([RELEASE_APPLIED.id]);
     expect(summary?.automations[0]).toEqual(
       expect.objectContaining({
         outcome: 'upgradable',
@@ -205,7 +205,7 @@ describe('the deploy check', () => {
     expect(summary?.counts).toEqual(
       expect.objectContaining({ upgradable: 0, warned: 1, refused: 0 }),
     );
-    const issue = store.events.find((e) => e.kind === VALIDATION_ISSUE.typeId);
+    const issue = store.events.find((e) => e.kind === VALIDATION_ISSUE.id);
     expect(issue).toEqual(
       expect.objectContaining({ version: '1', teamId: 'team-1' }),
     );
@@ -225,7 +225,7 @@ describe('the deploy check', () => {
     expect(summary?.automations[0]).toEqual(
       expect.objectContaining({ outcome: 'refused', detail: 'line 3: unknown field' }),
     );
-    expect(store.events.map((e) => e.kind)).toEqual([VALIDATION_ISSUE.typeId, RELEASE_APPLIED.typeId]);
+    expect(store.events.map((e) => e.kind)).toEqual([VALIDATION_ISSUE.id, RELEASE_APPLIED.id]);
   });
 
   it('says so when a refused movement was already failing under its pin before the release', async () => {
@@ -286,7 +286,7 @@ describe('the deploy check', () => {
 
     await runDeployCheck(store.deps);
 
-    const applied = store.events.filter((e) => e.kind === RELEASE_APPLIED.typeId);
+    const applied = store.events.filter((e) => e.kind === RELEASE_APPLIED.id);
     expect(applied.map((e) => e.teamId)).toEqual(['team-1', 'team-2']);
     expect(applied[1]?.reason).toContain('Release v0.8.0 applied');
     expect(applied[1]?.reason).toContain(`Clean under ${CUR}, upgraded when you ask: 1`);
@@ -302,7 +302,7 @@ describe('the deploy check', () => {
 
     const summary = await runDeployCheck(store.deps);
 
-    expect(store.events.map((e) => e.kind)).toContain(DEPRECATED_VERSION.typeId);
+    expect(store.events.map((e) => e.kind)).toContain(DEPRECATED_VERSION.id);
     expect(summary?.automations[0]).toEqual(expect.objectContaining({ outcome: 'warned', deprecated: true }));
   });
 
@@ -352,7 +352,7 @@ describe('a pin by the compatibility rule', () => {
     for (const entry of refused) expect(entry.detail).toContain(entry.from.version);
     // A pin the installed language does not read is never validated.
     expect(store.validations.map((v) => v.movement.id)).toEqual(['legacy', 'legacy', 'same-line']);
-    expect(store.events.filter((e) => e.kind === VALIDATION_ISSUE.typeId).map((e) => e.version)).toEqual([
+    expect(store.events.filter((e) => e.kind === VALIDATION_ISSUE.id).map((e) => e.version)).toEqual([
       '0.12.0',
       '0.14.0',
     ]);
@@ -576,7 +576,7 @@ describe('the upgrade rewrites the text by its fixes first', () => {
     expect(summary?.automations.map((a) => a.outcome)).toEqual(['warned']);
     expectNoPinMoved();
     expect(store.upgradeDiagnostics.get('old')?.map((d) => d.code)).toEqual(['MOV_V5_SPELLING', 'MOV_V5_SPELLING', 'MOV_V5_SPELLING']);
-    const issue = store.events.find((e) => e.kind === VALIDATION_ISSUE.typeId);
+    const issue = store.events.find((e) => e.kind === VALIDATION_ISSUE.id);
     expect(issue?.reason).toContain('Upgrading the automation rewrites what the checker can fix');
   });
 
