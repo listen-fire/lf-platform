@@ -8,8 +8,7 @@ import { sql } from 'kysely';
 
 import type { WebhookSubscriptionId } from '../../generated/kysely/automations/WebhookSubscription';
 import type { TeamId } from '../../generated/kysely/core/Team';
-import type { DiscriminableEvent, EventType } from 'movement-engine/public/adapter';
-import type { TriggerId } from '../../generated/kysely/automations/Trigger';
+import type { DiscriminableEvent } from 'movement-engine/public/adapter';
 import type { HarnessDelivery, SettleReport } from '../work/harness';
 import type {
   EventError,
@@ -24,14 +23,8 @@ import type {
 import { getAutomationsQb } from '../../lib/kysely';
 import { getWebhookProvider } from './providers';
 import { logger } from 'movement-engine/public/log';
-import { findTriggersByKind } from '../translation_graph/storage/tg_table';
-import {
-  captureDiscriminableEvent,
-  enqueueCapturedEvents,
-  readReceiptGroupOutcomes,
-  type CapturedTriggerEvent,
-} from '../translation_graph/triggers/dispatch_event';
-import { channelScopeMatches, eventConfigList, eventMatchesTriggerScope } from 'movement-engine/public/inbound';
+import { readReceiptGroupOutcomes, type CapturedTriggerEvent } from '../translation_graph/triggers/dispatch_event';
+import { deliverArrivals } from '../inbound/listen_door';
 import { TELEGRAM_ADAPTER_TYPE, TelegramAdapter } from '../translation_graph/adapters/telegram';
 import { handleTelegramCallbackQuery, ownsCallbackQuery } from './telegram_callback_door';
 import { WHATSAPP_ADAPTER_TYPE } from '../translation_graph/adapters/whatsapp';
@@ -40,15 +33,12 @@ import {
   handleWhatsappInteractiveReplies,
   ownsWhatsappInteractiveReply,
 } from './whatsapp_callback_door';
-import { enqueueAwaitWakes } from '../movement_engine/await_wake';
-import { notifyWork } from '../work/drain';
 import {
   enqueueLinkedObjectRefresh,
   hasBridgedLinkedObjects,
   type LinkedObjectRefresh,
 } from './linked_object_refresh';
-import { getAdapterManifest, hasAdapter, resolveAdapterSlug } from '../translation_graph/adapters/registry';
-import { filterByRecordScope } from '../translation_graph/triggers/record_scope';
+import { hasAdapter, resolveAdapterSlug } from '../translation_graph/adapters/registry';
 import { resolveAdapter } from '../translation_graph/adapters/resolve';
 import { isTestHarnessTeam } from '../../lib/recording';
 import { CHECKED_BY_MODULE, receiveDelivery } from 'movement-engine/public/inbound';
@@ -57,10 +47,6 @@ import { listRemoteAdapters, parseStoredManifest } from '../translation_graph/ad
 import { mayBeRemoteSlug } from '../translation_graph/adapters/remote/slugs';
 import { LEGACY_INTERCEPTS, builtInVerifierFor } from '../inbound/legacy_signature_headers';
 import { builtinModuleInboundVerifier } from '../translation_graph/adapters/builtin_modules';
-
-function jsonb(value: unknown): unknown {
-  return sql`${JSON.stringify(value)}::jsonb` as unknown;
-}
 
 /** The receipts phase 1 stored for one event (one per trigger that matched). */
 export type CapturedReceipts = CapturedTriggerEvent[];
@@ -259,6 +245,12 @@ export const platformInboundStore: InboundStore<CapturedReceipts> = {
       ])
       .executeTakeFirst();
     if (!row) return null;
+    // The cursor a delivery's write keeps (keepDelivery), else one a door kept
+    // on the subscription before this release.
+    const { rows: cursors } = await sql<{ checkpoint: unknown }>`
+      select checkpoint from automations.inbound_checkpoint
+      where team_id = ${row.team_id}::uuid and subscription_id = ${row.id}::text`.execute(getAutomationsQb(['inbound_checkpoint']));
+    const kept = cursors[0];
     return {
       id: row.id,
       teamId: row.team_id,
@@ -266,7 +258,7 @@ export const platformInboundStore: InboundStore<CapturedReceipts> = {
       credentialsId: row.credentials_id,
       secret: row.webhook_secret,
       grandfatheredUnsigned: row.grandfathered_unsigned,
-      checkpoint: row.inbound_checkpoint,
+      checkpoint: kept !== undefined ? kept.checkpoint : row.inbound_checkpoint,
     };
   },
 
@@ -281,27 +273,26 @@ export const platformInboundStore: InboundStore<CapturedReceipts> = {
   // real source signing them.
   verifiesSignature: (subscription) => !isTestHarnessTeam(subscription.teamId),
 
-  capture: ({ event, subscription, source, eventTypes }) =>
-    captureProviderTriggerEvents({
-      event,
-      subscription: subscriptionRow(subscription, source),
-      adapterType: source.adapterType,
-      eventTypes,
-    }),
-
-  async saveCheckpoint({ subscriptionId, checkpoint }) {
-    await getAutomationsQb(['webhook_subscription'])
-      .updateTable('webhook_subscription')
-      .set({ inbound_checkpoint: jsonb(checkpoint) as never })
-      .where('id', '=', subscriptionId as WebhookSubscriptionId)
-      .execute();
+  // A module's events are no listen's: every listen is judged on the
+  // delivery's arrivals, as it is kept (listen_door.ts). An event still
+  // refreshes the knowledge graph node bridged to the record it names.
+  capture: async ({ event, subscription, source }) => {
+    await refreshBridgedLinkedObject({ event, subscription: subscriptionRow(subscription, source) });
+    return [];
   },
 
-  enqueue: ({ captured, event, subscription, source }) =>
-    enqueueCapturedInboundEvent({ event, receipts: captured, subscription: subscriptionRow(subscription, source) }),
-
-  enqueueWakes: ({ adapterType, teamId, keys }) =>
-    enqueueAwaitWakes({ adapterType, teamId: teamId as TeamId, correlationKeys: keys }),
+  async keepDelivery({ subscription, source, arrivals, checkpoint }) {
+    const { kept } = await deliverArrivals({
+      teamId: subscription.teamId as TeamId,
+      delivered: { adapterType: source.adapterType, credentialsId: source.credentialsId },
+      subscriptionId: subscription.id,
+      externalId: null,
+      source: 'webhook',
+      arrivals,
+      ...(checkpoint !== undefined ? { checkpoint } : {}),
+    });
+    return kept.kept ? { kept: true, arrivalMark: kept.arrivalMark } : { kept: false };
+  },
 };
 
 interface HandleResult {
@@ -342,225 +333,25 @@ async function handleInboundWebhook(options: {
   };
 }
 
-/**
- * Phase 2 for ONE event: queue a linked_object refresh when a KG node is
- * bridged to the record it names, and a run per stored receipt. The rows are
- * independent; none makes a live provider read inside the request.
- */
-async function enqueueCapturedInboundEvent(input: {
+/** Queue a linked_object refresh when a knowledge graph node is bridged to
+ *  the record an event names. Its own row; no provider read in the request. */
+async function refreshBridgedLinkedObject(input: {
   event: DiscriminableEvent;
-  receipts: CapturedReceipts;
   subscription: { team_id: string; credentials_id: string; provider: string };
 }): Promise<void> {
-  const { event, receipts, subscription } = input;
-
-  // The cache refresh is its own row, owed whether or not any trigger matched.
+  const { event, subscription } = input;
   const { externalId, recordType, idempotencyKey } = event;
-  if (externalId !== undefined) {
-    const refresh: LinkedObjectRefresh = {
-      teamId: subscription.team_id as TeamId,
-      provider: subscription.provider,
-      credentialsId: subscription.credentials_id,
-      externalId,
-      ...(recordType !== undefined ? { recordType } : {}),
-    };
-    if (await hasBridgedLinkedObjects(refresh)) {
-      await enqueueLinkedObjectRefresh({ refresh, eventKey: idempotencyKey ?? externalId });
-    }
-  }
-
-  await enqueueCapturedEvents(receipts);
-}
-
-/**
- * Channel-scope filter for `listen … { channels: [...] }` (Slack's channel
- * names). Async because matching an inbound event's channel needs the event's
- * channel id → name resolved off the adapter (cached). Skips the resolution
- * entirely when no candidate declares `channels`, so unscoped listens (every
- * other adapter, and Slack listens without a channel filter) pay nothing. A
- * trigger with no `channels` always passes; a scoped trigger passes only when
- * the resolved channel name is in its list.
- */
-async function filterByChannelScope<T extends { config: unknown }>(input: {
-  candidates: T[];
-  event: DiscriminableEvent;
-  adapterType: string;
-  subscription: { team_id: string; credentials_id: string | null };
-}): Promise<T[]> {
-  const { candidates, event, adapterType, subscription } = input;
-  const hasChannels = (config: unknown): boolean =>
-    eventConfigList((config as { channels?: unknown } | null)?.channels).length > 0;
-  if (!candidates.some((t) => hasChannels(t.config))) return candidates;
-
-  const channelName = await resolveEventChannelName({ event, adapterType, subscription });
-  return candidates.filter((t) => channelScopeMatches(t.config, channelName));
-}
-
-/**
- * Resolve an inbound event's channel id → name via the adapter, when the
- * adapter supports it (Slack does; nothing else declares a channel filter).
- * Message events carry the channel at `payload.channel`; reactions at
- * `payload.item.channel`.
- */
-async function resolveEventChannelName(input: {
-  event: DiscriminableEvent;
-  adapterType: string;
-  subscription: { team_id: string; credentials_id: string | null };
-}): Promise<string | null> {
-  const payload = input.event.payload as
-    | { channel?: unknown; item?: { channel?: unknown } }
-    | undefined;
-  const channelId =
-    (typeof payload?.channel === 'string' && payload.channel) ||
-    (typeof payload?.item?.channel === 'string' && payload.item.channel) ||
-    undefined;
-  if (!channelId || !hasAdapter(input.adapterType)) return null;
-
-  const adapter = await resolveAdapter({
-    adapterType: input.adapterType,
-    teamId: input.subscription.team_id as TeamId,
-    credentialsId: input.subscription.credentials_id ?? undefined,
-  });
-  const maybe = adapter as { resolveChannelName?: (id: string) => Promise<string | null> };
-  return typeof maybe.resolveChannelName === 'function'
-    ? maybe.resolveChannelName(channelId)
-    : null;
-}
-
-/** Resolve the adapter's event-type union for discrimination. Used when the
- *  caller (the shared-bot fan-out) hasn't already fetched it for the delivery. */
-async function loadEventTypes(
-  adapterType: string,
-  subscription: { team_id: string; credentials_id: string | null },
-): Promise<readonly EventType[]> {
-  if (!hasAdapter(adapterType)) return [];
-  const adapter = await resolveAdapter({
-    adapterType,
+  if (externalId === undefined) return;
+  const refresh: LinkedObjectRefresh = {
     teamId: subscription.team_id as TeamId,
-    credentialsId: subscription.credentials_id ?? undefined,
-  });
-  return adapter.listEventTypes ? await adapter.listEventTypes() : [];
-}
-
-/**
- * R (2026-05-28) — trigger-first dispatch path. For each `automations.trigger`
- * row on this team whose kind matches the provider, fan out to bound
- * TGs through the trigger-id engine entry. Trigger filtering layered on
- * top: kind must match the provider, and (when the subscription scopes
- * by credentials) the trigger's credentials_id must agree.
- *
- * Bridge materialisation + trigger-entry filtering live inside each
- * binding's TG body (filter expression). Mirroring the legacy path's
- * external→KG bridge here would cross the chunk seam; we let the engine
- * handle source-position bridging via the TG body itself (W3-B1's anchor
- * bridge runs at engine entry, not in dispatch).
- *
- */
-export async function dispatchToProviderTriggers(input: ProviderTriggerDispatch): Promise<void> {
-  await enqueueCapturedEvents(await captureProviderTriggerEvents(input));
-  notifyWork();
-}
-
-interface ProviderTriggerDispatch {
-  event: DiscriminableEvent;
-  // `credentials_id` is the per-subscription credential for BYO inbound. The
-  // SHARED built-in bot has no per-team credential (it sends from the env
-  // `TELEGRAM_BOT_TOKEN`), so the shared-bot fan-out passes `null` here — the
-  // adapter then resolves the built-in client. BYO always passes a real id.
-  subscription: { team_id: string; credentials_id: string | null; provider: string };
-  adapterType: string;
-  /**
-   * Shared-bot path opt-out of credential narrowing. The shared built-in bot
-   * receives GLOBALLY (one bot, every team), so a trigger's own credential is
-   * the SEND identity, not a gate on which inbound it matches. When set, the
-   * per-trigger credential filter below is skipped — every TELEGRAM trigger on
-   * the resolved team is a candidate, each dispatching with its own credential
-   * (or the built-in env token when it has none).
-   */
-  matchAnyCredential?: boolean;
-  /** The adapter's event-type union, when the caller already fetched it for the
-   *  delivery (the BYO handler). Omitted by the shared-bot caller — fetched here. */
-  eventTypes?: readonly EventType[];
-}
-
-/**
- * Capture half of the trigger-first path: which of this team's triggers does
- * the event match, and a durable receipt for each. No movement runs here, so an
- * acking front door can finish this inside the request and dispatch after.
- */
-export async function captureProviderTriggerEvents(
-  input: ProviderTriggerDispatch,
-): Promise<CapturedTriggerEvent[]> {
-  const { event, subscription, adapterType, matchAnyCredential } = input;
-
-  // Provider key matches `automations.trigger.kind` directly (Setup writes
-  // the PipelineInputType enum value as the kind); webhook subscriptions are
-  // 1:1 with a provider. The adapter's own slug joins it because a remote
-  // install's listens carry its slug as their kind, and its provider key is no
-  // registry alias of that slug.
-  const triggers = await findTriggersByKind({
-    teamId: subscription.team_id,
-    kinds: [...new Set([subscription.provider, adapterType])],
-  });
-  if (triggers.length === 0) return [];
-
-  // Scope by credentials when set on the trigger, then by the listen's authored
-  // scope (`events` change types + Airtable `table`). A null credentials_id
-  // means the trigger is provider-wide (rare for webhook adapters, common for
-  // inbound email); a matching credentials_id is the integration narrowing.
-  const candidates = triggers.filter((t) => {
-    if (
-      !matchAnyCredential &&
-      t.credentialsId != null &&
-      t.credentialsId !== subscription.credentials_id
-    ) {
-      return false;
-    }
-    return eventMatchesTriggerScope(event, t.config);
-  });
-  if (candidates.length === 0) return [];
-
-  // Channel-scope filter (`listen … { channels: [...] }`) — async because it
-  // resolves the event's channel id → name off the adapter. Only runs when a
-  // candidate actually declares `channels`, so the common case pays nothing.
-  const channelScoped = await filterByChannelScope({ candidates, event, adapterType, subscription });
-  // A store's change to its own record (the knowledge graph's) is scoped by
-  // the watched type and fields, by name, through the adapter.
-  const mutation = isMutationSource(adapterType);
-  const scoped = mutation
-    ? await filterByRecordScope({ candidates: channelScoped, event, adapterType, teamId: subscription.team_id as TeamId })
-    : channelScoped;
-  if (scoped.length === 0) return [];
-
-  const eventTypes =
-    input.eventTypes ?? (await loadEventTypes(adapterType, subscription));
-
-  const captured: CapturedTriggerEvent[] = [];
-  for (const trigger of scoped) {
-    // The shared inbound tail: discriminate → build TriggerEvent → durable
-    // receipt → dispatch to the movement engine. Identical to the poll path
-    // (`poll_source/worker.ts`); only the front door (a webhook delivery vs a
-    // timer) differs — and where the ack sits relative to the dispatch.
-    const receipt = await captureDiscriminableEvent({
-      triggerId: trigger.id as TriggerId,
-      movementId: trigger.movementId,
-      event,
-      adapterType,
-      triggerType: mutation ? 'mutation' : 'webhook',
-      eventTypes,
-      teamId: subscription.team_id as TeamId,
-    });
-    if (receipt !== null) captured.push(receipt);
+    provider: subscription.provider,
+    credentialsId: subscription.credentials_id,
+    externalId,
+    ...(recordType !== undefined ? { recordType } : {}),
+  };
+  if (await hasBridgedLinkedObjects(refresh)) {
+    await enqueueLinkedObjectRefresh({ refresh, eventKey: idempotencyKey ?? externalId });
   }
-  return captured;
-}
-
-/** A source whose events are changes to records the host itself keeps (it
- *  fires only `mutation` triggers): its events anchor by the host's record id,
- *  and its listens are scoped by record type and fields. */
-function isMutationSource(adapterType: string): boolean {
-  const triggers = getAdapterManifest(adapterType)?.supportedTriggers ?? [];
-  return triggers.length > 0 && triggers.every((trigger) => trigger === 'mutation');
 }
 
 export { handleInboundWebhook };

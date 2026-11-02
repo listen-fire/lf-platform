@@ -23,6 +23,17 @@ import {
   type Queued,
 } from './run_host_queue';
 import { arrivalMark, dropUnstartedWaits, logArrivalsIn, openDeliveryWaits } from './run_host_waits';
+import { keepUnjudgedIn, type UnjudgedArrival } from '../lf_store/records_door';
+
+/** `inbound.keepDelivery`'s input as the platform's door sends it: with the
+ *  listens that could not judge the delivery's arrivals, kept in its write. */
+export interface PlatformKeepDelivery extends KeepDelivery {
+  unjudged?: readonly UnjudgedArrival[];
+}
+
+export interface PlatformDeliveryRowStore extends DeliveryRowStore {
+  keepDelivery(input: PlatformKeepDelivery): ReturnType<DeliveryRowStore['keepDelivery']>;
+}
 
 const FIRE_EVENT = 'fire_event';
 
@@ -43,7 +54,7 @@ async function saveCheckpointIn(exec: Exec, input: { teamId: string; subscriptio
 }
 
 /** The team's deliveries, kept for `host`. */
-export function deliveryRowStore(owner: { host: Host; teamId: string }): DeliveryRowStore {
+export function deliveryRowStore(owner: { host: Host; teamId: string }): PlatformDeliveryRowStore {
   return {
     /**
      * The receipt first: a duplicate (its id, or its external id kept at its
@@ -52,7 +63,7 @@ export function deliveryRowStore(owner: { host: Host; teamId: string }): Deliver
      * cursor, the waits of the runs it queues (from the mark before its
      * arrivals), its arrivals and the wakes they answer, and its rows.
      */
-    async keepDelivery(input: KeepDelivery) {
+    async keepDelivery(input: PlatformKeepDelivery) {
       const { subscriptionId, delivery, arrivals } = input;
       const waits = input.waits ?? [];
       if (arrivals === undefined && waits.length > 0) {
@@ -82,6 +93,7 @@ export function deliveryRowStore(owner: { host: Host; teamId: string }): Deliver
           queued.push(await queueRow(trx, { host: owner.host }, { ...row, payload: markedPayload(row.kind, row.payload, mark), teamId: row.teamId ?? owner.teamId }));
         }
         for (const wake of wakes ?? []) queued.push(await queueWake(trx, arrivals?.teamId ?? owner.teamId, wake));
+        for (const fact of input.unjudged ?? []) await keepUnjudgedIn(trx, { tenant: owner.teamId }, fact);
         return { mark, wakes, queued };
       });
       if (written === null) return { kept: false };

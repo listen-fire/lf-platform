@@ -81,6 +81,9 @@ export interface TriggerIdDispatchInput {
    * ⇒ the firing mints its own id, as before.
    */
   existingRunId?: TriggerRunId;
+  /** Where the delivery that started the run was kept in the arrival log:
+   *  the run reads its trigger's waits from there. */
+  triggerMark?: number;
 }
 
 export interface TriggerIdDispatchResult {
@@ -316,6 +319,7 @@ export async function dispatchTriggerByIdEvent(
       dryRun,
       ...(input.existingRunId !== undefined ? { existingRunId: input.existingRunId } : {}),
       ...(input.storedEventId !== undefined ? { triggerEventId: input.storedEventId } : {}),
+      ...(input.triggerMark !== undefined ? { triggerMark: input.triggerMark } : {}),
     });
     if (firing.result) {
       // Feed the writes this firing applied into the team's external-write

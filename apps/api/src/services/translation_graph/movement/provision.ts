@@ -59,10 +59,8 @@
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 
-import { parseProgram as parseInstalled, scanName } from 'movement-lang';
-import { checkProgram } from 'legacy-lang';
+import { LANGUAGE_VERSION, parseProgram as parseInstalled, scanName } from 'movement-lang';
 import { MovementParseError } from 'movement-lang';
-import { parseProgram } from 'legacy-lang';
 
 import type {
   Diagnostic,
@@ -78,18 +76,13 @@ import type { TriggerRunMode } from '../triggers/run_mode';
 import { mq } from '../../../lib/message_queue';
 import { unsafeCurrentContext } from '../../../services/context';
 import { logger } from 'movement-engine/public/log';
-import type { FileListener } from 'movement-engine/public/inbound';
-import { collectFileListeners } from '@listen-fire/legacy-engine/services/translation_graph/file_listeners';
 import { recordUserMilestone, recordTeamMilestone } from '../../../lib/journey';
 import { getAutomationsQb } from '../../../lib/kysely';
-import { getAdapterManifest, inboundAddressFor, isPollSource } from '../adapters/registry';
+import { inboundAddressFor, isPollSource } from '../adapters/registry';
 import { CRON_ADAPTER_TYPE } from '../adapters/cron';
 import { enqueueWork } from '../../work/store';
 import type { WorkKind } from '../../work/kinds';
 import { syncListenSubscriptions } from './listen_subscriptions';
-import { addressHops, resolveListenAddress } from './listen_address';
-import { cachedAdapterInstance } from './instance_cache';
-import { positionArgValues } from './catalog';
 import { movementWriteRunMode } from './dry_run';
 import {
   manualListenerMovements,
@@ -123,6 +116,8 @@ import {
   type MovementValidityAssessment,
 } from './authoring';
 import { checkInstalled, routeOf } from './language_route';
+import { plannedListensOfSource } from './listen_plans';
+import { listenConfigSchema, type ListenConfig } from '../../inbound/listen_door';
 
 /** Resource-change hint for a movement save/delete — fired from the
  *  shared service so UI and agent callers both propagate. The actor isn't
@@ -199,18 +194,19 @@ export type ProvisionMovementResult = ProvisionedMovement | ProvisionMovementFai
 
 // ── Listener reconciliation ─────────────────────────────────────────────────
 
-interface DesiredListener extends FileListener {
+/** One planned listen as provisioning makes its trigger row. */
+interface DesiredListener {
+  movementName: string;
+  /** The listen's module: the trigger row's kind. */
+  adapter: string;
+  /** `listen as "…"`: the trigger's name when present. */
+  alias?: string;
+  /** What the trigger row keeps (listen_door.ts `listenConfigSchema`). */
+  config: { listen: ListenConfig };
   /** The text-derived dry_run⇄live axis (the universal `dry_run`
    *  construction parameter). */
   textRunMode: Extract<TriggerRunMode, 'live' | 'dry_run'>;
   credentialsId: string | null;
-  /** The listen's FULL resolved address — the position's path + the config's
-   *  hops, names→ids (listen_address.ts). Persisted on the trigger row as a
-   *  DERIVED field beside the authored config; the subscription channel keys
-   *  on it. Absent when the adapter declares no address hops, or when a
-   *  consented-broken save couldn't resolve it (the reconciler then refuses
-   *  the channel rather than minting a half-scoped one). */
-  resolvedAddress?: Record<string, string>;
 }
 
 /** The routing discriminator inside a (kind, credentials) channel:
@@ -225,6 +221,10 @@ function configKeyOf(
   config: Record<string, unknown>,
   resolvedAddress?: Record<string, string>,
 ): string | null {
+  // A planned listen is named by its pipeline: its plan and its connection's
+  // construction, digested as listen-fire names it.
+  const planned = listenConfigSchema.safeParse(config);
+  if (planned.success) return planned.data.listen.pipeline;
   if (resolvedAddress !== undefined && Object.keys(resolvedAddress).length > 0) {
     return Object.entries(resolvedAddress)
       .sort(([a], [b]) => a.localeCompare(b))
@@ -247,6 +247,8 @@ function configKeyOf(
  *  never the resolved node-type UUID; `identityKeyOf` keeps using the
  *  UUID-preferring chain so trigger identity is unaffected). */
 function surfaceConfigKeyOf(config: Record<string, unknown>): string | null {
+  const planned = listenConfigSchema.safeParse(config);
+  if (planned.success) return planned.data.listen.pipeline;
   if (typeof config['key'] === 'string') return config['key'] as string;
   if (typeof config['type'] === 'string') return config['type'] as string;
   if (typeof config['schedule'] === 'string') return config['schedule'] as string;
@@ -406,7 +408,7 @@ async function reconcileDerivedTriggers(input: {
       movementName: d.movementName,
       kind: d.adapter,
       credentialsId: d.credentialsId,
-      configKey: configKeyOf(d.config, d.resolvedAddress),
+      configKey: configKeyOf(d.config),
     })),
     existing,
   });
@@ -461,8 +463,7 @@ async function reconcileDerivedTriggers(input: {
       triggerId = kept.id;
       if (
         kept.kind !== desired.adapter ||
-        !isDeepStrictEqual(kept.config, desired.config) ||
-        !isDeepStrictEqual(kept.resolvedAddress ?? null, desired.resolvedAddress ?? null)
+        !isDeepStrictEqual(kept.config, desired.config)
       ) {
         noteSchedule(kept.kind);
         noteSchedule(desired.adapter);
@@ -479,7 +480,7 @@ async function reconcileDerivedTriggers(input: {
           kind: desired.adapter,
           credentials_id: (desired.credentialsId ?? null) as never,
           config: desired.config as never,
-          resolved_address: (desired.resolvedAddress ?? null) as never,
+          resolved_address: null,
           movement_id: input.movementRow.id as MovementId,
           fired_movement_name: desired.movementName,
           run_mode: runMode,
@@ -499,7 +500,7 @@ async function reconcileDerivedTriggers(input: {
           name,
           kind: desired.adapter,
           config: desired.config as never,
-          resolved_address: (desired.resolvedAddress ?? null) as never,
+          resolved_address: null,
           credentials_id: (desired.credentialsId ?? null) as never,
           movement_id: input.movementRow.id as MovementId,
           fired_movement_name: desired.movementName,
@@ -553,12 +554,25 @@ async function provisionListeners(input: {
   if (route.kind === 'refused') {
     return { ok: false, diagnostics: [route.diagnostic], catalogNotes: teamCatalog.notes };
   }
+  // A legacy pin's listens cannot fire under this release: inbound judges by
+  // the listen plans only this release's checker makes. It is refused by
+  // name until it is upgraded.
+  if (route.kind === 'legacy') {
+    return {
+      ok: false,
+      diagnostics: [
+        {
+          code: 'MOV_LANGUAGE_VERSION_UNSUPPORTED',
+          message: `this automation is pinned to language version ${route.pin}, whose listens this release no longer runs: upgrade it to ${LANGUAGE_VERSION}`,
+          span: { start: { line: 1, col: 1 }, end: { line: 1, col: 1 } },
+        },
+      ],
+      catalogNotes: teamCatalog.notes,
+    };
+  }
   let program: Program;
   try {
-    program =
-      route.kind === 'installed'
-        ? parseInstalled(input.source, { languageVersion: route.pin })
-        : parseProgram(input.source, { languageVersion: input.movementRow.languageVersion });
+    program = parseInstalled(input.source, { languageVersion: route.pin });
   } catch (e) {
     if (!(e instanceof MovementParseError)) throw e;
     return {
@@ -570,17 +584,9 @@ async function provisionListeners(input: {
     };
   }
 
-  const checkDiagnostics = await within('listenCheck', async () => {
-    if (route.kind !== 'installed') {
-      return checkProgram(program, teamCatalog.catalog, {
-        resolveFile: teamCatalog.resolveFile,
-        languageVersion: input.movementRow.languageVersion,
-      });
-    }
-    const snapshot = teamCatalog.runSnapshot?.();
-    if (snapshot === undefined) throw new Error('a release pin is checked against its run snapshot');
-    return checkInstalled({ source: input.source, snapshot, pin: route.pin });
-  });
+  const snapshot = teamCatalog.runSnapshot?.();
+  if (snapshot === undefined) throw new Error('a release pin is checked against its run snapshot');
+  const checkDiagnostics = await within('listenCheck', async () => checkInstalled({ source: input.source, snapshot, pin: route.pin }));
   const errors = checkDiagnostics.filter((d) => (d.severity ?? 'error') === 'error');
   const infos = checkDiagnostics.filter((d) => (d.severity ?? 'error') !== 'error');
   if (errors.length > 0 && input.provisionDespiteErrors !== true) {
@@ -593,64 +599,22 @@ async function provisionListeners(input: {
   ): Extract<TriggerRunMode, 'live' | 'dry_run'> =>
     movementWriteRunMode(program, movementName).mode === 'dry_run' ? 'dry_run' : 'live';
 
-  const fileListeners = collectFileListeners(program, { languageVersion: input.movementRow.languageVersion });
-
-  const desired: DesiredListener[] = fileListeners.map((listener) => ({
-    ...listener,
-    textRunMode: textRunModeOf(listener.movementName),
+  // Each listen as the check plans it: the trigger row is its projection.
+  const planned = plannedListensOfSource({ file: input.movementRow.name, source: input.source, program, snapshot, pin: route.pin });
+  if (planned.refused.length > 0 && input.provisionDespiteErrors !== true) {
+    return { ok: false, errors: planned.refused, catalogNotes: teamCatalog.notes };
+  }
+  const desired: DesiredListener[] = planned.listens.map((listen) => ({
+    movementName: listen.plan.movement,
+    adapter: listen.plan.adapter,
+    ...(listen.plan.alias !== undefined ? { alias: listen.plan.alias } : {}),
+    config: { listen },
+    textRunMode: textRunModeOf(listen.plan.movement),
     credentialsId:
-      listener.credentialName !== undefined
-        ? (teamCatalog.resolveCredentialId(listener.credentialName) ?? null)
+      listen.credentialName !== undefined
+        ? (teamCatalog.resolveCredentialId(listen.credentialName) ?? null)
         : null,
   }));
-
-  // Resolve each listen's FULL address — the position's path + the config's
-  // hops, names→ids — before any trigger row is touched. The channel key and
-  // the external registration both read this (listen_subscriptions.ts), so a
-  // listen whose address doesn't resolve must NOT quietly derive a trigger
-  // whose subscription can never register (the measured silently-dead state).
-  // Failure is a save error; on a consented-broken save (fires-and-fails by
-  // design) the listener ships without an address and the reconciler refuses
-  // its channel with a note instead.
-  const addressFailures: string[] = [];
-  await within('listenAddress', async () => {
-    for (const listener of desired) {
-      const manifest = getAdapterManifest(listener.adapter);
-      if (!manifest || addressHops(manifest.listenConfig).length === 0) continue;
-      try {
-        const instance = await cachedAdapterInstance({
-          adapterType: listener.adapter,
-          teamId: input.teamId,
-          ...(listener.credentialsId !== null ? { credentialsId: listener.credentialsId } : {}),
-          types: [],
-        });
-        const resolution = await resolveListenAddress({
-          listenConfig: manifest.listenConfig,
-          config: listener.config,
-          positionValues: positionArgValues(manifest, listener.constructionArgs),
-          membersAt: instance.membersAt,
-        });
-        if (resolution.ok) {
-          listener.resolvedAddress = resolution.address;
-        } else {
-          addressFailures.push(
-            `the '${listener.adapter}' listener firing '${listener.movementName}': ${resolution.reason}`,
-          );
-        }
-      } catch (err) {
-        addressFailures.push(
-          `the '${listener.adapter}' listener firing '${listener.movementName}': address resolution failed (${err instanceof Error ? err.message : String(err)})`,
-        );
-      }
-    }
-  });
-  if (addressFailures.length > 0 && input.provisionDespiteErrors !== true) {
-    return {
-      ok: false,
-      errors: addressFailures,
-      catalogNotes: teamCatalog.notes,
-    };
-  }
 
   const { listeners, reconciles } = await within('reconcile', () =>
     reconcileDerivedTriggers({
@@ -1266,10 +1230,9 @@ function isRunnable(row: MovementRow): boolean {
   const route = routeOf(row.languageVersion);
   if (route.kind === 'refused') return false;
   try {
-    const program =
-      route.kind === 'installed'
-        ? parseInstalled(row.source, { languageVersion: route.pin })
-        : parseProgram(row.source, { languageVersion: route.pin });
+    // A legacy pin's listens do not run under this release.
+    if (route.kind === 'legacy') return false;
+    const program = parseInstalled(row.source, { languageVersion: route.pin });
     return manualListenerMovements(program, { languageVersion: route.pin }).length > 0;
   } catch (e) {
     if (e instanceof MovementParseError) return false;

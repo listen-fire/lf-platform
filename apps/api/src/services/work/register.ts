@@ -11,6 +11,7 @@ import { registerCronWork } from '../movement_scheduler/worker';
 import { registerPollWork } from '../poll_source/worker';
 import { registerRunOrphanSweepWork } from '../translation_graph/runs/trigger_run';
 import { registerDispatchWork } from '../translation_graph/triggers/dispatch_event';
+import { registerFireEventWork } from '../inbound/fire_event';
 import { periodicUnitWorkKinds, type CoreWorkKind } from './kinds';
 import { ensurePeriodicWork, removeRetiredWork } from './store';
 
@@ -44,6 +45,7 @@ function registerCoreWork(): void {
   registerCronWork();
   registerPollWork();
   registerDispatchWork();
+  registerFireEventWork();
   registerAwaitWork();
   registerCallbackFireWork();
   registerRunOrphanSweepWork();

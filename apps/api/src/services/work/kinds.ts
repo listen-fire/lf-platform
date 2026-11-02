@@ -5,6 +5,7 @@
 // core names none of them.
 export const CORE_WORK_KINDS = [
   'dispatch_event', // payload: CapturedTriggerEvent (triggers/dispatch_event.ts)
+  'fire_event', // payload: FireRow (inbound/listen_door.ts): one run a kept delivery queued
   'resume_timer', // payload: { runId: string }
   'fire_cron', // payload: { triggerId: string }
   'poll_source', // payload: { triggerId: string }

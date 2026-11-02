@@ -245,7 +245,7 @@ export async function dispatchCapturedTriggerEvent(input: {
  * guard put the receipt back on the queue, so the run waits there again. A
  * firing has already settled the row, so the `running` guard makes this a no-op.
  */
-async function settleQueuedRunAfterDispatch(input: {
+export async function settleQueuedRunAfterDispatch(input: {
   runId: TriggerRunId;
   teamId: TeamId;
   result: TriggerIdDispatchResult;

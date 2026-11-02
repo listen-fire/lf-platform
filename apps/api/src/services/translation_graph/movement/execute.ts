@@ -86,6 +86,9 @@ async function interpretMovementFiring(input: {
   trace?: MovementTraceEntry[];
   /** The run lease the firing holds; its parks are fenced by it. */
   lease?: HeldRunLease;
+  /** Where the delivery that started the run was kept in the arrival log:
+   *  the waits it opened on the trigger read from there. */
+  triggerMark?: number;
 }): Promise<MovementRunResult> {
   const teamCatalog = await runCatalogSnapshotForTeam(input.teamId, {
     source: input.version.source,
@@ -114,6 +117,7 @@ async function interpretMovementFiring(input: {
       ...(input.trace !== undefined ? { trace: input.trace } : {}),
     }),
     ...(input.dryRun !== undefined ? { dryRun: input.dryRun } : {}),
+    ...(input.triggerMark !== undefined ? { triggerMark: input.triggerMark } : {}),
   });
 }
 
@@ -276,6 +280,8 @@ type MovementFiringInput = {
   existingRunId?: TriggerRunId;
   /** The stored inbound receipt this firing came from, recorded on the run. */
   triggerEventId?: TriggerEventId;
+  /** Where the delivery that started the run was kept in the arrival log. */
+  triggerMark?: number;
 };
 
 /** A fresh firing of a listener's movement. */
@@ -348,6 +354,7 @@ async function runMovementFiringInContext(
         ...(lease !== null ? { lease } : {}),
         cancelGate,
         trace,
+        ...(input.triggerMark !== undefined ? { triggerMark: input.triggerMark } : {}),
       });
     // The host bills its own model and plugin calls; this context is for what
     // it does not reach through those — the catalog assembly and any model
