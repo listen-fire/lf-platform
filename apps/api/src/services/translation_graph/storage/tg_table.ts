@@ -20,6 +20,8 @@ import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
 import { getAutomationsQb } from '../../../lib/kysely';
 import { parseRunMode, type TriggerRunMode } from '../triggers/run_mode';
 import { resolveAdapterSlug, siblingKindsForAdapter } from '../adapters/registry';
+import { inboxKeysOf } from '../adapters/email/listen_keys';
+import { listenConfigSchema } from '../../inbound/listen_door';
 
 /**
  * Load one `trigger` row by id. Returns null when missing. Dispatchers
@@ -74,25 +76,20 @@ export async function loadTriggerById(triggerId: string): Promise<{
 }
 
 /**
- * Inbound dispatch lookup: find the trigger that owns a given plus-key,
- * scoped to a team and a set of inbound adapter kinds. Returns null when
- * no trigger matches.
+ * The listen of `teamId` on the shared inbox that names `key` (its WHERE
+ * requires `Key` to be it; ruling 5), or null. Keys are lowercase, as the door
+ * reads a plus-suffix, so a public inbox's claim (case-insensitive) and the
+ * listen it opens meet whatever their spelling.
  *
  * Model A tolerance (mirrors `findTriggersByKind`): `trigger.kind` is the
  * adapter slug ('email') on newly-provisioned rows, while inbound callers
- * still key on legacy channel kinds ('CUSTOM_EMAIL', 'MAILGUN'); legacy
- * rows have it the other way round. Expand each requested kind to its
- * canonical slug + sibling kinds so both conventions resolve.
- *
- * `keyCase: 'insensitive'` compares the key the way a public inbox's claim
- * does (citext), so a claim and a listen that spell one key in different case
- * still meet; a listener spelled exactly as asked wins over another case.
+ * still key on legacy channel kinds ('CUSTOM_EMAIL', 'MAILGUN'). Expand each
+ * requested kind to its canonical slug + sibling kinds so both resolve.
  */
 export async function findTriggerByInboundKey(input: {
   teamId: string;
   kinds: string[];
   key: string;
-  keyCase?: 'exact' | 'insensitive';
 }): Promise<{ id: string; kind: string; credentialsId: string | null } | null> {
   if (input.kinds.length === 0) return null;
   const expanded = Array.from(
@@ -104,17 +101,17 @@ export async function findTriggerByInboundKey(input: {
       ]),
     ),
   );
-  const query = getAutomationsQb(['trigger'])
+  const rows = await getAutomationsQb(['trigger'])
     .selectFrom('trigger')
     .where('team_id', '=', input.teamId as TeamId)
     .where('kind', 'in', expanded)
-    .select(['id', 'kind', 'credentials_id']);
-  const row = await (input.keyCase === 'insensitive'
-    ? query
-        .where(sql`(config->>'key')::public.citext`, '=', sql`${input.key}::public.citext`)
-        .orderBy(sql`config->>'key' = ${input.key}`, 'desc')
-    : query.where(sql`config->>'key'`, '=', input.key)
-  ).executeTakeFirst();
+    .select(['id', 'kind', 'credentials_id', 'config'])
+    .execute();
+  const key = input.key.toLowerCase();
+  const row = rows.find((candidate) => {
+    const listen = listenConfigSchema.safeParse(candidate.config);
+    return listen.success && inboxKeysOf(listen.data.listen.plan, listen.data.listen.fieldIds).includes(key);
+  });
   if (!row) return null;
   return {
     id: row.id as unknown as string,

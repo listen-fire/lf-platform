@@ -37,18 +37,15 @@
 //     team, so a resolved email can only ever match a user in the SAME team.
 
 import type { TeamId } from '../../generated/kysely/core/Team';
-import type { WebhookEvent } from './providers';
+import type { Arrival } from 'engine-contracts';
 import type { HarnessDelivery } from '../work/harness';
 
 import { getAutomationsQb } from '../../lib/kysely';
 import { logger } from 'movement-engine/public/log';
-import {
-  parseTelegramEvents,
-} from '../translation_graph/adapters/telegram';
+import { telegramInboundArrivals } from '@listen-fire/telegram/inbound';
 import { deliverArrivals } from '../inbound/listen_door';
 import { capturedRequest } from '../inbound/captured_request';
 import { builtinModuleRequestKeeping } from '../translation_graph/adapters/builtin_modules';
-import { resolveAdapter } from '../translation_graph/adapters/resolve';
 import { notifyWork } from '../work/drain';
 import { isTestHarnessTeam } from '../../lib/recording';
 import {
@@ -64,7 +61,7 @@ const TELEGRAM_PROVIDER_KEY = 'TELEGRAM';
 /** A parsed shared-bot inbound `Update`, classified for routing. */
 type SharedBotInbound =
   | { kind: 'start'; token: string; telegramUserId: string; chatId: string; senderName?: string }
-  | { kind: 'message'; telegramUserId: string; event: WebhookEvent }
+  | { kind: 'message'; telegramUserId: string; arrivals: Arrival[] }
   | { kind: 'callback_query' }
   | { kind: 'reply_to_bot' }
   | { kind: 'ignore' };
@@ -178,12 +175,11 @@ export function classifySharedBotInbound(raw: unknown): SharedBotInbound {
     };
   }
 
-  // A normal message. Re-use the adapter's pure parse so the event payload is
-  // byte-identical to the BYO door (whose `preprocessInbound` runs the same
-  // function — the adapter reads `chat_id`/`text`/`sender_*` off `data`).
-  const events = parseTelegramEvents(raw);
-  if (events.length === 0) return { kind: 'ignore' };
-  return { kind: 'message', telegramUserId, event: events[0] };
+  // A normal message: the module's arrivals for it, read once by the module's
+  // own reading (what its `preprocessInbound` answers at a team's door).
+  const arrivals = telegramInboundArrivals(raw);
+  if (arrivals.length === 0) return { kind: 'ignore' };
+  return { kind: 'message', telegramUserId, arrivals };
 }
 
 /**
@@ -264,11 +260,8 @@ export async function handleSharedBotInbound(raw: unknown): Promise<SharedBotDel
   // connection it names (the binding rows are the gate, not a credential).
   const delivered: string[] = [];
   for (const teamId of teamIds) {
+    const { arrivals } = inbound;
     try {
-      const adapter = await resolveAdapter({ adapterType: TELEGRAM_ADAPTER_TYPE, teamId: teamId as TeamId });
-      if (adapter.preprocessInbound === undefined) throw new Error('the Telegram module reads no inbound updates (preprocessInbound)');
-      const { arrivals = [] } = await adapter.preprocessInbound({ raw });
-      if (arrivals.length === 0) continue;
       const { kept } = await deliverArrivals({
         teamId: teamId as TeamId,
         delivered: { adapterType: TELEGRAM_ADAPTER_TYPE, credentialsId: null },

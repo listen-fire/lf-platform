@@ -50,24 +50,6 @@ jest.mock('../../../lib/kysely', () => ({
   }),
 }));
 
-// ── the module's arrivals for a message: one on its chat's `Messages` ─────
-jest.mock('../../translation_graph/adapters/resolve', () => ({
-  resolveAdapter: jest.fn(async () => ({
-    preprocessInbound: async ({ raw }: { raw: any }) => ({
-      arrivals: raw.message
-        ? [
-            {
-              edge: 'Messages',
-              key: String(raw.message.chat.id),
-              identity: String(raw.message.message_id),
-              landing: { recordId: String(raw.message.message_id), fields: { Text: raw.message.text } },
-            },
-          ]
-        : [],
-    }),
-  })),
-}));
-
 // ── the listen door — record each team's delivery; a team named in
 //    `deliverShouldThrowForTeam` cannot be kept, one in `notKeptForTeam` is
 //    refused by the store ──────────────────────────────────────────────────────
@@ -285,7 +267,8 @@ describe('linked-message routing (route-all)', () => {
       expect(call.source).toBe('webhook');
       // Keyed on Telegram's update id, which a redelivery keeps.
       expect(call.externalId).toBe('telegram:1');
-      expect(call.arrivals).toEqual([expect.objectContaining({ edge: 'Messages', identity: '42' })]);
+      // The module's own reading of the update: one arrival on its chat's Messages.
+      expect(call.arrivals).toEqual([expect.objectContaining({ edge: 'Messages', identity: '111222:42' })]);
     }
   });
 

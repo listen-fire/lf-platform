@@ -122,10 +122,13 @@ const API_KEY = 'test-harness-dummy-key';
 const TEAM = 'team-1';
 const OTHER_TEAM = 'team-2';
 
+/** Mail to a key of the box, unless the case says where it went: mail to
+ *  the box itself is no one team's, and is dropped. */
 function signed(body: Record<string, unknown>): Record<string, unknown> {
   const timestamp = '1750000000';
   const token = 'a-token';
   return {
+    ...('To' in body ? {} : { To: 'inbox+deals@example.com' }),
     ...body,
     timestamp,
     token,
@@ -164,10 +167,20 @@ describe('proving it is really Mailgun', () => {
   it('admits a correctly signed payload', async () => {
     member('ada@example.com', 'user-1');
     const decision = await verifyInboundEmailRequest(
-      request(signed({ sender: 'ada@example.com', recipient: 'inbox@example.com' })),
+      request(signed({ sender: 'ada@example.com', To: 'inbox+deals@example.com' })),
     );
 
     expect(decision).toMatchObject({ outcome: 'routed', teamId: TEAM, userId: 'user-1' });
+  });
+
+  it('drops mail sent to the box itself, from a member, with a logged reason (ruling 5)', async () => {
+    member('ada@example.com', 'user-1');
+    const decision = await verifyInboundEmailRequest(
+      request(signed({ sender: 'ada@example.com', To: 'inbox@example.com' })),
+    );
+
+    expect(decision).toEqual({ outcome: 'refused', status: 201 });
+    expect(logs.messages('warn').join(' ')).toMatch(/dropped mail sent to the shared inbox without a key/);
   });
 
   it('refuses a wrong signature with a code Mailgun will not retry', async () => {

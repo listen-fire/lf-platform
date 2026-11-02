@@ -13,17 +13,9 @@ import { z } from 'zod';
 
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type { ExternalServiceCredentialsId } from '../../../../generated/kysely/automations/ExternalServiceCredentials';
-import type { WebhookEvent } from '../../../webhook_sync/providers/interface';
-import type { Adapter, DiscriminableEvent } from 'movement-engine/public/adapter';
+import type { Adapter } from 'movement-engine/public/adapter';
 
-import {
-  TELEGRAM_MESSAGE_TYPE_ID,
-  TelegramAdapter as TelegramModuleAdapter,
-  TelegramClient,
-  parseTelegramMessage,
-  type TelegramSources,
-} from '@listen-fire/telegram';
-import { webhookEventToDiscriminable } from '../../../webhook_sync/event_conversion';
+import { TelegramAdapter as TelegramModuleAdapter, TelegramClient, type TelegramSources } from '@listen-fire/telegram';
 import { decryptToken } from '../../../../lib/credentials';
 import { getAutomationsQb } from '../../../../lib/kysely';
 import { injectFakeBaseUrl, isTestHarnessTeam } from '../../../../lib/recording';
@@ -151,39 +143,6 @@ export class TelegramAdapter extends TelegramModuleAdapter {
     }
     await client.sendMessage({ chat_id: input.chatId, text: input.text });
   }
-}
-
-/**
- * The shared-bot classifier's parse (telegram_builtin.ts): the delivered
- * message as the webhook layer's event, the module's normaliser underneath,
- * so both doors read byte-identical payloads.
- */
-export function parseTelegramEvents(body: unknown): WebhookEvent[] {
-  const payload = parseTelegramMessage(body);
-  if (payload === null) return [];
-  return [
-    {
-      eventType: 'message',
-      recordId: payload.message_id,
-      objectId: TELEGRAM_MESSAGE_TYPE_ID,
-      // A Telegram user id, not a platform authentication actor.
-      actor: undefined,
-      rawPayload: payload,
-      // Telegram delivers whole messages, not field-level diffs.
-      changedFields: undefined,
-    },
-  ];
-}
-
-/** The shared door's WebhookEvent → DiscriminableEvent: the legacy conversion
- *  plus the module's tag and `create`, exactly what the module's own
- *  `preprocessInbound` answers for the same delivery. */
-export function telegramEventToDiscriminable(e: WebhookEvent): DiscriminableEvent {
-  return {
-    ...webhookEventToDiscriminable(e),
-    tag: e.eventType,
-    ...(e.eventType === 'message' ? { changeType: 'create' as const } : {}),
-  };
 }
 
 /** Factory for the registry's legacy line. */

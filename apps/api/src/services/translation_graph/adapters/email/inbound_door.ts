@@ -17,13 +17,15 @@
 //                                external senders are refused — a key is a
 //                                user-chosen slug, guessable by anyone, so an
 //                                unclaimed one cannot be the thing that
-//                                authorises a metered run.
+//                                authorises a metered run. Mail with
+//                                no key is no one team's (the box is
+//                                every team's address): it is dropped.
 //   3. Which team, if several?   A public key belongs to one team (the claim
 //                                is unique), so this is only asked of a
 //                                sender: their routing key is unique only
 //                                WITHIN a team, so a sender who belongs to
 //                                more than one team is disambiguated by which
-//                                team owns a trigger for that key. Two owners
+//                                team has a listen naming that key. Two owners
 //                                = ambiguous = dropped.
 //
 // Who the run acts as follows the same split. On a public inbox it is the
@@ -45,6 +47,7 @@
 
 import type { InboundEmailDecision, MailgunStore, RoutableMessage } from '@listen-fire/email';
 
+import { z } from 'zod';
 import { admitMailgunMail, routingKeyFrom } from '@listen-fire/email';
 
 import { getAutomationsQb } from '../../../../lib/kysely';
@@ -312,12 +315,10 @@ async function routePublicInbox(message: RoutableMessage, inbox: PublicInbox): P
     });
   }
 
-  // The claim is case-insensitive, so the listen it opens is found the same way.
   const trigger = await findTriggerByInboundKey({
     teamId: inbox.teamId,
     kinds: INBOUND_EMAIL_TRIGGER_KINDS,
     key: inbox.key,
-    keyCase: 'insensitive',
   });
   return {
     outcome: 'routed',
@@ -364,12 +365,10 @@ async function routeInboundEmail(message: RoutableMessage): Promise<InboundEmail
   const primary = associations[0];
 
   if (key === null) {
-    return {
-      outcome: 'routed',
-      userId: primary.userId,
-      teamId: primary.teamId,
-      route: { teamId: primary.teamId, key: null, trigger: null },
-    };
+    // The box itself is every team's address, so mail without a key is no
+    // one team's (ruling 5): a listen on it must name a key.
+    logger.warn('[InboundEmail] dropped mail sent to the shared inbox without a key', { sender: identifier });
+    return { outcome: 'refused', status: 201 };
   }
 
   const matches = await routeByKey(associations, key);
@@ -406,9 +405,19 @@ const platformMailgunStore: MailgunStore = {
   mailgunSigningKey: () => signingKey(),
 };
 
-/** The Mailgun door over the platform's store. */
+const mailgunEnvelopeSchema = z.object({ recipient: z.string().min(1) });
+
+/**
+ * The Mailgun door over the platform's store. Mail is routed by the address
+ * it was delivered to (Mailgun's `recipient`, the envelope) before its
+ * headers: that is the address the landing's `Key` reads, so a message
+ * Bcc'd to `inbox+deals@…` goes where a listen on `deals` hears it.
+ */
 function verifyInboundEmailRequest(body: unknown): Promise<InboundEmailDecision> {
-  return admitMailgunMail(platformMailgunStore, body);
+  const envelope = mailgunEnvelopeSchema.safeParse(body);
+  if (!envelope.success) return admitMailgunMail(platformMailgunStore, body);
+  const route = (message: RoutableMessage) => routeInboundEmail({ ...message, recipients: [envelope.data.recipient, ...message.recipients] });
+  return admitMailgunMail({ ...platformMailgunStore, route }, body);
 }
 
 export {

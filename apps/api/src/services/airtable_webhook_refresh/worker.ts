@@ -16,14 +16,15 @@
 
 import type { WorkHandler } from '../work/kinds';
 import type { WorkKindRegistration } from '../work/drain';
-import type { TeamId } from '../../generated/kysely/core/Team';
+import type { RefreshEventSubscriptionInput } from 'engine-contracts';
 import type { WebhookSubscriptionId } from '../../generated/kysely/automations/WebhookSubscription';
 
 import { logger } from 'movement-engine/public/log';
 import { getAutomationsQb } from '../../lib/kysely';
 import { HOUR } from '../../constants';
-import { MOVEMENT_LISTEN_PROVISIONER } from '../translation_graph/movement/listen_subscriptions';
-import { getAdapter } from '../translation_graph/adapters/registry';
+import { teamIdSchema } from '../../lib/team_id';
+import { MOVEMENT_LISTEN_PROVISIONER, edgeSubscriptionOf } from '../translation_graph/movement/listen_subscriptions';
+import { resolveAdapter } from '../translation_graph/adapters/resolve';
 
 /** The webhook_subscription.provider key for Airtable (the uppercase trigger
  *  kind; see webhook_sync/providers/index.ts). */
@@ -34,25 +35,12 @@ export const AIRTABLE_WEBHOOK_SCAN_INTERVAL = HOUR;
  *  before Airtable's 7-day expiry. */
 const REFRESH_AFTER = 6 * 24 * HOUR;
 
-/** Parse a `scope` jsonb cell (object, or a serialized string from test fakes)
- *  into a flat string map. */
-function scopeOf(rawValue: unknown): Record<string, string> {
-  let raw = rawValue;
-  if (typeof raw === 'string') {
-    try {
-      raw = JSON.parse(raw);
-    } catch {
-      return {};
-    }
-  }
-  if (raw === null || typeof raw !== 'object') return {};
-  const scope: Record<string, string> = {};
-  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-    if (typeof v === 'string') scope[k] = v;
-  }
-  return scope;
-}
-
+/**
+ * Refresh each of the listens' Airtable subscriptions whose window is due, as
+ * the edge it serves (`refreshEventSubscription({ edge, filter, externalId })`,
+ * adapter protocol 2.6). A webhook a 0.12 settings listen registered is never
+ * refreshed: the subscription retry removes it (listen_subscriptions.ts).
+ */
 export async function refreshDueAirtableWebhooks(now = new Date()): Promise<void> {
   const cutoff = new Date(now.getTime() - REFRESH_AFTER);
   const rows = await getAutomationsQb(['webhook_subscription'])
@@ -63,39 +51,31 @@ export async function refreshDueAirtableWebhooks(now = new Date()): Promise<void
     .where('status', '=', 'active')
     .where('external_webhook_id', 'is not', null)
     .where('updated_at', '<', cutoff)
-    .select([
-      'id',
-      'team_id',
-      'credentials_id',
-      'external_webhook_id',
-      'scope',
-    ])
+    .select(['id', 'team_id', 'credentials_id', 'external_webhook_id', 'subscriptions'])
     .execute();
 
   for (const row of rows) {
     try {
       if (row.credentials_id === null || row.external_webhook_id === null) continue;
-      const scope = scopeOf(row.scope);
-      if (typeof scope.base !== 'string') {
-        logger.warn('[AirtableWebhookRefresh] subscription has no base scope; skipping', {
-          subscriptionId: row.id,
-        });
-        continue;
-      }
-
-      // Whichever line Airtable is on: its module or its legacy adapter. The
-      // refresh is not on the protocol (only Airtable's webhooks expire), so
-      // it is the in-process adapter's own method.
-      const adapter = getAdapter({
+      const held = edgeSubscriptionOf(row.subscriptions);
+      if (held === null) continue;
+      const adapter = await resolveAdapter({
         adapterType: 'airtable',
-        teamId: row.team_id as TeamId,
-        credentialsId: row.credentials_id as unknown as string,
+        teamId: teamIdSchema.parse(row.team_id),
+        credentialsId: row.credentials_id,
+        ...(held.constructionArgs !== undefined ? { constructionArgs: held.constructionArgs } : {}),
       });
-      const refresh: unknown = Reflect.get(adapter, 'refreshEventSubscription');
-      if (typeof refresh !== 'function') {
-        throw new Error('the Airtable adapter cannot refresh a webhook subscription');
+      if (adapter.refreshEventSubscription === undefined) {
+        throw new Error('the Airtable module cannot refresh a webhook subscription');
       }
-      await Reflect.apply(refresh, adapter, [{ externalId: row.external_webhook_id, scope }]);
+      // The engine's contract types the refresh of a 0.12 webhook only; the
+      // module reads an edge's too (module-kit `RefreshEdgeSubscriptionInput`).
+      const refresh: RefreshEventSubscriptionInput & { edge: string; filter?: unknown } = {
+        edge: held.edge,
+        ...(held.filter !== undefined ? { filter: held.filter } : {}),
+        externalId: row.external_webhook_id,
+      };
+      await adapter.refreshEventSubscription(refresh);
 
       // Advance the window mark so it isn't re-refreshed until the next cycle.
       await getAutomationsQb(['webhook_subscription'])
@@ -107,6 +87,7 @@ export async function refreshDueAirtableWebhooks(now = new Date()): Promise<void
       logger.info('[AirtableWebhookRefresh] refreshed webhook', {
         subscriptionId: row.id,
         webhookId: row.external_webhook_id,
+        edge: held.edge,
       });
     } catch (err) {
       logger.error('[AirtableWebhookRefresh] refresh failed for subscription', {

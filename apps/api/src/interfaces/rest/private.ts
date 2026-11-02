@@ -20,9 +20,7 @@ import {
 } from '../../services/translation_graph/adapters/email';
 import { fetchResendEmailPayload } from '../../services/translation_graph/adapters/email/resend_inbound';
 import { readMailgunMessage, readResendEnvelope, resendEnvelopeRecipients } from '@listen-fire/email';
-import { EMAILS_EDGE, EMAIL_KEY_FIELD } from '@listen-fire/email/types';
-import { normalisedBody } from '@listen-fire/email/adapter';
-import { inboxKeyOf } from '@listen-fire/email/address';
+import { inboundEmailArrival } from '../../services/translation_graph/adapters/email/arrival';
 import { resolveActingUser } from '../../services/translation_graph/adapters/acting_user/resolve';
 import { findPublicInbox } from '../../services/translation_graph/adapters/email/public_inbox';
 
@@ -124,16 +122,9 @@ const acceptInboundEmail = async (
   // nothing twice.
   const messageId =
     typeof emailPayload['messageId'] === 'string' && emailPayload['messageId'].length > 0 ? emailPayload['messageId'] : undefined;
-  const recipient = typeof emailPayload['recipient'] === 'string' ? emailPayload['recipient'] : undefined;
   let fired: number;
   try {
-    const arrivals: Arrival[] = [
-      {
-        edge: EMAILS_EDGE,
-        identity: messageId ?? ctx.id,
-        landing: { recordType: 'Email', fields: { ...emailPayload, content: normalisedBody(emailPayload), [EMAIL_KEY_FIELD]: inboxKeyOf(recipient) } },
-      },
-    ];
+    const arrivals: Arrival[] = [inboundEmailArrival({ payload: emailPayload, fallbackIdentity: ctx.id })];
     const { kept, fires } = await deliverArrivals({
       teamId,
       delivered: { adapterType: EMAIL_ADAPTER_TYPE, credentialsId: null },

@@ -81,13 +81,9 @@ import {
   TELEGRAM_ADAPTER_TYPE,
   TELEGRAM_MESSAGE_TYPE_ID,
   TELEGRAM_ATTACHMENT_TYPE_ID,
-  parseTelegramEvents,
-  telegramEventToDiscriminable,
   type TelegramMessagePayload,
 } from '../index';
 import { TELEGRAM_LINKED_USER_TYPE_ID } from '@listen-fire/telegram/types';
-import { discriminateEvent } from 'movement-engine/public/inbound';
-import { webhookEventToDiscriminable } from '../../../../webhook_sync/event_conversion';
 
 const TEAM_ID = 'team-1' as TeamId;
 const CRED_ID = 'cred-1';
@@ -988,45 +984,6 @@ describe('TelegramAdapter built-in path under the test-harness team (fake base u
     });
     const url = fetchMock.mock.calls[0][0] as string;
     expect(url).toBe(`${FAKE_BASE}/botBUILTIN_TOKEN/sendMessage`);
-  });
-});
-
-// ── Inbound parse → discriminate contract (pins the ff2bc7432 class) ──────
-//
-// Telegram's normalized payload carries NO literal discriminator (unlike
-// Slack's inner-event `type`), so the event type is TAG-ONLY and the parse
-// classifies + tags. Both inbound doors (BYO `preprocessInbound`, shared-bot
-// `telegram_builtin.ts`) MUST route through `telegramEventToDiscriminable`, or
-// the untagged event matches no type → no stable position → a reply write off
-// the inbound message errors with "no durable record id". The second case
-// demonstrates that failure mode directly (the un-tagged legacy conversion).
-describe('TelegramAdapter.listEventTypes — inbound parse→discriminate contract', () => {
-  const update = {
-    update_id: 9001,
-    message: {
-      message_id: 77,
-      from: { id: 424242, is_bot: false, first_name: 'Ada' },
-      chat: { id: 424242, type: 'private' },
-      date: 1700000000,
-      text: 'ping',
-    },
-  };
-
-  it('a real Update discriminates to a STABLE telegram:message position via the tagged mapper', async () => {
-    const parsed = parseTelegramEvents(update);
-    expect(parsed).toHaveLength(1);
-    const discriminable = telegramEventToDiscriminable(parsed[0]);
-    const eventTypes = await adapter().listEventTypes();
-    const result = discriminateEvent({ adapterType: TELEGRAM_ADAPTER_TYPE, event: discriminable, eventTypes });
-    expect(result?.eventType.positionType).toBe(TELEGRAM_MESSAGE_TYPE_ID);
-    expect(result?.position.identity).toMatchObject({ kind: 'stable', recordId: '77' });
-  });
-
-  it('the UN-tagged legacy conversion does NOT discriminate — pins that both doors must use the tagged mapper', async () => {
-    const parsed = parseTelegramEvents(update);
-    const untagged = webhookEventToDiscriminable(parsed[0]);
-    const eventTypes = await adapter().listEventTypes();
-    expect(discriminateEvent({ adapterType: TELEGRAM_ADAPTER_TYPE, event: untagged, eventTypes })).toBeNull();
   });
 });
 

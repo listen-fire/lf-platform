@@ -16,6 +16,7 @@ import {
 import type { ListenPlan } from 'engine-contracts';
 import type { CatalogSnapshot, EdgeListening, InstanceSchema, LanguageVersion, Program } from 'movement-lang';
 import type { ListenConfig } from '../../inbound/listen_door';
+import { keylessInboxListen } from '../adapters/email/listen_keys';
 
 /** Why this host would not fire `plan` as written, if it would not: only
  *  listen-fire lists the members of an earlier hop whose WHERE an arrival
@@ -60,7 +61,7 @@ export function plannedListensOfSource(input: {
   const listens: ListenConfig[] = [];
   const refused: string[] = [];
   for (const listen of planned) {
-    const why = unfiredHere(listen.plan);
+    const why = unfiredHere(listen.plan) ?? keylessInboxListen(listen.plan);
     if (why !== null) {
       refused.push(why);
       continue;
