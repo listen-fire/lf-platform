@@ -26,6 +26,7 @@ about are in `describe_systems` and the module's handbook chapter
 (`system:<module>`).
 
 - Comments start with `#`. No semicolons. A name is bound once: `x = …` (no `let`/`const`).
+- These start statements, never names: `await`, `callback`, `delete`, `edge`, `else`, `ERROR`, `export`, `extract`, `function`, `if`, `import`, `link`, `listen`, `movement`, `refresh`, `return`, `run`, `shape`, `unlink`, `write`.
 - Backticks quote a name with spaces; double quotes are always a string.
 - Types wear angle brackets: `<text>`, `<number>`, `<boolean>`, `<date>`, `<json>`, `<conn-[:Things]->>`.
   `<text | null>` for a field that may be missing.
@@ -42,7 +43,8 @@ about are in `describe_systems` and the module's handbook chapter
 
 ## Absent values
 
-`first`, `only`, a lookup that may find nothing: `T | absent`. Narrow it before use:
+`first`, `only`, a lookup that may find nothing, the record an arrival leads to
+(`only(c-[:Thing]->)`): `T | absent`. Test it once; every read after is safe:
 
 ```
 r = only(sys-[x:Things WHERE x.key == k]->)
@@ -67,7 +69,10 @@ field, with each field's kind; a field of a set of values lists them.
 ```
 write sys-[:Things]-> { field: value, other: "${x}" }    # create
 write sys-[:Things]-> { unique by (key), key: k, … }      # create or update by identity
-write channel-[:Messages]-> { Message: "…" }              # write along a record's edge
+write mail-[:Messages]-> { To: ["a@example.com"], Subject: "…", Body: "…" }   # send as a mailbox connection
+chat-[ch:Channels WHERE ch.Name == "general"]-> {         # a channel found by name:
+  write ch-[:Messages]-> { Message: "…" }                 # post inside its block, along its edge
+}
 ```
 
 ## Branching and failing
@@ -85,24 +90,3 @@ fail("reason")         # ends the run as failed, the reason kept in the run reco
 - `listen-fire run --event <file>`: one run on an event, for real (an event has
   no dry run; `--ephemeral` keeps the run out of the project's history).
 - `listen-fire runs`, `listen-fire runs show <id>`: what each run did, its event, trace and error.
-
-## Forms you will reach for
-
-```
-crm = connect `@lf/attio` using acme
-mail = connect `@lf/gmail` using team_mail
-chat = connect `@lf/slack` using team_chat
-
-function `Renamed`(c: <crm-[:CompanyChange]->>) {     # typed by the record the listen lands on
-  co = only(c-[:Company]->)                            # a change's record may be missing
-  if (co == null) { fail("no company") }               # test it once; every read after is safe
-  write mail-[:Messages]-> { To: ["ops@example.com"], Subject: "Renamed", Body: co.Name }
-  chat-[ch:Channels WHERE ch.Name == "general"]-> {    # a channel found by name: post inside its block
-    write ch-[:Messages]-> { Message: co.Name }
-  }
-}
-
-listen to crm-[:Companies]->-[c:Changes WHERE c.Field == "Name"]-> fire `Renamed`
-```
-
-These start statements, never names: `await`, `callback`, `delete`, `edge`, `else`, `ERROR`, `export`, `extract`, `function`, `if`, `import`, `link`, `listen`, `movement`, `refresh`, `return`, `run`, `shape`, `unlink`, `write`.
