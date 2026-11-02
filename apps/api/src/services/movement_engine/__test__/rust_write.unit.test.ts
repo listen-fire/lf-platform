@@ -1555,7 +1555,7 @@ describe('the cost cap in the Rust engine', () => {
     // Key for key, in order.
     expect(JSON.stringify(rust.suspensions[0]?.state)).toMatchSnapshot();
     expect(rust.suspensions[0]?.state).toMatchObject({
-      version: 2,
+      version: 3,
       address: 's2.b0.s0',
       bindingName: null,
       suspended: true,
