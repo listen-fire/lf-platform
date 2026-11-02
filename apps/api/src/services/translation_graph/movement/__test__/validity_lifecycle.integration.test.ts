@@ -23,6 +23,8 @@ import { saveMovement } from '../provision';
 import { runMovementNow } from '../run_now';
 import { getMovementRow } from '../store';
 import { installRemoteAdapterFromManifest } from '../../adapters/remote/install';
+import { registerFireEventWork } from '../../../inbound/fire_event';
+import { resetWorkHandlersForTests } from '../../../work/drain';
 import {
   FAKE_CRM_ADAPTER_TYPE,
   FAKE_CRM_COMPANY_TYPE,
@@ -41,11 +43,9 @@ jest.mock('../../../../lib/slack', () => ({
 
 const NAME = 'validity-lifecycle-probe';
 
-const sourceWithEdge = (edge: string) => `import { manual, \`${FAKE_CRM_ADAPTER_TYPE}\` as crm } from adapters
+const sourceWithEdge = (edge: string) => `df = connect #${FAKE_CRM_ADAPTER_TYPE}
 
-df = connect crm
-
-function probe(go: <manual-[:\`Invocation\`]->>) {
+function probe(go: <manual-[:Invocations]->>) {
   write df-[:\`${edge}\`]-> {
     Name: "Vireo Robotics"
   }
@@ -66,6 +66,10 @@ describe('movement validity lifecycle (real save gate + firings + live remote so
       .execute();
 
   beforeAll(async () => {
+    // Run now queues its run and drains it in this process: the drain runs it
+    // through the fire_event handler, as the deployment's drain does.
+    resetWorkHandlersForTests();
+    registerFireEventWork();
     teamId = randomUUID() as TeamId;
     await getCoreQb(['team'])
       .insertInto('team')

@@ -31,6 +31,7 @@ import type { MovementId } from '../../../../generated/kysely/automations/Moveme
 import type { Adapter, RuntimeCapabilities } from 'movement-engine/public/adapter';
 import type { CatalogSnapshot, InstanceSchema, PositionSchema } from 'movement-lang';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
+import { arrivalTriggerOf } from 'movement-engine/public/inbound';
 
 import { getAutomationsQb, getCoreQb } from '../../../../lib/kysely';
 import { cleanupTeam } from '../../../../test/harness/cleanup';
@@ -43,6 +44,7 @@ import { saveMovement } from '../provision';
 import { runMovementTestRun } from '../test_run';
 import { positionData } from 'engine-contracts/catalog';
 import { containerAssociation } from 'movement-engine/public/adapter';
+import { MANUAL_ADAPTER_TYPE, invocationArrival } from '../../adapters/manual';
 
 const mockedCatalog = runCatalogSnapshotForTeam as jest.Mock;
 const mockedResolve = resolveAdapter as jest.Mock;
@@ -159,20 +161,16 @@ function makeSlackTargetFake(): { adapter: Adapter; creates: Record<string, unkn
 
 const ANNOUNCE = (marker: string) =>
   [
-    'import { attio, slack } from adapters',
-    'import { acme_main, acme_slack } from credentials',
+    'chat = connect `@lf/slack` using acme_slack',
     '',
-    'crm = attio(credentials: acme_main)',
-    'chat = slack(credentials: acme_slack)',
-    '',
-    'movement announce(ev: <crm-[:`Webhook Event`]->>) {',
+    'movement announce(go: <manual-[:Invocations]->>) {',
     '  write chat-[:messages]-> {',
     '    channel: "#alerts"',
     `    text: "${marker}"`,
     '  }',
     '}',
     '',
-    'listen to crm { events: ["record.created"] } fire announce',
+    'listen to manual-[:Invocations]-> fire announce',
   ].join('\n');
 
 /** An edit that cannot be read: its save stops at `needsConfirmation`. */
@@ -182,17 +180,10 @@ function spelled(text: string): string {
   return spelledFor(LANGUAGE_VERSION, text, buildCatalog());
 }
 
+/** A press of Run now: an arrival on the manual unit's `Invocations`. */
 function webhookEvent(): TriggerEvent {
-  return {
-    pipelineInputId: 'trigger:test',
-    adapterType: 'attio',
-    triggerType: 'webhook',
-    payload: { event_type: 'record.created', action: 'record.created', id: { object_id: 'obj-x', record_id: 'co-1' } },
-    changeType: 'create',
-    rootRecordType: 'Companies',
-    externalRecordRef: { adapterType: 'attio', externalId: 'co-1', recordType: 'Companies' },
-    occurredAt: new Date().toISOString(),
-  };
+  const arrival = invocationArrival({ firedAt: new Date().toISOString(), submissionId: randomUUID() });
+  return arrivalTriggerOf({ pipelineInputId: 'trigger:test', adapterType: MANUAL_ADAPTER_TYPE, arrival, now: new Date() });
 }
 
 describe('a firing runs the shipped text, not a draft (real DB)', () => {
@@ -216,9 +207,12 @@ describe('a firing runs the shipped text, not a draft (real DB)', () => {
     }));
     const target = makeSlackTargetFake();
     slackCreates = target.creates;
-    mockedResolve.mockImplementation(async ({ adapterType }: { adapterType: string }) => {
+    const actualResolve = jest.requireActual('../../adapters/resolve').resolveAdapter;
+    mockedResolve.mockImplementation(async (input: { adapterType: string }) => {
+      const { adapterType } = input;
       if (adapterType === 'attio') return makeAttioSourceFake();
       if (adapterType === 'slack') return target.adapter;
+      if (adapterType === MANUAL_ADAPTER_TYPE) return actualResolve(input);
       throw new Error(`test: no fake for '${adapterType}'`);
     });
   });
@@ -246,7 +240,7 @@ describe('a firing runs the shipped text, not a draft (real DB)', () => {
     await getAutomationsQb(['trigger'])
       .insertInto('trigger')
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .values({ id: triggerId, team_id: teamId, name: 'Attio record changes', kind: 'attio', movement_id: movementId, fired_movement_name: 'announce' } as any)
+      .values({ id: triggerId, team_id: teamId, name: 'Run now', kind: 'manual', movement_id: movementId, fired_movement_name: 'announce' } as any)
       .execute();
     return triggerId;
   }

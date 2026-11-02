@@ -43,27 +43,20 @@ const NAME = 'save-warnings-probe';
  *  declares (the axis the collision warning keys on) and whether its writes
  *  rehearse (the axis the listener's run_mode keys on). */
 const fileDeclaring = (movementName: string, options: { dryRun?: boolean } = {}): string =>
-  `import { manual, \`${FAKE_CRM_ADAPTER_TYPE}\` as crm } from adapters
+  `df = connect #${FAKE_CRM_ADAPTER_TYPE}${options.dryRun === true ? ' { dryRun: true }' : ''}
 
-runs = connect manual
-df = connect crm${options.dryRun === true ? ' { dryRun: true }' : ''}
-
-function ${movementName}(go: <runs-[:\`Invocation\`]->>) {
+function ${movementName}(go: <manual-[:Invocations]->>) {
   write df-[:\`${FAKE_CRM_COMPANY_TYPE}\`]-> {
     Name: "Vireo Robotics"
   }
 }
 
-listen to runs {} fire ${movementName}
+listen to manual-[:Invocations]-> fire ${movementName}
 `;
 
 /** Fails in the PARSER, not the checker — the distinction the retirement
  *  ruling turns on. */
-const UNREADABLE = `import { manual } from adapters
-
-runs = connect manual
-
-function probe(go: <runs-[:\`Invocation\`]->>) {
+const UNREADABLE = `function probe(go: <manual-[:Invocations]->>) {
   write ((((
 `;
 

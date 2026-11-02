@@ -1,16 +1,17 @@
-// Layer 3 — typed listen events, the DISPATCH path against the REAL DB. Drives
+// Layer 3 — a change arrival, the DISPATCH path against the REAL DB. Drives
 // `dispatchTriggerByIdEvent` (the in-process trigger entry: gates →
-// runMovementFiring → runMovement → recorder → Postgres) with a synthetic Attio
-// `record.created` event and a movement that narrows on the action variant and
-// traverses the meta-edge. Proves the wiring author-time rigor can't catch: the
-// event's `changeType` becomes the seeded variant, the IS-narrow resolves, and
-// the `-[:Companies]->` traversal hydrates the live record — through the real
-// firing + recorder, read back exactly as the agent surface does.
+// runMovementFiring → runMovement → recorder → Postgres) with an Attio change
+// arriving on a company's `Changes` edge and a movement that branches on the
+// change's `Kind` and walks the change's `Company` edge. Proves the wiring
+// author-time rigor can't catch: the arrival's landing becomes the seed, its
+// `Kind` reads off it, and the `-[:Company]->` hop hydrates the live record —
+// through the real firing + recorder, read back exactly as the agent surface
+// does.
 //
 // The two NETWORK seams a bare test DB can't stand up are mocked (and ONLY
 // those): the catalog's live adapter introspection (`runCatalogSnapshotForTeam`)
 // and adapter I/O (`resolveAdapter`). Everything else — dispatch gates, the
-// firing, the run recorder, the engine seed/narrow/traverse — runs for real.
+// firing, the run recorder, the engine seed/branch/traverse — runs for real.
 
 import { randomUUID } from 'node:crypto';
 
@@ -26,14 +27,14 @@ jest.mock('../../adapters/resolve', () => {
 });
 
 import { LANGUAGE_VERSION } from 'movement-lang';
-import { eventAddressKey } from 'legacy-lang';
 
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type { TriggerId } from '../../../../generated/kysely/automations/Trigger';
 import type { MovementId } from '../../../../generated/kysely/automations/Movement';
 import type { Adapter, RuntimeCapabilities } from 'movement-engine/public/adapter';
-import type { Catalog, CatalogSnapshot, InstanceSchema, PositionSchema } from 'movement-lang';
+import type { CatalogSnapshot, InstanceSchema } from 'movement-lang';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
+import { arrivalTriggerOf } from 'movement-engine/public/inbound';
 
 import { getAutomationsQb, getCoreQb } from '../../../../lib/kysely';
 import { cleanupTeam } from '../../../../test/harness/cleanup';
@@ -57,39 +58,29 @@ import { containerAssociation } from 'movement-engine/public/adapter';
 const mockedCatalog = runCatalogSnapshotForTeam as jest.Mock;
 const mockedResolve = resolveAdapter as jest.Mock;
 
-const COMPANIES_OBJECT_ID = 'obj-companies';
-const PERSON_OBJECT_ID = 'obj-person';
+/** The one company Attio still has; a change to any other finds no live record. */
+const LIVE_COMPANY = 'co-1';
 
 function permissiveCaps(): RuntimeCapabilities {
   return { traversal: { incoming: true, edgeProperties: true }, resources: true };
 }
 
-// The Attio instance schema as the projection + host graft produce it: the
-// event NODE with its `action` enum, plus the demand-grafted per-action
-// narrowings — the same fixture the checker test uses.
-const ACTIONS = ['record.created', 'record.updated', 'record.deleted'];
-const EVENT = 'Webhook Event';
-const graftPositions: Record<string, PositionSchema> = {};
-const graftVariants: string[] = [];
-for (const action of ACTIONS) {
-  const key = eventAddressKey({ event: EVENT, narrowing: { action } });
-  graftVariants.push(key);
-  graftPositions[key] = {
-    properties: { action: { kind: 'enum', options: ACTIONS } },
-    edges: action === 'record.deleted' ? {} : { Companies: { target: 'Companies' } },
-  };
-}
+// The Attio instance schema as the module describes it: a company's changes
+// arrive on its `Changes` edge, landing on `CompanyChange`, whose `Company`
+// edge reads the company as it is now.
+const CHANGE_KINDS = ['created', 'updated', 'deleted'];
 const ATTIO_SCHEMA: InstanceSchema = {
   positions: {
-    Companies: { properties: { Name: 'text' }, edges: {} },
-    [EVENT]: {
-      properties: { action: { kind: 'enum', options: ACTIONS } },
-      edges: { Companies: { target: 'Companies', requiresLiveRecord: true } },
+    Companies: {
+      properties: { Name: 'text' },
+      edges: { Changes: { target: 'CompanyChange', readable: false, listenable: true } },
     },
-    ...graftPositions,
+    CompanyChange: {
+      properties: { Id: 'text', Kind: { kind: 'enum', options: CHANGE_KINDS }, Record: 'text' },
+      edges: { Company: { target: 'Companies', requiresLiveRecord: true } },
+    },
   },
-  collections: {},
-  unions: { [EVENT]: graftVariants },
+  collections: { Companies: { target: 'Companies' } },
   writableRoots: {},
 };
 
@@ -109,8 +100,8 @@ function buildCatalog(): CatalogSnapshot {
   });
 }
 
-// Fake Attio SOURCE mirroring getRecordForEvent: the `-[:Companies]->` edge
-// hydrates the live record ONLY when the event's id.object_id matches Companies.
+// Fake Attio SOURCE: the change's `-[:Company]->` edge hydrates the live
+// record, which Attio has only for LIVE_COMPANY.
 function makeAttioSourceFake(): Adapter {
   return {
     adapterType: 'attio',
@@ -130,17 +121,15 @@ function makeAttioSourceFake(): Adapter {
       return data?.[fieldId] ?? null;
     },
     async getRelated({ position, fieldId }) {
-      if (fieldId !== 'Companies') return [];
-      const data = positionData(position) as
-        | { id?: { object_id?: string; record_id?: string } }
-        | undefined;
-      if (data?.id?.object_id !== COMPANIES_OBJECT_ID) return [];
+      if (fieldId !== 'Company') return [];
+      const data = positionData(position) as { Record?: string } | undefined;
+      if (data?.Record !== LIVE_COMPANY) return [];
       return [
         {
           position: makeStablePosition({
             adapterType: 'attio',
             recordType: 'Companies',
-            recordId: data.id.record_id ?? 'unknown',
+            recordId: LIVE_COMPANY,
             data: { Name: 'Acme' },
           }),
         },
@@ -195,15 +184,12 @@ function makeSlackTargetFake(): { adapter: Adapter; creates: Record<string, unkn
 }
 
 const NOTIFY_NEW_COMPANY = [
-  'import { attio, slack } from adapters',
-  'import { acme_main, acme_slack } from credentials',
+  'crm = connect `@lf/attio` using acme_main',
+  'chat = connect `@lf/slack` using acme_slack',
   '',
-  'crm = connect attio using acme_main',
-  'chat = connect slack using acme_slack',
-  '',
-  'function notify_new_company(ev: <crm-[:`Webhook Event`]->>) {',
-  '  if (ev is <crm-[:`Webhook Event` WHERE `action` == "record.created"]->>) {',
-  '    ev-[co:Companies]-> {',
+  'function notify_new_company(change: <crm-[:CompanyChange]->>) {',
+  '  if (change.`Kind` == "created") {',
+  '    change-[co:Company]-> {',
   '      write chat-[:messages]-> {',
   '        channel: "#alerts"',
   '        text: co.`Name`',
@@ -212,7 +198,7 @@ const NOTIFY_NEW_COMPANY = [
   '  }',
   '}',
   '',
-  'listen to crm { events: ["record.created", "record.updated", "record.deleted"] } fire notify_new_company',
+  'listen to crm-[:Companies]->-[:Changes]-> fire notify_new_company',
 ].join('\n');
 
 async function seedMovementWithAttioTrigger(teamId: TeamId): Promise<{
@@ -246,28 +232,27 @@ async function seedMovementWithAttioTrigger(teamId: TeamId): Promise<{
   return { movementId, triggerId };
 }
 
-function webhookEvent(input: {
-  changeType: 'create' | 'update' | 'delete';
-  objectId: string;
-  eventType: string;
-}): TriggerEvent {
-  return {
+/** What Attio's webhook becomes at the door: a change arriving on the
+ *  company's `Changes` edge, carrying the company it is about. */
+function changeArrival(input: { kind: 'created' | 'updated' | 'deleted'; company: string }): TriggerEvent {
+  const id = `chg-${input.kind}-${input.company}`;
+  return arrivalTriggerOf({
     pipelineInputId: 'trigger:test',
     adapterType: 'attio',
-    triggerType: 'webhook',
-    payload: {
-      event_type: input.eventType,
-      action: input.eventType,
-      id: { object_id: input.objectId, record_id: 'co-1' },
+    arrival: {
+      edge: 'Changes',
+      key: input.company,
+      identity: id,
+      landing: { recordId: id, recordType: 'CompanyChange', fields: { Id: id, Kind: input.kind, Record: input.company } },
+      parents: [{ recordId: input.company, recordType: 'Companies', fields: {} }],
+      about: { recordType: 'Companies', externalId: input.company },
+      occurredAt: new Date().toISOString(),
     },
-    changeType: input.changeType,
-    rootRecordType: 'Companies',
-    externalRecordRef: { adapterType: 'attio', externalId: 'co-1', recordType: 'Companies' },
-    occurredAt: new Date().toISOString(),
-  };
+    now: new Date(),
+  });
 }
 
-describe('typed listen events — dispatch path (real DB)', () => {
+describe('a change arrival — dispatch path (real DB)', () => {
   let teamId: TeamId;
   let credentialId: string;
   let slackCreates: Record<string, unknown>[];
@@ -307,16 +292,16 @@ describe('typed listen events — dispatch path (real DB)', () => {
     jest.clearAllMocks();
   });
 
-  it('a Companies record.created → narrows + traverses + hydrates a write carrying "Acme"', async () => {
+  it('a company created → branches on Kind + traverses + hydrates a write carrying "Acme"', async () => {
     const { movementId, triggerId } = await seedMovementWithAttioTrigger(teamId);
 
     const result = await dispatchTriggerByIdEvent({
       triggerId,
       teamId,
-      event: webhookEvent({ changeType: 'create', objectId: COMPANIES_OBJECT_ID, eventType: 'record.created' }),
+      event: changeArrival({ kind: 'created', company: LIVE_COMPANY }),
     });
 
-    // The firing applied exactly one write (the IS-narrow passed, the traversal hydrated).
+    // The firing applied exactly one write (the Kind branch taken, the traversal hydrated).
     expect(result.movementFirings).toEqual([
       { movementName: 'notify_new_company', writes: 1, dryRun: false },
     ]);
@@ -332,13 +317,13 @@ describe('typed listen events — dispatch path (real DB)', () => {
     expect(detail.writes[0].values).toMatchObject({ text: 'Acme' });
   });
 
-  it('a Person record.created → narrows fine but the Companies traversal is empty: zero writes (object axis)', async () => {
+  it('a company Attio no longer has → the Kind branch is taken but the Company hop is empty: zero writes', async () => {
     const { triggerId } = await seedMovementWithAttioTrigger(teamId);
 
     const result = await dispatchTriggerByIdEvent({
       triggerId,
       teamId,
-      event: webhookEvent({ changeType: 'create', objectId: PERSON_OBJECT_ID, eventType: 'record.created' }),
+      event: changeArrival({ kind: 'created', company: 'co-gone' }),
     });
 
     expect(result.movementFirings).toEqual([
@@ -347,13 +332,13 @@ describe('typed listen events — dispatch path (real DB)', () => {
     expect(slackCreates).toEqual([]);
   });
 
-  it('a record.deleted does not satisfy the created pin — the live-record branch is not entered: zero writes', async () => {
+  it('a company deleted does not satisfy the created branch — the live-record hop is not walked: zero writes', async () => {
     const { triggerId } = await seedMovementWithAttioTrigger(teamId);
 
     const result = await dispatchTriggerByIdEvent({
       triggerId,
       teamId,
-      event: webhookEvent({ changeType: 'delete', objectId: COMPANIES_OBJECT_ID, eventType: 'record.deleted' }),
+      event: changeArrival({ kind: 'deleted', company: LIVE_COMPANY }),
     });
 
     expect(result.movementFirings).toEqual([

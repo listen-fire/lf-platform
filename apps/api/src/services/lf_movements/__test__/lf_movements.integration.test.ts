@@ -162,10 +162,13 @@ describe('the movements module', () => {
   });
 
   it('a legacy-pin movement is never listed or read', async () => {
-    expect(compatible('0.13.0', LANGUAGE_VERSION)).toBe(false);
+    // The next compatibility key: the minor under 0.x, the major from 1.0.
+    const [major, minor] = LANGUAGE_VERSION.split('.').map(Number);
+    const later = major === 0 ? `0.${minor + 1}.0` : `${major + 1}.0.0`;
+    expect(compatible(later, LANGUAGE_VERSION)).toBe(false);
     await seed(teamA, 'one', 'movement one() {}\n', '1');
     await seed(teamA, 'four', 'movement four() {}\n', '4');
-    await seed(teamA, 'later', 'function later() {}\n', '0.13.0');
+    await seed(teamA, 'later', 'function later() {}\n', later);
     await seed(teamA, 'current', 'function current() {}\n');
 
     expect(await paths(teamA)).toEqual(['current.mvt']);

@@ -36,17 +36,15 @@ jest.mock('../../../../lib/slack', () => ({
 
 const NAME = 'listener-retire-probe';
 
-const BODY = `import { manual, \`${FAKE_CRM_ADAPTER_TYPE}\` as crm } from adapters
+const BODY = `df = connect #${FAKE_CRM_ADAPTER_TYPE}
 
-df = connect crm
-
-function probe(go: <manual-[:\`Invocation\`]->>) {
+function probe(go: <manual-[:Invocations]->>) {
   write df-[:\`${FAKE_CRM_COMPANY_TYPE}\`]-> {
     Name: "Vireo Robotics"
   }
 }
 
-function second(go: <manual-[:\`Invocation\`]->>) {
+function second(go: <manual-[:Invocations]->>) {
   write df-[:\`${FAKE_CRM_COMPANY_TYPE}\`]-> {
     Name: "Second Robotics"
   }

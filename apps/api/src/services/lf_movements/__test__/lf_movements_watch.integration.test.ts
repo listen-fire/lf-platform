@@ -32,14 +32,10 @@ jest.mock('../../credentials/credential_lifecycle', () => ({
   credentialLifecycle: () => undefined,
 }));
 
-const MANUAL = (fn: string) => `import { manual } from adapters
-
-runs = connect manual
-
-function ${fn}(go: <runs-[:\`Invocation\`]->>) {
+const MANUAL = (fn: string) => `function ${fn}(go: <manual-[:Invocations]->>) {
 }
 
-listen to runs {} fire ${fn}
+listen to manual-[:Invocations]-> fire ${fn}
 `;
 
 const databaseUrl = getDatabaseUrl(false).url ?? '';
