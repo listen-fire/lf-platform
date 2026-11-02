@@ -1,6 +1,5 @@
-import { CapturedWrite } from 'movement-engine/public/adapter';
 import { Arrival } from 'engine-contracts';
-import * as engine_contracts_trigger_config from 'engine-contracts/trigger_config';
+import { CapturedWrite } from 'movement-engine/public/adapter';
 import * as _prisma_client_runtime_library from '@prisma/client/runtime/library';
 import { StoryValidity, Chip, StoryFilter, StoryShapeNode, StoryEdge, Step, StoryProblem, FieldType } from 'legacy-lang';
 import { CatalogSnapshot, InstanceSchema, LanguageVersion, Diagnostic } from 'movement-lang';
@@ -150,6 +149,61 @@ export interface TeamEngineSwitch {
     notes: string[];
 }
 
+export type ShownKept = {
+    kind: 'request';
+    method: string;
+    path: string;
+    query: string;
+    headers: Record<string, string>;
+    /** The body as text when it is UTF-8, else base64. */
+    body: string;
+    bodyEncoding: 'utf8' | 'base64';
+    /** The arrivals it brought, by receipt key. */
+    arrivalIds: string[];
+} | {
+    /** What a poll or a door read itself: there was no request to keep. */
+    kind: 'page';
+    adapter: string;
+    credential: string | null;
+    arrivals: Arrival[];
+};
+export type ShownRequest = {
+    outcome: 'refused';
+    reason: string;
+} | {
+    outcome: 'shown';
+    deliveryId: string;
+    receivedAt: Date;
+    source: string;
+    replayOf: string | null;
+    kept: ShownKept;
+};
+
+/** Identifier type for automations.movement_version */
+export type MovementVersionId = string & {
+    __brand: 'automations.movement_version';
+};
+
+/** What a replay did, said in lines a person reads. */
+export type ReplayOutcome = 
+/** It could not be replayed at all: no such listen or delivery, or no
+ *  request kept. Nothing was judged. */
+{
+    outcome: 'refused';
+    reason: string;
+} | {
+    outcome: 'replayed';
+    /** The runs it queued (their `fire_event` rows run them). */
+    runIds: string[];
+    /** The replay's own delivery, when it queued a run. */
+    replayDeliveryId: string | null;
+    /** The attempt the listen's facts were kept as. */
+    attempt: number;
+    /** Whether the listen still cannot judge an arrival it brought. */
+    stillUndecided: boolean;
+    lines: string[];
+};
+
 /** One would-be write the movement produced under dry-run — the
  *  `CapturedWrite` currency, surfaced verbatim to the UI. */
 export type MovementTestRunWrite = CapturedWrite;
@@ -165,21 +219,6 @@ export type MovementTestRunResult = {
 } | {
     ok: false;
     error: string;
-};
-
-/** Identifier type for automations.movement_version */
-export type MovementVersionId = string & {
-    __brand: 'automations.movement_version';
-};
-
-/** Identifier type for automations.trigger_event */
-export type TriggerEventId = string & {
-    __brand: 'automations.trigger_event';
-};
-
-/** Identifier type for automations.trigger_run */
-export type TriggerRunId = string & {
-    __brand: 'automations.trigger_run';
 };
 
 /**
@@ -212,6 +251,11 @@ export type TriggerRunId = string & {
 export type AutomationStatus = 'live' | 'setting_up' | 'paused' | 'error';
 
 export type TriggerRunMode = 'off' | 'dry_run' | 'live';
+
+/** Identifier type for automations.trigger_run */
+export type TriggerRunId = string & {
+    __brand: 'automations.trigger_run';
+};
 
 /** Which saved version a run executed, against the one that would run
  *  today. A run pins its version at start, so a firing from before the
@@ -694,6 +738,26 @@ export type OpsEventId = string & {
     __brand: 'public.ops_event';
 };
 
+/** How an arrival reached one of a movement's listens: a run it started, or
+ *  an `Arrival Not Judged` fact (the listen could not tell). */
+export type MovementEventStatus = 'ran' | 'run_failed' | 'not_judged';
+export type MovementEventItem = {
+    id: string;
+    /** The lane (trigger name) of the listen it reached. */
+    lane: string;
+    /** The listen, and the kept delivery it came in: what a replay names. */
+    triggerId: string;
+    deliveryId: string | null;
+    /** The module it came from. */
+    adapterType: string;
+    status: MovementEventStatus;
+    failureReason: string | null;
+    /** For a fact, which attempt (0 as delivered, one more per replay). */
+    attempt: number | null;
+    occurredAt: Date;
+    createdAt: Date;
+};
+
 /**
  * The STORY VIEW — the whole contract between the server that projects a
  * movement and the renderer that draws it.
@@ -731,6 +795,9 @@ export interface StoryViewTrigger {
     id: string;
     /** The whole sentence, ready to print: "When an email arrives at …". */
     sentence: string;
+    /** What the listen hears, as the author wrote it: the traversal ending on
+     *  the edge its arrivals land on (`crm-[:Deals]->-[c:Changes]->`). */
+    path?: string;
     system: StoryViewSystem | null;
     /** The lane name from `listen as "…"`, when the author named one. */
     lane?: string;
@@ -1114,6 +1181,16 @@ export interface DependentCheckResult {
     problemCount: number;
 }
 
+/** Why a listen runs nothing until a person resumes it. */
+export interface ListenPause {
+    /** Said by whichever paused it (the loop breaker's `LISTEN_LOOP` line, or
+     *  the loop guard's reason). */
+    reason: string;
+    /** The arrivals it held while paused (the loop breaker counts them; the
+     *  loop guard keeps their runs, failed, instead). */
+    held: number;
+}
+
 export interface ProvisionedListener {
     triggerId: string;
     /** The movement this listener fires. */
@@ -1204,15 +1281,6 @@ export interface MovementListenerInfo {
      *  loop guard paused it); null while it runs. */
     paused: ListenPause | null;
 }
-/** Why a listen runs nothing until a person resumes it. */
-interface ListenPause {
-    /** Said by whichever paused it (the loop breaker's `LISTEN_LOOP` line, or
-     *  the loop guard's reason). */
-    reason: string;
-    /** The arrivals it held while paused (the loop breaker counts them; the
-     *  loop guard keeps their runs, failed, instead). */
-    held: number;
-}
 export interface MovementListItem {
     id: string;
     name: string;
@@ -1288,66 +1356,6 @@ export type MovementRunItem = {
     calls: number;
     inputTokens: number;
     outputTokens: number;
-};
-/** How an arrival reached one of a movement's listens: a run it started, or
- *  an `Arrival Not Judged` fact (the listen could not tell). */
-type MovementEventStatus = 'ran' | 'run_failed' | 'not_judged';
-export type MovementEventItem = {
-    id: string;
-    /** The lane (trigger name) of the listen it reached. */
-    lane: string;
-    /** The listen, and the kept delivery it came in: what a replay names. */
-    triggerId: string;
-    deliveryId: string | null;
-    /** The module it came from. */
-    adapterType: string;
-    status: MovementEventStatus;
-    failureReason: string | null;
-    /** For a fact, which attempt (0 as delivered, one more per replay). */
-    attempt: number | null;
-    occurredAt: Date;
-    createdAt: Date;
-};
-/** What a replay did, said in lines a person reads. */
-type ReplayOutcome = {
-    outcome: 'refused';
-    reason: string;
-} | {
-    outcome: 'replayed';
-    runIds: string[];
-    replayDeliveryId: string | null;
-    attempt: number;
-    stillUndecided: boolean;
-    lines: string[];
-};
-type ShownKept = {
-    kind: 'request';
-    method: string;
-    path: string;
-    query: string;
-    headers: Record<string, string>;
-    /** The body as text when it is UTF-8, else base64. */
-    body: string;
-    bodyEncoding: 'utf8' | 'base64';
-    /** The arrivals it brought, by receipt key. */
-    arrivalIds: string[];
-} | {
-    /** What a poll or a door read itself: there was no request to keep. */
-    kind: 'page';
-    adapter: string;
-    credential: string | null;
-    arrivals: Arrival[];
-};
-type ShownRequest = {
-    outcome: 'refused';
-    reason: string;
-} | {
-    outcome: 'shown';
-    deliveryId: string;
-    receivedAt: Date;
-    source: string;
-    replayOf: string | null;
-    kept: ShownKept;
 };
 /**
  * How the editor treats a pin. `kind`: whose checker lints it (`legacy`: the
@@ -4382,6 +4390,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
             }, {
                 id: string;
                 name: string;
+                singular: string;
                 slug: string | null;
             }[]>;
             listEntryPoints: _trpc_server.BuildProcedure<"query", {
@@ -4477,13 +4486,35 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     displayName: string;
                     writable: boolean;
                     readable: boolean;
+                    bounded?: boolean | undefined;
+                    boundedBy?: string[] | undefined;
+                    delivery?: "scope" | "connection" | "polled" | undefined;
+                    pollEverySeconds?: number | undefined;
+                    carries?: string[] | undefined;
+                    scopedBy?: string | undefined;
+                    attributes?: boolean | undefined;
+                    addressed?: boolean | undefined;
+                    membersChange?: "pushed" | {
+                        relistEverySeconds: number;
+                    } | undefined;
                     description?: string | undefined;
                     externalId?: string | undefined;
                     scope?: "self-configured" | "inherits-parent-config" | undefined;
                     labelTemplate?: string | undefined;
                     collectionName?: string | undefined;
-                    fires?: boolean | undefined;
-                    firesOn?: string[] | undefined;
+                    listenable?: boolean | undefined;
+                    cursor?: boolean | undefined;
+                    identity?: string | undefined;
+                    version?: string | undefined;
+                    capability?: {
+                        supportsLimit: boolean;
+                        filter?: "bounded" | "native" | undefined;
+                        order?: "bounded" | "native" | undefined;
+                        naturalOrder?: {
+                            field: string;
+                            direction: "asc" | "desc";
+                        } | undefined;
+                    } | undefined;
                 }[];
                 runtimeCapabilities: engine_contracts_adapter.RuntimeCapabilities;
                 supportedTriggers: readonly ("mutation" | "extraction" | "snapshot" | "poll" | "changes-feed" | "webhook")[];
@@ -4579,7 +4610,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 fields: {
                     fieldId: string;
                     displayName: string;
-                    kind: "string" | "number" | "boolean" | "date" | "file" | "enum" | "json" | "reference";
+                    kind: "string" | "number" | "boolean" | "record" | "date" | "file" | "enum" | "json" | "owned" | "reference";
                     writable: boolean;
                     required: boolean;
                     enumValues?: string[] | undefined;
@@ -4610,7 +4641,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                             doc: string;
                             variadic?: boolean | undefined;
                         }[];
-                        returnKind?: "string" | "number" | "boolean" | "date" | "file" | "enum" | "json" | "reference" | undefined;
+                        returnKind?: "string" | "number" | "boolean" | "record" | "date" | "file" | "enum" | "json" | "owned" | "reference" | undefined;
                         effects?: {
                             reads?: string[] | undefined;
                             writes?: string[] | undefined;
@@ -4620,14 +4651,48 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         } | undefined;
                     }[] | undefined;
                     capability?: {
-                        filterOperators?: ("in" | "contains" | "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "exists" | "within")[] | undefined;
+                        filterOperators?: ("in" | "contains" | "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "exists" | "within" | "containsAny")[] | undefined;
                         orderable?: boolean | undefined;
+                    } | undefined;
+                    owned?: {
+                        name: string;
+                        allowPattern?: string | undefined;
+                        format?: "cron" | "timeZone" | undefined;
+                    } | undefined;
+                    record?: {
+                        typeId: string;
+                    } | undefined;
+                    mayBeAbsent?: boolean | undefined;
+                    changedIn?: {
+                        release: string;
+                        note: string;
+                        unchangedValues?: string[] | undefined;
                     } | undefined;
                 }[];
                 references: {
                     fieldId: string;
                     targetTypeId: string;
                     cardinality: "one" | "many";
+                    genericOver?: {
+                        field: string;
+                        onNonLiteral?: "error" | "warn" | undefined;
+                    } | undefined;
+                    literalsFrom?: {
+                        at: string[];
+                        from: string;
+                    }[] | undefined;
+                    answerShapeFrom?: string | undefined;
+                    bounded?: boolean | undefined;
+                    boundedBy?: string[] | undefined;
+                    delivery?: "scope" | "connection" | "polled" | undefined;
+                    pollEverySeconds?: number | undefined;
+                    carries?: string[] | undefined;
+                    scopedBy?: string | undefined;
+                    attributes?: boolean | undefined;
+                    addressed?: boolean | undefined;
+                    membersChange?: "pushed" | {
+                        relistEverySeconds: number;
+                    } | undefined;
                     targetTypeIds?: string[] | undefined;
                     required?: boolean | undefined;
                     direction?: "outgoing" | "incoming" | undefined;
@@ -4636,7 +4701,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     edgeFields?: {
                         fieldId: string;
                         displayName: string;
-                        kind: "string" | "number" | "boolean" | "date" | "file" | "enum" | "json" | "reference";
+                        kind: "string" | "number" | "boolean" | "record" | "date" | "file" | "enum" | "json" | "owned" | "reference";
                         writable: boolean;
                         required: boolean;
                         enumValues?: string[] | undefined;
@@ -4667,7 +4732,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                                 doc: string;
                                 variadic?: boolean | undefined;
                             }[];
-                            returnKind?: "string" | "number" | "boolean" | "date" | "file" | "enum" | "json" | "reference" | undefined;
+                            returnKind?: "string" | "number" | "boolean" | "record" | "date" | "file" | "enum" | "json" | "owned" | "reference" | undefined;
                             effects?: {
                                 reads?: string[] | undefined;
                                 writes?: string[] | undefined;
@@ -4677,36 +4742,45 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                             } | undefined;
                         }[] | undefined;
                         capability?: {
-                            filterOperators?: ("in" | "contains" | "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "exists" | "within")[] | undefined;
+                            filterOperators?: ("in" | "contains" | "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "exists" | "within" | "containsAny")[] | undefined;
                             orderable?: boolean | undefined;
+                        } | undefined;
+                        owned?: {
+                            name: string;
+                            allowPattern?: string | undefined;
+                            format?: "cron" | "timeZone" | undefined;
+                        } | undefined;
+                        record?: {
+                            typeId: string;
+                        } | undefined;
+                        mayBeAbsent?: boolean | undefined;
+                        changedIn?: {
+                            release: string;
+                            note: string;
+                            unchangedValues?: string[] | undefined;
                         } | undefined;
                     }[] | undefined;
                     backingFields?: string[] | undefined;
                     capability?: {
                         supportsLimit: boolean;
-                        filter?: "native" | "bounded" | undefined;
-                        order?: "native" | "bounded" | undefined;
+                        filter?: "bounded" | "native" | undefined;
+                        order?: "bounded" | "native" | undefined;
                         naturalOrder?: {
                             field: string;
                             direction: "asc" | "desc";
                         } | undefined;
                     } | undefined;
-                    sequenced?: "document" | "chronological" | "arrival" | undefined;
+                    sequenced?: "arrival" | "document" | "chronological" | undefined;
                     readable?: boolean | undefined;
-                    fires?: boolean | undefined;
-                    firesOn?: string[] | undefined;
                     subject?: boolean | undefined;
                     writable?: boolean | undefined;
                     linkable?: boolean | undefined;
                     ephemeral?: boolean | undefined;
                     requiresLiveRecord?: boolean | undefined;
-                    awaitable?: boolean | undefined;
-                    resolvesEmpty?: boolean | undefined;
-                    watchable?: boolean | undefined;
-                    genericOver?: {
-                        field: string;
-                        onNonLiteral?: "error" | "warn" | undefined;
-                    } | undefined;
+                    listenable?: boolean | undefined;
+                    cursor?: boolean | undefined;
+                    identity?: string | undefined;
+                    version?: string | undefined;
                 }[];
                 description?: string | undefined;
                 externalId?: string | undefined;
@@ -4795,11 +4869,11 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 limit_pause: unknown;
                 cost_cap_baseline_microdollars: string;
                 last_heartbeat_at: Date | null;
-                trigger_event_id: TriggerEventId | null;
                 lease_owner: string | null;
                 lease_until: Date | null;
                 lease_token: string | null;
                 delivery_id: string | null;
+                lease_mark: string | null;
             }>;
         }>;
         controlTower: _trpc_server.CreateRouterInner<_trpc_server.RootConfig<{
@@ -11627,10 +11701,14 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     deliveryId?: {
                         header: string;
                     } | undefined;
+                    captureHeaders?: string[] | undefined;
+                    redactFields?: string[] | undefined;
                 } | {
                     providerKey: string;
                     scheme: "module";
                     secretIssuedBy?: "provider" | "installer" | undefined;
+                    captureHeaders?: string[] | undefined;
+                    redactFields?: string[] | undefined;
                 } | undefined;
                 poll?: {
                     intervalSeconds: number;
@@ -11665,17 +11743,52 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     per?: string | undefined;
                     concurrent?: number | undefined;
                 }[] | undefined;
-                subscribableEvents?: string[] | undefined;
-                defaultSubscribedEvents?: string[] | undefined;
-                listenConfig?: {
-                    key: string;
-                    required?: boolean | undefined;
-                    format?: string | undefined;
-                    narrows?: {
-                        collection: string;
-                        matchField: string;
+                listenSettingsBecome?: {
+                    path: string[];
+                    aliases: string[];
+                    keys: Record<string, {
+                        hop: number;
+                        op: "in" | "type" | "contains" | "eq" | "neq";
+                        field?: string | undefined;
+                        values?: Record<string, string | boolean | null> | undefined;
+                        absent?: string | string[] | undefined;
+                        absentField?: string | undefined;
+                        lowercase?: boolean | undefined;
+                    }>;
+                    paramFrom?: string | undefined;
+                    fieldChange?: {
+                        hop: number;
+                        field: string;
+                        becomes: string;
+                        current: string;
+                        previous: string;
                     } | undefined;
-                }[] | undefined;
+                    changed?: string | undefined;
+                    alsoArrivesOn?: string[][] | undefined;
+                    byEvent?: Record<string, {
+                        path: string[];
+                        aliases: string[];
+                        keys: Record<string, {
+                            hop: number;
+                            op: "in" | "type" | "contains" | "eq" | "neq";
+                            field?: string | undefined;
+                            values?: Record<string, string | boolean | null> | undefined;
+                            absent?: string | string[] | undefined;
+                            absentField?: string | undefined;
+                            lowercase?: boolean | undefined;
+                        }>;
+                        paramFrom?: string | undefined;
+                        fieldChange?: {
+                            hop: number;
+                            field: string;
+                            becomes: string;
+                            current: string;
+                            previous: string;
+                        } | undefined;
+                        changed?: string | undefined;
+                        alsoArrivesOn?: string[][] | undefined;
+                    }> | undefined;
+                } | undefined;
                 displayName?: string | undefined;
                 description?: string | undefined;
                 handbookSection?: {
@@ -11786,10 +11899,14 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         deliveryId?: {
                             header: string;
                         } | undefined;
+                        captureHeaders?: string[] | undefined;
+                        redactFields?: string[] | undefined;
                     } | {
                         providerKey: string;
                         scheme: "module";
                         secretIssuedBy?: "provider" | "installer" | undefined;
+                        captureHeaders?: string[] | undefined;
+                        redactFields?: string[] | undefined;
                     } | undefined;
                     poll?: {
                         intervalSeconds: number;
@@ -11824,17 +11941,52 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         per?: string | undefined;
                         concurrent?: number | undefined;
                     }[] | undefined;
-                    subscribableEvents?: string[] | undefined;
-                    defaultSubscribedEvents?: string[] | undefined;
-                    listenConfig?: {
-                        key: string;
-                        required?: boolean | undefined;
-                        format?: string | undefined;
-                        narrows?: {
-                            collection: string;
-                            matchField: string;
+                    listenSettingsBecome?: {
+                        path: string[];
+                        aliases: string[];
+                        keys: Record<string, {
+                            hop: number;
+                            op: "in" | "type" | "contains" | "eq" | "neq";
+                            field?: string | undefined;
+                            values?: Record<string, string | boolean | null> | undefined;
+                            absent?: string | string[] | undefined;
+                            absentField?: string | undefined;
+                            lowercase?: boolean | undefined;
+                        }>;
+                        paramFrom?: string | undefined;
+                        fieldChange?: {
+                            hop: number;
+                            field: string;
+                            becomes: string;
+                            current: string;
+                            previous: string;
                         } | undefined;
-                    }[] | undefined;
+                        changed?: string | undefined;
+                        alsoArrivesOn?: string[][] | undefined;
+                        byEvent?: Record<string, {
+                            path: string[];
+                            aliases: string[];
+                            keys: Record<string, {
+                                hop: number;
+                                op: "in" | "type" | "contains" | "eq" | "neq";
+                                field?: string | undefined;
+                                values?: Record<string, string | boolean | null> | undefined;
+                                absent?: string | string[] | undefined;
+                                absentField?: string | undefined;
+                                lowercase?: boolean | undefined;
+                            }>;
+                            paramFrom?: string | undefined;
+                            fieldChange?: {
+                                hop: number;
+                                field: string;
+                                becomes: string;
+                                current: string;
+                                previous: string;
+                            } | undefined;
+                            changed?: string | undefined;
+                            alsoArrivesOn?: string[][] | undefined;
+                        }> | undefined;
+                    } | undefined;
                     displayName?: string | undefined;
                     description?: string | undefined;
                     handbookSection?: {
@@ -11930,10 +12082,14 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         deliveryId?: {
                             header: string;
                         } | undefined;
+                        captureHeaders?: string[] | undefined;
+                        redactFields?: string[] | undefined;
                     } | {
                         providerKey: string;
                         scheme: "module";
                         secretIssuedBy?: "provider" | "installer" | undefined;
+                        captureHeaders?: string[] | undefined;
+                        redactFields?: string[] | undefined;
                     } | undefined;
                     poll?: {
                         intervalSeconds: number;
@@ -11968,17 +12124,52 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         per?: string | undefined;
                         concurrent?: number | undefined;
                     }[] | undefined;
-                    subscribableEvents?: string[] | undefined;
-                    defaultSubscribedEvents?: string[] | undefined;
-                    listenConfig?: {
-                        key: string;
-                        required?: boolean | undefined;
-                        format?: string | undefined;
-                        narrows?: {
-                            collection: string;
-                            matchField: string;
+                    listenSettingsBecome?: {
+                        path: string[];
+                        aliases: string[];
+                        keys: Record<string, {
+                            hop: number;
+                            op: "in" | "type" | "contains" | "eq" | "neq";
+                            field?: string | undefined;
+                            values?: Record<string, string | boolean | null> | undefined;
+                            absent?: string | string[] | undefined;
+                            absentField?: string | undefined;
+                            lowercase?: boolean | undefined;
+                        }>;
+                        paramFrom?: string | undefined;
+                        fieldChange?: {
+                            hop: number;
+                            field: string;
+                            becomes: string;
+                            current: string;
+                            previous: string;
                         } | undefined;
-                    }[] | undefined;
+                        changed?: string | undefined;
+                        alsoArrivesOn?: string[][] | undefined;
+                        byEvent?: Record<string, {
+                            path: string[];
+                            aliases: string[];
+                            keys: Record<string, {
+                                hop: number;
+                                op: "in" | "type" | "contains" | "eq" | "neq";
+                                field?: string | undefined;
+                                values?: Record<string, string | boolean | null> | undefined;
+                                absent?: string | string[] | undefined;
+                                absentField?: string | undefined;
+                                lowercase?: boolean | undefined;
+                            }>;
+                            paramFrom?: string | undefined;
+                            fieldChange?: {
+                                hop: number;
+                                field: string;
+                                becomes: string;
+                                current: string;
+                                previous: string;
+                            } | undefined;
+                            changed?: string | undefined;
+                            alsoArrivesOn?: string[][] | undefined;
+                        }> | undefined;
+                    } | undefined;
                     displayName?: string | undefined;
                     description?: string | undefined;
                     handbookSection?: {
@@ -12279,62 +12470,6 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
             }, AutomationDetail>;
-            replayDelivery: _trpc_server.BuildProcedure<"mutation", {
-                _config: _trpc_server.RootConfig<{
-                    ctx: {
-                        authorise: () => Promise<void>;
-                    };
-                    meta: object;
-                    errorShape: {
-                        message: string;
-                        code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
-                        data: _trpc_server_dist_error_formatter.DefaultErrorData;
-                    };
-                    transformer: _trpc_server.DefaultDataTransformer;
-                }>;
-                _meta: object;
-                _ctx_out: {
-                    authorise: () => Promise<void>;
-                };
-                _input_in: {
-                    triggerId: string;
-                    deliveryId: string;
-                    force?: boolean | undefined;
-                };
-                _input_out: {
-                    triggerId: string;
-                    deliveryId: string;
-                    force?: boolean | undefined;
-                };
-                _output_in: typeof _trpc_server.unsetMarker;
-                _output_out: typeof _trpc_server.unsetMarker;
-            }, ReplayOutcome>;
-            showDeliveryRequest: _trpc_server.BuildProcedure<"mutation", {
-                _config: _trpc_server.RootConfig<{
-                    ctx: {
-                        authorise: () => Promise<void>;
-                    };
-                    meta: object;
-                    errorShape: {
-                        message: string;
-                        code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
-                        data: _trpc_server_dist_error_formatter.DefaultErrorData;
-                    };
-                    transformer: _trpc_server.DefaultDataTransformer;
-                }>;
-                _meta: object;
-                _ctx_out: {
-                    authorise: () => Promise<void>;
-                };
-                _input_in: {
-                    deliveryId: string;
-                };
-                _input_out: {
-                    deliveryId: string;
-                };
-                _output_in: typeof _trpc_server.unsetMarker;
-                _output_out: typeof _trpc_server.unsetMarker;
-            }, ShownRequest>;
             onRunActivity: _trpc_server.BuildProcedure<"subscription", {
                 _config: _trpc_server.RootConfig<{
                     ctx: {
@@ -12388,66 +12523,6 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
             }, _trpc_server_observable.Observable<AutomationRecentEvent, unknown>>;
-            getTriggerConfig: _trpc_server.BuildProcedure<"query", {
-                _config: _trpc_server.RootConfig<{
-                    ctx: {
-                        authorise: () => Promise<void>;
-                    };
-                    meta: object;
-                    errorShape: {
-                        message: string;
-                        code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
-                        data: _trpc_server_dist_error_formatter.DefaultErrorData;
-                    };
-                    transformer: _trpc_server.DefaultDataTransformer;
-                }>;
-                _meta: object;
-                _ctx_out: {
-                    authorise: () => Promise<void>;
-                };
-                _input_in: {
-                    id: string;
-                };
-                _input_out: {
-                    id: string;
-                };
-                _output_in: typeof _trpc_server.unsetMarker;
-                _output_out: typeof _trpc_server.unsetMarker;
-            }, {
-                blocks: engine_contracts_trigger_config.ConfigBlock[];
-                values: Record<string, string>;
-            }>;
-            updateTriggerConfig: _trpc_server.BuildProcedure<"mutation", {
-                _config: _trpc_server.RootConfig<{
-                    ctx: {
-                        authorise: () => Promise<void>;
-                    };
-                    meta: object;
-                    errorShape: {
-                        message: string;
-                        code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
-                        data: _trpc_server_dist_error_formatter.DefaultErrorData;
-                    };
-                    transformer: _trpc_server.DefaultDataTransformer;
-                }>;
-                _meta: object;
-                _ctx_out: {
-                    authorise: () => Promise<void>;
-                };
-                _input_in: {
-                    id: string;
-                    values: Record<string, unknown>;
-                };
-                _input_out: {
-                    id: string;
-                    values: Record<string, unknown>;
-                };
-                _output_in: typeof _trpc_server.unsetMarker;
-                _output_out: typeof _trpc_server.unsetMarker;
-            }, {
-                id: string;
-                values: Record<string, string>;
-            }>;
             renameTrigger: _trpc_server.BuildProcedure<"mutation", {
                 _config: _trpc_server.RootConfig<{
                     ctx: {
@@ -12684,6 +12759,62 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
             }, MovementRunAsyncResult>;
+            replayDelivery: _trpc_server.BuildProcedure<"mutation", {
+                _config: _trpc_server.RootConfig<{
+                    ctx: {
+                        authorise: () => Promise<void>;
+                    };
+                    meta: object;
+                    errorShape: {
+                        message: string;
+                        code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
+                        data: _trpc_server_dist_error_formatter.DefaultErrorData;
+                    };
+                    transformer: _trpc_server.DefaultDataTransformer;
+                }>;
+                _meta: object;
+                _ctx_out: {
+                    authorise: () => Promise<void>;
+                };
+                _input_in: {
+                    triggerId: string;
+                    deliveryId: string;
+                    force?: boolean | undefined;
+                };
+                _input_out: {
+                    triggerId: string;
+                    deliveryId: string;
+                    force?: boolean | undefined;
+                };
+                _output_in: typeof _trpc_server.unsetMarker;
+                _output_out: typeof _trpc_server.unsetMarker;
+            }, ReplayOutcome>;
+            showDeliveryRequest: _trpc_server.BuildProcedure<"mutation", {
+                _config: _trpc_server.RootConfig<{
+                    ctx: {
+                        authorise: () => Promise<void>;
+                    };
+                    meta: object;
+                    errorShape: {
+                        message: string;
+                        code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
+                        data: _trpc_server_dist_error_formatter.DefaultErrorData;
+                    };
+                    transformer: _trpc_server.DefaultDataTransformer;
+                }>;
+                _meta: object;
+                _ctx_out: {
+                    authorise: () => Promise<void>;
+                };
+                _input_in: {
+                    deliveryId: string;
+                };
+                _input_out: {
+                    deliveryId: string;
+                };
+                _output_in: typeof _trpc_server.unsetMarker;
+                _output_out: typeof _trpc_server.unsetMarker;
+            }, ShownRequest>;
         }>;
         teamEngine: _trpc_server.CreateRouterInner<_trpc_server.RootConfig<{
             ctx: {
