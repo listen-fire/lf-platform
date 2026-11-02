@@ -26,8 +26,6 @@ import type { TriggerRunRecorder } from '../runs/trigger_run';
 
 import { getAutomationsQb } from '../../../lib/kysely';
 import { LlmUsageContext } from '../../../lib/llm_usage';
-import { enqueueAwaitWake } from '../../movement_engine/await_wake';
-import { makeRecorderCallbackSink } from '../../movement_engine/callback_sink';
 import {
   actingPrincipalOf,
   appendingInto,
@@ -39,7 +37,7 @@ import {
   SegmentDirectory,
   type ActingUserLookup,
 } from 'movement-engine/public/host';
-import { makeRecorderParkSink } from '../../movement_engine/park_sink';
+import { makeRecorderParks } from '../../movement_engine/park_sink';
 import { postgresRunHostStore } from '../../movement_engine/run_host_store';
 import { parkSources } from 'movement-engine/public/run-host';
 import { notifyWork } from '../../work/drain';
@@ -86,6 +84,8 @@ export function productionEngineHost(input: {
   /** The run lease the segment steps under: every park it commits lands only
    *  while the run is still leased to it. */
   lease?: { token: string };
+  /** The leaf a resumed segment re-entered. */
+  resumedLeaf?: string;
   /** Absent ⇒ the run is never cancelled. */
   cancel?: CancelGate;
   /** Where the run's trace is appended as it goes, so a caller can publish it
@@ -98,6 +98,13 @@ export function productionEngineHost(input: {
   locks?: WriteLocks;
 }): EngineHost {
   const cancel = input.cancel ?? NEVER_CANCELLED;
+  const parks =
+    input.parksInto !== undefined
+      ? makeRecorderParks(input.parksInto, {
+          ...(input.lease !== undefined ? { lease: input.lease } : {}),
+          ...(input.resumedLeaf !== undefined ? { resumed: input.resumedLeaf } : {}),
+        })
+      : undefined;
   const usage = usageScope({ teamId: input.teamId, triggerRunId: input.triggerRunId, cancel });
   // Every call names its segment; the team it is for is the segment's.
   const segments = new SegmentDirectory();
@@ -143,17 +150,19 @@ export function productionEngineHost(input: {
       arbitrateEntities: (arbitration) => usage(() => refusingPastBudget(() => meteredArbitration(arbitration))),
     },
     park: {
-      ...(input.parksInto !== undefined
+      ...(parks !== undefined
         ? {
-            sink: makeRecorderParkSink(input.parksInto, input.lease !== undefined ? { lease: input.lease } : {}),
-            callbacks: makeRecorderCallbackSink(input.parksInto, input.teamId),
+            sink: parks.sink,
+            waits: parks.waits,
             // The library texts its parks pin, once each by their hash.
             sources: parkSources(postgresRunHostStore.sources, input.teamId),
           }
         : {}),
-      // A `wake_await` work row, so the wake outlives this process.
-      wake: async ({ segmentId, adapterType, correlationKey }) => {
-        await enqueueAwaitWake({ adapterType, teamId: teamOf(segmentId), correlationKey });
+      // A `wake_await` row, queued by the park group, so the wake outlives
+      // this process. A dry run never parks, so never asks for one.
+      wake: async (request) => {
+        if (parks === undefined) throw new Error('a run with no durable parks asked for a wake');
+        await parks.wake(request);
         notifyWork();
       },
       bindings: {

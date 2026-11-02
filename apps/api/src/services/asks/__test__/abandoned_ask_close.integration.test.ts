@@ -24,7 +24,7 @@ import type { TriggerRunRecorder } from '../../translation_graph/runs/trigger_ru
 
 import { cleanupTeam } from '../../../test/harness/cleanup';
 import { getAutomationsQb, getCoreQb } from '../../../lib/kysely';
-import { makeRecorderParkSink } from '../../movement_engine/park_sink';
+import { makeRecorderParks } from '../../movement_engine/park_sink';
 import { settleRunsParkedOnTriggers } from '../../interaction/run_failure';
 import { asksRouter } from '../../../interfaces/rest/asks';
 import { answerAskByToken, createAsk } from '../doors';
@@ -162,7 +162,7 @@ describe('a race arm that LOSES closes the ask it was awaiting', () => {
     const ask = await askParkedAt('s1.b0');
     await timerParkedAt('s1.b1');
 
-    const sink = makeRecorderParkSink(stubRecorder());
+    const sink = makeRecorderParks(stubRecorder()).sink;
     await sink.cancelSubtrees({ subtreeAddresses: ['s1.b0', 's1.b1'], excludeLeaf: 's1.b1' });
 
     // The ask is closed, not merely un-correlated.
@@ -201,7 +201,7 @@ describe('a race arm that LOSES closes the ask it was awaiting', () => {
     const answered = await answerAskByToken(ask.token, 'Vireo Robotics');
     expect(answered.kind).toBe('answered');
 
-    const sink = makeRecorderParkSink(stubRecorder());
+    const sink = makeRecorderParks(stubRecorder()).sink;
     await sink.cancelSubtrees({ subtreeAddresses: ['s1.b0', 's1.b1'], excludeLeaf: 's1.b0' });
 
     const after = await getAsk(ask.id);

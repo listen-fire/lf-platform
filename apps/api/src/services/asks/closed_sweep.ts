@@ -1,35 +1,44 @@
-// The ask service's safety sweep. An answer and a cancel each wake the run
-// parked on the ask at their own door; this periodic row covers a wake that was
-// lost on the way (a crash between the ask's write and the wake row, a composed
-// deployment that never registered its notifier). It finds closed asks that
-// runs are still parked on and queues the same `wake_await` row the door would
-// have. The engine then resumes each await, which re-checks the ask live.
+// The ask service's safety sweep. An answer and a cancel each deliver the
+// ask's `Response` arrival at their own door (in_process_notifier.ts); this
+// periodic row covers a delivery lost on the way (a crash between the ask's
+// write and the delivery's). It delivers each ask settled within the window
+// again: a delivery is named by the ask's state and id, so one kept before
+// keeps nothing and wakes nothing twice.
 
 import type { WorkHandler } from '../work/kinds';
+import type { AskId } from '../../generated/kysely/asks/Ask';
 
-import { enqueueAwaitWake, wakeAwaitPayloadSchema } from '../movement_engine/await_wake';
 import { SECOND } from '../../constants';
+import { getAsksQb } from '../../lib/kysely';
 import { registerWorkKinds, type WorkKindRegistration } from '../work/drain';
-import { loadClosedAskAwaitPage } from './await_store';
-import { ASK_ADAPTER_TYPE } from '@listen-fire/ask';
+import { deliverSettle } from './in_process_notifier';
+import { getAsk } from './store';
 
+/** How far back a settle is delivered again: well past any crash's restart. */
+const SETTLED_WITHIN_MS = 60 * 60 * SECOND;
 const PAGE_SIZE = 500;
 
 export const askClosedSweepHandler: WorkHandler = {
-  async run() {
-    let after: string | undefined;
-    do {
-      const page = await loadClosedAskAwaitPage({ limit: PAGE_SIZE, ...(after !== undefined ? { after } : {}) });
-      for (const { teamId, askId } of page.wakes) {
-        // One row per ask, however many sweeps see it before the drain gets to
-        // it; once it runs the correlation is gone and no sweep finds the ask.
-        await enqueueAwaitWake(
-          wakeAwaitPayloadSchema.parse({ adapterType: ASK_ADAPTER_TYPE, teamId, correlationKey: askId }),
-          { coalesceKey: `ask_closed:${askId}` },
-        );
+  async run(_payload, ctx) {
+    const since = new Date(ctx.now.getTime() - SETTLED_WITHIN_MS);
+    let after: AskId | undefined;
+    for (;;) {
+      let page = getAsksQb(['ask'])
+        .selectFrom('ask')
+        .where('state', '!=', 'open')
+        .where('updated_at', '>=', since)
+        .select('id')
+        .orderBy('id')
+        .limit(PAGE_SIZE);
+      if (after !== undefined) page = page.where('id', '>', after);
+      const rows = await page.execute();
+      for (const { id } of rows) {
+        const ask = await getAsk(id);
+        if (ask !== null) await deliverSettle(ask);
       }
-      after = page.next;
-    } while (after !== undefined);
+      if (rows.length < PAGE_SIZE) return;
+      after = rows[rows.length - 1]?.id;
+    }
   },
 };
 

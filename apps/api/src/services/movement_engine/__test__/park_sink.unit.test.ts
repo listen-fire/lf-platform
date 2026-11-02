@@ -51,7 +51,7 @@ jest.mock('../callback_store', () => ({ revokeRunCallbacks: jest.fn() }));
 jest.mock('../run_engine_record', () => ({ settleRunEngineRecord: jest.fn() }));
 jest.mock('../limit_pause', () => ({ markRunLimitPaused: jest.fn() }));
 
-import { makeRecorderParkSink } from '../park_sink';
+import { makeRecorderParks } from '../park_sink';
 import type { TriggerRunRecorder } from '../../translation_graph/runs/trigger_run';
 
 function recorder(): TriggerRunRecorder {
@@ -75,7 +75,7 @@ beforeEach(() => {
 
 describe('commitAwaitPark — write order', () => {
   it('writes the parked row before the correlation that indexes it', async () => {
-    await makeRecorderParkSink(recorder()).commitAwaitPark({
+    await makeRecorderParks(recorder()).sink.commitAwaitPark({
       address: 's1',
       state: {},
       adapterType: 'slack',

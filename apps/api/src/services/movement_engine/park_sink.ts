@@ -1,5 +1,5 @@
-// The durable-park sink — the production implementation of the engine's
-// `ParkSink` seam (run.ts). The park rules (what a park writes and in which
+// The durable-park group — the production implementation of the engine's
+// `park` family (its sink, waits and wake). The park rules (what a park writes and in which
 // order, the lease fence, a race's losing subtrees, the cancel that raced a
 // park) are the run-host core's (`runParkSink`); this supplies the hosted
 // product's records around a park: the run row exists as `running` before
@@ -10,29 +10,32 @@
 // This keeps every DB concern OUT of the pure interpreter (which takes the sink
 // as an injected dependency, exactly like `resolveAdapter`/`writeSink`).
 
-import { runParkSink } from 'movement-engine/public/run-host';
+import { runParkHost, type RunParkHost } from 'movement-engine/public/run-host';
 
-import type { ParkSink } from 'movement-engine/public/movement-engine';
 import type { TriggerRunRecorder } from '../translation_graph/runs/trigger_run';
 
 import { markRunLimitPaused } from './limit_pause';
 import { hostedRunHost } from './run_host';
 
 /**
- * Build the firing's park sink, backed by its `TriggerRunRecorder` (the run
- * identity + version pin live there).
+ * Build the segment's park group, backed by its `TriggerRunRecorder` (the
+ * run identity + version pin live there): where its parks go, its waits on
+ * listenable edges, and the wake it asks for an arrival that landed while an
+ * await parked.
  *
  * Given the run lease the segment holds, every park it commits lands only
  * while the run's lease is still that one: a holder whose lease lapsed
  * mid-statement is refused (`RunLeaseLost`) rather than overwriting the parks
- * of the instance that took the run over.
+ * of the instance that took the run over. `resumed` is the leaf a resumed
+ * segment re-entered: a note its awaits make is kept with its progress.
  */
-export function makeRecorderParkSink(recorder: TriggerRunRecorder, opts: { lease?: { token: string } } = {}): ParkSink {
+export function makeRecorderParks(recorder: TriggerRunRecorder, opts: { lease?: { token: string }; resumed?: string } = {}): RunParkHost {
   const runId = recorder.triggerRunId;
-  return runParkSink(hostedRunHost(), {
+  return runParkHost(hostedRunHost(), {
     runId,
     teamId: recorder.teamId,
     ...(opts.lease !== undefined ? { fence: opts.lease.token } : {}),
+    ...(opts.resumed !== undefined ? { resumed: opts.resumed } : {}),
     records: {
       ensureRun: () => recorder.ensureStarted(),
       markParked: () => recorder.markParked(),

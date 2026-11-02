@@ -11,7 +11,7 @@ import { getAutomationsQb, getCoreQb } from '../../../lib/kysely';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
 import type { TriggerRunRecorder } from '../../translation_graph/runs/trigger_run';
-import { makeRecorderParkSink } from '../park_sink';
+import { makeRecorderParks } from '../park_sink';
 import { enqueueAwaitWake } from '../await_wake';
 import { awaitingSource, makeAwaitingAdapter, runAwaiting } from './awaitable_fixture';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
@@ -93,7 +93,7 @@ afterEach(async () => {
 
 describe('commitTimerPark', () => {
   it('writes a parked_run row with park_reason=timer, the given wake_at, and status=parked', async () => {
-    const sink = makeRecorderParkSink(makeStubRecorder({ teamId, runId }));
+    const sink = makeRecorderParks(makeStubRecorder({ teamId, runId })).sink;
     const wakeAt = new Date(Date.now() + 60_000);
 
     await sink.commitTimerPark({ address: 's1', state: { x: 1 }, wakeAt: wakeAt.toISOString() });
@@ -120,7 +120,7 @@ describe('commitTimerPark', () => {
   });
 
   it('is idempotent: a second call for the same (run_id, address) upserts — one row, updated state and wake_at', async () => {
-    const sink = makeRecorderParkSink(makeStubRecorder({ teamId, runId }));
+    const sink = makeRecorderParks(makeStubRecorder({ teamId, runId })).sink;
     const wakeAt1 = new Date(Date.now() + 60_000);
     const wakeAt2 = new Date(Date.now() + 120_000);
 
@@ -153,7 +153,7 @@ async function awaitWakes() {
 
 describe('commitAwaitPark', () => {
   it('writes the await park and the correlation row from the key to it; no wake of its own', async () => {
-    const sink = makeRecorderParkSink(makeStubRecorder({ teamId, runId }));
+    const sink = makeRecorderParks(makeStubRecorder({ teamId, runId })).sink;
 
     await sink.commitAwaitPark({
       address: 's1',
@@ -191,7 +191,7 @@ describe('commitAwaitPark', () => {
       teamId: tenantOfTeam(teamId),
       source: spelledFor(LANGUAGE_VERSION, awaitingSource()),
       adapter: awaiting.adapter,
-      parkSink: makeRecorderParkSink(makeStubRecorder({ teamId, runId })),
+      parkSink: makeRecorderParks(makeStubRecorder({ teamId, runId })).sink,
       // The production host's wake: a `wake_await` work row.
       wake: ({ adapterType, correlationKey }) => enqueueAwaitWake({ adapterType, teamId, correlationKey }),
     });
@@ -217,8 +217,8 @@ describe('a park under a lease that lapsed', () => {
   it("is refused: a stale token's park commit writes nothing, and the new holder's row stands", async () => {
     const current = await postgresRunHostStore.leases.claim({ runId, ttlMs: 60_000 });
     expect(current).not.toBeNull();
-    const fresh = makeRecorderParkSink(makeStubRecorder({ teamId, runId }), { lease: { token: current!.token } });
-    const stale = makeRecorderParkSink(makeStubRecorder({ teamId, runId }), { lease: { token: randomUUID() } });
+    const fresh = makeRecorderParks(makeStubRecorder({ teamId, runId }), { lease: { token: current!.token } }).sink;
+    const stale = makeRecorderParks(makeStubRecorder({ teamId, runId }), { lease: { token: randomUUID() } }).sink;
     const wakeAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
     await fresh.commitTimerPark({ address: 's0', state: { ...STATE, by: 'new' }, wakeAt });
 
@@ -244,7 +244,7 @@ describe('a park under a lease that lapsed', () => {
 
   it("a stale holder's finish of a claimed leaf, and its sweep of the run, leave the new holder's rows alone", async () => {
     const current = await postgresRunHostStore.leases.claim({ runId, ttlMs: 60_000 });
-    const sink = makeRecorderParkSink(makeStubRecorder({ teamId, runId }), { lease: { token: current!.token } });
+    const sink = makeRecorderParks(makeStubRecorder({ teamId, runId }), { lease: { token: current!.token } }).sink;
     await sink.commitTimerPark({ address: 's0', state: STATE, wakeAt: new Date().toISOString() });
     await sink.recordJoin({ frameAddress: 's', parkedChildren: 1 });
     expect(await postgresRunHostStore.parks.claimLeaf({ runId, address: 's0' })).not.toBeNull();

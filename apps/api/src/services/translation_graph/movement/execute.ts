@@ -533,6 +533,9 @@ type ResumeFiringInput = {
    * re-evaluated against live data. Defaults to the ask behaviour (false).
    */
   reenter?: boolean;
+  /** The leaf this segment re-entered (its address): a note its awaits make
+   *  is kept with the segment's progress past it. */
+  resumedLeaf?: string;
   /**
    * Multi-leaf settle decision (fan-out / parallel, §5.4). After the engine
    * completes a branch (no re-park, no error), this decides whether the RUN as a
@@ -627,6 +630,7 @@ async function resumeMovementFiringInContext(
         triggerRunId: input.runId,
         parksInto: recorder,
         ...(input.lease !== undefined ? { lease: input.lease } : {}),
+        ...(input.resumedLeaf !== undefined ? { resumedLeaf: input.resumedLeaf } : {}),
         cancel: cancelGate,
       }),
       state: input.state,

@@ -111,6 +111,7 @@ export async function parkedRunStep(input: { runId: TriggerRunId; lease?: HeldRu
             // A slept timer steps past its sleep; anything else re-enters to
             // re-check live (an await binds its own landing, nothing injected).
             ...(request.reenter ? { reenter: true } : {}),
+            resumedLeaf: request.address,
             deferRaceSettlement: request.deferRaceSettlement,
           }),
         );

@@ -1,20 +1,18 @@
 // What a package adds beyond its adapter, beside the registry of adapters.
 //
 // An adapter package may bring the run host more than an adapter: work kinds
-// of its own (a sweep, a subscription refresh), the keeper of awaits its own
-// records back, the landing types its writes synthesise. The run host reaches
+// of its own (a sweep, a subscription refresh), the landing types its writes
+// synthesise. The run host reaches
 // each through these lookups and names no package. Read at call time, never at
 // load, so a package module mid-load in an import cycle is never captured
 // half-built.
 
 import type { WorkKindRegistration } from '../../work/drain';
 import type { LandingSynthesizer } from '../movement/generic_landings';
-import type { AwaitKeeper } from './await_correlation';
 
 import { AIRTABLE_WORK_KINDS } from '../../airtable_webhook_refresh/worker';
 import { ASK_ADAPTER_TYPE } from '@listen-fire/ask/types';
 import { askResponseDescriptorFor } from '@listen-fire/ask/descriptors';
-import { askAwaitKeeper } from '../../asks/await_keeper';
 import { ASK_WORK_KINDS } from '../../asks/closed_sweep';
 import { builtinModuleWorkKinds } from './builtin_modules';
 
@@ -23,16 +21,6 @@ import { builtinModuleWorkKinds } from './builtin_modules';
  *  packages' by name, and each module line's declared periodic tasks. */
 export function adapterWorkKinds(): WorkKindRegistration[] {
   return [...ASK_WORK_KINDS, ...AIRTABLE_WORK_KINDS, ...builtinModuleWorkKinds()];
-}
-
-/** Every package's keeper of record-backed awaits. */
-export function awaitKeepers(): readonly AwaitKeeper[] {
-  return [askAwaitKeeper];
-}
-
-/** The keeper of an adapter type's record-backed awaits, if it has one. */
-export function awaitKeeperFor(adapterType: string): AwaitKeeper | undefined {
-  return awaitKeepers().find((keeper) => keeper.adapterType === adapterType);
 }
 
 /** What an adapter type's generic landings are, given the literals a write

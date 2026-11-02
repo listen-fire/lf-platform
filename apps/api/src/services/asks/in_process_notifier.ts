@@ -8,27 +8,38 @@
 // subscriber and the knowledge usage sink: the two products meet here and
 // nowhere else.
 //
-// A settle queues the engine's wake for the ask's id — the same `wake_await`
-// row an inbound signal queues — so every answer door (the link page, Slack,
-// MCP, the control tower, a Response write in movement code) and the cancel
-// door wake their run through one durable door, and the wake outlives this
-// process. Being registered is what tells the cancel door a drain exists here. The kick asks
-// this process's drain for a pass now rather than on its next tick.
+// An answer is an arrival on the ask's `Response`, delivered as any module's
+// arrival is (listen_door.ts): logged in one write that wakes the run waiting
+// on the ask (keyed by its id), and judged by the team's listens on
+// `Response`. A cancel reports the ask gone: a run waiting on it is stranded
+// and its program hears `Wait Lost Its Record`, which it may race with a
+// sleep. Being registered is what tells the cancel door a drain exists here.
 
 import type { AskRecord } from './store';
 
-import { ASK_ADAPTER_TYPE } from '@listen-fire/ask';
+import { ASK_ADAPTER_TYPE, RESPONSE_EDGE_NAME, responseArrival } from '@listen-fire/ask';
 import { registerAskSettledNotifier } from './notifier';
-import { enqueueAwaitWake } from '../movement_engine/await_wake';
+import { deliverArrivals } from '../inbound/listen_door';
 import { notifyWork } from '../work/drain';
 
-/** Queue the engine's wake for whatever run is parked on the ask, and ask this
- *  process's drain for a pass now. */
-async function wakeRunsParkedOn(ask: AskRecord): Promise<void> {
-  await enqueueAwaitWake({ adapterType: ASK_ADAPTER_TYPE, teamId: ask.teamId, correlationKey: ask.id });
+/** The ask's settle, delivered as its `Response`'s arrival. The ask's id
+ *  names the delivery, so a settle told twice is kept once. */
+export async function deliverSettle(ask: AskRecord): Promise<void> {
+  const arrival =
+    ask.state === 'answered'
+      ? responseArrival({ id: ask.id, family: ask.family, answer: ask.answer, state: 'answered' })
+      : { edge: RESPONSE_EDGE_NAME, key: ask.id, gone: true as const };
+  await deliverArrivals({
+    teamId: ask.teamId,
+    delivered: { adapterType: ASK_ADAPTER_TYPE, credentialsId: null },
+    subscriptionId: ASK_ADAPTER_TYPE,
+    externalId: `${ask.state}:${ask.id}`,
+    source: 'hook',
+    arrivals: [arrival],
+  });
   notifyWork();
 }
 
 export function notifyEngineOfSettledAsks(): void {
-  registerAskSettledNotifier({ notify: wakeRunsParkedOn, cancelled: wakeRunsParkedOn });
+  registerAskSettledNotifier({ notify: deliverSettle, cancelled: deliverSettle });
 }

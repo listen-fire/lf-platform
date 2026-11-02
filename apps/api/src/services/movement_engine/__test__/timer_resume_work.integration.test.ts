@@ -35,7 +35,7 @@ import type { TriggerRunId } from '../../../generated/kysely/automations/Trigger
 import { TriggerRunRecorder } from '../../translation_graph/runs/trigger_run';
 import { registerTimerWork, resumeTimerParkedRun, settleCancelledTimersHandler, timerWorkKey } from '../timer_resume';
 import { testWorkContext } from '../../../test/harness/work';
-import { makeRecorderParkSink } from '../park_sink';
+import { makeRecorderParks } from '../park_sink';
 import { drainUntilIdle, drainWork, resetWorkHandlersForTests } from '../../work/drain';
 import { withRunLease, type HeldRunLease } from '../run_lease';
 import { getCallback, listRunCallbacks } from '../callback_store';
@@ -435,7 +435,7 @@ describe('timer_resume — parks resume through the work table (real DB)', () =>
     const firstWake = startedAt.getTime() + HOUR;
 
     const laterWake = new Date(Date.now() + 2 * HOUR);
-    const sink = makeRecorderParkSink(recorderFor({ runId, teamId }));
+    const sink = makeRecorderParks(recorderFor({ runId, teamId })).sink;
     const parked = await getAutomationsQb(['parked_run'])
       .selectFrom('parked_run')
       .where('run_id', '=', runId)

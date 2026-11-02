@@ -5,16 +5,19 @@
 // "correlation", "park", "address", "edge id".
 //
 // Two park shapes carry an author-chosen wait:
-//   • an AWAIT park (`await x-[:E]->`) — described from its `adapter_await` row:
-//       a record-backed await → its keeper's line (an ask: the question it is
-//         waiting to be answered)
+//   • an AWAIT park (`await x-[:E]->`) — described from its wait (the record
+//       and edge it waits on):
+//       an ask → the question it is waiting to be answered
 //       slack → a reply it is waiting for in a thread
 //   • a TIMER park — a recurring `until` condition ("checking on a schedule")
 //       or a one-shot `sleep` ("waiting for a scheduled time").
 
-import { getAutomationsQb } from '../../lib/kysely';
+import { ASK_ADAPTER_TYPE } from '@listen-fire/ask';
+
 import type { TriggerRunId } from '../../generated/kysely/automations/TriggerRun';
-import { awaitKeeperFor } from '../translation_graph/adapters/packages';
+
+import { getAsksQb, getAutomationsQb } from '../../lib/kysely';
+import { askIdSchema } from '../asks/store';
 
 /** One plain-language line describing something a run is waiting on. */
 export type AwaitDescription = string;
@@ -65,19 +68,22 @@ interface Correlation {
   correlationKey: string;
 }
 
+/** The wait each parked await address holds: the record it waits on, by
+ *  its module's key. */
 async function loadCorrelations(
   runId: TriggerRunId,
   addresses: string[],
 ): Promise<Map<string, Correlation>> {
-  const rows = await getAutomationsQb(['adapter_await'])
-    .selectFrom('adapter_await')
+  const rows = await getAutomationsQb(['wait_row'])
+    .selectFrom('wait_row')
     .where('run_id', '=', runId)
     .where('address', 'in', addresses)
-    .select(['address', 'adapter_type', 'correlation_key'])
+    .select(['address', 'adapter_type', 'key'])
     .execute();
   const map = new Map<string, Correlation>();
   for (const r of rows) {
-    map.set(r.address, { adapterType: r.adapter_type, correlationKey: r.correlation_key });
+    if (r.address === null || r.key === null) continue;
+    map.set(r.address, { adapterType: r.adapter_type, correlationKey: r.key });
   }
   return map;
 }
@@ -86,20 +92,21 @@ function keyOf(corr: Correlation): string {
   return `${corr.adapterType}\u0000${corr.correlationKey}`;
 }
 
+/** An ask await is described by the question it asked, read once for all. */
 async function describeKept(correlations: Correlation[]): Promise<Map<string, string>> {
-  const byAdapter = new Map<string, string[]>();
-  for (const { adapterType, correlationKey } of correlations) {
-    byAdapter.set(adapterType, [...(byAdapter.get(adapterType) ?? []), correlationKey]);
-  }
-  const described = new Map<string, string>();
-  for (const [adapterType, keys] of byAdapter) {
-    const describe = awaitKeeperFor(adapterType)?.describe;
-    if (describe === undefined) continue;
-    for (const [correlationKey, line] of await describe(keys)) {
-      described.set(keyOf({ adapterType, correlationKey }), line);
-    }
-  }
-  return described;
+  const askIds = correlations.flatMap(({ adapterType, correlationKey }) => {
+    if (adapterType !== ASK_ADAPTER_TYPE) return [];
+    const parsed = askIdSchema.safeParse(correlationKey);
+    return parsed.success ? [parsed.data] : [];
+  });
+  if (askIds.length === 0) return new Map();
+  const rows = await getAsksQb(['ask']).selectFrom('ask').where('id', 'in', askIds).select(['id', 'prompt']).execute();
+  return new Map(
+    rows.map((row) => [
+      keyOf({ adapterType: ASK_ADAPTER_TYPE, correlationKey: row.id }),
+      row.prompt.trim() !== '' ? `waiting for an answer to: ${row.prompt}` : 'waiting for an answer to a question',
+    ]),
+  );
 }
 
 function describeAwait(corr: Correlation): AwaitDescription {
