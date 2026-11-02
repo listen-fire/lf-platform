@@ -48,6 +48,8 @@ import {
 import { RESOURCES_REFERENCE_FIELD_ID } from 'movement-engine/public/adapter';
 import { containerAssociation } from 'movement-engine/public/adapter';
 import { makeUnstablePosition, positionData } from 'engine-contracts/catalog';
+import { arrivalTriggerOf } from 'movement-engine/public/inbound';
+import { inboundEmailArrival } from '../../email/arrival';
 
 
 /** Walk the explicit `attachments` edge and read each attachment's payload. */
@@ -96,12 +98,13 @@ const EMAIL_PAYLOAD: EmailPayload & Record<string, unknown> = {
 };
 
 /** The single inbound `TriggerEvent` both adapters parse for actor candidates. */
-const TRIGGER_EVENT: TriggerEvent = {
+const TRIGGER_EVENT: TriggerEvent = arrivalTriggerOf({
   pipelineInputId: 'pi-1',
   adapterType: EMAIL_ADAPTER_TYPE,
-  triggerType: 'webhook',
-  payload: EMAIL_PAYLOAD,
-};
+  // As the inbound door names the mail: its sender is who acted.
+  arrival: inboundEmailArrival({ payload: EMAIL_PAYLOAD, fallbackIdentity: 'msg-001' }),
+  now: new Date(),
+});
 
 /** The email source position both adapters extract resources from. */
 const EMAIL_POSITION: SourcePosition = makeUnstablePosition({
@@ -242,13 +245,16 @@ describe('RemoteAdapter ⟷ in-process email adapter parity (over real HTTP)', (
 
     expect(remoteCandidates).toEqual(localCandidates);
 
-    // Sanity: sender is the originator; forwarding hops are relays, in order.
+    // Sanity: sender is the originator (as the door named them, display name
+    // and all); forwarding hops are relays, in order.
     expect(remoteCandidates[0]).toEqual({
       identity: {
         identifier: 'jane@acme.example',
         scheme: 'email',
         adapterType: 'email',
         email: 'jane@acme.example',
+        name: 'Jane Founder',
+        label: 'Jane Founder',
       },
       source: 'originator',
     });

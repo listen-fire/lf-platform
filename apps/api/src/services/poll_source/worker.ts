@@ -173,12 +173,14 @@ async function armPoll(poll: SharedPoll, dueAt: Date): Promise<void> {
  *  sooner when its module said so (a schedule's next tick). A key no listen
  *  shares any more is not re-armed (the reconcile removes its row). */
 export const pollEdgeHandler: WorkHandler = {
-  async run(payload) {
+  async run(payload, ctx) {
     const { teamId, digest } = pollEdgePayloadSchema.parse(payload);
     const poll = (await sharedPolls({ teamId })).find((shared) => shared.digest === digest);
     if (poll === undefined) return;
     const { pollAgainAt } = await pollShared(poll);
-    await armPoll(poll, nextPollAt(new Date(), poll.everyMs, pollAgainAt));
+    // The drain's clock, as listen-fire reads its host's: the interval runs
+    // from when the row was taken, so a slow poll does not drift the schedule.
+    await armPoll(poll, nextPollAt(ctx.now, poll.everyMs, pollAgainAt));
   },
 };
 

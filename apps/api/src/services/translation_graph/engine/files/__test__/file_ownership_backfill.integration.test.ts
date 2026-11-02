@@ -1,6 +1,6 @@
 // The file ownership backfill, against rows shaped as an earlier release left
-// them: uploads under `<uuid>/<name>` with no document row, named by a trigger
-// event's payload and a parked run's state. After the migration the store's
+// them: uploads under `<uuid>/<name>` with no document row, named by a run's
+// trigger payload and a parked run's state. After the migration the store's
 // own ownership check (unchanged) answers for each one.
 
 import { randomUUID } from 'node:crypto';
@@ -40,6 +40,7 @@ describe('the file ownership backfill', () => {
   const sharedFile = oldUri('shared.csv');
   const orphanFile = oldUri('orphan.txt');
   const runId = randomUUID();
+  const firedRuns = [randomUUID(), randomUUID(), randomUUID()];
   let db: Client;
 
   beforeAll(async () => {
@@ -49,13 +50,16 @@ describe('the file ownership backfill', () => {
     // (no store is registered in this suite's module registry otherwise).
     services.document = new S3Adapter({ bucket: BUCKET, region: 'auto', accessKeyId: 'unused', secretAccessKey: 'unused' });
 
+    // The run a Run-now upload fired names its file in its trigger payload.
+    // (The trigger-event receipts the backfill also read went in 0.13; the
+    // backfill skips a relation that is gone.)
     await db.query(
-      `INSERT INTO automations.trigger_event (team_id, trigger_id, adapter_type, trigger_type, payload)
-       VALUES ($1, 'run-now', 'manual', 'manual', $2), ($3, 'run-now', 'manual', 'manual', $4), ($5, 'run-now', 'manual', 'manual', $6)`,
+      `INSERT INTO automations.trigger_run (id, team_id, trigger_id, trigger_type, status, trigger_payload)
+       VALUES ($1, $2, 'run-now', 'manual', 'success', $3), ($4, $5, 'run-now', 'manual', 'success', $6), ($7, $8, 'run-now', 'manual', 'success', $9)`,
       [
-        teamA, { files: [manualFileRef(eventFile, 'deck.pdf')], objectUri: eventFile },
-        teamA, { files: [manualFileRef(sharedFile, 'shared.csv')] },
-        teamB, { files: [manualFileRef(sharedFile, 'shared.csv')] },
+        firedRuns[0], teamA, { files: [manualFileRef(eventFile, 'deck.pdf')], objectUri: eventFile },
+        firedRuns[1], teamA, { files: [manualFileRef(sharedFile, 'shared.csv')] },
+        firedRuns[2], teamB, { files: [manualFileRef(sharedFile, 'shared.csv')] },
       ],
     );
     await db.query(
@@ -71,8 +75,7 @@ describe('the file ownership backfill', () => {
   });
 
   afterAll(async () => {
-    await db.query('DELETE FROM automations.trigger_run WHERE id = $1', [runId]);
-    await db.query('DELETE FROM automations.trigger_event WHERE team_id = ANY($1::uuid[])', [teams]);
+    await db.query('DELETE FROM automations.trigger_run WHERE id = ANY($1::uuid[])', [[runId, ...firedRuns]]);
     await db.query('DELETE FROM knowledge.document WHERE team_id = ANY($1::uuid[])', [teams]);
     await db.end();
   });

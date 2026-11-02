@@ -1,7 +1,7 @@
-// The Response EDGE WRITE against a real DB (callback-primitive layer 3).
+// The Response EDGE WRITE against a real DB.
 //
-// `write a-[:Response]-> { Answer: … }` is how an answer arrives — from a
-// callback body, from anywhere movement code runs — and the answer semantics
+// `write a-[:Response]-> { Answer: … }` is how an answer arrives — from
+// anywhere movement code runs — and the answer semantics
 // live at that write: the family coerces the value, the first answer stands,
 // and a settled request refuses. Everything else is a wrapper: this proves
 // `answerAskByToken` (the link page, the platform doors, MCP submit) drives the
@@ -13,7 +13,7 @@
 // The wake reaches the engine through the `AskSettledNotifier` seam (A-5), so
 // the composed wiring is registered here exactly as the composition root
 // registers it — proving the seam carries the behaviour rather than that the
-// door still names the engine. What it leaves is the engine's queued wake row.
+// door still names the engine. What it leaves is the answer's logged arrival.
 
 import { randomUUID } from 'node:crypto';
 
@@ -50,15 +50,13 @@ describe('the Response edge write (real DB)', () => {
   let teamId: TeamId;
   let adapter: AskAdapter;
 
-  const wakeRows = async (): Promise<unknown[]> =>
-    (
-      await getAutomationsQb(['work'])
-        .selectFrom('work')
-        .where('team_id', '=', teamId)
-        .where('kind', '=', 'wake_await')
-        .select('payload')
-        .execute()
-    ).map((row) => row.payload);
+  const arrivalRows = () =>
+    getAutomationsQb(['arrival'])
+      .selectFrom('arrival')
+      .where('team_id', '=', teamId)
+      .where('adapter_type', '=', 'ask')
+      .select(['edge', 'key', 'gone'])
+      .execute();
 
   beforeEach(async () => {
     notifyEngineOfSettledAsks();
@@ -89,8 +87,9 @@ describe('the Response edge write (real DB)', () => {
       expect(result.data.Answer).toEqual(stored);
       expect((await getAsk(ask.id))?.answer).toEqual(stored);
       expect((await getAsk(ask.id))?.state).toBe('answered');
-      // The settle queued the engine's wake for this ask, durably.
-      expect(await wakeRows()).toEqual([{ adapterType: 'ask', teamId, correlationKey: ask.id }]);
+      // The settle logged the answer as the ask's `Response` arrival, durably:
+      // the one write that wakes a run waiting on the ask.
+      expect(await arrivalRows()).toEqual([{ edge: 'Response', key: ask.id, gone: false }]);
     },
   );
 

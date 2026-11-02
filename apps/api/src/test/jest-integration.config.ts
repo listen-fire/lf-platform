@@ -37,6 +37,9 @@ export default {
   // by `pnpm code:type-check`.
   preset: 'ts-jest',
   transform: { '^.+\\.tsx?$': ['ts-jest', { isolatedModules: true, diagnostics: false }] },
+  // `@listen-fire/fake-channels` publishes its test harness as TypeScript
+  // (`/testing` is `testing.ts`), so it is transformed like ours.
+  transformIgnorePatterns: ['/node_modules/(?!\\.pnpm/@listen-fire\\+fake-channels|@listen-fire/fake-channels/)'],
   testEnvironment: 'node',
   // Real-DB integration tests need a generous timeout — migration
   // application + ontology seeding can take 5-10s on first run.

@@ -22,7 +22,8 @@ jest.mock('../../../../credentials/credential_lifecycle', () => ({
 
 import { LANGUAGE_VERSION } from 'movement-lang';
 import { postRpc } from 'movement-engine/public/adapter';
-import { triggerEventOf } from 'movement-engine/public/inbound';
+import { arrivalTriggerOf } from 'movement-engine/public/inbound';
+import { WireArrival } from 'engine-contracts/protocol';
 
 import type { TeamId } from '../../../../../generated/kysely/core/Team';
 import type { TriggerId } from '../../../../../generated/kysely/automations/Trigger';
@@ -38,23 +39,20 @@ import { RemoteAdapterManifestInput } from '../manifest';
 import { dispatchTriggerByIdEvent } from '../../../triggers/router';
 import { mintMovementVersionIfChanged } from '../../../movement/version_store';
 import { SERVE_MODULE } from '../../__test__/parity/serve_module';
-import { HUBSPOT_MODULE, startFakeHubSpot, type FakeHubSpot } from '@listen-fire/fake-channels/testing';
+import { HUBSPOT_MODULE, dealArrival, startFakeHubSpot, type FakeHubSpot } from '@listen-fire/fake-channels/testing';
 
 const MODULE = HUBSPOT_MODULE;
 const SERVER_SECRET = `install-${randomUUID()}`;
 const CLIENT = { clientId: 'listen-fire-app', clientSecret: 'listen-fire-app-secret' };
 
-const MIRROR = `import { hubspot } from adapters
-import { alice_hubspot, bob_hubspot } from credentials
-
-hs_alice = connect hubspot using alice_hubspot
-hs_bob = connect hubspot using bob_hubspot
+const MIRROR = `hs_alice = connect #hubspot using alice_hubspot
+hs_bob = connect #hubspot using bob_hubspot
 
 function mirror(deal: <hs_alice-[:Deal]->>) {
   write hs_bob-[:Deal]-> { Name: "Mirror of \${deal.Name}" }
 }
 
-listen to hs_alice { events: ["deal.created"] } fire mirror
+listen to hs_alice-[:Deal]-> fire mirror
 `;
 
 let fake: FakeHubSpot;
@@ -124,7 +122,6 @@ async function seedMirror(): Promise<{ triggerId: TriggerId; movementId: Movemen
       team_id: teamId,
       name: 'Alice’s new deals',
       kind: 'hubspot',
-      config: JSON.stringify({ events: ['deal.created'] }),
       movement_id: movementId,
       fired_movement_name: 'mirror',
     } as any)
@@ -172,14 +169,10 @@ it('reads as Alice and writes as Bob through one install; Alice’s rotated toke
   fake.deals.push({ id: 'deal-1', Name: 'Acme expansion', owner: 'alice' });
   const { triggerId } = await seedMirror();
 
-  const { triggerEvent } = triggerEventOf({
-    pipelineInputId: `trigger:${triggerId}`,
-    adapterType: 'hubspot',
-    triggerType: 'webhook',
-    event: { payload: { id: 'deal-1', Name: 'Acme expansion' }, externalId: 'deal-1', tag: 'deal.created', eventType: 'deal.created', changeType: 'create', recordType: 'Deal' },
-    eventTypes: [{ tag: 'deal.created', positionType: 'Deal' }],
-    now: new Date(),
-  });
+  // The deal's arrival on the root `Deal`, as the module's door reports it.
+  const arrival = WireArrival.parse(dealArrival({ id: 'deal-1', Name: 'Acme expansion', owner: 'alice' }));
+  if ('gone' in arrival) throw new Error('test: a created deal arrives, it does not go');
+  const triggerEvent = arrivalTriggerOf({ pipelineInputId: `trigger:${triggerId}`, adapterType: 'hubspot', arrival, now: new Date() });
   const result = await dispatchTriggerByIdEvent({ triggerId, teamId, event: triggerEvent });
 
   expect(result.movementFirings).toEqual([{ movementName: 'mirror', writes: 1, dryRun: false }]);

@@ -28,14 +28,13 @@ import { movementCatalogForTeam } from '../../../movement/catalog';
 import { saveMovement } from '../../../movement/provision';
 import { runMovementNow } from '../../../movement/run_now';
 import { startFakeMcpServer, type FakeMcpServer } from '../../../../../scripts/dev/lib/fake_mcp';
+import { registerFireEventWork } from '../../../../inbound/fire_event';
+import { resetWorkHandlersForTests } from '../../../../work/drain';
 
-const TRIAGE = `import { mcp } from adapters
-import { linear, crm } from credentials
+const TRIAGE = `tracker = connect \`@lf/mcp\` using linear
+customers = connect \`@lf/mcp\` using crm
 
-tracker = connect mcp using linear
-customers = connect mcp using crm
-
-function triage(run: <manual-[:Invocation]->>) {
+function triage(run: <manual-[:Invocations]->>) {
   issue = write tracker-[:create_issue]-> { title: "Follow up Acme", team: "ENG" }
   write customers-[:add_note]-> { customer: "acme", body: "filed: \${issue.text}" }
   tracker-[r:search_issues WHERE r.query == "Login"]-> {
@@ -55,6 +54,10 @@ async function connect(name: string, credentials: Record<string, string>): Promi
 }
 
 beforeAll(async () => {
+  // Run now queues its run and drains it in this process, through the
+  // fire_event handler, as the deployment's drain does.
+  resetWorkHandlersForTests();
+  registerFireEventWork();
   issues = await startFakeMcpServer({ kind: 'issues', token: 'issues-token' });
   customers = await startFakeMcpServer({ kind: 'crm', token: 'crm-key', header: 'X-API-Key' });
   teamId = randomUUID() as TeamId;
@@ -111,9 +114,7 @@ it('refuses at save a write whose argument has the wrong type, and a tool of the
 
 it('refuses a connection whose server is not at a public address before any request', async () => {
   const catalog = await movementCatalogForTeam(teamId, {
-    source: `import { mcp } from adapters
-import { metadata } from credentials
-probe = connect mcp using metadata
+    source: `probe = connect \`@lf/mcp\` using metadata
 `,
   });
   // @listen-fire/mcp 0.12.10 retries a thrown fetch as a network error, so the

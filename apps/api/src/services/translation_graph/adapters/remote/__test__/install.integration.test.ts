@@ -176,7 +176,7 @@ describe('installRemoteAdapterFromManifest with a slug a built-in answers to', (
     expect(() => manifest('SLACK', v2Server.baseUrl)).toThrow(/ASCII lower case/);
   });
 
-  it.each(['slack', 'gmail', 'callback'])(
+  it.each(['slack', 'gmail', 'manual'])(
     'refuses %s before asking the server or minting anything',
     async (slug) => {
       await expect(
