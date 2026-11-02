@@ -52,9 +52,13 @@ jest.mock('../catalog', () => ({ movementCatalogForTeam: jest.fn() }));
 import { LANGUAGE_VERSION, fromCatalogSnapshot, mockCatalogSnapshot, type LanguageVersion } from 'movement-lang';
 
 import { diagnoseMovementSource } from '../authoring';
+import { unitInstanceSchema } from '../../adapters/unit_surface';
+import { MANUAL_ADAPTER_TYPE, MANUAL_SURFACE } from '../../adapters/manual';
 import { checkInstalled, routeOf } from '../language_route';
 
-const BARE_MANUAL = 'function echo(run: <manual-[:Invocation]->>) {\n  return 1\n}\nlisten to manual fire echo\n';
+const BARE_MANUAL = 'function echo(run: <manual-[:Invocation]->>) {\n  return 1\n}\nlisten to manual-[:Invocations]-> fire echo\n';
+/** The same listen as the legacy versions spell it. */
+const LEGACY_BARE_MANUAL = 'function echo(run: <manual-[:Invocation]->>) {\n  return 1\n}\nlisten to manual fire echo\n';
 
 const IMPORT_COMPANIES = `import { attio } from adapters
 import { acme_main } from credentials
@@ -68,11 +72,12 @@ function \`Import Companies\`(go: <manual-[:Invocation]->>) {
   }
 }
 
-listen as "Import companies" to manual fire \`Import Companies\`
+listen as "Import companies" to manual-[:Invocations]-> fire \`Import Companies\`
 `;
 
 const snapshot = mockCatalogSnapshot({
   adapters: {
+    manual: { constructionArgs: [], schema: unitInstanceSchema(MANUAL_ADAPTER_TYPE, MANUAL_SURFACE) },
     attio: {
       constructionArgs: [{ name: 'credentials', kind: 'credential', required: true }],
       schema: {
@@ -95,7 +100,7 @@ function diagnose(source: string, languageVersion: LanguageVersion) {
 }
 
 describe('a current pin is checked by the wasm only', () => {
-  it('a bare manual listen validates, the wasm asked once and nothing else', () => {
+  it('a manual listen validates, the wasm asked once and nothing else', () => {
     const { validation, counters: asked } = diagnose(BARE_MANUAL, LANGUAGE_VERSION);
     expect(validation.diagnostics.map((d) => d.code)).not.toContain('MOV_ENGINE_UNSUPPORTED');
     expect(validation.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
@@ -112,8 +117,8 @@ describe('a current pin is checked by the wasm only', () => {
     expect(asked).toEqual({ rust: 1, ts: 0, scan: 0 });
   });
 
-  it('the same bare text pinned to a legacy id keeps the scan, which refuses it', () => {
-    const { validation, counters: asked } = diagnose(BARE_MANUAL, '4');
+  it('the same listen pinned to a legacy id keeps the scan, which refuses it', () => {
+    const { validation, counters: asked } = diagnose(LEGACY_BARE_MANUAL, '4');
     expect(validation.ok).toBe(false);
     const unsupported = validation.diagnostics.find((d) => d.code === 'MOV_ENGINE_UNSUPPORTED');
     expect(unsupported?.message).toContain("a movement seeded from 'manual'");
@@ -121,11 +126,11 @@ describe('a current pin is checked by the wasm only', () => {
   });
 
   it('a pin from a newer line is its version diagnostic alone, nothing asked', () => {
-    const { validation, counters: asked } = diagnose(BARE_MANUAL, '0.13.0');
+    const { validation, counters: asked } = diagnose(BARE_MANUAL, '0.14.0');
     expect(validation.ok).toBe(false);
     expect(validation.diagnostics).toHaveLength(1);
     expect(validation.diagnostics[0]?.code).toMatch(/^MOV_LANGUAGE_VERSION_/);
-    expect(validation.diagnostics[0]?.message).toContain('0.13.0');
+    expect(validation.diagnostics[0]?.message).toContain('0.14.0');
     expect(asked).toEqual({ rust: 0, ts: 0, scan: 0 });
   });
 
@@ -140,8 +145,8 @@ describe('routeOf', () => {
   it('reads a legacy id as legacy, the installed line as installed, and refuses any other line', () => {
     expect(routeOf('4')).toEqual({ kind: 'legacy', pin: '4' });
     expect(routeOf(LANGUAGE_VERSION)).toEqual({ kind: 'installed', pin: LANGUAGE_VERSION });
-    expect(routeOf('0.12.0')).toEqual({ kind: 'installed', pin: '0.12.0' });
-    for (const pin of ['0.11.0', '0.13.0']) {
+    expect(routeOf('0.13.0')).toEqual({ kind: 'installed', pin: '0.13.0' });
+    for (const pin of ['0.12.0', '0.14.0']) {
       const route = routeOf(pin);
       expect(route.kind).toBe('refused');
       if (route.kind !== 'refused') continue;

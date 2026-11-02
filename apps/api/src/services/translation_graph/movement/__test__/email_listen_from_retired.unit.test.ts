@@ -5,8 +5,8 @@
 // listen. Those automations are pinned to language version 1 or 2, their text
 // is never rewritten for them, and the engine re-checks every run — so under
 // those pins the key must not be an error, or every run would fail. It is a
-// warning that says where the decision lives now. From version 3 it was never
-// part of the language and stays an unknown key.
+// warning that says where the decision lives now. (From 0.13 a catalog no
+// longer describes a settings listen's keys, so no other key is judged.)
 
 import type { LanguageVersion } from 'movement-lang';
 import { checkProgram } from 'legacy-lang';
@@ -50,19 +50,5 @@ describe('a fork’s `from` key on an email listen', () => {
   it('holds whichever name the email adapter is constructed by', () => {
     const diagnostics = listenDiagnosticsOf(PROGRAM('mailgun', 'from: "anyone"'), '1');
     expect(diagnostics.map((d) => d.severity)).toEqual(['warning']);
-  });
-
-  it('still refuses a value the fork never accepted', () => {
-    const diagnostics = listenDiagnosticsOf(PROGRAM('email', 'from: "everyone"'), '2');
-    expect(diagnostics).toEqual([
-      { severity: 'error', message: expect.stringContaining("do not accept a config key 'from'") },
-    ]);
-  });
-
-  it.each(['3', '4'])('is an unknown key under version %s, which never had it', (version) => {
-    const diagnostics = listenDiagnosticsOf(PROGRAM('email', 'from: "anyone"'), version);
-    expect(diagnostics).toEqual([
-      { severity: 'error', message: expect.stringContaining("do not accept a config key 'from'") },
-    ]);
   });
 });

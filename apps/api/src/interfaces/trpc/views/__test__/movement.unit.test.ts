@@ -299,14 +299,17 @@ function \`Import Companies\`(go: <manual-[:Invocation]->>) {
   }
 }
 
-listen as "Import companies" to manual fire \`Import Companies\`
+listen as "Import companies" to manual-[:Invocations]-> fire \`Import Companies\`
 `;
-  const BARE_MANUAL = 'function echo(run: <manual-[:Invocation]->>) {\n  return 1\n}\nlisten to manual fire echo\n';
+  const BARE_MANUAL = 'function echo(run: <manual-[:Invocation]->>) {\n  return 1\n}\nlisten to manual-[:Invocations]-> fire echo\n';
 
   async function caller() {
     const { fromCatalogSnapshot, mockCatalogSnapshot } = await import('movement-lang');
+    const { unitInstanceSchema } = await import('../../../../services/translation_graph/adapters/unit_surface');
+    const { MANUAL_ADAPTER_TYPE, MANUAL_SURFACE } = await import('../../../../services/translation_graph/adapters/manual');
     const snapshot = mockCatalogSnapshot({
       adapters: {
+        manual: { constructionArgs: [], schema: unitInstanceSchema(MANUAL_ADAPTER_TYPE, MANUAL_SURFACE) },
         attio: {
           constructionArgs: [{ name: 'credentials', kind: 'credential', required: true }],
           schema: {
@@ -352,7 +355,7 @@ listen as "Import companies" to manual fire \`Import Companies\`
     jest.dontMock('../../../../services/translation_graph/movement/catalog');
   });
 
-  it('a bare manual listen has no diagnostics under the installed pin', async () => {
+  it('a manual listen has no diagnostics under the installed pin', async () => {
     const { diagnostics } = await (await caller()).check({ source: BARE_MANUAL });
     expect(diagnostics).toEqual([]);
   });
@@ -381,7 +384,7 @@ function hello(go: <manual-[:Invocation]->>) {
   }
 }
 
-listen to manual fire hello
+listen to manual-[:Invocations]-> fire hello
 `;
   const KNOWN_ID = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
   const UNKNOWN_ID = '9b2f4a1e-3c5d-4e6f-8a7b-0c1d2e3f4a5b';
@@ -390,18 +393,12 @@ listen to manual fire hello
 
   async function snapshotOf() {
     const { mockCatalogSnapshot } = await import('movement-lang');
+    const { unitInstanceSchema } = await import('../../../../services/translation_graph/adapters/unit_surface');
+    const { MANUAL_ADAPTER_TYPE, MANUAL_SURFACE } = await import('../../../../services/translation_graph/adapters/manual');
     return {
       ...mockCatalogSnapshot({
         adapters: {
-          manual: {
-            constructionArgs: [],
-            canFire: true,
-            schema: {
-              positions: { Invocation: { properties: { Text: 'text' }, edges: {} } },
-              collections: {},
-              writableRoots: {},
-            },
-          },
+          manual: { constructionArgs: [], schema: unitInstanceSchema(MANUAL_ADAPTER_TYPE, MANUAL_SURFACE) },
           attio: {
             constructionArgs: [{ name: 'credentials', kind: 'credential', required: true }],
             schema: {
@@ -518,9 +515,9 @@ listen to manual fire hello
     // The movement's own pin, a legacy id, is refused the same way.
     await expect(api.complete({ source: PROGRAM, offset: 10, id: KNOWN_ID })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
 
-    expect(await api.complete({ source: PROGRAM, offset: 10, languageVersion: '0.13.0' })).toEqual({ from: 10, to: 10, items: [] });
-    expect(await api.hover({ source: PROGRAM, offset: 10, languageVersion: '0.13.0' })).toBeNull();
-    expect(await api.definition({ source: PROGRAM, offset: 10, languageVersion: '0.13.0' })).toBeNull();
+    expect(await api.complete({ source: PROGRAM, offset: 10, languageVersion: '0.14.0' })).toEqual({ from: 10, to: 10, items: [] });
+    expect(await api.hover({ source: PROGRAM, offset: 10, languageVersion: '0.14.0' })).toBeNull();
+    expect(await api.definition({ source: PROGRAM, offset: 10, languageVersion: '0.14.0' })).toBeNull();
     expect(calls.catalog).toBe(0);
   });
 

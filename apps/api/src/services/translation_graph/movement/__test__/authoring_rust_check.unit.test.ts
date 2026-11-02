@@ -67,7 +67,6 @@ const programs: Record<string, string> = {
   clean: `${PRELUDE}movement m(msg: <inbox-[:message]->>) {
   write crm-[:companies]-> { name: msg.\`subject\`, stage: "Lead" }
 }
-listen to inbox fire m
 `,
   'an unknown field': `${PRELUDE}movement m(msg: <inbox-[:message]->>) {
   write crm-[:companies]-> { nam: msg.\`subject\` }
