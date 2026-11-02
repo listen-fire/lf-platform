@@ -450,10 +450,9 @@ async function main() {
           },
         ]
       : undefined;
-    // The in-process dispatch (and the services it reaches — RawTextService,
-    // the movement-issue alerter, …) read the ambient AsyncLocalStorage
-    // Context; calling `runMovementNow` bare leaves plugin persistence throwing
-    // "Async local storage undefined". Mirror the live path's team context.
+    // The steps before the firing (the file upload) read the ambient Context;
+    // the firing itself is queued and drained, so it acts as its own team,
+    // never as whatever Context is in scope.
     const result = await buildAgentContext(seed.teamId, seed.userId).runAsync(() =>
       runMovementNow({
         teamId: seed.teamId,

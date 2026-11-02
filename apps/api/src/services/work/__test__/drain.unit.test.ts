@@ -15,6 +15,9 @@ import {
   WorkDeferred,
 } from '../drain';
 import { claimDueWork, completeWork, deferWork, heartbeatWork, releaseWork } from '../store';
+import { maybePrincipal } from 'principal';
+import { Context, unsafeCurrentContext } from '../../context';
+import { userPrincipal } from '../../principal';
 
 jest.mock('../store', () => ({
   claimDueWork: jest.fn(),
@@ -305,6 +308,83 @@ describe('notifyWork', () => {
     expect(notify).toHaveBeenCalledTimes(1);
     expect(claim).not.toHaveBeenCalled();
   });
+});
+
+// The team whose identity the public routes run as (`startup/core.ts`).
+const PUBLIC_TEAM_ID = '3c556453-82b3-4314-ab78-67d843aaa7da';
+
+/** Run `fn` as a request of `teamId` would: inside a Context bound to one of
+ *  its users, with that user as the ambient principal. */
+function asRequestOf<T>(teamId: string, fn: () => Promise<T>): Promise<T> {
+  const ctx = new Context();
+  ctx.bindPrincipal(userPrincipal({ userId: `user-of-${teamId}`, teamId }));
+  return ctx.runAsync(fn);
+}
+
+/** Who a handler ran as: the Context's user's team, and the principal's. */
+function identityHandler(seen: Array<{ context: string | undefined; principal: string | undefined }>) {
+  return {
+    run: async () => {
+      const ctx = unsafeCurrentContext();
+      seen.push({
+        context: ctx?.authenticated === true ? ctx.user.teamId : undefined,
+        principal: maybePrincipal()?.teamId,
+      });
+    },
+  };
+}
+
+describe('a drain never runs a row as whoever asked for the pass', () => {
+  it.each([['another team', 'team-x'], ['the public team', PUBLIC_TEAM_ID]])(
+    'a drain called inside a request of %s runs its rows with no identity',
+    async (_label, teamId) => {
+      const seen: Array<{ context: string | undefined; principal: string | undefined }> = [];
+      registerWorkHandler('resume_timer', identityHandler(seen));
+      pending = [row()];
+
+      await asRequestOf(teamId, () => drainWork({ owner: 'me' }));
+
+      expect(seen).toEqual([{ context: undefined, principal: undefined }]);
+    },
+  );
+});
+
+// Real timers: the bug lives in what a Node timer carries, and jest's fake
+// timers carry nothing.
+describe('a drain loop never runs a row as whoever kicked it', () => {
+  let stopLoop: StopDrainLoop | undefined;
+
+  afterEach(async () => {
+    await stopLoop?.();
+    stopLoop = undefined;
+  });
+
+  const until = async (done: () => boolean): Promise<void> => {
+    for (let waited = 0; !done(); waited += 5) {
+      if (waited > 2_000) throw new Error('the loop never got there');
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+  };
+
+  it.each([['another team', 'team-x'], ['the public team', PUBLIC_TEAM_ID]])(
+    'a pass kicked from a request of %s, and every pass after it, runs with no identity',
+    async (_label, teamId) => {
+      const seen: Array<{ context: string | undefined; principal: string | undefined }> = [];
+      registerWorkHandler('resume_timer', identityHandler(seen));
+      stopLoop = startDrainLoop({ owner: 'me', everyMs: 20 });
+
+      pending = [row({ key: 'kicked' })];
+      await asRequestOf(teamId, async () => notifyWork());
+      await until(() => seen.length === 1);
+      pending = [row({ key: 'later' })];
+      await until(() => seen.length === 2);
+
+      expect(seen).toEqual([
+        { context: undefined, principal: undefined },
+        { context: undefined, principal: undefined },
+      ]);
+    },
+  );
 });
 
 describe('startDrainLoop', () => {

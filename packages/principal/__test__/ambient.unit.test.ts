@@ -3,6 +3,7 @@ import {
   maybePrincipal,
   runWithPrincipal,
   runWithPrincipalSync,
+  runWithoutPrincipal,
 } from '../ambient';
 import type { Principal } from '../principal';
 
@@ -70,5 +71,18 @@ describe('the ambient principal store', () => {
 
     expect(maybePrincipal()).toBeUndefined();
     await expect(later).resolves.toBe('team-sync');
+  });
+
+  it('runs a callback, and every timer it schedules, with no principal at all', async () => {
+    const later = await runWithPrincipal(principal('team-kicker'), async () =>
+      runWithoutPrincipal(() => {
+        expect(maybePrincipal()).toBeUndefined();
+        return new Promise<string | undefined>((resolve) => {
+          setTimeout(() => resolve(maybePrincipal()?.teamId), 1);
+        });
+      }),
+    );
+
+    expect(later).toBeUndefined();
   });
 });

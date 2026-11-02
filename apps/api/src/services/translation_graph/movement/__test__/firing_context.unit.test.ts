@@ -50,6 +50,7 @@ jest.mock('../../adapters/acting_user/resolve', () => ({
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 
+import { maybePrincipal } from 'principal';
 import { Context, currentContext, unsafeCurrentContext } from '../../../context';
 import { withFiringContext } from '../firing_context';
 import { userPrincipal } from '../../../principal';
@@ -81,18 +82,45 @@ describe('withFiringContext', () => {
     expect(seen).toEqual({ teamId: TEAM, userId: 'user-author' });
   });
 
-  it('leaves an ambient Context alone — a request-driven firing keeps its own', async () => {
-    const outer = new Context();
-    outer.bindPrincipal(userPrincipal({ userId: 'user-requesting', teamId: 'team-other' }));
+  // The drain loop carries the identity of whatever kicked it into every pass,
+  // so the Context in scope at a firing is as often a stranger's as a
+  // requester's. The public team's is the one that was seen: a team's firing
+  // stored its fetched deck there.
+  it.each([['another team', 'team-other'], ['the public team', '3c556453-82b3-4314-ab78-67d843aaa7da']])(
+    'acts as its own team inside a Context of %s',
+    async (_label, otherTeam) => {
+      const outer = new Context();
+      outer.bindPrincipal(userPrincipal({ userId: 'user-elsewhere', teamId: otherTeam }));
 
-    const seen = await outer.runAsync(() =>
-      withFiringContext(firing, async () => ({
-        same: unsafeCurrentContext() === outer,
-        teamId: currentContext().user.teamId,
-      })),
+      const seen = await outer.runAsync(() =>
+        withFiringContext(firing, async () => ({
+          same: unsafeCurrentContext() === outer,
+          teamId: currentContext().user.teamId,
+          userId: currentContext().user.id,
+          principalTeamId: maybePrincipal()?.teamId,
+        })),
+      );
+
+      expect(seen).toEqual({ same: false, teamId: TEAM, userId: 'user-author', principalTeamId: TEAM });
+    },
+  );
+
+  it('acts as a requester handed in on its own team', async () => {
+    const seen = await withFiringContext(
+      { ...firing, requester: userPrincipal({ userId: 'user-requesting', teamId: TEAM }) },
+      async () => ({ teamId: currentContext().user.teamId, userId: currentContext().user.id }),
     );
 
-    expect(seen).toEqual({ same: true, teamId: 'team-other' });
+    expect(seen).toEqual({ teamId: TEAM, userId: 'user-requesting' });
+  });
+
+  it('ignores a requester from another team', async () => {
+    const seen = await withFiringContext(
+      { ...firing, requester: userPrincipal({ userId: 'user-requesting', teamId: 'team-other' }) },
+      async () => ({ teamId: currentContext().user.teamId, userId: currentContext().user.id }),
+    );
+
+    expect(seen).toEqual({ teamId: TEAM, userId: 'user-author' });
   });
 
   it('falls back to a write member when the author has left the team', async () => {

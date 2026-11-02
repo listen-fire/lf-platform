@@ -12,6 +12,14 @@
 // So the Context is established HERE, at the seam every firing passes through,
 // rather than in each worker — a seventh worker cannot forget it.
 //
+// And it is established whatever is already in scope. A firing used to keep
+// any ambient Context it found, meaning to stay attributed to a requester. But
+// Node carries the identity of whatever scheduled a piece of work into it, so
+// what it found was as often a stranger's: the drain loop, kicked by a webhook
+// on the public routes, ran a team's email firing as the public team, and the
+// deck that run fetched was stored there. A firing now acts as its own team;
+// only a requester handed in explicitly, on the same team, is kept.
+//
 // An email run acts as the person the message itself resolves to — the sender
 // when they are on the team, or whoever claimed a public inbox's key — by the
 // same resolution the run's `@user_*` reads, so the identity a run's services
@@ -25,8 +33,9 @@ import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 import type { ActingUser } from 'movement-engine/public/adapter';
 import type { ActingUserTriggerContext } from '../adapters/acting_user_shared';
+import type { Principal } from 'principal';
 
-import { Context, unsafeCurrentContext } from '../../context';
+import { Context, runWithoutAmbientIdentity } from '../../context';
 import { runInSystemContext } from '../../context/utils';
 import { userPrincipal } from '../../principal';
 import { logger } from 'movement-engine/public/log';
@@ -41,6 +50,9 @@ interface Firing {
   triggerId: string;
   /** The event the run fired on; a resume is handed the original. */
   event: TriggerEvent;
+  /** Whoever asked for this firing by hand, when somebody did. Kept only when
+   *  they act in the firing's own team. */
+  requester?: Principal;
 }
 
 /**
@@ -55,30 +67,44 @@ function engineEvent(firing: Firing): TriggerEvent {
 }
 
 /**
- * Run one firing inside a Context bound to its team. A Context already in
- * scope is left alone: a request-driven firing must stay attributed to the
- * person who asked for it, never re-attributed to the listener's author.
+ * Run one firing inside a Context bound to its team, never inside whatever
+ * Context or Principal the caller happens to have in scope.
  */
 async function withFiringContext<T>(
   firing: Firing,
   fn: () => Promise<T>,
 ): Promise<T> {
-  if (unsafeCurrentContext() !== undefined) return fn();
+  return runWithoutAmbientIdentity(async () => {
+    const principal = await firingPrincipal(firing);
+    if (principal === undefined) return runInSystemContext(fn);
+    const ctx = new Context();
+    ctx.bindPrincipal(principal);
+    return ctx.runAsync(fn);
+  });
+}
 
-  let ctx: Context | undefined;
+/** Who the firing acts as: its requester when they act in its team, else the
+ *  team member `firingActor` names; undefined when there is nobody. */
+async function firingPrincipal(firing: Firing): Promise<Principal | undefined> {
+  const { requester } = firing;
+  if (requester !== undefined) {
+    if (requester.teamId === firing.teamId) return requester;
+    logger.warn('[MovementEngine] a requester from another team was handed a firing — acting as the firing’s own team', {
+      triggerId: firing.triggerId,
+      teamId: firing.teamId,
+      requesterTeamId: requester.teamId,
+    });
+  }
+
   try {
     const userId = await firingActor(firing);
-    if (userId === undefined) {
-      // Nobody to act as at all — an orphaned trigger, or a team with no
-      // members left. Say so: the team-scoped reads inside the run will fail.
-      logger.warn('[MovementEngine] firing has no user to act as — running system-scoped', {
-        triggerId: firing.triggerId,
-        teamId: firing.teamId,
-      });
-    } else {
-      ctx = new Context();
-      ctx.bindPrincipal(userPrincipal({ userId, teamId: firing.teamId as unknown as string }));
-    }
+    if (userId !== undefined) return userPrincipal({ userId, teamId: firing.teamId as unknown as string });
+    // Nobody to act as at all — an orphaned trigger, or a team with no
+    // members left. Say so: the team-scoped reads inside the run will fail.
+    logger.warn('[MovementEngine] firing has no user to act as — running system-scoped', {
+      triggerId: firing.triggerId,
+      teamId: firing.teamId,
+    });
   } catch (err) {
     // Establishing the identity must never be the thing that crashes a
     // dispatch — the firing's own error containment is INSIDE `fn`.
@@ -88,8 +114,7 @@ async function withFiringContext<T>(
       error: err instanceof Error ? err.message : String(err),
     });
   }
-
-  return ctx === undefined ? runInSystemContext(fn) : ctx.runAsync(fn);
+  return undefined;
 }
 
 /**
@@ -164,11 +189,13 @@ async function teamActor(input: {
  * for the reason a firing does: team-scoped services read the ambient identity.
  */
 async function withTeamContext<T>(teamId: TeamId, fn: () => Promise<T>): Promise<T> {
-  const userId = await teamActor({ teamId, preferredUserId: null });
-  if (userId === undefined) return runInSystemContext(fn);
-  const ctx = new Context();
-  ctx.bindPrincipal(userPrincipal({ userId, teamId: teamId as unknown as string }));
-  return ctx.runAsync(fn);
+  return runWithoutAmbientIdentity(async () => {
+    const userId = await teamActor({ teamId, preferredUserId: null });
+    if (userId === undefined) return runInSystemContext(fn);
+    const ctx = new Context();
+    ctx.bindPrincipal(userPrincipal({ userId, teamId: teamId as unknown as string }));
+    return ctx.runAsync(fn);
+  });
 }
 
 export { engineEvent, withFiringContext, withTeamContext };

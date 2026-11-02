@@ -24,6 +24,15 @@ function runWithPrincipalSync<T>(p: Principal, fn: () => T): T {
   return store.run(p, fn);
 }
 
+/**
+ * Run `fn` with NO ambient principal, whatever the caller has in scope. Every
+ * continuation `fn` spawns (a timer, a promise) starts empty too. For work
+ * that must not act as whoever happened to schedule it.
+ */
+function runWithoutPrincipal<T>(fn: () => T): T {
+  return store.exit(fn);
+}
+
 /** The ambient principal. Throws when there is none — an unauthenticated call
  *  site reaching for identity is a bug, not a `read` principal. */
 function currentPrincipal(): Principal {
@@ -58,6 +67,7 @@ function currentUserId(): string {
 export {
   runWithPrincipal,
   runWithPrincipalSync,
+  runWithoutPrincipal,
   currentPrincipal,
   maybePrincipal,
   currentUserId,

@@ -4,7 +4,7 @@ import EventEmitter from 'node:events';
 
 import * as db from '@prisma/client';
 import { Kysely, sql } from 'kysely';
-import { maybePrincipal, runWithPrincipalSync, type Principal } from 'principal';
+import { maybePrincipal, runWithoutPrincipal, runWithPrincipalSync, type Principal } from 'principal';
 
 import { prismaClient, prismaReadonlyClient } from '../../prisma';
 import { Dataloaders, getDataloaders } from '../../lib/datasources/dataloaders';
@@ -563,4 +563,19 @@ function unsafeCurrentContext(): Context | undefined {
   return asyncLocalStorage.getStore();
 }
 
-export { Context, currentContext, unsafeCurrentContext, type UserContext };
+/**
+ * Run `fn` with no ambient identity at all: no Context and no Principal,
+ * whatever the caller has in scope. Every timer and promise `fn` creates starts
+ * empty too.
+ *
+ * Node carries both stores into every continuation, timers included. So work
+ * that a request merely SCHEDULES (a drain pass it kicked, a row it woke)
+ * would otherwise run as that request's user and team, and keep doing so for
+ * every pass scheduled after it. Background work starts here and establishes
+ * whose it is for itself.
+ */
+function runWithoutAmbientIdentity<T>(fn: () => T): T {
+  return asyncLocalStorage.exit(() => runWithoutPrincipal(fn));
+}
+
+export { Context, currentContext, runWithoutAmbientIdentity, unsafeCurrentContext, type UserContext };

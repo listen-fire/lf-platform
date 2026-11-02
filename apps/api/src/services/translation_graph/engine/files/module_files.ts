@@ -27,10 +27,12 @@ export function platformModuleFiles(install: { teamId: TeamId; module: string })
     read: async (ref) => bytesOf((await streamFileRef(ref, { teamId: install.teamId })).stream),
     expose: async (ref) => {
       const resolved = await streamFileRef(ref, { teamId: install.teamId });
-      // Unstamped, as the adapters that exposed files before modules did (the
-      // row's team is best-effort; see `exposeFile`).
+      // The install's team, never the ambient one: a module's periodic work
+      // and a poll run with no identity in scope, and a stray one is another
+      // team's.
       const contentType = resolved.contentType ?? ref.contentType;
       const exposed = await exposeFile({
+        teamId: install.teamId,
         stream: Readable.from(await bytesOf(resolved.stream)),
         ...(ref.name !== undefined ? { filename: ref.name } : {}),
         ...(contentType !== undefined ? { contentType } : {}),

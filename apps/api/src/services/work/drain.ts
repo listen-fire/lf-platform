@@ -12,6 +12,7 @@ import {
   type WorkRow,
 } from './kinds';
 import { logger } from 'movement-engine/public/log';
+import { runWithoutAmbientIdentity } from '../context';
 import { claimDueWork, completeWork, deferWork, heartbeatWork, releaseWork } from './store';
 import { announceWork } from './wake';
 
@@ -300,8 +301,19 @@ function executeRow(row: WorkRow, settings: DrainSettings): Promise<RowOutcome> 
   return runRow({ row, owner, leaseMs, heartbeatMs, clock });
 }
 
-/** Claim due rows and run each concurrently, resolving once all of them finish. Never throws. */
-export async function drainWork(opts: DrainOptions = {}): Promise<DrainResult> {
+/**
+ * Claim due rows and run each concurrently, resolving once all of them finish.
+ * Never throws.
+ *
+ * A row is the work of the team it names, never of whoever asked for the pass
+ * (the drain tick's request, a harness): the pass runs with no ambient
+ * identity, and each handler establishes the one its work runs as.
+ */
+export function drainWork(opts: DrainOptions = {}): Promise<DrainResult> {
+  return runWithoutAmbientIdentity(() => drainPass(opts));
+}
+
+async function drainPass(opts: DrainOptions): Promise<DrainResult> {
   const settings = drainSettings(opts);
   const result = emptyResult();
   const rows = await claimRows(settings, settings.limit);
@@ -497,9 +509,12 @@ export function startDrainLoop(opts: DrainLoopOptions = {}): StopDrainLoop {
   let backlog = false;
   let timer: NodeJS.Timeout | undefined;
 
+  // A timer carries the identity in scope where it was created, and each pass
+  // schedules the next from inside itself. Created from a door's kick, every
+  // pass after it would run as that door's user and team.
   const schedule = (ms: number): void => {
     clearTimeout(timer);
-    timer = setTimeout(() => void runPass(), ms);
+    timer = runWithoutAmbientIdentity(() => setTimeout(() => void runPass(), ms));
   };
 
   const kick = (): void => {
