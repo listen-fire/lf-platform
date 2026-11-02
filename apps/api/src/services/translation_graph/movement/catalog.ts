@@ -82,7 +82,6 @@ import {
   buildCatalogSnapshot,
   constructionArgsOf,
   needsCredential,
-  triggerConfigVocabulary,
   type CatalogAdapterInput,
 } from 'movement-engine/public/catalog';
 import { closeDemandOverChains, closeDemandOverWriteVariants, demandSeed } from './demand';
@@ -215,6 +214,19 @@ const THIN_INSTANCE_SCHEMAS: Record<string, InstanceSchema> = {
   },
 };
 
+/** What the checker reads of a module's listens, off its manifest alone, as
+ *  the engine's own snapshot projects it: whether anything can fire, what an
+ *  author is told to expect, the re-send window, and how a 0.12 settings
+ *  listen is rewritten onto an edge. */
+function listenVocabularyOf(manifest: AdapterManifest): Pick<AdapterSpec, 'canFire' | 'triggerExpectation' | 'resendWindowSeconds' | 'listenSettingsBecome'> {
+  return {
+    ...((manifest.supportedTriggers ?? []).length > 0 ? { canFire: true } : {}),
+    ...(manifest.triggerExpectation !== undefined ? { triggerExpectation: manifest.triggerExpectation } : {}),
+    ...(manifest.resendWindowSeconds !== undefined ? { resendWindowSeconds: manifest.resendWindowSeconds } : {}),
+    ...(manifest.listenSettingsBecome !== undefined ? { listenSettingsBecome: manifest.listenSettingsBecome } : {}),
+  };
+}
+
 /**
  * A real `Catalog` over the host's static registries. Adapter existence
  * and construction arguments come from the manifests; plugins from the
@@ -239,7 +251,7 @@ export function staticCatalogFromManifests(
       if (!manifest) return undefined;
       return {
         constructionArgs: constructionArgsOf(manifest),
-        ...triggerConfigVocabulary(manifest),
+        ...listenVocabularyOf(manifest),
       };
     },
     credential(name): CredentialSpec | undefined {
@@ -1167,7 +1179,7 @@ async function assembleTeamCatalog(
       return {
         constructionArgs: constructionArgsOf(manifest),
         ...(manifest.declaredCredentials !== undefined ? { declaredCredentials: [...manifest.declaredCredentials] } : {}),
-        ...triggerConfigVocabulary(manifest),
+        ...listenVocabularyOf(manifest),
       };
     },
     credential(name): CredentialSpec | undefined {
