@@ -32,10 +32,10 @@ import { getQb, getAutomationsQb } from '../../../lib/kysely';
 import { userProcedure as sharedUserProcedure } from '../procedures';
 import ExternalServiceType from '../../../generated/kysely/automations/ExternalServiceType';
 import { movementsImportingCredential } from '../../../services/connections/credential_dependents';
-import {
-  listAdapterManifests,
-  resolveAdapterSlug,
-} from '../../../services/translation_graph/adapters/registry';
+import { resolveAdapterSlug } from '../../../services/translation_graph/adapters/registry';
+import { teamAdapterManifests } from '../../../services/translation_graph/adapters/team_manifests';
+import { listRemoteAdapters } from '../../../services/translation_graph/adapters/remote/store';
+import { loadCredentialRows } from '../../../services/translation_graph/movement/catalog';
 import { credentialImportNames } from 'movement-engine/public/catalog';
 import { connectWrittenAs } from '../../../services/translation_graph/adapters/builtin_modules';
 import { inboundRoutingAddress } from '@listen-fire/email';
@@ -137,13 +137,26 @@ export type CredentialDependentsPayload = {
  * The email and WhatsApp ones are the DEPLOYMENT's own inbound address and
  * number, because that is what a user would be told to write to.
  */
-/** Each `connect` a program writes with a credential of `type`, under each
- *  of `names`: one per module that credential type connects. */
-function connectLinesOf(type: string, names: readonly string[]): string[] {
-  const modules = listAdapterManifests()
-    .filter((manifest) => manifest.requiredCredentialType === type)
-    .flatMap((manifest) => connectWrittenAs(manifest.adapterType) ?? []);
-  return modules.flatMap((module) => names.map((name) => `connect ${module} using ${name}`));
+/** Each `connect` a program writes with one credential: under each name it
+ *  is imported by, one per module the language binds that name to (a team
+ *  module's provider credential binds its module alone); and, for the server
+ *  secret a team module was installed with, that module's own connect, which
+ *  names no credential (installed is connected). */
+function connectLinesOf(credential: {
+  imported: readonly { name: string; adapters: readonly string[] }[];
+  secretOf: readonly string[];
+}): string[] {
+  const using = credential.imported.flatMap(({ name, adapters }) =>
+    adapters.flatMap((adapter) => {
+      const module = connectWrittenAs(adapter);
+      return module === undefined ? [] : [`connect ${module} using ${name}`];
+    }),
+  );
+  const installed = credential.secretOf.flatMap((adapter) => {
+    const module = connectWrittenAs(adapter);
+    return module === undefined ? [] : [`connect ${module}`];
+  });
+  return [...using, ...installed];
 }
 
 function builtInChannels(): ConnectionsSourceChannel[] {
@@ -252,7 +265,7 @@ const connectionsRouter = (procedure: typeof trpc.procedure) => {
       const isProd = process.env.NODE_ENV === 'production';
 
       // Pull the tables in parallel — none depend on each other.
-      const [credentialRows, triggerRows] =
+      const [credentialRows, triggerRows, manifests, catalogCredentialRows, remoteInstalls] =
         await Promise.all([
           getAutomationsQb(['external_service_credentials'])
             .selectFrom('external_service_credentials')
@@ -265,25 +278,30 @@ const connectionsRouter = (procedure: typeof trpc.procedure) => {
             .where('team_id', '=', teamId)
             .select(['id', 'name', 'kind', 'config', 'credentials_id'])
             .execute(),
+          // The catalog's own manifests and credential rows, so the page
+          // shows exactly what the language resolves, the team's own modules
+          // (`#acme_crm`) among them.
+          teamAdapterManifests(teamId, []),
+          loadCredentialRows(teamId),
+          listRemoteAdapters({ teamId }),
         ]);
 
       // Movement import names for each credential row — the identifier a
       // program writes in `import { … } from credentials`. Reuses the
       // movement catalog's exact projection so the page can never disagree
       // with what the language resolves.
-      const credentialsByImportName = credentialImportNames({
-        rows: credentialRows.map((c) => ({
-          id: c.id as unknown as string,
-          name: c.name,
-          type: c.type,
-        })),
-        manifests: listAdapterManifests(),
-      });
-      const importNamesByCredentialId = new Map<string, string[]>();
+      const credentialsByImportName = credentialImportNames({ rows: catalogCredentialRows, manifests });
+      const importedByCredentialId = new Map<string, { name: string; adapters: readonly string[] }[]>();
       for (const [importName, row] of Object.entries(credentialsByImportName)) {
-        const list = importNamesByCredentialId.get(row.id) ?? [];
-        list.push(importName);
-        importNamesByCredentialId.set(row.id, list);
+        const list = importedByCredentialId.get(row.id) ?? [];
+        list.push({ name: importName, adapters: row.adapters });
+        importedByCredentialId.set(row.id, list);
+      }
+      const installsBySecretId = new Map<string, string[]>();
+      for (const install of remoteInstalls) {
+        const secretId = install.credentials_id as unknown as string | null;
+        if (secretId === null) continue;
+        installsBySecretId.set(secretId, [...(installsBySecretId.get(secretId) ?? []), install.adapter_type]);
       }
 
       const integrations: ConnectionsIntegration[] = credentialRows
@@ -305,8 +323,11 @@ const connectionsRouter = (procedure: typeof trpc.procedure) => {
             reads: boundTriggers.length > 0,
             writes: false,
             automationCount: boundTriggers.length,
-            importNames: importNamesByCredentialId.get(credId) ?? [],
-            connectLines: connectLinesOf(c.type, importNamesByCredentialId.get(credId) ?? []),
+            importNames: (importedByCredentialId.get(credId) ?? []).map(({ name }) => name),
+            connectLines: connectLinesOf({
+              imported: importedByCredentialId.get(credId) ?? [],
+              secretOf: installsBySecretId.get(credId) ?? [],
+            }),
           };
         });
 
@@ -394,16 +415,14 @@ const connectionsRouter = (procedure: typeof trpc.procedure) => {
 
         const [
           credentialRows,
+          manifests,
           movementRows,
           triggerRows,
           webhookRows,
           remoteAdapterRows,
         ] = await Promise.all([
-          getAutomationsQb(['external_service_credentials'])
-            .selectFrom('external_service_credentials')
-            .where('team_id', '=', teamId)
-            .select(['id', 'name', 'type'])
-            .execute(),
+          loadCredentialRows(teamId),
+          teamAdapterManifests(teamId, []),
           getAutomationsQb(['movement'])
             .selectFrom('movement')
             .where('team_id', '=', teamId)
@@ -434,12 +453,8 @@ const connectionsRouter = (procedure: typeof trpc.procedure) => {
         // single row in isolation could disagree with what the language
         // actually resolves.
         const byImportName = credentialImportNames({
-          rows: credentialRows.map((c) => ({
-            id: c.id as unknown as string,
-            name: c.name,
-            type: c.type,
-          })),
-          manifests: listAdapterManifests(),
+          rows: credentialRows,
+          manifests,
         });
         const importNames = Object.entries(byImportName)
           .filter(([, row]) => row.id === (credentialId as unknown as string))

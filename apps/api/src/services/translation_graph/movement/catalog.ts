@@ -2009,7 +2009,7 @@ export async function resolveCredentialIdByImportName(input: {
 
 // ── DB helpers ──────────────────────────────────────────────────────────────
 
-async function loadCredentialRows(teamId: TeamId): Promise<CredentialRow[]> {
+export async function loadCredentialRows(teamId: TeamId): Promise<CredentialRow[]> {
   const rows = await getAutomationsQb(['external_service_credentials'])
     .selectFrom('external_service_credentials')
     .where('team_id', '=', teamId)
