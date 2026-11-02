@@ -297,7 +297,8 @@ describe('a record through a list literal is the record', () => {
           '      copied = { ...x, tag: "t" }',
           '      return copied',
           '    }))',
-          '    write crm-[:companies]-> { name: "map ${got.name}|${COALESCE(got.thesis, \'-\')}" }',
+          // FIRST of a list may be absent: tested before it is read through.
+          '    if (exists(got)) { write crm-[:companies]-> { name: "map ${got.name}|${COALESCE(got.thesis, \'-\')}" } }',
         ]),
       );
       expect(names(writes)).toEqual(expected('map'));

@@ -42,7 +42,7 @@ interface Site {
 
 /** Only ever goes DOWN. Closing a gap (a checker diagnostic, a dry-run flag,
  *  engine support) lowers it; nothing may raise it. */
-const KNOWN_GAPS = 64;
+const KNOWN_GAPS = 59;
 
 // Sites in source order within each file; a construct thrown from two places
 // is listed twice, in the order it appears.
@@ -161,34 +161,12 @@ const SITES: Site[] = [
     cover: { by: 'uncovered', gap: "a node literal or write passed as a plugin argument; the checker checks plugin argument names only" } },
   { file: "run.ts", construct: "passing ${describeBinding[bound.kind]} ('${arg.expr.raw.trim()}') as a movement argument",
     cover: { by: 'uncovered', gap: "an argument whose binding is not a record (a value, a block's returned records) passed where a movement takes a position; the checker's fit check skips an unknown argument type" } },
-  { file: "run.ts", construct: "callback(\u2026)",
-    cover: { by: 'harness', seam: "callbackSink" } },
-  { file: "run.ts", construct: "callback(${subject.movement}(\u2026)) leaving '${deferred.map((p) => p.name).join(\"', '\")}' unsupplied",
-    cover: { by: 'checker', codes: ["MOV_CALLBACK_PARAM_NOT_VALUE", "MOV_PARAM_NEEDS_TYPE"] } },
-  { file: "run.ts", construct: "await '${pathRootName(source.head) ?? ''}-[:${edge}]->'",
-    cover: { by: 'uncovered', gap: "`await FIRST(m-[:Replies]->)` off a traversed record rather than a handle; the checker requires an awaitable edge, not a handle head" } },
-  { file: "run.ts", construct: "await '-[:${edge}]->' on '${adapterType}'",
-    cover: { by: 'partial', codes: ["MOV_AWAIT_NOT_AWAITABLE"], gap: "silent when the edge is undescribed" } },
-  { file: "run.ts", construct: "await (a durable park)",
-    cover: { by: 'harness', seam: "parkSink" } },
-  { file: "run.ts", construct: "await '-[:${input.edge}]->' on a callback",
-    cover: { by: 'checker', codes: ["MOV_TRAVERSE_UNKNOWN_EDGE"] } },
-  { file: "run.ts", construct: "await cb-[:${CALLBACK_CALLED_EDGE}]->",
-    cover: { by: 'harness', seam: "callbackSink" } },
-  { file: "run.ts", construct: "await cb-[:${CALLBACK_CALLED_EDGE}]-> (a durable park)",
-    cover: { by: 'harness', seam: "parkSink" } },
   { file: "run.ts", construct: "reading a block's inner binding by name ('{ \u2026 }.${binding}')",
     cover: { by: 'checker', codes: ["MOV_INLINE_BLOCK_RETIRED"] } },
   { file: "run.ts", construct: "continuing a walk past a head that is not a traversal",
     cover: { by: 'uncovered', gap: "a `lazy` head over `_resources` read past its end; the checker leaves that walk untyped (unconfirmed)" } },
   { file: "run.ts", construct: "rootless block heads (relative traversal)",
     cover: { by: 'uncovered', gap: "`-[c:companies]-> { \u2026 }` in a body; the checker walks rootless heads untyped" } },
-  { file: "run.ts", construct: "this block head over a callback",
-    cover: { by: 'partial', codes: ["MOV_TRAVERSE_UNKNOWN_EDGE"], gap: "a `_resources` head off a callback is untyped and not refused" } },
-  { file: "run.ts", construct: "'${head.hopsRaw}' on a callback",
-    cover: { by: 'partial', codes: ["MOV_TRAVERSE_UNKNOWN_EDGE", "MOV_TRANSFORM_HOP_RETIRED"], gap: "a `#transform` hop off a callback is refused under legacy version 3, still saved by a movement pinned to 1 or 2; any other edge is refused by MOV_TRAVERSE_UNKNOWN_EDGE" } },
-  { file: "run.ts", construct: "cb-[:${CALLBACK_CALLED_EDGE}]->",
-    cover: { by: 'harness', seam: "callbackSink" } },
   { file: "run.ts", construct: "this block head over ${describeBinding[rootBinding.kind]}",
     cover: { by: 'uncovered', gap: "a `_resources` head off a synthesised node or deferred walk; untyped in the checker" } },
   { file: "run.ts", construct: "this block head over an extract result",

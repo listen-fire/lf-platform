@@ -1158,12 +1158,18 @@ describe('a library closure two levels deep is read in the library, as one level
       }
     }, 60_000);
   }
+  // The manual unit as a catalog that cannot describe it would carry it.
+  const undescribed = (input: ReturnType<typeof inputOn>) => {
+    const base = input.catalog ?? catalog;
+    const manual = base.adapters.manual;
+    return manual === undefined ? input : { ...input, catalog: { ...base, adapters: { ...base.adapters, manual: { ...manual, schemas: {} } } } };
+  };
   it('v3: the chain and its one-level twin write the record as the TypeScript engine always wrote it', async () => {
     for (const [source, files] of [
       [twoCalls, chain('b')],
       [oneCall, oneLevel('b')],
     ] as const) {
-      const result = await runMovement(inputOn(source, makeParkSink(), makeKgFake(), { version: 3, files }));
+      const result = await runMovement(undescribed(inputOn(source, makeParkSink(), makeKgFake(), { version: 3, files })));
       expect(result.writes.map((w) => w.writtenValues)).toEqual([{ payload: { r: { kind: 'event' } } }]);
     }
   }, 60_000);
@@ -1175,7 +1181,7 @@ describe('a library closure two levels deep is read in the library, as one level
       [twoCalls, chain('b')],
       [oneCall, oneLevel('b')],
     ] as const) {
-      await expect(runMovement(inputOn(source, makeParkSink(), makeKgFake(), { version: 5, files }))).rejects.toThrow('MOVENG_CHECK');
+      await expect(runMovement(undescribed(inputOn(source, makeParkSink(), makeKgFake(), { version: 5, files })))).rejects.toThrow('MOVENG_CHECK');
     }
   }, 60_000);
   for (const version of [3, 5]) {
