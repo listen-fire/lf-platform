@@ -10,8 +10,11 @@
  * line out (prefix `# `) and saves; resuming uncomments it and saves.
  * There is no separate on/off switch to drift out of sync with the text.
  *
- * Three card states:
+ * Four card states:
  *   - Listening      — the listen line exists and the last save derived it;
+ *   - Stopped        — the same, but the platform paused it (the loop breaker
+ *     or the loop guard): it runs nothing until a person resumes it, which
+ *     clears the pause without touching the script;
  *   - Will start on save — the line exists in the editor but hasn't been
  *     saved yet;
  *   - Paused         — a commented-out listen line.
@@ -43,6 +46,8 @@ export interface ListenerSummary {
   /** `<local>+<key>@<domain>` for adapters with an inbound routing key, else null. */
   inboundAddress: string | null;
   movementName: string | null;
+  /** Why the platform stopped it until a person resumes it (null: it runs). */
+  paused: { reason: string; held: number } | null;
 }
 
 export interface ActiveListen {
@@ -250,6 +255,10 @@ export interface ListenersPanelProps {
   onPause: (listen: ActiveListen) => void;
   onResume: (paused: PausedListen) => void;
   onAddListener: (line: string) => void;
+  /** Resume a listener the platform stopped (by its trigger id). */
+  onResumeStopped: (triggerId: string) => void;
+  /** A resume is in flight. */
+  resuming: boolean;
   /** Show this lane's runs and arrivals — the activity reading of the same
    *  movement, filtered to one listener. */
   onOpenActivity: (lane: string) => void;
@@ -316,6 +325,7 @@ export function ListenersPanel(props: ListenersPanelProps) {
       <div className="space-y-3">
         {matched.map(({ listen, server }, i) => {
           const lane = server?.name ?? null;
+          const stopped = server?.paused ?? null;
           return (
             <ListenerCard
               key={`active-${i}`}
@@ -323,16 +333,27 @@ export function ListenersPanel(props: ListenersPanelProps) {
               movement={listen.movement}
               configKey={listen.configKey}
               inboundAddress={server?.inboundAddress ?? null}
-              status={server ? "listening" : "pending"}
+              status={server ? (stopped ? "stopped" : "listening") : "pending"}
+              stoppedBecause={stopped}
               {...(lane !== null
                 ? { onOpenActivity: () => props.onOpenActivity(lane) }
                 : {})}
-              action={{
-                label: "Pause",
-                icon: Pause,
-                disabled: props.saving,
-                onClick: () => props.onPause(listen),
-              }}
+              action={
+                server && stopped
+                  ? {
+                      label: "Resume",
+                      icon: Play,
+                      disabled: props.resuming,
+                      testId: "listener-resume-stopped",
+                      onClick: () => props.onResumeStopped(server.triggerId),
+                    }
+                  : {
+                      label: "Pause",
+                      icon: Pause,
+                      disabled: props.saving,
+                      onClick: () => props.onPause(listen),
+                    }
+              }
             />
           );
         })}
@@ -415,6 +436,7 @@ export function ListenersPanel(props: ListenersPanelProps) {
 
 const STATUS_STYLES = {
   listening: { classes: "bg-green-50 text-green-700", label: "Listening" },
+  stopped: { classes: "bg-red-50 text-red-700", label: "Stopped" },
   pending: { classes: "bg-amber-50 text-amber-700", label: "Starts on save" },
   paused: { classes: "bg-gray-100 text-gray-500", label: "Paused" },
 } as const;
@@ -425,6 +447,8 @@ function ListenerCard(props: {
   configKey: string | null;
   inboundAddress: string | null;
   status: keyof typeof STATUS_STYLES;
+  /** Why the platform stopped it, for a stopped listener. */
+  stoppedBecause?: { reason: string; held: number } | null;
   /** Open the activity reading filtered to this lane — server-derived
    *  listeners only; pending/paused ones have no history yet. */
   onOpenActivity?: () => void;
@@ -432,6 +456,7 @@ function ListenerCard(props: {
     label: string;
     icon: typeof Pause;
     disabled: boolean;
+    testId?: string;
     onClick: () => void;
   };
 }) {
@@ -473,6 +498,18 @@ function ListenerCard(props: {
         </span>
       </div>
 
+      {props.stoppedBecause && (
+        <div className="mt-3 rounded-lg bg-red-50/60 px-3 py-2" data-testid="listener-stopped-reason">
+          <p className="break-words text-[12px] leading-relaxed text-red-800">
+            {props.stoppedBecause.reason}
+          </p>
+          <p className="mt-1 text-[11.5px] leading-relaxed text-red-700/80">
+            {props.stoppedBecause.held === 0
+              ? "Nothing has arrived since it stopped."
+              : `${props.stoppedBecause.held} ${props.stoppedBecause.held === 1 ? "arrival" : "arrivals"} held since it stopped; they don't run on a resume (replay one from its activity).`}
+          </p>
+        </div>
+      )}
       {(props.configKey !== null || props.inboundAddress !== null) && (
         <dl className="mt-3 space-y-1.5">
           {props.configKey !== null && (
@@ -508,7 +545,7 @@ function ListenerCard(props: {
           disabled={props.action.disabled}
           onClick={props.action.onClick}
           className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-[12px] font-medium text-gray-600 hover:border-gray-300 hover:text-gray-900 disabled:opacity-50"
-          data-testid={`listener-${props.action.label.toLowerCase()}`}
+          data-testid={props.action.testId ?? `listener-${props.action.label.toLowerCase()}`}
         >
           <ActionIcon size={12} />
           {props.action.label}

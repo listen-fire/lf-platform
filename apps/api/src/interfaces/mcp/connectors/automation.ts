@@ -611,6 +611,17 @@ function automationConnectorOptions(): McpRouterOptions {
         title: 'Replay a delivery through a listener',
         endpoint: { method: 'POST', path: '/v1/automation/automations/replay-delivery' },
       },
+      resumeListen: {
+        description:
+          'Resume a listener that was paused because its runs kept setting each other off (a loop of writes and arrivals) or because it ran too often: listAutomations and getAutomation show such a listener with `paused` — `reason` says why, `held` how many arrivals it held. From now on it runs what arrives; what it held does not run (replayDelivery puts one through again). Confirm with the user first, and check the loop is broken: a loop that still stands pauses it again. Returns { resumed, held }.',
+        annotations: { destructiveHint: true },
+        inputSchema: {
+          listen: z.string().describe("The listener's triggerId (from listAutomations or getAutomation)."),
+          team: z.string().optional().describe('Team id (see instructions); omit to search across your teams.'),
+        },
+        title: 'Resume a paused listener',
+        endpoint: { method: 'POST', path: '/v1/automation/automations/resume-listen' },
+      },
     },
   };
 }

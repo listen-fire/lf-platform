@@ -103,6 +103,7 @@ import {
 import { abortRun, resumeRun } from '../../../services/interaction/operator';
 import { movementEventsImpl } from '../../../services/inbound/arrival_ledger';
 import { replayThroughListen } from '../../../services/inbound/listen_replay';
+import { resumeListen } from '../../../services/inbound/listen_pause';
 import { RunBusy } from '../../../services/movement_engine/run_lease';
 import { MovementEngineError } from 'movement-engine/public/errors';
 import { UserService } from '../../../services/user';
@@ -1582,6 +1583,24 @@ const replayDeliveryHandler: RequestHandler = jsonHandler(replayDeliverySchema, 
   return outcome.outcome === 'refused' ? { error: outcome.reason } : outcome;
 });
 
+// A listen the loop breaker or the loop guard paused runs nothing until a
+// person resumes it (ruling 2). listAutomations and getAutomation show it on
+// the listener (`paused`); this resumes it, by the listener's trigger id.
+const resumeListenSchema = z.object({ listen: z.string(), team: z.string().optional() });
+
+const resumeListenHandler: RequestHandler = jsonHandler(resumeListenSchema, 'body', async (input) => {
+  const teams = input.team !== undefined ? [await resolveToolTeam(input.team)] : await teamSetForReads();
+  for (const team of teams) {
+    const resumed = await resumeListen({
+      teamId: teamIdSchema.parse(team),
+      triggerId: input.listen as TriggerId,
+      resumedBy: actingUserId() ?? 'an API key',
+    });
+    if (resumed !== null) return resumed;
+  }
+  return { error: `listen ${input.listen} not found` };
+});
+
 // ---------------------------------------------------------------------------
 // Mount + register
 // ---------------------------------------------------------------------------
@@ -1637,6 +1656,7 @@ function mountAutomationToolRoutes(router: ReturnType<typeof Router>): void {
   router.post('/automations/resume-run', resumeRunHandler);
   router.get('/automations/:idOrName/arrivals', listArrivalsHandler);
   router.post('/automations/replay-delivery', replayDeliveryHandler);
+  router.post('/automations/resume-listen', resumeListenHandler);
 }
 
 /** Knowledge connector routes: KG read + validated edits, ontology, recipes, teams. */
@@ -1750,6 +1770,7 @@ function registerAutomationToolRoutes(): void {
   reg('POST', '/automations/resume-run', 'Resume a run that paused because it reached its cost limit (checkRun shows it as status "parked" with `paused` set). Every part of the run that stopped carries on from where it stopped, and its usage resets, so the limit applies afresh. Body: { runId, team? }. Also the top-level "resumeRun" tool.', { inputSchema: resumeRunSchema, latency: 'fast' });
   reg('GET', '/automations/:idOrName/arrivals', 'List what reached an automation\'s listens, newest first: each run an arrival started and each arrival a listen could not judge (status `not_judged`, with the reason and its attempt). Each names its `listen` and `deliveryId`, which replayDelivery takes. Query: ?team=. Also the top-level "listArrivals" tool.', { readOnly: true, latency: 'fast' });
   reg('POST', '/automations/replay-delivery', 'Put one kept delivery through one listen again: the way out of an arrival the listen could not judge once the system it needed answers again. Only the arrivals that delivery brought are judged, by that listen alone. A listen that ran the arrival before runs nothing unless `force` is true. Body: { listen, deliveryId, force?, team? }. Returns { outcome, runIds, attempt, stillUndecided, lines }; the runs are queued, so poll checkRun. Also the top-level "replayDelivery" tool.', { inputSchema: replayDeliverySchema, latency: 'fast' });
+  reg('POST', '/automations/resume-listen', 'Resume a listener the loop breaker or the loop guard paused: listAutomations and getAutomation show such a listener with `paused` ({ reason, held }). It runs what arrives from now on; the arrivals it held do not run (replayDelivery puts one through again). Body: { listen, team? } (`listen`: the listener\'s triggerId). Returns { resumed, held }. Also the top-level "resumeListen" tool.', { inputSchema: resumeListenSchema, latency: 'fast' });
   reg('POST', '/automations/cancel-run', 'Stop a run by id — one that\'s executing or one that\'s paused waiting on something. Everything the run already did stays done; it just won\'t do anything more. An executing run stops at its next safe point (usually within seconds). Body: { runId, team? }. Also the top-level "cancelRun" tool.', { inputSchema: cancelRunSchema, latency: 'fast' });
 }
 

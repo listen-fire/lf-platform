@@ -1200,6 +1200,18 @@ export interface MovementListenerInfo {
     /** Derived from the movement text on every save; not settable — see
      *  triggers/run_mode.ts. */
     runMode: TriggerRunMode;
+    /** Why it runs nothing until a person resumes it (the loop breaker or the
+     *  loop guard paused it); null while it runs. */
+    paused: ListenPause | null;
+}
+/** Why a listen runs nothing until a person resumes it. */
+interface ListenPause {
+    /** Said by whichever paused it (the loop breaker's `LISTEN_LOOP` line, or
+     *  the loop guard's reason). */
+    reason: string;
+    /** The arrivals it held while paused (the loop breaker counts them; the
+     *  loop guard keeps their runs, failed, instead). */
+    held: number;
 }
 export interface MovementListItem {
     id: string;

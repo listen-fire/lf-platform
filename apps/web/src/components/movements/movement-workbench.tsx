@@ -615,6 +615,14 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
       }
     },
   });
+  // A listener the platform stopped (the loop breaker or the loop guard)
+  // resumes without touching the script; the page reloads its listeners.
+  const resumeStopped = trpc.views.triggers.resumeGuardPaused.useMutation({
+    onSuccess: () => {
+      void utils.views.movement.get.invalidate({ id: props.movementId });
+    },
+  });
+
   const remove = trpc.views.movement.delete.useMutation({
     onSuccess: () => {
       void utils.views.movement.list.invalidate();
@@ -1040,12 +1048,14 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
     const loaded = props.initialListeners ?? [];
     if (!result?.ok) return loaded;
     // A save's provisioned listeners are the fresher truth, but they don't
-    // carry the trigger's lane name — take that from what the page loaded,
-    // matched by trigger id (a listener that survives a save keeps its id).
-    const laneById = new Map(loaded.map((l) => [l.triggerId, l.name]));
+    // carry the trigger's lane name or whether it is stopped — take those from
+    // what the page loaded, matched by trigger id (a listener that survives a
+    // save keeps its id).
+    const loadedById = new Map(loaded.map((l) => [l.triggerId, l]));
     return result.listeners.map((l) => ({
       ...l,
-      name: laneById.get(l.triggerId) ?? null,
+      name: loadedById.get(l.triggerId)?.name ?? null,
+      paused: loadedById.get(l.triggerId)?.paused ?? null,
     }));
   }, [result, props.initialListeners]);
 
@@ -1671,6 +1681,8 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
             onPause={pauseListener}
             onResume={resumeListener}
             onAddListener={addListener}
+            onResumeStopped={(triggerId) => resumeStopped.mutate({ triggerId })}
+            resuming={resumeStopped.isLoading}
             onOpenActivity={openActivityForLane}
           />
 

@@ -31,12 +31,10 @@ import type {
   AdapterResolution,
 } from 'movement-engine/public/host';
 import type { TeamId } from '../../generated/kysely/core/Team';
-import type { TriggerId } from '../../generated/kysely/automations/Trigger';
 
 import { getAutomationsQb } from '../../lib/kysely';
-import { logger } from 'movement-engine/public/log';
-import { recordWrite, setPaused, states, writeDepth } from '../lf_store/listens';
-import { savedListenOf, type SavedListen } from './listen_door';
+import { recordWrite, writeDepth } from '../lf_store/listens';
+import type { SavedListen } from './listen_door';
 
 // ── Settings ────────────────────────────────────────────────────────────────
 
@@ -249,23 +247,4 @@ export function ledgeredAdapters(adapters: HostAdapters, run: { teamId: TeamId; 
       return answer;
     },
   };
-}
-
-// ── Resuming a paused listen ────────────────────────────────────────────────
-
-/** Resume the listen the trigger row is, when the loop breaker paused it: its
- *  pause and its count of held arrivals cleared (the held arrivals do not
- *  run; a replay puts one through again). `held`: how many it held. */
-export async function resumeLoopPaused(input: { teamId: TeamId; triggerId: TriggerId; resumedBy: string }): Promise<{ resumed: boolean; held: number }> {
-  const listen = await savedListenOf(input.triggerId);
-  if (listen === null || listen.teamId !== input.teamId) return { resumed: false, held: 0 };
-  const scope = { tenant: input.teamId };
-  const state = (await states(scope, { pipelines: [listen.pipeline] }))[listen.pipeline];
-  if (state === undefined || state.paused === null) return { resumed: false, held: 0 };
-  await setPaused(scope, { pipeline: listen.pipeline, paused: null });
-  logger.info(`[LoopBreaker] ${listen.file}:${listen.plan.movement} resumed (it held ${state.held} arrivals)`, {
-    triggerId: input.triggerId,
-    resumedBy: input.resumedBy,
-  });
-  return { resumed: true, held: state.held };
 }

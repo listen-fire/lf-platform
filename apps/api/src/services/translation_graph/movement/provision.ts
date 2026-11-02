@@ -116,6 +116,7 @@ import {
 import { checkInstalled, routeOf } from './language_route';
 import { plannedListensOfSource } from './listen_plans';
 import { listenConfigSchema, type ListenConfig } from '../../inbound/listen_door';
+import { listenPauses, type ListenPause } from '../../inbound/listen_pause';
 
 /** Resource-change hint for a movement save/delete — fired from the
  *  shared service so UI and agent callers both propagate. The actor isn't
@@ -1166,9 +1167,12 @@ export interface MovementListenerInfo {
   /** Derived from the movement text on every save; not settable — see
    *  triggers/run_mode.ts. */
   runMode: TriggerRunMode;
+  /** Why it runs nothing until a person resumes it (the loop breaker or the
+   *  loop guard paused it); null while it runs. */
+  paused: ListenPause | null;
 }
 
-function toListenerInfo(row: DerivedTriggerRow): MovementListenerInfo {
+function toListenerInfo(row: DerivedTriggerRow, pauses: ReadonlyMap<string, ListenPause>): MovementListenerInfo {
   const configKey = surfaceConfigKeyOf(row.config);
   // The fired movement is authoritative — an aliased listener's `name` is just
   // the alias (no `movement/<file>/<movement>` convention to parse), so deriving
@@ -1187,6 +1191,7 @@ function toListenerInfo(row: DerivedTriggerRow): MovementListenerInfo {
       row.firedMovementName ??
       (nameParts.length >= 3 ? nameParts[nameParts.length - 1] : null),
     runMode: row.runMode,
+    paused: pauses.get(row.id) ?? null,
   };
 }
 
@@ -1240,8 +1245,12 @@ function isRunnable(row: MovementRow): boolean {
 export async function listMovements(teamId: string): Promise<MovementListItem[]> {
   const rows = await listMovementRows(teamId);
   const listenersByMovement = await listDerivedTriggerRowsForMovements(rows.map((r) => r.id));
+  const pauses = await listenPauses({
+    teamId: teamId as TeamId,
+    triggerIds: [...listenersByMovement.values()].flat().map((l) => l.id),
+  });
   return rows.map((row) => {
-    const listeners = (listenersByMovement.get(row.id) ?? []).map(toListenerInfo);
+    const listeners = (listenersByMovement.get(row.id) ?? []).map((l) => toListenerInfo(l, pauses));
     return {
       id: row.id,
       name: row.name,
@@ -1283,7 +1292,9 @@ export async function getMovement(input: {
 }): Promise<MovementDetail | null> {
   const row = await getMovementRow(input);
   if (!row) return null;
-  const listeners = (await listDerivedTriggerRows(row.id)).map(toListenerInfo);
+  const derived = await listDerivedTriggerRows(row.id);
+  const pauses = await listenPauses({ teamId: input.teamId as TeamId, triggerIds: derived.map((l) => l.id) });
+  const listeners = derived.map((l) => toListenerInfo(l, pauses));
   return {
     ...row,
     // Only what still stands between it and the current version.

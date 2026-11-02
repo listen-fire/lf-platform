@@ -58,6 +58,8 @@ const PANEL_PROPS: ListenersPanelProps = {
   onPause: () => {},
   onResume: () => {},
   onAddListener: () => {},
+  onResumeStopped: () => {},
+  resuming: false,
   onOpenActivity: () => {},
 };
 

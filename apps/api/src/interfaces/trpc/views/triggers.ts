@@ -29,7 +29,7 @@ import type { MovementId } from '../../../generated/kysely/automations/Movement'
 import { currentContext } from '../../../services/context';
 import { replayThroughListen, type ReplayOutcome } from '../../../services/inbound/listen_replay';
 import { showDeliveryRequest, type ShownRequest } from '../../../services/inbound/show_request';
-import { resumeLoopPaused } from '../../../services/inbound/loop_breaker';
+import { resumeListen } from '../../../services/inbound/listen_pause';
 import { mq } from '../../../lib/message_queue';
 import { trpc } from '../trpc';
 import { getAutomationsQb, getKnowledgeQb } from '../../../lib/kysely';
@@ -62,7 +62,6 @@ import {
   runMovementAsync,
   type MovementRunAsyncResult,
 } from '../../../services/translation_graph/movement/run_now';
-import { clearGuardPaused } from '../../../services/loop_guard';
 import ExternalServiceType from '../../../generated/kysely/automations/ExternalServiceType';
 import { reportedFailureReason } from '../../../services/translation_graph/runs/trigger_run';
 import { UserService } from '../../../services/user';
@@ -746,22 +745,13 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
       .input(z.object({ triggerId: z.string().min(1) }))
       .mutation(async ({ input }): Promise<{ resumed: boolean }> => {
         const ctx = currentContext();
-        const teamId = ctx.user.teamId as TeamId;
-        // Team-scope the lookup before touching guard state.
-        const owned = await getAutomationsQb(['trigger'])
-          .selectFrom('trigger')
-          .where('id', '=', input.triggerId as TriggerId)
-          .where('team_id', '=', teamId)
-          .select('id')
-          .executeTakeFirst();
-        if (!owned) throw new Error(`Automation ${input.triggerId} not found`);
-        const guard = await clearGuardPaused({
-          triggerId: input.triggerId,
-          teamId: teamId as unknown as string,
+        const resumed = await resumeListen({
+          teamId: ctx.user.teamId as TeamId,
+          triggerId: input.triggerId as TriggerId,
           resumedBy: ctx.user.id,
         });
-        const loop = await resumeLoopPaused({ teamId, triggerId: input.triggerId as TriggerId, resumedBy: ctx.user.id });
-        return { resumed: guard.resumed || loop.resumed };
+        if (resumed === null) throw new Error(`Automation ${input.triggerId} not found`);
+        return { resumed: resumed.resumed };
       }),
 
     /**
