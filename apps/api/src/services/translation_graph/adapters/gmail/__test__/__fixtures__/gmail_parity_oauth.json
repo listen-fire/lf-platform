@@ -228,7 +228,23 @@
             },
             "changedIn": {
               "release": "0.13.0",
-              "note": "it holds label names (`Deals`) where it held label ids (`Label_12`); Gmail’s own labels (`INBOX`, `UNREAD`) are spelled as before"
+              "note": "it holds label names (`Deals`) where it held label ids (`Label_12`); Gmail’s own labels (`INBOX`, `UNREAD`) are spelled as before",
+              "unchangedValues": [
+                "INBOX",
+                "UNREAD",
+                "STARRED",
+                "IMPORTANT",
+                "SENT",
+                "DRAFT",
+                "SPAM",
+                "TRASH",
+                "CHAT",
+                "CATEGORY_PERSONAL",
+                "CATEGORY_SOCIAL",
+                "CATEGORY_PROMOTIONS",
+                "CATEGORY_UPDATES",
+                "CATEGORY_FORUMS"
+              ]
             }
           },
           {
@@ -499,7 +515,23 @@
             },
             "changedIn": {
               "release": "0.13.0",
-              "note": "it holds label names (`Deals`) where it held label ids (`Label_12`); Gmail’s own labels (`INBOX`, `UNREAD`) are spelled as before"
+              "note": "it holds label names (`Deals`) where it held label ids (`Label_12`); Gmail’s own labels (`INBOX`, `UNREAD`) are spelled as before",
+              "unchangedValues": [
+                "INBOX",
+                "UNREAD",
+                "STARRED",
+                "IMPORTANT",
+                "SENT",
+                "DRAFT",
+                "SPAM",
+                "TRASH",
+                "CHAT",
+                "CATEGORY_PERSONAL",
+                "CATEGORY_SOCIAL",
+                "CATEGORY_PROMOTIONS",
+                "CATEGORY_UPDATES",
+                "CATEGORY_FORUMS"
+              ]
             }
           },
           {
@@ -817,7 +849,23 @@
                 },
                 "changedIn": {
                   "release": "0.13.0",
-                  "note": "it holds label names (`Deals`) where it held label ids (`Label_12`); Gmail’s own labels (`INBOX`, `UNREAD`) are spelled as before"
+                  "note": "it holds label names (`Deals`) where it held label ids (`Label_12`); Gmail’s own labels (`INBOX`, `UNREAD`) are spelled as before",
+                  "unchangedValues": [
+                    "INBOX",
+                    "UNREAD",
+                    "STARRED",
+                    "IMPORTANT",
+                    "SENT",
+                    "DRAFT",
+                    "SPAM",
+                    "TRASH",
+                    "CHAT",
+                    "CATEGORY_PERSONAL",
+                    "CATEGORY_SOCIAL",
+                    "CATEGORY_PROMOTIONS",
+                    "CATEGORY_UPDATES",
+                    "CATEGORY_FORUMS"
+                  ]
                 }
               },
               {
@@ -1140,7 +1188,23 @@
                 },
                 "changedIn": {
                   "release": "0.13.0",
-                  "note": "it holds label names (`Deals`) where it held label ids (`Label_12`); Gmail’s own labels (`INBOX`, `UNREAD`) are spelled as before"
+                  "note": "it holds label names (`Deals`) where it held label ids (`Label_12`); Gmail’s own labels (`INBOX`, `UNREAD`) are spelled as before",
+                  "unchangedValues": [
+                    "INBOX",
+                    "UNREAD",
+                    "STARRED",
+                    "IMPORTANT",
+                    "SENT",
+                    "DRAFT",
+                    "SPAM",
+                    "TRASH",
+                    "CHAT",
+                    "CATEGORY_PERSONAL",
+                    "CATEGORY_SOCIAL",
+                    "CATEGORY_PROMOTIONS",
+                    "CATEGORY_UPDATES",
+                    "CATEGORY_FORUMS"
+                  ]
                 }
               },
               {
@@ -1958,7 +2022,23 @@
               },
               "changedIn": {
                 "release": "0.13.0",
-                "note": "it holds label names (`Deals`) where it held label ids (`Label_12`); Gmail’s own labels (`INBOX`, `UNREAD`) are spelled as before"
+                "note": "it holds label names (`Deals`) where it held label ids (`Label_12`); Gmail’s own labels (`INBOX`, `UNREAD`) are spelled as before",
+                "unchangedValues": [
+                  "INBOX",
+                  "UNREAD",
+                  "STARRED",
+                  "IMPORTANT",
+                  "SENT",
+                  "DRAFT",
+                  "SPAM",
+                  "TRASH",
+                  "CHAT",
+                  "CATEGORY_PERSONAL",
+                  "CATEGORY_SOCIAL",
+                  "CATEGORY_PROMOTIONS",
+                  "CATEGORY_UPDATES",
+                  "CATEGORY_FORUMS"
+                ]
               }
             },
             {
@@ -2249,7 +2329,23 @@
                 },
                 "changedIn": {
                   "release": "0.13.0",
-                  "note": "it holds label names (`Deals`) where it held label ids (`Label_12`); Gmail’s own labels (`INBOX`, `UNREAD`) are spelled as before"
+                  "note": "it holds label names (`Deals`) where it held label ids (`Label_12`); Gmail’s own labels (`INBOX`, `UNREAD`) are spelled as before",
+                  "unchangedValues": [
+                    "INBOX",
+                    "UNREAD",
+                    "STARRED",
+                    "IMPORTANT",
+                    "SENT",
+                    "DRAFT",
+                    "SPAM",
+                    "TRASH",
+                    "CHAT",
+                    "CATEGORY_PERSONAL",
+                    "CATEGORY_SOCIAL",
+                    "CATEGORY_PROMOTIONS",
+                    "CATEGORY_UPDATES",
+                    "CATEGORY_FORUMS"
+                  ]
                 }
               },
               {
