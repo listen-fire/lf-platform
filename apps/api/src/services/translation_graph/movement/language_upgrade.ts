@@ -28,11 +28,14 @@
 // 2026-10-16): it judges the text as written.
 //
 // Only the explicit upgrade REWRITES the text, by the fixes the checker offers
-// under the current version (movement-lang checker/upgrade.ts — the loop
-// `listen-fire upgrade` runs too): the fixes marked safe (they provably keep the
-// meaning), and every fix when asked. What is judged is the rewritten text,
-// and when the pin moves, the rewritten text is saved with it, in one save
-// under the new pin. A movement that is not clean after the rewrite keeps its
+// under the current version (legacy-lang checker/upgrade.ts — the loop
+// `listen-fire upgrade` runs too), from a legacy id and from a release pin of
+// an older line alike: the fixes marked safe (they provably keep the meaning),
+// and every fix when asked. What is judged is the rewritten text, and when the
+// pin moves, the rewritten text is saved with it, in one save under the new
+// pin. An error holds the pin, and so does a meaning-changed diagnostic whose
+// rewrite was not applied (it is not proved to keep the meaning); one with
+// nothing to rewrite is listed and acknowledged. A movement held keeps its
 // text and its pin; what is left is reported against the rewritten text
 // (`upgradedSource`), each with its source line.
 //
@@ -99,12 +102,15 @@ export function blockingDiagnostics(diagnostics: AuthoringDiagnostic[]): Authori
   return diagnostics.filter((d) => d.severity === 'error' || d.upgrade === true);
 }
 
-/** What `upgradeMovement` refuses outright. A move-up warning is not here: the
- *  deploy check reports it as standing in the way, but it fires on every use of a construct whose meaning changed
- *  whether or not the author edits, so the explicit upgrade lets the author
- *  acknowledge it, or the pin could never move. */
-function hardErrors(diagnostics: AuthoringDiagnostic[]): AuthoringDiagnostic[] {
-  return diagnostics.filter((d) => d.severity === 'error');
+/** What `upgradeMovement` refuses outright: an error, and a move-up
+ *  diagnostic whose rewrite was left unapplied (not proved to keep the
+ *  meaning; `applyAllFixes` takes it), as `listen-fire upgrade` holds the pin.
+ *  A move-up warning with nothing to rewrite is not here: it fires on every use
+ *  of a construct whose meaning changed whether or not the author edits, so
+ *  the explicit upgrade lets the author acknowledge it, or the pin could never
+ *  move. */
+function holdsThePin(diagnostics: AuthoringDiagnostic[]): AuthoringDiagnostic[] {
+  return diagnostics.filter((d) => d.severity === 'error' || (d.upgrade === true && d.fix !== undefined));
 }
 
 /** The warnings under the newer version that do NOT block the move — shown
@@ -780,9 +786,9 @@ export type UpgradeMovementResult =
  * acknowledged it — so the first call shows the diagnostics, and a second,
  * acknowledged one acts.
  *
- * A pin the installed language reads is already current. A legacy id has its
- * old spellings rewritten (`rewriteForUpgrade`). A release pin of an older
- * line is validated as written, as a move up from its pin. A newer release's
+ * A pin the installed language reads is already current. A legacy id, or a
+ * release pin of an older line, has its old spellings rewritten
+ * (`rewriteForUpgrade`), checked as a move up from its pin. A newer release's
  * pin has nothing to move to: blocked, with the rule's text.
  */
 export async function upgradeMovement(input: {
@@ -818,14 +824,12 @@ export async function upgradeMovement(input: {
     };
   }
 
-  const rewrite: UpgradeRewrite = isLegacyLanguageVersion(pin)
-    ? await rewriteForUpgrade({ movement, to, validate, all: input.applyAllFixes === true })
-    : { source: movement.source, changed: false, validation: await validate(validationUnder(movement, to)) };
+  const rewrite = await rewriteForUpgrade({ movement, to, validate, all: input.applyAllFixes === true });
   const { validation } = rewrite;
   const diagnostics = blockingDiagnostics(validation.diagnostics);
   const shown = { ...base, ...(rewrite.changed ? { upgradedSource: rewrite.source } : {}) };
   await recordUpgradeCheck({ id: movement.id, diagnostics, checkedAgainst: to });
-  if (hardErrors(diagnostics).length > 0) return { status: 'blocked', ...shown, diagnostics };
+  if (holdsThePin(diagnostics).length > 0) return { status: 'blocked', ...shown, diagnostics };
   if (validation.gaps.length > 0) return { status: 'unverified', ...shown, diagnostics };
   if (!input.acknowledge) return { status: 'needs_acknowledgement', ...shown, diagnostics };
 

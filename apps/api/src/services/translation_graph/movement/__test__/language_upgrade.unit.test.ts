@@ -332,9 +332,9 @@ describe('a pin by the compatibility rule', () => {
     const store = fakeStore({
       movements: [
         movement({ id: 'legacy', languageVersion: '4' }),
-        movement({ id: 'same-line', languageVersion: '0.12.0' }),
-        movement({ id: 'older-line', languageVersion: '0.11.0' }),
-        movement({ id: 'newer', languageVersion: '0.13.0' }),
+        movement({ id: 'same-line', languageVersion: '0.13.0' }),
+        movement({ id: 'older-line', languageVersion: '0.12.0' }),
+        movement({ id: 'newer', languageVersion: '0.14.0' }),
       ],
       verdicts: {},
     });
@@ -353,8 +353,8 @@ describe('a pin by the compatibility rule', () => {
     // A pin the installed language does not read is never validated.
     expect(store.validations.map((v) => v.movement.id)).toEqual(['legacy', 'legacy', 'same-line']);
     expect(store.events.filter((e) => e.kind === VALIDATION_ISSUE.typeId).map((e) => e.version)).toEqual([
-      '0.11.0',
-      '0.13.0',
+      '0.12.0',
+      '0.14.0',
     ]);
   });
 
@@ -399,8 +399,8 @@ describe('an explicit upgrade by the compatibility rule', () => {
     expect(advanced).toEqual([CUR]);
   });
 
-  it('from an older line: validated as written under the installed language, as a move from its pin, and moved there', async () => {
-    jest.mocked(getMovementRow).mockResolvedValueOnce(movement({ id: 'older', languageVersion: '0.11.0' }));
+  it('from an older line: validated under the installed language as a move from its pin, and moved there', async () => {
+    jest.mocked(getMovementRow).mockResolvedValueOnce(movement({ id: 'older', languageVersion: '0.12.0' }));
     jest.mocked(assessMovementValidity).mockReturnValueOnce({ status: 'valid', reason: null } as never);
     const { validations, validate } = recorded();
     const advanced: Array<{ to: LanguageVersion; source?: string }> = [];
@@ -416,13 +416,13 @@ describe('an explicit upgrade by the compatibility rule', () => {
       },
     });
 
-    expect(result).toEqual(expect.objectContaining({ status: 'upgraded', from: { version: '0.11.0', name: '0.11.0' } }));
-    expect(validations.map((v) => [v.languageVersion, v.upgradingFrom, v.source])).toEqual([[CUR, '0.11.0', undefined]]);
+    expect(result).toEqual(expect.objectContaining({ status: 'upgraded', from: { version: '0.12.0', name: '0.12.0' } }));
+    expect(validations.map((v) => [v.languageVersion, v.upgradingFrom, v.source])).toEqual([[CUR, '0.12.0', undefined]]);
     expect(advanced).toEqual([{ to: CUR }]);
   });
 
   it('a pin on the installed line is already current', async () => {
-    jest.mocked(getMovementRow).mockResolvedValueOnce(movement({ id: 'now', languageVersion: '0.12.0' }));
+    jest.mocked(getMovementRow).mockResolvedValueOnce(movement({ id: 'now', languageVersion: '0.13.0' }));
     const { validations, validate } = recorded();
     const result = await upgradeMovement({ teamId: 'team-1', id: 'now', acknowledge: true, validate });
     expect(result.status).toBe('already_current');
@@ -430,7 +430,7 @@ describe('an explicit upgrade by the compatibility rule', () => {
   });
 
   it('a newer release has nothing to move to: blocked with the rule\'s text', async () => {
-    jest.mocked(getMovementRow).mockResolvedValueOnce(movement({ id: 'newer', languageVersion: '0.13.0' }));
+    jest.mocked(getMovementRow).mockResolvedValueOnce(movement({ id: 'newer', languageVersion: '0.14.0' }));
     const { validations, validate } = recorded();
     const result = await upgradeMovement({ teamId: 'team-1', id: 'newer', acknowledge: true, validate });
     expect(result).toEqual(
@@ -729,12 +729,19 @@ describe('the deploy check over the real authoring core', () => {
     adapters: {
       email: {
         constructionArgs: [{ name: 'credentials', kind: 'position', required: false }],
-        triggerConfig: ['key'],
         schema: {
           positions: { message: { properties: { Subject: 'text' }, edges: {} } },
-          collections: {},
+          collections: { message: { target: 'message', readable: false, listenable: true } },
           writableRoots: {},
-          eventPosition: 'message',
+        },
+      },
+      manual: {
+        constructionArgs: [],
+        canFire: true,
+        schema: {
+          positions: { Invocation: { properties: { Text: 'text' }, edges: {} } },
+          collections: { Invocations: { target: 'Invocation', readable: false, listenable: true } },
+          writableRoots: {},
         },
       },
     },
@@ -751,7 +758,7 @@ describe('the deploy check over the real authoring core', () => {
     gaps: [],
   });
 
-  it('a legacy id is warned, a bare manual listen on the installed language is current, a newer line is refused', async () => {
+  it('a legacy id is warned, a manual listen on the installed language is current, a newer line is refused', async () => {
     const store = fakeStore({
       movements: [
         movement({
@@ -762,9 +769,9 @@ describe('the deploy check over the real authoring core', () => {
         movement({
           id: 'manual',
           languageVersion: CUR,
-          source: 'function echo(run: <manual-[:Invocation]->>) {\n  return 1\n}\nlisten to manual fire echo\n',
+          source: 'function echo(run: <manual-[:Invocations]->>) {\n  return 1\n}\nlisten to manual-[:Invocations]-> fire echo\n',
         }),
-        movement({ id: 'newer', languageVersion: '0.13.0', source: 'listen to manual fire echo\n' }),
+        movement({ id: 'newer', languageVersion: '0.14.0', source: 'listen to manual-[:Invocations]-> fire echo\n' }),
       ],
       verdicts: {},
     });
@@ -778,6 +785,123 @@ describe('the deploy check over the real authoring core', () => {
       ['manual', 'current'],
       ['newer', 'refused'],
     ]);
+  });
+});
+
+describe('an upgrade from an older release line, over the installed checker', () => {
+  // `listen-fire upgrade`'s loop: the text is checked under the installed
+  // language as a move up from its 0.12 pin, each safe fix is applied, the
+  // rest are listed, and every fix is applied when asked. The settings listen
+  // becomes a traversal by the module's own `listenSettingsBecome`; the
+  // retired `await first(x)` becomes `await x`.
+  const snapshot = mockCatalogSnapshot({
+    adapters: {
+      gh: {
+        constructionArgs: [],
+        canFire: true,
+        listenSettingsBecome: {
+          path: ['Notifications'],
+          aliases: ['n'],
+          paramFrom: 'Notification',
+          keys: { events: { hop: 0, field: 'Reason', op: 'in' } },
+        },
+        schema: {
+          positions: { Notification: { properties: { Reason: 'text' }, edges: {} } },
+          collections: {
+            Notifications: { target: 'Notification', listenable: true, identity: 'Id', delivery: 'polled', pollEverySeconds: 60 },
+          },
+          writableRoots: {},
+        },
+      },
+      mail: {
+        constructionArgs: [],
+        schema: {
+          positions: {
+            Message: {
+              properties: { To: 'text', From: 'text', Sent: 'text' },
+              edges: { Replies: { target: 'Message', listenable: true, sequenced: 'chronological', identity: 'Sent' } },
+            },
+          },
+          collections: { Messages: { target: 'Message' } },
+          writableRoots: { Message: { fields: { To: 'text' }, resultShape: { externalId: 'text' } } },
+        },
+      },
+    },
+  });
+  const catalog = fromCatalogSnapshot(snapshot);
+  const { diagnoseMovementSource } = jest.requireActual<typeof import('../authoring')>('../authoring');
+  const realValidate: ValidateUnder = async ({ movement: m, languageVersion, upgradingFrom, source }) => ({
+    diagnostics: diagnoseMovementSource(source ?? m.source, {
+      catalog,
+      snapshot,
+      languageVersion,
+      ...(upgradingFrom !== undefined ? { upgradingFrom } : {}),
+    }).diagnostics,
+    gaps: [],
+  });
+  const advanceSpy = () => {
+    const advanced: Array<{ to: LanguageVersion; source?: string }> = [];
+    const advance = async ({ to, source }: { to: LanguageVersion; source?: string }) => {
+      advanced.push({ to, ...(source !== undefined ? { source } : {}) });
+      return { ok: true as const };
+    };
+    return { advanced, advance };
+  };
+
+  const PINNED_0_12 = [
+    'import { gh as gh_module, mail as mail_module } from adapters',
+    'gh = connect gh_module',
+    'mail = connect mail_module',
+    'function triage(n: <gh-[:Notification]->>) {',
+    '  m = write mail-[:Messages]-> { To: n.Reason }',
+    '  r = await first(m-[:Replies]->)',
+    '}',
+    '',
+    'listen to gh { events: ["mention", "assign"] } fire triage',
+    '',
+  ].join('\n');
+  const UPGRADED = PINNED_0_12.replace('<gh-[:Notification]->>', '<gh-[:Notifications]->>')
+    .replace('await first(m-[:Replies]->)', 'await m-[:Replies]->')
+    .replace('listen to gh { events: ["mention", "assign"] } fire triage', 'listen to gh-[n:Notifications WHERE n.Reason IN ["mention", "assign"]]-> fire triage');
+
+  it('applies the safe rewrites, lists the note with nothing to rewrite, and moves the pin once acknowledged', async () => {
+    jest.mocked(getMovementRow).mockResolvedValue(movement({ id: 'triage', languageVersion: '0.12.13', source: PINNED_0_12 }));
+    jest.mocked(assessMovementValidity).mockReturnValue({ status: 'valid', reason: null } as never);
+    const { advanced, advance } = advanceSpy();
+
+    const shown = await upgradeMovement({ teamId: 'team-1', id: 'triage', acknowledge: false, validate: realValidate, advance });
+    expect(shown.status).toBe('needs_acknowledgement');
+    if (shown.status === 'not_found') throw new Error('unreachable');
+    expect(shown.upgradedSource).toBe(UPGRADED);
+    // A wait no `sleep` races may never resolve: said, nothing to rewrite, not holding the pin.
+    expect(shown.diagnostics.map((d) => [d.code, d.upgrade, d.fix])).toEqual([['MOV_AWAIT_MAY_HANG', true, undefined]]);
+    expect(advanced).toEqual([]);
+
+    const moved = await upgradeMovement({ teamId: 'team-1', id: 'triage', acknowledge: true, validate: realValidate, advance });
+    expect(moved.status).toBe('upgraded');
+    expect(advanced).toEqual([{ to: CUR, source: UPGRADED }]);
+  });
+
+  it('holds the pin on a rewrite not proved to keep the meaning, and applies it when every fix is asked for', async () => {
+    const changesMeaning = PINNED_0_12.replace('["mention", "assign"] }', '["mention", "assign"], suppress_self: true }');
+    jest.mocked(getMovementRow).mockResolvedValue(movement({ id: 'triage', languageVersion: '0.12.13', source: changesMeaning }));
+    jest.mocked(assessMovementValidity).mockReturnValue({ status: 'valid', reason: null } as never);
+    const { advanced, advance } = advanceSpy();
+
+    const held = await upgradeMovement({ teamId: 'team-1', id: 'triage', acknowledge: true, validate: realValidate, advance });
+    expect(held.status).toBe('blocked');
+    if (held.status === 'not_found') throw new Error('unreachable');
+    const retired = held.diagnostics.filter((d) => d.code === 'MOV_LISTEN_SETTINGS_RETIRED');
+    expect(retired).toHaveLength(1);
+    expect(retired[0]!.fix?.safe).toBeUndefined();
+    // The safe rewrite elsewhere in the text is still applied and shown.
+    expect(held.upgradedSource).toContain('r = await m-[:Replies]->');
+    expect(held.upgradedSource).toContain('suppress_self: true');
+    expect(advanced).toEqual([]);
+
+    const all = await upgradeMovement({ teamId: 'team-1', id: 'triage', acknowledge: true, applyAllFixes: true, validate: realValidate, advance });
+    expect(all.status).toBe('upgraded');
+    expect(advanced).toEqual([{ to: CUR, source: UPGRADED }]);
   });
 });
 
