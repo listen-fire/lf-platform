@@ -101,6 +101,7 @@ describe('plugin-declared handbook sections', () => {
     ['a named-argument call', '`Log Lead`(l: msg)'],
     ['a named-argument call of a declared function', 'function log_lead(l: <Lead>) { }\nlog_lead(l: msg)'],
     ['a passage about an old form', 'The keyword is still supported for saved automations.'],
+    ['a callback', 'again = callback(() => `Chase`(company), { once: false })'],
   ])('catches %s', (_label, code) => {
     expect(proseViolations(sectionWith(`\`\`\`\n${code}\n\`\`\``))).not.toEqual([]);
   });
@@ -110,14 +111,13 @@ describe('plugin-declared handbook sections', () => {
       'node Company: "each company" { name: <text> "its name" }',
       'function `Log Lead`(l: <Lead>, cfg: <{ mode: text }>) { }',
       'function log_lead(l: <Lead>) { }',
-      'crm = connect attio using acme { dryRun: true }',
+      'crm = connect `@lf/attio` using acme { dryRun: true }',
       'page = fetch_url(url: c.website)',
       'found = extract(content, Company, { tier: "careful" })',
       'one = extractOne(content, node Sender: "the sender" { name: <text> "their name" })',
       'msg = graph<Message> { Body: m.Body, Files: m-[a:Attachments]-> { Name: a.Name } }',
       '`Log Lead`(graph<Lead> { Name: msg.Subject })',
       'log_lead(msg)',
-      'again = callback(() => `Chase`(company), { once: false })',
       'await until(() => done, { every: 1h })',
       'r = all(() => { return 1 })',
     ].join('\n');

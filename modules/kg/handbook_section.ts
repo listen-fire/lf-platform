@@ -20,8 +20,8 @@
 import type { HandbookSection } from 'movement-engine/public/handbook';
 
 export const KNOWLEDGE_GRAPH_HANDBOOK_SECTION: HandbookSection = {
-  title: 'Knowledge graph — the workspace\'s own store',
-  content: `## Knowledge graph — the workspace's own store
+  title: 'Knowledge graph — the team\'s own store',
+  content: `## Knowledge graph — the team's own store
 
 Connect the graph and name it, as every system is connected:
 
@@ -122,7 +122,7 @@ node Company: "the company this message is about" {
   }
 }
 
-function \`Record The Company\`(msg: <inbox-[:Email]->>) {
+function \`Record The Company\`(msg: <inbox-[:Emails]->>) {
   c = extractOne([msg.Body], Company)
   if (c == null) { fail("no company in this message") }
 
@@ -141,7 +141,7 @@ function \`Record The Company\`(msg: <inbox-[:Email]->>) {
   }
 }
 
-listen to inbox { key: "intake" } fire \`Record The Company\`
+listen to inbox-[e:Emails WHERE e.Key == "intake"]-> fire \`Record The Company\`
 `,
     },
     {

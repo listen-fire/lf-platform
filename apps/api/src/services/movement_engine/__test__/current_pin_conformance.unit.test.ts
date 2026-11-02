@@ -41,11 +41,13 @@ jest.mock('@listen-fire/legacy-engine/services/movement_engine/interpretable', (
 
 import { CORE_CHAPTERS } from '@listen-fire/handbook';
 import { HANDBOOK_CATALOG, checkExemption, claimsOf } from '@listen-fire/handbook/testing';
+import { handbookCatalogWithPlatformKg } from '../../../lib/knowledge/movement_handbook/__test__/kg_handbook_spec';
 import {
   LANGUAGE_VERSION,
   checkSourceInRust,
   fromCatalogSnapshot,
   parseProgram,
+  type CatalogSnapshot,
   type LanguageVersion,
 } from 'movement-lang';
 
@@ -56,16 +58,23 @@ import {
 } from '../../translation_graph/movement/authoring';
 import { manualListenerMovements } from '../../translation_graph/movement/files';
 
-const catalog = fromCatalogSnapshot(HANDBOOK_CATALOG);
+/** The handbook's catalog, its knowledge graph as this platform's module
+ *  declares it (kg_handbook_spec.ts says why). */
+let handbookCatalog: CatalogSnapshot = HANDBOOK_CATALOG;
+let catalog = fromCatalogSnapshot(handbookCatalog);
+beforeAll(async () => {
+  handbookCatalog = await handbookCatalogWithPlatformKg();
+  catalog = fromCatalogSnapshot(handbookCatalog);
+});
 
 function platform(source: string, languageVersion: LanguageVersion = LANGUAGE_VERSION) {
-  return diagnoseMovementSource(source, { catalog, snapshot: HANDBOOK_CATALOG, languageVersion });
+  return diagnoseMovementSource(source, { catalog, snapshot: handbookCatalog, languageVersion });
 }
 
 function wasm(source: string) {
   return formatMovementDiagnostics(
     source,
-    checkSourceInRust(source, HANDBOOK_CATALOG, { languageVersion: LANGUAGE_VERSION }),
+    checkSourceInRust(source, handbookCatalog, { languageVersion: LANGUAGE_VERSION }),
   );
 }
 
@@ -127,12 +136,12 @@ describe("claims of the handbook, through the platform's validation", () => {
       const files = claim.status === 'runs' ? claim.files : undefined;
       const snapshot = files
         ? {
-            ...HANDBOOK_CATALOG,
+            ...handbookCatalog,
             files: Object.fromEntries(
               Object.entries(files).map(([path, source]) => [path, { source }]),
             ),
           }
-        : HANDBOOK_CATALOG;
+        : handbookCatalog;
       const verdict = diagnoseMovementSource(claim.probe, {
         catalog: fromCatalogSnapshot(snapshot),
         snapshot,

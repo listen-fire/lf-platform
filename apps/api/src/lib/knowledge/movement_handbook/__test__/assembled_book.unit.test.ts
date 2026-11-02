@@ -6,12 +6,14 @@
 // anchors diagnostics and search results hand out read through the Library
 // reader.
 
+import type { CatalogSnapshot } from 'movement-lang';
 import { HANDBOOK_POINTERS, HANDBOOK_POINTER_BY_CODE } from 'movement-lang';
 import { CORE_CHAPTERS, proseViolations } from '@listen-fire/handbook';
-import { admitProbe, checkExemption, claimsOf, parseProbe } from '@listen-fire/handbook/testing';
+import { HANDBOOK_KG_SPEC, admitProbe, checkExemption, claimsOf, parseProbe } from '@listen-fire/handbook/testing';
 import { chapterRoute } from 'engine-contracts/handbook_section';
 
 import { readBook } from '../../library';
+import { handbookCatalogWithPlatformKg, kgHandbookSpec } from './kg_handbook_spec';
 import {
   buildMovementFrontMatter,
   getMovementChapter,
@@ -103,6 +105,15 @@ describe('the assembled book', () => {
 describe('the added sections\' engine claims', () => {
   const claims = claimsOf(chapters);
   const addedClaims = claimsOf(added);
+  // The graph as this platform's module declares it (kg_handbook_spec.ts).
+  let catalog: CatalogSnapshot;
+  beforeAll(async () => {
+    catalog = await handbookCatalogWithPlatformKg();
+  });
+
+  it.failing("listen-fire's handbook fixture still predates the graph's Changes (regenerate it from kgHandbookSpec, then check against it)", async () => {
+    expect(HANDBOOK_KG_SPEC).toEqual(await kgHandbookSpec());
+  });
 
   it('claimed constructs are unique across the whole book', () => {
     const constructs = claims.map((c) => c.construct);
@@ -120,12 +131,12 @@ describe('the added sections\' engine claims', () => {
   it.each(
     addedClaims.filter((c) => c.status === 'runs' && checkExemption(c) === undefined).map((c) => [c.chapter, c.construct, c] as const),
   )('%s claims "%s" runs — the engine admits it', (_chapter, _construct, claim) => {
-    expect(() => admitProbe(claim)).not.toThrow();
+    expect(() => admitProbe(claim, catalog)).not.toThrow();
   });
 
   it('every pending claim is still refused (a lift here means: update the section)', () => {
     for (const claim of addedClaims.filter((c) => c.status === 'pending')) {
-      expect(() => admitProbe(claim)).toThrow(/failed checking/);
+      expect(() => admitProbe(claim, catalog)).toThrow(/failed checking/);
     }
   });
 });
