@@ -31,10 +31,6 @@ jest.mock('../listen_door', () => ({
   ...jest.requireActual('../listen_door'),
   ...require('./fakes').listenDoorFake(),
 }));
-jest.mock('../../movement_engine/await_wake', () => ({
-  ...jest.requireActual('../../movement_engine/await_wake'),
-  ...require('./fakes').awaitWakeFake(),
-}));
 jest.mock('../../webhook_sync/linked_object_refresh', () => ({
   ...jest.requireActual('../../webhook_sync/linked_object_refresh'),
   ...require('./fakes').linkedObjectFake(),

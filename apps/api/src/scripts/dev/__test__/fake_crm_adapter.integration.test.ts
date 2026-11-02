@@ -16,6 +16,7 @@ import { hostedDocumentStore } from '../../../services/translation_graph/engine/
 import http from 'node:http';
 
 import type { AddressInfo } from 'node:net';
+import type { Adapter } from 'movement-engine/public/adapter';
 import type { MutationContext } from 'engine-contracts/mutation_context';
 import type { RemoteAdapterConfig } from 'movement-engine/public/modules';
 import type { FakeCrmServer } from '../fake_crm_adapter';
@@ -32,7 +33,6 @@ import {
   FAKE_CRM_ADAPTER_TYPE,
   FAKE_CRM_COMMENTS_EDGE,
   FAKE_CRM_COMMENT_TYPE,
-  FAKE_CRM_COMPANY_CREATED,
   FAKE_CRM_COMPANY_TYPE,
   FAKE_CRM_PAGE_SIZE,
   fakeCrmThreadKey,
@@ -149,7 +149,7 @@ describe('Fake CRM pages a traversal over the wire', () => {
 
     const streamed: unknown[] = [];
     for await (const r of remote.iterateRelated!(input)) streamed.push(positionData(r.position));
-    expect(streamed).toEqual(names.map((Name) => ({ Name })));
+    expect(streamed).toEqual(names.map((Name, i) => ({ id: `company-${i + 1}`, Name })));
   });
 
   it('refuses a cursor it did not mint, as a bad request (not retryable)', async () => {
@@ -262,63 +262,80 @@ async function remoteFor(server: FakeCrmServer, cacheScopeId: string): Promise<R
   return createRemoteAdapter({ documents: hostedDocumentStore, config, secret: SECRET, cacheScopeId, manifest });
 }
 
-// The comment thread is the awaitable edge: pending (keyed on the thread) until
-// a comment exists, landed with the comments after, empty once the company is
-// gone — all over the wire.
-describe('Fake CRM awaits a comment thread over the wire', () => {
+// The comment thread is a listenable edge: waited on under the thread's key
+// while the company stands, gone once it is deleted; the comments so far read
+// back along it; a webhook delivery's companies and comments are reported as
+// arrivals — all over the wire.
+describe('Fake CRM reports a comment thread over the wire', () => {
   let server: FakeCrmServer;
   let remote: RemoteAdapter;
 
   beforeAll(async () => {
     server = await startFakeCrmServer({ secret: SECRET });
-    remote = await remoteFor(server, 'fake-crm-await');
+    remote = await remoteFor(server, 'fake-crm-arrivals');
   });
 
   afterAll(async () => {
     await server.close();
   });
 
-  it('pending → landed → empty, with the thread as the correlation key', async () => {
+  it('keys the thread while the company stands, and reports it gone after', async () => {
     const { externalId } = await remote.createRecord({
       recordType: FAKE_CRM_COMPANY_TYPE,
       fields: { Name: 'Vireo Robotics' },
       mutationContext: MUTATION_CONTEXT,
     });
-    const point = { recordId: externalId, edge: FAKE_CRM_COMMENTS_EDGE };
+    const heads = [{ recordId: externalId }];
 
-    expect(await remote.awaitable!.resolveAwait(point)).toEqual({
-      status: 'pending',
-      correlationKey: fakeCrmThreadKey(externalId),
-    });
+    expect(await remote.arrivals!.awaitKeys({ edge: FAKE_CRM_COMMENTS_EDGE, heads })).toEqual([
+      { key: fakeCrmThreadKey(externalId) },
+    ]);
 
     await fetch(new URL('dev/comments', server.baseUrl), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ company: externalId, text: 'approved' }),
     });
-    expect(await remote.awaitable!.resolveAwait(point)).toEqual({
-      status: 'landed',
-      correlationKey: fakeCrmThreadKey(externalId),
-      landings: [{ recordId: 'comment-1', recordType: FAKE_CRM_COMMENT_TYPE, fields: { Text: 'approved' } }],
+    const thread = await remote.getRelated({
+      position: { adapterType: FAKE_CRM_ADAPTER_TYPE, recordType: FAKE_CRM_COMPANY_TYPE, identity: { kind: 'stable', recordId: externalId, data: {} } },
+      fieldId: FAKE_CRM_COMMENTS_EDGE,
+      direction: 'outgoing',
     });
+    expect(thread.map((r) => positionData(r.position))).toEqual([{ Id: 'comment-1', Text: 'approved' }]);
 
     await remote.deleteRecord({ recordType: FAKE_CRM_COMPANY_TYPE, externalId, mutationContext: MUTATION_CONTEXT });
-    expect(await remote.awaitable!.resolveAwait(point)).toEqual({ status: 'empty' });
+    expect(await remote.arrivals!.awaitKeys({ edge: FAKE_CRM_COMMENTS_EDGE, heads })).toEqual([{ gone: true }]);
   });
 
-  it('wakeKeys names the thread of each comment in its own delivery, and refuses anything else', async () => {
-    expect(await remote.wakeKeys!({ raw: { comments: [{ thread: 'company-9', text: 'hi' }] } })).toEqual([
-      fakeCrmThreadKey('company-9'),
+  it("reports a delivery's companies and comments as arrivals, and refuses anything else", async () => {
+    // `RemoteAdapter` declares 0.12's answer (events only); as an `Adapter` it
+    // answers the arrivals it carries on the wire.
+    const adapter: Adapter = remote;
+    const answer = await adapter.preprocessInbound!({
+      raw: { companies: [{ id: 'company-9', Name: 'Larch' }], comments: [{ id: 'comment-4', thread: 'company-9', text: 'hi' }] },
+    });
+    expect(answer.arrivals).toEqual([
+      {
+        edge: FAKE_CRM_COMPANY_TYPE,
+        identity: 'company-9',
+        landing: { recordId: 'company-9', recordType: FAKE_CRM_COMPANY_TYPE, fields: { id: 'company-9', Name: 'Larch' } },
+      },
+      {
+        edge: FAKE_CRM_COMMENTS_EDGE,
+        key: fakeCrmThreadKey('company-9'),
+        identity: 'comment-4',
+        landing: { recordId: 'comment-4', recordType: FAKE_CRM_COMMENT_TYPE, fields: { Id: 'comment-4', Text: 'hi' } },
+      },
     ]);
-    await expect(remote.wakeKeys!({ raw: { comments: [{ thread: 9 }] } })).rejects.toThrow(
+    await expect(remote.preprocessInbound({ raw: { comments: [{ thread: 9 }] } })).rejects.toThrow(
       /not a delivery this CRM sends/,
     );
   });
 });
 
-// The dev routes change the CRM as a user would, then push to the host's doors
-// with the install's own bearer secret and the team header.
-describe('Fake CRM pushes emit and wake to the host', () => {
+// The dev routes change the CRM as a user would, then push the arrivals to the
+// host's `wake` door with the install's own bearer secret and the team header.
+describe('Fake CRM pushes its arrivals to the host', () => {
   let server: FakeCrmServer;
   let host: http.Server;
   const received: Array<{ url: string; headers: http.IncomingHttpHeaders; body: unknown }> = [];
@@ -346,14 +363,14 @@ describe('Fake CRM pushes emit and wake to the host', () => {
     await new Promise<void>((resolve, reject) => host.close((err) => (err ? reject(err) : resolve())));
   });
 
-  it('a created company is emitted; a comment wakes its thread', async () => {
+  it('a created company arrives on Company; a comment on its thread', async () => {
     const created = await fetch(new URL('dev/companies', server.baseUrl), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ Name: 'Larch' }),
     });
     const { company, push } = (await created.json()) as { company: { externalId: string }; push: unknown };
-    expect(push).toEqual({ door: 'emit', status: 202, body: { accepted: 1 } });
+    expect(push).toEqual({ status: 202, body: { accepted: 1 } });
 
     await fetch(new URL('dev/comments', server.baseUrl), {
       method: 'POST',
@@ -362,7 +379,7 @@ describe('Fake CRM pushes emit and wake to the host', () => {
     });
 
     expect(received.map((r) => r.url)).toEqual([
-      `/api/public/adapter/${FAKE_CRM_ADAPTER_TYPE}/emit`,
+      `/api/public/adapter/${FAKE_CRM_ADAPTER_TYPE}/wake`,
       `/api/public/adapter/${FAKE_CRM_ADAPTER_TYPE}/wake`,
     ]);
     for (const r of received) {
@@ -370,18 +387,28 @@ describe('Fake CRM pushes emit and wake to the host', () => {
       expect(r.headers['x-listen-fire-team']).toBe('team-1');
     }
     expect(received[0]?.body).toEqual({
-      events: [
+      arrivals: [
         {
-          payload: { id: company.externalId, Name: 'Larch' },
-          externalId: company.externalId,
-          tag: FAKE_CRM_COMPANY_CREATED,
-          eventType: FAKE_CRM_COMPANY_CREATED,
-          changeType: 'create',
-          recordType: FAKE_CRM_COMPANY_TYPE,
+          edge: FAKE_CRM_COMPANY_TYPE,
+          identity: company.externalId,
+          landing: {
+            recordId: company.externalId,
+            recordType: FAKE_CRM_COMPANY_TYPE,
+            fields: { id: company.externalId, Name: 'Larch' },
+          },
         },
       ],
     });
-    expect(received[1]?.body).toEqual({ keys: [fakeCrmThreadKey(company.externalId)] });
+    expect(received[1]?.body).toEqual({
+      arrivals: [
+        {
+          edge: FAKE_CRM_COMMENTS_EDGE,
+          key: fakeCrmThreadKey(company.externalId),
+          identity: 'comment-1',
+          landing: { recordId: 'comment-1', recordType: FAKE_CRM_COMMENT_TYPE, fields: { Id: 'comment-1', Text: 'looks good' } },
+        },
+      ],
+    });
     expect(server.comments).toEqual([{ id: 'comment-1', thread: company.externalId, Text: 'looks good' }]);
   });
 });

@@ -183,17 +183,6 @@ export function listenDoorFake(): AnyRecord {
   };
 }
 
-export function awaitWakeFake(): AnyRecord {
-  return {
-    enqueueAwaitWakes: async (input: AnyRecord) => {
-      if (world.enqueueFails && Array.isArray(input.correlationKeys) && input.correlationKeys.length > 0) {
-        throw new Error('queue unavailable');
-      }
-      record({ kind: 'enqueue_wakes', ...input });
-    },
-  };
-}
-
 export function linkedObjectFake(): AnyRecord {
   return {
     hasBridgedLinkedObjects: async () => world.bridgedLinkedObjects,

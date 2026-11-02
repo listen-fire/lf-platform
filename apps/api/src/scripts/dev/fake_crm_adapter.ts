@@ -11,18 +11,21 @@
 // The CRM has ONE writable record type — `Company` (natural fields `Name`,
 // `Description`) — and records every write into an in-memory array so a test
 // (or the `dev:remote-verify` harness) can assert the write actually landed on
-// the other side of the wire. Each Company has a comment thread (`Comments`, to
-// `Comment { Text }`), awaitable: `await FIRST(c-[:Comments]->)` parks until a
-// comment exists, keyed on the company's thread.
+// the other side of the wire. Companies are a listenable root (adapter
+// protocol 2.6): each one somebody creates in the CRM arrives on `Company`,
+// named by its `id`. Each Company has a comment thread (`Comments`, to
+// `Comment { Id, Text }`), listenable: `await c-[:Comments]->` takes the first
+// comment already there, or else the next to arrive, waited on under the
+// thread's key (`awaitKeys`).
 //
 // It is the reference protocol-v2 adapter (docs/contracts/adapter-protocol.md), so it
 // speaks every inbound route a third party has:
-//   - the host's webhook door: a subscription (ensure/remove) and a webhook
-//     body (`FakeCrmDelivery`) it turns into events (preprocessInbound) and
-//     wake keys (wakeKeys, one per thread comment);
-//   - the two push doors: its dev control routes (`/dev/companies`,
-//     `/dev/comments`) change the CRM the way a user would and then push
-//     `emit` / `wake` to the host themselves.
+//   - the host's webhook door: a subscription per listenable edge
+//     (ensure/remove) and a webhook body (`FakeCrmDelivery`) whose companies
+//     and comments it reports as arrivals (preprocessInbound);
+//   - the push door: its dev control routes (`/dev/companies`,
+//     `/dev/comments`) change the CRM the way a user would and then push the
+//     arrivals to the host's `wake` themselves.
 //
 // The descriptor shapes mirror a real hardcoded writable adapter (see
 // `adapters/native_valuations.ts`, whose `commonFields()` / per-type descriptors
@@ -37,10 +40,8 @@ import type {
   Adapter,
   DeleteInput,
   DeleteResult,
-  DiscriminableEvent,
   EnsureEventSubscriptionInput,
   EventSubscriptionRegistration,
-  EventType,
   RemoveEventSubscriptionInput,
   GetFieldValueInput,
   GetRelatedInput,
@@ -54,7 +55,7 @@ import type {
   WriteInput,
   WriteResult,
 } from 'movement-engine/public/adapter';
-import type { AwaitPoint, AwaitResolution } from 'movement-engine/public/adapter';
+import type { Arrival, AwaitHead, AwaitKey } from 'engine-contracts/arrivals';
 import type {
   SchemaEntryPoint,
   SchemaTypeDescriptor,
@@ -131,9 +132,7 @@ export function fakeCrmManifest(baseUrl: string): Omit<RemoteAdapterManifestFile
       'updateRecord',
       'deleteRecord',
       'preprocessInbound',
-      'listEventTypes',
-      'wakeKeys',
-      'resolveAwait',
+      'awaitKeys',
       'ensureEventSubscription',
       'removeEventSubscription',
     ],
@@ -151,21 +150,18 @@ function fakeCrmPageOffset(cursor: unknown): number {
   throw new AdapterBadRequestError(`fake CRM: unrecognised page cursor ${JSON.stringify(cursor)}.`);
 }
 
-/** The one event the CRM emits: a company was created. */
-export const FAKE_CRM_COMPANY_CREATED = 'company.created';
-
-/** A company's comment thread — the awaitable edge, and the type it lands. */
+/** A company's comment thread — the listenable edge, and the type it lands. */
 export const FAKE_CRM_COMMENTS_EDGE = 'Comments';
 export const FAKE_CRM_COMMENT_TYPE = 'Comment';
 
 /**
  * The CRM's own webhook body (what it POSTs to a subscription's callback URL):
  * created companies, and comments on threads. A thread is a company's id; a
- * comment wakes whatever is parked on it (`thread:<company id>`).
+ * comment arrives on that company's `Comments`, under `thread:<company id>`.
  */
 export const FakeCrmDelivery = z.object({
   companies: z.array(z.object({ id: z.string(), Name: z.string() })).optional(),
-  comments: z.array(z.object({ thread: z.string(), text: z.string() })).optional(),
+  comments: z.array(z.object({ id: z.string(), thread: z.string(), text: z.string() })).optional(),
 });
 export type FakeCrmDelivery = z.infer<typeof FakeCrmDelivery>;
 
@@ -187,33 +183,48 @@ function deliveryOf(raw: unknown): FakeCrmDelivery {
   return parsed.data;
 }
 
-/** The event a created company is announced as — on the host door and on `emit`. */
-function companyCreatedEvent(company: { id: string; Name: string }): DiscriminableEvent {
+/** A company as an arrival on the CRM's root `Company` edge: it names no key,
+ *  since it lands on no record's edge (adapter protocol 2.6). */
+function companyArrival(company: { id: string; Name: string }): Arrival {
   return {
-    payload: company,
-    externalId: company.id,
-    tag: FAKE_CRM_COMPANY_CREATED,
-    eventType: FAKE_CRM_COMPANY_CREATED,
-    changeType: 'create',
-    recordType: FAKE_CRM_COMPANY_TYPE,
+    edge: FAKE_CRM_COMPANY_TYPE,
+    identity: company.id,
+    landing: { recordId: company.id, recordType: FAKE_CRM_COMPANY_TYPE, fields: { id: company.id, Name: company.Name } },
   };
 }
 
-/** A subscription the CRM holds: where it POSTs, and the secret it signs with. */
+/** A comment as an arrival on its thread's `Comments`. */
+function commentArrival(comment: FakeCrmComment): Arrival {
+  return {
+    edge: FAKE_CRM_COMMENTS_EDGE,
+    key: fakeCrmThreadKey(comment.thread),
+    identity: comment.id,
+    landing: {
+      recordId: comment.id,
+      recordType: FAKE_CRM_COMMENT_TYPE,
+      fields: { Id: comment.id, Text: comment.Text },
+    },
+  };
+}
+
+/** A subscription the CRM holds for one listenable edge: where it POSTs, and
+ *  the secret it signs with. */
 export interface FakeCrmSubscription {
   externalId: string;
   callbackUrl: string;
-  events: string[];
+  edge: string;
   secret: string;
 }
 
-/** The `Company` type descriptor: a writable `Name` (required) + `Description`
- *  (optional), and its comment thread. */
+/** The `Company` type descriptor: its `id`, a writable `Name` (required) +
+ *  `Description` (optional), and its comment thread. */
 const COMPANY_DESCRIPTOR: SchemaTypeDescriptor = {
   typeId: FAKE_CRM_COMPANY_TYPE,
   displayName: FAKE_CRM_COMPANY_TYPE,
   deletable: true,
   fields: [
+    // The CRM's id for the company: what names one arrival on `Company`.
+    { fieldId: 'id', displayName: 'id', kind: 'string', writable: false, required: false },
     { fieldId: 'Name', displayName: 'Name', kind: 'string', writable: true, required: true },
     { fieldId: 'Description', displayName: 'Description', kind: 'string', writable: true, required: false },
   ],
@@ -226,13 +237,11 @@ const COMPANY_DESCRIPTOR: SchemaTypeDescriptor = {
       direction: 'outgoing',
       // People comment in the CRM; nothing is created along the thread.
       writable: false,
-      // Readable (the comments so far) and awaitable (the first one): the
-      // Slack `Replies` shape.
-      awaitable: true,
-      // The CRM pushes a wake when a comment lands, so a park is woken, not polled.
-      watchable: true,
-      // A deleted company's thread settles empty rather than parking forever.
-      resolvesEmpty: true,
+      // Listenable: the CRM reports each comment as it lands, so a wait is
+      // woken, not polled. A comment's `Id` names it; the thread lists oldest first.
+      listenable: true,
+      identity: 'Id',
+      sequenced: 'chronological',
     },
   ],
 };
@@ -240,7 +249,11 @@ const COMPANY_DESCRIPTOR: SchemaTypeDescriptor = {
 const COMMENT_DESCRIPTOR: SchemaTypeDescriptor = {
   typeId: FAKE_CRM_COMMENT_TYPE,
   displayName: FAKE_CRM_COMMENT_TYPE,
-  fields: [{ fieldId: 'Text', displayName: 'Text', kind: 'string', writable: false, required: false }],
+  fields: [
+    // The CRM's id for the comment: what names one arrival on a thread.
+    { fieldId: 'Id', displayName: 'Id', kind: 'string', writable: false, required: false },
+    { fieldId: 'Text', displayName: 'Text', kind: 'string', writable: false, required: false },
+  ],
   references: [],
 };
 
@@ -294,27 +307,19 @@ export function createFakeCrmAdapter(): FakeCrmAdapter {
       adapterType: FAKE_CRM_ADAPTER_TYPE,
       recordType: FAKE_CRM_COMMENT_TYPE,
       recordId: comment.id,
-      data: { Text: comment.Text },
+      data: { Id: comment.id, Text: comment.Text },
     }),
   });
 
-  const resolveAwait = async (point: AwaitPoint): Promise<AwaitResolution> => {
-    if (point.edge !== FAKE_CRM_COMMENTS_EDGE) {
-      throw new Error(`fake CRM: '${point.edge}' is not an awaitable edge (only '${FAKE_CRM_COMMENTS_EDGE}').`);
+  // The key a company's thread is waited on under; a company the CRM no
+  // longer holds is gone, and nothing more arrives on it.
+  const awaitKeys = async (input: { edge: string; heads: AwaitHead[] }): Promise<AwaitKey[]> => {
+    if (input.edge !== FAKE_CRM_COMMENTS_EDGE) {
+      throw new Error(`fake CRM: '${input.edge}' is not a listenable edge of a company (only '${FAKE_CRM_COMMENTS_EDGE}').`);
     }
-    if (!writes.some((w) => w.externalId === point.recordId)) return { status: 'empty' };
-    const correlationKey = fakeCrmThreadKey(point.recordId);
-    const thread = threadOf(point.recordId);
-    if (thread.length === 0) return { status: 'pending', correlationKey };
-    return {
-      status: 'landed',
-      correlationKey,
-      landings: thread.map((comment) => ({
-        recordId: comment.id,
-        recordType: FAKE_CRM_COMMENT_TYPE,
-        fields: { Text: comment.Text },
-      })),
-    };
+    return input.heads.map(({ recordId }) =>
+      writes.some((w) => w.externalId === recordId) ? { key: fakeCrmThreadKey(recordId) } : { gone: true },
+    );
   };
 
   const companiesFrom = (input: GetRelatedInput): FakeCrmWrite[] =>
@@ -326,7 +331,7 @@ export function createFakeCrmAdapter(): FakeCrmAdapter {
       adapterType: FAKE_CRM_ADAPTER_TYPE,
       recordType: FAKE_CRM_COMPANY_TYPE,
       recordId: write.externalId,
-      data: { ...write.fields },
+      data: { id: write.externalId, ...write.fields },
     }),
   });
 
@@ -340,7 +345,7 @@ export function createFakeCrmAdapter(): FakeCrmAdapter {
       comments.push(comment);
       return comment;
     },
-    awaitable: { resolveAwait },
+    arrivals: { awaitKeys },
     adapterType: FAKE_CRM_ADAPTER_TYPE,
     supportedTriggers: ['webhook'],
     runtimeCapabilities: (): RuntimeCapabilities => BASE_RUNTIME_CAPABILITIES,
@@ -348,16 +353,19 @@ export function createFakeCrmAdapter(): FakeCrmAdapter {
     async listEntryPoints(): Promise<SchemaEntryPoint[]> {
       return [
         // Writable (created through Listen-Fire), not a readable source, and
-        // fires: a company somebody creates in the CRM itself is delivered to
-        // a listen (`company.created`) — pushed along, never enumerated.
+        // listenable: each company somebody creates in the CRM itself arrives
+        // on the root `Company`, at the connection's door — pushed, never
+        // enumerated.
         {
           typeId: FAKE_CRM_COMPANY_TYPE,
           displayName: FAKE_CRM_COMPANY_TYPE,
           scope: 'self-configured',
           writable: true,
           readable: false,
-          fires: true,
-          description: 'A company. A listen is delivered each one somebody creates in the CRM.',
+          listenable: true,
+          identity: 'id',
+          delivery: 'connection',
+          description: 'A company. A listen on `Company` is delivered each one somebody creates in the CRM.',
         },
         // Reached only along a company's `Comments`; published so it is named.
         {
@@ -437,16 +445,17 @@ export function createFakeCrmAdapter(): FakeCrmAdapter {
       return {};
     },
 
-    async preprocessInbound(input: { raw: unknown }): Promise<{ events: DiscriminableEvent[] }> {
-      return { events: (deliveryOf(input.raw).companies ?? []).map(companyCreatedEvent) };
-    },
-
-    async listEventTypes(): Promise<EventType[]> {
-      return [{ tag: FAKE_CRM_COMPANY_CREATED, positionType: FAKE_CRM_COMPANY_TYPE }];
-    },
-
-    async wakeKeys(input: { raw: unknown }): Promise<string[]> {
-      return (deliveryOf(input.raw).comments ?? []).map((comment) => fakeCrmThreadKey(comment.thread));
+    // A delivery's companies are arrivals on `Company`; its comments,
+    // arrivals on their threads.
+    async preprocessInbound(input: { raw: unknown }): Promise<{ events: []; arrivals: Arrival[] }> {
+      const delivery = deliveryOf(input.raw);
+      return {
+        events: [],
+        arrivals: [
+          ...(delivery.companies ?? []).map(companyArrival),
+          ...(delivery.comments ?? []).map(({ id, thread, text }) => commentArrival({ id, thread, Text: text })),
+        ],
+      };
     },
 
     async ensureEventSubscription(
@@ -454,13 +463,13 @@ export function createFakeCrmAdapter(): FakeCrmAdapter {
     ): Promise<EventSubscriptionRegistration> {
       const existing = subscriptions.find((sub) => sub.callbackUrl === input.callbackUrl);
       if (existing) {
-        existing.events = [...input.events];
+        existing.edge = input.edge;
         return { externalId: existing.externalId, secret: existing.secret };
       }
       const subscription: FakeCrmSubscription = {
         externalId: `crm-sub-${subscriptions.length + 1}`,
         callbackUrl: input.callbackUrl,
-        events: [...input.events],
+        edge: input.edge,
         secret: randomUUID(),
       };
       subscriptions.push(subscription);
@@ -483,9 +492,8 @@ export interface FakeCrmHost {
   teamId?: string;
 }
 
-/** What the host's door answered a push with. */
+/** What the host's `wake` door answered a push with. */
 export interface FakeCrmPushResult {
-  door: 'emit' | 'wake';
   status: number;
   body: unknown;
 }
@@ -508,18 +516,17 @@ const DevCompanyBody = z.object({ Name: z.string().min(1), Description: z.string
 const DevCommentBody = z.object({ company: z.string().min(1), text: z.string().min(1) });
 
 /**
- * Push to one of the host's adapter doors, authenticated the way the install
+ * Push arrivals to the host's `wake` door, authenticated the way the install
  * authenticates to this server (the same bearer secret, sent back). The CRM
- * awaits the answer without blocking its own event loop — the host calls the
- * CRM back (`listEventTypes`) while this request is still open.
+ * awaits the answer without blocking its own event loop — the host may call
+ * the CRM back while this request is still open.
  */
 async function pushToHost(input: {
   host: FakeCrmHost;
   secret: string;
-  door: 'emit' | 'wake';
-  body: { events: DiscriminableEvent[] } | { keys: string[] };
+  arrivals: Arrival[];
 }): Promise<FakeCrmPushResult> {
-  const url = `${input.host.apiBaseUrl.replace(/\/$/, '')}/api/public/adapter/${FAKE_CRM_ADAPTER_TYPE}/${input.door}`;
+  const url = `${input.host.apiBaseUrl.replace(/\/$/, '')}/api/public/adapter/${FAKE_CRM_ADAPTER_TYPE}/wake`;
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -527,7 +534,7 @@ async function pushToHost(input: {
       authorization: `Bearer ${input.secret}`,
       ...(input.host.teamId !== undefined ? { 'x-listen-fire-team': input.host.teamId } : {}),
     },
-    body: JSON.stringify(input.body),
+    body: JSON.stringify({ arrivals: input.arrivals }),
   });
   const text = await res.text();
   let body: unknown = text;
@@ -536,7 +543,7 @@ async function pushToHost(input: {
   } catch {
     // A non-JSON answer is reported as the text it was.
   }
-  return { door: input.door, status: res.status, body };
+  return { status: res.status, body };
 }
 
 function readJson(req: http.IncomingMessage): Promise<unknown> {
@@ -567,8 +574,10 @@ function sendJson(res: http.ServerResponse, status: number, body: unknown): void
  * protocol. Each change is then pushed to the host, as a real CRM would:
  *
  *   GET  /dev/state                            the companies, comments, subscriptions
- *   POST /dev/companies { Name, Description? } create a company → push `emit`
- *   POST /dev/comments  { company, text }      comment on its thread → push `wake`
+ *   POST /dev/companies { Name, Description? } create a company → its arrival on `Company`
+ *   POST /dev/comments  { company, text }      comment on its thread → its arrival on `Comments`
+ *
+ * Each arrival is pushed to the host's `wake` door.
  *
  * Unauthenticated: a localhost fixture, not part of the protocol.
  */
@@ -602,12 +611,7 @@ async function handleDevRoute(input: {
     }
     const company = adapter.addCompany(body.data);
     const push = host
-      ? await pushToHost({
-          host,
-          secret,
-          door: 'emit',
-          body: { events: [companyCreatedEvent({ id: company.externalId, Name: body.data.Name })] },
-        })
+      ? await pushToHost({ host, secret, arrivals: [companyArrival({ id: company.externalId, Name: body.data.Name })] })
       : null;
     sendJson(res, 200, { company, push });
     return;
@@ -623,7 +627,7 @@ async function handleDevRoute(input: {
   }
   const comment = adapter.addComment({ thread: body.data.company, text: body.data.text });
   const push = host
-    ? await pushToHost({ host, secret, door: 'wake', body: { keys: [fakeCrmThreadKey(body.data.company)] } })
+    ? await pushToHost({ host, secret, arrivals: [commentArrival(comment)] })
     : null;
   sendJson(res, 200, { comment, push });
 }
