@@ -5,13 +5,13 @@
 // against. The TypeScript engine (run.ts `resolvedShape`) and the Rust
 // engine's shim (rust_host.ts `check.compatible`) both read it here.
 
-import { type InstanceSchema, type SchemaFieldType, type ShapeDeclaration } from 'movement-lang';
-import { inheritDeclaration, inheritSchema, shapeToSchema } from 'legacy-lang';
+import { type InstanceSchema, type ShapeDeclaration } from 'movement-lang';
+import { inheritDeclaration, inheritSchema, shapeToSchema, type SurfaceFieldType } from 'legacy-lang';
 
 /** One declaration of an `extends` chain, with the `type`s of its file. */
 export interface ChainLink {
   declaration: ShapeDeclaration;
-  types: (name: string) => SchemaFieldType | undefined;
+  types: (name: string) => SurfaceFieldType | undefined;
 }
 
 /** The fold of a chain written declaration first, its bases after it. */

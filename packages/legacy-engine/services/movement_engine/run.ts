@@ -71,11 +71,11 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { BridgeError, writtenArms, type PluginOutput, type CombinatorKind, credentialArgOf, mapTargetRoots, memberPathBindingName, pathRootName, probePathHead, spellPathHead, spellPathRoot, splitUniquenessConjuncts, identityKeyOf, unwrapCredentialArg, constructionAsCall, argumentBindings, isPositionalCall, isValueTypeRef, spellParamType, typeNameOf, expandWriteSpreads, slotOfTree } from 'movement-lang';
 import { CURRENT_LANGUAGE_VERSION } from 'legacy-lang';
 import { conditionOfSlot, expressionOfSlot, languageVersionDiagnostic, parseMovementExpression, treeOfSlot } from 'legacy-lang';
-import { DiagnosticCodes, readCollectionConfig, readSortSettings, ALL_SETTING_KEYS, SEQUENTIAL_COLLECTION_SETTINGS, type CollectionRunSettings, pluginOutputUnder, before, aggregatedBarePath, bareName, isWalkProjection, EVENT_ACTION_FIELD, eventAddressKey, eventAddressOfHops, isEnumType, readExtractCallConfig, resolveBorrowedField, borrowedTypeSegments, durationToMs, CALLBACK_CALLED_EDGE, CALLBACK_CALL_AT, parseFieldTypeName, schemaSurface, declaredTypesIn, surfaceMisfit, readCall, resolveCallee, since, conjunctsOf, hoistingMemberReads, holdsNestedCall, nameNode, runsAsCall, shortCircuitOf, valueChildren, withValueChildren, bindPluginArgs, memberLocal, packageMembers, pluginArgMisfitMessage, pluginPositionalParams, pluginSpecUnder, EXTRACTED_RECORD_PARAM } from 'legacy-lang';
+import { DiagnosticCodes, readCollectionConfig, readSortSettings, ALL_SETTING_KEYS, SEQUENTIAL_COLLECTION_SETTINGS, type CollectionRunSettings, pluginOutputUnder, before, aggregatedBarePath, bareName, isWalkProjection, EVENT_ACTION_FIELD, fieldTypeOfSchema, eventAddressKey, eventAddressOfHops, isEnumType, readExtractCallConfig, resolveBorrowedField, borrowedTypeSegments, durationToMs, CALLBACK_CALLED_EDGE, CALLBACK_CALL_AT, parseFieldTypeName, schemaSurface, declaredTypesIn, surfaceMisfit, readCall, resolveCallee, since, conjunctsOf, hoistingMemberReads, holdsNestedCall, nameNode, runsAsCall, shortCircuitOf, valueChildren, withValueChildren, bindPluginArgs, memberLocal, packageMembers, pluginArgMisfitMessage, pluginPositionalParams, pluginSpecUnder, EXTRACTED_RECORD_PARAM } from 'legacy-lang';
 import { MovementParseError } from 'movement-lang';
 import { parseNestedCall } from 'legacy-lang';
-import type { MExpr, AwaitExpression, AwaitSource, LanguageVersion, ClosureExpression, DurationLiteral, RValue, RefreshStatement, CombinatorExpression, CollectionOpExpression, MembersExpression, ArmExpression, CallArg, PluginSpec, CallStatement, Catalog, CatalogSnapshot, ConstructionCall, ExprSlot, CallbackExpression, CallbackSubject, ExtractCallExpression, ExtractExpression, SchemaFieldType, InstanceSchema, LinkExpression, LinkTarget, LinkedExport, MatchExpression, MatchTarget, LinkedFile, MovementCondition, MovementDeclaration, MovementParam, NodeLiteral, CopyPlan, MapSpread, PathHead, Program, ShapeDeclaration, ShapeNode, Statement, TraversalBlock, WriteExpression, WriteSpread, WriteTarget, FieldWriteMode } from 'movement-lang';
-import type { CallNode, ShortCircuit, CallPosition, CallReading, CallScope, EventAddress, ProgramLink, SuppliedSurface } from 'legacy-lang';
+import type { MExpr, AwaitExpression, AwaitSource, LanguageVersion, ClosureExpression, DurationLiteral, RValue, RefreshStatement, CombinatorExpression, CollectionOpExpression, MembersExpression, ArmExpression, CallArg, PluginSpec, CallStatement, Catalog, CatalogSnapshot, ConstructionCall, ExprSlot, CallbackExpression, CallbackSubject, ExtractCallExpression, ExtractExpression, InstanceSchema, LinkExpression, LinkTarget, LinkedExport, MatchExpression, MatchTarget, LinkedFile, MovementCondition, MovementDeclaration, MovementParam, NodeLiteral, CopyPlan, MapSpread, PathHead, Program, ShapeDeclaration, ShapeNode, Statement, TraversalBlock, WriteExpression, WriteSpread, WriteTarget, FieldWriteMode } from 'movement-lang';
+import type { CallNode, ShortCircuit, CallPosition, CallReading, CallScope, EventAddress, ProgramLink, SuppliedSurface, SurfaceFieldType } from 'legacy-lang';
 import type { Expression, TraversalStep } from 'movement-lang/expression/types';
 import { compareOrderValues } from 'movement-lang/expression/order_limit';
 import {
@@ -2153,10 +2153,10 @@ class Interpreter {
    *  by the file environment they were declared in. A `type` is file-level and
    *  lexically scoped exactly as a value is: a name resolves in the file that
    *  WROTE it, never in the file that reuses what it wrote. */
-  private readonly fileTypes = new WeakMap<Environment, Map<string, SchemaFieldType>>();
+  private readonly fileTypes = new WeakMap<Environment, Map<string, SurfaceFieldType>>();
   /** The same, per library file — an imported declaration's types need no
    *  library environment built, only its program. */
-  private readonly libraryTypes = new Map<string, Map<string, SchemaFieldType>>();
+  private readonly libraryTypes = new Map<string, Map<string, SurfaceFieldType>>();
   /** What the run's extraction calls share: the content prefixes already sent
    *  (where the cache breakpoints go) and the files already read. */
   private readonly extractCalls = new ExtractCallRunState();
@@ -3951,7 +3951,7 @@ class Interpreter {
     return env;
   }
 
-  private typesOfLibrary(file: LinkedFile): Map<string, SchemaFieldType> {
+  private typesOfLibrary(file: LinkedFile): Map<string, SurfaceFieldType> {
     let types = this.libraryTypes.get(file.path);
     if (types === undefined) {
       types = declaredTypesIn(file.program);
@@ -3962,7 +3962,7 @@ class Interpreter {
 
   /** The refinements visible where `env` sits: its file's. A scope rebuilt
    *  from a park reads the running file's, as it always has. */
-  private typesIn(env: Environment | undefined): Map<string, SchemaFieldType> {
+  private typesIn(env: Environment | undefined): Map<string, SurfaceFieldType> {
     const file = env?.chainFromRoot()[0];
     return (
       (file !== undefined ? this.fileTypes.get(file) : undefined)
@@ -3973,7 +3973,7 @@ class Interpreter {
 
   /** A node declaration's refinements: those of the scope it was DECLARED in —
    *  the same scope its descriptions read. */
-  private shapeTypes(shape: ShapeBinding): Map<string, SchemaFieldType> {
+  private shapeTypes(shape: ShapeBinding): Map<string, SurfaceFieldType> {
     return shape.library !== undefined ? this.typesOfLibrary(shape.library) : this.typesIn(shape.fileEnv);
   }
 
@@ -12178,8 +12178,8 @@ function eventSeedAddress(input: {
     const value = payload?.[key];
     if (typeof value === 'string' && value.length > 0) narrowing[key] = value;
   }
-  const actionType = schema.positions[node]?.properties[EVENT_ACTION_FIELD];
-  if (isEnumType(actionType)) {
+  const declaredAction = schema.positions[node]?.properties[EVENT_ACTION_FIELD];
+  if (declaredAction !== undefined && isEnumType(fieldTypeOfSchema(declaredAction, schema))) {
     const value = payload?.[EVENT_ACTION_FIELD];
     if (typeof value === 'string' && value.length > 0) narrowing[EVENT_ACTION_FIELD] = value;
   }
@@ -12551,7 +12551,7 @@ function recordCallBinding(
  * position? The checker's reading of the same written type
  * (`paramValueType`), on the names the engine has.
  */
-function isValueParam(param: MovementParam, declaredTypes: ReadonlyMap<string, SchemaFieldType>): boolean {
+function isValueParam(param: MovementParam, declaredTypes: ReadonlyMap<string, SurfaceFieldType>): boolean {
   const type = param.type;
   if (type === undefined) return false;
   if (isValueTypeRef(type)) return true;

@@ -91,7 +91,8 @@ function stamped(program: Program, stamps: Stamp[]): unknown {
     if (typeof node !== 'object' || node === null) throw new Error(`no node at ${stamp.path}`);
     if ('spreadFields' in stamp) Reflect.set(node, 'fields', stamp.spreadFields);
     else if ('copy' in stamp) Reflect.set(node, 'copy', stamp.copy);
-    else Reflect.set(node, 'reference', stamp.reference);
+    else if ('reference' in stamp) Reflect.set(node, 'reference', stamp.reference);
+    else throw new Error(`a stamp the legacy checker does not write: ${JSON.stringify(stamp)}`);
   }
   return tree;
 }
