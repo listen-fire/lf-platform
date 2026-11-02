@@ -511,6 +511,10 @@ describe('triggers', () => {
     expect(trigger!.firesMovement).toBe(true);
   });
 
+  it('shows what the listen hears, as the author wrote it', () => {
+    expect(view().triggers[0]!.path).toBe('desk-[n:note WHERE n.box == "inbound"]->');
+  });
+
   it('composes a generic sentence from the declared label when none is declared', () => {
     const v = joinStoryView({
       movement: { id: 'mv-1', name: 'Intake', validity: { status: 'valid', problems: [] } },

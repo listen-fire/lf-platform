@@ -34,6 +34,11 @@ export function TriggerCard({ trigger }: { trigger: StoryViewTrigger }) {
       <p className="mt-1.5 text-[12.5px] leading-snug text-gray-700 [overflow-wrap:anywhere]">
         {trigger.sentence}
       </p>
+      {trigger.path && (
+        <p className="mt-1 font-mono text-[11px] leading-snug text-gray-500 [overflow-wrap:anywhere]">
+          {trigger.path}
+        </p>
+      )}
       {trigger.lane && (
         <p className="mt-1 text-[11px] text-gray-400 [overflow-wrap:anywhere]">
           {trigger.lane}

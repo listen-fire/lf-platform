@@ -138,6 +138,7 @@ export function joinStoryView(input: {
         provisioned: provisionedFor(trigger, listeners),
       }),
       system,
+      ...(trigger.path !== undefined ? { path: trigger.path } : {}),
       ...(trigger.lane !== undefined ? { lane: trigger.lane } : {}),
       fires: trigger.fires,
       firesMovement: trigger.firesMovement,

@@ -39,6 +39,9 @@ export interface StoryViewTrigger {
   id: string;
   /** The whole sentence, ready to print: "When an email arrives at …". */
   sentence: string;
+  /** What the listen hears, as the author wrote it: the traversal ending on
+   *  the edge its arrivals land on (`crm-[:Deals]->-[c:Changes]->`). */
+  path?: string;
   system: StoryViewSystem | null;
   /** The lane name from `listen as "…"`, when the author named one. */
   lane?: string;
