@@ -11,6 +11,7 @@ import type { SourcePosition } from 'movement-engine/public/catalog';
 
 import { fileValue } from 'movement-engine/public/adapter';
 import { makeMetaPosition, makeStablePosition, makeUnstablePosition } from 'movement-engine/public/catalog';
+import { arrivalTriggerOf } from 'movement-engine/public/inbound';
 import { withFileOwners } from 'movement-engine/public/files';
 
 export interface WhatsappParitySubject {
@@ -127,7 +128,6 @@ export async function runWhatsappParityScript(subject: WhatsappParitySubject): P
   }
   const meta = makeMetaPosition('whatsapp');
   await step('edgesFrom meta', async () => (await adapter.edgesFrom?.(meta)) ?? null);
-  await step('listEventTypes', async () => (await adapter.listEventTypes?.()) ?? null);
   await step('runtimeCapabilities', async () => adapter.runtimeCapabilities?.() ?? null);
 
   // ── Inbound ──
@@ -140,7 +140,8 @@ export async function runWhatsappParityScript(subject: WhatsappParitySubject): P
     await step(`preprocessInbound ${name}`, async () => (await adapter.preprocessInbound?.({ raw })) ?? null);
   }
   const inbound = await adapter.preprocessInbound?.({ raw: META_ENVELOPE });
-  const payloadOf = (index: number) => (inbound?.events[index]?.payload ?? {}) as Record<string, unknown>;
+  const arrivals = (inbound?.arrivals ?? []).flatMap((arrival) => ('landing' in arrival ? [arrival] : []));
+  const payloadOf = (index: number) => arrivals[index]?.landing.fields ?? {};
 
   // ── Fields ──
   const dispatched = dispatchedMessage(baseUrl, MOVEMENTS_NUMBER_ID);
@@ -184,10 +185,13 @@ export async function runWhatsappParityScript(subject: WhatsappParitySubject): P
   await step('Attachment without a key .File', () => adapter.getFieldValue({ position: bare, fieldId: 'File' }));
 
   // ── Actor ──
-  const event = (payload: unknown) => ({ pipelineInputId: 'parity', adapterType: 'whatsapp', triggerType: 'webhook' as const, payload });
-  for (const [name, payload] of [['dispatched', dispatched], ['twilio', TWILIO_RAW], ['reaction', payloadOf(3)], ['no sender', {}], ['blank sender', { from: 'whatsapp:  ' }]] as const) {
-    await step(`getActorCandidates ${name}`, async () => (await adapter.getActorCandidates?.({ event: event(payload) })) ?? null);
-    await step(`extractActor ${name}`, async () => (await adapter.extractActor?.({ event: event(payload) })) ?? null);
+  // Who acted rides on the arrival the door made (adapter protocol 2.7).
+  const fired = (arrival: (typeof arrivals)[number]) =>
+    arrivalTriggerOf({ pipelineInputId: 'parity', adapterType: 'whatsapp', now: new Date('2026-10-17T00:00:00.000Z'), arrival });
+  const { actor: _sender, ...senderless } = arrivals[0] ?? { edge: 'Messages', identity: 'none', landing: { recordId: 'none', fields: {} } };
+  for (const [name, arrival] of [...arrivals.map((arrival, index) => [`arrival ${index}`, arrival] as const), ['no sender', senderless] as const]) {
+    await step(`getActorCandidates ${name}`, async () => (await adapter.getActorCandidates?.({ event: fired(arrival) })) ?? null);
+    await step(`extractActor ${name}`, async () => (await adapter.extractActor?.({ event: fired(arrival) })) ?? null);
   }
 
   // ── File bytes ──

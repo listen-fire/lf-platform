@@ -6,12 +6,12 @@
         {
           "typeId": "whatsapp:message",
           "displayName": "Message",
+          "collectionName": "Messages",
           "writable": false,
           "readable": false,
-          "fires": true,
-          "firesOn": [
-            "message"
-          ]
+          "listenable": true,
+          "delivery": "connection",
+          "identity": "Message Id"
         },
         {
           "typeId": "whatsapp:attachment",
@@ -22,22 +22,23 @@
         {
           "typeId": "whatsapp:reaction",
           "displayName": "Reaction",
+          "collectionName": "Reactions",
           "writable": false,
           "readable": false,
-          "fires": true,
-          "firesOn": [
-            "reaction"
-          ]
+          "listenable": true,
+          "delivery": "connection",
+          "identity": "Message Id",
+          "attributes": true
         },
         {
           "typeId": "whatsapp:location",
           "displayName": "Location",
+          "collectionName": "Locations",
           "writable": false,
           "readable": false,
-          "fires": true,
-          "firesOn": [
-            "location"
-          ]
+          "listenable": true,
+          "delivery": "connection",
+          "identity": "Message Id"
         },
         {
           "typeId": "whatsapp:typing",
@@ -52,7 +53,7 @@
       "answer": {
         "typeId": "whatsapp:message",
         "displayName": "Message",
-        "description": "A single inbound WhatsApp message — what a listen delivers, whole: read `e.`Body`` straight off the event, reply along its `Replies` edge.",
+        "description": "A single inbound WhatsApp message — what a listen on `Messages` delivers, whole: read `e.`Body`` straight off the arrival, reply along its `Replies` edge.",
         "fields": [
           {
             "fieldId": "messageId",
@@ -68,7 +69,7 @@
             "kind": "string",
             "writable": false,
             "required": true,
-            "description": "The sender's phone number."
+            "description": "The sender's phone number, digits with the country code first and no plus (`447700900001`): the conversation a message is in, so a listen narrows to one by it."
           },
           {
             "fieldId": "to",
@@ -102,7 +103,7 @@
             "writable": true,
             "readable": false,
             "required": false,
-            "description": "WhatsApp's `interactive` object, exactly as the Cloud API spells it — passed through verbatim (no wrapping, no typed shape here; a malformed object surfaces as a loud WhatsApp error at run time, not at save time). Sending this REPLACES a plain-text send: the interactive type carries its own `body.text`, so the message's words go inside `interactive.body.text`, never in `Body` on the same send. Usually reply buttons: up to 3, each `{ type: \"reply\", reply: { id, title } }` (`title` capped at 20 characters). To make a tap DO something, mint a callback (`c = callback({ … })`) and put `\"${c.id}\"` in `reply.id` — WhatsApp allows up to 256 characters there, roomy for it — one callback per button, since its body is what that button means. WhatsApp captures nothing at tap time, so a callback fired from a button takes no values; anything a person has to fill in needs a plain-text reply instead. Build strings with \"${…}\" interpolation (never `+`, which is numeric addition). Example:\n{ type: \"button\",\n  body: { text: \"Ship the release?\" },\n  action: { buttons: [\n    { type: \"reply\", reply: { id: \"${approve.id}\", title: \"Approve\" } },\n    { type: \"reply\", reply: { id: \"${reject.id}\", title: \"Reject\" } } ] } }"
+            "description": "WhatsApp's `interactive` object, exactly as the Cloud API spells it — passed through verbatim (no wrapping, no typed shape here; a malformed object surfaces as a loud WhatsApp error at run time, not at save time). Sending this REPLACES a plain-text send: the interactive type carries its own `body.text`, so the message's words go inside `interactive.body.text`, never in `Body` on the same send. Reply buttons: up to 3, each `{ type: \"reply\", reply: { id, title } }` (`title` capped at 20 characters); a reply button's tap reaches no run. To make a tap DO something, write a form from the `@lf/forms` adapter (`form = write forms-[:Forms]-> { Title: …, Fields: … }`), send its `form.Url` on a url button (`type: \"cta_url\"`), and `await form-[:Submissions]->`: the form also asks for anything a person has to fill in, which WhatsApp does not capture at tap time. Build strings with \"${…}\" interpolation (never `+`, which is numeric addition). Example:\n{ type: \"cta_url\",\n  body: { text: \"Ship the release?\" },\n  action: { name: \"cta_url\", parameters: { display_text: \"Answer\", url: \"${form.Url}\" } } }"
           },
           {
             "fieldId": "waId",
@@ -216,7 +217,7 @@
       "answer": {
         "typeId": "whatsapp:reaction",
         "displayName": "Reaction",
-        "description": "Someone reacted to a message in the team-number conversation. Listen with `events: [\"reaction\"]`. Also the reaction WRITE: created along a message's `Reactions` edge.",
+        "description": "Someone reacted to a message in the team-number conversation. What a listen on `Reactions` delivers. Also the reaction WRITE: created along a message's `Reactions` edge.",
         "fields": [
           {
             "fieldId": "emoji",
@@ -273,7 +274,7 @@
       "answer": {
         "typeId": "whatsapp:location",
         "displayName": "Location",
-        "description": "Someone shared a location with the team number. Listen with `events: [\"location\"]`.",
+        "description": "Someone shared a location with the team number. What a listen on `Locations` delivers.",
         "fields": [
           {
             "fieldId": "latitude",
@@ -351,7 +352,7 @@
       "answer": {
         "typeId": "whatsapp:message",
         "displayName": "Message",
-        "description": "A single inbound WhatsApp message — what a listen delivers, whole: read `e.`Body`` straight off the event, reply along its `Replies` edge.",
+        "description": "A single inbound WhatsApp message — what a listen on `Messages` delivers, whole: read `e.`Body`` straight off the arrival, reply along its `Replies` edge.",
         "fields": [
           {
             "fieldId": "messageId",
@@ -367,7 +368,7 @@
             "kind": "string",
             "writable": false,
             "required": true,
-            "description": "The sender's phone number."
+            "description": "The sender's phone number, digits with the country code first and no plus (`447700900001`): the conversation a message is in, so a listen narrows to one by it."
           },
           {
             "fieldId": "to",
@@ -401,7 +402,7 @@
             "writable": true,
             "readable": false,
             "required": false,
-            "description": "WhatsApp's `interactive` object, exactly as the Cloud API spells it — passed through verbatim (no wrapping, no typed shape here; a malformed object surfaces as a loud WhatsApp error at run time, not at save time). Sending this REPLACES a plain-text send: the interactive type carries its own `body.text`, so the message's words go inside `interactive.body.text`, never in `Body` on the same send. Usually reply buttons: up to 3, each `{ type: \"reply\", reply: { id, title } }` (`title` capped at 20 characters). To make a tap DO something, mint a callback (`c = callback({ … })`) and put `\"${c.id}\"` in `reply.id` — WhatsApp allows up to 256 characters there, roomy for it — one callback per button, since its body is what that button means. WhatsApp captures nothing at tap time, so a callback fired from a button takes no values; anything a person has to fill in needs a plain-text reply instead. Build strings with \"${…}\" interpolation (never `+`, which is numeric addition). Example:\n{ type: \"button\",\n  body: { text: \"Ship the release?\" },\n  action: { buttons: [\n    { type: \"reply\", reply: { id: \"${approve.id}\", title: \"Approve\" } },\n    { type: \"reply\", reply: { id: \"${reject.id}\", title: \"Reject\" } } ] } }"
+            "description": "WhatsApp's `interactive` object, exactly as the Cloud API spells it — passed through verbatim (no wrapping, no typed shape here; a malformed object surfaces as a loud WhatsApp error at run time, not at save time). Sending this REPLACES a plain-text send: the interactive type carries its own `body.text`, so the message's words go inside `interactive.body.text`, never in `Body` on the same send. Reply buttons: up to 3, each `{ type: \"reply\", reply: { id, title } }` (`title` capped at 20 characters); a reply button's tap reaches no run. To make a tap DO something, write a form from the `@lf/forms` adapter (`form = write forms-[:Forms]-> { Title: …, Fields: … }`), send its `form.Url` on a url button (`type: \"cta_url\"`), and `await form-[:Submissions]->`: the form also asks for anything a person has to fill in, which WhatsApp does not capture at tap time. Build strings with \"${…}\" interpolation (never `+`, which is numeric addition). Example:\n{ type: \"cta_url\",\n  body: { text: \"Ship the release?\" },\n  action: { name: \"cta_url\", parameters: { display_text: \"Answer\", url: \"${form.Url}\" } } }"
           },
           {
             "fieldId": "waId",
@@ -477,7 +478,7 @@
       "answer": {
         "typeId": "whatsapp:reaction",
         "displayName": "Reaction",
-        "description": "Someone reacted to a message in the team-number conversation. Listen with `events: [\"reaction\"]`. Also the reaction WRITE: created along a message's `Reactions` edge.",
+        "description": "Someone reacted to a message in the team-number conversation. What a listen on `Reactions` delivers. Also the reaction WRITE: created along a message's `Reactions` edge.",
         "fields": [
           {
             "fieldId": "emoji",
@@ -539,47 +540,38 @@
         "descriptor": {
           "typeId": "meta",
           "displayName": "WhatsApp",
-          "description": "A WhatsApp connection. Nothing here can be listed — there is no call that enumerates conversations — so the way in is somebody messaging you, which a listen delivers whole.",
+          "description": "A WhatsApp connection. Nothing here can be listed — there is no call that enumerates conversations — so the way in is somebody messaging you, which a listen on `Messages`, `Reactions` or `Locations` delivers whole.",
           "fields": [],
           "references": [
             {
               "fieldId": "whatsapp:message",
               "targetTypeId": "whatsapp:message",
-              "cardinality": "one",
+              "cardinality": "many",
               "direction": "outgoing",
-              "name": "Message",
-              "fires": true,
-              "firesOn": [
-                "message"
-              ],
+              "name": "Messages",
+              "listenable": true,
               "readable": false,
-              "description": "Somebody sending a message — what a listen delivers."
+              "description": "Each message somebody sends the number — what a listen delivers."
             },
             {
               "fieldId": "whatsapp:reaction",
               "targetTypeId": "whatsapp:reaction",
-              "cardinality": "one",
+              "cardinality": "many",
               "direction": "outgoing",
-              "name": "Reaction",
-              "fires": true,
-              "firesOn": [
-                "reaction"
-              ],
+              "name": "Reactions",
+              "listenable": true,
               "readable": false,
-              "description": "Somebody reacting to a message."
+              "description": "Each reaction somebody adds to a message."
             },
             {
               "fieldId": "whatsapp:location",
               "targetTypeId": "whatsapp:location",
-              "cardinality": "one",
+              "cardinality": "many",
               "direction": "outgoing",
-              "name": "Location",
-              "fires": true,
-              "firesOn": [
-                "location"
-              ],
+              "name": "Locations",
+              "listenable": true,
               "readable": false,
-              "description": "Somebody sharing their location."
+              "description": "Each location somebody shares."
             }
           ]
         },
@@ -613,7 +605,7 @@
           "whatsapp:message": {
             "typeId": "whatsapp:message",
             "displayName": "Message",
-            "description": "A single inbound WhatsApp message — what a listen delivers, whole: read `e.`Body`` straight off the event, reply along its `Replies` edge.",
+            "description": "A single inbound WhatsApp message — what a listen on `Messages` delivers, whole: read `e.`Body`` straight off the arrival, reply along its `Replies` edge.",
             "fields": [
               {
                 "fieldId": "messageId",
@@ -629,7 +621,7 @@
                 "kind": "string",
                 "writable": false,
                 "required": true,
-                "description": "The sender's phone number."
+                "description": "The sender's phone number, digits with the country code first and no plus (`447700900001`): the conversation a message is in, so a listen narrows to one by it."
               },
               {
                 "fieldId": "to",
@@ -663,7 +655,7 @@
                 "writable": true,
                 "readable": false,
                 "required": false,
-                "description": "WhatsApp's `interactive` object, exactly as the Cloud API spells it — passed through verbatim (no wrapping, no typed shape here; a malformed object surfaces as a loud WhatsApp error at run time, not at save time). Sending this REPLACES a plain-text send: the interactive type carries its own `body.text`, so the message's words go inside `interactive.body.text`, never in `Body` on the same send. Usually reply buttons: up to 3, each `{ type: \"reply\", reply: { id, title } }` (`title` capped at 20 characters). To make a tap DO something, mint a callback (`c = callback({ … })`) and put `\"${c.id}\"` in `reply.id` — WhatsApp allows up to 256 characters there, roomy for it — one callback per button, since its body is what that button means. WhatsApp captures nothing at tap time, so a callback fired from a button takes no values; anything a person has to fill in needs a plain-text reply instead. Build strings with \"${…}\" interpolation (never `+`, which is numeric addition). Example:\n{ type: \"button\",\n  body: { text: \"Ship the release?\" },\n  action: { buttons: [\n    { type: \"reply\", reply: { id: \"${approve.id}\", title: \"Approve\" } },\n    { type: \"reply\", reply: { id: \"${reject.id}\", title: \"Reject\" } } ] } }"
+                "description": "WhatsApp's `interactive` object, exactly as the Cloud API spells it — passed through verbatim (no wrapping, no typed shape here; a malformed object surfaces as a loud WhatsApp error at run time, not at save time). Sending this REPLACES a plain-text send: the interactive type carries its own `body.text`, so the message's words go inside `interactive.body.text`, never in `Body` on the same send. Reply buttons: up to 3, each `{ type: \"reply\", reply: { id, title } }` (`title` capped at 20 characters); a reply button's tap reaches no run. To make a tap DO something, write a form from the `@lf/forms` adapter (`form = write forms-[:Forms]-> { Title: …, Fields: … }`), send its `form.Url` on a url button (`type: \"cta_url\"`), and `await form-[:Submissions]->`: the form also asks for anything a person has to fill in, which WhatsApp does not capture at tap time. Build strings with \"${…}\" interpolation (never `+`, which is numeric addition). Example:\n{ type: \"cta_url\",\n  body: { text: \"Ship the release?\" },\n  action: { name: \"cta_url\", parameters: { display_text: \"Answer\", url: \"${form.Url}\" } } }"
               },
               {
                 "fieldId": "waId",
@@ -694,7 +686,7 @@
           "whatsapp:reaction": {
             "typeId": "whatsapp:reaction",
             "displayName": "Reaction",
-            "description": "Someone reacted to a message in the team-number conversation. Listen with `events: [\"reaction\"]`. Also the reaction WRITE: created along a message's `Reactions` edge.",
+            "description": "Someone reacted to a message in the team-number conversation. What a listen on `Reactions` delivers. Also the reaction WRITE: created along a message's `Reactions` edge.",
             "fields": [
               {
                 "fieldId": "emoji",
@@ -747,7 +739,7 @@
           "whatsapp:location": {
             "typeId": "whatsapp:location",
             "displayName": "Location",
-            "description": "Someone shared a location with the team number. Listen with `events: [\"location\"]`.",
+            "description": "Someone shared a location with the team number. What a listen on `Locations` delivers.",
             "fields": [
               {
                 "fieldId": "latitude",
@@ -812,23 +804,6 @@
       }
     },
     {
-      "step": "listEventTypes",
-      "answer": [
-        {
-          "tag": "message",
-          "positionType": "whatsapp:message"
-        },
-        {
-          "tag": "reaction",
-          "positionType": "whatsapp:reaction"
-        },
-        {
-          "tag": "location",
-          "positionType": "whatsapp:location"
-        }
-      ]
-    },
-    {
       "step": "runtimeCapabilities",
       "answer": {
         "traversal": {
@@ -841,103 +816,188 @@
     {
       "step": "preprocessInbound meta envelope",
       "answer": {
-        "events": [
+        "events": [],
+        "arrivals": [
           {
-            "payload": {
-              "messageId": "wamid.T1",
-              "from": "447700900001",
-              "to": "+44 7700 900000",
-              "body": "Closed the round!",
-              "waId": "447700900001",
-              "profileName": "Ada",
-              "timestamp": "1700000000",
-              "attachments": []
+            "edge": "Messages",
+            "identity": "wamid.T1",
+            "landing": {
+              "recordId": "wamid.T1",
+              "recordType": "Message",
+              "fields": {
+                "messageId": "wamid.T1",
+                "from": "447700900001",
+                "to": "+44 7700 900000",
+                "body": "Closed the round!",
+                "waId": "447700900001",
+                "profileName": "Ada",
+                "timestamp": "1700000000",
+                "attachments": [],
+                "Message Id": "wamid.T1",
+                "From": "447700900001",
+                "To": "+44 7700 900000",
+                "Body": "Closed the round!",
+                "WhatsApp Id": "447700900001",
+                "Profile Name": "Ada",
+                "Timestamp": "1700000000"
+              }
             },
-            "externalId": "wamid.T1",
-            "idempotencyKey": "wamid.T1",
-            "recordType": "whatsapp:message",
-            "eventType": "message",
-            "tag": "message"
+            "actor": {
+              "identifier": "447700900001",
+              "scheme": "phone",
+              "adapterType": "whatsapp",
+              "name": "Ada",
+              "label": "Ada"
+            },
+            "occurredAt": "2023-11-14T22:13:20.000Z"
           },
           {
-            "payload": {
-              "messageId": "wamid.I1",
-              "from": "447700900001",
-              "to": "+44 7700 900000",
-              "body": "the deck",
-              "waId": "447700900001",
-              "profileName": "Ada",
-              "timestamp": "1700000001",
-              "attachments": [
-                {
-                  "key": "MEDIA-1",
-                  "filename": "wamid.I1",
-                  "contentType": "image/jpeg"
-                }
-              ]
+            "edge": "Messages",
+            "identity": "wamid.I1",
+            "landing": {
+              "recordId": "wamid.I1",
+              "recordType": "Message",
+              "fields": {
+                "messageId": "wamid.I1",
+                "from": "447700900001",
+                "to": "+44 7700 900000",
+                "body": "the deck",
+                "waId": "447700900001",
+                "profileName": "Ada",
+                "timestamp": "1700000001",
+                "attachments": [
+                  {
+                    "key": "MEDIA-1",
+                    "filename": "wamid.I1",
+                    "contentType": "image/jpeg"
+                  }
+                ],
+                "Message Id": "wamid.I1",
+                "From": "447700900001",
+                "To": "+44 7700 900000",
+                "Body": "the deck",
+                "WhatsApp Id": "447700900001",
+                "Profile Name": "Ada",
+                "Timestamp": "1700000001"
+              }
             },
-            "externalId": "wamid.I1",
-            "idempotencyKey": "wamid.I1",
-            "recordType": "whatsapp:message",
-            "eventType": "message",
-            "tag": "message"
+            "actor": {
+              "identifier": "447700900001",
+              "scheme": "phone",
+              "adapterType": "whatsapp",
+              "name": "Ada",
+              "label": "Ada"
+            },
+            "occurredAt": "2023-11-14T22:13:21.000Z"
           },
           {
-            "payload": {
-              "messageId": "wamid.S1",
-              "from": "447700900001",
-              "to": "+44 7700 900000",
-              "body": "",
-              "waId": "447700900001",
-              "profileName": "Ada",
-              "timestamp": "1700000002",
-              "attachments": [
-                {
-                  "key": "MEDIA-2",
-                  "filename": "wamid.S1",
-                  "contentType": "image/webp"
-                }
-              ]
+            "edge": "Messages",
+            "identity": "wamid.S1",
+            "landing": {
+              "recordId": "wamid.S1",
+              "recordType": "Message",
+              "fields": {
+                "messageId": "wamid.S1",
+                "from": "447700900001",
+                "to": "+44 7700 900000",
+                "body": "",
+                "waId": "447700900001",
+                "profileName": "Ada",
+                "timestamp": "1700000002",
+                "attachments": [
+                  {
+                    "key": "MEDIA-2",
+                    "filename": "wamid.S1",
+                    "contentType": "image/webp"
+                  }
+                ],
+                "Message Id": "wamid.S1",
+                "From": "447700900001",
+                "To": "+44 7700 900000",
+                "Body": "",
+                "WhatsApp Id": "447700900001",
+                "Profile Name": "Ada",
+                "Timestamp": "1700000002"
+              }
             },
-            "externalId": "wamid.S1",
-            "idempotencyKey": "wamid.S1",
-            "recordType": "whatsapp:message",
-            "eventType": "message",
-            "tag": "message"
+            "actor": {
+              "identifier": "447700900001",
+              "scheme": "phone",
+              "adapterType": "whatsapp",
+              "name": "Ada",
+              "label": "Ada"
+            },
+            "occurredAt": "2023-11-14T22:13:22.000Z"
           },
           {
-            "payload": {
-              "messageId": "wamid.R1",
-              "from": "447700900001",
-              "waId": "447700900001",
-              "profileName": "Ada",
-              "timestamp": "1700000003",
-              "emoji": "👍",
-              "reactedMessageId": "wamid.T1"
+            "edge": "Reactions",
+            "identity": "wamid.R1",
+            "landing": {
+              "recordId": "wamid.R1",
+              "recordType": "Reaction",
+              "fields": {
+                "messageId": "wamid.R1",
+                "from": "447700900001",
+                "waId": "447700900001",
+                "profileName": "Ada",
+                "timestamp": "1700000003",
+                "emoji": "👍",
+                "reactedMessageId": "wamid.T1",
+                "Emoji": "👍",
+                "Reacted Message Id": "wamid.T1",
+                "Message Id": "wamid.R1",
+                "From": "447700900001",
+                "Profile Name": "Ada",
+                "Timestamp": "1700000003"
+              }
             },
-            "externalId": "wamid.R1",
-            "idempotencyKey": "wamid.R1",
-            "recordType": "whatsapp:reaction",
-            "eventType": "reaction",
-            "tag": "reaction"
+            "actor": {
+              "identifier": "447700900001",
+              "scheme": "phone",
+              "adapterType": "whatsapp",
+              "name": "Ada",
+              "label": "Ada"
+            },
+            "about": {
+              "recordType": "Message",
+              "externalId": "wamid.T1"
+            },
+            "occurredAt": "2023-11-14T22:13:23.000Z"
           },
           {
-            "payload": {
-              "messageId": "wamid.L1",
-              "from": "447700900001",
-              "waId": "447700900001",
-              "profileName": "Ada",
-              "timestamp": "1700000004",
-              "latitude": 51.5,
-              "longitude": -0.12,
-              "name": "Office",
-              "address": "1 Road"
+            "edge": "Locations",
+            "identity": "wamid.L1",
+            "landing": {
+              "recordId": "wamid.L1",
+              "recordType": "Location",
+              "fields": {
+                "messageId": "wamid.L1",
+                "from": "447700900001",
+                "waId": "447700900001",
+                "profileName": "Ada",
+                "timestamp": "1700000004",
+                "latitude": 51.5,
+                "longitude": -0.12,
+                "name": "Office",
+                "address": "1 Road",
+                "Latitude": 51.5,
+                "Longitude": -0.12,
+                "Name": "Office",
+                "Address": "1 Road",
+                "Message Id": "wamid.L1",
+                "From": "447700900001",
+                "Profile Name": "Ada",
+                "Timestamp": "1700000004"
+              }
             },
-            "externalId": "wamid.L1",
-            "idempotencyKey": "wamid.L1",
-            "recordType": "whatsapp:location",
-            "eventType": "location",
-            "tag": "location"
+            "actor": {
+              "identifier": "447700900001",
+              "scheme": "phone",
+              "adapterType": "whatsapp",
+              "name": "Ada",
+              "label": "Ada"
+            },
+            "occurredAt": "2023-11-14T22:13:24.000Z"
           }
         ]
       }
@@ -945,19 +1005,22 @@
     {
       "step": "preprocessInbound empty envelope",
       "answer": {
-        "events": []
+        "events": [],
+        "arrivals": []
       }
     },
     {
       "step": "preprocessInbound malformed",
       "answer": {
-        "events": []
+        "events": [],
+        "arrivals": []
       }
     },
     {
       "step": "preprocessInbound not an object",
       "answer": {
-        "events": []
+        "events": [],
+        "arrivals": []
       }
     },
     {
@@ -1313,7 +1376,7 @@
       "answer": null
     },
     {
-      "step": "getActorCandidates dispatched",
+      "step": "getActorCandidates arrival 0",
       "answer": [
         {
           "identity": {
@@ -1326,7 +1389,7 @@
       ]
     },
     {
-      "step": "extractActor dispatched",
+      "step": "extractActor arrival 0",
       "answer": {
         "identifier": "447700900001",
         "scheme": "phone",
@@ -1336,30 +1399,7 @@
       }
     },
     {
-      "step": "getActorCandidates twilio",
-      "answer": [
-        {
-          "identity": {
-            "identifier": "+447700900002",
-            "scheme": "phone",
-            "adapterType": "whatsapp"
-          },
-          "source": "originator"
-        }
-      ]
-    },
-    {
-      "step": "extractActor twilio",
-      "answer": {
-        "identifier": "+447700900002",
-        "scheme": "phone",
-        "adapterType": "whatsapp",
-        "name": "Bo",
-        "label": "Bo"
-      }
-    },
-    {
-      "step": "getActorCandidates reaction",
+      "step": "getActorCandidates arrival 1",
       "answer": [
         {
           "identity": {
@@ -1372,7 +1412,76 @@
       ]
     },
     {
-      "step": "extractActor reaction",
+      "step": "extractActor arrival 1",
+      "answer": {
+        "identifier": "447700900001",
+        "scheme": "phone",
+        "adapterType": "whatsapp",
+        "name": "Ada",
+        "label": "Ada"
+      }
+    },
+    {
+      "step": "getActorCandidates arrival 2",
+      "answer": [
+        {
+          "identity": {
+            "identifier": "447700900001",
+            "scheme": "phone",
+            "adapterType": "whatsapp"
+          },
+          "source": "originator"
+        }
+      ]
+    },
+    {
+      "step": "extractActor arrival 2",
+      "answer": {
+        "identifier": "447700900001",
+        "scheme": "phone",
+        "adapterType": "whatsapp",
+        "name": "Ada",
+        "label": "Ada"
+      }
+    },
+    {
+      "step": "getActorCandidates arrival 3",
+      "answer": [
+        {
+          "identity": {
+            "identifier": "447700900001",
+            "scheme": "phone",
+            "adapterType": "whatsapp"
+          },
+          "source": "originator"
+        }
+      ]
+    },
+    {
+      "step": "extractActor arrival 3",
+      "answer": {
+        "identifier": "447700900001",
+        "scheme": "phone",
+        "adapterType": "whatsapp",
+        "name": "Ada",
+        "label": "Ada"
+      }
+    },
+    {
+      "step": "getActorCandidates arrival 4",
+      "answer": [
+        {
+          "identity": {
+            "identifier": "447700900001",
+            "scheme": "phone",
+            "adapterType": "whatsapp"
+          },
+          "source": "originator"
+        }
+      ]
+    },
+    {
+      "step": "extractActor arrival 4",
       "answer": {
         "identifier": "447700900001",
         "scheme": "phone",
@@ -1387,14 +1496,6 @@
     },
     {
       "step": "extractActor no sender",
-      "answer": null
-    },
-    {
-      "step": "getActorCandidates blank sender",
-      "answer": []
-    },
-    {
-      "step": "extractActor blank sender",
       "answer": null
     },
     {
