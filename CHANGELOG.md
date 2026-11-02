@@ -17,6 +17,8 @@ versions are the git tags described in [`deploy/UPGRADING.md`](deploy/UPGRADING.
 
 <!-- add merged PRs here -->
 
+- The language core is at 0.13.0 (the catalog block), the language's new compatibility key (the language's CHANGELOG, 0.13.0; `docs/contracts/platform-adoption-0.13.md` there lists what a host changes). Every `@listen-fire/*` package moves to its own npm latest; the `fake-channels` image's `FAKE_CHANNELS_VERSION` is 0.13.0. The adoption lands in slices on top of this pin.
+
 ## [0.12.13] - 2026-10-29
 
 The platform release that matches the language's 0.12.13, whose command is now `listen-fire` (formerly `lf`). The language's 0.12.12 was never adopted on its own: this release takes both. It also adds public inboxes and takes Tiny's document source fixes.
