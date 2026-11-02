@@ -4071,7 +4071,6 @@ ALTER TABLE ONLY automations.trigger
     ADD CONSTRAINT trigger_credentials_id_fkey FOREIGN KEY (credentials_id) REFERENCES automations.external_service_credentials(id) ON UPDATE CASCADE ON DELETE SET NULL;
 
 
--- ### Listen-Fire-owned API Tokens (Layer 14.4 substrate) -----------------------
 -- ### Webhook Subscriptions ---------------------------------------------------
 -- Tracks registered inbound webhooks from external systems (Attio, Affinity, etc.)
 -- for keeping linked object data fresh.
