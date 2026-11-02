@@ -112,7 +112,12 @@ or acts.
   front (`describe_systems`), the listen-fire cheat sheet (`programs/lf_cheatsheet.md`),
   the listen-fire-builder skill unchanged (the platform's
   `apps/web/skill-src` copy; listen-fire's own went with the split), the
-  handbook, `listen-fire check` and a dry run.
+  handbook, `listen-fire check` and a test run on the example event.
+  - listen-fire 0.14 has no dry run of an event, so the test run is real
+    (`listen-fire run --event … --ephemeral`): its writes reach the stand-ins'
+    mailbox and Slack, which are cleared before the program goes live. The
+    JavaScript test run records its sends instead. The woken agent has no
+    test run (a real one would write to the stand-ins being measured).
   - Stripe is connected through listen-fire's Stripe module, `@lf/stripe`
     (credential `stripe_account`: an API key and the endpoint's signing
     secret). The program listens on an invoice's changes

@@ -13,15 +13,19 @@
 //   read_program      movements/payment_failed.mvt as it stands
 //   write_program     replace it
 //   lf_check          `listen-fire check`, as printed
-//   test_run          `listen-fire run --event <the example> --dry-run`: one run on the
-//                     example event, reads made, nothing written
+//   test_run          `listen-fire run --event <the example> --ephemeral`: one run on
+//                     the example event, for real, its run state thrown away
 //
 // The test run is the same single run on the same example event the
-// JavaScript option's test_handler gets. Every command's output is given as
+// JavaScript option's test_handler gets. listen-fire 0.14 has no dry run of an
+// event, so its writes are made, to the stand-ins' mailbox and Slack, which
+// compare.sh clears before the program goes live (the JavaScript test records
+// them instead). Every command's output is given as
 // listen-fire printed it, with the project's own path made relative.
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
+const { createRequire } = require('module');
 const { session, PRICES } = require('./agent_tools.cjs');
 const { loadHandbook, PROJECT_MODULES } = require('./handbook.cjs');
 
@@ -38,13 +42,13 @@ const example = JSON.parse(fs.readFileSync(exampleFile, 'utf8'));
 const programPath = path.join(project, PROGRAM);
 const realProject = fs.realpathSync(project);
 const exampleRun = path.join(path.dirname(out), `${path.basename(out, '.json')}_example_event.json`);
-// The example as @lf/stripe's door keeps a delivery of it (modules/stripe/inbound.ts).
-const keptExample = {
-  payload: { id: example.id, type: example.type, created: null, livemode: example.livemode === true, api_version: example.api_version ?? null, previous_attributes: null, object: example.data.object },
-  tag: 'stripe:event',
-  eventType: example.type,
-};
-fs.writeFileSync(exampleRun, JSON.stringify({ external: 'stripe', credential: 'stripe_account', event: keptExample }));
+// The example as @lf/stripe's door makes it: the arrival on its invoice's
+// Changes, by the module's own code (modules/stripe/inbound.ts).
+createRequire(path.join(LF_SRC, 'packages/module-kit/package.json'))('tsx/cjs');
+const inbound = require(path.join(LF_SRC, 'modules/stripe/inbound.ts'));
+const parsed = inbound.eventOf(example);
+if (!parsed.ok) throw new Error(`the example event is not one @lf/stripe takes: ${parsed.message}`);
+fs.writeFileSync(exampleRun, JSON.stringify({ external: 'stripe', event: { arrivals: [inbound.changeArrival(parsed.payload)] } }));
 
 const handbook = loadHandbook(LF_SRC, PROJECT_MODULES);
 
@@ -117,7 +121,7 @@ async function main() {
     { name: 'lf_check', description: 'Run `listen-fire check`: every diagnostic the program has.', input_schema: { type: 'object', properties: {} } },
     {
       name: 'test_run',
-      description: 'Run `listen-fire run --event <the example event> --dry-run`: the program once on the example event. Reads are made (the CRM is real); writes are shown, not made.',
+      description: "Run `listen-fire run --event <the example event> --ephemeral`: the program once on the example event, for real (listen-fire has no dry run of an event). Reads are made (the CRM is real). Writes are made too, to a test mailbox and Slack that are cleared before the program goes live; the run is kept out of the project's run history.",
       input_schema: { type: 'object', properties: {} },
     },
   ];
@@ -143,7 +147,7 @@ async function main() {
       case 'lf_check':
         return lf(['check']);
       case 'test_run':
-        return lf(['run', '--event', exampleRun, '--dry-run']);
+        return lf(['run', '--event', exampleRun, '--ephemeral']);
       default:
         throw new Error(`no tool ${name}`);
     }

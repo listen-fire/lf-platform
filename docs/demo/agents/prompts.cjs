@@ -19,7 +19,7 @@ const jsDelivery = `How events reach the handler: the sandbox stores each webhoo
 const lfDelivery = `How events reach the program: \`listen-fire serve\` stores each Stripe delivery and acknowledges it (202) before it runs; a worker then runs it. A delivery whose Stripe event id has already been received is acknowledged as a duplicate and runs nothing. A run that fails, by \`fail(…)\` or by a connected system refusing or failing a call, is kept as failed with its error (\`listen-fire runs\`), and nothing runs it again by itself: the host wakes you to decide what to do (inspect, fix, run it again with \`listen-fire runs rerun <run-id>\`, or tell the user). A rerun runs the failed run again as its next attempt, on its own event and with the program as the project holds it now (so a fix takes effect), from the start. lf refuses it when the failed attempt already committed writes, and lists them; \`--force\` reruns it anyway, making those writes again. The host also runs \`listen-fire check\` every 30 seconds and wakes you when it finds new errors.`;
 
 const checkJs = 'Before you finish, check your work: test-run the handler on the example event and read what it did.';
-const checkLf = 'Before you finish, check your work: run `listen-fire check`, and a dry run (test_run) on the example event, and read what it did.';
+const checkLf = 'Before you finish, check your work: run `listen-fire check`, and a test run (test_run) on the example event, and read what it did.';
 const checkAgent = 'Check before you act: confirm what applies to this event before you send anything.';
 
 /** The prompt a woken agent gets: the same for both options but for what

@@ -13,8 +13,9 @@
 //               crm_list_tools     the CRM's tools, as the sandbox's client lists them
 //                                  (or crm_api_reference, its REST API's reference)
 //   lf          read_program, write_program (the live program), lf_check,
-//               lf_runs, lf_runs_show, lf_deliveries,
-//               test_run           a dry run of a run's event (`listen-fire run --event … --dry-run`)
+//               lf_runs, lf_runs_show, lf_deliveries (no test run: listen-fire
+//               0.14 has no dry run of an event, and a real one would write
+//               to the stand-ins the stressors measure)
 //               lf_rerun           `listen-fire runs rerun <run-id> [--force]`: the failed run
 //                                  again, now, as its next attempt (refused when
 //                                  the failed attempt committed writes, unless
@@ -100,7 +101,6 @@ async function wake({ kind, reason, js, lf }) {
       { name: 'lf_runs', description: 'Run `listen-fire runs`: the runs, most recent first.', input_schema: { type: 'object', properties: {} } },
       { name: 'lf_runs_show', description: 'Run `listen-fire runs show <run-id>`.', input_schema: { type: 'object', properties: { run_id: { type: 'string' } }, required: ['run_id'] } },
       { name: 'lf_deliveries', description: 'Run `listen-fire deliveries`: the deliveries kept, most recent first.', input_schema: { type: 'object', properties: {} } },
-      { name: 'test_run', description: "A dry run of a run's event against the program as it stands: `listen-fire run --event … --dry-run` (reads made, writes shown, not made).", input_schema: { type: 'object', properties: { run_id: { type: 'string' } }, required: ['run_id'] } },
       {
         name: 'lf_rerun',
         description:
@@ -128,21 +128,6 @@ async function wake({ kind, reason, js, lf }) {
           return run(['runs', 'show', String(input.run_id)]);
         case 'lf_deliveries':
           return run(['deliveries']);
-        case 'test_run': {
-          // The run's event as its delivery keeps it (external, credential,
-          // event: what the door made of it, its type included).
-          const json = (args) => JSON.parse(spawnSync(process.env.LF_BIN || 'listen-fire', [...args, '--json'], { cwd: lf.project, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).stdout);
-          const { deliveryId } = json(['runs', 'show', String(input.run_id)]).run;
-          const kept = [];
-          (function find(x) {
-            if (Array.isArray(x)) x.forEach(find);
-            else if (x && typeof x === 'object') (typeof x.external === 'string' && x.event ? kept.push(x) : Object.values(x).forEach(find));
-          })(json(['deliveries', 'show', deliveryId]));
-          if (kept.length !== 1) return `run ${input.run_id}'s delivery ${deliveryId} keeps ${kept.length} events; test_run takes a run whose delivery keeps one`;
-          const f = path.join(lf.scratch, `test_${input.run_id}.json`);
-          fs.writeFileSync(f, JSON.stringify({ external: kept[0].external, credential: kept[0].credential, event: kept[0].event }));
-          return run(['run', '--event', f, '--dry-run']);
-        }
         case 'lf_rerun': {
           const force = input.force === true;
           const output = run(['runs', 'rerun', String(input.run_id), ...(force ? ['--force'] : [])]);

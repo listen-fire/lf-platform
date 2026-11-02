@@ -82,6 +82,6 @@ fail("reason")         # ends the run as failed, the reason kept in the run reco
 - `listen-fire check`: every diagnostic, with the code and a fix. It reads each
   connection's live description, so a field, a type or a value a system does
   not have is refused before anything runs.
-- `listen-fire run --event <file> --dry-run`: one run on an event, reads made,
-  writes shown and not made.
+- `listen-fire run --event <file>`: one run on an event, for real (an event has
+  no dry run; `--ephemeral` keeps the run out of the project's history).
 - `listen-fire runs`, `listen-fire runs show <id>`: what each run did, its event, trace and error.
