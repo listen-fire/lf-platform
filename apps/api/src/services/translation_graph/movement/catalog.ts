@@ -906,6 +906,8 @@ async function assembleTeamCatalog(
           entryPoints: instance.entryPoints,
           describeType: instance.describeType,
           membersOf: instance.membersOf,
+          rootMembers: instance.rootMembers,
+          describeLanding: instance.describeLanding,
         },
         chains,
       });
@@ -1064,10 +1066,33 @@ async function assembleTeamCatalog(
             });
           }
         }
-        schemaByAdapterAndCred.set(
-          schemaKey(t.slug, t.credentialsId, t.posKey),
-          projection,
-        );
+        // The positioned connection's own selections and named types (its
+        // listen's `-[t:Tables WHERE t.Name == "Deals"]->`, a parameter's
+        // `Deals Change`), refined from its own root, as the unpositioned
+        // pass does from the meta root.
+        const key = schemaKey(t.slug, t.credentialsId, t.posKey);
+        const chains = allChains.filter((chain) => {
+          const manifest = manifestBySlug.get(chain.adapter);
+          const credentialsId = chain.credential !== undefined ? credentialsByName[chain.credential]?.id : undefined;
+          return manifest !== undefined && schemaKey(chain.adapter, credentialsId, positionKeyForManifest(manifest, chain.constructionArgs)) === key;
+        });
+        if (chains.length > 0) {
+          const refined = await refineInstanceSchema({
+            instance: {
+              adapterType: t.slug,
+              schema: projection.schema,
+              entryPoints: instance.entryPoints,
+              describeType: instance.describeType,
+              membersOf: instance.membersOf,
+              rootMembers: instance.rootMembers,
+              describeLanding: instance.describeLanding,
+            },
+            chains,
+          });
+          notes.push(...refined.notes);
+          projection = { ...projection, schema: refined.schema };
+        }
+        schemaByAdapterAndCred.set(key, projection);
         notes.push(...projection.notes);
       } catch (err) {
         const detail = err instanceof Error ? err.message : String(err);

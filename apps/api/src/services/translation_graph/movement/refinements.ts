@@ -61,6 +61,14 @@ export interface RefinableInstance {
    *  what a narrowing predicate runs against
    *  (`CachedAdapterInstance.membersOf`). */
   membersOf: (recordType: string) => Promise<Array<{ name: string; data: unknown }>>;
+  /** What the connection's root hands over, each with the type it is a
+   *  member of (`CachedAdapterInstance.rootMembers`). Absent: a record type
+   *  the program names that no hop walks to stays unknown. */
+  rootMembers?: () => Promise<Array<{ name: string; recordType: string }>>;
+  /** The node one of `from`'s edges lands on, by the type it targets, walked
+   *  along `from`'s own path (`CachedAdapterInstance.describeLanding`).
+   *  Absent: the landing is described by its name. */
+  describeLanding?: (from: string, target: string) => Promise<SchemaTypeDescriptor | null>;
 }
 
 /**
@@ -160,28 +168,92 @@ function refinedTypeName(input: { typeName: string; member: string }): string {
   return `${input.typeName} "${input.member}"`;
 }
 
+/** A described member projected under its refined name, with the nodes its
+ *  edges land on, each under its own name. */
+interface ProjectedMember {
+  position: PositionSchema;
+  landings: Record<string, PositionSchema>;
+  /** What a write along the member's edges creates, by landing. */
+  createShapes: NonNullable<InstanceSchema['createShapes']>;
+}
+
 /** Project one described member into a position under its refined name. */
 function projectRefinedPosition(input: {
   instance: RefinableInstance;
   refinedName: string;
   syntheticTypeId: string;
   descriptor: SchemaTypeDescriptor;
-}): PositionSchema | undefined {
+  landings?: ReadonlyMap<string, SchemaTypeDescriptor>;
+}): ProjectedMember | undefined {
+  const landings = input.landings ?? new Map<string, SchemaTypeDescriptor>();
+  const entry = (typeId: string, displayName: string) => ({ typeId, displayName, readable: true, writable: false });
   const projected = instanceSchemaFromDescriptors({
     adapterType: input.instance.adapterType,
     entries: [
       ...input.instance.entryPoints,
-      {
-        typeId: input.syntheticTypeId,
-        displayName: input.refinedName,
-        readable: true,
-        writable: false,
-      },
+      entry(input.syntheticTypeId, input.refinedName),
+      ...[...landings.keys()].map((name) => entry(name, name)),
     ],
-    descriptors: new Map([[input.syntheticTypeId, input.descriptor]]),
+    descriptors: new Map([[input.syntheticTypeId, input.descriptor], ...landings]),
     supportsInPlaceUpdate: false,
   });
-  return projected.schema.positions[input.refinedName];
+  const position = projected.schema.positions[input.refinedName];
+  if (position === undefined) return undefined;
+  const names = [...landings.keys()];
+  return {
+    position,
+    landings: entriesNamed(projected.schema.positions, names),
+    createShapes: entriesNamed(projected.schema.createShapes, names),
+  };
+}
+
+function entriesNamed<T>(map: Record<string, T> | undefined, names: readonly string[]): Record<string, T> {
+  const out: Record<string, T> = {};
+  for (const name of names) {
+    const value = map?.[name];
+    if (value !== undefined) out[name] = value;
+  }
+  return out;
+}
+
+/** The member is still one of its type, and a WHERE that picked it ranges
+ *  over the type: the type's own fields (a base's `Name`) are read as the
+ *  type types them, beside the member's own surface. */
+function withTypeProperties(position: PositionSchema, unnarrowed: PositionSchema | undefined): PositionSchema {
+  if (unnarrowed === undefined) return position;
+  return { ...position, properties: { ...position.properties, ...unnarrowed.properties } };
+}
+
+/**
+ * The nodes a member's edges land on that the schema has no position for,
+ * each described by the name its edge targets, and on from each landing the
+ * same way: a narrowed base's tables, each table's changes (`Deals Change`),
+ * and the row each change holds. Without them a listen through the member to
+ * a table's `Changes` lands on a type nothing describes. (listen-fire's
+ * `refinements.rs` grafts the same landings.)
+ */
+async function landingsOf(input: {
+  instance: RefinableInstance;
+  member: string;
+  descriptor: SchemaTypeDescriptor;
+  known: (name: string) => boolean;
+}): Promise<Map<string, SchemaTypeDescriptor>> {
+  const { instance } = input;
+  const describeLanding = (from: string, target: string) =>
+    instance.describeLanding !== undefined ? instance.describeLanding(from, target) : instance.describeType(target);
+  const landings = new Map<string, SchemaTypeDescriptor>();
+  const toWalk: Array<{ from: string; descriptor: SchemaTypeDescriptor }> = [{ from: input.member, descriptor: input.descriptor }];
+  for (let next = toWalk.pop(); next !== undefined; next = toWalk.pop()) {
+    for (const reference of next.descriptor.references) {
+      const target = reference.targetTypeId;
+      if (input.known(target) || landings.has(target)) continue;
+      const landing = await describeLanding(next.from, target);
+      if (landing === null) continue;
+      landings.set(target, landing);
+      toWalk.push({ from: target, descriptor: landing });
+    }
+  }
+  return landings;
 }
 
 /**
@@ -210,15 +282,16 @@ export async function narrowForInspection(input: {
   if (!described.ok) return described;
 
   const refinedName = refinedTypeName({ typeName: input.typeName, member });
-  const position = projectRefinedPosition({
+  const projected = projectRefinedPosition({
     instance: input.instance,
     refinedName,
     syntheticTypeId: `${input.typeName}::${member}`,
     descriptor: described.value,
   });
-  if (position === undefined) return { ok: false, failure: { kind: 'no-descriptor', member } };
+  if (projected === undefined) return { ok: false, failure: { kind: 'no-descriptor', member } };
 
   const schema = input.instance.schema;
+  const position = withTypeProperties(projected.position, schema.positions[input.typeName]);
   return {
     ok: true,
     member,
@@ -267,6 +340,9 @@ export async function refineInstanceSchema(input: {
    *  guard below and silently not narrow, and must record the same member type
    *  without paying for the describe that names it. */
   const grafted = new Map<string, string>();
+  /** A position the schema describes: one a projection only stubbed (an edge
+   *  target nobody walked to) is a landing still to describe. */
+  const isDescribed = (name: string) => positions[name] !== undefined && positions[name].undescribed !== true;
   /** How each narrowable type this program's hops land on narrows — the same
    *  `narrowBy` a describe shows. The checker reads it only to say how to fix a
    *  refused read of a field the unnarrowed type does not carry, so it is
@@ -324,10 +400,34 @@ export async function refineInstanceSchema(input: {
     }
     if (positions[refinedName] !== undefined) return undefined; // name taken — leave unnarrowed
 
+    const memberGraft = await graftMember({ typeName, member: selected, syntheticTypeId: `${typeName}::${key}` });
+    if (!memberGraft.ok) return noteFailure(memberGraft.failure);
+    const memberType = memberGraft.memberType;
+    if (memberType === undefined) return undefined;
+
+    refinements = { ...refinements, [key]: refinedName };
+    selectedMembers = { ...selectedMembers, [key]: memberType };
+    schema = { ...schema, refinements, selectedMembers };
+    return refinedName;
+  };
+
+  /** `member`, one of `typeName`, grafted as its refined position with the
+   *  nodes its edges land on. Its member type, or undefined when the walk
+   *  describes nothing there or its name is taken. */
+  const graftMember = async (input: {
+    typeName: string;
+    member: string;
+    syntheticTypeId: string;
+  }): Promise<{ ok: true; memberType: string | undefined } | { ok: false; failure: NarrowFailure }> => {
+    const refinedName = refinedTypeName({ typeName: input.typeName, member: input.member });
+    const already = grafted.get(refinedName);
+    if (already !== undefined) return { ok: true, memberType: already };
+    if (positions[refinedName] !== undefined) return { ok: true, memberType: undefined };
+
     // Describe only once we know this member isn't already grafted — otherwise
     // a second spelling of one selection pays a second walk.
-    const described = await describeMember({ instance, member: selected });
-    if (!described.ok) return noteFailure(described.failure);
+    const described = await describeMember({ instance, member: input.member });
+    if (!described.ok) return described;
     // The member's own type, as the walk names it — the SAME string a landed
     // record of this member carries, because both come from this descriptor
     // (the projection keys positions by `displayName`, and an adapter stamps
@@ -336,24 +436,64 @@ export async function refineInstanceSchema(input: {
     // name.
     const memberType = described.value.displayName;
 
-    const refinedPosition = projectRefinedPosition({
+    let landings: Map<string, SchemaTypeDescriptor>;
+    try {
+      landings = await landingsOf({ instance, member: input.member, descriptor: described.value, known: isDescribed });
+    } catch (err) {
+      return { ok: false, failure: { kind: 'error', message: err instanceof Error ? err.message : String(err) } };
+    }
+    const projected = projectRefinedPosition({
       instance,
       refinedName,
-      syntheticTypeId: `${typeName}::${key}`,
+      syntheticTypeId: input.syntheticTypeId,
       descriptor: described.value,
+      landings,
     });
-    if (refinedPosition === undefined) return undefined;
+    if (projected === undefined) return { ok: true, memberType: undefined };
 
-    positions = { ...positions, [refinedName]: refinedPosition };
-    refinements = { ...refinements, [key]: refinedName };
-    selectedMembers = { ...selectedMembers, [key]: memberType };
-    schema = { ...schema, positions, refinements, selectedMembers };
+    const landed = Object.fromEntries(Object.entries(projected.landings).filter(([name]) => !isDescribed(name)));
+    positions = {
+      ...positions,
+      ...landed,
+      [refinedName]: withTypeProperties(projected.position, positions[input.typeName]),
+    };
+    const createShapes = { ...projected.createShapes, ...(schema.createShapes ?? {}) };
+    schema = { ...schema, positions, ...(Object.keys(createShapes).length > 0 ? { createShapes } : {}) };
     grafted.set(refinedName, memberType);
-    return refinedName;
+    return { ok: true, memberType };
+  };
+
+  /** A record type the program names that the schema lacks (a parameter's
+   *  `Deals Change`): one a member the root hands over lands on, that member
+   *  then grafted as a walk narrowed to it would be. A name more than one
+   *  member lands on is left unknown, as is one none does; where it is
+   *  written the checker says so. */
+  const groundNamed = async (named: string) => {
+    if (instance.rootMembers === undefined || attempted.has(`named:${named}`)) return;
+    attempted.add(`named:${named}`);
+    const failed = (err: unknown) =>
+      notes.push(`${instance.adapterType}: finding the record type ${named} failed (${err instanceof Error ? err.message : String(err)})`);
+    try {
+      const landingOn: Array<{ member: string; recordType: string }> = [];
+      for (const { name, recordType } of await instance.rootMembers()) {
+        if (positions[recordType] === undefined) continue;
+        const descriptor = await instance.describeType(name);
+        if (descriptor === null) continue;
+        const landings = await landingsOf({ instance, member: name, descriptor, known: isDescribed });
+        if (landings.has(named)) landingOn.push({ member: name, recordType });
+      }
+      const [only] = landingOn;
+      if (landingOn.length !== 1 || only === undefined) return;
+      const memberGraft = await graftMember({ typeName: only.recordType, member: only.member, syntheticTypeId: `${only.recordType}::named:${named}` });
+      if (!memberGraft.ok && memberGraft.failure.kind === 'error') failed(memberGraft.failure.message);
+    } catch (err) {
+      failed(err);
+    }
   };
 
   for (const chain of input.chains) {
     let current: string | undefined = chain.startPosition; // undefined = the meta position
+    if (current !== undefined && schema.positions[current] === undefined) await groundNamed(current);
     for (const step of chain.steps) {
       if (step.type !== 'edge') break;
       const target =

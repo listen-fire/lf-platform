@@ -125,6 +125,19 @@ export interface CachedAdapterInstance {
    */
   membersOf: (recordType: string) => Promise<Array<{ name: string; data: unknown }>>;
   /**
+   * What the connection's root hands over, each by the name that addresses it
+   * and the type it is a member of (an Airtable base `CRM` of `Base`; on a
+   * connection positioned at a base, its tables). Empty for a flat adapter.
+   */
+  rootMembers: () => Promise<Array<{ name: string; recordType: string }>>;
+  /**
+   * The node one of `from`'s edges lands on, the edge named by the type it
+   * targets (`Deals` → `Deals Change`): one hop along the path `from`'s own
+   * hop handed over, whatever an earlier describe by name answered. Null when
+   * no walk handed `from` over or nothing is there.
+   */
+  describeLanding: (from: string, target: string) => Promise<SchemaTypeDescriptor | null>;
+  /**
    * Walk a PATH from the meta node and describe where it lands.
    *
    * The address form, for a caller that holds the walk rather than a name —
@@ -252,14 +265,19 @@ async function drainHop(input: {
  * enums read (`positionLabel`).
  */
 function filePaths(state: InstanceState, hop: EdgesFromResult | null): void {
-  if (!hop?.targetPositions) return;
+  for (const [name, position] of namedPaths(hop)) state.positionsByName.set(name, position);
+}
+
+/** The paths one hop handed over, each by the name that addresses it. */
+function namedPaths(hop: EdgesFromResult | null): Array<[string, SourcePosition]> {
+  if (!hop?.targetPositions) return [];
   const targetNameByFieldId = new Map(
     hop.descriptor.references.map((reference) => [reference.fieldId, reference.targetTypeId]),
   );
-  for (const [fieldId, position] of Object.entries(hop.targetPositions)) {
+  return Object.entries(hop.targetPositions).flatMap(([fieldId, position]): Array<[string, SourcePosition]> => {
     const targetName = targetNameByFieldId.get(fieldId) ?? positionLabel(position);
-    if (targetName !== undefined) state.positionsByName.set(targetName, position);
-  }
+    return targetName !== undefined ? [[targetName, position]] : [];
+  });
 }
 
 /**
@@ -693,6 +711,27 @@ export async function cachedAdapterInstance(input: {
       return [...held.positionsByName.entries()]
         .filter(([, position]) => position.recordType === recordType)
         .map(([name, position]) => ({ name, data: position.identity.data }));
+    },
+    describeLanding: async (from: string, target: string) => {
+      if (!adapter.edgesFrom) return null;
+      await walkRoot({ state: held, adapter, adapterType: input.adapterType });
+      const at = held.positionsByName.get(from);
+      if (at === undefined) return null;
+      const hop = await drainHop({ adapter, position: at });
+      filePaths(held, hop);
+      const edge = hop?.descriptor.references.find((reference) => reference.targetTypeId === target);
+      const position = edge !== undefined ? hop?.targetPositions?.[edge.fieldId] : undefined;
+      if (position === undefined) return null;
+      const landing = await drainHop({ adapter, position });
+      filePaths(held, landing);
+      return landing?.descriptor ?? null;
+    },
+    rootMembers: async () => {
+      if (!adapter.edgesFrom) return [];
+      const root = await walkRoot({ state: held, adapter, adapterType: input.adapterType });
+      return namedPaths(root).flatMap(([name, position]) =>
+        position.recordType !== null ? [{ name, recordType: position.recordType }] : [],
+      );
     },
     walkTo: (steps) => walkPath({ adapter, adapterType: input.adapterType, steps, state: held }),
     walkFrom: (steps) =>

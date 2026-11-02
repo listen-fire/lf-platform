@@ -151,8 +151,9 @@ describe('refineInstanceSchema', () => {
     // (and the same minimal fanout) as `-[s:`Pipeline Sheet`]->` would make.
     // Never a fanout across the members it didn't select.
     // plans/2026-07-10-adapter-entry-positions/4_polymorphic_edges.md
-    // One resolution despite two chains selecting the same position.
-    expect(calls).toEqual(['Pipeline Sheet']);
+    // One resolution despite two chains selecting the same position, and one
+    // describe of the table its edge lands on, which the schema lacked.
+    expect(calls).toEqual(['Pipeline Sheet', 'tbl-companies']);
 
     const refinedName = schema.refinements?.[keyFor('`Title` == "Pipeline Sheet"')];
     expect(refinedName).toBe('Spreadsheet "Pipeline Sheet"');
@@ -261,7 +262,7 @@ describe('refineInstanceSchema', () => {
     expect(Object.keys(schema.positions).filter((p) => p.startsWith('Spreadsheet "'))).toEqual([
       'Spreadsheet "Pipeline Sheet"',
     ]);
-    expect(calls).toEqual(['Pipeline Sheet']);
+    expect(calls).toEqual(['Pipeline Sheet', 'tbl-companies']);
   });
 
   it('a conjunction no member satisfies does not narrow', async () => {
