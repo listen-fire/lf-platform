@@ -15,6 +15,7 @@
 import type { Adapter } from 'movement-engine/public/adapter';
 import type { SourcePosition } from 'movement-engine/public/catalog';
 
+import { arrivalTriggerOf } from 'movement-engine/public/inbound';
 import { makeMetaPosition, makeStablePosition } from 'movement-engine/public/catalog';
 
 export interface SlackParitySubject {
@@ -111,7 +112,6 @@ export async function runSlackParityScript(subject: SlackParitySubject): Promise
   }
   const meta = makeMetaPosition('slack');
   await step('edgesFrom meta', async () => (await adapter.edgesFrom?.(meta)) ?? null);
-  await step('listEventTypes', async () => (await adapter.listEventTypes?.()) ?? null);
   await step('runtimeCapabilities', async () => adapter.runtimeCapabilities?.() ?? null);
   const channels = await step('Channels', () => adapter.getRelated({ position: meta, fieldId: 'Channels', direction: 'outgoing' }));
   const users = await step('Users', () => adapter.getRelated({ position: meta, fieldId: 'Users', direction: 'outgoing' }));
@@ -141,14 +141,17 @@ export async function runSlackParityScript(subject: SlackParitySubject): Promise
     ['not an object', 'hello'],
   ] as const) {
     await step(`preprocessInbound ${name}`, async () => (await adapter.preprocessInbound?.({ raw })) ?? null);
-    await step(`wakeKeys ${name}`, async () => (await adapter.wakeKeys?.({ raw })) ?? null);
   }
 
   // ── Delivered positions ──
+  const arrivalOf = async (raw: unknown) => {
+    const [first] = (await adapter.preprocessInbound?.({ raw }))?.arrivals ?? [];
+    return first !== undefined && 'landing' in first ? first : undefined;
+  };
   const delivered = async (raw: unknown, recordType: string): Promise<SourcePosition | undefined> => {
-    const event = (await adapter.preprocessInbound?.({ raw }))?.events[0];
-    if (event === undefined) return undefined;
-    return makeStablePosition({ adapterType: 'slack', recordType, recordId: event.externalId ?? '', data: event.payload });
+    const arrival = await arrivalOf(raw);
+    if (arrival === undefined) return undefined;
+    return makeStablePosition({ adapterType: 'slack', recordType, recordId: arrival.landing.recordId ?? '', data: arrival.landing.fields });
   };
   const fileMessage = await delivered(MESSAGE_EVENT, 'Message');
   if (fileMessage !== undefined) {
@@ -169,22 +172,20 @@ export async function runSlackParityScript(subject: SlackParitySubject): Promise
   if (reaction !== undefined) await walk('Reaction', reaction);
 
   // ── The actor ──
-  // A delivered event as the engine hands it to the actor gate.
-  const event = (payload: unknown) => ({ pipelineInputId: 'pi-parity', adapterType: 'slack', triggerType: 'webhook', payload }) as never;
+  // Who acted rides on the arrival the door made (adapter protocol 2.7); the
+  // run trigger is built from it as the engine builds it.
+  const fired = (arrival: NonNullable<Awaited<ReturnType<typeof arrivalOf>>>) =>
+    arrivalTriggerOf({ pipelineInputId: 'pi-parity', adapterType: 'slack', now: new Date('2026-10-17T00:00:00.000Z'), arrival });
   for (const [name, raw] of [['message', MESSAGE_EVENT], ['reaction', REACTION_EVENT]] as const) {
-    const payload = (await adapter.preprocessInbound?.({ raw }))?.events[0]?.payload;
-    await step(`getActorCandidates ${name}`, async () => (await adapter.getActorCandidates?.({ event: event(payload) })) ?? null);
-    await step(`extractActor ${name}`, async () => (await adapter.extractActor?.({ event: event(payload) })) ?? null);
+    const arrival = await arrivalOf(raw);
+    if (arrival === undefined) continue;
+    await step(`getActorCandidates ${name}`, async () => (await adapter.getActorCandidates?.({ event: fired(arrival) })) ?? null);
+    await step(`extractActor ${name}`, async () => (await adapter.extractActor?.({ event: fired(arrival) })) ?? null);
   }
-  await step('getActorCandidates no user', async () => (await adapter.getActorCandidates?.({ event: event({ type: 'message' }) })) ?? null);
-
-  // ── The awaited Replies ──
-  const awaitable = adapter.awaitable;
-  if (awaitable !== undefined) {
-    await step('resolveAwait thread with replies', () => awaitable.resolveAwait({ recordId: ROOT_TS, edge: 'Replies', headData: { channelId: DEALFLOW } }));
-    await step('resolveAwait thread without', () => awaitable.resolveAwait({ recordId: '1751500100.000200', edge: 'Replies', headData: { channel: DEALFLOW } }));
-    await step('resolveAwait no channel', () => awaitable.resolveAwait({ recordId: ROOT_TS, edge: 'Replies' }));
-    await step('resolveAwait other edge', () => awaitable.resolveAwait({ recordId: ROOT_TS, edge: 'Files', headData: { channelId: DEALFLOW } }));
+  const message = await arrivalOf(MESSAGE_EVENT);
+  if (message !== undefined) {
+    const { actor: _actor, ...nobody } = message;
+    await step('getActorCandidates no user', async () => (await adapter.getActorCandidates?.({ event: fired(nobody) })) ?? null);
   }
 
   // ── The composition field function ──

@@ -167,7 +167,7 @@ const recording = process.env.AIRTABLE_PARITY_RECORD === '1';
     });
     expect(errors).toEqual([]);
     expect(exchanges.length).toBeGreaterThan(15);
-    const ping = transcript.find((entry) => entry.step === 'preprocessInbound ping')?.answer as { arrivals: unknown[] } | undefined;
+    const ping = transcript.find((entry) => entry.step === 'scoped preprocessInbound ping')?.answer as { arrivals: unknown[] } | undefined;
     expect(ping?.arrivals.length).toBeGreaterThan(0);
   });
 

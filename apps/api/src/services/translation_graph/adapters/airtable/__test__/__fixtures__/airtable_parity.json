@@ -817,15 +817,15 @@
       "answer": {}
     },
     {
-      "step": "ensureEventSubscription Changes",
+      "step": "scoped ensureEventSubscription Changes",
       "answer": {
         "externalId": "ach1",
-        "secret": "/C41k8IUtJNDldPGdfJQg7i0p3xNJNcchMRCEC78U70=",
-        "expiresAt": "2026-11-09T17:23:41.300Z"
+        "secret": "n7aICQyLvQeoUo4khh2MKdrTNsSyZ/uFwo7E61KupP4=",
+        "expiresAt": "2026-11-09T17:27:17.286Z"
       }
     },
     {
-      "step": "preprocessInbound ping",
+      "step": "scoped preprocessInbound ping",
       "answer": {
         "events": [],
         "arrivals": [
@@ -862,7 +862,7 @@
               "recordType": "Companies",
               "externalId": "recPARITY1"
             },
-            "occurredAt": "2026-11-02T17:23:41.302Z"
+            "occurredAt": "2026-11-02T17:27:17.288Z"
           },
           {
             "edge": "Changes",
@@ -896,14 +896,14 @@
               "recordType": "Companies",
               "externalId": "recPARITY1"
             },
-            "occurredAt": "2026-11-02T17:23:41.304Z"
+            "occurredAt": "2026-11-02T17:27:17.289Z"
           }
         ],
         "checkpoint": 3
       }
     },
     {
-      "step": "preprocessInbound ping from the checkpoint",
+      "step": "scoped preprocessInbound ping from the checkpoint",
       "answer": {
         "events": [],
         "arrivals": [
@@ -939,37 +939,37 @@
               "recordType": "Companies",
               "externalId": "recPARITY1"
             },
-            "occurredAt": "2026-11-02T17:23:41.304Z"
+            "occurredAt": "2026-11-02T17:27:17.289Z"
           }
         ],
         "checkpoint": 3
       }
     },
     {
-      "step": "preprocessInbound not a ping",
+      "step": "scoped preprocessInbound not a ping",
       "answer": {
         "events": [],
         "arrivals": []
       }
     },
     {
-      "step": "ensureEventSubscription Changes held",
+      "step": "scoped ensureEventSubscription Changes held",
       "answer": null
     },
     {
-      "step": "removeEventSubscription Changes",
+      "step": "scoped removeEventSubscription Changes",
       "answer": null
     },
     {
-      "step": "ensureEventSubscription Tables",
+      "step": "scoped ensureEventSubscription Tables",
       "answer": {
         "externalId": "ach2",
-        "secret": "jSqrzrnr99ZZlMvtzpL13g4CZ/0T9RthN8tZFwTpfTY=",
-        "expiresAt": "2026-11-09T17:23:41.314Z"
+        "secret": "u+mM+PVKUPyRcBu9lL0gQrVPjSunCGJV8L7+8O0PRrU=",
+        "expiresAt": "2026-11-09T17:27:17.300Z"
       }
     },
     {
-      "step": "removeEventSubscription Tables",
+      "step": "scoped removeEventSubscription Tables",
       "answer": null
     }
   ],
@@ -1042,7 +1042,7 @@
       "authorization": "Bearer dev-loop-airtable-token",
       "body": null,
       "status": 200,
-      "response": "{\"records\":[{\"id\":\"rec1\",\"fields\":{\"fldName\":\"Parity Labs\",\"fldStage\":\"Seed\",\"fldNotes\":\"Made by recorded parity\"},\"createdTime\":\"2026-11-02T17:23:41.270Z\"}]}"
+      "response": "{\"records\":[{\"id\":\"rec1\",\"fields\":{\"fldName\":\"Parity Labs\",\"fldStage\":\"Seed\",\"fldNotes\":\"Made by recorded parity\"},\"createdTime\":\"2026-11-02T17:27:17.258Z\"}]}"
     },
     {
       "method": "GET",
@@ -1050,7 +1050,7 @@
       "authorization": "Bearer dev-loop-airtable-token",
       "body": null,
       "status": 200,
-      "response": "{\"records\":[{\"id\":\"rec1\",\"fields\":{\"fldFullName\":\"Paula Parity\",\"fldEmail\":\"paula@paritylabs.example\",\"fldCompany\":[\"rec1\"]},\"createdTime\":\"2026-11-02T17:23:41.275Z\"}]}"
+      "response": "{\"records\":[{\"id\":\"rec1\",\"fields\":{\"fldFullName\":\"Paula Parity\",\"fldEmail\":\"paula@paritylabs.example\",\"fldCompany\":[\"rec1\"]},\"createdTime\":\"2026-11-02T17:27:17.263Z\"}]}"
     },
     {
       "method": "GET",
@@ -1058,7 +1058,7 @@
       "authorization": "Bearer dev-loop-airtable-token",
       "body": null,
       "status": 200,
-      "response": "{\"records\":[{\"id\":\"rec1\",\"fields\":{\"fldName\":\"Parity Labs\",\"fldStage\":\"Seed\",\"fldNotes\":\"Made by recorded parity\"},\"createdTime\":\"2026-11-02T17:23:41.270Z\"}]}"
+      "response": "{\"records\":[{\"id\":\"rec1\",\"fields\":{\"fldName\":\"Parity Labs\",\"fldStage\":\"Seed\",\"fldNotes\":\"Made by recorded parity\"},\"createdTime\":\"2026-11-02T17:27:17.258Z\"}]}"
     },
     {
       "method": "GET",
@@ -1066,7 +1066,7 @@
       "authorization": "Bearer dev-loop-airtable-token",
       "body": null,
       "status": 200,
-      "response": "{\"records\":[{\"id\":\"rec1\",\"fields\":{\"fldFullName\":\"Paula Parity\",\"fldEmail\":\"paula@paritylabs.example\",\"fldCompany\":[\"rec1\"]},\"createdTime\":\"2026-11-02T17:23:41.275Z\"}]}"
+      "response": "{\"records\":[{\"id\":\"rec1\",\"fields\":{\"fldFullName\":\"Paula Parity\",\"fldEmail\":\"paula@paritylabs.example\",\"fldCompany\":[\"rec1\"]},\"createdTime\":\"2026-11-02T17:27:17.263Z\"}]}"
     },
     {
       "method": "GET",
@@ -1074,7 +1074,7 @@
       "authorization": "Bearer dev-loop-airtable-token",
       "body": null,
       "status": 200,
-      "response": "{\"id\":\"rec1\",\"fields\":{\"fldName\":\"Parity Labs\",\"fldStage\":\"Seed\",\"fldNotes\":\"Made by recorded parity\"},\"createdTime\":\"2026-11-02T17:23:41.270Z\"}"
+      "response": "{\"id\":\"rec1\",\"fields\":{\"fldName\":\"Parity Labs\",\"fldStage\":\"Seed\",\"fldNotes\":\"Made by recorded parity\"},\"createdTime\":\"2026-11-02T17:27:17.258Z\"}"
     },
     {
       "method": "PATCH",
@@ -1094,7 +1094,7 @@
       "authorization": "Bearer dev-loop-airtable-token",
       "body": null,
       "status": 200,
-      "response": "{\"records\":[{\"id\":\"rec1\",\"fields\":{\"fldName\":\"Parity Labs\",\"fldStage\":\"Series A\",\"fldNotes\":\"Made by recorded parity\"},\"createdTime\":\"2026-11-02T17:23:41.270Z\"}]}"
+      "response": "{\"records\":[{\"id\":\"rec1\",\"fields\":{\"fldName\":\"Parity Labs\",\"fldStage\":\"Series A\",\"fldNotes\":\"Made by recorded parity\"},\"createdTime\":\"2026-11-02T17:27:17.258Z\"}]}"
     },
     {
       "method": "DELETE",
@@ -1138,7 +1138,7 @@
         }
       },
       "status": 200,
-      "response": "{\"id\":\"ach1\",\"macSecretBase64\":\"/C41k8IUtJNDldPGdfJQg7i0p3xNJNcchMRCEC78U70=\",\"expirationTime\":\"2026-11-09T17:23:41.300Z\"}"
+      "response": "{\"id\":\"ach1\",\"macSecretBase64\":\"n7aICQyLvQeoUo4khh2MKdrTNsSyZ/uFwo7E61KupP4=\",\"expirationTime\":\"2026-11-09T17:27:17.286Z\"}"
     },
     {
       "method": "GET",
@@ -1146,7 +1146,7 @@
       "authorization": "Bearer dev-loop-airtable-token",
       "body": null,
       "status": 200,
-      "response": "{\"payloads\":[{\"timestamp\":\"2026-11-02T17:23:41.302Z\",\"baseTransactionNumber\":1,\"changedTablesById\":{\"tblCOMPANIES\":{\"createdRecordsById\":{\"recPARITY1\":{\"cellValuesByFieldId\":{\"fldName\":\"Pinged Co\",\"fldStage\":\"Seed\"}}}}}},{\"timestamp\":\"2026-11-02T17:23:41.304Z\",\"baseTransactionNumber\":2,\"changedTablesById\":{\"tblCOMPANIES\":{\"changedRecordsById\":{\"recPARITY1\":{\"current\":{\"cellValuesByFieldId\":{\"fldStage\":\"Series A\"}},\"unchanged\":{\"cellValuesByFieldId\":{}}}}}}}],\"cursor\":3,\"mightHaveMore\":false}"
+      "response": "{\"payloads\":[{\"timestamp\":\"2026-11-02T17:27:17.288Z\",\"baseTransactionNumber\":1,\"changedTablesById\":{\"tblCOMPANIES\":{\"createdRecordsById\":{\"recPARITY1\":{\"cellValuesByFieldId\":{\"fldName\":\"Pinged Co\",\"fldStage\":\"Seed\"}}}}}},{\"timestamp\":\"2026-11-02T17:27:17.289Z\",\"baseTransactionNumber\":2,\"changedTablesById\":{\"tblCOMPANIES\":{\"changedRecordsById\":{\"recPARITY1\":{\"current\":{\"cellValuesByFieldId\":{\"fldStage\":\"Series A\"}},\"unchanged\":{\"cellValuesByFieldId\":{}}}}}}}],\"cursor\":3,\"mightHaveMore\":false}"
     },
     {
       "method": "GET",
@@ -1154,7 +1154,7 @@
       "authorization": "Bearer dev-loop-airtable-token",
       "body": null,
       "status": 200,
-      "response": "{\"payloads\":[{\"timestamp\":\"2026-11-02T17:23:41.304Z\",\"baseTransactionNumber\":2,\"changedTablesById\":{\"tblCOMPANIES\":{\"changedRecordsById\":{\"recPARITY1\":{\"current\":{\"cellValuesByFieldId\":{\"fldStage\":\"Series A\"}},\"unchanged\":{\"cellValuesByFieldId\":{}}}}}}}],\"cursor\":3,\"mightHaveMore\":false}"
+      "response": "{\"payloads\":[{\"timestamp\":\"2026-11-02T17:27:17.289Z\",\"baseTransactionNumber\":2,\"changedTablesById\":{\"tblCOMPANIES\":{\"changedRecordsById\":{\"recPARITY1\":{\"current\":{\"cellValuesByFieldId\":{\"fldStage\":\"Series A\"}},\"unchanged\":{\"cellValuesByFieldId\":{}}}}}}}],\"cursor\":3,\"mightHaveMore\":false}"
     },
     {
       "method": "GET",
@@ -1162,7 +1162,7 @@
       "authorization": "Bearer dev-loop-airtable-token",
       "body": null,
       "status": 200,
-      "response": "{\"webhooks\":[{\"id\":\"ach1\",\"notificationUrl\":\"https://example.test/api/public/webhook-sync/airtable/sub-1\",\"expirationTime\":\"2026-11-09T17:23:41.300Z\",\"specification\":{\"options\":{\"filters\":{\"dataTypes\":[\"tableData\"],\"changeTypes\":[\"add\",\"update\",\"remove\"]},\"includes\":{\"includePreviousCellValues\":true,\"includeCellValuesInFieldIds\":\"all\"}}}}]}"
+      "response": "{\"webhooks\":[{\"id\":\"ach1\",\"notificationUrl\":\"https://example.test/api/public/webhook-sync/airtable/sub-1\",\"expirationTime\":\"2026-11-09T17:27:17.286Z\",\"specification\":{\"options\":{\"filters\":{\"dataTypes\":[\"tableData\"],\"changeTypes\":[\"add\",\"update\",\"remove\"]},\"includes\":{\"includePreviousCellValues\":true,\"includeCellValuesInFieldIds\":\"all\"}}}}]}"
     },
     {
       "method": "DELETE",
@@ -1206,7 +1206,7 @@
         }
       },
       "status": 200,
-      "response": "{\"id\":\"ach2\",\"macSecretBase64\":\"jSqrzrnr99ZZlMvtzpL13g4CZ/0T9RthN8tZFwTpfTY=\",\"expirationTime\":\"2026-11-09T17:23:41.314Z\"}"
+      "response": "{\"id\":\"ach2\",\"macSecretBase64\":\"u+mM+PVKUPyRcBu9lL0gQrVPjSunCGJV8L7+8O0PRrU=\",\"expirationTime\":\"2026-11-09T17:27:17.300Z\"}"
     },
     {
       "method": "DELETE",

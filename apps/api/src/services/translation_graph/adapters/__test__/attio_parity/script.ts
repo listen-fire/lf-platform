@@ -62,7 +62,7 @@ export async function runAttioParityScript(adapter: Adapter): Promise<Transcript
 
   for (const [name, raw] of INBOUND) {
     const answer = await t.step(`preprocessInbound ${name}`, () => adapter.preprocessInbound?.({ raw }) ?? null);
-    const arrival = answer?.arrivals[0];
+    const arrival = answer?.arrivals?.[0];
     if (arrival !== undefined && 'landing' in arrival) {
       // The run trigger the arrival makes; who acted rides on it.
       const trigger = arrivalTriggerOf({ pipelineInputId: 'pipeline-input-parity', adapterType: 'attio', now: new Date('2026-10-01T09:00:00.000Z'), arrival });

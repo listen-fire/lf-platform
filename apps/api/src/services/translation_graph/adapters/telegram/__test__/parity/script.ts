@@ -115,7 +115,7 @@ export async function runTelegramParityScript(subject: TelegramParitySubject): P
 
   // ── Fields and walks on a delivered message ──
   const inbound = await adapter.preprocessInbound?.({ raw: MEDIA_UPDATE });
-  const arrival = inbound?.arrivals[0];
+  const arrival = inbound?.arrivals?.[0];
   const mediaPayload = arrival !== undefined && 'landing' in arrival ? arrival.landing.fields : undefined;
   const message: SourcePosition = makeStablePosition({
     adapterType: 'telegram',

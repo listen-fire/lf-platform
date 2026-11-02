@@ -1,5 +1,6 @@
-// Recorded parity for Slack. The fixture is the legacy adapter as it was
-// before Slack became a module, driven through `parity/script.ts` against
+// Recorded parity for Slack. The fixture is the module in process, as the
+// platform registry builds it (the legacy line is gone), driven through
+// `parity/script.ts` against
 // the fake-channels Slack Web API: every answer, and every request it made
 // with what came back. Three installs are recorded:
 //   - workspace: a team's connected workspace (a bot token and a base URL);
@@ -10,7 +11,7 @@
 // Each implementation is replayed against the recording and must make the
 // same requests (its writes) and give the same answers.
 //
-// Re-record (only when the legacy line changes on purpose, reading the diff):
+// Re-record (when the module changes on purpose, reading the diff):
 // SLACK_PARITY_RECORD=1 pnpm test:unit --testPathPattern slack_parity
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -81,7 +82,6 @@ jest.mock('../../../../../lib/anthropic', () => ({
 import { runSlackParityScript } from './parity/script';
 import { recordingServer, replayingServer, requestOf, type ExchangeOptions } from '../../__test__/parity/exchange';
 import { bootFakeChannels } from '../../__test__/parity/fake_channels';
-import { SlackAdapter } from '../index';
 import { getAdapter } from '../../registry';
 import { BUILTIN_MODULES, builtinModuleInboundVerifier } from '../../builtin_modules';
 import { createMemoryVault, createSecretsFamily } from 'movement-engine/public/secrets';
@@ -119,9 +119,10 @@ function seed(name: InstallName, baseUrl: string): Install {
   return install;
 }
 
-function legacySubject(name: InstallName, baseUrl: string): SlackParitySubject {
+function moduleSubject(name: InstallName, baseUrl: string): SlackParitySubject {
   const install = seed(name, baseUrl);
-  return { adapter: new SlackAdapter(install.teamId, install.credentialsId), compose: true };
+  const adapter = getAdapter({ adapterType: 'slack', teamId: install.teamId, ...(install.credentialsId !== undefined ? { credentialsId: install.credentialsId } : {}) });
+  return { adapter, compose: true };
 }
 
 type Recording = Record<InstallName, { transcript: TranscriptEntry[]; exchanges: Exchange[] }>;
@@ -130,14 +131,14 @@ jest.setTimeout(240_000);
 
 const recording = process.env.SLACK_PARITY_RECORD === '1';
 
-(recording ? it : it.skip)('records the legacy adapter against fake-channels', async () => {
+(recording ? it : it.skip)('records the module in process against fake-channels', async () => {
   const fake = await bootFakeChannels({ file: 'slack', factory: 'slackRoutes', mount: '/slack' });
   const fixture: Partial<Recording> = {};
   try {
     for (const name of INSTALLS) {
       const proxy = await recordingServer(fake.baseUrl, EXCHANGE);
       try {
-        const transcript = await runSlackParityScript(legacySubject(name, proxy.baseUrl));
+        const transcript = await runSlackParityScript(moduleSubject(name, proxy.baseUrl));
         fixture[name] = { transcript, exchanges: proxy.exchanges() };
       } finally {
         await proxy.close();
@@ -149,15 +150,6 @@ const recording = process.env.SLACK_PARITY_RECORD === '1';
   writeFileSync(FIXTURE, `${JSON.stringify(fixture, null, 2)}\n`);
 });
 
-/** The module's refusal for an install with no credential ends "Connect
- *  Slack." where the legacy line pointed at an internal wiring step. The one
- *  wording change; everything else is the recording's. */
-function moduleRefusals(recorded: TranscriptEntry[]): TranscriptEntry[] {
-  return JSON.parse(
-    JSON.stringify(recorded).split('. Wire pipeline_output.credentials_id through getAdapter.').join('. Connect Slack.'),
-  ) as TranscriptEntry[];
-}
-
 function loadRecording(): Recording {
   return JSON.parse(readFileSync(FIXTURE, 'utf8')) as Recording;
 }
@@ -165,13 +157,12 @@ function loadRecording(): Recording {
 async function expectParity(
   name: InstallName,
   subjectAt: (baseUrl: string) => Promise<SlackParitySubject> | SlackParitySubject,
-  expecting: (recorded: TranscriptEntry[]) => TranscriptEntry[] = (recorded) => recorded,
 ): Promise<void> {
   const recorded = loadRecording()[name];
   const server = await replayingServer(recorded.exchanges, EXCHANGE);
   try {
     const transcript = await runSlackParityScript(await subjectAt(server.baseUrl));
-    expect(transcript).toEqual(expecting(recorded.transcript));
+    expect(transcript).toEqual(recorded.transcript);
     expect(server.requests()).toEqual(recorded.exchanges.map(requestOf));
   } finally {
     await server.close();
@@ -191,17 +182,9 @@ async function expectParity(
     expect(fixture.none.exchanges).toEqual([]);
   });
 
-  it.each(INSTALLS)('the legacy line replays identically (%s)', async (name) => {
-    await expectParity(name, (baseUrl) => legacySubject(name, baseUrl));
-  });
-
   it.each(INSTALLS)('the module in process, through the platform registry, replays identically (%s)', async (name) => {
     expect(BUILTIN_MODULES.slack?.line).toBe('module');
-    await expectParity(name, (baseUrl) => {
-      const install = seed(name, baseUrl);
-      const adapter = getAdapter({ adapterType: 'slack', teamId: install.teamId, ...(install.credentialsId !== undefined ? { credentialsId: install.credentialsId } : {}) });
-      return { adapter, compose: true };
-    }, moduleRefusals);
+    await expectParity(name, (baseUrl) => moduleSubject(name, baseUrl));
   });
 
   it('the module line declares the inbound the door has always verified', () => {

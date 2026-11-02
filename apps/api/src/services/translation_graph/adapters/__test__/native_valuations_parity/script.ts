@@ -195,7 +195,7 @@ export async function runValuationsParityScript(adapter: Adapter): Promise<Trans
 
   for (const [name, raw] of INBOUND) {
     const answer = await t.step(`preprocessInbound ${name}`, () => adapter.preprocessInbound?.({ raw }) ?? null);
-    const arrival = answer?.arrivals[0];
+    const arrival = answer?.arrivals?.[0];
     if (arrival !== undefined && 'landing' in arrival) {
       // The change the delivery lands, as the engine seeds it, and the walk
       // from it to the record now.

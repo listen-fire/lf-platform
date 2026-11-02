@@ -68,35 +68,34 @@ export async function runAirtableParityScript(adapter: Adapter, scoped: Adapter 
   }
 
   // One subscription per listenable edge (adapter protocol 2.6): a table's
-  // rows on Changes, the base's table names on Tables; each names its base.
-  const changes = { edge: 'Changes', scope: BASE };
-  const registered = await t.step('ensureEventSubscription Changes', () =>
-    adapter.ensureEventSubscription?.({ ...changes, callbackUrl: 'https://example.test/api/public/webhook-sync/airtable/sub-1' }) ?? null,
-  );
-  const webhookId = registered?.externalId;
-  if (webhookId !== undefined) {
-    if (inject !== undefined) {
-      await inject({ webhookId, body: { changeType: 'add', tableId: COMPANIES, recordId: 'recPARITY1', fields: { Name: 'Pinged Co', Stage: 'Seed' } } });
-      await inject({ webhookId, body: { changeType: 'update', tableId: COMPANIES, recordId: 'recPARITY1', fields: { Stage: 'Series A' } } });
+  // rows on Changes, the base's table names on Tables. The platform hears
+  // them on a connection started at its base (a listen scoped by a hop's
+  // record is refused at save), so they run on the scoped instance.
+  if (scoped !== undefined) {
+    const callbackUrl = 'https://example.test/api/public/webhook-sync/airtable/sub-1';
+    const registered = await t.step('scoped ensureEventSubscription Changes', () => scoped.ensureEventSubscription?.({ edge: 'Changes', callbackUrl }) ?? null);
+    const webhookId = registered?.externalId;
+    if (webhookId !== undefined) {
+      if (inject !== undefined) {
+        await inject({ webhookId, body: { changeType: 'add', tableId: COMPANIES, recordId: 'recPARITY1', fields: { Name: 'Pinged Co', Stage: 'Seed' } } });
+        await inject({ webhookId, body: { changeType: 'update', tableId: COMPANIES, recordId: 'recPARITY1', fields: { Stage: 'Series A' } } });
+      }
+      await t.step('scoped preprocessInbound ping', () => scoped.preprocessInbound?.({ raw: { base: { id: BASE }, webhook: { id: webhookId }, timestamp: '2026-10-01T09:00:00.000Z' } }) ?? null);
+      await t.step('scoped preprocessInbound ping from the checkpoint', () =>
+        scoped.preprocessInbound?.({ raw: { base: { id: BASE }, webhook: { id: webhookId } }, checkpoint: 2 }) ?? null,
+      );
+      await t.step('scoped preprocessInbound not a ping', () => scoped.preprocessInbound?.({ raw: { nope: true } }) ?? null);
+      await t.step('scoped ensureEventSubscription Changes held', () => scoped.ensureEventSubscription?.({ edge: 'Changes', callbackUrl, current: { externalId: webhookId } }) ?? null);
+      // 0.13.x types the removal without its edge, though the wire carries it.
+      const removal = { edge: 'Changes', callbackUrl, externalId: webhookId };
+      await t.step('scoped removeEventSubscription Changes', () => scoped.removeEventSubscription?.(removal) ?? null);
     }
-    await t.step('preprocessInbound ping', () => adapter.preprocessInbound?.({ raw: { base: { id: BASE }, webhook: { id: webhookId }, timestamp: '2026-10-01T09:00:00.000Z' } }) ?? null);
-    await t.step('preprocessInbound ping from the checkpoint', () =>
-      adapter.preprocessInbound?.({ raw: { base: { id: BASE }, webhook: { id: webhookId } }, checkpoint: 2 }) ?? null,
-    );
-    await t.step('preprocessInbound not a ping', () => adapter.preprocessInbound?.({ raw: { nope: true } }) ?? null);
-    await t.step('ensureEventSubscription Changes held', () =>
-      adapter.ensureEventSubscription?.({ ...changes, callbackUrl: 'https://example.test/api/public/webhook-sync/airtable/sub-1', current: { externalId: webhookId } }) ?? null,
-    );
-    // 0.13.x types the removal without its edge, though the wire carries it.
-    const removal = { ...changes, callbackUrl: 'https://example.test/api/public/webhook-sync/airtable/sub-1', externalId: webhookId };
-    await t.step('removeEventSubscription Changes', () => adapter.removeEventSubscription?.(removal) ?? null);
-  }
-  const tables = await t.step('ensureEventSubscription Tables', () =>
-    adapter.ensureEventSubscription?.({ edge: 'Tables', scope: BASE, callbackUrl: 'https://example.test/api/public/webhook-sync/airtable/sub-2' }) ?? null,
-  );
-  if (tables?.externalId !== undefined) {
-    const removal = { edge: 'Tables', scope: BASE, callbackUrl: 'https://example.test/api/public/webhook-sync/airtable/sub-2', externalId: tables.externalId };
-    await t.step('removeEventSubscription Tables', () => adapter.removeEventSubscription?.(removal) ?? null);
+    const tablesUrl = 'https://example.test/api/public/webhook-sync/airtable/sub-2';
+    const tables = await t.step('scoped ensureEventSubscription Tables', () => scoped.ensureEventSubscription?.({ edge: 'Tables', callbackUrl: tablesUrl }) ?? null);
+    if (tables?.externalId !== undefined) {
+      const removal = { edge: 'Tables', callbackUrl: tablesUrl, externalId: tables.externalId };
+      await t.step('scoped removeEventSubscription Tables', () => scoped.removeEventSubscription?.(removal) ?? null);
+    }
   }
   return t.entries;
 }
