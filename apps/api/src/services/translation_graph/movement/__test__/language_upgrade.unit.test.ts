@@ -1050,3 +1050,53 @@ describe('an upgrade over the real checkers, with a library the movement imports
     expect(result.diagnostics.filter((d) => d.code === 'MOV_PARSE')).toEqual([]);
   });
 });
+
+describe("an upgrade from 0.12 of a listen on the manual unit (Run now)", () => {
+  // 0.12 named the manual unit's event `Invocation`; 0.13 names its listenable
+  // edge `Invocations`. The settings listen becomes a traversal, and the
+  // trigger's type with it, by the unit's own `listenSettingsBecome`.
+  const snapshot = mockCatalogSnapshot({
+    adapters: {
+      manual: {
+        constructionArgs: [],
+        canFire: true,
+        listenSettingsBecome: { path: ['Invocations'], aliases: ['i'], paramFrom: 'Invocation', keys: {} },
+        schema: {
+          positions: { Invocation: { properties: { Text: 'text' }, edges: {} } },
+          collections: { Invocations: { target: 'Invocation', listenable: true, identity: 'Id' } },
+          writableRoots: {},
+        },
+      },
+    },
+  });
+  const catalog = fromCatalogSnapshot(snapshot);
+  const { diagnoseMovementSource } = jest.requireActual<typeof import('../authoring')>('../authoring');
+  const realValidate: ValidateUnder = async ({ movement: m, languageVersion, upgradingFrom, source }) => ({
+    diagnostics: diagnoseMovementSource(source ?? m.source, {
+      catalog,
+      snapshot,
+      languageVersion,
+      ...(upgradingFrom !== undefined ? { upgradingFrom } : {}),
+    }).diagnostics,
+    gaps: [],
+  });
+  const PINNED_0_12 = ['function backfill(go: <manual-[:Invocation]->>) {', '  return go.Text', '}', '', 'listen to manual {} fire backfill', ''].join('\n');
+
+  it('rewrites the trigger type and the listen onto Invocations', async () => {
+    jest.mocked(getMovementRow).mockResolvedValue(movement({ id: 'backfill', languageVersion: '0.12.13', source: PINNED_0_12 }));
+    jest.mocked(assessMovementValidity).mockReturnValue({ status: 'valid', reason: null } as never);
+    const advanced: Array<{ to: LanguageVersion; source?: string }> = [];
+    const advance = async ({ to, source }: { to: LanguageVersion; source?: string }) => {
+      advanced.push({ to, ...(source !== undefined ? { source } : {}) });
+      return { ok: true as const };
+    };
+
+    const result = await upgradeMovement({ teamId: 'team-1', id: 'backfill', acknowledge: true, validate: realValidate, advance });
+
+    if (result.status === 'not_found') throw new Error('unreachable');
+    expect(result.upgradedSource).toBe(
+      ['function backfill(go: <manual-[:Invocations]->>) {', '  return go.Text', '}', '', 'listen to manual-[:Invocations]-> fire backfill', ''].join('\n'),
+    );
+    expect(result.status).toBe('upgraded');
+  });
+});
