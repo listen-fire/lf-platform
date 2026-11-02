@@ -7,9 +7,20 @@
           {
             "typeId": "email:message",
             "displayName": "Email",
+            "collectionName": "Emails",
             "writable": false,
             "readable": false,
-            "fires": true
+            "listenable": true,
+            "bounded": false,
+            "boundedBy": [
+              "Key"
+            ],
+            "addressed": true,
+            "delivery": "connection",
+            "capability": {
+              "filter": "native",
+              "supportsLimit": false
+            }
           },
           {
             "typeId": "email:attachment",
@@ -33,6 +44,24 @@
               "writable": false,
               "required": true,
               "description": "RFC 5322 Message-Id (or an inbound-adapter id when absent)."
+            },
+            {
+              "fieldId": "Key",
+              "displayName": "Key",
+              "kind": "owned",
+              "owned": {
+                "name": "InboxKey",
+                "allowPattern": "^[a-z0-9.!#$%&'*+/=?^_`{|}~-]*$"
+              },
+              "writable": false,
+              "required": true,
+              "capability": {
+                "filterOperators": [
+                  "eq",
+                  "in"
+                ]
+              },
+              "description": "The plus-suffix of the address the message was sent to (`inbox+deals@…` is `deals`), lowercased: a listen takes the keys it names (`e.Key == \"deals\"`). Mail sent to the box itself has the empty key (`e.Key == \"\"`)."
             },
             {
               "fieldId": "subject",
@@ -158,6 +187,24 @@
               "description": "RFC 5322 Message-Id (or an inbound-adapter id when absent)."
             },
             {
+              "fieldId": "Key",
+              "displayName": "Key",
+              "kind": "owned",
+              "owned": {
+                "name": "InboxKey",
+                "allowPattern": "^[a-z0-9.!#$%&'*+/=?^_`{|}~-]*$"
+              },
+              "writable": false,
+              "required": true,
+              "capability": {
+                "filterOperators": [
+                  "eq",
+                  "in"
+                ]
+              },
+              "description": "The plus-suffix of the address the message was sent to (`inbox+deals@…` is `deals`), lowercased: a listen takes the keys it names (`e.Key == \"deals\"`). Mail sent to the box itself has the empty key (`e.Key == \"\"`)."
+            },
+            {
               "fieldId": "subject",
               "displayName": "Subject",
               "kind": "string",
@@ -281,12 +328,12 @@
               {
                 "fieldId": "email:message",
                 "targetTypeId": "email:message",
-                "cardinality": "one",
+                "cardinality": "many",
                 "direction": "outgoing",
-                "name": "Email",
-                "fires": true,
+                "name": "Emails",
+                "listenable": true,
                 "readable": false,
-                "description": "An email arriving — what a listen delivers, whole."
+                "description": "Each email arriving, under the key it was sent to — what a listen delivers, whole."
               }
             ]
           },
@@ -313,6 +360,24 @@
                   "writable": false,
                   "required": true,
                   "description": "RFC 5322 Message-Id (or an inbound-adapter id when absent)."
+                },
+                {
+                  "fieldId": "Key",
+                  "displayName": "Key",
+                  "kind": "owned",
+                  "owned": {
+                    "name": "InboxKey",
+                    "allowPattern": "^[a-z0-9.!#$%&'*+/=?^_`{|}~-]*$"
+                  },
+                  "writable": false,
+                  "required": true,
+                  "capability": {
+                    "filterOperators": [
+                      "eq",
+                      "in"
+                    ]
+                  },
+                  "description": "The plus-suffix of the address the message was sent to (`inbox+deals@…` is `deals`), lowercased: a listen takes the keys it names (`e.Key == \"deals\"`). Mail sent to the box itself has the empty key (`e.Key == \"\"`)."
                 },
                 {
                   "fieldId": "subject",
@@ -382,6 +447,24 @@
                 "writable": false,
                 "required": true,
                 "description": "RFC 5322 Message-Id (or an inbound-adapter id when absent)."
+              },
+              {
+                "fieldId": "Key",
+                "displayName": "Key",
+                "kind": "owned",
+                "owned": {
+                  "name": "InboxKey",
+                  "allowPattern": "^[a-z0-9.!#$%&'*+/=?^_`{|}~-]*$"
+                },
+                "writable": false,
+                "required": true,
+                "capability": {
+                  "filterOperators": [
+                    "eq",
+                    "in"
+                  ]
+                },
+                "description": "The plus-suffix of the address the message was sent to (`inbox+deals@…` is `deals`), lowercased: a listen takes the keys it names (`e.Key == \"deals\"`). Mail sent to the box itself has the empty key (`e.Key == \"\"`)."
               },
               {
                 "fieldId": "subject",
@@ -953,7 +1036,9 @@
               "identifier": "bo@acme.com",
               "scheme": "email",
               "adapterType": "email",
-              "email": "bo@acme.com"
+              "email": "bo@acme.com",
+              "name": "Bo Li",
+              "label": "Bo Li"
             },
             "source": "originator"
           },
@@ -1003,7 +1088,9 @@
               "identifier": "cy@acme.com",
               "scheme": "email",
               "adapterType": "email",
-              "email": "cy@acme.com"
+              "email": "cy@acme.com",
+              "name": "Cy",
+              "label": "Cy"
             },
             "source": "originator"
           },
@@ -1105,29 +1192,11 @@
       },
       {
         "step": "manifest triggerConfig",
-        "answer": [
-          {
-            "kind": "section",
-            "tone": "info",
-            "text": "Email sent to your inbound address starts this automation. Forward or CC it to route a message into your movement."
-          },
-          {
-            "kind": "slug",
-            "key": "key",
-            "label": "Inbound email address",
-            "prefix": "inbox+",
-            "suffix": "@example.com",
-            "required": true,
-            "min": 1,
-            "max": 30,
-            "unique": true,
-            "routingKey": true
-          }
-        ]
+        "answer": null
       },
       {
         "step": "manifest triggerExpectation",
-        "answer": "Fires once per email actually delivered to the movement's dedicated forwarding address (inbox+<key>@example.com) — it does NOT read an existing inbox or see mail sent elsewhere. The user must forward or send mail to that address for it to fire; the listen key is the plus-suffix, so different keys route different mail. Describe it as \"when an email is sent to your inbound address\", not \"when you get an email\"."
+        "answer": "Fires once per email actually delivered to the movement's dedicated forwarding address (inbox+<key>@example.com) — it does NOT read an existing inbox or see mail sent elsewhere. The user must forward or send mail to that address for it to fire; the listen names the plus-suffix as `e.Key`, so different keys route different mail. Describe it as \"when an email is sent to your inbound address\", not \"when you get an email\"."
       },
       {
         "step": "manifest configurationGap",
@@ -1628,7 +1697,7 @@
           "headers": {},
           "body": null,
           "status": 200,
-          "response": "{\"data\":[{\"id\":\"att_1\",\"filename\":\"deck.pdf\",\"content_type\":\"application/pdf\",\"size\":15,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_1\",\"expires_at\":\"2026-10-19T13:49:37.462Z\"},{\"id\":\"att_2\",\"filename\":\"notes.txt\",\"content_type\":\"text/plain\",\"size\":10,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_2\",\"expires_at\":\"2026-10-19T13:49:37.462Z\"}],\"has_more\":false}"
+          "response": "{\"data\":[{\"id\":\"att_1\",\"filename\":\"deck.pdf\",\"content_type\":\"application/pdf\",\"size\":15,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_1\",\"expires_at\":\"2026-11-02T18:17:45.875Z\"},{\"id\":\"att_2\",\"filename\":\"notes.txt\",\"content_type\":\"text/plain\",\"size\":10,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_2\",\"expires_at\":\"2026-11-02T18:17:45.875Z\"}],\"has_more\":false}"
         },
         {
           "method": "GET",
@@ -1647,7 +1716,7 @@
           "headers": {},
           "body": null,
           "status": 200,
-          "response": "{\"data\":[{\"id\":\"att_1\",\"filename\":\"deck.pdf\",\"content_type\":\"application/pdf\",\"size\":15,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_1\",\"expires_at\":\"2026-10-19T13:49:37.481Z\"},{\"id\":\"att_2\",\"filename\":\"notes.txt\",\"content_type\":\"text/plain\",\"size\":10,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_2\",\"expires_at\":\"2026-10-19T13:49:37.481Z\"}],\"has_more\":false}"
+          "response": "{\"data\":[{\"id\":\"att_1\",\"filename\":\"deck.pdf\",\"content_type\":\"application/pdf\",\"size\":15,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_1\",\"expires_at\":\"2026-11-02T18:17:45.881Z\"},{\"id\":\"att_2\",\"filename\":\"notes.txt\",\"content_type\":\"text/plain\",\"size\":10,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_2\",\"expires_at\":\"2026-11-02T18:17:45.881Z\"}],\"has_more\":false}"
         },
         {
           "method": "GET",
@@ -1665,7 +1734,7 @@
           "headers": {},
           "body": null,
           "status": 200,
-          "response": "{\"data\":[{\"id\":\"att_1\",\"filename\":\"deck.pdf\",\"content_type\":\"application/pdf\",\"size\":15,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_1\",\"expires_at\":\"2026-10-19T13:49:37.512Z\"},{\"id\":\"att_2\",\"filename\":\"notes.txt\",\"content_type\":\"text/plain\",\"size\":10,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_2\",\"expires_at\":\"2026-10-19T13:49:37.512Z\"}],\"has_more\":false}"
+          "response": "{\"data\":[{\"id\":\"att_1\",\"filename\":\"deck.pdf\",\"content_type\":\"application/pdf\",\"size\":15,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_1\",\"expires_at\":\"2026-11-02T18:17:45.888Z\"},{\"id\":\"att_2\",\"filename\":\"notes.txt\",\"content_type\":\"text/plain\",\"size\":10,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_2\",\"expires_at\":\"2026-11-02T18:17:45.888Z\"}],\"has_more\":false}"
         },
         {
           "method": "GET",
@@ -1756,7 +1825,7 @@
             }
           },
           "status": 200,
-          "response": "{\"data\":{\"id\":\"1\",\"sent_at\":\"2026-10-19T12:49:37.604Z\",\"recipients\":[{\"email\":\"ada@example.com\",\"username\":\"Ada\"}],\"sender\":null,\"cc\":[],\"subject\":\"Fake\",\"data\":\"x\",\"replyToHeader\":null,\"inReplyToHeader\":null,\"hasAttachment\":true,\"attachmentFilename\":\"f.txt\"}}"
+          "response": "{\"data\":{\"id\":\"1\",\"sent_at\":\"2026-11-02T17:17:45.914Z\",\"recipients\":[{\"email\":\"ada@example.com\",\"username\":\"Ada\"}],\"sender\":null,\"cc\":[],\"subject\":\"Fake\",\"data\":\"x\",\"replyToHeader\":null,\"inReplyToHeader\":null,\"hasAttachment\":true,\"attachmentFilename\":\"f.txt\"}}"
         }
       ],
       "mailgun": [
@@ -1897,9 +1966,20 @@
           {
             "typeId": "email:message",
             "displayName": "Email",
+            "collectionName": "Emails",
             "writable": false,
             "readable": false,
-            "fires": true
+            "listenable": true,
+            "bounded": false,
+            "boundedBy": [
+              "Key"
+            ],
+            "addressed": true,
+            "delivery": "connection",
+            "capability": {
+              "filter": "native",
+              "supportsLimit": false
+            }
           },
           {
             "typeId": "email:attachment",
@@ -1923,6 +2003,24 @@
               "writable": false,
               "required": true,
               "description": "RFC 5322 Message-Id (or an inbound-adapter id when absent)."
+            },
+            {
+              "fieldId": "Key",
+              "displayName": "Key",
+              "kind": "owned",
+              "owned": {
+                "name": "InboxKey",
+                "allowPattern": "^[a-z0-9.!#$%&'*+/=?^_`{|}~-]*$"
+              },
+              "writable": false,
+              "required": true,
+              "capability": {
+                "filterOperators": [
+                  "eq",
+                  "in"
+                ]
+              },
+              "description": "The plus-suffix of the address the message was sent to (`inbox+deals@…` is `deals`), lowercased: a listen takes the keys it names (`e.Key == \"deals\"`). Mail sent to the box itself has the empty key (`e.Key == \"\"`)."
             },
             {
               "fieldId": "subject",
@@ -2048,6 +2146,24 @@
               "description": "RFC 5322 Message-Id (or an inbound-adapter id when absent)."
             },
             {
+              "fieldId": "Key",
+              "displayName": "Key",
+              "kind": "owned",
+              "owned": {
+                "name": "InboxKey",
+                "allowPattern": "^[a-z0-9.!#$%&'*+/=?^_`{|}~-]*$"
+              },
+              "writable": false,
+              "required": true,
+              "capability": {
+                "filterOperators": [
+                  "eq",
+                  "in"
+                ]
+              },
+              "description": "The plus-suffix of the address the message was sent to (`inbox+deals@…` is `deals`), lowercased: a listen takes the keys it names (`e.Key == \"deals\"`). Mail sent to the box itself has the empty key (`e.Key == \"\"`)."
+            },
+            {
               "fieldId": "subject",
               "displayName": "Subject",
               "kind": "string",
@@ -2171,12 +2287,12 @@
               {
                 "fieldId": "email:message",
                 "targetTypeId": "email:message",
-                "cardinality": "one",
+                "cardinality": "many",
                 "direction": "outgoing",
-                "name": "Email",
-                "fires": true,
+                "name": "Emails",
+                "listenable": true,
                 "readable": false,
-                "description": "An email arriving — what a listen delivers, whole."
+                "description": "Each email arriving, under the key it was sent to — what a listen delivers, whole."
               }
             ]
           },
@@ -2203,6 +2319,24 @@
                   "writable": false,
                   "required": true,
                   "description": "RFC 5322 Message-Id (or an inbound-adapter id when absent)."
+                },
+                {
+                  "fieldId": "Key",
+                  "displayName": "Key",
+                  "kind": "owned",
+                  "owned": {
+                    "name": "InboxKey",
+                    "allowPattern": "^[a-z0-9.!#$%&'*+/=?^_`{|}~-]*$"
+                  },
+                  "writable": false,
+                  "required": true,
+                  "capability": {
+                    "filterOperators": [
+                      "eq",
+                      "in"
+                    ]
+                  },
+                  "description": "The plus-suffix of the address the message was sent to (`inbox+deals@…` is `deals`), lowercased: a listen takes the keys it names (`e.Key == \"deals\"`). Mail sent to the box itself has the empty key (`e.Key == \"\"`)."
                 },
                 {
                   "fieldId": "subject",
@@ -2272,6 +2406,24 @@
                 "writable": false,
                 "required": true,
                 "description": "RFC 5322 Message-Id (or an inbound-adapter id when absent)."
+              },
+              {
+                "fieldId": "Key",
+                "displayName": "Key",
+                "kind": "owned",
+                "owned": {
+                  "name": "InboxKey",
+                  "allowPattern": "^[a-z0-9.!#$%&'*+/=?^_`{|}~-]*$"
+                },
+                "writable": false,
+                "required": true,
+                "capability": {
+                  "filterOperators": [
+                    "eq",
+                    "in"
+                  ]
+                },
+                "description": "The plus-suffix of the address the message was sent to (`inbox+deals@…` is `deals`), lowercased: a listen takes the keys it names (`e.Key == \"deals\"`). Mail sent to the box itself has the empty key (`e.Key == \"\"`)."
               },
               {
                 "fieldId": "subject",
@@ -2843,7 +2995,9 @@
               "identifier": "bo@acme.com",
               "scheme": "email",
               "adapterType": "email",
-              "email": "bo@acme.com"
+              "email": "bo@acme.com",
+              "name": "Bo Li",
+              "label": "Bo Li"
             },
             "source": "originator"
           },
@@ -2893,7 +3047,9 @@
               "identifier": "cy@acme.com",
               "scheme": "email",
               "adapterType": "email",
-              "email": "cy@acme.com"
+              "email": "cy@acme.com",
+              "name": "Cy",
+              "label": "Cy"
             },
             "source": "originator"
           },
@@ -2996,7 +3152,7 @@
           "headers": {},
           "body": null,
           "status": 200,
-          "response": "{\"data\":[{\"id\":\"att_1\",\"filename\":\"deck.pdf\",\"content_type\":\"application/pdf\",\"size\":15,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_1\",\"expires_at\":\"2026-10-19T13:49:37.617Z\"},{\"id\":\"att_2\",\"filename\":\"notes.txt\",\"content_type\":\"text/plain\",\"size\":10,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_2\",\"expires_at\":\"2026-10-19T13:49:37.617Z\"}],\"has_more\":false}"
+          "response": "{\"data\":[{\"id\":\"att_1\",\"filename\":\"deck.pdf\",\"content_type\":\"application/pdf\",\"size\":15,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_1\",\"expires_at\":\"2026-11-02T18:17:45.923Z\"},{\"id\":\"att_2\",\"filename\":\"notes.txt\",\"content_type\":\"text/plain\",\"size\":10,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_2\",\"expires_at\":\"2026-11-02T18:17:45.923Z\"}],\"has_more\":false}"
         },
         {
           "method": "GET",
@@ -3015,7 +3171,7 @@
           "headers": {},
           "body": null,
           "status": 200,
-          "response": "{\"data\":[{\"id\":\"att_1\",\"filename\":\"deck.pdf\",\"content_type\":\"application/pdf\",\"size\":15,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_1\",\"expires_at\":\"2026-10-19T13:49:37.622Z\"},{\"id\":\"att_2\",\"filename\":\"notes.txt\",\"content_type\":\"text/plain\",\"size\":10,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_2\",\"expires_at\":\"2026-10-19T13:49:37.622Z\"}],\"has_more\":false}"
+          "response": "{\"data\":[{\"id\":\"att_1\",\"filename\":\"deck.pdf\",\"content_type\":\"application/pdf\",\"size\":15,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_1\",\"expires_at\":\"2026-11-02T18:17:45.926Z\"},{\"id\":\"att_2\",\"filename\":\"notes.txt\",\"content_type\":\"text/plain\",\"size\":10,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_2\",\"expires_at\":\"2026-11-02T18:17:45.926Z\"}],\"has_more\":false}"
         }
       ],
       "outbox": [],

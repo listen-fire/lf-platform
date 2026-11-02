@@ -12,6 +12,8 @@ import type { Adapter, FileRef } from 'movement-engine/public/adapter';
 import type { SourcePosition } from 'movement-engine/public/catalog';
 
 import { makeMetaPosition, makeStablePosition, makeUnstablePosition } from 'movement-engine/public/catalog';
+import { arrivalTriggerOf } from 'movement-engine/public/inbound';
+import { emailActorOf } from '@listen-fire/email/adapter';
 
 /** The decision a door hands back; the script only reads it as JSON. */
 type Decision = unknown;
@@ -221,8 +223,18 @@ export async function runEmailParityScript(subject: EmailParitySubject, provider
   }
 
   // ── Actor ──
-  // A webhook delivery's event, as the inbound handlers build it.
-  const event = (payload: unknown) => ({ pipelineInputId: 'pi-parity', adapterType: 'email', triggerType: 'webhook', payload }) as never;
+  // A webhook delivery's run trigger, as the door builds it: who acted rides
+  // on the arrival, named by the module's own reading of the mail (adapter
+  // protocol 2.7).
+  const event = (payload: Record<string, unknown>) => {
+    const actor = emailActorOf(payload);
+    return arrivalTriggerOf({
+      pipelineInputId: 'pi-parity',
+      adapterType: 'email',
+      now: new Date('2026-10-19T00:00:00.000Z'),
+      arrival: { edge: 'Emails', identity: 'parity', landing: { recordId: 'parity', fields: payload }, ...(actor !== undefined ? { actor } : {}) },
+    });
+  };
   await step('getActorCandidates mailgun', async () => (await adapter.getActorCandidates?.({ event: event(MAILGUN_PAYLOAD) })) ?? null);
   await step('getActorCandidates From header only', async () =>
     (await adapter.getActorCandidates?.({ event: event({ From: 'Cy <cy@acme.com>', 'message-headers': [['X-Original-To', 'orig@acme.com']] }) })) ?? null,
