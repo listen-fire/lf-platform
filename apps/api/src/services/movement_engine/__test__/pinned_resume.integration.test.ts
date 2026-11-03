@@ -3,7 +3,7 @@
 // movement is edited and redeployed (a new movement_version) and the library
 // is edited (the team's saved files); the wake resumes it on the movement text
 // it was pinned to (trigger_run.movement_version_id; version rows are
-// immutable) and on the library text its park pinned (park state version 3's
+// immutable) and on the library text its park pinned (the park state's
 // `libraries`, kept once by hash in automations.park_library_source).
 //
 // Only the network seams are mocked, as timer_resume.integration.test.ts does:
@@ -273,10 +273,10 @@ describe('a paused run resumes on the text it was pinned to (real DB, Rust engin
       .where('parked_run.status', '=', 'parked')
       .select(['parked_run.run_id as run_id', 'parked_run.address as address', 'parked_run.state as state'])
       .executeTakeFirstOrThrow();
-    // Park state version 2 (the Rust engine's): the library named by the hash
+    // Park state version 4 (the Rust engine's since 0.14): the library named by the hash
     // its one stored text is kept by.
     const state = parked.state as { version: number; libraries: Array<{ path: string; hash: string }> };
-    expect(state.version).toBe(3);
+    expect(state.version).toBe(4);
     expect(state.libraries).toEqual([{ path: 'lib/words', hash: expect.stringMatching(/^sha256:[0-9a-f]{64}$/) }]);
     const stored = await getAutomationsQb(['park_library_source'])
       .selectFrom('park_library_source')

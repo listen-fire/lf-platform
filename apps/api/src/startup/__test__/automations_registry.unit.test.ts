@@ -56,7 +56,9 @@ const PERIODIC_KINDS = [
  *  composed process, the default delivery). */
 const UNIT_KINDS = ['ask_closed_sweep', 'airtable_webhook_refresh', 'exposed_file_sweep', 'linked_object_refresh', 'knowledge_changes',
   // The Slack and WhatsApp doors each register a durable-row kind in the drain.
-  'slack_event', 'slack_response', 'whatsapp_message'];
+  'slack_event', 'slack_response', 'whatsapp_message',
+  // A listen whose earlier hops the host lists (Airtable by base or table) is listed again by its own row.
+  'resolve_listen'];
 
 const PASS = { claimed: 0, ran: 0, recovered: 0, failed: 0, deferred: 0, claimFailed: false };
 
