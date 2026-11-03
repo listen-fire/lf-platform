@@ -114,22 +114,32 @@ async function wakeFor(reason, why) {
 }
 
 let lastCheckAt = 0;
-let lastCheckOutput = null;
+let lastReportedErrors = null;
+// Only an error-severity diagnostic wakes the agent. The check's info notes are
+// no reason to wake it, and are left out of what it is told, so it cannot take
+// one for an error. The same error is not reported twice.
+const ERROR_LINE = /^\S+:\d+:\d+ error [A-Z][A-Z0-9_]* /;
 async function maybeCheck(force = false) {
   if (config.mode !== 'lf' || (!force && Date.now() - lastCheckAt < config.lf.checkEveryMs)) return null;
   lastCheckAt = Date.now();
   const output = lf(['check']).trim();
-  const errors = Number(/(\d+) error\(s\)/.exec(output)?.[1] ?? 0);
-  const fresh = errors > 0 && output !== lastCheckOutput;
-  lastCheckOutput = output;
-  const record = { at: new Date().toISOString(), errors, output, woke: fresh };
+  const lines = output.split('\n');
+  const errorLines = lines.filter((l) => ERROR_LINE.test(l));
+  const summaryErrors = Number(/(\d+) error\(s\)/.exec(output)?.[1] ?? 0);
+  // An error the summary counts but no line shows is still an error: tell the agent all of it.
+  const shown = errorLines.length > 0 ? [...errorLines, lines.at(-1)].join('\n') : output;
+  const errors = Math.max(errorLines.length, summaryErrors);
+  const fresh = errors > 0 && shown !== lastReportedErrors;
+  const record = { at: new Date().toISOString(), errors, infoNotes: lines.length - errorLines.length - 1, output, woke: fresh };
   fs.appendFileSync(out('checks.jsonl'), `${JSON.stringify(record)}\n`);
+  if (errors === 0) lastReportedErrors = null;
   if (!fresh) return null;
+  lastReportedErrors = shown;
   console.log(`  listen-fire check found ${errors} error(s)`);
   const before = await snapshot();
-  const w = await wakeFor(`The host's periodic \`listen-fire check\` found new errors:\n\n${output}`, 'lf check');
+  const w = await wakeFor(`The host's periodic \`listen-fire check\` found new errors:\n\n${shown}`, 'lf check');
   const g = gained(before, await snapshot());
-  fs.appendFileSync(out('deliveries.jsonl'), `${JSON.stringify({ payment: null, kind: 'check wake', check: output, wakes: [w], ...g })}\n`);
+  fs.appendFileSync(out('deliveries.jsonl'), `${JSON.stringify({ payment: null, kind: 'check wake', check: shown, wakes: [w], ...g })}\n`);
   return w;
 }
 

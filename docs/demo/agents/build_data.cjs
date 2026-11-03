@@ -21,7 +21,21 @@
 //                      stressor (null | "duplicated" | "crm 503" | "crm 429")
 //     options          { agent, js, lf }, each:
 //       label, means
-//       costs            three buckets, then their sum:
+//       like             the like-for-like comparison, every attempt of the option through
+//                        the identical stressors: { attemptsRecorded, allCorrectAttempts,
+//                        attempts[], median }, each attempt { attempt, correct (of the 25),
+//                        outcomes, allCorrect, spend } and spend { modelCalls, costUsd (the
+//                        option's TOTAL model spend: writing + every wake + every
+//                        per-event session), write { modelCalls, costUsd }, wakes { count,
+//                        modelCalls, costUsd, list[] { why, for, payment, costUsd } (what
+//                        woke it, and for what), run { modelCalls, costUsd } (the per-event
+//                        agent's sessions; none for js and lf), per1000 { allScaled,
+//                        writeOnce } }. per1000.allScaled is the attempt's total times
+//                        1000/25 (writing and wakes repeat at the stressors' rate);
+//                        per1000.writeOnce is the writing once plus the wakes and the
+//                        per-event sessions times 1000/25. `median` is the same figures
+//                        over the attempts
+//       costs            (the used attempt) three buckets, then their sum:
 //         write            { sessions, modelCalls, usage, costUsd, ms }: authoring
 //                          (the used attempt's session; nothing for the agent)
 //         maintain         { count, modelCalls, costUsd, ms, list[] }: every time the
@@ -54,8 +68,8 @@
 //       wentWrong[]       { n, outcome, what } for every payment not plainly right
 //       payments[]        per payment: n, outcome, failedFirst, recoveredBy,
 //                         deliveries, sent[], errors[], crm[], ms, costUsd, modelCalls
-//       attempts[]        (js, lf) every authoring attempt, the same measures and
-//                         costs; `used` names the one the rest shows
+//       attempts[]        every attempt (the agent's too: one whole run each), the
+//                         same costs and `spend`; `used` names the one the rest shows
 //       transcript        (js, lf) the used authoring session condensed
 //   labels           { real[], standIn[] }
 //
@@ -83,6 +97,8 @@ const path = require('path');
 const { customers } = require('./programs/customers.cjs');
 const { measure } = require('./measure.cjs');
 
+const COMPARE_WORK = process.env.COMPARE_WORK || path.join(__dirname, '.work', 'compare');
+const EXPECTED_ATTEMPTS = Number(process.env.EXPECTED_ATTEMPTS || 3);
 const OUT = process.argv[2];
 if (!OUT) {
   console.error('usage: node build_data.cjs <path to listen-fire-site/video/agents/data.js>');
@@ -103,7 +119,7 @@ const CRMS = {
   attio: "Native connector vs REST: the CRM is Attio (plan a select attribute). listen-fire reaches it through its native connector @lf/attio, which publishes the select's options to listen-fire check; JavaScript and the per-event agent through Attio's REST API with a plain HTTP helper.",
 };
 function scenario(name) {
-const C = path.join(__dirname, '.work', 'compare', name, 'capture');
+const C = path.join(COMPARE_WORK, name, 'capture');
 const has = (f) => fs.existsSync(path.join(C, f));
 const c = (f) => JSON.parse(fs.readFileSync(path.join(C, f), 'utf8'));
 const ct = (f) => fs.readFileSync(path.join(C, f), 'utf8').replace(/\s+$/, '');
@@ -283,6 +299,41 @@ function costsOf(write, maintain, run) {
     total: { modelCalls: write.modelCalls + maintain.modelCalls + run.total.modelCalls, costUsd: write.costUsd + maintain.costUsd + run.total.costUsd },
   };
 }
+/** An attempt's TOTAL model spend through the stressors: the writing, every
+ *  wake, and (the per-event agent) every session; and what that comes to for
+ *  1,000 payments. */
+function spendOf(attempt) {
+  const k = attempt.costs ?? costsOf(writeOf(attempt.session), maintainOf([], []), runOf([]));
+  const n = k.run.payments || payments.length;
+  const scale = 1000 / n;
+  return {
+    modelCalls: k.total.modelCalls,
+    costUsd: k.total.costUsd,
+    write: { modelCalls: k.write.modelCalls, costUsd: k.write.costUsd },
+    wakes: { count: k.maintain.count, modelCalls: k.maintain.modelCalls, costUsd: k.maintain.costUsd, list: k.maintain.list.map((w) => ({ why: w.why, for: w.for, payment: w.payment, modelCalls: w.modelCalls, costUsd: w.costUsd })) },
+    run: { modelCalls: k.run.total.modelCalls, costUsd: k.run.total.costUsd },
+    per1000: { allScaled: k.total.costUsd * scale, writeOnce: k.write.costUsd + (k.maintain.costUsd + k.run.total.costUsd) * scale },
+  };
+}
+/** An option's attempts side by side: correctness beside spend. */
+function likeOf(attempts) {
+  const rowsOf = (a) => a.ran?.rows ?? [];
+  const list = attempts.map((a) => ({
+    attempt: a.attempt,
+    correct: a.outcomes?.correct ?? 0,
+    clean: rowsOf(a).filter((x) => x.outcome === 'correct' && x.what.length === 0).length,
+    outcomes: a.outcomes,
+    allCorrect: (a.outcomes?.correct ?? 0) === payments.length,
+    spend: a.spend,
+  }));
+  const med = (f) => median(list.map((x) => f(x.spend)));
+  return {
+    attemptsRecorded: list.length,
+    allCorrectAttempts: list.filter((x) => x.allCorrect).length,
+    attempts: list,
+    median: { costUsd: med((x) => x.costUsd), modelCalls: med((x) => x.modelCalls), per1000: { allScaled: med((x) => x.per1000.allScaled), writeOnce: med((x) => x.per1000.writeOnce) } },
+  };
+}
 function condensed(session, writeTool) {
   const steps = [];
   for (const step of session.steps) {
@@ -307,23 +358,37 @@ const artefact = (kind, file) => {
 };
 const attemptNs = (dir) => (fs.existsSync(path.join(C, dir)) ? fs.readdirSync(path.join(C, dir)).filter((f) => /^attempt_\d+\.json$/.test(f)).map((f) => Number(/\d+/.exec(f)[0])).sort((a, b) => a - b) : []);
 
-// 1. The per-event agent.
-const sessions = lines('agent/sessions.jsonl');
-const agentRun = run('agent/stress', (p) => {
-  const mine = sessions.filter((s) => s.eventId === p.eventId);
+const attemptNsOf = (prefix) => {
+  const dir = path.dirname(prefix);
+  const stem = path.basename(prefix);
+  return fs.existsSync(path.join(C, dir)) ? fs.readdirSync(path.join(C, dir)).filter((f) => f.startsWith(stem) && /^\d+\.jsonl$/.test(f.slice(stem.length))).map((f) => Number(/\d+/.exec(f.slice(stem.length))[0])).sort((a, b) => a - b) : [];
+};
+// 1. The per-event agent: the whole run once per attempt.
+function agentAttempt(k) {
+  const sessions = lines(`agent/sessions_${k}.jsonl`);
+  const ran = run(`agent/stress_${k}`, (p) => {
+    const mine = sessions.filter((s) => s.eventId === p.eventId);
+    return {
+      errors: mine.filter((s) => s.harnessError).map((s) => s.harnessError),
+      ms: sum(mine.map((s) => s.ms)),
+      costUsd: sum(mine.map((s) => s.costUsd ?? 0)),
+      modelCalls: sum(mine.map((s) => s.modelCalls ?? 0)),
+      extra: {
+        sessions: mine.length,
+        notes: mine.map((s) => closingNote(s.steps)),
+        memory: mine.flatMap((s) => (s.steps ?? []).filter((x) => x.role === 'tool' && x.name.startsWith('memory_')).map((x) => `${x.name} ${JSON.stringify(x.input)} → ${clip(String(x.output), 120)}`)),
+        toolErrors: mine.flatMap((s) => (s.steps ?? []).filter((x) => x.role === 'tool' && x.isError).map((x) => `${x.name}: ${clip(String(x.output), 200)}`)),
+      },
+    };
+  });
   return {
-    errors: mine.filter((s) => s.harnessError).map((s) => s.harnessError),
-    ms: sum(mine.map((s) => s.ms)),
-    costUsd: sum(mine.map((s) => s.costUsd ?? 0)),
-    modelCalls: sum(mine.map((s) => s.modelCalls ?? 0)),
-    extra: {
-      sessions: mine.length,
-      notes: mine.map((s) => closingNote(s.steps)),
-      memory: mine.flatMap((s) => (s.steps ?? []).filter((x) => x.role === 'tool' && x.name.startsWith('memory_')).map((x) => `${x.name} ${JSON.stringify(x.input)} → ${clip(String(x.output), 120)}`)),
-      toolErrors: mine.flatMap((s) => (s.steps ?? []).filter((x) => x.role === 'tool' && x.isError).map((x) => `${x.name}: ${clip(String(x.output), 200)}`)),
-    },
+    attempt: k,
+    costs: costsOf(NOTHING_WRITTEN, maintainOf(ran.records, []), runOf(ran.rows)),
+    outcomes: outcomesOf(ran.rows),
+    byStressor: byStressor(ran.rows, { caughtBeforePayments: false }, 'the agent'),
+    ran,
   };
-});
+}
 function inconsistencies(rows) {
   const out = [];
   const emails = rows.flatMap((x) => x.sent.filter((s) => s.kind === 'email').map((s) => ({ n: x.n, ...s })));
@@ -338,17 +403,23 @@ function inconsistencies(rows) {
   return out;
 }
 const NOTHING_WRITTEN = { sessions: 0, modelCalls: 0, usage: {}, costUsd: 0, ms: 0 };
+const agentAttempts = attemptNsOf('agent/sessions_').map(agentAttempt);
+for (const a of agentAttempts) a.spend = spendOf(a);
+const usedAgent = agentAttempts[0];
 const agent = {
   label: 'Wake the agent for every event',
   means: 'A model session per delivery, with the CRM, email, Slack and a memory as tools.',
-  costs: costsOf(NOTHING_WRITTEN, maintainOf(agentRun.records, []), runOf(agentRun.rows)),
+  costs: usedAgent.costs,
   artefact: null,
   caught: [],
-  byStressor: byStressor(agentRun.rows, { caughtBeforePayments: false }, 'the agent'),
-  outcomes: outcomesOf(agentRun.rows),
-  wentWrong: wentWrongOf(agentRun.rows),
-  inconsistencies: inconsistencies(agentRun.rows),
-  payments: agentRun.rows.map(({ what, ...x }) => x),
+  byStressor: usedAgent.byStressor,
+  outcomes: usedAgent.outcomes,
+  wentWrong: wentWrongOf(usedAgent.ran.rows),
+  inconsistencies: inconsistencies(usedAgent.ran.rows),
+  payments: usedAgent.ran.rows.map(({ what, ...x }) => x),
+  used: usedAgent.attempt,
+  attempts: agentAttempts.map(({ ran: r, ...a }) => ({ ...a, wentWrong: wentWrongOf(r.rows) })),
+  like: likeOf(agentAttempts),
 };
 
 // 2. JavaScript.
@@ -412,6 +483,7 @@ function option(label, means, attempts, writeTool, extra) {
     costs: used.costs,
     artefact: used.artefact,
     ...extra(used),
+    like: likeOf(attempts),
     byStressor: used.byStressor,
     outcomes: used.outcomes,
     wentWrong: wentWrongOf(rows),
@@ -424,22 +496,26 @@ function option(label, means, attempts, writeTool, extra) {
 }
 const jsAttempts = attemptNs('js').map(jsAttempt);
 const lfAttempts = attemptNs('lf').map(lfAttempt);
+for (const a of [...jsAttempts, ...lfAttempts]) a.spend = spendOf(a);
 const js = option('Write a JavaScript script for a sandbox', 'The model writes a handler once; the sandbox stores each delivery and runs it.', jsAttempts, 'write_handler', () => ({ caught: [] }));
 const lfOption = option('Write a listen-fire program', 'The model writes a program once, checked by listen-fire check; listen-fire stores each delivery and runs it.', lfAttempts, 'write_program', (used) => ({ caught: used.caught }));
 agent.prices = js.prices;
 
 const problems = [
   ...(payments.length !== 25 ? [`${payments.length} payments`] : []),
-  ...(agentRun.rows.some((x) => x.deliveries.length === 0) ? ['the agent missed a payment'] : []),
+  ...agentAttempts.filter((a) => a.ran.rows.some((x) => x.deliveries.length === 0)).map((a) => `agent attempt ${a.attempt} missed a payment`),
   ...(jsAttempts.length === 0 || !jsAttempts[0].ran ? ['no JavaScript run'] : []),
   ...(lfAttempts.length === 0 || !lfAttempts[0].ran ? ['no listen-fire run'] : []),
   ...(lfAttempts[0] && !lfAttempts[0].finalCheckOk ? ['the used listen-fire attempt does not check clean'] : []),
   ...(lfAttempts[0]?.ran ? lfAttempts[0].ran.rows.filter((x) => x.modelCalls > 0).map((x) => `listen-fire payment ${x.n} made a model call`) : []),
   ...(lf.scenario !== name ? [`the capture says scenario ${lf.scenario}`] : []),
+  ...(lf.recording !== 'all three options, one run' && !(process.env.ALLOW_REHEARSAL === '1' && lf.recording === 'rehearsal, no model call') ? [`not one run of all three options (${lf.recording ?? 'a recording from before compare.sh said what it held'})`] : []),
+  ...[['agent', agentAttempts], ['js', jsAttempts], ['lf', lfAttempts]].filter(([, list]) => list.length !== EXPECTED_ATTEMPTS).map(([kind, list]) => `${kind} has ${list.length} attempts, expected ${EXPECTED_ATTEMPTS}`),
 ].map((x) => `${name}: ${x}`);
 return {
   lf,
   problems,
+  agentAttempts,
   jsAttempts,
   lfAttempts,
   data: {
@@ -464,6 +540,7 @@ const data = {
   environment: prompts.environment,
   cheatsheet: prompts.cheatsheet,
   validatedUnder: validatedUnder[0],
+  recording: [...new Set(SCENARIOS.map((name) => built[name].lf.recording))].join(' / '),
   scenarios: Object.fromEntries(SCENARIOS.map((name) => [name, built[name].data])),
   labels: {
     real: ['every model session: claude-sonnet-5-5, live (authoring, per-event, woken)', 'the JavaScript handler, run in node on every delivery against the stand-ins', 'lf check, listen-fire serve, listen-fire drain and every listen-fire run, with its real modules (@lf/stripe, @lf/mcp, @lf/attio, @lf/gmail, @lf/slack)'],
@@ -481,21 +558,25 @@ fs.writeFileSync(OUT, `window.DEMO=${JSON.stringify(data, null, 1)};\n`);
 const money = (x) => `$${x.toFixed(4)}`;
 const stress = (b) => `dup ${b.duplicated.map((d) => (d.actedTwice ? 'twice' : 'once')).join('/')}; transient ${b.transient.map((t) => `${t.status} ${t.result} (${t.how})`).join(' / ')}; rename ${b.renamed.caughtBeforePayments ? 'caught by the periodic check first; ' : ''}${b.renamed.payments.map((d) => `${d.n}:${d.plan}:${d.outcome}${d.failedFirst ? '(failed first)' : ''}`).join(', ')}`;
 const m = (a) => (a ? `${a.measures.lines} lines, ${a.measures.decisionPoints} decisions, ${a.measures.handRolledCount} hand-rolled (${Object.entries(a.measures.handRolled).filter(([, v]) => v.present).map(([k]) => k).join(', ')}), ${a.measures.ioSites.count} I/O sites, credentials ${a.measures.credentials.held}` : 'none');
-const buckets = (k) =>
-  k
-    ? `write ${k.write.modelCalls} calls ${money(k.write.costUsd)} ${(k.write.ms / 1000).toFixed(0)} s | maintain ${k.maintain.count} wake(s) ${k.maintain.modelCalls} calls ${money(k.maintain.costUsd)} | run median ${k.run.median.modelCalls} calls ${money(k.run.median.costUsd)} ${k.run.median.ms} ms, 25: ${k.run.total.modelCalls} calls ${money(k.run.total.costUsd)} | total ${k.total.modelCalls} calls ${money(k.total.costUsd)}`
-    : 'not run';
-for (const name of SCENARIOS) {
-  const { data: d, jsAttempts, lfAttempts } = built[name];
-  console.log(`== ${name}: ${d.crm}`);
-  console.log(`agent: ${buckets(d.options.agent.costs)}\n  ${JSON.stringify(d.options.agent.outcomes)}\n  ${stress(d.options.agent.byStressor)}`);
-  for (const [kind, list] of [['js', jsAttempts], ['lf', lfAttempts]]) {
-    for (const a of list) {
-      console.log(`${kind} ${a.attempt}: ${buckets(a.costs)}${a.checks ? `; authoring checks ${JSON.stringify(a.checks)}` : ''}`);
-      for (const w of a.costs?.maintain.list ?? []) console.log(`  wake: ${w.for} → ${w.modelCalls} calls ${money(w.costUsd)}, ${w.replays} replay(s), ${w.reruns.length} rerun(s), told the user ${w.toldUser.length}, ${w.changed ? 'changed' : 'left'} the automation`);
-      console.log(`  authored: ${m(a.artefact.authored)}\n  final:    ${m(a.artefact.final)}`);
-      console.log(`  ${JSON.stringify(a.outcomes)}\n  ${a.byStressor ? stress(a.byStressor) : 'not run'}`);
-    }
+const sec = (ms) => `${(ms / 1000).toFixed(0)} s`;
+const spendLine = (sp) => `write ${sp.write.modelCalls} calls ${money(sp.write.costUsd)} | wakes ${sp.wakes.count} (${sp.wakes.modelCalls} calls ${money(sp.wakes.costUsd)}) | per-event sessions ${sp.run.modelCalls} calls ${money(sp.run.costUsd)} | TOTAL ${sp.modelCalls} calls ${money(sp.costUsd)} | per 1,000 payments: all scaled ${money(sp.per1000.allScaled)}, writing once ${money(sp.per1000.writeOnce)}`;
+const likeLines = (label, like, attemptObjects) => {
+  console.log(`${label}: ${like.allCorrectAttempts} of ${like.attemptsRecorded} attempts right on every payment; median total ${money(like.median.costUsd)} per attempt, ${money(like.median.per1000.allScaled)} per 1,000 payments (all scaled) / ${money(like.median.per1000.writeOnce)} (writing once)`);
+  for (const a of like.attempts) {
+    console.log(`  attempt ${a.attempt}: ${a.correct}/${payments25} correct (${a.clean} clean) ${JSON.stringify(a.outcomes)}`);
+    console.log(`    ${spendLine(a.spend)}`);
+    for (const w of a.spend.wakes.list) console.log(`    woke: ${w.why}: ${w.for} → ${w.modelCalls} calls ${money(w.costUsd)}`);
+    const o = attemptObjects?.find((x) => x.attempt === a.attempt);
+    if (o?.artefact) console.log(`    authored: ${m(o.artefact.authored)}\n    final:    ${m(o.artefact.final)}`);
+    if (o?.byStressor) console.log(`    ${stress(o.byStressor)}`);
   }
+};
+const payments25 = 25;
+for (const name of SCENARIOS) {
+  const { data: d, agentAttempts, jsAttempts, lfAttempts } = built[name];
+  console.log(`== ${name}: ${d.crm}`);
+  likeLines('agent', d.options.agent.like, agentAttempts);
+  likeLines('js', d.options.js.like, jsAttempts);
+  likeLines('lf', d.options.lf.like, lfAttempts);
 }
 console.log(`${OUT} (validated under listen-fire ${data.validatedUnder})`);

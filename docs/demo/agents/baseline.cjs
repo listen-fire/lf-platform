@@ -20,6 +20,7 @@ const { session, PRICES } = require('./agent_tools.cjs');
 const { openCrm } = require('./crm_access.cjs');
 
 const { request, retryEmail: RETRY_EMAIL, environment: ENVIRONMENT, checkAgent } = require('./prompts.cjs');
+const { customers } = require('./programs/customers.cjs');
 
 const SYSTEM = `You are an assistant for Ledgerline's team, with tools for their CRM, their billing mailbox and their Slack, and a memory that lasts between sessions. A while ago the user told you:
 
@@ -43,6 +44,56 @@ async function json(url, init) {
 
 function rfc2822({ to, subject, body }) {
   return [`From: billing@ledgerline.io`, `To: ${to.join(', ')}`, `Subject: ${subject}`, 'MIME-Version: 1.0', 'Content-Type: text/plain; charset=utf-8', '', body].join('\r\n');
+}
+
+/**
+ * REHEARSE_AGENT: no model is called. A scripted session stands in for the
+ * agent, so a rehearsal exercises everything around it (the CRM door, the
+ * mailbox, Slack, the memory, the session record). It does what a right agent
+ * does: asks the CRM about the customer (again after a 429 or a 5xx), skips an
+ * event it has already handled, then sends the retry email or posts in
+ * #accounts. What it sends comes from the stand-in world's own table
+ * (programs/customers.cjs), as nothing here reads the model's judgement.
+ */
+async function scriptedSession({ event, tools, handle }) {
+  const started = Date.now();
+  const steps = [];
+  const call = async (name, input) => {
+    let output;
+    let isError = false;
+    try {
+      output = await handle(name, input);
+      const status = Number(/^\{"status":(\d+)/.exec(output)?.[1] ?? 200);
+      if (status === 429 || status >= 500) isError = true;
+    } catch (error) {
+      output = String(error.message ?? error);
+      isError = true;
+    }
+    steps.push({ role: 'tool', id: `rehearsal_${steps.length}`, name, input, output, isError });
+    return { output, isError };
+  };
+  const invoice = event.data.object;
+  const customer = customers.find((x) => x.stripe.id === invoice.customer);
+  if ((await call('memory_get', { key: `done:${event.id}` })).output !== 'null') return finish();
+  const lookup = tools.some((t) => t.name === 'crm_request')
+    ? ['crm_request', { method: 'POST', path: '/v2/objects/people/records/query', body: { filter: { email_addresses: invoice.customer_email }, limit: 1 } }]
+    : ['crm__find_customer_by_email', { email: invoice.customer_email }];
+  for (let i = 0; i < 3; i++) {
+    if (!(await call(...lookup)).isError) break;
+    await new Promise((r) => setTimeout(r, 1100));
+  }
+  if (customer.crm.plan === 'monthly') {
+    const amount = `$${(invoice.amount_due / 100).toFixed(2).replace(/\.00$/, '')}`;
+    const body = RETRY_EMAIL.split('\n').slice(2).join('\n').replace("<customer's name>", customer.crm.name).replace('<amount, e.g. $49>', amount).replace("<the invoice's hosted_invoice_url>", invoice.hosted_invoice_url);
+    await call('send_email', { to: [customer.crm.email], subject: RETRY_EMAIL.split('\n')[0].replace(/^Subject: /, ''), body });
+  } else {
+    await call('post_to_slack', { channel: 'accounts', text: `Payment failed for ${customer.crm.company}. Account manager: ${customer.crm.account_manager}` });
+  }
+  await call('memory_set', { key: `done:${event.id}`, value: 'handled' });
+  return finish();
+  function finish() {
+    return { model: null, ms: Date.now() - started, modelCalls: 0, stopReason: 'rehearsal', usage: {}, costUsd: 0, calls: [], steps };
+  }
 }
 
 async function openAgent({ fakes: F, crmUrl, crmToken, memoryFile }) {
@@ -104,7 +155,7 @@ async function openAgent({ fakes: F, crmUrl, crmToken, memoryFile }) {
     handle: async (event) => {
       const before = { outbox: new Set((await fakes.outbox()).map((m) => m.id)), slack: new Set((await fakes.slack()).map((m) => m.id)) };
       const user = `Stripe webhook:\n\n\`\`\`json\n${JSON.stringify(event, null, 2)}\n\`\`\``;
-      const result = await session({ system: SYSTEM, user, tools, handle: handleTool });
+      const result = process.env.REHEARSE_AGENT ? await scriptedSession({ event, tools, handle: handleTool }) : await session({ system: SYSTEM, user, tools, handle: handleTool });
       const emails = (await fakes.outbox()).filter((m) => !before.outbox.has(m.id)).map((m) => ({ to: m.to, subject: m.subject, body: m.body }));
       const channels = await fakes.channels();
       const posts = (await fakes.slack()).filter((m) => !before.slack.has(m.id)).map((m) => ({ channel: channels.find((c) => c.id === m.channel)?.name ?? m.channel, text: m.text }));

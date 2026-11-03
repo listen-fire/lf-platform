@@ -31,11 +31,14 @@
 #   3. the CRM renames `yearly` to `annual_plan` (its data and its tools'
 #      output schemas); 45 s later 5 more payments arrive, 2 on that plan.
 #
-# JavaScript and listen-fire are authored three times each from the same
-# state; every attempt goes through the stressors. Outputs land in
-# .work/compare/capture/; build_data.cjs reads them beside capture.sh's
-# review recording (.work/capture/), so run capture.sh first. Re-runnable:
-# each run starts .work/compare/ from nothing.
+# Every option has the same number of attempts (ATTEMPTS, default 3), each
+# from the same state and through the same stressors: JavaScript and
+# listen-fire are authored once per attempt, and the per-event agent is the
+# whole run again (its memory starts empty each time). One run of this script
+# records all three options on the one listen-fire build, which is what makes
+# the options like for like; build_data.cjs refuses a recording that is not.
+# Outputs land in .work/compare/<scenario>/capture/. Re-runnable: each run
+# starts its scenario's directory from nothing.
 #
 #   LF_BIN, LF_SRC, LF_BRANCHES   as capture.sh (a merged and deleted branch
 #                                 as <name>=<commit>)
@@ -56,19 +59,28 @@
 #                                        REST API with a plain HTTP helper
 #                                        (crm_access.cjs).
 #                                 Outputs land in .work/compare/<scenario>/.
-#   ATTEMPTS                      authoring attempts per option (default 3)
+#   ATTEMPTS                      attempts per option, the per-event agent's
+#                                 included (default 3)
+#   COMPARE_WORK                  where the recording is made (default
+#                                 .work/compare); build_data.cjs reads the same
+#                                 variable
 #   ONLY_LF                       re-record listen-fire alone: the scenario's
 #                                 per-event agent and JavaScript recordings
 #                                 (capture/agent, capture/js) are kept as they
 #                                 are, and everything else is made anew (the
 #                                 events are the same: make_events.cjs is
-#                                 seeded)
-#   REHEARSE_JS, REHEARSE_LF      a rehearsal of the stressors with no
-#                                 model call: this handler and this program
-#                                 stand in for every attempt, the per-event
-#                                 agent is left out, and a woken agent is
-#                                 scripted (it reads what a session would
-#                                 read first, and changes nothing)
+#                                 seeded). The result is a mixed recording,
+#                                 which build_data.cjs refuses.
+#   REHEARSE_AGENT, REHEARSE_JS,  a rehearsal of the stressors with no
+#   REHEARSE_LF                   model call. REHEARSE_JS and REHEARSE_LF name a
+#                                 handler and a program that stand in for every
+#                                 attempt; REHEARSE_AGENT=1 puts a scripted
+#                                 agent in every per-event session; a woken
+#                                 agent is scripted (it reads what a session
+#                                 would read first, and changes nothing). With
+#                                 all three set, no API key is read: any model
+#                                 call would be refused. With only REHEARSE_JS
+#                                 the per-event agent is left out, as before.
 #   SPEND_CAP_USD                 stop before a listen-fire attempt that could
 #                                 take the model spend past this: the spend so
 #                                 far (this run's authoring and wakes, plus
@@ -88,7 +100,8 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/../../.." && pwd)"
 SCENARIO="${SCENARIO:-mcp}"
 case "$SCENARIO" in mcp) export CRM_KIND=mcp ;; attio) export CRM_KIND=rest ;; *) echo "SCENARIO is mcp or attio"; exit 1 ;; esac
-WORK="$HERE/.work/compare/$SCENARIO"
+COMPARE_WORK="${COMPARE_WORK:-$HERE/.work/compare}"
+WORK="$COMPARE_WORK/$SCENARIO"
 CAP="$WORK/capture"
 TEMPLATE="$WORK/template/billing"
 LF_BIN="${LF_BIN:-listen-fire}"
@@ -99,7 +112,7 @@ CRM_TOKEN=crm-stand-in-token
 PROGRAM=movements/payment_failed.mvt
 ATTEMPTS="${ATTEMPTS:-3}"
 
-KEPT="$HERE/.work/compare/.kept_$SCENARIO"
+KEPT="$COMPARE_WORK/.kept_$SCENARIO"
 if [ -n "${ONLY_LF:-}" ]; then
   [ -d "$CAP/agent" ] && [ -d "$CAP/js" ] || { echo "ONLY_LF keeps $CAP/agent and $CAP/js, and there are none"; exit 1; }
   rm -rf "$KEPT" && mkdir -p "$KEPT" && mv "$CAP/agent" "$CAP/js" "$KEPT/"
@@ -134,13 +147,21 @@ if [ -n "${LF_SRC:-}" ]; then
     BRANCHES="$(jq -c --arg b "$name" --arg c "$(git -C "$LF_SRC" rev-parse --short "$ref")" '. + [{branch: $b, commit: $c}]' <<<"$BRANCHES")"
   done
 fi
-jq -n --arg version "$LF_VERSION" --arg commit "$COMMIT" --argjson branches "$BRANCHES" --arg scenario "$SCENARIO" \
-  '{version: $version, commit: (if $commit == "" then null else $commit end), branches: $branches, scenario: $scenario}' >"$CAP/00_lf.json"
+# What this directory holds, so a mix of recordings cannot pass for one.
+RECORDING="all three options, one run"
+[ -z "${ONLY_LF:-}" ] || RECORDING="listen-fire re-recorded alone (ONLY_LF)"
+[ -z "${REHEARSE_AGENT:-}${REHEARSE_JS:-}${REHEARSE_LF:-}" ] || RECORDING="rehearsal, no model call"
+jq -n --arg version "$LF_VERSION" --arg commit "$COMMIT" --argjson branches "$BRANCHES" --arg scenario "$SCENARIO" --arg recording "$RECORDING" --argjson attempts "$ATTEMPTS" \
+  '{version: $version, commit: (if $commit == "" then null else $commit end), branches: $branches, scenario: $scenario, recording: $recording, attempts: $attempts}' >"$CAP/00_lf.json"
 cp "$HERE/programs/request.txt" "$CAP/01_request.txt"
 cp "$HERE/programs/retry_email.txt" "$CAP/02_retry_email.txt"
 
-ANTHROPIC_KEY="$(sed -n 's/^ANTHROPIC_API_KEY=//p' "$REPO/apps/api/.env" | head -1 | tr -d "\"'")"
-[ -n "$ANTHROPIC_KEY" ] || { echo "no ANTHROPIC_API_KEY in apps/api/.env"; exit 1; }
+if [ -n "${REHEARSE_AGENT:-}" ] && [ -n "${REHEARSE_JS:-}" ] && [ -n "${REHEARSE_LF:-}" ]; then
+  ANTHROPIC_KEY="rehearsal-no-model-call"
+else
+  ANTHROPIC_KEY="$(sed -n 's/^ANTHROPIC_API_KEY=//p' "$REPO/apps/api/.env" | head -1 | tr -d "\"'")"
+  [ -n "$ANTHROPIC_KEY" ] || { echo "no ANTHROPIC_API_KEY in apps/api/.env"; exit 1; }
+fi
 
 # The stand-ins, as capture.sh starts them.
 (cd "$WORK/fakes" && FAKE_CHANNELS_PORT=0 exec node "$FAKES_SRC/packages/fake-channels/bin/fake-channels.cjs") >"$WORK/fakes.log" 2>&1 &
@@ -276,22 +297,29 @@ receiver() { # <log> <args…>: starts receivers.cjs, sets RECEIVER_PID and RECE
   RECEIVER_BASE="http://127.0.0.1:$(sed -n 's/^listening //p' "$log")"
 }
 
-# 1. The per-event agent.
-if [ -z "${REHEARSE_JS:-}" ] && [ -z "${ONLY_LF:-}" ]; then
-  reset
+# What a rehearsal's authoring leaves in place of a session, so the rest reads.
+REHEARSAL_SESSION='{"model":null,"ms":0,"modelCalls":0,"stopReason":"rehearsal","usage":{},"costUsd":0,"calls":[],"prices":{"model":null},"steps":[]}'
+
+# 1. The per-event agent: the whole run, ATTEMPTS times, each from the reset
+# state with an empty memory.
+if [ -n "${REHEARSE_AGENT:-}" ] || { [ -z "${REHEARSE_JS:-}" ] && [ -z "${ONLY_LF:-}" ]; }; then
+  [ -z "${ONLY_LF:-}" ] || { echo "ONLY_LF keeps the per-event agent's recording; REHEARSE_AGENT would replace it"; exit 1; }
   mkdir -p "$CAP/agent"
-  receiver "$WORK/agent_receiver.log" agent "$WORK/agent_memory.json" "$CAP/agent/sessions.jsonl" "$F" "$CRM_URL" "$CRM_TOKEN" "$STRIPE_SECRET"
-  stress agent "$RECEIVER_BASE/stripe" "$CAP/agent/stress"
-  kill "$RECEIVER_PID"
-  rename_back
-  [ -f "$WORK/agent_memory.json" ] && cp "$WORK/agent_memory.json" "$CAP/agent/memory.json"
+  for k in $(seq "$ATTEMPTS"); do
+    reset
+    receiver "$WORK/agent_receiver_$k.log" agent "$WORK/agent_memory_$k.json" "$CAP/agent/sessions_$k.jsonl" "$F" "$CRM_URL" "$CRM_TOKEN" "$STRIPE_SECRET"
+    stress agent "$RECEIVER_BASE/stripe" "$CAP/agent/stress_$k"
+    kill "$RECEIVER_PID"
+    rename_back
+    [ -f "$WORK/agent_memory_$k.json" ] && cp "$WORK/agent_memory_$k.json" "$CAP/agent/memory_$k.json"
+  done
 fi
 
 # 2. JavaScript.
 mkdir -p "$CAP/js"
 for k in $( [ -n "${ONLY_LF:-}" ] || seq "$ATTEMPTS"); do
   reset
-  if [ -n "${REHEARSE_JS:-}" ]; then cp "$REHEARSE_JS" "$CAP/js/handler_$k.js"; else
+  if [ -n "${REHEARSE_JS:-}" ]; then cp "$REHEARSE_JS" "$CAP/js/handler_$k.js"; echo "$REHEARSAL_SESSION" >"$CAP/js/attempt_$k.json"; else
     ANTHROPIC_API_KEY="$ANTHROPIC_KEY" node "$HERE/author_js.cjs" "$F" "$CRM_URL" "$CRM_TOKEN" "$EXAMPLE" "$CAP/js/handler_$k.js" "$CAP/js/attempt_$k.json" | tee "$CAP/js/attempt_${k}_summary.txt"
   fi
   [ -f "$CAP/js/handler_$k.js" ] || { echo "js attempt $k wrote no handler"; continue; }
@@ -336,7 +364,7 @@ for k in $(seq "$ATTEMPTS"); do
   project="$WORK/lf/$k/billing"
   mkdir -p "$(dirname "$project")"
   cp -R "$TEMPLATE" "$project"
-  if [ -n "${REHEARSE_LF:-}" ]; then cp "$REHEARSE_LF" "$project/$PROGRAM"; else
+  if [ -n "${REHEARSE_LF:-}" ]; then cp "$REHEARSE_LF" "$project/$PROGRAM"; echo "$REHEARSAL_SESSION" >"$CAP/lf/attempt_$k.json"; else
     ANTHROPIC_API_KEY="$ANTHROPIC_KEY" node "$HERE/author_lf.cjs" "$project" "$EXAMPLE" "$CAP/04_describe_systems.txt" "$CAP/lf/attempt_$k.json" | tee "$CAP/lf/attempt_${k}_summary.txt"
   fi
   (cd "$project" && { "$LF_BIN" check --json >"$CAP/lf/attempt_${k}_check.json" || true; })

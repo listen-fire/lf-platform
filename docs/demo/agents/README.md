@@ -63,15 +63,19 @@ SCENARIO=attio LF_BIN=<listen-fire binary> LF_SRC=<listen-fire checkout> LF_BRAN
 node build_data.cjs ../../../../listen-fire-site/video/agents/data.js
 ```
 
-- The current recording is in two parts.
-  - The per-event agent and JavaScript were recorded on 0.12.12,
-    main@05dfcb1564. They do not run lf, so the lf build does not affect them.
-  - listen-fire was re-recorded on 0.14.2 (main@d78f064454) with `ONLY_LF=1`
-    and `SPEND_HARD_CAP_USD`: three attempts in each scenario, all six right on
-    every payment ($0.95 in all). `validatedUnder` reads that build.
+- One `compare.sh` run per scenario records all three options on the same
+  listen-fire build, with `ATTEMPTS` attempts each (3 by default, the per-event
+  agent's included: it is the whole 25 payments, three times, with its memory
+  empty each time). `00_lf.json` says `recording: "all three options, one run"`,
+  and `build_data.cjs` refuses anything else (a `ONLY_LF=1` mix, a rehearsal,
+  an older capture) and any option with a different number of attempts.
 - `ONLY_LF=1` re-records listen-fire alone. It keeps the scenario's
   `capture/agent` and `capture/js` as they are and makes everything else anew.
-  The events are the same each time, because `make_events.cjs` is seeded.
+  The events are the same each time, because `make_events.cjs` is seeded. The
+  result is a mixed recording, which `build_data.cjs` refuses.
+- `COMPARE_WORK` moves the recording out of `.work/compare` (a rehearsal's
+  scratch directory; `build_data.cjs` reads the same variable, and takes
+  `ALLOW_REHEARSAL=1` to build a rehearsal).
 - `SPEND_CAP_USD` stops before a listen-fire attempt that could take the model
   spend past it: what this run's attempts have cost (authoring and every
   wake), plus `SPEND_BEFORE_USD` spent elsewhere, plus the dearest attempt so
@@ -171,11 +175,28 @@ earlier version dropped such a line when it had no `${…}` and no closing
 quote (the retry email's "We'll try again…" line).
 
 JavaScript and listen-fire are authored three times each from the same state,
-and every attempt goes through the stressors; the video shows the first.
-`REHEARSE_JS` and `REHEARSE_LF` rehearse the stressors with a given handler
-and program, with no model call: a woken agent is scripted (it reads what a
-session would read first, and changes nothing). With `ONLY_LF=1`, a
-listen-fire rehearsal leaves out the per-event agent and JavaScript too.
+the per-event agent is run three times, and every attempt goes through the
+stressors; the video shows the first.
+`REHEARSE_JS`, `REHEARSE_LF` and `REHEARSE_AGENT=1` rehearse the stressors
+with a given handler, a given program and a scripted per-event agent, with no
+model call: a woken agent is scripted too (it reads what a session would read
+first, and changes nothing). With all three set the API key is not read, so any
+model call would be refused.
+
+### What the comparison reports
+
+Each option's cost is its TOTAL model spend through the identical stressors,
+per attempt, beside how many of the 25 payments it got right (`like` in
+`data.js`): the writing and every wake for JavaScript and listen-fire, the
+per-event sessions for the agent. Each wake keeps its reason (what woke it, and
+for what), so the cost can say which stressor woke whom. Per 1,000 payments is
+given two ways, because the writing does not repeat with the payments: all of
+the attempt's spend scaled by 1000/25, and the writing once plus the wakes and
+per-event sessions scaled by 1000/25.
+
+The periodic `listen-fire check` wakes the listen-fire agent only on
+error-severity diagnostics, tells it only those (not the info notes), and does
+not report the same error twice.
 
 The review recording (`capture.sh`) predates this: its request says "yearly"
 (`programs/request_review.txt`).
@@ -218,7 +239,9 @@ The review recording (`capture.sh`) predates this: its request says "yearly"
 - `build_data.cjs`: both recordings into the video's `data.js` (its shape and the
   source of every figure are at its top). It refuses to build when a payment
   is missing from an option, the used listen-fire attempt does not check clean
-  or made a model call, or the two scenarios were recorded on different builds.
+  or made a model call, the options do not all have the same number of
+  attempts, the recording is not one run of all three options, or the two
+  scenarios were recorded on different builds.
 
 ## How it differs from the story
 
