@@ -11,7 +11,7 @@ function loadHandbook(lfSrc, modules) {
   const fromKit = createRequire(path.join(lfSrc, 'packages/module-kit/package.json'));
   fromKit('tsx/cjs');
   const hb = require(path.join(lfSrc, 'packages/handbook/index.ts'));
-  const chapters = { ...hb.CORE_CHAPTERS };
+  const chapters = { ...hb.CORE_CHAPTERS, ...(hb.UNIT_CHAPTERS ?? {}) };
   for (const [name, file, exported] of modules) {
     const manifest = require(path.join(lfSrc, 'modules', name, file))[exported];
     const section = manifest.handbookSection;

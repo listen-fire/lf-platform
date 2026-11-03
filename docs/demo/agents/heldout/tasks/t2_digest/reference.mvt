@@ -1,0 +1,16 @@
+# The grader's own proof: a hand-written program for T2, never shown to a model.
+support = connect `@lf/airtable` using team_airtable { base: "Support" }
+
+function `Weekly Digest`(t: <cron-[:Tick]->>) {
+  open = support-[x:Tickets WHERE x.Status != "Done"]-> { return coalesce(x.Assignee, "Unassigned") }
+  by = List.groupBy(open, (a) => a)
+  names = reduce(sort(open), (seen, n) => List.includes(seen, n) ? seen : [...seen, n], [])
+  lines = map(names, (n) => "${n}: ${count(coalesce(by[n], []))}")
+  write support-[:Digests]-> {
+    Date: t.`Fired at`,
+    `Open Tickets`: count(open),
+    Breakdown: Text.join(lines, "\n")
+  }
+}
+
+listen to cron-[t:Ticks WHERE t.Schedule == "0 9 * * 1" AND t.Zone == "UTC"]-> fire `Weekly Digest`

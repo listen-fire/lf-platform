@@ -1,0 +1,17 @@
+# The grader's own proof: a hand-written program for T1, never shown to a model.
+tg = connect `@lf/telegram` using tg_bot
+community = connect `@lf/airtable` using team_airtable { base: "Community" }
+
+function `Track Member`(m: <tg-[:Message]->>) {
+  status = m.Text == "/stop" ? "Unsubscribed" : "Active"
+  write community-[:Members]-> {
+    unique by (`Telegram Id`),
+    `Telegram Id`: m.`Sender Id`,
+    Name: m.`Sender First Name`,
+    Username: m.`Sender Username`,
+    `Last Message`: m.Text,
+    Status: status
+  }
+}
+
+listen to tg-[m:Messages]-> fire `Track Member`
