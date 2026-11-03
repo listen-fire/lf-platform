@@ -111,7 +111,7 @@ describe('the added sections\' engine claims', () => {
     catalog = await handbookCatalogWithPlatformKg();
   });
 
-  it.failing("listen-fire's handbook fixture still predates the graph's Changes (regenerate it from kgHandbookSpec, then check against it)", async () => {
+  it("listen-fire's handbook fixture is the graph as kgHandbookSpec declares it", async () => {
     expect(HANDBOOK_KG_SPEC).toEqual(await kgHandbookSpec());
   });
 

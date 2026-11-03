@@ -32,7 +32,7 @@ A signature block and a quoted reply are noise the extraction pays for. This cal
 
 \`\`\`
 tidy  = tidy_up(text: msg.\`Text\`)
-found = extract([COALESCE(tidy, "")], Company)
+found = extract([coalesce(tidy, "")], Company)
 \`\`\`
 
 ### Common mistakes

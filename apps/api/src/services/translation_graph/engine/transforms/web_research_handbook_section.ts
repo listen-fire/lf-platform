@@ -82,7 +82,7 @@ function \`Intake\`(m: <inbox-[:Email]->>) {
       unique by (FUZZY Name)
       Name:          c.name
       Domains ?:     coalesce(site.website, c.website)
-      Description ?: profile.summary
+      Description ?: profile?.summary
     }
   })
 }

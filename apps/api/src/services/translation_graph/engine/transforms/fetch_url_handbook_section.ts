@@ -88,7 +88,7 @@ function \`Intake\`(m: <inbox-[:Email]->>) {
     write crm-[:Companies]-> {
       unique by (Name)
       Name:           c.name
-      Description ?:  detail.summary
+      Description ?:  detail?.summary
     }
   })
 }
@@ -120,7 +120,7 @@ function \`Intake\`(m: <inbox-[:Email]->>) {
     write crm-[:Companies]-> {
       unique by (Name)
       Name:           o.company
-      Description ?:  terms.raise
+      Description ?:  terms?.raise
     }
   })
 }
