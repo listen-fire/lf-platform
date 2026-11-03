@@ -4,6 +4,11 @@
  *   pnpm dev:movement provision            # provision the built-in fixture
  *   pnpm dev:movement provision --file <path> [--movement <name>]
  *   pnpm dev:movement run <name> [--text "<body>"] [--file <path>]
+ *   pnpm dev:movement upgrade <name> [--all]
+ *                                          # move a saved movement's pin to the
+ *                                          # installed language, as the product's
+ *                                          # upgrade does (acknowledged; --all
+ *                                          # applies every fix)
  *                                          # invoke a saved movement's manual channel,
  *                                          # optionally carrying text and/or a file
  *   pnpm dev:movement catalog              # dump the team catalog's notes + credentials
@@ -58,6 +63,7 @@ import {
   ensureDevLoopTeam,
 } from './_lib';
 import { saveMovement } from '../../services/translation_graph/movement/provision';
+import { upgradeMovement } from '../../services/translation_graph/movement/language_upgrade';
 import { runMovementNow } from '../../services/translation_graph/movement/run_now';
 import { registerCoreWork } from '../../services/work/register';
 import { getMovementRowByName } from '../../services/translation_graph/movement/store';
@@ -468,9 +474,28 @@ async function main() {
     return;
   }
 
+  if (command === 'upgrade') {
+    const name = args[1];
+    if (!name) {
+      console.error('Usage: pnpm dev:movement upgrade <movement-name> [--all]');
+      process.exit(1);
+    }
+    const row = await getMovementRowByName({ teamId: seed.teamId, name });
+    if (!row) {
+      console.error(`No movement named '${name}' on the dev-loop team`);
+      process.exit(1);
+    }
+    const result = await buildAgentContext(seed.teamId, seed.userId).runAsync(() =>
+      upgradeMovement({ teamId: seed.teamId, id: row.id, acknowledge: true, applyAllFixes: args.includes('--all') }),
+    );
+    console.log(JSON.stringify(result, null, 2));
+    if (result.status !== 'upgraded' && result.status !== 'already_current') process.exit(1);
+    return;
+  }
+
   if (command !== 'provision') {
     console.error(
-      `Unknown command '${command}'. Use: provision | run | catalog | snapshot-catalog`,
+      `Unknown command '${command}'. Use: provision | run | upgrade | catalog | snapshot-catalog`,
     );
     process.exit(1);
   }
