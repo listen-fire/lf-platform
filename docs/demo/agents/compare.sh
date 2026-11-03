@@ -71,6 +71,12 @@
 #                                 events are the same: make_events.cjs is
 #                                 seeded). The result is a mixed recording,
 #                                 which build_data.cjs refuses.
+#   WRITING_ONLY                  only the listen-fire writing session of each
+#                                 attempt, then its check: no per-event agent,
+#                                 no JavaScript, no serving, no stressors, no
+#                                 wakes. Measures what writing the program
+#                                 costs; the result is not a recording
+#                                 (build_data.cjs refuses it).
 #   REHEARSE_AGENT, REHEARSE_JS,  a rehearsal of the stressors with no
 #   REHEARSE_LF                   model call. REHEARSE_JS and REHEARSE_LF name a
 #                                 handler and a program that stand in for every
@@ -150,6 +156,7 @@ fi
 # What this directory holds, so a mix of recordings cannot pass for one.
 RECORDING="all three options, one run"
 [ -z "${ONLY_LF:-}" ] || RECORDING="listen-fire re-recorded alone (ONLY_LF)"
+[ -z "${WRITING_ONLY:-}" ] || RECORDING="listen-fire writing sessions only (WRITING_ONLY)"
 [ -z "${REHEARSE_AGENT:-}${REHEARSE_JS:-}${REHEARSE_LF:-}" ] || RECORDING="rehearsal, no model call"
 # The listen-fire reference the authoring and woken agents are given (prompts.cjs).
 LF_REFERENCE="$(node -e 'console.log(require(process.argv[1]).lfReference)' "$HERE/prompts.cjs")"
@@ -304,7 +311,7 @@ REHEARSAL_SESSION='{"model":null,"ms":0,"modelCalls":0,"stopReason":"rehearsal",
 
 # 1. The per-event agent: the whole run, ATTEMPTS times, each from the reset
 # state with an empty memory.
-if [ -n "${REHEARSE_AGENT:-}" ] || { [ -z "${REHEARSE_JS:-}" ] && [ -z "${ONLY_LF:-}" ]; }; then
+if [ -z "${WRITING_ONLY:-}" ] && { [ -n "${REHEARSE_AGENT:-}" ] || { [ -z "${REHEARSE_JS:-}" ] && [ -z "${ONLY_LF:-}" ]; }; }; then
   [ -z "${ONLY_LF:-}" ] || { echo "ONLY_LF keeps the per-event agent's recording; REHEARSE_AGENT would replace it"; exit 1; }
   mkdir -p "$CAP/agent"
   for k in $(seq "$ATTEMPTS"); do
@@ -319,7 +326,7 @@ fi
 
 # 2. JavaScript.
 mkdir -p "$CAP/js"
-for k in $( [ -n "${ONLY_LF:-}" ] || seq "$ATTEMPTS"); do
+for k in $( [ -n "${ONLY_LF:-}${WRITING_ONLY:-}" ] || seq "$ATTEMPTS"); do
   reset
   if [ -n "${REHEARSE_JS:-}" ]; then cp "$REHEARSE_JS" "$CAP/js/handler_$k.js"; echo "$REHEARSAL_SESSION" >"$CAP/js/attempt_$k.json"; else
     ANTHROPIC_API_KEY="$ANTHROPIC_KEY" node "$HERE/author_js.cjs" "$F" "$CRM_URL" "$CRM_TOKEN" "$EXAMPLE" "$CAP/js/handler_$k.js" "$CAP/js/attempt_$k.json" | tee "$CAP/js/attempt_${k}_summary.txt"
@@ -371,6 +378,7 @@ for k in $(seq "$ATTEMPTS"); do
   fi
   (cd "$project" && { "$LF_BIN" check --json >"$CAP/lf/attempt_${k}_check.json" || true; })
   [ -f "$project/$PROGRAM" ] && cp "$project/$PROGRAM" "$CAP/lf/program_${k}_authored.mvt"
+  [ -z "${WRITING_ONLY:-}" ] || continue
   jq -e '.ok' "$CAP/lf/attempt_${k}_check.json" >/dev/null || { echo "lf attempt $k: the program does not check clean; not served"; continue; }
 
   reset
@@ -396,7 +404,7 @@ for k in $(seq "$ATTEMPTS"); do
   sed -E -e $'s/\x1b\\[[0-9;?]*[A-Za-z]//g' -e "s#$real/##g" -e "s#$project/##g" "$log" >"$CAP/lf/stress_$k/serve.log"
   rename_back
 done
-for k in $( [ -n "${ONLY_LF:-}" ] || seq "$ATTEMPTS"); do [ -f "$CAP/js/handler_$k.js" ] && cp "$CAP/js/handler_$k.js" "$CAP/js/handler_${k}_final.js"; done
+for k in $( [ -n "${ONLY_LF:-}${WRITING_ONLY:-}" ] || seq "$ATTEMPTS"); do [ -f "$CAP/js/handler_$k.js" ] && cp "$CAP/js/handler_$k.js" "$CAP/js/handler_${k}_final.js"; done
 unset ANTHROPIC_KEY
 [ -n "${REHEARSE_LF:-}" ] || echo "listen-fire's model spend: $(lf_spend)"
 cp "$CRM_CALLS" "$CAP/crm_calls.jsonl"
