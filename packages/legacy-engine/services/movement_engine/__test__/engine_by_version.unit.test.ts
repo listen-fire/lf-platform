@@ -136,11 +136,11 @@ describe('the engine a segment runs on', () => {
   });
 
   it('runs a patch release of the installed language on Rust', () => {
-    expect(engineFor({ languageVersion: '0.13.7' })).toBe('rust');
+    expect(engineFor({ languageVersion: '0.15.7' })).toBe('rust');
   });
 
   it('refuses a release the installed language does not read, on either side of it', () => {
-    for (const languageVersion of ['0.12.0', '0.14.0']) {
+    for (const languageVersion of ['0.14.0', '0.16.0']) {
       expect(() => engineFor({ languageVersion })).toThrow(MovementEngineError);
       expect(() => engineFor({ languageVersion })).toThrow(/^MOVENG_LANGUAGE_VERSION/);
     }
