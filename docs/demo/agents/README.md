@@ -66,9 +66,9 @@ node build_data.cjs ../../../../listen-fire-site/video/agents/data.js
 - The current recording is in two parts.
   - The per-event agent and JavaScript were recorded on 0.12.12,
     main@05dfcb1564. They do not run lf, so the lf build does not affect them.
-  - listen-fire was re-recorded on 0.14.1 (main@110878fa5c) with `ONLY_LF=1`
-    and `SPEND_CAP_USD`: three attempts in `mcp`, one in `attio` (the cap
-    stopped the second). `validatedUnder` reads that build.
+  - listen-fire was re-recorded on 0.14.2 (main@d78f064454) with `ONLY_LF=1`
+    and `SPEND_HARD_CAP_USD`: three attempts in each scenario, all six right on
+    every payment ($0.95 in all). `validatedUnder` reads that build.
 - `ONLY_LF=1` re-records listen-fire alone. It keeps the scenario's
   `capture/agent` and `capture/js` as they are and makes everything else anew.
   The events are the same each time, because `make_events.cjs` is seeded.
