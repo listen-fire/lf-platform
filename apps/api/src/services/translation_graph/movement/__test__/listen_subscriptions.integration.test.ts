@@ -66,6 +66,11 @@ const liveRows = () =>
     .orderBy('created_at')
     .execute();
 
+/** The live row subscribed for the listens taking `status == value`: rows
+ *  made in one sync share a creation instant, so their order says nothing. */
+const rowTaking = async (value: string) =>
+  (await liveRows()).find((row) => JSON.stringify(row.subscriptions).includes(`"value":${JSON.stringify(value)}`));
+
 beforeAll(async () => {
   process.env.API_BASE_URL = savedApiBaseUrl ?? 'https://platform.example.test';
   teamId = randomUUID() as TeamId;
@@ -103,8 +108,8 @@ describe('subscriptions per listenable edge', () => {
     expect(rows.every((row) => row.status === 'active' && row.webhook_secret === 'vendor-secret')).toBe(true);
     expect(vendor.ensureEventSubscription.mock.calls.map(([input]) => input)).toEqual(
       expect.arrayContaining([
-        { edge: 'Things', filter: takenEquals('status', 'open'), callbackUrl: expect.stringContaining(rows[0]!.id) },
-        { edge: 'Things', filter: takenEquals('status', 'closed'), callbackUrl: expect.stringContaining(rows[1]!.id) },
+        { edge: 'Things', filter: takenEquals('status', 'open'), callbackUrl: expect.stringContaining((await rowTaking('open'))!.id) },
+        { edge: 'Things', filter: takenEquals('status', 'closed'), callbackUrl: expect.stringContaining((await rowTaking('closed'))!.id) },
       ]),
     );
 
@@ -115,7 +120,8 @@ describe('subscriptions per listenable edge', () => {
   });
 
   it("judges what arrives at a subscription's URL by the listens sharing it only", async () => {
-    const [openRow, closedRow] = await liveRows();
+    const openRow = await rowTaking('open');
+    const closedRow = await rowTaking('closed');
     const heard = async (subscriptions: unknown) =>
       (await listensOfSubscription({ teamId, adapterType: VENDOR, subscriptions }))?.map((listen) => listen.triggerId).sort();
 
@@ -126,7 +132,7 @@ describe('subscriptions per listenable edge', () => {
   });
 
   it('removes a subscription no listen shares any more, by its edge, filter and external id', async () => {
-    const [, closedRow] = await liveRows();
+    const closedRow = await rowTaking('closed');
     await getAutomationsQb(['trigger']).deleteFrom('trigger').where('id', '=', closed).execute();
 
     expect((await syncListenSubscriptions({ teamId })).notes).toEqual([]);
