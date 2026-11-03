@@ -66,6 +66,7 @@ import { saveMovement } from '../../services/translation_graph/movement/provisio
 import { upgradeMovement } from '../../services/translation_graph/movement/language_upgrade';
 import { runMovementNow } from '../../services/translation_graph/movement/run_now';
 import { registerCoreWork } from '../../services/work/register';
+import { registerListenResolveWork } from '../../services/inbound/listen_resolve';
 import { getMovementRowByName } from '../../services/translation_graph/movement/store';
 import {
   constructionsOf,
@@ -521,6 +522,10 @@ async function main() {
       return;
     }
   }
+  // This process saves but does not drain; admitting the listen-resolve kind
+  // lets the save arm a listen's re-list (a narrowed Airtable listen does),
+  // which the dev-loop server then drains.
+  registerListenResolveWork();
   // saveMovement: the canonical `automations.movement` row is written first,
   // then gated + the file's listeners reconciled — same path the editor
   // uses. The inbound key now lives in the file's `listen` config.
