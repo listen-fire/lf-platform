@@ -55,6 +55,7 @@ import { diagnoseMovementSource } from '../authoring';
 import { unitInstanceSchema } from '../../adapters/unit_surface';
 import { MANUAL_ADAPTER_TYPE, MANUAL_SURFACE } from '../../adapters/manual';
 import { checkInstalled, routeOf } from '../language_route';
+import { NEWER_LINE, OLDER_LINE, SAME_LINE } from '../../../../test/language_lines';
 
 const BARE_MANUAL = 'function echo(run: <manual-[:Invocation]->>) {\n  return 1\n}\nlisten to manual-[:Invocations]-> fire echo\n';
 /** The same listen as the legacy versions spell it. */
@@ -126,11 +127,11 @@ describe('a current pin is checked by the wasm only', () => {
   });
 
   it('a pin from a newer line is its version diagnostic alone, nothing asked', () => {
-    const { validation, counters: asked } = diagnose(BARE_MANUAL, '0.14.0');
+    const { validation, counters: asked } = diagnose(BARE_MANUAL, NEWER_LINE);
     expect(validation.ok).toBe(false);
     expect(validation.diagnostics).toHaveLength(1);
     expect(validation.diagnostics[0]?.code).toMatch(/^MOV_LANGUAGE_VERSION_/);
-    expect(validation.diagnostics[0]?.message).toContain('0.14.0');
+    expect(validation.diagnostics[0]?.message).toContain(NEWER_LINE);
     expect(asked).toEqual({ rust: 0, ts: 0, scan: 0 });
   });
 
@@ -145,8 +146,8 @@ describe('routeOf', () => {
   it('reads a legacy id as legacy, the installed line as installed, and refuses any other line', () => {
     expect(routeOf('4')).toEqual({ kind: 'legacy', pin: '4' });
     expect(routeOf(LANGUAGE_VERSION)).toEqual({ kind: 'installed', pin: LANGUAGE_VERSION });
-    expect(routeOf('0.13.0')).toEqual({ kind: 'installed', pin: '0.13.0' });
-    for (const pin of ['0.12.0', '0.14.0']) {
+    expect(routeOf(SAME_LINE)).toEqual({ kind: 'installed', pin: SAME_LINE });
+    for (const pin of [OLDER_LINE, NEWER_LINE]) {
       const route = routeOf(pin);
       expect(route.kind).toBe('refused');
       if (route.kind !== 'refused') continue;

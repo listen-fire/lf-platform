@@ -50,6 +50,7 @@ import {
   type ValidateUnder,
 } from '../language_upgrade';
 import { DEPRECATED_VERSION, RELEASE_APPLIED, VALIDATION_ISSUE } from '@listen-fire/system';
+import { NEWER_LINE, OLDER_LINE, SAME_LINE } from '../../../../test/language_lines';
 
 /** The installed language. */
 const CUR = LANGUAGE_VERSION;
@@ -337,9 +338,9 @@ describe('a pin by the compatibility rule', () => {
     const store = fakeStore({
       movements: [
         movement({ id: 'legacy', languageVersion: '4' }),
-        movement({ id: 'same-line', languageVersion: '0.13.0' }),
-        movement({ id: 'older-line', languageVersion: '0.12.0' }),
-        movement({ id: 'newer', languageVersion: '0.14.0' }),
+        movement({ id: 'same-line', languageVersion: SAME_LINE }),
+        movement({ id: 'older-line', languageVersion: OLDER_LINE }),
+        movement({ id: 'newer', languageVersion: NEWER_LINE }),
       ],
       verdicts: {},
     });
@@ -365,7 +366,7 @@ describe('a pin by the compatibility rule', () => {
     // Each names the running release; its reason names the pin.
     const issues = store.events.filter((e) => e.kind === VALIDATION_ISSUE.id);
     expect(issues.map((e) => e.version)).toEqual([CUR, CUR]);
-    expect(issues.map((e) => e.reason)).toEqual([expect.stringContaining('0.12.0'), expect.stringContaining('0.14.0')]);
+    expect(issues.map((e) => e.reason)).toEqual([expect.stringContaining(OLDER_LINE), expect.stringContaining(NEWER_LINE)]);
   });
 
   it('keys the release by the installed language and the legacy ids', async () => {
@@ -432,7 +433,7 @@ describe('an explicit upgrade by the compatibility rule', () => {
   });
 
   it('a pin on the installed line is already current', async () => {
-    jest.mocked(getMovementRow).mockResolvedValueOnce(movement({ id: 'now', languageVersion: '0.13.0' }));
+    jest.mocked(getMovementRow).mockResolvedValueOnce(movement({ id: 'now', languageVersion: SAME_LINE }));
     const { validations, validate } = recorded();
     const result = await upgradeMovement({ teamId: 'team-1', id: 'now', acknowledge: true, validate });
     expect(result.status).toBe('already_current');
@@ -440,7 +441,7 @@ describe('an explicit upgrade by the compatibility rule', () => {
   });
 
   it('a newer release has nothing to move to: blocked with the rule\'s text', async () => {
-    jest.mocked(getMovementRow).mockResolvedValueOnce(movement({ id: 'newer', languageVersion: '0.14.0' }));
+    jest.mocked(getMovementRow).mockResolvedValueOnce(movement({ id: 'newer', languageVersion: NEWER_LINE }));
     const { validations, validate } = recorded();
     const result = await upgradeMovement({ teamId: 'team-1', id: 'newer', acknowledge: true, validate });
     expect(result).toEqual(
@@ -799,7 +800,7 @@ describe('the deploy check over the real authoring core', () => {
           languageVersion: CUR,
           source: 'function echo(run: <manual-[:Invocations]->>) {\n  return 1\n}\nlisten to manual-[:Invocations]-> fire echo\n',
         }),
-        movement({ id: 'newer', languageVersion: '0.14.0', source: 'listen to manual-[:Invocations]-> fire echo\n' }),
+        movement({ id: 'newer', languageVersion: NEWER_LINE, source: 'listen to manual-[:Invocations]-> fire echo\n' }),
       ],
       verdicts: {},
     });
@@ -932,6 +933,49 @@ describe('an upgrade from an older release line, over the installed checker', ()
     expect(all.status).toBe('upgraded');
     expect(advanced).toEqual([{ to: CUR, source: UPGRADED }]);
   });
+
+  it('runs every later release\'s safe rewrite in one move from 0.12: the settings listen, `.` to `?.`, and a walk word to its everyday spelling', async () => {
+    const pinned = [
+      'import { gh as gh_module, mail as mail_module } from adapters',
+      'gh = connect gh_module',
+      'mail = connect mail_module',
+      'function triage(n: <gh-[:Notification]->>) {',
+      '  mention = only(gh-[o:Notifications WHERE LOWER(o.Reason) == "mention"]->)',
+      '  write mail-[:Messages]-> { To: coalesce(mention.Reason, "none") }',
+      '}',
+      '',
+      'listen to gh { events: ["mention", "assign"] } fire triage',
+      '',
+    ].join('\n');
+    const upgraded = pinned
+      .replace('<gh-[:Notification]->>', '<gh-[:Notifications]->>')
+      .replace('LOWER(o.Reason)', 'Text.lower(o.Reason)')
+      .replace('mention.Reason', 'mention?.Reason')
+      .replace('listen to gh { events: ["mention", "assign"] } fire triage', 'listen to gh-[n:Notifications WHERE n.Reason IN ["mention", "assign"]]-> fire triage');
+    jest.mocked(getMovementRow).mockResolvedValue(movement({ id: 'triage', languageVersion: '0.12.13', source: pinned }));
+    jest.mocked(assessMovementValidity).mockReturnValue({ status: 'valid', reason: null } as never);
+    const { advanced, advance } = advanceSpy();
+
+    const result = await upgradeMovement({ teamId: 'team-1', id: 'triage', acknowledge: true, validate: realValidate, advance });
+
+    expect(result.status).toBe('upgraded');
+    expect(advanced).toEqual([{ to: CUR, source: upgraded }]);
+  });
+
+  it('holds the pin on `lazy`, which no rewrite replaces, even when every fix is asked for', async () => {
+    const pinned = PINNED_0_12.replace('  m = write', '  later = lazy gh-[:Notifications]->\n  m = write');
+    jest.mocked(getMovementRow).mockResolvedValue(movement({ id: 'triage', languageVersion: '0.12.13', source: pinned }));
+    jest.mocked(assessMovementValidity).mockReturnValue({ status: 'valid', reason: null } as never);
+    const { advanced, advance } = advanceSpy();
+
+    const held = await upgradeMovement({ teamId: 'team-1', id: 'triage', acknowledge: true, applyAllFixes: true, validate: realValidate, advance });
+
+    expect(held.status).toBe('blocked');
+    if (held.status === 'not_found') throw new Error('unreachable');
+    expect(held.diagnostics.filter((d) => d.code === 'MOV_LAZY_RETIRED').map((d) => [d.severity, d.fix])).toEqual([['error', undefined]]);
+    expect(held.upgradedSource).toContain('later = lazy gh-[:Notifications]->');
+    expect(advanced).toEqual([]);
+  });
 });
 
 describe('an upgrade over the real checkers, with a library the movement imports', () => {
@@ -1020,7 +1064,7 @@ describe('an upgrade over the real checkers, with a library the movement imports
   });
 
   it('every text it saves is the one the installed checker validated clean', async () => {
-    const clean = { ...snapshot, files: { 'lib/summary': { source: LIBRARY.replace('Body: found.summary', 'Body: coalesce(found.summary, "")') } } };
+    const clean = { ...snapshot, files: { 'lib/summary': { source: LIBRARY.replace('Body: found.summary', 'Body: coalesce(found?.summary, "")') } } };
     const validated: Array<{ source: string; clean: boolean; languageVersion: LanguageVersion }> = [];
     const validate: ValidateUnder = async ({ movement: m, languageVersion, upgradingFrom, source }) => {
       const text = source ?? m.source;

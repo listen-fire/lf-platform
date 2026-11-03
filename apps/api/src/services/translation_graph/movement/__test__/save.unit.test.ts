@@ -298,6 +298,7 @@ import {
   saveMovement,
 } from '../provision';
 import { movementSourceHash } from '../version_store';
+import { SAME_LINE } from '../../../../test/language_lines';
 
 
 const db = jest.requireMock('../../../../lib/kysely') as {
@@ -1461,17 +1462,17 @@ describe('the language version pin', () => {
     const first = await saveMovement({ teamId: TEAM, source: SOURCE_V1 });
     if (!first.ok) throw new Error('first save failed');
     // A movement saved on an earlier release this one reads (its compatibility key).
-    db.__tables.movement[0].language_version = '0.13.0';
+    db.__tables.movement[0].language_version = SAME_LINE;
 
     const again = await saveMovement({ teamId: TEAM, id: first.movementId, source: SOURCE_V2 });
     expect(again.ok).toBe(true);
     const [row] = db.__tables.movement;
     expect(row.source).toBe(SOURCE_V2);
-    expect(row.language_version).toBe('0.13.0');
-    expect(row.validity_checked_against).toBe('0.13.0');
+    expect(row.language_version).toBe(SAME_LINE);
+    expect(row.validity_checked_against).toBe(SAME_LINE);
 
     const detail = await getMovement({ teamId: TEAM, id: first.movementId });
-    expect(detail).toMatchObject({ languageVersion: '0.13.0', validityCheckedAgainst: '0.13.0' });
+    expect(detail).toMatchObject({ languageVersion: SAME_LINE, validityCheckedAgainst: SAME_LINE });
   });
 
   it('a movement pinned to a version this release does not support is refused, not saved as current', async () => {
