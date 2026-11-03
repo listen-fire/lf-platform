@@ -100,7 +100,7 @@
           "Bases": {
             "typeId": "Base",
             "displayName": "Base",
-            "description": "One of this workspace's bases. Narrow to one (`-[b:Bases WHERE b.Name == \"CRM\"]->`, or the `base:` construction arg) and its tables become the edges you write rows along.",
+            "description": "One of this workspace's bases, whose tables are each an edge named after the table, which you read and write rows along: off a connection made at the base (`connect … { base: \"CRM\" }`, then `c-[:Companies]->`), or off the base narrowed by name (`-[b:Bases WHERE b.Name == \"CRM\"]->`, then `b-[:Companies]->`).",
             "fields": [
               {
                 "fieldId": "Name",
@@ -128,7 +128,7 @@
       "answer": {
         "typeId": "Base",
         "displayName": "Base",
-        "description": "One of this workspace's bases. Narrow to one (`-[b:Bases WHERE b.Name == \"CRM\"]->`, or the `base:` construction arg) and its tables become the edges you write rows along.",
+        "description": "One of this workspace's bases, whose tables are each an edge named after the table, which you read and write rows along: off a connection made at the base (`connect … { base: \"CRM\" }`, then `c-[:Companies]->`), or off the base narrowed by name (`-[b:Bases WHERE b.Name == \"CRM\"]->`, then `b-[:Companies]->`).",
         "fields": [
           {
             "fieldId": "Name",
@@ -201,6 +201,10 @@
             "listenable": true,
             "delivery": "scope",
             "scopedBy": "Bases",
+            "carries": [
+              "Bases",
+              "Tables"
+            ],
             "identity": "Id",
             "attributes": true,
             "description": "What happens to the table's rows: one change per row an edit touched (created, updated or deleted), with the row before and after it (`Previous`, `Current`)."
@@ -339,6 +343,7 @@
             "displayName": "Name",
             "kind": "string",
             "cardinality": "one",
+            "mayBeAbsent": true,
             "writable": true,
             "required": false
           },
@@ -351,6 +356,7 @@
               "Won"
             ],
             "cardinality": "one",
+            "mayBeAbsent": true,
             "writable": true,
             "required": false
           },
@@ -371,6 +377,7 @@
             "displayName": "Notes",
             "kind": "string",
             "cardinality": "one",
+            "mayBeAbsent": true,
             "writable": true,
             "required": false
           },
@@ -400,6 +407,7 @@
             "displayName": "Full Name",
             "kind": "string",
             "cardinality": "one",
+            "mayBeAbsent": true,
             "writable": true,
             "required": false
           },
@@ -408,6 +416,7 @@
             "displayName": "Email",
             "kind": "string",
             "cardinality": "one",
+            "mayBeAbsent": true,
             "writable": true,
             "required": false
           },
@@ -445,6 +454,7 @@
             "displayName": "Vendor",
             "kind": "string",
             "cardinality": "one",
+            "mayBeAbsent": true,
             "writable": true,
             "required": false
           },
@@ -453,6 +463,7 @@
             "displayName": "Spend",
             "kind": "number",
             "cardinality": "one",
+            "mayBeAbsent": true,
             "writable": true,
             "required": false
           },
@@ -621,9 +632,10 @@
               "kind": "stable",
               "recordId": "rec1",
               "data": {
-                "fldName": "Parity Labs",
-                "fldStage": "Seed",
-                "fldNotes": "Made by recorded parity"
+                "Name": "Parity Labs",
+                "Stage": "Seed",
+                "Notes": "Made by recorded parity",
+                "Tags": []
               }
             }
           }
@@ -645,9 +657,9 @@
               "kind": "stable",
               "recordId": "rec1",
               "data": {
-                "fldFullName": "Paula Parity",
-                "fldEmail": "paula@paritylabs.example",
-                "fldCompany": [
+                "Full Name": "Paula Parity",
+                "Email": "paula@paritylabs.example",
+                "Company": [
                   "rec1"
                 ]
               }
@@ -715,9 +727,10 @@
               "kind": "stable",
               "recordId": "rec1",
               "data": {
-                "fldName": "Parity Labs",
-                "fldStage": "Seed",
-                "fldNotes": "Made by recorded parity"
+                "Name": "Parity Labs",
+                "Stage": "Seed",
+                "Notes": "Made by recorded parity",
+                "Tags": []
               }
             }
           }
@@ -726,15 +739,15 @@
     },
     {
       "step": "Companies[0].Name",
-      "answer": null
+      "answer": "Parity Labs"
     },
     {
       "step": "Companies[0].Stage",
-      "answer": null
+      "answer": "Seed"
     },
     {
       "step": "Companies[0].Notes",
-      "answer": null
+      "answer": "Made by recorded parity"
     },
     {
       "step": "scoped root Contacts",
@@ -747,9 +760,9 @@
               "kind": "stable",
               "recordId": "rec1",
               "data": {
-                "fldFullName": "Paula Parity",
-                "fldEmail": "paula@paritylabs.example",
-                "fldCompany": [
+                "Full Name": "Paula Parity",
+                "Email": "paula@paritylabs.example",
+                "Company": [
                   "rec1"
                 ]
               }
@@ -760,7 +773,7 @@
     },
     {
       "step": "Contacts[0].Email",
-      "answer": null
+      "answer": "paula@paritylabs.example"
     },
     {
       "step": "Contacts[0] -[Company]->",
@@ -769,9 +782,10 @@
     {
       "step": "readRecord Companies",
       "answer": {
-        "fldName": "Parity Labs",
-        "fldStage": "Seed",
-        "fldNotes": "Made by recorded parity"
+        "Name": "Parity Labs",
+        "Stage": "Seed",
+        "Notes": "Made by recorded parity",
+        "Tags": []
       }
     },
     {
@@ -780,8 +794,7 @@
         "adapterType": "airtable",
         "externalId": "rec1",
         "data": {
-          "url": "https://airtable.com/appTEST001/tblCOMPANIES/rec1",
-          "name": "Parity Labs"
+          "url": "https://airtable.com/appTEST001/tblCOMPANIES/rec1"
         },
         "association": "none"
       }
@@ -803,9 +816,10 @@
               "kind": "stable",
               "recordId": "rec1",
               "data": {
-                "fldName": "Parity Labs",
-                "fldStage": "Series A",
-                "fldNotes": "Made by recorded parity"
+                "Name": "Parity Labs",
+                "Stage": "Series A",
+                "Notes": "Made by recorded parity",
+                "Tags": []
               }
             }
           }
@@ -820,8 +834,8 @@
       "step": "scoped ensureEventSubscription Changes",
       "answer": {
         "externalId": "ach1",
-        "secret": "n7aICQyLvQeoUo4khh2MKdrTNsSyZ/uFwo7E61KupP4=",
-        "expiresAt": "2026-11-09T17:27:17.286Z"
+        "secret": "7tAOBPvhL3S+vqYqkKrCCJTM+6lEGdTV/CUb+GmvDtk=",
+        "expiresAt": "2026-11-10T15:43:45.125Z"
       }
     },
     {
@@ -841,7 +855,8 @@
                 "Kind": "created",
                 "Current": {
                   "Name": "Pinged Co",
-                  "Stage": "Seed"
+                  "Stage": "Seed",
+                  "Tags": []
                 },
                 "Changed Fields": [
                   "Name",
@@ -858,11 +873,29 @@
                 }
               }
             },
+            "parents": [
+              {
+                "recordId": "appTEST001",
+                "recordType": "Base",
+                "fields": {
+                  "Id": "appTEST001",
+                  "Name": "Pipeline Tracker"
+                }
+              },
+              {
+                "recordId": "tblCOMPANIES",
+                "recordType": "Table",
+                "fields": {
+                  "Id": "tblCOMPANIES",
+                  "Name": "Companies"
+                }
+              }
+            ],
             "about": {
               "recordType": "Companies",
               "externalId": "recPARITY1"
             },
-            "occurredAt": "2026-11-02T17:27:17.288Z"
+            "occurredAt": "2026-11-03T15:43:45.127Z"
           },
           {
             "edge": "Changes",
@@ -875,9 +908,12 @@
                 "Id": "2:recPARITY1",
                 "Kind": "updated",
                 "Current": {
-                  "Stage": "Series A"
+                  "Stage": "Series A",
+                  "Tags": []
                 },
-                "Previous": {},
+                "Previous": {
+                  "Tags": []
+                },
                 "Changed Fields": [
                   "Stage"
                 ],
@@ -892,11 +928,29 @@
                 }
               }
             },
+            "parents": [
+              {
+                "recordId": "appTEST001",
+                "recordType": "Base",
+                "fields": {
+                  "Id": "appTEST001",
+                  "Name": "Pipeline Tracker"
+                }
+              },
+              {
+                "recordId": "tblCOMPANIES",
+                "recordType": "Table",
+                "fields": {
+                  "Id": "tblCOMPANIES",
+                  "Name": "Companies"
+                }
+              }
+            ],
             "about": {
               "recordType": "Companies",
               "externalId": "recPARITY1"
             },
-            "occurredAt": "2026-11-02T17:27:17.289Z"
+            "occurredAt": "2026-11-03T15:43:45.129Z"
           }
         ],
         "checkpoint": 3
@@ -918,9 +972,12 @@
                 "Id": "2:recPARITY1",
                 "Kind": "updated",
                 "Current": {
-                  "Stage": "Series A"
+                  "Stage": "Series A",
+                  "Tags": []
                 },
-                "Previous": {},
+                "Previous": {
+                  "Tags": []
+                },
                 "Changed Fields": [
                   "Stage"
                 ],
@@ -935,11 +992,29 @@
                 }
               }
             },
+            "parents": [
+              {
+                "recordId": "appTEST001",
+                "recordType": "Base",
+                "fields": {
+                  "Id": "appTEST001",
+                  "Name": "Pipeline Tracker"
+                }
+              },
+              {
+                "recordId": "tblCOMPANIES",
+                "recordType": "Table",
+                "fields": {
+                  "Id": "tblCOMPANIES",
+                  "Name": "Companies"
+                }
+              }
+            ],
             "about": {
               "recordType": "Companies",
               "externalId": "recPARITY1"
             },
-            "occurredAt": "2026-11-02T17:27:17.289Z"
+            "occurredAt": "2026-11-03T15:43:45.129Z"
           }
         ],
         "checkpoint": 3
@@ -964,8 +1039,8 @@
       "step": "scoped ensureEventSubscription Tables",
       "answer": {
         "externalId": "ach2",
-        "secret": "u+mM+PVKUPyRcBu9lL0gQrVPjSunCGJV8L7+8O0PRrU=",
-        "expiresAt": "2026-11-09T17:27:17.300Z"
+        "secret": "uYBS205Z7b3gcUnwNX1bap/WIvy4G8WNkgXvpuzTeZA=",
+        "expiresAt": "2026-11-10T15:43:45.144Z"
       }
     },
     {
@@ -1042,7 +1117,7 @@
       "authorization": "Bearer dev-loop-airtable-token",
       "body": null,
       "status": 200,
-      "response": "{\"records\":[{\"id\":\"rec1\",\"fields\":{\"fldName\":\"Parity Labs\",\"fldStage\":\"Seed\",\"fldNotes\":\"Made by recorded parity\"},\"createdTime\":\"2026-11-02T17:27:17.258Z\"}]}"
+      "response": "{\"records\":[{\"id\":\"rec1\",\"fields\":{\"Name\":\"Parity Labs\",\"Stage\":\"Seed\",\"Notes\":\"Made by recorded parity\"},\"createdTime\":\"2026-11-03T15:43:45.090Z\"}]}"
     },
     {
       "method": "GET",
@@ -1050,7 +1125,7 @@
       "authorization": "Bearer dev-loop-airtable-token",
       "body": null,
       "status": 200,
-      "response": "{\"records\":[{\"id\":\"rec1\",\"fields\":{\"fldFullName\":\"Paula Parity\",\"fldEmail\":\"paula@paritylabs.example\",\"fldCompany\":[\"rec1\"]},\"createdTime\":\"2026-11-02T17:27:17.263Z\"}]}"
+      "response": "{\"records\":[{\"id\":\"rec1\",\"fields\":{\"Full Name\":\"Paula Parity\",\"Email\":\"paula@paritylabs.example\",\"Company\":[\"rec1\"]},\"createdTime\":\"2026-11-03T15:43:45.095Z\"}]}"
     },
     {
       "method": "GET",
@@ -1058,7 +1133,7 @@
       "authorization": "Bearer dev-loop-airtable-token",
       "body": null,
       "status": 200,
-      "response": "{\"records\":[{\"id\":\"rec1\",\"fields\":{\"fldName\":\"Parity Labs\",\"fldStage\":\"Seed\",\"fldNotes\":\"Made by recorded parity\"},\"createdTime\":\"2026-11-02T17:27:17.258Z\"}]}"
+      "response": "{\"records\":[{\"id\":\"rec1\",\"fields\":{\"Name\":\"Parity Labs\",\"Stage\":\"Seed\",\"Notes\":\"Made by recorded parity\"},\"createdTime\":\"2026-11-03T15:43:45.090Z\"}]}"
     },
     {
       "method": "GET",
@@ -1066,7 +1141,7 @@
       "authorization": "Bearer dev-loop-airtable-token",
       "body": null,
       "status": 200,
-      "response": "{\"records\":[{\"id\":\"rec1\",\"fields\":{\"fldFullName\":\"Paula Parity\",\"fldEmail\":\"paula@paritylabs.example\",\"fldCompany\":[\"rec1\"]},\"createdTime\":\"2026-11-02T17:27:17.263Z\"}]}"
+      "response": "{\"records\":[{\"id\":\"rec1\",\"fields\":{\"Full Name\":\"Paula Parity\",\"Email\":\"paula@paritylabs.example\",\"Company\":[\"rec1\"]},\"createdTime\":\"2026-11-03T15:43:45.095Z\"}]}"
     },
     {
       "method": "GET",
@@ -1074,7 +1149,7 @@
       "authorization": "Bearer dev-loop-airtable-token",
       "body": null,
       "status": 200,
-      "response": "{\"id\":\"rec1\",\"fields\":{\"fldName\":\"Parity Labs\",\"fldStage\":\"Seed\",\"fldNotes\":\"Made by recorded parity\"},\"createdTime\":\"2026-11-02T17:27:17.258Z\"}"
+      "response": "{\"id\":\"rec1\",\"fields\":{\"Name\":\"Parity Labs\",\"Stage\":\"Seed\",\"Notes\":\"Made by recorded parity\"},\"createdTime\":\"2026-11-03T15:43:45.090Z\"}"
     },
     {
       "method": "PATCH",
@@ -1086,7 +1161,7 @@
         }
       },
       "status": 200,
-      "response": "{\"id\":\"rec1\",\"fields\":{\"fldName\":\"Parity Labs\",\"fldStage\":\"Series A\",\"fldNotes\":\"Made by recorded parity\"}}"
+      "response": "{\"id\":\"rec1\",\"fields\":{\"Name\":\"Parity Labs\",\"Stage\":\"Series A\",\"Notes\":\"Made by recorded parity\"}}"
     },
     {
       "method": "GET",
@@ -1094,7 +1169,7 @@
       "authorization": "Bearer dev-loop-airtable-token",
       "body": null,
       "status": 200,
-      "response": "{\"records\":[{\"id\":\"rec1\",\"fields\":{\"fldName\":\"Parity Labs\",\"fldStage\":\"Series A\",\"fldNotes\":\"Made by recorded parity\"},\"createdTime\":\"2026-11-02T17:27:17.258Z\"}]}"
+      "response": "{\"records\":[{\"id\":\"rec1\",\"fields\":{\"Name\":\"Parity Labs\",\"Stage\":\"Series A\",\"Notes\":\"Made by recorded parity\"},\"createdTime\":\"2026-11-03T15:43:45.090Z\"}]}"
     },
     {
       "method": "DELETE",
@@ -1138,7 +1213,7 @@
         }
       },
       "status": 200,
-      "response": "{\"id\":\"ach1\",\"macSecretBase64\":\"n7aICQyLvQeoUo4khh2MKdrTNsSyZ/uFwo7E61KupP4=\",\"expirationTime\":\"2026-11-09T17:27:17.286Z\"}"
+      "response": "{\"id\":\"ach1\",\"macSecretBase64\":\"7tAOBPvhL3S+vqYqkKrCCJTM+6lEGdTV/CUb+GmvDtk=\",\"expirationTime\":\"2026-11-10T15:43:45.125Z\"}"
     },
     {
       "method": "GET",
@@ -1146,7 +1221,7 @@
       "authorization": "Bearer dev-loop-airtable-token",
       "body": null,
       "status": 200,
-      "response": "{\"payloads\":[{\"timestamp\":\"2026-11-02T17:27:17.288Z\",\"baseTransactionNumber\":1,\"changedTablesById\":{\"tblCOMPANIES\":{\"createdRecordsById\":{\"recPARITY1\":{\"cellValuesByFieldId\":{\"fldName\":\"Pinged Co\",\"fldStage\":\"Seed\"}}}}}},{\"timestamp\":\"2026-11-02T17:27:17.289Z\",\"baseTransactionNumber\":2,\"changedTablesById\":{\"tblCOMPANIES\":{\"changedRecordsById\":{\"recPARITY1\":{\"current\":{\"cellValuesByFieldId\":{\"fldStage\":\"Series A\"}},\"unchanged\":{\"cellValuesByFieldId\":{}}}}}}}],\"cursor\":3,\"mightHaveMore\":false}"
+      "response": "{\"payloads\":[{\"timestamp\":\"2026-11-03T15:43:45.127Z\",\"baseTransactionNumber\":1,\"changedTablesById\":{\"tblCOMPANIES\":{\"createdRecordsById\":{\"recPARITY1\":{\"cellValuesByFieldId\":{\"fldName\":\"Pinged Co\",\"fldStage\":\"Seed\"}}}}}},{\"timestamp\":\"2026-11-03T15:43:45.129Z\",\"baseTransactionNumber\":2,\"changedTablesById\":{\"tblCOMPANIES\":{\"changedRecordsById\":{\"recPARITY1\":{\"current\":{\"cellValuesByFieldId\":{\"fldStage\":\"Series A\"}},\"unchanged\":{\"cellValuesByFieldId\":{}}}}}}}],\"cursor\":3,\"mightHaveMore\":false}"
     },
     {
       "method": "GET",
@@ -1154,7 +1229,7 @@
       "authorization": "Bearer dev-loop-airtable-token",
       "body": null,
       "status": 200,
-      "response": "{\"payloads\":[{\"timestamp\":\"2026-11-02T17:27:17.289Z\",\"baseTransactionNumber\":2,\"changedTablesById\":{\"tblCOMPANIES\":{\"changedRecordsById\":{\"recPARITY1\":{\"current\":{\"cellValuesByFieldId\":{\"fldStage\":\"Series A\"}},\"unchanged\":{\"cellValuesByFieldId\":{}}}}}}}],\"cursor\":3,\"mightHaveMore\":false}"
+      "response": "{\"payloads\":[{\"timestamp\":\"2026-11-03T15:43:45.129Z\",\"baseTransactionNumber\":2,\"changedTablesById\":{\"tblCOMPANIES\":{\"changedRecordsById\":{\"recPARITY1\":{\"current\":{\"cellValuesByFieldId\":{\"fldStage\":\"Series A\"}},\"unchanged\":{\"cellValuesByFieldId\":{}}}}}}}],\"cursor\":3,\"mightHaveMore\":false}"
     },
     {
       "method": "GET",
@@ -1162,7 +1237,7 @@
       "authorization": "Bearer dev-loop-airtable-token",
       "body": null,
       "status": 200,
-      "response": "{\"webhooks\":[{\"id\":\"ach1\",\"notificationUrl\":\"https://example.test/api/public/webhook-sync/airtable/sub-1\",\"expirationTime\":\"2026-11-09T17:27:17.286Z\",\"specification\":{\"options\":{\"filters\":{\"dataTypes\":[\"tableData\"],\"changeTypes\":[\"add\",\"update\",\"remove\"]},\"includes\":{\"includePreviousCellValues\":true,\"includeCellValuesInFieldIds\":\"all\"}}}}]}"
+      "response": "{\"webhooks\":[{\"id\":\"ach1\",\"notificationUrl\":\"https://example.test/api/public/webhook-sync/airtable/sub-1\",\"expirationTime\":\"2026-11-10T15:43:45.125Z\",\"specification\":{\"options\":{\"filters\":{\"dataTypes\":[\"tableData\"],\"changeTypes\":[\"add\",\"update\",\"remove\"]},\"includes\":{\"includePreviousCellValues\":true,\"includeCellValuesInFieldIds\":\"all\"}}}}]}"
     },
     {
       "method": "DELETE",
@@ -1206,7 +1281,7 @@
         }
       },
       "status": 200,
-      "response": "{\"id\":\"ach2\",\"macSecretBase64\":\"u+mM+PVKUPyRcBu9lL0gQrVPjSunCGJV8L7+8O0PRrU=\",\"expirationTime\":\"2026-11-09T17:27:17.300Z\"}"
+      "response": "{\"id\":\"ach2\",\"macSecretBase64\":\"uYBS205Z7b3gcUnwNX1bap/WIvy4G8WNkgXvpuzTeZA=\",\"expirationTime\":\"2026-11-10T15:43:45.144Z\"}"
     },
     {
       "method": "DELETE",

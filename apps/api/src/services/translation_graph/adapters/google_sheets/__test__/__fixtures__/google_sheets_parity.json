@@ -124,7 +124,8 @@
             "kind": "string",
             "writable": false,
             "required": false,
-            "description": "The cell's current value."
+            "mayBeAbsent": true,
+            "description": "The cell's current value, absent when the cell is blank."
           },
           {
             "fieldId": "Cell",
@@ -165,7 +166,8 @@
             "displayName": "Value",
             "kind": "string",
             "writable": true,
-            "required": true
+            "required": true,
+            "mayBeAbsent": true
           }
         ],
         "references": [],
@@ -184,6 +186,7 @@
             "displayName": "Name",
             "kind": "string",
             "cardinality": "one",
+            "mayBeAbsent": true,
             "writable": true,
             "required": false
           },
@@ -192,6 +195,7 @@
             "displayName": "Stage",
             "kind": "string",
             "cardinality": "one",
+            "mayBeAbsent": true,
             "writable": true,
             "required": false
           },
@@ -200,6 +204,7 @@
             "displayName": "Domain",
             "kind": "string",
             "cardinality": "one",
+            "mayBeAbsent": true,
             "writable": true,
             "required": false
           },
@@ -208,6 +213,7 @@
             "displayName": "Notes",
             "kind": "string",
             "cardinality": "one",
+            "mayBeAbsent": true,
             "writable": true,
             "required": false
           }
@@ -1084,7 +1090,8 @@
               "displayName": "Value",
               "kind": "string",
               "writable": true,
-              "required": true
+              "required": true,
+              "mayBeAbsent": true
             }
           ],
           "references": [],
@@ -1114,7 +1121,8 @@
               "kind": "string",
               "writable": false,
               "required": false,
-              "description": "The cell's current value."
+              "mayBeAbsent": true,
+              "description": "The cell's current value, absent when the cell is blank."
             },
             {
               "fieldId": "Cell",
@@ -1144,6 +1152,7 @@
               "displayName": "Name",
               "kind": "string",
               "cardinality": "one",
+              "mayBeAbsent": true,
               "writable": true,
               "required": false
             },
@@ -1152,6 +1161,7 @@
               "displayName": "Stage",
               "kind": "string",
               "cardinality": "one",
+              "mayBeAbsent": true,
               "writable": true,
               "required": false
             },
@@ -1160,6 +1170,7 @@
               "displayName": "Domain",
               "kind": "string",
               "cardinality": "one",
+              "mayBeAbsent": true,
               "writable": true,
               "required": false
             },
@@ -1168,6 +1179,7 @@
               "displayName": "Notes",
               "kind": "string",
               "cardinality": "one",
+              "mayBeAbsent": true,
               "writable": true,
               "required": false
             }
@@ -1877,6 +1889,7 @@
             "displayName": "Name",
             "kind": "string",
             "cardinality": "one",
+            "mayBeAbsent": true,
             "writable": true,
             "required": false
           },
@@ -1885,6 +1898,7 @@
             "displayName": "Stage",
             "kind": "string",
             "cardinality": "one",
+            "mayBeAbsent": true,
             "writable": true,
             "required": false
           },
@@ -1893,6 +1907,7 @@
             "displayName": "Domain",
             "kind": "string",
             "cardinality": "one",
+            "mayBeAbsent": true,
             "writable": true,
             "required": false
           },
@@ -1901,6 +1916,7 @@
             "displayName": "Notes",
             "kind": "string",
             "cardinality": "one",
+            "mayBeAbsent": true,
             "writable": true,
             "required": false
           }
