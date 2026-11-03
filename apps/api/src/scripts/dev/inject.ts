@@ -74,6 +74,11 @@ import type { WebhookSubscriptionId } from '../../generated/kysely/automations/W
 import ExternalServiceType from '../../generated/kysely/automations/ExternalServiceType';
 import { encryptToken } from '../../lib/credentials';
 import { ensureDevLoopTeam } from './_lib';
+
+// The dev-loop Airtable base/table `dev:airtable setup` seeds (kept in step
+// with airtable.ts; not imported, since that module runs on import).
+const DEV_AIRTABLE_BASE_ID = 'appDevLoop';
+const DEV_AIRTABLE_TABLE_ID = 'tblDeals';
 import { fakeCrmBaseUrl } from './fake_crm_adapter';
 import { signMailgunPayload } from './lib/mailgun-sign';
 import { signResendWebhook } from './lib/resend-sign';
@@ -1671,14 +1676,20 @@ async function injectAirtableWebhook(args: AirtableInjectArgs) {
     .where('team_id', '=', seed.teamId as TeamId)
     .where('provider', '=', 'AIRTABLE')
     .where('deleted_at', 'is', null)
-    .select(['id', 'external_webhook_id', 'scope', 'status'])
+    .select(['id', 'external_webhook_id', 'scope', 'subscriptions', 'status'])
     .execute();
-  const matched = subs.find((s) => {
-    const scope = scopeOfRow(s.scope);
-    if (args.base && scope.base !== args.base) return false;
-    if (args.table && scope.table !== args.table) return false;
+  // 0.13 keeps the base in the `subscriptions` cell (one webhook per base, every
+  // table); 0.12 kept base + table in the `scope` column. The table a change is
+  // on is named by the injection, not the subscription. Prefer an active,
+  // registered row for the base.
+  const baseOf = (s: { scope: unknown; subscriptions: unknown }) => scopeOfRow(s.subscriptions).scope ?? scopeOfRow(s.scope).base;
+  const candidates = subs.filter((s) => {
+    const legacyTable = scopeOfRow(s.scope).table;
+    if (args.base && baseOf(s) !== args.base) return false;
+    if (args.table && legacyTable !== undefined && legacyTable !== args.table) return false;
     return true;
   });
+  const matched = candidates.find((s) => s.status === 'active' && s.external_webhook_id) ?? candidates[0];
   if (!matched) {
     return {
       error:
@@ -1697,11 +1708,11 @@ async function injectAirtableWebhook(args: AirtableInjectArgs) {
     };
   }
 
-  const scope = scopeOfRow(matched.scope);
-  const base = args.base ?? scope.base;
-  const table = args.table ?? scope.table;
+  const legacy = scopeOfRow(matched.scope);
+  const base = args.base ?? baseOf(matched) ?? DEV_AIRTABLE_BASE_ID;
+  const table = args.table ?? legacy.table ?? DEV_AIRTABLE_TABLE_ID;
   if (!base || !table) {
-    return { error: `AIRTABLE subscription ${matched.id} has no base/table scope`, scope };
+    return { error: `AIRTABLE subscription ${matched.id} has no base/table scope`, scope: legacy };
   }
 
   const { changeType, recordEvent } = AIRTABLE_EVENT_MAP[args.event];
