@@ -1,0 +1,30 @@
+# Deliberately wrong (the grader's own check that it fails): no unique by, so an enquiry sent twice is two rows.
+form = connect `@lf/webhook` using site_form
+events = connect `@lf/airtable` using team_airtable { base: "Events" }
+
+node Enquiry {
+  enquiry_id: <text>
+  submitted_at: <text>
+  name: <text>
+  email: <text>
+  event_date: <text>
+  guests: <number>
+  message: <text | null>
+}
+
+function `File Enquiry`(e: <Enquiry>) {
+  client = only(events-[c:Clients WHERE c.Email == e.email]->)
+  soon = Date.from(e.event_date) < Date.addDays(Date.from(e.submitted_at), 14)
+  priority = soon ? "Urgent" : (e.guests > 150 ? "High" : "Normal")
+  write events-[:Enquiries]-> {
+    `Enquiry Id`: e.enquiry_id,
+    Name: e.name,
+    Email: e.email,
+    `Event Date`: e.event_date,
+    Guests: e.guests,
+    `Assigned To`: client == null ? "Dana" : client.`Account Manager`,
+    Priority: priority
+  }
+}
+
+listen to form-[:Requests]-><Enquiry> fire `File Enquiry`

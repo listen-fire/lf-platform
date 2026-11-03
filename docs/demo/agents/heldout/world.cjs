@@ -1,12 +1,18 @@
-// The held-out tasks' stand-in world in fake-channels' Airtable: two bases a
-// team would have, Community (T1's Members) and Support (T2's Tickets and
-// Digests). Both tasks see both bases, as one Airtable account would show
-// them. Records hold their fields by name, as Airtable answers them and as
+// The held-out tasks' stand-in worlds in fake-channels' Airtable. The first
+// holds two bases a team would have, Community (T1's Members) and Support
+// (T2's Tickets and Digests); the second, for the later tasks, Events (T3's
+// Clients and Enquiries) and Facilities (T4's Equipment and Service Jobs).
+// The tasks of one world see both its bases, as one Airtable account would
+// show them; a task's reset puts its world in place first when the other one
+// is. Records hold their fields by name, as Airtable answers them and as
 // @lf/airtable writes them; `rows` also maps any field id back to its name.
 //
-//   node world.cjs <fakes url> setup          the bases and tables, the fake's
+//   node world.cjs <fakes url> setup [a|b]    a world's bases and tables (a,
+//                                               T1/T2's, by default), the fake's
 //                                               default bases removed
-//   node world.cjs <fakes url> reset <t1|t2>  that task's records as seeded
+//   node world.cjs <fakes url> world <task>   that task's world, its records
+//                                               left as they are
+//   node world.cjs <fakes url> reset <task>   that task's records as seeded
 //   node world.cjs <fakes url> rows <base> <table>
 const BASES = {
   appCOMMUNITY: {
@@ -53,7 +59,11 @@ const BASES = {
       },
     },
   },
+  ...require('./tasks/t3_enquiries/world.cjs').BASES,
+  ...require('./tasks/t4_service/world.cjs').BASES,
 };
+const WORLDS = { a: ['appCOMMUNITY', 'appSUPPORT'], b: ['appEVENTS', 'appFACILITIES'] };
+const WORLD_OF = { t1: 'a', t2: 'a', t3: 'b', t4: 'b' };
 
 // T1: two members already in the table. Grace unsubscribed earlier; Linus is
 // never written to.
@@ -86,11 +96,12 @@ async function call(fakes, method, path, body) {
   return res.json();
 }
 
-async function setup(fakes) {
+async function setup(fakes, world = 'a') {
   for (const base of await call(fakes, 'GET', '/admin/airtable/base/state')) await call(fakes, 'DELETE', `/admin/airtable/table:${base.id}/state`);
   await call(fakes, 'DELETE', '/admin/airtable/base/state');
   const entities = [];
-  for (const [baseId, base] of Object.entries(BASES)) {
+  for (const baseId of WORLDS[world]) {
+    const base = BASES[baseId];
     entities.push({ entity_type: 'base', id: baseId, data: { id: baseId, name: base.name, permissionLevel: 'create' } });
     for (const [tableId, table] of Object.entries(base.tables)) {
       entities.push({ entity_type: `table:${baseId}`, id: tableId, data: { id: tableId, name: table.name, primaryFieldId: table.primaryFieldId, fields: table.fields } });
@@ -105,7 +116,20 @@ async function seedRecords(fakes, baseId, tableId, records) {
   await call(fakes, 'POST', '/admin/airtable/seed', { entities: records.map((r) => ({ entity_type: `record:${baseId}:${tableId}`, id: r.id, data: { id: r.id, fields: r.fields, createdTime: at } })) });
 }
 
-async function reset(fakes, task) {
+/** The task's world, set up unless its bases are the fake's bases already. */
+async function ensureWorld(fakes, task) {
+  const world = WORLD_OF[task];
+  if (!world) throw new Error(`no task ${task}`);
+  const have = (await call(fakes, 'GET', '/admin/airtable/base/state')).map((b) => b.id).sort().join(' ');
+  if (have !== [...WORLDS[world]].sort().join(' ')) await setup(fakes, world);
+}
+
+/** `now` places T4's dates (the grader passes its own; default the clock). */
+async function reset(fakes, task, now = Date.now()) {
+  await ensureWorld(fakes, task);
+  const seed = (base, table, records) => seedRecords(fakes, base, table, records);
+  if (task === 't3') return require('./tasks/t3_enquiries/world.cjs').reset(seed);
+  if (task === 't4') return require('./tasks/t4_service/world.cjs').reset(seed, now);
   if (task === 't1') return seedRecords(fakes, 'appCOMMUNITY', 'tblMEMBERS', MEMBERS);
   if (task === 't2') {
     await seedRecords(fakes, 'appSUPPORT', 'tblTICKETS', TICKETS);
@@ -131,13 +155,14 @@ async function changeTickets(fakes) {
   await call(fakes, 'POST', '/airtable/v0/appSUPPORT/tblTICKETS', { fields: { Title: 'Billing address change', Status: 'Open', Assignee: 'Lena' } });
 }
 
-module.exports = { BASES, MEMBERS, TICKETS, setup, reset, rows, changeTickets };
+module.exports = { BASES, MEMBERS, TICKETS, call, setup, ensureWorld, reset, rows, changeTickets };
 
 if (require.main === module) {
   const [fakes, what, ...rest] = process.argv.slice(2);
   const done = (p) => p.then((v) => v !== undefined && console.log(JSON.stringify(v, null, 1))).catch((e) => (console.error(e.message), process.exit(1)));
-  if (what === 'setup') done(setup(fakes));
+  if (what === 'setup') done(setup(fakes, rest[0]));
+  else if (what === 'world') done(ensureWorld(fakes, rest[0]));
   else if (what === 'reset') done(reset(fakes, rest[0]));
   else if (what === 'rows') done(rows(fakes, rest[0], rest[1]));
-  else (console.error('setup | reset <t1|t2> | rows <base> <table>'), process.exit(2));
+  else (console.error('setup [a|b] | world <task> | reset <task> | rows <base> <table>'), process.exit(2));
 }

@@ -1,0 +1,18 @@
+# Deliberately wrong (the grader's own check that it fails): unique by the equipment, so a done or booked job is overwritten instead of a new one added or the old one left.
+facilities = connect `@lf/airtable` using team_airtable { base: "Facilities" }
+
+function `Plan Services`(t: <cron-[:Tick]->>) {
+  horizon = Date.addDays(Date.from(t.`Fired at`), 7)
+  facilities-[q:Equipment WHERE q.Status != "Retired"]-> {
+    if (q.`Next Service` <= horizon) {
+      write facilities-[:`Service Jobs`]-> {
+        unique by (Equipment),
+        Equipment: q.Name,
+        Due: q.`Next Service`,
+        Status: "To do"
+      }
+    }
+  }
+}
+
+listen to cron-[t:Ticks WHERE t.Schedule == "0 7 * * *" AND t.Zone == "UTC"]-> fire `Plan Services`

@@ -1,4 +1,4 @@
-// node grade.cjs <t1|t2> <authored project> <events dir> <out json>
+// node grade.cjs <t1|t2|t3|t4> <authored project> <events dir> <out json>
 // (env LF_BIN, FAKES; LF_MODULES_DIR and LF_SERVE_MODULE as run.sh sets them)
 //
 // The deterministic grader. It copies the authored project (run state left
@@ -12,6 +12,11 @@
 //       (LF_CLOCK_AHEAD_MS): now (the listen arms), the next Monday 09:00:30
 //       UTC, the tickets changed, the Thursday after (nothing due), the
 //       Monday after that; the Digests table after each.
+//   t3  five enquiries posted through @lf/webhook's door, then the Enquiries
+//       table (tasks/t3_enquiries/grade.cjs).
+//   t4  the daily 07:00 UTC schedule drained on two mornings, the team's
+//       changes between them, then the Service Jobs table
+//       (tasks/t4_service/grade.cjs).
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
@@ -99,10 +104,14 @@ async function t2() {
   digestMatches('second Monday', newest, { Priya: 2, Tom: 0, Sam: 2, Lena: 1, Unassigned: 2 });
 }
 
+/** What a task's own grader (tasks/<task>/grade.cjs) is handed. */
+const context = { lf, expect, text, world, FAKES, scratch: path.dirname(out) };
+
 async function main() {
   const checked = lf(['check']);
   expect('listen-fire check is clean', checked === 0);
-  if (checked === 0) await (task === 't1' ? t1() : t2());
+  const GRADERS = { t1, t2, t3: () => require('./tasks/t3_enquiries/grade.cjs')(context), t4: () => require('./tasks/t4_service/grade.cjs')(context) };
+  if (checked === 0) await GRADERS[task]();
   const pass = checks.length > 1 && checks.every((c) => c.ok);
   fs.writeFileSync(out, `${JSON.stringify({ task, pass, checks, steps }, null, 1)}\n`);
   console.log(`${task} grade: ${pass ? 'PASS' : 'FAIL'} (${checks.filter((c) => c.ok).length}/${checks.length} checks)${pass ? '' : `; failed: ${checks.filter((c) => !c.ok).map((c) => c.name).join('; ')}`}`);

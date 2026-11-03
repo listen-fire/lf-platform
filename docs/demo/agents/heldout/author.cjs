@@ -14,6 +14,9 @@
 //        describe_systems as `listen-fire catalog`'s JSON over a scratch
 //        program connecting every credential, lf_catalog described as JSON,
 //        and the handbook's front page as v0.14.2 had it.
+//   lookup  new in every way but two: the cheat sheet's place holds
+//        ../programs/lf_primer_basic.md (snapshotted to lookup_arm/), and one
+//        more tool, `example`, runs `<LF_BIN> example <words>`.
 //   primer  new in every way but one: the cheat sheet's place holds the
 //        primer (../programs/lf_primer.md, copied to primer_arm/ by run.sh
 //        when its run starts).
@@ -27,7 +30,7 @@ const { spawnSync } = require('child_process');
 const { session, PRICES } = require('./agent_tools.cjs');
 
 const [arm, task, project, describeFile, exampleRun, out] = process.argv.slice(2);
-if (!['old', 'new', 'primer'].includes(arm) || !['t1', 't2'].includes(task)) throw new Error('usage: author.cjs <old|new|primer> <t1|t2> <project> <describe> <example run> <out>');
+if (!['old', 'new', 'primer', 'lookup'].includes(arm) || !['t1', 't2', 't3', 't4'].includes(task)) throw new Error('usage: author.cjs <old|new|primer|lookup> <t1|t2|t3|t4> <project> <describe> <example run> <out>');
 const LF_BIN = process.env.LF_BIN;
 const LF_SRC = process.env.LF_SRC;
 const HERE = __dirname;
@@ -57,12 +60,34 @@ const TASKS = {
     example: () => `An example of the event the schedule fires (the test run fires the program on it):\n\n\`\`\`json\n${JSON.stringify(JSON.parse(fs.readFileSync(exampleRun, 'utf8')).event.arrivals[0].landing.fields, null, 2)}\n\`\`\``,
     testWrites: 'Writes are made too, to the Airtable base, which is reset before the program goes live',
   },
+  t3: {
+    dir: 'tasks/t3_enquiries',
+    program: 'movements/enquiries.mvt',
+    modules: [
+      ['airtable', 'AIRTABLE_MANIFEST'],
+      ['webhook', 'WEBHOOK_MANIFEST'],
+    ],
+    connections: `- site_form: the website's enquiry form, through the webhook connector: the form posts each enquiry to its URL as JSON (\`listen-fire serve\` prints the URL). The form does not sign its posts.
+- team_airtable: the team's Airtable, through its connector.`,
+    delivery: `How events reach the program: \`listen-fire serve\` stores each delivery the form posts and acknowledges it (202) before it runs; a worker then runs it. The form's posts carry no delivery id, so a post the form sends again is a new delivery and runs again.`,
+    example: () => `An example of the JSON the form posts:\n\n\`\`\`json\n${fs.readFileSync(path.join(path.dirname(exampleRun), 'example.body.json'), 'utf8').trim()}\n\`\`\``,
+    testWrites: 'Writes are made too, to the Airtable base, which is reset before the program goes live',
+  },
+  t4: {
+    dir: 'tasks/t4_service',
+    program: 'movements/service_jobs.mvt',
+    modules: [['airtable', 'AIRTABLE_MANIFEST']],
+    connections: `- team_airtable: the team's Airtable, through its connector.`,
+    delivery: `How events reach the program: \`listen-fire serve\` fires each scheduled tick as it comes due; a worker then runs it. A tick that came due while nothing ran fires once when it runs again.`,
+    example: () => `An example of the event the schedule fires (the test run fires the program on it):\n\n\`\`\`json\n${JSON.stringify(JSON.parse(fs.readFileSync(exampleRun, 'utf8')).event.arrivals[0].landing.fields, null, 2)}\n\`\`\``,
+    testWrites: 'Writes are made too, to the Airtable base, which is reset before the program goes live',
+  },
 };
 const T = TASKS[task];
 const PROGRAM = T.program;
 const request = read(`${T.dir}/request.txt`);
 const environment = fs.readFileSync(path.join(HERE, '../programs/environment.txt'), 'utf8').trim();
-const cheatsheet = read(arm === 'primer' ? 'primer_arm/lf_primer.md' : `${arm}_arm/lf_cheatsheet.md`);
+const cheatsheet = read(arm === 'primer' ? 'primer_arm/lf_primer.md' : arm === 'lookup' ? 'lookup_arm/lf_primer_basic.md' : `${arm}_arm/lf_cheatsheet.md`);
 // The rest of prompts.cjs's lfDelivery, after its Stripe sentences: generic.
 const lfDeliveryRest = `A run that fails, by \`fail(…)\` or by a connected system refusing or failing a call, is kept as failed with its error (\`listen-fire runs\`), and nothing runs it again by itself: the host wakes you to decide what to do (inspect, fix, run it again with \`listen-fire runs rerun <run-id>\`, or tell the user). A rerun runs the failed run again as its next attempt, on its own event and with the program as the project holds it now (so a fix takes effect), from the start. lf refuses it when the failed attempt already committed writes, and lists them; \`--force\` reruns it anyway, making those writes again. The host also runs \`listen-fire check\` every 30 seconds and wakes you when it finds new errors.`;
 const checkLf = 'Before you finish, check your work: run `listen-fire check`, and a test run (test_run) on the example event, and read what it did.';
@@ -164,6 +189,15 @@ async function main() {
     arm === 'old'
       ? { name: 'lf_catalog', description: 'Run `listen-fire catalog`: the catalog the program is checked against, as JSON (each connection the program makes, its types and fields).', input_schema: { type: 'object', properties: {} } }
       : { name: 'lf_catalog', description: 'Run `listen-fire catalog`: the catalog the program is checked against (each connection the project holds, its types and fields).', input_schema: { type: 'object', properties: {} } },
+    ...(arm === 'lookup'
+      ? [
+          {
+            name: 'example',
+            description: "Checked micro examples of listen-fire for what you describe, e.g. 'create or update by id'. Use it whenever you are unsure how to write something.",
+            input_schema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+          },
+        ]
+      : []),
     { name: 'read_program', description: `${PROGRAM} as it stands.`, input_schema: { type: 'object', properties: {} } },
     { name: 'write_program', description: `Replace ${PROGRAM} with this source, whole.`, input_schema: { type: 'object', properties: { source: { type: 'string' } }, required: ['source'] } },
     { name: 'lf_check', description: 'Run `listen-fire check`: every diagnostic the program has.', input_schema: { type: 'object', properties: {} } },
@@ -186,6 +220,14 @@ async function main() {
         return String(input.route) === 'index' ? handbook.index() : handbook.read(String(input.route));
       case 'lf_catalog':
         return lf(['catalog']);
+      case 'example': {
+        const words = String(input.query ?? '').split(/\s+/).filter(Boolean);
+        const ran = spawnSync(LF_BIN, ['example', ...words], { cwd: project, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 120_000, maxBuffer: 64 * 1024 * 1024 });
+        const stdout = relative(`${ran.stdout ?? ''}`.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '')).trimEnd();
+        if (ran.status === 0) return stdout;
+        const stderr = relative(`${ran.stderr ?? ''}`.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '')).trimEnd();
+        return `${stdout}${stdout && stderr ? '\n' : ''}${stderr}\n(exit ${ran.status})`;
+      }
       case 'read_program':
         return fs.existsSync(programPath) ? fs.readFileSync(programPath, 'utf8') : `(${PROGRAM} does not exist yet)`;
       case 'write_program':
@@ -205,6 +247,11 @@ async function main() {
   // on the program already in place (run.sh's DRY puts the reference there).
   if (process.env.PROMPT_ONLY) {
     const probes = {};
+    if (arm === 'lookup') {
+      probes.example = await handle('example', { query: 'connect airtable base' });
+      console.log(`example: ${probes.example.length} chars; first line: ${probes.example.split('\n')[0]}`);
+      console.log(`example (no match): ${(await handle('example', { query: 'zzzqqq nonexistent' })).replace(/\n/g, ' | ').slice(0, 200)}`);
+    }
     for (const probe of ['describe_systems', 'read_skill', 'lf_catalog', 'lf_check', 'test_run', 'handbook_read']) {
       if (!tools.some((t) => t.name === probe)) continue;
       probes[probe] = await handle(probe, { route: 'front#maybe-absent' });

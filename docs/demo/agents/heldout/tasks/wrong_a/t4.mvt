@@ -1,0 +1,17 @@
+# Deliberately wrong (the grader's own check that it fails): no check for an open job, so every morning adds the same jobs again.
+facilities = connect `@lf/airtable` using team_airtable { base: "Facilities" }
+
+function `Plan Services`(t: <cron-[:Tick]->>) {
+  horizon = Date.addDays(Date.from(t.`Fired at`), 7)
+  facilities-[q:Equipment WHERE q.Status != "Retired"]-> {
+    if (q.`Next Service` <= horizon) {
+      write facilities-[:`Service Jobs`]-> {
+        Equipment: q.Name,
+        Due: q.`Next Service`,
+        Status: "To do"
+      }
+    }
+  }
+}
+
+listen to cron-[t:Ticks WHERE t.Schedule == "0 7 * * *" AND t.Zone == "UTC"]-> fire `Plan Services`
