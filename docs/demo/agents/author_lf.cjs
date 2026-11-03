@@ -1,30 +1,34 @@
-// node author_lf.cjs <project> <example event file> <describe_systems file> <out json>
+// node author_lf.cjs <project> <unused> <describe_systems file> <out json>
 // The listen-fire option's authoring: one real model session (the same model
 // as every other agent here) writes the program in a project whose
-// credentials are already added. It is given the request, our retry email,
-// the handbook's front page (what an authoring agent is handed first), the
-// project's `listen-fire credential list` and one example event. Its tools:
+// credentials are already added. Its system prompt is a general platform's
+// (since 2026-11-03): what listen-fire is, the project's `listen-fire
+// credential list`, the language primer (prompts.cjs) and how a failed run is
+// handled. The user's request is the first message. Its tools:
 //
-//   handbook_search   the handbook's language search (@listen-fire/handbook)
-//   handbook_read     a handbook chapter or section, including each installed
-//                     module's own chapter (system:stripe, system:mcp, …)
 //   describe_systems  `listen-fire catalog`'s text, made before any program
 //                     existed: every connection the project holds, as
-//                     listen-fire describes it (the CRM's from its MCP tools)
-//   lf_catalog        `listen-fire catalog` now, as printed (the same text)
+//                     listen-fire describes it
+//   handbook_search   the handbook's language search (@listen-fire/handbook)
+//   handbook_read     a handbook chapter or section, including each installed
+//                     module's own chapter (system:stripe, system:attio, …)
 //   example           `listen-fire example <words>`: checked micro examples
-//   read_program      movements/payment_failed.mvt as it stands
-//   write_program     replace it
+//   write_program     replace the program
 //   lf_check          `listen-fire check`, as printed
-//   test_run          `listen-fire run --event <the example> --ephemeral`: one run on
-//                     the example event, for real, its run state thrown away
+//   test_run          one run, for real, on a webhook body the agent writes:
+//                     @lf/stripe's own inbound code makes it the arrival its
+//                     door would (as `listen-fire run --webhook` does), then
+//                     `listen-fire run --event … --ephemeral`
+//   web_search, web_fetch  the web every option searches (web.cjs)
 //
-// The test run is the same single run on the same example event the
-// JavaScript option's test_handler gets. listen-fire 0.14 has no dry run of an
-// event, so its writes are made, to the stand-ins' mailbox and Slack, which
+// No example event is given (a platform has none before the first arrives).
+// Before 2026-11-03 it was, with a description of each connection, the
+// delivery's details and the tools read_program and lf_catalog. The test
+// run's writes are made, to the stand-ins' mailbox and Slack, which
 // compare.sh clears before the program goes live (the JavaScript test records
-// them instead). Every command's output is given as
-// listen-fire printed it, with the project's own path made relative.
+// them instead). Every command's output is given as listen-fire printed it,
+// with the project's own path made relative. The second argument, once the
+// example event, is kept for compare.sh's call and not read.
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
@@ -32,23 +36,20 @@ const { createRequire } = require('module');
 const { session, PRICES } = require('./agent_tools.cjs');
 const { loadHandbook, PROJECT_MODULES } = require('./handbook.cjs');
 
-const [project, exampleFile, describeFile, out] = process.argv.slice(2);
+const [project, , describeFile, out] = process.argv.slice(2);
 const LF_BIN = process.env.LF_BIN || 'listen-fire';
 const LF_SRC = process.env.LF_SRC || path.join(__dirname, '../../../../listen-fire');
 const PROGRAM = 'movements/payment_failed.mvt';
-const { request, retryEmail, environment, cheatsheet, lfDelivery, checkLf, exampleTool, runExample } = require('./prompts.cjs');
+const { request, environment, cheatsheet, lfDelivery, checkLf, exampleTool, runExample } = require('./prompts.cjs');
+const { webTools, runWeb } = require('./web.cjs');
 const describeSystems = fs.readFileSync(describeFile, 'utf8').trim();
-const example = JSON.parse(fs.readFileSync(exampleFile, 'utf8'));
 const programPath = path.join(project, PROGRAM);
 const realProject = fs.realpathSync(project);
-const exampleRun = path.join(path.dirname(out), `${path.basename(out, '.json')}_example_event.json`);
-// The example as @lf/stripe's door makes it: the arrival on its invoice's
-// Changes, by the module's own code (modules/stripe/inbound.ts).
+const testEvent = path.join(path.dirname(out), `${path.basename(out, '.json')}_test_event.json`);
+// A webhook body the agent writes, as @lf/stripe's door makes it: the arrival
+// on its invoice's Changes, by the module's own code (modules/stripe/inbound.ts).
 createRequire(path.join(LF_SRC, 'packages/module-kit/package.json'))('tsx/cjs');
 const inbound = require(path.join(LF_SRC, 'modules/stripe/inbound.ts'));
-const parsed = inbound.eventOf(example);
-if (!parsed.ok) throw new Error(`the example event is not one @lf/stripe takes: ${parsed.message}`);
-fs.writeFileSync(exampleRun, JSON.stringify({ external: 'stripe', event: { arrivals: [inbound.changeArrival(parsed.payload)] } }));
 
 const handbook = loadHandbook(LF_SRC, PROJECT_MODULES);
 
@@ -64,32 +65,21 @@ function lf(args) {
 
 const credentials = lf(['credential', 'list']).replace(/\n\(exit \d+\)$/, '');
 
+// A general platform's prompt (since 2026-11-03): what listen-fire is, the
+// project's connections as `listen-fire credential list` prints them, the
+// language primer, and how a failed run is handled. Nothing about this task's
+// systems: the catalog, handbook, example lookup and web search find those.
 const SYSTEM = `You are an agent that sets up automations for your user. Automations are listen-fire programs: a .mvt file in this project, which \`listen-fire serve\` runs on every event it listens to, with no model involved.
 
-When your user asks for one, write ${PROGRAM}. It must pass \`listen-fire check\`; it goes live under \`listen-fire serve\` once you finish. The project's connections are set up already (\`listen-fire credential list\`):
+When your user asks for one, write ${PROGRAM}. It must pass \`listen-fire check\`; it goes live under \`listen-fire serve\` once you finish. The project's connections (\`listen-fire credential list\`):
 
 \`\`\`
 ${credentials}
 \`\`\`
 
-- stripe_account: the user's Stripe account, through its connector: Stripe's events reach it (signed with the endpoint's secret), and it reads customers, invoices and subscriptions. \`listen-fire serve\` prints its URL, and Stripe sends the failed-payment events there.
-- crm: the user's CRM, ${process.env.CRM_KIND === 'rest' ? 'Attio, through its connector' : 'over MCP'}.
-- billing_mail: the billing mailbox, billing@ledgerline.io.
-- team_slack: the team's Slack.
-
 ${lfDelivery}
 
 ${environment}
-
-Our retry email:
-
-${retryEmail}
-
-An example of the event Stripe sends:
-
-\`\`\`json
-${JSON.stringify(example, null, 2)}
-\`\`\`
 
 The language, in short (handbook_read and handbook_search reach the whole handbook):
 
@@ -114,16 +104,15 @@ async function main() {
       description: 'Read the handbook: "index" for its index, a chapter ("anatomy", "system:mcp"), one section ("branching#if-else"), or a front page section ("front#maybe-absent").',
       input_schema: { type: 'object', properties: { route: { type: 'string' } }, required: ['route'] },
     },
-    { name: 'lf_catalog', description: 'Run `listen-fire catalog`: the catalog the program is checked against (each connection the project holds, its types and fields).', input_schema: { type: 'object', properties: {} } },
     exampleTool,
-    { name: 'read_program', description: `${PROGRAM} as it stands.`, input_schema: { type: 'object', properties: {} } },
     { name: 'write_program', description: `Replace ${PROGRAM} with this source, whole.`, input_schema: { type: 'object', properties: { source: { type: 'string' } }, required: ['source'] } },
     { name: 'lf_check', description: 'Run `listen-fire check`: every diagnostic the program has.', input_schema: { type: 'object', properties: {} } },
     {
       name: 'test_run',
-      description: "Run `listen-fire run --event <the example event> --ephemeral`: the program once on the example event, for real (listen-fire has no dry run of an event). Reads are made (the CRM is real). Writes are made too, to a test mailbox and Slack that are cleared before the program goes live; the run is kept out of the project's run history.",
-      input_schema: { type: 'object', properties: {} },
+      description: "Run the program once on an incoming webhook, for real: give its body as the connected system would send it (JSON). It reaches the listens of the project's connection that receives it; reads are made, and so are writes, to a test mailbox and Slack that are cleared before the program goes live. The run is kept out of the project's run history.",
+      input_schema: { type: 'object', properties: { body: { type: 'object', description: 'The webhook body, as the sender would send it.' } }, required: ['body'] },
     },
+    ...webTools,
   ];
   if (fs.existsSync(programPath)) fs.rmSync(programPath);
   const handle = async (name, input) => {
@@ -134,22 +123,26 @@ async function main() {
         return handbook.search(String(input.query), input.kind);
       case 'handbook_read':
         return String(input.route) === 'index' ? handbook.index() : handbook.read(String(input.route));
-      case 'lf_catalog':
-        return lf(['catalog']);
       case 'example':
         return runExample(input, { cwd: project, relative });
-      case 'read_program':
-        return fs.existsSync(programPath) ? fs.readFileSync(programPath, 'utf8') : `(${PROGRAM} does not exist yet)`;
       case 'write_program':
         if (typeof input.source !== 'string' || input.source.trim() === '') throw new Error('source must be the whole program');
         fs.writeFileSync(programPath, input.source);
         return `wrote ${PROGRAM} (${input.source.split('\n').length} lines)`;
       case 'lf_check':
         return lf(['check']);
-      case 'test_run':
-        return lf(['run', '--event', exampleRun, '--ephemeral']);
-      default:
-        throw new Error(`no tool ${name}`);
+      case 'test_run': {
+        const body = typeof input.body === 'string' ? JSON.parse(input.body) : input.body;
+        const parsed = inbound.eventOf(body);
+        if (!parsed.ok) return `the stripe_account connection refused the body: ${parsed.message}\n(exit 1)`;
+        fs.writeFileSync(testEvent, JSON.stringify({ external: 'stripe', event: { arrivals: [inbound.changeArrival(parsed.payload)] } }));
+        return lf(['run', '--event', testEvent, '--ephemeral']);
+      }
+      default: {
+        const answer = runWeb(name, input);
+        if (answer === undefined) throw new Error(`no tool ${name}`);
+        return answer;
+      }
     }
   };
   // PROBE_ONLY: no model call. The example tool is called once through the

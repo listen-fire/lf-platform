@@ -1,52 +1,46 @@
-// node author_js.cjs <fakes url> <crm url> <crm token> <example event> <handler file> <out json>
+// node author_js.cjs <fakes url> <crm url> <crm token> <unused> <handler file> <out json>
 // The JavaScript option's authoring: one real model session (the same model
-// as every other agent here) writes a handler for a sandbox. It is given the
-// request, our retry email, the sandbox's globals (sandbox.cjs) and one
-// example event. Its tools:
+// as every other agent here) writes a handler for a sandbox. Its system
+// prompt is a general platform's (since 2026-11-03): the sandbox, how a
+// handler is triggered, its globals (sandbox.cjs) and the user's connected
+// accounts. The user's request is the first message. Its tools:
 //
-//   crm_list_tools   the CRM's tools/list, as the sandbox's MCP client gets it
-//                    (mcp), or crm_api_reference, the CRM's REST API
-//                    reference (rest): crm_access.cjs's discovery
-//   read_handler     handler.js as it stands
+//   web_search, web_fetch   the web every option searches (web.cjs): how
+//                    Stripe's events and Attio's REST API look is found there
 //   write_handler    replace handler.js
-//   test_handler     run handler.js once on the example event: CRM calls are
-//                    real, email and Slack are recorded and not sent, kv is
-//                    a store of the test runs' own
+//   test_handler     run handler.js once on a webhook body the agent writes:
+//                    CRM calls are real, email and Slack are recorded and not
+//                    sent, kv is a store of the test runs' own
 //
-// The test run is the one a sandbox gives: the same single run on the same
-// example event the listen-fire option's `listen-fire run --dry-run` gets.
+// No example event is given, and no CRM reference: a platform knows neither.
+// (Before 2026-11-03: an example event, the CRM's reference tool and a
+// read_handler tool.) The fourth argument, once the example event, is kept
+// for compare.sh's call and not read.
 const fs = require('fs');
 const path = require('path');
 const { session, PRICES } = require('./agent_tools.cjs');
 const { openSandbox } = require('./sandbox.cjs');
 
-const [fakes, crmUrl, crmToken, exampleFile, handlerFile, out] = process.argv.slice(2);
-const { request, retryEmail, environment, jsDelivery, checkJs } = require('./prompts.cjs');
-const example = JSON.parse(fs.readFileSync(exampleFile, 'utf8'));
+const [fakes, crmUrl, crmToken, , handlerFile, out] = process.argv.slice(2);
+const { request, environment, jsDelivery, checkJs } = require('./prompts.cjs');
+const { webTools, runWeb } = require('./web.cjs');
 
-const system = (crmDoc) => `You are an agent that sets up automations for your user. Automations run in a JavaScript sandbox: you write a handler once, and the sandbox calls it for every event, with no model involved.
+// A general platform's prompt: what the sandbox is, how a handler is
+// triggered, its globals and the user's connected accounts; nothing about
+// what Stripe sends or how the CRM answers (web search finds those).
+const system = (crmDoc) => `You are an agent that sets up automations for your user on a JavaScript automation platform. An automation is a handler: you write it once, and the platform runs it in a sandbox for every webhook its endpoint receives, with no model involved.
 
-When your user asks for one, write handler.js. It defines \`async function handler(event)\`. The sandbox calls it with each Stripe webhook event sent to the user's endpoint, parsed from JSON, after checking Stripe's signature. Besides standard JavaScript, it has these globals:
+Write handler.js. It defines \`async function handler(event)\`, which the sandbox calls with each webhook's JSON body, parsed, once the platform has checked the sender's signature. The user's connected accounts send their webhooks to the endpoint: Stripe. Besides standard JavaScript, the sandbox has these globals:
 
 - ${crmDoc}
-- \`email\`: \`await email.send({ to, subject, body })\` sends a plain-text email from the billing mailbox, billing@ledgerline.io. \`to\` is an address or a list of them.
-- \`slack\`: \`await slack.post({ channel, text })\` posts in a channel of the team's Slack, by its name.
-- \`kv\`: a key-value store kept across events. \`await kv.get(key)\` answers the value or null; \`await kv.set(key, value)\` keeps any JSON value; \`await kv.delete(key)\`.
-- \`console.log\`, which goes to the sandbox's log.
+- \`email\`: \`await email.send({ to, subject, body })\` sends a plain-text email from the user's mailbox, billing@ledgerline.io. \`to\` is an address or a list of them.
+- \`slack\`: \`await slack.post({ channel, text })\` posts in a channel of the user's Slack, by its name.
+- \`kv\`: a key-value store kept across runs. \`await kv.get(key)\` answers the value or null; \`await kv.set(key, value)\` keeps any JSON value; \`await kv.delete(key)\`.
+- \`console.log\`, which goes to the platform's log; \`setTimeout\`.
 
 ${jsDelivery}
 
 ${environment}
-
-Our retry email:
-
-${retryEmail}
-
-An example of the event Stripe sends:
-
-\`\`\`json
-${JSON.stringify(example, null, 2)}
-\`\`\`
 
 ${checkJs} When you are done, finish with a short note to the user.`;
 
@@ -54,31 +48,32 @@ async function main() {
   const sandbox = await openSandbox({ fakes, crmUrl, crmToken, dryRun: true });
   const SYSTEM = system(sandbox.crmDoc);
   const tools = [
-    sandbox.discovery.tool,
-    { name: 'read_handler', description: 'handler.js as it stands.', input_schema: { type: 'object', properties: {} } },
+    ...webTools,
     { name: 'write_handler', description: 'Replace handler.js with this source, whole.', input_schema: { type: 'object', properties: { source: { type: 'string' } }, required: ['source'] } },
     {
       name: 'test_handler',
-      description: 'Run handler.js once on the example event. CRM calls are real; email.send and slack.post are recorded and not sent; kv starts empty for the test runs. Answers what it returned or threw, its log, its CRM calls and what it would have sent.',
-      input_schema: { type: 'object', properties: {} },
+      description: "Run handler.js once on a webhook body you give (JSON). Calls to the user's accounts are real, except that email.send and slack.post are recorded and not sent; kv starts empty. Answers what it returned or threw, its log, its CRM calls and what it would have sent.",
+      input_schema: { type: 'object', properties: { event: { type: 'object', description: 'The webhook body, as the sender would send it.' } }, required: ['event'] },
     },
   ];
   if (fs.existsSync(handlerFile)) fs.rmSync(handlerFile);
   const handle = async (name, input) => {
     switch (name) {
-      case sandbox.discovery.tool.name:
-        return sandbox.discovery.run();
-      case 'read_handler':
-        return fs.existsSync(handlerFile) ? fs.readFileSync(handlerFile, 'utf8') : '(handler.js does not exist yet)';
       case 'write_handler':
         if (typeof input.source !== 'string' || input.source.trim() === '') throw new Error('source must be the whole file');
         fs.writeFileSync(handlerFile, input.source);
         return `wrote handler.js (${input.source.split('\n').length} lines)`;
-      case 'test_handler':
+      case 'test_handler': {
         if (!fs.existsSync(handlerFile)) throw new Error('handler.js does not exist yet');
-        return JSON.stringify(await sandbox.run(fs.readFileSync(handlerFile, 'utf8'), example), null, 1);
-      default:
-        throw new Error(`no tool ${name}`);
+        const event = typeof input.event === 'string' ? JSON.parse(input.event) : input.event;
+        if (event === null || typeof event !== 'object') throw new Error('event must be the webhook body, a JSON object');
+        return JSON.stringify(await sandbox.run(fs.readFileSync(handlerFile, 'utf8'), event), null, 1);
+      }
+      default: {
+        const answer = runWeb(name, input);
+        if (answer === undefined) throw new Error(`no tool ${name}`);
+        return answer;
+      }
     }
   };
   const user = request;

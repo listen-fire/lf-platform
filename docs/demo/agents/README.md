@@ -109,21 +109,21 @@ or acts.
 
 - **Wake the agent for every event** (`baseline.cjs` behind
   `receivers.cjs agent`): a fresh session per delivery, with the CRM (its MCP
-  tools, or a `crm_request` tool for its REST API), email, Slack and a
-  key-value memory.
+  tools, or a `crm_request` tool for its REST API), email, Slack, the web
+  (`web.cjs`) and a key-value memory.
 - **JavaScript** (`author_js.cjs`, `sandbox.cjs`, `receivers.cjs js`): the
   model writes `handler(event)` for a sandbox with `crm` (a plain MCP client,
   or `crm.request` for the REST API; no retry of its own either way, where
   listen-fire's `@lf/mcp` and `@lf/attio` retry 429 and 5xx with backoff),
-  `email`, `slack`, a persistent `kv` and the runtime's timers. It can list
-  the CRM's tools (or read its API reference) and test-run the handler.
+  `email`, `slack`, a persistent `kv` and the runtime's timers. It can search
+  the web (`web.cjs`) and test-run the handler on a webhook body it writes.
 - **listen-fire** (`author_lf.cjs`): the model gets the connected systems up
   front (`describe_systems`: `listen-fire catalog`'s text, every connection
   the project holds), the listen-fire reference (the basic primer,
   `programs/lf_primer_basic.md`, and an `example` tool that runs
   `listen-fire example <words>` for checked micro examples; the woken agent
   gets the same two; `prompts.cjs` is their one source and `00_lf.json` says
-  `reference: "basic+lookup"`), the handbook, `listen-fire check` and a test run on the example event. It
+  `reference: "basic+lookup"`), the handbook, `listen-fire check` and a test run on a webhook body it writes. It
   gets no builder skill, as JavaScript gets no equivalent. The woken agent
   reads a run as `listen-fire runs show` prints it (text).
   - listen-fire 0.14 has no dry run of an event, so the test run is real
@@ -163,13 +163,20 @@ host also runs `listen-fire check` every 30 s and wakes the agent on new errors.
 The stressors, the same for all three (`make_events.cjs … plain`: every
 Stripe email is the CRM's): the 3rd, 8th and 17th payment delivered twice; one
 CRM call answered 503 (5th payment) and one 429 (15th), each with
-Retry-After: 1; then the CRM renames `yearly` to `annual_plan` and, 45 s
-later, 5 more payments arrive, 2 on that plan. In the Attio scenario the 503
-and the 429 answer the next call that reads records, whoever makes it (armed
-just before the payment's delivery): `@lf/attio` lists records page by page
-and filters them itself, so its call names no customer. The rename is a
-select option renamed in the workspace: the option keeps its id and takes the
-new title, on every record.
+Retry-After: 1; then 5 of day 2's payments, 2 of them yearly. In the Attio
+scenario the 503 and the 429 answer the next call that reads records, whoever
+makes it (armed just before the payment's delivery): `@lf/attio` lists records
+page by page and filters them itself, so its call names no customer. (Until
+2026-11-03 the CRM also renamed `yearly` to `annual_plan` before day 2; it was
+dropped because its only story was an agent woken after launch.)
+
+Since 2026-11-03 every option's system prompt is a small, general one, and the
+request (with the retry email) is the first user message, the same words for
+all three (`prompts.cjs`). No option is handed an example event or a CRM
+reference: every one has the same web search and fetch over a fixed set of
+Stripe and Attio documentation pages (`web.cjs`, `web/*.md`), which describe
+what the stand-ins really do. The JavaScript author tests its handler on a
+webhook body it writes; listen-fire's test run takes one too.
 
 `measure.cjs` measures each handler and program (lines, decision points,
 hand-rolled concerns, I/O sites, credentials); its method is at its top.

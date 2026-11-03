@@ -10,8 +10,9 @@
 //               sandbox_log        the sandbox's runs of an event
 //               replay             run a stored event through the live handler,
 //                                  for real
-//               crm_list_tools     the CRM's tools, as the sandbox's client lists them
-//                                  (or crm_api_reference, its REST API's reference)
+//   both        web_search, web_fetch  the web every option searches (web.cjs;
+//                                  since 2026-11-03, in place of the CRM's
+//                                  tools list or REST reference)
 //   lf          read_program, write_program (the live program), lf_check,
 //               lf_runs, lf_runs_show, lf_deliveries (no test run: listen-fire
 //               0.14 has no dry run of an event, and a real one would write
@@ -36,6 +37,7 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const { session, PRICES } = require('./agent_tools.cjs');
 const { wakeSystem, exampleTool, runExample } = require('./prompts.cjs');
+const { webTools, runWeb } = require('./web.cjs');
 
 function lfRunner(project) {
   const real = fs.realpathSync(project);
@@ -63,7 +65,7 @@ async function wake({ kind, reason, js, lf }) {
       { name: 'test_handler', description: 'Run handler.js once on a stored event, as a dry run: CRM calls are real; email.send and slack.post are recorded and not sent; kv starts empty.', input_schema: { type: 'object', properties: { event_id: { type: 'string' } }, required: ['event_id'] } },
       { name: 'sandbox_log', description: "The sandbox's runs of an event: what each returned or threw, its log, its CRM calls, what it sent.", input_schema: { type: 'object', properties: { event_id: { type: 'string' } }, required: ['event_id'] } },
       { name: 'replay', description: 'Run a stored event through the live handler now, for real (its sends happen).', input_schema: { type: 'object', properties: { event_id: { type: 'string' } }, required: ['event_id'] } },
-      js.dry.discovery.tool,
+      ...webTools,
       tell,
     ];
     handle = async (name, input) => {
@@ -87,13 +89,14 @@ async function wake({ kind, reason, js, lf }) {
           actions.replays.push({ eventId: input.event_id, answer: text.slice(0, 2000) });
           return text;
         }
-        case js.dry.discovery.tool.name:
-          return js.dry.discovery.run();
         case 'tell_user':
           actions.toldUser.push(String(input.message));
           return 'sent';
-        default:
-          throw new Error(`no tool ${name}`);
+        default: {
+          const web = runWeb(name, input);
+          if (web === undefined) throw new Error(`no tool ${name}`);
+          return web;
+        }
       }
     };
   } else {
@@ -117,6 +120,7 @@ async function wake({ kind, reason, js, lf }) {
       { name: 'handbook_search', description: "Search the language's handbook.", input_schema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
       { name: 'handbook_read', description: 'Read the handbook: "index", a chapter, or chapter#section.', input_schema: { type: 'object', properties: { route: { type: 'string' } }, required: ['route'] } },
       exampleTool,
+      ...webTools,
       tell,
     ];
     handle = async (name, input) => {
@@ -152,8 +156,11 @@ async function wake({ kind, reason, js, lf }) {
         case 'tell_user':
           actions.toldUser.push(String(input.message));
           return 'sent';
-        default:
-          throw new Error(`no tool ${name}`);
+        default: {
+          const web = runWeb(name, input);
+          if (web === undefined) throw new Error(`no tool ${name}`);
+          return web;
+        }
       }
     };
   }

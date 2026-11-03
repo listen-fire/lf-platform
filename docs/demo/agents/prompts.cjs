@@ -1,14 +1,25 @@
 // What the agents in the comparison are told, in one place, so the JavaScript
 // and listen-fire options are told the same things in the same words wherever
 // the two can be the same.
+//
+// Since 2026-11-03 (Henry: "listen-fire thrives in chaos") every system prompt
+// is a small, general one, as a platform of its kind would give any task: it
+// says what the platform is and how its automations are triggered, never what
+// this task's systems look like. The user's request (with the retry email it
+// needs) is the first user message, the same words for every option. Shapes
+// are discovered, not given: every option has the same web search over the
+// vendors' documentation (web.cjs); listen-fire also has its own catalog,
+// handbook, example lookup and checker.
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
 const read = (f) => fs.readFileSync(path.join(__dirname, 'programs', f), 'utf8').trim();
 
-const request = read('request.txt');
 const retryEmail = read('retry_email.txt');
+// The user's request, whole: what they asked for and the email it names.
+const request = `${read('request.txt')}\n\nOur retry email:\n\n${retryEmail}`;
+// What every option is told about working alone (programs/environment.txt).
 const environment = read('environment.txt');
 // The listen-fire reference every listen-fire agent is given (the authoring
 // session and the woken one): the basic primer, and the `example` tool below.
@@ -32,33 +43,27 @@ function runExample(input, { cwd, relative = (t) => t }) {
   return `${stdout}${stdout && stderr ? '\n' : ''}${stderr}\n(exit ${ran.status})`;
 }
 
-// How each option's events reach it. The same in substance: stored and
-// acknowledged before they run, a repeat delivered as Stripe does, a failure
-// kept and not run again by itself, the agent woken to decide.
-const jsDelivery = `How events reach the handler: the sandbox stores each webhook and acknowledges it (200) before it runs the handler, one event at a time. Stripe delivers each event at least once, and may deliver the same event more than once. A handler that throws is logged as failed for that event, and nothing runs it again by itself: the host wakes you to decide what to do (inspect, fix, replay it, or tell the user).`;
+// What each platform says about a failure, in general: the same in substance.
+const jsDelivery = 'A handler that throws is logged as failed for that event, and nothing runs it again by itself: the platform wakes you to decide what to do.';
+const lfDelivery = 'A run that fails is kept as failed with its error (`listen-fire runs`), and nothing runs it again by itself: the host wakes you to decide what to do.';
 
-const lfDelivery = `How events reach the program: \`listen-fire serve\` stores each Stripe delivery and acknowledges it (202) before it runs; a worker then runs it. A delivery whose Stripe event id has already been received is acknowledged as a duplicate and runs nothing. A run that fails, by \`fail(…)\` or by a connected system refusing or failing a call, is kept as failed with its error (\`listen-fire runs\`), and nothing runs it again by itself: the host wakes you to decide what to do (inspect, fix, run it again with \`listen-fire runs rerun <run-id>\`, or tell the user). A rerun runs the failed run again as its next attempt, on its own event and with the program as the project holds it now (so a fix takes effect), from the start. lf refuses it when the failed attempt already committed writes, and lists them; \`--force\` reruns it anyway, making those writes again. The host also runs \`listen-fire check\` every 30 seconds and wakes you when it finds new errors.`;
-
-const checkJs = 'Before you finish, check your work: test-run the handler on the example event and read what it did.';
-const checkLf = 'Before you finish, check your work: run `listen-fire check`, and a test run (test_run) on the example event, and read what it did.';
-const checkAgent = 'Check before you act: confirm what applies to this event before you send anything.';
+const checkJs = 'Before you finish, test the handler and read what it did.';
+const checkLf = 'Before you finish, run `listen-fire check` and a test run, and read what it did.';
+const checkAgent = 'Check before you act.';
+const quoted = (text) => text.split('\n').map((l) => `> ${l}`.trimEnd()).join('\n');
 
 /** The prompt a woken agent gets: the same for both options but for what
- *  kind of automation it maintains and how its events are delivered. */
+ *  kind of automation it maintains. */
 function wakeSystem(kind) {
   const what =
     kind === 'js'
-      ? 'Each automation is a JavaScript handler in a sandbox (handler.js), which the sandbox runs on every event, with no model involved.'
-      : 'Each automation is a listen-fire program (a .mvt file in this project), which `listen-fire serve` runs on every event, with no model involved.';
+      ? 'Each automation is a JavaScript handler (handler.js) that a sandbox runs on every webhook its endpoint receives, with no model involved.'
+      : 'Each automation is a listen-fire program (a .mvt file in this project), which `listen-fire serve` runs on every event it listens to, with no model involved.';
   return `You maintain the automations one of your users asked you for. ${what}
 
 The user asked for this one:
 
-> ${request}
-
-Our retry email:
-
-${retryEmail}
+${quoted(request)}
 
 ${kind === 'js' ? jsDelivery : lfDelivery}
 
@@ -69,4 +74,4 @@ ${environment}
 Finish with a short note on what you did.`;
 }
 
-module.exports = { request, retryEmail, environment, cheatsheet, lfReference, exampleTool, runExample, jsDelivery, lfDelivery, checkJs, checkLf, checkAgent, wakeSystem };
+module.exports = { request, retryEmail, environment, cheatsheet, lfReference, exampleTool, runExample, jsDelivery, lfDelivery, checkJs, checkLf, checkAgent, quoted, wakeSystem };

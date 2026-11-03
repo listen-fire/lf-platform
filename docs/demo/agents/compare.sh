@@ -28,8 +28,9 @@
 #   1. the 3rd, 8th and 17th payment delivered twice (Stripe's redelivery);
 #   2. the CRM answers one call about the 5th payment's customer 503 and one
 #      about the 15th's 429, each with Retry-After: 1 (the next call succeeds);
-#   3. the CRM renames `yearly` to `annual_plan` (its data and its tools'
-#      output schemas); 45 s later 5 more payments arrive, 2 on that plan.
+#   3. then 5 of day 2's payments, 2 of them on the yearly plan.
+# (Before 2026-11-03 the CRM also renamed `yearly` to `annual_plan` before day
+# 2; it was dropped because its only story was an agent woken after launch.)
 #
 # Every option has the same number of attempts (ATTEMPTS, default 3), each
 # from the same state and through the same stressors: JavaScript and
@@ -71,12 +72,13 @@
 #                                 events are the same: make_events.cjs is
 #                                 seeded). The result is a mixed recording,
 #                                 which build_data.cjs refuses.
-#   WRITING_ONLY                  only the listen-fire writing session of each
-#                                 attempt, then its check: no per-event agent,
-#                                 no JavaScript, no serving, no stressors, no
-#                                 wakes. Measures what writing the program
-#                                 costs; the result is not a recording
-#                                 (build_data.cjs refuses it).
+#   WRITING_ONLY                  only the writing sessions of each attempt:
+#                                 JavaScript's handler and listen-fire's
+#                                 program (then its check), no per-event agent,
+#                                 no serving, no stressors, no wakes. Measures
+#                                 what writing each costs; the result is not a
+#                                 recording (build_data.cjs refuses it).
+#                                 WRITING_ONLY=lf writes listen-fire's alone.
 #   REHEARSE_AGENT, REHEARSE_JS,  a rehearsal of the stressors with no
 #   REHEARSE_LF                   model call. REHEARSE_JS and REHEARSE_LF name a
 #                                 handler and a program that stand in for every
@@ -156,7 +158,7 @@ fi
 # What this directory holds, so a mix of recordings cannot pass for one.
 RECORDING="all three options, one run"
 [ -z "${ONLY_LF:-}" ] || RECORDING="listen-fire re-recorded alone (ONLY_LF)"
-[ -z "${WRITING_ONLY:-}" ] || RECORDING="listen-fire writing sessions only (WRITING_ONLY)"
+[ -z "${WRITING_ONLY:-}" ] || RECORDING="writing sessions only (WRITING_ONLY)"
 [ -z "${REHEARSE_AGENT:-}${REHEARSE_JS:-}${REHEARSE_LF:-}" ] || RECORDING="rehearsal, no model call"
 # The listen-fire reference the authoring and woken agents are given (prompts.cjs).
 LF_REFERENCE="$(node -e 'console.log(require(process.argv[1]).lfReference)' "$HERE/prompts.cjs")"
@@ -258,13 +260,13 @@ if [ "$SCENARIO" = attio ]; then crm_described='.credentials.crm'; else crm_desc
 jq -e "$crm_described" "$CAP/04_describe_systems.json" >/dev/null || { echo "describe_systems has no CRM"; exit 1; }
 
 # The stressors' plan: day 1's 20 payments (3 of them twice, a 503 before the
-# 5th and a 429 before the 15th), then the rename and 5 of day 2's payments.
+# 5th and a 429 before the 15th), then 5 of day 2's payments.
 crm_id() { node -e 'const {customers}=require(process.argv[1]);const e=require(process.argv[2]);console.log(customers.find((c)=>c.stripe.id===e.data.object.customer).crm.crm_id)' "$HERE/programs/customers.cjs" "$1"; }
-mkdir -p "$CAP/events_after_rename"
+mkdir -p "$CAP/events_day2"
 i=0
 for id in C-10533 C-10544 C-10549 C-10578 C-10555; do
   i=$((i + 1))
-  for f in "$WORK/day2/"*.json; do [ "$(crm_id "$f")" = "$id" ] && cp "$f" "$CAP/events_after_rename/$(printf '%02d' $i).json"; done
+  for f in "$WORK/day2/"*.json; do [ "$(crm_id "$f")" = "$id" ] && cp "$f" "$CAP/events_day2/$(printf '%02d' $i).json"; done
 done
 ITEMS="$WORK/items.json"
 {
@@ -278,13 +280,9 @@ ITEMS="$WORK/items.json"
     esac
     case $n in 3 | 8 | 17) jq -nc --argjson n $n --arg f "$f" '{payment: $n, kind: "duplicate", file: $f}' ;; esac
   done
-  for f in "$CAP/events_after_rename/"*.json; do
+  for f in "$CAP/events_day2/"*.json; do
     n=$((n + 1))
-    if [ $n = 21 ]; then
-      jq -nc --argjson n $n --arg f "$f" '{payment: $n, kind: "original", phase: "after rename", file: $f, renamePlan: {from: "yearly", to: "annual_plan"}}'
-    else
-      jq -nc --argjson n $n --arg f "$f" '{payment: $n, kind: "original", phase: "after rename", file: $f}'
-    fi
+    jq -nc --argjson n $n --arg f "$f" '{payment: $n, kind: "original", phase: "day 2", file: $f}'
   done
 } | jq -s . >"$ITEMS"
 cp "$ITEMS" "$CAP/plan_items.json"
@@ -296,7 +294,6 @@ stress() { # <mode> <url> <out dir> [extra config json]
     '{mode: $mode, url: $url, out: $out, secret: $secret, fakes: $fakes, crm: $crm, crmCalls: $calls, items: $items[0], renameWaitMs: 45000} + $extra' >"$3.config.json"
   ANTHROPIC_API_KEY="$ANTHROPIC_KEY" REHEARSE_WAKE="${REHEARSE_LF:+1}${REHEARSE_JS:+1}" node "$HERE/stress.cjs" "$3.config.json" | tee "$3.summary.txt"
 }
-rename_back() { curl -sf -XPOST "${CRM_URL%/mcp}/admin/rename-plan" -d '{"from":"annual_plan","to":"yearly"}' >/dev/null; }
 receiver() { # <log> <args…>: starts receivers.cjs, sets RECEIVER_PID and RECEIVER_BASE
   local log="$1"; shift
   ANTHROPIC_API_KEY="$ANTHROPIC_KEY" node "$HERE/receivers.cjs" "$@" >"$log" 2>&1 &
@@ -319,20 +316,20 @@ if [ -z "${WRITING_ONLY:-}" ] && { [ -n "${REHEARSE_AGENT:-}" ] || { [ -z "${REH
     receiver "$WORK/agent_receiver_$k.log" agent "$WORK/agent_memory_$k.json" "$CAP/agent/sessions_$k.jsonl" "$F" "$CRM_URL" "$CRM_TOKEN" "$STRIPE_SECRET"
     stress agent "$RECEIVER_BASE/stripe" "$CAP/agent/stress_$k"
     kill "$RECEIVER_PID"
-    rename_back
-    [ -f "$WORK/agent_memory_$k.json" ] && cp "$WORK/agent_memory_$k.json" "$CAP/agent/memory_$k.json"
+      [ -f "$WORK/agent_memory_$k.json" ] && cp "$WORK/agent_memory_$k.json" "$CAP/agent/memory_$k.json"
   done
 fi
 
 # 2. JavaScript.
 mkdir -p "$CAP/js"
-for k in $( [ -n "${ONLY_LF:-}${WRITING_ONLY:-}" ] || seq "$ATTEMPTS"); do
+for k in $( [ -n "${ONLY_LF:-}" ] || [ "${WRITING_ONLY:-}" = lf ] || seq "$ATTEMPTS"); do
   reset
   if [ -n "${REHEARSE_JS:-}" ]; then cp "$REHEARSE_JS" "$CAP/js/handler_$k.js"; echo "$REHEARSAL_SESSION" >"$CAP/js/attempt_$k.json"; else
     ANTHROPIC_API_KEY="$ANTHROPIC_KEY" node "$HERE/author_js.cjs" "$F" "$CRM_URL" "$CRM_TOKEN" "$EXAMPLE" "$CAP/js/handler_$k.js" "$CAP/js/attempt_$k.json" | tee "$CAP/js/attempt_${k}_summary.txt"
   fi
   [ -f "$CAP/js/handler_$k.js" ] || { echo "js attempt $k wrote no handler"; continue; }
   cp "$CAP/js/handler_$k.js" "$CAP/js/handler_${k}_authored.js"
+  [ -z "${WRITING_ONLY:-}" ] || continue
   reset
   live="$WORK/js_$k"
   mkdir -p "$live"
@@ -340,7 +337,6 @@ for k in $( [ -n "${ONLY_LF:-}${WRITING_ONLY:-}" ] || seq "$ATTEMPTS"); do
   stress js "$RECEIVER_BASE/stripe" "$CAP/js/stress_$k" "$(jq -nc --arg r "$RECEIVER_BASE" --arg h "$CAP/js/handler_$k.js" --arg s "$CAP/js/store_$k.jsonl" --arg l "$CAP/js/invocations_$k.jsonl" --arg u "$CRM_URL" --arg t "$CRM_TOKEN" \
     '{js: {receiver: $r, handlerFile: $h, storeFile: $s, logFile: $l, crmUrl: $u, crmToken: $t}}')"
   kill "$RECEIVER_PID"
-  rename_back
   [ -f "$live/kv.json" ] && cp "$live/kv.json" "$CAP/js/kv_$k.json"
 done
 
@@ -402,7 +398,6 @@ for k in $(seq "$ATTEMPTS"); do
   kill "$SERVE_PID"
   sleep 1
   sed -E -e $'s/\x1b\\[[0-9;?]*[A-Za-z]//g' -e "s#$real/##g" -e "s#$project/##g" "$log" >"$CAP/lf/stress_$k/serve.log"
-  rename_back
 done
 for k in $( [ -n "${ONLY_LF:-}${WRITING_ONLY:-}" ] || seq "$ATTEMPTS"); do [ -f "$CAP/js/handler_$k.js" ] && cp "$CAP/js/handler_$k.js" "$CAP/js/handler_${k}_final.js"; done
 unset ANTHROPIC_KEY

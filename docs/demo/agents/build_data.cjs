@@ -17,7 +17,8 @@
 //                      mcp: an MCP server with generic tools, every option over MCP;
 //                      attio: Attio, lf through @lf/attio, the others through its REST API
 //     stressors        { duplicated: [n…], transient: [{ n, status }], renamed:
-//                      { from, to, beforePayment, waitMs } }
+//                      { from, to, beforePayment, waitMs } (null in a recording
+//                      made since 2026-11-03, which has no rename) }
 //     payments[]       the 25 payments: n, phase ("day" | "after rename"),
 //                      eventId, email, company, plan (in the CRM when it was
 //                      paid), accountManager, expected ("retry email" | "slack"),
@@ -135,10 +136,11 @@ const payments = [...new Set(items.map((i) => i.payment))].map((n) => {
   const event = JSON.parse(fs.readFileSync(item.file, 'utf8'));
   const invoice = event.data.object;
   const customer = customers.find((x) => x.stripe.id === invoice.customer);
-  const after = n >= renamed.payment;
+  // A recording since 2026-11-03 has no rename (compare.sh dropped it).
+  const after = renamed ? n >= renamed.payment : false;
   return {
     n,
-    phase: after ? 'after rename' : 'day',
+    phase: renamed ? (after ? 'after rename' : 'day') : (item.phase ?? 'day'),
     eventId: event.id,
     email: invoice.customer_email,
     company: customer.crm.company,
@@ -153,7 +155,7 @@ const payments = [...new Set(items.map((i) => i.payment))].map((n) => {
 const stressors = {
   duplicated: payments.filter((p) => p.stressor === 'duplicated').map((p) => p.n),
   transient: items.filter((i) => i.failCrm).map((i) => ({ n: i.payment, status: i.failStatus })),
-  renamed: { ...renamed.renamePlan, beforePayment: renamed.payment, waitMs: 45000 },
+  renamed: renamed ? { ...renamed.renamePlan, beforePayment: renamed.payment, waitMs: 45000 } : null,
 };
 const paymentOf = (s) => {
   const text = s.kind === 'email' ? [].concat(s.to).join(' ') + String(s.body ?? '') : String(s.text ?? '');
@@ -225,8 +227,8 @@ function run(dir, perEvent) {
     };
   });
   const checkWakeIndex = records.findIndex((d) => d.kind === 'check wake');
-  const firstAfterRename = records.findIndex((d) => d.payment === renamed.payment);
-  return { rows, wakes, records, caughtBeforePayments: checkWakeIndex >= 0 && checkWakeIndex < firstAfterRename, check: checkWakeIndex >= 0 ? records[checkWakeIndex].check : null };
+  const firstAfterRename = renamed ? records.findIndex((d) => d.payment === renamed.payment) : -1;
+  return { rows, wakes, records, caughtBeforePayments: renamed !== undefined && checkWakeIndex >= 0 && checkWakeIndex < firstAfterRename, check: checkWakeIndex >= 0 ? records[checkWakeIndex].check : null };
 }
 
 /** `retriedBy`: who retried a transient CRM failure within the run, when one was. */
@@ -241,7 +243,7 @@ function byStressor(rows, extra = {}, retriedBy = 'the code itself') {
       const how = !ok ? 'lost' : x.failedFirst ? x.recoveredBy : failedCalls > 0 && x.crm.length > failedCalls ? `the call was retried by ${retriedBy}` : 'unaffected';
       return { n, status, result: ok ? 'recovered' : 'lost', how, outcome: x.outcome };
     }),
-    renamed: { ...extra, payments: rows.filter((x) => x.n >= renamed.payment).map((x) => ({ n: x.n, plan: payments[x.n - 1].plan, outcome: x.outcome, failedFirst: x.failedFirst, what: x.what.join('; ') })) },
+    renamed: !renamed ? null : { ...extra, payments: rows.filter((x) => x.n >= renamed.payment).map((x) => ({ n: x.n, plan: payments[x.n - 1].plan, outcome: x.outcome, failedFirst: x.failedFirst, what: x.what.join('; ') })) },
   };
 }
 const wentWrongOf = (rows) => rows.filter((x) => x.outcome !== 'correct' || x.what.length > 0 || x.failedFirst).map((x) => ({ n: x.n, outcome: x.outcome, failedFirst: x.failedFirst, recoveredBy: x.recoveredBy, what: x.what.join('; ') }));
@@ -561,7 +563,7 @@ if (problems.length > 0) throw new Error(`refusing to build data.js: ${problems.
 
 fs.writeFileSync(OUT, `window.DEMO=${JSON.stringify(data, null, 1)};\n`);
 const money = (x) => `$${x.toFixed(4)}`;
-const stress = (b) => `dup ${b.duplicated.map((d) => (d.actedTwice ? 'twice' : 'once')).join('/')}; transient ${b.transient.map((t) => `${t.status} ${t.result} (${t.how})`).join(' / ')}; rename ${b.renamed.caughtBeforePayments ? 'caught by the periodic check first; ' : ''}${b.renamed.payments.map((d) => `${d.n}:${d.plan}:${d.outcome}${d.failedFirst ? '(failed first)' : ''}`).join(', ')}`;
+const stress = (b) => `dup ${b.duplicated.map((d) => (d.actedTwice ? 'twice' : 'once')).join('/')}; transient ${b.transient.map((t) => `${t.status} ${t.result} (${t.how})`).join(' / ')}${!b.renamed ? '' : `; rename ${b.renamed.caughtBeforePayments ? 'caught by the periodic check first; ' : ''}${b.renamed.payments.map((d) => `${d.n}:${d.plan}:${d.outcome}${d.failedFirst ? '(failed first)' : ''}`).join(', ')}`}`;
 const m = (a) => (a ? `${a.measures.lines} lines, ${a.measures.decisionPoints} decisions, ${a.measures.handRolledCount} hand-rolled (${Object.entries(a.measures.handRolled).filter(([, v]) => v.present).map(([k]) => k).join(', ')}), ${a.measures.ioSites.count} I/O sites, credentials ${a.measures.credentials.held}` : 'none');
 const sec = (ms) => `${(ms / 1000).toFixed(0)} s`;
 const spendLine = (sp) => `write ${sp.write.modelCalls} calls ${money(sp.write.costUsd)} | wakes ${sp.wakes.count} (${sp.wakes.modelCalls} calls ${money(sp.wakes.costUsd)}) | per-event sessions ${sp.run.modelCalls} calls ${money(sp.run.costUsd)} | TOTAL ${sp.modelCalls} calls ${money(sp.costUsd)} | per 1,000 payments: all scaled ${money(sp.per1000.allScaled)}, writing once ${money(sp.per1000.writeOnce)}`;

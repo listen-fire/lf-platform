@@ -7,8 +7,10 @@
 //   rest   the CRM's REST API (attio_crm.cjs, Attio's API) through a plain
 //          HTTP helper that adds the base URL and the access token and keeps
 //          nothing between calls: the sandbox's `crm.request(method, path,
-//          body)`, the agent's `crm_request` tool. Both are given the API's
-//          reference (programs/attio_rest.md).
+//          body)`, the agent's `crm_request` tool. Since 2026-11-03 neither is
+//          handed the API's reference: they find Attio's docs with the web
+//          search every option has (web.cjs). `discovery` still answers
+//          programs/attio_rest.md, for a caller that asks for it.
 //
 // openCrm({ url, token, caller }) answers:
 //   sandboxDoc            the `crm` global, as the sandbox's prompt lists it
@@ -87,7 +89,7 @@ async function openRest({ url, token, caller }) {
   }
   const requestTool = {
     name: 'crm_request',
-    description: `Send one request to the CRM's REST API (Attio), with the workspace's access token. Answers the HTTP status, the headers that matter and the JSON body.\n\n${reference()}`,
+    description: "Send one request to Attio's REST API for the user's workspace, with its access token. Answers the HTTP status, the headers that matter and the JSON body.",
     input_schema: {
       type: 'object',
       properties: { method: { type: 'string', description: 'GET, POST, PATCH, …' }, path: { type: 'string', description: 'From /v2, e.g. /v2/objects/people/attributes' }, body: { type: 'object', description: 'The JSON body, for POST and PATCH.' } },
@@ -97,7 +99,7 @@ async function openRest({ url, token, caller }) {
   return {
     kind: 'rest',
     sandboxDoc:
-      "`crm`: the user's CRM, Attio, through its REST API. `await crm.request(method, path, body?)` sends one request (the base URL and the workspace's access token are added) and answers `{ status, headers, body }`, `body` parsed from JSON; it does not throw on an error status. The API's reference is the `crm_api_reference` tool.",
+      "`crm`: the user's Attio workspace. `await crm.request(method, path, body?)` sends one request to Attio's REST API (the base URL and the workspace's access token are added) and answers `{ status, headers, body }`, `body` parsed from JSON; it does not throw on an error status.",
     sandboxGlobal: (rec) => ({
       request: async (method, route, body) => {
         let answer;

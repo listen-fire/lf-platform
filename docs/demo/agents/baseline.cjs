@@ -1,14 +1,15 @@
 // The per-event agent: a fresh session (the same model as every other agent
-// here) for each event Stripe delivers, told what the user asked for, our
-// retry email, the operating environment every option is told
-// (programs/environment.txt), and the event as Stripe delivered it. Its tools
-// reach the same stand-ins the other options reach:
+// here) for each event Stripe delivers. Its system prompt is a general
+// assistant's (since 2026-11-03); its first message is what the user asked
+// for (with our retry email) and the event as Stripe delivered it. Its tools
+// reach the same stand-ins the other options reach, and the same web:
 //
 //   crm__<tool>       the CRM's MCP tools, as its server lists them (mcp), or
 //   crm_request       one request to the CRM's REST API (rest; crm_access.cjs)
 //   send_email        a new message from the billing mailbox (the fake Gmail's send API)
 //   post_to_slack     a message in a channel (the fake Slack's chat.postMessage)
 //   memory_get/_set/_list   a key-value memory kept across sessions (a JSON file)
+//   web_search, web_fetch   the web every option searches (web.cjs)
 //
 // receivers.cjs puts it behind a webhook endpoint (openAgent). Run directly,
 //   node baseline.cjs <fakes url> <crm url> <crm token> <out json> <event file>...
@@ -19,22 +20,27 @@ const path = require('path');
 const { session, PRICES } = require('./agent_tools.cjs');
 const { openCrm } = require('./crm_access.cjs');
 
-const { request, retryEmail: RETRY_EMAIL, environment: ENVIRONMENT, checkAgent } = require('./prompts.cjs');
+const { request, retryEmail: RETRY_EMAIL, environment: ENVIRONMENT, checkAgent, quoted } = require('./prompts.cjs');
 const { customers } = require('./programs/customers.cjs');
+const { webTools, runWeb } = require('./web.cjs');
 
-const SYSTEM = `You are an assistant for Ledgerline's team, with tools for their CRM, their billing mailbox and their Slack, and a memory that lasts between sessions. A while ago the user told you:
-
-> ${request}
-
-You are woken each time Stripe sends Ledgerline a webhook, with the event. Handle it as the user asked, with your tools.
-
-Our retry email:
-
-${RETRY_EMAIL}
+// A general assistant's prompt (since 2026-11-03): its tools and how it is
+// started. What the user asked for, and the event, are the first message.
+const SYSTEM = `You are an assistant for your user's team, with tools for their CRM (Attio), their billing mailbox (billing@ledgerline.io), their Slack and the web, and a memory that lasts between sessions. You are started each time one of their connected accounts sends a webhook, with its body, and act on it as your user has asked.
 
 ${ENVIRONMENT}
 
 ${checkAgent} Finish with one line saying what you did.`;
+/** The first message of a session: the user's standing request, then the webhook. */
+const userMessage = (event) => `Your user asked you:
+
+${quoted(request)}
+
+A webhook from Stripe:
+
+\`\`\`json
+${JSON.stringify(event, null, 2)}
+\`\`\``;
 
 async function json(url, init) {
   const answer = await fetch(url, init);
@@ -124,6 +130,7 @@ async function openAgent({ fakes: F, crmUrl, crmToken, memoryFile }) {
     { name: 'memory_get', description: 'Read a value from your memory, by key. Answers null when there is none.', input_schema: { type: 'object', properties: { key: { type: 'string' } }, required: ['key'] } },
     { name: 'memory_set', description: 'Keep a value in your memory under a key, for later sessions.', input_schema: { type: 'object', properties: { key: { type: 'string' }, value: { type: 'string' } }, required: ['key', 'value'] } },
     { name: 'memory_list', description: 'The keys in your memory, optionally only those starting with a prefix.', input_schema: { type: 'object', properties: { prefix: { type: 'string' } } } },
+    ...webTools,
   ];
   const handleTool = async (name, input) => {
     if (crmToolNames.has(name)) return crm.agentRun(name, input);
@@ -147,6 +154,8 @@ async function openAgent({ fakes: F, crmUrl, crmToken, memoryFile }) {
       return 'kept';
     }
     if (name === 'memory_list') return JSON.stringify(Object.keys(memory()).filter((k) => k.startsWith(String(input.prefix ?? ''))));
+    const web = runWeb(name, input);
+    if (web !== undefined) return web;
     throw new Error(`no tool ${name}`);
   };
   return {
@@ -154,7 +163,7 @@ async function openAgent({ fakes: F, crmUrl, crmToken, memoryFile }) {
     /** One event: the session, and what the fakes gained during it. */
     handle: async (event) => {
       const before = { outbox: new Set((await fakes.outbox()).map((m) => m.id)), slack: new Set((await fakes.slack()).map((m) => m.id)) };
-      const user = `Stripe webhook:\n\n\`\`\`json\n${JSON.stringify(event, null, 2)}\n\`\`\``;
+      const user = userMessage(event);
       const result = process.env.REHEARSE_AGENT ? await scriptedSession({ event, tools, handle: handleTool }) : await session({ system: SYSTEM, user, tools, handle: handleTool });
       const emails = (await fakes.outbox()).filter((m) => !before.outbox.has(m.id)).map((m) => ({ to: m.to, subject: m.subject, body: m.body }));
       const channels = await fakes.channels();
@@ -165,7 +174,7 @@ async function openAgent({ fakes: F, crmUrl, crmToken, memoryFile }) {
   };
 }
 
-module.exports = { openAgent, SYSTEM, PRICES };
+module.exports = { openAgent, SYSTEM, userMessage, PRICES };
 
 if (require.main === module) {
   const [F, crmUrl, crmToken, out, ...eventFiles] = process.argv.slice(2);
