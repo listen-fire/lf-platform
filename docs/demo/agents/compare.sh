@@ -151,8 +151,10 @@ fi
 RECORDING="all three options, one run"
 [ -z "${ONLY_LF:-}" ] || RECORDING="listen-fire re-recorded alone (ONLY_LF)"
 [ -z "${REHEARSE_AGENT:-}${REHEARSE_JS:-}${REHEARSE_LF:-}" ] || RECORDING="rehearsal, no model call"
-jq -n --arg version "$LF_VERSION" --arg commit "$COMMIT" --argjson branches "$BRANCHES" --arg scenario "$SCENARIO" --arg recording "$RECORDING" --argjson attempts "$ATTEMPTS" \
-  '{version: $version, commit: (if $commit == "" then null else $commit end), branches: $branches, scenario: $scenario, recording: $recording, attempts: $attempts}' >"$CAP/00_lf.json"
+# The listen-fire reference the authoring and woken agents are given (prompts.cjs).
+LF_REFERENCE="$(node -e 'console.log(require(process.argv[1]).lfReference)' "$HERE/prompts.cjs")"
+jq -n --arg version "$LF_VERSION" --arg commit "$COMMIT" --argjson branches "$BRANCHES" --arg scenario "$SCENARIO" --arg recording "$RECORDING" --argjson attempts "$ATTEMPTS" --arg reference "$LF_REFERENCE" \
+  '{version: $version, commit: (if $commit == "" then null else $commit end), branches: $branches, scenario: $scenario, recording: $recording, attempts: $attempts, reference: $reference}' >"$CAP/00_lf.json"
 cp "$HERE/programs/request.txt" "$CAP/01_request.txt"
 cp "$HERE/programs/retry_email.txt" "$CAP/02_retry_email.txt"
 

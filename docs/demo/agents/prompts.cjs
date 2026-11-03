@@ -3,13 +3,34 @@
 // the two can be the same.
 const fs = require('fs');
 const path = require('path');
+const { spawnSync } = require('child_process');
 
 const read = (f) => fs.readFileSync(path.join(__dirname, 'programs', f), 'utf8').trim();
 
 const request = read('request.txt');
 const retryEmail = read('retry_email.txt');
 const environment = read('environment.txt');
-const cheatsheet = read('lf_cheatsheet.md');
+// The listen-fire reference every listen-fire agent is given (the authoring
+// session and the woken one): the basic primer, and the `example` tool below.
+// `lfReference` is recorded with the captures so a recording says which it had.
+const cheatsheet = read('lf_primer_basic.md');
+const lfReference = 'basic+lookup';
+const exampleTool = {
+  name: 'example',
+  description: "Checked micro examples of listen-fire for what you describe, e.g. 'create or update by id'. Use it whenever you are unsure how to write something.",
+  input_schema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+};
+/** `<LF_BIN> example <query words>` in `cwd`: its stdout, and `(exit N)` after
+ *  any stderr when it exits non-zero. `relative` makes the project's paths relative. */
+function runExample(input, { cwd, relative = (t) => t }) {
+  const words = String(input.query ?? '').split(/\s+/).filter(Boolean);
+  const ran = spawnSync(process.env.LF_BIN || 'listen-fire', ['example', ...words], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 120_000, maxBuffer: 64 * 1024 * 1024 });
+  const clean = (t) => relative(String(t ?? '').replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '')).trimEnd();
+  const stdout = clean(ran.stdout);
+  if (ran.status === 0) return stdout;
+  const stderr = clean(ran.stderr);
+  return `${stdout}${stdout && stderr ? '\n' : ''}${stderr}\n(exit ${ran.status})`;
+}
 
 // How each option's events reach it. The same in substance: stored and
 // acknowledged before they run, a repeat delivered as Stripe does, a failure
@@ -48,4 +69,4 @@ ${environment}
 Finish with a short note on what you did.`;
 }
 
-module.exports = { request, retryEmail, environment, cheatsheet, jsDelivery, lfDelivery, checkJs, checkLf, checkAgent, wakeSystem };
+module.exports = { request, retryEmail, environment, cheatsheet, lfReference, exampleTool, runExample, jsDelivery, lfDelivery, checkJs, checkLf, checkAgent, wakeSystem };

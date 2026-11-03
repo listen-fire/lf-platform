@@ -119,8 +119,11 @@ or acts.
   the CRM's tools (or read its API reference) and test-run the handler.
 - **listen-fire** (`author_lf.cjs`): the model gets the connected systems up
   front (`describe_systems`: `listen-fire catalog`'s text, every connection
-  the project holds), the listen-fire cheat sheet (`programs/lf_cheatsheet.md`),
-  the handbook, `listen-fire check` and a test run on the example event. It
+  the project holds), the listen-fire reference (the basic primer,
+  `programs/lf_primer_basic.md`, and an `example` tool that runs
+  `listen-fire example <words>` for checked micro examples; the woken agent
+  gets the same two; `prompts.cjs` is their one source and `00_lf.json` says
+  `reference: "basic+lookup"`), the handbook, `listen-fire check` and a test run on the example event. It
   gets no builder skill, as JavaScript gets no equivalent. The woken agent
   reads a run as `listen-fire runs show` prints it (text).
   - listen-fire 0.14 has no dry run of an event, so the test run is real

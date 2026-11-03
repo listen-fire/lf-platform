@@ -6,7 +6,10 @@
 // The shape of window.DEMO:
 //
 //   request, retryEmail, environment   what every option is told (prompts.cjs)
-//   cheatsheet       the listen-fire cheat sheet the listen-fire author is given
+//   cheatsheet       the listen-fire reference text the listen-fire author and the woken
+//                    agent are given (programs/lf_primer_basic.md), beside the `example`
+//                    tool
+//   listenFireReference  which reference that was ("basic+lookup"; also in each 00_lf.json)
 //   validatedUnder   "<listen-fire version> (<branch>@<commit>)", read from the captures' 00_lf.json
 //                    (both scenarios must agree)
 //   scenarios        { mcp, attio }, the same three options in each, like for like:
@@ -509,6 +512,7 @@ const problems = [
   ...(lfAttempts[0] && !lfAttempts[0].finalCheckOk ? ['the used listen-fire attempt does not check clean'] : []),
   ...(lfAttempts[0]?.ran ? lfAttempts[0].ran.rows.filter((x) => x.modelCalls > 0).map((x) => `listen-fire payment ${x.n} made a model call`) : []),
   ...(lf.scenario !== name ? [`the capture says scenario ${lf.scenario}`] : []),
+  ...(lf.reference !== prompts.lfReference ? [`the capture's listen-fire reference is ${lf.reference ?? 'unrecorded'}, this harness gives ${prompts.lfReference}`] : []),
   ...(lf.recording !== 'all three options, one run' && !(process.env.ALLOW_REHEARSAL === '1' && lf.recording === 'rehearsal, no model call') ? [`not one run of all three options (${lf.recording ?? 'a recording from before compare.sh said what it held'})`] : []),
   ...[['agent', agentAttempts], ['js', jsAttempts], ['lf', lfAttempts]].filter(([, list]) => list.length !== EXPECTED_ATTEMPTS).map(([kind, list]) => `${kind} has ${list.length} attempts, expected ${EXPECTED_ATTEMPTS}`),
 ].map((x) => `${name}: ${x}`);
@@ -540,6 +544,7 @@ const data = {
   environment: prompts.environment,
   cheatsheet: prompts.cheatsheet,
   validatedUnder: validatedUnder[0],
+  listenFireReference: prompts.lfReference,
   recording: [...new Set(SCENARIOS.map((name) => built[name].lf.recording))].join(' / '),
   scenarios: Object.fromEntries(SCENARIOS.map((name) => [name, built[name].data])),
   labels: {

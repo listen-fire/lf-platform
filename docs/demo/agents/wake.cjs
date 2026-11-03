@@ -20,7 +20,8 @@
 //                                  again, now, as its next attempt (refused when
 //                                  the failed attempt committed writes, unless
 //                                  force, which makes them again)
-//               describe_systems, handbook_search, handbook_read
+//               describe_systems, handbook_search, handbook_read,
+//               example            `listen-fire example <words>` (prompts.cjs)
 //
 // wake() answers the session (every block, tool call, usage, cost) with what it
 // did: replays (js) or reruns (lf), messages to the user, and whether it
@@ -34,7 +35,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { session, PRICES } = require('./agent_tools.cjs');
-const { wakeSystem } = require('./prompts.cjs');
+const { wakeSystem, exampleTool, runExample } = require('./prompts.cjs');
 
 function lfRunner(project) {
   const real = fs.realpathSync(project);
@@ -115,6 +116,7 @@ async function wake({ kind, reason, js, lf }) {
       { name: 'describe_systems', description: 'Every system this project is connected to, as listen-fire describes it (`listen-fire catalog`).', input_schema: { type: 'object', properties: {} } },
       { name: 'handbook_search', description: "Search the language's handbook.", input_schema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
       { name: 'handbook_read', description: 'Read the handbook: "index", a chapter, or chapter#section.', input_schema: { type: 'object', properties: { route: { type: 'string' } }, required: ['route'] } },
+      exampleTool,
       tell,
     ];
     handle = async (name, input) => {
@@ -145,6 +147,8 @@ async function wake({ kind, reason, js, lf }) {
           return lf.handbook.search(String(input.query));
         case 'handbook_read':
           return String(input.route) === 'index' ? lf.handbook.index() : lf.handbook.read(String(input.route));
+        case 'example':
+          return runExample(input, { cwd: lf.project, relative: (t) => t.split(`${fs.realpathSync(lf.project)}/`).join('').split(`${lf.project}/`).join('') });
         case 'tell_user':
           actions.toldUser.push(String(input.message));
           return 'sent';
@@ -166,7 +170,7 @@ async function scripted({ kind, reason, handle }) {
   const plan =
     kind === 'js'
       ? [['read_handler', {}], ...(eventId ? [['sandbox_log', { event_id: eventId }]] : [])]
-      : [['describe_systems', {}], ['lf_check', {}], ...(runId ? [['lf_runs_show', { run_id: runId }]] : [])];
+      : [['describe_systems', {}], ['example', { query: 'create or update by id' }], ['lf_check', {}], ...(runId ? [['lf_runs_show', { run_id: runId }]] : [])];
   const steps = [];
   for (const [name, input] of plan) {
     let output;

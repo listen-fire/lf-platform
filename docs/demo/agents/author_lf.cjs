@@ -12,6 +12,7 @@
 //                     existed: every connection the project holds, as
 //                     listen-fire describes it (the CRM's from its MCP tools)
 //   lf_catalog        `listen-fire catalog` now, as printed (the same text)
+//   example           `listen-fire example <words>`: checked micro examples
 //   read_program      movements/payment_failed.mvt as it stands
 //   write_program     replace it
 //   lf_check          `listen-fire check`, as printed
@@ -35,7 +36,7 @@ const [project, exampleFile, describeFile, out] = process.argv.slice(2);
 const LF_BIN = process.env.LF_BIN || 'listen-fire';
 const LF_SRC = process.env.LF_SRC || path.join(__dirname, '../../../../listen-fire');
 const PROGRAM = 'movements/payment_failed.mvt';
-const { request, retryEmail, environment, cheatsheet, lfDelivery, checkLf } = require('./prompts.cjs');
+const { request, retryEmail, environment, cheatsheet, lfDelivery, checkLf, exampleTool, runExample } = require('./prompts.cjs');
 const describeSystems = fs.readFileSync(describeFile, 'utf8').trim();
 const example = JSON.parse(fs.readFileSync(exampleFile, 'utf8'));
 const programPath = path.join(project, PROGRAM);
@@ -114,6 +115,7 @@ async function main() {
       input_schema: { type: 'object', properties: { route: { type: 'string' } }, required: ['route'] },
     },
     { name: 'lf_catalog', description: 'Run `listen-fire catalog`: the catalog the program is checked against (each connection the project holds, its types and fields).', input_schema: { type: 'object', properties: {} } },
+    exampleTool,
     { name: 'read_program', description: `${PROGRAM} as it stands.`, input_schema: { type: 'object', properties: {} } },
     { name: 'write_program', description: `Replace ${PROGRAM} with this source, whole.`, input_schema: { type: 'object', properties: { source: { type: 'string' } }, required: ['source'] } },
     { name: 'lf_check', description: 'Run `listen-fire check`: every diagnostic the program has.', input_schema: { type: 'object', properties: {} } },
@@ -134,6 +136,8 @@ async function main() {
         return String(input.route) === 'index' ? handbook.index() : handbook.read(String(input.route));
       case 'lf_catalog':
         return lf(['catalog']);
+      case 'example':
+        return runExample(input, { cwd: project, relative });
       case 'read_program':
         return fs.existsSync(programPath) ? fs.readFileSync(programPath, 'utf8') : `(${PROGRAM} does not exist yet)`;
       case 'write_program':
@@ -148,6 +152,14 @@ async function main() {
         throw new Error(`no tool ${name}`);
     }
   };
+  // PROBE_ONLY: no model call. The example tool is called once through the
+  // handler, and the prompt and tools are written out, to prove the plumbing.
+  if (process.env.PROBE_ONLY) {
+    const probe = await handle('example', { query: 'create or update by id' });
+    console.log(`example probe (${probe.length} chars): ${probe.split('\n')[0]}`);
+    fs.writeFileSync(out, `${JSON.stringify({ system: SYSTEM, user: request, tools, probe }, null, 1)}\n`);
+    return;
+  }
   const result = await session({ system: SYSTEM, user: request, tools, handle, maxCalls: 60 });
   const source = fs.existsSync(programPath) ? fs.readFileSync(programPath, 'utf8') : null;
   fs.writeFileSync(out, `${JSON.stringify({ system: SYSTEM, user: request, tools: tools.map((t) => ({ name: t.name, description: t.description })), prices: PRICES, source, ...result }, null, 1)}\n`);
