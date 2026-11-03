@@ -110,7 +110,7 @@ async function runOne(crm: Crm, mode: Mode): Promise<Record<string, number>> {
     const start = process.hrtime.bigint();
     const adapter = adapterFor(round);
     const entries = await adapter.listEntryPoints();
-    const first = entries.find((e) => e.readable && e.fires !== true);
+    const first = entries.find((e) => e.readable);
     if (first !== undefined) {
       await adapter.describe(first.typeId);
       const found = await adapter.getRelated({ position: meta, fieldId: first.collectionName ?? first.displayName, direction: 'outgoing', limit: 3 });

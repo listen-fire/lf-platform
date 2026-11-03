@@ -5,7 +5,7 @@ import { hostedDocumentStore } from '../services/translation_graph/engine/files/
 import { randomUUID } from 'node:crypto';
 
 import { z } from 'zod';
-import { fileDescriptorOf, PROTOCOL_VERSION } from 'engine-contracts';
+import { fileDescriptorOf, PROTOCOL_VERSION, type Adapter } from 'engine-contracts';
 import { canonicalJson } from 'engine-contracts/conformance';
 
 import type { TeamId } from '../generated/kysely/core/Team';
@@ -616,9 +616,11 @@ async function checkSubscriptions(input: {
     report.skip('removeEventSubscription', 'not listed in the manifest methods');
     return;
   }
-  const remove = adapter.removeEventSubscription.bind(adapter);
+  // The remote adapter's own type still takes only 0.12's removal input; the
+  // engine contract's takes an edge's, which is what the wire carries.
+  const contract: Adapter = adapter;
   await report.run('removeEventSubscription', async () => {
-    await remove({ edge, callbackUrl: host.callbackUrl, ...(externalId !== undefined ? { externalId } : {}) });
+    await contract.removeEventSubscription?.({ edge, callbackUrl: host.callbackUrl, ...(externalId !== undefined ? { externalId } : {}) });
     return 'removed';
   });
 }
@@ -639,9 +641,7 @@ async function checkDelivery(input: {
   } else {
     const preprocessInbound = adapter.preprocessInbound.bind(adapter);
     await report.run('preprocessInbound', async () => {
-      // listen-fire 0.13.x types RemoteAdapter.preprocessInbound's answer as
-      // 0.12's (`events` only), though the wire carries `arrivals`; read the
-      // answer as the wire sends it until a later release fixes the type.
+      // A remote module's answer is read as the wire sends it.
       const answer: unknown = await preprocessInbound({ raw: sampleDelivery });
       const arrivals = DeliveryAnswer.parse(answer).arrivals.length;
       return `${arrivals} arrival${arrivals === 1 ? '' : 's'}`;

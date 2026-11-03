@@ -11658,7 +11658,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 supportedTriggers: string[];
                 webhookEventTypeId?: string | undefined;
                 kind?: "core" | "adapter" | "plugin" | undefined;
-                slot?: "models" | "files" | "store" | "judge" | "limiter" | "loopGuard" | "browser" | "wake" | "ocr" | "secrets" | "movements" | undefined;
+                slot?: "models" | "files" | "store" | "judge" | "limiter" | "browser" | "wake" | "ocr" | "secrets" | "movements" | undefined;
                 settings?: {
                     name: string;
                     label?: string | undefined;
@@ -11856,7 +11856,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     supportedTriggers: string[];
                     webhookEventTypeId?: string | undefined;
                     kind?: "core" | "adapter" | "plugin" | undefined;
-                    slot?: "models" | "files" | "store" | "judge" | "limiter" | "loopGuard" | "browser" | "wake" | "ocr" | "secrets" | "movements" | undefined;
+                    slot?: "models" | "files" | "store" | "judge" | "limiter" | "browser" | "wake" | "ocr" | "secrets" | "movements" | undefined;
                     settings?: {
                         name: string;
                         label?: string | undefined;
@@ -12039,7 +12039,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     supportedTriggers: string[];
                     webhookEventTypeId?: string | undefined;
                     kind?: "core" | "adapter" | "plugin" | undefined;
-                    slot?: "models" | "files" | "store" | "judge" | "limiter" | "loopGuard" | "browser" | "wake" | "ocr" | "secrets" | "movements" | undefined;
+                    slot?: "models" | "files" | "store" | "judge" | "limiter" | "browser" | "wake" | "ocr" | "secrets" | "movements" | undefined;
                     settings?: {
                         name: string;
                         label?: string | undefined;
