@@ -279,7 +279,7 @@ describe('a map field holding an extract(…) answer reads back as its list of r
         '    total = reduce(x.entries, (acc, e) => "${acc}${e.name}", "")',
         '    grouped = List.groupBy(x.entries, (e) => e.name)',
         '    keyed = List.keyBy(x.entries, (e) => e.name)',
-        '    write crm-[:companies]-> { name: "${count(kept)}|${total}|${count(grouped[first(x.entries).name])}|${keyed[first(x.entries).name].name}" }',
+        '    write crm-[:companies]-> { name: "${count(kept)}|${total}|${count(grouped[first(x.entries)?.name])}|${keyed[first(x.entries)?.name]?.name}" }',
         '  })',
       ]),
     ).toEqual(['0|Acme|1|Acme', '1|Beta|1|Beta']);
@@ -289,7 +289,7 @@ describe('a map field holding an extract(…) answer reads back as its list of r
     expect(
       await names([
         '  map(results, (x) => {',
-        '    write crm-[:companies]-> { name: "${count(x.entries)}|${first(x.entries).name}|${x.entries[0].name}" }',
+        '    write crm-[:companies]-> { name: "${count(x.entries)}|${first(x.entries)?.name}|${x.entries[0]?.name}" }',
         '  })',
       ]),
     ).toEqual(['1|Acme|Acme', '1|Beta|Beta']);

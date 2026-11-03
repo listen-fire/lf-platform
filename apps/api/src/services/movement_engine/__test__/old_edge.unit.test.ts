@@ -86,7 +86,7 @@ jest.mock('../../../lib/prompts/execute', () => ({
 import { resumeMovement, runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { type ParkSink } from '@listen-fire/legacy-engine/services/movement_engine/run';
 
-import { LANGUAGE_VERSION, fromCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
+import { LANGUAGE_VERSION, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import {
@@ -264,7 +264,7 @@ function runOn(
       ...body,
       '}',
     ].join('\n'),
-    fromCatalogSnapshot(catalog),
+    catalog,
   );
   const input = {
     source,

@@ -337,7 +337,7 @@ describe('a plugin called by position on the Rust engine', () => {
     ],
   ])('runs a plugin call that is %s', async (_what, lines) => {
     const calls = await run(
-      [...EXTRACT_COMPANIES, ...lines, '  t = more[0].summary'],
+      [...EXTRACT_COMPANIES, ...lines, '  t = more[0]?.summary'],
       { research: { data: { summary: 'Payments.' } } },
       { replies: [COMPANIES_FOUND] },
     );

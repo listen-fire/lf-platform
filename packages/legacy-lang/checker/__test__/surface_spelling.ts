@@ -34,9 +34,14 @@ const isRespelling = (d: Diagnostic): boolean => d.code.startsWith('MOV_V5_');
 const PREVIOUS_RELEASE: LanguageVersion = '0.12.0';
 
 /** The installed release's respellings of a program written for the line
- *  before it. Each is a fix `listen-fire upgrade` applies. */
+ *  before it. Each is a fix `listen-fire upgrade` applies: since 0.14 that
+ *  includes `?.` for a field read through a value that may be missing, the
+ *  one MOV_ABSENT_REQUIRED fix marked safe (it runs exactly as `.` ran
+ *  before). A fallback the fix would choose for a write is never applied. */
 const isReleaseRespelling = (d: ReleaseDiagnostic): boolean =>
-  d.code.startsWith('MOV_V5_') || d.code === 'MOV_LISTEN_SETTINGS_RETIRED';
+  d.code.startsWith('MOV_V5_') ||
+  d.code === 'MOV_LISTEN_SETTINGS_RETIRED' ||
+  (d.code === 'MOV_ABSENT_REQUIRED' && d.fix?.safe === true);
 
 const isSnapshot = (catalog: Catalog | CatalogSnapshot): catalog is CatalogSnapshot =>
   !('instantiate' in catalog && typeof catalog.instantiate === 'function');

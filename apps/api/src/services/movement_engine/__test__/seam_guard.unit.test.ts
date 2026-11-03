@@ -1150,7 +1150,7 @@ describe('every family crosses as JSON', () => {
         '  co = match crm-[:companies]-> { unique by (FUZZY `name`)',
         '    name: "Acme"',
         '  }',
-        '  write crm-[:notes]-> { title: "${ai(m.`subject`)} ${coalesce(page, "")} ${coalesce(first(found).summary, "")}" }',
+        '  write crm-[:notes]-> { title: "${ai(m.`subject`)} ${coalesce(page, "")} ${coalesce(first(found)?.summary, "")}" }',
       ],
       {
         crm: fakeCrm({

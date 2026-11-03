@@ -3,7 +3,9 @@
 // let it through and the call RAN: the record arrived where a number was typed
 // (and a sum over it was NaN, written without a word). That is why the refusal lands from
 // 0.12 only, with an upgrade warning before it — the frozen
-// behaviour is pinned here, and version 5 is refused at check.
+// behaviour is pinned here, and the release pin is refused at check. Since
+// 0.15 `coalesce` answers the union of its arguments (a record or a number),
+// so the refusal is the argument's type itself.
 
 import { LANGUAGE_VERSION, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import type { Adapter, RuntimeCapabilities, WriteInput } from 'movement-engine/public/adapter';
@@ -125,7 +127,7 @@ describe('a value that may be a record, handed to a <number> parameter', () => {
     expect(kg.creates.find((c) => c.fields.payload !== undefined)?.fields.payload).toEqual({ y: Number.NaN });
   });
 
-  it('is refused at check under 0.12', async () => {
-    await expect(runUnder(LANGUAGE_VERSION)).rejects.toThrow(/MOV_CALL_ARG_MAYBE_RECORD/);
+  it('is refused at check under the release pin', async () => {
+    await expect(runUnder(LANGUAGE_VERSION)).rejects.toThrow(/MOV_CALL_ARG_TYPE \(line \d+\): 'f' expects number .* graph\.company handle/);
   });
 });

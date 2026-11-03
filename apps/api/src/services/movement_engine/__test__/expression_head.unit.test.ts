@@ -6,14 +6,11 @@
 // drift apart — and hands the value to the walk that already knows what to do
 // with a value holding records.
 //
-// Laziness is unchanged by it: a deferred head evaluates its root at the READ,
-// out of the scope the walk captured, which is the moment the rest of the walk
-// happens too. That is what lets a parked run resume one: the recipe travels,
-// the answer does not.
-//
 // What is pinned here: the three shapes run; the inline form writes exactly
-// what the bound form writes; a lazy head with an expression root defers,
-// serialises, and resumes; and the head's own bracket applies off each root.
+// what the bound form writes; a node entry's head with an expression root
+// reads the records it picks; and the head's own bracket applies off each
+// root. (A `lazy` head deferred its root to the read until 0.14 retired
+// `lazy`.)
 
 // ── Jest module workarounds (mirrors run.unit.test.ts) ──────────────────────
 
@@ -379,26 +376,17 @@ describe('a block head rooted at an expression', () => {
   });
 });
 
-describe('a deferred head with an expression root', () => {
-  it('defers, and reads the same records the eager form reads', async () => {
-    const lazyWrites = makeFakeAdapter('attio');
-    const eagerWrites = makeFakeAdapter('attio');
-
-    const LAZY = [
-      '  d = node { tags: lazy AT(both, 1)-[t:tag]-> }',
-      '  d-[t:tags]-> {',
-      WRITE_TAG,
-    ].join('\n');
-    const EAGER = [
+describe("a node entry's head with an expression root", () => {
+  it('reads the records the expression picks', async () => {
+    const writes = makeFakeAdapter('attio');
+    const ENTRY = [
       '  d = node { tags: AT(both, 1)-[t:tag]-> }',
       '  d-[t:tags]-> {',
       WRITE_TAG,
     ].join('\n');
 
-    await run(TWO_NODES + LAZY, { attio: lazyWrites.adapter });
-    await run(TWO_NODES + EAGER, { attio: eagerWrites.adapter });
+    await run(TWO_NODES + ENTRY, { attio: writes.adapter });
 
-    expect(lazyWrites.creates.map((w) => w.fields.name)).toEqual(['B']);
-    expect(lazyWrites.creates).toEqual(eagerWrites.creates);
+    expect(writes.creates.map((w) => w.fields.name)).toEqual(['B']);
   });
 });

@@ -260,8 +260,9 @@ describe('TEXT.PAIRS over a record the run holds', () => {
         '  write deduped-[:entries]-> { unique by (`name`)',
         '    name: "Beta"',
         '  }',
-        '  entries = deduped-[e:entries]-> { return e }',
+        '  entries = deduped-[e:entries ORDER BY e.name]-> { return e }',
         '  top = first(entries)',
+        '  if (!exists(top)) { fail("no entry") }',
         '  write crm-[:companies]-> { name: Text.pairs(top, "; ") }',
       ]),
     ).resolves.toEqual(['name=Acme; stage=; raised=5; hot=false']);

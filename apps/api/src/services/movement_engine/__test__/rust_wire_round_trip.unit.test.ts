@@ -230,7 +230,7 @@ describe('own `__proto__` keys on the wire', () => {
     });
     expect(ai.asked).toHaveLength(1);
     const extraction = await run({
-      source: program(...ONE_COMPANY, '  fail("${found.name}")'),
+      source: program(...ONE_COMPANY, '  fail("${found?.name}")'),
       replies: [JSON.parse('{"record":{"name":{"value":"Acme","evidence":{"item":0,"quote":"q"}},"__proto__":{"x":1}}}')],
     });
     expect(extraction.asked).toHaveLength(1);
@@ -352,7 +352,7 @@ describe('lone surrogates on the wire', () => {
     const traced = result.trace.find((entry) => Reflect.get(entry, 'kind') === 'ai');
     expect(JSON.stringify(traced)).toEqual(expect.stringContaining(`${'p'.repeat(299)}😀…`));
     const extraction = await run({
-      source: program(...ONE_COMPANY, '  fail("${found.name} ${Text.length(found.name)}")'),
+      source: program(...ONE_COMPANY, '  if (!exists(found)) { fail("none") }', '  fail("${found.name} ${Text.length(found.name)}")'),
       replies: [JSON.parse(`{"record":{"name":{"value":"${'n'.repeat(199)}😀\\udc00","evidence":{"item":0,"quote":"q"}}}}`)],
     });
     // Read in one call, the lone half as U+FFFD: 201 characters.

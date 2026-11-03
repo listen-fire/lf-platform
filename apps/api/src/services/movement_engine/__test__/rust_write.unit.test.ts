@@ -7,7 +7,6 @@
 
 import {
   LANGUAGE_VERSION,
-  fromCatalogSnapshot,
   mockCatalogSnapshot,
   type InstanceSchema,
   type LanguageVersion,
@@ -302,7 +301,7 @@ async function runOn(c: Case): Promise<Outcome> {
     source: spelledFor(
       LANGUAGE_VERSION,
       PRELUDE + c.source,
-      fromCatalogSnapshot(catalog),
+      catalog,
     ),
     event: c.event,
     teamId: TEAM_ID,
@@ -1146,27 +1145,6 @@ describe('the graphs a run builds, in the Rust engine', () => {
     });
   });
 
-  it('keeps a lazy walk and runs it at every read: an entry walked by a block, a binding read for a field and for EXISTS', async () => {
-    const source = program([
-      '  held = node { cos: lazy crm-[c:companies]->, names: lazy crm-[c:companies]-> node { label: c.`name` } }',
-      '  held-[c:cos]-> {',
-      '    write crm-[:notes]-> { body: c.`name` }',
-      '  }',
-      '  held-[n:names]-> {',
-      '    write crm-[:notes]-> { body: n.`label` }',
-      '  }',
-      '  cos = lazy crm-[c:companies]->',
-      '  if EXISTS(cos) {',
-      '    write crm-[:companies]-> { name: JOIN(cos.`name`, ", ") }',
-      '  }',
-    ]);
-    await onRust({
-      source,
-      event: webhook({ subject: 'Acme' }),
-      attio: { landings: { 'co-1': { name: 'Acme' }, 'co-2': { name: 'Globex' } } },
-    });
-  });
-
   it('fails a target WHERE and an edge the node lacks at the check; a bare name in a hop WHERE over landings runs', async () => {
     // The checker refuses the first four (MOV_TARGET_WHERE_LOCAL,
     // MOV_NODE_EDGE_UNDECLARED): each ends at its check.
@@ -1555,7 +1533,7 @@ describe('the cost cap in the Rust engine', () => {
     // Key for key, in order.
     expect(JSON.stringify(rust.suspensions[0]?.state)).toMatchSnapshot();
     expect(rust.suspensions[0]?.state).toMatchObject({
-      version: 3,
+      version: 4,
       address: 's2.b0.s0',
       bindingName: null,
       suspended: true,
@@ -1578,7 +1556,7 @@ describe('the cost cap in the Rust engine', () => {
     });
   });
 
-  it('runs a capped run that could suspend inside a call or holding a kept walk', async () => {
+  it('runs a capped run that could suspend inside a call', async () => {
     const callee = [
       'movement save(t: <text>) {',
       '  write crm-[:companies]-> { unique by (`name`) name: t }',
@@ -1588,15 +1566,6 @@ describe('the cost cap in the Rust engine', () => {
       {
         source: `${callee}\n${['movement m(msg: <inbox-[:message]->>) {', '  save(t: msg.`subject`)', '}'].join('\n')}`,
         movementName: 'm',
-        costCapMicrodollars: 1_000,
-      },
-      {
-        source: [
-          'movement m(msg: <inbox-[:message]->>) {',
-          '  cos = lazy crm-[c:companies]->',
-          '  write crm-[:companies]-> { name: JOIN(cos.`name`, ", ") }',
-          '}',
-        ].join('\n'),
         costCapMicrodollars: 1_000,
       },
     ]) {

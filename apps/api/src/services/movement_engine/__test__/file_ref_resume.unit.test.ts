@@ -371,9 +371,11 @@ describe('a file bound before an ordinary timer park', () => {
   const source = [
     'function intake(m: <inbox-[:message]->>) {',
     '  files = List.from(m-[:files]->.data)',
+    // Parked to show the file's descriptor inside a list; since 0.15 a member
+    // of it is a file or a text, so the file is read from `files`.
     '  content = [m.`subject`, ...files]',
     '  await sleep(1h)',
-    '  write crm-[:companies]-> { name: coalesce(File.read(content[1]), "unread"), summary: coalesce(File.read(only(files)), "unread") }',
+    '  write crm-[:companies]-> { name: coalesce(File.read(only(files)), "unread"), summary: coalesce(File.read(only(files)), "unread") }',
     '}',
   ].join('\n');
 
@@ -456,10 +458,9 @@ describe('a file bound before a cost-cap pause inside a MAP member', () => {
   const source = [
     'function intake(m: <inbox-[:message]->>) {',
     '  files = List.from(m-[:files]->.data)',
-    '  content = [m.`subject`, ...files]',
     '  out = map(["a"], (u) => {',
     '    page = fetch_url(u)',
-    '    return coalesce(File.read(content[1]), "unread")',
+    '    return coalesce(File.read(only(files)), "unread")',
     '  })',
     '  write crm-[:companies]-> { name: Text.join(out, ",") }',
     '}',

@@ -116,7 +116,7 @@ function makeFakeAdapter(
     resources?: Resource[];
     related?: Record<string, Array<Record<string, unknown>>>;
     /** Answer a hop FRESHLY per call — how a source that changes between two
-     *  reads is spelled (a lazy walk must see the change; an eager one must
+     *  reads is spelled (a walk a closure defers must see the change; an eager one must
      *  not). Consulted before `related`; `relatedCalls` counts the hops. */
     relatedFn?: (fieldId: string, call: number) => Array<Record<string, unknown>> | undefined;
   } = {},
@@ -609,7 +609,11 @@ describe('a shape WRITE still RUNS after the author-time retirement', () => {
   });
 });
 
-// ── Wave 2 — pass-through edges and `lazy` ──────────────────────────────────
+// ── Wave 2 — pass-through edges, and a walk deferred by a closure ───────────
+//
+// `lazy` retired in 0.14 for a closure: a node entry holds what its walk lands
+// on when the node is built, and a walk again at each read is a closure
+// (`files = () => msg-[a:files]->`) called where the files are read.
 
 describe('the files-through-a-call gap, closed', () => {
   // The shape the callee is written against names the SOURCE's own field
@@ -647,7 +651,7 @@ describe('the files-through-a-call gap, closed', () => {
     };
   }
 
-  it('a lazy edge hands the source FileRef to a callee that writes it onward', async () => {
+  it('a pass-through edge hands the source FileRef to a callee that writes it onward', async () => {
     const deck = attachment('pitch.pdf');
     const email = makeFakeAdapter('email', { related: { files: [deck] } });
     const dropbox = makeFakeAdapter('dropbox');
@@ -656,7 +660,7 @@ describe('the files-through-a-call gap, closed', () => {
       DOC +
         [
           'function intake(msg: <inbox-[:message]->>) {',
-          '  store(node { title: msg.`subject`, files: lazy msg-[a:files]-> })',
+          '  store(node { title: msg.`subject`, files: msg-[a:files]-> })',
           '}',
         ].join('\n'),
       { subject: 'Series A' },
@@ -676,27 +680,6 @@ describe('the files-through-a-call gap, closed', () => {
     ]);
   });
 
-  it('the eager form closes it too — same landings, walked at the literal', async () => {
-    const deck = attachment('deck.pdf');
-    const email = makeFakeAdapter('email', { related: { files: [deck] } });
-    const dropbox = makeFakeAdapter('dropbox');
-
-    await run(
-      DOC +
-        [
-          'function intake(msg: <inbox-[:message]->>) {',
-          '  store(node { title: msg.`subject`, files: msg-[a:files]-> })',
-          '}',
-        ].join('\n'),
-      { subject: 'Series A' },
-      { email: email.adapter, dropbox: dropbox.adapter },
-    );
-
-    expect(dropbox.creates).toHaveLength(1);
-    expect(dropbox.creates[0].fields.data).toEqual(deck.data);
-    expect(isFileValue(dropbox.creates[0].fields.data)).toBe(true);
-  });
-
   it('every landing fans out — one write per walked position', async () => {
     const email = makeFakeAdapter('email', {
       related: { files: [attachment('a.pdf'), attachment('b.pdf')] },
@@ -707,7 +690,7 @@ describe('the files-through-a-call gap, closed', () => {
       DOC +
         [
           'function intake(msg: <inbox-[:message]->>) {',
-          '  store(node { title: "x", files: lazy msg-[a:files]-> })',
+          '  store(node { title: "x", files: msg-[a:files]-> })',
           '}',
         ].join('\n'),
       {},
@@ -809,40 +792,15 @@ describe('when the walk happens', () => {
     expect(attio.creates.map((w) => w.fields.name)).toEqual(['call1-0', 'call1-0']);
   });
 
-  it('LAZY re-walks the live source on EVERY read — no cache, per ruling 3', async () => {
-    const email = growingEmail();
-    const attio = makeFakeAdapter('attio');
-
-    await run(
-      COUNTER +
-        [
-          'function intake(msg: <inbox-[:message]->>) {',
-          '  d = node { title: "x", files: lazy msg-[a:files]-> }',
-          '  record_names(d)',
-          '  record_names(d)',
-          '}',
-        ].join('\n'),
-      {},
-      { email: email.adapter, attio: attio.adapter },
-    );
-
-    expect(email.relatedCalls.count).toBe(2);
-    // The second read sees what the source says NOW: two records, not one.
-    expect(attio.creates.map((w) => w.fields.name)).toEqual([
-      'call1-0',
-      'call2-0',
-      'call2-1',
-    ]);
-  });
-
-  it('a lazy edge nothing reads never walks at all', async () => {
+  it('a closure nothing calls never walks at all', async () => {
     const email = growingEmail();
     const attio = makeFakeAdapter('attio');
 
     await run(
       [
         'function intake(msg: <inbox-[:message]->>) {',
-        '  d = node { title: "x", files: lazy msg-[a:files]-> }',
+        '  files = () => msg-[a:files]->',
+        '  d = node { title: "x" }',
         '  crm = connect attio using acme_main',
         '  write crm-[:companies]-> { name: d.title }',
         '}',
@@ -898,7 +856,7 @@ describe('the hop keeps its own WHERE / ORDER BY / LIMIT', () => {
     expect(attio.creates.map((w) => w.fields.name)).toEqual(['a.pdf']);
   });
 
-  it('a WHERE on a lazy hop narrows the walk it stored', async () => {
+  it('a WHERE on a node entry\'s hop narrows what the entry holds', async () => {
     const email = makeFakeAdapter('email', { related: { files: FILES } });
     const attio = makeFakeAdapter('attio');
 
@@ -906,7 +864,7 @@ describe('the hop keeps its own WHERE / ORDER BY / LIMIT', () => {
       PICK +
         [
           'function intake(msg: <inbox-[:message]->>) {',
-          '  record_names(node { title: "x", files: lazy msg-[a:files WHERE a.`kind` == "deck"]-> })',
+          '  record_names(node { title: "x", files: msg-[a:files WHERE a.`kind` == "deck"]-> })',
           '}',
         ].join('\n'),
       {},
@@ -916,7 +874,7 @@ describe('the hop keeps its own WHERE / ORDER BY / LIMIT', () => {
     expect(attio.creates.map((w) => w.fields.name)).toEqual(['b.pdf', 'a.pdf']);
   });
 
-  it('ORDER BY / LIMIT apply to the stored walk, not to the read', async () => {
+  it('ORDER BY / LIMIT apply to the walk the entry holds', async () => {
     const email = makeFakeAdapter('email', { related: { files: FILES } });
     const attio = makeFakeAdapter('attio');
 
@@ -924,7 +882,7 @@ describe('the hop keeps its own WHERE / ORDER BY / LIMIT', () => {
       PICK +
         [
           'function intake(msg: <inbox-[:message]->>) {',
-          '  record_names(node { title: "x", files: lazy msg-[a:files ORDER BY a.`filename` LIMIT 2]-> })',
+          '  record_names(node { title: "x", files: msg-[a:files ORDER BY a.`filename` LIMIT 2]-> })',
           '}',
         ].join('\n'),
       {},
@@ -935,8 +893,8 @@ describe('the hop keeps its own WHERE / ORDER BY / LIMIT', () => {
   });
 });
 
-describe('`lazy` on an ordinary binding', () => {
-  it('binds the walk, and a block off it walks the live source', async () => {
+describe('a closure bound to a walk', () => {
+  it('a block off its call walks the live source', async () => {
     const attio = makeFakeAdapter('attio', {
       related: { people: [{ name: 'Ada' }], company: [{ name: 'Acme' }] },
     });
@@ -946,8 +904,8 @@ describe('`lazy` on an ordinary binding', () => {
       [
         'function intake(msg: <inbox-[:message]->>) {',
         '  crm = connect attio using acme_main',
-        '  people = lazy crm-[p:people]->',
-        '  people-[c:company]-> {',
+        '  people = () => crm-[p:people]->',
+        '  people()-[c:company]-> {',
         '    write crm-[:companies]-> { name: c.`name` }',
         '  }',
         '}',
@@ -959,7 +917,7 @@ describe('`lazy` on an ordinary binding', () => {
     expect(attio.creates).toEqual([{ recordType: 'company', fields: { name: 'Acme' } }]);
   });
 
-  it('a field read off it walks and collapses over the landings', async () => {
+  it('a field read off its call walks and collapses over the landings', async () => {
     const email = makeFakeAdapter('email', {
       related: { files: [{ filename: 'a.pdf' }, { filename: 'b.pdf' }] },
     });
@@ -969,8 +927,8 @@ describe('`lazy` on an ordinary binding', () => {
       [
         'function intake(msg: <inbox-[:message]->>) {',
         '  crm = connect attio using acme_main',
-        '  files = lazy msg-[a:files]->',
-        '  write crm-[:companies]-> { name: Text.join(files.`filename`, ", ") }',
+        '  files = () => msg-[a:files]->',
+        '  write crm-[:companies]-> { name: Text.join(files().`filename`, ", ") }',
         '}',
       ].join('\n'),
       {},
@@ -982,7 +940,7 @@ describe('`lazy` on an ordinary binding', () => {
     ]);
   });
 
-  it('each read walks again — the binding holds the walk, not its answer', async () => {
+  it('each call walks again — the binding holds the walk, not its answer', async () => {
     const email = makeFakeAdapter('email', {
       relatedFn: (fieldId, call) =>
         fieldId === 'files' ? [{ filename: `call${call}` }] : undefined,
@@ -993,9 +951,9 @@ describe('`lazy` on an ordinary binding', () => {
       [
         'function intake(msg: <inbox-[:message]->>) {',
         '  crm = connect attio using acme_main',
-        '  files = lazy msg-[a:files]->',
-        '  write crm-[:companies]-> { name: files.`filename` }',
-        '  write crm-[:companies]-> { name: files.`filename` }',
+        '  files = () => msg-[a:files]->',
+        '  write crm-[:companies]-> { name: files().`filename` }',
+        '  write crm-[:companies]-> { name: files().`filename` }',
         '}',
       ].join('\n'),
       {},
@@ -1007,14 +965,14 @@ describe('`lazy` on an ordinary binding', () => {
 });
 
 describe('a park carries the WALK, not what it walked to', () => {
-  it('the captured scope holds the traversal and its own scope — no landings', async () => {
+  it('the captured scope holds the closure — no landings', async () => {
     const email = makeFakeAdapter('email', { related: { files: [{ filename: 'a.pdf' }] } });
     const attio = makeFakeAdapter('attio');
     const { sink, timerParks } = makeFakeParkSink();
     const source = [
       'function intake(msg: <inbox-[:message]->>) {',
       '  crm = connect attio using acme_main',
-      '  files = lazy msg-[a:files]->',
+      '  files = () => msg-[a:files]->',
       '  await sleep(30d)',
       '}',
     ].join('\n');
@@ -1030,44 +988,11 @@ describe('a park carries the WALK, not what it walked to', () => {
       .flatMap((scope) => Object.entries(scope.bindings))
       .find(([name]) => name === 'files');
     expect(captured).toBeDefined();
-    const descriptor = captured?.[1];
-    if (descriptor?.kind !== 'lazyWalk') throw new Error('expected the walk to survive the park');
-    // Version 2: the walk's head is parked as its place in the pinned program.
-    expect(codeAt(PRELUDE + source, descriptor.walk.head).hopsRaw).toBe('-[a:files]->');
-    // The root it walks from came along, so the resumed run can walk again.
-    expect(Object.keys(descriptor.walk.captured)).toContain('msg');
+    expect(captured?.[1]?.kind).toBe('closure');
     // Nothing was walked to park it — the source was never touched.
     expect(email.relatedCalls.count).toBe(0);
     // And the parked blob really is a JSON wire shape.
     expect(() => JSON.stringify(timerParks[0].state)).not.toThrow();
-  });
-
-  it('a synthesised node parks its deferred edge the same way', async () => {
-    const email = makeFakeAdapter('email', { related: { files: [{ filename: 'a.pdf' }] } });
-    const attio = makeFakeAdapter('attio');
-    const { sink, timerParks } = makeFakeParkSink();
-
-    const source = [
-      'function intake(msg: <inbox-[:message]->>) {',
-      '  crm = connect attio using acme_main',
-      '  d = node { title: "x", files: lazy msg-[a:files]-> }',
-      '  await sleep(30d)',
-      '}',
-    ].join('\n');
-    await run(
-      source,
-      {},
-      { email: email.adapter, attio: attio.adapter, parkSink: sink },
-    );
-
-    const node = (timerParks[0].state as ParkedScopeState).scopeChain
-      .flatMap((scope) => Object.entries(scope.bindings))
-      .find(([name]) => name === 'd')?.[1];
-    if (node?.kind !== 'nodePosition') throw new Error('expected the node to survive the park');
-    const edge = node.edges.files;
-    if (edge.kind !== 'deferred') throw new Error('expected the edge to park deferred');
-    expect(codeAt(PRELUDE + source, edge.walk.head).hopsRaw).toBe('-[a:files]->');
-    expect(email.relatedCalls.count).toBe(0);
   });
 
   it('an EAGER edge parks what it already walked', async () => {
@@ -1098,16 +1023,16 @@ describe('a park carries the WALK, not what it walked to', () => {
   });
 });
 
-describe('emptiness through a deferred walk', () => {
-  it('EXISTS gates on the walk, run at the test', async () => {
+describe('emptiness through a walk a closure defers', () => {
+  it('a count gates on the walk, run at the test', async () => {
     const email = makeFakeAdapter('email', { related: { files: [{ filename: 'a.pdf' }] } });
     const attio = makeFakeAdapter('attio');
     await run(
       [
         'function intake(msg: <inbox-[:message]->>) {',
         '  crm = connect attio using acme_main',
-        '  files = lazy msg-[a:files]->',
-        '  if (files != null) {',
+        '  files = () => msg-[a:files]->',
+        '  if (count(files()) > 0) {',
         '    write crm-[:companies]-> { name: "yes" }',
         '  }',
         '}',
@@ -1161,7 +1086,7 @@ describe('the design example, end to end', () => {
     'function intake(msg: <inbox-[:message]->>) {',
     '  deal = node {',
     '    title: msg.`subject`',
-    '    files: lazy msg-[a:files]-> node { name: a.`filename`, blob: a.`data` }',
+    '    files: msg-[a:files]-> node { name: a.`filename`, blob: a.`data` }',
     '  }',
     '  process_deal(deal)',
     '}',
@@ -1262,29 +1187,6 @@ describe('when a MAPPED walk happens', () => {
     });
   }
 
-  const MAPPED_ENTRY = 'files: lazy msg-[a:files]-> node { label: a.`filename` }';
-
-  it('LAZY re-walks AND re-maps on every read — no cache, per ruling 3', async () => {
-    const email = growingEmail();
-    const attio = makeFakeAdapter('attio');
-
-    await run(
-      BAG +
-        [
-          'function intake(msg: <inbox-[:message]->>) {',
-          `  d = node { title: "x", ${MAPPED_ENTRY} }`,
-          '  record_names(d)',
-          '  record_names(d)',
-          '}',
-        ].join('\n'),
-      {},
-      { email: email.adapter, attio: attio.adapter },
-    );
-
-    expect(email.relatedCalls.count).toBe(2);
-    expect(attio.creates.map((w) => w.fields.name)).toEqual(['call1-0', 'call2-0', 'call2-1']);
-  });
-
   it('EAGER maps once, at the literal — a later read sees that same snapshot', async () => {
     const email = growingEmail();
     const attio = makeFakeAdapter('attio');
@@ -1306,25 +1208,6 @@ describe('when a MAPPED walk happens', () => {
     expect(attio.creates.map((w) => w.fields.name)).toEqual(['call1-0', 'call1-0']);
   });
 
-  it('a mapped edge nothing reads never walks, and never synthesises', async () => {
-    const email = growingEmail();
-    const attio = makeFakeAdapter('attio');
-
-    await run(
-      [
-        'function intake(msg: <inbox-[:message]->>) {',
-        `  d = node { title: "x", ${MAPPED_ENTRY} }`,
-        '  crm = connect attio using acme_main',
-        '  write crm-[:companies]-> { name: d.title }',
-        '}',
-      ].join('\n'),
-      {},
-      { email: email.adapter, attio: attio.adapter },
-    );
-
-    expect(email.relatedCalls.count).toBe(0);
-  });
-
   it('the hop keeps its own WHERE — the mapping renames what the walk chose', async () => {
     const email = makeFakeAdapter('email', {
       related: {
@@ -1340,7 +1223,7 @@ describe('when a MAPPED walk happens', () => {
       BAG +
         [
           'function intake(msg: <inbox-[:message]->>) {',
-          '  record_names(node { title: "x", files: lazy msg-[a:files WHERE a.`kind` == "deck"]-> node { label: a.`filename` } })',
+          '  record_names(node { title: "x", files: msg-[a:files WHERE a.`kind` == "deck"]-> node { label: a.`filename` } })',
           '}',
         ].join('\n'),
       {},
@@ -1396,30 +1279,7 @@ describe('mapped landings are ordinary synthesised nodes', () => {
     ]);
   });
 
-  it('a `lazy` BINDING with a tail yields mapped landings a block fans out', async () => {
-    const email = makeFakeAdapter('email', {
-      related: { files: [{ filename: 'a.pdf' }, { filename: 'b.pdf' }] },
-    });
-    const attio = makeFakeAdapter('attio');
-
-    await run(
-      [
-        'function intake(msg: <inbox-[:message]->>) {',
-        '  crm = connect attio using acme_main',
-        '  files = lazy msg-[a:files]-> node { label: a.`filename` }',
-        '  write crm-[:companies]-> { name: Text.join(files.label, ", ") }',
-        '}',
-      ].join('\n'),
-      {},
-      { email: email.adapter, attio: attio.adapter },
-    );
-
-    expect(attio.creates).toEqual([
-      { recordType: 'company', fields: { name: 'a.pdf, b.pdf' } },
-    ]);
-  });
-
-  it('hopping PAST a lazy mapped edge continues on the TAIL’s plane, not the source’s', async () => {
+  it('hopping PAST a mapped edge continues on the TAIL’s plane, not the source’s', async () => {
     // The hop after `people` is `company`, which the MAPPING declared — past
     // the tail we are inside the synthesised tree, so the source's own edge of
     // that name is never consulted.
@@ -1451,7 +1311,7 @@ describe('mapped landings are ordinary synthesised nodes', () => {
         '  crm = connect attio using acme_main',
         '  persist(node {',
         '    title: "x"',
-        '    people: lazy crm-[p:people]-> node { name: p.`name`, company: node { name: "Acme" } }',
+        '    people: crm-[p:people]-> node { name: p.`name`, company: node { name: "Acme" } }',
         '  })',
         '}',
       ].join('\n'),
@@ -1463,63 +1323,16 @@ describe('mapped landings are ordinary synthesised nodes', () => {
   });
 });
 
-describe('a park carries the MAPPING, not what it mapped', () => {
-  it('the parked edge holds the walk AND the tail literal — no landings', async () => {
-    const email = makeFakeAdapter('email', { related: { files: [{ filename: 'a.pdf' }] } });
-    const attio = makeFakeAdapter('attio');
-    const { sink, timerParks } = makeFakeParkSink();
-
-    const source = [
-      'function intake(msg: <inbox-[:message]->>) {',
-      '  crm = connect attio using acme_main',
-      '  d = node { title: "x", files: lazy msg-[a:files]-> node { label: a.`filename` } }',
-      '  await sleep(30d)',
-      '}',
-    ].join('\n');
-    await run(
-      source,
-      {},
-      { email: email.adapter, attio: attio.adapter, parkSink: sink },
-    );
-
-    const node = (timerParks[0].state as ParkedScopeState).scopeChain
-      .flatMap((scope) => Object.entries(scope.bindings))
-      .find(([name]) => name === 'd')?.[1];
-    if (node?.kind !== 'nodePosition') throw new Error('expected the node to survive the park');
-    const edge = node.edges.files;
-    if (edge.kind !== 'deferred') throw new Error('expected the edge to park deferred');
-    expect(codeAt(PRELUDE + source, edge.walk.head).hopsRaw).toBe('-[a:files]->');
-    expect(codeAt(PRELUDE + source, edge.walk.mapping).entries).toEqual([
-      expect.objectContaining({ name: 'label' }),
-    ]);
-    // Nothing was walked, and nothing was synthesised, to park it.
-    expect(email.relatedCalls.count).toBe(0);
-    expect(() => JSON.stringify(timerParks[0].state)).not.toThrow();
-  });
-
-  it('a RESUMED run re-walks and re-maps — the recipe survived, the answers did not', async () => {
+describe('a park carries the closure, not what it walked', () => {
+  it('a RESUMED run calls the closure and re-walks — the recipe survived, the answers did not', async () => {
     const SOURCE =
       [
-        'node Bag {',
-        '  title: <text>',
-        '  node files {',
-        '    label: <text>',
-        '  }',
-        '}',
-        '',
-        'function record_names(d: <Bag>) {',
-        '  crm = connect attio using acme_main',
-        '  d-[f:files]-> {',
-        '    write crm-[:companies]-> { name: f.`label` }',
-        '  }',
-        '}',
-        '',
         'function intake(msg: <inbox-[:message]->>) {',
         '  crm = connect attio using acme_main',
-        '  d = node { title: "x", files: lazy msg-[a:files]-> node { label: a.`filename` } }',
-        '  write crm-[:companies]-> { name: d.title }',
+        '  files = () => msg-[a:files]->',
+        '  write crm-[:companies]-> { name: "x" }',
         '  await sleep(30d)',
-        '  record_names(d)',
+        '  write crm-[:companies]-> { name: Text.join(files().`filename`, ", ") }',
         '}',
       ].join('\n');
 
@@ -1535,12 +1348,12 @@ describe('a park carries the MAPPING, not what it mapped', () => {
 
     expect(parked.parked).toBe(true);
     expect(attio0.creates.map((w) => w.fields.name)).toEqual(['x']);
-    // The deferred edge never walked before the park.
+    // The closure was never called before the park.
     expect(email0.relatedCalls.count).toBe(0);
     const state = JSON.parse(JSON.stringify(timerParks[0].state)) as ParkedScopeState;
 
-    // Resume against a source that has MOVED ON. The mapping came back as AST
-    // and runs against what the source says now — which is the whole point of
+    // Resume against a source that has MOVED ON. The closure came back as AST
+    // and walks what the source says now — which is the whole point of
     // parking the recipe rather than its answers.
     const email1 = makeFakeAdapter('email', { related: { files: [{ filename: 'after.pdf' }] } });
     const attio1 = makeFakeAdapter('attio');

@@ -257,9 +257,10 @@ function digestMovement(artifactType: 'pdf' | 'text'): string {
     '  digest = "Files from ${msg.`user`}: ${Text.join(items, ", ")}"',
     '  write drive-[:report]-> {',
     '    slug:   Text.slug(msg.`user`)',
-    '    amount: Currency.numberFromFigure(msg.`text`)',
-    '    code:   Currency.codeFromFigure(msg.`text`)',
-    '    due:    Date.addDays("2026-03-12", 7)',
+    // Each may answer nothing (since 0.15): left unset then.
+    '    amount ?: Currency.numberFromFigure(msg.`text`)',
+    '    code   ?: Currency.codeFromFigure(msg.`text`)',
+    '    due    ?: Date.addDays("2026-03-12", 7)',
     artifactType === 'pdf' ? '    report: pdf.render(digest)' : '    report: File.from(digest, "text")',
     '  }',
     '}',

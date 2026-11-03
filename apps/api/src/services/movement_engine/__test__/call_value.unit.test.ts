@@ -7,8 +7,9 @@
 //      provenance) now taken THROUGH a call boundary;
 //   2. a WRITE HANDLE bound by the callee, read as an edge off the value —
 //      its landing reads exactly as it does anywhere;
-//   3. PARK/RESUME while the caller holds a LAZY binding returned from a call
-//      — the recipe crosses back, and a resumed run re-walks the live source.
+//   3. a CLOSURE crosses a park and is called after the resume. (A value
+//      holding a `lazy` walk crossed a park too until 0.14 retired `lazy`: a
+//      node entry now holds what its walk landed on when the node was built.)
 //
 // Harness mirrors node_synthesis.unit.test.ts (the waves this stands on).
 
@@ -117,7 +118,7 @@ function makeFakeAdapter(
     resources?: Resource[];
     related?: Record<string, Array<Record<string, unknown>>>;
     /** Answer a hop FRESHLY per call — how a source that changes between two
-     *  reads is spelled (a lazy walk must see the change; an eager one must
+     *  reads is spelled (a walk at each call must see the change; an eager one must
      *  not). Consulted before `related`; `relatedCalls` counts the hops. */
     relatedFn?: (fieldId: string, call: number) => Array<Record<string, unknown>> | undefined;
   } = {},
@@ -310,14 +311,14 @@ function resume(
 // ── Probe 1: the utility idiom, end to end ───────────────────────────────────
 
 describe('the utility idiom — one movement shapes, another writes', () => {
-  // The shaper RETURNS a node with a field (`title`) and a lazy edge (`files`)
+  // The shaper RETURNS a node with a field (`title`) and an edge (`files`)
   // — multi-export is an ordinary node literal, handed back. Its parameter `m`
   // is the caller's data and is not part of what it returns.
   const SHAPER = [
     'function email_to_doc(m: <inbox-[:message]->>) {',
     '  return node {',
     '    title: m.`subject`',
-    '    files: lazy m-[a:files]-> node { name: a.`filename`, blob: a.`data` }',
+    '    files: m-[a:files]-> node { name: a.`filename`, blob: a.`data` }',
     '  }',
     '}',
     '',
@@ -430,7 +431,7 @@ describe('the utility idiom — one movement shapes, another writes', () => {
 
   it('the VALUE carries what the body made, and nothing else', async () => {
     // The shaper's scope holds a parameter (`m`), a constructed instance
-    // (`crm`), a scalar (`title`) and a lazy position (`files`). Only the last
+    // (`crm`), a scalar (`title`) and walked positions (`files`). Only the last
     // two are records the body made — the rest is the caller's data and
     // configuration. Read off the parked value, which is the shape itself.
     const email = makeFakeAdapter('email', { related: { files: [{ filename: 'a.pdf' }] } });
@@ -443,7 +444,7 @@ describe('the utility idiom — one movement shapes, another writes', () => {
         '  crm = connect attio using acme_main',
         '  return node {',
         '    title: m.`subject`',
-        '    files: lazy m-[a:files]-> node { name: a.`filename` }',
+        '    files: m-[a:files]-> node { name: a.`filename` }',
         '  }',
         '}',
         '',
@@ -511,110 +512,7 @@ describe('a write-handle binding is an edge off the value', () => {
   });
 });
 
-// ── Probe 3: park / resume across a lazy binding returned from a call ────────
-
-describe("a park carries a call value's deferred walk, not what it walked to", () => {
-  const SHAPER = [
-    'function email_to_doc(m: <inbox-[:message]->>) {',
-    '  return node {',
-    '    title: m.`subject`',
-    '    files: lazy m-[a:files]-> node { name: a.`filename` }',
-    '  }',
-    '}',
-    '',
-  ].join('\n');
-
-  it('the parked value holds the WALK — no landings, nothing walked', async () => {
-    const email = makeFakeAdapter('email', { related: { files: [{ filename: 'a.pdf' }] } });
-    const attio = makeFakeAdapter('attio');
-    const { sink, timerParks } = makeFakeParkSink();
-
-    const source = SHAPER + [
-      'function intake(msg: <inbox-[:message]->>) {',
-      '  crm = connect attio using acme_main',
-      '  doc = email_to_doc(msg)',
-      '  await sleep(30d)',
-      '}',
-    ].join('\n');
-    await run(source, { subject: 'x' }, { email: email.adapter, attio: attio.adapter, parkSink: sink });
-
-    const value = (timerParks[0].state as ParkedScopeState).scopeChain
-      .flatMap((scope) => Object.entries(scope.bindings))
-      .find(([name]) => name === 'doc')?.[1];
-    if (value?.kind !== 'nodePosition') {
-      throw new Error("expected the call's value to survive the park");
-    }
-    // The scalar binding parked as a field; the lazy one as the RECIPE.
-    expect(value.fields.title).toBe('x');
-    const edge = value.edges.files;
-    if (edge.kind !== 'deferred') throw new Error('expected the edge to park deferred');
-    // Version 2: the walk and its mapping are parked as their places in the
-    // pinned program.
-    expect(codeAt(PRELUDE + source, edge.walk.head).hopsRaw).toBe('-[a:files]->');
-    expect(codeAt(PRELUDE + source, edge.walk.mapping).entries).toEqual([
-      expect.objectContaining({ name: 'name' }),
-    ]);
-    // The callee's scope outlives the call for the walk's purposes: the walk's
-    // root resolves against what it captured THERE, and it captured it whole.
-    expect(email.relatedCalls.count).toBe(0);
-    expect(() => JSON.stringify(timerParks[0].state)).not.toThrow();
-  });
-
-  it('a RESUMED caller re-walks the live source through the call value', async () => {
-    const SOURCE = SHAPER + [
-      'node Bag {',
-      '  title: <text>',
-      '  node files {',
-      '    name: <text>',
-      '  }',
-      '}',
-      '',
-      'function record_names(d: <Bag>) {',
-      '  crm = connect attio using acme_main',
-      '  d-[f:files]-> {',
-      '    write crm-[:companies]-> { name: f.`name` }',
-      '  }',
-      '}',
-      '',
-      'function intake(msg: <inbox-[:message]->>) {',
-      '  crm = connect attio using acme_main',
-      '  doc = email_to_doc(msg)',
-      '  write crm-[:companies]-> { name: doc.title }',
-      '  await sleep(30d)',
-      '  record_names(doc)',
-      '}',
-    ].join('\n');
-
-    // A `sleep` before the second call parks the run there.
-    const { sink, timerParks } = makeFakeParkSink();
-    const email0 = makeFakeAdapter('email', { related: { files: [{ filename: 'before.pdf' }] } });
-    const attio0 = makeFakeAdapter('attio');
-    const parked = await run(SOURCE, { subject: 'x' }, {
-      email: email0.adapter,
-      attio: attio0.adapter,
-      parkSink: sink,
-    });
-
-    expect(parked.parked).toBe(true);
-    expect(attio0.creates.map((w) => w.fields.name)).toEqual(['x']);
-    expect(email0.relatedCalls.count).toBe(0);
-    const state = JSON.parse(JSON.stringify(timerParks[0].state)) as ParkedScopeState;
-
-    // Resume against a source that has MOVED ON — the recipe came back, so the
-    // walk answers what the source says NOW.
-    const email1 = makeFakeAdapter('email', { related: { files: [{ filename: 'after.pdf' }] } });
-    const attio1 = makeFakeAdapter('attio');
-    const result = await resume(SOURCE, { subject: 'x' }, {
-      email: email1.adapter,
-      attio: attio1.adapter,
-    }, state);
-
-    expect(result.parked).toBeUndefined();
-    expect(attio1.creates.map((w) => w.fields.name)).toEqual(['after.pdf']);
-  });
-});
-
-// ── Probe 4: a CLOSURE crosses a park ────────────────────────────────────────
+// ── Probe 3: a CLOSURE crosses a park ────────────────────────────────────────
 //
 // A closure is (AST, captured bindings). Both halves have to survive the wire:
 // the body rides across as itself (it has no name to re-resolve by), and the

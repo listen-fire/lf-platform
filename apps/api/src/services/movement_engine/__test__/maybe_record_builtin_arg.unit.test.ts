@@ -3,7 +3,9 @@
 // language versions 3 and 4 the checker let it through and the built-in RAN
 // on the record as it was. That is why the refusal lands from 0.12
 // only, with an upgrade warning before it — the frozen behaviour is pinned
-// here, and version 5 is refused at check.
+// here, and the release pin is refused at check. Since 0.15 `coalesce`
+// answers the union of its arguments (a record or a number), so the refusal
+// is that a record is not a value.
 
 import { LANGUAGE_VERSION, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import type { Adapter, RuntimeCapabilities, WriteInput } from 'movement-engine/public/adapter';
@@ -129,7 +131,7 @@ describe('a value that may be a record, handed to a built-in that takes a value'
     expect(payloads((await runUnder(CASES.upper!, version)).kg)).toEqual([{ x: '[OBJECT OBJECT]' }]);
   });
 
-  it.each(Object.keys(CASES))('%s is refused at check under 0.12', async name => {
-    await expect(runUnder(CASES[name]!, LANGUAGE_VERSION)).rejects.toThrow(/MOV_CALL_ARG_MAYBE_RECORD/);
+  it.each(Object.keys(CASES))('%s is refused at check under the release pin', async name => {
+    await expect(runUnder(CASES[name]!, LANGUAGE_VERSION)).rejects.toThrow(/MOV_RECORD_NOT_A_VALUE \(line \d+\): a graph\.company handle is a record, not a value/);
   });
 });

@@ -266,7 +266,7 @@ describe('TEXT.SERIALISE over a value the run holds', () => {
     await expect(
       run([
         ...COLLECTED,
-        '  collected = deduped-[e:entries]-> { return e }',
+        '  collected = deduped-[e:entries ORDER BY e.name]-> { return e }',
         '  top = first(collected)',
         '  write crm-[:companies]-> { name: Json.stringify(top) }',
       ]),

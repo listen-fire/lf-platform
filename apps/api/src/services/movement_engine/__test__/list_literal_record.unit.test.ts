@@ -74,7 +74,7 @@ jest.mock('../../../lib/anthropic', () => ({
   MAX_CHAT_CONTINUATIONS: 5,
 }));
 
-import { LANGUAGE_VERSION, fromCatalogSnapshot, mockCatalogSnapshot, type InstanceSchema } from 'movement-lang';
+import { LANGUAGE_VERSION, mockCatalogSnapshot, type InstanceSchema } from 'movement-lang';
 import { runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import type { CapturedWrite } from 'movement-engine/public/adapter';
@@ -186,7 +186,7 @@ async function run(body: string[]) {
     source: spelledFor(
       LANGUAGE_VERSION,
       [PRELUDE, 'movement m(msg: <inbox-[:message]->>) {', ...body, '}'].join('\n'),
-      fromCatalogSnapshot(catalog),
+      catalog,
     ),
     event: event(),
     teamId: TEAM_ID,
