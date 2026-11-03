@@ -56,6 +56,10 @@ import type { ExternalServiceCredentialsId } from '../../generated/kysely/automa
 import ExternalServiceType from '../../generated/kysely/automations/ExternalServiceType';
 import { ensureDevLoopTeam, ensureDevLoopSlackCredential } from './_lib';
 import { saveMovement } from '../../services/translation_graph/movement/provision';
+// This process saves movements but does not drain; registering the listen-
+// resolve work kind admits it so `saveMovement`'s re-list arming can enqueue it
+// (the dev-loop server drains it).
+import { registerListenResolveWork } from '../../services/inbound/listen_resolve';
 
 const FAKE_CHANNELS_URL = process.env.FAKE_CHANNELS_URL || 'http://localhost:5556';
 
@@ -65,6 +69,10 @@ export const DEV_AIRTABLE_BASE_ID = 'appDevLoop';
 export const DEV_AIRTABLE_BASE_NAME = 'Dev Base';
 export const DEV_AIRTABLE_TABLE_ID = 'tblDeals';
 export const DEV_AIRTABLE_TABLE_NAME = 'Deals';
+/** A SECOND table in the same base: a listen narrowed to it must NOT fire on a
+ *  change to the first table, though both share one per-base webhook. */
+export const DEV_AIRTABLE_TABLE2_ID = 'tblCandidates';
+export const DEV_AIRTABLE_TABLE2_NAME = 'Candidates';
 
 /** The proof movement: listens to the seeded (base, table) for rows created
  *  ONLY and writes each new row to the fake Slack `dealflow` channel (so a run
@@ -113,30 +121,73 @@ function airtable_intake_positioned(c: <at-[:\`${DEV_AIRTABLE_TABLE_NAME} Change
 listen to at-[t:Tables WHERE t.Name == "${DEV_AIRTABLE_TABLE_NAME}"]->-[c:Changes WHERE c.Kind == "created"]-> fire airtable_intake_positioned
 `;
 
+/** A workspace listen narrowed to the OTHER table (by name). It shares the
+ *  base's one webhook with the Deals listen, so a Deals-table change reaches
+ *  it too — and must be skipped, because its table hop names Candidates. */
+const AIRTABLE_MOVEMENT_OTHER = `
+at   = connect \`@lf/airtable\` using \`Dev Loop Airtable\`
+chat = connect \`@lf/slack\` using \`Dev Loop Slack\`
+
+function airtable_intake_other(c: <at-[:\`${DEV_AIRTABLE_TABLE2_NAME} Change\`]->>) {
+  c-[r:Record]-> {
+    chat-[ch:Channels WHERE ch.\`Name\` == "dealflow"]-> {
+      write ch-[:Messages]-> {
+        Message: "Candidates intake: \${r.\`Name\`}"
+      }
+    }
+  }
+}
+
+listen to at-[b:Bases WHERE b.Name == "${DEV_AIRTABLE_BASE_NAME}"]->-[t:Tables WHERE t.Name == "${DEV_AIRTABLE_TABLE2_NAME}"]->-[c:Changes WHERE c.Kind == "created"]-> fire airtable_intake_other
+`;
+
+/** The form an upgraded 0.12 Airtable automation takes: the base and table
+ *  narrowed by `Id`, not `Name`. It must fire on a Deals-table change too. */
+const AIRTABLE_MOVEMENT_BY_ID = `
+at   = connect \`@lf/airtable\` using \`Dev Loop Airtable\`
+chat = connect \`@lf/slack\` using \`Dev Loop Slack\`
+
+function airtable_intake_by_id(c: <at-[:\`${DEV_AIRTABLE_TABLE_NAME} Change\`]->>) {
+  c-[r:Record]-> {
+    chat-[ch:Channels WHERE ch.\`Name\` == "dealflow"]-> {
+      write ch-[:Messages]-> {
+        Message: "By-id intake: \${r.\`Name\`}"
+      }
+    }
+  }
+}
+
+listen to at-[b:Bases WHERE b.Id == "${DEV_AIRTABLE_BASE_ID}"]->-[t:Tables WHERE t.Id == "${DEV_AIRTABLE_TABLE_ID}"]->-[c:Changes WHERE c.Kind == "created"]-> fire airtable_intake_by_id
+`;
+
 
 /** Seed a base + table into fake-channels so `listEntryPoints` resolves the
  *  movement's `<at-[:\`Deals\`]->>` type. Idempotent — the admin seed
  *  route upserts by (service, entity_type, id). */
 async function seedFakeBaseAndTable(input: { baseId: string; tableId: string }): Promise<void> {
+  const tableEntity = (id: string, name: string) => ({
+    entity_type: `table:${input.baseId}`,
+    id,
+    data: {
+      id,
+      name,
+      primaryFieldId: 'fldName',
+      fields: [
+        { id: 'fldName', name: 'Name', type: 'singleLineText' },
+        { id: 'fldStage', name: 'Stage', type: 'singleLineText' },
+      ],
+    },
+  });
   const entities = [
     {
       entity_type: 'base',
       id: input.baseId,
       data: { id: input.baseId, name: DEV_AIRTABLE_BASE_NAME },
     },
-    {
-      entity_type: `table:${input.baseId}`,
-      id: input.tableId,
-      data: {
-        id: input.tableId,
-        name: DEV_AIRTABLE_TABLE_NAME,
-        primaryFieldId: 'fldName',
-        fields: [
-          { id: 'fldName', name: 'Name', type: 'singleLineText' },
-          { id: 'fldStage', name: 'Stage', type: 'singleLineText' },
-        ],
-      },
-    },
+    tableEntity(input.tableId, DEV_AIRTABLE_TABLE_NAME),
+    // A second table in the same base: a listen narrowed to it shares the
+    // base's one webhook but must not fire on a change to the first.
+    tableEntity(DEV_AIRTABLE_TABLE2_ID, DEV_AIRTABLE_TABLE2_NAME),
   ];
   const res = await fetch(`${FAKE_CHANNELS_URL}/admin/airtable/seed`, {
     method: 'POST',
@@ -184,6 +235,8 @@ async function main() {
     process.exit(1);
   }
 
+  registerListenResolveWork();
+
   const seed = await ensureDevLoopTeam();
   await ensureDevLoopSlackCredential(seed.teamId);
 
@@ -203,6 +256,12 @@ async function main() {
     teamId: seed.teamId,
     source: AIRTABLE_POSITIONED_MOVEMENT,
   });
+
+  // A workspace listen on the OTHER table, and one on Deals narrowed by id (an
+  // upgraded 0.12 automation's form): both save, and both resolve to this
+  // base's one webhook.
+  const other = await saveMovement({ teamId: seed.teamId, source: AIRTABLE_MOVEMENT_OTHER });
+  const byId = await saveMovement({ teamId: seed.teamId, source: AIRTABLE_MOVEMENT_BY_ID });
 
   // Surface the webhook_subscription the listen reconciler provisioned (its id
   // keys the inbound callback URL; the external_webhook_id is the fake's
@@ -244,6 +303,12 @@ async function main() {
               })),
             }
           : { errors: positioned.errors, diagnostics: positioned.diagnostics },
+        other: other.ok
+          ? { name: other.movementName, listeners: other.listeners.map((l) => ({ triggerId: l.triggerId, fires: l.movementName })) }
+          : { errors: other.errors, diagnostics: other.diagnostics },
+        byId: byId.ok
+          ? { name: byId.movementName, listeners: byId.listeners.map((l) => ({ triggerId: l.triggerId, fires: l.movementName })) }
+          : { errors: byId.errors, diagnostics: byId.diagnostics },
         subscription: sub ?? null,
         nextSteps: [
           `pnpm dev:inject airtable-webhook --event create --record rec1 --values '{"Name":"Acme","Stage":"Seed"}'`,
@@ -255,7 +320,7 @@ async function main() {
       2,
     ),
   );
-  if (!movement.ok || !positioned.ok) process.exit(1);
+  if (!movement.ok || !positioned.ok || !other.ok || !byId.ok) process.exit(1);
 }
 
 main()

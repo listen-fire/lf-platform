@@ -19,25 +19,23 @@ import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
 import type { Resolution } from '../../lf_store/listens';
 import type { SavedListen } from '../listen_door';
 
-const claimResolve = jest.fn();
-const saveResolution = jest.fn();
-const states = jest.fn();
-jest.mock('../../lf_store/listens', () => ({
-  claimResolve: (...args: unknown[]) => claimResolve(...args),
-  saveResolution: (...args: unknown[]) => saveResolution(...args),
-  states: (...args: unknown[]) => states(...args),
-}));
-
-const getRelated = jest.fn();
-const resolveAdapter = jest.fn(async () => ({ getRelated }));
-jest.mock('../../translation_graph/adapters/resolve', () => ({ resolveAdapter: (...args: unknown[]) => resolveAdapter(...args) }));
-
-const enqueueWork = jest.fn(async () => undefined);
-jest.mock('../../work/store', () => ({ enqueueWork: (...args: unknown[]) => enqueueWork(...args) }));
+jest.mock('../../lf_store/listens', () => ({ claimResolve: jest.fn(), saveResolution: jest.fn(), states: jest.fn() }));
+jest.mock('../../translation_graph/adapters/resolve', () => ({ resolveAdapter: jest.fn() }));
+jest.mock('../../work/store', () => ({ enqueueWork: jest.fn() }));
 jest.mock('../../work/drain', () => ({ registerWorkKinds: jest.fn() }));
 jest.mock('../listen_door', () => ({ savedListenOf: jest.fn() }));
 
+import { claimResolve as claimResolveImport, saveResolution as saveResolutionImport, states as statesImport } from '../../lf_store/listens';
+import { resolveAdapter as resolveAdapterImport } from '../../translation_graph/adapters/resolve';
+import { enqueueWork as enqueueWorkImport } from '../../work/store';
 import { armResolveForArrivals, relistIntervalMs, resolveListen, resolvesListen } from '../listen_resolve';
+
+const claimResolve = claimResolveImport as jest.Mock;
+const saveResolution = saveResolutionImport as jest.Mock;
+const states = statesImport as jest.Mock;
+const resolveAdapter = resolveAdapterImport as jest.Mock;
+const enqueueWork = enqueueWorkImport as jest.Mock;
+const getRelated = jest.fn();
 
 const corpusPath = join(dirname(require.resolve('engine-contracts/package.json')), 'dist/conformance/listen-arrivals.json');
 const corpus = listenArrivalCasesSchema.parse(JSON.parse(readFileSync(corpusPath, 'utf-8')));
@@ -75,6 +73,8 @@ beforeEach(() => {
   claimResolve.mockResolvedValue({ token: 'hold-1' });
   saveResolution.mockResolvedValue(true);
   states.mockResolvedValue({});
+  resolveAdapter.mockResolvedValue({ getRelated });
+  enqueueWork.mockResolvedValue(undefined);
 });
 
 const savedResolution = (): Resolution => saveResolution.mock.calls[0]![1].resolution;

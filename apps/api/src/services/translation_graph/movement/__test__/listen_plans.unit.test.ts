@@ -13,7 +13,7 @@ const hop = (edge: string, from: string, to: string, more: Partial<PlanHop> = {}
 
 /** A base-and-table-narrowed Airtable listen, its `Changes` carrying the base
  *  and table (`carries`), narrowed by `taken`. */
-function airtable(taken: unknown): ListenPlan {
+function airtable(taken: PlanHop['taken']): ListenPlan {
   return {
     movement: 'changed',
     connection: 'crm',
@@ -27,8 +27,8 @@ function airtable(taken: unknown): ListenPlan {
   };
 }
 
-const byName = { left: { type: 'edge_property', propertyTypeId: 'Name', fieldOnly: true }, op: 'eq', right: { type: 'static', value: 'Hiring' } };
-const byId = { left: { type: 'edge_property', propertyTypeId: 'Id', fieldOnly: true }, op: 'eq', right: { type: 'static', value: 'appHiring' } };
+const byName = { left: { type: 'edge_property', propertyTypeId: 'Name', fieldOnly: true }, op: 'eq', right: { type: 'static', value: 'Hiring' } } as unknown as PlanHop['taken'];
+const byId = { left: { type: 'edge_property', propertyTypeId: 'Id', fieldOnly: true }, op: 'eq', right: { type: 'static', value: 'appHiring' } } as unknown as PlanHop['taken'];
 
 describe('unfiredHere', () => {
   it('does not refuse an Airtable listen narrowed by base or table name — its Changes carries them', () => {
