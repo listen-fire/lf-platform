@@ -6,7 +6,8 @@
 //
 // - agent: the endpoint answers once the per-event session has handled it.
 // - js: the endpoint stores and acknowledges; the host waits for the sandbox
-//   to run it (GET /idle). A run that threw wakes the agent (wake.cjs).
+//   to run it (GET /idle). A run that threw wakes the agent (wake.cjs),
+//   unless NO_WAKES is set.
 // - lf: `listen-fire serve --doors-only` stores and acknowledges; the host's worker
 //   runs it (`listen-fire drain --until-idle`). A run that failed wakes the agent, which
 //   may run it again with `listen-fire runs rerun`. The
@@ -29,6 +30,10 @@ const { createHmac } = require('crypto');
 const { wake } = require('./wake.cjs');
 
 const config = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+// NO_WAKES=1 (Henry, 2026-11-03: no waking edge cases): nothing wakes an agent
+// after launch. A failed run stays failed, and the periodic `listen-fire check`
+// is not run, so each program is judged as it was written.
+const NO_WAKES = Boolean(process.env.NO_WAKES);
 const out = (f) => path.join(config.out, f);
 const BACKOFF_MS = [1000, 2000, 4000];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -120,6 +125,7 @@ let lastReportedErrors = null;
 // one for an error. The same error is not reported twice.
 const ERROR_LINE = /^\S+:\d+:\d+ error [A-Z][A-Z0-9_]* /;
 async function maybeCheck(force = false) {
+  if (NO_WAKES) return null;
   if (config.mode !== 'lf' || (!force && Date.now() - lastCheckAt < config.lf.checkEveryMs)) return null;
   lastCheckAt = Date.now();
   const output = lf(['check']).trim();
@@ -200,7 +206,7 @@ async function main() {
     }
     const processedMs = Date.now() - started;
     const itemWakes = [];
-    for (const f of failures) {
+    for (const f of NO_WAKES ? [] : failures) {
       const reason =
         config.mode === 'lf'
           ? `A run failed.\n\nRun ${f.runId} (payment_failed:Payment Failed): ${f.error}\n\n\`listen-fire runs show ${f.runId}\` has its event, trace and attempts.`

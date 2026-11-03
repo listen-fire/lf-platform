@@ -5,6 +5,11 @@
 //
 // The shape of window.DEMO:
 //
+//   business         { label, eventsPerMonth }: the business a week of events is
+//                    scaled to (BUSINESS below)
+//   wakesAfterLaunch "on" or "off" (compare.sh NO_WAKES): whether a failed run
+//                    or the periodic check woke an agent after launch
+//
 //   request, retryEmail, environment   what every option is told (prompts.cjs)
 //   cheatsheet       the listen-fire reference text the listen-fire author and the woken
 //                    agent are given (programs/lf_primer_basic.md), beside the `example`
@@ -535,12 +540,22 @@ return {
 
 const prompts = require('./prompts.cjs');
 
-const SCENARIOS = ['mcp', 'attio'];
+// SCENARIOS=attio builds one scenario's recording (the 2026-11-03 recording has no mcp).
+const SCENARIOS = (process.env.SCENARIOS || 'mcp,attio').split(',').filter(Boolean);
 const built = Object.fromEntries(SCENARIOS.map((name) => [name, scenario(name)]));
 const lfOf = (b) => (b.lf.branches.length > 0 ? `${b.lf.version} (${b.lf.branches.map((x) => `${x.branch}@${x.commit}`).join(', ')})` : b.lf.commit ? `${b.lf.version} (${b.lf.commit})` : b.lf.version);
 const validatedUnder = [...new Set(SCENARIOS.map((name) => lfOf(built[name])))];
 
+// The business the timeline scales a week of events to. Ledgerline is a
+// SaaS with about 20,000 subscribers; about 7% of monthly card charges fail
+// on the first attempt (the commonly cited range for subscription billing is
+// 5 to 10%), so about 1,400 failed payments a month, about 320 a week.
+const BUSINESS = { label: 'A SaaS with ~20,000 subscribers', eventsPerMonth: 1400 };
+const wakesAfterLaunch = [...new Set(SCENARIOS.map((name) => built[name].lf.wakes ?? 'on'))].join(' / ');
+
 const data = {
+  business: BUSINESS,
+  wakesAfterLaunch,
   request: prompts.request,
   retryEmail: prompts.retryEmail,
   environment: prompts.environment,
@@ -551,7 +566,7 @@ const data = {
   scenarios: Object.fromEntries(SCENARIOS.map((name) => [name, built[name].data])),
   labels: {
     real: ['every model session: claude-sonnet-5-5, live (authoring, per-event, woken)', 'the JavaScript handler, run in node on every delivery against the stand-ins', 'lf check, listen-fire serve, listen-fire drain and every listen-fire run, with its real modules (@lf/stripe, @lf/mcp, @lf/attio, @lf/gmail, @lf/slack)'],
-    standIn: ['Stripe (signed invoice.payment_failed deliveries from a local sender)', "Stripe's API, for any read @lf/stripe makes beyond the event (listen-fire's fake Stripe, seeded with the same customers)", 'the MCP scenario\'s CRM (a local MCP server with generic tools: plan a plain string, the options answered as data)', 'the Attio scenario\'s CRM (fake-channels\' Attio, behind a local door that adds the token check, the call log and the injected 503 and 429)', 'Gmail and Slack (fake-channels)', 'the sandbox (node vm with crm, email, slack and kv, behind a store-then-acknowledge endpoint)', "the agent provider's host (stress.cjs: the worker, the periodic listen-fire check, waking the agent)"],
+    standIn: ['Stripe (signed invoice.payment_failed deliveries from a local sender)', "Stripe's API, for any read @lf/stripe makes beyond the event (listen-fire's fake Stripe, seeded with the same customers)", 'the MCP scenario\'s CRM (a local MCP server with generic tools: plan a plain string, the options answered as data)', 'the Attio scenario\'s CRM (fake-channels\' Attio, behind a local door that adds the token check, the call log and the injected 503 and 429)', 'Gmail and Slack (fake-channels)', 'the sandbox (node vm with crm, email, slack and kv, behind a store-then-acknowledge endpoint)', wakesAfterLaunch === 'off' ? "the agent provider's host (stress.cjs: the worker; nothing wakes an agent after launch)" : "the agent provider's host (stress.cjs: the worker, the periodic listen-fire check, waking the agent)"],
   },
 };
 

@@ -79,6 +79,11 @@
 #                                 what writing each costs; the result is not a
 #                                 recording (build_data.cjs refuses it).
 #                                 WRITING_ONLY=lf writes listen-fire's alone.
+#   NO_WAKES                      nothing wakes an agent after launch (stress.cjs):
+#                                 a failed run stays failed and the periodic
+#                                 listen-fire check is not run, so each program
+#                                 is judged as written; 00_lf.json says
+#                                 `wakes: "off"`
 #   REHEARSE_AGENT, REHEARSE_JS,  a rehearsal of the stressors with no
 #   REHEARSE_LF                   model call. REHEARSE_JS and REHEARSE_LF name a
 #                                 handler and a program that stand in for every
@@ -162,8 +167,10 @@ RECORDING="all three options, one run"
 [ -z "${REHEARSE_AGENT:-}${REHEARSE_JS:-}${REHEARSE_LF:-}" ] || RECORDING="rehearsal, no model call"
 # The listen-fire reference the authoring and woken agents are given (prompts.cjs).
 LF_REFERENCE="$(node -e 'console.log(require(process.argv[1]).lfReference)' "$HERE/prompts.cjs")"
-jq -n --arg version "$LF_VERSION" --arg commit "$COMMIT" --argjson branches "$BRANCHES" --arg scenario "$SCENARIO" --arg recording "$RECORDING" --argjson attempts "$ATTEMPTS" --arg reference "$LF_REFERENCE" \
-  '{version: $version, commit: (if $commit == "" then null else $commit end), branches: $branches, scenario: $scenario, recording: $recording, attempts: $attempts, reference: $reference}' >"$CAP/00_lf.json"
+WAKES=on
+[ -z "${NO_WAKES:-}" ] || WAKES=off
+jq -n --arg version "$LF_VERSION" --arg commit "$COMMIT" --argjson branches "$BRANCHES" --arg scenario "$SCENARIO" --arg recording "$RECORDING" --argjson attempts "$ATTEMPTS" --arg reference "$LF_REFERENCE" --arg wakes "$WAKES" \
+  '{version: $version, commit: (if $commit == "" then null else $commit end), branches: $branches, scenario: $scenario, recording: $recording, attempts: $attempts, reference: $reference, wakes: $wakes}' >"$CAP/00_lf.json"
 cp "$HERE/programs/request.txt" "$CAP/01_request.txt"
 cp "$HERE/programs/retry_email.txt" "$CAP/02_retry_email.txt"
 
