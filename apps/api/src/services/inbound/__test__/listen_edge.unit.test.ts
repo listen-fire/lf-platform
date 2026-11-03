@@ -65,3 +65,33 @@ describe('the keys a listen is delivered under', () => {
     expect(listenEdgeKeysOf(saved({ plan: UNION, members: [{}, {}] }), ['connection', 'polled', 'scope'])).toEqual([]);
   });
 });
+
+describe('a listen subscribed per scope (Airtable narrowed by base)', () => {
+  // `at-[b:Bases WHERE …]->-[t:Tables WHERE …]->-[c:Changes]->`: its `Changes`
+  // is subscribed per base its `Bases` hop lands on (`scopedBy`).
+  const AIRTABLE: ListenPlan = {
+    movement: 'changed',
+    connection: 'crm',
+    adapter: 'airtable',
+    hops: [
+      hop('Bases', '', 'Base', { judged: 'resolved' }),
+      hop('Tables', 'Base', 'Table', { judged: 'resolved' }),
+      hop('Changes', 'Table', 'Change', { judged: 'arrival' }),
+    ],
+  };
+  const airtable = (watching?: SavedListen['watching']) =>
+    saved({ plan: AIRTABLE, delivery: { kind: 'scope', scopedBy: 'Bases' }, ...(watching !== undefined ? { watching } : {}) });
+
+  it('is watched once per base it was resolved to, each key scoped by that base', () => {
+    const keys = listenEdgeKeysOf(airtable({ heads: ['appA', 'appB'], resolvedAt: '2026-11-03T00:00:00.000Z', failure: null }), ['scope']);
+    expect(keys.map(({ key }) => key.scope)).toEqual(['appA', 'appB']);
+    expect(keys.every(({ key }) => key.edge === 'Changes' && key.adapterType === 'airtable')).toBe(true);
+    // Two bases, two subscriptions: the digests differ.
+    expect(new Set(keys.map(({ digest }) => digest)).size).toBe(2);
+  });
+
+  it('is watched nowhere until it is resolved', () => {
+    expect(listenEdgeKeysOf(airtable(), ['scope'])).toEqual([]);
+    expect(listenEdgeKeysOf(airtable({ heads: [], resolvedAt: '2026-11-03T00:00:00.000Z', failure: null }), ['scope'])).toEqual([]);
+  });
+});

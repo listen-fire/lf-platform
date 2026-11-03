@@ -44,12 +44,14 @@ import type { TriggerId } from '../../generated/kysely/automations/Trigger';
 import type { MovementId } from '../../generated/kysely/automations/Movement';
 import type { TriggerRunId } from '../../generated/kysely/automations/TriggerRun';
 import type { UnjudgedArrival } from '../lf_store/records_door';
+import type { Resolution } from '../lf_store/listens';
 
 import { getAutomationsQb } from '../../lib/kysely';
 import { getAdapterManifest } from '../translation_graph/adapters/registry';
 import { resolveAdapter } from '../translation_graph/adapters/resolve';
 import { deliveryRowStore } from '../movement_engine/run_host_deliveries';
 import { chainBefore, loopSettings } from './loop_breaker';
+import { armResolveForArrivals, withWatching, withWatchingOne } from './listen_resolve';
 
 // ── A saved listen, as its trigger row keeps it ─────────────────────────────
 
@@ -57,7 +59,26 @@ import { chainBefore, loopSettings } from './loop_breaker';
  *  why it cannot (a node the program imports from another file). */
 const landingSchema = z.union([z.object({ declared: z.unknown() }), z.object({ unread: z.string() })]);
 
-const listenDeliverySchema = z.object({ kind: z.enum(['connection', 'scope', 'polled']), pollEverySeconds: z.number().positive().optional() });
+const deliveryKindSchema = z.enum(['connection', 'scope', 'polled']);
+
+const listenDeliverySchema = z.object({
+  kind: deliveryKindSchema,
+  pollEverySeconds: z.number().positive().optional(),
+  /** An edge pushed per scope whose subscription is made per record an
+   *  earlier hop, this edge named, landed on (Airtable's `Changes`, per base:
+   *  `Bases`), not per head. */
+  scopedBy: z.string().optional(),
+});
+
+/** A hop of one traversal whose members the host lists (`judged:
+ *  'resolved'`), by its place in the traversal, as its module declares its
+ *  edge: how its members' changes are learnt, and how that edge's arrivals
+ *  reach the host. */
+const resolvedHopSchema = z.object({
+  hop: z.number().int().nonnegative(),
+  membersChange: z.union([z.literal('pushed'), z.object({ relistEverySeconds: z.number().positive() })]).optional(),
+  delivery: deliveryKindSchema.optional(),
+});
 
 /** What provisioning keeps on a listen's trigger row (`trigger.config`): the
  *  plan the check made, its pipeline, its connection's construction, the
@@ -77,12 +98,18 @@ export const listenConfigSchema = z.object({
      *  `pollEverySeconds` (poll_source/worker.ts). Absent when undeclared,
      *  and for a listen over a union, whose members say it each. */
     delivery: listenDeliverySchema.optional(),
+    /** The hops of its own traversal whose members the host lists
+     *  (listen_resolve.ts); absent for none, and for a listen over a union,
+     *  whose members say it each. */
+    resolvedHops: z.array(resolvedHopSchema).optional(),
     /** A listen over a union: how each member's last edge is delivered, off
-     *  that member's record type, in the order of its plan's `members`. */
-    members: z.array(z.object({ delivery: listenDeliverySchema.optional() })).optional(),
+     *  that member's record type, and the hops of it the host lists, in the
+     *  order of its plan's `members`. */
+    members: z.array(z.object({ delivery: listenDeliverySchema.optional(), resolvedHops: z.array(resolvedHopSchema).optional() })).optional(),
   }),
 });
 export type ListenConfig = z.infer<typeof listenConfigSchema>['listen'];
+export type ResolvedHop = z.infer<typeof resolvedHopSchema>;
 
 /** One saved listen of a team: its trigger row and what it keeps. */
 export interface SavedListen extends ListenConfig {
@@ -92,6 +119,10 @@ export interface SavedListen extends ListenConfig {
   file: string;
   /** The connection's credential, as the team resolved its name at save. */
   credentialsId: string | null;
+  /** A listen with a hop the host lists: what its last resolve came to, as
+   *  the store keeps it (listen_resolve.ts). Absent for one never resolved,
+   *  which is watched under no record, and for any other listen. */
+  watching?: Resolution;
 }
 
 /** The listens `teamId` saved (on `adapterType`'s module, when it names one;
@@ -107,11 +138,12 @@ export async function savedListens(input: { teamId: TeamId; adapterType?: string
   const rows = await query
     .select(['trigger.id as id', 'trigger.config as config', 'trigger.credentials_id as credentialsId', 'movement.name as file'])
     .execute();
-  return rows.flatMap((row) => {
+  const listens = rows.flatMap((row) => {
     const parsed = listenConfigSchema.safeParse(row.config);
     if (!parsed.success) return [];
     return [{ ...parsed.data.listen, triggerId: row.id, teamId: input.teamId, file: row.file, credentialsId: row.credentialsId ?? null }];
   });
+  return withWatching(listens);
 }
 
 /** The saved listen a trigger row is, or null when it is no listen. */
@@ -126,7 +158,7 @@ export async function savedListenOf(triggerId: TriggerId): Promise<SavedListen |
   const parsed = listenConfigSchema.safeParse(row.config);
   if (!parsed.success) return null;
   // The row's team as the branded id the rest of the door carries (its boundary).
-  return { ...parsed.data.listen, triggerId: row.id, teamId: row.teamId as TeamId, file: row.file, credentialsId: row.credentialsId ?? null };
+  return withWatchingOne({ ...parsed.data.listen, triggerId: row.id, teamId: row.teamId as TeamId, file: row.file, credentialsId: row.credentialsId ?? null });
 }
 
 // ── Judging a delivery's arrivals ───────────────────────────────────────────
@@ -540,7 +572,7 @@ export async function deliverArrivals(input: {
   const now = new Date();
   const listens = input.listens ?? (await savedListens({ teamId: input.teamId, adapterType: input.delivered.adapterType }));
   const judged = judgeArrivals({ listens, delivery: input.delivered, arrivals: input.arrivals, now });
-  const kept = await keepJudgedDelivery({
+  const result = await keepJudgedDelivery({
     teamId: input.teamId,
     subscriptionId: input.subscriptionId,
     adapterType: input.delivered.adapterType,
@@ -552,5 +584,13 @@ export async function deliverArrivals(input: {
     ...(input.request !== undefined ? { request: input.request } : {}),
     now,
   });
-  return kept;
+  // A module that pushes its members' changes reports them as arrivals on the
+  // members' own edge (Airtable's `Tables`): a listen the host lists those for
+  // is listed again, so a base or table made, renamed or removed moves what it
+  // watches.
+  if (result.kept.kept) {
+    const edges = [...new Set(input.arrivals.flatMap((arrival) => ('gone' in arrival ? [] : [arrival.edge])))];
+    await armResolveForArrivals({ edges, listens });
+  }
+  return result;
 }

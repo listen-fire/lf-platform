@@ -163,3 +163,39 @@ describe('judgeArrivals', () => {
     ]);
   });
 });
+
+// A listen narrowed by base and table (`at-[b:Bases WHERE b.Name == "Hiring"]
+// ->-[t:Tables WHERE t.Name == "Deals"]->-[x:Changes]->`): its base and table
+// hops are listed to subscribe per base (listen_resolve.ts), but the judge
+// fires each arrival from the base and table it carries. The door needs no
+// knowledge of the resolution to fire — the engine's `carries` does it.
+describe('a base-and-table-narrowed Airtable listen is judged from what the arrival carries', () => {
+  const carried = corpus.plans.carried!.plan;
+  const air = (): SavedListen => listen({ pipeline: 'listen:crm.lf:changed:00', plan: carried, file: 'crm.lf' });
+  const change = (caseName: string): Exclude<Arrival, { gone: true }> => {
+    const found = corpus.cases.find((c) => c.plan === 'carried' && c.case === caseName);
+    if (found === undefined) throw new Error(`no carried conformance case '${caseName}'`);
+    return { ...found.arrival, identity: 'c1' } as Exclude<Arrival, { gone: true }>;
+  };
+
+  it('fires under the base and table the listen names', () => {
+    const judged = judgeArrivals({
+      listens: [air()],
+      delivery: { adapterType: 'air', credentialsId: null },
+      arrivals: [change('a change carrying its base and table fires: a hop the host lists is judged on the record the arrival carries for it')],
+      now: NOW,
+    });
+    expect(judged.minted).toHaveLength(1);
+  });
+
+  it('skips a change under another table', () => {
+    const judged = judgeArrivals({
+      listens: [air()],
+      delivery: { adapterType: 'air', credentialsId: null },
+      arrivals: [change('a change carrying a table of another name skips at Tables')],
+      now: NOW,
+    });
+    expect(judged.minted).toEqual([]);
+    expect(judged.lines).toEqual([]);
+  });
+});

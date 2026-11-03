@@ -12,47 +12,78 @@ import {
   triggerAwaitsOf,
 } from 'movement-engine/public/inbound';
 
-import { memberPlans, type ListenPlan } from 'engine-contracts';
+import { memberPlans, type ListenPlan, type PlanHop } from 'engine-contracts';
 import { checkAnswerInRust } from 'movement-lang';
 import type { CatalogSnapshot, EdgeListening, InstanceSchema, LanguageVersion, Program } from 'movement-lang';
-import type { ListenConfig } from '../../inbound/listen_door';
+import type { ListenConfig, ResolvedHop } from '../../inbound/listen_door';
 import { keylessInboxListen } from '../adapters/email/listen_keys';
 
-/** Why this host would not fire `plan` as written, if it would not: only
- *  listen-fire lists the members of an earlier hop whose WHERE an arrival
- *  does not carry the record for (a `resolved` hop), in the listen's own
- *  traversal or any member's of a union. Judged here with that hop unjudged,
- *  it would fire under every member. */
-function unfiredHere(plan: ListenPlan): string | null {
-  const resolved = memberPlans(plan).flatMap((traversal) => traversal.hops.filter((hop) => hop.judged === 'resolved').map((hop) => `\`${hop.edge}\``));
-  if (resolved.length === 0) return null;
-  return `the listen that fires ${plan.movement} filters ${[...new Set(resolved)].join(', ')} by a WHERE its module's arrivals do not carry the record for: this host cannot judge it, and would fire under every one. Filter that hop on the landing's fields instead`;
+/** Why this host would not fire `plan` as written, if it would not: a
+ *  `resolved` hop — one whose WHERE the host lists the members of rather than
+ *  judging on arrival — whose edge the traversal's last edge does NOT carry
+ *  (`carries`). Where the last edge carries it (Airtable's `Changes` carries
+ *  its base and table), the judge fires from the arrival and the host only
+ *  lists the hop to subscribe per base (listen_resolve.ts); where it does
+ *  not, the host would fire under every member. Over a union, each member's
+ *  own `carries`. */
+export function unfiredHere(plan: ListenPlan): string | null {
+  const unlisted = memberPlans(plan).flatMap((traversal) =>
+    traversal.hops.filter((hop) => hop.judged === 'resolved' && !(traversal.carries ?? []).includes(hop.edge)).map((hop) => `\`${hop.edge}\``),
+  );
+  if (unlisted.length === 0) return null;
+  return `the listen that fires ${plan.movement} filters ${[...new Set(unlisted)].join(', ')} by a WHERE its module's arrivals do not carry the record for: this host cannot judge it, and would fire under every one. Filter that hop on the landing's fields instead`;
 }
 
-/** How the arrivals on one traversal's last edge reach the host, as `schema`
- *  (its connection's) declares that edge, off that traversal's own record
- *  type, or that root collection. */
+/** What `schema` (the traversal's connection's) declares of one hop's edge,
+ *  off that hop's own record type, or that root collection. */
+function declaredEdge(schema: InstanceSchema | undefined, hop: PlanHop): EdgeListening | undefined {
+  if (schema === undefined) return undefined;
+  return hop.from === '' ? schema.collections[hop.edge] : schema.positions[hop.from]?.edges[hop.edge];
+}
+
+/** How the arrivals on one traversal's last edge reach the host: pushed to
+ *  the connection or per scope (`scopedBy`, the earlier hop whose records it
+ *  is subscribed per — Airtable's `Changes` per base, `Bases`), or polled. */
 function deliveryOf(schema: InstanceSchema | undefined, traversal: ListenPlan): ListenConfig['delivery'] {
   const last = traversal.hops.at(-1);
-  if (schema === undefined || last === undefined) return undefined;
-  const declared: EdgeListening | undefined = last.from === '' ? schema.collections[last.edge] : schema.positions[last.from]?.edges[last.edge];
+  if (last === undefined) return undefined;
+  const declared = declaredEdge(schema, last);
   if (declared?.delivery === undefined) return undefined;
-  return { kind: declared.delivery, ...(declared.pollEverySeconds !== undefined ? { pollEverySeconds: declared.pollEverySeconds } : {}) };
+  return {
+    kind: declared.delivery,
+    ...(declared.pollEverySeconds !== undefined ? { pollEverySeconds: declared.pollEverySeconds } : {}),
+    ...(declared.scopedBy !== undefined ? { scopedBy: declared.scopedBy } : {}),
+  };
 }
 
-/** How each traversal of `plan` is delivered: the listen's own, or, over a
- *  union, each member's in the plan's order (`members`). */
-function deliveriesOf(schema: InstanceSchema | undefined, plan: ListenPlan): Pick<ListenConfig, 'delivery' | 'members'> {
-  if (plan.members === undefined) {
-    const delivery = deliveryOf(schema, plan);
-    return delivery !== undefined ? { delivery } : {};
-  }
-  return {
-    members: memberPlans(plan).map((traversal) => {
-      const delivery = deliveryOf(schema, traversal);
-      return delivery !== undefined ? { delivery } : {};
-    }),
+/** The hops of one traversal whose members the host lists (`judged:
+ *  'resolved'`), each with how its members' changes are learnt and how its
+ *  edge is delivered (listen_resolve.ts reads both). */
+function resolvedHopsOf(schema: InstanceSchema | undefined, traversal: ListenPlan): ResolvedHop[] {
+  return traversal.hops.flatMap((hop, index): ResolvedHop[] => {
+    if (hop.judged !== 'resolved') return [];
+    const declared = declaredEdge(schema, hop);
+    return [
+      {
+        hop: index,
+        ...(declared?.membersChange !== undefined ? { membersChange: declared.membersChange } : {}),
+        ...(declared?.delivery !== undefined ? { delivery: declared.delivery } : {}),
+      },
+    ];
+  });
+}
+
+/** How each traversal of `plan` is delivered and what hops of it the host
+ *  lists: the listen's own, or, over a union, each member's in the plan's
+ *  order (`members`). */
+function listenShapeOf(schema: InstanceSchema | undefined, plan: ListenPlan): Pick<ListenConfig, 'delivery' | 'resolvedHops' | 'members'> {
+  const shapeOf = (traversal: ListenPlan): { delivery?: ListenConfig['delivery']; resolvedHops?: ResolvedHop[] } => {
+    const delivery = deliveryOf(schema, traversal);
+    const resolvedHops = resolvedHopsOf(schema, traversal);
+    return { ...(delivery !== undefined ? { delivery } : {}), ...(resolvedHops.length > 0 ? { resolvedHops } : {}) };
   };
+  if (plan.members === undefined) return shapeOf(plan);
+  return { members: memberPlans(plan).map(shapeOf) };
 }
 
 function messageOf(error: unknown): string {
@@ -103,7 +134,7 @@ export function plannedListensOfSource(input: {
       awaits: triggerAwaitsOf({ program: input.program, stamps: answer.stamps, plan: listen.plan }),
       fieldIds: fieldIdsOf(schema),
       ...(landing !== undefined ? { landing } : {}),
-      ...deliveriesOf(schema, listen.plan),
+      ...listenShapeOf(schema, listen.plan),
     });
   }
   return { listens, refused };

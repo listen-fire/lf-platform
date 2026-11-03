@@ -55,11 +55,14 @@ import { registerWorkHandler } from '../../work/drain';
 export const MOVEMENT_LISTEN_PROVISIONER = 'movement-listen';
 
 /** What a provisioned row's `subscriptions` cell keeps for an edge's
- *  subscription: its key, and the digest it is found by. */
+ *  subscription: its key, and the digest it is found by. An edge pushed per
+ *  scope (Airtable's `Changes`, one webhook per base) keeps the record that
+ *  scope is, so the module is told which base to register, remove or refresh. */
 const edgeSubscriptionSchema = z.object({
   digest: z.string(),
   edge: z.string(),
   filter: z.unknown().optional(),
+  scope: z.string().optional(),
   constructionArgs: z.record(z.string(), z.string()).optional(),
 });
 type EdgeSubscription = z.infer<typeof edgeSubscriptionSchema>;
@@ -149,6 +152,7 @@ async function desiredSubscriptions(
           digest,
           edge: key.edge,
           ...(key.taken !== undefined ? { filter: key.taken } : {}),
+          ...(key.scope !== undefined ? { scope: key.scope } : {}),
           ...(key.constructionArgs !== undefined ? { constructionArgs: key.constructionArgs } : {}),
         },
       });
@@ -190,7 +194,13 @@ function usableSecret(secret: string | null): boolean {
 function removalOf(row: Pick<SubscriptionRow, 'held' | 'externalWebhookId' | 'legacyScope'>, callbackUrl: string) {
   const externalId = row.externalWebhookId !== null ? { externalId: row.externalWebhookId } : {};
   if (row.held !== null) {
-    return { edge: row.held.edge, ...(row.held.filter !== undefined ? { filter: row.held.filter } : {}), callbackUrl, ...externalId };
+    return {
+      edge: row.held.edge,
+      ...(row.held.filter !== undefined ? { filter: row.held.filter } : {}),
+      ...(row.held.scope !== undefined ? { scope: row.held.scope } : {}),
+      callbackUrl,
+      ...externalId,
+    };
   }
   return { callbackUrl, ...externalId, ...(Object.keys(row.legacyScope).length > 0 ? { scope: row.legacyScope } : {}) };
 }
@@ -268,6 +278,7 @@ async function ensureSubscription(input: {
   const registration = await adapter.ensureEventSubscription({
     edge: held.edge,
     ...(held.filter !== undefined ? { filter: held.filter } : {}),
+    ...(held.scope !== undefined ? { scope: held.scope } : {}),
     callbackUrl,
     ...(row.externalWebhookId !== null ? { current: { externalId: row.externalWebhookId } } : {}),
   });

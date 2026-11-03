@@ -115,7 +115,8 @@ import {
 } from './authoring';
 import { checkInstalled, routeOf } from './language_route';
 import { plannedListensOfSource } from './listen_plans';
-import { listenConfigSchema, type ListenConfig } from '../../inbound/listen_door';
+import { listenConfigSchema, type ListenConfig, type SavedListen } from '../../inbound/listen_door';
+import { resolveAndArm, resolvesListen } from '../../inbound/listen_resolve';
 import { listenPauses, type ListenPause } from '../../inbound/listen_pause';
 
 /** Resource-change hint for a movement save/delete — fired from the
@@ -634,6 +635,21 @@ async function provisionListeners(input: {
   // Its own one-shot row, not the periodic one: while a drain holds the
   // periodic row's lease, a request on that key is pushed to the next interval.
   for (const kind of reconciles) await enqueueWork({ kind, key: `${kind}:shipped` });
+
+  // A listen the host lists the members of (Airtable narrowed by base or
+  // table) is listed now, before its subscriptions are synced, so they are
+  // made per record it is subscribed under (its base); the clock relist is
+  // armed with it (listen_resolve.ts). Read off the reconcile's own rows, not
+  // the store, so no listen re-read is owed. A failure keeps the listen saved
+  // and surfaces as a note, never blocks the save.
+  await within('resolveListens', async () => {
+    for (const listener of listeners) {
+      const parsed = listenConfigSchema.safeParse(listener.config);
+      if (!parsed.success || !resolvesListen(parsed.data.listen)) continue;
+      const listen: SavedListen = { ...parsed.data.listen, triggerId: listener.triggerId as TriggerId, teamId: input.teamId as TeamId, file: input.movementRow.name, credentialsId: listener.credentialsId };
+      await resolveAndArm(listen);
+    }
+  });
 
   // External event subscriptions follow the listens: the trigger table is
   // now the desired state, so the global per-team diff-sync (attio

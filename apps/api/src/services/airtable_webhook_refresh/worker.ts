@@ -16,7 +16,7 @@
 
 import type { WorkHandler } from '../work/kinds';
 import type { WorkKindRegistration } from '../work/drain';
-import type { RefreshEventSubscriptionInput } from 'engine-contracts';
+import type { RefreshEdgeSubscriptionInput } from 'engine-contracts';
 import type { WebhookSubscriptionId } from '../../generated/kysely/automations/WebhookSubscription';
 
 import { logger } from 'movement-engine/public/log';
@@ -68,11 +68,12 @@ export async function refreshDueAirtableWebhooks(now = new Date()): Promise<void
       if (adapter.refreshEventSubscription === undefined) {
         throw new Error('the Airtable module cannot refresh a webhook subscription');
       }
-      // The engine's contract types the refresh of a 0.12 webhook only; the
-      // module reads an edge's too (module-kit `RefreshEdgeSubscriptionInput`).
-      const refresh: RefreshEventSubscriptionInput & { edge: string; filter?: unknown } = {
+      // An edge's refresh, told from a 0.12 webhook's by naming the edge; a
+      // `Changes` webhook names the base it is for (`scope`).
+      const refresh: RefreshEdgeSubscriptionInput = {
         edge: held.edge,
         ...(held.filter !== undefined ? { filter: held.filter } : {}),
+        ...(held.scope !== undefined ? { scope: held.scope } : {}),
         externalId: row.external_webhook_id,
       };
       await adapter.refreshEventSubscription(refresh);
