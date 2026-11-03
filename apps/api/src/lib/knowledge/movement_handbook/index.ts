@@ -11,7 +11,10 @@ import {
   getMovementDoctrine,
   languageIndex as languageIndexOver,
   readChapter,
+  renderExampleIndex,
+  renderExampleLookup,
   renderIndex,
+  searchExamples,
   searchLanguage as searchLanguageOver,
   type Chapter,
   type Handbook,
@@ -138,4 +141,13 @@ export function languageIndex(): LanguageEntry[] {
 /** The best few entries for `query` over the assembled book, optionally of one kind. */
 export function searchLanguage(input: { query: string; kind?: LanguageSearchKind }): LanguageSearchResult {
   return searchLanguageOver(input, getMovementHandbook().chapters);
+}
+
+/** A few checked lines doing what `query` asks (the language's micro
+ *  examples, as `listen-fire example` serves them); with no words, every
+ *  example's intent. */
+export function showExample(input: { query?: string }): string {
+  const query = input.query?.trim() ?? '';
+  if (query === '') return `Every example; ask for one in your own words:\n${renderExampleIndex()}`;
+  return renderExampleLookup(query, searchExamples(query));
 }

@@ -1,41 +1,15 @@
-// Manual's conceptual authoring documentation — assembled into the automation
-// handbook as the `system:manual` chapter, bound by the same prose contract as
-// every hand-written chapter.
+// Manual's authoring documentation is the language handbook's own
+// `system:manual` chapter (`UNIT_CHAPTERS`), so the platform serves the text the
+// language checks; the platform adds only the probe its engine-claims check runs.
 
+import { UNIT_CHAPTERS } from '@listen-fire/handbook';
 import type { HandbookSection } from 'movement-engine/public/handbook';
 
+const CHAPTER = UNIT_CHAPTERS['system:manual'];
+
 export const MANUAL_HANDBOOK_SECTION: HandbookSection = {
-  title: 'Run now — ad-hoc runs, text, and files (manual)',
-  content: `## Run now — ad-hoc runs, text, and files (manual)
-
-Listen to \`manual\` to let a person — or an agent — start a run by hand. It is the host's own — no import, no \`connect\`. "Run now", pasted text, and uploaded files all arrive on its \`Invocations\`, each one an \`Invocation\`:
-
-\`\`\`
-crm = connect \`@lf/attio\` using acme_main
-
-node Company: "each company named in the supplied text or files" {
-  name:   <text> "the company's name"
-  domain: <text> "the company's web domain, if given"
-}
-
-function \`Import Companies\`(go: <manual-[:Invocations]->>) {
-  found = extract([go.Text, ...go-[:Files]->.File], Company)
-
-  map(found, (c) => {
-    write crm-[:Companies]-> {
-      unique by (FUZZY Name)
-      Name:    c.name
-      Domains: c.domain
-    }
-  })
-}
-
-listen as "Import companies" to manual-[:Invocations]-> fire \`Import Companies\`
-\`\`\`
-
-- The example is the whole pattern: whatever the person supplied — \`go.Text\`, uploaded \`Files\` — goes into the extraction's content, and the writes fan out from what was found.
-- Only \`Fired at\` is always present; \`Text\`, \`Run by (email)\` / \`(name)\`, and the \`Files\` edge are optional — a bare run has empty text and zero files. A \`File\` position carries \`Name\`, \`Content Type\`, \`Size\`, and the file itself.
-- A backfill is this same channel with the source read in the body: \`crm-[c:Companies]-> { … }\` runs the block once per existing record. The parameter stays the \`Invocation\`.`,
+  title: CHAPTER.title,
+  content: CHAPTER.content,
   engineClaims: [
     {
       construct: 'manual-channel backfills (instance-rooted traversal in the body)',

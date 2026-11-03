@@ -38,7 +38,7 @@ const WHATSAPP_CONFIRM_DESCRIPTION: Record<WhatsappLinkVerification, string> = {
 // instructions, and a second voice competes with the skill's.
 const AUTOMATION_INSTRUCTIONS =
   "To automate anything for the user — react to events, move data between their systems, push into their CRM or chat — build an \"automation\" here: a small program over their real connected systems. This connector is how you make Listen-Fire DO things.\n\n" +
-  "The loop. Call getStarted first: one call returns the handbook's front page (where this language differs from TypeScript, the few ideas it adds, the build loop), your team, and its connected systems with their record types and fields. The handbook's chapters are not needed: look up anything else — a built-in's signature, a system's behaviour, a recipe — with searchLanguage, and read the anchor a result or a diagnostic names with readHandbook (\"front#maybe-absent\"); where anything else disagrees with the handbook, the handbook wins. " +
+  "The loop. Call getStarted first: one call returns the handbook's front page (where this language differs from TypeScript, the few ideas it adds, the build loop), your team, and its connected systems with their record types and fields. The handbook's chapters are not needed: look up anything else — a built-in's signature, a system's behaviour, a recipe — with searchLanguage, and read the anchor a result or a diagnostic names with readHandbook (\"front#maybe-absent\"); where anything else disagrees with the handbook, the handbook wins. Unsure how to write something? showExample, asked in words, answers with a few checked lines doing it. " +
   "Reconcile getStarted's systems against the task — mint any missing connection first via connectSystem. Author against the real record and field names (getStarted's digest; describeConnection for more of one system), never from memory. Then saveAutomation: it validates first and saves nothing while there are errors, handing back the diagnostics, so a separate validateAutomation is not needed. Then runAutomation on real input; checkRun and inspectRun show what a run did. Make independent tool calls together, in one turn. Once something is saved, prefer a small edit over resending the whole program: readAutomation (or getAutomation, which also carries its metadata) to see the current text, grepAutomations to find where something is defined or used, and editAutomation to change it — anchored on a unique snippet plus the revision you just read, so a concurrent edit is caught instead of clobbered. Reach for saveAutomation itself only for a brand-new automation or a genuine rewrite. A write a third party sees (an email, a message to someone else) gets an approval step inside the automation — a question a person acts on. The user's knowledge graph is reachable as the `kg` system in listConnections.\n\nTeams. This connection may span several teams; getStarted lists them with their ids. Creating or changing anything in a team needs its id as `team`; with exactly one team you may omit it.";
 
 /** The connector as served: what a client is told and the tools it is offered. */
@@ -170,6 +170,16 @@ function automationConnectorOptions(): McpRouterOptions {
         },
         title: 'Search the automation language',
         endpoint: { method: 'POST', path: '/v1/automation/language/search' },
+      },
+      showExample: {
+        description:
+          'Unsure how to write something? Say it in your own words ("create or update a record", "run every Monday", "a value chosen by a condition", "remove repeats from a list") and get back a few lines of checked automation code doing exactly that, each under a comment saying what it does. The connection names in them (my_github, team_mail, team_chat) stand for yours. No words → every example\'s intent.',
+        annotations: { readOnlyHint: true },
+        inputSchema: {
+          query: z.string().optional().describe('What you want to write, in words.'),
+        },
+        title: 'Show a micro example',
+        endpoint: { method: 'POST', path: '/v1/automation/language/example' },
       },
       listConnections: {
         description:

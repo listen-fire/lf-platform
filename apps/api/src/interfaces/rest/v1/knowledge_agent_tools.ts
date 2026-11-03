@@ -36,6 +36,7 @@ import { readBook } from '../../../lib/knowledge/library';
 import {
   LANGUAGE_SEARCH_KINDS,
   searchLanguage,
+  showExample,
 } from '../../../lib/knowledge/movement_handbook';
 import { getNodeDetail } from '../../../lib/knowledge/knowledge_query';
 import {
@@ -232,6 +233,18 @@ const searchLanguageSchema = z.object({
 const searchLanguageHandler: RequestHandler = jsonHandler(searchLanguageSchema, 'body', async (input) =>
   searchLanguage({ query: input.query, ...(input.kind ? { kind: input.kind } : {}) }),
 );
+
+const showExampleSchema = z.object({
+  query: z.string().optional(),
+});
+
+const showExampleHandler: RequestHandler = (req, res) => {
+  const parsed = showExampleSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() });
+  }
+  return res.status(200).type('text/markdown').send(showExample(parsed.data.query !== undefined ? { query: parsed.data.query } : {}));
+};
 
 // ---------------------------------------------------------------------------
 // knowledge.read — getNodeDetail, getRecipe, getOntology
@@ -1624,6 +1637,7 @@ function mountAutomationToolRoutes(router: ReturnType<typeof Router>): void {
   // library.read — the authoring handbook
   router.post('/handbook', readBookHandler);
   router.post('/language/search', searchLanguageHandler);
+  router.post('/language/example', showExampleHandler);
 
   // catalog.read
   router.get('/connections', listCatalogHandler);
@@ -1744,6 +1758,12 @@ function registerAutomationToolRoutes(): void {
     '/language/search',
     'Search the automation language: built-in functions (generated signatures), the front page\'s concepts, recipes, and what each system and plugin documents. Body: { query, kind?: "function" | "concept" | "recipe" }. Returns at most a few entries, each with its purpose, signature or short text, an example, and an anchor readHandbook serves. Also the top-level "searchLanguage" tool.',
     { inputSchema: searchLanguageSchema, readOnly: true, latency: 'fast' },
+  );
+  reg(
+    'POST',
+    '/language/example',
+    'A few lines of checked automation code doing what the words ask ("create or update a record", "run every Monday"), each under a comment saying what it does. Body: { query? }; no words → every example\'s intent. Also the top-level "showExample" tool.',
+    { inputSchema: showExampleSchema, readOnly: true, latency: 'fast' },
   );
 
   // connected systems

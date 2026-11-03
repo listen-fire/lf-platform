@@ -23,6 +23,12 @@ describe('the build loop the connector teaches', () => {
     expect(description('readHandbook')).toContain('searchLanguage');
   });
 
+  it('offers showExample, as the front page names it: read-only, behind its own route', () => {
+    expect(AUTOMATION_INSTRUCTIONS).toContain('showExample, asked in words');
+    expect(tools.showExample?.annotations).toEqual({ readOnlyHint: true });
+    expect(tools.showExample?.endpoint).toEqual({ method: 'POST', path: '/v1/automation/language/example' });
+  });
+
   it('offers getStarted as the place to start, read-only, behind its own route', () => {
     expect(description('getStarted')).toMatch(/^START HERE/);
     expect(tools.getStarted?.annotations).toEqual({ readOnlyHint: true });

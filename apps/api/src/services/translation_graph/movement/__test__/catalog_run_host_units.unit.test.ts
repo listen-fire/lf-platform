@@ -19,7 +19,7 @@ import { diagnoseMovementSource } from '../authoring';
 jest.mock('../../../../lib/kysely', () => {
   const tables: Record<string, Array<Record<string, unknown>>> = {
     external_service_credentials: [
-      { id: 'cred-attio-1', name: 'acme_main', type: 'ATTIO', created_at: new Date(1) },
+      { id: 'cred-attio-1', name: 'acme', type: 'ATTIO', created_at: new Date(1) },
     ],
   };
   function builder(table: string) {
