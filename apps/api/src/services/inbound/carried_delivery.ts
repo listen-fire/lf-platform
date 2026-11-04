@@ -10,7 +10,7 @@
 // when its listens fire; or a run it parked on that module's keys, whose reply
 // this may be.
 
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import { sql } from 'kysely';
 import { z } from 'zod';
@@ -26,10 +26,12 @@ import type { TriggerEventId } from '../../generated/kysely/automations/TriggerE
 import { getAutomationsQb } from '../../lib/kysely';
 import { teamIdSchema } from '../../lib/team_id';
 import { queueAwaitWakesOf } from '../movement_engine/carried_correlations';
-import { deliveryRowStore } from '../movement_engine/run_host_deliveries';
+import { WAITING_KEY_PREFIX, deliveryRowStore } from '../movement_engine/run_host_deliveries';
 import { notifyWork, registerWorkHandler } from '../work/drain';
 import { enqueueWork } from '../work/store';
 import { modulePlatform } from '../translation_graph/movement/carried_run';
+import { MOVEMENT_LISTEN_PROVISIONER } from '../translation_graph/movement/carried_subscriptions';
+import { edgeSubscriptionOf } from '../translation_graph/movement/listen_subscriptions';
 import { siblingKindsForAdapter } from '../translation_graph/adapters/registry';
 import { dispatchWorkKey } from '../translation_graph/triggers/dispatch_event';
 import { storeTriggerEvent } from '../translation_graph/triggers/event_store';
@@ -70,10 +72,33 @@ function kindsOf(origin: Pick<DeliveryOrigin, 'adapterType' | 'providerKey'>): s
   return [...new Set([origin.adapterType, ...(origin.providerKey !== undefined ? [origin.providerKey] : []), ...siblingKindsForAdapter(origin.adapterType)])];
 }
 
+/** Whether a carried version hears this delivery where it arrived. Each version
+ *  registers its own webhook, so a source with both posts each event to both: a
+ *  version with a webhook of its own on this channel reads only that one's. A row
+ *  a current listen holds carries what it filtered for, and a version without a
+ *  webhook here (a module with no subscriptions, or one a source refused) reads it
+ *  as the door's one delivery. */
+async function arrivedWhereCarriedHears(origin: DeliveryOrigin, subscriptionId: string): Promise<boolean> {
+  if (origin.providerKey === undefined) return true;
+  const rows = await getAutomationsQb(['webhook_subscription'])
+    .selectFrom('webhook_subscription')
+    .where('team_id', '=', origin.teamId)
+    .where('provider', '=', origin.providerKey)
+    .where('deleted_at', 'is', null)
+    .where('provisioned_by', '=', MOVEMENT_LISTEN_PROVISIONER)
+    .where('status', '=', 'active')
+    .select(['id', 'credentials_id', 'subscriptions'])
+    .execute();
+  const here = rows.find((row) => row.id === subscriptionId);
+  if (here === undefined || edgeSubscriptionOf(here.subscriptions) === null) return true;
+  return !rows.some((row) => edgeSubscriptionOf(row.subscriptions) === null && ((row.credentials_id as string | null) ?? null) === origin.credentialsId);
+}
+
 /** The keys of the carried versions something rides on this delivery for. */
-async function versionsConcerned(origin: DeliveryOrigin): Promise<string[]> {
+async function versionsConcerned(origin: DeliveryOrigin, subscriptionId: string): Promise<string[]> {
   const carried = carriedVersions().filter((version) => version.provides.listen.kind === 'carried' || version.provides.resume.kind === 'carried');
   if (carried.length === 0) return [];
+  if (!(await arrivedWhereCarriedHears(origin, subscriptionId))) return [];
   const pins = await getAutomationsQb(['trigger', 'movement'])
     .selectFrom('trigger')
     .innerJoin('movement', 'movement.id', 'trigger.movement_id')
@@ -114,14 +139,21 @@ function readingRows(origin: DeliveryOrigin, deliveryId: string, versions: reado
   });
 }
 
-export type KeptFirst = { kind: 'read'; deliveryId: string } | { kind: 'duplicate' };
+export type KeptFirst = { kind: 'read'; deliveryId: string; keptAt: Date } | { kind: 'duplicate' };
+
+/** What a delivery is named by while it waits for the current version to judge
+ *  it: a provider's retry of it carries the same request, and sends no id every
+ *  version could read. */
+export function waitingKeyOf(request: { rawBody: Buffer; query?: string }): string {
+  return `${WAITING_KEY_PREFIX}${createHash('sha256').update(request.query ?? '').update('\0').update(request.rawBody).digest('hex')}`;
+}
 
 /**
  * The delivery as it arrived (redacted: captured_request.ts), kept before any
  * version reads it, with one reading row per carried version it concerns.
  * `duplicate`: its external id was kept and judged before. A retry of one kept
  * but not yet judged is read again by the current version; its carried rows
- * were queued with the first keep.
+ * were queued with the first keep, so no carried version reads it twice.
  */
 export async function keepForEveryVersion(input: {
   origin: DeliveryOrigin;
@@ -132,7 +164,6 @@ export async function keepForEveryVersion(input: {
 }): Promise<KeptFirst> {
   const { origin } = input;
   const id = randomUUID();
-  const versions = await versionsConcerned(origin);
   const kept = await deliveryRowStore({ host: 'platform', teamId: origin.teamId }).keepRawDelivery({
     delivery: {
       id,
@@ -142,10 +173,15 @@ export async function keepForEveryVersion(input: {
       source: input.source,
       request: input.request,
     },
-    work: readingRows(origin, id, versions),
+    work: async () => readingRows(origin, id, await versionsConcerned(origin, input.subscriptionId)),
   });
   if (kept.alreadyKept && kept.judged) return { kind: 'duplicate' };
-  return { kind: 'read', deliveryId: kept.id };
+  return { kind: 'read', deliveryId: kept.id, keptAt: kept.keptAt };
+}
+
+/** The current version read a kept delivery and found nothing in it. */
+export async function judgedEmpty(input: { teamId: string; id: string }): Promise<void> {
+  await deliveryRowStore({ host: 'platform', teamId: input.teamId }).judgedEmpty({ id: input.id });
 }
 
 /** The listens on a module pinned to a carried version whose listens fire, for
@@ -204,11 +240,15 @@ async function keptDeliveryOf(row: ReadDeliveryRow): Promise<CarriedKeptDelivery
 }
 
 /** A receipt and its row, for one listen the version judged: a redelivery of a
- *  receipt still waiting queues it again, as its row may have been lost. */
-export async function receiveJudgedEvent(input: { teamId: TeamId; triggerId: string; event: CarriedEvent; lane: Pick<ListeningLane, 'readEvent'> }): Promise<void> {
+ *  receipt still waiting queues it again, as its row may have been lost.
+ *  `stableKey`: what names the event when its source gave it no id, so a reading
+ *  taken again keeps one receipt. */
+export async function receiveJudgedEvent(input: { teamId: TeamId; triggerId: string; event: CarriedEvent; lane: Pick<ListeningLane, 'readEvent'>; stableKey?: string }): Promise<void> {
   const read = input.lane.readEvent(input.event);
   if (!read.ok) throw new Error(`a judged event could not be read by its own version: ${read.reason}`);
-  const stored = await storeTriggerEvent({ teamId: input.teamId, triggerId: input.triggerId, event: { json: input.event, record: read.record } });
+  const idempotencyKey = read.record.idempotencyKey ?? input.stableKey;
+  const record = idempotencyKey !== undefined ? { ...read.record, idempotencyKey } : read.record;
+  const stored = await storeTriggerEvent({ teamId: input.teamId, triggerId: input.triggerId, event: { json: input.event, record } });
   if (stored.duplicate && (await receiptStatus(stored.id)) !== 'received') return;
   await enqueueWork({
     kind: 'dispatch_event',
@@ -252,7 +292,9 @@ async function runReadDelivery(payload: unknown): Promise<void> {
     modulePlatform(),
   );
   for (const line of read.lines) logger.warn(`[ReadDelivery] ${line}`);
-  for (const receipt of read.receipts) await receiveJudgedEvent({ teamId: row.teamId, triggerId: receipt.triggerId, event: receipt.event, lane });
+  for (const [index, receipt] of read.receipts.entries()) {
+    await receiveJudgedEvent({ teamId: row.teamId, triggerId: receipt.triggerId, event: receipt.event, lane, stableKey: `delivery:${row.deliveryId}:${index}` });
+  }
   await queueAwaitWakesOf({ adapterType: row.adapterType, teamId: row.teamId, keys: read.wakeKeys });
   notifyWork();
 }

@@ -14,7 +14,9 @@
 import './env';
 
 jest.mock('../carried_delivery', () => ({
-  keepForEveryVersion: jest.fn(async () => ({ kind: 'read', deliveryId: 'kept-first' })),
+  keepForEveryVersion: jest.fn(async () => ({ kind: 'read', deliveryId: 'kept-first', keptAt: new Date(0) })),
+  waitingKeyOf: jest.fn(() => 'waiting:golden'),
+  judgedEmpty: jest.fn(async () => undefined),
   carriedListensOn: jest.fn(async () => []),
   receiveJudgedEvent: jest.fn(async () => undefined),
 }));

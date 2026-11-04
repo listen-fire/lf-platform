@@ -34,6 +34,7 @@ import { ORPHAN_AFTER } from '../../movement_engine/run_lease';
 import { settleUnresumableRun } from '../../interaction/run_failure';
 import { resolveActingUser } from '../adapters/acting_user/resolve';
 import { modulePlatform } from '../movement/carried_run';
+import { recordMovementFailureIssue } from '../movement/issues';
 import { doorRefusal, runMovementFiring, shippedMovementForTrigger, type ShippedMovement } from '../movement/execute';
 import { claimQueuedRun, requeueRun, runningSegment } from '../runs/trigger_run';
 import { loadTriggerById } from '../storage/tg_table';
@@ -143,11 +144,13 @@ async function dispatchCaptured(captured: CapturedTriggerEvent, modules: () => M
       ...(captured.runId !== undefined ? { existingRunId: captured.runId as TriggerRunId } : {}),
       ...(captured.storedEventId !== undefined ? { triggerEventId: captured.storedEventId as TriggerEventId } : {}),
     });
-  // A start the version does not serve is refused before anything else, and
-  // recorded: a legacy id says why, and gives the remedy.
-  if (doorRefusal(pin, { kind: 'judged', event }) !== undefined) {
-    const refused = await firing(captured.dryRun === true);
-    return { kind: 'failed', message: refused.error ?? `language ${pin} does not run here` };
+  // A start the version does not serve is refused before anything else. An
+  // operator reads why on the automation's one issue, which counts the refusals:
+  // a run row per delivery would only pile up.
+  const refusal = doorRefusal(pin, { kind: 'judged', event });
+  if (refusal !== undefined) {
+    await recordMovementFailureIssue({ teamId, movementId: trigger.movementId, movementName: movement.row.name, triggerName: trigger.name, message: refusal });
+    return { kind: 'failed', message: refusal };
   }
   if (await isPlatformToken({ teamId, adapterType: record.adapterType, actor: record.actor })) return { kind: 'dropped', reason: 'native_echo' };
   const gate = runModeGate(trigger.runMode);

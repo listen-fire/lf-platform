@@ -31,6 +31,11 @@ export interface ListenEdgeKey {
    *  (Airtable's `Changes`, one webhook per base); undefined for an edge over
    *  the whole connection. */
   scope?: string;
+  /** A listen that brought its own cursor from a carried version polls on it,
+   *  alone: another listen on the key stands somewhere else in the same feed, so
+   *  sharing would lose what lay between or hear it twice. Undefined for all
+   *  others. */
+  alone?: string;
 }
 
 /** How the module delivers a listen's last edge, as its saved listen keeps it. */
@@ -97,6 +102,7 @@ export function listenEdgeKeysOf(
       constructionArgs: listen.constructionArgs,
       edge: last.edge,
       taken: last.taken,
+      ...(delivery.kind === 'polled' && listen.carriedFrom?.pollsAlone === true ? { alone: listen.triggerId } : {}),
     };
     if (delivery.scopedBy === undefined) {
       add(base, delivery);

@@ -43,7 +43,7 @@ import { mayBeRemoteSlug } from '../translation_graph/adapters/remote/slugs';
 import { LEGACY_INTERCEPTS, builtInVerifierFor } from '../inbound/legacy_signature_headers';
 import { builtinModuleInboundVerifier, builtinModuleRequestKeeping } from '../translation_graph/adapters/builtin_modules';
 import { capturedRequest } from '../inbound/captured_request';
-import { keepForEveryVersion } from '../inbound/carried_delivery';
+import { judgedEmpty, keepForEveryVersion, waitingKeyOf } from '../inbound/carried_delivery';
 
 /** What capture keeps of one event: nothing. Every listen is judged on the
  *  delivery's arrivals as it is kept (`keepDelivery`), so no event is matched
@@ -237,6 +237,27 @@ function requireSubscriptionCredentials(subscription: InboundSubscription): stri
   return subscription.credentialsId;
 }
 
+/** A current version's reading that found nothing is told, once it has. */
+function judgingEmpty<T extends Pick<Adapter, 'preprocessInbound' | 'checkInbound'>>(adapter: T, judged: () => Promise<void>): T {
+  const { preprocessInbound: read, checkInbound: check } = adapter;
+  const wrapped: T = Object.create(adapter);
+  if (read !== undefined) {
+    wrapped.preprocessInbound = async (input) => {
+      const answer = await read.call(adapter, input);
+      if (answer.events.length === 0 && (answer.arrivals ?? []).length === 0) await judged();
+      return answer;
+    };
+  }
+  if (check !== undefined) {
+    wrapped.checkInbound = async (input) => {
+      const answer = await check.call(adapter, input);
+      if (answer.outcome === 'accepted' && (answer.events ?? []).length === 0 && (answer.arrivals ?? []).length === 0) await judged();
+      return answer;
+    };
+  }
+  return wrapped;
+}
+
 /** The trigger matcher's view of a subscription, with the channel's credential. */
 function subscriptionRow(subscription: InboundSubscription, source: OpenedSource) {
   return { team_id: subscription.teamId, credentials_id: source.credentialsId, provider: subscription.providerKey };
@@ -321,25 +342,39 @@ export interface ReceivedRequest {
  *  (redacted) before any version reads it: each version reads that, and a listen
  *  can be put through it again. */
 export function platformInboundStoreFor(received: ReceivedRequest): InboundStore<CapturedReceipts> {
-  let rawKeptId: string | undefined;
+  let rawKept: { id: string; keptAt: Date } | undefined;
   const keepFirstFor =
     (subscription: InboundSubscription): KeepFirst =>
     async ({ adapterType, credentialsId }) => {
-      if (rawKeptId !== undefined) return;
+      if (rawKept !== undefined) return;
       const kept = await keepForEveryVersion({
         origin: { teamId: subscription.teamId as TeamId, adapterType, providerKey: subscription.providerKey, credentialsId },
         subscriptionId: subscription.id,
-        externalId: null,
+        externalId: waitingKeyOf({ rawBody: received.rawBody, ...(received.query !== undefined ? { query: received.query } : {}) }),
         source: 'webhook',
         request: requestAsKept({ received, adapterType, subscription, arrivals: [] }),
       });
-      if (kept.kind === 'read') rawKeptId = kept.deliveryId;
+      if (kept.kind === 'read') rawKept = { id: kept.deliveryId, keptAt: kept.keptAt };
     };
+  // The current version read it and found nothing: it is judged, and an identical
+  // delivery after this is a new one.
+  const openedJudged = (subscription: InboundSubscription, source: InboundSource | null): InboundSource | null =>
+    source === null
+      ? null
+      : {
+          ...source,
+          open: async (...args) => {
+            const opened = await source.open(...args);
+            return opened === null ? null : { ...opened, adapter: judgingEmpty(opened.adapter, async () => {
+              if (rawKept !== undefined) await judgedEmpty({ teamId: subscription.teamId, id: rawKept.id });
+            }) };
+          },
+        };
   return {
     ...platformInboundStore,
     sourceFor: async (subscription) =>
-      getWebhookProvider(subscription.providerKey) ? builtInSource(subscription, keepFirstFor(subscription)) : remoteSource(subscription, keepFirstFor(subscription)),
-    keepDelivery: (input) => keepWebhookDelivery(input, received, rawKeptId),
+      openedJudged(subscription, getWebhookProvider(subscription.providerKey) ? builtInSource(subscription, keepFirstFor(subscription)) : await remoteSource(subscription, keepFirstFor(subscription))),
+    keepDelivery: (input) => keepWebhookDelivery(input, received, rawKept),
   };
 }
 
@@ -363,7 +398,7 @@ function requestAsKept(input: { received: ReceivedRequest; adapterType: string; 
 async function keepWebhookDelivery(
   { subscription, source, arrivals, checkpoint }: Parameters<InboundStore<CapturedReceipts>['keepDelivery']>[0],
   received: ReceivedRequest | null,
-  rawKeptId?: string,
+  rawKept?: { id: string; keptAt: Date },
 ): Promise<{ kept: boolean; arrivalMark?: number }> {
   const listens = await listensOfSubscription({
     teamId: subscription.teamId as TeamId,
@@ -380,7 +415,7 @@ async function keepWebhookDelivery(
     ...(checkpoint !== undefined ? { checkpoint } : {}),
     ...(listens !== undefined ? { listens } : {}),
     ...(received !== null ? { request: requestAsKept({ received, adapterType: source.adapterType, subscription, arrivals }) } : {}),
-    ...(rawKeptId !== undefined ? { rawKeptId } : {}),
+    ...(rawKept !== undefined ? { rawKeptId: rawKept.id, keptAt: rawKept.keptAt } : {}),
   });
   if (!kept.kept) return { kept: false };
   await refreshBridgedLinkedObjects({ arrivals, subscription: subscriptionRow(subscription, source) });

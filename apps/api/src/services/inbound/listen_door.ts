@@ -106,6 +106,10 @@ export const listenConfigSchema = z.object({
      *  that member's record type, and the hops of it the host lists, in the
      *  order of its plan's `members`. */
     members: z.array(z.object({ delivery: listenDeliverySchema.optional(), resolvedHops: z.array(resolvedHopSchema).optional() })).optional(),
+    /** The listen came up from a carried version by an upgrade: when (a delivery
+     *  kept before it was that version's), and whether it polls on the cursor it
+     *  brought rather than sharing a poll (inbound/listen_edge.ts). */
+    carriedFrom: z.object({ at: z.string(), pollsAlone: z.boolean().optional() }).optional(),
   }),
 });
 export type ListenConfig = z.infer<typeof listenConfigSchema>['listen'];
@@ -573,9 +577,14 @@ export async function deliverArrivals(input: {
   listens?: readonly SavedListen[];
   /** The row the door kept before reading it (carried_delivery.ts). */
   rawKeptId?: string;
+  /** When that row was kept: a listen an upgrade moved here since was its earlier
+   *  version's for this delivery, and that version read it. */
+  keptAt?: Date;
 }): Promise<{ kept: KeptDelivery; deliveryId: string; fires: FireRow[] }> {
   const now = new Date();
-  const listens = input.listens ?? (await savedListens({ teamId: input.teamId, adapterType: input.delivered.adapterType }));
+  const all = input.listens ?? (await savedListens({ teamId: input.teamId, adapterType: input.delivered.adapterType }));
+  const { keptAt } = input;
+  const listens = keptAt === undefined ? all : all.filter((listen) => listen.carriedFrom === undefined || Date.parse(listen.carriedFrom.at) <= keptAt.getTime());
   const judged = judgeArrivals({ listens, delivery: input.delivered, arrivals: input.arrivals, now });
   const result = await keepJudgedDelivery({
     teamId: input.teamId,

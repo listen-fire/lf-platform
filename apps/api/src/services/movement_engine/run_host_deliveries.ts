@@ -46,14 +46,45 @@ export interface RawDelivery {
 
 export interface PlatformDeliveryRowStore extends DeliveryRowStore {
   keepDelivery(input: PlatformKeepDelivery): ReturnType<DeliveryRowStore['keepDelivery']>;
-  /** The delivery as it arrived, and the rows owed by it in the same write:
-   *  `alreadyKept` when its external id was kept before. Then its id is that
-   *  delivery's, `judged` says whether the platform's version read it, and
-   *  nothing is written. */
-  keepRawDelivery(input: { delivery: RawDelivery; work: readonly NewWorkRow[] }): Promise<{ id: string; alreadyKept: boolean; judged: boolean }>;
+  /** The delivery as it arrived, and the rows owed by it in the same write,
+   *  under the team's doors lock (`work` is asked inside it, so what it reads is
+   *  settled against any upgrade): `alreadyKept` when its external id was kept
+   *  before. Then its id is that delivery's, `judged` says whether the platform's
+   *  version read it, and nothing is written. `keptAt` is the database's clock
+   *  at the keep. */
+  keepRawDelivery(input: { delivery: RawDelivery; work: () => Promise<readonly NewWorkRow[]> }): Promise<{ id: string; alreadyKept: boolean; judged: boolean; keptAt: Date }>;
+  /** A kept delivery the platform's version read and found nothing in. */
+  judgedEmpty(input: { id: string }): Promise<void>;
 }
 
 const FIRE_EVENT = 'fire_event';
+
+/** A kept delivery the platform's version has not judged yet is named by what
+ *  it carries, so a provider's retry of it finds it. The key goes with the
+ *  judging: an identical delivery after that is a new one. */
+export const WAITING_KEY_PREFIX = 'waiting:';
+
+/** The doors of a team hold this shared while a delivery is kept and what it owes
+ *  each version is read; an upgrade holds it alone (`holdDoorsAlone`). So a
+ *  delivery is on one side of a move: its keep sees the move, or the move sees
+ *  what it queued. */
+function doorsLockKey(teamId: string) {
+  return sql`hashtextextended(${`doors:${teamId}`}::text, 0)`;
+}
+
+async function holdDoorsShared(exec: Exec, teamId: string): Promise<void> {
+  await sql`select pg_advisory_xact_lock_shared(${doorsLockKey(teamId)})`.execute(exec);
+}
+
+/** Holds the team's doors for the rest of the open transaction. Answers the
+ *  database's clock once it has them, the instant a move is on the far side of. */
+export async function holdDoorsAlone(exec: Exec, teamId: string): Promise<Date> {
+  await sql`select pg_advisory_xact_lock(${doorsLockKey(teamId)})`.execute(exec);
+  const { rows } = await sql<{ at: Date }>`select clock_timestamp() as at`.execute(exec);
+  const at = rows[0]?.at;
+  if (at === undefined) throw new Error('the database answered no clock');
+  return at;
+}
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -95,7 +126,7 @@ export function deliveryRowStore(owner: { host: Host; teamId: string }): Platfor
           input.rawKept !== undefined
             ? await sql<{ id: string }>`
                 update automations.delivery
-                set judged_at = now(), events = ${JSON.stringify(delivery.events)}::text::jsonb, event_count = ${delivery.events.length}::int,
+                set judged_at = now(), external_id = case when external_id like ${WAITING_KEY_PREFIX + '%'} then null else external_id end, events = ${JSON.stringify(delivery.events)}::text::jsonb, event_count = ${delivery.events.length}::int,
                     request = coalesce(${delivery.request === undefined ? null : JSON.stringify(delivery.request)}::text::jsonb, request)
                 where id = ${input.rawKept.id}::uuid and team_id = ${owner.teamId}::uuid and judged_at is null
                 returning id::text as id`.execute(trx)
@@ -131,25 +162,41 @@ export function deliveryRowStore(owner: { host: Host; teamId: string }): Platfor
 
     async keepRawDelivery({ delivery, work }) {
       const written = await inStoreTransaction(async (trx) => {
-        const { rows } = await sql<{ id: string }>`
+        await holdDoorsShared(trx, owner.teamId);
+        // A waiting key names a delivery only for as long as a provider retries.
+        if (delivery.externalId !== null && delivery.externalId.startsWith(WAITING_KEY_PREFIX)) {
+          await sql`
+            update automations.delivery set external_id = null
+            where team_id = ${owner.teamId}::uuid and subscription_id = ${delivery.subscriptionId}::text and external_id = ${delivery.externalId}::text
+              and received_at < now() - interval '1 day'`.execute(trx);
+        }
+        const { rows } = await sql<{ id: string; received_at: Date }>`
           insert into automations.delivery (id, team_id, subscription_id, external_id, received_at, source, inline, events, event_count, request)
           values (${delivery.id}::uuid, ${owner.teamId}::uuid, ${delivery.subscriptionId}::text, ${delivery.externalId}::text,
-                  ${delivery.receivedAt}::timestamptz, ${delivery.source}::text, false, '[]'::jsonb, 0, ${JSON.stringify(delivery.request)}::text::jsonb)
-          on conflict do nothing returning id::text as id`.execute(trx);
-        if (rows.length === 0) {
-          const before = await sql<{ id: string; judged: boolean }>`
-            select id::text as id, judged_at is not null as judged from automations.delivery
+                  clock_timestamp(), ${delivery.source}::text, false, '[]'::jsonb, 0, ${JSON.stringify(delivery.request)}::text::jsonb)
+          on conflict do nothing returning id::text as id, received_at`.execute(trx);
+        const first = rows[0];
+        if (first === undefined) {
+          const before = await sql<{ id: string; judged: boolean; received_at: Date }>`
+            select id::text as id, judged_at is not null as judged, received_at from automations.delivery
             where team_id = ${owner.teamId}::uuid and subscription_id = ${delivery.subscriptionId}::text and external_id = ${delivery.externalId}::text`.execute(trx);
-          const first = before.rows[0];
-          if (first === undefined) throw new Error(`delivery ${delivery.id} conflicted with no kept delivery`);
-          return { id: first.id, alreadyKept: true, judged: first.judged, queued: [] };
+          const kept = before.rows[0];
+          if (kept === undefined) throw new Error(`delivery ${delivery.id} conflicted with no kept delivery`);
+          return { id: kept.id, alreadyKept: true, judged: kept.judged, keptAt: kept.received_at, queued: [] };
         }
         const queued: Queued[] = [];
-        for (const row of work) queued.push(await queueRow(trx, { host: owner.host }, { ...row, teamId: row.teamId ?? owner.teamId }));
-        return { id: delivery.id, alreadyKept: false, judged: false, queued };
+        for (const row of await work()) queued.push(await queueRow(trx, { host: owner.host }, { ...row, teamId: row.teamId ?? owner.teamId }));
+        return { id: delivery.id, alreadyKept: false, judged: false, keptAt: first.received_at, queued };
       });
       await announceQueued(written.queued);
-      return { id: written.id, alreadyKept: written.alreadyKept, judged: written.judged };
+      return { id: written.id, alreadyKept: written.alreadyKept, judged: written.judged, keptAt: written.keptAt };
+    },
+
+    async judgedEmpty({ id }) {
+      await sql`
+        update automations.delivery
+        set judged_at = now(), external_id = case when external_id like ${WAITING_KEY_PREFIX + '%'} then null else external_id end
+        where id = ${id}::uuid and team_id = ${owner.teamId}::uuid and judged_at is null`.execute(storeDb());
     },
 
     /** The row gave up: kept dead with its reason, never claimed again,
