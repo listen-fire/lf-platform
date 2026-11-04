@@ -111,6 +111,8 @@ jest.mock('../catalog', () => ({
 // A carried version's run host: which version runs a pin is the real
 // registry's answer; the segment it runs is stubbed (its own tests drive it).
 jest.mock('../carried_run', () => ({
+  carriedParksOf: jest.fn(() => ({})),
+  resumeCarriedSegment: jest.fn(),
   carriedRunLaneOf: jest.requireActual('../carried_run').carriedRunLaneOf,
   runCarriedSegment: jest.fn(),
 }));

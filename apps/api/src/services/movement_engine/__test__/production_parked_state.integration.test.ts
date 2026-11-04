@@ -21,10 +21,8 @@ import { resetAskSettledNotifierForTests } from '../../asks/notifier';
 import { drainUntilIdle, resetWorkHandlersForTests } from '../../work/drain';
 import { registerCoreWork } from '../../work/register';
 import { registerAskClosedSweepWork } from '../../asks/closed_sweep';
-import { LANGUAGE_VERSION } from 'movement-lang';
-
 import { failRunAndCancelRequests } from '../../interaction/run_failure';
-import { liveDeployCheckDeps } from '../../translation_graph/movement/language_upgrade';
+import { liveDeployCheckDeps, thisDeployCheckRelease } from '../../translation_graph/movement/language_upgrade';
 import { getMovementRow } from '../../translation_graph/movement/store';
 import { fireCallback } from '../callback_fire';
 import { resumeLimitPausedRun } from '../limit_resume';
@@ -187,7 +185,7 @@ describe('a run production parked', () => {
 
   it('survives the deploy check that stops its automation: the run keeps its row, and wakes', async () => {
     const { runId, rows } = await load('timer');
-    const deps = liveDeployCheckDeps({ tag: 'test', language: LANGUAGE_VERSION });
+    const deps = liveDeployCheckDeps(thisDeployCheckRelease('test'));
     const movement = await getMovementRow({ teamId: TEAM, id: String(rows.movement?.[0]?.id) });
     if (movement === null) throw new Error('test: no movement');
     await deps.unprovision(movement);

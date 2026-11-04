@@ -158,9 +158,9 @@ describe('the engine a segment runs on', () => {
   });
 });
 
-describe('a version this build runs on its own engine but does not resume (0.12)', () => {
+describe('a version this build runs and resumes on its own engine (0.12)', () => {
   const OLDER = '0.12.13';
-  const refusal = resumeRefusal(OLDER)!;
+  const refusal = heldRunRefusal(OLDER, 'resume') ?? '';
 
   it("a run is refused by this release's dispatcher itself: 0.12 runs on its own lane, never on this engine", async () => {
     const own = `this automation pins language ${OLDER}, which this platform runs on 0.12.13's own engine, never on this release's (${LANGUAGE_VERSION})`;
@@ -173,8 +173,8 @@ describe('a version this build runs on its own engine but does not resume (0.12)
     expect(recorded).toEqual([]);
   });
 
-  it("a resume is refused by pin, in the registry's text naming what the version provides", () => {
-    expect(refusal).toMatch(/^this automation pins language 0\.12\.13: this platform carries 0\.12\.13 to /);
+  it("a resume is refused by pin here: it is 0.12's own engine's to step", () => {
+    expect(refusal).toContain("own engine, never on this release's");
     expect(() => engineFor({ languageVersion: OLDER, parkedOn: 'rust' })).toThrow(MovementEngineError);
     expect(() => engineFor({ languageVersion: OLDER, parkedOn: 'rust' })).toThrow(`MOVENG_LANGUAGE_VERSION: ${refusal}`);
   });
