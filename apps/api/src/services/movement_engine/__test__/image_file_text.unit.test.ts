@@ -243,7 +243,7 @@ describe('a run pinned to a carried release stays as it was', () => {
   });
 
   it("the carried host's reader skips an image unopened, costing nothing", async () => {
-    const { files } = runPlatformFor({ teamId: teamOfTenant(TEAM_ID), cancel: NEVER_CANCELLED });
+    const { files } = runPlatformFor({ teamId: teamOfTenant(TEAM_ID), cancel: { ...NEVER_CANCELLED, reason: () => null } });
     expect(await files.resolveFileText({ segmentId: 'seg-1', file, budget })).toEqual({
       unreadable: 'unsupported_type',
       detail: 'image/png',
