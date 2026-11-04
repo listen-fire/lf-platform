@@ -1335,7 +1335,7 @@ async function runSave(
         listeners: [],
         infos: [],
         catalogNotes: notes,
-        warnings: provisioned.diagnostics.map((diagnostic) => diagnostic.message),
+        warnings: (provisioned.diagnostics ?? []).map((diagnostic) => diagnostic.message),
         validity,
       };
     }
