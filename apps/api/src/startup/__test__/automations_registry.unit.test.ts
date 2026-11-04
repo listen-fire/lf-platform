@@ -42,6 +42,7 @@ const removeRetired = jest.mocked(removeRetiredWork);
 
 const PERIODIC_KINDS = [
   'poll_reconcile',
+  'cron_reconcile',
   'listen_subscription_retry',
   'ask_closed_sweep',
   'timer_sweep',
@@ -308,6 +309,7 @@ describe('registerAutomationsWork', () => {
     }
     expect(Object.fromEntries(ensured.map((input) => [input.kind, input.intervalMs]))).toMatchObject({
       poll_reconcile: 30_000,
+      cron_reconcile: 30_000,
       listen_subscription_retry: 5 * 60_000,
       ask_closed_sweep: 30_000,
       timer_sweep: 30_000,
