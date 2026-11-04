@@ -976,7 +976,7 @@ const validateMovementSchema = z.object({
   languageVersion: languageVersionInput.optional(),
 });
 
-type AutomationValidation = TeamMovementValidation & { validatedUnder: VersionView };
+type AutomationValidation = TeamMovementValidation & { validatedUnder: VersionView; languageHelp?: string };
 
 /**
  * Check text the way a save would: an explicit version wins; else a saved
@@ -992,9 +992,11 @@ async function validateAutomationText(input: {
 }): Promise<AutomationValidation | { error: string }> {
   let languageVersion = input.languageVersion;
   let upgradingFrom: LanguageVersion | undefined;
+  let helpNote: { languageHelp?: string } = {};
   if (input.automation !== undefined) {
     const row = await getMovementRow({ teamId: input.teamId, id: input.automation }).catch(() => null);
     if (!row) return { error: `No automation '${input.automation}' in this team.` };
+    helpNote = helpNoteOf(row);
     if (languageVersion === undefined) languageVersion = row.languageVersion;
     else if (movesUp(row.languageVersion, languageVersion)) upgradingFrom = row.languageVersion;
   }
@@ -1007,6 +1009,7 @@ async function validateAutomationText(input: {
   return {
     ...validation,
     validatedUnder: versionView(languageVersion ?? LANGUAGE_VERSION),
+    ...helpNote,
   };
 }
 
@@ -1018,6 +1021,7 @@ async function validateAutomationText(input: {
  */
 function unsavedRefusal(validation: AutomationValidation) {
   const validity = assessMovementValidity({ diagnostics: validation.diagnostics, gaps: validation.gaps });
+  const helpNote = validation.languageHelp !== undefined ? { languageHelp: validation.languageHelp } : {};
   switch (validity.status) {
     case 'valid':
       return null;
@@ -1028,6 +1032,7 @@ function unsavedRefusal(validation: AutomationValidation) {
         message: 'Not saved: the program has errors (diagnostics). Fix them and save again.',
         diagnostics: validation.diagnostics,
         validatedUnder: validation.validatedUnder,
+        ...helpNote,
       };
     case 'unverified':
       return {
@@ -1038,6 +1043,7 @@ function unsavedRefusal(validation: AutomationValidation) {
         errors: validation.gaps.map((g) => `couldn't check this automation against "${g.adapter}" (${g.detail})`),
         diagnostics: validation.diagnostics,
         validatedUnder: validation.validatedUnder,
+        ...helpNote,
       };
     default:
       return neverAsAny(validity.status);
@@ -1185,6 +1191,8 @@ const saveMovementSchema = z.object({
 
 const saveMovementHandler: RequestHandler = jsonHandler(saveMovementSchema, 'body', async (input) => {
   const teamId = await resolveToolTeam(input.team);
+  const saving = input.id !== undefined ? await getMovementRow({ teamId, id: input.id }).catch(() => null) : null;
+  const helpNote = saving !== null ? helpNoteOf(saving) : {};
   // Validate first, and save nothing that would not go live: an agent's save is
   // its check, so text it got wrong never becomes the stored automation.
   // Consent (acknowledgeErrors) skips the refusal and ships the text as it is.
@@ -1242,6 +1250,7 @@ const saveMovementHandler: RequestHandler = jsonHandler(saveMovementSchema, 'bod
       storyUrl: storyUrl(token),
       warnings,
       ...remainingDiagnostics(checked),
+      ...helpNote,
     };
   }
   return {
@@ -1249,6 +1258,7 @@ const saveMovementHandler: RequestHandler = jsonHandler(saveMovementSchema, 'bod
     ...(result.diagnostics !== undefined
       ? { diagnostics: formatMovementDiagnostics(input.source, result.diagnostics) }
       : {}),
+    ...helpNote,
   };
 });
 
@@ -1371,13 +1381,14 @@ const editAutomationHandler: RequestHandler = async (req, res) => {
     if (result.ok) {
       return res
         .status(200)
-        .json({ ...result, revision: movementSourceHash(spliced.source), ...remainingDiagnostics(checked) });
+        .json({ ...result, revision: movementSourceHash(spliced.source), ...remainingDiagnostics(checked), ...helpNoteOf(current) });
     }
     return res.status(200).json({
       ...result,
       ...(result.diagnostics !== undefined
         ? { diagnostics: formatMovementDiagnostics(spliced.source, result.diagnostics) }
         : {}),
+      ...helpNoteOf(current),
     });
   } catch (err) {
     return internalError(res, err);

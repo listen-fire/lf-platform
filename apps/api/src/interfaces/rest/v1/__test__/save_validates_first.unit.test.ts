@@ -51,6 +51,7 @@ jest.mock('../team_scope', () => {
 
 import type { RequestHandler } from 'express';
 
+import { LANGUAGE_VERSION } from 'movement-lang';
 import { runWithPrincipal, type Principal } from 'principal';
 
 import { editAutomationHandler, getMovementHandler, saveMovementHandler, validateMovementHandler } from '../knowledge_agent_tools';
@@ -236,5 +237,47 @@ describe('listAutomations / getAutomation views carry the pin as a string', () =
     const res = await call(getMovementHandler, { body: {}, params: { idOrName: 'm1' } });
     expect(res.body).toMatchObject({ languageVersion: '0.12.0', checkedAgainst: '4' });
     expect(res.body).not.toHaveProperty('validityCheckedAgainst');
+  });
+});
+
+describe('an automation on another language version: every answer says how to be taught it', () => {
+  const PINNED = { id: 'm1', name: 'Log', source: 'old', languageVersion: '0.12.13', validityStatus: 'valid', validityCheckedAgainst: '0.12.13' };
+  const NOTE = expect.stringContaining('Pass automation: "m1" to readHandbook');
+
+  beforeEach(() => {
+    getMovementRowMock.mockResolvedValue(PINNED);
+    getMovementMock.mockResolvedValue(PINNED);
+    validateMock.mockResolvedValue(validation({}));
+  });
+
+  it('validateAutomation, naming it', async () => {
+    const res = await call(validateMovementHandler, { body: { source: 'new', automation: 'm1' } });
+    expect(res.body?.languageHelp).toEqual(NOTE);
+  });
+
+  it('saveAutomation, saved, refused by the check, and saved with consent', async () => {
+    expect((await call(saveMovementHandler, { body: { source: 'new', id: 'm1' } })).body).toMatchObject({ ok: true, languageHelp: NOTE });
+    expect((await call(saveMovementHandler, { body: { source: 'new', id: 'm1', acknowledgeErrors: true } })).body).toMatchObject({ ok: true, languageHelp: NOTE });
+    validateMock.mockResolvedValue(validation({ diagnostics: [diagnostic('error')] }));
+    expect((await call(saveMovementHandler, { body: { source: 'broken', id: 'm1' } })).body).toMatchObject({ ok: false, saved: false, languageHelp: NOTE });
+    validateMock.mockResolvedValue(validation({ gaps: [{ adapter: 'attio', detail: 'timed out' }] }));
+    expect((await call(saveMovementHandler, { body: { source: 'unchecked', id: 'm1' } })).body).toMatchObject({ ok: false, saved: false, languageHelp: NOTE });
+  });
+
+  it('editAutomation, saved, refused by the check, and refused by a stale revision', async () => {
+    const body = { oldString: 'old', newString: 'new' };
+    const params = { idOrName: 'm1' };
+    expect((await call(editAutomationHandler, { body, params })).body).toMatchObject({ ok: true, languageHelp: NOTE });
+    saveMovementMock.mockResolvedValueOnce({ ok: false, conflict: true });
+    expect((await call(editAutomationHandler, { body, params })).body).toMatchObject({ ok: false, languageHelp: NOTE });
+    validateMock.mockResolvedValue(validation({ diagnostics: [diagnostic('error')] }));
+    expect((await call(editAutomationHandler, { body, params })).body).toMatchObject({ ok: false, saved: false, languageHelp: NOTE });
+  });
+
+  it('nothing on the current version, nor on a new automation', async () => {
+    getMovementRowMock.mockResolvedValue({ ...PINNED, languageVersion: LANGUAGE_VERSION });
+    expect((await call(saveMovementHandler, { body: { source: 'new', id: 'm1' } })).body).not.toHaveProperty('languageHelp');
+    expect((await call(validateMovementHandler, { body: { source: 'new', automation: 'm1' } })).body).not.toHaveProperty('languageHelp');
+    expect((await call(saveMovementHandler, { body: { source: 'new' } })).body).not.toHaveProperty('languageHelp');
   });
 });
