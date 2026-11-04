@@ -96,10 +96,11 @@ export interface RunPlatform {
   bindings: EngineHost['park']['bindings'];
   /** The cross-run write locks every version shares. */
   locks: WriteLocks;
+  /** The run's event stays with its version: it asks its own module, in
+   *  `candidates`, who the event says acted. */
   actingUser(input: {
     teamId: string;
     triggerId?: string;
-    event: TriggerEvent;
     candidates(): Promise<unknown>;
   }): Promise<ActingUser | null>;
   control: {

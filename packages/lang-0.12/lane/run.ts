@@ -176,7 +176,6 @@ function hostFor(request: SegmentRequest & { parkRefusal: string }, platform: Ru
         const user = await platform.actingUser({
           teamId: segments.facts(segmentId).teamId,
           ...(triggerId !== undefined ? { triggerId } : {}),
-          event,
           candidates: () => table.answer({ segmentId, instance, method: 'getActorCandidates', args: { event } }),
         });
         return actingPrincipalOf(user);

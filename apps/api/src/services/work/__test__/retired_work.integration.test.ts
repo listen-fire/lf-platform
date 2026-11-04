@@ -23,8 +23,17 @@ const kept = async (key: string) =>
 
 describe("a new drain's startup", () => {
   const keys: string[] = [];
+  // The startup ensures its periodic rows, which later suites' drains would claim.
+  let periodicBefore: string[] = [];
+  const periodicKeys = async () =>
+    (await getAutomationsQb(['work']).selectFrom('work').where('host', '=', 'platform').where('interval_ms', 'is not', null).select('key').execute()).map((row) => row.key);
+  beforeAll(async () => {
+    periodicBefore = await periodicKeys();
+  });
   afterAll(async () => {
     await getAutomationsQb(['work']).deleteFrom('work').where('key', 'in', keys).execute();
+    const added = (await periodicKeys()).filter((key) => !periodicBefore.includes(key));
+    if (added.length > 0) await getAutomationsQb(['work']).deleteFrom('work').where('host', '=', 'platform').where('key', 'in', added).execute();
   });
 
   it.each(WRITTEN_BY_012_13)('leaves a queued %s row for the 0.12.13 service that wrote it', async (kind) => {

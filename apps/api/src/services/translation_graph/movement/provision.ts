@@ -1119,8 +1119,11 @@ async function runSave(
   // `recordAutomationSavedMilestones` above) — did THIS request arrive via
   // MCP? Stamped on the Context by the auth middleware from `x-mcp-domain`.
   const viaMcp = journeyContext?.mcpDomain === 'automation';
-  const recordMilestones = (): void =>
+  // An upgrade is nobody authoring an automation, so it counts as no milestone.
+  const recordMilestones = (): void => {
+    if (input.languageUpgrade !== undefined) return;
     onceCommitted(() => recordAutomationSavedMilestones({ actingUserId, teamId: input.teamId, viaMcp }));
+  };
 
   // Record the validity axis once. Stamp consent when we're shipping a
   // non-`valid` movement on acknowledgement.

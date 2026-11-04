@@ -11,7 +11,7 @@
 // run exactly as it settles one of this release's.
 
 import { z } from 'zod';
-import { WireActorCandidate, triggerEventSchema } from 'engine-contracts';
+import { WireActorCandidate } from 'engine-contracts';
 import { MovementEngineError, MovementRunFailed, type MovementEngineErrorCode } from 'movement-engine/public/errors';
 import { logger } from 'movement-engine/public/log';
 import { inProcessValidationDefault } from 'module-kit';
@@ -108,13 +108,11 @@ export function runPlatformFor(input: {
     files: { resolveFileText: shared.resolveFileText, render: shared.render },
     bindings: shared.bindings,
     locks: shared.locks,
-    actingUser: async ({ teamId, triggerId, event, candidates }) => {
+    actingUser: async ({ teamId, triggerId, candidates }) => {
       const trigger = triggerId !== undefined ? await loadActingUserTrigger(triggerId) : undefined;
-      const parsedEvent = triggerEventSchema.safeParse(event);
       return resolveActingUser({
         teamId: teamIdSchema.parse(teamId),
         ...(trigger !== undefined ? { trigger } : {}),
-        ...(parsedEvent.success ? { event: parsedEvent.data } : {}),
         // A carried module's candidates, checked against this release's
         // protocol shape rather than trusted.
         getCandidates: async () => actorCandidates.parse(await candidates()),

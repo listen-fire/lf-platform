@@ -422,9 +422,9 @@ export async function listMovementRuns(input: {
     .execute();
   // A run someone started on a carried version is recorded under the
   // movement's own id: there is no listen row for it (./carried_run_now.ts).
-  const triggerIds: string[] = [...triggerRows.map((r) => r.id as unknown as TriggerId), carriedRunTriggerId(input.movementId)];
+  const triggerIds: string[] = [...triggerRows.map((r) => r.id), carriedRunTriggerId(input.movementId)];
   const laneByTriggerId = new Map([
-    ...triggerRows.map((r) => [r.id as unknown as string, r.name ?? ''] as const),
+    ...triggerRows.map((r) => [r.id, r.name ?? ''] as const),
     [carriedRunTriggerId(input.movementId), CARRIED_RUN_NOW_NAME] as const,
   ]);
 

@@ -46,7 +46,6 @@ import { z } from 'zod';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { MovementId } from '../../../generated/kysely/automations/Movement';
-import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
 import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
 
 import { currentContext } from '../../../services/context';
@@ -153,9 +152,9 @@ export async function movementRunsImpl(params: {
 
   // A run someone started on a carried version is recorded under the
   // movement's own id: there is no listen row for it.
-  const triggerIds: string[] = [...triggerRows.map((r) => r.id as unknown as TriggerId), carriedRunTriggerId(movementId)];
+  const triggerIds: string[] = [...triggerRows.map((r) => r.id), carriedRunTriggerId(movementId)];
   const laneByTriggerId = new Map<string, string>([
-    ...triggerRows.map((r) => [r.id as unknown as string, r.name] as const),
+    ...triggerRows.map((r) => [r.id, r.name] as const),
     [carriedRunTriggerId(movementId), CARRIED_RUN_NOW_NAME] as const,
   ]);
 
@@ -224,7 +223,7 @@ export async function latestRunsByTriggerId(params: {
   const rows = await getAutomationsQb(['trigger_run'])
     .selectFrom('trigger_run')
     .where('team_id', '=', teamId)
-    .where('trigger_id', 'in', triggerIds as unknown as TriggerId[])
+    .where('trigger_id', 'in', triggerIds)
     .select([
       'id',
       'trigger_id',

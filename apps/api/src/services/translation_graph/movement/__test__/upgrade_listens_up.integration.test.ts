@@ -14,6 +14,8 @@ import type { AdapterManifest } from 'movement-engine/public/adapter';
 const VENDOR = 'acme_vendor';
 
 const credential = { usable: false };
+/** Whether the planned listen lists its members before it subscribes. */
+const plan = { resolved: false };
 
 const vendor = {
   ensureEventSubscription: jest.fn(async (_input: unknown) => ({ externalId: 'ext-1', secret: 'vendor-secret' })),
@@ -52,18 +54,25 @@ jest.mock('../listen_plans', () => {
     plannedListensOfSource: () => {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { testListenConfig } = require('../../../../test/harness/listens');
-      return { listens: [testListenConfig({ adapterType: VENDOR, edge: 'Things', delivery: 'connection', movement: 'stamp' }, 'a1b2c3d4')], refused: [] };
+      const listen = testListenConfig({ adapterType: VENDOR, edge: 'Things', delivery: 'connection', movement: 'stamp' }, 'a1b2c3d4');
+      return { listens: [plan.resolved ? { ...listen, resolvedHops: [{ hop: 0, membersChange: 'pushed' }] } : listen], refused: [] };
     },
   };
+});
+
+jest.mock('../../../inbound/listen_resolve', () => {
+  const actual = jest.requireActual('../../../inbound/listen_resolve');
+  return { ...actual, resolveAndArm: jest.fn(async () => null) };
 });
 
 import { getAutomationsQb, getCoreQb } from '../../../../lib/kysely';
 import { cleanupTeam } from '../../../../test/harness/cleanup';
 import { insertTestListen } from '../../../../test/harness/listens';
 import { deliverArrivals } from '../../../inbound/listen_door';
+import { resolveAndArm } from '../../../inbound/listen_resolve';
 import { claimDueWork } from '../../../work/store';
 import { drainWork, resetWorkHandlersForTests } from '../../../work/drain';
-import { upgradeMovement, type ValidateUnder } from '../language_upgrade';
+import { advanceLive, upgradeMovement, type Advance, type ValidateUnder } from '../language_upgrade';
 import { listensOfSubscription, MOVEMENT_LISTEN_PROVISIONER } from '../listen_subscriptions';
 import { registerBringUpListensWork } from '../listens_up';
 import { mintMovementVersionIfChanged } from '../version_store';
@@ -118,6 +127,8 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
+  plan.resolved = false;
+  jest.mocked(resolveAndArm).mockResolvedValue(null);
   credential.usable = false;
   teamId = randomUUID() as TeamId;
   await getCoreQb(['team']).insertInto('team').values({ id: teamId, name: `up-${teamId.slice(0, 8)}` }).execute();
@@ -202,6 +213,50 @@ describe('an upgraded automation whose listens could not be brought up', () => {
     expect(await pass()).toEqual(expect.objectContaining({ recovered: 1, failed: 0 }));
     expect(await workRows(id)).toEqual([]);
     expect(await subscriptions()).toEqual([expect.objectContaining({ status: 'active' })]);
+  });
+
+  it('a rollback leaves nothing owed for a listen that lists its members: no listing, no provider, no state, no rows', async () => {
+    plan.resolved = true;
+    credential.usable = true;
+    const id = await seedShipped('stamp');
+    const stopsAfterSaving: Advance = async (input) => {
+      const move = await advanceLive(input);
+      return async () => {
+        expect(await move()).toEqual({ ok: true });
+        return { ok: false, detail: 'a later member refused' };
+      };
+    };
+
+    const result = await upgradeMovement({ teamId, id, acknowledge: true, validate: clean, advance: stopsAfterSaving });
+
+    expect(result).toEqual(expect.objectContaining({ status: 'unverified' }));
+    await pass();
+    expect(resolveAndArm).not.toHaveBeenCalled();
+    expect(vendor.ensureEventSubscription).not.toHaveBeenCalled();
+    expect(await workRows(id)).toEqual([]);
+    expect(await getAutomationsQb(['trigger']).selectFrom('trigger').where('movement_id', '=', id as MovementId).select('id').execute()).toEqual([]);
+    expect(await getAutomationsQb(['listen_state']).selectFrom('listen_state').where('team_id', '=', teamId as never).select('pipeline').execute()).toEqual([]);
+  });
+
+  it('a listen whose members could not be listed fails the row and says why, and is listed before it subscribes', async () => {
+    plan.resolved = true;
+    credential.usable = true;
+    const id = await seedShipped('stamp');
+    await upgradeMovement({ teamId, id, acknowledge: true, validate: clean });
+    expect(resolveAndArm).not.toHaveBeenCalled();
+    jest.mocked(resolveAndArm).mockResolvedValue('LISTEN_RESOLVE_FAILED: it could not list the records it watches');
+
+    for (let failing = 0; failing < 3; failing++) expect((await pass()).failed).toBe(1);
+
+    expect(await issues(id)).toEqual([expect.objectContaining({ state: 'open', message: expect.stringContaining('LISTEN_RESOLVE_FAILED') })]);
+
+    jest.mocked(resolveAndArm).mockResolvedValue(null);
+    expect((await pass()).failed).toBe(0);
+    expect(await workRows(id)).toEqual([]);
+    expect(await issues(id)).toEqual([expect.objectContaining({ state: 'resolved' })]);
+    const [listed] = jest.mocked(resolveAndArm).mock.invocationCallOrder;
+    const [subscribed] = vendor.ensureEventSubscription.mock.invocationCallOrder;
+    expect(listed).toBeLessThan(subscribed!);
   });
 
   it("another automation's failing listen neither holds this row nor raises an issue here", async () => {

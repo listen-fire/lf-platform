@@ -71,7 +71,7 @@ describe('dispatchTriggerByIdEvent — loop-guard wiring', () => {
   });
 
   it('skips the guard under dry-run (a rehearsal can\'t loop in production)', () => {
-    expect(fn).toMatch(/if \(!dryRun\) \{\s*const guardDisposition = await applyLoopGuard/);
+    expect(fn).toMatch(/if \(!dryRun && !refused\) \{\s*const guardDisposition = await applyLoopGuard/);
   });
 
   it('feeds applied writes into the team external-write budget (post-run)', () => {

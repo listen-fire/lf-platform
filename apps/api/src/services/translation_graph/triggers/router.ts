@@ -31,7 +31,7 @@ import { describeDroppedReason, type DroppedReason } from './dropped_reason';
 import { isLfEngineTeam } from '../../lf_engine/team_engine';
 import {
   runMovementFiring,
-  shippedMovementForTrigger,
+  doorRefusal, shippedMovementForTrigger,
 } from '../movement/execute';
 
 // ── Trigger-id dispatch (R, 2026-05-28) ───────────────────────────────────
@@ -134,6 +134,21 @@ export async function dispatchTriggerByIdEvent(
   }
   const dryRun = input.dryRun || gate.dryRun;
 
+  // A trigger row is a listen: the pin's version is asked to fire its listens
+  // before the guard counts the arrival, a source adapter is built for it or
+  // its sender is judged. A version that does not gets none of that, and the
+  // firing below records the refusal.
+  // What fires is the shipped version, never the row's live text: an edit
+  // whose save stopped at `needsConfirmation` changes nothing that runs.
+  // This holds under dry run too (a `dry_run` listener rehearses what would
+  // fire); the editor's test run, which tries the draft, does not come
+  // through here.
+  const fired =
+    triggerRow.movementId === null
+      ? undefined
+      : await shippedMovementForTrigger({ teamId: input.teamId, movementId: triggerRow.movementId });
+  const refused = fired?.kind === 'shipped' && doorRefusal(fired.movement.version.languageVersion, { kind: 'listen' }) !== undefined;
+
   // ── LOOP GUARD (Phase 1, the safety floor) ───────────────────────────────
   // The cause-agnostic backstop, consulted ONCE per run, composed with the
   // run_mode gate above (the established "don't run this" precedent). It does
@@ -145,7 +160,7 @@ export async function dispatchTriggerByIdEvent(
   // Both are skipped under dry-run (a rehearsal can't loop in production) and
   // both FAIL OPEN — the evaluate() call and the paused-state read are
   // wrapped so any guard error allows the run.
-  if (!dryRun) {
+  if (!dryRun && !refused) {
     const guardDisposition = await applyLoopGuard({
       triggerId: input.triggerId,
       teamId: input.teamId,
@@ -157,7 +172,7 @@ export async function dispatchTriggerByIdEvent(
 
   // A run's own echo is the loop breaker's (inbound/loop_breaker.ts): it
   // caps every chain of writes and arrivals as a queued run starts.
-  if (!dryRun) {
+  if (!dryRun && !refused) {
     const sourceAdapter = await resolveAdapter({
       adapterType: input.event.adapterType,
       teamId: input.teamId,
@@ -194,16 +209,7 @@ export async function dispatchTriggerByIdEvent(
   // path below, untouched. Failure containment lives inside
   // `runMovementFiring`: a thrown engine error records a FAILED
   // trigger_run and comes back as a value — dispatch never crashes.
-  if (triggerRow.movementId !== null) {
-    // What fires is the shipped version, never the row's live text: an edit
-    // whose save stopped at `needsConfirmation` changes nothing that runs.
-    // This holds under dry run too (a `dry_run` listener rehearses what would
-    // fire); the editor's test run, which tries the draft, does not come
-    // through here.
-    const fired = await shippedMovementForTrigger({
-      teamId: input.teamId,
-      movementId: triggerRow.movementId,
-    });
+  if (fired !== undefined) {
     if (fired.kind === 'not_shipped') {
       logger.info('[TGRouter] dropped: the movement has never shipped', {
         triggerId: input.triggerId,

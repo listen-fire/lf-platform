@@ -1556,8 +1556,11 @@ listen to inbox-[e:Emails WHERE e.Key == "deals"]-> fire intake
     expect(shown).toMatchObject({ status: 'needs_acknowledgement', upgradedSource: NEW, diagnostics: [] });
     expect(db.__tables.movement[0]).toMatchObject({ source: OLD, language_version: '4' });
 
+    journey.recordTeamMilestone.mockClear();
     const done = await upgradeMovement({ teamId: TEAM, id, acknowledge: true });
     expect(done).toMatchObject({ status: 'upgraded', upgradedSource: NEW });
+    // An upgrade is nobody authoring an automation.
+    expect(journey.recordTeamMilestone).not.toHaveBeenCalled();
     expect(db.__tables.movement[0]).toMatchObject({ source: NEW, language_version: LANGUAGE_VERSION, upgrade_diagnostics: null });
     const current = db.__tables.movement_version.find((v) => v.id === db.__tables.movement[0].current_version_id);
     expect(current).toMatchObject({ source: NEW, language_version: LANGUAGE_VERSION });

@@ -129,6 +129,29 @@ describe("a 0.12 segment on 0.12's own run host", () => {
   });
 });
 
+describe("who a 0.12 run acts as", () => {
+  it("is asked with the event left to 0.12: its own module reads the press's sender", async () => {
+    const asked: Array<{ keys: string[]; candidates: unknown }> = [];
+    const acts = 'function who(run: <manual-[:Invocation]->>) {\n  return @user_email\n}\nlisten to manual fire who\n';
+    const event = manualInvocationEvent({ key: 'movement-1', invocation: { firedAt: '2026-11-04T10:00:00.000Z', actorEmail: 'ann@example.test' } });
+
+    const outcome = await runSegment(
+      request(acts, { event }),
+      platform({
+        actingUser: async (input) => {
+          asked.push({ keys: Object.keys(input), candidates: await input.candidates() });
+          return { id: 'user-1', email: 'ann@example.test', name: 'Ann', phoneNumber: null };
+        },
+      }),
+    );
+
+    expect(outcome).toMatchObject({ kind: 'ran' });
+    expect(asked).toHaveLength(1);
+    expect(asked[0]?.keys).not.toContain('event');
+    expect(JSON.stringify(asked[0]?.candidates)).toContain('ann@example.test');
+  });
+});
+
 describe("a 0.12 run of an ask, against the catalog its own literals type", () => {
   const form = (read: string) =>
     'import { `@lf/ask` as ask } from adapters\nqa = connect ask\n' +

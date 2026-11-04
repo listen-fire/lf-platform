@@ -315,7 +315,7 @@ function neededBy(door: FiringDoor): RunningCapability {
 /** Why `pin`'s version does not serve `door`, in the registry's text;
  *  undefined when it does. A legacy id is the legacy packages' to run, by
  *  their own rules, and is not asked. */
-function doorRefusal(pin: LanguageVersion, door: FiringDoor): string | undefined {
+export function doorRefusal(pin: LanguageVersion, door: FiringDoor): string | undefined {
   return isLegacyLanguageVersion(pin) ? undefined : refusalOf(pin, neededBy(door));
 }
 

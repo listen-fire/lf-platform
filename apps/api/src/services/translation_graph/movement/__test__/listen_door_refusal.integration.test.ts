@@ -15,10 +15,20 @@ import type { TriggerEvent } from 'movement-engine/public/inbound';
 
 import { getAutomationsQb, getCoreQb } from '../../../../lib/kysely';
 import { cleanupTeam } from '../../../../test/harness/cleanup';
+import { loadGuardPausedState } from '../../../loop_guard';
+import { resolveAdapter } from '../../adapters/resolve';
 import { dispatchTriggerByIdEvent } from '../../triggers/router';
 import { mintMovementVersionIfChanged } from '../version_store';
 import { runCarriedSegment } from '../carried_run';
 
+jest.mock('../../../loop_guard', () => {
+  const actual = jest.requireActual('../../../loop_guard');
+  return { ...actual, loadGuardPausedState: jest.fn(actual.loadGuardPausedState) };
+});
+jest.mock('../../adapters/resolve', () => {
+  const actual = jest.requireActual('../../adapters/resolve');
+  return { ...actual, resolveAdapter: jest.fn(actual.resolveAdapter) };
+});
 jest.mock('../carried_run', () => {
   const actual = jest.requireActual('../carried_run');
   return { ...actual, runCarriedSegment: jest.fn(actual.runCarriedSegment) };
@@ -74,6 +84,9 @@ describe("a listen's firing of a 0.12 automation (real Postgres, real router)", 
 
     const dispatched = await dispatchTriggerByIdEvent({ teamId, triggerId, event });
 
+    // Asked first: nothing was counted, no source adapter built, no sender judged.
+    expect(loadGuardPausedState).not.toHaveBeenCalled();
+    expect(resolveAdapter).not.toHaveBeenCalled();
     const refusal = refusalOf('0.12.13', 'listen');
     expect(refusal).toMatch(/but not to fire its listens/);
     expect(dispatched.errors).toEqual([{ triggerEntryId: triggerId, message: refusal }]);

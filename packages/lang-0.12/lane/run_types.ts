@@ -117,11 +117,11 @@ export interface RunPlatform {
   bindings: EngineHost['park']['bindings'];
   /** The platform's cross-run write locks, shared by every version. */
   locks: WriteLocks;
-  /** Who acted, by the trigger's own rules and then the source's candidates. */
+  /** Who acted, by the trigger's own rules and then the source's candidates.
+   *  The event stays here: this version's module reads it, in `candidates`. */
   actingUser(input: {
     teamId: string;
     triggerId?: string;
-    event: TriggerEvent;
     candidates(): Promise<unknown>;
   }): Promise<ActingUser | null>;
   /** A cancel, asked at each boundary; the lease, asked with it. */

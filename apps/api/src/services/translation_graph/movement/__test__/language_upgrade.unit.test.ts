@@ -815,6 +815,26 @@ describe('an explicit upgrade: errors block, meaning-changed warnings hold the p
     );
   });
 
+  it('a stopped move says what stopped: a text it rewrote, or a text it left alone', async () => {
+    const stopped = async (rewrote: boolean) => {
+      jest.mocked(getMovementRow).mockResolvedValueOnce(movement({ id: 'old' }));
+      jest.mocked(saveMovement).mockResolvedValueOnce({ ok: false, errors: ['the plan was refused'] } as never);
+      const edit = { line: 1, col: 1, endLine: 1, endCol: 7, text: 'SOURCE' };
+      return upgradeMovement({
+        teamId: 'team-1',
+        id: 'old',
+        acknowledge: true,
+        validate: async ({ source }) => ({
+          diagnostics: rewrote && source === undefined ? [{ ...diagnostic('warning', 'old spelling'), upgrade: true as const, line: 1, col: 1, endLine: 1, endCol: 7, fix: { edits: [edit], safe: true as const } }] : [],
+          gaps: [],
+        }),
+      });
+    };
+
+    expect(await stopped(false)).toEqual(expect.objectContaining({ status: 'unverified', detail: expect.stringMatching(/^it did not ship under .*: the plan was refused$/) }));
+    expect(await stopped(true)).toEqual(expect.objectContaining({ status: 'unverified', detail: 'the rewritten text did not ship: the plan was refused' }));
+  });
+
   it('an error blocks even when acknowledged', async () => {
     jest.mocked(getMovementRow).mockResolvedValueOnce(movement({ id: 'old' }));
     const error = diagnostic('error', 'refused');

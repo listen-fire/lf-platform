@@ -319,7 +319,7 @@ describe('an upgrading import group moves in one transaction (real Postgres, the
       await leftRow(guarded, { kind: 'manual', guard: true });
       const plain = await seed('swept_plain', LISTENS);
       await leftRow(plain, { kind: 'manual' });
-      const { unprovision } = liveDeployCheckDeps({ tag: 't', language: { current: LANGUAGE_VERSION, legacy: [], deprecated: [] } });
+      const { unprovision } = liveDeployCheckDeps({ tag: 't', language: { current: LANGUAGE_VERSION, legacy: new Set<string>(), deprecated: new Set<string>() } });
 
       for (const id of [paused, guarded, plain]) await unprovision((await getMovementRow({ teamId, id }))!);
 
