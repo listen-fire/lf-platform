@@ -554,6 +554,9 @@ async function provisionListeners(input: {
    *  halves (address resolution, subscription sync) are reported inside the
    *  `listeners` step rather than hidden in it (./timing.ts). */
   timer?: StepTimer;
+  /** Inside a caller's open transaction: those two halves wait here until it
+   *  commits, so no provider is called while it is open or for a rollback. */
+  afterCommit?: AfterCommit;
 }): Promise<ProvisionMovementResult> {
   const { teamCatalog } = input;
   const within = <T>(name: string, run: () => Promise<T>): Promise<T> =>
@@ -642,35 +645,48 @@ async function provisionListeners(input: {
   // periodic row's lease, a request on that key is pushed to the next interval.
   for (const kind of reconciles) await enqueueWork({ kind, key: `${kind}:shipped` });
 
-  // A listen the host lists the members of (Airtable narrowed by base or
-  // table) is listed now, before its subscriptions are synced, so they are
-  // made per record it is subscribed under (its base); the clock relist is
-  // armed with it (listen_resolve.ts). Read off the reconcile's own rows, not
-  // the store, so no listen re-read is owed. A failure keeps the listen saved
-  // and surfaces as a note, never blocks the save.
-  await within('resolveListens', async () => {
-    for (const listener of listeners) {
-      const parsed = listenConfigSchema.safeParse(listener.config);
-      if (!parsed.success || !resolvesListen(parsed.data.listen)) continue;
-      const listen: SavedListen = { ...parsed.data.listen, triggerId: listener.triggerId as TriggerId, teamId: input.teamId as TeamId, file: input.movementRow.name, credentialsId: listener.credentialsId };
-      await resolveAndArm(listen);
-    }
-  });
+  const reachProviders = async (): Promise<string[]> => {
+    // A listen the host lists the members of (Airtable narrowed by base or
+    // table) is listed now, before its subscriptions are synced, so they are
+    // made per record it is subscribed under (its base); the clock relist is
+    // armed with it (listen_resolve.ts). Read off the reconcile's own rows, not
+    // the store, so no listen re-read is owed. A failure keeps the listen saved
+    // and surfaces as a note, never blocks the save.
+    await within('resolveListens', async () => {
+      for (const listener of listeners) {
+        const parsed = listenConfigSchema.safeParse(listener.config);
+        if (!parsed.success || !resolvesListen(parsed.data.listen)) continue;
+        const listen: SavedListen = { ...parsed.data.listen, triggerId: listener.triggerId as TriggerId, teamId: input.teamId as TeamId, file: input.movementRow.name, credentialsId: listener.credentialsId };
+        await resolveAndArm(listen);
+      }
+    });
 
-  // External event subscriptions follow the listens: the trigger table is
-  // now the desired state, so the global per-team diff-sync (attio
-  // webhooks et al — Adapter.ensureEventSubscription) runs after every
-  // reconcile. Failures surface as notes, never block the save.
-  const subscriptionSync = await within('subscriptionSync', () =>
-    syncListenSubscriptions({ teamId: input.teamId }),
-  );
+    // External event subscriptions follow the listens: the trigger table is
+    // now the desired state, so the global per-team diff-sync (attio
+    // webhooks et al — Adapter.ensureEventSubscription) runs after every
+    // reconcile. Failures surface as notes, never block the save.
+    const subscriptionSync = await within('subscriptionSync', () =>
+      syncListenSubscriptions({ teamId: input.teamId }),
+    );
+    return subscriptionSync.notes;
+  };
+
+  const { afterCommit } = input;
+  let subscriptionNotes: string[] = [];
+  if (afterCommit !== undefined) {
+    afterCommit(async () => {
+      await reachProviders();
+    });
+  } else {
+    subscriptionNotes = await reachProviders();
+  }
 
   return {
     ok: true,
     movementName: input.movementRow.name,
     listeners,
     infos,
-    catalogNotes: [...teamCatalog.notes, ...subscriptionSync.notes],
+    catalogNotes: [...teamCatalog.notes, ...subscriptionNotes],
     // Save-time warnings are assembled by `saveMovement` — provisioning
     // itself has no view of the rest of the team's automations.
     warnings: [],
@@ -678,6 +694,23 @@ async function provisionListeners(input: {
 }
 
 // ── Text-canonical persistence (saveMovement & friends) ────────────────────
+
+/** Hands over an effect to run once the caller's transaction has committed:
+ *  never if it rolls back. */
+export type AfterCommit = (effect: () => Promise<void>) => void;
+
+/**
+ * A save joining a caller's open database transaction (an upgrade's import
+ * group). It writes only to the database, through that transaction. The caller
+ * assembled its catalog before the transaction opened (the one provider read a
+ * save needs up front), and runs everything else that reaches outside the
+ * database once it commits: listen resolution, subscriptions, change hints,
+ * milestones. A rollback leaves nothing at a provider and tells nobody.
+ */
+export interface SaveInTransaction {
+  teamCatalog: TeamMovementCatalog;
+  afterCommit: AfterCommit;
+}
 
 export interface SaveMovementInput {
   teamId: string;
@@ -719,6 +752,8 @@ export interface SaveMovementInput {
    *  the pin and the text it is written in move in the one row update. An
    *  ordinary save never moves the pin. */
   languageUpgrade?: { to: LanguageVersion };
+  /** Set only by the language upgrade: the save joins its open transaction. */
+  inTransaction?: SaveInTransaction;
 }
 
 export interface SavedMovement extends ProvisionedMovement {
@@ -887,13 +922,14 @@ async function checkForSave({ input, row, timer }: { input: SaveMovementInput; r
 
   // Referenced-set catalog: introspect only the (adapter, credential)
   // pairs this program (and its imported libraries) constructs, not the
-  // whole workspace.
-  const teamCatalog = await timer.step('catalog', () =>
+  // whole workspace. A save inside a transaction was handed the one its caller
+  // assembled before opening it: no provider is read while it is open.
+  const teamCatalog = input.inTransaction?.teamCatalog ?? (await timer.step('catalog', () =>
     movementCatalogForTeam(input.teamId as TeamId, {
       source: input.source,
       languageVersion: row.languageVersion,
     }),
-  );
+  ));
   timer.note(teamCatalog.cost ?? {});
 
   // Runtime validity (plans/2026-07-13-movement-validity-lifecycle): assess the
@@ -944,6 +980,15 @@ async function runSave(
   input: SaveMovementInput,
   timer: StepTimer,
 ): Promise<SaveMovementResult> {
+  if (input.inTransaction !== undefined && unsafeCurrentContext()?.kyselyTrx === undefined) {
+    throw new Error('a save handed a transaction to join is running outside one');
+  }
+  // What reaches outside the database: now, or once the caller's transaction
+  // has committed.
+  const outsideTheDatabase = (tell: () => void): void => {
+    if (input.inTransaction === undefined) tell();
+    else input.inTransaction.afterCommit(async () => tell());
+  };
   const declaredName = movementNameFromSource(input.source);
   const existing = input.id
     ? await getMovementRow({ teamId: input.teamId, id: input.id })
@@ -1027,12 +1072,14 @@ async function runSave(
   // The source row is now saved — emit the resource-change hint here (the
   // shared service layer), so UI saves and agent saves both propagate
   // regardless of the save's eventual gate outcome below.
-  emitMovementChange({
-    teamId: input.teamId,
-    movementId: row.id,
-    action: 'saveMovement',
-    ...(input.changeSource !== undefined ? { source: input.changeSource } : {}),
-  });
+  outsideTheDatabase(() =>
+    emitMovementChange({
+      teamId: input.teamId,
+      movementId: row.id,
+      action: 'saveMovement',
+      ...(input.changeSource !== undefined ? { source: input.changeSource } : {}),
+    }),
+  );
 
   const { validation, validity, notes, gaps, teamCatalog } = await checkForSave({ input, row, timer });
   const sourceHash = movementSourceHash(input.source);
@@ -1047,6 +1094,8 @@ async function runSave(
   // `recordAutomationSavedMilestones` above) — did THIS request arrive via
   // MCP? Stamped on the Context by the auth middleware from `x-mcp-domain`.
   const viaMcp = journeyContext?.mcpDomain === 'automation';
+  const recordMilestones = (): void =>
+    outsideTheDatabase(() => recordAutomationSavedMilestones({ actingUserId, teamId: input.teamId, viaMcp }));
 
   // Record the validity axis once. Stamp consent when we're shipping a
   // non-`valid` movement on acknowledgement.
@@ -1077,7 +1126,7 @@ async function runSave(
     // `needsConfirmation` still counts: the source is durably persisted and
     // the user authored an automation — that's the milestone, independent
     // of whether it shipped live.
-    recordAutomationSavedMilestones({ actingUserId, teamId: input.teamId, viaMcp });
+    recordMilestones();
     return {
       ok: false,
       needsConfirmation: true,
@@ -1107,6 +1156,7 @@ async function runSave(
           source: input.source,
           teamCatalog,
           timer,
+          ...(input.inTransaction !== undefined ? { afterCommit: input.inTransaction.afterCommit } : {}),
           // A consented non-valid save ships: derive its declared listens despite
           // check errors so it genuinely fires-and-fails (decision 3b).
           ...(consented ? { provisionDespiteErrors: true } : {}),
@@ -1126,7 +1176,7 @@ async function runSave(
   // A carried version's save is its text and its check, under its own pin;
   // nothing of this release's listener reconciliation reads its text.
   if (teamCatalog === undefined) {
-    recordAutomationSavedMilestones({ actingUserId, teamId: input.teamId, viaMcp });
+    recordMilestones();
     return { ...provisioned, movementId: row.id, validity };
   }
 
@@ -1139,13 +1189,13 @@ async function runSave(
     // user did everything in their control. Only team-level infrastructure
     // stopped it shipping, which the user can't fix by authoring harder.
     // That failure is a distinct, later funnel step (first_run), not this one.
-    recordAutomationSavedMilestones({ actingUserId, teamId: input.teamId, viaMcp });
+    recordMilestones();
     return { ...provisioned, movementId: row.id };
   }
 
   // Both remaining paths below ship the save (`ok: true`) — the definitive
   // success case.
-  recordAutomationSavedMilestones({ actingUserId, teamId: input.teamId, viaMcp });
+  recordMilestones();
 
   const declaredNames = declaredMovementNames(input.source);
   const collisionWarnings = await timer.step('collisions', () =>

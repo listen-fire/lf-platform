@@ -21,7 +21,6 @@ import { upsertMovementRow } from '../../translation_graph/movement/store';
 import {
   mintMovementVersionIfChanged,
   movementSourceHash,
-  repinCurrentVersion,
 } from '../../translation_graph/movement/version_store';
 import { clearGuardPaused, setGuardPaused } from '../../loop_guard/pause';
 import { persistCredential } from '../../credentials/persist_credential';
@@ -257,7 +256,7 @@ describe('the movements module', () => {
     expect(compatible(repin, LANGUAGE_VERSION)).toBe(true);
     expect(repin).not.toBe(LANGUAGE_VERSION);
     const before = await getAutomationsQb(['movement']).selectFrom('movement').where('id', '=', id as MovementId).select('current_version_id').executeTakeFirstOrThrow();
-    await repinCurrentVersion({ teamId: teamA, movementId: id, languageVersion: repin });
+    await mintMovementVersionIfChanged({ teamId: teamA, movementId: id, source: text, languageVersion: repin });
     const after = await getAutomationsQb(['movement']).selectFrom('movement').where('id', '=', id as MovementId).select('current_version_id').executeTakeFirstOrThrow();
     expect(after.current_version_id).not.toBe(before.current_version_id);
     expect(await read(teamA, 'versioned.mvt')).toEqual(first);

@@ -151,31 +151,6 @@ export async function getMovementVersion(input: {
   };
 }
 
-/**
- * Re-mint the movement's current snapshot under a moved pin: same text, new
- * language version. A no-op for a movement with no snapshot yet (its first
- * clean save mints one under whatever the pin is then).
- */
-export async function repinCurrentVersion(input: {
-  teamId: string;
-  movementId: string;
-  languageVersion: LanguageVersion;
-}): Promise<void> {
-  const current = await getAutomationsQb(['movement', 'movement_version'])
-    .selectFrom('movement')
-    .innerJoin('movement_version', 'movement_version.id', 'movement.current_version_id')
-    .where('movement.id', '=', input.movementId as MovementId)
-    .select('movement_version.source as source')
-    .executeTakeFirst();
-  if (!current) return;
-  await mintMovementVersionIfChanged({
-    teamId: input.teamId,
-    movementId: input.movementId,
-    source: current.source,
-    languageVersion: input.languageVersion,
-  });
-}
-
 /** What a parked run re-enters: the snapshot's source (P11 — the stored
  *  addresses name THAT AST) and the language version it runs under. Null when
  *  the id doesn't resolve. */

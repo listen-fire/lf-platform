@@ -29,7 +29,6 @@ jest.mock('../../../context', () => ({
   unsafeCurrentContext: () => undefined,
 }));
 jest.mock('../store', () => ({
-  advanceMovementLanguageVersion: jest.fn(),
   getMovementRow: jest.fn(),
   listAllMovementRows: jest.fn(),
   // The team's files: none besides the movement itself unless a case says so,
@@ -50,8 +49,8 @@ import { parseProgram } from 'legacy-lang';
 
 import { assessMovementValidity, type AuthoringDiagnostic } from '../authoring';
 
-import { advanceMovementLanguageVersion, getMovementRow, listMovementRows, recordUpgradeCheck, type MovementRow } from '../store';
-import { saveMovement } from '../provision';
+import { getMovementRow, listMovementRows, recordUpgradeCheck, type MovementRow } from '../store';
+import { saveMovement, type AfterCommit } from '../provision';
 import {
   runDeployCheck,
   upgradeMovement,
@@ -157,7 +156,6 @@ function fakeStore(input: {
 /** The check has no seam that moves a pin; this proves it reached for no
  *  other way to move one either. */
 function expectNoPinMoved(): void {
-  expect(advanceMovementLanguageVersion).not.toHaveBeenCalled();
   expect(saveMovement).not.toHaveBeenCalled();
 }
 
@@ -469,7 +467,7 @@ describe('an explicit upgrade by the compatibility rule', () => {
       validate,
       advance: async ({ to }) => {
         advanced.push(to);
-        return { ok: true };
+        return async () => ({ ok: true });
       },
     });
 
@@ -484,7 +482,7 @@ describe('an explicit upgrade by the compatibility rule', () => {
     jest.mocked(getMovementRow).mockResolvedValueOnce(movement({ id: 'older', languageVersion: '0.12.0' }));
     jest.mocked(assessMovementValidity).mockReturnValueOnce({ status: 'valid', reason: null } as never);
     const { validations, validate } = recorded();
-    const advanced: Array<{ to: LanguageVersion; source?: string }> = [];
+    const advanced: Array<{ to: LanguageVersion; source: string }> = [];
 
     const result = await upgradeMovement({
       teamId: 'team-1',
@@ -492,14 +490,16 @@ describe('an explicit upgrade by the compatibility rule', () => {
       acknowledge: true,
       validate,
       advance: async ({ to, source }) => {
-        advanced.push({ to, ...(source !== undefined ? { source } : {}) });
-        return { ok: true };
+        advanced.push({ to, source });
+        return async () => ({ ok: true });
       },
     });
 
     expect(result).toEqual(expect.objectContaining({ status: 'upgraded', from: { version: '0.12.0', name: '0.12.0' } }));
     expect(validations.map((v) => [v.languageVersion, v.upgradingFrom, v.source])).toEqual([[CUR, '0.12.0', undefined]]);
-    expect(advanced).toEqual([{ to: CUR }]);
+    // Its text did not change: it is still a save, under the new pin, so its
+    // listens are provisioned there.
+    expect(advanced).toEqual([{ to: CUR, source: 'source of older' }]);
   });
 
   it('a pin on the installed line is already current', async () => {
@@ -521,8 +521,7 @@ describe('an explicit upgrade by the compatibility rule', () => {
       }),
     );
     expect(validations).toEqual([]);
-    expect(advanceMovementLanguageVersion).not.toHaveBeenCalled();
-  });
+    });
 });
 
 describe('an upgrade moves the whole import group, or nothing', () => {
@@ -549,7 +548,7 @@ describe('an upgrade moves the whole import group, or nothing', () => {
     const advanced: Array<{ id: string; to: LanguageVersion }> = [];
     const advance = async ({ movement: m, to }: { movement: MovementRow; to: LanguageVersion }) => {
       advanced.push({ id: m.id, to });
-      return { ok: true as const };
+      return async () => ({ ok: true as const });
     };
     return { validations, validate, advanced, advance };
   };
@@ -596,8 +595,7 @@ describe('an upgrade moves the whole import group, or nothing', () => {
     const result = await upgradeMovement({ teamId: 'team-1', id: 'app', acknowledge: true, validate, advance });
 
     expect(advanced).toEqual([]);
-    expect(advanceMovementLanguageVersion).not.toHaveBeenCalled();
-    expect(saveMovement).not.toHaveBeenCalled();
+      expect(saveMovement).not.toHaveBeenCalled();
     if (result.status === 'not_found') throw new Error('unreachable');
     expect(result.status).toBe('blocked');
     expect(result.diagnostics).toEqual([]);
@@ -616,16 +614,16 @@ describe('an upgrade moves the whole import group, or nothing', () => {
     const { validate } = groupOf({});
     const moved: string[] = [];
     const outcomes: Array<'committed' | 'rolled back'> = [];
-    const together = async (_teamId: string, moves: () => Promise<void>) => {
+    const together = async (_teamId: string, moves: (afterCommit: AfterCommit) => Promise<void>) => {
       try {
-        await moves();
+        await moves(() => undefined);
         outcomes.push('committed');
       } catch (err) {
         outcomes.push('rolled back');
         throw err;
       }
     };
-    const advance = async ({ movement: m }: { movement: { name: string } }) => {
+    const advance = async ({ movement: m }: { movement: { name: string } }) => async () => {
       if (m.name === 'app') return { ok: false as const, detail: 'the rewritten text did not ship' };
       moved.push(m.name);
       return { ok: true as const };
@@ -650,6 +648,64 @@ describe('an upgrade moves the whole import group, or nothing', () => {
     expect(result.status).toBe('upgraded');
     expect(enterTransaction).toHaveBeenCalledTimes(1);
     expect(advanced.map((a) => a.id)).toEqual(['lib', 'app', 'old-app']);
+  });
+
+  it('each member is prepared before the transaction opens, and what reaches a provider waits for its commit', async () => {
+    jest.mocked(getMovementRow).mockResolvedValueOnce(rows[1]);
+    jest.mocked(listMovementRows).mockResolvedValueOnce(rows);
+    jest.mocked(assessMovementValidity).mockReturnValue({ status: 'valid', reason: null } as never);
+    const { validate } = groupOf({});
+    const events: string[] = [];
+    enterTransaction.mockClear();
+    enterTransaction.mockImplementationOnce(async () => {
+      events.push('transaction opened');
+    });
+    const advance = async ({ movement: m }: { movement: { name: string } }) => {
+      events.push(`prepared ${m.name}`);
+      return async (afterCommit: AfterCommit) => {
+        events.push(`saved ${m.name}`);
+        afterCommit(async () => {
+          events.push(`provider called for ${m.name}`);
+        });
+        return { ok: true as const };
+      };
+    };
+
+    const result = await upgradeMovement({ teamId: 'team-1', id: 'app', acknowledge: true, validate, advance });
+
+    expect(result.status).toBe('upgraded');
+    expect(events).toEqual([
+      'prepared lib',
+      'prepared app',
+      'prepared old-app',
+      'transaction opened',
+      'saved lib',
+      'saved app',
+      'saved old-app',
+      'provider called for lib',
+      'provider called for app',
+      'provider called for old-app',
+    ]);
+  });
+
+  it('a group that rolls back calls no provider', async () => {
+    jest.mocked(getMovementRow).mockResolvedValueOnce(rows[1]);
+    jest.mocked(listMovementRows).mockResolvedValueOnce(rows);
+    jest.mocked(assessMovementValidity).mockReturnValue({ status: 'valid', reason: null } as never);
+    const { validate } = groupOf({});
+    const called: string[] = [];
+    const advance = async ({ movement: m }: { movement: { name: string } }) => async (afterCommit: AfterCommit) => {
+      if (m.name === 'app') return { ok: false as const, detail: 'the rewritten text did not ship' };
+      afterCommit(async () => {
+        called.push(m.name);
+      });
+      return { ok: true as const };
+    };
+
+    const result = await upgradeMovement({ teamId: 'team-1', id: 'app', acknowledge: true, validate, advance });
+
+    expect(result).toEqual(expect.objectContaining({ status: 'unverified' }));
+    expect(called).toEqual([]);
   });
 
   it('without acknowledge, a clean group is reported and nothing moves', async () => {
@@ -746,6 +802,7 @@ describe('an explicit upgrade: errors block, meaning-changed warnings hold the p
   it('a meaning-changed warning moves up once checked and acknowledged (`--all`)', async () => {
     jest.mocked(assessMovementValidity).mockReturnValueOnce({ status: 'valid', reason: null } as never);
     jest.mocked(getMovementRow).mockResolvedValueOnce(movement({ id: 'old' }));
+    jest.mocked(saveMovement).mockResolvedValueOnce({ ok: true } as never);
     const result = await upgradeMovement({
       teamId: 'team-1',
       id: 'old',
@@ -754,6 +811,11 @@ describe('an explicit upgrade: errors block, meaning-changed warnings hold the p
       validate: async () => ({ diagnostics: [meaningChanged('changed meaning')], gaps: [] }),
     });
     expect(result.status).toBe('upgraded');
+    // The text did not change: the move is still a save, joining the group's
+    // transaction, so the listens are provisioned under the new pin.
+    expect(saveMovement).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'old', source: 'source of old', languageUpgrade: { to: CUR }, inTransaction: expect.anything() }),
+    );
   });
 
   it('an error blocks even when acknowledged', async () => {
@@ -841,15 +903,15 @@ describe('the upgrade rewrites the text by its fixes first', () => {
     expect(shown).toEqual(expect.objectContaining({ status: 'needs_acknowledgement', upgradedSource: NEW, diagnostics: [] }));
 
     jest.mocked(assessMovementValidity).mockReturnValueOnce({ status: 'valid', reason: null } as never);
-    const advanced: Array<{ to: LanguageVersion; source?: string }> = [];
+    const advanced: Array<{ to: LanguageVersion; source: string }> = [];
     const done = await upgradeMovement({
       teamId: 'team-1',
       id: 'old',
       acknowledge: true,
       validate: underFive(),
       advance: async ({ to, source }) => {
-        advanced.push({ to, ...(source !== undefined ? { source } : {}) });
-        return { ok: true };
+        advanced.push({ to, source });
+        return async () => ({ ok: true });
       },
     });
     expect(done.status).toBe('upgraded');
@@ -864,7 +926,7 @@ describe('the upgrade rewrites the text by its fixes first', () => {
       id: 'old',
       acknowledge: true,
       validate: underFive(),
-      advance: async () => ({ ok: false, detail: 'the rewritten text did not ship: a system could not be read' }),
+      advance: async () => async () => ({ ok: false, detail: 'the rewritten text did not ship: a system could not be read' }),
     });
     expect(result).toEqual(
       expect.objectContaining({ status: 'unverified', detail: 'the rewritten text did not ship: a system could not be read' }),
@@ -1078,10 +1140,10 @@ describe('an upgrade from an older release line, over the installed checker', ()
     gaps: [],
   });
   const advanceSpy = () => {
-    const advanced: Array<{ to: LanguageVersion; source?: string }> = [];
-    const advance = async ({ to, source }: { to: LanguageVersion; source?: string }) => {
-      advanced.push({ to, ...(source !== undefined ? { source } : {}) });
-      return { ok: true as const };
+    const advanced: Array<{ to: LanguageVersion; source: string }> = [];
+    const advance = async ({ to, source }: { to: LanguageVersion; source: string }) => {
+      advanced.push({ to, source });
+      return async () => ({ ok: true as const });
     };
     return { advanced, advance };
   };
@@ -1249,10 +1311,10 @@ describe('an upgrade over the real checkers, with a library the movement imports
     gaps: [],
   });
   const advanceSpy = () => {
-    const advanced: Array<{ to: LanguageVersion; source?: string }> = [];
-    const advance = async ({ to, source }: { to: LanguageVersion; source?: string }) => {
-      advanced.push({ to, ...(source !== undefined ? { source } : {}) });
-      return { ok: true as const };
+    const advanced: Array<{ to: LanguageVersion; source: string }> = [];
+    const advance = async ({ to, source }: { to: LanguageVersion; source: string }) => {
+      advanced.push({ to, source });
+      return async () => ({ ok: true as const });
     };
     return { advanced, advance };
   };
@@ -1367,10 +1429,10 @@ describe("an upgrade from 0.12 of a listen on the manual unit (Run now)", () => 
   it('rewrites the trigger type and the listen onto Invocations', async () => {
     jest.mocked(getMovementRow).mockResolvedValue(movement({ id: 'backfill', languageVersion: '0.12.13', source: PINNED_0_12 }));
     jest.mocked(assessMovementValidity).mockReturnValue({ status: 'valid', reason: null } as never);
-    const advanced: Array<{ to: LanguageVersion; source?: string }> = [];
-    const advance = async ({ to, source }: { to: LanguageVersion; source?: string }) => {
-      advanced.push({ to, ...(source !== undefined ? { source } : {}) });
-      return { ok: true as const };
+    const advanced: Array<{ to: LanguageVersion; source: string }> = [];
+    const advance = async ({ to, source }: { to: LanguageVersion; source: string }) => {
+      advanced.push({ to, source });
+      return async () => ({ ok: true as const });
     };
 
     const result = await upgradeMovement({ teamId: 'team-1', id: 'backfill', acknowledge: true, validate: realValidate, advance });

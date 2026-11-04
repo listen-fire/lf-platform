@@ -29,7 +29,6 @@ import type { AuthoringDiagnostic } from './authoring';
 
 import { getAutomationsQb } from '../../../lib/kysely';
 import { parseRunMode, type TriggerRunMode } from '../triggers/run_mode';
-import { repinCurrentVersion } from './version_store';
 
 /** Runtime validity of the CURRENT source against the adapters' CURRENT live
  *  shape. Null = never checked.
@@ -324,31 +323,6 @@ export async function recordUpgradeCheck(input: {
     })
     .where('id', '=', input.id as MovementId)
     .execute();
-}
-
-/**
- * Move a movement's pin — only an explicit upgrade, never an edit or the
- * deploy check. Clears what stood in the way, and re-mints the
- * movement's current snapshot under the new version so new runs pin it while
- * parked ones keep the version they started with.
- */
-export async function advanceMovementLanguageVersion(input: {
-  teamId: string;
-  id: string;
-  to: LanguageVersion;
-}): Promise<void> {
-  await getAutomationsQb(['movement'])
-    .updateTable('movement')
-    .set({
-      language_version: input.to,
-      upgrade_diagnostics: null,
-      upgrade_checked_against: input.to,
-      updated_at: new Date(),
-    })
-    .where('team_id', '=', input.teamId)
-    .where('id', '=', input.id as MovementId)
-    .execute();
-  await repinCurrentVersion({ teamId: input.teamId, movementId: input.id, languageVersion: input.to });
 }
 
 export async function deleteMovementRow(input: { teamId: string; id: string }): Promise<void> {

@@ -80,7 +80,7 @@ import {
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { MovementId } from '../../../generated/kysely/automations/Movement';
 import type { TeamFacts } from '@listen-fire/language-versions';
-import type { ImportedFile } from './catalog';
+import { movementCatalogForTeam, type ImportedFile } from './catalog';
 
 import { getAutomationsQb } from '../../../lib/kysely';
 import { settleRunsParkedOnTriggers } from '../../interaction/run_failure';
@@ -99,11 +99,10 @@ import {
 } from './authoring';
 import { teamFactsOncePerTeam } from './carried_check';
 import { withTeamContext } from './firing_context';
-import { currentContext, unsafeCurrentContext } from '../../context';
+import { currentContext } from '../../context';
 import { importGroupOf } from './imports_across_versions';
-import { saveMovement } from './provision';
+import { saveMovement, type AfterCommit } from './provision';
 import {
-  advanceMovementLanguageVersion,
   getMovementRow,
   listAllMovementRows,
   listMovementRows,
@@ -160,13 +159,25 @@ export type ValidateUnder = (input: {
   movingWith?: ReadonlyMap<string, ImportedFile>;
 }) => Promise<Pick<TeamMovementValidation, 'diagnostics' | 'gaps'>>;
 
-/** What moving a pin did. Moving it with a rewritten text is a save, which
- *  can still land short of shipping. */
+/** What moving a pin did. Moving it is a save, which can still land short of
+ *  shipping. */
 export type AdvanceOutcome = { ok: true } | { ok: false; detail: string };
 
-/** Move `movement`'s pin to `to` — with `source`, saving that text with it.
- *  Only an explicit upgrade calls it. */
-export type Advance = (input: { movement: MovementRow; to: LanguageVersion; source?: string }) => Promise<AdvanceOutcome>;
+/** One member's move, ready to run inside the group's transaction: database
+ *  writes only, handing what reaches a provider to `afterCommit`. */
+export type MoveMember = (afterCommit: AfterCommit) => Promise<AdvanceOutcome>;
+
+/** Prepares moving `movement` to `to`, saved as `source` (the rewrite, or its
+ *  own text when the rewrite changed nothing). The preparing runs before the
+ *  group's transaction opens and makes every provider read the move needs.
+ *  `movingWith` is the members moving before it, as they will be moved. Only an
+ *  explicit upgrade calls it. */
+export type Advance = (input: {
+  movement: MovementRow;
+  to: LanguageVersion;
+  source: string;
+  movingWith: ReadonlyMap<string, ImportedFile>;
+}) => Promise<MoveMember>;
 
 // ── The rewrite ─────────────────────────────────────────────────────────────
 
@@ -894,23 +905,37 @@ export function liveDeployCheckDeps(release: DeployCheckRelease): DeployCheckDep
 }
 
 /**
- * Move a pin for real, for an explicit upgrade. Without a rewrite, the pin
- * moves on its own (and the current snapshot is re-minted under it). With one,
- * the rewritten text is saved under the new pin in one save — the text and the pin it is written in
- * move together, its listeners are reconciled and its snapshot minted — so no
- * run ever sees the new spelling under the old pin or the old under the new.
+ * Move a pin for real, for an explicit upgrade: always a save, whether or not
+ * the rewrite changed the text. The text and the pin it is written in move
+ * together, the automation's listens are provisioned under the new pin and its
+ * snapshot minted, so no run ever sees the new spelling under the old pin or
+ * the old under the new, and a version whose listens did not fire ends up with
+ * its listens firing.
+ *
+ * The catalog is assembled here, before the group's transaction opens: it is
+ * the one provider read the save needs up front. Its imports of the members
+ * moving before it resolve to their moved text, which is not in the database
+ * yet.
  */
-export const advanceLive: Advance = async ({ movement, to, source }) => {
-  if (source === undefined) {
-    await advanceMovementLanguageVersion({ teamId: movement.teamId, id: movement.id, to });
-    return { ok: true };
-  }
-  // Inside a group's transaction the save joins it; on its own it runs as the
-  // team.
-  const save = () => saveMovement({ teamId: movement.teamId, id: movement.id, source, languageUpgrade: { to } });
-  const saved = unsafeCurrentContext()?.kyselyTrx !== undefined ? await save() : await withTeamContext(movement.teamId as TeamId, save);
-  if (saved.ok) return { ok: true };
-  return { ok: false, detail: `the rewritten text did not ship: ${(saved.errors ?? []).join('; ') || 'the save stopped short of shipping'}` };
+export const advanceLive: Advance = async ({ movement, to, source, movingWith }) => {
+  const teamCatalog = await withTeamContext(movement.teamId as TeamId, () =>
+    movementCatalogForTeam(movement.teamId as TeamId, {
+      source,
+      languageVersion: to,
+      ...(movingWith.size > 0 ? { movingWith } : {}),
+    }),
+  );
+  return async (afterCommit) => {
+    const saved = await saveMovement({
+      teamId: movement.teamId,
+      id: movement.id,
+      source,
+      languageUpgrade: { to },
+      inTransaction: { teamCatalog, afterCommit },
+    });
+    if (saved.ok) return { ok: true };
+    return { ok: false, detail: `the rewritten text did not ship: ${(saved.errors ?? []).join('; ') || 'the save stopped short of shipping'}` };
+  };
 };
 
 /** The most recent check's summary — what `deploy/up.sh` prints. */
@@ -1073,17 +1098,22 @@ export async function upgradeMovement(input: {
   // Every member moves in one transaction, libraries first so each importer
   // is saved against what it imports as moved: a member that cannot move
   // undoes the members before it, so no importer is left on one version
-  // importing a library moved to another.
+  // importing a library moved to another. The transaction holds only database
+  // writes: each member is prepared before it opens (the provider reads), and
+  // what reaches a provider or tells anyone runs after it commits.
   const advance = input.advance ?? advanceLive;
   const together = input.together ?? inOneTransaction;
+  const moves: { member: CheckedMember; move: MoveMember }[] = [];
+  const moved = new Map<string, ImportedFile>();
+  for (const member of checked) {
+    const move = await advance({ movement: member.movement, to, source: member.rewrite.source, movingWith: new Map(moved) });
+    moves.push({ member, move });
+    moved.set(member.movement.name, { source: member.rewrite.source, languageVersion: to });
+  }
   try {
-    await together(movement.teamId, async () => {
-      for (const member of checked) {
-        const advanced = await advance({
-          movement: member.movement,
-          to,
-          ...(member.rewrite.changed ? { source: member.rewrite.source } : {}),
-        });
+    await together(movement.teamId, async (afterCommit) => {
+      for (const { member, move } of moves) {
+        const advanced = await move(afterCommit);
         if (!advanced.ok) throw new GroupMoveStopped(member.movement.name, advanced.detail);
         const assessment = assessMovementValidity({ diagnostics: member.rewrite.validation.diagnostics, gaps: [] });
         await recordValidityOutcome({
@@ -1116,14 +1146,31 @@ class GroupMoveStopped extends Error {
 }
 
 /** Runs `moves` as the team, in one database transaction: every write a save
- *  makes joins it, and a throw rolls all of them back. */
-export type MoveTogether = (teamId: string, moves: () => Promise<void>) => Promise<void>;
+ *  makes joins it, and a throw rolls all of them back. What the moves hand to
+ *  `afterCommit` runs once the transaction has committed, never if it rolled
+ *  back. */
+export type MoveTogether = (teamId: string, moves: (afterCommit: AfterCommit) => Promise<void>) => Promise<void>;
 
-export const inOneTransaction: MoveTogether = (teamId, moves) =>
-  withTeamContext(teamId as TeamId, async () => {
+export const inOneTransaction: MoveTogether = async (teamId, moves) => {
+  const effects: (() => Promise<void>)[] = [];
+  await withTeamContext(teamId as TeamId, async () => {
     await currentContext().enterTransaction();
-    await moves();
+    await moves((effect) => effects.push(effect));
   });
+  // Committed, and outside it now, as the team. The upgrade has landed, so an
+  // effect that fails is logged, loudly, and the rest still run: its listen
+  // stays saved.
+  await withTeamContext(teamId as TeamId, async () => {
+    for (const effect of effects) {
+      await effect().catch((error: unknown) =>
+        logger.error('[LanguageUpgrade] a step after the group committed failed', {
+          teamId,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
+  });
+};
 
 /** Why a group stays: the members that cannot move, each with its reason. */
 function heldDetail(heldBy: readonly HeldMember[]): string {
