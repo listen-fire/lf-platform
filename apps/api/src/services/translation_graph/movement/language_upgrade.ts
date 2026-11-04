@@ -1079,7 +1079,77 @@ export type UpgradeMovementResult =
       /** What an upgrade that landed wants known: the listens it left paused
        *  because it could not tell which of them a person had paused. */
       warnings?: string[];
+      /** What moving changes, said before it moves. Absent on `already_current`
+       *  and when no move is on offer. */
+      changes?: UpgradeChanges;
     };
+
+/** What moving an automation to the current version changes. */
+export interface UpgradeChanges {
+  /** The lines the rewrite changes, in the saved text's numbering. */
+  text: { line: number; was: string[]; becomes: string[] }[];
+  /** What else is different once it has moved, in plain words. */
+  behaviour: string[];
+}
+
+/** The changed lines between two texts: a longest common subsequence over
+ *  what differs once a common head and tail are set aside, as hunks. */
+export function changedLines(before: string, after: string): UpgradeChanges['text'] {
+  const was = before.split('\n');
+  const becomes = after.split('\n');
+  let head = 0;
+  while (head < was.length && head < becomes.length && was[head] === becomes[head]) head++;
+  let tail = 0;
+  while (tail < was.length - head && tail < becomes.length - head && was[was.length - 1 - tail] === becomes[becomes.length - 1 - tail]) tail++;
+  const a = was.slice(head, was.length - tail);
+  const b = becomes.slice(head, becomes.length - tail);
+  const lengths: number[][] = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
+  const at = (i: number, j: number): number => lengths[i]?.[j] ?? 0;
+  for (let i = a.length - 1; i >= 0; i--) {
+    for (let j = b.length - 1; j >= 0; j--) {
+      (lengths[i] ?? [])[j] = a[i] === b[j] ? at(i + 1, j + 1) + 1 : Math.max(at(i + 1, j), at(i, j + 1));
+    }
+  }
+  const hunks: UpgradeChanges['text'] = [];
+  let open: UpgradeChanges['text'][number] | undefined;
+  const hunkAt = (i: number) => (open ??= (() => {
+    const hunk = { line: head + i + 1, was: [], becomes: [] };
+    hunks.push(hunk);
+    return hunk;
+  })());
+  let i = 0;
+  let j = 0;
+  while (i < a.length || j < b.length) {
+    if (i < a.length && j < b.length && a[i] === b[j]) {
+      open = undefined;
+      i++;
+      j++;
+    } else if (j < b.length && (i === a.length || at(i, j + 1) >= at(i + 1, j))) {
+      hunkAt(i).becomes.push(b[j] ?? '');
+      j++;
+    } else {
+      hunkAt(i).was.push(a[i] ?? '');
+      i++;
+    }
+  }
+  return hunks;
+}
+
+/** What a move from `movement`'s pin to `to` changes, from what its version
+ *  provides and what the rewrite did. */
+export function upgradeChanges(input: { movement: Pick<MovementRow, 'languageVersion' | 'source' | 'currentVersionId'>; rewritten: string; to: LanguageVersion }): UpgradeChanges {
+  const { movement, to } = input;
+  const from = movement.languageVersion;
+  const behaviour = [
+    `New runs use ${to}; runs already in progress finish under ${from}.`,
+    `Help moves with it: readHandbook, searchLanguage, showExample, getStarted, listConnections and describeConnection answer for ${to}, whose spellings differ; what you read for ${from} no longer applies to it.`,
+    `Edits to it are checked under ${to}. There is no moving back.`,
+  ];
+  if (listeningOf(from).kind === 'held' && movement.currentVersionId !== null) {
+    behaviour.unshift(`Its listens start firing under ${to}; they do not fire while it is on ${from}.`);
+  }
+  return { text: changedLines(movement.source, input.rewritten), behaviour };
+}
 
 /** One member of the group, checked for the move. */
 interface CheckedMember {
@@ -1186,6 +1256,7 @@ export async function upgradeMovement(input: {
   const diagnostics = own.diagnostics;
   const shown = {
     ...base,
+    changes: upgradeChanges({ movement, rewritten: own.rewrite.source, to }),
     ...(own.rewrite.changed ? { upgradedSource: own.rewrite.source } : {}),
     ...(others.length > 0 ? { movesWith: others.map(asMember) } : {}),
     ...(heldBy.length > 0 ? { heldBy } : {}),

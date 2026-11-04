@@ -265,6 +265,12 @@ export interface TeamSnapshot {
   unread: ReadonlyMap<string, string>;
   /** Every adapter key the snapshot names. */
   adapters: ReadonlySet<string>;
+  /** The manifests it was built from: what its systems declare about
+   *  themselves. */
+  manifests: readonly AdapterManifest[];
+  /** What each typed instance's schema calls a record type, where it says, by
+   *  `<adapter>::<type>`. */
+  recordLabels: ReadonlyMap<string, string>;
 }
 
 /** Every program's write chains under its own pin, scanned at most once for all
@@ -334,6 +340,15 @@ export async function teamSnapshot(input: {
     }
     return entry;
   });
+  const recordLabels = new Map<string, string>();
+  const remember = (adapter: string, schema: InstanceSchema): void => {
+    for (const [type, position] of Object.entries(schema.positions)) {
+      const key = `${adapter}::${type}`;
+      if (position.displayName !== undefined && !recordLabels.has(key)) recordLabels.set(key, position.displayName);
+    }
+  };
+  for (const [adapter, surface] of schemas) remember(adapter, surface.schema);
+  for (const [adapter, bySchema] of connected.schemas) for (const schema of Object.values(bySchema)) remember(adapter, schema);
   const credentials: Record<string, CredentialSpec> = {};
   for (const [name, row] of Object.entries(credentialImportNames({ rows: [...team.credentials], manifests }))) {
     credentials[name] = { adapters: row.adapters, ...(row.credential !== undefined ? { credential: row.credential } : {}) };
@@ -350,6 +365,8 @@ export async function teamSnapshot(input: {
     typed: new Set([...schemas.keys(), ...connected.schemas.keys()]),
     unread: connected.unread,
     adapters: new Set(manifests.map((manifest) => manifest.adapterType)),
+    manifests,
+    recordLabels,
   };
 }
 

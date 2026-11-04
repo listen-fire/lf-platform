@@ -152,16 +152,12 @@ export interface StoryView {
   flow: Step[];
 }
 
-/**
- * Unreadable source yields no view — never a partial guess. Nor does a program
- * on a language version whose picture the platform does not draw (`not-drawn`):
- * it carries its own version's check, and says why there is no picture.
- */
+/** Unreadable source yields no view — never a partial guess. */
 export type StoryViewResult =
   | { ok: true; view: StoryView }
   | {
       ok: false;
-      reason: 'unreadable' | 'not-drawn';
+      reason: 'unreadable';
       movement: { id: string; name: string };
       problems: StoryProblem[];
     };

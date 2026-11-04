@@ -1213,6 +1213,9 @@ importers:
       '@listen-fire/slack':
         specifier: 0.13.4
         version: 0.13.4(@listen-fire/engine-contracts@0.15.1)(@listen-fire/engine@0.15.1)(@listen-fire/movement-lang@0.15.1)(tsx@4.21.0)
+      legacy-lang:
+        specifier: workspace:@listen-fire/legacy-lang@*
+        version: link:../legacy-lang
       module-kit:
         specifier: npm:@listen-fire/module-kit@0.14.0
         version: '@listen-fire/module-kit@0.14.0(@listen-fire/engine-contracts@0.15.1)(@listen-fire/movement-lang@0.15.1)(tsx@4.21.0)'

@@ -59,6 +59,24 @@ describe.each(others.map((version) => [version.key, version] as const))('carried
     }
   });
 
+  it('is what its carried help loads, when it teaches', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const required: object = require(name);
+    const { help } = version.provides;
+    switch (help.kind) {
+      case 'carried':
+        expect(await help.lane()).toEqual(expect.objectContaining(required));
+        break;
+      case 'current':
+      case 'held':
+        break;
+      default: {
+        const unknown: never = help;
+        throw new Error(`unknown help capability ${JSON.stringify(unknown)}`);
+      }
+    }
+  });
+
   it('is what its carried run host loads, when it runs', async () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const required: object = require(name);

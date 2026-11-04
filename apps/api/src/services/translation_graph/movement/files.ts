@@ -26,6 +26,8 @@
 import { LANGUAGE_VERSION, MovementParseError, RUN_HOST_UNITS, parseProgram, type LanguageVersion, type Program, type ResolveFile } from 'movement-lang';
 import { fileExports, referencedFileImports } from 'legacy-lang';
 
+import { isCurrent } from '@listen-fire/language-versions';
+
 import { routeOf } from './language_route';
 import { getMovementRowByName, listMovementRows, type MovementValidityStatus } from './store';
 
@@ -188,7 +190,11 @@ function facetScanOfProgram(program: Program): FacetScan {
   return scan;
 }
 
-const LISTEN_LINE = /^\s*listen\s+to\s+([A-Za-z_]\w*).*\bfire\s+([A-Za-z_]\w*)\s*$/;
+// `listen as "lane" to x`, a config over several lines, and a backticked name:
+// each is a statement the scan reads as one, joined up to the line that fires.
+const LISTEN_START = /^\s*listen\s/;
+const LISTEN_STATEMENT = /^\s*listen\s+(?:as\s+"[^"]*"\s+)?to\s+([A-Za-z_]\w*)[\s\S]*\bfire\s+(`[^`]+`|[A-Za-z_]\w*)\s*$/;
+const MAX_LISTEN_LINES = 10;
 const MANUAL_CONSTRUCT_LINE = /^\s*([A-Za-z_]\w*)\s*=\s*([A-Za-z_]\w*)\s*\(/;
 const MANUAL_IMPORT_LINE = /^\s*import\s*\{([^}]*)\}\s*from\s+adapters\b/;
 const EXPORT_MOVEMENT_LINE = /^\s*export\s+movement\s+([A-Za-z_]\w*)/;
@@ -222,14 +228,23 @@ function facetScanByLexicalScan(source: string): FacetScan {
       if (adapter === 'manual') manualInstances.add(construct[1]);
     }
   }
-  for (const line of source.split('\n')) {
-    const listen = LISTEN_LINE.exec(line);
-    if (listen) {
-      scan.listenerCount++;
-      scan.firedMovements.push(listen[2]);
-      // The run host's `manual` unit, unless the file imports the name itself.
-      const unit = listen[1] === 'manual' && !adapterAliases.has('manual');
-      if (manualInstances.has(listen[1]) || unit) scan.manualTargets.push(listen[2]);
+  const lines = source.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? '';
+    if (LISTEN_START.test(line)) {
+      for (let j = i; j < Math.min(i + MAX_LISTEN_LINES, lines.length); j++) {
+        const listen = LISTEN_STATEMENT.exec(lines.slice(i, j + 1).join('\n'));
+        if (listen === null) continue;
+        const fired = (listen[2] ?? '').replace(/^`|`$/g, '');
+        const instance = listen[1] ?? '';
+        scan.listenerCount++;
+        scan.firedMovements.push(fired);
+        // The run host's `manual` unit, unless the file imports the name itself.
+        const unit = instance === 'manual' && !adapterAliases.has('manual');
+        if (manualInstances.has(instance) || unit) scan.manualTargets.push(fired);
+        i = j;
+        break;
+      }
       continue;
     }
     if (EXPORT_MOVEMENT_LINE.test(line)) {
@@ -241,14 +256,24 @@ function facetScanByLexicalScan(source: string): FacetScan {
   return scan;
 }
 
-/** The file's facets, derived from its text. Never throws. */
-export function movementFileFacets(source: string): MovementFileFacets {
+/**
+ * The file's facets, derived from its text. Never throws. The installed parser
+ * reads only a text on the current version: a text on another version is
+ * scanned lexically, so a list of automations neither reads it under a grammar
+ * it was not written in nor loads the version it is on. Opening one asks its
+ * own version (`outlineOf`). No pin is a text not saved yet: the current version.
+ */
+export function movementFileFacets(source: string, pin: LanguageVersion = LANGUAGE_VERSION): MovementFileFacets {
   let scan: FacetScan;
-  try {
-    scan = facetScanOfProgram(parseProgram(source));
-  } catch (e) {
-    if (!(e instanceof MovementParseError)) throw e;
+  if (!isCurrent(pin)) {
     scan = facetScanByLexicalScan(source);
+  } else {
+    try {
+      scan = facetScanOfProgram(parseProgram(source));
+    } catch (e) {
+      if (!(e instanceof MovementParseError)) throw e;
+      scan = facetScanByLexicalScan(source);
+    }
   }
   return {
     listenerCount: scan.listenerCount,

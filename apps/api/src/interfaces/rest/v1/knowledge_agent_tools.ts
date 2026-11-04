@@ -76,7 +76,9 @@ import {
 } from '../../../services/translation_graph/movement/provision';
 import {
   getMovementRow,
+  getMovementRowByName,
   listMovementRows,
+  type MovementRow,
 } from '../../../services/translation_graph/movement/store';
 import {
   movesUp,
@@ -86,6 +88,17 @@ import {
   type VersionView,
 } from '../../../services/translation_graph/movement/language_upgrade';
 import { languageVersionInput, pinFromInput } from '../../../services/translation_graph/movement/language_pin_input';
+import {
+  catalogUnderCarried,
+  carriedAutomationsBook,
+  describeUnderCarried,
+  exampleUnderCarried,
+  helpRouteOf,
+  languageOf,
+  searchCarried,
+  type HelpRoute,
+} from '../../../services/translation_graph/movement/authoring_help';
+import { isCurrent, refusalOf } from '@listen-fire/language-versions';
 import { agentCompletionsAt } from '../../../services/translation_graph/movement/language_service';
 import { neverAsAny } from 'movement-engine/public/types';
 import { movementSourceHash } from '../../../services/translation_graph/movement/version_store';
@@ -202,24 +215,80 @@ function jsonHandler<I>(
 // library.read — readBook
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Whose help: the automation an agent is working on
+// ---------------------------------------------------------------------------
+
+/** Which version's help an agent asks for: the automation it is working on,
+ *  or a version named outright. Neither is the current version: what a new
+ *  automation is written in. */
+const helpInput = {
+  team: z.string().optional(),
+  automation: z.string().optional(),
+  languageVersion: languageVersionInput.optional(),
+};
+
+/** The same rule as `validateAutomationText`: an explicit version, else the
+ *  saved automation's pin, else current. The automation is looked up across the
+ *  teams the connection covers, and its team comes back with it. */
+async function helpFor(input: {
+  team?: string | undefined;
+  automation?: string | undefined;
+  languageVersion?: string | number | undefined;
+}): Promise<{ route: Exclude<HelpRoute, { kind: 'refused' }>; asked: boolean; teamId?: string } | { error: string }> {
+  const explicit = input.languageVersion !== undefined ? pinFromInput(input.languageVersion) : undefined;
+  if (explicit !== undefined && 'error' in explicit) return explicit;
+  let pin = explicit?.pin;
+  let teamId: string | undefined;
+  if (input.automation !== undefined) {
+    const row = await rowByIdOrName({ idOrName: input.automation, team: input.team });
+    if (row === null) return { error: `No automation '${input.automation}'.` };
+    teamId = row.teamId;
+    pin ??= row.languageVersion;
+  }
+  const route = helpRouteOf(pin ?? LANGUAGE_VERSION);
+  if (route.kind === 'refused') return { error: route.error };
+  return { route, asked: pin !== undefined, ...(teamId !== undefined ? { teamId } : {}) };
+}
+
+async function rowByIdOrName(input: { idOrName: string; team?: string | undefined }): Promise<MovementRow | null> {
+  const teams = input.team !== undefined ? [await resolveToolTeam(input.team)] : await teamSetForReads();
+  for (const teamId of teams) {
+    const byId = await getMovementRow({ teamId, id: input.idOrName }).catch(() => null);
+    if (byId) return byId;
+  }
+  for (const teamId of teams) {
+    const named = await getMovementRowByName({ teamId, name: input.idOrName });
+    if (named) return named;
+  }
+  return null;
+}
+
 const readBookSchema = z.object({
   handbook: z.string().optional(),
   chapter: z.string().optional(),
   chapters: z.array(z.string()).optional(),
   section: z.string().optional(),
+  ...helpInput,
 });
 
 // The connector's agent has searchLanguage, so it is served the front page and
-// looks the rest up rather than reading whole chapters.
-const readBookHandler: RequestHandler = jsonHandler(readBookSchema, 'body', async (input) =>
-  readBook({
+// looks the rest up rather than reading whole chapters. Working on an automation,
+// the automations handbook is that automation's version's.
+const readBookHandler: RequestHandler = jsonHandler(readBookSchema, 'body', async (input) => {
+  const help = await helpFor(input);
+  if ('error' in help) return help;
+  const carried = help.route.kind === 'carried' ? await carriedAutomationsBook(help.route.lane) : undefined;
+  const read = readBook({
     bookId: input.handbook,
     chapter: input.chapter,
     chapters: input.chapters,
     section: input.section,
     frontPageInsteadOfChapters: true,
-  }),
-);
+    ...(carried !== undefined ? { automations: carried.book } : {}),
+  });
+  return help.asked ? { ...read, language: languageOf(help.route, carried?.handbook) } : read;
+});
 
 // ---------------------------------------------------------------------------
 // library.read — searchLanguage
@@ -228,22 +297,39 @@ const readBookHandler: RequestHandler = jsonHandler(readBookSchema, 'body', asyn
 const searchLanguageSchema = z.object({
   query: z.string().min(1),
   kind: z.enum(LANGUAGE_SEARCH_KINDS).optional(),
+  ...helpInput,
 });
 
-const searchLanguageHandler: RequestHandler = jsonHandler(searchLanguageSchema, 'body', async (input) =>
-  searchLanguage({ query: input.query, ...(input.kind ? { kind: input.kind } : {}) }),
-);
+const searchLanguageHandler: RequestHandler = jsonHandler(searchLanguageSchema, 'body', async (input) => {
+  const help = await helpFor(input);
+  if ('error' in help) return help;
+  const asked = { query: input.query, ...(input.kind ? { kind: input.kind } : {}) };
+  if (help.route.kind === 'carried') return { ...(await searchCarried(help.route.lane, asked)), language: languageOf(help.route) };
+  const found = searchLanguage(asked);
+  return help.asked ? { ...found, language: languageOf(help.route) } : found;
+});
 
 const showExampleSchema = z.object({
   query: z.string().optional(),
+  ...helpInput,
 });
 
-const showExampleHandler: RequestHandler = (req, res) => {
+const showExampleHandler: RequestHandler = async (req, res) => {
   const parsed = showExampleSchema.safeParse(req.body ?? {});
   if (!parsed.success) {
     return res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() });
   }
-  return res.status(200).type('text/markdown').send(showExample(parsed.data.query !== undefined ? { query: parsed.data.query } : {}));
+  try {
+    const help = await helpFor(parsed.data);
+    if ('error' in help) return res.status(400).json(help);
+    const text =
+      help.route.kind === 'carried'
+        ? await exampleUnderCarried(help.route, parsed.data.query)
+        : showExample(parsed.data.query !== undefined ? { query: parsed.data.query } : {});
+    return res.status(200).type('text/markdown').send(text);
+  } catch (err) {
+    return internalError(res, err);
+  }
 };
 
 // ---------------------------------------------------------------------------
@@ -439,8 +525,14 @@ const ontologyMutationHandler = (name: (typeof ONTOLOGY_MUTATION_TOOLS)[number])
 
 const listCatalogHandler: RequestHandler = async (req, res) => {
   try {
-    const team = typeof req.query.team === 'string' ? req.query.team : undefined;
-    const resolvedTeam = await resolveToolTeam(team);
+    const stringOf = (value: unknown) => (typeof value === 'string' ? value : undefined);
+    const team = stringOf(req.query.team);
+    const help = await helpFor({ team, automation: stringOf(req.query.automation), languageVersion: stringOf(req.query.languageVersion) });
+    if ('error' in help) return res.status(400).json(help);
+    const resolvedTeam = help.teamId ?? (await resolveToolTeam(team));
+    if (help.route.kind === 'carried') {
+      return res.status(200).json({ ...(await catalogUnderCarried(help.route.lane, resolvedTeam)), language: languageOf(help.route) });
+    }
     const catalog = await movementCatalogSnapshotForTeam(resolvedTeam as TeamId);
     return res.status(200).json(toAgentCatalogView(catalog));
   } catch (err) {
@@ -473,6 +565,8 @@ const describeInstanceSchema = z.object({
   // How much to say. Absent is the compact text an agent authors against;
   // "full" is the JSON, for what the text leaves out.
   detail: z.enum(['compact', 'full']).optional(),
+  automation: helpInput.automation,
+  languageVersion: helpInput.languageVersion,
 });
 
 /**
@@ -488,7 +582,18 @@ const describeInstanceHandler: RequestHandler = async (req, res) => {
   }
   const input = parsed.data;
   try {
-    const teamId = (await resolveToolTeam(input.team)) as TeamId;
+    const help = await helpFor(input);
+    if ('error' in help) return res.status(400).json(help);
+    const teamId = (help.teamId ?? (await resolveToolTeam(input.team))) as TeamId;
+    if (help.route.kind === 'carried') {
+      const text = await describeUnderCarried(help.route, {
+        teamId,
+        systems: Array.isArray(input.system) ? input.system : [input.system],
+        ...(input.connection !== undefined ? { connection: input.connection } : {}),
+        asked: { types: input.types, position: input.position, narrow: input.narrow, detail: input.detail === 'full' ? input.detail : undefined },
+      });
+      return res.status(200).type('text/markdown').send(text);
+    }
     if (input.detail === 'full') return res.status(200).json(await describeInstanceFull(teamId, input));
     // Batch form: each system at its root, one block apiece, described
     // concurrently. Per-system scoping is single-system only.
@@ -739,7 +844,7 @@ const listTeamsHandler: RequestHandler = async (_req, res) => {
 // getStarted — the first read of a build, in one call
 // ---------------------------------------------------------------------------
 
-const getStartedSchema = z.object({ team: z.string().optional() });
+const getStartedSchema = z.object(helpInput);
 
 // Markdown, not JSON: the answer is prose and a digest, and escaping it into a
 // JSON string costs the reader tokens for nothing.
@@ -749,14 +854,18 @@ const getStartedHandler: RequestHandler = async (req, res) => {
     return res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() });
   }
   try {
+    const help = await helpFor(parsed.data);
+    if ('error' in help) return res.status(400).json(help);
     const teams = await listAccessibleTeams();
     // Several teams and none named: list them rather than refuse, so the agent
     // learns them here instead of from a separate listTeams.
     const teamId =
-      parsed.data.team === undefined && teams.length > 1
-        ? null
-        : ((await resolveToolTeam(parsed.data.team)) as TeamId);
-    const text = await renderGetStarted({ teams, teamId });
+      help.teamId !== undefined
+        ? (help.teamId as TeamId)
+        : parsed.data.team === undefined && teams.length > 1
+          ? null
+          : ((await resolveToolTeam(parsed.data.team)) as TeamId);
+    const text = await renderGetStarted({ teams, teamId, ...(help.route.kind === 'carried' ? { carried: help.route } : {}) });
     return res.status(200).type('text/markdown').send(text);
   } catch (err) {
     return internalError(res, err);
@@ -832,7 +941,19 @@ async function withStoryUrl<
   T extends { id: string; languageVersion: LanguageVersion; validityCheckedAgainst: LanguageVersion | null },
 >(teamId: string, movement: T) {
   const token = await storyTokenForMovement({ teamId, movementId: movement.id });
-  return { ...withLanguageVersionView(movement), storyUrl: storyUrl(token) };
+  return { ...withLanguageVersionView(movement), ...helpNoteOf(movement), storyUrl: storyUrl(token) };
+}
+
+/** What an agent about to work on an automation off the current version needs
+ *  to know: help answers for the version it asks about, and it has to ask. */
+function helpNoteOf(movement: { id: string; languageVersion: LanguageVersion }): { languageHelp?: string } {
+  if (isCurrent(movement.languageVersion)) return {};
+  return {
+    languageHelp:
+      `Written in language ${movement.languageVersion}; the current version is ${LANGUAGE_VERSION}, whose spellings do not read here. ` +
+      `Pass automation: "${movement.id}" to readHandbook, searchLanguage, showExample, getStarted, listConnections and describeConnection to be taught its version; without it they answer for ${LANGUAGE_VERSION}. ` +
+      'validateAutomation, saveAutomation and editAutomation check it under its own version and keep its pin. upgradeAutomation is what moves it on, and says what changes.',
+  };
 }
 
 /**
@@ -957,7 +1078,9 @@ function upgradeMessage(result: Exclude<UpgradeMovementResult, { status: 'not_fo
   // older line is refused by this release until it moves.
   const meanwhile = isLegacyLanguageVersion(result.from.version)
     ? 'it keeps running as it does now until then'
-    : `until then ${to} refuses to run it`;
+    : refusalOf(result.from.version, 'run') === undefined
+      ? `until then it stays on ${result.from.version}, and runs there when someone starts it`
+      : `until then ${to} refuses to run it`;
   // An import is allowed only between files on one version, so the files it
   // shares imports with move with it, or none of them does.
   const together =
@@ -980,8 +1103,8 @@ function upgradeMessage(result: Exclude<UpgradeMovementResult, { status: 'not_fo
         : `Not upgraded: a connected system it uses could not be read, so it cannot be shown to be clean under ${to}. Try again once the connection works.${together}`;
     case 'needs_acknowledgement':
       return (rewritten
-        ? `Clean under ${to} once its old spellings are rewritten (upgradedSource). Call again with acknowledge: true to save that text and move it there; ${meanwhile}.`
-        : `Clean under ${to}. Call again with acknowledge: true to move it there; ${meanwhile}.`) + together;
+        ? `Clean under ${to} once its old spellings are rewritten (upgradedSource). \`changes\` says what moving changes: each rewritten line, and what else is different. Call again with acknowledge: true to save that text and move it there; ${meanwhile}.`
+        : `Clean under ${to}. \`changes\` says what moving changes. Call again with acknowledge: true to move it there; ${meanwhile}.`) + together;
     case 'upgraded':
       return `Upgraded to ${to}${rewritten ? ', its text rewritten into that version\'s spelling (upgradedSource)' : ''}. New runs use it; runs already in progress finish under the version they started with.${together}${result.warnings !== undefined ? ` Left paused (warnings): ${result.warnings.join(' ')}` : ''}`;
     default:
@@ -1170,6 +1293,8 @@ const readAutomationHandler: RequestHandler = async (req, res) => {
       id: movement.id,
       name: movement.name,
       revision: movement.revision,
+      languageVersion: movement.languageVersion,
+      ...helpNoteOf(movement),
       totalLines,
       offset: resolvedOffset,
       lines,
@@ -1593,9 +1718,15 @@ const replayDeliveryHandler: RequestHandler = jsonHandler(replayDeliverySchema, 
     .selectFrom('trigger')
     .where('id', '=', input.listen as TriggerId)
     .where('team_id', 'in', teams)
-    .select('team_id')
+    .select(['team_id', 'movement_id'])
     .executeTakeFirst();
   if (owner === undefined) return { error: `listen ${input.listen} not found` };
+  // A replay judges by the current version's listen plan. A listen on another
+  // version has none, so saying "no such listen" would be untrue.
+  const movement = owner.movement_id !== null ? await getMovementRow({ teamId: owner.team_id, id: owner.movement_id }) : null;
+  if (movement && !isCurrent(movement.languageVersion)) {
+    return { error: `'${movement.name}' is written in language ${movement.languageVersion}, and this platform replays a delivery only through a listen on ${LANGUAGE_VERSION}. Upgrade it (upgradeAutomation) to replay through it.` };
+  }
   const outcome = await replayThroughListen({
     teamId: teamIdSchema.parse(owner.team_id),
     triggerId: input.listen as TriggerId,
@@ -1847,6 +1978,9 @@ export {
   registerKnowledgeAgentToolRoutes,
   // exported for unit tests
   getStartedHandler,
+  searchLanguageHandler,
+  showExampleHandler,
+  replayDeliveryHandler,
   readBookHandler,
   getNodeDetailHandler,
   listCatalogHandler,

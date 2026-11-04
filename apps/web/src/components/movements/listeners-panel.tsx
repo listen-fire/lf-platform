@@ -254,9 +254,38 @@ function channelLabel(slug: string): string {
   return slug.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+/** The listens of a text the browser cannot read (a pin on a carried version,
+ *  whose parser is on the server), as its own version's parser read them. */
+export interface ServerListenOutline {
+  active: ActiveListen[] | null;
+  paused: PausedListen[];
+  adapters: Record<string, string> | null;
+}
+
+/** Whether a text a carried version read can be run on demand: it listens to
+ *  the manual channel. Until the first answer, what the page loaded with. */
+export function runnableFromOutline(outline: ServerListenOutline | null, untilRead: boolean): boolean {
+  if (outline === null) return untilRead;
+  return (outline.active ?? []).some((listen) => (listen.adapter ?? listen.instance).replace(/^@lf\//, "") === "manual");
+}
+
+/** The movement a suggested listen line fires, read from its text. */
+function firedBySuggestion(line: string): string | null {
+  return /\bfire\s+`?([^`]+?)`?\s*$/.exec(line)?.[1] ?? null;
+}
+
 export interface ListenersPanelProps {
   /** Current editor text (null while the editor is still loading). */
   source: string | null;
+  /**
+   * Present for a pin on a carried version: the browser's parser never reads
+   * its text, and this is what its own version read (null until the first
+   * answer). Absent, the panel reads `source` itself.
+   */
+  serverOutline?: ServerListenOutline | null;
+  /** False when a save does not make this version's listens fire: a listen
+   *  with no server row is then not about to start. Absent, it is. */
+  savedListensFire?: boolean;
   /** Listeners the server derived from the last save. */
   serverListeners: ListenerSummary[];
   /** MOV_LISTEN_MISSING info messages from the live checker. */
@@ -275,20 +304,21 @@ export interface ListenersPanelProps {
 }
 
 export function ListenersPanel(props: ListenersPanelProps) {
-  const { source, serverListeners } = props;
+  const { source, serverListeners, serverOutline } = props;
+  const readsOnServer = serverOutline !== undefined;
 
-  const active = useMemo(
-    () => (source !== null ? activeListensOf(source) : null),
-    [source],
-  );
-  const paused = useMemo(
-    () => (source !== null ? pausedListensOf(source) : []),
-    [source],
-  );
-  const adapters = useMemo(
-    () => (source !== null ? instanceAdaptersOf(source) : null),
-    [source],
-  );
+  const active = useMemo(() => {
+    if (readsOnServer) return serverOutline?.active ?? null;
+    return source !== null ? activeListensOf(source) : null;
+  }, [source, readsOnServer, serverOutline]);
+  const paused = useMemo(() => {
+    if (readsOnServer) return serverOutline?.paused ?? [];
+    return source !== null ? pausedListensOf(source) : [];
+  }, [source, readsOnServer, serverOutline]);
+  const adapters = useMemo(() => {
+    if (readsOnServer) return serverOutline?.adapters != null ? new Map(Object.entries(serverOutline.adapters)) : null;
+    return source !== null ? instanceAdaptersOf(source) : null;
+  }, [source, readsOnServer, serverOutline]);
 
   // "Nothing runs this movement" suggestions — but a PAUSED listener for
   // the movement already answers that (resume it), so those are filtered.
@@ -297,11 +327,11 @@ export function ListenersPanel(props: ListenersPanelProps) {
       .map(suggestedListenLine)
       .filter((line): line is string => line !== null)
       .filter((line) => {
-        const listen = parseLoneListen(line);
-        return !paused.some((p) => p.movement === (listen?.movement ?? null));
+        const fired = readsOnServer ? firedBySuggestion(line) : (parseLoneListen(line)?.movement ?? null);
+        return !paused.some((p) => p.movement === fired);
       });
     return Array.from(new Set(lines));
-  }, [props.suggestionMessages, paused]);
+  }, [props.suggestionMessages, paused, readsOnServer]);
 
   // Match each script listener to a server-derived row (one-to-one, in
   // order) for its trigger-side details: channel + inbound address.
@@ -319,7 +349,7 @@ export function ListenersPanel(props: ListenersPanelProps) {
   }, [active, serverListeners]);
 
   const empty =
-    (active === null || active.length === 0) && paused.length === 0 && suggestions.length === 0;
+    (active === null || active.length === 0) && paused.length === 0 && suggestions.length === 0 && serverOutline !== null;
 
   // With `listen` as the only invoker, a file with no triggers still runs
   // — on demand, or only when another automation calls it — so the
@@ -344,7 +374,7 @@ export function ListenersPanel(props: ListenersPanelProps) {
               movement={listen.movement}
               configKey={listen.configKey}
               inboundAddress={server?.inboundAddress ?? null}
-              status={server ? (stopped ? "stopped" : "listening") : "pending"}
+              status={server ? (stopped ? "stopped" : "listening") : props.savedListensFire === false ? "notFiring" : "pending"}
               stoppedBecause={stopped}
               {...(lane !== null
                 ? { onOpenActivity: () => props.onOpenActivity(lane) }
@@ -387,7 +417,7 @@ export function ListenersPanel(props: ListenersPanelProps) {
           />
         ))}
 
-        {active === null && serverListeners.length > 0 && (
+        {active === null && serverListeners.length > 0 && (!readsOnServer || serverOutline !== null) && (
           <p className="text-[12px] leading-relaxed text-gray-400">
             The script doesn&apos;t parse right now, so listeners can&apos;t be
             managed — the saved ones keep running. Fix the problems below to
@@ -427,11 +457,18 @@ export function ListenersPanel(props: ListenersPanelProps) {
             No triggers yet — this automation runs on demand or is imported
             by other automations. Add a{" "}
             <span className="font-mono text-[11px]">listen</span> line to run a
-            movement on events, or{" "}
-            <span className="font-mono text-[11px]">
-              go = manual(); listen to go {"{}"} fire …
-            </span>{" "}
-            to run it on demand.
+            movement on events
+            {readsOnServer ? (
+              "."
+            ) : (
+              <>
+                , or{" "}
+                <span className="font-mono text-[11px]">
+                  go = manual(); listen to go {"{}"} fire …
+                </span>{" "}
+                to run it on demand.
+              </>
+            )}
           </p>
         )}
       </div>
@@ -450,6 +487,7 @@ const STATUS_STYLES = {
   listening: { classes: "bg-green-50 text-green-700", label: "Listening" },
   stopped: { classes: "bg-red-50 text-red-700", label: "Stopped" },
   pending: { classes: "bg-amber-50 text-amber-700", label: "Starts on save" },
+  notFiring: { classes: "bg-gray-100 text-gray-500", label: "Not firing" },
   paused: { classes: "bg-gray-100 text-gray-500", label: "Paused" },
 } as const;
 

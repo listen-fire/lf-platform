@@ -66,7 +66,7 @@ describe('a 0.12 movement saved (real Postgres)', () => {
     return rows.length;
   }
 
-  it("keeps its pin, validates under 0.12, and says it does not run", async () => {
+  it("keeps its pin, validates under 0.12, and a clean save goes live under it", async () => {
     const id = await seed('echo-012', ECHO_012('Text'), '0.12.13');
 
     const saved = await saveMovement({ teamId, id, source: ECHO_012('Content') });
@@ -76,16 +76,11 @@ describe('a 0.12 movement saved (real Postgres)', () => {
     expect(row?.source).toBe(ECHO_012('Content'));
     expect(row?.validityStatus).toBe('valid');
     expect(row?.validityCheckedAgainst).toBe('0.12.13');
-    expect(saved.ok).toBe(false);
-    if (saved.ok) return;
-    expect(saved.needsConfirmation).toBeUndefined();
-    expect(saved.diagnostics).toEqual([
-      expect.objectContaining({
-        code: 'MOV_LANGUAGE_VERSION_UNSUPPORTED',
-        message: expect.stringContaining(`it is saved and checked under 0.12.13; this automation pins language 0.12.13: this platform carries 0.12.13 to check`),
-      }),
-    ]);
-    expect(await triggerCount(id)).toBe(0);
+    expect(saved.ok).toBe(true);
+    if (!saved.ok) return;
+    expect(saved.listeners).toEqual([expect.objectContaining({ kind: 'manual', movementName: 'echo' })]);
+    expect(saved.warnings).toEqual([]);
+    expect(await triggerCount(id)).toBe(1);
   });
 
   it("an edit 0.12's checker rejects is held for consent, under 0.12, with 0.12's diagnostic", async () => {

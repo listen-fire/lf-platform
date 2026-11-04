@@ -18,6 +18,7 @@
     "@listen-fire/kg": "workspace:*",
     "@listen-fire/lang-0.12": "workspace:*",
     "@listen-fire/slack": "0.13.4",
+    "legacy-lang": "workspace:@listen-fire/legacy-lang@*",
     "module-kit": "npm:@listen-fire/module-kit@0.14.0",
     "movement-engine": "catalog:",
     "movement-lang": "catalog:"

@@ -27,7 +27,7 @@ import { storyOf, type Chip, type ChipPart, type StoryFilter, type StoryIR, type
 import { MovementParseError } from 'movement-lang';
 import { LRUCache } from 'lru-cache';
 
-import type { CheckingLane } from '@listen-fire/language-versions';
+import type { CheckingLane, StoryWords } from '@listen-fire/language-versions';
 import type { BrandIcon } from 'movement-engine/public/adapter';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type {
@@ -46,7 +46,7 @@ import { getAdapterManifest } from '../adapters/registry';
 import { resolveEventPhrase } from '../vocabulary';
 import { movementCatalogForTeam, type TeamMovementCatalog } from './catalog';
 import { routeOf } from './language_route';
-import { validateUnderCarried } from './carried_check';
+import { teamFactsOf } from './carried_check';
 import { storyFromAnalysis } from './story_from_analysis';
 import {
   getMovementRow,
@@ -671,60 +671,71 @@ export async function projectStoryView(row: {
       movement: { ...movement, validity: result.story.movement.validity },
       story: result.story,
       vocabulary: storyVocabularyOf(teamCatalog),
-      listeners: (await listDerivedTriggerRows(row.id)).map((listener) => ({
-        kind: listener.kind,
-        movementName: listener.firedMovementName,
-        inboundAddress: inboundAddressOf(listener.config),
-      })),
+      listeners: await provisionedListeners(row.id),
     }),
   };
 }
 
 /**
- * A pin a carried version checks has its own version's verdict and no
- * picture: the picture is drawn from this release's story analysis, which
- * reads only this release's programs. The verdict is never dropped: a program
- * that does not read is `unreadable`, as any other is; one that reads says it
- * is not drawn and lists what its own check found.
+ * A pin a carried version checks has its picture drawn by that version: its
+ * own parse, story analysis and projection, against its own catalog, which come
+ * back as plain data with the words its own manifests declare. The platform's
+ * join and renderer take it from there; nothing of this release reads the
+ * program, and nothing of that version loads until such a program is opened.
  */
 async function carriedStoryView(input: {
+  id: string;
   teamId: string;
+  name: string;
   source: string;
+  validityStatus: MovementValidityStatus | null;
   movement: { id: string; name: string };
   pin: LanguageVersion;
   lane: () => Promise<CheckingLane>;
 }): Promise<StoryViewResult> {
-  const validation = await validateUnderCarried({ teamId: input.teamId, source: input.source, pin: input.pin, lane: input.lane });
-  const problems: StoryProblem[] = validation.diagnostics.map((d) => ({
-    code: d.code,
-    message: d.message,
-    severity: d.severity,
-    span: { start: { line: d.line, col: d.col }, end: { line: d.endLine, col: d.endCol } },
-  }));
-  if (validation.diagnostics.some((d) => d.code === 'MOV_PARSE')) {
-    return { ok: false, reason: 'unreadable', movement: input.movement, problems };
-  }
-  const unchecked = validation.gaps.map((gap) => gap.adapter);
-  const verdict =
-    validation.ok && unchecked.length === 0
-      ? `it checks clean under ${input.pin}`
-      : validation.ok
-        ? `it checks clean under ${input.pin}, without reading ${unchecked.join(', ')}`
-        : `its check under ${input.pin} found the problems below`;
+  const [lane, team, { modulePlatform }] = await Promise.all([input.lane(), teamFactsOf(input.teamId), import('./carried_run')]);
+  const drawn = await lane.storyOf({
+    source: input.source,
+    pin: input.pin,
+    team,
+    connected: { teamId: input.teamId, modules: modulePlatform() },
+    name: input.name,
+    ...(input.validityStatus !== null ? { validityStatus: input.validityStatus } : {}),
+  });
+  if (!drawn.ok) return { ok: false, reason: 'unreadable', movement: input.movement, problems: drawn.problems };
   return {
-    ok: false,
-    reason: 'not-drawn',
-    movement: input.movement,
-    problems: [
-      {
-        code: 'STORY_NOT_DRAWN',
-        message: `This automation is written in language ${input.pin}, whose picture this platform does not draw; ${verdict}.`,
-        severity: 'info',
-        span: { start: { line: 1, col: 1 }, end: { line: 1, col: 1 } },
-      },
-      ...problems,
-    ],
+    ok: true,
+    view: joinStoryView({
+      movement: { ...input.movement, validity: drawn.story.movement.validity },
+      story: drawn.story,
+      vocabulary: vocabularyFromWords(drawn.words),
+      listeners: await provisionedListeners(input.id),
+    }),
   };
+}
+
+/** The join's lookups over what a carried version's manifests declared. */
+export function vocabularyFromWords(words: StoryWords): StoryVocabulary {
+  return {
+    system(adapterType) {
+      const system = words.systems[adapterType];
+      return system === undefined ? null : { label: system.label, icon: system.icon };
+    },
+    eventPhrase(adapterType, config) {
+      return resolveEventPhrase(words.systems[adapterType]?.eventPhrase, config);
+    },
+    recordLabel({ adapterType, recordType }) {
+      return words.recordLabels[`${adapterType ?? ''}::${recordType}`] ?? null;
+    },
+  };
+}
+
+async function provisionedListeners(movementId: string): Promise<StoryProvisionedListener[]> {
+  return (await listDerivedTriggerRows(movementId)).map((listener) => ({
+    kind: listener.kind,
+    movementName: listener.firedMovementName,
+    inboundAddress: inboundAddressOf(listener.config),
+  }));
 }
 
 function runSnapshotOf(teamCatalog: TeamMovementCatalog) {

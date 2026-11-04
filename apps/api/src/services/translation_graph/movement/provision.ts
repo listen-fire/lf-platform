@@ -1441,6 +1441,20 @@ async function runSave(
   // nothing of this release's listener reconciliation reads its text.
   if (teamCatalog === undefined) {
     recordMilestones();
+    // The text is saved, under its pin, whether or not its version fires
+    // listens yet: that is what a person is told, and not a failed save.
+    if (!provisioned.ok && carriedListening?.kind === 'held') {
+      return {
+        ok: true,
+        movementId: row.id,
+        movementName: name,
+        listeners: [],
+        infos: [],
+        catalogNotes: notes,
+        warnings: (provisioned.diagnostics ?? []).map((diagnostic) => diagnostic.message),
+        validity,
+      };
+    }
     return { ...provisioned, movementId: row.id, validity };
   }
 
@@ -1617,7 +1631,7 @@ export interface MovementListItem {
  *  that version: a list of automations loads no version it has no work for,
  *  and the press itself is what its own parser answers. */
 function isRunnable(row: MovementRow): boolean {
-  if (runningOf(row.languageVersion).kind === 'carried') return movementFileFacets(row.source).runnableOnDemand;
+  if (runningOf(row.languageVersion).kind === 'carried') return movementFileFacets(row.source, row.languageVersion).runnableOnDemand;
   const route = routeOf(row.languageVersion);
   // A pin this platform does not run has nothing "Run now" can start.
   if (route.kind === 'refused' || route.kind === 'carried') return false;
@@ -1652,7 +1666,7 @@ export async function listMovements(teamId: string): Promise<MovementListItem[]>
       kind: listeners[0]?.kind ?? null,
       listeners,
       runnable: isRunnable(row),
-      facets: movementFileFacets(row.source),
+      facets: movementFileFacets(row.source, row.languageVersion),
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };

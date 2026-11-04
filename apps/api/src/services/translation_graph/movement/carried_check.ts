@@ -7,7 +7,7 @@
 
 import { LRUCache } from 'lru-cache';
 
-import type { CheckingLane, TeamFacts } from '@listen-fire/language-versions';
+import type { CheckingLane, DeploymentFacts, TeamFacts } from '@listen-fire/language-versions';
 import type { Diagnostic, LanguageVersion } from 'movement-lang';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { TeamMovementValidation } from './authoring';
@@ -25,6 +25,15 @@ import { listRemoteAdapters } from '../adapters/remote/store';
 import { listShippedFiles } from './version_store';
 import { neverAsAny } from 'movement-engine/public/types';
 
+/** What of the deployment decides the systems a carried version documents. */
+export function deploymentFacts(): DeploymentFacts {
+  return {
+    kgChangeWebhooks: mutationDelivery() === 'webhook',
+    mcpEnabled: MCP_CONNECTIONS_ENABLED,
+    whatsappNumber: WHATSAPP_MOVEMENTS_NUMBER,
+  };
+}
+
 /** What the platform knows of the team, read now. Its files are their live
  *  text (what an edit checks and a test run imports), or their shipped text
  *  (what a firing imports: a file that never shipped is not there). */
@@ -39,9 +48,7 @@ export async function teamFactsOf(teamId: string, options: { imports?: 'live' | 
     files,
     remoteAdapters: remotes.map((row) => ({ adapterType: row.adapter_type, manifest: row.manifest })),
     connectOf: (type) => (isCredentialType(type) ? connectMethodForType(type) : 'app-only'),
-    kgChangeWebhooks: mutationDelivery() === 'webhook',
-    mcpEnabled: MCP_CONNECTIONS_ENABLED,
-    whatsappNumber: WHATSAPP_MOVEMENTS_NUMBER,
+    ...deploymentFacts(),
   };
 }
 

@@ -111,6 +111,36 @@ function row(input: {
 
 // ── 1. Facets ────────────────────────────────────────────────────────────────
 
+describe('movementFileFacets of a text on another version', () => {
+  const ZERO_TWELVE = 'function echo(run: <manual-[:Invocation]->>) {\n  return run.Text\n}\nlisten to manual fire echo\n';
+
+  it('reads a listen by the scan, without this release\'s parser', () => {
+    expect(movementFileFacets(ZERO_TWELVE, '0.12.13')).toMatchObject({ listenerCount: 1, runnableOnDemand: true, isAutomation: true });
+  });
+
+  it('reads a named listen, a backticked movement and a config over several lines', () => {
+    const named = 'listen as "Import companies" to manual fire `Import Companies`\n';
+    expect(movementFileFacets(named, '0.12.13')).toMatchObject({ listenerCount: 1, runnableOnDemand: true });
+    const spread = 'inbox = connect email\nlisten to inbox {\n  key: "deals"\n} fire triage\n';
+    expect(movementFileFacets(spread, '0.12.13')).toMatchObject({ listenerCount: 1, runnableOnDemand: false, isAutomation: true });
+  });
+
+  it('a comment is not a listen', () => {
+    expect(movementFileFacets('# listen to manual fire echo\n', '0.12.13')).toMatchObject({ listenerCount: 0, isAutomation: false });
+  });
+
+  it("never this release's parser: a text the two read differently is scanned", () => {
+    // The parser sees one statement, a string over two lines; the scan sees a line.
+    const text = 'note = "\nlisten to manual fire echo\n"\n';
+    expect(movementFileFacets(text)).toMatchObject({ listenerCount: 0 });
+    expect(movementFileFacets(text, '0.12.13')).toMatchObject({ listenerCount: 1 });
+  });
+
+  it('a legacy id is read the same way', () => {
+    expect(movementFileFacets(ZERO_TWELVE, '4')).toMatchObject({ listenerCount: 1 });
+  });
+});
+
 describe('movementFileFacets', () => {
   it('a listen-fired file with no spare exports is automation only', () => {
     expect(movementFileFacets(AUTOMATION)).toEqual({
