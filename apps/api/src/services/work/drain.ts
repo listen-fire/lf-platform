@@ -13,6 +13,7 @@ import {
 } from './kinds';
 import { logger } from 'movement-engine/public/log';
 import { runWithoutAmbientIdentity } from '../context';
+import { WorkDeferred } from './deferred';
 import { buryWork, claimDueWork, completeWork, deferWork, heartbeatWork, releaseWork } from './store';
 import { announceWork } from './wake';
 
@@ -63,15 +64,7 @@ export class WorkGivesUp extends Error {
   }
 }
 
-/** Thrown by a handler whose work cannot happen yet (the run it would step is
- *  held by another process): the row is released to retry with backoff, not
- *  completed, and the pass is not marked failing. */
-export class WorkDeferred extends Error {
-  constructor(reason: string) {
-    super(reason);
-    this.name = 'WorkDeferred';
-  }
-}
+export { WorkDeferred };
 
 const handlers = new Map<WorkKind, WorkHandler>();
 
