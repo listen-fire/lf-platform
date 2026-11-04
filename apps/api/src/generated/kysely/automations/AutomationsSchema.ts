@@ -13,6 +13,7 @@ import type { default as InboundEmailRouteTable } from './InboundEmailRoute';
 import type { default as ExternalServiceCredentialsTable } from './ExternalServiceCredentials';
 import type { default as MovementVersionTable } from './MovementVersion';
 import type { default as JoinBranchExportTable } from './JoinBranchExport';
+import type { default as AdapterAwaitTable } from './AdapterAwait';
 import type { default as PhoneVerificationTable } from './PhoneVerification';
 import type { default as WriteLedgerTable } from './WriteLedger';
 import type { default as RemoteAdapterTable } from './RemoteAdapter';
@@ -23,17 +24,21 @@ import type { default as TeamSettingsTable } from './TeamSettings';
 import type { default as EventReceiptTable } from './EventReceipt';
 import type { default as WaitRowTable } from './WaitRow';
 import type { default as WorkTable } from './Work';
+import type { default as CallbackTable } from './Callback';
 import type { default as LfMovementsListingTable } from './LfMovementsListing';
 import type { default as ArrivalTable } from './Arrival';
 import type { default as TriggerRunTable } from './TriggerRun';
 import type { default as ArrivalUnjudgedTable } from './ArrivalUnjudged';
 import type { default as TriggerTable } from './Trigger';
+import type { default as DeliveryRequestReadTable } from './DeliveryRequestRead';
 import type { default as AuditLogTable } from './AuditLog';
+import type { default as TriggerEventTable } from './TriggerEvent';
 import type { default as CacheEntryTable } from './CacheEntry';
 import type { default as RecordBindingTable } from './RecordBinding';
 import type { default as ParkedRunTable } from './ParkedRun';
 import type { default as LfSecretsLeaseTable } from './LfSecretsLease';
 import type { default as ModuleProcessesTable } from './ModuleProcesses';
+import type { default as PlatformOwnedTokenTable } from './PlatformOwnedToken';
 import type { default as ParkLibrarySourceTable } from './ParkLibrarySource';
 import type { default as ConnectTokenTable } from './ConnectToken';
 import type { default as ListenStateTable } from './ListenState';
@@ -41,7 +46,6 @@ import type { default as DeployCheckTable } from './DeployCheck';
 import type { default as GoogleGrantedItemTable } from './GoogleGrantedItem';
 import type { default as TelegramIdentityTable } from './TelegramIdentity';
 import type { default as DeliveryTable } from './Delivery';
-import type { default as DeliveryRequestReadTable } from './DeliveryRequestRead';
 import type { default as OutboundEmailTable } from './OutboundEmail';
 import type { default as TeamEngineTable } from './TeamEngine';
 import type { default as ArrivalIdentityTable } from './ArrivalIdentity';
@@ -73,6 +77,8 @@ export default interface AutomationsSchema {
 
   join_branch_export: JoinBranchExportTable;
 
+  adapter_await: AdapterAwaitTable;
+
   phone_verification: PhoneVerificationTable;
 
   write_ledger: WriteLedgerTable;
@@ -93,6 +99,8 @@ export default interface AutomationsSchema {
 
   work: WorkTable;
 
+  callback: CallbackTable;
+
   lf_movements_listing: LfMovementsListingTable;
 
   arrival: ArrivalTable;
@@ -103,7 +111,11 @@ export default interface AutomationsSchema {
 
   trigger: TriggerTable;
 
+  delivery_request_read: DeliveryRequestReadTable;
+
   audit_log: AuditLogTable;
+
+  trigger_event: TriggerEventTable;
 
   cache_entry: CacheEntryTable;
 
@@ -115,6 +127,7 @@ export default interface AutomationsSchema {
 
   module_processes: ModuleProcessesTable;
 
+  platform_owned_token: PlatformOwnedTokenTable;
 
   park_library_source: ParkLibrarySourceTable;
 
@@ -129,8 +142,6 @@ export default interface AutomationsSchema {
   telegram_identity: TelegramIdentityTable;
 
   delivery: DeliveryTable;
-
-  delivery_request_read: DeliveryRequestReadTable;
 
   outbound_email: OutboundEmailTable;
 

@@ -252,6 +252,11 @@ export type AutomationStatus = 'live' | 'setting_up' | 'paused' | 'error';
 
 export type TriggerRunMode = 'off' | 'dry_run' | 'live';
 
+/** Identifier type for automations.trigger_event */
+export type TriggerEventId = string & {
+    __brand: 'automations.trigger_event';
+};
+
 /** Identifier type for automations.trigger_run */
 export type TriggerRunId = string & {
     __brand: 'automations.trigger_run';
@@ -4871,11 +4876,13 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 limit_pause: unknown;
                 cost_cap_baseline_microdollars: string;
                 last_heartbeat_at: Date | null;
+                trigger_event_id: TriggerEventId | null;
                 lease_owner: string | null;
                 lease_until: Date | null;
                 lease_token: string | null;
                 delivery_id: string | null;
                 lease_mark: string | null;
+                chain: string[];
             }>;
         }>;
         controlTower: _trpc_server.CreateRouterInner<_trpc_server.RootConfig<{

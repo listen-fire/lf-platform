@@ -17,9 +17,16 @@
  *
  */
 
+/**
+ * The park row under `park` holds a leaf parked on a wait (listen-fire 0.13
+ * and later). An await parked under 0.12 has no wait: it is parked on a
+ * correlation (`adapter_await`), which is carried, so its run is carried live.
+ */
+function leafOnAWait(park: string): string {
+  return `${park}.park_reason = 'await' AND ${park}.status <> 'completed' AND EXISTS (SELECT 1 FROM automations.wait_row w WHERE w.run_id = ${park}.run_id AND w.address = ${park}.address)`;
+}
 /** A run row (alias `t`) holding a leaf parked on a wait. */
-const PARKED_ON_A_WAIT =
-  "EXISTS (SELECT 1 FROM automations.parked_run p WHERE p.run_id = t.id AND p.park_reason = 'await' AND p.status <> 'completed')";
+const PARKED_ON_A_WAIT = `EXISTS (SELECT 1 FROM automations.parked_run p WHERE p.run_id = t.id AND ${leafOnAWait('p')})`;
 const CARRIED_WAIT_REASON =
   'carried from another deployment while it waited on an arrival: its wait is not carried, so it would never wake. Run it again';
 
@@ -242,6 +249,8 @@ export const MANIFEST: Record<Product, TableSpec[]> = {
     { table: 'movement_issue', tenancy: { kind: 'team_column' } },
     { table: 'movement_story_token', tenancy: { kind: 'team_column' } },
     { table: 'trigger', tenancy: { kind: 'team_column' } },
+    // listen-fire 0.12's receipts, kept while 0.12 automations run.
+    { table: 'trigger_event', tenancy: { kind: 'team_column' }, history: true },
     {
       table: 'trigger_run',
       tenancy: { kind: 'team_column' },
@@ -259,8 +268,8 @@ export const MANIFEST: Record<Product, TableSpec[]> = {
       tenancy: { kind: 'via', column: 'run_id', parent: 'automations.trigger_run' },
       // Its run is carried failed (above): the wait's leaf is closed, never resumed.
       rewrite: {
-        status: `CASE WHEN t.park_reason = 'await' AND t.status <> 'completed' THEN 'completed' ELSE t.status END`,
-        state: `CASE WHEN t.park_reason = 'await' AND t.status <> 'completed' THEN NULL ELSE t.state END`,
+        status: `CASE WHEN ${leafOnAWait('t')} THEN 'completed' ELSE t.status END`,
+        state: `CASE WHEN ${leafOnAWait('t')} THEN NULL ELSE t.state END`,
       },
     },
     // listen-fire 0.13's store state. A listen's state (its resolution, its
@@ -309,6 +318,8 @@ export const MANIFEST: Record<Product, TableSpec[]> = {
       table: 'join_branch_export',
       tenancy: { kind: 'via', column: 'run_id', parent: 'automations.trigger_run' },
     },
+    // A 0.12 run's park on a correlation, carried with it so it still wakes.
+    { table: 'adapter_await', tenancy: { kind: 'team_column' } },
     // The library texts parked runs name by hash: carried with the parks that read them.
     { table: 'park_library_source', tenancy: { kind: 'team_column' } },
     {
@@ -349,6 +360,8 @@ export const MANIFEST: Record<Product, TableSpec[]> = {
       exportExcludedBecause:
         'the pids and machines of module processes lf hosts started for the source; they name nothing on the target',
     },
+    // A 0.12 run's callbacks, carried with it.
+    { table: 'callback', tenancy: { kind: 'team_column' } },
     { table: 'record_binding', tenancy: { kind: 'team_column' } },
     {
       table: 'lf_secrets_lease',
@@ -432,6 +445,12 @@ export const MANIFEST: Record<Product, TableSpec[]> = {
       tenancy: { kind: 'team_column' },
       exportExcludedBecause:
         'one pasted model key per team, re-pasted in ninety seconds; a shell row would say only what the connect surface already shows',
+    },
+    {
+      table: 'platform_owned_token',
+      tenancy: { kind: 'team_column' },
+      exportExcludedBecause:
+        'a handle on a token held by the source operator’s own third-party app registration; it names nothing on the target (ST-4, doc 10 §2e)',
     },
     {
       // It has a tenant now (D55(a)) — the 6.4 finding was fixed rather than

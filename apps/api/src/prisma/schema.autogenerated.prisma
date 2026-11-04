@@ -69,6 +69,24 @@ model AsksWorkerHeartbeat {
   @@schema("asks")
 }
 
+model AdapterAwait {
+  id             String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  adapterType    String     @map("adapter_type")
+  correlationKey String     @map("correlation_key")
+  runId          String     @map("run_id") @db.Uuid
+  teamId         String     @map("team_id") @db.Uuid
+  address        String
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime   @default(now()) @map("updated_at") @db.Timestamptz(6)
+  triggerRun     TriggerRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, address], map: "adapter_await_run_address_unique")
+  @@index([adapterType, correlationKey, teamId], map: "adapter_await_correlation_idx")
+  @@index([runId])
+  @@map("adapter_await")
+  @@schema("automations")
+}
+
 model Arrival {
   seq         BigInt   @id @default(autoincrement())
   teamId      String   @map("team_id") @db.Uuid
@@ -155,6 +173,30 @@ model CacheEntry {
 
   @@index([expiresAt], map: "cache_entry_expires_idx")
   @@map("cache_entry")
+  @@schema("automations")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model Callback {
+  id         String     @id
+  teamId     String     @map("team_id") @db.Uuid
+  runId      String     @map("run_id") @db.Uuid
+  address    String
+  params     Json       @default("[]")
+  state      Json
+  calls      Json       @default("[]")
+  singleUse  Boolean    @default(true) @map("single_use")
+  expiresAt  DateTime?  @map("expires_at") @db.Timestamptz(6)
+  status     String     @default("live")
+  createdAt  DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime   @default(now()) @map("updated_at") @db.Timestamptz(6)
+  firedAt    DateTime?  @map("fired_at") @db.Timestamptz(6)
+  revokedAt  DateTime?  @map("revoked_at") @db.Timestamptz(6)
+  triggerRun TriggerRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([teamId])
+  @@map("callback")
   @@schema("automations")
 }
 
@@ -569,6 +611,20 @@ model PhoneVerification {
   @@schema("automations")
 }
 
+model PlatformOwnedToken {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  teamId          String    @map("team_id") @db.Uuid
+  adapterType     String    @map("adapter_type")
+  externalTokenId String    @map("external_token_id")
+  description     String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  revokedAt       DateTime? @map("revoked_at")
+
+  @@index([teamId, adapterType], map: "platform_owned_token_team_adapter_idx")
+  @@map("platform_owned_token")
+  @@schema("automations")
+}
+
 model PublicInbox {
   id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   key             String   @unique @db.Citext
@@ -724,6 +780,29 @@ model Trigger {
   @@schema("automations")
 }
 
+model TriggerEvent {
+  id              String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  teamId          String       @map("team_id") @db.Uuid
+  triggerId       String       @map("trigger_id")
+  adapterType     String       @map("adapter_type")
+  triggerType     String       @map("trigger_type")
+  payload         Json
+  status          String       @default("received")
+  dispatchedAt    DateTime?    @map("dispatched_at") @db.Timestamptz(3)
+  failureReason   String?      @map("failure_reason")
+  droppedReason   String?      @map("dropped_reason")
+  externalEventId String?      @map("external_event_id")
+  occurredAt      DateTime     @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  createdAt       DateTime     @default(now()) @map("created_at")
+  triggerRuns     TriggerRun[]
+
+  @@index([createdAt])
+  @@index([teamId])
+  @@index([triggerId])
+  @@map("trigger_event")
+  @@schema("automations")
+}
+
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model TriggerRun {
   id                          String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -751,6 +830,7 @@ model TriggerRun {
   limitPause                  Json?              @map("limit_pause")
   costCapBaselineMicrodollars BigInt             @default(0) @map("cost_cap_baseline_microdollars")
   lastHeartbeatAt             DateTime?          @map("last_heartbeat_at") @db.Timestamptz(6)
+  triggerEventId              String?            @map("trigger_event_id") @db.Uuid
   leaseOwner                  String?            @map("lease_owner")
   leaseUntil                  DateTime?          @map("lease_until") @db.Timestamptz(6)
   leaseToken                  String?            @map("lease_token") @db.Uuid
@@ -759,15 +839,20 @@ model TriggerRun {
   returned                    Json?              @db.Json
   deliveryId                  String?            @map("delivery_id") @db.Uuid
   leaseMark                   BigInt?            @map("lease_mark")
+  chains                      String[]           @default([]) @map("chain")
+  adapterAwaits               AdapterAwait[]
+  callbacks                   Callback[]
   joinBranchExports           JoinBranchExport[]
   joinPendings                JoinPending[]
   parkedRuns                  ParkedRun[]
   movementVersion             MovementVersion?   @relation(fields: [movementVersionId], references: [id])
+  triggerEvent                TriggerEvent?      @relation(fields: [triggerEventId], references: [id], onUpdate: NoAction)
 
   @@index([createdAt])
   @@index([deliveryId])
   @@index([host, teamId, startedAt], map: "trigger_run_host_team_idx")
   @@index([teamId])
+  @@index([triggerEventId])
   @@index([triggerId])
   @@map("trigger_run")
   @@schema("automations")
