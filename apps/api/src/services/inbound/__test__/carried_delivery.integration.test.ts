@@ -327,6 +327,8 @@ describe('one door, two versions (real Postgres)', () => {
     const movement = await movementOn('0.12.13', 'email = Email()\nfunction f(e: <email>) {\n  return 1\n}\nlisten to email { key: "Inbox" } fire f\n');
     const id = await listenRow({ movementId: movement, kind: 'email', config: { key: 'Inbox' }, firedMovementName: 'f' });
     expect((await findTriggerByInboundKey({ teamId, kinds: ['email'], key: 'inbox' }))?.id).toBe(id);
+    // As the email door asks: by the kinds it dispatches, and the key as it was sent.
+    expect((await findTriggerByInboundKey({ teamId, kinds: ['CUSTOM_EMAIL', 'MAILGUN', 'INBOUND_EMAIL'], key: 'Inbox' }))?.id).toBe(id);
   });
 
   it('an answer to a question a legacy run waits on is refused at the door, recording nothing', async () => {

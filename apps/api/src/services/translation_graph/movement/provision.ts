@@ -706,7 +706,16 @@ async function provisionCarriedListeners(input: {
   const within = <T>(name: string, run: () => Promise<T>): Promise<T> => (input.timer ? input.timer.within(name, run) : run());
   const team = await teamFactsOf(input.teamId, { imports: 'live' });
   const credentialOf = (name: string): string | null => team.credentials.find((row) => row.name === name)?.id ?? null;
-  const statements = lane.listenersOf({ source: input.source, pin });
+  // A text its version cannot parse states no listens: answered as the current
+  // version's save answers it. The class is that version's own, so it is read by name.
+  let statements: ReturnType<ListeningLane['listenersOf']>;
+  try {
+    statements = lane.listenersOf({ source: input.source, pin });
+  } catch (error) {
+    if (!(error instanceof Error) || error.name !== 'MovementParseError') throw error;
+    const at = { line: 1, col: 1 };
+    return { ok: false, diagnostics: [{ code: 'MOV_PARSE', message: error.message, span: { start: at, end: at } }], catalogNotes: input.notes };
+  }
   const desired: DesiredListener[] = statements.map((statement) => ({
     movementName: statement.movementName,
     adapter: statement.adapter,
