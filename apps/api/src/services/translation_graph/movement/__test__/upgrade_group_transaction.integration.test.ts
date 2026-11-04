@@ -240,6 +240,22 @@ ${LISTENS}`);
 
     const pausedRowOf = (id: string) =>
       getAutomationsQb(['trigger'])
+    it('an automation shipped while the upgrade ran is not moved as a draft: nothing moves, and the answer says so', async () => {
+      const id = await seedNeverShipped('shipped_meanwhile', `${LISTENS}// before\n`);
+      // Prepared as it was found, never shipped; shipped by the time the transaction runs.
+      const shippedBetween: Advance = async (input) => {
+        const move = await advanceLive(input);
+        await mintMovementVersionIfChanged({ teamId, movementId: id, source: input.movement.source, languageVersion: '0.12.13' });
+        return move;
+      };
+
+      const result = await upgradeMovement({ teamId, id, acknowledge: true, validate: rewrites, advance: shippedBetween });
+
+      expect(result).toEqual(expect.objectContaining({ status: 'unverified', detail: expect.stringContaining('shipped while the upgrade ran') }));
+      expect(await rowOf(id)).toEqual(expect.objectContaining({ language_version: '0.12.13', source: `${LISTENS}// before\n` }));
+      expect(await bringUpRowsOf(id)).toEqual([]);
+    });
+
         .selectFrom('trigger')
         .where('movement_id', '=', id as MovementId)
         .select(['kind', 'run_mode', 'guard_paused_at', 'guard_paused_reason', 'guard_paused_signal'])

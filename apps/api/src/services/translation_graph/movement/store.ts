@@ -146,6 +146,19 @@ export async function getMovementRow(input: {
   return row ? toMovementRow(row) : null;
 }
 
+/** The row, read for update: inside a transaction, it holds against a save
+ *  until the transaction ends. */
+export async function lockMovementRow(input: { teamId: string; id: string }): Promise<MovementRow | null> {
+  const row = await getAutomationsQb(['movement'])
+    .selectFrom('movement')
+    .where('team_id', '=', input.teamId)
+    .where('id', '=', input.id as MovementId)
+    .select(movementColumns)
+    .forUpdate()
+    .executeTakeFirst();
+  return row ? toMovementRow(row) : null;
+}
+
 export async function getMovementRowByName(input: {
   teamId: string;
   name: string;

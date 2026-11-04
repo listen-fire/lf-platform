@@ -109,6 +109,7 @@ import {
   getMovementRow,
   listAllMovementRows,
   listMovementRows,
+  lockMovementRow,
   recordUpgradeCheck,
   recordValidityOutcome,
   type MovementRow,
@@ -936,6 +937,12 @@ export const advanceLive: Advance = async ({ movement, to, source, movingWith })
   // shipped moves its text and pin, and nothing starts.
   if (movement.currentVersionId === null) {
     return async () => {
+      // Read again, locked, inside the transaction: shipping in between would
+      // leave a shipped automation with its pin moved and no listens.
+      const now = await lockMovementRow({ teamId: movement.teamId, id: movement.id });
+      const stale = staleSinceChecked(movement, now);
+      if (stale !== null) return { ok: false, detail: stale };
+      if (now !== null && now.currentVersionId !== null) return { ok: false, detail: 'it was shipped while the upgrade ran' };
       await moveNeverShippedPin({ teamId: movement.teamId, id: movement.id, name: movement.name, source, to });
       return { ok: true };
     };
@@ -948,6 +955,8 @@ export const advanceLive: Advance = async ({ movement, to, source, movingWith })
     }),
   );
   return async () => {
+    const stale = staleSinceChecked(movement, await lockMovementRow({ teamId: movement.teamId, id: movement.id }));
+    if (stale !== null) return { ok: false, detail: stale };
     const saved = await saveMovement({
       teamId: movement.teamId,
       id: movement.id,
@@ -960,6 +969,13 @@ export const advanceLive: Advance = async ({ movement, to, source, movingWith })
     return { ok: false, detail: `${what}: ${(saved.errors ?? []).join('; ') || 'the save stopped short of shipping'}` };
   };
 };
+
+/** Why the row, read again inside the transaction, is no longer the one the
+ *  upgrade checked: saving over an edit made meanwhile would lose it. */
+function staleSinceChecked(checked: MovementRow, now: MovementRow | null): string | null {
+  if (now === null) return 'it was deleted while the upgrade ran';
+  return now.source === checked.source ? null : 'it was edited while the upgrade ran';
+}
 
 /** The most recent check's summary — what `deploy/up.sh` prints. */
 export async function latestDeployCheckSummary(): Promise<DeployCheckSummary | null> {
