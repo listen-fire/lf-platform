@@ -39,6 +39,7 @@ jest.mock('../store', () => ({
 }));
 jest.mock('../version_store', () => ({ movementSourceHash: () => 'hash' }));
 jest.mock('../provision', () => ({ saveMovement: jest.fn() }));
+jest.mock('../upgrade_holds', () => ({ holdsOnMoving: jest.fn(async () => []) }));
 jest.mock('../listens_up', () => ({ bringUpListensLater: jest.fn(async () => undefined) }));
 // The real authoring core is loaded by one case below; its team wrapper's
 // catalog assembly is never reached.

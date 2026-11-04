@@ -155,13 +155,9 @@ describe('an upgrading import group moves in one transaction (real Postgres, the
 
   it('a member that cannot move rolls back the real saves before it: text, pin, version and listen rows; no provider is called', async () => {
     const lib = await seed('lib', LIBRARY);
-    const listens = await seed('app_a', `${LISTENS}`);
     // The listening member is pulled into the group by importing the library.
-    await getAutomationsQb(['movement'])
-      .updateTable('movement')
-      .set({ source: `import { shout } from "lib"\n${LISTENS}` })
-      .where('id', '=', listens as MovementId)
-      .execute();
+    const listens = await seed('app_a', `import { shout } from "lib"
+${LISTENS}`);
     const app = await seed('app_b', importing('app_b', 'lib'));
     const libVersion = (await rowOf(lib)).current_version_id;
     const listensVersion = (await rowOf(listens)).current_version_id;
