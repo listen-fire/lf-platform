@@ -348,7 +348,13 @@ function keyOf(release: LanguageVersion): string {
 }
 
 const CURRENT_VERSION: CarriedVersion = {
-  key: keyOf(LANGUAGE_VERSION),
+  // Read when asked, never when this module loads: a conformance corpus runs
+  // the engine under a legacy id by making LANGUAGE_VERSION that id, and
+  // importing the registry must not fail for it. A legacy id is no release, so
+  // asking the current entry for its key under that setup is the one refusal.
+  get key() {
+    return keyOf(LANGUAGE_VERSION);
+  },
   release: LANGUAGE_VERSION,
   load: async () => ({ LANGUAGE_VERSION }),
   provides: { check: CURRENT, help: CURRENT, run: CURRENT, resume: CURRENT, listen: CURRENT },
@@ -374,17 +380,23 @@ const CARRIED: readonly CarriedVersion[] = [
   },
 ];
 
-const BY_KEY: ReadonlyMap<string, CarriedVersion> = (() => {
-  const byKey = new Map<string, CarriedVersion>();
+let carriedByKey: ReadonlyMap<string, CarriedVersion> | undefined;
+
+/** The entries by key, checked on first use: each filed under its release's key,
+ *  none twice (see the current entry's key for why not at load). */
+function byKey(): ReadonlyMap<string, CarriedVersion> {
+  if (carriedByKey !== undefined) return carriedByKey;
+  const entries = new Map<string, CarriedVersion>();
   for (const version of CARRIED) {
     if (keyOf(version.release) !== version.key) {
       throw new Error(`the language version registry files release ${version.release} under key ${version.key}`);
     }
-    if (byKey.has(version.key)) throw new Error(`the language version registry carries key ${version.key} twice`);
-    byKey.set(version.key, version);
+    if (entries.has(version.key)) throw new Error(`the language version registry carries key ${version.key} twice`);
+    entries.set(version.key, version);
   }
-  return byKey;
-})();
+  carriedByKey = entries;
+  return entries;
+}
 
 const BY_LEGACY_ID: ReadonlyMap<string, CarriedVersion> = (() => {
   const byId = new Map<string, CarriedVersion>();
@@ -413,7 +425,7 @@ export function currentVersion(): CarriedVersion {
  *  text that is not a release. */
 export function versionOf(pin: LanguageVersion): CarriedVersion | undefined {
   const key = compatibilityKey(pin);
-  return key === undefined ? undefined : BY_KEY.get(key);
+  return key === undefined ? undefined : byKey().get(key);
 }
 
 /** The carried version whose key a legacy id shares (the release it ran
