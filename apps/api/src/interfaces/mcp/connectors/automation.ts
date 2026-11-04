@@ -18,6 +18,19 @@ import {
 } from '../../../services/translation_graph/movement/language_pin_input';
 import { LANGUAGE_SEARCH_KINDS } from '../../../lib/knowledge/movement_handbook';
 
+/** Which version's help a tool answers with. */
+const HELP_INPUTS = {
+  automation: z
+    .string()
+    .optional()
+    .describe(
+      "The saved automation you are working on (id or exact name): this answers for ITS language version, whose spellings are the ones its check reads. Omit for a new automation, which is written in the current version.",
+    ),
+  languageVersion: languageVersionInput
+    .optional()
+    .describe("Answer for this language version instead, by the `version` listAutomations shows (\"0.12.8\", say)."),
+};
+
 // The two WhatsApp linking tools describe the flow THIS deployment runs, so an
 // agent on a trusting deployment is never told to ask the user for a code.
 const WHATSAPP_LINK_DESCRIPTION: Record<WhatsappLinkVerification, string> = {
@@ -39,6 +52,7 @@ const WHATSAPP_CONFIRM_DESCRIPTION: Record<WhatsappLinkVerification, string> = {
 const AUTOMATION_INSTRUCTIONS =
   "To automate anything for the user — react to events, move data between their systems, push into their CRM or chat — build an \"automation\" here: a small program over their real connected systems. This connector is how you make Listen-Fire DO things.\n\n" +
   "The loop. Call getStarted first: one call returns the handbook's front page (where this language differs from TypeScript, the few ideas it adds, the build loop), your team, and its connected systems with their record types and fields. The handbook's chapters are not needed: look up anything else — a built-in's signature, a system's behaviour, a recipe — with searchLanguage, and read the anchor a result or a diagnostic names with readHandbook (\"front#maybe-absent\"); where anything else disagrees with the handbook, the handbook wins. Unsure how to write something? showExample, asked in words, answers with a few checked lines doing it. " +
+  "Working on a saved automation? Pass it as `automation` to getStarted, readHandbook, searchLanguage, showExample, listConnections and describeConnection: an automation stays in the language version it was written in until it is upgraded, and they then answer for that version. " +
   "Reconcile getStarted's systems against the task — mint any missing connection first via connectSystem. Author against the real record and field names (getStarted's digest; describeConnection for more of one system), never from memory. Then saveAutomation: it validates first and saves nothing while there are errors, handing back the diagnostics, so a separate validateAutomation is not needed. Then runAutomation on real input; checkRun and inspectRun show what a run did. Make independent tool calls together, in one turn. Once something is saved, prefer a small edit over resending the whole program: readAutomation (or getAutomation, which also carries its metadata) to see the current text, grepAutomations to find where something is defined or used, and editAutomation to change it — anchored on a unique snippet plus the revision you just read, so a concurrent edit is caught instead of clobbered. Reach for saveAutomation itself only for a brand-new automation or a genuine rewrite. A write a third party sees (an email, a message to someone else) gets an approval step inside the automation — a question a person acts on. The user's knowledge graph is reachable as the `kg` system in listConnections.\n\nTeams. This connection may span several teams; getStarted lists them with their ids. Creating or changing anything in a team needs its id as `team`; with exactly one team you may omit it.";
 
 /** The connector as served: what a client is told and the tools it is offered. */
@@ -59,6 +73,7 @@ function automationConnectorOptions(): McpRouterOptions {
             .string()
             .optional()
             .describe('Team id; needed only when this connection spans several teams.'),
+          ...HELP_INPUTS,
         },
         title: 'Get started',
         endpoint: { method: 'GET', path: '/v1/automation/get-started' },
@@ -153,6 +168,8 @@ function automationConnectorOptions(): McpRouterOptions {
             .describe(
               'Several anchors to read in one call, e.g. ["front#maybe-absent","writes#identity","system:slack"].',
             ),
+          team: z.string().optional().describe('Team id (see instructions); needed only to find `automation` by name in one team.'),
+          ...HELP_INPUTS,
         },
         title: 'Read the Listen-Fire handbook',
         endpoint: { method: 'POST', path: '/v1/automation/handbook' },
@@ -167,6 +184,8 @@ function automationConnectorOptions(): McpRouterOptions {
             .enum(LANGUAGE_SEARCH_KINDS)
             .optional()
             .describe('Only this kind: "function", "concept" or "recipe".'),
+          team: z.string().optional().describe('Team id (see instructions); needed only to find `automation` by name in one team.'),
+          ...HELP_INPUTS,
         },
         title: 'Search the automation language',
         endpoint: { method: 'POST', path: '/v1/automation/language/search' },
@@ -177,6 +196,8 @@ function automationConnectorOptions(): McpRouterOptions {
         annotations: { readOnlyHint: true },
         inputSchema: {
           query: z.string().optional().describe('What you want to write, in words.'),
+          team: z.string().optional().describe('Team id (see instructions); needed only to find `automation` by name in one team.'),
+          ...HELP_INPUTS,
         },
         title: 'Show a micro example',
         endpoint: { method: 'POST', path: '/v1/automation/language/example' },
@@ -187,6 +208,7 @@ function automationConnectorOptions(): McpRouterOptions {
         annotations: { readOnlyHint: true },
         inputSchema: {
           team: z.string().optional().describe('Team id (see instructions).'),
+          ...HELP_INPUTS,
         },
         title: 'List connected systems',
         endpoint: { method: 'GET', path: '/v1/automation/connections' },
@@ -224,6 +246,7 @@ function automationConnectorOptions(): McpRouterOptions {
               'How much to say. Omit for the compact text (what you author against). "full" returns the JSON: every description, edge capabilities and the projected write shapes, at many times the size.',
             ),
           team: z.string().optional().describe('Team id (see instructions).'),
+          ...HELP_INPUTS,
         },
         title: 'Describe a connected system',
         endpoint: { method: 'POST', path: '/v1/automation/connections/describe' },
@@ -343,7 +366,7 @@ function automationConnectorOptions(): McpRouterOptions {
       },
       upgradeAutomation: {
         description:
-          "Move a saved automation onto the current version of the automation language. Every automation is written in a language version (listAutomations' `languageVersion`). One on a legacy id (1 to 4) keeps running as it always has until it is upgraded; one pinned to a release of an older line the platform carries is still checked, saved and run under its own version: validateAutomation, saveAutomation and editAutomation check it there and keep its pin, and runAutomation runs it there; its listens do not fire, and a run of it that would wait (an ask, a pause) is stopped, until it is upgraded. `upgradeDiagnostics` in listAutomations lists what stands between it and the current version. This rewrites the old spellings into the current version's by the rewrites proved to keep the meaning (applyAllFixes: true applies the others too), validates the rewritten text under it, and returns `status`, `from`, `to` (each `{ version }`; `name` repeats it this release only), `diagnostics`, `upgradedSource` (the rewritten text, when the rewrite changed it; the diagnostics' lines are its lines) and a `message`: `blocked` — an error, a rewrite not proved to keep the meaning (its diagnostic carries the fix), or a warning with nothing to rewrite that says the automation may now do something else (a field whose meaning changed, an awaited value captured, a wait that may hang): read each, edit what assumed the old behaviour, then call again with applyAllFixes: true, which applies those fixes and moves past those warnings; repair an error in the saved text in either spelling, save, and call again; `needs_acknowledgement` — nothing holds it, and a second call with acknowledge: true saves the rewritten text and moves it; `upgraded`; `already_current`; `unverified` — a connected system could not be read. An import is allowed only between automations on the same version, so the automations and libraries it shares imports with on its version move with it (`movesWith`, each with its own `upgradedSource`), and when any of them cannot move, nothing moves and `heldBy` names each with its diagnostics. Nothing changes without acknowledge: true. Any other warning (a cost note, say) reads the same under both and never blocks, so it is not listed.",
+          "Move a saved automation onto the current version of the automation language. Every automation is written in a language version (listAutomations' `languageVersion`). One on a legacy id (1 to 4) keeps running as it always has until it is upgraded; one pinned to a release of an older line the platform carries is still checked, saved and run under its own version: validateAutomation, saveAutomation and editAutomation check it there and keep its pin, and runAutomation runs it there; its listens do not fire, and a run of it that would wait (an ask, a pause) is stopped, until it is upgraded. `upgradeDiagnostics` in listAutomations lists what stands between it and the current version. This rewrites the old spellings into the current version's by the rewrites proved to keep the meaning (applyAllFixes: true applies the others too), validates the rewritten text under it, and returns `status`, `from`, `to` (each `{ version }`; `name` repeats it this release only), `diagnostics`, `upgradedSource` (the rewritten text, when the rewrite changed it; the diagnostics' lines are its lines), `changes` (what moving changes: `text`, each rewritten line, and `behaviour`, what else is different once it has moved; tell the user) and a `message`: `blocked` — an error, a rewrite not proved to keep the meaning (its diagnostic carries the fix), or a warning with nothing to rewrite that says the automation may now do something else (a field whose meaning changed, an awaited value captured, a wait that may hang): read each, edit what assumed the old behaviour, then call again with applyAllFixes: true, which applies those fixes and moves past those warnings; repair an error in the saved text in either spelling, save, and call again; `needs_acknowledgement` — nothing holds it, and a second call with acknowledge: true saves the rewritten text and moves it; `upgraded`; `already_current`; `unverified` — a connected system could not be read. An import is allowed only between automations on the same version, so the automations and libraries it shares imports with on its version move with it (`movesWith`, each with its own `upgradedSource`), and when any of them cannot move, nothing moves and `heldBy` names each with its diagnostics. Nothing changes without acknowledge: true. Any other warning (a cost note, say) reads the same under both and never blocks, so it is not listed.",
         inputSchema: {
           automation: z.string().describe('The automation id (from listAutomations).'),
           acknowledge: z

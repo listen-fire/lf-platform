@@ -58,6 +58,8 @@ import { bringUpListensLater } from '../listens_up';
 import {
   runDeployCheck,
   upgradeMovement,
+  changedLines,
+  upgradeChanges,
   type DeployCheckDeps,
   type DeployCheckSummary,
   type PlatformLanguageRelease,
@@ -1465,5 +1467,56 @@ describe("an upgrade from 0.12 of a listen on the manual unit (Run now)", () => 
       ['function backfill(go: <manual-[:Invocations]->>) {', '  return go.Text', '}', '', 'listen to manual-[:Invocations]-> fire backfill', ''].join('\n'),
     );
     expect(result.status).toBe('upgraded');
+  });
+});
+
+describe('what an upgrade says it changes', () => {
+  it('lists each line the rewrite changes, in the saved text\'s numbering', () => {
+    const before = 'a\nlisten to manual fire echo\nb\nc\n';
+    const after = 'a\nlisten to manual-[:Invocations]-> fire echo\nb\nc\nd\n';
+    expect(changedLines(before, after)).toEqual([
+      { line: 2, was: ['listen to manual fire echo'], becomes: ['listen to manual-[:Invocations]-> fire echo'] },
+      { line: 5, was: [], becomes: ['d'] },
+    ]);
+  });
+
+  it('an unchanged text has no line to list', () => {
+    expect(changedLines('a\nb\n', 'a\nb\n')).toEqual([]);
+  });
+
+  it('a line removed between kept ones is its own change', () => {
+    expect(changedLines('a\nb\nc\n', 'a\nc\n')).toEqual([{ line: 2, was: ['b'], becomes: [] }]);
+  });
+
+  it('says runs, help and checking move, and that listens start only for one that shipped', () => {
+    const shipped = upgradeChanges({
+      movement: { languageVersion: '0.12.13', source: 'a', currentVersionId: 'v1' },
+      rewritten: 'a',
+      to: '0.15.1',
+    });
+    expect(shipped.text).toEqual([]);
+    expect(shipped.behaviour.join(' ')).toContain('runs already in progress finish under 0.12.13');
+    expect(shipped.behaviour.join(' ')).toContain('Help moves with it');
+    expect(shipped.behaviour[0]).toContain('Its listens start firing under 0.15.1');
+    const neverShipped = upgradeChanges({
+      movement: { languageVersion: '0.12.13', source: 'a', currentVersionId: null },
+      rewritten: 'a',
+      to: '0.15.1',
+    });
+    expect(neverShipped.behaviour.join(' ')).not.toContain('listens start firing');
+  });
+
+  it('a move on offer carries it', async () => {
+    jest.mocked(getMovementRow).mockResolvedValueOnce(movement({ id: 'older', languageVersion: '0.12.0', source: 'old text' }));
+    jest.mocked(assessMovementValidity).mockReturnValueOnce({ status: 'valid', reason: null } as never);
+    const result = await upgradeMovement({
+      teamId: 'team-1',
+      id: 'older',
+      acknowledge: false,
+      validate: async () => ({ diagnostics: [], gaps: [] }) as never,
+    });
+    if (result.status === 'not_found') throw new Error('it is there');
+    expect(result.status).toBe('needs_acknowledgement');
+    expect(result.changes?.behaviour.join(' ')).toContain('New runs use');
   });
 });

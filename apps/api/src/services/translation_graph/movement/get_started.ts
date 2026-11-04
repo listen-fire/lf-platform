@@ -8,6 +8,7 @@ import type { TeamRef } from 'principal';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 
 import { renderFrontPage } from '../../../lib/knowledge/movement_handbook';
+import { carriedAutomationsBook, digestUnderCarried, type HelpRoute } from './authoring_help';
 import { describeMovementInstance, movementCatalogSnapshotForTeam } from './catalog';
 import { renderConnectionsDigest, type SystemDigestInput } from './connection_digest';
 import { connectionsFor, resolveStubLandings, within } from './describe_connection';
@@ -109,7 +110,21 @@ const EXTRACT_CACHE_TIP =
 export async function renderGetStarted(input: {
   teams: TeamRef[];
   teamId: TeamId | null;
+  /** The automation's own version, when it is not the current one: its
+   *  systems and its front page answer instead. */
+  carried?: Extract<HelpRoute, { kind: 'carried' }>;
 }): Promise<string> {
+  const { carried } = input;
+  if (carried !== undefined) {
+    const systems = input.teamId === null ? null : await digestUnderCarried(carried.lane, input.teamId);
+    const { book } = await carriedAutomationsBook(carried.lane);
+    return [
+      teamSection(input),
+      `## Language\n\nThis automation is written in language ${carried.pin}, so everything here answers for that version. Pass the same \`automation\` to readHandbook, searchLanguage, showExample, listConnections and describeConnection. An upgrade (upgradeAutomation) is what moves it on.`,
+      ...(systems !== null ? ['## Systems', systems, EXTRACT_CACHE_TIP] : []),
+      book.frontPage,
+    ].join('\n\n');
+  }
   const systems = input.teamId === null ? null : await connectedSystemsDigest(input.teamId);
   return [
     teamSection(input),

@@ -64,6 +64,19 @@ function stub(meta: Omit<LibraryBook, 'chapters' | 'intentIndex'>): LibraryBook 
 }
 
 /**
+ * The automations book a reader is served. The current version's by default; a
+ * reader working on an automation pinned to a carried version is served that
+ * version's own (`movement/authoring_help.ts`), so it is never taught another
+ * version's spellings.
+ */
+export interface AutomationsBook {
+  chapters: readonly BookChapter[];
+  intentIndex: readonly BookIntentEntry[];
+  frontPage: string;
+  frontSection(anchor: string): { ok: true; content: string } | { ok: false; error: string };
+}
+
+/**
  * The Library reader — the single source the MCP `readBook` tool calls
  * (interfaces/rest/v1/knowledge_agent_tools.ts).
  *
@@ -92,8 +105,12 @@ export function readBook(args: {
   chapters?: string[];
   section?: string;
   frontPageInsteadOfChapters?: boolean;
+  /** The automations book to serve; absent, the current version's. */
+  automations?: AutomationsBook;
 }) {
-  const shelf = getLibraryShelf();
+  const shelf = getLibraryShelf(args.automations);
+  const frontPage = () => args.automations?.frontPage ?? renderFrontPage();
+  const frontEntry = (anchor: string) => (args.automations !== undefined ? args.automations.frontSection(anchor) : frontSection(anchor));
   const frontPageOnly = args.frontPageInsteadOfChapters === true;
   if (!args.bookId) {
     return {
@@ -132,7 +149,7 @@ export function readBook(args: {
         ? [args.chapter]
         : [];
   if (requested.length === 0 && frontPageOnly && book.bookId === AUTOMATIONS_BOOK) {
-    return { bookId: book.bookId, chapter: FRONT_PAGE_ID, title: FRONT_PAGE_TITLE, content: renderFrontPage() };
+    return { bookId: book.bookId, chapter: FRONT_PAGE_ID, title: FRONT_PAGE_TITLE, content: frontPage() };
   }
   if (requested.length === 0) {
     return {
@@ -157,8 +174,8 @@ export function readBook(args: {
     const section = route.section ?? (requested.length === 1 ? args.section : undefined);
     const id = route.chapter;
     if (id === FRONT_PAGE_ID && book.bookId === AUTOMATIONS_BOOK) {
-      if (section === undefined) return { id, title: FRONT_PAGE_TITLE, content: renderFrontPage() };
-      const entry = frontSection(section);
+      if (section === undefined) return { id, title: FRONT_PAGE_TITLE, content: frontPage() };
+      const entry = frontEntry(section);
       return entry.ok
         ? { id, section, title: FRONT_PAGE_TITLE, content: entry.content }
         : { id, error: entry.error };
@@ -217,14 +234,32 @@ function isTeachingChapter(id: string): boolean {
 /** The front page is the automations book's first chapter for everyone — the
  *  Library and the in-app agents read it as a chapter, and the anchors
  *  diagnostics hand out (`front#maybe-absent`) land in a chapter a person can open. */
-function withFrontPage(book: LibraryBook): LibraryBook {
+function withFrontPage(book: LibraryBook, frontPage: string): LibraryBook {
   return {
     ...book,
-    chapters: [{ id: FRONT_PAGE_ID, title: FRONT_PAGE_TITLE, content: renderFrontPage() }, ...book.chapters],
+    chapters: [{ id: FRONT_PAGE_ID, title: FRONT_PAGE_TITLE, content: frontPage }, ...book.chapters],
   };
 }
 
-export function getLibraryShelf(): LibraryBook[] {
+const AUTOMATIONS_BOOK_META = {
+  bookId: AUTOMATIONS_BOOK,
+  title: 'Writing automations',
+  description:
+    'Automations are small programs that move data when something happens — an email arrives, a record changes. How to write them: sources and targets, writes, extraction, branching, and going live.',
+  status: 'available',
+} as const;
+
+function automationsShelfBook(automations: AutomationsBook | undefined): LibraryBook {
+  if (automations !== undefined) {
+    return withFrontPage(
+      { ...AUTOMATIONS_BOOK_META, chapters: [...automations.chapters], intentIndex: [...automations.intentIndex] },
+      automations.frontPage,
+    );
+  }
+  return withFrontPage(bookFrom(getMovementHandbook(), AUTOMATIONS_BOOK_META), renderFrontPage());
+}
+
+export function getLibraryShelf(automations?: AutomationsBook): LibraryBook[] {
   return [
     bookFrom(getUsingListenFireHandbook(), {
       bookId: 'using-listen-fire',
@@ -233,15 +268,7 @@ export function getLibraryShelf(): LibraryBook[] {
         'Finding your way around the product: what each page is for, how to connect an integration, and how connecting, building automations, and automating fit together.',
       status: 'available',
     }),
-    withFrontPage(
-      bookFrom(getMovementHandbook(), {
-        bookId: AUTOMATIONS_BOOK,
-        title: 'Writing automations',
-        description:
-          'Automations are small programs that move data when something happens — an email arrives, a record changes. How to write them: sources and targets, writes, extraction, branching, and going live.',
-        status: 'available',
-      }),
-    ),
+    automationsShelfBook(automations),
     bookFrom(modelHandbook, {
       bookId: 'knowledge-model',
       title: 'Knowledge model design & editing',
