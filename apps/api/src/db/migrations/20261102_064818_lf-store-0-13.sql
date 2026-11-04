@@ -3,7 +3,7 @@
 -- for the re-send window, the write ledger, listen states, failed runs and
 -- releases for the records door, unjudged arrivals, a delivery's request and
 -- the `poll` source, and the run lease's arrival mark. The callback and
--- correlation tables stay until their runs are settled.
+-- correlation tables stay while any automation is pinned to 0.12.
 
 SET search_path = automations, pg_catalog;
 
