@@ -31,20 +31,13 @@ import { isLfEngineTeam } from '../../lf_engine/team_engine';
 import { mapRecordingTriggerType } from '../triggers/router';
 import { describeDroppedReason } from '../triggers/dropped_reason';
 import { runMovementFiring, shippedMovementForTrigger } from './execute';
+import { CARRIED_RUN_NOW_NAME, carriedRunTriggerId } from './carried_names';
 import { carriedRunLaneOf } from './carried_run';
 
 /** The work kind a carried version's Run now is queued under. */
 export const CARRIED_RUN_WORK_KIND = 'run_carried';
 
-/** What a carried Run now's run is recorded as having fired through. */
-export const CARRIED_RUN_NOW_NAME = 'Run now';
-
-/** The trigger id a carried Run now's run is recorded under: the movement's
- *  own id, since there is no trigger row for a listen this platform does not
- *  fire. A runs list reads it beside the movement's listens. */
-export function carriedRunTriggerId(movementId: string): string {
-  return movementId;
-}
+export { CARRIED_RUN_NOW_NAME, carriedRunTriggerId } from './carried_names';
 
 const carriedRunRowSchema = z.object({
   teamId: teamIdSchema,

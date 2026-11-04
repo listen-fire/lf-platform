@@ -27,7 +27,7 @@ import { logger } from 'movement-engine/public/log';
 import { savedListens, type SavedListen } from '../../inbound/listen_door';
 import { listenEdgeKeysOf } from '../../inbound/listen_edge';
 import { resolveAndArm, resolvesListen } from '../../inbound/listen_resolve';
-import { registerWorkHandler } from '../../work/drain';
+import { registerWorkHandler, WorkKeepsTrying } from '../../work/drain';
 import { enqueueWork } from '../../work/store';
 import { withTeamContext } from './firing_context';
 import { recordMovementFailureIssue, resolveMovementIssuesOfClass } from './issues';
@@ -113,7 +113,7 @@ async function runBringUp(payload: unknown, ctx: WorkContext): Promise<void> {
         });
       }
     }
-    throw new Error(`listens not brought up at their providers: ${notUp.flatMap(({ name, why }) => why.map((line) => `${name}: ${line}`)).join('; ')}`);
+    throw new WorkKeepsTrying(`listens not brought up at their providers: ${notUp.flatMap(({ name, why }) => why.map((line) => `${name}: ${line}`)).join('; ')}`);
   });
 }
 

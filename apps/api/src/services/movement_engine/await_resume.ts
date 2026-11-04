@@ -9,6 +9,9 @@
 import { waitWakeOf, wakeWait, type StepperFor } from 'movement-engine/public/run-host';
 import { logger } from 'movement-engine/public/log';
 
+import { correlatedAwaitsLane, type CarriedStepperFor } from '@listen-fire/language-versions';
+import { z } from 'zod';
+
 import type { WorkHandler } from '../work/kinds';
 
 import { getAutomationsQb } from '../../lib/kysely';
@@ -16,7 +19,8 @@ import { registerWorkHandler, WorkDeferred } from '../work/drain';
 import { createSingleFlight } from './single_flight';
 import { hostedLeaseOptions, hostedRunHost } from './run_host';
 import { triggerRunIdOf } from './run_host_store';
-import { parkedRunStep } from './resume_step';
+import { carriedRunHost } from './carried_host';
+import { carriedRunStep, parkedRunStep } from './resume_step';
 
 // Single-flight per run (F18/F21): concurrent wakes for the SAME run
 // coalesce — one drain runs, gathering ALL of that run's currently-resolvable
@@ -35,6 +39,31 @@ export const runResumeSlot = createSingleFlight<string>();
 
 export const awaitStepper: StepperFor = ({ runId, lease }) => parkedRunStep({ runId: triggerRunIdOf(runId), lease, log: 'AwaitResume' });
 
+export const carriedStepper: CarriedStepperFor = ({ runId, lease }) => carriedRunStep({ runId: triggerRunIdOf(runId), lease, log: 'AwaitResume' });
+
+/** A wake that names an adapter identity rather than a wait: a run parked on a
+ *  key, as 0.12 parks one, which only a version that parks on keys steps. */
+const correlatedWakeSchema = z.object({ adapterType: z.string(), teamId: z.string(), correlationKey: z.string() });
+
+/** Drives each run parked on one adapter identity, by its version's own rules. */
+async function resumeCorrelated(wake: z.infer<typeof correlatedWakeSchema>): Promise<void> {
+  const lane = correlatedAwaitsLane();
+  if (lane === undefined) {
+    logger.warn('[AwaitResume] a wake_await row names a key, and no version this platform carries parks on keys: dropped', { wake });
+    return;
+  }
+  const { wakeAwaits } = await lane();
+  const { busy } = await logged({ ...wake }, () =>
+    wakeAwaits(carriedRunHost(), {
+      wake,
+      stepper: carriedStepper,
+      around: (runId, body) => runResumeSlot.coalesce(runId, body),
+      lease: hostedLeaseOptions(),
+    }),
+  );
+  if (busy.length > 0) throw new WorkDeferred(`run ${busy.join(', ')} is held by another process`);
+}
+
 /**
  * One wait's wake: drive its run through the per-run slot (this process's
  * own wakes of a run collapse onto one pass), then the run's lease (no other
@@ -44,8 +73,8 @@ export const awaitStepper: StepperFor = ({ runId, lease }) => parkedRunStep({ ru
 export async function resumeWait(payload: unknown): Promise<void> {
   const wake = waitWakeOf(payload);
   if (wake === null) {
-    // A row of the release before waits (an adapter identity): its parks were
-    // failed by the migration that retired correlations, so nothing waits on it.
+    const correlated = correlatedWakeSchema.safeParse(payload);
+    if (correlated.success) return resumeCorrelated(correlated.data);
     logger.warn('[AwaitResume] a wake_await row names no wait: dropped', { payload });
     return;
   }

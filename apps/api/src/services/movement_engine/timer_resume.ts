@@ -28,7 +28,7 @@
 
 import { sql } from 'kysely';
 import { z } from 'zod';
-import { drainDueTimers, nextTimerWake } from 'movement-engine/public/run-host';
+import { nextTimerWake } from 'movement-engine/public/run-host';
 import { armTimerWake, settleIfCancelRequested, timerWorkKey } from 'movement-engine/public/run-host';
 import { neverAsAny } from 'movement-engine/public/types';
 
@@ -43,7 +43,7 @@ import { ORPHAN_AFTER, withRunLease, type HeldRunLease } from './run_lease';
 import { registerWorkHandler } from '../work/drain';
 import { hostedRunHost } from './run_host';
 import { postgresRunHostStore } from './run_host_store';
-import { parkedRunStep } from './resume_step';
+import { parkedRunDriver } from './resume_step';
 
 export { timerWorkKey };
 
@@ -215,8 +215,8 @@ export async function resumeTimerParkedRun(
   if (await settleIfCancelRequested(host, { runId: run.runId, ...(lease !== undefined ? { fence: lease.token } : {}) })) return 'done';
   const due = await host.store.parks.leaves({ runId: run.runId, parkedOnly: true, reason: 'timer', dueBy: now.toISOString() });
   if (due.length === 0) return 'done';
-  const step = await parkedRunStep({ runId: run.runId, ...(lease !== undefined ? { lease } : {}), log: 'TimerResume' });
-  if (step === null) return 'done';
-  const drained = await drainDueTimers(host, { runId: run.runId, teamId: run.teamId, dueBy: now.toISOString(), ...(lease !== undefined ? { lease } : {}), step });
+  const driver = await parkedRunDriver({ runId: run.runId, ...(lease !== undefined ? { lease } : {}), log: 'TimerResume' });
+  if (driver === null) return 'done';
+  const drained = await driver.drainDueTimers({ dueBy: now.toISOString() });
   return drained === 'leaseLost' ? 'lease_lost' : 'done';
 }

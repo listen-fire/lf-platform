@@ -85,6 +85,7 @@ import { movementCatalogForTeam, type ImportedFile } from './catalog';
 import { getAutomationsQb } from '../../../lib/kysely';
 import { listenPauses } from '../../inbound/listen_pause';
 import { settleRunsParkedOnTriggers } from '../../interaction/run_failure';
+import { loadPinnedVersion } from './version_store';
 import {
   automationUrl,
   automationsUrl,
@@ -887,14 +888,22 @@ export function liveDeployCheckDeps(release: DeployCheckRelease): DeployCheckDep
         .execute();
       if (triggers.length === 0) return;
       const triggerIds = triggers.map((t) => t.id);
-      await settleRunsParkedOnTriggers({
-        triggerIds,
-        reason: 'This run was waiting under an earlier release; its automation stopped at the upgrade. Upgrade the automation, then run it again.',
-      });
+      // A run its version resumes keeps going, on its own engine: only a version
+      // that does not resume has its waiting runs settled here.
+      const resumes = refusalOf(movement.languageVersion, 'resume') === undefined;
+      if (!resumes) {
+        await settleRunsParkedOnTriggers({
+          triggerIds,
+          reason: 'This run was waiting under an earlier release; its automation stopped at the upgrade. Upgrade the automation, then run it again.',
+        });
+      }
       // A paused row stays: it is the only record of the pause, and the upgrade
-      // that brings this automation back must find it. It fires nothing here.
+      // that brings this automation back must find it. It fires nothing here. A
+      // row a waiting run names stays too: the run reads what it fired through
+      // from it when it resumes.
       const pauses = await listenPauses({ teamId: movement.teamId as TeamId, triggerIds });
-      const unpaused = triggers.filter((t) => t.run_mode !== 'off' && !pauses.has(t.id)).map((t) => t.id);
+      const named = resumes ? await triggersWaitingRunsName(triggerIds) : new Set<string>();
+      const unpaused = triggers.filter((t) => t.run_mode !== 'off' && !pauses.has(t.id) && !named.has(t.id)).map((t) => t.id);
       if (unpaused.length === 0) return;
       await getAutomationsQb(['trigger']).deleteFrom('trigger').where('id', 'in', unpaused).execute();
     },
@@ -1007,6 +1016,70 @@ export type UpgradeMovementResult =
       detail?: string;
     };
 
+/** The triggers of `triggerIds` a run parked on a leaf still names. */
+async function triggersWaitingRunsName(triggerIds: readonly string[]): Promise<Set<string>> {
+  const rows = await getAutomationsQb(['trigger_run', 'parked_run'])
+    .selectFrom('trigger_run')
+    .innerJoin('parked_run', 'parked_run.run_id', 'trigger_run.id')
+    .where('trigger_run.host', '=', 'platform')
+    .where('trigger_run.trigger_id', 'in', [...triggerIds])
+    .select('trigger_run.trigger_id')
+    .distinct()
+    .execute();
+  return new Set(rows.map((row) => row.trigger_id));
+}
+
+/** Why a member of an upgrading group cannot move yet, whatever its diagnostics:
+ *  one line per reason, each naming the member. */
+async function holdsOnMoving(group: readonly MovementRow[]): Promise<string[]> {
+  const holds: string[] = [];
+  for (const member of group) {
+    // An upgrade rewrites and ships the latest text. An edit that stopped at
+    // needs confirmation has not shipped, so moving it would put behaviour nobody
+    // confirmed live.
+    if (member.currentVersionId !== null) {
+      const shipped = await loadPinnedVersion(member.currentVersionId);
+      if (shipped !== null && shipped.source !== member.source) {
+        holds.push(`${member.name} has an edit waiting for confirmation, which an upgrade would put live: confirm or discard that edit first`);
+      }
+    }
+  }
+  const held = await runsWaitingOnKeys(group.map((member) => member.id));
+  for (const member of group) {
+    const runs = held.get(member.id);
+    if (runs !== undefined) {
+      holds.push(
+        `${member.name} has ${runs.length === 1 ? 'a run' : `${runs.length} runs`} waiting on a callback or an await under its current language version (${runs.join(', ')}), which only that version can resume: it stays there until they finish, or cancel them first`,
+      );
+    }
+  }
+  return holds;
+}
+
+/** The runs of each movement parked on a key: an await correlated to an adapter
+ *  identity, or a callback still taking calls. Those are written only under a
+ *  version that parks on keys, and a person's or a system's call reaches them by
+ *  that key, so the automation stays on that version until they finish. */
+async function runsWaitingOnKeys(movementIds: readonly string[]): Promise<Map<string, string[]>> {
+  const rows = await getAutomationsQb(['trigger_run', 'movement_version', 'adapter_await', 'callback'])
+    .selectFrom('trigger_run')
+    .innerJoin('movement_version', 'movement_version.id', 'trigger_run.movement_version_id')
+    .where('movement_version.movement_id', 'in', [...movementIds] as MovementId[])
+    .where('trigger_run.host', '=', 'platform')
+    .where('trigger_run.status', 'in', ['running', 'parked'])
+    .where((eb) =>
+      eb.or([
+        eb.exists(eb.selectFrom('adapter_await').select('adapter_await.id').whereRef('adapter_await.run_id', '=', 'trigger_run.id')),
+        eb.exists(eb.selectFrom('callback').select('callback.id').whereRef('callback.run_id', '=', 'trigger_run.id').where('callback.status', '=', 'live')),
+      ]),
+    )
+    .select(['movement_version.movement_id', 'trigger_run.id'])
+    .execute();
+  const byMovement = new Map<string, string[]>();
+  for (const row of rows) byMovement.set(row.movement_id, [...(byMovement.get(row.movement_id) ?? []), row.id]);
+  return byMovement;
+}
+
 /** One member of the group, checked for the move. */
 interface CheckedMember {
   movement: MovementRow;
@@ -1073,6 +1146,17 @@ export async function upgradeMovement(input: {
 
   const all = input.applyAllFixes === true;
   const group = importGroupOf(movement, await listMovementRows(input.teamId));
+  const holds = await holdsOnMoving(group);
+  if (holds.length > 0) {
+    const others = group.filter((member) => member.id !== movement.id);
+    return {
+      status: 'blocked',
+      ...base,
+      ...(others.length > 0 ? { movesWith: others.map((member) => ({ automation: { id: member.id, name: member.name } })) } : {}),
+      diagnostics: [],
+      detail: `${holds.join('; ')}${others.length > 0 ? '; it moves together with the automations and libraries it shares imports with, so nothing moved' : ''}`,
+    };
+  }
   const movingWith = new Map<string, ImportedFile>();
   const checked: CheckedMember[] = [];
   for (const member of group) {

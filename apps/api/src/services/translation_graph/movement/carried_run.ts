@@ -16,10 +16,12 @@ import { MovementEngineError, MovementRunFailed, type MovementEngineErrorCode } 
 import { logger } from 'movement-engine/public/log';
 import { inProcessValidationDefault } from 'module-kit';
 import {
-  resumeRefusal,
   runningOf,
   type CarriedEvent,
+  type CarriedParks,
   type ModulePlatform,
+  type ResumeRequest,
+  type ResumingLane,
   type RunPlatform,
   type RunningLane,
   type SegmentOutcome,
@@ -34,6 +36,12 @@ import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
 import type { DbCancelGate } from '../../movement_engine/cancel_gate';
 
+import type { TriggerRunRecorder } from '../runs/trigger_run';
+
+import { callbackUrl } from '../../movement_engine/callback_store';
+import { carriedRunHost } from '../../movement_engine/carried_host';
+import { markRunLimitPaused } from '../../movement_engine/limit_pause';
+import { notifyWork } from '../../work/drain';
 import { RunLeaseLost } from '../../movement_engine/run_lease';
 import { teamCredentials } from '../../credentials/credential_ownership';
 import { writeKeeper } from '../../inbound/loop_breaker';
@@ -94,6 +102,7 @@ export function runPlatformFor(input: {
   cancel: DbCancelGate;
   lease?: { isLost(): boolean };
   writeSink?: DryRunWriteSink;
+  parks?: CarriedParks;
 }): RunPlatform {
   const shared = sharedRunServices({
     teamId: input.teamId,
@@ -129,6 +138,21 @@ export function runPlatformFor(input: {
     },
     ...(keep !== undefined ? { keepWrite: keep } : {}),
     ...(input.writeSink !== undefined ? { writeSink: input.writeSink } : {}),
+    ...(input.parks !== undefined ? { parks: input.parks } : {}),
+  };
+}
+
+/** Where one segment's parks and callbacks go: through its recorder, so the run
+ *  row is there first and shows parked, under the lease it holds. */
+export function carriedParksOf(recorder: TriggerRunRecorder, lease?: { token: string }): CarriedParks {
+  return {
+    host: carriedRunHost(),
+    ...(lease !== undefined ? { fence: lease.token } : {}),
+    ensureRun: () => recorder.ensureStarted(),
+    markParked: () => recorder.markParked(),
+    markLimitPaused: (pause) => markRunLimitPaused({ runId: recorder.triggerRunId, teamId: recorder.teamId, triggerId: recorder.triggerId, pause }),
+    callbackUrl,
+    notifyWork,
   };
 }
 
@@ -209,8 +233,8 @@ function stripCode(message: string, code: string): string {
  * Runs one segment of `source` under its carried `pin` from its first
  * statement, against the team's files on the same version (their shipped text
  * for a firing, their live text for a test run), and answers its result as
- * this release reads one. A segment that tries to park is stopped with the
- * registry's resume refusal: this platform does not resume `pin`'s runs.
+ * this release reads one. Its parks go through `parks`; a rehearsal has none,
+ * and never parks.
  */
 export async function runCarriedSegment(input: {
   lane: RunningLane;
@@ -230,6 +254,7 @@ export async function runCarriedSegment(input: {
   writeSink?: DryRunWriteSink;
   costCapMicrodollars?: number;
   team?: TeamFacts;
+  parks?: CarriedParks;
 }): Promise<MovementRunResult> {
   const team = input.team ?? (await teamFactsOf(input.teamId, { imports: input.imports }));
   const outcome = await input.lane.runSegment(
@@ -245,7 +270,6 @@ export async function runCarriedSegment(input: {
       ...(input.dryRun !== undefined ? { dryRun: input.dryRun } : {}),
       team,
       ...(input.trace !== undefined ? { trace: input.trace } : {}),
-      parkRefusal: resumeRefusal(input.pin) ?? `language ${input.pin}'s runs resume on this platform`,
     },
     runPlatformFor({
       teamId: input.teamId,
@@ -253,7 +277,33 @@ export async function runCarriedSegment(input: {
       cancel: input.cancel,
       ...(input.lease !== undefined ? { lease: input.lease } : {}),
       ...(input.writeSink !== undefined ? { writeSink: input.writeSink } : {}),
+      ...(input.parks !== undefined ? { parks: input.parks } : {}),
     }),
   );
   return settledOutcome(outcome, { runId: input.triggerRunId ?? 'a test run', movementName: input.movementName ?? '' });
+}
+
+/** One segment of a run a carried version parked, on that version's engine, from
+ *  the pinned text and the version's own event and state. */
+export async function resumeCarriedSegment(input: {
+  lane: ResumingLane;
+  request: Omit<ResumeRequest, 'team'>;
+  teamId: TeamId;
+  triggerRunId: TriggerRunId;
+  cancel: DbCancelGate;
+  lease?: { isLost(): boolean };
+  parks: CarriedParks;
+}): Promise<MovementRunResult> {
+  const team = await teamFactsOf(input.teamId, { imports: 'shipped' });
+  const outcome = await input.lane.resumeSegment(
+    { ...input.request, team },
+    runPlatformFor({
+      teamId: input.teamId,
+      triggerRunId: input.triggerRunId,
+      cancel: input.cancel,
+      ...(input.lease !== undefined ? { lease: input.lease } : {}),
+      parks: input.parks,
+    }),
+  );
+  return settledOutcome(outcome, { runId: input.triggerRunId, movementName: input.request.movementName ?? '' });
 }

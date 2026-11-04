@@ -31,6 +31,7 @@ import { logger } from 'movement-engine/public/log';
 import { answerAskByToken, type AskDoorOutcome } from '../asks/doors';
 import { parseAskLink } from '@listen-fire/ask/link';
 import { isRetiredCallbackId, RETIRED_CALLBACK_TEXT } from '../interaction/retired_callback';
+import { answerCallbackTap } from '../movement_engine/callback_fire';
 
 /** What the door needs of a bot: the two Bot API calls that close a tap.
  *  `TelegramAdapter` satisfies it structurally — narrow on purpose, so the door
@@ -103,9 +104,10 @@ export async function handleTelegramCallbackQuery(input: {
   if (!query || query.data === undefined) return { handled: false };
 
   if (isRetiredCallbackId(query.data)) {
-    await ack(input.responder, query, RETIRED_CALLBACK_TEXT);
-    await retireKeyboard(input.responder, query);
-    return { handled: true, outcome: 'retired' };
+    const answered = await answerCallbackTap(query.data);
+    await ack(input.responder, query, answered.text);
+    if (answered.served) await retireKeyboard(input.responder, query);
+    return { handled: true, outcome: answered.text === RETIRED_CALLBACK_TEXT ? 'retired' : 'answered' };
   }
 
   const link = parseAskLink(query.data);

@@ -43,6 +43,17 @@ export interface DrainResult {
   claimFailed: boolean;
 }
 
+/** Thrown by a handler whose failure is expected and already reported where a
+ *  person will see it (a credential that stays unusable): the row retries with
+ *  backoff like any failure, its attempts counted, and the worker is not sick,
+ *  so the pass is not marked failing. */
+export class WorkKeepsTrying extends Error {
+  constructor(reason: string) {
+    super(reason);
+    this.name = 'WorkKeepsTrying';
+  }
+}
+
 /** Thrown by a handler whose work cannot happen yet (the run it would step is
  *  held by another process): the row is released to retry with backoff, not
  *  completed, and the pass is not marked failing. */
@@ -228,6 +239,12 @@ async function runRow(input: {
         return 'deferred';
       }
       await announceWork(row.kind, dueAt);
+      return 'deferred';
+    }
+    if (error instanceof WorkKeepsTrying) {
+      logger.info('[work] handler keeps trying; releasing for retry', { kind: row.kind, key: row.key, attempts: row.attempts, reason: error.message });
+      clearInterval(timer);
+      await releaseWithBackoff({ row, leaseToken, clock });
       return 'deferred';
     }
     // Handlers own failure recording; the drain only makes the row retry at its due_at.

@@ -24,6 +24,7 @@ import { getAutomationsQb, getQb } from '../../../lib/kysely';
 import { costMicrodollarsToUsd } from '../../../lib/llm_usage';
 import { mq } from '../../../lib/message_queue';
 import { logger } from 'movement-engine/public/log';
+import { revokeRunCallbacks } from '../../movement_engine/callback_store';
 import {
   startOpsRun,
   addOpsRunMessage,
@@ -838,6 +839,16 @@ export class TriggerRunRecorder {
         logger.warn('[trigger_run] not settled: the run lease is no longer this segment\'s', { runId: this.id });
         return;
       }
+
+      // A run that ends revokes its live callbacks, however it ended: a callback
+      // is something only the running run can react to. Only a carried version
+      // (0.12) mints one.
+      await revokeRunCallbacks(this.id).catch((revokeErr) => {
+        logger.warn('[trigger_run] failed to revoke run callbacks', {
+          runId: this.id,
+          error: revokeErr instanceof Error ? revokeErr.message : String(revokeErr),
+        });
+      });
 
       // Best-effort live signal — a publish failure must never affect the firing.
       mq.triggerRuns.recorded

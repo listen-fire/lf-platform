@@ -3,7 +3,6 @@
 // together through the run-host core's drain.
 
 import { MovementEngineError } from 'movement-engine/public/errors';
-import { drainRun } from 'movement-engine/public/run-host';
 
 import type { TriggerRunId } from '../../generated/kysely/automations/TriggerRun';
 import type { HeldRunLease } from './run_lease';
@@ -11,8 +10,7 @@ import type { HeldRunLease } from './run_lease';
 import { getAutomationsQb } from '../../lib/kysely';
 import { runSpentMicrodollars } from '../translation_graph/runs/trigger_run';
 import { readLimitPause } from './limit_pause';
-import { hostedRunHost } from './run_host';
-import { parkedRunStep } from './resume_step';
+import { parkedRunDriver } from './resume_step';
 
 /**
  * Resume a run paused at a limit: lift the pause, reset its usage, and resume
@@ -51,8 +49,16 @@ export async function resumeLimitPausedRun(
 
   // The run's context loads once, and its absence refuses the resume before
   // the pause is lifted.
-  const step = await parkedRunStep({ runId, ...(lease !== undefined ? { lease } : {}), log: 'LimitPause' });
-  if (step === null) {
+  let resumed = 0;
+  const driver = await parkedRunDriver({
+    runId,
+    ...(lease !== undefined ? { lease } : {}),
+    log: 'LimitPause',
+    onLeaf: () => {
+      resumed += 1;
+    },
+  });
+  if (driver === null) {
     throw new MovementEngineError('MOVENG_RUNTIME', `run ${runId}'s automation or pinned version is gone — it cannot be resumed`);
   }
 
@@ -73,18 +79,7 @@ export async function resumeLimitPausedRun(
   // statement had finished replay from its journal). A flow that meets the cap
   // again pauses the run again, and the flows not yet reached stay paused
   // with it.
-  let resumed = 0;
-  await drainRun(hostedRunHost(), {
-    runId,
-    teamId: run.team_id,
-    leaves: { addresses: leaves.map((leaf) => leaf.address), reason: 'limit' },
-    ...(lease !== undefined ? { lease } : {}),
-    step: (request, settle) => {
-      if (request.kind === 'leaf') resumed += 1;
-      return step(request, settle);
-    },
-    until: () => runIsLimitPaused(runId),
-  });
+  await driver.drainLeaves({ addresses: leaves.map((leaf) => leaf.address), reason: 'limit', until: () => runIsLimitPaused(runId) });
   return { resumed };
 }
 

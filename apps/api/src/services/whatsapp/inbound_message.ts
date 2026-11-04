@@ -17,7 +17,8 @@ import { enqueueWork } from '../work/store';
 import { dispatchWhatsappMessage } from './dispatch';
 import { resolveWhatsappSender } from './utils';
 import { getMetaWhatsappApi } from './metaApi';
-import { isRetiredCallbackId, RETIRED_CALLBACK_TEXT } from '../interaction/retired_callback';
+import { isRetiredCallbackId } from '../interaction/retired_callback';
+import { answerCallbackTap } from '../movement_engine/callback_fire';
 
 declare module '../work/kinds' {
   interface UnitWorkKinds {
@@ -97,9 +98,10 @@ async function runWhatsappMessage(row: WhatsappMessageRow): Promise<void> {
   logger.info('Dispatched WhatsApp message', { messageId: message.id });
 
   const tapped = message.interactive?.button_reply?.id ?? message.interactive?.list_reply?.id;
-  if (isRetiredCallbackId(tapped)) {
+  if (tapped !== undefined && isRetiredCallbackId(tapped)) {
     try {
-      await getMetaWhatsappApi(businessPhoneNumberId).sendTextMessage(message.from, RETIRED_CALLBACK_TEXT, { replyToMessageId: message.id });
+      const { text } = await answerCallbackTap(tapped);
+      await getMetaWhatsappApi(businessPhoneNumberId).sendTextMessage(message.from, text, { replyToMessageId: message.id });
     } catch (error) {
       logger.warn('[whatsapp/webhook] telling the tapper a callback button was retired failed', {
         messageId: message.id,

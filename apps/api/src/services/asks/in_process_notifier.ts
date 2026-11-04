@@ -20,7 +20,9 @@ import type { AskRecord } from './store';
 import { ASK_ADAPTER_TYPE, RESPONSE_EDGE_NAME, responseArrival } from '@listen-fire/ask';
 import { registerAskSettledNotifier } from './notifier';
 import { deliverArrivals } from '../inbound/listen_door';
+import { getAutomationsQb } from '../../lib/kysely';
 import { notifyWork } from '../work/drain';
+import { enqueueWork } from '../work/store';
 
 /** The ask's settle, delivered as its `Response`'s arrival. The ask's id
  *  names the delivery, so a settle told twice is kept once. */
@@ -37,7 +39,27 @@ export async function deliverSettle(ask: AskRecord): Promise<void> {
     source: 'hook',
     arrivals: [arrival],
   });
+  await wakeRunsParkedOnAsk(ask);
   notifyWork();
+}
+
+/** A run parked on this ask under 0.12 waits on the ask's id as a key, not on a
+ *  wait: it is woken by a `wake_await` row, as production woke it. One row per
+ *  ask, however often the settle is told. */
+export async function wakeRunsParkedOnAsk(ask: Pick<AskRecord, 'id' | 'teamId'>): Promise<void> {
+  const parked = await getAutomationsQb(['adapter_await'])
+    .selectFrom('adapter_await')
+    .where('adapter_type', '=', ASK_ADAPTER_TYPE)
+    .where('correlation_key', '=', ask.id)
+    .select('run_id')
+    .executeTakeFirst();
+  if (parked === undefined) return;
+  await enqueueWork({
+    kind: 'wake_await',
+    key: `wake_await:ask_closed:${ask.id}`,
+    teamId: ask.teamId,
+    payload: { adapterType: ASK_ADAPTER_TYPE, teamId: ask.teamId, correlationKey: ask.id },
+  });
 }
 
 export function notifyEngineOfSettledAsks(): void {

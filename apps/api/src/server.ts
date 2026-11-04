@@ -81,6 +81,7 @@ import { slackEventsRouter } from './interfaces/rest/slackEvents';
 import { slackInteractivityRouter } from './interfaces/rest/slackInteractivity';
 import { filesRouter } from './interfaces/rest/files';
 import { asksRouter } from './interfaces/rest/asks';
+import { callbacksRouter } from './interfaces/rest/callbacks';
 import { storyRouter } from './interfaces/rest/story';
 import { connectRouter } from './interfaces/rest/connect';
 import { initialiseWebSockets } from './lib/webSockets';
@@ -241,6 +242,7 @@ async function main() {
   // here wherever EITHER product is.
   if (mounts('asks') || mounts('automations')) {
     app.use('/api/asks', asksRouter);
+    app.use('/api/cb', callbacksRouter);
   }
   // MCP OAuth is core's (D7): the authorization server, its metadata, and the
   // 401 challenge that starts a connector's flow. A static-stub deployment

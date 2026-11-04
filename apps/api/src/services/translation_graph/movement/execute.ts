@@ -28,7 +28,7 @@ import type { AnyParkedScopeState } from 'engine-contracts';
 import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 
-import { refusalOf, type CarriedEvent, type RunningCapability } from '@listen-fire/language-versions';
+import { refusalOf, type CarriedEvent, type ResumingLane, type RunningCapability } from '@listen-fire/language-versions';
 import { neverAsAny } from 'movement-engine/public/types';
 import { isLegacyLanguageVersion } from 'legacy-lang';
 import { describeError } from 'movement-engine/public/errors';
@@ -36,7 +36,7 @@ import { logger } from 'movement-engine/public/log';
 import { refuseHeldRun, runMovement, resumeMovement, settleRaceFrame } from '@listen-fire/legacy-engine/dispatch';
 import { MovementRunFailed, runFailureCause, type CancelGate, type MovementRunResult } from 'movement-engine/public/movement-engine';
 import { makeDbCancelGate, type DbCancelGate } from '../../movement_engine/cancel_gate';
-import { carriedRunLaneOf, runCarriedSegment } from './carried_run';
+import { carriedParksOf, carriedRunLaneOf, resumeCarriedSegment, runCarriedSegment } from './carried_run';
 import { failRunAndCancelRequests } from '../../interaction/run_failure';
 import { LlmUsageContext } from '../../../lib/llm_usage';
 import { runCostCapFromEnv } from 'movement-engine/public/models';
@@ -115,6 +115,7 @@ async function interpretMovementFiring(input: {
         ...(input.trace !== undefined ? { trace: input.trace } : {}),
         ...(input.dryRun !== undefined ? { dryRun: input.dryRun } : {}),
         costCapMicrodollars: runCostCapFromEnv(),
+        ...(input.parksInto !== undefined ? { parks: carriedParksOf(input.parksInto, input.lease) } : {}),
       });
     }
   }
@@ -627,8 +628,14 @@ type ResumeFiringInput = {
   movementId: string;
   event: TriggerEvent;
   recordingTriggerType: TriggerRunTriggerType;
-  /** The parked leaf's serialised scope (`parked_run.state`). */
-  state: AnyParkedScopeState;
+  /** The parked leaf's serialised scope (`parked_run.state`), as this release
+   *  reads it. */
+  state?: AnyParkedScopeState;
+  /** The version whose own engine steps the run, and the event in its shape;
+   *  absent when this release's engines do. */
+  carried?: { lane: ResumingLane; event: CarriedEvent };
+  /** The parked leaf's scope under `carried`: that version's, unread here. */
+  carriedState?: unknown;
   /** The validated answer to bind as the ask's result. Absent under `reenter`
    *  (an await / recurring-timer resume re-enters at its statement, binding
    *  nothing). */
@@ -665,6 +672,67 @@ type ResumeFiringInput = {
   lease?: HeldRunLease;
 };
 
+/** One segment of a parked run on this release's engines. */
+async function resumeOnThisRelease(
+  input: ResumeFiringInput,
+  context: { recorder: TriggerRunRecorder; movementName: string | undefined; cancelGate: DbCancelGate },
+): Promise<MovementRunResult> {
+  const { recorder, movementName, cancelGate } = context;
+  const languageVersion = input.pinnedLanguageVersion;
+  refuseHeldRun(languageVersion, 'resume');
+  if (input.state === undefined) throw new Error(`run ${input.runId} is resumed on this release with no park state`);
+  const teamCatalog = await runCatalogSnapshotForTeam(input.teamId, {
+    source: input.pinnedSource,
+    languageVersion,
+    imports: 'shipped',
+  });
+  const commonInput = {
+    source: input.pinnedSource,
+    languageVersion,
+    ...(movementName !== undefined ? { movementName } : {}),
+    event: engineEvent(input),
+    teamId: tenantOfTeam(input.teamId),
+    // The ORIGINAL firing's instant, read back off the run row by
+    // `adoptOpsRun()` above: a run that waited a day on an answer still
+    // computes the window it started with.
+    firedAt: recorder.firedAt.toISOString(),
+    // What the run spent before it parked, read back with its clock: the
+    // cost cap is the run's, not the segment's — counted from the run's last
+    // resume from a limit pause, which reset its usage. The cap is read
+    // afresh: a run resumed after ops raised it meets the new one.
+    costCapMicrodollars: runCostCapFromEnv(),
+    priorSpentMicrodollars: recorder.priorSpentMicrodollars,
+    capBaselineMicrodollars: recorder.capBaselineMicrodollars,
+    // A run paused at its cost limit stays paused: a branch woken by its own
+    // event takes it, then suspends before its next statement.
+    limitPaused: recorder.limitPaused,
+    // The engine that parked it, read back with the rest: the resume goes
+    // back to it (`engineRoute`), whatever the emergency switch says now.
+    ...(recorder.parkedOnEngine !== undefined ? { parkedOnEngine: recorder.parkedOnEngine } : {}),
+    catalog: teamCatalog.snapshot,
+    credentialIds: teamCatalog.credentialIds,
+    runId: input.runId,
+    // A resumed run can re-park at a deeper ask — it gets live parks too.
+    host: productionEngineHost({
+      teamId: input.teamId,
+      triggerRunId: input.runId,
+      parksInto: recorder,
+      ...(input.lease !== undefined ? { lease: input.lease } : {}),
+      ...(input.resumedLeaf !== undefined ? { resumedLeaf: input.resumedLeaf } : {}),
+      cancel: cancelGate,
+    }),
+    state: input.state,
+  };
+  return input.settleRaceFrameAddress !== undefined
+    ? settleRaceFrame({ ...commonInput, frameAddress: input.settleRaceFrameAddress })
+    : resumeMovement({
+        ...commonInput,
+        ...(input.answer !== undefined ? { answer: input.answer } : {}),
+        ...(input.reenter !== undefined ? { reenter: input.reenter } : {}),
+        ...(input.deferRaceSettlement !== undefined ? { deferRaceSettlement: input.deferRaceSettlement } : {}),
+      });
+}
+
 /** A parked run stepping forward: an ask answered, an await settled, a timer
  *  woken, or a race frame settling its winners. */
 export async function resumeMovementFiring(
@@ -699,60 +767,36 @@ async function resumeMovementFiringInContext(
   });
   try {
     const languageVersion = input.pinnedLanguageVersion;
-    refuseHeldRun(languageVersion, 'resume');
-    const teamCatalog = await runCatalogSnapshotForTeam(input.teamId, {
-      source: input.pinnedSource,
-      languageVersion,
-      imports: 'shipped',
-    });
-    const commonInput = {
-      source: input.pinnedSource,
-      languageVersion,
-      ...(movementName !== undefined ? { movementName } : {}),
-      event: engineEvent(input),
-      teamId: tenantOfTeam(input.teamId),
-      // The ORIGINAL firing's instant, read back off the run row by
-      // `adoptOpsRun()` above: a run that waited a day on an answer still
-      // computes the window it started with.
-      firedAt: recorder.firedAt.toISOString(),
-      // What the run spent before it parked, read back with its clock: the
-      // cost cap is the run's, not the segment's — counted from the run's last
-      // resume from a limit pause, which reset its usage. The cap is read
-      // afresh: a run resumed after ops raised it meets the new one.
-      costCapMicrodollars: runCostCapFromEnv(),
-      priorSpentMicrodollars: recorder.priorSpentMicrodollars,
-      capBaselineMicrodollars: recorder.capBaselineMicrodollars,
-      // A run paused at its cost limit stays paused: a branch woken by its own
-      // event takes it, then suspends before its next statement.
-      limitPaused: recorder.limitPaused,
-      // The engine that parked it, read back with the rest: the resume goes
-      // back to it (`engineRoute`), whatever the emergency switch says now.
-      ...(recorder.parkedOnEngine !== undefined ? { parkedOnEngine: recorder.parkedOnEngine } : {}),
-      catalog: teamCatalog.snapshot,
-      credentialIds: teamCatalog.credentialIds,
-      runId: input.runId,
-      // A resumed run can re-park at a deeper ask — it gets live parks too.
-      host: productionEngineHost({
-        teamId: input.teamId,
-        triggerRunId: input.runId,
-        parksInto: recorder,
-        ...(input.lease !== undefined ? { lease: input.lease } : {}),
-        ...(input.resumedLeaf !== undefined ? { resumedLeaf: input.resumedLeaf } : {}),
-        cancel: cancelGate,
-      }),
-      state: input.state,
-    };
-    const resumeFiring = () =>
-      input.settleRaceFrameAddress !== undefined
-        ? settleRaceFrame({ ...commonInput, frameAddress: input.settleRaceFrameAddress })
-        : resumeMovement({
-            ...commonInput,
-            ...(input.answer !== undefined ? { answer: input.answer } : {}),
-            ...(input.reenter !== undefined ? { reenter: input.reenter } : {}),
-            ...(input.deferRaceSettlement !== undefined
-              ? { deferRaceSettlement: input.deferRaceSettlement }
-              : {}),
-          });
+    const { carried } = input;
+    const resumeFiring = carried !== undefined
+      ? () =>
+          resumeCarriedSegment({
+            lane: carried.lane,
+            teamId: input.teamId,
+            triggerRunId: input.runId,
+            cancel: cancelGate,
+            ...(input.lease !== undefined ? { lease: input.lease } : {}),
+            parks: carriedParksOf(recorder, input.lease),
+            request: {
+              source: input.pinnedSource,
+              pin: languageVersion,
+              ...(movementName !== undefined ? { movementName } : {}),
+              event: carried.event,
+              teamId: input.teamId,
+              firedAt: recorder.firedAt.toISOString(),
+              runId: input.runId,
+              costCapMicrodollars: runCostCapFromEnv(),
+              priorSpentMicrodollars: recorder.priorSpentMicrodollars,
+              capBaselineMicrodollars: recorder.capBaselineMicrodollars,
+              limitPaused: recorder.limitPaused,
+              ...(recorder.parkedOnEngine !== undefined ? { parkedOnEngine: recorder.parkedOnEngine } : {}),
+              state: input.carriedState,
+              ...(input.reenter !== undefined ? { reenter: input.reenter } : {}),
+              ...(input.deferRaceSettlement !== undefined ? { deferRaceSettlement: input.deferRaceSettlement } : {}),
+              ...(input.settleRaceFrameAddress !== undefined ? { settleRaceFrameAddress: input.settleRaceFrameAddress } : {}),
+            },
+          })
+      : () => resumeOnThisRelease(input, { recorder, movementName, cancelGate });
     const result = await new LlmUsageContext({
       teamId: input.teamId as unknown as string,
       triggerRunId: input.runId as unknown as string,
@@ -862,6 +906,111 @@ async function resumeMovementFiringInContext(
     }).catch(() => {});
     return { result: null, error: message };
   }
+}
+
+/**
+ * Run a fired callback's body as a SEGMENT of its owning run, on the engine of
+ * the version that minted it (`callback(…)` was retired in 0.13, so it is always
+ * a carried one). The run's team, billing and step ledger; no new run identity.
+ *
+ * It does not settle the run: the main continuation is parked and wakes through
+ * its own mechanism. A body that throws fails the SEGMENT and stops there: a
+ * failed side entry must not kill the primary await.
+ */
+export async function fireCallbackFiring(input: {
+  teamId: TeamId;
+  triggerId: string;
+  triggerName: string;
+  firedMovementName?: string;
+  pinnedSource: string;
+  pinnedLanguageVersion: LanguageVersion;
+  movementVersionId: string | null;
+  runId: TriggerRunId;
+  movementId: string;
+  event: TriggerEvent;
+  recordingTriggerType: TriggerRunTriggerType;
+  carried: { lane: ResumingLane; event: CarriedEvent };
+  /** The callback's captured closure: the minting version's, unread here. */
+  state: unknown;
+  values: Record<string, unknown>;
+  callIndex: number;
+  lease?: HeldRunLease;
+}): Promise<MovementFiringOutcome> {
+  return withFiringContext(input, async () => {
+    const recorder = new TriggerRunRecorder({
+      teamId: input.teamId,
+      triggerId: input.triggerId,
+      triggerType: input.recordingTriggerType,
+      triggerEvent: input.event,
+      movementVersionId: input.movementVersionId,
+      existingRunId: input.runId,
+    });
+    if (input.lease !== undefined) recorder.holdLease(input.lease);
+    const leaseContext = { runId: input.runId, movementId: input.movementId };
+    await recorder.adoptOpsRun();
+    const movementName = input.firedMovementName ?? firedMovementNameFromTriggerName(input.triggerName);
+    const cancelGate = makeDbCancelGate(recorder.triggerRunId, {
+      ...(input.lease !== undefined ? { lease: input.lease } : {}),
+    });
+    try {
+      const fire = () =>
+        resumeCarriedSegment({
+          lane: input.carried.lane,
+          teamId: input.teamId,
+          triggerRunId: input.runId,
+          cancel: cancelGate,
+          ...(input.lease !== undefined ? { lease: input.lease } : {}),
+          parks: carriedParksOf(recorder, input.lease),
+          request: {
+            source: input.pinnedSource,
+            pin: input.pinnedLanguageVersion,
+            ...(movementName !== undefined ? { movementName } : {}),
+            event: input.carried.event,
+            teamId: input.teamId,
+            // A body belongs to the run that minted it, clock included.
+            firedAt: recorder.firedAt.toISOString(),
+            runId: input.runId,
+            costCapMicrodollars: runCostCapFromEnv(),
+            priorSpentMicrodollars: recorder.priorSpentMicrodollars,
+            capBaselineMicrodollars: recorder.capBaselineMicrodollars,
+            ...(recorder.parkedOnEngine !== undefined ? { parkedOnEngine: recorder.parkedOnEngine } : {}),
+            state: input.state,
+            callback: { values: input.values, callIndex: input.callIndex },
+          },
+        });
+      const result = await new LlmUsageContext({
+        teamId: input.teamId as unknown as string,
+        triggerRunId: input.runId as unknown as string,
+        cancelGate,
+      }).runAsync(fire);
+      const lostBeforeSettle = leaseLostBeforeSettle(input.lease, leaseContext);
+      if (lostBeforeSettle !== null) return lostBeforeSettle;
+      recorder.recordMovementStep({
+        movementId: input.movementId,
+        movementName: result.movementName,
+        sourceAdapterType: input.event.adapterType,
+        result,
+      });
+      await recorder.snapshotSteps();
+      return { result };
+    } catch (err) {
+      const lost = leaseLostOutcome(err, leaseContext) ?? leaseLostBeforeSettle(input.lease, leaseContext);
+      if (lost !== null) return lost;
+      const { error, partial } = unwrapRunFailure(err);
+      const message = describeError(error);
+      logger.error('[MovementEngine] callback body failed', { triggerId: input.triggerId, movementId: input.movementId, runId: input.runId, error: message });
+      // The SEGMENT fails; the run does not.
+      recorder.recordStepFailure({
+        tgId: `movement:${input.movementId}`,
+        tgName: movementName ?? input.movementId,
+        sourceAdapterType: input.event.adapterType,
+        message,
+        ...(partial !== undefined ? { partial } : {}),
+      });
+      await recorder.snapshotSteps();
+      return { result: null, error: message };
+    }
+  });
 }
 
 /** Legacy fallback: recover the fired movement from the old name convention

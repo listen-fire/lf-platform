@@ -10,6 +10,7 @@ import type { LeaseOptions } from 'movement-engine/public/run-host';
 import type { RunHost, RunRecords } from 'movement-engine/public/run-host';
 
 import { getAutomationsQb } from '../../lib/kysely';
+import { closeCarriedRun } from './carried_records';
 import { settleRunEngineRecord } from './run_engine_record';
 import { postgresRunHostStore, triggerRunIdOf } from './run_host_store';
 
@@ -31,6 +32,9 @@ const hostedRunRecords: RunRecords = {
       .where('id', '=', triggerRunIdOf(runId))
       .where('status', 'in', ['running', 'parked'])
       .execute();
+    // A run a carried version parked leaves its correlations, open asks and
+    // live callbacks standing otherwise; every other run has none.
+    await closeCarriedRun(triggerRunIdOf(runId));
   },
 };
 

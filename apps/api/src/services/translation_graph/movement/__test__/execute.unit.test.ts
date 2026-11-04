@@ -599,12 +599,12 @@ describe('resumeMovementFiring', () => {
     expect(resumeMovement).toHaveBeenCalledWith(expect.objectContaining({ languageVersion: '1' }));
   });
 
-  it('a run parked under a version this build does not run is refused by the registry, before any catalog is assembled', async () => {
+  it("a run parked under a carried version is never handed to this release's engines: refused before any catalog is assembled", async () => {
     const outcome = await resumeMovementFiring({ ...resumeInput, pinnedLanguageVersion: '0.12.13', answer: true });
 
     expect(runCatalogSnapshotForTeam).not.toHaveBeenCalled();
     expect(resumeMovement).not.toHaveBeenCalled();
-    expect(outcome.error).toContain(resumeRefusal('0.12.13'));
+    expect(outcome.error).toContain("never on this release's");
   });
 
   it('resumes on the engine the run row says parked it', async () => {
