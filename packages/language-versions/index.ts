@@ -30,8 +30,8 @@
 // resolve the wrong release's packages.
 //
 // Each entry says what it provides its pins, one capability each: checking,
-// running a segment someone starts, resuming a parked run, and firing its
-// listens. Each is the current core's, the version's own through its
+// authoring help, running a segment someone starts, resuming a parked run, and
+// firing its listens. Each is the current core's, the version's own through its
 // package's façade, or held. A held capability refuses its pins with one text
 // per capability (`refusalOf`), never handing them to another version.
 
@@ -44,6 +44,9 @@ import {
   type HoverCard,
   type LanguageVersion,
 } from 'movement-lang';
+
+import type { StoryIR, StoryProblem, StoryValidityStatus } from 'legacy-lang';
+import type { AdapterEventPhraseVocabulary, BrandIcon } from 'movement-engine/public/adapter';
 
 import type { ListeningLane, ModulePlatform, ResumingLane, RunningLane } from './running';
 
@@ -129,15 +132,102 @@ export interface EditorRequest extends CheckRequest {
   offset: number;
 }
 
+/** The words a program's systems declare in a carried version, for the
+ *  platform's join: its display names, its brand marks and its event phrasing. */
+export interface StoryWords {
+  systems: Record<string, { label: string; icon: BrandIcon | null; eventPhrase?: AdapterEventPhraseVocabulary }>;
+  /** What an instance schema calls a record type, by `<adapter>::<type>`. */
+  recordLabels: Record<string, string>;
+}
+
+export interface StoryRequest extends CheckRequest {
+  /** The automation's name, as the platform knows it. */
+  name: string;
+  /** The platform's stored ruling on the program, carried in. */
+  validityStatus?: StoryValidityStatus;
+}
+
+/** A carried version's picture of a program: the projection is its own, over
+ *  its own parse and story analysis, and only the plain result crosses. A text
+ *  the version cannot read has no picture. */
+export type CarriedStory =
+  | { ok: true; story: StoryIR; words: StoryWords; gaps: { adapter: string; detail: string }[] }
+  | { ok: false; problems: StoryProblem[] };
+
 /** A carried version's own checker and editor service. The editor's answers
  *  are the language service's shapes, which a carried version must answer in
  *  exactly. */
 export interface CheckingLane {
   checkSource(request: CheckRequest): Promise<CheckedSource>;
+  storyOf(request: StoryRequest): Promise<CarriedStory>;
   completionsAt(request: EditorRequest): Promise<Completions>;
   hoverAt(request: EditorRequest): Promise<HoverCard | null>;
   definitionAt(request: EditorRequest): Promise<Definition | null>;
 }
+
+/** What of the deployment decides the systems a carried version documents. */
+export type DeploymentFacts = Pick<TeamFacts, 'kgChangeWebhooks' | 'mcpEnabled' | 'whatsappNumber'>;
+
+/** The handbook a carried version's pins are taught from, as plain text. */
+export interface CarriedHandbook {
+  /** The handbook's own release. */
+  release: string;
+  frontPage: string;
+  chapters: readonly { id: string; title: string; content: string }[];
+  intentIndex: readonly { intent: string; chapter: string; section?: string }[];
+}
+
+export interface CarriedSearchResult {
+  query: string;
+  results: readonly {
+    name: string;
+    kind: string;
+    purpose: string;
+    detail: string;
+    example?: string;
+    anchor?: string;
+  }[];
+  note: string;
+}
+
+/** A team's systems as a carried version reads them. */
+export interface SystemsRequest {
+  team: TeamFacts;
+  teamId: string;
+  modules: ModulePlatform;
+}
+
+/** The catalog a carried version offers a program. */
+export interface CarriedCatalogView {
+  adapters: Record<string, object>;
+  credentials: Record<string, object>;
+  plugins: Record<string, object>;
+  notes: string[];
+}
+
+/** A carried version's authoring help, in its own words. */
+export interface HelpLane {
+  handbookOf(deployment: DeploymentFacts): CarriedHandbook;
+  /** One entry of the front page by its anchor. */
+  handbookFrontSection(anchor: string): { ok: true; content: string } | { ok: false; error: string };
+  searchHandbook(input: { query: string; kind?: 'function' | 'concept' | 'recipe' }, deployment: DeploymentFacts): CarriedSearchResult;
+  catalogOf(team: TeamFacts): Promise<CarriedCatalogView>;
+  /** One system, as compact text a program on this version is written against. */
+  describeSystem(request: SystemsRequest & { system: string; connection?: string }): Promise<string>;
+  /** Every system the team can use on this version, as compact text. */
+  connectionsDigest(request: SystemsRequest): Promise<string>;
+}
+
+/**
+ * Whether a carried version teaches its pins: its handbook, its language
+ * search and its catalog.
+ *
+ * - `current`: the platform's own book and catalog do.
+ * - `carried`: the version's own do, through its package.
+ * - `held`: nothing teaches this version: a request for its help is refused,
+ *   never answered from another version.
+ */
+export type HelpCapability = { kind: 'current' } | { kind: 'carried'; lane: () => Promise<HelpLane> } | { kind: 'held' };
 
 /**
  * Whether a carried version checks its pins: checking, diagnostics, the story
@@ -182,6 +272,7 @@ export type ListenCapability = { kind: 'current' } | { kind: 'carried'; lane: ()
 /** What a carried version provides its pins, one capability each. */
 export interface Provided {
   readonly check: CheckCapability;
+  readonly help: HelpCapability;
   readonly run: RunCapability;
   readonly resume: ResumeCapability;
   readonly listen: ListenCapability;
@@ -224,7 +315,7 @@ const CURRENT_VERSION: CarriedVersion = {
   key: keyOf(LANGUAGE_VERSION),
   release: LANGUAGE_VERSION,
   load: async () => ({ LANGUAGE_VERSION }),
-  provides: { check: CURRENT, run: CURRENT, resume: CURRENT, listen: CURRENT },
+  provides: { check: CURRENT, help: CURRENT, run: CURRENT, resume: CURRENT, listen: CURRENT },
 };
 
 /** 0.12's listens fire only with the switch on, until its schedules, polls and
@@ -245,6 +336,7 @@ const CARRIED: readonly CarriedVersion[] = [
     load: () => import('@listen-fire/lang-0.12'),
     provides: {
       check: { kind: 'carried', lane: () => import('@listen-fire/lang-0.12') },
+      help: { kind: 'carried', lane: () => import('@listen-fire/lang-0.12') },
       run: { kind: 'carried', lane: () => import('@listen-fire/lang-0.12') },
       resume: { kind: 'carried', lane: () => import('@listen-fire/lang-0.12') },
       get listen() {
@@ -323,11 +415,18 @@ export function providedFor(pin: LanguageVersion): Provided {
   return versionOf(pin)?.provides ?? NOTHING_PROVIDED;
 }
 
-const NOTHING_PROVIDED: Provided = { check: HELD, run: HELD, resume: HELD, listen: HELD };
+const NOTHING_PROVIDED: Provided = { check: HELD, help: HELD, run: HELD, resume: HELD, listen: HELD };
 
 /** How `pin` is checked. */
 export function checkingOf(pin: LanguageVersion): CheckCapability {
   return providedFor(pin).check;
+}
+
+/** How `pin` is taught. A legacy id was taught from the release it ran beside,
+ *  and an upgrade is what moves it on. */
+export function helpingOf(pin: LanguageVersion): { release: LanguageVersion; help: HelpCapability } | undefined {
+  const version = versionOf(pin) ?? versionOfLegacyId(pin);
+  return version === undefined ? undefined : { release: version.release, help: version.provides.help };
 }
 
 /** How a segment someone starts on `pin` runs. */

@@ -19,8 +19,8 @@ import {
   type Program,
 } from '@listen-fire/movement-lang';
 
-import { gapsOf, teamSnapshot } from './catalog';
-import { importClosure, importKeyOf, readingPin } from './imports';
+import { gapsOf, teamSnapshot, type TeamSnapshot } from './catalog';
+import { importClosure, importKeyOf, readingPin, type ImportClosure } from './imports';
 import type { CheckRequest, CheckedDiagnostic, CheckedSource, EditorRequest } from './types';
 
 const AT_START = { start: { line: 1, col: 1 }, end: { line: 1, col: 1 } };
@@ -47,11 +47,16 @@ function parsed(source: string, pin: string): Program | CheckedDiagnostic {
   }
 }
 
-/** The 0.12 checker's verdict on `source`, under `pin`, against the team. */
-export async function checkSource(request: CheckRequest): Promise<CheckedSource> {
+/** A program read for a check or a story: its parse, the files it imports, and
+ *  the team's snapshot for it; or the refusal of a text 0.12 cannot read. */
+export type ReadProgram =
+  | { readable: false; refusal: CheckedDiagnostic }
+  | { readable: true; program: Program; closure: ImportClosure; libraries: Program[]; teamCatalog: TeamSnapshot };
+
+export async function readProgram(request: CheckRequest): Promise<ReadProgram> {
   const { source, pin, team } = request;
   const program = parsed(source, pin);
-  if (!('statements' in program)) return { diagnostics: [program], firedMovements: [], gaps: [], notes: [] };
+  if (!('statements' in program)) return { readable: false, refusal: program };
   const closure = importClosure(program, pin, team.files);
   const pinOf = (name: string): string => readingPin(team.files.find((f) => f.name === name)?.languageVersion ?? pin, pin);
   const libraries = Object.entries(closure.files).flatMap(([name, file]) => {
@@ -64,9 +69,17 @@ export async function checkSource(request: CheckRequest): Promise<CheckedSource>
     sources: [{ source, pin }, ...Object.entries(closure.files).map(([name, file]) => ({ source: file.source, pin: pinOf(name) }))],
     ...(request.connected !== undefined ? { reading: { ...request.connected, programs: [program, ...libraries] } } : {}),
   });
+  return { readable: true, program, closure, libraries, teamCatalog };
+}
+
+/** The 0.12 checker's verdict on `source`, under `pin`, against the team. */
+export async function checkSource(request: CheckRequest): Promise<CheckedSource> {
+  const read = await readProgram(request);
+  if (!read.readable) return { diagnostics: [read.refusal], firedMovements: [], gaps: [], notes: [] };
+  const { program, closure, libraries, teamCatalog } = read;
   let diagnostics: CheckedDiagnostic[];
   try {
-    diagnostics = checkSourceInRust(source, teamCatalog.snapshot, { languageVersion: pin }).map(checked);
+    diagnostics = checkSourceInRust(request.source, teamCatalog.snapshot, { languageVersion: request.pin }).map(checked);
   } catch (error) {
     if (!(error instanceof RustCheckRefused)) throw error;
     diagnostics = [{ code: 'MOV_PARSE', message: error.message, severity: 'error', span: AT_START }];

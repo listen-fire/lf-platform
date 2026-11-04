@@ -12,6 +12,8 @@
 export { LANGUAGE_VERSION } from '@listen-fire/movement-lang';
 export * as errors from '@listen-fire/engine/public/errors';
 export { checkSource, completionsAt, definitionAt, hoverAt } from './lane/check';
+export { storyOf } from './lane/story';
+export { catalogOf, connectionsDigest, describeSystem, handbookFrontSection, handbookOf, searchHandbook } from './lane/help';
 export { hostedModuleTypes } from './lane/modules';
 export { manualInvocationEvent, manualListens, readEvent, resumeSegment, runSegment } from './lane/run';
 export { gateFiring, isListenRow, listenersOf, readDelivery } from './lane/listen';
