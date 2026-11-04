@@ -10,7 +10,7 @@ import { getQb } from '../../lib/kysely';
 import { TeamId } from '../../generated/kysely/core/Team';
 import type { Arrival } from 'engine-contracts';
 import { deliverArrivals } from '../../services/inbound/listen_door';
-import { carriedListensOn, receiveJudgedEvent } from '../../services/inbound/carried_delivery';
+import { carriedListensOn, receiveJudgedEvent, withDoorsHeld } from '../../services/inbound/carried_delivery';
 import { keptPage } from '../../services/inbound/captured_request';
 import { notifyWork } from '../../services/work/drain';
 import {
@@ -114,7 +114,12 @@ const acceptInboundEmail = async (
   let fired: number;
   try {
     const arrivals: Arrival[] = [arrival];
-    const { kept, fires } = await deliverArrivals({
+    // One side of an upgrade: both versions read this email's listens under the
+    // team's doors. A failed carried read answers 500, and the redelivery finds
+    // this delivery kept: the carried receipt dedupes on the Message-Id, so it
+    // is taken before that answer.
+    const { kept, fires, carriedFired } = await withDoorsHeld(teamId, async () => {
+      const delivered = await deliverArrivals({
       teamId,
       delivered: { adapterType: EMAIL_ADAPTER_TYPE, credentialsId: null },
       subscriptionId: EMAIL_ADAPTER_TYPE,
@@ -124,16 +129,18 @@ const acceptInboundEmail = async (
       // The provider's message is read by this door, not a module: a replay
       // judges the arrival it read again.
       request: keptPage({ adapterType: EMAIL_ADAPTER_TYPE, credentialsId: null, arrivals }),
+      });
+      // A carried version's listen on the key this was sent to: its own event,
+      // built as its door built it.
+      const carried = route?.trigger != null ? await carriedEmailListen({ teamId, triggerId: route.trigger.id }) : undefined;
+      if (carried !== undefined) {
+        await receiveJudgedEvent({ teamId, triggerId: carried.id, event: carriedEmailEvent({ triggerId: carried.id, kind: carried.kind, payload: emailPayload, messageId }), lane: await carried.lane() });
+        return { ...delivered, carriedFired: 1 };
+      }
+      return { ...delivered, carriedFired: 0 };
     });
     if (!kept.kept) return res.status(201).send();
-    fired = fires.length;
-    // A carried version's listen on the key this was sent to: its own event,
-    // built as its door built it.
-    const carried = route?.trigger != null ? await carriedEmailListen({ teamId, triggerId: route.trigger.id }) : undefined;
-    if (carried !== undefined) {
-      await receiveJudgedEvent({ teamId, triggerId: carried.id, event: carriedEmailEvent({ triggerId: carried.id, kind: carried.kind, payload: emailPayload, messageId }), lane: await carried.lane() });
-      fired += 1;
-    }
+    fired = fires.length + carriedFired;
   } catch (err) {
     logger.error('[InboundEmail] failed to keep the delivery', {
       teamId,

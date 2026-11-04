@@ -76,6 +76,18 @@ async function holdDoorsShared(exec: Exec, teamId: string): Promise<void> {
   await sql`select pg_advisory_xact_lock_shared(${doorsLockKey(teamId)})`.execute(exec);
 }
 
+/** `body` with the team's doors held shared: for a door that reads a delivery's
+ *  listens version by version itself, so an upgrade is not between its reads.
+ *  The lock's transaction only holds the lock: `body` writes as it always does. */
+export function withDoorsHeld<T>(teamId: string, body: () => Promise<T>): Promise<T> {
+  return storeDb()
+    .transaction()
+    .execute(async (trx) => {
+      await holdDoorsShared(trx, teamId);
+      return body();
+    });
+}
+
 /** Holds the team's doors for the rest of the open transaction. Answers the
  *  database's clock once it has them, the instant a move is on the far side of. */
 export async function holdDoorsAlone(exec: Exec, teamId: string): Promise<Date> {

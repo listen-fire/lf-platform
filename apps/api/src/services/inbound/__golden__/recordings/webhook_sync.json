@@ -1739,6 +1739,50 @@
     },
     "effects": [
       {
+        "kind": "db",
+        "op": "select",
+        "table": "callback",
+        "steps": [
+          [
+            "where",
+            [
+              "id",
+              "=",
+              "cb_golden0001"
+            ]
+          ],
+          [
+            "select",
+            [
+              [
+                "id",
+                "team_id",
+                "run_id",
+                "address",
+                "params",
+                "state",
+                "calls",
+                "single_use",
+                "expires_at",
+                "status",
+                "created_at",
+                "fired_at",
+                "revoked_at"
+              ]
+            ]
+          ]
+        ]
+      },
+      {
+        "kind": "whatsapp_send_text",
+        "businessPhoneNumberId": "pn-1",
+        "to": "15550002222",
+        "text": "This button belongs to an automation written for an earlier release, and it no longer does anything. Ask its owner to upgrade the automation and run it again.",
+        "options": {
+          "replyToMessageId": "wamid.2"
+        }
+      },
+      {
         "kind": "adapter_preprocess",
         "adapterType": "whatsapp",
         "teamId": "team-1"

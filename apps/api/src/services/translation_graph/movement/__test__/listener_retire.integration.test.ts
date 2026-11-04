@@ -249,7 +249,7 @@ describe('listener retirement on re-save (real Postgres + live adapter socket)',
 
     await save({ name, id: first.movementId, source: WITH_NO_LISTEN });
 
-    const status = async (id: string) => (await getAutomationsQb(['trigger_run']).selectFrom('trigger_run').where('id', '=', id).select('status').executeTakeFirstOrThrow()).status;
+    const status = async (id: string) => (await getAutomationsQb(['trigger_run']).selectFrom('trigger_run').where('id', '=', id as never).select('status').executeTakeFirstOrThrow()).status;
     expect(await status(own)).toBe('failed');
     expect(await status(other)).toBe('parked');
   });

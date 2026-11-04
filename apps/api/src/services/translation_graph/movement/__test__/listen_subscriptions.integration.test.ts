@@ -8,6 +8,8 @@
 
 import { randomUUID } from 'node:crypto';
 
+import { sql } from 'kysely';
+
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type { MovementId } from '../../../../generated/kysely/automations/Movement';
 import type { TriggerId } from '../../../../generated/kysely/automations/Trigger';
@@ -144,6 +146,38 @@ describe('subscriptions per listenable edge', () => {
       externalId: closedRow!.external_webhook_id,
     });
     expect(await liveRows()).toHaveLength(1);
+  });
+
+  it('keeps a 0.12 webhook while a listen an upgrade moved has no subscription of its own yet, then removes it', async () => {
+    const moved = await insertTestListen({ teamId, movementId, adapterType: VENDOR, edge: 'Things', delivery: 'connection', taken: takenEquals('status', 'moved'), movement: 'moved' });
+    await getAutomationsQb(['trigger'])
+      .updateTable('trigger')
+      .set({ config: sql`jsonb_set(config, '{listen,carriedFrom}', ${JSON.stringify({ at: new Date().toISOString() })}::text::jsonb)` as never })
+      .where('id', '=', moved as never)
+      .execute();
+    const webhook = randomUUID();
+    await getAutomationsQb(['webhook_subscription'])
+      .insertInto('webhook_subscription')
+      .values({
+        id: webhook as WebhookSubscriptionId,
+        team_id: teamId,
+        provider: 'ACME_VENDOR',
+        webhook_secret: 'old',
+        external_webhook_id: 'ext-0-12',
+        subscriptions: JSON.stringify([{ event_type: 'thing.created' }]),
+        status: 'active',
+        provisioned_by: 'movement-listen',
+      } as never)
+      .execute();
+    vendor.ensureEventSubscription.mockRejectedValueOnce(new Error('the source refused'));
+    await syncListenSubscriptions({ teamId });
+    expect(vendor.removeEventSubscription).not.toHaveBeenCalled();
+    expect((await liveRows()).map((row) => row.id)).toContain(webhook);
+
+    await syncListenSubscriptions({ teamId });
+    expect((await liveRows()).map((row) => row.id)).not.toContain(webhook);
+    await getAutomationsQb(['trigger']).deleteFrom('trigger').where('id', '=', moved as never).execute();
+    await syncListenSubscriptions({ teamId });
   });
 
   it('removes a webhook a 0.12 settings listen registered in its own form, and never renews it', async () => {

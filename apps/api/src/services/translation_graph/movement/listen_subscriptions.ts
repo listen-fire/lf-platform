@@ -51,7 +51,7 @@ import { builtinInboundSecretIssuedByProvider } from '../adapters/builtin_module
 import { teamAdapterManifestSet } from '../adapters/team_manifests';
 import { readTeamEngine } from '../../lf_engine/team_engine';
 import { savedListens, type SavedListen } from '../../inbound/listen_door';
-import { listenEdgeKeysOf, type ListenEdgeKey } from '../../inbound/listen_edge';
+import { listenEdgeKeysOf, watchedTraversals, type ListenEdgeKey } from '../../inbound/listen_edge';
 import { registerWorkHandler } from '../../work/drain';
 import { MOVEMENT_LISTEN_PROVISIONER, carriedChannelsOf, ensureCarriedChannel, sameScope, type ChannelRowHeld, type WantedChannels } from './carried_subscriptions';
 
@@ -346,6 +346,29 @@ async function ensureSubscription(input: {
 }
 
 /**
+ * Which 0.12 webhooks a listen an upgrade moved still hears through: its own
+ * subscription is not registered yet (the source refused, or the listen has not
+ * been resolved to its scope). A delivery at such a webhook is judged by every
+ * current listen on the module, so withdrawing it would lose what arrives until
+ * the retry succeeds. Keeping it costs nothing: a listen hears an arrival once.
+ */
+async function webhooksStillCarryingMoved(input: { teamId: TeamId; manifestBySlug: ReadonlyMap<string, AdapterManifest> }): Promise<(row: SubscriptionRow) => boolean> {
+  const moved = (await savedListens({ teamId: input.teamId })).filter((listen) => listen.carriedFrom !== undefined);
+  if (moved.length === 0) return () => false;
+  const up = new Set((await provisionedRows(input.teamId)).flatMap((row) => (row.held !== null && row.status === 'active' ? [row.held.digest] : [])));
+  const waiting: Array<{ provider: string; credentialsId: string | null }> = [];
+  for (const listen of moved) {
+    const manifest = input.manifestBySlug.get(resolveAdapterSlug(listen.plan.adapter));
+    if (manifest === undefined || !manifest.methods.includes('ensureEventSubscription')) continue;
+    const pushed = watchedTraversals(listen).some(({ delivery }) => delivery?.kind === 'connection' || delivery?.kind === 'scope');
+    if (!pushed) continue;
+    const keys = listenEdgeKeysOf(listen, ['connection', 'scope']);
+    if (keys.length === 0 || keys.some(({ digest }) => !up.has(digest))) waiting.push({ provider: webhookProviderKey(manifest), credentialsId: listen.credentialsId });
+  }
+  return (row) => row.held === null && waiting.some((listen) => listen.provider === row.provider && listen.credentialsId === row.credentialsId);
+}
+
+/**
  * Bring the team's subscriptions in line with its listens. Idempotent; every
  * failure is contained per subscription and surfaced as a note.
  */
@@ -396,11 +419,17 @@ export async function syncListenSubscriptions(input: { teamId: TeamId }): Promis
   }
 
   const heldForCarried = new Set(carried.flatMap(({ channels }) => channels.map(carriedRowOf)));
+  const stillCarrying = lfEngined ? () => false : await webhooksStillCarryingMoved({ teamId: input.teamId, manifestBySlug });
 
   for (const row of existing) {
     if (desired.some((subscription) => rowOf(subscription) === row)) continue;
     // A listen on a carried version hears through it.
     if (heldForCarried.has(row)) continue;
+    // Nor is the one a moved listen still hears through, until its own is up.
+    if (stillCarrying(row)) {
+      notes.push(`${row.provider}: its 0.12 webhook stays until the upgraded listen's own subscription is up`);
+      continue;
+    }
     // With the remote installs only partly read, a row no built-in owns may be
     // a live remote subscription whose manifest simply went unread: keep it.
     if (remoteDegraded && !hasAdapter(resolveAdapterSlug(row.provider))) {

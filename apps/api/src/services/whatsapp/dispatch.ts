@@ -22,7 +22,7 @@ import { exposeFile } from '../translation_graph/engine/files/expose';
 import { classifyMetaMessage, whatsappInboundArrivals } from '@listen-fire/whatsapp/inbound';
 import { WHATSAPP_ADAPTER_TYPE } from '../translation_graph/adapters/whatsapp';
 import { deliverArrivals } from '../inbound/listen_door';
-import { carriedListensOn, receiveJudgedEvent } from '../inbound/carried_delivery';
+import { carriedListensOn, receiveJudgedEvent, withDoorsHeld } from '../inbound/carried_delivery';
 import { keptPage } from '../inbound/captured_request';
 import { notifyWork } from '../work/drain';
 import { getMetaWhatsappApi, movementsPhoneNumberId } from './metaApi';
@@ -243,7 +243,11 @@ export async function dispatchWhatsappMessage(input: {
         ? { ...arrival, landing: { ...arrival.landing, fields: { ...arrival.landing.fields, ...payload } } }
         : arrival,
     );
-    const { kept, fires } = await deliverArrivals({
+    // One side of an upgrade: both versions read this message's listens under the
+    // team's doors. A failed carried read throws, and the retry finds this
+    // delivery kept: the carried receipts dedupe on the wamid, so they run first.
+    const { kept, fires, carriedRuns } = await withDoorsHeld(resolved.teamId, async () => {
+      const delivered = await deliverArrivals({
       teamId: resolved.teamId as TeamId,
       delivered: { adapterType: WHATSAPP_ADAPTER_TYPE, credentialsId: null },
       subscriptionId: WHATSAPP_KIND,
@@ -255,9 +259,10 @@ export async function dispatchWhatsappMessage(input: {
       // Its media are already the team's documents: a replay judges these
       // arrivals again rather than reading Meta's delivery afresh.
       request: keptPage({ adapterType: WHATSAPP_ADAPTER_TYPE, credentialsId: null, arrivals }),
+      });
+      return { ...delivered, carriedRuns: await receiveCarriedWhatsapp({ teamId: resolved.teamId as TeamId, classified, payload, messageId: message.id }) };
     });
     if (!kept.kept) return;
-    const carriedRuns = await receiveCarriedWhatsapp({ teamId: resolved.teamId as TeamId, classified, payload, messageId: message.id });
     notifyWork();
     // Read receipt at preprocess: a message a movement will handle shows blue
     // ticks immediately (ruling 2026-07-07). Fire-and-forget — a receipt

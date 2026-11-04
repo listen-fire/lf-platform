@@ -26,7 +26,7 @@ import type { TriggerEventId } from '../../generated/kysely/automations/TriggerE
 import { getAutomationsQb } from '../../lib/kysely';
 import { teamIdSchema } from '../../lib/team_id';
 import { queueAwaitWakesOf } from '../movement_engine/carried_correlations';
-import { WAITING_KEY_PREFIX, deliveryRowStore } from '../movement_engine/run_host_deliveries';
+import { WAITING_KEY_PREFIX, deliveryRowStore, withDoorsHeld } from '../movement_engine/run_host_deliveries';
 import { notifyWork, registerWorkHandler } from '../work/drain';
 import { enqueueWork } from '../work/store';
 import { modulePlatform } from '../translation_graph/movement/carried_run';
@@ -178,6 +178,8 @@ export async function keepForEveryVersion(input: {
   if (kept.alreadyKept && kept.judged) return { kind: 'duplicate' };
   return { kind: 'read', deliveryId: kept.id, keptAt: kept.keptAt };
 }
+
+export { withDoorsHeld };
 
 /** The current version read a kept delivery and found nothing in it. */
 export async function judgedEmpty(input: { teamId: string; id: string }): Promise<void> {
