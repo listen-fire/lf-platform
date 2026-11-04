@@ -30,7 +30,7 @@ import type {
   Span,
 } from 'movement-lang';
 import type { TeamId } from '../../../generated/kysely/core/Team';
-import type { CatalogGap } from './catalog';
+import type { CatalogGap, ImportedFile } from './catalog';
 import type { MovementValidityStatus } from './store';
 
 import { listUnsupportedConstructs } from '@listen-fire/legacy-engine/services/movement_engine/interpretable';
@@ -335,6 +335,9 @@ export async function validateMovementForTeam(input: {
   /** The movement's pin, when validating it for a move up to
    *  `languageVersion` — see `diagnoseMovementSource`. */
   upgradingFrom?: LanguageVersion;
+  /** The import group's members already checked for the move, as they will
+   *  be once moved (./language_upgrade.ts). */
+  movingWith?: ReadonlyMap<string, ImportedFile>;
 }): Promise<TeamMovementValidation> {
   // Catalog assembly scopes itself to the source by scanning its constructions
   // and expression slots. A malformed expression can make one of those scans
@@ -382,6 +385,7 @@ async function runValidate(
     source: string;
     languageVersion?: LanguageVersion;
     upgradingFrom?: LanguageVersion;
+    movingWith?: ReadonlyMap<string, ImportedFile>;
   },
   timer: StepTimer,
 ): Promise<TeamMovementValidation> {
@@ -394,6 +398,8 @@ async function runValidate(
       movementCatalogForTeam(input.teamId as TeamId, {
         source: input.source,
         ...(input.languageVersion !== undefined ? { languageVersion: input.languageVersion } : {}),
+        ...(input.upgradingFrom !== undefined ? { upgradingFrom: input.upgradingFrom } : {}),
+        ...(input.movingWith !== undefined ? { movingWith: input.movingWith } : {}),
       }),
     );
   } catch (e) {

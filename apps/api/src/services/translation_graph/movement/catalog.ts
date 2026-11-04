@@ -648,6 +648,21 @@ interface TeamCatalogOptions {
   languageVersion?: LanguageVersion;
   /** Which text `source`'s file imports resolve to; absent means `live`. */
   imports?: ImportText;
+  /** `source`'s own pin, when it is checked for a move up to
+   *  `languageVersion`. A library on that pin's version moves with it (an
+   *  upgrade moves the import group together), so it is read under
+   *  `languageVersion` rather than refused as an import across versions. */
+  upgradingFrom?: LanguageVersion;
+  /** The import group's members already checked for the move, by name, as
+   *  they will be once moved: an import of one resolves to this text, not the
+   *  saved one. */
+  movingWith?: ReadonlyMap<string, ImportedFile>;
+}
+
+/** An imported file's text and the pin it is read under. */
+export interface ImportedFile {
+  source: string;
+  languageVersion: LanguageVersion;
 }
 
 /**
@@ -713,9 +728,11 @@ async function assembleTeamCatalog(
       ? await assembleMovementFileSources({
           rootSource: options.source,
           load: async (path) => {
-            const file = await loadImportedFile({ teamId, path, imports: options.imports ?? 'live' });
+            const file =
+              options.movingWith?.get(path) ?? (await loadImportedFile({ teamId, path, imports: options.imports ?? 'live' }));
             if (file === null) return null;
-            if (onOtherVersions(rootPin, file.languageVersion)) {
+            const movesWithRoot = options.upgradingFrom !== undefined && !onOtherVersions(options.upgradingFrom, file.languageVersion);
+            if (onOtherVersions(rootPin, file.languageVersion) && !movesWithRoot) {
               importsAcrossVersions.set(path, file.languageVersion);
               return null;
             }
@@ -723,7 +740,7 @@ async function assembleTeamCatalog(
             return file.source;
           },
         })
-      : await allTeamMovementSources(teamId, filePins);
+      : await allTeamMovementSources(teamId, rootPin, filePins);
   const resolveFile = resolverOverSources(fileSources);
 
   const schemaByAdapterAndCred = new Map<string, AdapterSchemaProjection>();
@@ -1269,12 +1286,14 @@ async function assembleTeamCatalog(
 }
 
 /** The full-workspace path → source map (the no-source sweep's resolver
- *  base — the dev CLI's catalog dump has no root program to walk from). */
+ *  base — the dev CLI's catalog dump has no root program to walk from): every
+ *  file a program pinned to `pin` may import. */
 async function allTeamMovementSources(
   teamId: TeamId,
+  pin: LanguageVersion,
   pins: Map<string, LanguageVersion>,
 ): Promise<Map<string, string>> {
-  const rows = await listMovementRows(teamId as unknown as string);
+  const rows = (await listMovementRows(teamId as unknown as string)).filter((row) => !onOtherVersions(pin, row.languageVersion));
   for (const row of rows) pins.set(row.name, row.languageVersion);
   return new Map(rows.map((row) => [row.name, row.source]));
 }
@@ -1576,8 +1595,12 @@ export async function movementCatalogSnapshotForTeam(
   // Saved movement files — the import-path namespace. Carrying the
   // sources keeps the editor full-fidelity offline: imports resolve,
   // library exports complete, imported movements typecheck at call sites.
+  // Only the files the program may import: a file on another version is
+  // never offered.
+  const pin = options.languageVersion ?? LANGUAGE_VERSION;
   const files: Record<string, { source: string }> = {};
   for (const row of await listMovementRows(teamId as unknown as string)) {
+    if (onOtherVersions(pin, row.languageVersion)) continue;
     files[row.name] = { source: row.source };
   }
 

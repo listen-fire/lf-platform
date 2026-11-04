@@ -43,6 +43,13 @@
 // text and its pin; what is left is reported against the rewritten text
 // (`upgradedSource`), each with its source line.
 //
+// An import is allowed only between files on the same version
+// (./imports_across_versions.ts), so the upgrade moves the movement's whole
+// import group: every automation and library on its version connected to it
+// by imports. Every member is rewritten and checked, libraries first; the group
+// moves only when all are clean, and otherwise nothing moves and the members
+// that cannot are named. An upgrade never stops an importer.
+//
 // An edit or re-save never moves the pin (store.ts).
 //
 // See plans/language-versioning-2026-09-29/1_design.md, "Deploy check".
@@ -72,6 +79,7 @@ import {
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { MovementId } from '../../../generated/kysely/automations/Movement';
+import type { ImportedFile } from './catalog';
 
 import { getAutomationsQb } from '../../../lib/kysely';
 import { settleRunsParkedOnTriggers } from '../../interaction/run_failure';
@@ -89,11 +97,13 @@ import {
   type TeamMovementValidation,
 } from './authoring';
 import { withTeamContext } from './firing_context';
+import { importGroupOf } from './imports_across_versions';
 import { saveMovement } from './provision';
 import {
   advanceMovementLanguageVersion,
   getMovementRow,
   listAllMovementRows,
+  listMovementRows,
   recordUpgradeCheck,
   recordValidityOutcome,
   type MovementRow,
@@ -142,6 +152,9 @@ export type ValidateUnder = (input: {
   /** The text to validate, when it is not the movement's own (the upgrade's
    *  rewrite of it). */
   source?: string;
+  /** The members of its import group already checked for the move, by name,
+   *  as they will be once moved: what its imports of them resolve to. */
+  movingWith?: ReadonlyMap<string, ImportedFile>;
 }) => Promise<Pick<TeamMovementValidation, 'diagnostics' | 'gaps'>>;
 
 /** What moving a pin did. Moving it with a rewritten text is a save, which
@@ -199,12 +212,14 @@ export async function rewriteForUpgrade(input: {
   to: LanguageVersion;
   validate: ValidateUnder;
   all?: boolean;
+  movingWith?: ReadonlyMap<string, ImportedFile>;
 }): Promise<UpgradeRewrite> {
   const validations = new Map<string, Pick<TeamMovementValidation, 'diagnostics' | 'gaps'>>();
   const result = await upgradeSourceAsync(input.movement.source, async (source) => {
     const validation = await input.validate({
       ...validationUnder(input.movement, input.to),
       ...(source !== input.movement.source ? { source } : {}),
+      ...(input.movingWith !== undefined && input.movingWith.size > 0 ? { movingWith: input.movingWith } : {}),
     });
     validations.set(source, validation);
     return validation.diagnostics.map(checkerDiagnostic);
@@ -602,17 +617,19 @@ async function releasePinNotRun(input: {
   const pin = movement.languageVersion;
 
   if (releaseVersionStanding(pin, current) === 'olderKey') {
-    const checked = await checkedUnderOwnPin(deps, movement);
-    const detail =
-      `${releaseVersionDiagnostic(pin, current)?.message ?? `this automation pins language ${pin}, which the installed language ${current} does not read`}; ` +
-      `${checked}it does not fire until it is upgraded`;
     logger.warn('[DeployCheck] an automation written for an earlier release stops firing until it is upgraded', {
       movementId: movement.id,
       teamId: movement.teamId,
       languageVersion: pin,
       current,
     });
+    // The stop is the safety and the check only information, so the stop
+    // comes first: a check that fails cannot leave the automation firing.
     await deps.unprovision(movement);
+    const checked = await checkedUnderOwnPin(deps, movement);
+    const detail =
+      `${releaseVersionDiagnostic(pin, current)?.message ?? `this automation pins language ${pin}, which the installed language ${current} does not read`}; ` +
+      `${checked}it does not fire until it is upgraded`;
     await emitSafely(deps, () => ({
       teamId: movement.teamId,
       kind: VALIDATION_ISSUE,
@@ -640,7 +657,8 @@ async function releasePinNotRun(input: {
 
 /** The verdict of `movement`'s own version's checker, recorded as its
  *  validity, as the start of a clause: empty when its version's checker is
- *  not carried, so nothing is claimed of it. */
+ *  not carried, so nothing is claimed of it. A check that fails says so in
+ *  the clause and claims nothing either. */
 async function checkedUnderOwnPin(deps: DeployCheckDeps, movement: MovementRow): Promise<string> {
   const pin = movement.languageVersion;
   const checking = checkingOf(pin);
@@ -648,14 +666,24 @@ async function checkedUnderOwnPin(deps: DeployCheckDeps, movement: MovementRow):
     case 'held':
       return '';
     case 'current':
-    case 'carried': {
-      const underPin = await deps.validate({ movement, languageVersion: pin });
-      await deps.recordValidity({ movement, validation: underPin, checkedAgainst: pin });
-      const errors = errorsOf(underPin.diagnostics);
-      if (errors.length > 0) return `checked under ${pin}, it does not validate (${diagnosticsText(errors)}); `;
-      if (underPin.gaps.length > 0) return `checked under ${pin}, it validates, but ${gapsText(underPin.gaps)}; `;
-      return `checked under ${pin}, it validates; `;
-    }
+    case 'carried':
+      try {
+        const underPin = await deps.validate({ movement, languageVersion: pin });
+        await deps.recordValidity({ movement, validation: underPin, checkedAgainst: pin });
+        const errors = errorsOf(underPin.diagnostics);
+        if (errors.length > 0) return `checked under ${pin}, it does not validate (${diagnosticsText(errors)}); `;
+        if (underPin.gaps.length > 0) return `checked under ${pin}, it validates, but ${gapsText(underPin.gaps)}; `;
+        return `checked under ${pin}, it validates; `;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        logger.error('[DeployCheck] could not check a stopped automation under its own language version', {
+          movementId: movement.id,
+          teamId: movement.teamId,
+          languageVersion: pin,
+          error: message,
+        });
+        return `it could not be checked under ${pin} (${message}); `;
+      }
     default:
       return neverAsAny(checking);
   }
@@ -777,7 +805,7 @@ function releaseAppliedReason(
 // ── The real dependencies ───────────────────────────────────────────────────
 
 /** Validate against the team's live catalog, inside the team. */
-export const validateUnderLiveCatalog: ValidateUnder = ({ movement, languageVersion, upgradingFrom, source }) =>
+export const validateUnderLiveCatalog: ValidateUnder = ({ movement, languageVersion, upgradingFrom, source, movingWith }) =>
   withTeamContext(movement.teamId as TeamId, () =>
     validateMovementForTeam({
       teamId: movement.teamId,
@@ -786,6 +814,7 @@ export const validateUnderLiveCatalog: ValidateUnder = ({ movement, languageVers
       // Reaches imported library files too: the checker checks them under the
       // importer's version and move, and surfaces their warnings.
       ...(upgradingFrom !== undefined ? { upgradingFrom } : {}),
+      ...(movingWith !== undefined ? { movingWith } : {}),
     }),
   );
 
@@ -880,6 +909,24 @@ export async function latestDeployCheckSummary(): Promise<DeployCheckSummary | n
 
 // ── The explicit upgrade ────────────────────────────────────────────────────
 
+/** Another member of an upgrade's import group. */
+export interface GroupMember {
+  automation: { id: string; name: string };
+  /** Its text rewritten into the target version's spelling, when the
+   *  rewrite changed it. */
+  upgradedSource?: string;
+}
+
+/** A member of an upgrade's import group that cannot move, so the whole group
+ *  stays where it is. */
+export interface HeldMember extends GroupMember {
+  /** What holds it: its blocking diagnostics under the target version (their
+   *  places are in its `upgradedSource` when it is present), or none when a
+   *  connected system it uses could not be read. */
+  diagnostics: AuthoringDiagnostic[];
+  unverified: boolean;
+}
+
 export type UpgradeMovementResult =
   | { status: 'not_found' }
   | {
@@ -893,9 +940,25 @@ export type UpgradeMovementResult =
       /** The text rewritten into the target version's spelling, when the
        *  rewrite changed it: saved with the pin on `upgraded`, shown otherwise. */
       upgradedSource?: string;
+      /** The automations and libraries on its version connected to it by
+       *  imports. An import is allowed only between files on one version, so
+       *  they move with it, or none of them moves. Absent when there are none. */
+      movesWith?: GroupMember[];
+      /** The other members of the group that cannot move, each with what
+       *  holds it: nothing in the group moves until they can. */
+      heldBy?: HeldMember[];
       /** Why a clean, acknowledged move still did not land. */
       detail?: string;
     };
+
+/** One member of the group, checked for the move. */
+interface CheckedMember {
+  movement: MovementRow;
+  rewrite: UpgradeRewrite;
+  diagnostics: AuthoringDiagnostic[];
+  held: boolean;
+  unverified: boolean;
+}
 
 /**
  * Validate one movement under the installed language and report what that
@@ -907,6 +970,14 @@ export type UpgradeMovementResult =
  * release pin of an older line, has its old spellings rewritten
  * (`rewriteForUpgrade`), checked as a move up from its pin. A newer release's
  * pin has nothing to move to: blocked, with the rule's text.
+ *
+ * An import is allowed only between files on the same version, so the movement
+ * moves with its import group (`importGroupOf`): every automation and library
+ * on its version connected to it by imports. Each member is rewritten and
+ * checked, libraries first, each against the members it imports as they will
+ * be once moved. The group moves only when every member is clean; otherwise
+ * nothing moves and the members that cannot are named. Moving one alone would
+ * break its imports with the rest and stop an importer.
  */
 export async function upgradeMovement(input: {
   teamId: string;
@@ -942,30 +1013,80 @@ export async function upgradeMovement(input: {
     };
   }
 
-  const rewrite = await rewriteForUpgrade({ movement, to, validate, all: input.applyAllFixes === true });
-  const { validation } = rewrite;
-  const diagnostics = blockingDiagnostics(validation.diagnostics);
-  const shown = { ...base, ...(rewrite.changed ? { upgradedSource: rewrite.source } : {}) };
-  await recordUpgradeCheck({ id: movement.id, diagnostics, checkedAgainst: to });
-  if (holdsThePin(diagnostics, input.applyAllFixes === true).length > 0) return { status: 'blocked', ...shown, diagnostics };
-  if (validation.gaps.length > 0) return { status: 'unverified', ...shown, diagnostics };
+  const all = input.applyAllFixes === true;
+  const group = importGroupOf(movement, await listMovementRows(input.teamId));
+  const movingWith = new Map<string, ImportedFile>();
+  const checked: CheckedMember[] = [];
+  for (const member of group) {
+    const rewrite = await rewriteForUpgrade({ movement: member, to, validate, all, movingWith: new Map(movingWith) });
+    movingWith.set(member.name, { source: rewrite.source, languageVersion: to });
+    const diagnostics = blockingDiagnostics(rewrite.validation.diagnostics);
+    await recordUpgradeCheck({ id: member.id, diagnostics, checkedAgainst: to });
+    const held = holdsThePin(diagnostics, all).length > 0;
+    checked.push({ movement: member, rewrite, diagnostics, held, unverified: !held && rewrite.validation.gaps.length > 0 });
+  }
+
+  const own = checked.find((member) => member.movement.id === movement.id);
+  if (own === undefined) throw new Error('the import group of an upgrade lost the movement it was asked for');
+  const others = checked.filter((member) => member !== own);
+  const asMember = (member: CheckedMember): GroupMember => ({
+    automation: { id: member.movement.id, name: member.movement.name },
+    ...(member.rewrite.changed ? { upgradedSource: member.rewrite.source } : {}),
+  });
+  const heldBy: HeldMember[] = others
+    .filter((member) => member.held || member.unverified)
+    .map((member) => ({ ...asMember(member), diagnostics: member.diagnostics, unverified: member.unverified }));
+  const diagnostics = own.diagnostics;
+  const shown = {
+    ...base,
+    ...(own.rewrite.changed ? { upgradedSource: own.rewrite.source } : {}),
+    ...(others.length > 0 ? { movesWith: others.map(asMember) } : {}),
+    ...(heldBy.length > 0 ? { heldBy } : {}),
+  };
+  if (checked.some((member) => member.held)) {
+    return { status: 'blocked', ...shown, diagnostics, ...(own.held ? {} : { detail: heldDetail(heldBy) }) };
+  }
+  if (checked.some((member) => member.unverified)) {
+    return { status: 'unverified', ...shown, diagnostics, ...(own.unverified ? {} : { detail: heldDetail(heldBy) }) };
+  }
   if (!input.acknowledge) return { status: 'needs_acknowledgement', ...shown, diagnostics };
 
-  const advanced = await (input.advance ?? advanceLive)({
-    movement,
-    to,
-    ...(rewrite.changed ? { source: rewrite.source } : {}),
-  });
-  if (!advanced.ok) return { status: 'unverified', ...shown, diagnostics, detail: advanced.detail };
-  const assessment = assessMovementValidity({ diagnostics: validation.diagnostics, gaps: [] });
-  await recordValidityOutcome({
-    id: movement.id,
-    status: assessment.status,
-    reason: assessment.reason,
-    sourceHash: movementSourceHash(rewrite.source),
-    checkedAgainst: to,
-  });
+  // Libraries first, so each importer is saved against what it imports as
+  // moved.
+  const advance = input.advance ?? advanceLive;
+  const moved: string[] = [];
+  for (const member of checked) {
+    const advanced = await advance({
+      movement: member.movement,
+      to,
+      ...(member.rewrite.changed ? { source: member.rewrite.source } : {}),
+    });
+    if (!advanced.ok) {
+      const who = others.length > 0 ? `${member.movement.name}: ` : '';
+      const already = moved.length > 0 ? `; already moved: ${moved.join(', ')}` : '';
+      return { status: 'unverified', ...shown, diagnostics, detail: `${who}${advanced.detail}${already}` };
+    }
+    moved.push(member.movement.name);
+    const assessment = assessMovementValidity({ diagnostics: member.rewrite.validation.diagnostics, gaps: [] });
+    await recordValidityOutcome({
+      id: member.movement.id,
+      status: assessment.status,
+      reason: assessment.reason,
+      sourceHash: movementSourceHash(member.rewrite.source),
+      checkedAgainst: to,
+    });
+  }
   return { status: 'upgraded', ...shown, diagnostics };
+}
+
+/** Why a group stays: the members that cannot move, each with its reason. */
+function heldDetail(heldBy: readonly HeldMember[]): string {
+  const reasons = heldBy.map((member) =>
+    member.unverified
+      ? `${member.automation.name} (a connected system it uses could not be read)`
+      : `${member.automation.name} (${diagnosticsText(member.diagnostics)})`,
+  );
+  return `it moves together with the automations and libraries it shares imports with, and these cannot move yet: ${reasons.join('; ')}`;
 }
 
 /** The standing release, for the entry points: the installed language, and

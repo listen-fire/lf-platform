@@ -24,6 +24,9 @@ jest.mock('../store', () => ({
   advanceMovementLanguageVersion: jest.fn(),
   getMovementRow: jest.fn(),
   listAllMovementRows: jest.fn(),
+  // The team's files: none besides the movement itself unless a case says so,
+  // so an upgrade's import group is the movement alone.
+  listMovementRows: jest.fn(async () => []),
   recordUpgradeCheck: jest.fn(),
   recordValidityOutcome: jest.fn(),
 }));
@@ -39,7 +42,7 @@ import { parseProgram } from 'legacy-lang';
 
 import { assessMovementValidity, type AuthoringDiagnostic } from '../authoring';
 
-import { advanceMovementLanguageVersion, getMovementRow, type MovementRow } from '../store';
+import { advanceMovementLanguageVersion, getMovementRow, listMovementRows, recordUpgradeCheck, type MovementRow } from '../store';
 import { saveMovement } from '../provision';
 import {
   runDeployCheck,
@@ -402,6 +405,29 @@ describe('a pin by the compatibility rule', () => {
     for (const detail of details) expect(detail).not.toMatch(/\b(runs|keeps running|fires)\b/);
   });
 
+  it('a 0.12 pin whose check throws is still stopped and unprovisioned, and the detail says it could not be checked', async () => {
+    const store = fakeStore({ movements: [movement({ id: 'unreadable-012', languageVersion: '0.12.13' })], verdicts: {} });
+    const order: string[] = [];
+    const unprovision = store.deps.unprovision;
+    store.deps.unprovision = async (m) => {
+      order.push('unprovision');
+      await unprovision(m);
+    };
+    store.deps.validate = async () => {
+      order.push('validate');
+      throw new Error('the 0.12 lane failed to load');
+    };
+
+    const summary = await runDeployCheck(store.deps);
+
+    expect(order).toEqual(['unprovision', 'validate']);
+    expect(store.unprovisioned).toEqual(['unreadable-012']);
+    expect(summary?.automations.map((a) => [a.name, a.outcome])).toEqual([['unreadable-012', 'stopped']]);
+    const [entry] = summary?.automations ?? [];
+    expect(entry?.detail).toContain('it could not be checked under 0.12.13 (the 0.12 lane failed to load); it does not fire until it is upgraded');
+    expect(store.validity.has('unreadable-012')).toBe(false);
+  });
+
   it('keys the release by the installed language and the legacy ids', async () => {
     const store = fakeStore({ movements: [], verdicts: {} });
     await runDeployCheck(store.deps);
@@ -485,6 +511,102 @@ describe('an explicit upgrade by the compatibility rule', () => {
     );
     expect(validations).toEqual([]);
     expect(advanceMovementLanguageVersion).not.toHaveBeenCalled();
+  });
+});
+
+describe('an upgrade moves the whole import group, or nothing', () => {
+  // An import is allowed only between files on the same version, so moving one
+  // member alone would break its imports with the rest and stop an importer.
+  const LIBRARY = 'export function shout(t: <text>) {\n  return t\n}\n';
+  const importing = (name: string) => `import { shout } from "lib"\nfunction ${name}(t: <text>) {\n  return shout(t)\n}\n`;
+  const rows = [
+    movement({ id: 'lib', languageVersion: '0.12.13', source: LIBRARY }),
+    movement({ id: 'app', languageVersion: '0.12.13', source: importing('app') }),
+    // A legacy id is on 0.12's version, so it is in the group too.
+    movement({ id: 'old-app', languageVersion: '4', source: importing('old_app') }),
+    // On the version but connected to nothing: stays.
+    movement({ id: 'loner', languageVersion: '0.12.13', source: LIBRARY }),
+    // Already on the installed version: nothing to move.
+    movement({ id: 'current-app', languageVersion: CUR, source: importing('current_app') }),
+  ];
+  const groupOf = (verdicts: Partial<Record<string, AuthoringDiagnostic[]>>) => {
+    const validations: Array<Parameters<ValidateUnder>[0]> = [];
+    const validate: ValidateUnder = async (validation) => {
+      validations.push(validation);
+      return { diagnostics: verdicts[validation.movement.id] ?? [], gaps: [] };
+    };
+    const advanced: Array<{ id: string; to: LanguageVersion }> = [];
+    const advance = async ({ movement: m, to }: { movement: MovementRow; to: LanguageVersion }) => {
+      advanced.push({ id: m.id, to });
+      return { ok: true as const };
+    };
+    return { validations, validate, advanced, advance };
+  };
+
+  it('upgrading an importer moves the library and every other importer with it, libraries first', async () => {
+    jest.mocked(getMovementRow).mockResolvedValueOnce(rows[1]);
+    jest.mocked(listMovementRows).mockResolvedValueOnce(rows);
+    jest.mocked(assessMovementValidity).mockReturnValue({ status: 'valid', reason: null } as never);
+    const { validations, validate, advanced, advance } = groupOf({});
+
+    const result = await upgradeMovement({ teamId: 'team-1', id: 'app', acknowledge: true, validate, advance });
+
+    expect(result).toEqual(expect.objectContaining({ status: 'upgraded' }));
+    expect(advanced).toEqual([
+      { id: 'lib', to: CUR },
+      { id: 'app', to: CUR },
+      { id: 'old-app', to: CUR },
+    ]);
+    if (result.status === 'not_found') throw new Error('unreachable');
+    expect(result.movesWith?.map((m) => m.automation.id)).toEqual(['lib', 'old-app']);
+    // Each importer is checked against the library as it will be once moved.
+    const app = validations.find((v) => v.movement.id === 'app');
+    expect(app?.movingWith?.get('lib')).toEqual({ source: LIBRARY, languageVersion: CUR });
+    expect(validations.find((v) => v.movement.id === 'lib')?.movingWith).toBeUndefined();
+  });
+
+  it('upgrading the library moves its importers with it', async () => {
+    jest.mocked(getMovementRow).mockResolvedValueOnce(rows[0]);
+    jest.mocked(listMovementRows).mockResolvedValueOnce(rows);
+    jest.mocked(assessMovementValidity).mockReturnValue({ status: 'valid', reason: null } as never);
+    const { validate, advanced, advance } = groupOf({});
+
+    const result = await upgradeMovement({ teamId: 'team-1', id: 'lib', acknowledge: true, validate, advance });
+
+    expect(result.status).toBe('upgraded');
+    expect(advanced.map((a) => a.id)).toEqual(['lib', 'app', 'old-app']);
+  });
+
+  it('a group with one member that cannot move is refused, naming it, and nothing moves', async () => {
+    jest.mocked(getMovementRow).mockResolvedValueOnce(rows[1]);
+    jest.mocked(listMovementRows).mockResolvedValueOnce(rows);
+    const { validate, advanced, advance } = groupOf({ 'old-app': [diagnostic('error', 'no field Textt')] });
+
+    const result = await upgradeMovement({ teamId: 'team-1', id: 'app', acknowledge: true, validate, advance });
+
+    expect(advanced).toEqual([]);
+    expect(advanceMovementLanguageVersion).not.toHaveBeenCalled();
+    expect(saveMovement).not.toHaveBeenCalled();
+    if (result.status === 'not_found') throw new Error('unreachable');
+    expect(result.status).toBe('blocked');
+    expect(result.diagnostics).toEqual([]);
+    expect(result.heldBy).toEqual([
+      expect.objectContaining({ automation: { id: 'old-app', name: 'old-app' }, unverified: false, diagnostics: [expect.objectContaining({ message: 'no field Textt' })] }),
+    ]);
+    expect(result.detail).toContain('old-app (line 3: no field Textt)');
+    // Each member's own check is still recorded against the target.
+    expect(jest.mocked(recordUpgradeCheck).mock.calls.map(([call]) => call.id)).toEqual(['lib', 'app', 'old-app']);
+  });
+
+  it('without acknowledge, a clean group is reported and nothing moves', async () => {
+    jest.mocked(getMovementRow).mockResolvedValueOnce(rows[1]);
+    jest.mocked(listMovementRows).mockResolvedValueOnce(rows);
+    const { validate, advanced, advance } = groupOf({});
+
+    const result = await upgradeMovement({ teamId: 'team-1', id: 'app', acknowledge: false, validate, advance });
+
+    expect(result.status).toBe('needs_acknowledgement');
+    expect(advanced).toEqual([]);
   });
 });
 
