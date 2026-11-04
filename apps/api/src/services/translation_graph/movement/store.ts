@@ -444,7 +444,20 @@ function configRecordOf(value: unknown): Record<string, unknown> {
     : {};
 }
 
-export async function listDerivedTriggerRows(movementId: string): Promise<DerivedTriggerRow[]> {
+/**
+ * The config of a trigger row kept only for the runs that name it. A save retired
+ * the listen, and a run on an earlier version still reads what it fired through
+ * from the row when it resumes. Nothing listens through it: it parses as no listen,
+ * its run mode is off, and it is no listener of the automation. A later save
+ * deletes it once no such run is left.
+ */
+export const LEFTOVER_TRIGGER_CONFIG = { leftoverForUnfinishedRuns: true } as const;
+
+function isLeftoverTriggerRow(row: DerivedTriggerRow): boolean {
+  return row.config.leftoverForUnfinishedRuns === true;
+}
+
+async function triggerRowsOf(movementId: string): Promise<DerivedTriggerRow[]> {
   const rows = await getAutomationsQb(['trigger'])
     .selectFrom('trigger')
     .where('movement_id', '=', movementId as MovementId)
@@ -452,6 +465,16 @@ export async function listDerivedTriggerRows(movementId: string): Promise<Derive
     .orderBy('created_at', 'asc')
     .execute();
   return rows.map(toDerivedTriggerRow);
+}
+
+/** The listeners of a movement. */
+export async function listDerivedTriggerRows(movementId: string): Promise<DerivedTriggerRow[]> {
+  return (await triggerRowsOf(movementId)).filter((row) => !isLeftoverTriggerRow(row));
+}
+
+/** The rows of a movement kept only for the runs that name them. */
+export async function listLeftoverTriggerRows(movementId: string): Promise<DerivedTriggerRow[]> {
+  return (await triggerRowsOf(movementId)).filter(isLeftoverTriggerRow);
 }
 
 export async function listDerivedTriggerRowsForMovements(
@@ -467,6 +490,7 @@ export async function listDerivedTriggerRowsForMovements(
     .execute();
   for (const raw of rows) {
     const row = toDerivedTriggerRow(raw);
+    if (isLeftoverTriggerRow(row)) continue;
     const list = result.get(row.movementId) ?? [];
     list.push(row);
     result.set(row.movementId, list);

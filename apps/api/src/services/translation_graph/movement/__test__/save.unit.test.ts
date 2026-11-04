@@ -95,6 +95,8 @@ jest.mock('../../../../lib/kysely', () => {
       select: () => api,
       selectAll: () => api,
       forUpdate: () => api,
+      innerJoin: () => api,
+      distinct: () => api,
       orderBy: (col: string, dir?: string) => {
         order = { col, dir: dir ?? 'asc' };
         return api;

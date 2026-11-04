@@ -93,7 +93,10 @@ import { movementCatalogForTeam, type CatalogGap, type TeamMovementCatalog } fro
 import {
   deleteMovementRow,
   getMovementRow,
+  LEFTOVER_TRIGGER_CONFIG,
   listDerivedTriggerRows,
+  listLeftoverTriggerRows,
+  triggersUnfinishedRunsName,
   listDerivedTriggerRowsForMovements,
   listMovementRows,
   listenersFiringMovementNames,
@@ -397,6 +400,24 @@ export function planListenerReconciliation(input: {
   return { matches, retired: remaining };
 }
 
+/** A row a run on another version names does not change what it fires: when the
+ *  plan would (a movement renamed, a listen moved to another movement), the new
+ *  listen takes a row of its own, and this one is retired. */
+function keepWhatWaitingRunsFired(input: {
+  plan: ReconciliationPlan;
+  desired: ReadonlyArray<{ movementName: string }>;
+  namedElsewhere: ReadonlySet<string>;
+}): ReconciliationPlan {
+  const retired = [...input.plan.retired];
+  const matches = input.plan.matches.map((row, i) => {
+    if (row === undefined || !input.namedElsewhere.has(row.id)) return row;
+    if (row.firedMovementName === null || row.firedMovementName === input.desired[i].movementName) return row;
+    retired.push(row);
+    return undefined;
+  });
+  return { matches, retired };
+}
+
 /** The periodic reconcile that arms a listener's poll: any listen's last
  *  edge may be polled (a schedule's `Ticks` is), so every new, changed or
  *  retired listener asks for it; it is idempotent. */
@@ -423,7 +444,8 @@ async function reconcileDerivedTriggers(input: {
     reconciles.add(reconcileKindFor(kind));
   };
   const existing = await listDerivedTriggerRows(input.movementRow.id);
-  const plan = planListenerReconciliation({
+  const leftovers = await listLeftoverTriggerRows(input.movementRow.id);
+  const planned = planListenerReconciliation({
     desired: input.desired.map((d) => ({
       movementName: d.movementName,
       kind: d.adapter,
@@ -432,6 +454,19 @@ async function reconcileDerivedTriggers(input: {
     })),
     existing,
   });
+  // A run on another version is not this text's to end: it finishes on its own
+  // pin, and reads what it fired through from its row when it resumes. So its row
+  // keeps firing what the run fired, and a row this text has no listen for stays
+  // as a leftover rather than failing the run.
+  const namedElsewhere = await triggersUnfinishedRunsName({
+    triggerIds: [
+      ...planned.retired,
+      ...leftovers,
+      ...planned.matches.flatMap((row, i) => (row !== undefined && row.firedMovementName !== input.desired[i].movementName ? [row] : [])),
+    ].map((row) => row.id),
+    pinnedOtherThan: input.movementRow.languageVersion,
+  });
+  const plan = keepWhatWaitingRunsFired({ plan: planned, desired: input.desired, namedElsewhere });
   const breakerPauses = input.keepPauses === true ? await loopBreakerPauses({ teamId: input.teamId, configs: existing.map((row) => row.config) }) : new Map<string, string>();
   const breakerPauseOf = (row: DerivedTriggerRow): string | undefined => {
     const pipeline = pipelineOfConfig(row.config);
@@ -469,18 +504,27 @@ async function reconcileDerivedTriggers(input: {
   // is the last actor that knows the work is being dropped, so settle those
   // runs first — the same duty `deleteMovement` discharges, for the same
   // reason (../../interaction/run_failure.ts).
-  if (plan.retired.length > 0) {
+  const deleted = [...plan.retired.filter((row) => !namedElsewhere.has(row.id)), ...leftovers.filter((row) => !namedElsewhere.has(row.id))];
+  if (deleted.length > 0) {
     await settleRunsParkedOnTriggers({
-      triggerIds: plan.retired.map((row) => row.id),
+      triggerIds: deleted.map((row) => row.id),
       reason:
         input.retirementReason ??
         'This run was still waiting to continue when its listener was removed from the automation, so it was stopped.',
     });
   }
-  for (const row of plan.retired) {
+  for (const row of deleted) {
     noteSchedule(row.kind);
     await qb
       .deleteFrom('trigger')
+      .where('id', '=', row.id as TriggerId)
+      .execute();
+  }
+  for (const row of plan.retired.filter((retired) => namedElsewhere.has(retired.id))) {
+    noteSchedule(row.kind);
+    await qb
+      .updateTable('trigger')
+      .set({ config: LEFTOVER_TRIGGER_CONFIG as never, resolved_address: null, credentials_id: null, run_mode: 'off', updated_at: new Date() })
       .where('id', '=', row.id as TriggerId)
       .execute();
   }
@@ -1498,7 +1542,7 @@ export async function deleteMovement(input: { teamId: string; id: string }): Pro
   if (!row) return false;
   const qb = getAutomationsQb(['trigger']);
 
-  const derived = await listDerivedTriggerRows(row.id);
+  const derived = [...(await listDerivedTriggerRows(row.id)), ...(await listLeftoverTriggerRows(row.id))];
   const triggerIds = new Set(derived.map((d) => d.id));
   if (row.triggerId !== null) triggerIds.add(row.triggerId); // legacy link
   // A Run now of a version this platform does not fire listens for has no
