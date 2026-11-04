@@ -89,6 +89,8 @@ export interface ModulePlatform {
 /** The platform's services a carried version's segment reaches. */
 export interface RunPlatform {
   modules: ModulePlatform;
+  /** Where this version's engine reports which engine ran a segment: the run's row. */
+  recordEngine(record: { runId: string; engine: 'ts' | 'rust' }): void;
   credentials: CredentialOwnership;
   /** Billed and metered by the platform. */
   llm: EngineHost['llm'];

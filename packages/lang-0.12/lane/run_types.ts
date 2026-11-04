@@ -111,6 +111,8 @@ export interface ModulePlatform {
  *  data. */
 export interface RunPlatform {
   modules: ModulePlatform;
+  /** Where this version's engine reports which engine ran a segment: the run's row. */
+  recordEngine(record: { runId: string; engine: 'ts' | 'rust' }): void;
   /** Whether a credential a run names is its team's. */
   credentials: CredentialOwnership;
   /** The platform's model calls, billed and metered by it. */

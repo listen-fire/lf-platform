@@ -184,6 +184,36 @@ describe('an upgrade held where it is', () => {
     expect(await runOf(runId)).toMatchObject({ status: 'success' });
   });
 
+  it("an edit waiting in another member of the group refuses by that member's name, and nothing moves", async () => {
+    const { name, movementId } = await load('timer');
+    await sql`UPDATE automations.movement SET source = source || ${'\n// an edit that stopped at needs confirmation\n'} WHERE id = ${movementId}::uuid`.execute(getAutomationsQb(['movement']));
+    const importer = '00000000-0000-4000-8000-00000000abcd';
+    await getAutomationsQb(['movement'])
+      .insertInto('movement')
+      .values({ id: importer, team_id: TEAM, name: 'importer', source: `import { nap } from "${name}"\nfunction go(run: <manual-[:Invocation]->>) {\n  return nap(run)\n}\nlisten to manual fire go\n`, language_version: '0.12.8' } as never)
+      .execute();
+    const result = await upgrade(importer);
+    expect(result).toMatchObject({ status: 'blocked' });
+    if (result.status !== 'blocked') return;
+    expect(result.detail).toContain(`${name} has an edit waiting for confirmation`);
+    expect(result.detail).toContain('nothing moved');
+    expect((await getMovementRow({ teamId: TEAM, id: importer }))?.languageVersion).toBe('0.12.8');
+  });
+
+  it('a run that parks on a key after the first look is seen inside the transaction, and nothing moves', async () => {
+    const { movementId, runId, name } = await load('timer');
+    const parksMeanwhile: ValidateUnder = async () => {
+      const [ask] = (JSON.parse(readFileSync(join(FIXTURES, 'ask.json'), 'utf8')) as { rows: Record<string, Record<string, unknown>[]> }).rows.adapter_await ?? [];
+      await getAutomationsQb(['adapter_await']).insertInto('adapter_await').values({ run_id: runId, address: 's9', team_id: TEAM, adapter_type: 'ask', correlation_key: String(ask?.correlation_key) } as never).execute();
+      return (await clean(undefined as never, undefined as never)) as never;
+    };
+    const result = await upgradeMovement({ teamId: TEAM, id: movementId, acknowledge: true, validate: parksMeanwhile, advance: moved, together });
+    expect(result).toMatchObject({ status: 'blocked' });
+    if (result.status !== 'blocked') return;
+    expect(result.detail).toContain(name);
+    expect(result.detail).toContain(runId);
+  });
+
   it('an edit waiting for confirmation refuses by name, and names the remedy', async () => {
     const { movementId, name } = await load('timer');
     await sql`UPDATE automations.movement SET source = source || ${'\n// an edit that stopped at needs confirmation\n'} WHERE id = ${movementId}::uuid`.execute(getAutomationsQb(['movement']));

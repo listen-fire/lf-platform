@@ -38,7 +38,7 @@ import {
   describeError,
   runFailureCause,
 } from '@listen-fire/engine/public/errors';
-import { fireCallbackBody, resumeMovement, runMovement, settleRaceFrame, type CancelGate, type MovementRunResult } from '@listen-fire/engine/public/movement-engine';
+import { fireCallbackBody, resumeMovement, runMovement, setRunEngineRecorder, settleRaceFrame, type CancelGate, type MovementRunResult } from '@listen-fire/engine/public/movement-engine';
 import { segmentWriteLocks } from '@listen-fire/engine/public/write-locks';
 import { MovementParseError, RUN_HOST_UNITS, parseProgram, type Program } from '@listen-fire/movement-lang';
 import type { TriggerEvent } from '@listen-fire/engine/public/inbound';
@@ -236,6 +236,7 @@ async function preparedProgram(request: Pick<SegmentRequest, 'source' | 'pin' | 
  * outcome says how it ended.
  */
 export async function runSegment(request: SegmentRequest, platform: RunPlatform): Promise<SegmentOutcome> {
+  setRunEngineRecorder(platform.recordEngine);
   try {
     const prepared = await preparedProgram(request, platform);
     const result = await runMovement({
@@ -274,6 +275,7 @@ function isParkState(state: unknown): state is AnyParkedScopeState {
  * a leaf resumed, a race settled with its winners, or a callback's body.
  */
 export async function resumeSegment(request: ResumeRequest, platform: RunPlatform): Promise<SegmentOutcome> {
+  setRunEngineRecorder(platform.recordEngine);
   try {
     const prepared = await preparedProgram(request, platform);
     const common = {

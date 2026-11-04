@@ -42,6 +42,7 @@ import { callbackUrl } from '../../movement_engine/callback_store';
 import { carriedRunHost } from '../../movement_engine/carried_host';
 import { markRunLimitPaused } from '../../movement_engine/limit_pause';
 import { notifyWork } from '../../work/drain';
+import { recordRunEngineOnRow } from '../../movement_engine/run_engine_record';
 import { RunLeaseLost } from '../../movement_engine/run_lease';
 import { teamCredentials } from '../../credentials/credential_ownership';
 import { writeKeeper } from '../../inbound/loop_breaker';
@@ -112,6 +113,7 @@ export function runPlatformFor(input: {
   const keep = input.triggerRunId !== undefined ? writeKeeper({ teamId: input.teamId, runId: input.triggerRunId }) : undefined;
   return {
     modules: modulePlatform(),
+    recordEngine: recordRunEngineOnRow,
     credentials: teamCredentials,
     llm: shared.llm,
     files: { resolveFileText: shared.resolveFileText, render: shared.render },

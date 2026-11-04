@@ -33,15 +33,19 @@ async function writeRunEngine({ runId, engine }: RunEngineRecord): Promise<void>
   }
 }
 
+/** One decision, landing on its run's row. A carried version's engine has its own
+ *  recorder, and is handed this. */
+export function recordRunEngineOnRow(record: RunEngineRecord): void {
+  const chained = (pending.get(record.runId) ?? Promise.resolve()).then(() => writeRunEngine(record));
+  pending.set(record.runId, chained);
+  void chained.then(() => {
+    if (pending.get(record.runId) === chained) pending.delete(record.runId);
+  });
+}
+
 /** Makes the engine's decisions land on the run rows. */
 export function recordRunEnginesOnRows(): void {
-  setRunEngineRecorder((record) => {
-    const chained = (pending.get(record.runId) ?? Promise.resolve()).then(() => writeRunEngine(record));
-    pending.set(record.runId, chained);
-    void chained.then(() => {
-      if (pending.get(record.runId) === chained) pending.delete(record.runId);
-    });
-  });
+  setRunEngineRecorder(recordRunEngineOnRow);
 }
 
 /** Resolves once every decision recorded so far is written. */

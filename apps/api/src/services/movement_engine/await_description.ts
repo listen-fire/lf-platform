@@ -69,7 +69,8 @@ interface Correlation {
 }
 
 /** The wait each parked await address holds: the record it waits on, by
- *  its module's key. */
+ *  its module's key. A run a carried version parked holds its key on the
+ *  correlation map, not on a wait. */
 async function loadCorrelations(
   runId: TriggerRunId,
   addresses: string[],
@@ -85,6 +86,13 @@ async function loadCorrelations(
     if (r.address === null || r.key === null) continue;
     map.set(r.address, { adapterType: r.adapter_type, correlationKey: r.key });
   }
+  const carried = await getAutomationsQb(['adapter_await'])
+    .selectFrom('adapter_await')
+    .where('run_id', '=', runId)
+    .where('address', 'in', addresses)
+    .select(['address', 'adapter_type', 'correlation_key'])
+    .execute();
+  for (const r of carried) map.set(r.address, { adapterType: r.adapter_type, correlationKey: r.correlation_key });
   return map;
 }
 
@@ -115,6 +123,7 @@ function describeAwait(corr: Correlation): AwaitDescription {
     // name a person recognises, so keep it plain.
     return 'waiting for a reply in a Slack thread';
   }
+  if (corr.adapterType === 'callback') return 'waiting for someone to use the link or button it sent';
   return 'waiting for a response';
 }
 

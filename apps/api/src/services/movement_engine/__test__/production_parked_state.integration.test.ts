@@ -25,8 +25,10 @@ import { askClosedSweepHandler, registerAskClosedSweepWork } from '../../asks/cl
 import { failRunAndCancelRequests } from '../../interaction/run_failure';
 import { liveDeployCheckDeps, thisDeployCheckRelease } from '../../translation_graph/movement/language_upgrade';
 import { getMovementRow } from '../../translation_graph/movement/store';
+import { describeRunAwaits } from '../await_description';
 import { callbackAckText, fireCallback } from '../callback_fire';
 import { resumeLimitPausedRun } from '../limit_resume';
+import { takeRunLease } from '../run_lease';
 
 const FIXTURES = join(__dirname, 'fixtures', 'production-0.12.13');
 const TEAM = '00000000-0000-4000-8000-0000000012a1' as TeamId;
@@ -147,6 +149,43 @@ describe('a run production parked', () => {
     const callback = await getAutomationsQb(['callback']).selectFrom('callback').where('run_id', '=', runId).select('status').executeTakeFirstOrThrow();
     expect(callback.status).toBe('fired');
     expect(await fireCallback({ id, values: {} })).toMatchObject({ kind: 'closed' });
+  });
+
+  it("on a repeatable callback closes it when the run finishes: the finish revokes what the run left standing", async () => {
+    const { runId, rows } = await load('callback');
+    const id = rows.callback?.[0]?.id as string;
+    await getAutomationsQb(['callback']).updateTable('callback').set({ single_use: false }).where('id', '=', id).execute();
+    expect(await fireCallback({ id, values: {} })).toMatchObject({ kind: 'recorded', queued: true });
+    await drain();
+    expect(await runOf(runId)).toMatchObject({ status: 'success' });
+    const callback = await getAutomationsQb(['callback']).selectFrom('callback').where('id', '=', id).select('status').executeTakeFirstOrThrow();
+    expect(callback.status).toBe('revoked');
+  });
+
+  it('with its run held by another worker defers the body, and runs it once when the run is free', async () => {
+    const { runId, rows } = await load('callback');
+    const id = rows.callback?.[0]?.id as string;
+    expect(await fireCallback({ id, values: {} })).toMatchObject({ kind: 'recorded', queued: true });
+    // What another process holding the run looks like from here: its lease row.
+    const elsewhere = await takeRunLease(runId);
+    if (elsewhere === null) throw new Error('test: the run was already held');
+    await drain();
+    expect(await asksOfTeam()).toEqual([]);
+    expect(await runOf(runId)).toMatchObject({ status: 'parked' });
+    await elsewhere.release();
+    for (let pass = 0; pass < 4; pass++) {
+      await getAutomationsQb(['work']).updateTable('work').set({ due_at: new Date(Date.now() - 1000) }).where('team_id', '=', TEAM).execute();
+      await drain();
+    }
+    expect(await runOf(runId)).toMatchObject({ status: 'success' });
+    expect((await asksOfTeam()).map((ask) => ask.prompt).sort()).toEqual(['body', 'written before the park: callback']);
+  });
+
+  it('says what it waits on: a question by its prompt, a callback in plain words', async () => {
+    const asking = await load('ask');
+    expect(await describeRunAwaits(asking.runId)).toEqual(['waiting for an answer to: Deal?']);
+    const calling = await load('callback');
+    expect(await describeRunAwaits(calling.runId)).toEqual(['waiting for someone to use the link or button it sent']);
   });
 
   it('in a race settles it with the arm that won, and closes the loser', async () => {

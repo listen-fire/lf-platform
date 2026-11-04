@@ -66,7 +66,12 @@ describe('a 0.12 Run now that pauses', () => {
 
   const status = (runId: TriggerRunId) =>
     getAutomationsQb(['trigger_run']).selectFrom('trigger_run').where('id', '=', runId).select(['status', 'failure_reason']).executeTakeFirstOrThrow();
-  const asked = async () => (await getAsksQb(['ask']).selectFrom('ask').where('team_id', '=', teamId).select('prompt').execute()).map((row) => row.prompt);
+  /** Every write the team's asks hold, sorted: exact, so a write done twice fails. */
+  const asked = async () => (await getAsksQb(['ask']).selectFrom('ask').where('team_id', '=', teamId).select('prompt').execute()).map((row) => row.prompt).sort();
+
+  afterEach(async () => {
+    await getAsksQb(['ask']).deleteFrom('ask').where('team_id', '=', teamId).execute();
+  });
 
   it('on a timer parks, and wakes on 0.12 with what it had bound', async () => {
     const runId = await pressed('timer');
@@ -76,7 +81,9 @@ describe('a 0.12 Run now that pauses', () => {
     await getAutomationsQb(['work']).updateTable('work').set({ due_at: past }).where('team_id', '=', teamId).where('kind', '=', 'resume_timer').execute();
     await drainUntilIdle({ teamId, heartbeatMs: false });
     expect(await status(runId)).toMatchObject({ status: 'success' });
-    expect(await asked()).toContain('pressed: timer');
+    expect(await asked()).toEqual(['pressed: timer']);
+    const { engine } = await getAutomationsQb(['trigger_run']).selectFrom('trigger_run').where('id', '=', runId).select('engine').executeTakeFirstOrThrow();
+    expect(engine).toBe('rust');
   });
 
   it('on an ask parks on its key, and an answer at the platform door wakes it', async () => {
@@ -86,7 +93,7 @@ describe('a 0.12 Run now that pauses', () => {
     expect(await answerAskById(ask.id as AskId, { Budget: '10' })).toMatchObject({ kind: 'answered' });
     await drainUntilIdle({ teamId, heartbeatMs: false });
     expect(await status(runId)).toMatchObject({ status: 'success' });
-    expect(await asked()).toContain('pressed: ask');
+    expect(await asked()).toEqual(['Deal?', 'pressed: ask']);
   });
 
   it('on a callback parks, and a call runs its body and then the awaiter', async () => {
@@ -96,6 +103,6 @@ describe('a 0.12 Run now that pauses', () => {
     expect(await fireCallback({ id: callback.id, values: {} })).toMatchObject({ kind: 'recorded' });
     await drainUntilIdle({ teamId, heartbeatMs: false });
     expect(await status(runId)).toMatchObject({ status: 'success' });
-    expect(await asked()).toEqual(expect.arrayContaining(['body', 'pressed: callback']));
+    expect(await asked()).toEqual(['body', 'pressed: callback']);
   });
 });

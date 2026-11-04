@@ -1103,6 +1103,8 @@ export async function upgradeMovement(input: {
 
   const all = input.applyAllFixes === true;
   const group = importGroupOf(movement, await listMovementRows(input.teamId));
+  const holdsDetail = (found: readonly string[]): string =>
+    `${found.join('; ')}${group.length > 1 ? '; it moves together with the automations and libraries it shares imports with, so nothing moved' : ''}`;
   const holds = await holdsOnMoving(group);
   if (holds.length > 0) {
     const others = group.filter((member) => member.id !== movement.id);
@@ -1111,7 +1113,7 @@ export async function upgradeMovement(input: {
       ...base,
       ...(others.length > 0 ? { movesWith: others.map((member) => ({ automation: { id: member.id, name: member.name } })) } : {}),
       diagnostics: [],
-      detail: `${holds.join('; ')}${others.length > 0 ? '; it moves together with the automations and libraries it shares imports with, so nothing moved' : ''}`,
+      detail: holdsDetail(holds),
     };
   }
   const movingWith = new Map<string, ImportedFile>();
@@ -1168,6 +1170,10 @@ export async function upgradeMovement(input: {
   const warnings: string[] = [];
   try {
     await together(movement.teamId, async () => {
+      // Looked at again here: rewriting and validating takes a while, and a run
+      // may have parked on a key meanwhile.
+      const late = await holdsOnMoving(group);
+      if (late.length > 0) throw new GroupHeldMeanwhile(late);
       for (const { member, move } of moves) {
         const advanced = await move();
         if (!advanced.ok) throw new GroupMoveStopped(member.movement.name, advanced.detail);
@@ -1185,12 +1191,20 @@ export async function upgradeMovement(input: {
       if (shipped.length > 0) await bringUpListensLater({ teamId: movement.teamId, movementIds: shipped });
     });
   } catch (err) {
+    if (err instanceof GroupHeldMeanwhile) return { status: 'blocked', ...shown, diagnostics, detail: holdsDetail(err.holds) };
     if (!(err instanceof GroupMoveStopped)) throw err;
     const who = others.length > 0 ? `${err.member}: ` : '';
     const nothing = others.length > 0 ? '; nothing moved' : '';
     return { status: 'unverified', ...shown, diagnostics, detail: `${who}${err.detail}${nothing}` };
   }
   return { status: 'upgraded', ...shown, diagnostics, ...(warnings.length > 0 ? { warnings } : {}) };
+}
+
+/** A hold that appeared after the first look: the group's transaction rolls back. */
+class GroupHeldMeanwhile extends Error {
+  constructor(readonly holds: readonly string[]) {
+    super(holds.join('; '));
+  }
 }
 
 /** A member of an upgrading group that could not move: the group's
