@@ -1373,6 +1373,24 @@ export interface MovementLanguageRoute {
         listen: boolean;
     };
 }
+/** The listens of a text on a carried version, as that version's parser read
+ *  them. Stated here so the browser's types carry no version's package. */
+export interface MovementListen {
+    instance: string;
+    configKey: string | null;
+    address: string | null;
+    movement: string;
+    startLine: number;
+    endLine: number;
+}
+export interface MovementListenOutline {
+    active: (MovementListen & {
+        adapter: string | null;
+        traversal: boolean;
+    })[] | null;
+    paused: MovementListen[];
+    adapters: Record<string, string> | null;
+}
 /** The skeleton, with the release a new movement is pinned to. */
 export type MovementCatalogResponse = TeamCatalogSnapshot & {
     installed: {
@@ -8811,6 +8829,34 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
             }, movement_lang_index.Definition | null>;
+            outline: _trpc_server.BuildProcedure<"mutation", {
+                _config: _trpc_server.RootConfig<{
+                    ctx: {
+                        authorise: () => Promise<void>;
+                    };
+                    meta: object;
+                    errorShape: {
+                        message: string;
+                        code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
+                        data: _trpc_server_dist_error_formatter.DefaultErrorData;
+                    };
+                    transformer: _trpc_server.DefaultDataTransformer;
+                }>;
+                _meta: object;
+                _ctx_out: {
+                    authorise: () => Promise<void>;
+                };
+                _input_in: {
+                    source: string;
+                    id: string;
+                };
+                _input_out: {
+                    source: string;
+                    id: string;
+                };
+                _output_in: typeof _trpc_server.unsetMarker;
+                _output_out: typeof _trpc_server.unsetMarker;
+            }, MovementListenOutline>;
             catalogForSource: _trpc_server.BuildProcedure<"mutation", {
                 _config: _trpc_server.RootConfig<{
                     ctx: {

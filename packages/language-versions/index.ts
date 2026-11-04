@@ -154,12 +154,48 @@ export type CarriedStory =
   | { ok: true; story: StoryIR; words: StoryWords; gaps: { adapter: string; detail: string }[] }
   | { ok: false; problems: StoryProblem[] };
 
+/** What a text's facets say about a file: whether it is an automation, a
+ *  library, and whether a person can run it on demand. */
+export interface FileFacets {
+  listenerCount: number;
+  runnableOnDemand: boolean;
+  isAutomation: boolean;
+  exportedMovementCount: number;
+  exportedShapeCount: number;
+  isLibrary: boolean;
+}
+
+export interface OutlinedListen {
+  instance: string;
+  configKey: string | null;
+  /** Where it listens, as written; null for the form that names only its
+   *  instance. */
+  address: string | null;
+  movement: string;
+  startLine: number;
+  endLine: number;
+}
+
+/** The listens a text declares and the facets they give it, read by the
+ *  version's own parser: what a panel that manages listens needs, in text
+ *  positions, with no syntax tree crossing. */
+export interface ListenOutline {
+  /** The live `listen` statements; null when the text does not parse. */
+  active: (OutlinedListen & { adapter: string | null; traversal: boolean })[] | null;
+  /** The commented-out ones. */
+  paused: OutlinedListen[];
+  /** Instance name to adapter key; null when the text does not parse. */
+  adapters: Record<string, string> | null;
+  facets: FileFacets;
+}
+
 /** A carried version's own checker and editor service. The editor's answers
  *  are the language service's shapes, which a carried version must answer in
  *  exactly. */
 export interface CheckingLane {
   checkSource(request: CheckRequest): Promise<CheckedSource>;
   storyOf(request: StoryRequest): Promise<CarriedStory>;
+  outlineOf(request: { source: string; pin: LanguageVersion }): ListenOutline;
   completionsAt(request: EditorRequest): Promise<Completions>;
   hoverAt(request: EditorRequest): Promise<HoverCard | null>;
   definitionAt(request: EditorRequest): Promise<Definition | null>;

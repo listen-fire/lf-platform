@@ -106,7 +106,7 @@ import {
   storyViewForMovement,
   type StoryViewResult,
 } from '../../../services/translation_graph/movement/story_view';
-import { listMovementRows } from '../../../services/translation_graph/movement/store';
+import { getMovementRow, listMovementRows } from '../../../services/translation_graph/movement/store';
 import { reportedFailureReason } from '../../../services/translation_graph/runs/trigger_run';
 import { UserService } from '../../../services/user';
 import { movementEventsImpl, type MovementEventItem } from '../../../services/inbound/arrival_ledger';
@@ -326,6 +326,22 @@ function languageRouteOf(pin: LanguageVersion): MovementLanguageRoute {
   }
 }
 
+/** The listens of a text on a carried version, as that version's parser read
+ *  them. Stated here so the browser's types carry no version's package. */
+interface MovementListen {
+  instance: string;
+  configKey: string | null;
+  address: string | null;
+  movement: string;
+  startLine: number;
+  endLine: number;
+}
+export interface MovementListenOutline {
+  active: (MovementListen & { adapter: string | null; traversal: boolean })[] | null;
+  paused: MovementListen[];
+  adapters: Record<string, string> | null;
+}
+
 /** The skeleton, with the release a new movement is pinned to. */
 export type MovementCatalogResponse = TeamCatalogSnapshot & {
   installed: { pin: LanguageVersion };
@@ -436,6 +452,26 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
     definition: userProcedure
       .input(editorPositionInput)
       .mutation(async ({ input }): Promise<Definition | null> => answered(await defineAt(editorRequestOf(input)), input.id)),
+
+    /**
+     * The listens a program declares, read by its carried version's own parser:
+     * that parser is not in the browser, so the listeners panel asks here for a
+     * pin the browser cannot read. A MUTATION for `check`'s reason. A pin whose
+     * text the browser reads has nothing to ask.
+     */
+    outline: userProcedure
+      .input(z.object({ source: z.string(), id: z.string().uuid() }))
+      .mutation(async ({ input }): Promise<MovementListenOutline> => {
+        const ctx = currentContext();
+        const row = await getMovementRow({ teamId: ctx.user.teamId, id: input.id });
+        if (row === null) throw new TRPCError({ code: 'NOT_FOUND', message: `no movement ${input.id}` });
+        const route = routeOf(row.languageVersion);
+        if (route.kind !== 'carried') {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: `language ${row.languageVersion} is not read through a carried version` });
+        }
+        const { active, paused, adapters } = (await route.lane()).outlineOf({ source: input.source, pin: route.pin });
+        return { active, paused, adapters };
+      }),
 
     /**
      * The same snapshot, TYPED FOR ONE PROGRAM: instance schemas filled by the
@@ -567,9 +603,15 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
         const detail = await getMovement({ teamId, id: input.id });
         if (!detail) return null;
         const dependents = await movementDependents({ teamId, name: detail.name });
+        // Opening an automation on a carried version is what loads that version.
+        const route = routeOf(detail.languageVersion);
+        const facets =
+          route.kind === 'carried'
+            ? (await route.lane()).outlineOf({ source: detail.source, pin: route.pin }).facets
+            : movementFileFacets(detail.source, detail.languageVersion);
         return {
           ...detail,
-          facets: movementFileFacets(detail.source),
+          facets,
           dependents,
           languageRoute: languageRouteOf(detail.languageVersion),
         };

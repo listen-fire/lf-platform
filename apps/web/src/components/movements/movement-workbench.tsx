@@ -71,6 +71,7 @@ import {
 } from "@/components/movements/movement-activity";
 import {
   ListenersPanel,
+  type ServerListenOutline,
   commentListenLines,
   uncommentListenLines,
   type ListenerSummary,
@@ -582,6 +583,12 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
     [props.languageRoute, catalog],
   );
 
+  // A pin on a carried version: its parser is on the server, so the listeners
+  // panel asks its own version about the text it shows, a beat after typing.
+  const readsListensOnServer = props.languageRoute?.kind === "carried" && movementId !== undefined;
+  const [serverOutline, setServerOutline] = useState<ServerListenOutline | null>(null);
+  const outlineSource = useRef<string | null>(null);
+
   // The server's lint for a release pin: the movement's own pin when it has a
   // row, else the installed release.
   const checkRemote = useCallback<CheckRemote>(
@@ -760,6 +767,26 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
   // The Listeners panel projects the CURRENT text (a listen line is the
   // listener), so the workbench tracks the editor's content as state.
   const [currentSource, setCurrentSource] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!readsListensOnServer || movementId === undefined || currentSource === null) return;
+    if (outlineSource.current === currentSource) return;
+    const source = currentSource;
+    const timer = setTimeout(() => {
+      outlineSource.current = source;
+      utils.client.views.movement.outline
+        .mutate({ source, id: movementId })
+        .then((outline) => {
+          // Ignore an answer the author has already typed past.
+          if (outlineSource.current === source) setServerOutline(outline);
+        })
+        .catch(() => {
+          // Transient: let the next edit ask again.
+          if (outlineSource.current === source) outlineSource.current = null;
+        });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [readsListensOnServer, movementId, currentSource, utils]);
   const handleEditorChange = useCallback(
     (source: string) => {
       setCurrentSource(source);
@@ -1685,6 +1712,7 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
           {/* Listeners — the file's listen lines, with pause/resume. */}
           <ListenersPanel
             source={currentSource}
+            {...(readsListensOnServer ? { serverOutline } : {})}
             serverListeners={serverListeners}
             suggestionMessages={listenSuggestions}
             saving={save.isLoading}

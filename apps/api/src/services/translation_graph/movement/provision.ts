@@ -1501,7 +1501,7 @@ export interface MovementListItem {
  *  that version: a list of automations loads no version it has no work for,
  *  and the press itself is what its own parser answers. */
 function isRunnable(row: MovementRow): boolean {
-  if (runningOf(row.languageVersion).kind === 'carried') return movementFileFacets(row.source).runnableOnDemand;
+  if (runningOf(row.languageVersion).kind === 'carried') return movementFileFacets(row.source, row.languageVersion).runnableOnDemand;
   const route = routeOf(row.languageVersion);
   // A pin this platform does not run has nothing "Run now" can start.
   if (route.kind === 'refused' || route.kind === 'carried') return false;
@@ -1536,7 +1536,7 @@ export async function listMovements(teamId: string): Promise<MovementListItem[]>
       kind: listeners[0]?.kind ?? null,
       listeners,
       runnable: isRunnable(row),
-      facets: movementFileFacets(row.source),
+      facets: movementFileFacets(row.source, row.languageVersion),
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };

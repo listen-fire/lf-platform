@@ -1,7 +1,7 @@
 // A 0.12 automation's picture and authoring help come from 0.12's own language
 // and handbook, in 0.12's words: nothing here reads under a later release.
 
-import { catalogOf, checkSource, connectionsDigest, describeSystem, handbookFrontSection, handbookOf, searchHandbook, storyOf } from '..';
+import { catalogOf, checkSource, connectionsDigest, describeSystem, handbookFrontSection, handbookOf, outlineOf, searchHandbook, storyOf } from '..';
 import type { ModulePlatform } from '../lane/run_types';
 import type { TeamFacts, TeamFile } from '../lane/types';
 
@@ -159,5 +159,38 @@ describe('the systems a 0.12 automation is written against', () => {
       team: withAttio,
     });
     expect(checked.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
+  });
+});
+
+describe("a 0.12 text's listens, as the panel and an opened automation read them", () => {
+  it('reads the listen 0.12 spells, with its facets', () => {
+    expect(outlineOf({ source: ECHO_012, pin: '0.12.13' })).toEqual({
+      active: [{ instance: 'manual', adapter: null, configKey: null, traversal: false, address: null, movement: 'echo', startLine: 4, endLine: 4 }],
+      paused: [],
+      adapters: {},
+      facets: { listenerCount: 1, runnableOnDemand: true, isAutomation: true, exportedMovementCount: 0, exportedShapeCount: 0, isLibrary: false },
+    });
+  });
+
+  it('reads a commented-out listen as paused, by 0.12\'s parser', () => {
+    const paused = outlineOf({ source: ECHO_012.replace('listen to', '# listen to'), pin: '0.12.13' });
+    expect(paused.active).toEqual([]);
+    expect(paused.paused).toEqual([expect.objectContaining({ movement: 'echo', startLine: 4, endLine: 4 })]);
+  });
+
+  it('text only a later release reads does not parse here', () => {
+    const outline = outlineOf({ source: ECHO_015, pin: '0.12.13' });
+    expect(outline.active).toBeNull();
+    expect(outline.facets.isAutomation).toBe(false);
+  });
+
+  it('a commented-out later spelling is not offered as a paused listen', () => {
+    expect(outlineOf({ source: `${ECHO_012}# listen to manual-[:Invocations]-> fire echo\n`, pin: '0.12.13' }).paused).toEqual([]);
+  });
+
+  it('a connected instance names its adapter, an import alias resolved', () => {
+    const outline = outlineOf({ source: 'import { `@lf/email` as mail } from adapters\ninbox = connect mail\nfunction f(m: <inbox-[:message]->>) {\n  return 1\n}\nlisten to inbox { key: "deals" } fire f\n', pin: '0.12.13' });
+    expect(outline.active).toEqual([expect.objectContaining({ instance: 'inbox', configKey: 'deals', movement: 'f' })]);
+    expect(outline.facets.runnableOnDemand).toBe(false);
   });
 });
