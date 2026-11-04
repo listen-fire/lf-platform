@@ -83,6 +83,7 @@ import { enqueueWork } from '../../work/store';
 import type { WorkKind } from '../../work/kinds';
 import { syncListenSubscriptions } from './listen_subscriptions';
 import { movementWriteRunMode } from './dry_run';
+import { loopBreakerPauses, pauseListenConfig, pipelineOfConfig } from '../../inbound/listen_pause';
 import {
   manualListenerMovements,
   movementFileFacets,
@@ -403,6 +404,9 @@ async function reconcileDerivedTriggers(input: {
   /** What to tell a run parked on a listener this reconciliation retires.
    *  Defaults to the ordinary case (the `listen` line went away). */
   retirementReason?: string;
+  /** A language upgrade: it never changes whether anything is live, so every
+   *  pause outlasts it, even where the new plan cannot be matched to its row. */
+  keepPauses?: boolean;
 }): Promise<{ listeners: ProvisionedListener[]; reconciles: Set<WorkKind> }> {
   const qb = getAutomationsQb(['trigger']);
   // The schedule reconciles whose rows this save made stale: a new, changed or
@@ -421,6 +425,18 @@ async function reconcileDerivedTriggers(input: {
     })),
     existing,
   });
+  const breakerPauses = input.keepPauses === true ? await loopBreakerPauses({ teamId: input.teamId, configs: existing.map((row) => row.config) }) : new Map<string, string>();
+  const breakerPauseOf = (row: DerivedTriggerRow): string | undefined => {
+    const pipeline = pipelineOfConfig(row.config);
+    return pipeline === null ? undefined : breakerPauses.get(pipeline);
+  };
+  // A pause on a row this retires passes to every row this makes for the
+  // automation: it cannot be said which of them is that listen now, and running
+  // one a person stopped is the worse mistake.
+  const retiredPaused = input.keepPauses === true ? plan.retired : [];
+  const carriedOff = retiredPaused.some((row) => row.runMode === 'off');
+  const carriedGuard = retiredPaused.find((row) => row.guardPause !== undefined)?.guardPause;
+  const carriedBreaker = retiredPaused.map(breakerPauseOf).find((reason) => reason !== undefined);
 
   // Retire rows whose listen disappeared: delete the trigger row itself.
   // `trigger_run` history rows reference the trigger id WITHOUT an FK, so
@@ -497,9 +513,11 @@ async function reconcileDerivedTriggers(input: {
         })
         .where('id', '=', triggerId as TriggerId)
         .execute();
+      const held = breakerPauseOf(kept);
+      if (held !== undefined) await pauseListenConfig({ teamId: input.teamId, config: desired.config, reason: held });
     } else {
       triggerId = randomUUID();
-      runMode = textRunMode;
+      runMode = carriedOff ? 'off' : textRunMode;
       noteSchedule(desired.adapter);
       await qb
         .insertInto('trigger')
@@ -515,8 +533,12 @@ async function reconcileDerivedTriggers(input: {
           fired_movement_name: desired.movementName,
           run_mode: runMode,
           provisioned_by_setup_agent: false,
+          ...(carriedGuard !== undefined
+            ? { guard_paused_at: carriedGuard.at, guard_paused_reason: carriedGuard.reason, guard_paused_signal: carriedGuard.signal }
+            : {}),
         } as never)
         .execute();
+      if (carriedBreaker !== undefined) await pauseListenConfig({ teamId: input.teamId, config: desired.config, reason: carriedBreaker });
     }
 
     // The trigger row is purely the dispatch index — dispatch executes the
@@ -558,6 +580,8 @@ async function provisionListeners(input: {
    *  caller's work row (./listens_up.ts): no provider is called while it is
    *  open or for a rollback. */
   providersLater?: boolean;
+  /** A language upgrade: see `reconcileDerivedTriggers`. */
+  keepPauses?: boolean;
 }): Promise<ProvisionMovementResult> {
   const { teamCatalog } = input;
   const within = <T>(name: string, run: () => Promise<T>): Promise<T> =>
@@ -637,6 +661,7 @@ async function provisionListeners(input: {
       teamId: input.teamId,
       movementRow: input.movementRow,
       desired,
+      ...(input.keepPauses === true ? { keepPauses: true } : {}),
     }),
   );
 
@@ -945,6 +970,24 @@ async function checkForSave({ input, row, timer }: { input: SaveMovementInput; r
   };
 }
 
+/** What tells anyone waits for an open context transaction to commit, when
+ *  there is one; a rollback told nobody. */
+function onceCommitted(tell: () => void): void {
+  const context = unsafeCurrentContext();
+  if (context?.kyselyTrx !== undefined) context.onChangesCommitted(tell);
+  else tell();
+}
+
+/**
+ * Move a never-shipped automation's text and pin, and nothing else: it stays
+ * never-shipped, with no listens and no version, because an upgrade never
+ * starts anything. Its next ordinary save ships it, under the new pin.
+ */
+export async function moveNeverShippedPin(input: { teamId: string; id: string; name: string; source: string; to: LanguageVersion }): Promise<void> {
+  const row = await upsertMovementRow({ teamId: input.teamId, id: input.id, name: input.name, source: input.source, languageVersion: input.to });
+  onceCommitted(() => emitMovementChange({ teamId: input.teamId, movementId: row.id, action: 'saveMovement' }));
+}
+
 export async function saveMovement(input: SaveMovementInput): Promise<SaveMovementResult> {
   // One timing line per save, whatever gate it returns through — the authoring
   // loop's latency signal (./timing.ts). The steps live in `runSave`; the
@@ -971,13 +1014,6 @@ async function runSave(
   if (input.inTransaction !== undefined && unsafeCurrentContext()?.kyselyTrx === undefined) {
     throw new Error('a save handed a transaction to join is running outside one');
   }
-  // What tells anyone waits for the caller's transaction to commit, when there
-  // is one; a rollback told nobody.
-  const onceCommitted = (tell: () => void): void => {
-    const context = unsafeCurrentContext();
-    if (context?.kyselyTrx !== undefined) context.onChangesCommitted(tell);
-    else tell();
-  };
   const declaredName = movementNameFromSource(input.source);
   const existing = input.id
     ? await getMovementRow({ teamId: input.teamId, id: input.id })
@@ -1146,6 +1182,7 @@ async function runSave(
           teamCatalog,
           timer,
           ...(input.inTransaction !== undefined ? { providersLater: true } : {}),
+          ...(input.languageUpgrade !== undefined ? { keepPauses: true } : {}),
           // A consented non-valid save ships: derive its declared listens despite
           // check errors so it genuinely fires-and-fails (decision 3b).
           ...(consented ? { provisionDespiteErrors: true } : {}),

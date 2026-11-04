@@ -222,7 +222,7 @@ jest.mock('../../adapters/registry', () => {
 // A shipped cron or poll is armed by the periodic reconciles; the save asks
 // for a reconcile now (the store write and the wake are their own suites').
 // A listen paused by the loop breaker is that suite's subject; none is here.
-jest.mock('../../../inbound/listen_pause', () => ({ listenPauses: jest.fn(async () => new Map()) }));
+jest.mock('../../../inbound/listen_pause', () => ({ ...jest.requireActual('../../../inbound/listen_pause'), listenPauses: jest.fn(async () => new Map()), loopBreakerPauses: jest.fn(async () => new Map()) }));
 
 jest.mock('../../../work/store', () => ({
   enqueueWork: jest.fn(async () => {}),

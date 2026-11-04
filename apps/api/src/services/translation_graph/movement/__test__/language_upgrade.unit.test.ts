@@ -80,7 +80,7 @@ function movement(over: Partial<MovementRow> & { id: string }): MovementRow {
     source: `source of ${over.id}`,
     description: '',
     triggerId: null,
-    currentVersionId: null,
+    currentVersionId: 'version-1',
     validityStatus: null,
     validityReason: null,
     validitySourceHash: null,

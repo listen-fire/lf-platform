@@ -19,10 +19,14 @@ import type { TriggerRunId } from '../../../../generated/kysely/automations/Trig
 import { getAutomationsQb, getCoreQb } from '../../../../lib/kysely';
 import { cleanupTeam } from '../../../../test/harness/cleanup';
 import { unsafeCurrentContext } from '../../../context';
-import { advanceLive, upgradeMovement, type Advance, type ValidateUnder } from '../language_upgrade';
+import { listenPauses } from '../../../inbound/listen_pause';
+import { setPaused } from '../../../lf_store/listens';
+import { advanceLive, liveDeployCheckDeps, upgradeMovement, type Advance, type ValidateUnder } from '../language_upgrade';
+import { getMovementRow } from '../store';
 import { movementCatalogForTeam } from '../catalog';
 import { syncListenSubscriptions } from '../listen_subscriptions';
 import { registerBringUpListensWork } from '../listens_up';
+import { mintMovementVersionIfChanged } from '../version_store';
 import { drainUntilIdle, resetWorkHandlersForTests } from '../../../work/drain';
 
 jest.mock('../../../credentials/credential_lifecycle', () => ({
@@ -102,12 +106,19 @@ describe('an upgrading import group moves in one transaction (real Postgres, the
     mockedCatalog.mockClear();
   });
 
-  async function seed(name: string, source: string): Promise<string> {
+  async function seedNeverShipped(name: string, source: string): Promise<string> {
     const id = randomUUID();
     await getAutomationsQb(['movement'])
       .insertInto('movement')
       .values({ id: id as MovementId, team_id: teamId, name, source, description: '', language_version: '0.12.13' })
       .execute();
+    return id;
+  }
+
+  /** On 0.12, shipped under that pin, as production left it. */
+  async function seed(name: string, source: string): Promise<string> {
+    const id = await seedNeverShipped(name, source);
+    await mintMovementVersionIfChanged({ teamId, movementId: id, source, languageVersion: '0.12.13' });
     return id;
   }
 
@@ -152,6 +163,8 @@ describe('an upgrading import group moves in one transaction (real Postgres, the
       .where('id', '=', listens as MovementId)
       .execute();
     const app = await seed('app_b', importing('app_b', 'lib'));
+    const libVersion = (await rowOf(lib)).current_version_id;
+    const listensVersion = (await rowOf(listens)).current_version_id;
     const sources: Record<string, string> = {};
     const saved: string[] = [];
     // The real preparation and the real save, until the last member refuses.
@@ -176,8 +189,8 @@ describe('an upgrading import group moves in one transaction (real Postgres, the
     expect(saved).toEqual(['lib', 'app_a']);
     expect(result).toEqual(expect.objectContaining({ status: 'unverified', detail: 'app_b: the rewritten text did not ship; nothing moved' }));
 
-    expect(await rowOf(lib)).toEqual({ language_version: '0.12.13', source: LIBRARY, current_version_id: null });
-    expect(await rowOf(listens)).toEqual(expect.objectContaining({ language_version: '0.12.13', current_version_id: null }));
+    expect(await rowOf(lib)).toEqual({ language_version: '0.12.13', source: LIBRARY, current_version_id: libVersion });
+    expect(await rowOf(listens)).toEqual(expect.objectContaining({ language_version: '0.12.13', current_version_id: listensVersion }));
     expect(await rowOf(app)).toEqual(expect.objectContaining({ language_version: '0.12.13' }));
     expect(await triggersOf(listens)).toEqual([]);
     expect(mockedSync).not.toHaveBeenCalled();
@@ -214,6 +227,110 @@ describe('an upgrading import group moves in one transaction (real Postgres, the
       .select(['language_version', 'source'])
       .executeTakeFirstOrThrow();
     expect(version).toEqual({ language_version: LANGUAGE_VERSION, source: LISTENS });
+  });
+
+  describe('an upgrade never changes whether an automation is live', () => {
+    it('a never-shipped automation moves its text and pin, provisions nothing, and stays never-shipped', async () => {
+      const id = await seedNeverShipped('draft_stamp', `${LISTENS}// before\n`);
+
+      const result = await upgradeMovement({ teamId, id, acknowledge: true, validate: rewrites });
+
+      expect(result.status).toBe('upgraded');
+      expect(await rowOf(id)).toEqual({ language_version: LANGUAGE_VERSION, source: `${LISTENS}// after\n`, current_version_id: null });
+      expect(await triggersOf(id)).toEqual([]);
+      expect(await bringUpRowsOf(id)).toEqual([]);
+      expect(mockedCatalog).not.toHaveBeenCalled();
+    });
+
+    const pausedRowOf = (id: string) =>
+      getAutomationsQb(['trigger'])
+        .selectFrom('trigger')
+        .where('movement_id', '=', id as MovementId)
+        .select(['kind', 'run_mode', 'guard_paused_at', 'guard_paused_reason', 'guard_paused_signal'])
+        .execute();
+
+    /** A row 0.12 left: `config` is what the new plan matches it by, or fails to. */
+    async function leftRow(id: string, row: { kind: string; run_mode?: string; guard?: boolean; config?: unknown }): Promise<TriggerId> {
+      const triggerId = randomUUID() as TriggerId;
+      await getAutomationsQb(['trigger'])
+        .insertInto('trigger')
+        .values({
+          id: triggerId,
+          team_id: teamId,
+          name: `left-${triggerId.slice(0, 8)}`,
+          kind: row.kind,
+          config: JSON.stringify(row.config ?? {}),
+          movement_id: id as MovementId,
+          run_mode: row.run_mode ?? 'live',
+          ...(row.guard === true ? { guard_paused_at: new Date(), guard_paused_reason: 'a team budget breach', guard_paused_signal: 'team_budget' } : {}),
+        })
+        .execute();
+      return triggerId;
+    }
+
+    it('a row paused by run_mode stays off, the new listen matched to it', async () => {
+      const id = await seed('paused_off', LISTENS);
+      const triggerId = await leftRow(id, { kind: 'manual', run_mode: 'off' });
+
+      expect((await upgradeMovement({ teamId, id, acknowledge: true, validate: rewrites })).status).toBe('upgraded');
+
+      expect(await triggersOf(id)).toEqual([{ id: triggerId, kind: 'manual' }]);
+      expect(await pausedRowOf(id)).toEqual([expect.objectContaining({ run_mode: 'off' })]);
+    });
+
+    it('a row the loop guard paused stays paused, the new listen matched to it', async () => {
+      const id = await seed('paused_guard', LISTENS);
+      await leftRow(id, { kind: 'manual', guard: true });
+
+      await upgradeMovement({ teamId, id, acknowledge: true, validate: rewrites });
+
+      expect(await pausedRowOf(id)).toEqual([expect.objectContaining({ run_mode: 'live', guard_paused_reason: 'a team budget breach', guard_paused_signal: 'team_budget', guard_paused_at: expect.any(Date) })]);
+    });
+
+    it('a pause on a row the new plan cannot match passes to the row it makes', async () => {
+      const off = await seed('paused_unmatched_off', LISTENS);
+      await leftRow(off, { kind: 'attio', run_mode: 'off' });
+      const guard = await seed('paused_unmatched_guard', LISTENS);
+      await leftRow(guard, { kind: 'attio', guard: true });
+
+      await upgradeMovement({ teamId, id: off, acknowledge: true, validate: rewrites });
+      await upgradeMovement({ teamId, id: guard, acknowledge: true, validate: rewrites });
+
+      expect(await pausedRowOf(off)).toEqual([expect.objectContaining({ kind: 'manual', run_mode: 'off' })]);
+      expect(await pausedRowOf(guard)).toEqual([expect.objectContaining({ kind: 'manual', guard_paused_reason: 'a team budget breach' })]);
+    });
+
+    it("the loop breaker's pause outlasts the listen's new pipeline", async () => {
+      const id = await seed('paused_breaker', LISTENS);
+      const oldPipeline = `listen:paused_breaker:stamp:${randomUUID().slice(0, 8)}`;
+      await leftRow(id, { kind: 'manual', config: { listen: { pipeline: oldPipeline } } });
+      await setPaused({ tenant: teamId }, { pipeline: oldPipeline, paused: 'LISTEN_LOOP: it echoes itself' });
+
+      expect((await upgradeMovement({ teamId, id, acknowledge: true, validate: rewrites })).status).toBe('upgraded');
+
+      const [row] = await triggersOf(id);
+      expect(await listenPauses({ teamId, triggerIds: [row!.id] })).toEqual(new Map([[row!.id, { reason: 'LISTEN_LOOP: it echoes itself', held: 0 }]]));
+    });
+
+    it('the deploy sweep keeps a paused row, so an upgrade after it finds the pause; it removes the others', async () => {
+      const paused = await seed('swept_paused', LISTENS);
+      await leftRow(paused, { kind: 'manual', run_mode: 'off' });
+      const guarded = await seed('swept_guarded', LISTENS);
+      await leftRow(guarded, { kind: 'manual', guard: true });
+      const plain = await seed('swept_plain', LISTENS);
+      await leftRow(plain, { kind: 'manual' });
+      const { unprovision } = liveDeployCheckDeps({ tag: 't', language: { current: LANGUAGE_VERSION, legacy: [], deprecated: [] } });
+
+      for (const id of [paused, guarded, plain]) await unprovision((await getMovementRow({ teamId, id }))!);
+
+      expect(await triggersOf(plain)).toEqual([]);
+      expect(await pausedRowOf(guarded)).toHaveLength(1);
+      expect(await pausedRowOf(paused)).toHaveLength(1);
+
+      await upgradeMovement({ teamId, id: paused, acknowledge: true, validate: rewrites });
+
+      expect(await pausedRowOf(paused)).toEqual([expect.objectContaining({ run_mode: 'off' })]);
+    });
   });
 
   it('a member whose save retires a listen settles the run parked on it, in the open transaction', async () => {

@@ -83,6 +83,7 @@ import type { TeamFacts } from '@listen-fire/language-versions';
 import { movementCatalogForTeam, type ImportedFile } from './catalog';
 
 import { getAutomationsQb } from '../../../lib/kysely';
+import { listenPauses } from '../../inbound/listen_pause';
 import { settleRunsParkedOnTriggers } from '../../interaction/run_failure';
 import {
   automationUrl,
@@ -102,7 +103,7 @@ import { withTeamContext } from './firing_context';
 import { currentContext } from '../../context';
 import { importGroupOf } from './imports_across_versions';
 import { bringUpListensLater } from './listens_up';
-import { saveMovement } from './provision';
+import { moveNeverShippedPin, saveMovement } from './provision';
 import {
   getMovementRow,
   listAllMovementRows,
@@ -882,17 +883,20 @@ export function liveDeployCheckDeps(release: DeployCheckRelease): DeployCheckDep
         .selectFrom('trigger')
         .where('movement_id', '=', movement.id as MovementId)
         .where('team_id', '=', movement.teamId as TeamId)
-        .select('id')
+        .select(['id', 'run_mode'])
         .execute();
       if (triggers.length === 0) return;
+      const triggerIds = triggers.map((t) => t.id);
       await settleRunsParkedOnTriggers({
-        triggerIds: triggers.map((t) => t.id),
+        triggerIds,
         reason: 'This run was waiting under an earlier release; its automation stopped at the upgrade. Upgrade the automation, then run it again.',
       });
-      await getAutomationsQb(['trigger'])
-        .deleteFrom('trigger')
-        .where('id', 'in', triggers.map((t) => t.id))
-        .execute();
+      // A paused row stays: it is the only record of the pause, and the upgrade
+      // that brings this automation back must find it. It fires nothing here.
+      const pauses = await listenPauses({ teamId: movement.teamId as TeamId, triggerIds });
+      const unpaused = triggers.filter((t) => t.run_mode !== 'off' && !pauses.has(t.id)).map((t) => t.id);
+      if (unpaused.length === 0) return;
+      await getAutomationsQb(['trigger']).deleteFrom('trigger').where('id', 'in', unpaused).execute();
     },
     recordRun: async ({ tag, languageRelease, summary }) => {
       await getAutomationsQb(['deploy_check'])
@@ -919,6 +923,14 @@ export function liveDeployCheckDeps(release: DeployCheckRelease): DeployCheckDep
  * yet.
  */
 export const advanceLive: Advance = async ({ movement, to, source, movingWith }) => {
+  // An upgrade never changes whether an automation is live: one that has never
+  // shipped moves its text and pin, and nothing starts.
+  if (movement.currentVersionId === null) {
+    return async () => {
+      await moveNeverShippedPin({ teamId: movement.teamId, id: movement.id, name: movement.name, source, to });
+      return { ok: true };
+    };
+  }
   const teamCatalog = await withTeamContext(movement.teamId as TeamId, () =>
     movementCatalogForTeam(movement.teamId as TeamId, {
       source,
@@ -935,7 +947,8 @@ export const advanceLive: Advance = async ({ movement, to, source, movingWith })
       inTransaction: { teamCatalog },
     });
     if (saved.ok) return { ok: true };
-    return { ok: false, detail: `the rewritten text did not ship: ${(saved.errors ?? []).join('; ') || 'the save stopped short of shipping'}` };
+    const what = source === movement.source ? `it did not ship under ${to}` : 'the rewritten text did not ship';
+    return { ok: false, detail: `${what}: ${(saved.errors ?? []).join('; ') || 'the save stopped short of shipping'}` };
   };
 };
 
@@ -1125,7 +1138,8 @@ export async function upgradeMovement(input: {
           checkedAgainst: to,
         });
       }
-      await bringUpListensLater({ teamId: movement.teamId, movementIds: checked.map((member) => member.movement.id), key: movement.id });
+      const shipped = checked.filter((member) => member.movement.currentVersionId !== null).map((member) => member.movement.id);
+      if (shipped.length > 0) await bringUpListensLater({ teamId: movement.teamId, movementIds: shipped, key: movement.id });
     });
   } catch (err) {
     if (!(err instanceof GroupMoveStopped)) throw err;

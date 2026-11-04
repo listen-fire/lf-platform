@@ -29,9 +29,28 @@ export interface ListenPause {
 
 const pipelineOf = z.object({ listen: z.object({ pipeline: z.string() }) });
 
-function pipelineOfConfig(config: unknown): string | null {
+export function pipelineOfConfig(config: unknown): string | null {
   const parsed = pipelineOf.safeParse(config);
   return parsed.success ? parsed.data.listen.pipeline : null;
+}
+
+/** Why the loop breaker paused each of `configs`' listens, by pipeline. */
+export async function loopBreakerPauses(input: { teamId: TeamId; configs: readonly unknown[] }): Promise<Map<string, string>> {
+  const pipelines = input.configs.map(pipelineOfConfig).filter((pipeline): pipeline is string => pipeline !== null);
+  if (pipelines.length === 0) return new Map();
+  const found = await states({ tenant: input.teamId }, { pipelines });
+  return new Map(
+    pipelines.flatMap((pipeline) => {
+      const paused = found[pipeline]?.paused;
+      return paused === undefined || paused === null ? [] : [[pipeline, paused] as const];
+    }),
+  );
+}
+
+/** Pause the listen `config` is, as the loop breaker would have. */
+export async function pauseListenConfig(input: { teamId: TeamId; config: unknown; reason: string }): Promise<void> {
+  const pipeline = pipelineOfConfig(input.config);
+  if (pipeline !== null) await setPaused({ tenant: input.teamId }, { pipeline, paused: input.reason });
 }
 
 /** The team's paused listens among `triggerIds`, by trigger id. */

@@ -186,7 +186,7 @@ jest.mock('../../adapters/registry', () => {
 jest.mock('../../../work/store', () => ({ enqueueWork: jest.fn(async () => undefined) }));
 
 // A listen paused by the loop breaker is that suite's subject; none is here.
-jest.mock('../../../inbound/listen_pause', () => ({ listenPauses: jest.fn(async () => new Map()) }));
+jest.mock('../../../inbound/listen_pause', () => ({ ...jest.requireActual('../../../inbound/listen_pause'), listenPauses: jest.fn(async () => new Map()), loopBreakerPauses: jest.fn(async () => new Map()) }));
 
 jest.mock('../listen_subscriptions', () => ({
   syncListenSubscriptions: jest.fn(async () => ({ notes: [] })),

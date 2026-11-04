@@ -354,6 +354,8 @@ export interface DerivedTriggerRow {
    *  legacy rows and on adapters that declare no address hops. */
   resolvedAddress?: Record<string, string>;
   runMode: TriggerRunMode;
+  /** The loop guard's pause, when it holds this row (loop_guard/pause.ts). */
+  guardPause?: { at: Date; reason: string | null; signal: string | null };
 }
 
 const derivedTriggerColumns = [
@@ -366,6 +368,9 @@ const derivedTriggerColumns = [
   'config',
   'resolved_address',
   'run_mode',
+  'guard_paused_at',
+  'guard_paused_reason',
+  'guard_paused_signal',
 ] as const;
 
 function toDerivedTriggerRow(row: {
@@ -378,6 +383,9 @@ function toDerivedTriggerRow(row: {
   config: unknown;
   resolved_address: unknown;
   run_mode: string;
+  guard_paused_at?: Date | null;
+  guard_paused_reason?: string | null;
+  guard_paused_signal?: string | null;
 }): DerivedTriggerRow {
   const resolvedAddress = stringRecordOf(row.resolved_address);
   return {
@@ -390,6 +398,9 @@ function toDerivedTriggerRow(row: {
     config: configRecordOf(row.config),
     ...(resolvedAddress !== undefined ? { resolvedAddress } : {}),
     runMode: parseRunMode(row.run_mode),
+    ...(row.guard_paused_at != null
+      ? { guardPause: { at: row.guard_paused_at, reason: row.guard_paused_reason ?? null, signal: row.guard_paused_signal ?? null } }
+      : {}),
   };
 }
 
