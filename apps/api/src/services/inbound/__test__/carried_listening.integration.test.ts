@@ -79,7 +79,6 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 describe('0.12 listens beside the current version (real Postgres)', () => {
   let teamId: TeamId;
   let calls: Array<{ method: string; url: string; body?: unknown }>;
-  const prior = process.env.LF_CARRIED_LISTENS;
   const realResolve = jest.requireActual('../../translation_graph/adapters/resolve').resolveAdapter;
 
   async function draft(source: string, pin = PIN): Promise<string> {
@@ -191,7 +190,6 @@ describe('0.12 listens beside the current version (real Postgres)', () => {
   });
 
   beforeEach(async () => {
-    process.env.LF_CARRIED_LISTENS = 'on';
     firing.mockClear();
     calls = [];
     currentRead.mockImplementation(realResolve);
@@ -203,10 +201,6 @@ describe('0.12 listens beside the current version (real Postgres)', () => {
     await cleanupTeam(teamId);
   });
 
-  afterAll(() => {
-    if (prior === undefined) delete process.env.LF_CARRIED_LISTENS;
-    else process.env.LF_CARRIED_LISTENS = prior;
-  });
 
   describe('webhooks a 0.12 listen wants', () => {
     it('a save reaches the source through 0.12\'s own module, in production\'s row', async () => {

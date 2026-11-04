@@ -227,13 +227,6 @@ const CURRENT_VERSION: CarriedVersion = {
   provides: { check: CURRENT, run: CURRENT, resume: CURRENT, listen: CURRENT },
 };
 
-/** 0.12's listens fire only with the switch on, until its schedules, polls and
- *  subscriptions are back too: a release with listens half on would stop those
- *  silently. Only tests and the dev loop set it. */
-function carriedListens(lane: () => Promise<ListeningLane>): ListenCapability {
-  return process.env.LF_CARRIED_LISTENS === 'on' ? { kind: 'carried', lane } : HELD;
-}
-
 const CARRIED: readonly CarriedVersion[] = [
   CURRENT_VERSION,
   // Carried for the automations pinned to 0.12 and the runs 0.12 parked, so
@@ -247,9 +240,7 @@ const CARRIED: readonly CarriedVersion[] = [
       check: { kind: 'carried', lane: () => import('@listen-fire/lang-0.12') },
       run: { kind: 'carried', lane: () => import('@listen-fire/lang-0.12') },
       resume: { kind: 'carried', lane: () => import('@listen-fire/lang-0.12') },
-      get listen() {
-        return carriedListens(() => import('@listen-fire/lang-0.12'));
-      },
+      listen: { kind: 'carried', lane: () => import('@listen-fire/lang-0.12') },
     },
     listenRows: () => import('@listen-fire/lang-0.12'),
   },

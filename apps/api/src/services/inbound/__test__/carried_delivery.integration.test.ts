@@ -57,7 +57,6 @@ const ATTIO_012 = 'attio = Attio(credential: attio_conn)\nfunction onChange(e: <
 
 describe('one door, two versions (real Postgres)', () => {
   let teamId: TeamId;
-  const prior = process.env.LF_CARRIED_LISTENS;
 
   async function movementOn(pin: string, source: string): Promise<string> {
     const id = randomUUID() as MovementId;
@@ -131,7 +130,6 @@ describe('one door, two versions (real Postgres)', () => {
   });
 
   beforeEach(async () => {
-    process.env.LF_CARRIED_LISTENS = 'on';
     firing.mockClear();
     teamId = randomUUID() as TeamId;
     await getCoreQb(['team']).insertInto('team').values({ id: teamId, name: `carried-${teamId}` }).execute();
@@ -141,10 +139,6 @@ describe('one door, two versions (real Postgres)', () => {
     await cleanupTeam(teamId);
   });
 
-  afterAll(() => {
-    if (prior === undefined) delete process.env.LF_CARRIED_LISTENS;
-    else process.env.LF_CARRIED_LISTENS = prior;
-  });
 
   it('keeps one delivery, without its signature or credentials, before the versions read it, and 0.12 judges only its own', async () => {
     const secret = 'sekrit-secret-sekrit';
@@ -173,16 +167,6 @@ describe('one door, two versions (real Postgres)', () => {
     expect(stored[0]!.status).toBe('dispatched');
     expect(firing).toHaveBeenCalledTimes(1);
     expect(firing.mock.calls[0]![0]).toMatchObject({ triggerId: row012, door: { kind: 'judged' }, triggerEventId: stored[0]!.id });
-  });
-
-  it('with the switch off, a delivery queues nothing for 0.12 and fires nothing', async () => {
-    delete process.env.LF_CARRIED_LISTENS;
-    const secret = 'sekrit-secret-sekrit';
-    const sub = await subscription(secret);
-    await listenRow({ movementId: await movementOn('0.12.13', ATTIO_012) });
-    expect((await deliver(sub, attioBody(randomUUID()), secret)).status).toBe(200);
-    expect(await workOf('read_delivery')).toEqual([]);
-    expect(await receipts()).toEqual([]);
   });
 
   it('a row kept only for a run, whose listen left the text, is not judged', async () => {
@@ -216,8 +200,7 @@ describe('one door, two versions (real Postgres)', () => {
     const receiptOf = (id: string) => getAutomationsQb(['trigger_event']).selectFrom('trigger_event').where('id', '=', id as never).select(['status', 'failure_reason']).executeTakeFirstOrThrow();
 
     it('a 0.12.13 door queued runs, with the listen switch off too', async () => {
-      delete process.env.LF_CARRIED_LISTENS;
-      const triggerId = await listenRow({ movementId: await movementOn('0.12.13', ATTIO_012) });
+        const triggerId = await listenRow({ movementId: await movementOn('0.12.13', ATTIO_012) });
       const receipt = await queueOldRow(triggerId);
       await drainUntilIdle({ teamId });
       expect(firing).toHaveBeenCalledTimes(1);
@@ -266,8 +249,7 @@ describe('one door, two versions (real Postgres)', () => {
       expect(rows.map((row) => [row.kind, row.fired_movement_name])).toEqual([['manual', 'echo']]);
       expect(rows[0]!.config).not.toHaveProperty('listen');
 
-      delete process.env.LF_CARRIED_LISTENS;
-      const row = await getMovementRow({ teamId, id });
+        const row = await getMovementRow({ teamId, id });
       await liveDeployCheckDeps(thisDeployCheckRelease('test')).unprovision(row!);
       expect(await getAutomationsQb(['trigger']).selectFrom('trigger').where('id', '=', rows[0]!.id).select('id').executeTakeFirst()).toBeDefined();
     });
@@ -322,7 +304,6 @@ describe('one door, two versions (real Postgres)', () => {
   });
 
   it('a Slack reply wakes the 0.12 run parked on its thread, with the listen switch off', async () => {
-    delete process.env.LF_CARRIED_LISTENS;
     const key = 'C1:1700000000.000100';
     const runId = randomUUID();
     const movement = await movementOn('0.12.13', ATTIO_012);
@@ -342,12 +323,10 @@ describe('one door, two versions (real Postgres)', () => {
     expect(wakes.map((wake) => wake.payload)).toEqual([{ adapterType: 'slack', teamId, correlationKey: expect.stringContaining('1700000000.000100') }]);
   });
 
-  it('a public inbox key under 0.12 finds its claimant from the config, only while its listens fire', async () => {
+  it('a public inbox key under 0.12 finds its claimant from the config', async () => {
     const movement = await movementOn('0.12.13', 'email = Email()\nfunction f(e: <email>) {\n  return 1\n}\nlisten to email { key: "Inbox" } fire f\n');
     const id = await listenRow({ movementId: movement, kind: 'email', config: { key: 'Inbox' }, firedMovementName: 'f' });
     expect((await findTriggerByInboundKey({ teamId, kinds: ['email'], key: 'inbox' }))?.id).toBe(id);
-    delete process.env.LF_CARRIED_LISTENS;
-    expect(await findTriggerByInboundKey({ teamId, kinds: ['email'], key: 'inbox' })).toBeNull();
   });
 
   it('an answer to a question a legacy run waits on is refused at the door, recording nothing', async () => {

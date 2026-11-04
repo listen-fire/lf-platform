@@ -50,7 +50,7 @@ describe('the language versions this build carries', () => {
     expect(runRefusal('0.12.0')).toBeUndefined();
   });
 
-  it('0.12 checks and resumes by its own lane; its listens are held, refused by what they are', async () => {
+  it('0.12 checks, runs, resumes and listens by its own lane', async () => {
     const checking = checkingOf('0.12.0');
     expect(checking.kind).toBe('carried');
     if (checking.kind !== 'carried') return;
@@ -59,12 +59,11 @@ describe('the language versions this build carries', () => {
     expect(resuming.kind).toBe('carried');
     if (resuming.kind !== 'carried') return;
     expect(typeof (await resuming.lane()).drainDueTimers).toBe('function');
-    expect(listeningOf('0.12.0')).toEqual({ kind: 'held' });
+    expect(listeningOf('0.12.0').kind).toBe('carried');
     expect(isCurrent('0.12.0')).toBe(false);
     expect(resumeRefusal('0.12.4')).toBeUndefined();
-    expect(refusalOf('0.12.4', 'listen')).toMatch(/but not to fire its listens/);
-    expect(providedFlagsFor('0.12.4')).toEqual({ check: true, run: true, resume: true, listen: false });
-    expect(refusalOf('0.12.4', 'listen')).toContain('to check, run and resume its automations');
+    expect(refusalOf('0.12.4', 'listen')).toBeUndefined();
+    expect(providedFlagsFor('0.12.4')).toEqual({ check: true, run: true, resume: true, listen: true });
   });
 
   it('a key no entry carries and a text that is no version belong to none, and are refused in the language\'s own text', () => {
