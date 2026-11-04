@@ -76,15 +76,11 @@ describe('a 0.12 movement saved (real Postgres)', () => {
     expect(row?.source).toBe(ECHO_012('Content'));
     expect(row?.validityStatus).toBe('valid');
     expect(row?.validityCheckedAgainst).toBe('0.12.13');
-    expect(saved.ok).toBe(false);
-    if (saved.ok) return;
-    expect(saved.needsConfirmation).toBeUndefined();
-    expect(saved.diagnostics).toEqual([
-      expect.objectContaining({
-        code: 'MOV_LANGUAGE_VERSION_UNSUPPORTED',
-        message: expect.stringContaining(`it is saved and checked under 0.12.13; this automation pins language 0.12.13: this platform carries 0.12.13 to check`),
-      }),
-    ]);
+    // A clean save is a save: the editor says so, and says what it does not do.
+    expect(saved.ok).toBe(true);
+    if (!saved.ok) return;
+    expect(saved.listeners).toEqual([]);
+    expect(saved.warnings).toEqual([expect.stringContaining('it is saved and checked under 0.12.13; this automation pins language 0.12.13: this platform carries')]);
     expect(await triggerCount(id)).toBe(0);
   });
 

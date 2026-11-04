@@ -148,13 +148,15 @@ describe('the systems a 0.12 automation is written against', () => {
     expect(digest).toMatch(/Not connected on this team:.*attio/);
   });
 
-  it('the connection the help shows reads under 0.12', async () => {
-    const withAttio: TeamFacts = { ...team(), credentials: [{ id: 'c1', name: 'acme_main', type: 'ATTIO' }] };
-    const text = await describeSystem({ team: withAttio, teamId: 't', modules, system: 'attio' }).catch((error: unknown) => String(error));
-    const shown = /`(connect attio using \w+)`/.exec(text)?.[1];
-    expect(shown).toBe('connect attio using acme_main');
+  it.each([
+    ['acme_main', 'acme_main'],
+    ['Acme Main', '`Acme Main`'],
+  ])('the connection the help shows for %s reads under 0.12', async (name, spelled) => {
+    const withAttio: TeamFacts = { ...team(), credentials: [{ id: 'c1', name, type: 'ATTIO' }] };
+    const text = await describeSystem({ team: withAttio, teamId: 't', modules, system: 'attio' });
+    expect(text).toContain(`connect attio using ${spelled}`);
     const checked = await checkSource({
-      source: `import { attio } from adapters\nimport { acme_main } from credentials\ncrm = ${shown}\n`,
+      source: `import { attio } from adapters\nimport { ${spelled} } from credentials\ncrm = connect attio using ${spelled}\n`,
       pin: '0.12.13',
       team: withAttio,
     });

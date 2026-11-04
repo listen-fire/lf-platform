@@ -98,7 +98,7 @@ import {
   searchCarried,
   type HelpRoute,
 } from '../../../services/translation_graph/movement/authoring_help';
-import { isCurrent } from '@listen-fire/language-versions';
+import { isCurrent, refusalOf } from '@listen-fire/language-versions';
 import { agentCompletionsAt } from '../../../services/translation_graph/movement/language_service';
 import { neverAsAny } from 'movement-engine/public/types';
 import { movementSourceHash } from '../../../services/translation_graph/movement/version_store';
@@ -1078,7 +1078,9 @@ function upgradeMessage(result: Exclude<UpgradeMovementResult, { status: 'not_fo
   // older line is refused by this release until it moves.
   const meanwhile = isLegacyLanguageVersion(result.from.version)
     ? 'it keeps running as it does now until then'
-    : `until then ${to} refuses to run it`;
+    : refusalOf(result.from.version, 'run') === undefined
+      ? `until then it stays on ${result.from.version}, and runs there when someone starts it`
+      : `until then ${to} refuses to run it`;
   // An import is allowed only between files on one version, so the files it
   // shares imports with move with it, or none of them does.
   const together =

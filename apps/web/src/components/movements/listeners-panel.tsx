@@ -262,6 +262,13 @@ export interface ServerListenOutline {
   adapters: Record<string, string> | null;
 }
 
+/** Whether a text a carried version read can be run on demand: it listens to
+ *  the manual channel. Until the first answer, what the page loaded with. */
+export function runnableFromOutline(outline: ServerListenOutline | null, untilRead: boolean): boolean {
+  if (outline === null) return untilRead;
+  return (outline.active ?? []).some((listen) => (listen.adapter ?? listen.instance).replace(/^@lf\//, "") === "manual");
+}
+
 /** The movement a suggested listen line fires, read from its text. */
 function firedBySuggestion(line: string): string | null {
   return /\bfire\s+`?([^`]+?)`?\s*$/.exec(line)?.[1] ?? null;
@@ -276,6 +283,9 @@ export interface ListenersPanelProps {
    * answer). Absent, the panel reads `source` itself.
    */
   serverOutline?: ServerListenOutline | null;
+  /** False when a save does not make this version's listens fire: a listen
+   *  with no server row is then not about to start. Absent, it is. */
+  savedListensFire?: boolean;
   /** Listeners the server derived from the last save. */
   serverListeners: ListenerSummary[];
   /** MOV_LISTEN_MISSING info messages from the live checker. */
@@ -364,7 +374,7 @@ export function ListenersPanel(props: ListenersPanelProps) {
               movement={listen.movement}
               configKey={listen.configKey}
               inboundAddress={server?.inboundAddress ?? null}
-              status={server ? (stopped ? "stopped" : "listening") : "pending"}
+              status={server ? (stopped ? "stopped" : "listening") : props.savedListensFire === false ? "notFiring" : "pending"}
               stoppedBecause={stopped}
               {...(lane !== null
                 ? { onOpenActivity: () => props.onOpenActivity(lane) }
@@ -477,6 +487,7 @@ const STATUS_STYLES = {
   listening: { classes: "bg-green-50 text-green-700", label: "Listening" },
   stopped: { classes: "bg-red-50 text-red-700", label: "Stopped" },
   pending: { classes: "bg-amber-50 text-amber-700", label: "Starts on save" },
+  notFiring: { classes: "bg-gray-100 text-gray-500", label: "Not firing" },
   paused: { classes: "bg-gray-100 text-gray-500", label: "Paused" },
 } as const;
 

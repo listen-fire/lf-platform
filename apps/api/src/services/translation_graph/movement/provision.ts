@@ -1325,6 +1325,20 @@ async function runSave(
   // nothing of this release's listener reconciliation reads its text.
   if (teamCatalog === undefined) {
     recordMilestones();
+    // The text is saved, under its pin, whether or not its version fires
+    // listens yet: that is what a person is told, and not a failed save.
+    if (!provisioned.ok && carriedListening?.kind === 'held') {
+      return {
+        ok: true,
+        movementId: row.id,
+        movementName: name,
+        listeners: [],
+        infos: [],
+        catalogNotes: notes,
+        warnings: provisioned.diagnostics.map((diagnostic) => diagnostic.message),
+        validity,
+      };
+    }
     return { ...provisioned, movementId: row.id, validity };
   }
 

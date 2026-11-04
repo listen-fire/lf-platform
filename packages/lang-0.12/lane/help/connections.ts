@@ -60,7 +60,7 @@ function connectionsFor(snapshot: TeamSnapshot['snapshot'], system: string): str
 function connectSpelling(system: string, spec: Pick<AdapterSpec, 'constructionArgs'>, connections: readonly string[]): string {
   const usesCredential = spec.constructionArgs.some((arg) => arg.kind === 'credential');
   const named = spec.constructionArgs.filter((arg) => arg.kind !== 'credential' && arg.required).map((arg) => `${arg.name}: …`);
-  const using = usesCredential ? ` using ${connections[0] ?? '…'}` : '';
+  const using = usesCredential ? ` using ${connections[0] !== undefined ? spellName(connections[0]) : '…'}` : '';
   const positioned = named.length > 0 ? ` { ${named.join(', ')} }` : '';
   const others = connections.slice(1);
   return `\`connect ${system}${using}${positioned}\`${others.length > 0 ? ` (other connections: ${others.join(', ')})` : ''}`;

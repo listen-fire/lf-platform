@@ -71,6 +71,7 @@ import {
 } from "@/components/movements/movement-activity";
 import {
   ListenersPanel,
+  runnableFromOutline,
   type ServerListenOutline,
   commentListenLines,
   uncommentListenLines,
@@ -175,8 +176,11 @@ export type MovementValidityStatus = "valid" | "invalid" | "unverified";
 
 export function ValidityBadge({
   validityStatus,
+  goesLive,
 }: {
   validityStatus: MovementValidityStatus | null;
+  /** False on a version whose listens do not fire: a clean check is not live. */
+  goesLive?: boolean;
 }) {
   const styles = {
     valid: "bg-green-50 text-green-700",
@@ -185,7 +189,7 @@ export function ValidityBadge({
     unchecked: "bg-gray-100 text-gray-600",
   } as const;
   const labels = {
-    valid: "Live",
+    valid: goesLive === false ? "Checks clean" : "Live",
     invalid: "Has problems",
     unverified: "Couldn't verify",
     unchecked: "Not checked yet",
@@ -1099,9 +1103,14 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
   // "Run now" availability mirrors the manual-channel listener: the latest
   // shipped save's listeners win, falling back to the page load. A held-back
   // save keeps the last shipped listener runnable.
-  const runnable = result?.ok
-    ? result.listeners.some((l) => l.kind === "manual")
-    : props.initialRunnable ?? false;
+  // A version whose listens do not fire has no listener rows to mirror: its own
+  // parser's reading of the text answers instead.
+  const savedListensFire = languageRoute === undefined || saveGoesLive(languageRoute);
+  const runnable = !savedListensFire
+    ? runnableFromOutline(serverOutline, props.initialRunnable ?? false)
+    : result?.ok
+      ? result.listeners.some((l) => l.kind === "manual")
+      : props.initialRunnable ?? false;
 
   // After a shipped save, the server re-checked every script importing this
   // file against the new text (report-only — their stored validity is
@@ -1179,7 +1188,12 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
               {props.movementName ?? "New movement"}
             </h1>
           )}
-          {validityStatus && <ValidityBadge validityStatus={validityStatus} />}
+          {validityStatus && (
+            <ValidityBadge
+              validityStatus={validityStatus}
+              {...(languageRoute !== undefined ? { goesLive: saveGoesLive(languageRoute) } : {})}
+            />
+          )}
           {(props.dependents?.length ?? 0) > 0 && (
             <UsedByChips dependents={props.dependents ?? []} />
           )}
@@ -1611,10 +1625,14 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
               <div className="rounded-xl border border-green-100 bg-green-50/70 px-4 py-3.5">
                 <div className="flex items-center gap-2 text-[12.5px] font-medium text-green-800">
                   <CheckCircle2 size={15} />
-                  Movement &lsquo;{result.movementName}&rsquo; is live
+                  Movement &lsquo;{result.movementName}&rsquo; is {savedListensFire ? "live" : "saved"}
                 </div>
                 <div className="mt-2 text-[12px] leading-relaxed text-green-700">
-                  {result.listeners.length === 0
+                  {!savedListensFire
+                    ? languageRoute?.provides?.run === true
+                      ? "Run now and test runs use this text. Its listens do not fire until you upgrade it."
+                      : "It does not run until you upgrade it."
+                    : result.listeners.length === 0
                     ? "No listeners — nothing runs this file on events."
                     : result.listeners.length === 1
                       ? "Its listener is live — details under Listeners."
@@ -1713,6 +1731,7 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
           <ListenersPanel
             source={currentSource}
             {...(readsListensOnServer ? { serverOutline } : {})}
+            {...(languageRoute !== undefined ? { savedListensFire: saveGoesLive(languageRoute) } : {})}
             serverListeners={serverListeners}
             suggestionMessages={listenSuggestions}
             saving={save.isLoading}

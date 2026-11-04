@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { ListenersPanel, type ListenerSummary, type ListenersPanelProps } from "../listeners-panel";
+import { ListenersPanel, runnableFromOutline, type ListenerSummary, type ListenersPanelProps } from "../listeners-panel";
 
 const SOURCE = `import { email } from adapters
 
@@ -131,6 +131,28 @@ describe("a text on a carried version, whose parser is on the server", () => {
     expect(html).toContain('data-testid="listener-card-pending"');
   });
 
+  it("a version whose listens do not fire does not promise one on save", () => {
+    const outline = { active: [{ ...echo, adapter: null, traversal: false }], paused: [], adapters: {} };
+    const html = renderToStaticMarkup(
+      createElement(ListenersPanel, {
+        source: ZERO_TWELVE,
+        serverOutline: outline,
+        savedListensFire: false,
+        serverListeners: [],
+        suggestionMessages: [],
+        saving: false,
+        onPause: () => {},
+        onResume: () => {},
+        onAddListener: () => {},
+        onResumeStopped: () => {},
+        resuming: false,
+        onOpenActivity: () => {},
+      }),
+    );
+    expect(html).toContain("Not firing");
+    expect(html).not.toContain("Starts on save");
+  });
+
   it("shows a commented-out listen its own version read", () => {
     expect(carried({ active: [], paused: [echo], adapters: {} })).toContain('data-testid="listener-card-paused"');
   });
@@ -145,6 +167,26 @@ describe("a text on a carried version, whose parser is on the server", () => {
     const html = carried({ active: [], paused: [], adapters: {} });
     expect(html).toContain("No triggers yet");
     expect(html).not.toContain("go = manual()");
+  });
+});
+
+describe("Run now on a text a carried version read", () => {
+  const listen = (over: { instance: string; adapter: string | null }) => ({ configKey: null, address: null, movement: "m", startLine: 1, endLine: 1, traversal: false, ...over });
+
+  it("is what the page loaded with until the first answer", () => {
+    expect(runnableFromOutline(null, true)).toBe(true);
+    expect(runnableFromOutline(null, false)).toBe(false);
+  });
+
+  it("the unit by name, or a connected manual channel under any alias", () => {
+    const read = (active: ReturnType<typeof listen>[]) => runnableFromOutline({ active, paused: [], adapters: {} }, false);
+    expect(read([listen({ instance: "manual", adapter: null })])).toBe(true);
+    expect(read([listen({ instance: "go", adapter: "@lf/manual" })])).toBe(true);
+    expect(read([listen({ instance: "inbox", adapter: "@lf/email" })])).toBe(false);
+  });
+
+  it("a text that does not parse cannot be run", () => {
+    expect(runnableFromOutline({ active: null, paused: [], adapters: null }, true)).toBe(false);
   });
 });
 
