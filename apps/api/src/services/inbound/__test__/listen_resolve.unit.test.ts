@@ -105,10 +105,12 @@ describe('listing a listen`s base members by its WHERE', () => {
     const unnarrowed: ListenPlan = { ...CARRIED, hops: CARRIED.hops.map((hop, i) => (i === 0 ? { ...hop, taken: undefined, checked: undefined } : hop)) };
     getRelated.mockResolvedValue(Array.from({ length: 501 }, (_, i) => base(`app${i}`, `Base ${i}`)));
 
-    await resolveListen(airtableListen({ plan: unnarrowed }));
+    const answered = await resolveListen(airtableListen({ plan: unnarrowed }));
 
     expect(savedResolution().heads).toEqual([]);
     expect(savedResolution().failure).toMatch(/^LISTEN_SCOPE_LIMIT: crm\.lf:changed matched more Bases than its limit of 500/);
+    // A suspension is a state to be kept, not a failure a second listing mends: nothing is told to retry it.
+    expect(answered).toBeNull();
   });
 
   it('keeps the bases it had when a list fails', async () => {

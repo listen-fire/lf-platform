@@ -225,17 +225,21 @@ async function listMembers(listen: SavedListen): Promise<Resolution> {
 /** List the listen's members and keep what it comes to, under the store's
  *  hold: over the scope limit it is suspended, watched nowhere; a failed read
  *  keeps the records it had, with the new failure. Another process's live hold
- *  leaves it to that process. Answers the failure this listing came to, if any. */
+ *  leaves it to that process. Answers the failure listing again may mend, if
+ *  any: a suspension is kept in the store and lifts on the listen's own relist
+ *  once its filter matches fewer, so it is not one to retry. */
 export async function resolveListen(listen: SavedListen): Promise<string | null> {
   const scope = { tenant: listen.teamId };
   const held = await claimResolve(scope, { pipeline: listen.pipeline, ttlMs: RESOLVE_HOLD_MS });
   if (held === null) return null;
   const before = (await states(scope, { pipelines: [listen.pipeline] }))[listen.pipeline];
   let resolution: Resolution;
+  let suspended = false;
   try {
     resolution = await listMembers(listen);
   } catch (err) {
     if (err instanceof OverLimit) {
+      suspended = true;
       resolution = { heads: [], resolvedAt: new Date().toISOString(), failure: err.line(listen) };
     } else {
       const why = err instanceof Error ? err.message : String(err);
@@ -251,7 +255,7 @@ export async function resolveListen(listen: SavedListen): Promise<string | null>
   const saved = await saveResolution(scope, { pipeline: listen.pipeline, token: held.token, resolution });
   if (!saved) return null;
   if (resolution.failure !== null) logger.warn('[ListenResolve] a listen could not be resolved', { pipeline: listen.pipeline, failure: resolution.failure });
-  return resolution.failure;
+  return suspended ? null : resolution.failure;
 }
 
 /** The shortest `relistEverySeconds` the listen's resolved hops declare, in
