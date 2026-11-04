@@ -93,7 +93,7 @@ import { movementCatalogForTeam, type CatalogGap, type TeamMovementCatalog } fro
 import {
   deleteMovementRow,
   getMovementRow,
-  LEFTOVER_TRIGGER_CONFIG,
+  leftoverTriggerConfig,
   listDerivedTriggerRows,
   listLeftoverTriggerRows,
   triggersUnfinishedRunsName,
@@ -524,7 +524,7 @@ async function reconcileDerivedTriggers(input: {
     noteSchedule(row.kind);
     await qb
       .updateTable('trigger')
-      .set({ config: LEFTOVER_TRIGGER_CONFIG as never, resolved_address: null, credentials_id: null, run_mode: 'off', updated_at: new Date() })
+      .set({ config: leftoverTriggerConfig(row.config) as never, resolved_address: null, credentials_id: null, run_mode: 'off', updated_at: new Date() })
       .where('id', '=', row.id as TriggerId)
       .execute();
   }

@@ -446,12 +446,15 @@ function configRecordOf(value: unknown): Record<string, unknown> {
 
 /**
  * The config of a trigger row kept only for the runs that name it. A save retired
- * the listen, and a run on an earlier version still reads what it fired through
- * from the row when it resumes. Nothing listens through it: it parses as no listen,
- * its run mode is off, and it is no listener of the automation. A later save
- * deletes it once no such run is left.
+ * the listen, and a run on an earlier version still reads from the row what it
+ * fired through and who it acts as when it resumes. Nothing listens through it: it
+ * parses as no listen, its run mode is off, and it is no listener of the
+ * automation. A later save deletes it once no such run is left.
  */
-export const LEFTOVER_TRIGGER_CONFIG = { leftoverForUnfinishedRuns: true } as const;
+export function leftoverTriggerConfig(config: Record<string, unknown>): Record<string, unknown> {
+  const { listen: _listen, ...kept } = config;
+  return { ...kept, leftoverForUnfinishedRuns: true };
+}
 
 function isLeftoverTriggerRow(row: DerivedTriggerRow): boolean {
   return row.config.leftoverForUnfinishedRuns === true;

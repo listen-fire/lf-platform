@@ -138,7 +138,7 @@ describe('an upgrade held where it is', () => {
   it('an upgrade that retires the trigger row a timer run names keeps it as a leftover that fires nothing, and the run finishes', async () => {
     const { movementId, runId, triggerId } = await load('timer');
     // A listen the new plan cannot match to any listen of the new text.
-    await getAutomationsQb(['trigger']).updateTable('trigger').set({ kind: 'listen_the_new_text_has_no_match_for', run_mode: 'live' }).where('id', '=', triggerId as never).execute();
+    await getAutomationsQb(['trigger']).updateTable('trigger').set({ kind: 'listen_the_new_text_has_no_match_for', run_mode: 'live', config: JSON.stringify({ overrideActingUserToCreator: true }) as never }).where('id', '=', triggerId as never).execute();
     expect(await upgradeMovement({ teamId: TEAM, id: movementId, acknowledge: true })).toMatchObject({ status: 'upgraded' });
     expect(await runOf(runId)).toMatchObject({ status: 'parked', failure_reason: null });
 
@@ -146,7 +146,8 @@ describe('an upgrade held where it is', () => {
     expect(listeners.map((row) => row.id)).not.toContain(triggerId);
     expect(listeners).toHaveLength(1);
     expect((await savedListens({ teamId: TEAM, movementId: movementId as never })).map((listen) => listen.triggerId)).toEqual([listeners[0]?.id]);
-    expect(await triggerOf(triggerId)).toMatchObject({ run_mode: 'off', config: { leftoverForUnfinishedRuns: true } });
+    // Who a resumed run acts as is read from the row's config, so that stays.
+    expect(await triggerOf(triggerId)).toMatchObject({ run_mode: 'off', config: { leftoverForUnfinishedRuns: true, overrideActingUserToCreator: true } });
 
     await timerWakes(runId);
     expect(await runOf(runId)).toMatchObject({ status: 'success' });
