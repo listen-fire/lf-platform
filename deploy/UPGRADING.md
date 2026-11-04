@@ -115,3 +115,16 @@ This release starts no new run on language versions 1 to 4, and carries no engin
 - **A question answered on a paused run is refused at the door.** The page says the run can't continue, and that its owner can cancel it. Nothing is recorded.
 - **A run paused on a timer resumes.** If it then reaches a question or a callback, it fails at that statement, with the reason on the run.
 - **Such a run holds its automation at its version.** Cancel the run to upgrade the automation.
+
+## Rolling out beside 0.12.13
+
+Services restart one at a time, so for a while an old service and a new one share the database. In either order nothing is lost and nothing fires twice, on these terms:
+
+- **Upgrade nothing, and create no automation, until every service is on this release.** A service still on 0.12.13 reads a current version's rows as its own: its drain polls them and fails each run by name, and its save can remove their webhooks. Upgrades come after the rollout.
+- **A delivery at a new door waits for a new drain.** An old drain leaves its reading row alone, untouched, and the row's events run once a new drain has read it.
+- **Schedules and polls take turns.** Old and new drains use the same work rows and the same cursors. A row is held by one lease at a time, so an occurrence or a page fires once, whichever drain takes it.
+- **A Run now of a 0.12 automation waits until a service on this release drains it.**
+
+## Upgrading an automation off 0.12
+
+An upgrade keeps your automation's place: a schedule or a poll carries on from where it stood, so nothing is missed and nothing fires twice. It waits up to 30 seconds for what is still on its way under 0.12, then says so and moves nothing; ask again. A listen on Attio cannot be rewritten for you: the upgrade names what stands in the way.

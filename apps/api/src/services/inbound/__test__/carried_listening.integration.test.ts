@@ -333,13 +333,12 @@ describe('0.12 listens beside the current version (real Postgres)', () => {
       expect((await triggersOf(id)).map((after) => after.id)).toEqual([row!.id]);
     });
 
-    it('one that does not resolve refuses the save, naming it', async () => {
+    it('a consented save of one that does not resolve ships no address and no half scoped webhook', async () => {
       await airtableCredential();
-      const source = AIRTABLE('tblMissing');
-      const id = await draft(source);
-      const saved = await saveMovement({ teamId, id, source, acknowledgeErrors: false });
-      expect(saved.ok).toBe(false);
-      expect(await triggersOf(id)).toEqual([]);
+      const id = await shipped(AIRTABLE('tblMissing'));
+      const [row] = await triggersOf(id);
+      expect(row!.resolved_address).toBeNull();
+      expect(await webhooks()).toEqual([]);
     });
   });
 
