@@ -104,31 +104,66 @@ describe('the static surfaces 0.12 described', () => {
   });
 });
 
-// Production typed an ask's answer by the ask's own literals; 0.12's base
-// surface would type these wrongly in both directions, so ask is a gap, and
-// none of these is an error.
-describe('an ask is a gap, never typed at its base', () => {
+// An ask's answer is typed by the ask's own literals, as production typed it:
+// each right and each wrong use, under 0.12's own checker.
+describe("an ask's answer, typed by its own literals", () => {
   const ASK = 'import { `@lf/ask` as ask } from adapters\nqa = connect ask\n';
   const asked = (body: string) => `${ASK}function m(go: <manual-[:Invocation]->>) {\n${body}}\nlisten to manual fire m\n`;
-  const ASK_GAP = [{ adapter: 'ask', detail: expect.stringContaining('ask was checked') }];
+  const errorsOf = async (body: string) => {
+    const checked = await check(asked(body));
+    expect(checked.gaps).toEqual([]);
+    return checked.diagnostics.filter((d) => d.severity === 'error');
+  };
 
   it.each([
     [
       'a number Provide compared and added to',
-      '  p = write qa-[:Provide]-> { Prompt: "How much?", `Answer Type`: "number" }\n  a = await first(p-[:Response]->)\n  if (a.Answer > 5) { return a.Answer + 1 }\n  return 0\n',
+      '  p = write qa-[:Provide]-> { Prompt: "How much?", `Answer Type`: "number" }\n  a = await first(p-[:Response]->)\n  return coalesce(a.Answer, 0) + 1\n',
     ],
     [
       "a Form's own fields read",
       '  q = write qa-[:Form]-> { Prompt: "Deal?", Fields: ["Budget", "Timeline"] }\n  a = await first(q-[:Response]->)\n  return a.Budget\n',
     ],
     [
-      'a Choose compared with an option it never offers',
-      '  c = write qa-[:Choose]-> { Prompt: "Which?", Options: ["Seed", "Series A"] }\n  a = await first(c-[:Response]->)\n  if (a.Answer == "Series B") { return 1 }\n  return 0\n',
+      'a Choose compared with an option it offers',
+      '  c = write qa-[:Choose]-> { Prompt: "Which?", Options: ["Seed", "Series A"] }\n  a = await first(c-[:Response]->)\n  if (a.Answer == "Seed") { return 1 }\n  return 0\n',
     ],
-  ])('%s', async (_, body) => {
-    const checked = await check(asked(body));
+  ])('reads clean: %s', async (_, body) => {
+    expect(await errorsOf(body)).toEqual([]);
+  });
+
+  it.each([
+    [
+      'a field the Form does not declare',
+      '  q = write qa-[:Form]-> { Prompt: "Deal?", Fields: ["Budget", "Timeline"] }\n  a = await first(q-[:Response]->)\n  return a.Budgett\n',
+      "no field 'Budgett'",
+    ],
+    [
+      'a field of no ask',
+      '  c = write qa-[:Check]-> { Prompt: "Sure?" }\n  a = await first(c-[:Response]->)\n  return a.Nope\n',
+      "no field 'Nope'",
+    ],
+  ])('refuses: %s', async (_, body, message) => {
+    expect(await errorsOf(body)).toEqual([expect.objectContaining({ code: 'MOV_UNKNOWN_PROPERTY', message: expect.stringContaining(message) })]);
+  });
+
+  it('a Provide answer is the type it declared: a number is arithmetic, a text is not', async () => {
+    const body = (type: string) => `  p = write qa-[:Provide]-> { Prompt: "How much?", \`Answer Type\`: "${type}" }\n  a = await first(p-[:Response]->)\n  if (a.Answer != null) { return a.Answer * 2 }\n  return 0\n`;
+
+    expect(await errorsOf(body('number'))).toEqual([]);
+    expect((await errorsOf(body('text'))).length).toBeGreaterThan(0);
+  });
+
+  it('a Choose answer compared with an option it never offers is an error', async () => {
+    const errors = await errorsOf('  c = write qa-[:Choose]-> { Prompt: "Which?", Options: ["Seed", "Series A"] }\n  a = await first(c-[:Response]->)\n  if (a.Answer == "Series B") { return 1 }\n  return 0\n');
+    expect(errors.length).toBeGreaterThan(0);
+  });
+
+  it('a library that decides its own ask is typed under the importer', async () => {
+    const library = `${ASK}export function deal(go: <text>) {\n  q = write qa-[:Form]-> { Prompt: "Deal?", Fields: ["Budget"] }\n  a = await first(q-[:Response]->)\n  return a.Budget\n}\n`;
+    const importer = 'import { deal } from "lib"\nfunction m(go: <manual-[:Invocation]->>) {\n  return deal(go.Text)\n}\nlisten to manual fire m\n';
+    const checked = await check(importer, [{ name: 'lib', source: library, languageVersion: '0.12.4' }]);
     expect(checked.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
-    expect(checked.gaps).toEqual(ASK_GAP);
   });
 });
 

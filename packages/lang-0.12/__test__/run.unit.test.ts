@@ -129,6 +129,22 @@ describe("a 0.12 segment on 0.12's own run host", () => {
   });
 });
 
+describe("a 0.12 run of an ask, against the catalog its own literals type", () => {
+  const form = (read: string) =>
+    'import { `@lf/ask` as ask } from adapters\nqa = connect ask\n' +
+    `function m(go: <manual-[:Invocation]->>) {\n  q = write qa-[:Form]-> { Prompt: "Deal?", Fields: ["Budget"] }\n  a = await first(q-[:Response]->)\n  return ${read}\n}\nlisten to manual fire m\n`;
+
+  it("a field the Form declares gets past the run's check, to the module", async () => {
+    const outcome = await runSegment(request(form('a.Budget')), platform());
+    expect(outcome).toMatchObject({ kind: 'failed', message: expect.stringContaining('no module is hosted') });
+  });
+
+  it("a field it does not declare is the run's check's to refuse", async () => {
+    const outcome = await runSegment(request(form('a.Budgett')), platform());
+    expect(outcome).toMatchObject({ kind: 'failed', code: 'MOVENG_CHECK', message: expect.stringContaining("no field 'Budgett'") });
+  });
+});
+
 describe('a program importing a library on another version', () => {
   const IMPORTS = 'import { shout } from "lib"\nfunction echo(run: <manual-[:Invocation]->>) {\n  return shout(run.Text)\n}\nlisten to manual fire echo\n';
   const LIBRARY = 'export function shout(t: <text>) {\n  return t\n}\n';

@@ -9,16 +9,16 @@
 // 0.12's own module for it, connected with the team's credential through the
 // platform's hosting (./modules.ts), by 0.12's own introspection: the reading
 // listen-fire's 0.12 runner gives a module. Production's platform added three
-// passes over that reading which this package does not carry: demand scoping
-// (it read only the types a program names), WHERE refinements (a narrowed
-// walk typed at the narrowed type) and an ask's answer typed by its own
-// literals. So an instance read here is typed at its full, unrefined surface;
-// a construction with an entry position, and ask, stay gaps, said out loud.
-// Without the platform's hosting (a check with no modules handed in), every
-// connected system is a gap.
+// passes over that reading. An ask's answer typed by its own literals is carried
+// here (./generic_landings.ts). Demand scoping (it read only the types a program
+// names) and WHERE refinements (a narrowed walk typed at the narrowed type) are
+// not, so an instance read here is typed at its full, unrefined surface, and a
+// construction with an entry position stays a gap, said out loud. Without the
+// platform's hosting (a check with no modules handed in), every connected system
+// is a gap.
 
 import type { Adapter, AdapterManifest } from '@listen-fire/engine/public/adapter';
-import { buildCatalogSnapshot, credentialImportNames, type CatalogAdapterInput } from '@listen-fire/engine/public/catalog';
+import { buildCatalogSnapshot, credentialImportNames, type CatalogAdapterInput, type SchemaEntryPoint } from '@listen-fire/engine/public/catalog';
 import { introspectAdapter } from '@listen-fire/engine/public/embed';
 import { availableChatModels } from '@listen-fire/engine/public/models';
 import { bundledPluginSpecs } from '@listen-fire/engine/public/plugins';
@@ -31,10 +31,16 @@ import {
   type Program,
 } from '@listen-fire/movement-lang';
 
+import type { ModuleKv } from '@listen-fire/module-kit';
+
+import { AskAdapter } from '../modules/ask/adapter';
+import { ASK_MANIFEST } from '../modules/ask/manifest';
 import { SystemAdapter } from '../modules/system/adapter';
 import { SYSTEM_MANIFEST } from '../modules/system/manifest';
 import { CRON_MANIFEST, createCronAdapter } from '../units/cron';
 import { MANUAL_MANIFEST, createManualAdapter } from '../units/manual';
+import { scanInstanceChains } from './constructions';
+import { graftGenericLandings } from './generic_landings';
 import { manifestsOf } from './manifests';
 import { moduleTable } from './modules';
 import { RemoteAdapterManifestFile, remoteAdapterManifest } from './remote';
@@ -56,16 +62,39 @@ const DESCRIBED: readonly { manifest: AdapterManifest; adapter: Adapter }[] = [
     }),
   },
   { manifest: SYSTEM_MANIFEST, adapter: new SystemAdapter() },
+  {
+    manifest: ASK_MANIFEST,
+    // Describing raises no ask, so it keeps no record and hands out no link.
+    adapter: new AskAdapter({
+      kv: new Proxy({} as ModuleKv, {
+        get: () => {
+          throw new Error('ask keeps no record while it is described');
+        },
+      }),
+      answerUrl: () => {
+        throw new Error('ask hands out no link while it is described');
+      },
+    }),
+  },
 ];
 
-let described: Promise<ReadonlyMap<string, { schema: InstanceSchema; notes: string[] }>> | undefined;
+interface DescribedSurface {
+  schema: InstanceSchema;
+  notes: string[];
+  entryPoints: SchemaEntryPoint[];
+}
+
+let described: Promise<ReadonlyMap<string, DescribedSurface>> | undefined;
 
 /** The static surfaces' schemas, read once per process: they are the same for
  *  every team. A failed read is not kept, so the next check reads again. */
-function describedSchemas(): Promise<ReadonlyMap<string, { schema: InstanceSchema; notes: string[] }>> {
+function describedSchemas(): Promise<ReadonlyMap<string, DescribedSurface>> {
   if (described === undefined) {
     const reading = Promise.all(
-      DESCRIBED.map(async ({ manifest, adapter }) => [manifest.adapterType, await introspectAdapter(adapter, manifest)] as const),
+      DESCRIBED.map(async ({ manifest, adapter }) => {
+        const [read, entryPoints] = await Promise.all([introspectAdapter(adapter, manifest), adapter.listEntryPoints()]);
+        return [manifest.adapterType, { ...read, entryPoints }] as const;
+      }),
     ).then((entries) => new Map(entries));
     described = reading;
     reading.catch(() => {
@@ -134,10 +163,6 @@ export interface ConnectedReading {
   programs: readonly Program[];
 }
 
-/** Adapters a connection is never read for here: ask's answers are typed by
- *  its own literals in production, which this package does not carry. */
-const NOT_READ: ReadonlySet<string> = new Set(['ask']);
-
 // A team's connected schemas, shared for a minute: an editor's keystrokes and
 // a run's checks read each connection once.
 const READ_TTL_MS = 60_000;
@@ -186,10 +211,6 @@ async function readConnected(
     const key = `${instance.adapter}|${instance.credentialName ?? ''}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    if (NOT_READ.has(instance.adapter)) {
-      unread.set(instance.adapter, `production typed ${instance.adapter}'s answers by each construction's own literals, which this platform does not do for 0.12`);
-      continue;
-    }
     if (instance.positioned) {
       unread.set(instance.adapter, 'a construction that pins an entry position is read only through production\'s demand passes, which this platform does not carry for 0.12');
       continue;
@@ -229,6 +250,12 @@ function remoteManifestsOf(team: TeamFacts, notes: string[]): AdapterManifest[] 
   });
 }
 
+/** A program a snapshot is for, under the pin it is read at. */
+export interface ProgramSource {
+  source: string;
+  pin: string;
+}
+
 export interface TeamSnapshot {
   snapshot: CatalogSnapshot;
   notes: string[];
@@ -240,12 +267,37 @@ export interface TeamSnapshot {
   adapters: ReadonlySet<string>;
 }
 
-/** The team's 0.12 snapshot, with `files` as the import namespace. */
-export async function teamSnapshot(
-  team: TeamFacts,
-  files: Record<string, { source: string }>,
-  reading?: ConnectedReading,
-): Promise<TeamSnapshot> {
+/** A static surface's schema with the landings `sources` decide grafted in, as
+ *  production grafted them: each write's literals, read under its own pin. */
+function withConstructionLandings(input: {
+  adapterType: string;
+  surface: DescribedSurface;
+  sources: readonly ProgramSource[];
+}): InstanceSchema {
+  const { adapterType, surface } = input;
+  let { schema } = surface;
+  for (const { source, pin } of input.sources) {
+    const chains = scanInstanceChains(source, pin).filter((chain) => chain.adapter.replace(/^@lf\//, '') === adapterType);
+    if (chains.length === 0) continue;
+    schema = graftGenericLandings({
+      instance: { adapterType, schema, entryPoints: surface.entryPoints },
+      chains,
+      languageVersion: pin,
+    }).schema;
+  }
+  return schema;
+}
+
+/** The team's 0.12 snapshot, with `files` as the import namespace. `sources`
+ *  are the programs it is for, under the pin each is read at: what their
+ *  constructions decide is in it. */
+export async function teamSnapshot(input: {
+  team: TeamFacts;
+  files: Record<string, { source: string }>;
+  sources: readonly ProgramSource[];
+  reading?: ConnectedReading;
+}): Promise<TeamSnapshot> {
+  const { team, files, reading, sources } = input;
   const notes: string[] = [];
   const manifests = [...manifestsOf(team), ...remoteManifestsOf(team, notes)];
   const schemas = await describedSchemas();
@@ -261,7 +313,7 @@ export async function teamSnapshot(
     const own = schemas.get(manifest.adapterType);
     if (own !== undefined) {
       notes.push(...own.notes);
-      return { ...entry, schemas: { [instanceSchemaKey({ positionKey: '' })]: own.schema } };
+      return { ...entry, schemas: { [instanceSchemaKey({ positionKey: '' })]: withConstructionLandings({ adapterType: manifest.adapterType, surface: own, sources }) } };
     }
     const read = connected.schemas.get(manifest.adapterType);
     if (read !== undefined) return { ...entry, schemas: read };

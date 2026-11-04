@@ -189,13 +189,16 @@ function hostFor(request: SegmentRequest & { parkRefusal: string }, platform: Ru
   };
 }
 
+function pinOfLibrary(name: string, request: SegmentRequest): string {
+  return readingPin(request.team.files.find((f) => f.name === name)?.languageVersion ?? request.pin, request.pin);
+}
+
 /** The libraries a program imports, parsed under the pin each is read at;
  *  one 0.12 cannot parse is left to the run's own check to report. */
 function librariesOf(files: Record<string, { source: string }>, request: SegmentRequest): Program[] {
   return Object.entries(files).flatMap(([name, file]) => {
-    const own = request.team.files.find((f) => f.name === name)?.languageVersion ?? request.pin;
     try {
-      return [parseProgram(file.source, { languageVersion: readingPin(own, request.pin) })];
+      return [parseProgram(file.source, { languageVersion: pinOfLibrary(name, request) })];
     } catch (error) {
       if (error instanceof MovementParseError) return [];
       throw error;
@@ -233,10 +236,18 @@ export async function runSegment(
     if (closure.diagnostics.length > 0) {
       throw new MovementEngineError('MOVENG_CHECK', closure.diagnostics.map((diagnostic) => diagnostic.message).join('; '));
     }
-    const catalog = await teamSnapshot(request.team, closure.files, {
-      teamId: request.teamId,
-      modules: platform.modules,
-      programs: [program, ...librariesOf(closure.files, request)],
+    const catalog = await teamSnapshot({
+      team: request.team,
+      files: closure.files,
+      sources: [
+        { source: request.source, pin: request.pin },
+        ...Object.entries(closure.files).map(([name, file]) => ({ source: file.source, pin: pinOfLibrary(name, request) })),
+      ],
+      reading: {
+        teamId: request.teamId,
+        modules: platform.modules,
+        programs: [program, ...librariesOf(closure.files, request)],
+      },
     });
     const credentialIds = Object.fromEntries(request.team.credentials.map((row) => [row.name, row.id]));
     const result = await runMovement({

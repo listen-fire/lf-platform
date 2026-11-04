@@ -53,16 +53,17 @@ export async function checkSource(request: CheckRequest): Promise<CheckedSource>
   const program = parsed(source, pin);
   if (!('statements' in program)) return { diagnostics: [program], firedMovements: [], gaps: [], notes: [] };
   const closure = importClosure(program, pin, team.files);
+  const pinOf = (name: string): string => readingPin(team.files.find((f) => f.name === name)?.languageVersion ?? pin, pin);
   const libraries = Object.entries(closure.files).flatMap(([name, file]) => {
-    const own = team.files.find((f) => f.name === name)?.languageVersion ?? pin;
-    const library = parsed(file.source, readingPin(own, pin));
+    const library = parsed(file.source, pinOf(name));
     return 'statements' in library ? [library] : [];
   });
-  const teamCatalog = await teamSnapshot(
+  const teamCatalog = await teamSnapshot({
     team,
-    closure.files,
-    request.connected !== undefined ? { ...request.connected, programs: [program, ...libraries] } : undefined,
-  );
+    files: closure.files,
+    sources: [{ source, pin }, ...Object.entries(closure.files).map(([name, file]) => ({ source: file.source, pin: pinOf(name) }))],
+    ...(request.connected !== undefined ? { reading: { ...request.connected, programs: [program, ...libraries] } } : {}),
+  });
   let diagnostics: CheckedDiagnostic[];
   try {
     diagnostics = checkSourceInRust(source, teamCatalog.snapshot, { languageVersion: pin }).map(checked);
@@ -83,7 +84,8 @@ export async function checkSource(request: CheckRequest): Promise<CheckedSource>
 async function editorSnapshot(request: EditorRequest) {
   const key = importKeyOf(request.pin);
   const own = request.team.files.filter((file) => importKeyOf(file.languageVersion) === key);
-  return (await teamSnapshot(request.team, Object.fromEntries(own.map((file) => [file.name, { source: file.source }])))).snapshot;
+  const sources = [{ source: request.source, pin: request.pin }, ...own.map((file) => ({ source: file.source, pin: readingPin(file.languageVersion, request.pin) }))];
+  return (await teamSnapshot({ team: request.team, files: Object.fromEntries(own.map((file) => [file.name, { source: file.source }])), sources })).snapshot;
 }
 
 export async function completionsAt(request: EditorRequest): Promise<Completions> {
