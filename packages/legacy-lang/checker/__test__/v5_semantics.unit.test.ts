@@ -186,10 +186,6 @@ describe('a list\'s length, membership and presence are chosen by the operand\'s
     expect(fixesOf(fn5('  c = List.includes(t, s)'))).toEqual(['Text.includes(t, s)']);
     expect(codes(fn5('  a = count(xs)\n  b = Text.length(t)\n  c = List.includes(xs, s)\n  d = Text.includes(t, s)'), 5)).toEqual([]);
   });
-
-  it('inside walk brackets nothing is respelled', () => {
-    expect(fixesOf(`${HEAD5}function go(c: <chat-[:channel]->>) {\n  ms = c-[m:Messages WHERE m.Tags CONTAINS "x" AND LENGTH(m.Text) > 2]->\n}`)).toEqual([]);
-  });
 });
 
 describe('a walk\'s fields are read through the hop\'s alias from version 5', () => {

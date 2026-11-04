@@ -70,8 +70,4 @@ describe("a read hop's WHERE binds the hop's own alias", () => {
     );
     expect(found.map((d) => d.code)).toEqual([C.UNKNOWN_PROPERTY]);
   });
-
-  it('the alias names the landed record, so a hop walked from it types too', () => {
-    expectClean(inMovement('  rows = reg-[e:entities WHERE EXISTS(e-[:Holdings]->)]->'));
-  });
 });

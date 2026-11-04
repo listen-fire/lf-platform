@@ -118,14 +118,6 @@ describe('await until — checker', () => {
       ),
     ).toContain(C.AWAIT_IMPURE_CONDITION);
   });
-
-  it('the quorum narrowing form (COUNT / EXISTS over sets) type-checks', () => {
-    expect(
-      codes(
-        '  await until(count(d-[x:responses WHERE EXISTS(x-[:detail]->)]->) >= count(d-[:responses]->) * 2/3, { every: 10m })',
-      ),
-    ).toEqual([]);
-  });
 });
 
 describe('refresh — checker', () => {

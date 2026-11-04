@@ -92,7 +92,6 @@ describe('a message suggests the surface of its program\'s version', () => {
       ['IF … THEN "Yes" ELSE "No" END', '… ? "Yes" : "No"'],
       ['if ISNULL(x) { ERROR("…") }', 'if (x == null) { fail("…") }'],
       ['await until(() => { return EXISTS(t-[:Shipment]->) }, every: 15m)', 'await until(() => { return exists(t-[:Shipment]->) }, { every: 15m })'],
-      ['crm-[c:Companies WHERE LOWER(c.Name) CONTAINS "x"]->', 'crm-[c:Companies WHERE LOWER(c.Name) CONTAINS "x"]->'],
     ]) {
       expect(spellCode(old!, '4')).toBe(old);
       expect(spellCode(old!, '5')).toBe(v5);

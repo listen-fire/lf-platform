@@ -11,11 +11,11 @@
 // Both checkers answer every case, the TypeScript one and the Rust one; the
 // Rust twin is listen-fire's crates/movement-checker/tests/guard_clause.rs.
 
-import { LANGUAGE_VERSION } from 'movement-lang/language_version';
-import { parseProgram } from '../../parser/parse';
-import { checkProgram, type Diagnostic } from '../check';
-import { fromCatalogSnapshot, type CatalogSnapshot } from 'movement-lang/service/snapshot';
-import { checkSourceInRust } from 'movement-lang/checker/rust_checker';
+import { LANGUAGE_VERSION } from '@listen-fire/movement-lang/language_version';
+import { parseProgram } from '../../../legacy-lang/parser/parse';
+import { checkProgram, type Diagnostic } from '../../../legacy-lang/checker/check';
+import { fromCatalogSnapshot, type CatalogSnapshot } from '@listen-fire/movement-lang/service/snapshot';
+import { checkSourceInRust } from '@listen-fire/movement-lang/checker/rust_checker';
 
 const snapshot: CatalogSnapshot = JSON.parse(
   '{"adapters":{"chat":{"canFire":true,"constructionArgs":[],"schemas":{"":{"positions":{"Channel":{"properties":{"Name":"text","Topic":"text"},"edges":{"Messages":{"target":"Message","writable":true}}},"Message":{"properties":{"Message":"text"},"edges":{}}},"collections":{"Channels":{"target":"Channel"}},"writableRoots":{"Channel":{"fields":{"Name":"text"},"resultShape":{"externalId":"text"}},"Message":{"fields":{"Message":"text"},"resultShape":{"externalId":"text"}}}}}}},"credentials":{},"plugins":{}}',

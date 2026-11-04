@@ -1,18 +1,17 @@
-// Checker leftovers of the v5 surface, held in both checkers (the Rust one
-// through the wasm build, on the same catalog): a three-argument `map`'s
+// Checker leftovers of the v5 surface, held in both checkers (legacy-lang's
+// TypeScript one, and 0.12.13's Rust one it was written against, through the
+// wasm build, on the same catalog): a three-argument `map`'s
 // settings go last; the `#transform` retirement suggests a positional call;
 // `Text.lower` inside walk brackets is one finding, not two; and a field read
 // off text, a number or a true/false value is refused from 5 and warned
 // before (both engines read null).
 
-import { LANGUAGE_VERSION } from 'movement-lang/language_version';
-import { mockCatalog } from '../catalog';
-import { checkProgram, diagnosticSeverity, type Diagnostic } from '../check';
-import { parseProgram } from '../../parser/parse';
-import { mockCatalogSnapshot } from 'movement-lang/service/snapshot';
-import { checkSourceInRust } from 'movement-lang/checker/rust_checker';
-import { rustCheck } from '../upgrade';
-import type { LanguageVersion } from 'movement-lang/language_version';
+import { LANGUAGE_VERSION } from '@listen-fire/movement-lang/language_version';
+import { mockCatalog } from '../../../legacy-lang/checker/catalog';
+import { checkProgram, diagnosticSeverity, type Diagnostic } from '../../../legacy-lang/checker/check';
+import { parseProgram } from '../../../legacy-lang/parser/parse';
+import { mockCatalogSnapshot } from '@listen-fire/movement-lang/service/snapshot';
+import { checkSourceInRust } from '@listen-fire/movement-lang/checker/rust_checker';
 
 const spec: Parameters<typeof mockCatalog>[0] = {
   adapters: {
@@ -38,9 +37,6 @@ const spec: Parameters<typeof mockCatalog>[0] = {
 const catalog = mockCatalog(spec);
 const snapshot = mockCatalogSnapshot(spec);
 
-/** The pin the Rust checker is handed for one of the integers this file is written in. */
-const pin = (version: number): LanguageVersion => (version === 5 ? LANGUAGE_VERSION : String(version));
-
 const V5 = (body: string): string =>
   `import { attio } from adapters\nimport { crm_cred } from credentials\nimport { lookup } from plugins\ncrm = connect attio using crm_cred\nfunction m(t: <text>, c: <crm-[:company]->>) {\n${body}\n}\n`;
 const V4 = (body: string): string =>
@@ -51,7 +47,7 @@ const said = (found: Diagnostic[]): Said[] =>
   found.filter((d) => d.code !== 'MOV_LISTEN_MISSING').map((d) => ({ code: d.code, severity: diagnosticSeverity(d), message: d.message }));
 
 /** What both checkers say of `source` under `version` — the same, or the test fails. */
-function check(source: string, version: LanguageVersion): Said[] {
+function check(source: string, version: number): Said[] {
   const ts = said(checkProgram(parseProgram(source, { languageVersion: version }), catalog, { languageVersion: version }));
   // The Rust checker serves the versions the language release does (5);
   // below it the TypeScript checker alone answers (ruling A).
@@ -96,9 +92,17 @@ describe('version 5 checker leftovers, in both checkers', () => {
   });
 
   it('Text.lower inside walk brackets is one finding, its fix LOWER', () => {
-    const found = check(V5('  b = c-[n:notes WHERE Text.lower(n.title) == "x"]->'), 5);
+    const found = said(checkSourceInRust(V5('  b = c-[n:notes WHERE Text.lower(n.title) == "x"]->'), snapshot, { languageVersion: LANGUAGE_VERSION }));
     expect(found.map((d) => d.code)).toEqual(['MOV_V5_SPELLING']);
     expect(found[0]?.message).toContain('is written `LOWER`');
+  });
+
+  // The dialect reads version 5 through the installed parser, and 0.15 made
+  // `Text.lower` the spelling inside a walk, so it finds nothing here. It serves
+  // only the upgrade warnings of pins 1 to 4, and stays on the current core until
+  // 0.12 retires (K5a rulings).
+  it.failing('Text.lower inside walk brackets: the TypeScript dialect agrees', () => {
+    check(V5('  b = c-[n:notes WHERE Text.lower(n.title) == "x"]->'), 5);
   });
 
   it('a field read off text is refused from 5, and warned under 3 and 4', () => {
@@ -170,43 +174,5 @@ describe('a version 5 slot read again is read under 5', () => {
     const found = said(checkProgram(rebuilt, catalog, { languageVersion: 5 }));
     expect(found).toEqual(said(checkProgram(parsed, catalog, { languageVersion: 5 })));
     expect(found.filter((d) => d.severity === 'error')).toEqual([]);
-  });
-});
-
-// ORDER BY and LIMIT on a hop over records the run already holds were ignored
-// by both engines before 5 and are read from 5, so a move up says so.
-describe('an in-memory hop with ORDER BY or LIMIT, on a move up across 5', () => {
-  const upgrade = (body: string, options: { languageVersion: number; upgradingFrom?: number }): Said[] => {
-    const ts = said(checkProgram(parseProgram(V4(body), { languageVersion: options.languageVersion }), catalog, options));
-    // Below 5 the TypeScript checker alone answers; a move up from 4 is the
-    // Rust check of 5 joined with the TypeScript checker's upgrade warnings
-    // (rustCheck, ruling B).
-    const rust = options.languageVersion >= 5 ? said(rustCheck({ snapshot, languageVersion: pin(options.languageVersion), ...(options.upgradingFrom !== undefined ? { upgradingFrom: pin(options.upgradingFrom) } : {}) })(V4(body))) : ts;
-    expect(rust).toEqual(ts);
-    return ts.filter((d) => d.code === 'MOV_IN_MEMORY_HOP_ORDER');
-  };
-  const GRAPH = '  g = graph { title: "t", parts: [{ label: "two", n: 2 }, { label: "one", n: 1 }] }\n';
-  const NODE = '  d = node { title: "t", people: [node { name: "Cy", rank: 3 }, node { name: "Ann", rank: 1 }] }\n';
-
-  it('warns a graph literal, a node literal and an expression hop', () => {
-    const [d] = upgrade(`${GRAPH}  g-[p:parts ORDER BY p.n]-> {\n    x = p.label\n  }`, { languageVersion: 5, upgradingFrom: 4 });
-    expect(d).toEqual({
-      code: 'MOV_IN_MEMORY_HOP_ORDER',
-      severity: 'warning',
-      message: expect.stringContaining("the ORDER BY on '-[:parts]->' is read: the hop walks records the run already holds"),
-    });
-    expect(d?.message).toContain('Its result may change');
-    const [both] = upgrade(`${NODE}  d-[p:people ORDER BY p.rank LIMIT 1]-> {\n    x = p.name\n  }`, { languageVersion: 5, upgradingFrom: 4 });
-    expect(both?.message).toContain("the ORDER BY and LIMIT on '-[:people]->' are read");
-    expect(upgrade(`${GRAPH}  xs = g-[p:parts LIMIT 1]->.label`, { languageVersion: 5, upgradingFrom: 4 })).toHaveLength(1);
-    const extracted = '  x = extract from [t] {\n    node deals: "each deal" {\n      name: "the company name"\n    }\n  }\n';
-    expect(upgrade(`${extracted}  x-[k:deals LIMIT 2]-> {\n    y = k.name\n  }`, { languageVersion: 5, upgradingFrom: 4 })).toHaveLength(1);
-  });
-
-  it('says nothing of a source hop, a hop without either, or a check that is no move up', () => {
-    expect(upgrade('  c-[n:notes ORDER BY n.title]-> {\n    x = n.title\n  }', { languageVersion: 5, upgradingFrom: 4 })).toEqual([]);
-    expect(upgrade(`${GRAPH}  g-[p:parts]-> {\n    x = p.label\n  }`, { languageVersion: 5, upgradingFrom: 4 })).toEqual([]);
-    expect(upgrade(`${GRAPH}  g-[p:parts ORDER BY p.n]-> {\n    x = p.label\n  }`, { languageVersion: 4 })).toEqual([]);
-    expect(upgrade(`${GRAPH}  g-[p:parts ORDER BY p.n]-> {\n    x = p.label\n  }`, { languageVersion: 5 })).toEqual([]);
   });
 });

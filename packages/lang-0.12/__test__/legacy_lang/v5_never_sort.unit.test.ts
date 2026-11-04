@@ -3,13 +3,13 @@
 // TypeScript checker. The Rust checker's twin is
 // listen-fire's crates/movement-checker/tests/v5_never_sort.rs.
 
-import { LANGUAGE_VERSION } from 'movement-lang/language_version';
-import { parseProgram } from '../../parser/parse';
-import { checkProgram, type Diagnostic } from '../check';
-import { mockCatalog, type InstanceSchema } from '../catalog';
-import { applyFix } from 'movement-lang/checker/fixes';
-import { checkSourceInRust } from 'movement-lang/checker/rust_checker';
-import { fromCatalogSnapshot, type CatalogSnapshot } from 'movement-lang/service/snapshot';
+import { LANGUAGE_VERSION } from '@listen-fire/movement-lang/language_version';
+import { parseProgram } from '../../../legacy-lang/parser/parse';
+import { checkProgram, type Diagnostic } from '../../../legacy-lang/checker/check';
+import { mockCatalog, type InstanceSchema } from '../../../legacy-lang/checker/catalog';
+import { applyFix } from '@listen-fire/movement-lang/checker/fixes';
+import { checkSourceInRust } from '@listen-fire/movement-lang/checker/rust_checker';
+import { fromCatalogSnapshot, type CatalogSnapshot } from '@listen-fire/movement-lang/service/snapshot';
 
 const crmSchema: InstanceSchema = {
   positions: { company: { properties: { name: 'text', score: 'number' }, edges: {} } },

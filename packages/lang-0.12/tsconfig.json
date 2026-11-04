@@ -12,5 +12,7 @@
     "noEmit": true,
     "types": ["node", "jest"]
   },
-  "exclude": ["node_modules", "jest.config.cjs"]
+  // __test__/legacy_lang runs legacy-lang's sources beside this package's, which
+  // its own package types: under this one they would be typed against 0.12.
+  "exclude": ["node_modules", "jest.config.cjs", "__test__/legacy_lang"]
 }
