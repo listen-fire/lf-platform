@@ -21,6 +21,10 @@ jest.mock('../../asks/doors', () => ({
   answerAskByToken: (...args: unknown[]) => answerAskByToken(...args),
 }));
 
+jest.mock('../../movement_engine/callback_fire', () => ({
+  answerCallbackTap: async () => ({ text: 'Ask its owner to upgrade the automation and run it again.', served: true, outcome: 'retired' }),
+}));
+
 import { captureEngineLogs } from '../../../test/engine_logs';
 import {
   callbackQueryOf,

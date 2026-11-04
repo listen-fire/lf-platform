@@ -4,8 +4,9 @@
 // not a new route — it is an update whose `callback_query` carries the
 // `callback_data` the author wired into the button. When that data is an ask
 // answer link, the door answers the ask; when it is a callback id an
-// automation wired before 0.13, the tapper is told the button was retired
-// (interaction/retired_callback.ts); otherwise the update flows on untouched
+// automation wired before 0.13, a run still holding it is fired, and otherwise
+// the tapper is told the button was retired (interaction/retired_callback.ts);
+// any other update flows on untouched
 // (a bot may have buttons of its own that are none of our business).
 //
 // Two things Telegram makes MANDATORY, both of them acks:
@@ -30,8 +31,8 @@ import { z } from 'zod';
 import { logger } from 'movement-engine/public/log';
 import { answerAskByToken, type AskDoorOutcome } from '../asks/doors';
 import { parseAskLink } from '@listen-fire/ask/link';
-import { isRetiredCallbackId, RETIRED_CALLBACK_TEXT } from '../interaction/retired_callback';
-import { answerCallbackTap } from '../movement_engine/callback_fire';
+import { isRetiredCallbackId } from '../interaction/retired_callback';
+import { answerCallbackTap, type CallbackTapAnswer } from '../movement_engine/callback_fire';
 
 /** What the door needs of a bot: the two Bot API calls that close a tap.
  *  `TelegramAdapter` satisfies it structurally — narrow on purpose, so the door
@@ -85,7 +86,7 @@ export function ownsCallbackQuery(raw: unknown): boolean {
 export interface TelegramCallbackResult {
   /** The door consumed this delivery — no movement event to parse from it. */
   handled: boolean;
-  outcome?: AskDoorOutcome['kind'] | 'malformed' | 'retired';
+  outcome?: AskDoorOutcome['kind'] | CallbackTapAnswer['outcome'] | 'malformed';
 }
 
 /**
@@ -104,10 +105,19 @@ export async function handleTelegramCallbackQuery(input: {
   if (!query || query.data === undefined) return { handled: false };
 
   if (isRetiredCallbackId(query.data)) {
-    const answered = await answerCallbackTap(query.data);
+    let answered: CallbackTapAnswer;
+    try {
+      answered = await answerCallbackTap(query.data);
+    } catch (err) {
+      // The ack still has to go out: a spinning client is worse than a failure
+      // the person can see. The failure itself is not swallowed.
+      logger.error('[telegram/callback] firing failed', err);
+      await ack(input.responder, query, 'Something went wrong recording that.');
+      return { handled: true, outcome: 'not_found' };
+    }
     await ack(input.responder, query, answered.text);
     if (answered.served) await retireKeyboard(input.responder, query);
-    return { handled: true, outcome: answered.text === RETIRED_CALLBACK_TEXT ? 'retired' : 'answered' };
+    return { handled: true, outcome: answered.outcome };
   }
 
   const link = parseAskLink(query.data);

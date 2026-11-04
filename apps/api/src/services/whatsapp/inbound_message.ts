@@ -89,25 +89,21 @@ export async function enqueueWhatsappMessage(row: WhatsappMessageRow): Promise<v
 /**
  * One message, in an order that keeps a retry clean: the dispatch first (its
  * receipts make a rerun a no-op, and a failure throws so the row retries before
- * anything ops can see has happened), then the ops notice, which never
- * throws.
+ * anything the tapper or ops can see has happened), then a tapped callback
+ * button's fire (a failure throws, the same) and its reply, then the ops notice.
+ * The reply and the notice never throw.
  */
 async function runWhatsappMessage(row: WhatsappMessageRow): Promise<void> {
   const { message, profileName, businessNumber, businessPhoneNumberId } = row;
   await dispatchWhatsappMessage({ message, profileName, businessNumber, businessPhoneNumberId });
   logger.info('Dispatched WhatsApp message', { messageId: message.id });
 
-  const tapped = message.interactive?.button_reply?.id ?? message.interactive?.list_reply?.id;
-  if (tapped !== undefined && isRetiredCallbackId(tapped)) {
-    try {
-      const { text } = await answerCallbackTap(tapped);
-      await getMetaWhatsappApi(businessPhoneNumberId).sendTextMessage(message.from, text, { replyToMessageId: message.id });
-    } catch (error) {
-      logger.warn('[whatsapp/webhook] telling the tapper a callback button was retired failed', {
-        messageId: message.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
+  // A fire that fails throws, so the row retries with the tap still unspent. Only
+  // what the tapper is told afterwards may fail quietly.
+  const tapped = tappedCallbackOf(message);
+  if (tapped !== undefined) {
+    const { text } = await answerCallbackTap(tapped);
+    await tellTapper(row, text);
   }
 
   if (row.announce) {
@@ -119,6 +115,23 @@ async function runWhatsappMessage(row: WhatsappMessageRow): Promise<void> {
         error: error instanceof Error ? error.message : String(error),
       });
     }
+  }
+}
+
+function tappedCallbackOf(message: WhatsAppMessage): string | undefined {
+  const tapped = message.interactive?.button_reply?.id ?? message.interactive?.list_reply?.id;
+  return tapped !== undefined && isRetiredCallbackId(tapped) ? tapped : undefined;
+}
+
+/** WhatsApp cannot edit a message, so the only feedback is a threaded reply. */
+async function tellTapper(row: WhatsappMessageRow, text: string): Promise<void> {
+  try {
+    await getMetaWhatsappApi(row.businessPhoneNumberId).sendTextMessage(row.message.from, text, { replyToMessageId: row.message.id });
+  } catch (error) {
+    logger.warn('[whatsapp/webhook] telling the tapper how a callback tap came out failed', {
+      messageId: row.message.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 
@@ -164,6 +177,7 @@ export const whatsappMessageHandler: WorkHandler = {
         attempts: ctx.attempts,
         error: error instanceof Error ? error.message : String(error),
       });
+      if (tappedCallbackOf(parsed.data.message) !== undefined) await tellTapper(parsed.data, 'Something went wrong recording that.');
     }
   },
 };

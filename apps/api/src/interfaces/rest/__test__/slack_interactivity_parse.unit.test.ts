@@ -15,6 +15,7 @@ import {
   blockActionValue,
   parseAskAction,
   resolveAskAction,
+  resolveBlockAction,
 } from '../slackInteractivity';
 
 describe('parseAskAction', () => {
@@ -174,5 +175,48 @@ describe('resolveAskAction', () => {
 
   it('an action with neither a parseable value nor an action_id is ignored', () => {
     expect(resolveAskAction({})).toBeNull();
+  });
+});
+
+describe('resolveBlockAction: what a tap turned out to be', () => {
+  it('a button carries a callback id on value, and supplies nothing', () => {
+    expect(resolveBlockAction({ action_id: 'ship', value: 'cb_abc123' })).toEqual({ kind: 'callback', id: 'cb_abc123' });
+  });
+
+  it('a static_select option carrying a callback id resolves it off selected_option', () => {
+    expect(resolveBlockAction({ action_id: 'tier', selected_option: { value: 'cb_seed' } })).toEqual({ kind: 'callback', id: 'cb_seed' });
+  });
+
+  it('a datepicker carries the id on action_id and the picked date rides along', () => {
+    expect(resolveBlockAction({ action_id: 'cb_date1', selected_date: '2026-08-15' })).toEqual({ kind: 'callback', id: 'cb_date1', suppliedValue: '2026-08-15' });
+  });
+
+  it('a timepicker does the same with selected_time', () => {
+    expect(resolveBlockAction({ action_id: 'cb_time1', selected_time: '14:30' })).toEqual({ kind: 'callback', id: 'cb_time1', suppliedValue: '14:30' });
+  });
+
+  it('a dispatch-triggered text input supplies its entered value', () => {
+    expect(resolveBlockAction({ action_id: 'cb_text1', value: 'what I typed' })).toEqual({ kind: 'callback', id: 'cb_text1', suppliedValue: 'what I typed' });
+  });
+
+  it('a callback id on action_id with nothing captured supplies nothing', () => {
+    expect(resolveBlockAction({ action_id: 'cb_bare' })).toEqual({ kind: 'callback', id: 'cb_bare' });
+  });
+
+  it('a pre-wired callback id wins over one on action_id, and over an ask link', () => {
+    expect(resolveBlockAction({ action_id: 'cb_from_action_id', value: 'cb_from_value' })).toEqual({ kind: 'callback', id: 'cb_from_value' });
+    expect(resolveBlockAction({ action_id: 'ask_legacy?answer=true', value: 'cb_current' })).toEqual({ kind: 'callback', id: 'cb_current' });
+  });
+
+  it('an ask answer link resolves as an ask', () => {
+    expect(resolveBlockAction({ action_id: 'ask_answer_0', value: 'http://localhost:3500/api/asks/ask_abc?answer=true' })).toEqual({ kind: 'ask', token: 'ask_abc', answer: 'true' });
+    expect(resolveBlockAction({ action_id: 'ask_date2', selected_date: '2026-08-16' })).toEqual({ kind: 'ask', token: 'ask_date2', answer: '2026-08-16' });
+  });
+
+  it('an ordinary block action is neither, and flows on untouched', () => {
+    const warn = jest.spyOn(logger, 'warn').mockImplementation();
+    expect(resolveBlockAction({ action_id: 'approve_expense_42', value: 'expense_42' })).toBeNull();
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 });

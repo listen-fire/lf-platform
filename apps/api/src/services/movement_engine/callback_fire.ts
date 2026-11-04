@@ -335,15 +335,23 @@ export function interactionServed(outcome: CallbackFireOutcome): boolean {
   return outcome.kind === 'recorded' && outcome.callback.singleUse;
 }
 
+/** What a door tells the tapper, whether the message has done its job (a door
+ *  retires its controls), and how the tap came out. */
+export interface CallbackTapAnswer {
+  text: string;
+  served: boolean;
+  outcome: CallbackFireOutcome['kind'] | 'retired';
+}
+
 /**
  * A tap on a chat button that carries a callback's id, as a door answers it: a
  * run of a version that keeps callbacks is still listening, so the tap fires it.
  * An id no such run holds belongs to an automation upgraded past callbacks.
  */
-export async function answerCallbackTap(id: string, opts: { suppliedValue?: unknown } = {}): Promise<{ text: string; served: boolean }> {
-  if ((await getDoorCallback(id)) === null) return { text: RETIRED_CALLBACK_TEXT, served: true };
+export async function answerCallbackTap(id: string, opts: { suppliedValue?: unknown } = {}): Promise<CallbackTapAnswer> {
+  if ((await getDoorCallback(id)) === null) return { text: RETIRED_CALLBACK_TEXT, served: true, outcome: 'retired' };
   const outcome = await fireCallback({ id, values: {}, ...(opts.suppliedValue !== undefined ? { suppliedValue: opts.suppliedValue } : {}) });
-  return { text: callbackAckText(outcome), served: interactionServed(outcome) };
+  return { text: callbackAckText(outcome), served: interactionServed(outcome), outcome: outcome.kind };
 }
 
 /** What a door tells the tapper. Platform-neutral by construction — a toast, an
