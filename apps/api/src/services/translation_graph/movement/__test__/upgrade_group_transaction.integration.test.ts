@@ -146,7 +146,9 @@ describe('an upgrading import group moves in one transaction (real Postgres, the
   }
 
   async function bringUpRowsOf(id: string) {
-    return getAutomationsQb(['work']).selectFrom('work').where('kind', '=', 'bring_up_listens').where('key', '=', `bring_up_listens:${id}`).select('id').execute();
+    // The row is the group's, found by the movement it lists.
+    const rows = await getAutomationsQb(['work']).selectFrom('work').where('team_id', '=', teamId).where('kind', '=', 'bring_up_listens').select(['id', 'payload']).execute();
+    return rows.filter((row) => (row.payload as { movementIds: string[] }).movementIds.includes(id));
   }
 
   async function triggersOf(id: string) {

@@ -77,7 +77,7 @@ import { recordMovementFailureIssue } from '../issues';
 import { drainWork, resetWorkHandlersForTests } from '../../../work/drain';
 import { advanceLive, upgradeMovement, type Advance, type ValidateUnder } from '../language_upgrade';
 import { listensOfSubscription, MOVEMENT_LISTEN_PROVISIONER } from '../listen_subscriptions';
-import { registerBringUpListensWork } from '../listens_up';
+import { bringUpListensLater, registerBringUpListensWork } from '../listens_up';
 import { mintMovementVersionIfChanged } from '../version_store';
 
 const SOURCE = 'function stamp(go: <manual-[:Invocations]->>) {\n}\n\nlisten to manual-[:Invocations]-> fire stamp\n';
@@ -314,5 +314,19 @@ describe('an upgraded automation whose listens could not be brought up', () => {
     expect(await workRows()).toEqual([]);
     expect(await issues(failing)).toEqual([expect.objectContaining({ state: 'resolved', failure_class: 'MOV_LISTENS_NOT_UP' })]);
     expect(await issues(healthy)).toEqual([expect.objectContaining({ state: 'open', failure_class: 'MOV_UNRELATED' })]);
+  });
+  it('two groups that share a member each keep their own row and member list, and the same group asked twice keeps one', async () => {
+    const [a, b] = [randomUUID(), randomUUID()];
+    const members = async () =>
+      (await getAutomationsQb(['work']).selectFrom('work').where('team_id', '=', teamId).where('kind', '=', 'bring_up_listens').select('payload').execute())
+        .map((row) => (row.payload as { movementIds: string[] }).movementIds.slice().sort())
+        .sort((x, y) => x.length - y.length);
+
+    await bringUpListensLater({ teamId, movementIds: [a, b] });
+    await bringUpListensLater({ teamId, movementIds: [a] });
+    expect(await members()).toEqual([[a], [a, b].sort()]);
+
+    await bringUpListensLater({ teamId, movementIds: [b, a] });
+    expect(await members()).toEqual([[a], [a, b].sort()]);
   });
 });

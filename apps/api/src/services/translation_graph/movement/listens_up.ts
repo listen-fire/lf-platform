@@ -17,6 +17,8 @@
 // One row per group, not per member: the subscription sync is per team, and two
 // at once could register the same subscription twice.
 
+import { createHash } from 'node:crypto';
+
 import { z } from 'zod';
 
 import type { MovementId } from '../../../generated/kysely/automations/Movement';
@@ -43,12 +45,19 @@ const ISSUE_FROM_ATTEMPT = 3;
 
 const payloadSchema = z.object({ teamId: z.string(), movementIds: z.array(z.string()) });
 
+/** The row's key names the group it owes, so two groups never share a row and a
+ *  row's member list is never replaced by another's. */
+function keyOf(movementIds: readonly string[]): string {
+  const digest = createHash('sha256').update([...new Set(movementIds)].sort().join(',')).digest('hex').slice(0, 32);
+  return `${WORK_KIND}:${digest}`;
+}
+
 /** Owe the providers `movementIds`' listens. Inside a context transaction the
  *  row joins it, and the drain is told once it commits. */
-export async function bringUpListensLater(input: { teamId: string; movementIds: readonly string[]; key: string }): Promise<void> {
+export async function bringUpListensLater(input: { teamId: string; movementIds: readonly string[] }): Promise<void> {
   await enqueueWork({
     kind: WORK_KIND,
-    key: `${WORK_KIND}:${input.key}`,
+    key: keyOf(input.movementIds),
     teamId: input.teamId,
     payload: { teamId: input.teamId, movementIds: input.movementIds },
   });

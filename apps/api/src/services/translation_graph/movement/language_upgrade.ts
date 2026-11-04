@@ -1188,7 +1188,7 @@ export async function upgradeMovement(input: {
         });
       }
       const shipped = checked.filter((member) => member.movement.currentVersionId !== null).map((member) => member.movement.id);
-      if (shipped.length > 0) await bringUpListensLater({ teamId: movement.teamId, movementIds: shipped, key: movement.id });
+      if (shipped.length > 0) await bringUpListensLater({ teamId: movement.teamId, movementIds: shipped });
     });
   } catch (err) {
     if (!(err instanceof GroupMoveStopped)) throw err;
