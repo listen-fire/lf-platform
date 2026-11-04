@@ -116,6 +116,8 @@ describe('the 0.12 surface, by the carried 0.12.13 checker', () => {
   it('a message spells a walk\'s own words as they are', () => {
     expect(spellCode(LOWER_IN_A_WALK)).toBe(LOWER_IN_A_WALK);
     for (const [old, v5] of [
+    // Up to 4 the text is canonical as it stands, so nothing is respelled either.
+    expect(dialectSpellCode(LOWER_IN_A_WALK, '4')).toBe(LOWER_IN_A_WALK);
       ['EXISTS(channel)', 'channel != null'],
       ['AT(t, 0)', 't[0]'],
       ['IF … THEN "Yes" ELSE "No" END', '… ? "Yes" : "No"'],
