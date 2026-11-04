@@ -1223,6 +1223,9 @@ importers:
         specifier: 'catalog:'
         version: '@listen-fire/movement-lang@0.15.1'
     devDependencies:
+      '@listen-fire/affinity':
+        specifier: 0.14.1
+        version: 0.14.1(@listen-fire/engine-contracts@0.15.1)(@listen-fire/engine@0.15.1)(@listen-fire/movement-lang@0.15.1)(tsx@4.21.0)
       '@types/jest':
         specifier: 29.5.14
         version: 29.5.14
