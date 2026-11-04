@@ -152,8 +152,8 @@ describe('one door, two versions (real Postgres)', () => {
     const carried = await movementOn('0.12.13', ATTIO_012);
     const row012 = await listenRow({ movementId: carried });
     // A row pinned to the current version is not 0.12's to read.
-    const current = await movementOn(LANGUAGE_VERSION, 'function a() {\n  return 1\n}\n');
-    const row015 = await listenRow({ movementId: current, firedMovementName: 'a' });
+    const current = await movementOn(LANGUAGE_VERSION, ATTIO_012);
+    const row015 = await listenRow({ movementId: current });
 
     const answer = await deliver(sub, attioBody(randomUUID()), secret);
     expect(answer.status).toBe(200);
