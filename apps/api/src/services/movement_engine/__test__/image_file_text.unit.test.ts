@@ -252,7 +252,7 @@ describe('a run pinned to a carried release stays as it was', () => {
     expect(readMock).not.toHaveBeenCalled();
   });
 
-  it('why it must: with no file owners, as that host holds none, opening the image fails the run by name', async () => {
+  it('why it must stay unopened: a file whose owner the run does not hold fails the run by name', async () => {
     const shared = sharedRunServices({ teamId: teamOfTenant(TEAM_ID), cancel: NEVER_CANCELLED, rawText: inMemoryRawTextStore() });
     await expect(shared.resolveFileText({ segmentId: 'seg-1', file, budget })).rejects.toThrow(FileOutsideTeamError);
   });

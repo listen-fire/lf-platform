@@ -132,6 +132,9 @@ function hostFor(request: { dryRun?: boolean; runId?: string; teamId: string; tr
       }),
     credentials: platform.credentials,
     ...segmentScopedCalls,
+    // A file a module's call redeems (a write's attachment) is read by the
+    // platform's readers, which look for its owner in the platform's scope.
+    around: (segmentId, call) => segmentScopedCalls.around(segmentId, () => platform.withFileOwners(table.fileOwners(segmentId), call)),
     ...(platform.writeSink !== undefined ? { writeSink: platform.writeSink } : {}),
   });
   const locks = segmentWriteLocks(platform.locks);
@@ -155,7 +158,9 @@ function hostFor(request: { dryRun?: boolean; runId?: string; teamId: string; tr
     },
     control: { cancel },
     files: {
-      resolveFileText: platform.files.resolveFileText,
+      // A file's bytes come from a document the team owns, or through an
+      // instance the run's segment holds, as production's host at 0.12.13.
+      resolveFileText: (request) => platform.withFileOwners(table.fileOwners(request.segmentId), () => platform.files.resolveFileText(request)),
       render: platform.files.render,
     },
     lookup: {

@@ -61,6 +61,7 @@ async function main() {
     {
       modules: { hostFor: refused('a module'), parts: {}, log: { debug() {}, info() {}, warn() {}, error() {} }, validateResults: true },
       credentials: { belongsTo: () => true },
+      withFileOwners: (_owners, call) => call(),
       llm: { client: { call: refused('llm') }, extractCall: { call: refused('extract') }, transforms: { invoke: refused('plugins') }, arbitrateEntities: refused('judge') },
       files: { resolveFileText: refused('file text'), render: refused('render') },
       bindings: { record: refused('bindings'), findBoundCounterpart: refused('bindings'), delete: refused('bindings') },

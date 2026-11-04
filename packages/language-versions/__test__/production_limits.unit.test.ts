@@ -66,6 +66,7 @@ function platform(input: { renderMs?: number; fields?: Record<string, string> } 
         return { __brand: 'FileRef', name: 'out.txt', contentType: 'text/plain', size: content.length, source: { store: 'document', objectUri: 'mem://out' } } as never;
       },
     },
+    withFileOwners: (_owners, call) => call(),
     bindings: { record: refused('bindings'), findBoundCounterpart: refused('bindings'), delete: refused('bindings') },
     locks: new InMemoryWriteLocks(),
     actingUser: async () => null,

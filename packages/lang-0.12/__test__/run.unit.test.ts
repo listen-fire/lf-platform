@@ -58,6 +58,7 @@ function platform(overrides: Partial<RunPlatform> = {}): RunPlatform {
       arbitrateEntities: refused('arbitrate'),
     },
     files: { resolveFileText: refused('file text'), render: refused('render') },
+    withFileOwners: (_owners, call) => call(),
     bindings: { record: refused('bindings'), findBoundCounterpart: refused('bindings'), delete: refused('bindings') },
     locks: new InMemoryWriteLocks(),
     actingUser: async () => null,

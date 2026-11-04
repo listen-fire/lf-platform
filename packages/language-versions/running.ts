@@ -88,6 +88,12 @@ export interface ModulePlatform {
   validateResults: boolean;
 }
 
+/** The instance a carried segment holds for a file's owner, as a byte reader
+ *  needs it: the one method that serves the file's bytes. */
+export interface CarriedFileOwner {
+  resolveFileRef?(input: { ref: FileRef }): Promise<ResolveFileRefResult>;
+}
+
 /** The platform's services a carried version's segment reaches. */
 export interface RunPlatform {
   modules: ModulePlatform;
@@ -97,6 +103,13 @@ export interface RunPlatform {
   /** Billed and metered by the platform. */
   llm: EngineHost['llm'];
   files: EngineHost['files'];
+  /** Runs `call` with `owners` as where the platform's byte readers find a
+   *  file's owner. A carried version's own scope is not the one they read, so
+   *  it sets this around each file read and module call of a segment. */
+  withFileOwners<T>(
+    owners: (owner: { adapterType: string; credentialsId?: string; constructionArgs?: Record<string, string> }) => CarriedFileOwner | undefined,
+    call: () => Promise<T>,
+  ): Promise<T>;
   bindings: EngineHost['park']['bindings'];
   /** The cross-run write locks every version shares. */
   locks: WriteLocks;

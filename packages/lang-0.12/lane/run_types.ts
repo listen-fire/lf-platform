@@ -110,6 +110,12 @@ export interface ModulePlatform {
   validateResults: boolean;
 }
 
+/** The instance a 0.12 segment holds for a file's owner, as a byte reader
+ *  needs it: the one method that serves the file's bytes. */
+export interface CarriedFileOwner {
+  resolveFileRef?(input: { ref: FileRef }): Promise<ResolveFileRefResult>;
+}
+
 /** The platform's services a 0.12 segment reaches, each a function over plain
  *  data. */
 export interface RunPlatform {
@@ -121,6 +127,13 @@ export interface RunPlatform {
   /** The platform's model calls, billed and metered by it. */
   llm: EngineHost['llm'];
   files: EngineHost['files'];
+  /** Runs `call` with `owners` as where the platform's byte readers find a
+   *  file's owner: 0.12's own scope (`withFileOwners`) is not the one they
+   *  read, so this host sets the platform's too. */
+  withFileOwners<T>(
+    owners: (owner: { adapterType: string; credentialsId?: string; constructionArgs?: Record<string, string> }) => CarriedFileOwner | undefined,
+    call: () => Promise<T>,
+  ): Promise<T>;
   bindings: EngineHost['park']['bindings'];
   /** The platform's cross-run write locks, shared by every version. */
   locks: WriteLocks;

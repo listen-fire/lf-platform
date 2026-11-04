@@ -29,7 +29,7 @@ import {
 } from '@listen-fire/language-versions';
 
 import type { LanguageVersion } from 'movement-lang';
-import type { DryRunWriteSink } from 'movement-engine/public/adapter';
+import type { Adapter, DryRunWriteSink } from 'movement-engine/public/adapter';
 import type { MovementRunResult } from 'movement-engine/public/movement-engine';
 import type { MovementTraceEntry } from 'movement-engine/public/trace';
 import type { TeamId } from '../../../generated/kysely/core/Team';
@@ -56,7 +56,7 @@ import { platformSlackChat, platformSlackFile } from '../adapters/slack/platform
 import { WHATSAPP_MOVEMENTS_NUMBER } from '../adapters/whatsapp/shared_app';
 import { resolveActingUser } from '../adapters/acting_user/resolve';
 import { isExposedFileUrl } from '../engine/files/expose';
-import { streamFileRef } from '../engine/files/retrieve';
+import { streamFileRef, withFileOwners } from '../engine/files/retrieve';
 import { teamIdSchema } from '../../../lib/team_id';
 import { loadActingUserTrigger, sharedRunServices } from './engine_host';
 import { teamFactsOf } from './carried_check';
@@ -113,9 +113,7 @@ export function runPlatformFor(input: {
     cancel: input.cancel,
     // A pin's meaning does not change within its compatibility key. A run
     // pinned to a carried release skips an image: reading one would spend its
-    // budget and change its answers; worse, its host holds no file owners
-    // (`withFileOwners`), so an image a connected system owns would fail the
-    // run where it used to be skipped. And a read past its budget reads as an
+    // budget and change its answers. And a read past its budget reads as an
     // unreadable file and the run goes on, where a current run stops at the
     // cap. Upgrading the pin is how it gets both.
     asCarriedRelease: true,
@@ -127,6 +125,10 @@ export function runPlatformFor(input: {
     credentials: teamCredentials,
     llm: shared.llm,
     files: { resolveFileText: shared.resolveFileText, render: shared.render },
+    // A carried release's instance is not this release's `Adapter`. The byte
+    // reader asks one thing of an owner, `resolveFileRef`, and asks whether it
+    // has it (`redeemFileRef`), so the instance serves as that owner.
+    withFileOwners: (owners, call) => withFileOwners((owner) => owners(owner) as Adapter | undefined, call),
     bindings: shared.bindings,
     locks: shared.locks,
     actingUser: async ({ teamId, triggerId, candidates }) => {
