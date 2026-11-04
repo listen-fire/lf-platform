@@ -83,6 +83,17 @@ export interface PlatformModuleParts {
   /** A stored document read back for a team, through the store's ownership
    *  check. */
   readDocument(ref: FileRef, options: { teamId: string }): Promise<ResolveFileRefResult>;
+  /** A team's install of a remote adapter: its stored manifest file (JSON,
+   *  read by the version in its own terms), its server secret, the document
+   *  store a fetched file lands in, and the connection's provider credential
+   *  when it names one. */
+  remoteInstall(input: { adapterType: string; teamId: string; credentialsId?: string }): Promise<{
+    manifest: unknown;
+    secret: string;
+    credentialsId: string;
+    documents: RemoteDocuments;
+    credential?: RemoteCredential;
+  }>;
 }
 
 /** How the platform hosts 0.12's modules. */
@@ -152,3 +163,9 @@ export type SegmentOutcome =
   | { kind: 'lease-lost'; message: string };
 
 export type { CredentialFields };
+
+/** What a remote adapter of this release stores fetched files in, and the
+ *  provider credential it sends. */
+type RemoteInput = Parameters<typeof import('@listen-fire/engine/public/modules').createRemoteAdapter>[0];
+export type RemoteDocuments = RemoteInput['documents'];
+export type RemoteCredential = NonNullable<RemoteInput['credential']>;

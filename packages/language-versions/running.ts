@@ -66,6 +66,17 @@ export interface PlatformModuleParts {
   whatsappNumber: string | null;
   isExposedFileUrl(url: string): boolean;
   readDocument(ref: FileRef, options: { teamId: string }): Promise<ResolveFileRefResult>;
+  /** A team's install of a remote adapter: its stored manifest file (JSON,
+   *  read by the version in its own terms), its server secret, the document
+   *  store a fetched file lands in, and the connection's provider credential
+   *  when it names one. */
+  remoteInstall(input: { adapterType: string; teamId: string; credentialsId?: string }): Promise<{
+    manifest: unknown;
+    secret: string;
+    credentialsId: string;
+    documents: RemoteDocuments;
+    credential?: RemoteCredential;
+  }>;
 }
 
 export interface ModulePlatform {
@@ -148,3 +159,9 @@ export interface RunningLane {
   /** A Run now press as the event the version's manual unit reads. */
   manualInvocationEvent: (input: { key: string; invocation: ManualInvocation; requestId?: string }) => CarriedEvent;
 }
+
+/** What a remote adapter of this release stores fetched files in, and the
+ *  provider credential it sends. */
+type RemoteInput = Parameters<typeof import('movement-engine/public/modules').createRemoteAdapter>[0];
+export type RemoteDocuments = RemoteInput['documents'];
+export type RemoteCredential = NonNullable<RemoteInput['credential']>;

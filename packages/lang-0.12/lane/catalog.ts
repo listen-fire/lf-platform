@@ -37,6 +37,7 @@ import { CRON_MANIFEST, createCronAdapter } from '../units/cron';
 import { MANUAL_MANIFEST, createManualAdapter } from '../units/manual';
 import { manifestsOf } from './manifests';
 import { moduleTable } from './modules';
+import { RemoteAdapterManifestFile, remoteAdapterManifest } from './remote';
 import type { ModulePlatform } from './run_types';
 import type { CheckGap, TeamFacts } from './types';
 
@@ -185,10 +186,9 @@ async function readConnected(
     const credentialsId = credential?.id;
     try {
       const read = await readOnce(`${reading.teamId}|${instance.adapter}|${credentialsId ?? ''}`, () =>
-        introspectAdapter(
-          table.resolve(instance.adapter, { teamId: reading.teamId, ...(credentialsId !== undefined ? { credentialsId } : {}) }),
-          manifest,
-        ),
+        table
+          .resolve(instance.adapter, { teamId: reading.teamId, ...(credentialsId !== undefined ? { credentialsId } : {}) })
+          .then((adapter) => introspectAdapter(adapter, manifest)),
       );
       notes.push(...read.notes);
       schemas.set(instance.adapter, {
@@ -200,6 +200,19 @@ async function readConnected(
     }
   }
   return { schemas, notes, unread };
+}
+
+/** The team's remote installs, each projected as production projected it; a
+ *  stored file 0.12 cannot read is a note, and its install is not offered. */
+function remoteManifestsOf(team: TeamFacts, notes: string[]): AdapterManifest[] {
+  return (team.remoteAdapters ?? []).flatMap((install) => {
+    const parsed = RemoteAdapterManifestFile.safeParse(install.manifest);
+    if (!parsed.success) {
+      notes.push(`${install.adapterType}: its stored manifest is not one 0.12 reads (${parsed.error.issues[0]?.message ?? 'invalid'}) — not offered`);
+      return [];
+    }
+    return [remoteAdapterManifest(parsed.data)];
+  });
 }
 
 export interface TeamSnapshot {
@@ -220,7 +233,7 @@ export async function teamSnapshot(
   reading?: ConnectedReading,
 ): Promise<TeamSnapshot> {
   const notes: string[] = [];
-  const manifests = manifestsOf(team);
+  const manifests = [...manifestsOf(team), ...remoteManifestsOf(team, notes)];
   const schemas = await describedSchemas();
   const connected =
     reading !== undefined ? await readConnected(reading, team, manifests, new Set(schemas.keys())) : { schemas: new Map<string, Record<string, InstanceSchema>>(), notes: [], unread: new Map<string, string>() };

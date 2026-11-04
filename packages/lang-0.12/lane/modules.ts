@@ -14,14 +14,16 @@
 //
 // A module is loaded on the first install that asks for it, never at import.
 
-import type { Adapter } from '@listen-fire/engine/public/adapter';
+import type { Adapter, TriggerType } from '@listen-fire/engine/public/adapter';
 import {
   adapterInProcess,
   noCredential,
   type AdapterModuleDefinition,
   type InProcessAdapterModule,
 } from '@listen-fire/module-kit';
-import { ownedFilesAdapter } from '@listen-fire/engine/public/modules';
+import { randomUUID } from 'node:crypto';
+
+import { createRemoteAdapter, ownedFilesAdapter } from '@listen-fire/engine/public/modules';
 
 import { askModuleWith } from '../modules/ask';
 import { kgModuleWith } from '../modules/kg';
@@ -29,6 +31,7 @@ import { nativeValuationsModule } from '../modules/native-valuations';
 import { systemModuleWith, type SystemRecords } from '../modules/system';
 import { CRON_ADAPTER_TYPE, createCronAdapter } from '../units/cron';
 import { MANUAL_ADAPTER_TYPE, createManualAdapter } from '../units/manual';
+import { RemoteAdapterManifestFile } from './remote';
 import type { ModuleDeclaration, ModuleInstall, ModulePlatform, PlatformModuleParts } from './run_types';
 
 type ModuleLoader = (parts: PlatformModuleParts) => AdapterModuleDefinition;
@@ -152,7 +155,7 @@ function declarationOf(definition: AdapterModuleDefinition): ModuleDeclaration {
  *  loaded once per table, each install loaded in process with what the
  *  platform hosts it with. */
 export function moduleTable(platform: ModulePlatform): {
-  resolve(adapterType: string, install: ModuleInstall): Adapter;
+  resolve(adapterType: string, install: ModuleInstall): Promise<Adapter>;
 } {
   const loaded = new Map<string, AdapterModuleDefinition>();
   const definitionOf = (adapterType: string): AdapterModuleDefinition | undefined => {
@@ -166,18 +169,53 @@ export function moduleTable(platform: ModulePlatform): {
     return definition;
   };
   return {
-    resolve(adapterType, install) {
+    async resolve(adapterType, install) {
       const unit = unitAdapter(adapterType, install, platform.parts);
       if (unit !== undefined) return unit;
       const definition = definitionOf(adapterType);
-      if (definition === undefined) {
-        throw new Error(
-          `a language 0.12 automation constructs '${adapterType}', which is not one of 0.12's modules on this platform (${moduleAdapterTypes().join(', ')})`,
-        );
-      }
+      // Anything else is a team's install of a remote adapter, or nothing.
+      if (definition === undefined) return remoteAdapterOf(adapterType, install, platform.parts);
       return loadInProcess(definition, adapterType, install, platform).adapter;
     },
   };
+}
+
+/** A team's install of a remote adapter, as production built it at 0.12.13
+ *  (`adapters/resolve.ts` on main): 0.12's own remote adapter over the
+ *  install's stored manifest, read in 0.12's terms, its secret and the
+ *  connection's provider credential. One cache scope per instance. */
+async function remoteAdapterOf(adapterType: string, install: ModuleInstall, parts: PlatformModuleParts): Promise<Adapter> {
+  const pieces = await parts.remoteInstall({
+    adapterType,
+    teamId: install.teamId,
+    ...(install.credentialsId !== undefined ? { credentialsId: install.credentialsId } : {}),
+  });
+  const parsed = RemoteAdapterManifestFile.safeParse(pieces.manifest);
+  if (!parsed.success) {
+    throw new Error(`the stored manifest of '${adapterType}' is not one language 0.12 reads: ${parsed.error.issues[0]?.message ?? 'invalid'}`);
+  }
+  const file = parsed.data;
+  return createRemoteAdapter({
+    config: { adapterType: file.adapterType, teamId: install.teamId, baseUrl: file.baseUrl, authStrategy: file.authStrategy, credentialsId: pieces.credentialsId },
+    secret: pieces.secret,
+    cacheScopeId: randomUUID(),
+    manifest: {
+      adapterType: file.adapterType,
+      supportedTriggers: file.supportedTriggers.filter(isTriggerType),
+      runtimeCapabilities: file.runtimeCapabilities,
+      methods: file.methods,
+      ...(file.credentials !== undefined ? { credentials: file.credentials } : {}),
+      ...(file.limits !== undefined ? { limits: file.limits } : {}),
+    },
+    documents: pieces.documents,
+    ...(pieces.credential !== undefined ? { credential: pieces.credential } : {}),
+  });
+}
+
+const TRIGGER_TYPES: readonly TriggerType[] = ['extraction', 'snapshot', 'poll', 'changes-feed', 'webhook', 'mutation'];
+
+function isTriggerType(value: string): value is TriggerType {
+  return TRIGGER_TYPES.some((type) => type === value);
 }
 
 function loadInProcess(

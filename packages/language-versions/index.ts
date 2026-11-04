@@ -84,6 +84,9 @@ export interface TeamFacts {
   mcpEnabled: boolean;
   /** The shared WhatsApp number a manifest quotes, when one is set. */
   whatsappNumber: string | null;
+  /** The team's installs of remote adapters: each install's stored manifest
+   *  file, as JSON, which the carried version reads in its own terms. */
+  remoteAdapters?: readonly { adapterType: string; manifest: unknown }[];
 }
 
 export interface LineCol {

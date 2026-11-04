@@ -33,6 +33,9 @@ export interface TeamFacts extends DeploymentFacts {
   files: readonly TeamFile[];
   /** How a credential of `credentialType` is connected on the platform. */
   connectOf(credentialType: string): ConnectMethod;
+  /** The team's installs of remote adapters: each install's stored manifest
+   *  file, as JSON. */
+  remoteAdapters?: readonly { adapterType: string; manifest: unknown }[];
 }
 
 export interface Position {

@@ -21,6 +21,7 @@ import { WHATSAPP_MOVEMENTS_NUMBER } from '../adapters/whatsapp/shared_app';
 import { dedupeDiagnostics, toAuthoringDiagnostic } from './authoring_diagnostic';
 import { loadCredentialRows } from './catalog';
 import { listMovementRows } from './store';
+import { listRemoteAdapters } from '../adapters/remote/store';
 import { listShippedFiles } from './version_store';
 import { neverAsAny } from 'movement-engine/public/types';
 
@@ -28,10 +29,15 @@ import { neverAsAny } from 'movement-engine/public/types';
  *  text (what an edit checks and a test run imports), or their shipped text
  *  (what a firing imports: a file that never shipped is not there). */
 export async function teamFactsOf(teamId: string, options: { imports?: 'live' | 'shipped' } = {}): Promise<TeamFacts> {
-  const [credentials, files] = await Promise.all([loadCredentialRows(teamId as TeamId), teamFilesOf(teamId, options.imports ?? 'live')]);
+  const [credentials, files, remotes] = await Promise.all([
+    loadCredentialRows(teamId as TeamId),
+    teamFilesOf(teamId, options.imports ?? 'live'),
+    listRemoteAdapters({ teamId: teamId as TeamId }),
+  ]);
   return {
     credentials,
     files,
+    remoteAdapters: remotes.map((row) => ({ adapterType: row.adapter_type, manifest: row.manifest })),
     connectOf: (type) => (isCredentialType(type) ? connectMethodForType(type) : 'app-only'),
     kgChangeWebhooks: mutationDelivery() === 'webhook',
     mcpEnabled: MCP_CONNECTIONS_ENABLED,

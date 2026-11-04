@@ -40,6 +40,7 @@ import { writeKeeper } from '../../inbound/loop_breaker';
 import { askUrl } from '../../asks/store';
 import { mutationDelivery } from '../../knowledge/mutation_outbox/delivery_mode';
 import { moduleHostFor } from '../adapters/builtin_modules';
+import { remoteInstallPieces } from '../adapters/resolve';
 import { platformKgStore } from '../adapters/kg_store';
 import { platformSlackChat, platformSlackFile } from '../adapters/slack/platform';
 import { WHATSAPP_MOVEMENTS_NUMBER } from '../adapters/whatsapp/shared_app';
@@ -76,6 +77,8 @@ export function modulePlatform(): ModulePlatform {
       whatsappNumber: WHATSAPP_MOVEMENTS_NUMBER,
       isExposedFileUrl,
       readDocument: (ref, { teamId }) => streamFileRef(ref, { teamId: teamIdSchema.parse(teamId) }),
+      remoteInstall: ({ adapterType, teamId, credentialsId }) =>
+        remoteInstallPieces({ adapterType, teamId: teamIdSchema.parse(teamId), ...(credentialsId !== undefined ? { credentialsId } : {}) }),
     },
     log: logger,
     validateResults: inProcessValidationDefault(process.env),

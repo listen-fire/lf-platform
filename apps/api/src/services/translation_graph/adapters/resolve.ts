@@ -72,28 +72,7 @@ export async function resolveAdapter(input: {
   // (Remote installs below ignore constructionArgs — no entry position over
   //  the wire yet — so they read `input` without it.)
 
-  // 2. Remote fallback — a team-scoped install, keyed by the canonical slug.
-  const row = await getRemoteAdapter({
-    teamId: input.teamId,
-    adapterType: slug,
-  });
-  if (!row) {
-    if (slug === MCP_ADAPTER_TYPE) throw new Error(MCP_DISABLED_MESSAGE);
-    throw new Error(
-      `Unknown adapter type: ${input.adapterType} (slug: ${slug}). Registered: ${listAdapterTypes().join(', ')} (and no remote_adapter install for this team).`,
-    );
-  }
-  if (!row.credentials_id) {
-    throw new Error(
-      `Remote adapter "${input.adapterType}" has no credential configured (credentials_id is null).`,
-    );
-  }
-
-  const manifestFile = rowToManifest(row);
-  // The install's server secret signs every call. The credential must belong
-  // to THIS adapter: its app_id is bound to the install's slug at mint time,
-  // so a secret provisioned for another remote adapter can never drive this one.
-  const install = await loadRemoteInstallPayload(row.credentials_id, input.teamId, row.adapter_type);
+  const { manifestFile, install, installCredentialsId } = await remoteInstallOf({ adapterType: input.adapterType, slug, teamId: input.teamId });
 
   // The connection's credential, when it names one other than the install's
   // own: the provider credential the calls act as (`connect hs_alice using
@@ -101,7 +80,7 @@ export async function resolveAdapter(input: {
   // before modules declared credentials, so it still means "no provider
   // credential".
   const providerCredentialsId =
-    input.credentialsId !== undefined && input.credentialsId !== row.credentials_id ? input.credentialsId : undefined;
+    input.credentialsId !== undefined && input.credentialsId !== installCredentialsId ? input.credentialsId : undefined;
   const credential =
     providerCredentialsId !== undefined
       ? await providerCredentialBinding({
@@ -119,7 +98,7 @@ export async function resolveAdapter(input: {
     authStrategy: manifestFile.authStrategy,
     // What a file handle re-resolves this instance by: the connection's own
     // credential, so a redeemed handle acts as the same account.
-    credentialsId: providerCredentialsId ?? row.credentials_id,
+    credentialsId: providerCredentialsId ?? installCredentialsId,
   };
 
   const manifest: RemoteManifest = {
@@ -147,6 +126,51 @@ export async function resolveAdapter(input: {
     documents: hostedDocumentStore,
     ...(credential !== undefined ? { credential } : {}),
   });
+}
+
+/** A team's install of a remote adapter: its row, its stored manifest read in
+ *  this release's terms, and its decrypted payload (the server secret signs
+ *  every call; the credential must belong to THIS adapter: its app_id is
+ *  bound to the install's slug at mint time, so a secret provisioned for
+ *  another remote adapter can never drive this one). */
+async function remoteInstallOf(input: { adapterType: string; slug: string; teamId: TeamId }) {
+  const row = await getRemoteAdapter({ teamId: input.teamId, adapterType: input.slug });
+  if (!row) {
+    if (input.slug === MCP_ADAPTER_TYPE) throw new Error(MCP_DISABLED_MESSAGE);
+    throw new Error(
+      `Unknown adapter type: ${input.adapterType} (slug: ${input.slug}). Registered: ${listAdapterTypes().join(', ')} (and no remote_adapter install for this team).`,
+    );
+  }
+  if (!row.credentials_id) {
+    throw new Error(`Remote adapter "${input.adapterType}" has no credential configured (credentials_id is null).`);
+  }
+  const install = await loadRemoteInstallPayload(row.credentials_id, input.teamId, row.adapter_type);
+  return { row, manifestFile: rowToManifest(row), install, installCredentialsId: row.credentials_id };
+}
+
+/**
+ * What another release's remote adapter is built from, for a team's install:
+ * the stored manifest as JSON (that release reads it in its own terms), the
+ * install's server secret, the document store a fetched file lands in, and
+ * the connection's provider credential when it names one, refreshed through
+ * the platform's secrets store like this release's.
+ */
+export async function remoteInstallPieces(input: { adapterType: string; teamId: TeamId; credentialsId?: string }) {
+  const slug = resolveAdapterSlug(input.adapterType);
+  const { row, manifestFile, install, installCredentialsId } = await remoteInstallOf({ adapterType: input.adapterType, slug, teamId: input.teamId });
+  const providerCredentialsId =
+    input.credentialsId !== undefined && input.credentialsId !== installCredentialsId ? input.credentialsId : undefined;
+  const credential =
+    providerCredentialsId !== undefined
+      ? await providerCredentialBinding({ credentialsId: providerCredentialsId, teamId: input.teamId, manifest: manifestFile, install })
+      : undefined;
+  return {
+    manifest: row.manifest,
+    secret: install.secret,
+    credentialsId: providerCredentialsId ?? installCredentialsId,
+    documents: hostedDocumentStore,
+    ...(credential !== undefined ? { credential } : {}),
+  };
 }
 
 /**

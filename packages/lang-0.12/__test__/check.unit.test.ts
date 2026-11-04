@@ -212,6 +212,7 @@ describe("a connected system, read through the platform's hosting of 0.12's modu
       readFile: refused,
       whatsappNumber: null,
       isExposedFileUrl: () => false,
+      remoteInstall: refused,
       readDocument: refused,
     },
     log: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} },

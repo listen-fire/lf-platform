@@ -47,6 +47,7 @@ function platform(input: { renderMs?: number; fields?: Record<string, string> } 
         readFile: refused('readFile'),
         whatsappNumber: null,
         isExposedFileUrl: () => false,
+        remoteInstall: refused('remote installs'),
         readDocument: refused('readDocument'),
       },
       log,
