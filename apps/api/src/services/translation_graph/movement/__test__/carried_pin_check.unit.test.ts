@@ -13,6 +13,18 @@ jest.mock('../store', () => ({
   listMovementRows: jest.fn(async () => []),
   getMovementRow: jest.fn(),
 }));
+jest.mock('../../adapters/remote/store', () => ({
+  ...jest.requireActual('../../adapters/remote/store'),
+  listRemoteAdapters: jest.fn(async () => []),
+}));
+// The team's stored credentials, which reading a connected system decrypts:
+// none is readable here, so a connection is a gap.
+jest.mock('../../../credentials/secrets_postgres', () => ({
+  ...jest.requireActual('../../../credentials/secrets_postgres'),
+  postgresSecrets: () => {
+    throw new Error('no stored credential in this test');
+  },
+}));
 
 import { LANGUAGE_VERSION, fromCatalogSnapshot, mockCatalogSnapshot } from 'movement-lang';
 
