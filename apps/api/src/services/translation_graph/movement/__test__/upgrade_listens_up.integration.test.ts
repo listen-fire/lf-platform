@@ -73,6 +73,7 @@ import { insertTestListen } from '../../../../test/harness/listens';
 import { deliverArrivals } from '../../../inbound/listen_door';
 import { resolveAndArm } from '../../../inbound/listen_resolve';
 import { claimDueWork } from '../../../work/store';
+import { claimResolve, saveResolution } from '../../../lf_store/listens';
 import { recordMovementFailureIssue } from '../issues';
 import { drainWork, resetWorkHandlersForTests } from '../../../work/drain';
 import { advanceLive, upgradeMovement, type Advance, type ValidateUnder } from '../language_upgrade';
@@ -85,14 +86,20 @@ const clean: ValidateUnder = async () => ({ ok: true, diagnostics: [], listenerC
 const savedApiBaseUrl = process.env.API_BASE_URL;
 
 let teamId: TeamId;
-// Each pass looks far enough ahead that the row's backoff has passed.
-let clockMs = Date.now();
+// Each pass looks far enough ahead that the row's backoff has passed: at a
+// stated number of minutes after the test began, or an hour after the last.
+let startedAtMs = Date.now();
+let clockMs = startedAtMs;
 
-const pass = async () => {
-  clockMs += 3_600_000;
+const pass = async (minutesIn?: number) => {
+  clockMs = minutesIn === undefined ? clockMs + 3_600_000 : startedAtMs + minutesIn * 60_000;
   const at = new Date(clockMs);
   return drainWork({ teamId, now: () => at });
 };
+
+/** Passes at which a row failing since the test began has failed three times and
+ *  is ten minutes old, which is when an issue is raised. */
+const PASSES_TO_AN_ISSUE = [1, 5, 20];
 
 async function seedShipped(name: string, source = SOURCE): Promise<string> {
   const id = randomUUID();
@@ -134,6 +141,8 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
+  startedAtMs = Date.now();
+  clockMs = startedAtMs;
   plan.resolved = false;
   for (const file of Object.keys(edgeOf)) delete edgeOf[file];
   jest.mocked(resolveAndArm).mockResolvedValue(null);
@@ -164,13 +173,13 @@ describe('an upgraded automation whose listens could not be brought up', () => {
     expect(await workRows(id)).toHaveLength(1);
 
     // Failing, the row stays and counts; a first failure may be a blip.
-    expect(await pass()).toEqual(expect.objectContaining({ failed: 0, deferred: 1 }));
-    expect(await pass()).toEqual(expect.objectContaining({ failed: 0, deferred: 1 }));
+    expect(await pass(PASSES_TO_AN_ISSUE[0])).toEqual(expect.objectContaining({ failed: 0, deferred: 1 }));
+    expect(await pass(PASSES_TO_AN_ISSUE[1])).toEqual(expect.objectContaining({ failed: 0, deferred: 1 }));
     expect(await workRows(id)).toEqual([expect.objectContaining({ attempts: 2 })]);
     expect(await issues(id)).toEqual([]);
 
-    // By the third, an issue says so, keeping the note that says why.
-    expect(await pass()).toEqual(expect.objectContaining({ failed: 0, deferred: 1 }));
+    // Once it has failed for ten minutes, an issue says so, keeping the note that says why.
+    expect(await pass(PASSES_TO_AN_ISSUE[2])).toEqual(expect.objectContaining({ failed: 0, deferred: 1 }));
     expect(await issues(id)).toEqual([
       {
         state: 'open',
@@ -182,7 +191,7 @@ describe('an upgraded automation whose listens could not be brought up', () => {
 
     // The credential comes back: the row finishes and the issue closes.
     credential.usable = true;
-    expect((await pass()).failed).toBe(0);
+    expect((await pass(30)).failed).toBe(0);
     expect(await workRows(id)).toEqual([]);
     expect(await issues(id)).toEqual([expect.objectContaining({ state: 'resolved' })]);
 
@@ -254,7 +263,7 @@ describe('an upgraded automation whose listens could not be brought up', () => {
     expect(resolveAndArm).not.toHaveBeenCalled();
     jest.mocked(resolveAndArm).mockResolvedValue('LISTEN_RESOLVE_FAILED: it could not list the records it watches');
 
-    for (let failing = 0; failing < 3; failing++) expect(await pass()).toEqual(expect.objectContaining({ failed: 0, deferred: 1 }));
+    for (const minutes of PASSES_TO_AN_ISSUE) expect(await pass(minutes)).toEqual(expect.objectContaining({ failed: 0, deferred: 1 }));
 
     expect(await issues(id)).toEqual([expect.objectContaining({ state: 'open', message: expect.stringContaining('LISTEN_RESOLVE_FAILED') })]);
 
@@ -300,7 +309,7 @@ describe('an upgraded automation whose listens could not be brought up', () => {
     expect((await upgradeMovement({ teamId, id: healthy, acknowledge: true, validate: clean })).status).toBe('upgraded');
     expect(await workRows()).toHaveLength(1);
 
-    for (let attempt = 0; attempt < 3; attempt++) expect(await pass()).toEqual(expect.objectContaining({ failed: 0, deferred: 1 }));
+    for (const minutes of PASSES_TO_AN_ISSUE) expect(await pass(minutes)).toEqual(expect.objectContaining({ failed: 0, deferred: 1 }));
 
     expect(vendor.ensureEventSubscription).toHaveBeenCalledWith(expect.objectContaining({ edge: 'Things' }));
     expect(await issues(healthy)).toEqual([expect.objectContaining({ state: 'open', failure_class: 'MOV_UNRELATED' })]);
@@ -315,7 +324,7 @@ describe('an upgraded automation whose listens could not be brought up', () => {
     expect(await issues(failing)).toEqual([expect.objectContaining({ state: 'resolved', failure_class: 'MOV_LISTENS_NOT_UP' })]);
     expect(await issues(healthy)).toEqual([expect.objectContaining({ state: 'open', failure_class: 'MOV_UNRELATED' })]);
   });
-  it('an error that stops the bring up raises the issue from the third attempt, as a failed listen does, and coming up closes it', async () => {
+  it('an error that stops the bring up raises the issue once the row is ten minutes old, as a failed listen does, and coming up closes it', async () => {
     plan.resolved = true;
     credential.usable = true;
     const id = await seedShipped('stamp');
@@ -323,9 +332,9 @@ describe('an upgraded automation whose listens could not be brought up', () => {
     jest.mocked(resolveAndArm).mockRejectedValue(new Error('the database dropped the connection'));
 
     // Thrown, not answered: the row fails and is retried, and the pulse is told.
-    for (let attempt = 0; attempt < 2; attempt++) expect(await pass()).toEqual(expect.objectContaining({ failed: 1 }));
+    for (const minutes of PASSES_TO_AN_ISSUE.slice(0, 2)) expect(await pass(minutes)).toEqual(expect.objectContaining({ failed: 1 }));
     expect(await issues(id)).toEqual([]);
-    expect(await pass()).toEqual(expect.objectContaining({ failed: 1 }));
+    expect(await pass(PASSES_TO_AN_ISSUE[2])).toEqual(expect.objectContaining({ failed: 1 }));
 
     expect(await issues(id)).toEqual([
       expect.objectContaining({ state: 'open', failure_class: 'MOV_LISTENS_NOT_UP', message: expect.stringContaining('the database dropped the connection') }),
@@ -334,6 +343,42 @@ describe('an upgraded automation whose listens could not be brought up', () => {
     jest.mocked(resolveAndArm).mockResolvedValue(null);
     expect((await pass()).failed).toBe(0);
     expect(await issues(id)).toEqual([expect.objectContaining({ state: 'resolved' })]);
+  });
+
+  it('a member that stays down is tried again without listing the healthy members again', async () => {
+    plan.resolved = true;
+    credential.usable = true;
+    await seedShipped('lib', LIBRARY);
+    const healthy = await seedShipped('member_a', memberSource('member_a'));
+    await seedShipped('member_b', memberSource('member_b'));
+    // The healthy member's listing is kept, as listing it for real keeps it; the other cannot be listed.
+    jest.mocked(resolveAndArm).mockImplementation(async (listen) => {
+      if (listen.file === 'member_b') return 'LISTEN_RESOLVE_FAILED: it could not list the records it watches';
+      const scope = { tenant: listen.teamId };
+      const held = await claimResolve(scope, { pipeline: listen.pipeline, ttlMs: 60_000 });
+      await saveResolution(scope, { pipeline: listen.pipeline, token: held!.token, resolution: { heads: ['base1'], resolvedAt: new Date().toISOString(), failure: null } });
+      return null;
+    });
+    await upgradeMovement({ teamId, id: healthy, acknowledge: true, validate: clean });
+
+    for (const minutes of PASSES_TO_AN_ISSUE) expect(await pass(minutes)).toEqual(expect.objectContaining({ failed: 0, deferred: 1 }));
+
+    const listed = jest.mocked(resolveAndArm).mock.calls.map(([listen]) => listen.file);
+    expect(listed.filter((file) => file === 'member_a')).toHaveLength(1);
+    expect(listed.filter((file) => file === 'member_b')).toHaveLength(3);
+  });
+
+  it('a credential that is unusable only for seconds raises no issue however often it was tried, and one that stays so for ten minutes does', async () => {
+    const id = await seedShipped('stamp');
+    await upgradeMovement({ teamId, id, acknowledge: true, validate: clean });
+
+    // Six attempts in the first minute: the drain backs off from a second, so these are what a blip looks like.
+    for (const seconds of [1, 4, 9, 20, 40, 59]) expect(await pass(seconds / 60)).toEqual(expect.objectContaining({ failed: 0, deferred: 1 }));
+    expect(await workRows(id)).toEqual([expect.objectContaining({ attempts: 6 })]);
+    expect(await issues(id)).toEqual([]);
+
+    expect(await pass(11)).toEqual(expect.objectContaining({ failed: 0, deferred: 1 }));
+    expect(await issues(id)).toEqual([expect.objectContaining({ state: 'open', failure_class: 'MOV_LISTENS_NOT_UP' })]);
   });
 
   it('two groups that share a member each keep their own row and member list, and the same group asked twice keeps one', async () => {

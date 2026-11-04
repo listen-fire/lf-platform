@@ -11,8 +11,8 @@
 // backoff for as long as it takes (a credential that needs reconnecting can
 // take days): the upgrade has already answered `upgraded`, and asking again
 // answers `already_current`, so this row is the only retry there is. Failing
-// repeatedly raises an issue on the automation, on the surface a refused firing
-// uses; coming up closes it.
+// for ten minutes raises an issue on the automation, on the surface a refused
+// firing uses; coming up closes it.
 //
 // One row per group, not per member: the subscription sync is per team, and two
 // at once could register the same subscription twice.
@@ -28,7 +28,7 @@ import type { WorkContext } from '../../work/kinds';
 import { logger } from 'movement-engine/public/log';
 import { savedListens, type SavedListen } from '../../inbound/listen_door';
 import { listenEdgeKeysOf } from '../../inbound/listen_edge';
-import { resolveAndArm, resolvesListen } from '../../inbound/listen_resolve';
+import { resolveAndArm, resolvesListen, withWatchingOne } from '../../inbound/listen_resolve';
 import { registerWorkHandler, WorkKeepsTrying } from '../../work/drain';
 import { enqueueWork } from '../../work/store';
 import { withTeamContext } from './firing_context';
@@ -40,10 +40,13 @@ const WORK_KIND = 'bring_up_listens';
 /** The issue's failure class: `fingerprintFailure` reads it off the message. */
 const NOT_UP_CLASS = 'MOV_LISTENS_NOT_UP';
 
-/** A first failure may be a blip; by the third, a person should know. */
-const ISSUE_FROM_ATTEMPT = 3;
+/** A failure for a few seconds is a blip (a credential being refreshed); one
+ *  that outlasts this since the listens were asked for is one a person should
+ *  know of. Measured in time because the drain's backoff makes attempts come
+ *  seconds apart at first. */
+const ISSUE_AFTER_MS = 10 * 60_000;
 
-const payloadSchema = z.object({ teamId: z.string(), movementIds: z.array(z.string()) });
+const payloadSchema = z.object({ teamId: z.string(), movementIds: z.array(z.string()), requestedAt: z.string() });
 
 /** The row's key names the group it owes, so two groups never share a row and a
  *  row's member list is never replaced by another's. */
@@ -59,7 +62,7 @@ export async function bringUpListensLater(input: { teamId: string; movementIds: 
     kind: WORK_KIND,
     key: keyOf(input.movementIds),
     teamId: input.teamId,
-    payload: { teamId: input.teamId, movementIds: input.movementIds },
+    payload: { teamId: input.teamId, movementIds: input.movementIds, requestedAt: new Date().toISOString() },
   });
 }
 
@@ -67,10 +70,18 @@ function unique(texts: readonly string[]): string[] {
   return [...new Set(texts)];
 }
 
-async function resolvedFailuresOf(listens: readonly SavedListen[]): Promise<string[]> {
+/** Whether the listen was listed without failing since `requestedAt`: a pass
+ *  that comes round again for another member's sake need not list it again. */
+async function listedSince(listen: SavedListen, requestedAt: Date): Promise<boolean> {
+  const { watching } = await withWatchingOne(listen);
+  return watching !== undefined && watching.failure === null && watching.resolvedAt !== null && Date.parse(watching.resolvedAt) >= requestedAt.getTime();
+}
+
+async function resolvedFailuresOf(listens: readonly SavedListen[], requestedAt: Date): Promise<string[]> {
   const failures: string[] = [];
   for (const listen of listens) {
     if (!resolvesListen(listen)) continue;
+    if (await listedSince(listen, requestedAt)) continue;
     const failure = await resolveAndArm(listen);
     if (failure !== null) failures.push(failure);
   }
@@ -79,13 +90,13 @@ async function resolvedFailuresOf(listens: readonly SavedListen[]): Promise<stri
 
 /** Bring `movementIds`' listens up, once. Answers each automation still not
  *  up: its name and why. */
-async function bringUp(input: { teamId: TeamId; movementIds: readonly string[] }): Promise<Array<{ movementId: string; name: string; why: string[] }>> {
+async function bringUp(input: { teamId: TeamId; movementIds: readonly string[]; requestedAt: Date }): Promise<Array<{ movementId: string; name: string; why: string[] }>> {
   const { teamId } = input;
   const listensOf = (movementId: string) => savedListens({ teamId, movementId: movementId as MovementId });
 
   // Listed first: a subscription per record is made under the records this finds.
   const resolving = new Map<string, string[]>();
-  for (const movementId of input.movementIds) resolving.set(movementId, await resolvedFailuresOf(await listensOf(movementId)));
+  for (const movementId of input.movementIds) resolving.set(movementId, await resolvedFailuresOf(await listensOf(movementId), input.requestedAt));
 
   const { notes, unregistered } = await syncListenSubscriptions({ teamId });
   if (notes.length > 0) logger.warn('[ListensUp] the subscription sync left notes', { teamId, notes });
@@ -120,15 +131,17 @@ async function raiseForError(input: { teamId: TeamId; movementIds: readonly stri
 }
 
 async function runBringUp(payload: unknown, ctx: WorkContext): Promise<void> {
-  const { teamId, movementIds } = payloadSchema.parse(payload);
+  const { teamId, movementIds, requestedAt: requestedAtText } = payloadSchema.parse(payload);
+  const requestedAt = new Date(requestedAtText);
+  const longEnough = ctx.now.getTime() - requestedAt.getTime() >= ISSUE_AFTER_MS;
   await withTeamContext(teamId as TeamId, async () => {
     let notUp: Awaited<ReturnType<typeof bringUp>>;
     try {
-      notUp = await bringUp({ teamId: teamId as TeamId, movementIds });
+      notUp = await bringUp({ teamId: teamId as TeamId, movementIds, requestedAt });
     } catch (error) {
       // The retry the drain gives a thrown row is the same one; only saying so
       // is added. Saying so must not hide the error it is about.
-      if (ctx.attempts >= ISSUE_FROM_ATTEMPT) {
+      if (longEnough) {
         await raiseForError({ teamId: teamId as TeamId, movementIds, error }).catch((raising: unknown) =>
           logger.error('[ListensUp] the issue for a failed bring up could not be raised', { teamId, error: raising instanceof Error ? raising.message : String(raising) }),
         );
@@ -140,7 +153,7 @@ async function runBringUp(payload: unknown, ctx: WorkContext): Promise<void> {
       if (!stillDown.has(movementId)) await resolveMovementIssuesOfClass({ movementId, failureClass: NOT_UP_CLASS });
     }
     if (notUp.length === 0) return;
-    if (ctx.attempts >= ISSUE_FROM_ATTEMPT) {
+    if (longEnough) {
       for (const { movementId, name, why } of notUp) {
         await recordMovementFailureIssue({
           teamId,
