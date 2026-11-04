@@ -221,17 +221,18 @@ model ConnectToken {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model Delivery {
-  id             String   @id @db.Uuid
-  teamId         String   @map("team_id") @db.Uuid
-  subscriptionId String   @map("subscription_id")
-  externalId     String?  @map("external_id")
-  receivedAt     DateTime @map("received_at") @db.Timestamptz(6)
+  id             String    @id @db.Uuid
+  teamId         String    @map("team_id") @db.Uuid
+  subscriptionId String    @map("subscription_id")
+  externalId     String?   @map("external_id")
+  receivedAt     DateTime  @map("received_at") @db.Timestamptz(6)
   source         String
   inline         Boolean
-  replayOf       String?  @map("replay_of") @db.Uuid
+  replayOf       String?   @map("replay_of") @db.Uuid
   events         Json
-  eventCount     Int      @map("event_count")
+  eventCount     Int       @map("event_count")
   request        Json?
+  judgedAt       DateTime? @map("judged_at") @db.Timestamptz(6)
 
   @@index([teamId, receivedAt], map: "delivery_received_idx")
   @@map("delivery")
