@@ -3,6 +3,7 @@
 
 import { checkSource, completionsAt } from '..';
 import type { TeamFacts, TeamFile } from '../lane/types';
+import type { ModulePlatform } from '../lane/run_types';
 
 function team(files: TeamFile[] = []): TeamFacts {
   return {
@@ -50,14 +51,14 @@ describe("a 0.12 program, by 0.12's checker", () => {
       'function f(go: <manual-[:Invocation]->>) {\n  write crm-[:Companies]-> {\n    unique by (Name)\n    Name: go.Text\n  }\n}\nlisten to manual fire f\n';
     const checked = await check(source);
     expect(checked.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
-    expect(checked.gaps).toEqual([{ adapter: 'attio', detail: expect.stringContaining('nothing this automation reads from or writes to attio was checked') }]);
+    expect(checked.gaps).toEqual([{ adapter: 'attio', detail: expect.stringContaining('reads from or writes to attio was checked') }]);
   });
 });
 
 describe('a connection made anywhere is a gap', () => {
   const PRELUDE = 'import { attio } from adapters\nimport { acme_main } from credentials\n';
   const WRITE = '  write crm-[:Companies]-> {\n    unique by (Name)\n    Nme: go.Text\n  }\n';
-  const ATTIO_GAP = [{ adapter: 'attio', detail: expect.stringContaining('nothing this automation reads from or writes to attio was checked') }];
+  const ATTIO_GAP = [{ adapter: 'attio', detail: expect.stringContaining('reads from or writes to attio was checked') }];
 
   it('inside a function body', async () => {
     const source = `${PRELUDE}function f(go: <manual-[:Invocation]->>) {\n  crm = connect attio using acme_main\n${WRITE}}\nlisten to manual fire f\n`;
@@ -169,5 +170,74 @@ describe("the editor, by 0.12's language service", () => {
     const offset = ECHO_012.indexOf('run.Text') + 'run.'.length;
     const { items } = await completionsAt({ source: ECHO_012, offset, pin: '0.12.13', team: team() });
     expect(items.map((item) => item.label)).toEqual(['Fired at', 'Run by (email)', 'Run by (name)', 'Text', 'Content']);
+  });
+});
+
+describe("a connected system, read through the platform's hosting of 0.12's module for it", () => {
+  // A fake Affinity: every request answers an empty list, which 0.12's
+  // Affinity module reads as a workspace with no lists. Its fixed entities
+  // are typed from the module itself.
+  let server: import('node:http').Server;
+  let baseUrl = '';
+  beforeAll(async () => {
+    const http = await import('node:http');
+    server = http.createServer((_req, res) => {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end('[]');
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    baseUrl = typeof address === 'object' && address !== null ? `http://127.0.0.1:${address.port}` : '';
+  });
+  afterAll(async () => {
+    await new Promise((resolve) => server.close(resolve));
+  });
+
+  const refused = async (): Promise<never> => {
+    throw new Error('not part of this test');
+  };
+  const modules = (): ModulePlatform => ({
+    hostFor: () => ({
+      credential: { name: 'api_key', fields: async () => ({ apiKey: 'k', baseUrl }), update: async () => {} },
+      kv: { get: refused, set: refused, delete: refused, list: refused, compareAndSet: refused },
+      files: { put: refused, read: refused, expose: refused },
+    }),
+    parts: {
+      askAnswerUrl: () => '',
+      kgStore: () => {
+        throw new Error('no kg');
+      },
+      kgChangeWebhooks: false,
+      slackChat: refused,
+      readFile: refused,
+      whatsappNumber: null,
+      isExposedFileUrl: () => false,
+      readDocument: refused,
+    },
+    log: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} },
+    validateResults: false,
+  });
+  const affinityTeam: TeamFacts = { ...team(), credentials: [{ id: 'cred-affinity', name: 'Acme Affinity', type: 'AFFINITY' }] };
+  const program = (field: string) =>
+    'import { affinity } from adapters\nimport { `Acme Affinity` } from credentials\n\ncrm = connect affinity using `Acme Affinity`\n\n' +
+    `function sync(run: <manual-[:Invocation]->>) {\n  write crm-[:Organization]-> {\n    ${field}: run.Text\n  }\n}\n\nlisten to manual fire sync\n`;
+  const checkConnected = (source: string) =>
+    checkSource({ source, pin: '0.12.13', team: affinityTeam, connected: { teamId: 'team-1', modules: modules() } });
+
+  it('types the instance: a clean write checks clean, with no gap', async () => {
+    const checked = await checkConnected(program('Name'));
+    expect(checked.gaps).toEqual([]);
+    expect(checked.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
+  });
+
+  it("catches a field the module does not declare, by 0.12's checker", async () => {
+    const checked = await checkConnected(program('Nmae'));
+    expect(checked.gaps).toEqual([]);
+    expect(checked.diagnostics.some((d) => d.severity === 'error' && d.message.includes('Nmae'))).toBe(true);
+  });
+
+  it('without the platform\'s hosting, the same connection is a gap', async () => {
+    const checked = await checkSource({ source: program('Nmae'), pin: '0.12.13', team: affinityTeam });
+    expect(checked.gaps.map((gap) => gap.adapter)).toEqual(['affinity']);
   });
 });

@@ -41,13 +41,13 @@ import {
 } from '@listen-fire/engine/public/errors';
 import { runMovement, type CancelGate, type MovementRunResult } from '@listen-fire/engine/public/movement-engine';
 import { segmentWriteLocks } from '@listen-fire/engine/public/write-locks';
-import { MovementParseError, RUN_HOST_UNITS, parseProgram } from '@listen-fire/movement-lang';
+import { MovementParseError, RUN_HOST_UNITS, parseProgram, type Program } from '@listen-fire/movement-lang';
 import type { TriggerEvent } from '@listen-fire/engine/public/inbound';
 
 import { MANUAL_ADAPTER_TYPE, type ManualInvocationPayload } from '../units/manual';
 
 import { teamSnapshot } from './catalog';
-import { importClosure } from './imports';
+import { importClosure, readingPin } from './imports';
 import { moduleTable } from './modules';
 import type { RunPlatform, SegmentOutcome, SegmentRequest } from './run_types';
 
@@ -189,6 +189,20 @@ function hostFor(request: SegmentRequest & { parkRefusal: string }, platform: Ru
   };
 }
 
+/** The libraries a program imports, parsed under the pin each is read at;
+ *  one 0.12 cannot parse is left to the run's own check to report. */
+function librariesOf(files: Record<string, { source: string }>, request: SegmentRequest): Program[] {
+  return Object.entries(files).flatMap(([name, file]) => {
+    const own = request.team.files.find((f) => f.name === name)?.languageVersion ?? request.pin;
+    try {
+      return [parseProgram(file.source, { languageVersion: readingPin(own, request.pin) })];
+    } catch (error) {
+      if (error instanceof MovementParseError) return [];
+      throw error;
+    }
+  });
+}
+
 /** A failure, as text and the code 0.12 gave it, with what the run had done. */
 function failureOf(err: unknown): SegmentOutcome {
   const cause = runFailureCause(err);
@@ -214,7 +228,11 @@ export async function runSegment(
   try {
     const program = parseProgram(request.source, { languageVersion: request.pin });
     const closure = importClosure(program, request.pin, request.team.files);
-    const catalog = await teamSnapshot(request.team, closure.files);
+    const catalog = await teamSnapshot(request.team, closure.files, {
+      teamId: request.teamId,
+      modules: platform.modules,
+      programs: [program, ...librariesOf(closure.files, request)],
+    });
     const credentialIds = Object.fromEntries(request.team.credentials.map((row) => [row.name, row.id]));
     const result = await runMovement({
       source: request.source,

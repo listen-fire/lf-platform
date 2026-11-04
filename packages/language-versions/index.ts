@@ -45,7 +45,7 @@ import {
   type LanguageVersion,
 } from 'movement-lang';
 
-import type { RunningLane } from './running';
+import type { ModulePlatform, RunningLane } from './running';
 
 export * from './running';
 
@@ -116,6 +116,9 @@ export interface CheckRequest {
   /** The program's pin, on the carried version's key. */
   pin: LanguageVersion;
   team: TeamFacts;
+  /** The platform's hosting of the version's modules, so the connected
+   *  systems the program constructs are read; absent, each is a gap. */
+  connected?: { teamId: string; modules: ModulePlatform };
 }
 
 export interface EditorRequest extends CheckRequest {

@@ -19,6 +19,7 @@ import {
   resumeRefusal,
   runningOf,
   type CarriedEvent,
+  type ModulePlatform,
   type RunPlatform,
   type RunningLane,
   type SegmentOutcome,
@@ -58,6 +59,29 @@ export async function carriedRunLaneOf(pin: LanguageVersion): Promise<RunningLan
 
 const actorCandidates = z.array(WireActorCandidate);
 
+/** How the platform hosts a carried version's modules: each install as it
+ *  hosts its own release's module for the same adapter type, and the parts
+ *  its own modules are defined with. A check reads connected systems through
+ *  it too. */
+export function modulePlatform(): ModulePlatform {
+  return {
+    hostFor: ({ adapterType, install, declaration }) =>
+      moduleHostFor({ adapterType, install: { ...install, teamId: teamIdSchema.parse(install.teamId) }, declaration }),
+    parts: {
+      askAnswerUrl: askUrl,
+      kgStore: (install) => platformKgStore({ teamId: teamIdSchema.parse(install.teamId), credentialsId: install.credentialsId }),
+      kgChangeWebhooks: mutationDelivery() === 'webhook',
+      slackChat: platformSlackChat,
+      readFile: (ref, teamId) => platformSlackFile(ref, teamIdSchema.parse(teamId)),
+      whatsappNumber: WHATSAPP_MOVEMENTS_NUMBER,
+      isExposedFileUrl,
+      readDocument: (ref, { teamId }) => streamFileRef(ref, { teamId: teamIdSchema.parse(teamId) }),
+    },
+    log: logger,
+    validateResults: inProcessValidationDefault(process.env),
+  };
+}
+
 /** The platform's services, for one run of a carried version. */
 export function runPlatformFor(input: {
   teamId: TeamId;
@@ -75,22 +99,7 @@ export function runPlatformFor(input: {
   });
   const keep = input.triggerRunId !== undefined ? writeKeeper({ teamId: input.teamId, runId: input.triggerRunId }) : undefined;
   return {
-    modules: {
-      hostFor: ({ adapterType, install, declaration }) =>
-        moduleHostFor({ adapterType, install: { ...install, teamId: teamIdSchema.parse(install.teamId) }, declaration }),
-      parts: {
-        askAnswerUrl: askUrl,
-        kgStore: (install) => platformKgStore({ teamId: teamIdSchema.parse(install.teamId), credentialsId: install.credentialsId }),
-        kgChangeWebhooks: mutationDelivery() === 'webhook',
-        slackChat: platformSlackChat,
-        readFile: (ref, teamId) => platformSlackFile(ref, teamIdSchema.parse(teamId)),
-        whatsappNumber: WHATSAPP_MOVEMENTS_NUMBER,
-        isExposedFileUrl,
-        readDocument: (ref, { teamId }) => streamFileRef(ref, { teamId: teamIdSchema.parse(teamId) }),
-      },
-      log: logger,
-      validateResults: inProcessValidationDefault(process.env),
-    },
+    modules: modulePlatform(),
     credentials: teamCredentials,
     llm: shared.llm,
     files: { resolveFileText: shared.resolveFileText, render: shared.render },

@@ -5,6 +5,7 @@
 // registry loads it.
 
 import type { DeploymentFacts } from './manifests';
+import type { ModulePlatform } from './run_types';
 
 export type ConnectMethod = 'oauth' | 'key-entry' | 'intrinsic' | 'handshake' | 'app-only';
 
@@ -69,11 +70,14 @@ export interface CheckedSource {
   notes: string[];
 }
 
-/** A program checked under its pin and the team it belongs to. */
+/** A program checked under its pin and the team it belongs to. With
+ *  `connected`, the connected systems it constructs are read through the
+ *  platform's hosting of 0.12's modules; without it, each is a gap. */
 export interface CheckRequest {
   source: string;
   pin: string;
   team: TeamFacts;
+  connected?: { teamId: string; modules: ModulePlatform };
 }
 
 /** An editor request: `offset` is a UTF-16 offset into `source`. */

@@ -89,7 +89,15 @@ export async function validateUnderCarried(input: {
   team?: Promise<TeamFacts>;
 }): Promise<TeamMovementValidation> {
   const [lane, team] = await Promise.all([input.lane(), input.team ?? teamFactsOf(input.teamId)]);
-  const checked = await lane.checkSource({ source: input.source, pin: input.pin, team });
+  // Connected systems are read through the platform's hosting of the
+  // version's own modules.
+  const { modulePlatform } = await import('./carried_run');
+  const checked = await lane.checkSource({
+    source: input.source,
+    pin: input.pin,
+    team,
+    connected: { teamId: input.teamId, modules: modulePlatform() },
+  });
   const lines = input.source.split('\n');
   // A carried diagnostic carries its own release's severity, which the
   // authoring shape keeps.

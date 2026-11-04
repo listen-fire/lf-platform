@@ -53,7 +53,16 @@ export async function checkSource(request: CheckRequest): Promise<CheckedSource>
   const program = parsed(source, pin);
   if (!('statements' in program)) return { diagnostics: [program], firedMovements: [], gaps: [], notes: [] };
   const closure = importClosure(program, pin, team.files);
-  const teamCatalog = await teamSnapshot(team, closure.files);
+  const libraries = Object.entries(closure.files).flatMap(([name, file]) => {
+    const own = team.files.find((f) => f.name === name)?.languageVersion ?? pin;
+    const library = parsed(file.source, readingPin(own, pin));
+    return 'statements' in library ? [library] : [];
+  });
+  const teamCatalog = await teamSnapshot(
+    team,
+    closure.files,
+    request.connected !== undefined ? { ...request.connected, programs: [program, ...libraries] } : undefined,
+  );
   let diagnostics: CheckedDiagnostic[];
   try {
     diagnostics = checkSourceInRust(source, teamCatalog.snapshot, { languageVersion: pin }).map(checked);
@@ -61,11 +70,6 @@ export async function checkSource(request: CheckRequest): Promise<CheckedSource>
     if (!(error instanceof RustCheckRefused)) throw error;
     diagnostics = [{ code: 'MOV_PARSE', message: error.message, severity: 'error', span: AT_START }];
   }
-  const libraries = Object.entries(closure.files).flatMap(([name, file]) => {
-    const own = team.files.find((f) => f.name === name)?.languageVersion ?? pin;
-    const library = parsed(file.source, readingPin(own, pin));
-    return 'statements' in library ? [library] : [];
-  });
   return {
     diagnostics: [...closure.diagnostics, ...diagnostics],
     firedMovements: program.statements.flatMap((statement) => (statement.kind === 'listen' ? [statement.movement] : [])),
