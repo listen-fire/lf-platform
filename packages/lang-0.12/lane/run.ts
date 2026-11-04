@@ -1,5 +1,6 @@
-// 0.12's run host for a segment someone started: Run now, a test run, a
-// validate-then-run. It is production's engine host at 0.12.13
+// 0.12's run host: a segment someone started (Run now, a test run, a
+// validate-then-run) and a segment of a run it parked. It is production's
+// engine host at 0.12.13
 // (`movement/engine_host.ts` on main) built from 0.12's own host kit, so the
 // segment opens at host families v1, its adapters are 0.12's modules
 // (./modules.ts), and every error the engine branches on by class is 0.12's
@@ -10,10 +11,8 @@
 // data (./run_types.ts): its billed model calls, its file text and rendering,
 // its record bindings, its cross-run write locks, its acting-user rules, its
 // cancel and lease, and its write ledger. What leaves here is plain data: the
-// run's result, or why it failed, as text.
-//
-// A segment that tries to park is stopped where it parks with the registry's
-// refusal: this platform does not resume a 0.12 run, so a park would strand it.
+// run's result, or why it failed, as text. Its parks go through 0.12's own
+// run host core over the platform's rows (./resume.ts).
 
 import {
   NEVER_CANCELLED,
@@ -31,7 +30,7 @@ import {
   type HostAdapters,
 } from '@listen-fire/engine/public/host';
 import { WRITE_METHODS } from '@listen-fire/engine/public/adapter';
-import { tenantIdOf, triggerEventSchema } from '@listen-fire/engine-contracts';
+import { refuseUnsupportedParkStateVersion, tenantIdOf, triggerEventSchema, type AnyParkedScopeState } from '@listen-fire/engine-contracts';
 import {
   MovementEngineError,
   MovementRunFailed,
@@ -39,39 +38,18 @@ import {
   describeError,
   runFailureCause,
 } from '@listen-fire/engine/public/errors';
-import { runMovement, type CancelGate, type MovementRunResult } from '@listen-fire/engine/public/movement-engine';
+import { fireCallbackBody, resumeMovement, runMovement, settleRaceFrame, type CancelGate, type MovementRunResult } from '@listen-fire/engine/public/movement-engine';
 import { segmentWriteLocks } from '@listen-fire/engine/public/write-locks';
 import { MovementParseError, RUN_HOST_UNITS, parseProgram, type Program } from '@listen-fire/movement-lang';
 import type { TriggerEvent } from '@listen-fire/engine/public/inbound';
 
+import { parkFamiliesOf } from './resume';
 import { MANUAL_ADAPTER_TYPE, type ManualInvocationPayload } from '../units/manual';
 
 import { teamSnapshot } from './catalog';
 import { importClosure, readingPin } from './imports';
 import { moduleTable } from './modules';
-import type { EventReading, RunPlatform, SegmentOutcome, SegmentRequest } from './run_types';
-
-/** What a park is stopped with: the registry's refusal, as 0.12's own error,
- *  so the engine fails the segment where it parks. */
-function refusingParks(refusal: string): Pick<Required<EngineHost['park']>, 'sink' | 'callbacks' | 'wake'> {
-  const refuse = async (): Promise<never> => {
-    throw new MovementEngineError('MOVENG_UNSUPPORTED', refusal);
-  };
-  return {
-    sink: {
-      recordJoin: refuse,
-      commitTimerPark: refuse,
-      commitAwaitPark: refuse,
-      decrementJoin: refuse,
-      persistBranchExport: refuse,
-      collectBranchExports: refuse,
-      cancelSubtrees: refuse,
-      commitSuspension: refuse,
-    },
-    callbacks: { mint: refuse, calls: refuse },
-    wake: refuse,
-  };
-}
+import type { EventReading, ResumeRequest, RunPlatform, SegmentOutcome, SegmentRequest } from './run_types';
 
 /** The platform's cancel and lease as 0.12's gate: a lost lease is 0.12's
  *  `RunLeaseLost`, thrown at the same boundaries a cancel stops at. */
@@ -136,8 +114,11 @@ export function ledgered(adapters: HostAdapters, keepWrite: NonNullable<RunPlatf
   };
 }
 
+/** A rehearsal parks nothing, so it has nothing to wake. */
+const unwokenByARehearsal = async (): Promise<void> => {};
+
 /** The engine host one 0.12 segment runs on. */
-function hostFor(request: SegmentRequest & { parkRefusal: string }, platform: RunPlatform): EngineHost {
+function hostFor(request: { dryRun?: boolean; runId?: string; teamId: string; trace?: SegmentRequest['trace'] }, platform: RunPlatform): EngineHost {
   const segments = new SegmentDirectory();
   const modules = moduleTable(platform.modules);
   const table = adapterTable({
@@ -165,7 +146,12 @@ function hostFor(request: SegmentRequest & { parkRefusal: string }, platform: Ru
     },
     adapters,
     llm: platform.llm,
-    park: { ...refusingParks(request.parkRefusal), bindings: platform.bindings },
+    park: {
+      ...(platform.parks !== undefined && request.runId !== undefined
+        ? parkFamiliesOf({ parks: platform.parks, runId: request.runId, teamId: request.teamId, segments })
+        : { wake: unwokenByARehearsal }),
+      bindings: platform.bindings,
+    },
     control: { cancel },
     files: {
       resolveFileText: platform.files.resolveFileText,
@@ -188,13 +174,13 @@ function hostFor(request: SegmentRequest & { parkRefusal: string }, platform: Ru
   };
 }
 
-function pinOfLibrary(name: string, request: SegmentRequest): string {
+function pinOfLibrary(name: string, request: Pick<SegmentRequest, 'pin' | 'team'>): string {
   return readingPin(request.team.files.find((f) => f.name === name)?.languageVersion ?? request.pin, request.pin);
 }
 
 /** The libraries a program imports, parsed under the pin each is read at;
  *  one 0.12 cannot parse is left to the run's own check to report. */
-function librariesOf(files: Record<string, { source: string }>, request: SegmentRequest): Program[] {
+function librariesOf(files: Record<string, { source: string }>, request: Pick<SegmentRequest, 'pin' | 'team'>): Program[] {
   return Object.entries(files).flatMap(([name, file]) => {
     try {
       return [parseProgram(file.source, { languageVersion: pinOfLibrary(name, request) })];
@@ -218,37 +204,40 @@ function failureOf(err: unknown): SegmentOutcome {
   };
 }
 
+/** A program and its imports read under their pins, against the team's 0.12
+ *  catalog: what a segment runs against, from its first statement or a park. */
+async function preparedProgram(request: Pick<SegmentRequest, 'source' | 'pin' | 'team' | 'teamId'>, platform: RunPlatform) {
+  const program = parseProgram(request.source, { languageVersion: request.pin });
+  const closure = importClosure(program, request.pin, request.team.files);
+  // An import of a library on another version is the program's own error,
+  // named with both versions, before anything runs.
+  if (closure.diagnostics.length > 0) {
+    throw new MovementEngineError('MOVENG_CHECK', closure.diagnostics.map((diagnostic) => diagnostic.message).join('; '));
+  }
+  const catalog = await teamSnapshot({
+    team: request.team,
+    files: closure.files,
+    sources: [
+      { source: request.source, pin: request.pin },
+      ...Object.entries(closure.files).map(([name, file]) => ({ source: file.source, pin: pinOfLibrary(name, request) })),
+    ],
+    reading: {
+      teamId: request.teamId,
+      modules: platform.modules,
+      programs: [program, ...librariesOf(closure.files, request)],
+    },
+  });
+  return { catalog: catalog.snapshot, credentialIds: Object.fromEntries(request.team.credentials.map((row) => [row.name, row.id])) };
+}
+
 /**
  * Runs one 0.12 segment from its first statement, against the team's 0.12
  * catalog, on 0.12's engine. Never throws for the run's own failure: the
  * outcome says how it ended.
  */
-export async function runSegment(
-  request: SegmentRequest & { parkRefusal: string },
-  platform: RunPlatform,
-): Promise<SegmentOutcome> {
+export async function runSegment(request: SegmentRequest, platform: RunPlatform): Promise<SegmentOutcome> {
   try {
-    const program = parseProgram(request.source, { languageVersion: request.pin });
-    const closure = importClosure(program, request.pin, request.team.files);
-    // An import of a library on another version is the program's own error,
-    // named with both versions, before anything runs.
-    if (closure.diagnostics.length > 0) {
-      throw new MovementEngineError('MOVENG_CHECK', closure.diagnostics.map((diagnostic) => diagnostic.message).join('; '));
-    }
-    const catalog = await teamSnapshot({
-      team: request.team,
-      files: closure.files,
-      sources: [
-        { source: request.source, pin: request.pin },
-        ...Object.entries(closure.files).map(([name, file]) => ({ source: file.source, pin: pinOfLibrary(name, request) })),
-      ],
-      reading: {
-        teamId: request.teamId,
-        modules: platform.modules,
-        programs: [program, ...librariesOf(closure.files, request)],
-      },
-    });
-    const credentialIds = Object.fromEntries(request.team.credentials.map((row) => [row.name, row.id]));
+    const prepared = await preparedProgram(request, platform);
     const result = await runMovement({
       source: request.source,
       languageVersion: request.pin,
@@ -257,13 +246,65 @@ export async function runSegment(
       teamId: tenantIdOf(request.teamId),
       firedAt: request.firedAt,
       ...(request.costCapMicrodollars !== undefined ? { costCapMicrodollars: request.costCapMicrodollars } : {}),
-      catalog: catalog.snapshot,
-      credentialIds,
+      ...prepared,
       ...(request.runId !== undefined ? { runId: request.runId } : {}),
       ...(request.dryRun !== undefined ? { dryRun: request.dryRun } : {}),
       host: hostFor(request, platform),
     });
     return { kind: 'ran', result };
+  } catch (err) {
+    return failureOf(err);
+  }
+}
+
+/** A row's park state as 0.12 reads it: refused by name when 0.12 did not write
+ *  it, and read whole by 0.12's engine from here. */
+function parkStateOf(state: unknown): AnyParkedScopeState {
+  if (!isParkState(state)) throw new MovementEngineError('MOVENG_RUNTIME', 'a parked leaf has no readable park state');
+  refuseUnsupportedParkStateVersion(state.version);
+  return state;
+}
+
+function isParkState(state: unknown): state is AnyParkedScopeState {
+  return typeof state === 'object' && state !== null && 'version' in state && typeof state.version === 'number';
+}
+
+/**
+ * Runs one segment of a run 0.12 parked, on 0.12's engine, from the pinned text:
+ * a leaf resumed, a race settled with its winners, or a callback's body.
+ */
+export async function resumeSegment(request: ResumeRequest, platform: RunPlatform): Promise<SegmentOutcome> {
+  try {
+    const prepared = await preparedProgram(request, platform);
+    const common = {
+      source: request.source,
+      languageVersion: request.pin,
+      ...(request.movementName !== undefined ? { movementName: request.movementName } : {}),
+      event: triggerEventSchema.parse(request.event),
+      teamId: tenantIdOf(request.teamId),
+      firedAt: request.firedAt,
+      ...(request.costCapMicrodollars !== undefined ? { costCapMicrodollars: request.costCapMicrodollars } : {}),
+      ...(request.priorSpentMicrodollars !== undefined ? { priorSpentMicrodollars: request.priorSpentMicrodollars } : {}),
+      ...(request.capBaselineMicrodollars !== undefined ? { capBaselineMicrodollars: request.capBaselineMicrodollars } : {}),
+      ...(request.limitPaused !== undefined ? { limitPaused: request.limitPaused } : {}),
+      ...(request.parkedOnEngine !== undefined ? { parkedOnEngine: request.parkedOnEngine } : {}),
+      ...prepared,
+      runId: request.runId,
+      host: hostFor(request, platform),
+      state: parkStateOf(request.state),
+    };
+    if (request.callback !== undefined) return { kind: 'ran', result: await fireCallbackBody({ ...common, ...request.callback }) };
+    if (request.settleRaceFrameAddress !== undefined) {
+      return { kind: 'ran', result: await settleRaceFrame({ ...common, frameAddress: request.settleRaceFrameAddress }) };
+    }
+    return {
+      kind: 'ran',
+      result: await resumeMovement({
+        ...common,
+        ...(request.reenter !== undefined ? { reenter: request.reenter } : {}),
+        ...(request.deferRaceSettlement !== undefined ? { deferRaceSettlement: request.deferRaceSettlement } : {}),
+      }),
+    };
   } catch (err) {
     return failureOf(err);
   }
@@ -321,7 +362,7 @@ export function manualInvocationEvent(input: { key: string; invocation: ManualIn
 export function readEvent(event: Readonly<Record<string, unknown>>): EventReading {
   const parsed = triggerEventSchema.safeParse(event);
   if (!parsed.success) return { ok: false, reason: parsed.error.issues.map((issue) => `${issue.path.join('.') || 'event'}: ${issue.message}`).join('; ') };
-  const { pipelineInputId, adapterType, triggerType, payload, recordId } = parsed.data;
+  const { pipelineInputId, adapterType, triggerType, payload, recordId, occurredAt, idempotencyKey } = parsed.data;
   return {
     ok: true,
     record: {
@@ -330,6 +371,8 @@ export function readEvent(event: Readonly<Record<string, unknown>>): EventReadin
       triggerType,
       ...(payload !== undefined ? { payload } : {}),
       ...(recordId !== undefined ? { recordId } : {}),
+      ...(occurredAt !== undefined ? { occurredAt: String(occurredAt) } : {}),
+      ...(idempotencyKey !== undefined ? { idempotencyKey } : {}),
     },
   };
 }

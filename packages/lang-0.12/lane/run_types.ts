@@ -14,6 +14,8 @@ import type { MovementRunResult } from '@listen-fire/engine/public/movement-engi
 import type { WriteLocks } from '@listen-fire/engine/public/write-locks';
 import type { MovementTraceEntry } from '@listen-fire/engine/public/trace';
 import type { TriggerEvent } from '@listen-fire/engine/public/inbound';
+import type { RunLimitPause } from '@listen-fire/engine/public/movement-engine';
+import type { CallbackRecord, RunHostLog, RunHostStore, RunRecords, StepLeaf, StepperFor, runCallbackBody } from '@listen-fire/engine/public/run-host';
 import type {
   CredentialFields,
   ModuleCredential,
@@ -136,6 +138,91 @@ export interface RunPlatform {
   keepWrite?(write: { adapterType: string; recordType: string; externalId: string; at: string }): Promise<void>;
   /** Receives each write a rehearsed target captured. */
   writeSink?: DryRunWriteSink;
+  /** Where the segment's parks and callbacks go. Absent for a rehearsal, which
+   *  never parks. */
+  parks?: CarriedParks;
+}
+
+// ── The rows a 0.12 run parks in, and 0.12's rules over them ───────────────
+
+/** How a fenced write came out. Never a throw of the platform's class: this
+ *  version throws its own `RunLeaseLost`. */
+export type FencedWrite = 'written' | 'lease-lost';
+
+export interface CarriedRunStore {
+  parks: Omit<RunHostStore['parks'], 'putLeaf'> & { putLeaf(input: Parameters<RunHostStore['parks']['putLeaf']>[0]): Promise<FencedWrite> };
+  joins: Omit<RunHostStore['joins'], 'recordJoin'> & { recordJoin(input: Parameters<RunHostStore['joins']['recordJoin']>[0]): Promise<FencedWrite> };
+  correlations: RunHostStore['correlations'];
+  leases: RunHostStore['leases'];
+  work: RunHostStore['work'];
+  sources: RunHostStore['sources'];
+}
+
+/** A stored callback, its signature as the row holds it. */
+export interface CarriedCallbackRecord extends Omit<CallbackRecord, 'params'> {
+  params: { name: string; type: string }[];
+}
+
+export type CarriedCallbackClaim =
+  | { kind: 'recorded'; callback: CarriedCallbackRecord; callIndex: number }
+  | { kind: 'not_found' }
+  | { kind: 'closed' | 'expired'; callback: CarriedCallbackRecord };
+
+export interface CarriedCallbackStore {
+  mint(input: { teamId: string; runId: string; address: string; params: { name: string; type: string }[]; state: unknown; singleUse: boolean; expiresAt?: string }): Promise<{ id: string }>;
+  get(input: { id: string }): Promise<CarriedCallbackRecord | null>;
+  record(input: { id: string; values: Record<string, unknown>; bodyDueAt: string }): Promise<CarriedCallbackClaim>;
+  markBodyStarted(input: { id: string; callIndex: number; fence?: string }): Promise<boolean>;
+  landed(input: { ids: readonly string[] }): Promise<string[]>;
+  revokeRun(input: { runId: string }): Promise<void>;
+}
+
+/** The platform's run rows and records, as 0.12's rules reach them. */
+export interface CarriedRunHost {
+  store: CarriedRunStore;
+  callbacks: CarriedCallbackStore;
+  /** An ask await resolves when its ask settles; a withdrawn one closes it. */
+  askAwaits: {
+    loadResolvable(input: { runId: string }): Promise<{ runId: string; teamId: string; address: string }[]>;
+    abandon(input: { runId: string; addresses?: readonly string[] }): Promise<void>;
+  };
+  runs: RunRecords;
+  log: RunHostLog;
+}
+
+/** What one segment's parks are written through. */
+export interface CarriedParks {
+  host: CarriedRunHost;
+  /** The run lease the segment steps under: its parks land only under it. */
+  fence?: string;
+  ensureRun(): Promise<void>;
+  markParked(): Promise<void>;
+  markLimitPaused(pause: RunLimitPause): Promise<void>;
+  callbackUrl(id: string): string;
+  notifyWork(): void;
+}
+
+/** One segment of a parked run: its state stays this version's, unread by the
+ *  platform. */
+export type CarriedStep = StepLeaf;
+export type CarriedStepperFor = StepperFor;
+
+export type RunCallbackBodyInput = Parameters<typeof runCallbackBody>[2];
+
+/** One segment of a run this version parked: a leaf resumed, a race settled,
+ *  or a callback's body. */
+export interface ResumeRequest extends Omit<SegmentRequest, 'dryRun'> {
+  runId: string;
+  /** The parked leaf's state as the row holds it. */
+  state: unknown;
+  reenter?: boolean;
+  deferRaceSettlement?: boolean;
+  settleRaceFrameAddress?: string;
+  callback?: { values: Record<string, unknown>; callIndex: number };
+  priorSpentMicrodollars?: number;
+  capBaselineMicrodollars?: number;
+  limitPaused?: boolean;
+  parkedOnEngine?: 'ts' | 'rust';
 }
 
 /** One segment someone started: a run from its first statement. Its event is
@@ -161,7 +248,7 @@ export interface SegmentRequest {
 export type EventReading =
   | {
       ok: true;
-      record: { pipelineInputId: string; adapterType: string; triggerType: TriggerEvent['triggerType']; payload?: unknown; recordId?: string };
+      record: { pipelineInputId: string; adapterType: string; triggerType: TriggerEvent['triggerType']; payload?: unknown; recordId?: string; occurredAt?: string; idempotencyKey?: string };
     }
   | { ok: false; reason: string };
 

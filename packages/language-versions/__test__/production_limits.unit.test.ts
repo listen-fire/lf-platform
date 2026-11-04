@@ -14,7 +14,7 @@ import { InMemoryWriteLocks } from 'movement-engine/public/write-locks';
 import { runMovement } from 'movement-engine/public/movement-engine';
 import { mockCatalogSnapshot, LANGUAGE_VERSION } from 'movement-lang';
 
-import { resumeRefusal, runningOf, type RunPlatform, type RunningLane, type TeamFacts } from '..';
+import { runningOf, type RunPlatform, type RunningLane, type TeamFacts } from '..';
 
 const TEAM = '00000000-0000-4000-8000-000000000012';
 
@@ -87,7 +87,6 @@ async function run012(source: string, movementName: string, p: RunPlatform, cred
       firedAt: new Date().toISOString(),
       runId: 'run-012',
       team: team(credentials),
-      parkRefusal: resumeRefusal('0.12.13') ?? '',
     },
     p,
   );

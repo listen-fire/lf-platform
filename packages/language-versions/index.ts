@@ -45,7 +45,7 @@ import {
   type LanguageVersion,
 } from 'movement-lang';
 
-import type { ModulePlatform, RunningLane } from './running';
+import type { ModulePlatform, ResumingLane, RunningLane } from './running';
 
 export * from './running';
 
@@ -162,10 +162,16 @@ export type CheckCapability = { kind: 'current' } | { kind: 'carried'; lane: () 
  */
 export type RunCapability = { kind: 'current' } | { kind: 'carried'; lane: () => Promise<RunningLane> } | { kind: 'held' };
 
-/** Whether a carried version resumes a run it parked: a timer, an ask, an
- *  await, a limit pause, a race settling. `held` refuses the resume, and a
- *  segment of that version that tries to park is stopped with the same text. */
-export type ResumeCapability = { kind: 'current' } | { kind: 'held' };
+/**
+ * Whether a carried version resumes a run it parked: a timer, an ask, an await,
+ * a callback's call, a limit pause, a race settling.
+ *
+ * - `current`: the platform's own run host and engine step it.
+ * - `carried`: the version's own rules and engine do, over the platform's rows
+ *   (`running.ts` states what crosses).
+ * - `held`: the version does not resume: the resume is refused.
+ */
+export type ResumeCapability = { kind: 'current' } | { kind: 'carried'; lane: () => Promise<ResumingLane> } | { kind: 'held' };
 
 /** Whether a carried version's listens fire: inbound deliveries, polls and
  *  schedules start its runs. `held` keeps its automations unprovisioned. */
@@ -228,7 +234,7 @@ const CARRIED: readonly CarriedVersion[] = [
     provides: {
       check: { kind: 'carried', lane: () => import('@listen-fire/lang-0.12') },
       run: { kind: 'carried', lane: () => import('@listen-fire/lang-0.12') },
-      resume: HELD,
+      resume: { kind: 'carried', lane: () => import('@listen-fire/lang-0.12') },
       listen: HELD,
     },
   },
@@ -314,9 +320,20 @@ export function runningOf(pin: LanguageVersion): RunCapability {
   return providedFor(pin).run;
 }
 
-/** How a parked run of `pin` resumes. */
+/** How a parked run of `pin` resumes. A run a legacy id pinned resumes on the
+ *  legacy packages, and is not asked here. */
 export function resumingOf(pin: LanguageVersion): ResumeCapability {
   return providedFor(pin).resume;
+}
+
+/** The version that keeps an await correlated to an adapter identity: only a
+ *  version whose awaits parked on keys ever wrote one, so a wake naming a key
+ *  is its to step. Undefined once no carried version does. */
+export function correlatedAwaitsLane(): (() => Promise<ResumingLane>) | undefined {
+  for (const version of CARRIED) {
+    if (version.provides.resume.kind === 'carried') return version.provides.resume.lane;
+  }
+  return undefined;
 }
 
 /** Whether `pin`'s listens fire. */

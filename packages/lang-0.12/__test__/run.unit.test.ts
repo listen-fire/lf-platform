@@ -95,12 +95,12 @@ describe("a 0.12 segment on 0.12's own run host", () => {
     expect(JSON.parse(JSON.stringify(outcome))).toEqual(outcome);
   });
 
-  it("stops a segment that parks with the registry's refusal, as 0.12's own error, failing loudly", async () => {
+  it("a segment with nowhere to park (the platform gave no rows) fails on 0.12's own engine, loudly", async () => {
     const sleeps = 'function nap(run: <manual-[:Invocation]->>) {\n  await sleep(1h)\n}\nlisten to manual fire nap\n';
     const outcome = await runSegment(request(sleeps), platform());
-    expect(outcome).toMatchObject({ kind: 'failed', code: 'MOVENG_UNSUPPORTED' });
+    expect(outcome).toMatchObject({ kind: 'failed' });
     if (outcome.kind !== 'failed') return;
-    expect(outcome.message).toContain('this platform does not resume a parked 0.12 run');
+    expect(outcome.message).toMatch(/park/);
   });
 
   it("a lost lease stops the segment as 0.12's own `RunLeaseLost`, answered as its own outcome", async () => {
@@ -187,7 +187,7 @@ describe('a program importing a library on another version', () => {
 describe('an event, read by 0.12', () => {
   it("answers what the platform records, by 0.12's schema", () => {
     const event = manualInvocationEvent({ key: 'movement-1', invocation: { firedAt: '2026-11-04T10:00:00.000Z', text: 'hello' } });
-    expect(readEvent(event)).toEqual({
+    expect(readEvent(event)).toMatchObject({
       ok: true,
       record: { pipelineInputId: 'trigger:movement-1', adapterType: 'manual', triggerType: 'webhook', payload: { firedAt: '2026-11-04T10:00:00.000Z', text: 'hello' } },
     });

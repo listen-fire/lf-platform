@@ -112,6 +112,236 @@ export interface RunPlatform {
    *  rehearsal. */
   keepWrite?(write: { adapterType: string; recordType: string; externalId: string; at: string }): Promise<void>;
   writeSink?: DryRunWriteSink;
+  /** Where the segment's parks and callbacks go; absent for a rehearsal. */
+  parks?: CarriedParks;
+}
+
+// ── The rows a carried version's run parks in, and its rules over them ─────
+//
+// The platform keeps the rows; the version brings the rules (which leaves a
+// drain steps, how a callback's call lands, what a withdrawn await closes), so
+// a run parked under a version is stepped by that version. A park's state is
+// the version's, and stays unread here.
+
+/** How a fenced write came out: the version throws its own lost-lease class. */
+export type FencedWrite = 'written' | 'lease-lost';
+
+export interface CarriedLeaf {
+  address: string;
+  reason: string;
+  status: 'parked' | 'resuming';
+  wakeAt: string | null;
+}
+
+export interface CorrelatedPark {
+  runId: string;
+  teamId: string;
+  address: string;
+}
+
+export interface CarriedClaimedWork {
+  id: string;
+  kind: string;
+  key: string;
+  payload?: unknown;
+  claim: string;
+}
+
+export interface CarriedRunStore {
+  parks: {
+    putLeaf(input: { runId: string; address: string; reason: string; wakeAt: string | null; state?: unknown; rewritten?: boolean; fence?: string }): Promise<FencedWrite>;
+    claimLeaf(input: { runId: string; address: string; reason?: string }): Promise<{ state?: unknown; reason: string } | null>;
+    finishLeaf(input: { runId: string; address: string; fence?: string }): Promise<void>;
+    leaves(input: { runId: string; parkedOnly?: boolean; reason?: string; dueBy?: string }): Promise<CarriedLeaf[]>;
+    deleteLeaves(input: { runId: string; addresses: readonly string[] }): Promise<void>;
+  };
+  joins: {
+    recordJoin(input: { runId: string; frameAddress: string; pending: number; fence?: string }): Promise<FencedWrite>;
+    decrementJoin(input: { runId: string; frameAddress: string; branchAddress: string; leafAddress: string }): Promise<{ closed: boolean }>;
+    persistBranchExport(input: { runId: string; frameAddress: string; branchAddress: string; branchIndex: number; exports: unknown }): Promise<void>;
+    collectBranchExports(input: { runId: string; frameAddress: string }): Promise<Array<{ branchAddress: string; branchIndex: number; exports?: unknown }>>;
+    hasPendingJoins(input: { runId: string }): Promise<boolean>;
+    frames(input: { runId: string }): Promise<string[]>;
+    deleteFrames(input: { runId: string; frameAddresses: readonly string[] }): Promise<void>;
+  };
+  correlations: {
+    correlate(input: { runId: string; teamId: string; address: string; adapterType: string; correlationKey: string }): Promise<void>;
+    correlated(input: { adapterType: string; teamId: string; correlationKey: string }): Promise<CorrelatedPark[]>;
+    ofRun(input: { runId: string; adapterType: string }): Promise<Array<CorrelatedPark & { correlationKey: string }>>;
+    drop(input: { runId: string; address: string }): Promise<void>;
+    dropRun(input: { runId: string }): Promise<void>;
+  };
+  leases: {
+    claim(input: { runId: string; ttlMs: number }): Promise<{ token: string } | null>;
+    renew(input: { runId: string; token: string; ttlMs: number }): Promise<boolean>;
+    release(input: { runId: string; token: string }): Promise<void>;
+    dropRunState(input: { runId: string; fence?: string }): Promise<boolean>;
+  };
+  work: {
+    enqueue(input: { kind: string; key: string; payload: unknown; dueAt?: string; teamId?: string }): Promise<void>;
+    enqueueIfAbsent(input: { kind: string; key: string; payload: unknown; dueAt?: string; teamId?: string }): Promise<boolean>;
+    claimDue(input: { limit: number; leaseMs: number; dueBy?: string; kinds?: readonly string[] }): Promise<CarriedClaimedWork[]>;
+    complete(work: CarriedClaimedWork): Promise<void>;
+    release(work: CarriedClaimedWork & { dueAt?: string }): Promise<void>;
+  };
+  sources: {
+    put(input: { teamId: string; hash: string; source: string }): Promise<void>;
+    get(input: { teamId: string; hash: string }): Promise<string | null>;
+  };
+}
+
+export type CarriedCallbackStatus = 'live' | 'fired' | 'revoked';
+
+export interface CarriedCallbackRecord {
+  id: string;
+  teamId: string;
+  runId: string;
+  address: string;
+  params: { name: string; type: string }[];
+  state?: unknown;
+  calls: { at: string; values: Record<string, unknown>; bodyStartedAt?: string }[];
+  singleUse: boolean;
+  expiresAt: string | null;
+  status: CarriedCallbackStatus;
+}
+
+export type CarriedCallbackClaim =
+  | { kind: 'recorded'; callback: CarriedCallbackRecord; callIndex: number }
+  | { kind: 'not_found' }
+  | { kind: 'closed' | 'expired'; callback: CarriedCallbackRecord };
+
+export interface CarriedCallbackStore {
+  mint(input: { teamId: string; runId: string; address: string; params: { name: string; type: string }[]; state: unknown; singleUse: boolean; expiresAt?: string }): Promise<{ id: string }>;
+  get(input: { id: string }): Promise<CarriedCallbackRecord | null>;
+  record(input: { id: string; values: Record<string, unknown>; bodyDueAt: string }): Promise<CarriedCallbackClaim>;
+  markBodyStarted(input: { id: string; callIndex: number; fence?: string }): Promise<boolean>;
+  landed(input: { ids: readonly string[] }): Promise<string[]>;
+  revokeRun(input: { runId: string }): Promise<void>;
+}
+
+/** The platform's run rows and records, as a carried version's rules reach
+ *  them. */
+export interface CarriedRunHost {
+  store: CarriedRunStore;
+  callbacks: CarriedCallbackStore;
+  /** An ask await resolves when its ask settles; a withdrawn one closes it. */
+  askAwaits: {
+    loadResolvable(input: { runId: string }): Promise<CorrelatedPark[]>;
+    abandon(input: { runId: string; addresses?: readonly string[] }): Promise<void>;
+  };
+  runs: {
+    cancelRequest(input: { runId: string }): Promise<{ reason: string | null } | null>;
+    markFailed(input: { runId: string; message: string }): Promise<void>;
+    closeRun?(input: { runId: string }): Promise<void>;
+  };
+  log: {
+    warn(message: string, fields: Record<string, unknown>): void;
+    error(message: string, fields: Record<string, unknown>): void;
+  };
+}
+
+/** What one segment's parks are written through. */
+export interface CarriedParks {
+  host: CarriedRunHost;
+  /** The run lease the segment steps under: its parks land only under it. */
+  fence?: string;
+  ensureRun(): Promise<void>;
+  markParked(): Promise<void>;
+  markLimitPaused(pause: { limit: 'cost'; capMicrodollars: number; spentMicrodollars: number }): Promise<void>;
+  callbackUrl(id: string): string;
+  notifyWork(): void;
+}
+
+/** A lease held on a run while a carried version steps it. */
+export interface CarriedLease {
+  readonly runId: string;
+  readonly token: string;
+  isLost(): boolean;
+  release(): Promise<void>;
+}
+
+export interface CarriedLeaseOptions {
+  ttlMs?: number;
+  beforeRelease?: (runId: string) => Promise<void>;
+  warn?: (message: string, fields: Record<string, unknown>) => void;
+}
+
+/** One segment a carried version's drain asks the platform to run. */
+export type CarriedStepRequest =
+  | { kind: 'leaf'; address: string; reason: string; state: unknown; reenter: boolean; deferRaceSettlement: true }
+  | { kind: 'race'; frameAddress: string; state: unknown };
+
+export type CarriedStepOutcome =
+  | { kind: 'leaseLost' }
+  | { kind: 'failed'; error: string }
+  | { kind: 'cancelled'; reason?: string }
+  | { kind: 'parked'; parkedAddress: string | undefined; deferredRaceFrames: readonly string[] }
+  | { kind: 'completed'; deferredRaceFrames: readonly string[] };
+
+export type CarriedStep = (request: CarriedStepRequest, settle: { runComplete(): Promise<boolean> }) => Promise<CarriedStepOutcome>;
+
+export type CarriedStepperFor = (input: { runId: string; lease: CarriedLease }) => Promise<CarriedStep | null>;
+
+export type CarriedBodyOutcome =
+  | { kind: 'ran' }
+  | { kind: 'failed'; error: string }
+  | { kind: 'cancelled'; reason?: string }
+  | { kind: 'leaseLost' };
+
+export type CarriedBodyRun = { kind: 'ran'; outcome: CarriedBodyOutcome } | { kind: 'not_started' } | { kind: 'refused'; reason: string };
+
+/** One segment of a run the version parked. */
+export interface ResumeRequest extends Omit<SegmentRequest, 'dryRun'> {
+  runId: string;
+  /** The parked leaf's state as the row holds it: the version reads it. */
+  state: unknown;
+  reenter?: boolean;
+  deferRaceSettlement?: boolean;
+  settleRaceFrameAddress?: string;
+  /** Run this callback's body rather than resuming a leaf. */
+  callback?: { values: Record<string, unknown>; callIndex: number };
+  priorSpentMicrodollars?: number;
+  capBaselineMicrodollars?: number;
+  limitPaused?: boolean;
+  parkedOnEngine?: 'ts' | 'rust';
+}
+
+/** A carried version's rules over a parked run, and its segments of one. */
+export interface ResumingLane {
+  resumeSegment(request: ResumeRequest, platform: RunPlatform): Promise<SegmentOutcome>;
+  readEvent(event: CarriedEvent): CarriedEventReading;
+  manualListens(request: { source: string; pin: string }): string[];
+  drainDueTimers(host: CarriedRunHost, input: { runId: string; dueBy: string; lease?: CarriedLease; step: CarriedStep }): Promise<'done' | 'leaseLost'>;
+  drainLeaves(
+    host: CarriedRunHost,
+    input: { runId: string; addresses: readonly string[]; reason: string; lease?: CarriedLease; step: CarriedStep; until?: () => Promise<boolean> },
+  ): Promise<'done' | 'leaseLost'>;
+  wakeAwaits(
+    host: CarriedRunHost,
+    input: {
+      wake: { adapterType: string; teamId: string; correlationKey: string };
+      stepper: CarriedStepperFor;
+      around?: (runId: string, body: () => Promise<void>) => Promise<void>;
+      lease?: CarriedLeaseOptions;
+    },
+  ): Promise<{ busy: string[] }>;
+  queueAwaitWake(host: CarriedRunHost, wake: { adapterType: string; teamId: string; correlationKey: string }, opts?: { coalesceKey?: string; dueAt?: string }): Promise<void>;
+  runCallbackBody(
+    host: CarriedRunHost,
+    input: {
+      id: string;
+      callIndex: number;
+      lease: CarriedLease;
+      now: string;
+      runOpen: (runId: string) => Promise<boolean>;
+      body: (input: { callback: CarriedCallbackRecord; values: Record<string, unknown> }) => Promise<CarriedBodyOutcome>;
+      stepper: CarriedStepperFor;
+    },
+  ): Promise<CarriedBodyRun>;
+  coerceCallbackValues(
+    params: CarriedCallbackRecord['params'],
+    raw: Record<string, unknown>,
+  ): { ok: true; values: Record<string, unknown> } | { ok: false; message: string };
 }
 
 /** An event in a carried version's own shape, as JSON: the version made it
@@ -127,6 +357,8 @@ export interface CarriedEventRecord {
   triggerType: TriggerEvent['triggerType'];
   payload?: unknown;
   recordId?: string;
+  occurredAt?: string;
+  idempotencyKey?: string;
 }
 
 /** A carried event read by its own version, or why that version cannot read
@@ -146,9 +378,6 @@ export interface SegmentRequest {
   dryRun?: boolean;
   team: TeamFacts;
   trace?: MovementTraceEntry[];
-  /** What a park is stopped with: the registry's resume refusal for the pin,
-   *  when its version does not resume. */
-  parkRefusal: string;
 }
 
 export type SegmentOutcome =
